@@ -133,7 +133,9 @@ d3 package does. They also answer `span` questions, routed by label set and
 wording as vela3-fast's are. vela3-turbo answers each request on d3-turbo's
 state-once path first, then the router questions again with their adapter
 on. Requests with images run with every adapter off and refuse span
-questions. vela3-mini and vela3-flash run open span labels without a
+questions. A span question reads a target of up to 32,768 tokens in
+windows; a longer target fails that question with `scan_budget_exceeded`.
+vela3-mini and vela3-flash run open span labels without a
 description by name, where their packages write a definition with the base
 first ([parity record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela3-d3-parity.md)).
 

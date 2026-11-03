@@ -385,7 +385,7 @@ def test_the_head_reads_word_first_tokens_and_option_line_means(model) -> None:
 def test_span_questions_add_no_input_tokens(model) -> None:
     decisions = {"x": {"type": "noul", "instructions": "Is this hard?"}}
     span = {"s": {"type": "span", "criteria": ["thing"]}}
-    alone = model._decisions("Merge two lists.", decisions, None)
+    alone = model.plan("Merge two lists.", decisions)
     assert (
         model.plan("Merge two lists.", {**decisions, **span}).input_tokens
         == alone.input_tokens

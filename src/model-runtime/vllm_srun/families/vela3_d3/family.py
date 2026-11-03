@@ -174,7 +174,11 @@ def _head(path: Path, device: torch.device) -> SpanHead:
 
 
 def _names_only(names: list[str], only: set[str]) -> dict[str, str]:
-    """No definition writer: labels without a description run by name."""
+    """No definition writer yet: labels without a description run by name.
+
+    The packages' writers (vela3-mini's base, vela3-flash's grafted head) take
+    this place in #5703.
+    """
     return {}
 
 

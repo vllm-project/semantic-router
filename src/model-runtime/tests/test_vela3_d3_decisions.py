@@ -206,24 +206,20 @@ def test_a_pass_without_router_rows_is_one_plain_forward(runtimes, monkeypatch) 
     assert seen[0].rows == (False, True, False)
 
 
-def test_rows_with_an_adapter_never_pack(runtimes) -> None:
+def test_rows_with_an_adapter_never_pack(runtimes, monkeypatch) -> None:
+    # The CPU fixture's engine never packs, so the batcher's packing check is asked as if it did.
     model = runtimes[0].lookup(None).model
+    monkeypatch.setattr(model, "packs_merged_rows", True)
     items = list(
         model.plan(
             "state", {"attack": NOUL, "x": {**NOUL, "instructions": "y " * 40}}
         ).items
     )
-    model.packs_merged_rows = True
-    try:
-        assert not model._packs(items)
-        plain = list(
-            model.plan(
-                "state", {"x": NOUL, "y": {**NOUL, "instructions": "y " * 40}}
-            ).items
-        )
-        assert model._packs(plain)
-    finally:
-        model.packs_merged_rows = model.engine_model.supports_packed
+    assert not model._packs(items)
+    plain = list(
+        model.plan("state", {"x": NOUL, "y": {**NOUL, "instructions": "y " * 40}}).items
+    )
+    assert model._packs(plain)
 
 
 def test_gated_answers_match_one_request_through_the_merged_path(runtimes) -> None:
