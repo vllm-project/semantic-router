@@ -28,6 +28,7 @@ const sources = [
   'families/decision2/family.py',
   'families/decision3/family.py',
   'families/vela3/family.py',
+  'families/vela3_d3/family.py',
 ].map((path) => runtime + path)
 
 describe('Decision catalog generation boundary', () => {

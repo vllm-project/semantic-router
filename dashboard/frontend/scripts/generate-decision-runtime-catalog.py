@@ -85,6 +85,23 @@ def assignment(path, name):
     )
 
 
+def descriptor_question_types(family):
+    """The ``question_types`` node of a family's ``descriptor()``."""
+    family_tree = ast.parse((RUNTIME / f"families/{family}/family.py").read_text())
+    descriptor = next(
+        node
+        for node in ast.walk(family_tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "descriptor"
+    )
+    return next(
+        value
+        for node in ast.walk(descriptor)
+        if isinstance(node, ast.Dict)
+        for key, value in zip(node.keys, node.values, strict=True)
+        if isinstance(key, ast.Constant) and key.value == "question_types"
+    )
+
+
 def projection():
     """Read literal release entries and shared System One question kinds."""
     models = []
@@ -105,19 +122,7 @@ def projection():
         ("decision2", None),
         ("decision3", None),
     ):
-        family_tree = ast.parse((RUNTIME / f"families/{family}/family.py").read_text())
-        descriptor = next(
-            node
-            for node in ast.walk(family_tree)
-            if isinstance(node, ast.FunctionDef) and node.name == "descriptor"
-        )
-        capabilities = next(
-            value
-            for node in ast.walk(descriptor)
-            if isinstance(node, ast.Dict)
-            for key, value in zip(node.keys, node.values, strict=True)
-            if isinstance(key, ast.Constant) and key.value == "question_types"
-        )
+        capabilities = descriptor_question_types(family)
         if expected:
             if not (
                 isinstance(capabilities, ast.Call)
@@ -226,6 +231,22 @@ def backend_projection(data):
                 "id": f"{organization}/{ast.literal_eval(entry.args[0])}",
                 "family": "vela3",
                 "question_types": vela3_kinds,
+            }
+        )
+    # The Vela 3.0 d3 sizes answer their base's System One kinds and span questions.
+    d3_kinds = list(ast.literal_eval(descriptor_question_types("vela3_d3")))
+    for entry in assignment(RUNTIME / "registry/tables/vela3_d3.py", "MODELS").elts:
+        if (
+            not isinstance(entry, ast.Call)
+            or not isinstance(entry.func, ast.Name)
+            or entry.func.id != "_vela"
+        ):
+            raise ValueError("Vela release entries require an updated task projection")
+        models.append(
+            {
+                "id": f"{organization}/{ast.literal_eval(entry.args[0])}",
+                "family": "vela3_d3",
+                "question_types": d3_kinds,
             }
         )
     return {"models": models}
