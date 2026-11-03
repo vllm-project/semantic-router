@@ -103,14 +103,15 @@ func runProtectionExplicitRelease(ctx context.Context, public, management, token
 		rel == nil || !rel.Honored || rel.PreviousModel != a || rel.SelectedModel != b {
 		return fmt.Errorf("release not applied: %+v release=%+v", released, rel)
 	}
-	newHold, _, err := turn("session-gate-seed", false)
+	// gate_back admits both models and prefers a, so b stays only through the hold.
+	newHold, _, err := turn("session-gate-back", false)
 	if err != nil {
 		return err
 	}
 	if newHold.SelectedModel != b || newHold.Learning.Protection.Action == "release_switch" || newHold.Learning.Protection.Release != nil {
 		return fmt.Errorf("plain turn after release did not hold %q: %+v", b, newHold)
 	}
-	refused, headers, err := turn("session-gate-seed", true)
+	refused, headers, err := turn("session-gate-back", true)
 	if err != nil {
 		return err
 	}
