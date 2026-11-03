@@ -175,21 +175,37 @@ func TestProtectionReleaseRejectedInToolLoop(t *testing.T) {
 }
 
 func TestProtectionReleaseIntervalCountsUserTurns(t *testing.T) {
-	h := newReleaseHarness(t, routerLearningProtectionOnlyTestConfig(config.RouterLearningScopeSession))
-	h.send(releaseRequest{proposal: "frontier"})
-	if model, _ := h.send(releaseRequest{proposal: "cheap", release: true}); model != "cheap" {
-		t.Fatalf("first release not honored: %q", model)
-	}
-	h.send(releaseRequest{proposal: "frontier", toolLoop: true})
-	model, ctx := h.send(releaseRequest{proposal: "frontier", release: true})
-	if model != "cheap" {
-		t.Fatalf("release honored one user turn later: %q", model)
-	}
-	if warnings := releaseWarnings(ctx); len(warnings) != 1 || warnings[0] != "release_interval" {
-		t.Fatalf("warnings = %v", warnings)
-	}
-	if model, _ := h.send(releaseRequest{proposal: "frontier", release: true}); model != "frontier" {
-		t.Fatalf("release not honored after two user turns: %q", model)
+	for _, tc := range []struct {
+		name    string
+		between int
+	}{
+		{name: "default_two", between: 2},
+		{name: "one", between: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := routerLearningProtectionOnlyTestConfig(config.RouterLearningScopeSession)
+			if tc.between != 2 {
+				cfg.RouterLearning.Protection.Release.MinUserTurnsBetween = &tc.between
+			}
+			h := newReleaseHarness(t, cfg)
+			h.send(releaseRequest{proposal: "frontier"})
+			if model, _ := h.send(releaseRequest{proposal: "cheap", release: true}); model != "cheap" {
+				t.Fatalf("first release not honored: %q", model)
+			}
+			h.send(releaseRequest{proposal: "frontier", toolLoop: true})
+			for turn := 1; turn <= tc.between; turn++ {
+				model, ctx := h.send(releaseRequest{proposal: "frontier", release: true})
+				if model != "cheap" {
+					t.Fatalf("release honored %d user turn(s) later: %q", turn, model)
+				}
+				if warnings := releaseWarnings(ctx); len(warnings) != 1 || warnings[0] != "release_interval" {
+					t.Fatalf("warnings = %v", warnings)
+				}
+			}
+			if model, _ := h.send(releaseRequest{proposal: "frontier", release: true}); model != "frontier" {
+				t.Fatalf("release not honored after %d user turns between: %q", tc.between, model)
+			}
+		})
 	}
 }
 

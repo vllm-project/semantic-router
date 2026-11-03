@@ -120,7 +120,9 @@ request's protection key: with an `agent` header configured, releasing one
 subagent leaves the main agent and other subagents held. The router removes the
 header before the request reaches a backend, whether or not release is enabled,
 so config load accepts only an `x-` header name, and rejects an identity header,
-`x-api-key`, or another `x-vsr-` control header.
+a credential header such as `x-api-key` or `x-goog-api-key`, a gateway header
+(`x-envoy-*`, `x-authz-*`, `x-forwarded-*`, `x-request-id`), or another `x-vsr-`
+control header.
 
 A release is honored only when all of these hold:
 
@@ -128,9 +130,11 @@ A release is honored only when all of these hold:
   first decision instead.
 - The request is at a portable turn boundary, with no active tool loop and no
   nonportable context. Otherwise the reason is `release_not_at_turn_boundary`.
-- At least `min_user_turns_between` user turns have passed since the last
-  honored release on the key. A user turn is a request outside a tool loop;
-  tool hops do not count. Otherwise the reason is `release_interval`.
+- At least `min_user_turns_between` user turns lie between the last honored
+  release on the key and this one. With the default `2`, a release on turn 3
+  allows the next one on turn 6; `0` removes the limit. A user turn is a request
+  outside a tool loop; tool hops do not count. Otherwise the reason is
+  `release_interval`.
 - `release.enabled` is not `false`. Otherwise the reason is `release_disabled`.
 - Protection runs in `apply` mode for the request. A decision with
   `adaptations.mode: bypass` reports `protection_bypassed`; a request where
@@ -154,7 +158,7 @@ recorded as not honored, without using up the interval.
 Do not put the release header in Claude Code's `ANTHROPIC_CUSTOM_HEADERS`.
 That setting is fixed at startup and sent on every request, so every request
 would ask for a release. Protection would then re-decide every
-`min_user_turns_between` user turns, which effectively turns the hold off.
+`min_user_turns_between + 1` user turns, which effectively turns the hold off.
 :::
 
 ## Guards

@@ -86,7 +86,7 @@ func evaluateProtectionRelease(
 	// Memory has not counted this request yet; at a turn boundary it is the
 	// next user turn.
 	last := session.MemoryLastReleaseUserTurn
-	if last > 0 && session.MemoryUserTurnCount+1-last < cfg.Release.EffectiveMinUserTurnsBetween() {
+	if last > 0 && session.MemoryUserTurnCount+1-last <= cfg.Release.EffectiveMinUserTurnsBetween() {
 		verdict.reason = protectionReleaseReasonInterval
 		return verdict
 	}
