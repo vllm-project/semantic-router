@@ -238,7 +238,7 @@ class Reader:
                 criteria=criteria,
                 key=schema.id,
                 abstain=schema.abstain,
-                threshold=_threshold(question) if kind == "set" else None,
+                threshold=threshold_of(question) if kind == "set" else None,
                 truncate=overflow == "truncate",
                 require_full_input=require_full_input(question),
             ),
@@ -313,7 +313,7 @@ class Reader:
                 options=route.labels,
                 criteria=criteria,
                 key=question.get("preset") or question_id,
-                threshold=_threshold(question),
+                threshold=threshold_of(question),
                 span_range=span_range,
                 truncate=overflow == "truncate",
                 require_full_input=require_full_input(question),
@@ -330,7 +330,8 @@ def _overflow(question: dict[str, Any]) -> str:
     return str(overflow)
 
 
-def _threshold(question: dict[str, Any]) -> float | None:
+def threshold_of(question: dict[str, Any]) -> float | None:
+    """A question's threshold override, ``None`` when it sets none."""
     threshold = question.get("threshold")
     if threshold is None:
         return None

@@ -32,7 +32,7 @@ from ..decision3.package import STATE_ONCE_MODES
 from . import package as pkg
 from .gates import Gates
 from .model import GatedDecisions, SpanSetup, TurboDecisions
-from .spans import PRESETS, Policy, Renderer, SpanReader
+from .spans import ADAPTERS, PRESETS, Policy, Renderer, SpanReader
 
 
 class Vela3D3Family(ModelFamily):
@@ -130,7 +130,7 @@ class Vela3D3Family(ModelFamily):
         )
         heads = {
             route: _head(details.root / details.heads[name], engine_model.device)
-            for route, name in (("span", "span"), ("ner", "ner"), ("rel", "relation"))
+            for route, name in ADAPTERS.items()
             if name in details.heads
         }
         model.span_setup = SpanSetup(

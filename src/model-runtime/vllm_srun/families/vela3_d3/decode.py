@@ -16,6 +16,9 @@ where each "token" is a word of the target text:
 4. contiguous words of one label form a span, trimmed of whitespace and of
    enclosing bracket and quote characters.
 
+These are the Vela 2.0 decoder's rules (``vela2.words.decode_spans``); only
+the unit class differs, and URL tails are not trimmed.
+
 Evidence questions decode by sentence or paragraph (``evidence_spans``).
 """
 
@@ -27,6 +30,8 @@ from typing import Any
 
 import numpy as np
 
+from ..vela2.words import decode_spans
+
 # The released decoder's class, code point for code point. Unlike the word splitter's (vela2 ``words._CJK``,
 # whose compatibility block starts at U+8C48), the decoder's starts at U+F900.
 CJK = (
@@ -37,9 +42,6 @@ UNIT = re.compile(
     rf"(?:https?://|www\.)[^\s\]\)\}}>\u300c\u300d\u300e\u300f\"'\u201c\u201d{CJK}]+"
     rf"|(?:(?![{CJK}])[^\W_]|[@._\-+])+"
     rf"|\S"
-)
-EDGE = frozenset(
-    "[](){}<>\u300c\u300d\u300e\u300f\u3010\u3011\u300a\u300b\u3008\u3009\"'\u201c\u201d\u2018\u2019\u00ab\u00bb\u2039\u203a"
 )
 SENTENCE = re.compile(r"[^.!?\n]+(?:[.!?]+|\n|$)")
 PARAGRAPH_BREAK = re.compile(r"(\n\s*\n|\n)")
@@ -53,20 +55,6 @@ def units(text: str) -> np.ndarray:
     return out
 
 
-def trim(text: str, start: int, end: int) -> tuple[int, int]:
-    while start < end and (text[start].isspace() or text[start] in EDGE):
-        start += 1
-    while end > start and (text[end - 1].isspace() or text[end - 1] in EDGE):
-        end -= 1
-    return start, end
-
-
-def _first_nonspace(text: str, start: int, end: int) -> int:
-    while start < end and text[start].isspace():
-        start += 1
-    return start
-
-
 def decode(
     probabilities: Any,
     offsets: Any,
@@ -74,72 +62,28 @@ def decode(
     text: str,
     threshold: float,
 ) -> list[dict[str, Any]]:
-    """``[{start, end, label}]`` (code-point offsets) from word x label probabilities."""
-    probs = np.asarray(probabilities, dtype=np.float32)
-    offs = np.asarray(offsets)
-    count = len(offs)
-    if count == 0:
+    """``[{start, end, label}]`` (code-point offsets) from word x label probabilities.
+
+    The Vela 2.0 decoder with this decoder's unit class and no URL-tail trim;
+    words no character spans are left out first.
+    """
+    offs = np.asarray(offsets).reshape(-1, 2)
+    kept = offs[:, 1] > offs[:, 0]
+    if not kept.any():
         return []
-    valid = offs[:, 1] > offs[:, 0]
-    best = probs.argmax(1)
-    top = probs[np.arange(count), best]
-    label = np.where(valid & (top > threshold), best, -1)
-    unit_of = units(text)
-    word_unit = np.full(count, -1, dtype=np.int64)
-    for t in range(count):
-        if not valid[t]:
-            continue
-        a, b = int(offs[t, 0]), int(offs[t, 1])
-        first = _first_nonspace(text, a, b)
-        word_unit[t] = unit_of[first] if first < b and first < len(text) else -1
-    t = 0
-    while t < count:
-        if word_unit[t] < 0:
-            t += 1
-            continue
-        last = t
-        while last + 1 < count and (
-            word_unit[last + 1] == word_unit[t] or not valid[last + 1]
-        ):
-            last += 1
-        members = [i for i in range(t, last + 1) if valid[i]]
-        labelled = [i for i in members if label[i] >= 0]
-        if labelled:
-            if len({int(label[i]) for i in labelled}) > 1:
-                scores: dict[int, float] = {}
-                for i in labelled:
-                    scores[int(label[i])] = scores.get(int(label[i]), 0.0) + float(
-                        top[i]
-                    )
-                winner = max(scores, key=lambda k: scores[k])
-                for i in labelled:
-                    label[i] = winner
-            for c in {int(label[i]) for i in labelled}:
-                positions = [i for i in labelled if label[i] == c]
-                for i in members:
-                    if positions[0] < i < positions[-1] and label[i] < 0:
-                        label[i] = c
-        t = last + 1
-    runs: list[list[int]] = []
-    current: list[int] | None = None
-    for t in range(count):
-        if not valid[t]:
-            continue
-        c = int(label[t])
-        if current is not None and c == current[0]:
-            current[2] = int(offs[t, 1])
-            continue
-        if current is not None:
-            runs.append(current)
-        current = [c, int(offs[t, 0]), int(offs[t, 1])] if c >= 0 else None
-    if current is not None:
-        runs.append(current)
-    out = []
-    for c, first, last in runs:
-        start, end = trim(text, first, last)
-        if end > start:
-            out.append({"start": start, "end": end, "label": names[c]})
-    return out
+    probs = np.asarray(probabilities, dtype=np.float32)
+    return [
+        {"start": span["start"], "end": span["end"], "label": span["label"]}
+        for span in decode_spans(
+            probs[kept],
+            offs[kept],
+            list(names),
+            text,
+            threshold,
+            unit_pattern=UNIT,
+            url_tails=False,
+        )
+    ]
 
 
 def paragraphs(text: str) -> list[tuple[int, int]]:

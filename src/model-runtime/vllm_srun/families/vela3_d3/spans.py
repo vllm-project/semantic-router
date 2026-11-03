@@ -32,7 +32,9 @@ from ...errors import QuestionError
 from ...systemone import require_full_input
 from ..decision3.family import Item
 from ..decision3.prompt import render
-from ..vela2.words import _WORD
+from ..vela2.words import words_of
+from ..vela3.request import threshold_of
+from ..vela3.routing import RELATION_WORDING
 from .decode import decode, evidence_spans
 
 WINDOW, STRIDE, MAX_TARGET = 1800, 1536, 2048
@@ -55,15 +57,11 @@ PRESETS = ("pii", "halu")
 PRESET_KEPT = ("over", "threshold", "overflow", "require_full_input")
 # A span question reads its whole target, in windows: the one overflow it takes.
 WINDOWED = "window"
-RELATION = re.compile(
-    r"\bspans? (?:are|is) the .+ (?:of|for)\b|\brelat(?:ed|ion|ions|es|ing)?\b|\b(?:head|tail)\b|\bstands? in\b"
-    r"|\bwith respect to\b|\bcounterpart\b|\bsuch that\b|\brole of\b"
-)
 ANSWERING = re.compile(
     r"\b(?:answers?|evidence|support(?:s|ing|ed)?|cite[sd]?|citations?)\b"
 )
 ENTITY = re.compile(r"\b(?:entity|entities|types?|category|categories|named)\b")
-# The adapter and head each route runs.
+# The adapter and head each route runs (the heads by the same names).
 ADAPTERS = {"span": "span", "ner": "ner", "rel": "relation"}
 
 
@@ -167,19 +165,6 @@ def labels_of(question: dict[str, Any]) -> list[tuple[str, str]]:
     return labels
 
 
-def threshold_of(question: dict[str, Any]) -> float | None:
-    value = question.get("threshold")
-    if value is None:
-        return None
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, int | float)
-        or not 0 <= value <= 1
-    ):
-        raise invalid("threshold must be a number in [0, 1]")
-    return float(value)
-
-
 # ------------------------------------------------------------------ routing
 
 
@@ -222,7 +207,7 @@ class Policy:
         text = " ".join(str(instructions or "").split()).lower()
         if not text:
             return "ner"
-        if RELATION.search(text):
+        if RELATION_WORDING.search(text):
             return "rel" if self.relation else "span"
         if ANSWERING.search(text):
             return "span"
@@ -270,26 +255,6 @@ class Policy:
 
 
 # ------------------------------------------------------------------ rendering
-
-
-def word_first_tokens(text: str, offsets: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Each word of ``text`` that a token covers: its offsets and its first token's index."""
-    found = [(m.start(), m.end()) for m in _WORD.finditer(text)]
-    if not found or offsets is None or len(offsets) == 0:
-        return np.zeros((0, 2), np.int32), np.zeros(0, np.int32)
-    offsets = np.asarray(offsets)
-    starts, ends = offsets[:, 0], offsets[:, 1]
-    valid = ends > starts
-    reach = np.maximum.accumulate(np.where(valid, ends, -1))
-    spans, firsts = [], []
-    for a, b in found:
-        t = int(np.searchsorted(reach, a, side="right"))
-        while t < len(offsets) and not valid[t]:
-            t += 1
-        if t < len(offsets) and starts[t] < b:
-            spans.append((a, b))
-            firsts.append(t)
-    return np.asarray(spans, np.int32).reshape(-1, 2), np.asarray(firsts, np.int32)
 
 
 def windows(firsts: np.ndarray, count: int) -> list[tuple[int, int]]:
@@ -360,7 +325,8 @@ class Renderer:
         text_start = user_start + len("State:\n") + start
         encoding = self.tokenizer.encode(rendered, add_special_tokens=False)
         offsets = np.asarray(encoding.offsets, dtype=np.int64).reshape(-1, 2)
-        spans, firsts = word_first_tokens(text, offsets - text_start)
+        words = words_of(text, offsets - text_start)
+        spans, firsts = words.offsets, words.first
         position = user_start + len("\n".join(head)) + 1
         ranges = []
         begins, ends = offsets[:, 0], offsets[:, 1]
@@ -389,7 +355,7 @@ class Renderer:
         if count <= MAX_TARGET:
             return [self.window(parts, target, question, labels, text, 0)], count
         offsets = np.asarray(encoding.offsets, dtype=np.int64).reshape(-1, 2)
-        _, firsts = word_first_tokens(text, offsets)
+        firsts = words_of(text, offsets).first
         out = []
         for a, b in windows(firsts, count):
             start, end = int(offsets[a][0]), int(offsets[b - 1][1])

@@ -103,10 +103,12 @@ def words_of(text: str, token_offsets: NDArray[np.int32] | None) -> Words:
     return Words(spans[covered].astype(np.int32), token[covered].astype(np.int32))
 
 
-def _word_units(text: str, offsets: NDArray[np.int32]) -> NDArray[np.intp]:
-    """The unit (of ``_UNIT``) each word's first non-space character belongs to, -1 for none."""
+def _word_units(
+    text: str, offsets: NDArray[np.int32], unit_pattern: re.Pattern[str]
+) -> NDArray[np.intp]:
+    """The unit (of ``unit_pattern``) each word's first non-space character belongs to, -1 for none."""
     bounds = np.asarray(
-        [match.span() for match in _UNIT.finditer(text)], np.int64
+        [match.span() for match in unit_pattern.finditer(text)], np.int64
     ).reshape(-1, 2)
     first = offsets[:, 0].astype(np.int64)
     for index in np.nonzero([text[a].isspace() for a in first.tolist()])[0]:
@@ -124,13 +126,13 @@ def _word_units(text: str, offsets: NDArray[np.int32]) -> NDArray[np.intp]:
     return np.where(inside, unit, -1)
 
 
-def trim(text: str, start: int, end: int) -> tuple[int, int]:
-    """Drop surrounding whitespace, brackets and quotes, and a URL's trailing punctuation or CJK tail."""
+def trim(text: str, start: int, end: int, *, url_tails: bool = True) -> tuple[int, int]:
+    """Drop surrounding whitespace, brackets and quotes, and (``url_tails``) a URL's trailing punctuation or CJK tail."""
     while start < end and (text[start].isspace() or text[start] in EDGE):
         start += 1
     while end > start and (text[end - 1].isspace() or text[end - 1] in EDGE):
         end -= 1
-    if not _URL_START.match(text, start):
+    if not url_tails or not _URL_START.match(text, start):
         return start, end
     cjk = _CJK_CHAR.search(text, start, end)
     if cjk:
@@ -155,6 +157,9 @@ def decode_spans(
     labels: list[str],
     text: str,
     threshold: float,
+    *,
+    unit_pattern: re.Pattern[str] = _UNIT,
+    url_tails: bool = True,
 ) -> list[DecodedSpan]:
     """Labelled spans from word x label probabilities (the packages' word readout decoder).
 
@@ -164,6 +169,9 @@ def decode_spans(
     summed probability and gaps between labelled words are filled; only units
     that hold a labelled word can change. Consecutive words with the same label
     form a span, whose probability is the mean over its words.
+
+    ``unit_pattern`` and ``url_tails`` let another package's decoder (its
+    unit class, whether it trims URL tails) run the same rules.
     """
     probs = np.asarray(probabilities, dtype=np.float32)
     offsets = np.asarray(offsets)
@@ -176,7 +184,7 @@ def decode_spans(
     labelled = np.nonzero(label >= 0)[0]
     if not len(labelled):
         return []
-    unit = _word_units(text, offsets)
+    unit = _word_units(text, offsets, unit_pattern)
     change = np.ones(count, bool)
     change[1:] = unit[1:] != unit[:-1]
     run_start = np.nonzero(change)[0]
@@ -203,7 +211,9 @@ def decode_spans(
         value = int(label[begin])
         if value < 0:
             continue
-        start, end = trim(text, int(offsets[begin, 0]), int(offsets[stop - 1, 1]))
+        start, end = trim(
+            text, int(offsets[begin, 0]), int(offsets[stop - 1, 1]), url_tails=url_tails
+        )
         if end <= start:
             continue
         spans.append(

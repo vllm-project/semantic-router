@@ -98,7 +98,8 @@ class Roster:
     router_tasks: dict[str, tuple[str, tuple[str, ...]]]
 
 
-def _file(value: Any, where: str) -> str:
+def package_file(value: Any, where: str) -> str:
+    """``value`` as a file of the package (a safe relative path), or a ``PackageError`` naming ``where``."""
     if not isinstance(value, str) or not safe_relative(value):
         raise PackageError(f"{CONFIG_FILE}: {where} must name a file in the package")
     return value
@@ -112,7 +113,7 @@ def roster(root: Path, config: dict[str, Any]) -> tuple[Roster, dict[str, str]]:
     files: dict[str, str] = {}
 
     def take(name: str, value: Any, where: str) -> str | None:
-        file = _file(value, where)
+        file = package_file(value, where)
         if file not in present:
             return None
         files[name] = file
@@ -145,7 +146,9 @@ def roster(root: Path, config: dict[str, Any]) -> tuple[Roster, dict[str, str]]:
             f"router:{task}" if len(listed) == 1 else f"router:{task}:{index}"
             for index in range(len(listed))
         ]
-        if not all(_file(f, f"router.task_adapters.{task}") in present for f in listed):
+        if not all(
+            package_file(f, f"router.task_adapters.{task}") in present for f in listed
+        ):
             continue
         for name, file in zip(names, listed, strict=True):
             files[name] = file
@@ -211,7 +214,8 @@ class Vela3Package:
         return (self.root / BACKBONE_FILE,)
 
 
-def _sums(root: Path) -> dict[str, str]:
+def read_sums(root: Path) -> dict[str, str]:
+    """The package's ``SHA256SUMS`` by file name, empty when it has none."""
     path = root / SUMS_FILE
     if not path.is_file():
         return {}
@@ -244,7 +248,7 @@ def verify(root: Path, expected: dict[str, str] | None) -> Vela3Package:
         )
         if wrong:
             raise PackageError(f"files differ from the pinned revision: {wrong[:5]}")
-    sums = _sums(root)
+    sums = read_sums(root)
     mismatched = sorted(
         name for name, digest in files.items() if name in sums and sums[name] != digest
     )

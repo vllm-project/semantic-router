@@ -28,15 +28,13 @@ from ...errors import PackageError
 from ...registry.artifacts import (
     named_files,
     read_json,
-    safe_relative,
     safetensors_header,
     sha256_json,
 )
 from ...registry.resolve import REVISION
+from ..vela3.package import CONFIG_FILE, SUMS_FILE, package_file, read_sums
 
 FORMAT = "vela3/3"
-CONFIG_FILE = "vela3_config.json"
-SUMS_FILE = "SHA256SUMS"
 # Read for images only (a non-goal here): never loaded.
 IMAGE_ADAPTERS = frozenset({"image_halu"})
 # The span heads by engine name and where vela3_config.json names their files.
@@ -95,12 +93,6 @@ class Vela3D3Package:
     model_sha256: str = ""
 
 
-def _file(value: Any, where: str) -> str:
-    if not isinstance(value, str) or not safe_relative(value):
-        raise PackageError(f"{CONFIG_FILE}: {where} must name a file in the package")
-    return value
-
-
 def _base(vela3: dict[str, Any]) -> Base:
     base = vela3.get("base")
     if not isinstance(base, dict) or not isinstance(base.get("repo_id"), str):
@@ -115,13 +107,13 @@ def _heads(vela3: dict[str, Any]) -> dict[str, str]:
     span = vela3.get("span")
     if not isinstance(span, dict):
         raise PackageError(f"{CONFIG_FILE}: span must describe the span heads")
-    heads = {"span": _file(span.get("head_file"), "span.head_file")}
+    heads = {"span": package_file(span.get("head_file"), "span.head_file")}
     for name, path in HEAD_FIELDS.items():
         if not path:
             continue
         entry = span.get(path[0])
         if isinstance(entry, dict) and entry.get("head_file"):
-            heads[name] = _file(entry["head_file"], f"span.{path[0]}.head_file")
+            heads[name] = package_file(entry["head_file"], f"span.{path[0]}.head_file")
     return heads
 
 
@@ -129,7 +121,7 @@ def adapter_of(root: Path, name: str, spec: Any) -> Adapter:
     """Read one adapter's header and check it against its ``vela3_config.json`` entry (no tensor is read)."""
     if not isinstance(spec, dict):
         raise PackageError(f"{CONFIG_FILE}: adapters.{name} must be an object")
-    file = _file(spec.get("file"), f"adapters.{name}.file")
+    file = package_file(spec.get("file"), f"adapters.{name}.file")
     header = safetensors_header(root / file)
     metadata = header.pop("__metadata__", None) or {}
     try:
@@ -164,19 +156,6 @@ def adapter_of(root: Path, name: str, spec: Any) -> Adapter:
     return Adapter(name, file, rank, alpha, first, modules)
 
 
-def _sums(root: Path) -> dict[str, str]:
-    path = root / SUMS_FILE
-    if not path.is_file():
-        raise PackageError(f"the package has no {SUMS_FILE}")
-    sums = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        digest, _, name = line.strip().partition(" ")
-        name = name.strip().lstrip("*")
-        if digest and name:
-            sums[name] = digest
-    return sums
-
-
 def verify(root: Path, expected: dict[str, str] | None) -> Vela3D3Package:
     """Check every loaded file; ``expected`` is the built-in table's digests for a pinned revision."""
     root = Path(root)
@@ -190,20 +169,22 @@ def verify(root: Path, expected: dict[str, str] | None) -> Vela3D3Package:
             f"{CONFIG_FILE}: adapters must name the decision and span adapters"
         )
     heads = _heads(vela3)
-    questions_file = _file(vela3.get("router_questions_file"), "router_questions_file")
+    questions_file = package_file(
+        vela3.get("router_questions_file"), "router_questions_file"
+    )
     definitions = vela3.get("definitions") or {}
     data = ["config.json", CONFIG_FILE, questions_file]
     if definitions.get("cache_file"):
-        data.append(_file(definitions["cache_file"], "definitions.cache_file"))
+        data.append(package_file(definitions["cache_file"], "definitions.cache_file"))
     weights = [
-        _file((spec or {}).get("file"), f"adapters.{name}.file")
+        package_file((spec or {}).get("file"), f"adapters.{name}.file")
         for name, spec in specs.items()
         if name not in IMAGE_ADAPTERS
     ]
     weights += list(heads.values())
     if definitions.get("writer") == "grafted_head":
         weights.append(
-            _file(definitions.get("lm_head_file"), "definitions.lm_head_file")
+            package_file(definitions.get("lm_head_file"), "definitions.lm_head_file")
         )
     weights = sorted(set(weights))
     files = named_files(root, [*data, *weights])
@@ -216,7 +197,9 @@ def verify(root: Path, expected: dict[str, str] | None) -> Vela3D3Package:
         if wrong:
             raise PackageError(f"files differ from the pinned revision: {wrong[:5]}")
     else:
-        sums = _sums(root)
+        if not (root / SUMS_FILE).is_file():
+            raise PackageError(f"the package has no {SUMS_FILE}")
+        sums = read_sums(root)
         mismatched = sorted(
             name for name, digest in files.items() if sums.get(name) != digest
         )
