@@ -23,10 +23,15 @@ const LossyFieldToolResultError = "tool_result.is_error"
 // and Responses backends as user text.
 const LossyFieldSystemMessageRole = "messages[].role"
 
+// LossyFieldUnreadableFile names files in the conversation when the selected
+// model declares no file input. Accepting the loss sends each such file as a
+// short note, which ProjectUnreadableFiles writes.
+const LossyFieldUnreadableFile = "content.file"
+
 // OptInLossyFields lists the losses an operator may accept while every other
 // lossy translation keeps failing closed.
 func OptInLossyFields() []string {
-	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole}
+	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole, LossyFieldUnreadableFile}
 }
 
 type MissingIDPolicy string
