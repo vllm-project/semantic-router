@@ -1270,6 +1270,7 @@
             "type": "string",
             "enum": [
               "tool_result.is_error",
+              "messages[].role",
               "reasoning.signature"
             ]
           },

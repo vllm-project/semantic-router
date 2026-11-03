@@ -461,7 +461,12 @@ func encodeResponsesContent(contents []llmprotocol.Content, direction string) (j
 			if direction != "input" {
 				return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "file_content_position", "Responses output messages cannot contain input files", nil)
 			}
-			parts = append(parts, responsesContentWire{Type: "input_file", FileURL: content.URL, FileID: content.FileID, FileData: content.Data, Filename: content.Filename, Detail: content.Detail})
+			fileData := ""
+			if content.Data != "" {
+				// Neutral content stores the MIME type separately from Base64 bytes.
+				fileData = "data:" + content.MediaType + ";base64," + content.Data
+			}
+			parts = append(parts, responsesContentWire{Type: "input_file", FileURL: content.URL, FileID: content.FileID, FileData: fileData, Filename: content.Filename, Detail: content.Detail})
 		default:
 			return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_content", "content cannot be encoded as Responses", nil)
 		}

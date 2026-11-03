@@ -18,6 +18,11 @@ const (
 // OpenAI request formats cannot carry.
 const LossyFieldToolResultError = "tool_result.is_error"
 
+// LossyFieldSystemMessageRole names the role of Anthropic system messages
+// inside the conversation, which ProjectAnthropicSystemMessages sends to Chat
+// and Responses backends as user text.
+const LossyFieldSystemMessageRole = "messages[].role"
+
 // LossyFieldReasoningSignature names the signature an Anthropic backend puts
 // on its thinking, which Chat Completions and Responses clients cannot carry.
 const LossyFieldReasoningSignature = "reasoning.signature"
@@ -25,7 +30,7 @@ const LossyFieldReasoningSignature = "reasoning.signature"
 // OptInLossyFields lists the losses an operator may accept while every other
 // lossy translation keeps failing closed.
 func OptInLossyFields() []string {
-	return []string{LossyFieldToolResultError, LossyFieldReasoningSignature}
+	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole, LossyFieldReasoningSignature}
 }
 
 type MissingIDPolicy string
