@@ -82,6 +82,8 @@ func TestDashboardRoutePoliciesSeparateSecurityDomains(t *testing.T) {
 		{http.MethodPost, "/api/dsl/decompile", auth.PermConfigRead},
 		{http.MethodPost, "/api/dsl/format", auth.PermConfigRead},
 		{http.MethodGet, "/api/instance", auth.PermConfigRead},
+		{http.MethodGet, "/api/recipes/builtin", auth.PermConfigRead},
+		{http.MethodPost, "/api/recipes/builtin/compose", auth.PermConfigWrite},
 		{http.MethodPost, "/api/router/v1/chat/completions", auth.PermInferenceRun},
 		{http.MethodPost, "/api/router/api/v1/observability/outcomes", auth.PermFeedbackSubmit},
 		{http.MethodGet, "/api/router/api/v1/observability/replays/record-1", auth.PermReplayRead},
