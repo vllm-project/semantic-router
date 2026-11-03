@@ -37,6 +37,8 @@ export interface KeywordSignalConfig {
   operator: 'AND' | 'OR'
   keywords: string[]
   case_sensitive: boolean
+  include_history?: boolean
+  source?: 'tool_result'
 }
 
 export interface EmbeddingSignalConfig {

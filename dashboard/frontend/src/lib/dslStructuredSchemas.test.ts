@@ -94,6 +94,10 @@ describe('DSL structured field schemas', () => {
       type: 'select',
       options: ['tool_result'],
     })
+    expect(requireField(getSignalFieldSchema('keyword'), 'source')).toMatchObject({
+      type: 'select',
+      options: ['tool_result'],
+    })
 
     const domainScores = requireField(getSignalFieldSchema('domain'), 'model_scores')
     expect(domainScores.type).toBe('object[]')

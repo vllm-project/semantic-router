@@ -34,8 +34,9 @@ func (c *Classifier) buildPrimarySignalDispatchers(input SignalEvaluationInput, 
 		{
 			config.SignalTypeKeyword, "Keyword",
 			func(context.Context) {
-				c.evaluateKeywordSignalWithHistory(results, mu,
-					textForSignal(config.SignalTypeKeyword), input.PriorUserMessages)
+				c.evaluateKeywordSignalWithSources(results, mu,
+					textForSignal(config.SignalTypeKeyword), input.PriorUserMessages,
+					input.ToolResultTexts, input.ToolResultScanIncomplete)
 			},
 		},
 		{

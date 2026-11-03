@@ -30,6 +30,17 @@ type keywordRule struct {
 	regex          *preppedKeywordRule
 	scored         scoredKeywordMatcher
 	includeHistory bool
+	// operator is the configured AND, OR or NOR.
+	operator string
+	// source is config.KeywordSourceToolResult for rules that match only
+	// textual tool results; empty for rules that match the user message.
+	source string
+}
+
+// matchesToolResults reports whether the rule selects tool results instead of
+// the user message.
+func (r keywordRule) matchesToolResults() bool {
+	return r.source == config.KeywordSourceToolResult
 }
 
 // scoredKeywordMatcher is a BM25 or n-gram rule.
@@ -69,12 +80,27 @@ func (c *KeywordClassifier) HasHistoryRules() bool {
 	return false
 }
 
+// ToolResultRuleNames returns, in configuration order, the names of the rules
+// that select source: tool_result.
+func (c *KeywordClassifier) ToolResultRuleNames() []string {
+	if c == nil {
+		return nil
+	}
+	var names []string
+	for _, rule := range c.rules {
+		if rule.matchesToolResults() {
+			names = append(names, rule.name)
+		}
+	}
+	return names
+}
+
 func newKeywordRule(rule config.KeywordRule) (keywordRule, error) {
 	method := strings.ToLower(rule.Method)
 	if method == "" {
 		method = "regex"
 	}
-	compiled := keywordRule{name: rule.Name, method: method, includeHistory: rule.IncludeHistory}
+	compiled := keywordRule{name: rule.Name, method: method, includeHistory: rule.IncludeHistory, operator: rule.Operator, source: rule.Source}
 	scoredRule := lexical.Rule{Name: rule.Name, Operator: rule.Operator, Keywords: rule.Keywords, CaseSensitive: rule.CaseSensitive}
 	switch method {
 	case "bm25":

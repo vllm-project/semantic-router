@@ -53,6 +53,9 @@ func (d *decompiler) keywordToSignal(kw *config.KeywordRule) *SignalDecl {
 	if kw.IncludeHistory {
 		fields["include_history"] = BoolValue{V: true}
 	}
+	if kw.Source != "" {
+		fields["source"] = StringValue{V: kw.Source}
+	}
 	return &SignalDecl{SignalType: "keyword", Name: kw.Name, Fields: fields}
 }
 

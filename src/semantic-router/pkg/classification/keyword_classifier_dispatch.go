@@ -37,6 +37,10 @@ func (c *KeywordClassifier) ClassifyWithKeywordsAndCount(text string) (string, [
 	}
 	analysis := lexical.NewText(text)
 	for _, rule := range c.rules {
+		if rule.matchesToolResults() {
+			// A single text is user content; tool-result rules never see it.
+			continue
+		}
 		match, err := c.matchRule(text, analysis, rule)
 		if err != nil {
 			return "", nil, 0, 0, err
@@ -59,25 +63,52 @@ func (c *KeywordClassifier) MatchAll(text string) ([]KeywordRuleMatch, error) {
 // MatchAllWithHistory is MatchAll with an optional conversation history.
 // Rules with includeHistory match against historyText (prior user messages
 // plus the current message) when it is non-empty; every other rule matches
-// against currentText only.
+// against currentText only. Rules with source: tool_result never match here
+// because no tool results are supplied.
 func (c *KeywordClassifier) MatchAllWithHistory(currentText, historyText string) ([]KeywordRuleMatch, error) {
+	return c.MatchAllWithSources(KeywordMatchInput{CurrentText: currentText, HistoryText: historyText})
+}
+
+// KeywordMatchInput is the request content MatchAllWithSources evaluates.
+// Each rule reads exactly one of the three fields, selected by its
+// configuration.
+type KeywordMatchInput struct {
+	// CurrentText is the current user message.
+	CurrentText string
+	// HistoryText is the prior user messages joined with the current one. It
+	// is read by include_history rules and ignored when empty.
+	HistoryText string
+	// ToolResultTexts are the textual tool results of the request in request
+	// order, one string per tool result. They are read by source: tool_result
+	// rules, each text on its own, and never by any other rule.
+	ToolResultTexts []string
+}
+
+// MatchAllWithSources evaluates every keyword rule against the content its
+// source selects and returns all matches in declaration order.
+func (c *KeywordClassifier) MatchAllWithSources(input KeywordMatchInput) ([]KeywordRuleMatch, error) {
 	if c == nil {
 		return nil, nil
 	}
-	analysis := lexical.NewText(currentText)
-	// historyAnalysis is built lazily, only if some rule opts into history.
+	analysis := lexical.NewText(input.CurrentText)
+	// historyAnalysis is built lazily, only if a scored rule needs it.
 	var historyAnalysis *lexical.Text
 	matches := make([]KeywordRuleMatch, 0)
 
 	for _, rule := range c.rules {
-		text, ruleAnalysis := currentText, analysis
-		if rule.includeHistory && historyText != "" {
+		var match ruleMatch
+		var err error
+		switch {
+		case rule.matchesToolResults():
+			match, err = c.matchRuleAcrossTexts(input.ToolResultTexts, rule)
+		case rule.includeHistory && input.HistoryText != "":
 			if historyAnalysis == nil {
-				historyAnalysis = lexical.NewText(historyText)
+				historyAnalysis = lexical.NewText(input.HistoryText)
 			}
-			text, ruleAnalysis = historyText, historyAnalysis
+			match, err = c.matchRule(input.HistoryText, historyAnalysis, rule)
+		default:
+			match, err = c.matchRule(input.CurrentText, analysis, rule)
 		}
-		match, err := c.matchRule(text, ruleAnalysis, rule)
 		if err != nil {
 			return nil, err
 		}
@@ -93,6 +124,47 @@ func (c *KeywordClassifier) MatchAllWithHistory(currentText, historyText string)
 		})
 	}
 	return matches, nil
+}
+
+// matchRuleAcrossTexts evaluates one regex rule against several independent
+// texts, so a phrase or an AND rule cannot be assembled from two tool results.
+// An AND or OR rule matches when any text matches and reports the keywords
+// matched across all matching texts; a NOR rule matches only when every text
+// is free of its keywords. No text means no match, so NOR cannot match a
+// request that carries no tool results. Configuration validation restricts
+// source: tool_result to regex rules, which never read a lexical analysis.
+func (c *KeywordClassifier) matchRuleAcrossTexts(texts []string, rule keywordRule) (ruleMatch, error) {
+	if len(texts) == 0 {
+		return ruleMatch{}, nil
+	}
+	nor := rule.operator == "NOR"
+	combined := ruleMatch{ruleName: rule.name}
+	seen := make(map[string]struct{})
+	for _, text := range texts {
+		match, err := c.matchRule(text, nil, rule)
+		if err != nil {
+			return ruleMatch{}, err
+		}
+		if !match.matched {
+			if nor {
+				return ruleMatch{}, nil
+			}
+			continue
+		}
+		combined.matched = true
+		combined.totalKeywords = match.totalKeywords
+		for _, keyword := range match.keywords {
+			if _, ok := seen[keyword]; ok {
+				continue
+			}
+			seen[keyword] = struct{}{}
+			combined.keywords = append(combined.keywords, keyword)
+		}
+	}
+	if combined.matched {
+		combined.matchCount = len(combined.keywords)
+	}
+	return combined, nil
 }
 
 // matchRule evaluates one rule. analysis shares tokenization between the

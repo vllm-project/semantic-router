@@ -82,6 +82,13 @@ type KeywordRule struct {
 	// so a marker stated earlier in the conversation still matches.
 	// Assistant and system messages are never included.
 	IncludeHistory bool `yaml:"include_history,omitempty"`
+	// Source selects which request content this rule matches. When empty (the
+	// default), the rule matches the current user message, plus prior user
+	// messages when IncludeHistory is set. "tool_result" matches only the
+	// textual tool results in the request, each evaluated on its own, and
+	// never the prompt or conversation history; a request without tool
+	// results does not match such a rule. Only regex rules may select it.
+	Source string `yaml:"source,omitempty"`
 }
 
 type AggregationMethod string

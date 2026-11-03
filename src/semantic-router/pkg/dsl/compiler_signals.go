@@ -51,6 +51,9 @@ func (c *Compiler) compileKeywordSignal(s *SignalDecl) {
 	if v, ok := getBoolField(s.Fields, "include_history"); ok {
 		rule.IncludeHistory = v
 	}
+	if v, ok := getStringField(s.Fields, "source"); ok {
+		rule.Source = v
+	}
 	c.config.KeywordRules = append(c.config.KeywordRules, rule)
 }
 

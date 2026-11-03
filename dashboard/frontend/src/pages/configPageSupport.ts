@@ -1091,6 +1091,8 @@ export interface KeywordSignal {
   bm25_threshold?: number
   ngram_threshold?: number
   ngram_arity?: number
+  include_history?: boolean
+  source?: 'tool_result'
 }
 
 export interface EmbeddingSignal {

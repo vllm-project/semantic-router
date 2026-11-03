@@ -7,7 +7,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-func TestExtractToolResultTextsPreservesOrderAndSelectsText(t *testing.T) {
+func TestExtractToolResultTextsJoinsBlocksPerToolResultAndSelectsText(t *testing.T) {
 	req := &llmprotocol.Request{
 		Messages: []llmprotocol.Message{
 			{
@@ -54,7 +54,7 @@ func TestExtractToolResultTextsPreservesOrderAndSelectsText(t *testing.T) {
 	}
 
 	got := extractToolResultTexts(req)
-	want := []string{"first", "second", "third"}
+	want := []string{"first\nsecond", "third"}
 	if !reflect.DeepEqual(got.texts, want) {
 		t.Fatalf("extractToolResultTexts().texts = %#v, want %#v", got.texts, want)
 	}
@@ -141,8 +141,8 @@ func TestExtractToolResultTextsIncludesTextBearingBlocks(t *testing.T) {
 	}
 
 	got := extractToolResultTexts(req)
-	if !reflect.DeepEqual(got.texts, []string{"refusal text", "reasoning text"}) || got.incomplete {
-		t.Fatalf("extraction = %#v, want two text-bearing blocks and complete status", got)
+	if !reflect.DeepEqual(got.texts, []string{"refusal text\nreasoning text"}) || got.incomplete {
+		t.Fatalf("extraction = %#v, want one joined text-bearing result and complete status", got)
 	}
 }
 

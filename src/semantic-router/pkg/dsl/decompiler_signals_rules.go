@@ -51,6 +51,9 @@ func (d *decompiler) decompileKeywordSignals() {
 		if kw.IncludeHistory {
 			d.write("  include_history: true\n")
 		}
+		if kw.Source != "" {
+			d.write("  source: %q\n", kw.Source)
+		}
 		d.write("}\n\n")
 	}
 }
