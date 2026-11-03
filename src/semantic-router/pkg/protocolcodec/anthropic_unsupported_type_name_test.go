@@ -19,3 +19,12 @@ func TestAnthropicUnsupportedContentNamesTheType(t *testing.T) {
 	_, _, _, err := NewBuiltinEngine().DecodeRequestForMutation(llmprotocol.AnthropicMessagesV1, body)
 	require.ErrorContains(t, err, `Anthropic content type "tool_reference" is unsupported`)
 }
+
+// Claude Code's WebSearch sends Anthropic's hosted web_search tool, which no
+// backend behind the Router can run. The refusal names the tool type.
+func TestAnthropicUnsupportedToolNamesTheType(t *testing.T) {
+	body := []byte(`{"model":"m","max_tokens":64,"messages":[{"role":"user","content":"Perform a web search for the query: vllm"}],
+		"tools":[{"type":"web_search_20250305","name":"web_search","max_uses":8}]}`)
+	_, _, _, err := NewBuiltinEngine().DecodeRequestForMutation(llmprotocol.AnthropicMessagesV1, body)
+	require.ErrorContains(t, err, `Anthropic tool type "web_search_20250305" is unsupported`)
+}
