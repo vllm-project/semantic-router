@@ -122,13 +122,9 @@ Check the selected model on tool continuations and user follow-ups. The harness
 retains tool permissions, task state, and the outer loop; recipes do not configure
 delegated agents.
 
-Claude Code sends `x-claude-code-session-id` on every Messages request and
-does not send `x-session-id`. To hold its runs, set
-`identity.headers.session: x-claude-code-session-id`. Its subagents send the
-same session ID as the agent that started them, so under that setting they
-are held on the model their parent was given. To hold each subagent on its own
-model instead, also set `identity.headers.agent: x-claude-code-agent-id`, which
-Claude Code sends on subagent requests only.
+Claude Code sends `x-claude-code-session-id` instead of `x-session-id`. See
+[Agents that delegate to subagents](../tutorials/learning/protection#agents-that-delegate-to-subagents)
+for the identity headers that hold its runs and its subagents.
 
 ### Agents that send tool output as messages
 
@@ -175,8 +171,8 @@ decides much of a call's latency and cost, and three things lose it.
   [model configuration](model-configuration#tune-timeouts-retries-and-endpoint-health))
   does not keep a session on one replica. When several replicas serve agent
   sessions, route the model to a pool whose scheduler places requests by prefix
-  cache and load, such as [llm-d](k8s/llm-d), instead of listing the replicas
-  as `backend_refs`.
+  cache and load, for example [llm-d](k8s/llm-d) (an experimental integration),
+  instead of listing the replicas as `backend_refs`.
 - **Eviction.** When the sessions in flight need more KV cache than the GPU
   holds, a returning session finds its prefix evicted. A CPU offload tier on the
   backend, such as LMCache for vLLM, returns those prefixes instead of computing
