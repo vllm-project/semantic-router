@@ -53,7 +53,7 @@ global:
     deployments:
       primary:
         provider: model_runtime
-        artifact: vllm-sr/Vela-2.0-0.8B
+        artifact: vllm-sr/vela3-lite
     system:
       decision_model:
         deployment: primary
@@ -277,8 +277,9 @@ routing:
         description: The message contains personal data about a person.
         question:
           type: noul
-          instructions: Does the message contain personal data about a person, such as a name with an
-            email address, phone number, street address or ID number?
+          instructions: Does the message contain personal data, such as an email address, a phone
+            number, a street or delivery address, or a government ID or social security number? A
+            city or country alone is not personal data.
         predicate:
           gte: 0.5
       - name: domain
@@ -299,7 +300,7 @@ routing:
               description: 'Anything else: general knowledge, everyday questions, writing or personal
                 topics'
         predicate:
-          gte: 0.4
+          gte: 0.6
       - name: difficulty
         description: How much reasoning a strong expert needs, from 0 (none) to 4 (research level).
         question:
@@ -312,7 +313,7 @@ routing:
             - Deep expert reasoning on a hard problem
             - Research-level work on an open or frontier problem
         predicate:
-          gte: 1.0
+          gte: 0.85
   decisions:
     - name: local_security_containment
       description: An attempt to make the assistant ignore its rules or reveal its hidden system prompt
@@ -391,7 +392,7 @@ routing:
           type: router_replay
     - name: simple_math_fast_path
       description: 'Math and science that needs almost no reasoning (domain: math_science, difficulty
-        below 1) stays on the local model.'
+        below 0.85) stays on the local model.'
       priority: 300
       tier: 2
       rules:
@@ -438,7 +439,7 @@ routing:
             max_records: 10000
           type: router_replay
     - name: domain_code_complex
-      description: 'Hard software work (domain: code, difficulty 1.75 or more) goes to the strongest technical
+      description: 'Hard software work (domain: code, difficulty 1.6 or more) goes to the strongest technical
         models.'
       priority: 255
       tier: 3
@@ -452,7 +453,7 @@ routing:
           - type: decision
             name: difficulty
             predicate:
-              gte: 1.75
+              gte: 1.6
       modelRefs:
         - model: google/gemini-3.1-pro
           use_reasoning: false
@@ -465,7 +466,7 @@ routing:
             max_records: 10000
           type: router_replay
     - name: domain_code
-      description: 'Other software work that needs some reasoning (domain: code, difficulty 1 to 1.75)
+      description: 'Other software work that needs some reasoning (domain: code, difficulty 0.85 to 1.6)
         goes to the code model.'
       priority: 250
       tier: 3
@@ -483,7 +484,7 @@ routing:
               - type: decision
                 name: difficulty
                 predicate:
-                  gte: 1.75
+                  gte: 1.6
       modelRefs:
         - model: google/gemini-2.5-flash-lite
           use_reasoning: false
@@ -496,7 +497,7 @@ routing:
             max_records: 10000
           type: router_replay
     - name: domain_stem_research
-      description: 'Math and science that needs reasoning (domain: math_science, difficulty 1 or more)
+      description: 'Math and science that needs reasoning (domain: math_science, difficulty 0.85 or more)
         goes to the STEM and research models.'
       priority: 240
       tier: 3
@@ -546,7 +547,7 @@ routing:
             max_records: 10000
           type: router_replay
     - name: complex_general
-      description: Any other request that needs deep reasoning (difficulty 1.75 or more, domain not code
+      description: Any other request that needs deep reasoning (difficulty 1.6 or more, domain not code
         or math_science) goes to the stronger models.
       priority: 190
       tier: 4
@@ -557,7 +558,7 @@ routing:
           - type: decision
             name: difficulty
             predicate:
-              gte: 1.75
+              gte: 1.6
           - operator: NOT
             conditions:
               - type: decision
@@ -580,7 +581,7 @@ routing:
             max_records: 10000
           type: router_replay
     - name: medium_general
-      description: Any other request that needs some reasoning (difficulty 1 to 1.75) goes to the medium
+      description: Any other request that needs some reasoning (difficulty 0.85 to 1.6) goes to the medium
         model.
       priority: 150
       tier: 5
@@ -595,7 +596,7 @@ routing:
               - type: decision
                 name: difficulty
                 predicate:
-                  gte: 1.75
+                  gte: 1.6
       modelRefs:
         - model: google/gemini-2.5-flash-lite
           use_reasoning: false

@@ -7,7 +7,8 @@ fast, specialist, and premium model lanes. The router's decision model answers
 four named questions about each request in one call, and two conversation
 facts come from the request itself. Each of the 15 routing decisions reads one
 of these answers, so every route can be traced to the question that chose it.
-The recipe declares the decision model it was calibrated with, Vela 2.0 0.8B.
+The recipe declares the decision model it was calibrated with, vela3-lite
+(Vela 3.0 0.8B).
 
 The recipe exposes `vllm-sr/auto`. It is intended as a starting policy that
 operators calibrate against their own models and traffic.
@@ -46,13 +47,13 @@ must dominate every decision.
 | Question | Type | Asks | Decides |
 | --- | --- | --- | --- |
 | `task` | Choice of 11 | What kind of work does this request ask for? | Which work lane a request takes. |
-| `verification` | Yes or no | Does the user ask to verify the answer, or to back it with sources, citations or evidence? | Whether an explanation takes the verified lane. |
+| `verification` | Yes or no | Does the user ask for sources, citations or evidence, or ask the assistant to fact-check a claim or verify an answer? | Whether an explanation takes the verified lane. |
 | `correction` | Yes or no | In the latest message, does the user say the assistant's previous answer was wrong and ask for a corrected answer? | Whether a follow-up takes the recovery lane. |
 | `clarify` | Yes or no | In the latest message, does the user ask the assistant to explain its previous answer again, more clearly, more simply or with an example? | Whether a follow-up takes the clarification lane. |
 
 `task` counts when its most likely answer has probability at least 0.4. A yes
 counts for `verification` at 0.5, for `clarify` at 0.6, and for `correction`
-at 0.7. Each label of `task` has a description in
+at 0.85. Each label of `task` has a description in
 [`config.yaml`](config.yaml); the descriptions are part of the policy, and the
 examples in them separate neighbouring kinds of work.
 
@@ -95,26 +96,31 @@ rule that reads a question treats an unknown answer as no match.
 
 ## Calibration notes
 
-The thresholds and descriptions were calibrated on the maintained probes with
-Vela 2.0 0.8B:
+The thresholds were calibrated on the maintained probes with vela3-lite:
 
-- On a first message the model sometimes answers yes to `clarify` or
-  `correction`: of the 62 first-message probes it answers, 7 reach the
-  `clarify` threshold and 2 score 0.9 or more for `correction`. Both
-  questions therefore count only after an earlier assistant answer.
-- After an earlier answer, the model separates feedback from a new request
-  clearly. The 5 corrections score 0.99 or more for `correction`; the 4
-  clarification requests score 0.97 or more for `clarify` and 0.44 or less
-  for `correction`; the 3 follow-ups that ask for something new score 0.08
-  or less for both. `correction` counts at 0.7, inside that gap.
-- Explanations that ask for sources score 0.93 or more for `verification`,
-  and the other explanations 0.03 or less.
-- "Verify with a source whether light travels faster than sound" was read as
-  `science` (0.91) until `facts` named basic facts of science and nature,
-  even when the user asks for a source, and `science` named hard problems
-  that need multi-step reasoning.
-- "Who are you?" was read as `facts` until `chat` named questions about the
-  assistant itself.
+- On a first message the model sometimes answers yes to `clarify`: of the 63
+  first-message probes it answers, 4 reach the `clarify` threshold, and none
+  scores more than 0.59 for `correction`. Both questions therefore count only
+  after an earlier assistant answer.
+- After an earlier answer, the 5 corrections score 0.97 or more for
+  `correction`; the 4 clarification requests score 0.78 or more for `clarify`
+  and 0.75 or less for `correction`; the 3 follow-ups that ask for something
+  new score 0.06 or less for `correction` and 0.34 or less for `clarify`.
+  `correction` counts at 0.85, inside that gap; at 0.7, two clarification
+  requests took the recovery lane.
+- Explanations that ask for sources score 0.61 or more for `verification`,
+  and the other explanations 0.03 or less. A wording that began with
+  verifying the answer scored a request to "compare recent peer-reviewed
+  findings with citations" 0.39, so the question leads with sources,
+  citations and evidence.
+- The lane-deciding `task` answers have probability 0.78 or more.
+
+The descriptions come from the calibration on Vela 2.0 0.8B, where
+"Verify with a source whether light travels faster than sound" was read as
+`science` (0.91) until `facts` named basic facts of science and nature, even
+when the user asks for a source, and `science` named hard problems that need
+multi-step reasoning, and "Who are you?" was read as `facts` until `chat` named
+questions about the assistant itself.
 
 Two descriptions come from an earlier calibration on Vela 2.0 0.3B: with
 engineering plans and advanced science described as one label, that model
@@ -130,20 +136,23 @@ neighbouring labels.
 
 - Reachable OpenAI-compatible endpoints for the configured aliases.
 - The decision model for the four questions. The recipe declares it as the
-  `primary` deployment of Vela 2.0 0.8B, which
+  `primary` deployment of vela3-lite, which
   `global.model_catalog.system.decision_model` names. Keep that binding: an
   unset decision model follows the router default, vela3-fast, on which these
   thresholds were not calibrated.
   In the CPU conformance run, with the router limited to 4 CPUs and 4
-  requests in flight, the median request took 28 s and the 95th
-  percentile 59 s.
+  requests in flight, the median request took 19 s and the 95th
+  percentile 41 s. The model reads the whole message once per question, so a
+  long message costs more on a CPU: the repeated question in the probes is
+  asked 100 times, because at 500 its four questions passed the decision
+  deadline there.
   Serve it on a GPU for live traffic. With no device set, the runtime uses a
   GPU when the router has one and the CPU otherwise; set `device: rocm` or
-  `device: cuda` on the `primary` deployment to require one. For a smaller
-  model, change its `artifact` (for example to `vllm-sr/Vela-2.0-0.3B`) or
-  point `global.model_catalog.system.decision_model.deployment` at another
+  `device: cuda` on the `primary` deployment to require one. To use another
+  decision model, change its `artifact` or point
+  `global.model_catalog.system.decision_model.deployment` at another
   deployment, and rerun the probes, because the thresholds were calibrated on
-  the 0.8B.
+  vela3-lite.
 - A response-cache store when cache behavior is desired.
 - Calibrated cost and capability metadata for the actual deployment.
 
@@ -176,10 +185,10 @@ maintainer-facing source and conformance fixtures for this built-in Recipe.
 The 75 probes cover every decision, priority collisions between follow-ups and
 work lanes, follow-ups that ask for something new, verification requests,
 English and Chinese requests, a long repeated question, and the fallback for a
-blank message. CPU conformance runs them with the declared Vela 2.0 0.8B,
+blank message. CPU conformance runs them with the declared vela3-lite,
 which reaches the expected decision for all 75. With the router limited to 4
-CPUs, as on a 4-vCPU CI runner, and 4 probes in flight, the whole run took 11
-minutes: 0.12 requests per second, with a median latency of 28 seconds. See
+CPUs, as on a 4-vCPU CI runner, and 4 probes in flight, the median latency
+was 19 seconds. See
 [`probes.yaml`](probes.yaml) and the
 [conformance guide](../CONFORMANCE.md).
 

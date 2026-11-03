@@ -34,7 +34,7 @@ SIGNAL decision code {
 SIGNAL decision sources {
   description: "The user asks for sources, citations or a fact check."
   question: { instructions: "Does the user ask for sources, citations or a fact check of the answer?", type: "noul" }
-  predicate: { gte: 0.6 }
+  predicate: { gte: 0.4 }
 }
 
 # =============================================================================

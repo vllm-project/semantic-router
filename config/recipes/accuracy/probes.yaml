@@ -84,12 +84,24 @@ decisions:
               description: Read one evidence document.
         tags: [language:en, tools, shape:tools, accuracy]
       - id: workflow_priority_over_long_context
-        query: Research, compare, and synthesize the evidence, then break this into independent workstreams.
-        repeat: 2600
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: 'Here is the incident record for this morning:'
+          - role: assistant
+            content: I have the incident record.
+          - role: user
+            content: Research, compare, and synthesize the evidence in that incident record, then break this into independent workstreams.
+        generated_text:
+          message_index: 0
+          content_index: 1
+          target_text_bytes: 82000
+          text: 'Incident record: the checkout service timed out between 09:00 and 09:40 while the payment queue backlog grew and cache hit rates fell. '
         expected_signals:
           decision: [accuracy_mode:workstreams]
           context: [accuracy_long_context]
-        tags: [collision, priority, stress:long-input, orchestration]
+        tags: [collision, priority, stress:long-input, orchestration, shape:messages]
 
   - id: accuracy_long_context_direct
     expected_decision: accuracy_long_context_direct
@@ -97,22 +109,58 @@ decisions:
     expected_alias: gpt55-worker
     variants:
       - id: long_architecture_context
-        query: Background architecture context that must be summarized without multi-model fan-out.
-        repeat: 2600
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: 'Here is the background architecture context:'
+          - role: assistant
+            content: I have the architecture context.
+          - role: user
+            content: Summarize that architecture context directly, without multi-model fan-out.
+        generated_text:
+          message_index: 0
+          content_index: 1
+          target_text_bytes: 82000
+          text: 'Architecture note: the order service writes to a primary database, publishes events to a queue, and serves reads from a regional cache. '
         expected_signals:
           context: [accuracy_long_context]
-        tags: [stress:long-input, performance, single-model]
+        tags: [stress:long-input, performance, single-model, shape:messages]
       - id: long_multilingual_context
-        query: Contexte technique détaillé à résumer directement sans orchestration parallèle.
-        repeat: 2600
-        tags: [stress:long-input, language:fr, performance]
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: 'Voici le contexte technique détaillé :'
+          - role: assistant
+            content: J'ai bien reçu le contexte technique.
+          - role: user
+            content: Résume directement ce contexte technique, sans orchestration parallèle.
+        generated_text:
+          message_index: 0
+          content_index: 1
+          target_text_bytes: 82000
+          text: 'Contexte technique : le service de commandes ecrit dans une base primaire, publie des evenements dans une file et lit depuis un cache regional. '
+        tags: [stress:long-input, language:fr, performance, shape:messages]
       - id: long_context_priority_over_deliberation
-        query: Compare competing hypotheses, request independent expert opinions, and reach a verdict.
-        repeat: 2600
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: 'Here is the incident record for this morning:'
+          - role: assistant
+            content: I have the incident record.
+          - role: user
+            content: Compare competing hypotheses about that incident record, request independent expert opinions, and reach a verdict.
+        generated_text:
+          message_index: 0
+          content_index: 1
+          target_text_bytes: 82000
+          text: 'Incident record: the checkout service timed out between 09:00 and 09:40 while the payment queue backlog grew and cache hit rates fell. '
         expected_signals:
           decision: [accuracy_mode:independent_review]
           context: [accuracy_long_context]
-        tags: [collision, priority, stress:long-input, deliberation]
+        tags: [collision, priority, stress:long-input, deliberation, shape:messages]
 
   - id: accuracy_deliberation
     expected_decision: accuracy_deliberation

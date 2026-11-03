@@ -20,14 +20,14 @@ SIGNAL decision task {
 
 SIGNAL decision verification {
   description: "The user asks for sources, citations or evidence."
-  question: { choices: [{ description: "No: no verification or sources are requested", key: "false" }, { description: "Yes: the user asks for verification, sources or evidence", key: "true" }], instructions: "Does the user ask to verify the answer, or to back it with sources, citations or evidence?", type: "noul" }
+  question: { choices: [{ description: "No: no verification or sources are requested", key: "false" }, { description: "Yes: the user asks for verification, sources or evidence", key: "true" }], instructions: "Does the user ask for sources, citations or evidence, or ask the assistant to fact-check a claim or verify an answer?", type: "noul" }
   predicate: { gte: 0.5 }
 }
 
 SIGNAL decision correction {
   description: "The user says the assistant's previous answer was wrong."
   question: { choices: [{ description: "No: the user continues, asks something new, or is satisfied", key: "false" }, { description: "Yes: the user says the previous answer was wrong", key: "true" }], instructions: "In the latest message, does the user say the assistant's previous answer was wrong and ask for a corrected answer?", type: "noul" }
-  predicate: { gte: 0.7 }
+  predicate: { gte: 0.85 }
 }
 
 SIGNAL decision clarify {

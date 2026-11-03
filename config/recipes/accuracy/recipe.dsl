@@ -21,7 +21,7 @@ SIGNAL decision accuracy_mode {
 SIGNAL decision accuracy_difficulty {
   description: "How much reasoning a strong expert needs, from 0 (none) to 4 (research level)."
   question: { instructions: "How much reasoning does a strong expert need to answer this request well?", levels: ["Answer immediately, with no thinking", "A little thought, one or two simple steps", "Multi-step reasoning or a careful check", "Deep expert reasoning on a hard problem", "Research-level work on an open or frontier problem"], type: "score" }
-  predicate: { gte: 1.5 }
+  predicate: { gte: 1.25 }
 }
 
 # =============================================================================
@@ -76,7 +76,7 @@ ROUTE omni (description = "Understand image-bearing requests with the dedicated 
   ALGORITHM static
 }
 
-ROUTE accuracy_workflow (description = "Several workstreams (accuracy_mode: workstreams) that need multi-step reasoning (accuracy_difficulty 1.5 or more) run as a bounded parallel workflow.", on_unknown = "no_match") {
+ROUTE accuracy_workflow (description = "Several workstreams (accuracy_mode: workstreams) that need multi-step reasoning (accuracy_difficulty 1.25 or more) run as a bounded parallel workflow.", on_unknown = "no_match") {
   PRIORITY 100
   WHEN decision("accuracy_mode", label: "workstreams", predicate: { gte: 0.6 }) AND decision("accuracy_difficulty")
   MODEL "opus48-worker" (reasoning = true, effort = "medium"),
@@ -102,7 +102,7 @@ ROUTE accuracy_long_context_direct (description = "Keep long-context work on one
   ALGORITHM static
 }
 
-ROUTE accuracy_deliberation (description = "Independent opinions or a verdict (accuracy_mode: independent_review) that need multi-step reasoning (accuracy_difficulty 1.5 or more) get independent frontier perspectives.", on_unknown = "no_match") {
+ROUTE accuracy_deliberation (description = "Independent opinions or a verdict (accuracy_mode: independent_review) that need multi-step reasoning (accuracy_difficulty 1.25 or more) get independent frontier perspectives.", on_unknown = "no_match") {
   PRIORITY 90
   WHEN decision("accuracy_mode", label: "independent_review", predicate: { gte: 0.6 }) AND decision("accuracy_difficulty") AND NOT decision("accuracy_mode", label: "workstreams", predicate: { gte: 0.6 })
   MODEL "opus48-worker" (reasoning = true, effort = "medium"),

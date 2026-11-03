@@ -1,0 +1,188 @@
+"""Detecting and verifying Vela 3.0 d3-size packages (``vela3/3``) and their pinned d3 base."""
+
+from __future__ import annotations
+
+import json
+import shutil
+from dataclasses import replace
+from pathlib import Path
+
+import pytest
+from vllm_srun.errors import PackageError
+from vllm_srun.families.decision3.family import Decision3Family
+from vllm_srun.families.vela3.family import Vela3Family
+from vllm_srun.families.vela3_d3.family import Vela3D3Family
+from vllm_srun.plugins.base import PackageRef, RegistryOptions
+from vllm_srun.registry import builtin
+from vllm_srun.testing import vela3_d3 as fixture
+from vllm_srun.testing.fixtures import FAKE_BASE_REVISION
+
+
+@pytest.fixture(scope="module")
+def written(tmp_path_factory) -> Path:
+    return fixture.write_fixture(
+        tmp_path_factory.mktemp("v3d3") / "vela3-fixture", "text", 3
+    )
+
+
+def base_of(root: Path) -> Path:
+    return root.parent / f"{root.name}-base"
+
+
+def copy(root: Path, tmp_path: Path, name: str = "copy") -> Path:
+    target = tmp_path / name
+    shutil.copytree(root, target)
+    shutil.copytree(base_of(root), base_of(target))
+    return target
+
+
+def family(root: Path) -> Vela3D3Family:
+    return Vela3D3Family(RegistryOptions(base_path=base_of(root)))
+
+
+def edit_config(root: Path, change) -> None:
+    path = root / "vela3_config.json"
+    config = json.loads(path.read_text())
+    change(config)
+    path.write_text(json.dumps(config))
+    fixture.write_sums(root)
+
+
+def test_detects_only_vela3_3_packages(written) -> None:
+    assert family(written).detect(PackageRef(written))
+    assert not Vela3Family().detect(PackageRef(written))
+    assert not Decision3Family().detect(PackageRef(written))
+    assert not family(written).detect(PackageRef(base_of(written)))
+
+
+def test_verifies_the_package_its_adapters_and_its_base(written) -> None:
+    verified = family(written).verify(PackageRef(written))
+    details = verified.details["package"]
+    assert verified.family == "vela3_d3"
+    assert details.base.repo_id == fixture.BASE_REPO
+    assert details.base.revision == FAKE_BASE_REVISION
+    assert details.base_package.family == "decision3"
+    assert set(details.adapters) == set(fixture.ADAPTERS)
+    decision = details.adapters["decision"]
+    assert (decision.rank, decision.alpha, decision.first) == (4, 8, 0)
+    assert decision.scaling == 2.0
+    assert all(module.startswith("layers.") for module in decision.modules)
+    assert set(details.heads) == {"span", "ner", "relation"}
+    assert details.router_question_ids == frozenset(fixture.ROUTER_QUESTION_IDS)
+    assert verified.max_input_tokens == details.base_package.max_input_tokens
+
+
+def test_identity_covers_the_base(written, tmp_path) -> None:
+    first = family(written).verify(PackageRef(written)).model_sha256
+    other = fixture.write_fixture(tmp_path / "other", "text", 4)
+    shutil.rmtree(base_of(other))
+    shutil.copytree(base_of(written), base_of(other))
+    assert family(other).verify(PackageRef(other)).model_sha256 != first
+    rebased = copy(written, tmp_path)
+    shutil.rmtree(base_of(rebased))
+    from vllm_srun.testing import decision3
+
+    decision3.write_fixture(base_of(rebased), "text", 99)
+    assert family(rebased).verify(PackageRef(rebased)).model_sha256 != first
+
+
+def test_refuses_a_file_that_differs_from_sha256sums(written, tmp_path) -> None:
+    root = copy(written, tmp_path)
+    (root / "router_questions.json").write_text("{}")
+    with pytest.raises(PackageError, match="SHA256SUMS"):
+        family(root).verify(PackageRef(root))
+
+
+def test_refuses_an_adapter_whose_metadata_differs_from_the_config(
+    written, tmp_path
+) -> None:
+    root = copy(written, tmp_path)
+    edit_config(root, lambda c: c["adapters"]["span"].update(r=8))
+    with pytest.raises(PackageError, match="span"):
+        family(root).verify(PackageRef(root))
+    root = copy(written, tmp_path, "modules")
+    edit_config(root, lambda c: c["adapters"]["ner"].update(modules=1))
+    with pytest.raises(PackageError, match="ner"):
+        family(root).verify(PackageRef(root))
+
+
+def test_refuses_unpaired_lora_factors(written, tmp_path) -> None:
+    from safetensors.torch import load_file, save_file
+
+    root = copy(written, tmp_path)
+    path = root / "decision_lora.safetensors"
+    from safetensors import safe_open
+
+    with safe_open(str(path), framework="pt") as handle:
+        metadata = handle.metadata()
+    tensors = load_file(str(path))
+    tensors.pop(sorted(k for k in tensors if k.endswith(".B"))[0])
+    save_file(tensors, str(path), metadata=metadata)
+    fixture.write_sums(root)
+    with pytest.raises(PackageError, match="unpaired"):
+        family(root).verify(PackageRef(root))
+
+
+def test_refuses_an_unpinned_base(written, tmp_path) -> None:
+    root = copy(written, tmp_path)
+    edit_config(root, lambda c: c["base"].update(revision="main"))
+    with pytest.raises(PackageError, match="40-hex"):
+        family(root).verify(PackageRef(root))
+
+
+def test_refuses_a_base_that_fails_its_own_manifest(written, tmp_path) -> None:
+    root = copy(written, tmp_path)
+    (base_of(root) / "readout.safetensors").write_bytes(b"0")
+    with pytest.raises(PackageError):
+        family(root).verify(PackageRef(root))
+
+
+def pin(root: Path, monkeypatch) -> builtin.BuiltinModel:
+    """Register root's verified files, identity and base as a built-in entry."""
+    verified = family(root).verify(PackageRef(root))
+    entry = builtin.BuiltinModel(
+        repo_id="vllm-sr/vela3-fixture",
+        revision="a" * 40,
+        family="vela3_d3",
+        model_sha256=verified.model_sha256,
+        manifest_sha256="",
+        loaded_parameters=0,
+        backbone="qwen3_5_text",
+        min_device_memory_gib=1,
+        base=(fixture.BASE_REPO, FAKE_BASE_REVISION),
+        files=dict(verified.details["package"].files),
+    )
+    monkeypatch.setattr(
+        builtin, "lookup", lambda repo: entry if repo == entry.repo_id else None
+    )
+    return entry
+
+
+def test_a_pinned_entry_holds_files_identity_and_base(written, monkeypatch) -> None:
+    entry = pin(written, monkeypatch)
+    ref = PackageRef(written, entry.repo_id, entry.revision)
+    assert family(written).verify(ref).model_sha256 == entry.model_sha256
+    for wrong in (
+        replace(entry, model_sha256="0" * 64),
+        replace(entry, base=(fixture.BASE_REPO, "b" * 40)),
+        replace(entry, files={**entry.files, "span_head.safetensors": "0" * 64}),
+    ):
+        monkeypatch.setattr(builtin, "lookup", lambda repo, e=wrong: e)
+        with pytest.raises(PackageError):
+            family(written).verify(ref)
+
+
+def test_a_pinned_download_needs_no_sha256sums(written, tmp_path, monkeypatch) -> None:
+    # A pinned revision downloads only the files its entry lists.
+    root = copy(written, tmp_path)
+    entry = pin(root, monkeypatch)
+    (root / "SHA256SUMS").unlink()
+    ref = PackageRef(root, entry.repo_id, entry.revision)
+    assert family(root).verify(ref).model_sha256 == entry.model_sha256
+
+
+def test_an_unpinned_package_needs_sha256sums(written, tmp_path) -> None:
+    root = copy(written, tmp_path)
+    (root / "SHA256SUMS").unlink()
+    with pytest.raises(PackageError, match="SHA256SUMS"):
+        family(root).verify(PackageRef(root))

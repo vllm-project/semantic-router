@@ -11,7 +11,7 @@ The router's decision model answers four named questions about the latest user
 message in one call, in any language, and its built-in re-ask judgment compares
 that message with the user's earlier turns. Each routing decision reads those
 answers. The recipe declares the decision model it was calibrated with,
-Vela 2.0 0.8B.
+vela3-lite (Vela 3.0 0.8B).
 
 Clients use the `vllm-sr/auto` entrypoint.
 
@@ -48,7 +48,7 @@ because the repeated-question judgment needs earlier turns.
 | `wrong` | Yes or no, at 0.5 | Does the latest message say that an earlier answer or fix was wrong, incorrect or did not work? | Whether the request takes a recovery lane. |
 | `clarify` | Yes or no, at 0.6 | Does the latest message ask to explain an earlier answer again, more clearly, more simply or with an example? | Whether a follow-up that does not call the answer wrong stays on the low-cost clarification lane. |
 | `code` | Yes or no, at 0.5 | Is the request about software, such as code, a program error or exception, a failing test or a bug? | Whether recovery takes a code-repair lane. |
-| `sources` | Yes or no, at 0.6 | Does the user ask for sources, citations or a fact check of the answer? | Whether recovery takes the verified lane. |
+| `sources` | Yes or no, at 0.4 | Does the user ask for sources, citations or a fact check of the answer? | Whether recovery takes the verified lane. |
 | `persistently_dissatisfied` | Built-in re-ask judgment, at 0.8 | Does the current user turn repeat the last two user turns? | Whether recovery escalates to a premium lane. |
 
 One conversation fact needs no model: `feedback_has_images` is true when the
@@ -82,25 +82,27 @@ for an unknown answer.
 ## Calibration notes
 
 The questions and thresholds were calibrated on the maintained probes with
-Vela 2.0 0.8B:
+vela3-lite:
 
-- The single-message wrong-answer probes score 0.67 or more for `wrong`, and
-  the clarification requests and ordinary messages 0.36 or less.
-- The clarification requests score 0.93 or more for `clarify`, and ordinary
-  messages 0.36 or less. Wrong-answer messages that also ask for a new
-  explanation score high too, which is why the clarification lane excludes
-  `wrong`.
-- The code-repair probes score 0.84 or more for `code`, and the others 0.29
+- The wrong-answer probes score 0.75 or more for `wrong`, and the
+  clarification requests and ordinary messages 0.46 or less.
+- The clarification requests score 0.89 or more for `clarify`, and ordinary
+  messages 0.12 or less. Wrong-answer messages that also ask for a new
+  explanation score 0.93 or more too, which is why the clarification lane
+  excludes `wrong`.
+- The code-repair probes score 0.93 or more for `code`, and the others 0.48
   or less.
-- The verified-recovery probes score 0.87 or more for `sources`. The others
-  score 0.45 or less, except a code failure that also asks for sources (0.75),
-  which code repair takes.
+- The verified-recovery probes score 0.66 or more for `sources`. The others
+  score 0.07 or less, except a code failure that also asks for sources
+  (0.57), which code repair takes; `sources` counts at 0.4 so that the code
+  failure keeps its `sources` answer.
 - A single choice between a new request, a wrong answer and a clarification
   put "That answer was wrong. Explain it again" on clarification. Two separate
   questions, with `wrong` tried first, route it as a recovery.
-- A question that asked for verification or evidence read "Prove that the sum
-  of the first n integers is n(n+1)/2" as a request for evidence (0.90); asking
-  only for sources, citations or a fact check scores it 0.45.
+- On Vela 2.0 0.8B, a question that asked for verification or evidence read
+  "Prove that the sum of the first n integers is n(n+1)/2" as a request for
+  evidence (0.90); asking only for sources, citations or a fact check scored
+  it 0.45.
 
 When you change a question or a threshold, or move to another decision model,
 rerun the probes.
@@ -110,20 +112,20 @@ rerun the probes.
 - Reachable OpenAI-compatible endpoints for the four configured aliases.
 - Conversation history in the request for re-ask and persistence detection.
 - The decision model for the four questions and the re-ask judgment. The
-  recipe declares it as the `primary` deployment of Vela 2.0 0.8B, which
+  recipe declares it as the `primary` deployment of vela3-lite, which
   `global.model_catalog.system.decision_model` names. The deployment sets no
   device, so the model runtime uses a GPU when the router has one and the CPU
   otherwise.
   In the CPU conformance run, with the router limited to 4 CPUs and 4
-  requests in flight, the median request took 13.5 s and the 95th
-  percentile 16.3 s.
+  requests in flight, the median request took 21.6 s and the 95th
+  percentile 24.1 s: on a CPU the model reads the message once per question.
   Serve it on a GPU for live traffic. With no device set, the runtime uses a
   GPU when the router has one; set `device: rocm` or `device: cuda` on the
-  `primary` deployment to require one. For a smaller model, change its
-  `artifact` (for example to `vllm-sr/Vela-2.0-0.3B`) or point
+  `primary` deployment to require one. To use another decision model, change
+  its `artifact` or point
   `global.model_catalog.system.decision_model.deployment` at another
   deployment, and rerun the probes, because the thresholds were calibrated on
-  the 0.8B.
+  vela3-lite.
 - A response-cache store when cache behavior is desired.
 
 ## Data handling and safety
@@ -152,7 +154,7 @@ Mixture-of-Model Entrypoint.
 The 32 probes cover first and repeated corrections, coding failures,
 verification requests, clarification, rephrasing, Spanish and Japanese
 follow-ups, and negative cases where ordinary traffic must remain on the
-default lane. CPU conformance runs them with the declared Vela 2.0 0.8B, which
+default lane. CPU conformance runs them with the declared vela3-lite, which
 reaches the expected decision for all 32. See [`probes.yaml`](probes.yaml) and
 the [conformance guide](../CONFORMANCE.md).
 

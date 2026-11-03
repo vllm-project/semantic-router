@@ -189,7 +189,7 @@ so the runtime has one discovery path.
 
 | Entry-point group | Base class | Built-in |
 | --- | --- | --- |
-| `vllm_srun.families` | `ModelFamily` | `decision3`, `decision2`, `decision1`, `task_heads`, `vela2`, `multimodal_embedding` |
+| `vllm_srun.families` | `ModelFamily` | `decision3`, `decision2`, `decision1`, `task_heads`, `vela2`, `vela3`, `vela3_d3`, `multimodal_embedding` |
 | `vllm_srun.engines` | `Engine` | `native`, `onnxruntime` |
 | `vllm_srun.accelerators` | `Accelerator` | `cpu`, `cuda`, `rocm`, `xpu`, `mps` |
 
@@ -1011,6 +1011,41 @@ layout passes the modeling code's additive float masks, so the forwards are
 bit-identical to the package's on a CPU ([record](records/vela3-parity.md)).
 The span and router layout, word units and span decoder are the Vela 2.0
 family's, which the package copies verbatim.
+
+### 8.8 Vela 3.0 d3 sizes (`vela3_d3`)
+
+vela3-lite, -mini, -flash and -turbo (`vela3_config.json` format `vela3/3`)
+hold no backbone. Each pins a Decision 3.0 package (`base`: repository and
+40-hex revision), which the family fetches like decision2's base (or takes
+from `--base-path`), verifies with the `decision3` family and runs
+unchanged; the identity covers the package's weight files and the base's
+identity. Over the base's text model sit gated LoRA adapters
+(`BackboneSpec.gated`): FP32 factors on the base's own Linears, at most one
+on per forward, on the rows `ForwardBatch.adapter` names. A gated Linear
+returns `base(x) + ((x.float() @ A.T) @ B.T * alpha / r).to(dtype)` on its
+rows and `base(x)` itself on the others, so a forward with every adapter off
+is the base's. Fused layers and graphs would bypass the gate, so a model with
+gated adapters runs eager on GPUs.
+
+| Questions | Adapter | Forward |
+| --- | --- | --- |
+| Router question IDs (by ID, or ID and trained wording) | `decision` | The base's batch, one pass per adapter, each row keeping its own adapter's pass |
+| `decision_task_adapters` IDs and `prefix:` keys | Their own (`decision_df`, `decision_hz`, ...) | As above |
+| `"decision_adapter": true` with `decision_opt_in` | `decision_optin` (or `decision`) | As above |
+| Every other Choice, Noul and Score question | None | The base's own |
+| Span questions | `span`, `ner` or `relation`, by label set and wording | One noncausal pass per window over d3's prompt; the head reads word first tokens against option-line means |
+
+vela3-turbo (`decisions.attention` `noncausal`) answers every question on
+d3-turbo's state-once path first, then each gated question again as a
+replay row (its full prompt, noncausal, adapter on for the pass, eight rows
+per pass); the replay's answer replaces the base's and its tokens count in
+the usage. Requests with images take the base alone and refuse span
+questions. Span answers follow the contract (`spans`, `thresholds`, a Noul of
+the most probable word); the decoder is the package's (its unit class starts
+its compatibility block at U+F900, unlike the word splitter's). Open labels
+without a description run by name: the packages' label-definition writers
+(vela3-mini's base, vela3-flash's grafted head) are not run
+([record](records/vela3-d3-parity.md)).
 
 ## 9. Scheduler and planner
 

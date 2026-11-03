@@ -13,7 +13,7 @@ global:
     deployments:
       primary:
         provider: model_runtime
-        artifact: vllm-sr/Vela-2.0-0.8B
+        artifact: vllm-sr/vela3-lite
     system:
       decision_model:
         deployment: primary
@@ -88,7 +88,7 @@ routing:
         instructions: Which subject is this question about?
         choices:
         - key: biology
-          description: Biology, cells, organisms and genetics
+          description: Biology, organisms, cells and organelles, genetics and evolution
         - key: business
           description: Business, accounting, finance and management
         - key: computer_science
@@ -98,7 +98,7 @@ routing:
         - key: engineering
           description: Engineering, circuits, machines and materials
         - key: health
-          description: Health, medicine, anatomy and nutrition
+          description: Health, medicine, nutrition and the human body, its anatomy, blood and organs
         - key: history
           description: History, wars, empires and historical events
         - key: law

@@ -15,7 +15,7 @@ global:
     deployments:
       primary:
         provider: model_runtime
-        artifact: vllm-sr/Vela-2.0-0.8B
+        artifact: vllm-sr/vela3-lite
     system:
       decision_model:
         deployment: primary
@@ -146,8 +146,9 @@ routing:
         description: The message contains personal data about a person.
         question:
           type: noul
-          instructions: Does the message contain personal data about a person, such as a name with an
-            email address, phone number, street address or ID number?
+          instructions: Does the message contain personal data, such as an email address, a phone
+            number, a street or delivery address, or a government ID or social security number? A
+            city or country alone is not personal data.
         predicate:
           gte: 0.5
       - name: depth

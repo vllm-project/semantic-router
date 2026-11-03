@@ -28,7 +28,7 @@ global:
     deployments:
       primary:
         provider: model_runtime
-        artifact: vllm-sr/Vela-2.0-0.8B
+        artifact: vllm-sr/vela3-lite
     system:
       decision_model:
         deployment: primary
@@ -318,8 +318,8 @@ routing:
         description: The user asks for sources, citations or evidence.
         question:
           type: noul
-          instructions: Does the user ask to verify the answer, or to back it with sources, citations
-            or evidence?
+          instructions: Does the user ask for sources, citations or evidence, or ask the assistant to
+            fact-check a claim or verify an answer?
           choices:
             - key: 'false'
               description: 'No: no verification or sources are requested'
@@ -339,7 +339,7 @@ routing:
             - key: 'true'
               description: 'Yes: the user says the previous answer was wrong'
         predicate:
-          gte: 0.7
+          gte: 0.85
       - name: clarify
         description: The user asks for the previous answer again, more clearly.
         question:
