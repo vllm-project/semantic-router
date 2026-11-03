@@ -32,7 +32,7 @@ from ..decision3.package import STATE_ONCE_MODES
 from . import package as pkg
 from .gates import Gates
 from .model import GatedDecisions, SpanSetup, TurboDecisions
-from .spans import Policy, Renderer, SpanReader
+from .spans import PRESETS, Policy, Renderer, SpanReader
 
 
 class Vela3D3Family(ModelFamily):
@@ -148,6 +148,9 @@ class Vela3D3Family(ModelFamily):
             model_sha256=package.model_sha256,
             manifest_sha256=package.manifest_sha256,
             question_types=(*model.info.question_types, "span"),
+            presets=tuple(
+                name for name in PRESETS if name in details.vela3["span"]["schemas"]
+            ),
         )
         return model
 

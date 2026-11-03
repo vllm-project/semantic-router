@@ -46,9 +46,15 @@ FIELDS = frozenset(
         "threshold",
         "head",
         "over",
+        "overflow",
         "require_full_input",
     }
 )
+# The vela3 family's presets: a router label set asked with its trained question and descriptions.
+PRESETS = ("pii", "halu")
+PRESET_KEPT = ("over", "threshold", "overflow", "require_full_input")
+# A span question reads its whole target, in windows: the one overflow it takes.
+WINDOWED = "window"
 RELATION = re.compile(
     r"\bspans? (?:are|is) the .+ (?:of|for)\b|\brelat(?:ed|ion|ions|es|ing)?\b|\b(?:head|tail)\b|\bstands? in\b"
     r"|\bwith respect to\b|\bcounterpart\b|\bsuch that\b|\brole of\b"
@@ -61,8 +67,36 @@ ENTITY = re.compile(r"\b(?:entity|entities|types?|category|categories|named)\b")
 ADAPTERS = {"span": "span", "ner": "ner", "rel": "relation"}
 
 
-def invalid(message: str) -> QuestionError:
-    return QuestionError("invalid_question", message)
+def invalid(message: str, reason: str | None = None) -> QuestionError:
+    return QuestionError("invalid_question", message, reason)
+
+
+def is_span(question: Any) -> bool:
+    """A span question, or a preset (which is one)."""
+    return isinstance(question, dict) and (
+        question.get("type") == "span" or "preset" in question
+    )
+
+
+def expand_preset(question: dict[str, Any], span: dict[str, Any]) -> dict[str, Any]:
+    """A preset question as the span question it names (the vela3 family's rules)."""
+    name = question["preset"]
+    if name not in PRESETS or name not in span["schemas"]:
+        raise invalid(f"preset must be one of {list(PRESETS)}", "preset_unknown")
+    if set(question) - {"preset", "type", *PRESET_KEPT}:
+        raise invalid(
+            "a preset question takes only preset, type, over, threshold, overflow "
+            "and require_full_input"
+        )
+    if question.get("type") not in (None, "span"):
+        raise invalid(f"preset {name} is a span question")
+    schema = span["schemas"][name]
+    return {
+        "type": "span",
+        "instructions": schema["question"],
+        "criteria": dict(schema["labels"]),
+        **{key: question[key] for key in PRESET_KEPT if key in question},
+    }
 
 
 @dataclass(frozen=True)
@@ -379,9 +413,15 @@ def plan_question(
     definitions: Definitions,
 ) -> SpanItem:
     """One span question's item, as the released ``span_answer`` prepares it; ``QuestionError`` if invalid."""
+    if "preset" in question:
+        question = expand_preset(question, policy.span)
     unknown = sorted(set(question) - FIELDS)
     if unknown:
         raise invalid(f"span questions do not take {unknown}")
+    if question.get("overflow") not in (None, WINDOWED):
+        raise invalid(
+            f"span questions read their whole target in windows: overflow must be {WINDOWED!r}"
+        )
     require_full_input(question)
     if question.get("head") not in (None, "router"):
         raise invalid("this model has no broad span head")

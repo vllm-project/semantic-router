@@ -85,7 +85,8 @@ def test_thresholds_follow_the_label_set_and_the_route() -> None:
 @pytest.mark.parametrize(
     ("question", "message"),
     [
-        ({"type": "span", "criteria": ["a"], "preset": "pii"}, "do not take"),
+        ({"type": "span", "criteria": ["a"], "preset": "pii"}, "takes only"),
+        ({"type": "span", "criteria": ["a"], "scope": "x"}, "do not take"),
         ({"type": "span", "criteria": ["a"], "head": "broad"}, "broad"),
         ({"type": "span", "criteria": ["a"], "labels": [{"key": "b"}]}, "not both"),
         ({"type": "span", "criteria": ["a"], "threshold": 1.5}, "threshold"),
@@ -385,6 +386,57 @@ def test_decisions_beside_span_questions_answer_as_before(runtime) -> None:
     assert {k: mixed["answers"][k] for k in decisions} == alone["answers"]
     assert list(mixed["answers"]) == ["attack", "x", "s"]
     assert mixed["usage"]["input_tokens"] == alone["usage"]["input_tokens"]
+
+
+def test_presets_ask_the_trained_label_sets(runtime, model) -> None:
+    schemas = SPAN_CONFIG["schemas"]
+    questions = {
+        "pii": {"preset": "pii", "over": "user", "require_full_input": True},
+        "halu": {"preset": "halu", "type": "span", "threshold": 0.3},
+    }
+    status, body = call(runtime, {"state": STATE, "questions": questions})
+    assert status == 200
+    assert set(body["spans"]) == {"pii", "halu"}
+    assert body["thresholds"]["halu"] == 0.3
+    assert body["answers"]["pii"]["input_coverage"] == "complete"
+    plan = model.plan(STATE, questions)
+    by_id = {item.question_id: item for item in plan.items}
+    assert by_id["pii"].names == tuple(schemas["pii"]["labels"])
+    assert by_id["pii"].label_set == "pii"
+    assert by_id["halu"].names == tuple(schemas["halu"]["labels"])
+    assert runtime.lookup(None).card([])["presets"] == ["pii", "halu"]
+
+
+@pytest.mark.parametrize(
+    ("question", "reason", "message"),
+    [
+        ({"preset": "toxicity"}, "preset_unknown", "preset must be one of"),
+        ({"preset": "pii", "criteria": ["a"]}, "question_malformed", "takes only"),
+        ({"preset": "pii", "type": "choice"}, "question_malformed", "span question"),
+        (
+            {"type": "span", "criteria": ["a"], "overflow": "truncate"},
+            "question_malformed",
+            "window",
+        ),
+    ],
+)
+def test_malformed_presets_and_overflows_fail_alone(
+    runtime, question, reason, message
+) -> None:
+    other = {"type": "noul", "instructions": "Is this hard?"}
+    status, body = call(
+        runtime, {"state": STATE, "questions": {"q": question, "x": other}}
+    )
+    assert status == 200
+    answer = body["answers"]["q"]
+    assert (answer["error"], answer["reason"]) == ("invalid_question", reason)
+    assert message in answer["message"]
+
+
+def test_span_questions_read_their_target_in_windows(runtime) -> None:
+    question = {"type": "span", "criteria": ["dose"], "overflow": "window"}
+    status, body = call(runtime, {"state": STATE, "questions": {"q": question}})
+    assert status == 200 and "q" in body["spans"]
 
 
 def test_span_windows_go_through_the_base_length_check(runtime) -> None:

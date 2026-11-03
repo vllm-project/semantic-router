@@ -32,6 +32,7 @@ from .spans import (
     SpanItem,
     SpanReader,
     invalid,
+    is_span,
     plan_question,
 )
 from .spans import answer as span_answer
@@ -72,11 +73,7 @@ def refuse_blank(state: Any) -> None:
 
 def split_spans(questions: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     """The request's span questions, and the others (the base's)."""
-    asked = {
-        k: q
-        for k, q in questions.items()
-        if isinstance(q, dict) and q.get("type") == "span"
-    }
+    asked = {k: q for k, q in questions.items() if is_span(q)}
     return asked, {k: q for k, q in questions.items() if k not in asked}
 
 
