@@ -343,6 +343,9 @@ def test_container_start_vllm_sr_applies_custom_stack_name_and_port_offset(
     assert "127.0.0.1:9390:9190" in router_cmd
     assert "127.0.0.1:8900:8700" in dashboard_cmd
     assert "127.0.0.1:8280:8080" in router_cmd
+    # The startup port record is container-local and never uses the host offset.
+    assert "/tmp/vllm-sr-management-port" in router_cmd
+    assert "python3" in router_cmd
 
 
 def test_container_start_vllm_sr_propagates_stack_name_to_dashboard(
