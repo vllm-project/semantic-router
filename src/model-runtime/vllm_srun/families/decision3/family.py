@@ -290,9 +290,17 @@ class Decision3Family(ModelFamily):
         )
 
     def load(
-        self, package: VerifiedPackage, spec: ModelSpec, engine_model: EngineModel
+        self,
+        package: VerifiedPackage,
+        spec: ModelSpec,
+        engine_model: EngineModel,
+        model_class: type[Decision3Model] | None = None,
     ) -> Decision3Model:
-        """A ``Decision3Model``, or a ``StateOnceModel`` for a package whose layout is state-once."""
+        """A ``Decision3Model``, or a ``StateOnceModel`` for a package whose layout is state-once.
+
+        ``model_class`` replaces that choice: a family that runs this package as
+        its base passes its own subclass of the one the layout needs.
+        """
         from safetensors.torch import load_file
 
         details: pkg.Decision3Package = package.details["package"]
@@ -406,7 +414,8 @@ class Decision3Family(ModelFamily):
             dtype=f"bf16/{'fp32' if readout_dtype == 'float32' else 'bf16'}-readout",
             modalities=modalities,
         )
-        model_class = self._model_class(decision)
+        if model_class is None:
+            model_class = model_class_of(decision)
         if decision.get("attention_mode", "causal") in pkg.STATE_ONCE_MODES:
             # A state-once model counts each state once in usage.input_tokens, and that count of one request
             # is capped at the context length (max_request_tokens).
@@ -427,14 +436,6 @@ class Decision3Family(ModelFamily):
             video_settings,
             video_token,
         )
-
-    def _model_class(self, decision: dict[str, Any]) -> type[Decision3Model]:
-        """``Decision3Model``, or ``StateOnceModel`` for a package whose layout is state-once."""
-        if decision.get("attention_mode", "causal") in pkg.STATE_ONCE_MODES:
-            from .state_once import StateOnceModel
-
-            return StateOnceModel
-        return Decision3Model
 
     def golden(self, package: VerifiedPackage) -> list[dict[str, Any]]:
         requests = builtin.golden(
@@ -1287,3 +1288,12 @@ def _scaled(logits: torch.Tensor, temperatures: list[float]) -> torch.Tensor:
 
 def _bytes(tensor: torch.Tensor) -> int:
     return tensor.numel() * tensor.element_size()
+
+
+def model_class_of(decision: dict[str, Any]) -> type[Decision3Model]:
+    """``Decision3Model``, or ``StateOnceModel`` for a package whose layout is state-once."""
+    if decision.get("attention_mode", "causal") in pkg.STATE_ONCE_MODES:
+        from .state_once import StateOnceModel
+
+        return StateOnceModel
+    return Decision3Model

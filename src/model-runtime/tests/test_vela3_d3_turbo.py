@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import shutil
 from pathlib import Path
 
 import pytest
 import torch
+from vllm_srun.errors import PackageError
 from vllm_srun.families.decision3.family import BATCH_SIZE
 from vllm_srun.families.vela3_d3.gates import Gates
 from vllm_srun.families.vela3_d3.model import adapter_of
@@ -227,3 +230,16 @@ def test_the_opt_in_key_is_stripped_for_the_base(runtimes) -> None:
     _, got = call(vela, {"state": STATE, "questions": questions})
     _, want = call(d3, {"state": STATE, "questions": Gates.strip(questions)})
     assert got["answers"] == want["answers"]
+
+
+def test_a_state_once_base_needs_noncausal_replays(written, tmp_path) -> None:
+    root = tmp_path / "vela3-turbo"
+    shutil.copytree(written, root)
+    path = root / "vela3_config.json"
+    config = json.loads(path.read_text())
+    config["decisions"] = {**(config.get("decisions") or {}), "attention": "causal"}
+    path.write_text(json.dumps(config))
+    fixture.write_sums(root)
+    base = written.parent / f"{written.name}-base"
+    with pytest.raises(PackageError, match="decisions.attention 'noncausal'"):
+        start_runtime(root, base_path=str(base))

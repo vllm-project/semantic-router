@@ -32,7 +32,7 @@ from ..decision3.package import STATE_ONCE_MODES
 from ..vela3.request import PRESETS
 from . import package as pkg
 from .gates import Gates
-from .model import GatedDecisions, SpanSetup, TurboDecisions
+from .model import GatedDecisions, SpanSetup, TurboDecisions, VelaPlanning
 from .spans import ADAPTERS, Policy, Renderer, SpanReader
 
 
@@ -121,23 +121,26 @@ class Vela3D3Family(ModelFamily):
         self, package: VerifiedPackage, spec: ModelSpec, engine_model: EngineModel
     ) -> LoadedModel[Any, Any]:
         details: pkg.Vela3D3Package = package.details["package"]
-        loader = _GatedBase(self.options)
-        loader.replays = (details.vela3.get("decisions") or {}).get("attention")
-        model = loader.load(package.details["base"], spec, engine_model)
-        assert isinstance(model, GatedDecisions | TurboDecisions)
-        model.gates = Gates.from_config(
-            details.vela3, details.router_questions, details.adapters
+        base = package.details["base"]
+        model = Decision3Family(self.options).load(
+            base, spec, engine_model, _model_class(details, base)
         )
+        assert isinstance(model, VelaPlanning)
         heads = {
             route: _head(details.root / details.heads[name], engine_model.device)
             for route, name in ADAPTERS.items()
             if name in details.heads
         }
-        model.span_setup = SpanSetup(
-            policy=Policy(details.vela3["span"], set(heads)),
-            renderer=Renderer(model.tokenizer, model.codes),
-            reader=SpanReader(engine_model, heads),
-            definitions=_names_only,
+        model.attach(
+            Gates.from_config(
+                details.vela3, details.router_questions, details.adapters
+            ),
+            SpanSetup(
+                policy=Policy(details.vela3["span"], set(heads)),
+                renderer=Renderer(model.tokenizer, model.codes),
+                reader=SpanReader(engine_model, heads),
+                definitions=_names_only,
+            ),
         )
         model.info = replace(
             model.info,
@@ -175,25 +178,21 @@ def _names_only(names: list[str], only: set[str]) -> dict[str, str]:
     return {}
 
 
-class _GatedBase(Decision3Family):
-    """The base's ``decision3`` loading, building the gated model.
-
-    ``replays`` is the package's ``decisions.attention``: how a state-once
-    base answers its gated rows again (only ``noncausal``, vela3-turbo's, is
-    served).
-    """
-
-    replays: str | None = None
-
-    def _model_class(self, decision: dict[str, Any]) -> type[Decision3Model]:
-        if decision.get("attention_mode", "causal") not in STATE_ONCE_MODES:
-            return GatedDecisions
-        if self.replays != NONCAUSAL_REPLAYS:
-            raise PackageError(
-                f"a state-once base needs decisions.attention {NONCAUSAL_REPLAYS!r}; "
-                f"the package declares {self.replays!r}"
-            )
-        return TurboDecisions
-
-
+# The one way a state-once base answers its gated rows again (``decisions.attention``): vela3-turbo's.
 NONCAUSAL_REPLAYS = "noncausal"
+
+
+def _model_class(
+    details: pkg.Vela3D3Package, base: VerifiedPackage
+) -> type[Decision3Model]:
+    """``GatedDecisions`` over a causal base, ``TurboDecisions`` over a state-once one that replays noncausally."""
+    layout = base.details["package"].decision_config.get("attention_mode", "causal")
+    if layout not in STATE_ONCE_MODES:
+        return GatedDecisions
+    replays = (details.vela3.get("decisions") or {}).get("attention")
+    if replays != NONCAUSAL_REPLAYS:
+        raise PackageError(
+            f"a state-once base needs decisions.attention {NONCAUSAL_REPLAYS!r}; "
+            f"the package declares {replays!r}"
+        )
+    return TurboDecisions

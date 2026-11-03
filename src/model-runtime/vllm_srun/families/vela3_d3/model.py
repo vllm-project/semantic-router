@@ -198,6 +198,11 @@ class VelaPlanning(Decision3Model):
     gates: Gates
     span_setup: SpanSetup
 
+    def attach(self, gates: Gates, span_setup: SpanSetup) -> None:
+        """Give the loaded base model the package's gates and span setup (``Vela3D3Family.load``)."""
+        self.gates = gates
+        self.span_setup = span_setup
+
     def plan(
         self, state: Any, questions: dict[str, Any], scan: int | None = None
     ) -> RequestPlan[Item]:
