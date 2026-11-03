@@ -29,16 +29,15 @@ from typing import Any
 import numpy as np
 
 from ...errors import QuestionError
-from ...systemone import require_full_input
+from ...systemone import listed_options, named_options, require_full_input
 from ..decision3.family import Item
 from ..decision3.prompt import render
 from ..vela2.words import words_of
-from ..vela3.request import expand_preset, threshold_of
+from ..vela3.request import expand_preset, text, threshold_of
 from ..vela3.routing import RELATION_WORDING
 from .decode import decode, evidence_spans
 
 WINDOW, STRIDE, MAX_TARGET = 1800, 1536, 2048
-MAX_LABELS = 255
 FIELDS = frozenset(
     {
         "type",
@@ -112,33 +111,25 @@ def parts_of(state: Any) -> list[tuple[str, str]]:
 
 
 def labels_of(question: dict[str, Any]) -> list[tuple[str, str]]:
+    """A span question's ``(label, description)`` pairs, read as the vela3 family reads them.
+
+    ``criteria`` is ``{label: description or null}`` or a list of names,
+    ``labels`` a ``[{key, description}]`` list; an undescribed label has "".
+    """
     criteria, listed = question.get("criteria"), question.get("labels")
     if criteria is not None and listed is not None:
         raise invalid("use criteria or labels, not both")
-    if isinstance(criteria, dict):
-        labels = [(str(k), "" if v is None else str(v)) for k, v in criteria.items()]
+    if listed is not None:
+        criteria = listed_options(listed, "labels")
     elif isinstance(criteria, list):
-        labels = [(str(k), "") for k in criteria]
-    elif isinstance(listed, list) and all(
-        isinstance(o, dict) and "key" in o for o in listed
-    ):
-        labels = [
-            (
-                str(o["key"]),
-                "" if o.get("description") is None else str(o["description"]),
-            )
-            for o in listed
-        ]
-    else:
-        raise invalid(
-            "span questions need criteria: {label: description or null} or a list of labels"
-        )
-    if not 1 <= len(labels) <= MAX_LABELS:
-        raise invalid(f"a span question needs 1 to {MAX_LABELS} labels")
-    names = [n for n, _ in labels]
-    if len(set(names)) != len(names):
-        raise invalid("span labels must be distinct")
-    return labels
+        names = [str(name) for name in criteria]
+        if len(set(names)) != len(names):
+            raise invalid("span labels must be distinct")
+        criteria = dict.fromkeys(names)
+    options = named_options(criteria, minimum=1)
+    return [
+        (name, "" if value is None else text(value)) for name, value in options.items()
+    ]
 
 
 # ------------------------------------------------------------------ routing
