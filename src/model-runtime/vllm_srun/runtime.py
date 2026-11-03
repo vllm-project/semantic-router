@@ -25,14 +25,13 @@ from concurrent.futures import Future
 from dataclasses import dataclass, field, replace
 from functools import partial
 from http import HTTPStatus
-from pathlib import Path
 from typing import Any
 
 from . import assets as assetlib
 from . import dtypes, media
 from .accel.autotune import KernelChoices, freeze_autotune
 from .accel.cpu import cap_threads
-from .config import ONNX_RUNTIME_SPIN_COUNT, ModelConfig, ServeConfig
+from .config import ONNX_RUNTIME_SPIN_COUNT, ModelConfig, ServeConfig, _name_of
 from .errors import (
     PackageError,
     RuntimeServiceError,
@@ -298,10 +297,6 @@ class ResultCache:
             self._values.move_to_end(key)
             while len(self._values) > self.entries:
                 self._values.popitem(last=False)
-
-
-def _name_of(artifact: str) -> str:
-    return Path(artifact.rstrip("/")).name or artifact
 
 
 class ServedModel:
@@ -869,7 +864,7 @@ class Runtime:
         self._planning: dict[object, float] = {}
         self._planning_lock = threading.Lock()
         self.served = [ServedModel(self, model) for model in config.served_models()]
-        labels = [served.config.name for served in self.served if served.config.name]
+        labels = [served.label for served in self.served]
         if len(labels) != len(set(labels)):
             raise ValueError("served model names must be unique")
         self.health = ProcessHealth(self)

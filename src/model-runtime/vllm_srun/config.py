@@ -217,6 +217,10 @@ def spin_count(models: Sequence[ModelConfig]) -> str | None:
     return None
 
 
+def _name_of(artifact: str) -> str:
+    return Path(artifact.rstrip("/")).name or artifact
+
+
 def split_revision(value: str) -> tuple[str, str | None]:
     """``repo@revision`` -> (repo, revision); a local path never carries a revision."""
     model, at, revision = value.rpartition("@")
@@ -265,9 +269,9 @@ def load_models_file(
             config.engine_args(defaults or EngineArgs())
         except ValueError as exc:
             raise ValueError(f"{path}: models[{index}]: {exc}") from exc
-        if config.name:
-            if config.name in names:
-                raise ValueError(f"{path}: duplicate model name {config.name!r}")
-            names.add(config.name)
+        effective_name = config.name or _name_of(config.model)
+        if effective_name in names:
+            raise ValueError(f"{path}: duplicate model name {effective_name!r}")
+        names.add(effective_name)
         models.append(config)
     return tuple(models)
