@@ -5,7 +5,7 @@
   "date": "2026-10-28",
   "rerun": "2026-11-02",
   "hardware": "Huawei Ascend 950DT",
-  "cann": "9.1",
+  "CANN": "9.1",
   "model": "vllm-sr/d3-mini",
   "model_sha256": "9ac186bb30b30c129d7aae03d73932600424963bd4644c2041a9d7120f029af5",
   "corpus": "office label-diff, 60 requests",

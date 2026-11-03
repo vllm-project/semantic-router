@@ -621,6 +621,8 @@ def test_every_model_records_goldens_and_kernel_choices(model):
         expected.add("cpu:x86_64:avx512:bf16_native")
     elif model.repo_id == "vllm-sr/d3-ultra":
         expected.update({"cpu:x86_64:avx512:bf16_native", "rocm:gfx942"})
+    elif model.repo_id == "vllm-sr/d3-mini":
+        expected.update({"npu", "npu:Ascend950DT"})
     assert set(model.golden_answers) == expected
     for answers in model.golden_answers.values():
         assert set(answers) == {
