@@ -39,9 +39,10 @@ FIELDS = frozenset(
 )
 # A span question reads its whole target, in windows: the one overflow it takes.
 WINDOWED = "window"
-# The most target tokens a span question reads in windows (at least one question prompt), as the
-# vela3 family's span budget: about 21 windows, which bounds one question's forwards.
-SPAN_BUDGET = 32768
+# The most target tokens a span question reads, in about 21 windows: the vela3 family's default
+# scan budget on a CPU (4 x 8,192). It bounds one question's forwards on every size, whatever the
+# base's question cap (vela3-lite, -mini and -flash's bases allow 262,144 tokens).
+SPAN_TARGET_TOKENS = 32768
 
 
 def invalid(message: str, reason: str | None = None) -> QuestionError:
@@ -102,14 +103,14 @@ def labels_of(question: dict[str, Any]) -> list[tuple[str, str]]:
     ]
 
 
-def over_budget(tokens: int, budget: int) -> QuestionError | None:
-    """Why a span target of ``tokens`` tokens is refused (over ``budget``), or None."""
-    if tokens <= budget:
+def over_budget(tokens: int) -> QuestionError | None:
+    """Why a span target of ``tokens`` tokens is refused (over ``SPAN_TARGET_TOKENS``), or None."""
+    if tokens <= SPAN_TARGET_TOKENS:
         return None
     return QuestionError(
         SCAN_BUDGET_EXCEEDED,
-        f"the span target has {tokens} tokens, over this model's span budget of {budget} tokens; "
-        "nothing was read",
+        f"the span target has {tokens} tokens, over this model's span budget of "
+        f"{SPAN_TARGET_TOKENS} tokens; nothing was read",
         "scan_budget",
     )
 
@@ -122,12 +123,11 @@ def plan_question(
     renderer: Renderer,
     definitions: Definitions,
     length_error: Callable[[int], QuestionError | None],
-    budget: int = SPAN_BUDGET,
 ) -> SpanItem:
     """One span question's item, as the released ``span_answer`` prepares it; ``QuestionError`` if invalid.
 
-    The target may hold at most ``budget`` tokens (``scan_budget_exceeded``,
-    checked before it is laid out). Every window, whose other parts are not
+    The target may hold at most ``SPAN_TARGET_TOKENS`` tokens
+    (``scan_budget_exceeded``, checked before it is laid out). Every window, whose other parts are not
     windowed, must pass the base's ``length_error``.
     """
     if "preset" in question:
@@ -159,7 +159,7 @@ def plan_question(
         target,
         routed.question,
         routed.labels,
-        lambda tokens: over_budget(tokens, budget),
+        over_budget,
     )
     refused = length_error(max(len(window.ids) for window in windows))
     if refused is not None:

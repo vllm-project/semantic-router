@@ -1047,9 +1047,10 @@ questions take the base alone; those with media refuse span questions. On
 every path a blank state is refused and span questions are planned before
 the base sees the rest.
 A span question reads its whole target in windows, so `overflow` takes only
-`window`. The target holds at most 32,768 tokens (or the question cap, when
-that is larger), as the vela3 family's span budget: a longer one fails alone
-with `scan_budget_exceeded` before any window runs. The card reports no scan
+`window`. The target holds at most 32,768 tokens on every size (the vela3
+family's default scan budget on a CPU; it does not follow the base's question
+cap, which is 262,144 tokens on vela3-lite, -mini and -flash): a longer one
+fails alone with `scan_budget_exceeded` before any window runs. The card reports no scan
 budget, so the Router asks these models without `overflow`. Each window goes
 through the base's length check (`max_length_exceeded`).
 `"decision_adapter"` is part of the API contract (`Question`). `{"preset": "pii"}` and `"halu"` ask the package's

@@ -29,7 +29,7 @@ from .span_policy import Definitions, Policy
 from .span_read import SpanReader
 from .span_read import answer as span_answer
 from .span_render import Renderer
-from .spans import SPAN_BUDGET, SpanItem, invalid, is_span, plan_question
+from .spans import SpanItem, invalid, is_span, plan_question
 
 
 @dataclass(frozen=True)
@@ -223,7 +223,6 @@ class Vela3D3Model(Decision3Model):
                 setup.renderer,
                 setup.definitions,
                 self.length_error,
-                max(SPAN_BUDGET, self.question_cap()[0]),
             )
 
         return plan_span

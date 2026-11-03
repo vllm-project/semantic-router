@@ -482,9 +482,14 @@ def test_span_windows_go_through_the_base_length_check(runtime) -> None:
     assert "over_user" in body["spans"]
 
 
+@pytest.mark.parametrize("question_cap", [None, 262_144])
 def test_a_span_target_over_the_span_budget_is_refused_before_it_runs(
-    runtime, model, monkeypatch
+    runtime, model, monkeypatch, question_cap
 ) -> None:
+    # vela3-lite, -mini and -flash's bases name no validated length: their question cap is the
+    # backbone's 262,144 positions, and the span budget must not follow it.
+    if question_cap is not None:
+        monkeypatch.setattr(model, "question_cap", lambda: (question_cap, False))
     forwards: list[object] = []
     forward = model.engine_model.forward
     monkeypatch.setattr(
