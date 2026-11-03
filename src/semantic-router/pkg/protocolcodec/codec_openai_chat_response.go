@@ -48,7 +48,7 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	// from the neutral response, so render it again instead of leaking them.
 	// LiteLLM's provider_specific_fields are similarly non-canonical and must
 	// not be replayed.
-	needsReencode := wire.hasOpenRouterDecorations() || wire.hasLiteLLMDecorations()
+	needsReencode := wire.hasOpenRouterDecorations() || wire.hasLiteLLMDecorations() || chatChoicesHaveReasoningDetails(wire.Choices)
 	if needsReencode {
 		canonicalBody = nil
 	}

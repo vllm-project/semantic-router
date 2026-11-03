@@ -1,7 +1,7 @@
 - id: vllm-sr/mom-v1-blend
   display_name: MoM V1 Blend
   description: Spends reasoning only where a request needs it; one decision-model call
-    per request selects the reasoning, medium, or simple pool.
+    per request selects one of ten lanes, from thinking off to maximum effort.
   kind: virtual
   publisher: vllm-sr.ai
   presentation:
@@ -36,7 +36,36 @@
   - tools
   - multimodal
   roles:
-  - name: reasoning
+  - name: long_context
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - long_context
+    recommended_pool:
+    - zai/glm-5.3-flash
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+  - name: vision
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - vision
+    recommended_pool:
+    - zai/glm-5.3-flash
+  - name: recovery
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    recommended_pool:
+    - zai/glm-5.3-flash
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: agentic
     required: true
     minimum_candidates: 1
     traits:
@@ -44,19 +73,62 @@
     - reasoning
     - tools
     recommended_pool:
+    - zai/glm-5.3-flash
     - deepseek/deepseek-v4-flash
     - deepseek/deepseek-v4-pro
     - zai/glm-5.1
-  - name: simple
+  - name: facts
     required: true
     minimum_candidates: 1
     traits:
     - chat
     recommended_pool:
+    - zai/glm-5.3-flash
     - deepseek/deepseek-v4-flash
     - deepseek/deepseek-v4-pro
     - zai/glm-5.1
-  - name: medium
+  - name: frontier
+    required: true
+    minimum_candidates: 2
+    traits:
+    - chat
+    - reasoning
+    recommended_pool:
+    - zai/glm-5.3-flash
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: code
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: hard
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: standard
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: fast
     required: true
     minimum_candidates: 1
     traits:
