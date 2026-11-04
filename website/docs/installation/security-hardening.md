@@ -49,11 +49,13 @@ examples include:
 request_headers_to_remove:
   - x-authz-user-id
   - x-authz-user-groups
+  - x-vsr-gateway-credential
 ```
 
 Do not expose Router management, metrics, ExtProc, or backing-store ports as
 public inference endpoints. Terminate client authentication at a trusted
-boundary and allow only that component to supply identity headers.
+boundary and allow only that component to supply identity headers and the
+gateway credential described below.
 
 Relevant Dashboard permissions include:
 
@@ -92,6 +94,71 @@ referenced.
 Existing chart-native Secret references, such as a Dashboard JWT Secret, remain
 external objects and are not copied into the CLI-managed Secret. Use the same
 namespace and release ownership discipline for every manually managed Secret.
+
+### Forward a dedicated credential to a trusted gateway
+
+When the Router sits behind an authenticating deployment layer and routes to an
+upstream gateway that meters each user itself (a LiteLLM, one-api, or similar
+relay issuing per-user virtual keys), let the authenticator hand the Router a
+dedicated credential for that gateway. The credential that authenticates the
+client to the deployment and the credential meant for the downstream gateway
+are separate trust objects: the Router never forwards the client's raw
+`Authorization` header.
+
+```yaml
+global:
+  services:
+    authz:
+      gateway_credential:
+        enabled: true
+        header: x-vsr-gateway-credential   # default; set by the authenticator
+providers:
+  models:
+    - name: gpt-4o
+      provider_model_id: gpt-4o
+      api_format: openai
+      backend_refs:
+        - name: litellm
+          base_url: https://litellm.internal/v1
+          provider: openai-compatible
+          trusted_gateway: true             # receives the gateway credential
+```
+
+The contract is disabled by default. Once enabled:
+
+- The gateway credential is an authentication output like the identity headers.
+  The shipped Envoy configurations (`vllm-sr serve --gateway extproc` and
+  `deploy/local/envoy.yaml`) remove a client-supplied copy in a filter ahead of
+  ext_proc; the `vllm-sr` template removes a custom `header` too, and
+  `deploy/local/envoy.yaml` names only the default. Neither runs an
+  authenticator, so a deployment that issues the credential places its
+  authenticator after that filter and before ext_proc, as the `trusted-gateway`
+  E2E profile does. A custom gateway configuration must do the same:
+  `request_headers_to_remove` runs only after ext_proc. A standalone listener
+  drops the header unless `identity.trust_headers` is set. The Router keeps
+  the value only when the request also carries the authenticated user
+  (`global.services.authz.identity.user_id_header`).
+- `header` must name a dedicated header. Configuration rejects one that
+  carries a client credential (`Authorization`, `api-key`, `x-api-key`, and
+  similar) or an identity header.
+- The Router removes the header from every upstream request, on every branch,
+  and redacts it from logs. Only a `backend_refs` entry with
+  `trusted_gateway: true` receives the value, under that backend's auth header
+  with its prefix (`Authorization: Bearer <credential>` for an OpenAI-compatible
+  gateway), replacing whatever the client sent there. The client's other
+  credential headers are removed, so a gateway that authenticates on
+  `x-api-key` does not also receive the client's `Authorization`.
+- A trusted gateway has no `api_key` or `api_key_env`; configuration rejects the
+  combination so a shared key can never stand in silently. A request that
+  reaches a trusted gateway without the credential is rejected with `401` before
+  any upstream call, including fallback attempts.
+- Looper hops run on the client's behalf spend the same credential, typed and
+  in process. Calls the Router makes on its own behalf (shadow dispatch,
+  context-window probes, automatic-output preparation) never use it and fail
+  against a trusted gateway, as does System One dispatch (judges and native
+  `/v1/systemone` targets).
+- Caller attribution and any tenant, quota, budget, or spend policy stay with
+  the trusted gateway.
 
 ### Isolate sr-bench credentials
 

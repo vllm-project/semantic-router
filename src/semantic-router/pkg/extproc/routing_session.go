@@ -73,6 +73,9 @@ func (r *OpenAIRouter) newRoutingSession(ctx context.Context, release func()) *r
 	}
 	if hop, ok := routing.HopFrom(ctx); ok {
 		session.ctx.Hop = &hop
+		// A hop spends the client request's trusted gateway credential; it
+		// never reads one from its own headers.
+		session.ctx.gatewayCredential = gatewayCredentialFrom(ctx)
 	} else if models, ok := routing.ListenerModelsFrom(ctx); ok {
 		// A hop's context derives from its client request's, so only a
 		// client request takes the listener's restriction.

@@ -1,0 +1,88 @@
+# trusted-gateway E2E profile values.
+#
+# Two concrete models, each on its own provider-mocker instance:
+#   gateway-model → trusted-gateway (trusted_gateway: true). The mocker accepts
+#                   only "Bearer gw-virtual-key-alice", the credential the
+#                   stand-in authenticator attaches for alice.
+#   static-model  → static-backend (api_key). The mocker accepts only
+#                   "Bearer static-key-e2e", so a leaked gateway credential
+#                   would fail this path.
+# Both mockers refuse any request that still carries x-vsr-gateway-credential.
+replicaCount: 1
+image:
+  repository: ghcr.io/vllm-project/semantic-router/vllm-sr
+  pullPolicy: Never
+  tag: e2e-test
+service:
+  type: ClusterIP
+  port: 8080
+persistence:
+  enabled: false
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      model: gateway-model
+    models:
+      - name: gateway-model
+        api_format: openai
+        backend_refs:
+          - name: trusted-gateway
+            endpoint: trusted-gateway.trusted-gateway-system.svc.cluster.local:8000
+            weight: 1
+            provider: openai-compatible
+            trusted_gateway: true
+      - name: static-model
+        api_format: openai
+        backend_refs:
+          - name: static-backend
+            endpoint: static-backend.trusted-gateway-system.svc.cluster.local:8000
+            weight: 1
+            provider: openai-compatible
+            api_key: static-key-e2e
+  evaluation:
+    records:
+      - model: gateway-model
+        benchmark: vllm-sr/operator-rating@1.0.0
+        metrics:
+          score: 0.6
+      - model: static-model
+        benchmark: vllm-sr/operator-rating@1.0.0
+        metrics:
+          score: 0.5
+  routing:
+    # Replaces the chart's placeholder card; every card must be a catalog model.
+    modelCards:
+      - name: gateway-model
+      - name: static-model
+    decisions:
+      - name: route_to_gateway
+        description: Route virtual-model requests to the trusted gateway
+        priority: 50
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: all_requests
+        modelRefs:
+          - model: gateway-model
+            use_reasoning: false
+    signals:
+      keywords:
+        - name: all_requests
+          operator: OR
+          keywords:
+            - ""
+  global:
+    router:
+      clear_route_cache: true
+      strategy: priority
+    services:
+      authz:
+        gateway_credential:
+          enabled: true
+          header: x-vsr-gateway-credential
+      observability:
+        metrics:
+          enabled: true

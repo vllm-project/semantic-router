@@ -74,3 +74,55 @@ func TestListenerKeepsIdentityHeadersOnlyWhenItTrustsTheRequest(t *testing.T) {
 		})
 	}
 }
+
+// The deployment authenticator's gateway credential is an authentication
+// output like the identity headers: a client-sent one is dropped unless the
+// listener trusts identity headers.
+func TestListenerDropsAClientSentGatewayCredentialWithIdentity(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		trust IdentityTrust
+		kept  bool
+	}{
+		{name: "default drops it", trust: IdentityTrust{}, kept: false},
+		{name: "trusted headers keep it", trust: IdentityTrust{Headers: true}, kept: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &fakeProcessor{}
+			u := &fakeUpstream{resp: okUpstream(`{}`, http.Header{"Content-Type": {"application/json"}})}
+			h, err := NewHandler(Options{
+				Serving: Static(Serving{
+					Engine:          routing.NewEngine(p, routing.DefaultOptions),
+					Upstream:        u,
+					IdentityHeaders: []string{"x-gateway-token"},
+					TrustIdentity:   tt.trust,
+				}),
+				Listener: "http-8899",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			server := httptest.NewServer(h)
+			defer server.Close()
+
+			req, _ := http.NewRequest(http.MethodPost, server.URL+"/v1/chat/completions", strings.NewReader(`{"model":"m"}`))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-Vsr-Gateway-Credential", "gw-key")
+			req.Header.Set("X-Gateway-Token", "gw-key")
+			resp, err := server.Client().Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, _ = io.ReadAll(resp.Body)
+			resp.Body.Close()
+			header := p.headers[0]
+			builtIn, configured := header.Get("x-vsr-gateway-credential"), header.Get("x-gateway-token")
+			if kept := builtIn == "gw-key" && configured == "gw-key"; kept != tt.kept {
+				t.Fatalf("gateway credential kept = %v (%q, %q), want %v", kept, builtIn, configured, tt.kept)
+			}
+			if !tt.kept && (builtIn != "" || configured != "") {
+				t.Fatalf("an untrusted request carried a gateway credential: %q, %q", builtIn, configured)
+			}
+		})
+	}
+}

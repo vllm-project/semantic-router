@@ -117,6 +117,12 @@ type CanonicalBackendRef struct {
 	// usage metering fields, so the decoder tolerates them. A plain vLLM
 	// backend must leave it unset.
 	OpenAICompatGateway bool `yaml:"openai_compat_gateway,omitempty"`
+	// TrustedGateway marks an upstream gateway that receives the request's
+	// deployment-injected gateway credential (global.services.authz
+	// .gateway_credential) under this backend's auth header, instead of a
+	// static api_key. A request without a trusted credential is rejected
+	// before dispatch.
+	TrustedGateway bool `yaml:"trusted_gateway,omitempty"`
 }
 
 func canonicalProviderDefaults(providers CanonicalProviders) CanonicalProviderDefaults {

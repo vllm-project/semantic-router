@@ -85,6 +85,36 @@ allowance and propagates client cancellation. Recipe probes retain their own
 it for the intended run, and allow at least five extra seconds in external HTTP
 clients or proxies when they need to receive the Router's timeout response.
 
+### Authz
+
+```yaml
+global:
+  services:
+    authz:
+      fail_open: false
+      identity:
+        user_id_header: x-authz-user-id
+        user_groups_header: x-authz-user-groups
+      providers:
+        - type: header-injection
+        - type: static-config
+      gateway_credential:
+        enabled: false
+        header: x-vsr-gateway-credential
+```
+
+`identity` names the headers an authenticating gateway sets for the user and
+their groups. `providers` is the credential chain for upstream provider keys:
+`header-injection` reads per-user keys an ext_authz service injected,
+`static-config` falls back to the `api_key` of the selected backend, and the
+first match wins; `fail_open` lets a request through with no key at all.
+
+`gateway_credential` declares the dedicated credential a deployment
+authenticator attaches for a trusted upstream gateway. It is forwarded only to a
+`backend_refs` entry marked `trusted_gateway: true`, under that backend's auth
+header, and a request without it is rejected before dispatch. See
+[Security Hardening](../../installation/security-hardening#forward-a-dedicated-credential-to-a-trusted-gateway).
+
 ### Response API
 
 ```yaml
