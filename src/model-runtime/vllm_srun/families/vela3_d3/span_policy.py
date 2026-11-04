@@ -1,9 +1,8 @@
-"""Span routing and thresholds of the Vela 3.0 d3 sizes, over the package's ``span`` section.
+"""Span routing and thresholds of the Vela 3.0 d3 sizes (``vela3_config.json`` ``span``).
 
 ``Policy.resolve`` decides everything about a span question the package
-decides (``package.SpanConfig``): its label set, its route (the adapter and
-head it runs: the same name), the question it asks and each label's
-description.
+decides: its label set, its route (the adapter and head it runs: the
+same name), the question it asks and each label's description.
 
 Routing (the released ``_span_route``): router label sets (PII, halu, toxic),
 evidence and answer labels and questions, and wordings that name no entity
@@ -45,9 +44,10 @@ class SpanRoute:
 
 @dataclass(frozen=True)
 class Policy:
-    """A package's span routing and thresholds, over the heads its ``span`` section names."""
+    """A package's span routing and thresholds, over the heads it ships."""
 
     config: SpanConfig
+    definitions: Definitions
 
     def label_set(self, names: list[str]) -> str | None:
         """The router label set that holds every label, else ``evidence`` for evidence labels."""
@@ -90,10 +90,7 @@ class Policy:
         return "span"
 
     def resolve(
-        self,
-        labels: list[tuple[str, str]],
-        instructions: str | None,
-        definitions: Definitions,
+        self, labels: list[tuple[str, str]], instructions: str | None
     ) -> SpanRoute:
         """A question's route, label set, question and described labels.
 
@@ -114,7 +111,7 @@ class Policy:
             asked = asked or config.evidence.question
         if label_set is None:
             empty = {n for n, d in labels if not d}
-            written = definitions(names, empty) if empty else {}
+            written = self.definitions(names, empty) if empty else {}
             labels = [(n, written.get(n) or d) for n, d in labels]
         names_only = not any(d for _, d in labels)
         if (
@@ -158,7 +155,7 @@ class Policy:
                 else relation.threshold_multi
             )
         if label_set == "pii":
-            # SpanConfig.parse checked that a bucket holds every target a span question reads.
+            # SpanConfig.parse checks that a bucket reaches SPAN_TARGET_TOKENS, the most a question reads.
             return next(
                 threshold
                 for limit, threshold in config.pii_buckets

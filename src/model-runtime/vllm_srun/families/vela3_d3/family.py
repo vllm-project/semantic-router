@@ -34,10 +34,11 @@ from ..decision3.package import STATE_ONCE_MODES
 from ..vela3_shared import PRESETS
 from . import package as pkg
 from .gates import Gates
-from .model import GatedDecisions, SpanSetup, TurboDecisions, Vela3D3Model
+from .model import GatedDecisions, TurboDecisions, Vela3D3Model
 from .span_policy import Policy
 from .span_read import SpanReader
 from .span_render import Renderer
+from .spans import Spans
 
 
 class Vela3D3Family(ModelFamily):
@@ -157,11 +158,10 @@ class Vela3D3Family(ModelFamily):
             Gates.from_config(
                 details.vela3, details.router_questions, details.adapters
             ),
-            SpanSetup(
-                policy=Policy(details.span),
+            Spans(
+                policy=Policy(details.span, _names_only),
                 renderer=Renderer(model.tokenizer, model.codes),
                 reader=SpanReader(engine_model, heads),
-                definitions=_names_only,
             ),
         )
         model.info = replace(

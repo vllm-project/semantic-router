@@ -12,7 +12,7 @@ from vllm_srun.families.decision3.prompt import render
 from vllm_srun.families.vela3_d3 import span_render, spans
 from vllm_srun.families.vela3_d3.package import SpanConfig
 from vllm_srun.families.vela3_d3.span_policy import Policy
-from vllm_srun.families.vela3_d3.span_read import combine
+from vllm_srun.families.vela3_d3.span_read import SpanReader, combine
 from vllm_srun.families.vela3_d3.span_render import Renderer, Window
 from vllm_srun.plugins.base import AdapterGate
 from vllm_srun.testing import vela3_d3 as fixture
@@ -32,10 +32,14 @@ def no_limit(length):
     return None
 
 
+def no_definitions(names, only):
+    return {}
+
+
 def policy(without=()) -> Policy:
-    """The fixture's policy, without the ``span`` sections (and so the heads) named in ``without``."""
     return Policy(
-        SpanConfig.parse({k: v for k, v in SPAN_CONFIG.items() if k not in without})
+        SpanConfig.parse({k: v for k, v in SPAN_CONFIG.items() if k not in without}),
+        no_definitions,
     )
 
 
@@ -111,11 +115,9 @@ def test_thresholds_follow_the_label_set_and_the_route() -> None:
     ],
 )
 def test_malformed_span_questions_are_refused(question, message) -> None:
-    renderer = Renderer(None, [])
+    planner = spans.Spans(policy(), Renderer(None, []), SpanReader(None, {}))
     with pytest.raises(QuestionError, match=message):
-        spans.plan_question(
-            "q", question, STATE, policy(), renderer, lambda n, o: {}, no_limit
-        )
+        planner.plan("q", question, STATE, no_limit)
 
 
 def test_a_span_question_needs_text_parts() -> None:
@@ -149,7 +151,7 @@ def model(runtime):
 
 
 def test_a_window_is_the_d3_prompt_with_word_and_option_positions(model) -> None:
-    renderer = model.span_setup.renderer
+    renderer = model.spans.renderer
     parts = list(STATE.items())
     labels = [("dose", "an amount of a drug"), ("drug", "")]
     window = renderer.window(
@@ -175,7 +177,7 @@ def test_a_window_is_the_d3_prompt_with_word_and_option_positions(model) -> None
 
 
 def test_long_targets_read_in_word_aligned_windows(model) -> None:
-    renderer = model.span_setup.renderer
+    renderer = model.spans.renderer
     text = " ".join(f"w{i}" for i in range(3000))
     windows, count = renderer.windows(
         [("user", text)], "user", "Which spans?", [("x", "")]
@@ -196,19 +198,15 @@ def test_windows_start_a_stride_apart_on_word_starts() -> None:
     assert span_render.windows(np.arange(100), 100) == [(0, 100)]
 
 
-def no_definitions(names, only):
-    return {}
-
-
 def test_label_sets_take_their_trained_question_and_descriptions() -> None:
     schema = SPAN_CONFIG["schemas"]["pii"]
-    routed = policy().resolve([("EMAIL", ""), ("PERSON", "")], None, no_definitions)
+    routed = policy().resolve([("EMAIL", ""), ("PERSON", "")], None)
     assert (routed.label_set, routed.question) == ("pii", schema["question"])
     assert routed.labels == [
         ("EMAIL", schema["labels"]["EMAIL"]),
         ("PERSON", schema["labels"]["PERSON"]),
     ]
-    open_labels = policy().resolve([("thing", "")], None, no_definitions)
+    open_labels = policy().resolve([("thing", "")], None)
     assert open_labels.question == SPAN_CONFIG["default_question"]
 
 
@@ -216,11 +214,13 @@ def test_open_labels_without_descriptions_leave_the_ner_head_unless_it_takes_nam
     None
 ):
     config = {**SPAN_CONFIG, "ner": {**SPAN_CONFIG["ner"], "names_only_route": "span"}}
-    strict = Policy(SpanConfig.parse(config))
+    strict = Policy(SpanConfig.parse(config), no_definitions)
     drug = [("drug", "")]
-    assert strict.resolve(drug, None, no_definitions).route == "span"
-    assert policy().resolve(drug, None, no_definitions).route == "ner"
-    defined = strict.resolve(drug, None, lambda names, only: {"drug": "a medicine"})
+    assert strict.resolve(drug, None).route == "span"
+    assert policy().resolve(drug, None).route == "ner"
+    defined = Policy(
+        SpanConfig.parse(config), lambda names, only: {"drug": "a medicine"}
+    ).resolve(drug, None)
     assert (defined.route, defined.labels) == ("ner", [("drug", "a medicine")])
 
 
@@ -336,10 +336,10 @@ def test_the_head_reads_word_first_tokens_and_option_line_means(model) -> None:
     hidden = output.gathered[0]
     words = hidden[list(window.word_tokens)]
     labels = torch.stack([hidden[a : b + 1].mean(0) for a, b in window.option_ranges])
-    head = model.span_setup.reader.heads[item.route]
+    head = model.spans.reader.heads[item.route]
     with torch.inference_mode():
         want = head(words, labels).float().cpu().numpy()
-    offsets, got = model.span_setup.reader.logits(item)
+    offsets, got = model.spans.reader.logits(item)
     assert offsets.tolist() == [list(o) for o in window.word_offsets]
     assert np.array_equal(got, want.astype(np.float64))
 
