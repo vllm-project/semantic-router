@@ -175,6 +175,16 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
         ),
     )
     parser.add_argument(
+        "--max-model-len",
+        type=int,
+        default=ENGINE_DEFAULTS.max_model_len,
+        help=(
+            "most input tokens one decision question may have, at most the model "
+            "package's limit; a longer question fails with max_length_exceeded "
+            "before any forward (default: the package's limit)"
+        ),
+    )
+    parser.add_argument(
         "--media-workers",
         type=int,
         default=SERVE_DEFAULTS.media_workers,
@@ -255,6 +265,7 @@ def _engine_args(args: argparse.Namespace) -> EngineArgs:
             batch_window_ms=args.batch_window_ms,
             dtype=args.dtype,
             enable_shared_context=args.enable_shared_context,
+            max_model_len=args.max_model_len,
         )
     except ValueError as exc:
         raise SystemExit(f"--{str(exc).replace('_', '-')}") from exc

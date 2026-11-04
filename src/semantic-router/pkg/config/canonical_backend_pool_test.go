@@ -104,6 +104,19 @@ func TestCanonicalBackendPoolRejectsHeterogeneousRequestSemantics(t *testing.T) 
 `,
 			want: "TLS server name",
 		},
+		{
+			name: "compat gateway",
+			backendRefs: `
+        - name: primary
+          provider: vllm
+          endpoint: 10.0.0.1:8000
+          compat_gateway: true
+        - name: secondary
+          provider: vllm
+          endpoint: 10.0.0.2:8000
+`,
+			want: "compat_gateway",
+		},
 	}
 
 	for _, test := range tests {
