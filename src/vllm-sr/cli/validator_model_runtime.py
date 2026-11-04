@@ -261,7 +261,10 @@ def _deployment_error(name, deployment, external_names):
     provider = deployment.get("provider")
     if provider == "model_runtime":
         return model_runtime_deployment_error(deployment)
-    if any(deployment.get(field) is not None for field in ENGINE_ARGUMENTS) or any(
+    if any(
+        deployment.get(field) is not None
+        for field in (*ENGINE_ARGUMENTS, "max_model_len")
+    ) or any(
         deployment.get(field)
         for field in ("endpoint", "process", "served_name", "replicas")
     ):

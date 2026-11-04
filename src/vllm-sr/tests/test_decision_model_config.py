@@ -317,6 +317,21 @@ def test_decision_type_requires_its_configuration():
         ({"artifact": "vllm-sr/x", "device": "mps"}, None),
         ({"artifact": "vllm-sr/x", "max_num_seqs": 0}, "max_num_seqs must be"),
         ({"artifact": "vllm-sr/x", "max_num_seqs": 1.5}, "max_num_seqs must be"),
+        ({"artifact": "/models/kai", "max_model_len": 32000}, None),
+        ({"artifact": "vllm-sr/x", "max_model_len": 0}, "max_model_len must be"),
+        ({"artifact": "vllm-sr/x", "max_model_len": True}, "max_model_len must be"),
+        (
+            {"endpoint": "http://runtime:8100", "max_model_len": 32000},
+            "max_model_len applies only to a managed worker",
+        ),
+        (
+            {
+                "artifact": "vllm-sr/x",
+                "replicas": [{"device": "cpu"}, {"device": "cpu"}],
+                "max_model_len": 32000,
+            },
+            "max_model_len applies only to a managed worker",
+        ),
         (
             {"artifact": "vllm-sr/x", "max_num_batched_tokens": 7},
             "max_num_batched_tokens must be",
