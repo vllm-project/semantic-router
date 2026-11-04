@@ -343,9 +343,20 @@ func mergeMonotonicUsage(current, update llmprotocol.Usage) (llmprotocol.Usage, 
 		// vLLM's Messages stream counts the whole prompt as uncached input in
 		// message_start and splits it into cache reads and writes in
 		// message_delta. The total is unchanged, so the later split replaces
-		// the earlier one instead of reading as a decrease.
-		current.InputUncached, current.InputCacheRead, current.InputCacheWrite = update.InputUncached, update.InputCacheRead, update.InputCacheWrite
-		current.InputCacheWrite5m, current.InputCacheWrite1h = update.InputCacheWrite5m, update.InputCacheWrite1h
+		// the earlier one instead of reading as a decrease. Only the buckets
+		// the update reports are replaced: Anthropic repeats the split in
+		// message_delta without the cache-write TTL tiers.
+		for _, bucket := range []struct{ current, update *llmprotocol.TokenCount }{
+			{&current.InputUncached, &update.InputUncached},
+			{&current.InputCacheRead, &update.InputCacheRead},
+			{&current.InputCacheWrite, &update.InputCacheWrite},
+			{&current.InputCacheWrite5m, &update.InputCacheWrite5m},
+			{&current.InputCacheWrite1h, &update.InputCacheWrite1h},
+		} {
+			if bucket.update.Value != nil {
+				*bucket.current = *bucket.update
+			}
+		}
 	}
 	currentCounts := usageCounts(current)
 	updateCounts := usageCounts(update)
