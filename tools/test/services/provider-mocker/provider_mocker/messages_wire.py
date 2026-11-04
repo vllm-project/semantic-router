@@ -80,6 +80,26 @@ def build_message(body: dict) -> dict:
         "stop_sequence": matched,
         "usage": {"input_tokens": 6, "output_tokens": 3},
     }
+    if contains_text(body["messages"], "__mock_provider_cache_cost__"):
+        response["usage"] = {
+            "input_tokens": 10,
+            "cache_read_input_tokens": 10,
+            "cache_creation_input_tokens": 80,
+            "cache_creation": {
+                "ephemeral_5m_input_tokens": 30,
+                "ephemeral_1h_input_tokens": 50,
+            },
+            "output_tokens": 2,
+        }
+        if contains_text(body["messages"], "__mock_cache_aggregate__"):
+            del response["usage"]["cache_creation"]
+        if contains_text(body["messages"], "__mock_cache_read_heavy__"):
+            response["usage"] = {
+                "input_tokens": 10,
+                "cache_read_input_tokens": 90,
+                "cache_creation_input_tokens": 0,
+                "output_tokens": 2,
+            }
     if contains_text(body["messages"], "__mock_anthropic_diagnostics__"):
         response["diagnostics"] = {
             "cache_miss_reason": {

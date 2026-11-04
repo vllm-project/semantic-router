@@ -20,14 +20,11 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from ..vela3_shared import RELATION_WORDING
 from .package import Roster
 
 ROUTER_TYPES = ("choice", "set")
-# vela3_encoder._REL_Q and _EV_Q, character for character.
-RELATION_WORDING = re.compile(
-    r"\bspans? (?:are|is) the .+ (?:of|for)\b|\brelat(?:ed|ion|ions|es|ing)?\b|\b(?:head|tail)\b|\bstands? in\b"
-    r"|\bwith respect to\b|\bcounterpart\b|\bsuch that\b|\brole of\b"
-)
+# vela3_encoder._EV_Q, character for character (_REL_Q is RELATION_WORDING).
 EVIDENCE_WORDING = re.compile(
     r"\b(?:evidence|support(?:s|ing|ed)?|cite[sd]?|citations?)\b"
 )

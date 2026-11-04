@@ -574,7 +574,8 @@ func validatePolicy(policy llmprotocol.Policy) error {
 		policy.ResponseVendor != llmprotocol.ResponseVendorCloudflare &&
 		policy.ResponseVendor != llmprotocol.ResponseVendorSnowflake &&
 		policy.ResponseVendor != llmprotocol.ResponseVendorOpenRouter &&
-		policy.ResponseVendor != llmprotocol.ResponseVendorOpenAICompatGateway {
+		policy.ResponseVendor != llmprotocol.ResponseVendorOpenAICompatGateway &&
+		policy.ResponseVendor != llmprotocol.ResponseVendorAnthropicCompatGateway {
 		return fmt.Errorf("response-vendor policy is invalid")
 	}
 	if !positiveProtocolLimits(policy.Limits) {

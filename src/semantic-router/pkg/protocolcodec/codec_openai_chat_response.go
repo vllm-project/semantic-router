@@ -37,6 +37,12 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 		"citations":                                              wire.hasCitations(),
 		"search_results":                                         wire.hasSearchResults(),
 	}, "response request metadata is not model output")
+	if wire.hasTimeInfo() {
+		// A same-format response replays the original bytes, so unlike the
+		// shared family message this reason also states what the client sees.
+		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.OpenAIChatV1, "time_info",
+			"provider serving timing metadata is not model output; a same-format replay forwards it unchanged")
+	}
 	if err := decodeChatChoices(wire, &response, policy); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, err
 	}

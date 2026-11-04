@@ -258,6 +258,11 @@ func runProtocolCodecBackendBufferedMatrix(
 		return err
 	}
 	defer providerSession.Close()
+	if backendFormat == "openai.responses.v1" {
+		if fileErr := runResponsesInlineFiles(ctx, session, providerSession); fileErr != nil {
+			return fileErr
+		}
+	}
 
 	var failures []error
 	results := make(map[string]string, len(protocolCodecE2EClients))

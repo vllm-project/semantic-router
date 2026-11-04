@@ -632,6 +632,13 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
             'When off, Replay keeps route metadata but omits content when PII is detected or detection is unavailable. A decision can override this default.',
         },
         {
+          name: 'capture_tool_results',
+          label: 'Capture tool results',
+          type: 'boolean',
+          description:
+            'Stores client tool-result text in records, each result bounded by max_tool_trace_bytes. Requires personal data capture; callers without replay detail access still see results redacted. Intended for development and audit.',
+        },
+        {
           name: 'store_backend',
           label: 'Store Backend',
           type: 'select',
