@@ -114,6 +114,7 @@ var DashboardContract = []string{
 // behaviour such as cache-token synthesis and stop-reason mapping.
 var ProviderProtocolsContract = []string{
 	"provider-cache-cost-breakdown",
+	"provider-cache-net-savings",
 	"prompt-compression-json-routing",
 	// Chat clients must receive Chat Completions even though the selected
 	// backend speaks Anthropic Messages.

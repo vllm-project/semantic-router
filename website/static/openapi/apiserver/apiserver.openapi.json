@@ -26816,6 +26816,139 @@
                     "object": {
                       "type": "string"
                     },
+                    "provider_cache": {
+                      "type": "object",
+                      "properties": {
+                        "actual_spend": {
+                          "type": "number"
+                        },
+                        "by_currency": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "actual_spend": {
+                                "type": "number"
+                              },
+                              "currency": {
+                                "type": "string"
+                              },
+                              "net_savings": {
+                                "type": "number"
+                              },
+                              "no_cache_spend": {
+                                "type": "number"
+                              },
+                              "priced_records": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "currency",
+                              "no_cache_spend",
+                              "actual_spend",
+                              "net_savings",
+                              "priced_records"
+                            ]
+                          }
+                        },
+                        "by_decision": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "actual_spend": {
+                                "type": "number"
+                              },
+                              "currency": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "net_savings": {
+                                "type": "number"
+                              },
+                              "no_cache_spend": {
+                                "type": "number"
+                              },
+                              "priced_records": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "currency",
+                              "no_cache_spend",
+                              "actual_spend",
+                              "net_savings",
+                              "priced_records"
+                            ]
+                          }
+                        },
+                        "by_selected_model": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "actual_spend": {
+                                "type": "number"
+                              },
+                              "currency": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "net_savings": {
+                                "type": "number"
+                              },
+                              "no_cache_spend": {
+                                "type": "number"
+                              },
+                              "priced_records": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "currency",
+                              "no_cache_spend",
+                              "actual_spend",
+                              "net_savings",
+                              "priced_records"
+                            ]
+                          }
+                        },
+                        "currency": {
+                          "type": "string"
+                        },
+                        "excluded_records": {
+                          "type": "integer"
+                        },
+                        "net_savings": {
+                          "type": "number"
+                        },
+                        "no_cache_spend": {
+                          "type": "number"
+                        },
+                        "priced_records": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "no_cache_spend",
+                        "actual_spend",
+                        "net_savings",
+                        "priced_records",
+                        "excluded_records",
+                        "by_decision",
+                        "by_selected_model"
+                      ]
+                    },
                     "record_count": {
                       "type": "integer"
                     },
@@ -26991,6 +27124,7 @@
                     "record_count",
                     "lifecycle",
                     "summary",
+                    "provider_cache",
                     "model_selection",
                     "decision_distribution",
                     "signal_distribution",

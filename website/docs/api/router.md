@@ -559,6 +559,33 @@ cross-currency total.
 non-completed requests and records missing the data needed for a complete
 estimate; it does not imply that every excluded request lacks pricing.
 
+### Net provider prompt-cache saving
+
+The aggregate's `provider_cache` totals the same-model no-cache comparison over
+the records that match the request's filters:
+
+| Field | Meaning |
+| --- | --- |
+| `no_cache_spend` | Sum of `provider_cache.no_cache_cost`. |
+| `actual_spend` | Sum of the same records' actual provider cost. |
+| `net_savings` | `no_cache_spend - actual_spend`. |
+| `priced_records` | Records included in the totals. |
+| `excluded_records` | Matching records left out of the totals. |
+
+Only settled records are included: completed, not served from the Router
+response cache, with `complete` usage and a captured no-cache cost. The total
+is not a sum of per-request savings clamped at zero. A request whose cache
+writes cost more than its cache reads saved lowers `net_savings`, and the
+total can be negative. For example, one request that saves `0.00009` and
+another that loses `0.00035` give a net saving of `-0.00026`, not `0.00009`.
+The costs are the prices captured when each record settled; records are not
+repriced with today's rates.
+
+`by_currency`, `currency`, and the flat amounts follow the same rules as
+`summary`. `by_decision` and `by_selected_model` split the totals per
+decision or model and currency, without a top-N cut, so each currency's
+entries add up to its total.
+
 When bearer authentication is enabled, replay callers need `replay.read`.
 Prompt, response, tool, and other sensitive details remain redacted unless the
 principal also has `replay.detail`. Treat replay storage as potentially

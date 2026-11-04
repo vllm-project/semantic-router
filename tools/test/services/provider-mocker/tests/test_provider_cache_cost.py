@@ -28,3 +28,23 @@ def test_cache_cost_fixture_has_disjoint_aggregate_and_tiers():
         ]
         assert events[0]["message"]["usage"] == {**usage, "output_tokens": 0}
         assert events[-2]["usage"] == usage
+
+
+def test_cache_read_heavy_fixture_reads_without_writes():
+    response = build_message(
+        {
+            "model": "claude",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "__mock_provider_cache_cost__ __mock_cache_read_heavy__",
+                }
+            ],
+        }
+    )
+    assert response["usage"] == {
+        "input_tokens": 10,
+        "cache_read_input_tokens": 90,
+        "cache_creation_input_tokens": 0,
+        "output_tokens": 2,
+    }
