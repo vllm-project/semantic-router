@@ -199,6 +199,14 @@ func (decoder *anthropicStreamDecoder) decodeEvent(
 			appendProviderFieldOmission(&diagnostics, decoder.policy, llmprotocol.AnthropicMessagesV1,
 				"stream.message.usage.iterations", "per-iteration usage has no neutral accounting bucket")
 		}
+		if wire.Message != nil && wire.Message.Usage != nil {
+			usage := wire.Message.Usage
+			appendProviderFieldOmissions(&diagnostics, decoder.policy, llmprotocol.AnthropicMessagesV1, map[string]bool{
+				"stream.message.usage.inference_geo": usage.InferenceGeo != "",
+				"stream.message.usage.service_tier":  usage.ServiceTier != "",
+				"stream.message.usage.speed":         usage.Speed != "",
+			}, anthropicUsageMetadataReason)
+		}
 		return events, diagnostics, err
 	case "content_block_start":
 		return decoder.emitDecodedAnthropicEvent(decodeAnthropicContentStart(wire))
