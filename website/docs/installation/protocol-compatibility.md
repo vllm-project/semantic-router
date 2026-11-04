@@ -71,14 +71,35 @@ path is retained and the protocol operation suffix is appended exactly once;
 the protocol's default `/v1` base path is used only when the URL has no path.
 `chat_path` applies only to Chat Completions.
 
-### Gateways that add response fields
+### Response fields the Router does not model
 
-The Router decodes backend replies strictly. A reply that carries a field its
-`api_format` does not define fails as an invalid response, so a client sees a
-502 for a buffered reply or an error event for a stream. Some relay gateways
-add their own fields to every reply, such as usage metering or a cost inside
-`usage`. Set `compat_gateway: true` on the backend ref that points at such a
-gateway:
+Providers and gateways add fields of their own to replies: a gateway's cost or
+trace ID, provider metadata, or a field a provider ships before the Router
+models it. Any backend can send them, and no setting is needed:
+
+- A reply, a stream event, or an error body that carries a field its
+  `api_format` does not define still succeeds. A client that uses the
+  backend's format receives the reply unchanged, field included. A client of
+  another format receives the translated reply without the field.
+- Each such field is reported as a `dropped` diagnostic. It is counted in
+  `llm_translation_lossy_total` and logged at debug level, and buffered
+  replies list it in `x-vsr-protocol-warnings`.
+- Fields the Router models are still validated: their types and values, the
+  usage totals, the rule that a streamed usage counter never decreases, and
+  the rule that no counter is negative. A field the Router does not model
+  never counts toward usage, and the response cache stores the reply without
+  it.
+- When a Chat Completions reply names its usage counters `input_tokens` and
+  `output_tokens`, as some relays in front of Anthropic models do, the Router
+  reads them as `prompt_tokens` and `completion_tokens`.
+- A Chat reply that carries `fusion`, `flow`, or `reasoning_mom_responses` is
+  refused. These names belong to the Router's own Looper output, so a client
+  must not receive a backend's value under them.
+
+This applies to the first attempt and to native fallback, and to buffered,
+streamed, and gzip-compressed replies. For example, this gateway backend needs
+nothing beyond its address, even though every reply it sends carries a
+`usage.total_cost`:
 
 ```yaml
 providers:
@@ -88,25 +109,14 @@ providers:
       api_format: anthropic
       backend_refs:
         - name: gateway
-          provider: anthropic
+          provider: anthropic-compatible
           base_url: https://gateway.example.com/anthropic
-          compat_gateway: true
 ```
 
-The Router then drops each field the backend's wire format does not define and
-reports it as a dropped-field diagnostic. Usage, accounting, the response
-cache and Router Replay keep the canonical counters. The opt-in applies to the
-first attempt and to native fallback, for buffered and streamed replies. When
-the model's `api_format` is `openai`, a gateway's Anthropic-style
-`input_tokens` and `output_tokens` usage names are also read as
-`prompt_tokens` and `completion_tokens`. Leave the field unset for backends
-that serve the canonical contract.
-
-Startup rejects `compat_gateway` where it would have no effect: on
-`azure-openai`, `cloudflare-workers-ai`, `openrouter` and `snowflake-cortex`
-backends, which keep their own response contracts, and on `systemone` models. Weighted backend
-refs of one model must agree on it. `openai_compat_gateway` is the deprecated
-spelling and still works.
+Earlier releases had a backend-ref setting named `compat_gateway`, also spelled
+`openai_compat_gateway`, that enabled this behavior for one backend. It was
+removed. A configuration that still sets it fails to load with a message that
+names the field; delete the field.
 
 With `--gateway extproc`, the generated Envoy cluster for an HTTPS backend
 verifies both the server

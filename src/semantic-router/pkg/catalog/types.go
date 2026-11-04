@@ -212,9 +212,6 @@ type ProviderInstance struct {
 	// ProviderInstance an internal materialization contract.
 	AuthPrefixSet bool   `json:"-" yaml:"-"`
 	ChatPath      string `json:"chat_path,omitempty" yaml:"chat_path,omitempty"`
-	// CompatGateway marks an instance whose URL is a relay gateway that adds
-	// its own response fields, carried through to the provider profile.
-	CompatGateway bool `json:"compat_gateway,omitempty" yaml:"compat_gateway,omitempty"`
 }
 
 // ModelProviderBinding binds a request-facing model alias to one provider

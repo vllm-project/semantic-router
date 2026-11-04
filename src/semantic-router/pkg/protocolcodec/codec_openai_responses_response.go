@@ -12,10 +12,10 @@ import (
 )
 
 type responsesResponseWire struct {
-	KVTransferParams  json.RawMessage     `json:"kv_transfer_params,omitempty" response_extension:"true"`
-	ECTransferParams  json.RawMessage     `json:"ec_transfer_params,omitempty" response_extension:"true"`
-	InputMessages     json.RawMessage     `json:"input_messages,omitempty" response_extension:"true"`
-	OutputMessages    json.RawMessage     `json:"output_messages,omitempty" response_extension:"true"`
+	KVTransferParams  json.RawMessage     `json:"kv_transfer_params,omitempty"`
+	ECTransferParams  json.RawMessage     `json:"ec_transfer_params,omitempty"`
+	InputMessages     json.RawMessage     `json:"input_messages,omitempty"`
+	OutputMessages    json.RawMessage     `json:"output_messages,omitempty"`
 	ID                string              `json:"id"`
 	Object            string              `json:"object,omitempty"`
 	CreatedAt         float64             `json:"created_at"`
@@ -87,8 +87,8 @@ type responsesUsageWire struct {
 }
 
 type responsesInputUsageDetails struct {
-	InputTokensPerTurn  json.RawMessage `json:"input_tokens_per_turn,omitempty" response_extension:"true"`
-	CachedTokensPerTurn json.RawMessage `json:"cached_tokens_per_turn,omitempty" response_extension:"true"`
+	InputTokensPerTurn  json.RawMessage `json:"input_tokens_per_turn,omitempty"`
+	CachedTokensPerTurn json.RawMessage `json:"cached_tokens_per_turn,omitempty"`
 	CachedTokens        *int64          `json:"cached_tokens"`
 	CacheWriteTokens    *int64          `json:"cache_write_tokens,omitempty"`
 	CreatedCacheTokens  *int64          `json:"created_cache_tokens,omitempty"`
@@ -96,9 +96,9 @@ type responsesInputUsageDetails struct {
 }
 
 type responsesOutputUsageDetails struct {
-	OutputTokensPerTurn     json.RawMessage `json:"output_tokens_per_turn,omitempty" response_extension:"true"`
-	ToolOutputTokensPerTurn json.RawMessage `json:"tool_output_tokens_per_turn,omitempty" response_extension:"true"`
-	ToolOutputTokens        json.RawMessage `json:"tool_output_tokens,omitempty" response_extension:"true"`
+	OutputTokensPerTurn     json.RawMessage `json:"output_tokens_per_turn,omitempty"`
+	ToolOutputTokensPerTurn json.RawMessage `json:"tool_output_tokens_per_turn,omitempty"`
+	ToolOutputTokens        json.RawMessage `json:"tool_output_tokens,omitempty"`
 	ReasoningTokens         int64           `json:"reasoning_tokens"`
 }
 
@@ -124,26 +124,22 @@ func responsesErrorCode(protocolError *llmprotocol.ProtocolError) string {
 
 func (OpenAIResponsesCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (llmprotocol.Response, llmprotocol.Envelope, llmprotocol.Diagnostics, error) {
 	var wire responsesResponseWire
-	canonicalBody, vendorExtensions, err := decodeProviderWireVendorAware(body, &wire, policy)
+	_, unknownFields, err := decodeProviderWireTolerant(body, &wire, policy)
 	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
 	if err := validateResponsesResponseResource(wire, false); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
-	nestedVendorExtensions, err := responsesOutputVendorExtensions(wire.Output, policy)
-	if err != nil {
-		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
-	}
-	vendorExtensions = append(vendorExtensions, nestedVendorExtensions...)
+	unknownFields = append(unknownFields, responsesOutputUnknownFields(wire.Output, policy)...)
 	var diagnostics llmprotocol.Diagnostics
-	appendVendorExtensionDiagnostics(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, vendorExtensions)
+	appendUnknownFieldDiagnostics(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, unknownFields)
 	diagnostics = appendDiagnostics(diagnostics, responsesResponseMetadataDiagnostics(wire, policy), policy.Limits.Diagnostics)
 	response, err := decodeResponsesResponseResource(wire, policy, &diagnostics)
 	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
-	return response, responseEnvelope(llmprotocol.OpenAIResponsesV1, canonicalBody, response.Generation, wire.Status, policy), diagnostics, nil
+	return response, responseEnvelope(llmprotocol.OpenAIResponsesV1, body, response.Generation, wire.Status, policy), diagnostics, nil
 }
 
 func responsesResponseMetadataDiagnostics(wire responsesResponseWire, policy llmprotocol.Policy) llmprotocol.Diagnostics {

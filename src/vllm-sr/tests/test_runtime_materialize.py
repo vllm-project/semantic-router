@@ -84,20 +84,10 @@ def test_realize_runtime_config_applies_overrides_without_mutating_source(
     assert stat.S_IMODE(target.stat().st_mode) == 0o600
 
 
-@pytest.mark.parametrize(
-    ("provider", "field"),
-    [
-        ("vllm", "openai_compat_gateway"),
-        ("vllm", "compat_gateway"),
-        ("anthropic", "compat_gateway"),
-    ],
-)
-def test_realize_runtime_config_round_trips_gateway_opt_in(
-    tmp_path: Path, provider: str, field: str
-):
-    """A backend_ref carrying the gateway opt-in, under either spelling,
-    passes the strict CLI validation and survives realization unchanged (the
-    field must round-trip through the supported entry point)."""
+@pytest.mark.parametrize("field", ["compat_gateway", "openai_compat_gateway"])
+def test_realize_runtime_config_names_removed_gateway_opt_in(tmp_path: Path, field: str):
+    """A backend_ref that still sets a removed gateway opt-in fails with the
+    same one-line hint the Router gives, before anything is published."""
 
     source = tmp_path / "raw.yaml"
     source.write_bytes(
@@ -112,7 +102,7 @@ def test_realize_runtime_config_round_trips_gateway_opt_in(
                                 {
                                     "name": "relay",
                                     "endpoint": "https://relay.example.com/v1",
-                                    "provider": provider,
+                                    "provider": "anthropic",
                                     field: True,
                                 }
                             ],
@@ -144,11 +134,12 @@ def test_realize_runtime_config_round_trips_gateway_opt_in(
     )
     target = tmp_path / "state" / "runtime-config.yaml"
 
-    realize_runtime_config(source, target)
-
-    realized = yaml.safe_load(target.read_text(encoding="utf-8"))
-    backend_ref = realized["providers"]["models"][0]["backend_refs"][0]
-    assert backend_ref[field] is True
+    with pytest.raises(
+        ValueError,
+        match=f"{field} was removed; gateway response fields are accepted by default",
+    ):
+        realize_runtime_config(source, target)
+    assert not target.exists()
 
 
 def test_realize_runtime_config_strict_atomic_replace(tmp_path: Path, monkeypatch):
