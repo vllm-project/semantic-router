@@ -1,8 +1,10 @@
 """The Router's decision model: global.model_catalog.system.decision_model.
 
 The binding selects one declared model_runtime deployment for the Router's
-judgment tasks. Model identity and runtime requirements belong to that resource.
-The Router owns defaults; the CLI selects exact keys and validates the resource.
+judgment tasks, or a systemone deployment, a remote System One API, for its
+decision questions. Model identity and runtime requirements belong to that
+resource. The Router owns defaults; the CLI selects exact keys and validates
+the resource.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ from cli.model_runtime_defaults import effective_model_deployments_document
 
 DEFAULT_DECISION_MODEL = "primary"
 DECISION_MODEL_FIELD = "global.model_catalog.system.decision_model"
+SYSTEMONE_PROVIDER = "systemone"
 
 
 def canonical_decision_model(name: str | None) -> str:
@@ -44,6 +47,13 @@ def configured_decision_model(document: dict | None) -> str:
             "decision_model must be {deployment: <declared deployment key>}"
         )
     return canonical_decision_model(binding["deployment"])
+
+
+def remote_decision_model(document: dict | None) -> str | None:
+    """The decision model when it is a systemone deployment, which runs no local model."""
+    key = configured_decision_model(document)
+    deployment = effective_model_deployments_document(document).get(key) or {}
+    return key if deployment.get("provider") == SYSTEMONE_PROVIDER else None
 
 
 def decision_model_deployment(document: dict | None, name: str | None = None) -> dict:
