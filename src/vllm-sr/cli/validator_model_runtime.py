@@ -9,8 +9,10 @@ from cli.model_runtime_defaults import (
 from cli.model_runtime_retired import ENGINE_ARGUMENTS
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
+from cli.decision_model import SYSTEMONE_PROVIDER
 from cli.validator_decision_model import (
     model_runtime_deployment_error,
+    systemone_deployment_error,
     validate_decision_model_references,
     validate_systemone_listener_models,
 )
@@ -103,6 +105,11 @@ def _binding_error(
     consumer, binding, deployment, profile=None, *, global_default=False
 ):
     provider = deployment.get("provider")
+    if provider == SYSTEMONE_PROVIDER:
+        return (
+            "a systemone deployment answers decision signals and selectors only; "
+            f"bind {consumer} to a model_runtime or http deployment"
+        )
     runtime = provider == "model_runtime"
     if runtime and consumer == "hallucination_explainer":
         return (
@@ -261,6 +268,8 @@ def _deployment_error(name, deployment, external_names):
     provider = deployment.get("provider")
     if provider == "model_runtime":
         return model_runtime_deployment_error(deployment)
+    if provider == SYSTEMONE_PROVIDER:
+        return systemone_deployment_error(deployment)
     if any(
         deployment.get(field) is not None
         for field in (*ENGINE_ARGUMENTS, "max_model_len")

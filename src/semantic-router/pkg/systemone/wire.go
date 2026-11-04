@@ -11,9 +11,10 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
-	"strings"
 
 	"github.com/klauspost/compress/zstd"
+
+	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
 // zstdMaxWindow is the largest window a zstd request body may use, as on
@@ -42,29 +43,14 @@ func malformedBody(reason, format string, args ...any) *wireError {
 // identity, "gzip" for gzip or x-gzip, "zstd"; another coding, or more than
 // one, is 415.
 func requestEncoding(h http.Header) (string, *wireError) {
-	var codings []string
-	for _, value := range h.Values("Content-Encoding") {
-		for _, coding := range strings.Split(value, ",") {
-			if coding = strings.ToLower(strings.TrimSpace(coding)); coding != "" && coding != "identity" {
-				codings = append(codings, coding)
-			}
-		}
+	coding, single := httputil.ContentCoding(h.Values("Content-Encoding"))
+	if single && (coding == "" || coding == "gzip" || coding == "zstd") {
+		return coding, nil
 	}
-	unsupported := &wireError{
+	return "", &wireError{
 		status: http.StatusUnsupportedMediaType, code: "unsupported_media_type", reason: "encoding_unsupported",
 		message: "send the body uncompressed, or with one Content-Encoding: gzip or zstd",
 	}
-	switch {
-	case len(codings) == 0:
-		return "", nil
-	case len(codings) > 1:
-		return "", unsupported
-	case codings[0] == "gzip" || codings[0] == "x-gzip":
-		return "gzip", nil
-	case codings[0] == "zstd":
-		return "zstd", nil
-	}
-	return "", unsupported
 }
 
 // decodeBody decompresses one layer of encoding into at most RequestLimit bytes.

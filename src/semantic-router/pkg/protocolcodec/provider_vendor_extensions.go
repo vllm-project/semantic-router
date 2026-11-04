@@ -19,7 +19,7 @@ const vendorExtensionReason = "provider vendor extension field is not part of th
 func providerVendorExtensionsAllowed(policy llmprotocol.Policy) bool {
 	switch policy.ResponseVendor {
 	case llmprotocol.ResponseVendorAzure, llmprotocol.ResponseVendorCloudflare,
-		llmprotocol.ResponseVendorOpenAICompatGateway:
+		llmprotocol.ResponseVendorOpenAICompatGateway, llmprotocol.ResponseVendorAnthropicCompatGateway:
 		return true
 	}
 	return false
