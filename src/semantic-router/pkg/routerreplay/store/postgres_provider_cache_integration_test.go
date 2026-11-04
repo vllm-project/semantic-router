@@ -79,7 +79,7 @@ func TestPostgresProviderCacheIntegration(t *testing.T) {
 		Output:    TokenCostComponent{Tokens: &two, Provenance: "authoritative"},
 	}
 	record := postgresMetadataFixture()
-	record.ID = "provider-cache"
+	record.ID, record.RequestID = "provider-cache", "provider-cache-request"
 	record.ProviderCache = partial
 	if _, err = postgres.Add(ctx, record); err != nil {
 		t.Fatal(err)
@@ -116,6 +116,23 @@ func TestPostgresProviderCacheIntegration(t *testing.T) {
 	}
 	if listed != 1 {
 		t.Fatalf("summary list returned the record %d times", listed)
+	}
+	scanned := 0
+	if err = postgres.ScanMetadata(ctx, func(metadata Record) error {
+		switch metadata.RequestID {
+		case record.RequestID:
+			scanned++
+			if !reflect.DeepEqual(metadata.ProviderCache, complete) {
+				t.Errorf("metadata scan lost provider cache accounting: %+v", metadata.ProviderCache)
+			}
+		default:
+			if metadata.ProviderCache != nil {
+				t.Errorf("metadata scan invented provider cache accounting: %+v", metadata.ProviderCache)
+			}
+		}
+		return nil
+	}); err != nil || scanned != 1 {
+		t.Fatalf("metadata scan returned the record %d times: %v", scanned, err)
 	}
 
 	if err = postgres.UpdateUsageCost(ctx, record.ID, UsageCost{}); err != nil {

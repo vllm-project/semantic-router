@@ -295,6 +295,30 @@ export interface InsightsAggregateSummary {
   by_currency?: InsightsAggregateCurrencySummary[]
 }
 
+export interface InsightsProviderCacheCurrencyTotal {
+  currency: string
+  no_cache_spend: number
+  actual_spend: number
+  net_savings: number
+  priced_records: number
+}
+
+export interface InsightsProviderCacheSpendEntry extends InsightsProviderCacheCurrencyTotal {
+  name: string
+}
+
+export interface InsightsAggregateProviderCache {
+  no_cache_spend: number
+  actual_spend: number
+  net_savings: number
+  currency?: string
+  priced_records: number
+  excluded_records: number
+  by_currency?: InsightsProviderCacheCurrencyTotal[]
+  by_decision: InsightsProviderCacheSpendEntry[]
+  by_selected_model: InsightsProviderCacheSpendEntry[]
+}
+
 export interface InsightsAggregateTokenVolume {
   input_tokens: number
   output_tokens: number
@@ -325,6 +349,7 @@ export interface InsightsAggregateResponse {
     unknown: number
   }
   summary: InsightsAggregateSummary
+  provider_cache?: InsightsAggregateProviderCache
   model_selection: InsightsAggregateValue[]
   decision_distribution: InsightsAggregateValue[]
   signal_distribution: InsightsAggregateValue[]

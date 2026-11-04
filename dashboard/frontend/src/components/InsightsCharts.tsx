@@ -19,6 +19,7 @@ import type {
   InsightsAggregateTokenEntry,
 } from '../pages/insightsPageTypes'
 import styles from './InsightsCharts.module.css'
+import InsightsProviderCacheSummary from './InsightsProviderCacheSummary'
 import { formatInsightsCost as formatCurrency } from '../utils/insightsCost'
 
 interface InsightsChartsProps {
@@ -248,6 +249,8 @@ export default function InsightsCharts({ aggregate }: InsightsChartsProps) {
           explains what was not recorded. Historical rows without captured prices are not repriced.
         </p>
       ) : null}
+
+      <InsightsProviderCacheSummary summary={aggregate.provider_cache} />
 
       <div className={styles.chartsRow}>
         <div className={styles.chartSection}>
