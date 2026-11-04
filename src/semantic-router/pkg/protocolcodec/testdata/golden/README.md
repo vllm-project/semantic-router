@@ -139,3 +139,18 @@ check as ordinary successful streams. Hosted image-generation fixtures also
 pin the complete Responses progress lifecycle, missing required event fields,
 duplicate state transitions, sparse partial-image indexes, and invalid base64
 payloads as readable protocol contracts.
+
+Responses provider defaults are indexed as extensions, not official OpenAI fields.
+Strict response decoding accepts absent fields or `null` for `kv_transfer_params`,
+`ec_transfer_params`, `input_messages`, and `output_messages`; per-turn usage arrays
+must be empty and `tool_output_tokens` must be an integer zero. Buffered responses
+and streaming response resources use the same validation. An explicit compatible
+response vendor still strips these fields regardless of their values.
+
+These defaults have no neutral representation. Usage defaults produce dropped-field
+diagnostics; null fields do not. A dropped-field diagnostic describes omission from
+the neutral response, not removal from every client payload. Bounded, unchanged
+same-format codec replay can retain strict defaults, and ExtProc same-format
+forwarding can retain original provider bytes. Cross-format conversion and source
+re-encoding omit the fields. Cache writes canonicalize vendor-decorated responses
+so later reads can use strict decoding.

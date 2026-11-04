@@ -57,6 +57,7 @@ func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 			CaptureRequestBody:  canonicalBoolPtr(true),
 			CaptureResponseBody: canonicalBoolPtr(true),
 			CapturePersonalData: canonicalBoolPtr(true),
+			CaptureToolResults:  canonicalBoolPtr(false),
 			MaxRecords:          canonicalIntPtr(defaultRouterReplayMaxRecords),
 			MaxBodyBytes:        canonicalIntPtr(defaultRouterReplayMaxBodyBytes),
 			MaxToolTraceBytes:   canonicalIntPtr(0),

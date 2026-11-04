@@ -33,6 +33,7 @@ type anthropicUsageWire struct {
 	OutputTokensDetails      anthropicOutputUsageDetailsWire  `json:"output_tokens_details"`
 	ServerToolUse            anthropicServerToolUsageWire     `json:"server_tool_use"`
 	ServiceTier              string                           `json:"service_tier"`
+	Speed                    string                           `json:"speed,omitempty"`
 	Iterations               []json.RawMessage                `json:"iterations,omitempty"`
 }
 
@@ -63,23 +64,27 @@ type anthropicTransportErrorWire struct {
 
 func (AnthropicMessagesCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (llmprotocol.Response, llmprotocol.Envelope, llmprotocol.Diagnostics, error) {
 	var wire anthropicResponseWire
-	if err := decodeProviderWire(body, &wire, policy); err != nil {
+	canonicalBody, vendorExtensions, err := decodeProviderWireVendorAware(body, &wire, policy)
+	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
 	if err := validateAnthropicResponseResource(wire); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
-	diagnostics, err := anthropicStopSequenceDiagnostics(body, "", policy)
+	var diagnostics llmprotocol.Diagnostics
+	appendVendorExtensionDiagnostics(&diagnostics, policy, llmprotocol.AnthropicMessagesV1, vendorExtensions)
+	stopSequenceDiagnostics, err := anthropicStopSequenceDiagnostics(body, "", policy)
 	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
+	diagnostics = appendDiagnostics(diagnostics, stopSequenceDiagnostics, policy.Limits.Diagnostics)
 	diagnostics = appendDiagnostics(diagnostics, anthropicResponseMetadataDiagnostics(wire, policy), policy.Limits.Diagnostics)
 	response, err := decodeAnthropicResponseResource(wire, policy)
 	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
 	appendAnthropicResponseUsage(&response, wire.Usage, policy, &diagnostics)
-	return response, responseEnvelope(llmprotocol.AnthropicMessagesV1, body, response.Generation, response.SourceStopReason, policy), diagnostics, nil
+	return response, responseEnvelope(llmprotocol.AnthropicMessagesV1, canonicalBody, response.Generation, response.SourceStopReason, policy), diagnostics, nil
 }
 
 func anthropicResponseMetadataDiagnostics(wire anthropicResponseWire, policy llmprotocol.Policy) llmprotocol.Diagnostics {
@@ -137,9 +142,12 @@ func appendAnthropicResponseUsage(
 		"usage.server_tool_use": usage.ServerToolUse.WebFetchRequests != 0 ||
 			usage.ServerToolUse.WebSearchRequests != 0,
 		"usage.service_tier": usage.ServiceTier != "",
+		"usage.speed":        usage.Speed != "",
 		"usage.iterations":   len(usage.Iterations) > 0,
-	}, "provider usage metadata has no neutral accounting bucket")
+	}, anthropicUsageMetadataReason)
 }
+
+const anthropicUsageMetadataReason = "provider usage metadata has no neutral accounting bucket"
 
 func decodeAnthropicUsage(wire anthropicUsageWire, policy llmprotocol.Policy, diagnostics *llmprotocol.Diagnostics) llmprotocol.Usage {
 	cacheWrite := wire.CacheCreationInputTokens
@@ -350,9 +358,12 @@ func (AnthropicMessagesCodec) DecodeTransportError(
 		return decodeSnowflakeTransportError(body, policy, llmprotocol.AnthropicMessagesV1)
 	}
 	var wire anthropicTransportErrorWire
-	if err := decodeProviderWire(body, &wire, policy); err != nil {
+	_, vendorExtensions, err := decodeProviderWireVendorAware(body, &wire, policy)
+	if err != nil {
 		return llmprotocol.TransportError{}, nil, err
 	}
+	var diagnostics llmprotocol.Diagnostics
+	appendVendorExtensionDiagnostics(&diagnostics, policy, llmprotocol.AnthropicMessagesV1, vendorExtensions)
 	if wire.Type != "error" {
 		return llmprotocol.TransportError{}, nil, invalidProviderResponse(
 			"invalid_upstream_error_envelope",
@@ -376,7 +387,7 @@ func (AnthropicMessagesCodec) DecodeTransportError(
 			Code:     wire.Error.Type, Message: wire.Error.Message,
 		},
 		ProviderRequestID: wire.RequestID,
-	}, nil, nil
+	}, diagnostics, nil
 }
 
 func (AnthropicMessagesCodec) EncodeTransportError(transportError llmprotocol.TransportError) []byte {

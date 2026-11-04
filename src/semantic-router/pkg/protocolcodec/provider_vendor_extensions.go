@@ -19,7 +19,7 @@ const vendorExtensionReason = "provider vendor extension field is not part of th
 func providerVendorExtensionsAllowed(policy llmprotocol.Policy) bool {
 	switch policy.ResponseVendor {
 	case llmprotocol.ResponseVendorAzure, llmprotocol.ResponseVendorCloudflare,
-		llmprotocol.ResponseVendorOpenAICompatGateway:
+		llmprotocol.ResponseVendorOpenAICompatGateway, llmprotocol.ResponseVendorAnthropicCompatGateway:
 		return true
 	}
 	return false
@@ -84,13 +84,13 @@ func stripVendorExtensionObject(
 	for name, value := range object {
 		child := vendorExtensionPath(path, name)
 		fieldType, found := fields[name]
-		if !found {
+		if !found || fieldType.vendorExtension {
 			delete(object, name)
 			dropped[child] = struct{}{}
 			changed = true
 			continue
 		}
-		if rewritten, childChanged := stripVendorExtensionValue(value, fieldType, child, dropped); childChanged {
+		if rewritten, childChanged := stripVendorExtensionValue(value, fieldType.typeOf, child, dropped); childChanged {
 			object[name] = rewritten
 			changed = true
 		}

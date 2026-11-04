@@ -50,6 +50,7 @@ from ...errors import (
     question_error,
 )
 from ...plugins.base import (
+    AdapterGate,
     BackboneSpec,
     DtypePolicy,
     EngineModel,
@@ -290,9 +291,17 @@ class Decision3Family(ModelFamily):
         )
 
     def load(
-        self, package: VerifiedPackage, spec: ModelSpec, engine_model: EngineModel
+        self,
+        package: VerifiedPackage,
+        spec: ModelSpec,
+        engine_model: EngineModel,
+        model_class: type[Decision3Model] | None = None,
     ) -> Decision3Model:
-        """A ``Decision3Model``, or a ``StateOnceModel`` for a package whose layout is state-once."""
+        """A ``Decision3Model``, or a ``StateOnceModel`` for a package whose layout is state-once.
+
+        ``model_class`` replaces that choice: a family that runs this package as
+        its base passes its own subclass of the one the layout needs.
+        """
         from safetensors.torch import load_file
 
         details: pkg.Decision3Package = package.details["package"]
@@ -406,11 +415,9 @@ class Decision3Family(ModelFamily):
             dtype=f"bf16/{'fp32' if readout_dtype == 'float32' else 'bf16'}-readout",
             modalities=modalities,
         )
-        model_class = Decision3Model
+        if model_class is None:
+            model_class = model_class_of(decision)
         if decision.get("attention_mode", "causal") in pkg.STATE_ONCE_MODES:
-            from .state_once import StateOnceModel
-
-            model_class = StateOnceModel
             # A state-once model counts each state once in usage.input_tokens, and that count of one request
             # is capped at the context length (max_request_tokens).
             info = replace(
@@ -568,10 +575,7 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
 
     def exact_batches(self, items: list[Item]) -> list[list[int]]:
         """Request order, eight questions per pass."""
-        return [
-            list(range(start, min(start + BATCH_SIZE, len(items))))
-            for start in range(0, len(items), BATCH_SIZE)
-        ]
+        return passes(len(items))
 
     # ------------------------------------------------------------------ planning
 
@@ -1150,7 +1154,10 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         images: ImageInputs | None,
         states: list[int] | None = None,
         packed: bool = False,
+        adapter: AdapterGate | None = None,
+        noncausal: bool = False,
     ) -> list[list[float] | None]:
+        """Each item's probabilities from one forward (``adapter`` and ``noncausal`` as ``ForwardBatch``'s)."""
         output = self.engine_model.forward(
             ForwardBatch(
                 input_ids=ids,
@@ -1161,6 +1168,8 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
                 images=images,
                 states=states,
                 packed=packed,
+                adapter=adapter,
+                noncausal=noncausal,
             )
         )
         return self._probabilities(items, output.query)
@@ -1282,3 +1291,20 @@ def _scaled(logits: torch.Tensor, temperatures: list[float]) -> torch.Tensor:
 
 def _bytes(tensor: torch.Tensor) -> int:
     return tensor.numel() * tensor.element_size()
+
+
+def passes(count: int) -> list[list[int]]:
+    """``range(count)`` in request order, ``BATCH_SIZE`` rows per pass."""
+    return [
+        list(range(start, min(start + BATCH_SIZE, count)))
+        for start in range(0, count, BATCH_SIZE)
+    ]
+
+
+def model_class_of(decision: dict[str, Any]) -> type[Decision3Model]:
+    """``Decision3Model``, or ``StateOnceModel`` for a package whose layout is state-once."""
+    if decision.get("attention_mode", "causal") in pkg.STATE_ONCE_MODES:
+        from .state_once import StateOnceModel
+
+        return StateOnceModel
+    return Decision3Model

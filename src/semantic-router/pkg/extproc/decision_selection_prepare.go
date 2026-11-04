@@ -27,6 +27,10 @@ func prepareDecisionSelectionCards(cfg *config.RouterConfig, provider interface 
 			selector := *decision.Algorithm.Decision
 			deployment := cfg.DecisionSelectorDeployment(selector)
 			card, exists := cards[deployment]
+			if remote := cfg.ModelDeployments[deployment]; !exists && remote.IsSystemOne() {
+				card, exists = modelservice.RemoteCard(remote.Model, remote.QuestionTypes, nil), true
+				cards[deployment] = card
+			}
 			if !exists {
 				if provider == nil {
 					return nil, fmt.Errorf("decision selector %s requires a model runtime", decision.Name)

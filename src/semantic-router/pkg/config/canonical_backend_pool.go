@@ -32,6 +32,7 @@ type effectiveBackendSemantics struct {
 	reasoningTransport modelcatalog.ReasoningTransport
 	reasoningModes     []string
 	reasoningEfforts   []string
+	compatGateway      bool
 }
 
 type effectiveCredentialIdentity struct {
@@ -154,6 +155,7 @@ func newEffectiveBackendSemantics(
 		reasoningTransport: reasoningTransport,
 		reasoningModes:     profile.ReasoningModes,
 		reasoningEfforts:   profile.ReasoningEfforts,
+		compatGateway:      profile.CompatGateway,
 	}, nil
 }
 
@@ -190,6 +192,7 @@ func effectiveBackendDifferences(left, right effectiveBackendSemantics) []string
 	)
 	result = appendDifference(result, !slices.Equal(left.reasoningModes, right.reasoningModes), "reasoning modes")
 	result = appendDifference(result, !slices.Equal(left.reasoningEfforts, right.reasoningEfforts), "reasoning efforts")
+	result = appendDifference(result, left.compatGateway != right.compatGateway, "compat_gateway")
 	return result
 }
 
