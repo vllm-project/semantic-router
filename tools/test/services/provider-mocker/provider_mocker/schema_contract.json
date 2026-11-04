@@ -521,7 +521,8 @@
         "output_tokens",
         "output_tokens_details",
         "server_tool_use",
-        "service_tier"
+        "service_tier",
+        "speed"
       ]
     },
     "openai_images": {
