@@ -735,6 +735,25 @@ class DiagnosticTests(unittest.TestCase):
                 self.assertEqual(len(result["checks"]["all"]), 2)
                 self.assertEqual(len(result["checks"]["latest"]), len(visible))
 
+    def test_running_qualification_is_not_reported_as_failed(self):
+        for status in ("queued", "in_progress"):
+            with self.subTest(status=status):
+                client = DiagnosticClient()
+                client.run.update(status=status, conclusion=None)
+                result = self.diagnose(client)
+                self.assertEqual(result["state"], "running")
+                self.assertIn("qualification_incomplete", result["reason_codes"])
+                self.assertFalse(result["evidence"]["full_qualification"])
+                self.assertTrue(result["evidence"]["snapshot_current"])
+
+    def test_running_publisher_check_is_not_reported_as_failed(self):
+        client = DiagnosticClient()
+        client.run.update(status="in_progress", conclusion=None)
+        client.checks[0].update(status="in_progress", conclusion=None)
+        result = self.diagnose(client)
+        self.assertEqual(result["state"], "running")
+        self.assertIn("qualification_incomplete", result["reason_codes"])
+
     def test_failed_current_qualification_stays_failed(self):
         for field in ("run", "native_job", "own_check"):
             with self.subTest(field=field):
@@ -764,10 +783,16 @@ class DiagnosticTests(unittest.TestCase):
                 self.assertFalse(result["evidence"]["cancellation_only"])
                 self.assertNotIn("private raw payload", json.dumps(result))
 
+    def test_closed_pull_is_reported_as_not_open(self):
+        client = DiagnosticClient()
+        client.pull.update(state="closed")
+        result = self.diagnose(client)
+        self.assertEqual(result["state"], "ignored")
+        self.assertEqual(result["reason_codes"], ["pull_not_open"])
+
     def test_explicit_identity_mismatches_stop(self):
         for mutation in (
             lambda c: c.pull.update(number=4),
-            lambda c: c.pull.update(state="closed"),
             lambda c: c.run.update(head_sha="d" * 40),
             lambda c: c.run.update(workflow_id=9),
             lambda c: c.run.update(path=".github/workflows/other.yml"),
@@ -803,6 +828,39 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(result["state"], "evidence_unavailable")
         self.assertNotIn("secret-private-host", json.dumps(result))
 
+    def test_current_source_uses_shared_plan_selection_contract(self):
+        client = DiagnosticClient()
+        live_identity = {
+            "head_sha": HEAD,
+            "base_sha": "d" * 40,
+            "source_sha": "e" * 40,
+        }
+        with (
+            patch("pr_ci_status.source_identity", return_value=live_identity),
+            patch("pr_ci_status.plan_for_run", return_value=client.plan) as select_plan,
+        ):
+            result = self.diagnose(client)
+        self.assertEqual(result["state"], "competing_required")
+        self.assertTrue(result["evidence"]["current_source"])
+        self.assertTrue(result["evidence"]["snapshot_current"])
+        self.assertEqual(select_plan.call_count, 2)
+
+    def test_current_source_change_during_collection_invalidates_snapshot(self):
+        client = DiagnosticClient()
+        live_identity = {
+            "head_sha": HEAD,
+            "base_sha": "d" * 40,
+            "source_sha": "e" * 40,
+        }
+        with (
+            patch("pr_ci_status.source_identity", return_value=live_identity),
+            patch("pr_ci_status.plan_for_run", side_effect=[client.plan, None]),
+        ):
+            result = self.diagnose(client)
+        self.assertEqual(result["state"], "stale")
+        self.assertIn("source_changed", result["reason_codes"])
+        self.assertFalse(result["evidence"]["snapshot_current"])
+
     def test_old_base_preserves_raw_competition_but_no_readiness(self):
         client = DiagnosticClient()
         client.live_base = "d" * 40
@@ -811,6 +869,41 @@ class DiagnosticTests(unittest.TestCase):
         self.assertTrue(result["evidence"]["competition"])
         self.assertFalse(result["evidence"]["current_source"])
         self.assertIn("source_stale", result["reason_codes"])
+
+    def test_requiredness_change_during_collection_invalidates_snapshot(self):
+        client = DiagnosticClient()
+        reads = 0
+
+        def required_checks(repo, head, number):
+            nonlocal reads
+            self.assertEqual((repo, head, number), (REPO, HEAD, 3))
+            reads += 1
+            if reads == 1:
+                return {70: True, 80: True}, True
+            return {70: False, 80: False}, True
+
+        client.required_checks = required_checks
+        result = self.diagnose(client)
+        self.assertEqual(result["state"], "stale")
+        self.assertIn("requiredness_changed", result["reason_codes"])
+        self.assertFalse(result["evidence"]["snapshot_current"])
+        self.assertEqual(reads, 2)
+
+    def test_stable_requiredness_is_revalidated(self):
+        client = DiagnosticClient()
+        reads = 0
+        original = client.required_checks
+
+        def required_checks(repo, head, number):
+            nonlocal reads
+            reads += 1
+            return original(repo, head, number)
+
+        client.required_checks = required_checks
+        result = self.diagnose(client)
+        self.assertEqual(result["state"], "competing_required")
+        self.assertTrue(result["evidence"]["snapshot_current"])
+        self.assertEqual(reads, 2)
 
     def test_requiredness_unavailable_or_incomplete_is_not_inferred(self):
         for unavailable in (False, True):

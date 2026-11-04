@@ -17,6 +17,7 @@ from manual_ci import (
     GitHubClient,
     ManualCIError,
     api_failure,
+    plan_for_run,
     read_artifact,
     source_identity,
 )
@@ -702,6 +703,31 @@ def diagnostic_check(check, role, required):
     }
 
 
+def resolve_requiredness(client, repo: str, head: str, number: int, checks: list[dict]):
+    """Resolve requiredness by node identity; unknown is never inferred."""
+    try:
+        lookup = getattr(client, "required_checks", None)
+        required, complete = (
+            lookup(repo, head, number)
+            if lookup
+            else required_checks(client, repo, head, number)
+        )
+        complete = bool(complete) and all(
+            type(required.get(check["id"])) is bool for check in checks
+        )
+    except (
+        ManualCIError,
+        KeyError,
+        ValueError,
+        TypeError,
+        OSError,
+        RuntimeError,
+        subprocess.TimeoutExpired,
+    ):
+        return {}, False
+    return (required if complete else {}), complete
+
+
 def diagnose(
     client, repo: str, number: int, head: str, run_id: int, attempt: int
 ) -> dict:
@@ -745,13 +771,15 @@ def diagnose(
         workflow = client.request(f"repos/{repo}/actions/workflows/pr.yml")
         pull = client.request(f"repos/{repo}/pulls/{number}")
         main_ref = client.request(f"repos/{repo}/git/ref/heads/main")
+        if pull.get("number") != number:
+            return finish("ignored", "pull_mismatch")
+        if pull.get("state") != "open":
+            return finish("ignored", "pull_not_open")
         if (
             run.get("id") != run_id
             or run.get("head_sha") != head
             or run.get("run_attempt") != attempt
             or not diagnostic_run_matches(run, run, workflow, repo)
-            or pull.get("number") != number
-            or pull.get("state") != "open"
             or pull.get("head", {}).get("sha") != head
             or not latest_run(client, repo, run)
         ):
@@ -760,6 +788,7 @@ def diagnose(
         if not bound or bound.get("number") != number:
             return finish("ignored", "pull_mismatch")
         snapshots[run_id] = run
+        source_snapshot = None
         raw = {}
         for check_filter in ("all", "latest"):
             raw[check_filter] = list(
@@ -778,26 +807,9 @@ def diagnose(
                 raise ManualCIError(
                     "Diagnostic checks do not match the requested identity."
                 )
-        try:
-            lookup = getattr(client, "required_checks", None)
-            required, complete = (
-                lookup(repo, head, number)
-                if lookup
-                else required_checks(client, repo, head, number)
-            )
-            complete = complete and all(
-                type(required.get(c["id"])) is bool for c in raw["all"] + raw["latest"]
-            )
-        except (
-            ManualCIError,
-            KeyError,
-            ValueError,
-            TypeError,
-            OSError,
-            RuntimeError,
-            subprocess.TimeoutExpired,
-        ):
-            required, complete = {}, False
+        required, complete = resolve_requiredness(
+            client, repo, head, number, raw["all"] + raw["latest"]
+        )
         result["evidence"]["requiredness_complete"] = bool(complete)
         if not complete:
             required = {}
@@ -877,19 +889,19 @@ def diagnose(
             evidence["full_qualification"] = (
                 run.get("status") == "completed" and qualification == "success"
             )
-            if qualification == "failure" or (replacements and not green):
+            if run.get("status") == "completed" and (
+                qualification == "failure" or (replacements and not green)
+            ):
                 state, reason = "failed", "current_qualification_failed"
             elif qualification == "awaiting-approval":
                 state, reason = "deferred", "qualification_deferred"
             elif evidence["full_qualification"]:
                 try:
                     identity = source_identity(client, repo, number)
-                    evidence["current_source"] = identity == {
-                        "head_sha": head,
-                        "base_sha": plan["base_sha"],
-                        "source_sha": plan["source_sha"],
-                    }
+                    source_snapshot = plan_for_run(client, repo, run, identity)
+                    evidence["current_source"] = source_snapshot is not None
                 except ManualCIError:
+                    source_snapshot = False
                     evidence["current_source"] = False
                 if not evidence["current_source"]:
                     state, reason = (
@@ -962,12 +974,25 @@ def diagnose(
 
             if snapshot(fresh_checks) != snapshot(checks):
                 return finish("stale", "snapshot_changed")
+        fresh_required, fresh_complete = resolve_requiredness(
+            client, repo, head, number, raw["all"] + raw["latest"]
+        )
+        if (fresh_required, fresh_complete) != (required, complete):
+            return finish("stale", "requiredness_changed")
         fresh_pull = client.request(f"repos/{repo}/pulls/{number}")
         if any(
             fresh_pull.get(key) != pull.get(key)
             for key in ("number", "state", "head", "base", "merge_commit_sha")
         ) or not latest_run(client, repo, run):
             return finish("stale", "snapshot_changed")
+        if source_snapshot is not None:
+            try:
+                fresh_identity = source_identity(client, repo, number)
+                fresh_source = plan_for_run(client, repo, run, fresh_identity)
+            except ManualCIError:
+                fresh_source = False
+            if bool(fresh_source) != bool(source_snapshot):
+                return finish("stale", "source_changed")
         evidence["snapshot_current"] = True
         return finish(state, reason)
     except (
