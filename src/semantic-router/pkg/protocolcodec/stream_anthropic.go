@@ -412,7 +412,14 @@ func decodeAnthropicStreamUsage(wire anthropicUsageWire, initial bool, policy ll
 		usage.InputCacheWrite1h = cacheWrite1h
 		usage.InputTotal = authoritative(wire.InputTokens + wire.CacheReadInputTokens + cacheWrite)
 	}
-	if wire.OutputTokens > 0 || !initial {
+	if initial {
+		// message_start's output count is provisional. A reasoning/other split
+		// taken from it can shrink once message_delta reports the thinking
+		// count, so only the total is settled here.
+		if wire.OutputTokens > 0 {
+			usage.OutputTotal = authoritative(wire.OutputTokens)
+		}
+	} else {
 		reasoning := wire.OutputTokensDetails.ThinkingTokens
 		other := wire.OutputTokens - reasoning
 		if other < 0 {
