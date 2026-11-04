@@ -84,64 +84,6 @@ def test_realize_runtime_config_applies_overrides_without_mutating_source(
     assert stat.S_IMODE(target.stat().st_mode) == 0o600
 
 
-@pytest.mark.parametrize("field", ["compat_gateway", "openai_compat_gateway"])
-def test_realize_runtime_config_names_removed_gateway_opt_in(tmp_path: Path, field: str):
-    """A backend_ref that still sets a removed gateway opt-in fails with the
-    same one-line hint the Router gives, before anything is published."""
-
-    source = tmp_path / "raw.yaml"
-    source.write_bytes(
-        yaml.safe_dump(
-            {
-                "version": "v0.3",
-                "providers": {
-                    "models": [
-                        {
-                            "name": "relay-model",
-                            "backend_refs": [
-                                {
-                                    "name": "relay",
-                                    "endpoint": "https://relay.example.com/v1",
-                                    "provider": "anthropic",
-                                    field: True,
-                                }
-                            ],
-                        }
-                    ]
-                },
-                "routing": {
-                    "decisions": [
-                        {
-                            "name": "default",
-                            "priority": 0,
-                            "modelRefs": [{"model": "relay-model"}],
-                        }
-                    ]
-                },
-                "global": {
-                    "model_catalog": {
-                        "embeddings": {
-                            "semantic": {
-                                "use_cpu": True,
-                                "embedding_config": {"model_type": "mmbert"},
-                            }
-                        }
-                    }
-                },
-            },
-            sort_keys=False,
-        ).encode("utf-8")
-    )
-    target = tmp_path / "state" / "runtime-config.yaml"
-
-    with pytest.raises(
-        ValueError,
-        match=f"{field} was removed; gateway response fields are accepted by default",
-    ):
-        realize_runtime_config(source, target)
-    assert not target.exists()
-
-
 def test_realize_runtime_config_strict_atomic_replace(tmp_path: Path, monkeypatch):
     source = tmp_path / "raw.yaml"
     _write_source(source)

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
@@ -150,5 +151,58 @@ func TestFallbackAnthropicGatewayCandidateDecodesGatewayFields(t *testing.T) {
 	if body := string(resp.GetImmediateResponse().GetBody()); strings.Contains(body, "total_cost") ||
 		!strings.Contains(body, `"prompt_tokens":12`) {
 		t.Fatalf("Chat client body = %s", body)
+	}
+}
+
+// A gzip reply is decoded before the codec reads it, so a compressed gateway
+// reply needs no setting either, through the full response phases.
+func TestGzipAnthropicGatewayReplyDecodes(t *testing.T) {
+	for _, client := range []llmprotocol.WireFormat{llmprotocol.AnthropicMessagesV1, llmprotocol.OpenAIChatV1} {
+		t.Run(string(client), func(t *testing.T) {
+			ctx := looperTransportContext(llmprotocol.AnthropicMessagesV1, false)
+			ctx.LooperRequest = false
+			ctx.SourceFormat = client
+			result := runBufferedReply(t, &OpenAIRouter{}, ctx, 200, gzipBytes(t, []byte(anthropicGatewayReply)), "gzip")
+
+			require.Nil(t, result.body.GetImmediateResponse(), "gzip gateway reply was rejected: %v", result.body)
+			require.True(t, ctx.ResponseUnknownFields)
+			if client == llmprotocol.AnthropicMessagesV1 {
+				require.Contains(t, string(result.clientBody), `"total_cost":3e-05`)
+				return
+			}
+			require.NotContains(t, string(result.clientBody), "total_cost")
+			require.Contains(t, string(result.clientBody), `"prompt_tokens":12`)
+		})
+	}
+}
+
+// An OpenAI-format relay names its usage counters the Anthropic way and adds a
+// cost. A Chat client receives the relay's bytes; a Messages client receives
+// the counters it reported.
+const chatRelayReply = `{"id":"chatcmpl-relay","object":"chat.completion","created":1,"model":"relay-model",` +
+	`"choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"done"}}],` +
+	`"usage":{"input_tokens":12,"output_tokens":4,"total_tokens":16,"total_cost":3e-05}}`
+
+func TestChatRelayReplyNeedsNoSetting(t *testing.T) {
+	for _, client := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1} {
+		t.Run(string(client), func(t *testing.T) {
+			ctx := looperTransportContext(llmprotocol.OpenAIChatV1, false)
+			ctx.LooperRequest = false
+			ctx.SourceFormat = client
+			result := runBufferedReply(t, &OpenAIRouter{}, ctx, 200, []byte(chatRelayReply), "")
+
+			require.Nil(t, result.body.GetImmediateResponse(), "relay reply was rejected: %v", result.body)
+			require.True(t, ctx.ResponseUnknownFields)
+			require.NotNil(t, ctx.SemanticResponse)
+			require.EqualValues(t, 12, *ctx.SemanticResponse.Usage.InputTotal.Value)
+			require.EqualValues(t, 4, *ctx.SemanticResponse.Usage.OutputTotal.Value)
+			if client == llmprotocol.OpenAIChatV1 {
+				require.Contains(t, string(result.clientBody), `"total_cost":3e-05`)
+				require.Contains(t, string(result.clientBody), `"input_tokens":12`)
+				return
+			}
+			require.NotContains(t, string(result.clientBody), "total_cost")
+			require.Contains(t, string(result.clientBody), `"input_tokens":12`)
+		})
 	}
 }

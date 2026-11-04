@@ -75,7 +75,30 @@ the protocol's default `/v1` base path is used only when the URL has no path.
 
 Providers and gateways add fields of their own to replies: a gateway's cost or
 trace ID, provider metadata, or a field a provider ships before the Router
-models it. Any backend can send them, and no setting is needed:
+models it. Any backend can send them, and no setting is needed. These two
+backends, one serving the Anthropic Messages format through a gateway and one
+serving Chat Completions through a relay, need nothing beyond their addresses,
+even when every reply carries a field such as `"total_cost": 3e-05` inside
+`usage`:
+
+```yaml
+providers:
+  models:
+    - name: claude-via-gateway
+      provider_model_id: example-claude
+      api_format: anthropic
+      backend_refs:
+        - name: gateway
+          provider: anthropic-compatible
+          base_url: https://gateway.example.com/anthropic
+    - name: gpt-via-relay
+      provider_model_id: example-gpt
+      api_format: openai
+      backend_refs:
+        - name: relay
+          provider: openai-compatible
+          base_url: https://relay.example.com/v1
+```
 
 - A reply, a stream event, or an error body that carries a field its
   `api_format` does not define still succeeds. A client that uses the
@@ -97,9 +120,11 @@ models it. Any backend can send them, and no setting is needed:
   must not receive a backend's value under them.
 
 This applies to the first attempt and to native fallback, and to buffered,
-streamed, and gzip-compressed replies. For example, this gateway backend needs
-nothing beyond its address, even though every reply it sends carries a
-`usage.total_cost`:
+streamed, and gzip-compressed replies.
+
+Earlier releases had a backend-ref setting named `compat_gateway`, also spelled
+`openai_compat_gateway`, that enabled this behavior for one backend. It was
+removed. A configuration that still sets it:
 
 ```yaml
 providers:
@@ -111,12 +136,14 @@ providers:
         - name: gateway
           provider: anthropic-compatible
           base_url: https://gateway.example.com/anthropic
+          compat_gateway: true
 ```
 
-Earlier releases had a backend-ref setting named `compat_gateway`, also spelled
-`openai_compat_gateway`, that enabled this behavior for one backend. It was
-removed. A configuration that still sets it fails to load with a message that
-names the field; delete the field.
+fails to load with this message. Delete the field:
+
+```text
+providers.models[claude-via-gateway].backend_refs[0]: compat_gateway was removed; gateway response fields are accepted by default, so delete it
+```
 
 With `--gateway extproc`, the generated Envoy cluster for an HTTPS backend
 verifies both the server
