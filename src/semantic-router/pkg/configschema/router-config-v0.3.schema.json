@@ -6680,6 +6680,9 @@
         "capture_personal_data": {
           "type": "boolean"
         },
+        "capture_tool_results": {
+          "type": "boolean"
+        },
         "max_records": {
           "type": "integer"
         },
@@ -6759,6 +6762,9 @@
           "type": "boolean"
         },
         "capture_response_body": {
+          "type": "boolean"
+        },
+        "capture_tool_results": {
           "type": "boolean"
         },
         "max_body_bytes": {

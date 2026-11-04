@@ -40,6 +40,7 @@ var (
 		validateModelDeploymentContracts,
 		validateGlobalModelBindingContracts,
 		validateGlobalToolSessionsContracts,
+		validateGlobalRouterReplayCaptureContracts,
 	}
 
 	// These contracts need the complete routing graph, including all recipes.
@@ -80,6 +81,7 @@ var (
 		validateHallucinationSignalContracts,
 		validateTopicContinuityContracts,
 		validateDecisionRouterLearningConfig,
+		validateDecisionRouterReplayCaptureContracts,
 	}
 )
 
