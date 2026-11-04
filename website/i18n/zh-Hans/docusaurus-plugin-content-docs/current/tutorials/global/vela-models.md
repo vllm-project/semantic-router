@@ -94,7 +94,7 @@ Nano 的 English 分数通过未改变的冻结文本路径保留。Mini 的带�
 | [vela3-flash](https://huggingface.co/vllm-sr/vela3-flash) | 9B | 高精度路由 |
 | [vela3-turbo](https://huggingface.co/vllm-sr/vela3-turbo) | 27B | 参考模型 |
 
-0.4B 是基座加每题所用 adapter 的规模；部署加载全部 adapter，共 1.5B 参数，约 7 GB。模型运行时目前只服务 **vela3-fast**；其余四个尺寸和 vela3-fast-vision 暂时通过各自的包运行。基准测试与 fast-vision 包详见 [Vela 3.0 发布公告](/blog/vela-3-0-name-it-vela-finds-it)。
+0.4B 是基座加每题所用 adapter 的规模；部署加载全部 adapter，共 1.5B 参数，约 7 GB。模型运行时服务 **vela3-fast** 和其余四个尺寸；vela3-fast-vision 暂时通过自己的包运行。基准测试与 fast-vision 包详见 [Vela 3.0 发布公告](/blog/vela-3-0-name-it-vela-finds-it)。
 
 ## 默认值与输入预算 {#defaults-and-input-budgets}
 
