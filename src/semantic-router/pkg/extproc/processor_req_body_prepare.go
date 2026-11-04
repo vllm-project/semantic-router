@@ -34,7 +34,7 @@ func (r *OpenAIRouter) extractRequestSignalSnapshot(
 		ctx.SemanticRequest.Generation++
 	}
 	captureOriginalContextHistory(ctx)
-	snapshot := extractSemanticRequestSignals(ctx.SemanticRequest, r.routingInputSelector())
+	snapshot := extractSemanticRequestSignalsWith(ctx.SemanticRequest, r.routingInputSelector())
 	ctx.RoutingInput = snapshot.RoutingInput
 	captureOriginalRequestDemand(ctx, ctx.SemanticRequest, snapshot)
 	if snapshot.Stream {

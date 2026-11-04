@@ -85,9 +85,14 @@ type intentMessageContentPart struct {
 	ImageURL *intentMessageImageURL `json:"image_url,omitempty"`
 }
 
-// resolveSignalInput applies routing_input through selector exactly as the
+// resolveSignalInput resolves the request as sent, ignoring routing_input.
+func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
+	return req.resolveSignalInputWith(nil)
+}
+
+// resolveSignalInputWith applies routing_input through selector exactly as the
 // data plane does, so a preview scores the same text as live routing.
-func (req IntentRequest) resolveSignalInput(selector *routinginput.Selector) (intentSignalInput, error) {
+func (req IntentRequest) resolveSignalInputWith(selector *routinginput.Selector) (intentSignalInput, error) {
 	if req.PreviewContext != nil {
 		for _, identity := range []string{req.PreviewContext.SessionID, req.PreviewContext.ConversationID} {
 			if len(identity) > 1024 || strings.ContainsAny(identity, "\r\n\x00") {

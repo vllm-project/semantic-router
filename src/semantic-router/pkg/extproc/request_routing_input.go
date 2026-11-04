@@ -28,6 +28,28 @@ func replayPrompt(ctx *RequestContext, request *llmprotocol.Request) string {
 	return prompt
 }
 
+// routedUserMessage returns a user message as routing reads it, with its text
+// replaced by the routing text and its other content unchanged, or reports
+// that routing skips it.
+func routedUserMessage(routing *routinginput.Walk, index int, message llmprotocol.Message) (llmprotocol.Message, bool) {
+	text := semanticText(message.Content)
+	routed, skipped := routing.UserMessage(index, text, textOnlyMessage(message))
+	if skipped || routed == text {
+		return message, skipped
+	}
+	view := message
+	view.Content = make([]llmprotocol.Content, 0, len(message.Content)+1)
+	if routed != "" {
+		view.Content = append(view.Content, llmprotocol.Content{Kind: llmprotocol.ContentText, Text: routed})
+	}
+	for _, content := range message.Content {
+		if content.Kind != llmprotocol.ContentText {
+			view.Content = append(view.Content, content)
+		}
+	}
+	return view, false
+}
+
 func textOnlyMessage(message llmprotocol.Message) bool {
 	for _, content := range message.Content {
 		if content.Kind != llmprotocol.ContentText {

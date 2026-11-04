@@ -107,7 +107,7 @@ func extractToolTransitionContextFromRequest(req *llmprotocol.Request, historyWi
 	if req == nil {
 		return toolTransitionContextFromConversationHistory(signalConversationHistory{}, historyWindow, ctx)
 	}
-	return toolTransitionContextFromConversationHistory(extractSignalConversationHistory(req, selector), historyWindow, ctx)
+	return toolTransitionContextFromConversationHistory(extractSignalConversationHistoryWith(req, selector), historyWindow, ctx)
 }
 
 func toolTransitionContextFromConversationHistory(history signalConversationHistory, historyWindow int, ctx *RequestContext) tools.ToolTransitionContext {
@@ -120,11 +120,15 @@ func toolTransitionContextFromConversationHistory(history signalConversationHist
 	}
 }
 
-func extractSignalConversationHistory(req *llmprotocol.Request, selector *routinginput.Selector) signalConversationHistory {
+func extractSignalConversationHistory(req *llmprotocol.Request) signalConversationHistory {
+	return extractSignalConversationHistoryWith(req, nil)
+}
+
+func extractSignalConversationHistoryWith(req *llmprotocol.Request, selector *routinginput.Selector) signalConversationHistory {
 	if req == nil {
 		return signalConversationHistory{}
 	}
-	return signalConversationHistoryFromRequest(req, extractSemanticRequestSignals(req, selector))
+	return signalConversationHistoryFromRequest(req, extractSemanticRequestSignalsWith(req, selector))
 }
 
 func recentToolNames(names []string, historyWindow int) []string {

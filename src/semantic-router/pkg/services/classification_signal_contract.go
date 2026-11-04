@@ -20,7 +20,7 @@ func (s *ClassificationService) ClassifyIntentForEval(ctx context.Context, req I
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	input, err := req.resolveSignalInput(s.routingInputSelectorSnapshot())
+	input, err := req.resolveSignalInputWith(s.routingInputSelectorSnapshot())
 	if err != nil {
 		return nil, err
 	}

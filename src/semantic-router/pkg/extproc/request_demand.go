@@ -54,7 +54,7 @@ func captureRequestDemand(
 		snapshot.Stage = stage
 		snapshot.Model = firstNonEmpty(strings.TrimSpace(model), strings.TrimSpace(request.Model))
 	} else {
-		facts := extractSemanticRequestSignals(request, nil)
+		facts := extractSemanticRequestSignals(request)
 		snapshot = requestDemandSnapshot(stage, request, model, facts.ContextTokenFloor)
 	}
 	recordRequestDemandSnapshot(ctx, snapshot)

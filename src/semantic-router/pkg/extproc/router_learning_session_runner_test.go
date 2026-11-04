@@ -74,7 +74,7 @@ func protectionScenarioInput(router *OpenAIRouter, scenario protectionScenario, 
 		Name:        "protection-benchmark",
 		Adaptations: config.DecisionAdaptationsConfig{Protection: &config.DecisionLearningProtectionConfig{Mode: scenario.Mode}},
 	}
-	history := extractSignalConversationHistory(request, nil)
+	history := extractSignalConversationHistory(request)
 	ctx.VSRConversationFacts = router.prepareSignalEvaluationInput(history).conversationFacts
 	candidates := make([]config.ModelRef, 0, len(step.Candidates))
 	for _, model := range step.Candidates {

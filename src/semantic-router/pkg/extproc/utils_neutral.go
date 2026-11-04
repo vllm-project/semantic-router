@@ -68,11 +68,17 @@ func prependSemanticOutputText(output []llmprotocol.OutputItem, prefix string) b
 }
 
 // extractSemanticRequestSignals derives routing facts from the neutral request
-// accepted at ingress. Wire-specific JSON walkers are confined to codecs. The
-// selector applies routing_input: user text and conversation facts describe
-// the routing view, while the jailbreak input and the context estimate keep
-// the request as sent.
-func extractSemanticRequestSignals(request *llmprotocol.Request, selector *routinginput.Selector) *requestSignalSnapshot {
+// as sent, ignoring routing_input.
+func extractSemanticRequestSignals(request *llmprotocol.Request) *requestSignalSnapshot {
+	return extractSemanticRequestSignalsWith(request, nil)
+}
+
+// extractSemanticRequestSignalsWith derives routing facts from the neutral
+// request accepted at ingress. Wire-specific JSON walkers are confined to
+// codecs. The selector applies routing_input: user text and conversation facts
+// describe the routing view, while the jailbreak input and the context
+// estimate keep the request as sent.
+func extractSemanticRequestSignalsWith(request *llmprotocol.Request, selector *routinginput.Selector) *requestSignalSnapshot {
 	result := &requestSignalSnapshot{
 		Model: request.Model, Stream: request.Stream,
 		JailbreakInput: extractJailbreakInput(request),
@@ -100,7 +106,13 @@ func extractSemanticRequestSignals(request *llmprotocol.Request, selector *routi
 	}
 	routing := selector.Walk()
 	for index, message := range request.Messages {
-		consumeSemanticMessage(result, message, index, routing)
+		if message.Role == llmprotocol.RoleUser && selector != nil {
+			var skipped bool
+			if message, skipped = routedUserMessage(routing, index, message); skipped {
+				continue
+			}
+		}
+		consumeSemanticMessage(result, message)
 	}
 	result.RoutingInput = routing.Outcome()
 	result.ToolDefinitionCount = len(request.Tools)
@@ -113,17 +125,10 @@ func extractSemanticRequestSignals(request *llmprotocol.Request, selector *routi
 }
 
 //nolint:gocognit,cyclop,funlen // Signal extraction walks the complete neutral message content vocabulary.
-func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.Message, index int, routing *routinginput.Walk) {
-	text := semanticText(message.Content)
-	if message.Role == llmprotocol.RoleUser {
-		routed, skipped := routing.UserMessage(index, text, textOnlyMessage(message))
-		if skipped {
-			return
-		}
-		text = routed
-	}
+func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.Message) {
 	previousWasTool := result.LastMessageToolResult || result.LastMessageRole == string(llmprotocol.RoleTool)
 	role := string(message.Role)
+	text := semanticText(message.Content)
 	result.LastMessageRole = role
 	result.LastMessageToolResult = false
 	result.LastMessageFlowToolResult = false

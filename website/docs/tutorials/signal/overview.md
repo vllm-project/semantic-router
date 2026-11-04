@@ -157,9 +157,20 @@ global:
   reading them.
 
 The routing text is the last user message that is not skipped and still has
-text after stripping. Signals, the semantic-cache query, memory retrieval and
-the text memory stores, the RAG query, tool selection and Replay's prompt all use
-it. A skipped message is not counted as a user turn, so a runtime-context turn
+text after stripping. It takes the place of the last user message for:
+
+- every routing signal, and the conversation facts they read;
+- the semantic-cache lookup query;
+- tool selection;
+- the RAG query;
+- memory: the retrieval query, the history its query rewriting reads, and the
+  user message it stores;
+- the query that model-selection algorithms read;
+- the question the hallucination check reads;
+- Replay's prompt;
+- the routing preview, classify and eval APIs.
+
+A skipped message is not counted as a user turn, so a runtime-context turn
 after a tool result leaves the request a tool-loop turn, and user-feedback and
 re-ask signals do not fire on it. The request sent to the model is unchanged,
 and context-length estimates still count all of it.

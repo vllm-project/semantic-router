@@ -35,7 +35,7 @@ func TestGuardProvenanceNeutralSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	snapshot := extractSemanticRequestSignals(request, nil)
+	snapshot := extractSemanticRequestSignals(request)
 	want := &classification.JailbreakInput{
 		Current: []classification.JailbreakContent{{Role: "tool", Text: "prior-tool"}, {Role: "user", Text: "current-user"}, {Role: "tool", Text: "current-tool-result"}},
 		History: []classification.JailbreakContent{{Role: "user", Text: "prior-user"}},
@@ -65,7 +65,7 @@ func TestGuardProvenanceNoTrustedFallbackOrStaleCurrentUser(t *testing.T) {
 				{Role: llmprotocol.RoleUser, Content: guardProvenanceText("older-user")},
 				{Role: role, Content: guardProvenanceText("trusted-final-message")},
 			}}
-			snapshot := extractSemanticRequestSignals(request, nil)
+			snapshot := extractSemanticRequestSignals(request)
 			if snapshot.JailbreakInput == nil || len(snapshot.JailbreakInput.Current) != 0 {
 				t.Fatal("trusted final message or stale user turn became current Guard evidence")
 			}
@@ -79,7 +79,7 @@ func TestGuardProvenanceNoTrustedFallbackOrStaleCurrentUser(t *testing.T) {
 		Role: llmprotocol.RoleSystem, Content: guardProvenanceText("instruction-only"),
 	}}}
 	router := &OpenAIRouter{Config: &config.RouterConfig{}}
-	input := router.prepareSignalEvaluationInput(extractSignalConversationHistory(request, nil))
+	input := router.prepareSignalEvaluationInput(extractSignalConversationHistory(request))
 	if input.evaluationText != "instruction-only" || input.requestFacts.JailbreakInput == nil ||
 		len(input.requestFacts.JailbreakInput.Current)+len(input.requestFacts.JailbreakInput.History) != 0 {
 		t.Fatal("general fallback must not become a Guard fallback")
@@ -120,7 +120,7 @@ func TestGuardProvenanceDecodedToolResults(t *testing.T) {
 				Current: []classification.JailbreakContent{{Role: "tool", Text: "tool-marker"}},
 				History: []classification.JailbreakContent{{Role: "user", Text: "user-marker"}},
 			}
-			if got := extractSemanticRequestSignals(&request, nil).JailbreakInput; !reflect.DeepEqual(got, want) {
+			if got := extractSemanticRequestSignals(&request).JailbreakInput; !reflect.DeepEqual(got, want) {
 				t.Fatalf("decoded Guard projection = %#v, want %#v", got, want)
 			}
 		})
@@ -139,7 +139,7 @@ func TestGuardProvenanceDecodedSiblingToolResults(t *testing.T) {
 		{Role: "tool", Text: "second-result"},
 		{Role: "user", Text: "current-suffix"},
 	}}
-	if got := extractSemanticRequestSignals(&request, nil).JailbreakInput; !reflect.DeepEqual(got, want) {
+	if got := extractSemanticRequestSignals(&request).JailbreakInput; !reflect.DeepEqual(got, want) {
 		t.Fatalf("sibling results were split across current and history: %#v", got)
 	}
 }

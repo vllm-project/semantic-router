@@ -71,12 +71,12 @@ func TestRoutingInputRoutesOnTheQuestionAcrossWireFormats(t *testing.T) {
 			router := routingInputTestRouter()
 			request := decodeRoutingInputRequest(t, router, test.format, test.body)
 
-			plain := extractSemanticRequestSignals(request, nil)
+			plain := extractSemanticRequestSignals(request)
 			if plain.UserContent != routingInputContext {
 				t.Fatalf("without routing_input the routing text = %q, want the runtime-context turn", plain.UserContent)
 			}
 
-			routed := extractSemanticRequestSignals(request, router.routingInputSelector())
+			routed := extractSemanticRequestSignalsWith(request, router.routingInputSelector())
 			if routed.UserContent != routingInputQuestion || len(routed.PriorUserMessages) != 0 {
 				t.Fatalf("routing text = %q, prior = %q; want only the question", routed.UserContent, routed.PriorUserMessages)
 			}
@@ -112,7 +112,7 @@ func TestRoutingInputConversationFactsDescribeTheRoutingView(t *testing.T) {
 		neutralTextMessage(llmprotocol.RoleUser, "That is wrong, the dates are off."),
 		neutralTextMessage(llmprotocol.RoleUser, routingInputContext),
 	}}
-	routed := router.prepareSignalEvaluationInput(extractSignalConversationHistory(userTurn, router.routingInputSelector()))
+	routed := router.prepareSignalEvaluationInput(extractSignalConversationHistoryWith(userTurn, router.routingInputSelector()))
 	if routed.currentUserText != "That is wrong, the dates are off." || !routed.hasAssistantReply ||
 		!slices.Equal(routed.priorUserMessages, []string{"Summarize the supplier contracts."}) ||
 		routed.conversationFacts.UserMessageCount != 2 {
@@ -125,11 +125,11 @@ func TestRoutingInputConversationFactsDescribeTheRoutingView(t *testing.T) {
 		neutralToolResult("call-lookup", "three invoices"),
 		neutralTextMessage(llmprotocol.RoleUser, routingInputContext),
 	}}
-	plain := router.prepareSignalEvaluationInput(extractSignalConversationHistory(toolTurn, nil))
+	plain := router.prepareSignalEvaluationInput(extractSignalConversationHistory(toolTurn))
 	if plain.conversationFacts.LastMessageRole != "user" || !plain.conversationFacts.LastUserAfterToolResult {
 		t.Fatalf("without routing_input the runtime-context turn reads as a user turn: %+v", plain.conversationFacts)
 	}
-	routed = router.prepareSignalEvaluationInput(extractSignalConversationHistory(toolTurn, router.routingInputSelector()))
+	routed = router.prepareSignalEvaluationInput(extractSignalConversationHistoryWith(toolTurn, router.routingInputSelector()))
 	facts := routed.conversationFacts
 	if facts.LastMessageRole != "tool" || !facts.LastMessageToolResult || facts.LastUserAfterToolResult ||
 		facts.UserMessageCount != 1 || routed.hasAssistantReply || routed.evaluationText != "Find last week's open invoices." {
@@ -152,7 +152,7 @@ func TestRoutingInputKeepsRemovedTextForSafetySignals(t *testing.T) {
 		neutralTextMessage(llmprotocol.RoleUser, attack),
 		neutralTextMessage(llmprotocol.RoleUser, secret),
 	}}
-	input := router.prepareSignalEvaluationInput(extractSignalConversationHistory(request, router.routingInputSelector()))
+	input := router.prepareSignalEvaluationInput(extractSignalConversationHistoryWith(request, router.routingInputSelector()))
 	if input.evaluationText != "What is on my calendar tomorrow?" {
 		t.Fatalf("routing text = %q", input.evaluationText)
 	}
@@ -182,9 +182,31 @@ func TestRoutingInputNeverSkipsMessagesWithMedia(t *testing.T) {
 			{Kind: llmprotocol.ContentImage, MediaType: "image/png", Data: tinyPNG},
 		},
 	}}}
-	snapshot := extractSemanticRequestSignals(request, router.routingInputSelector())
+	snapshot := extractSemanticRequestSignalsWith(request, router.routingInputSelector())
 	if snapshot.RoutingInput.SkippedMessages != 0 || snapshot.UserContent != routingInputContext || snapshot.ImageContentCount != 1 {
 		t.Fatalf("a message with an image was skipped: %+v", snapshot.RoutingInput)
+	}
+}
+
+func TestRoutingInputStripKeepsAMessagesMedia(t *testing.T) {
+	router := routingInputTestRouter()
+	request := &llmprotocol.Request{Messages: []llmprotocol.Message{{
+		Role: llmprotocol.RoleUser,
+		Content: []llmprotocol.Content{
+			{Kind: llmprotocol.ContentText, Text: routingInputMemories + "\n\nWhat is in this picture?"},
+			{Kind: llmprotocol.ContentImage, MediaType: "image/png", Data: tinyPNG},
+		},
+	}}}
+	snapshot := extractSemanticRequestSignalsWith(request, router.routingInputSelector())
+	if snapshot.UserContent != "What is in this picture?" || snapshot.RoutingInput.StrippedBlocks != 1 {
+		t.Fatalf("routing text = %q, outcome %+v", snapshot.UserContent, snapshot.RoutingInput)
+	}
+	if snapshot.ImageContentCount != 1 || snapshot.FirstImageURL == "" ||
+		snapshot.InputModality.ImageContentCount != 1 || snapshot.InputModality.TextContentCount != 1 {
+		t.Fatalf("stripping text lost the message's image: %+v", snapshot.InputModality)
+	}
+	if len(request.Messages[0].Content) != 2 || request.Messages[0].Content[0].Text != routingInputMemories+"\n\nWhat is in this picture?" {
+		t.Fatal("the routing view must not change the request")
 	}
 }
 
@@ -195,8 +217,8 @@ func TestRoutingInputWithoutMatchesLeavesFactsUnchanged(t *testing.T) {
 		neutralTextMessage(llmprotocol.RoleAssistant, "Here is the summary."),
 		neutralTextMessage(llmprotocol.RoleUser, "Now list the changed clauses."),
 	}}
-	plain := extractSemanticRequestSignals(request, nil)
-	routed := extractSemanticRequestSignals(request, router.routingInputSelector())
+	plain := extractSemanticRequestSignals(request)
+	routed := extractSemanticRequestSignalsWith(request, router.routingInputSelector())
 	if routed.RoutingInput.Changed() || routed.RoutingInput.MessageIndex != 2 {
 		t.Fatalf("nothing matched, yet routing_input reports %+v", routed.RoutingInput)
 	}
@@ -212,7 +234,7 @@ func TestRoutingInputDrivesCacheMemoryAndReplay(t *testing.T) {
 		neutralTextMessage(llmprotocol.RoleUser, routingInputMemories+"\n\n"+routingInputQuestion),
 		neutralTextMessage(llmprotocol.RoleUser, routingInputContext),
 	}}
-	snapshot := extractSemanticRequestSignals(request, router.routingInputSelector())
+	snapshot := extractSemanticRequestSignalsWith(request, router.routingInputSelector())
 	ctx := &RequestContext{SemanticRequest: request, UserContent: snapshot.UserContent, RoutingInput: snapshot.RoutingInput}
 
 	identity, err := cacheIdentityForContext(ctx)

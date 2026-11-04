@@ -20,7 +20,7 @@ import (
 
 // handleToolSelectionForRequest handles tool selection for the request.
 func (r *OpenAIRouter) handleToolSelectionForRequest(request *llmprotocol.Request, response *ext_proc.ProcessingResponse, ctx *RequestContext) {
-	fast := extractSemanticRequestSignals(request, r.routingInputSelector())
+	fast := extractSemanticRequestSignalsWith(request, r.routingInputSelector())
 	if err := r.handleToolSelection(request, fast.UserContent, fast.NonUserMessages, &response, ctx); err != nil {
 		logging.Errorf("Error in tool selection: %v", err)
 		// Continue without failing the request

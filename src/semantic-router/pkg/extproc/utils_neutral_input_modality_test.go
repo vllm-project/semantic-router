@@ -57,7 +57,7 @@ func TestExtractSemanticRequestSignalsPreservesInlineImagesAcrossProtocols(t *te
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			request := decodeSignalRequest(t, test.format, test.body)
-			snapshot := extractSemanticRequestSignals(request, nil)
+			snapshot := extractSemanticRequestSignals(request)
 			if snapshot.FirstImageURL != want {
 				t.Fatalf("FirstImageURL = %q, want %q", snapshot.FirstImageURL, want)
 			}
@@ -73,7 +73,7 @@ func TestExtractSemanticRequestSignalsRejectsRemoteImageURL(t *testing.T) {
 			URL:  "https://example.invalid/image.png",
 		}},
 	}}}
-	snapshot := extractSemanticRequestSignals(request, nil)
+	snapshot := extractSemanticRequestSignals(request)
 	if snapshot.FirstImageURL != "" {
 		t.Fatalf("FirstImageURL = %q, remote URLs must not reach the classifier", snapshot.FirstImageURL)
 	}
@@ -93,7 +93,7 @@ func TestExtractSemanticRequestSignalsCountsChatInputModalities(t *testing.T) {
 			{"role": "user", "content": "and now text only"}
 		]
 	}`)
-	snapshot := extractSemanticRequestSignals(request, nil)
+	snapshot := extractSemanticRequestSignals(request)
 	assertInputModalityFacts(t, snapshot.InputModality, classification.InputModalityFacts{
 		TextContentCount: 2, ImageContentCount: 1, AudioContentCount: 1,
 	})
@@ -101,7 +101,7 @@ func TestExtractSemanticRequestSignalsCountsChatInputModalities(t *testing.T) {
 
 func TestExtractSemanticRequestSignalsTextOnlyChatHasNoMediaCounts(t *testing.T) {
 	request := decodeSignalRequest(t, llmprotocol.OpenAIChatV1, `{"model":"m","messages":[{"role":"user","content":"hello"}]}`)
-	snapshot := extractSemanticRequestSignals(request, nil)
+	snapshot := extractSemanticRequestSignals(request)
 	assertInputModalityFacts(t, snapshot.InputModality, classification.InputModalityFacts{TextContentCount: 1})
 }
 
@@ -115,7 +115,7 @@ func TestExtractSemanticRequestSignalsCountsResponsesFileIDImage(t *testing.T) {
 			{"type": "input_image", "file_id": "file_abc123"}
 		]}]
 	}`)
-	snapshot := extractSemanticRequestSignals(request, nil)
+	snapshot := extractSemanticRequestSignals(request)
 	assertInputModalityFacts(t, snapshot.InputModality, classification.InputModalityFacts{
 		TextContentCount: 1, ImageContentCount: 1,
 	})
@@ -130,7 +130,7 @@ func TestExtractSemanticRequestSignalsCountsAnthropicInputModalities(t *testing.
 			{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "aGVsbG8="}}
 		]}]
 	}`)
-	snapshot := extractSemanticRequestSignals(request, nil)
+	snapshot := extractSemanticRequestSignals(request)
 	assertInputModalityFacts(t, snapshot.InputModality, classification.InputModalityFacts{
 		TextContentCount: 1, ImageContentCount: 1,
 	})
@@ -143,7 +143,7 @@ func TestExtractSemanticRequestSignalsCountsNeutralVideoContent(t *testing.T) {
 		Role:    llmprotocol.RoleUser,
 		Content: []llmprotocol.Content{{Kind: llmprotocol.ContentVideo, URL: "https://example.com/a.mp4"}},
 	}}}
-	snapshot := extractSemanticRequestSignals(request, nil)
+	snapshot := extractSemanticRequestSignals(request)
 	assertInputModalityFacts(t, snapshot.InputModality, classification.InputModalityFacts{VideoContentCount: 1})
 }
 
@@ -157,7 +157,7 @@ func TestExtractSemanticRequestSignalsScopesInputModalitiesToUserMessages(t *tes
 		}},
 		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "thanks"}}},
 	}}
-	snapshot := extractSemanticRequestSignals(request, nil)
+	snapshot := extractSemanticRequestSignals(request)
 	assertInputModalityFacts(t, snapshot.InputModality, classification.InputModalityFacts{TextContentCount: 1})
 	if snapshot.ImageContentCount != 1 {
 		t.Fatalf("ImageContentCount = %d, want 1", snapshot.ImageContentCount)
@@ -174,6 +174,6 @@ func TestExtractSemanticRequestSignalsIgnoresWhitespaceOnlyText(t *testing.T) {
 			{"type": "image_url", "image_url": {"url": "https://example.com/a.png"}}
 		]}]
 	}`)
-	snapshot := extractSemanticRequestSignals(request, nil)
+	snapshot := extractSemanticRequestSignals(request)
 	assertInputModalityFacts(t, snapshot.InputModality, classification.InputModalityFacts{ImageContentCount: 1})
 }

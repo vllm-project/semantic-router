@@ -290,7 +290,7 @@ func (r *OpenAIRouter) parseLooperRequestForPlugins(
 		})
 		return nil, err
 	}
-	snapshot := extractSemanticRequestSignals(ctx.SemanticRequest, r.routingInputSelector())
+	snapshot := extractSemanticRequestSignalsWith(ctx.SemanticRequest, r.routingInputSelector())
 	ctx.UserContent, ctx.RoutingInput = snapshot.UserContent, snapshot.RoutingInput
 	return ctx.SemanticRequest, nil
 }

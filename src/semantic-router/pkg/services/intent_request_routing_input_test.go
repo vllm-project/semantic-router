@@ -43,12 +43,12 @@ func TestResolveSignalInputAppliesRoutingInput(t *testing.T) {
 		previewMessage(t, "user", previewMemories+"\n\n"+previewQuestion),
 		previewMessage(t, "user", previewContext),
 	}}
-	plain, err := req.resolveSignalInput(nil)
+	plain, err := req.resolveSignalInput()
 	if err != nil || plain.evaluationText != previewContext {
 		t.Fatalf("without routing_input the preview scores %q (%v), want the runtime-context turn", plain.evaluationText, err)
 	}
 
-	input, err := req.resolveSignalInput(previewSelector(t))
+	input, err := req.resolveSignalInputWith(previewSelector(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestResolveSignalInputNeverSkipsMessagesWithMedia(t *testing.T) {
 		{"type": "text", "text": previewContext},
 		{"type": "image_url", "image_url": map[string]string{"url": "data:image/png;base64,iVBORw0KGgo="}},
 	})}}
-	input, err := req.resolveSignalInput(previewSelector(t))
+	input, err := req.resolveSignalInputWith(previewSelector(t))
 	if err != nil {
 		t.Fatal(err)
 	}

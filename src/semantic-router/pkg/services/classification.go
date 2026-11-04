@@ -177,7 +177,7 @@ func (s *ClassificationService) ClassifyIntent(ctx context.Context, req IntentRe
 	defer s.runtimeMutex.RUnlock()
 	start := time.Now()
 
-	input, err := req.resolveSignalInput(s.routingInputSelectorSnapshot())
+	input, err := req.resolveSignalInputWith(s.routingInputSelectorSnapshot())
 	if err != nil {
 		return nil, err
 	}

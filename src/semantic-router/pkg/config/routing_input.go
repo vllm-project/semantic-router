@@ -15,11 +15,13 @@ const (
 	MaxRoutingInputMarkerBytes  = 256
 )
 
-// RoutingInputConfig chooses the user text that routing reads. Signals, the
-// semantic-cache query, memory, RAG, tool selection, Replay's prompt and the
-// conversation facts use the selected text; the request sent to the model is
-// unchanged. Jailbreak, PII and content-safety signals keep scanning the text
-// it leaves out. Empty lists route on the last user message that has text.
+// RoutingInputConfig chooses the user text that routing reads. Routing signals
+// and their conversation facts, the semantic-cache query, tool selection, the
+// RAG query, memory retrieval and storage, the model-selection query, the
+// hallucination check, Replay's prompt and the routing preview use the
+// selected text; the request sent to the model is unchanged. Jailbreak, PII and
+// content-safety signals keep scanning the text it leaves out. Empty lists
+// route on the last user message that has text.
 type RoutingInputConfig struct {
 	// SkipUserMessagesMatching lists RE2 patterns. A user message whose text
 	// matches one is never routing text and does not count as a user turn.

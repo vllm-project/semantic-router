@@ -45,7 +45,7 @@ func TestIntentRequestResolveSignalInput_UsesMessagesConversationHistory(t *test
 		},
 	}
 
-	input, err := req.resolveSignalInput(nil)
+	input, err := req.resolveSignalInput()
 	require.NoError(t, err)
 
 	assert.Equal(t, "That was not clear. Explain inflation vs recession in plain English.", input.evaluationText)
@@ -79,7 +79,7 @@ func TestIntentRequestResolveSignalInput_ExtractsConversationAndToolFacts(t *tes
 		},
 	}
 
-	input, err := req.resolveSignalInput(nil)
+	input, err := req.resolveSignalInput()
 	require.NoError(t, err)
 
 	facts := input.conversationFacts
@@ -110,7 +110,7 @@ func TestIntentRequestResolveSignalInput_LastUserAfterToolResultRequiresAdjacenc
 		},
 	}
 
-	input, err := req.resolveSignalInput(nil)
+	input, err := req.resolveSignalInput()
 	require.NoError(t, err)
 
 	facts := input.conversationFacts
@@ -134,7 +134,7 @@ func TestIntentRequestResolveSignalInput_PendingAssistantToolCallIsNotToolResult
 		},
 	}
 
-	input, err := req.resolveSignalInput(nil)
+	input, err := req.resolveSignalInput()
 	require.NoError(t, err)
 
 	facts := input.conversationFacts
@@ -160,7 +160,7 @@ func TestIntentRequestResolveSignalInput_HistoricalUnmatchedToolCallDoesNotStayA
 		},
 	}
 
-	input, err := req.resolveSignalInput(nil)
+	input, err := req.resolveSignalInput()
 	require.NoError(t, err)
 
 	facts := input.conversationFacts
@@ -175,7 +175,7 @@ func TestIntentRequestResolveSignalInput_FlowToolStateRequiresTrailingResult(t *
 	req := IntentRequest{Messages: []IntentMessage{
 		{Role: "tool", ToolCallID: "flowtool_deadbeef__call_1", Content: mustMessageContent(t, "done")},
 	}}
-	input, err := req.resolveSignalInput(nil)
+	input, err := req.resolveSignalInput()
 	require.NoError(t, err)
 	assert.True(t, input.conversationFacts.LastMessageFlowToolResult)
 
@@ -183,7 +183,7 @@ func TestIntentRequestResolveSignalInput_FlowToolStateRequiresTrailingResult(t *
 		IntentMessage{Role: "assistant", Content: mustMessageContent(t, "workflow complete")},
 		IntentMessage{Role: "user", Content: mustMessageContent(t, "new request")},
 	)
-	input, err = req.resolveSignalInput(nil)
+	input, err = req.resolveSignalInput()
 	require.NoError(t, err)
 	assert.False(t, input.conversationFacts.LastMessageFlowToolResult)
 }
@@ -247,7 +247,7 @@ func TestIntentRequestResolveSignalInput_RequestContextEstimateMatchesDataPlaneC
 		MaxCompletionTokens: json.RawMessage(`4096`),
 	}
 
-	input, err := req.resolveSignalInput(nil)
+	input, err := req.resolveSignalInput()
 	require.NoError(t, err)
 	envelope, err := json.Marshal(req)
 	require.NoError(t, err)
@@ -272,7 +272,7 @@ func TestIntentRequestResolveSignalInput_DoesNotDoubleCountTopLevelTextWithCurre
 		}},
 	}
 
-	input, err := req.resolveSignalInput(nil)
+	input, err := req.resolveSignalInput()
 	require.NoError(t, err)
 	envelope, err := json.Marshal(req)
 	require.NoError(t, err)
@@ -303,7 +303,7 @@ func TestIntentRequestResolveSignalInput_ToolChoiceFacts(t *testing.T) {
 				ToolChoice:   test.toolChoice,
 				FunctionCall: test.functionCall,
 			}
-			input, err := req.resolveSignalInput(nil)
+			input, err := req.resolveSignalInput()
 			require.NoError(t, err)
 			assert.Equal(t, test.wantRequired, input.conversationFacts.ToolChoiceRequired)
 			assert.Equal(t, test.wantNone, input.conversationFacts.ToolChoiceNone)
@@ -314,7 +314,7 @@ func TestIntentRequestResolveSignalInput_ToolChoiceFacts(t *testing.T) {
 func TestIntentRequestResolveSignalInput_FallsBackToText(t *testing.T) {
 	req := IntentRequest{Text: "Fallback single-turn request"}
 
-	input, err := req.resolveSignalInput(nil)
+	input, err := req.resolveSignalInput()
 	require.NoError(t, err)
 
 	assert.Equal(t, "Fallback single-turn request", input.evaluationText)
@@ -339,7 +339,7 @@ func TestIntentRequestResolveSignalInput_ExtractsImageFromCurrentUserTurn(t *tes
 		},
 	}
 
-	input, err := req.resolveSignalInput(nil)
+	input, err := req.resolveSignalInput()
 	require.NoError(t, err)
 
 	assert.Equal(t, "What does this screenshot show?", input.evaluationText)
@@ -361,7 +361,7 @@ func TestIntentRequestResolveSignalInput_AcceptsImageOnlyUserTurn(t *testing.T) 
 		},
 	}
 
-	input, err := req.resolveSignalInput(nil)
+	input, err := req.resolveSignalInput()
 	require.NoError(t, err)
 
 	assert.Empty(t, input.evaluationText)
@@ -388,7 +388,7 @@ func TestIntentRequestResolveSignalInput_CanonicalizesUppercaseImageURL(t *testi
 		},
 	}
 
-	input, err := req.resolveSignalInput(nil)
+	input, err := req.resolveSignalInput()
 	require.NoError(t, err)
 
 	assert.Equal(t, "What does this screenshot show?", input.evaluationText)
@@ -412,7 +412,7 @@ func TestIntentRequestResolveSignalInput_StringImageURLDoesNotPoisonText(t *test
 		},
 	}
 
-	input, err := req.resolveSignalInput(nil)
+	input, err := req.resolveSignalInput()
 	require.NoError(t, err)
 
 	assert.Equal(t, "hello world", input.evaluationText)
@@ -434,7 +434,7 @@ func TestIntentRequestResolveSignalInput_MalformedImageURLDoesNotPoisonText(t *t
 		},
 	}
 
-	input, err := req.resolveSignalInput(nil)
+	input, err := req.resolveSignalInput()
 	require.NoError(t, err)
 
 	assert.Equal(t, "keep this text", input.evaluationText)
@@ -457,7 +457,7 @@ func TestIntentRequestResolveSignalInput_ImageOnlyTurnFallsBackToTopLevelText(t 
 		},
 	}
 
-	input, err := req.resolveSignalInput(nil)
+	input, err := req.resolveSignalInput()
 	require.NoError(t, err)
 
 	assert.Equal(t, "summarize my quarterly report", input.evaluationText)
@@ -481,7 +481,7 @@ func TestIntentRequestResolveSignalInput_ImageOnlyFollowUpKeepsPriorUserText(t *
 		},
 	}
 
-	input, err := req.resolveSignalInput(nil)
+	input, err := req.resolveSignalInput()
 	require.NoError(t, err)
 
 	assert.Equal(t, "What is our refund policy?", input.evaluationText)
@@ -503,7 +503,7 @@ func TestIntentRequestResolveSignalInput_DropsUnsafeImageURL(t *testing.T) {
 		},
 	}
 
-	input, err := req.resolveSignalInput(nil)
+	input, err := req.resolveSignalInput()
 	require.NoError(t, err)
 
 	assert.Equal(t, "Describe it.", input.evaluationText)
@@ -515,7 +515,7 @@ func TestIntentRequestResolveSignalInput_DropsUnsafeImageURL(t *testing.T) {
 func TestIntentRequestResolveSignalInput_AcceptsMetadataOnly(t *testing.T) {
 	req := IntentRequest{Metadata: map[string]string{"cohort": "canary"}}
 
-	input, err := req.resolveSignalInput(nil)
+	input, err := req.resolveSignalInput()
 	require.NoError(t, err)
 
 	assert.Empty(t, input.evaluationText)
@@ -530,7 +530,7 @@ func TestIntentRequestResolveSignalInput_PreservesWhitespaceForTextBytes(t *test
 		}},
 	}
 
-	input, err := req.resolveSignalInput(nil)
+	input, err := req.resolveSignalInput()
 	require.NoError(t, err)
 
 	assert.Empty(t, input.evaluationText)
@@ -539,7 +539,7 @@ func TestIntentRequestResolveSignalInput_PreservesWhitespaceForTextBytes(t *test
 }
 
 func TestIntentRequestResolveSignalInput_PreservesTopLevelWhitespaceForTextBytes(t *testing.T) {
-	input, err := (IntentRequest{Text: " \t \n"}).resolveSignalInput(nil)
+	input, err := (IntentRequest{Text: " \t \n"}).resolveSignalInput()
 	require.NoError(t, err)
 
 	assert.Empty(t, input.evaluationText)
@@ -551,7 +551,7 @@ func TestIntentRequestResolveSignalInput_RejectsOversizedMetadata(t *testing.T) 
 		Metadata: map[string]string{"cohort": strings.Repeat("x", maxIntentMetadataValueBytes+1)},
 	}
 
-	_, err := req.resolveSignalInput(nil)
+	_, err := req.resolveSignalInput()
 	require.ErrorIs(t, err, ErrInvalidRequestFacts)
 }
 
