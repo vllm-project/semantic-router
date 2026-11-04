@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Do the heads of an OR rule miss the same texts? (issue #4669, measured on the toxicchat join)
 
-Reads the router_signal_ab.py ``join`` output of one arm for the suite's jailbreak and safety
-files and joins the two heads by text. For the rule ``jailbreak OR safety`` a *miss* is a
+Reads one arm's predictions for the suite's jailbreak and safety files, in the suite's prediction
+layout (the ``join`` output of router_signal_ab.py, router_signal_direct.py's output, or the
+suite's published scores), and joins the two heads by text. For the rule ``jailbreak OR safety`` a *miss* is a
 rule-positive text (either gold positive) that neither head fires on.
 
 Within each gold cell (jailbreak and unsafe, unsafe only, jailbreak only) the misses expected
@@ -16,10 +17,12 @@ draws give the difference between arms. ``--b-match-fpr`` sets the second arm's 
 head fires on as many gold-negative texts as the first arm's does (thresholds are fixed, not
 re-estimated in each draw). The verdict needs the second arm: it passes when the difference has a
 lower bound above 0 and the first arm's ratio is at least 1.25, fails when the difference has an
-upper bound below 0.25, and is underpowered otherwise.
+upper bound below 0.25, and is underpowered otherwise. ``--exclude`` drops texts first, for
+example the training overlap that guard_overlap_scan.py reports.
 
     python3 tools/guard_miss_correlation.py --suite text --a vela2/preds --a-thresholds 0.99,0.9 \\
-        [--b vela1/preds (--b-thresholds 0.5,0.5 | --b-match-fpr)] --out guard.json
+        [--b vela1/preds (--b-thresholds 0.5,0.5 | --b-match-fpr)] [--exclude overlap.json] \\
+        --out guard.json
 """
 
 from __future__ import annotations
@@ -29,8 +32,9 @@ import collections
 import json
 import math
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -55,7 +59,11 @@ class Table:
     s_score: np.ndarray
 
     def cell_index(self) -> np.ndarray:
-        """0 both positive, 1 safety only, 2 jailbreak only, 3 neither."""
+        """Index each text's gold cell.
+
+        Returns:
+            0 both positive, 1 safety only, 2 jailbreak only, 3 neither, per text.
+        """
         return np.where(
             self.jb_gold & self.s_gold,
             0,
@@ -63,17 +71,39 @@ class Table:
         )
 
 
-def read_jsonl(path: Path) -> list[dict]:
+def read_jsonl(path: Path) -> list[dict[str, Any]]:
+    """Read a JSON lines file, skipping blank lines.
+
+    Args:
+        path: The file.
+
+    Returns:
+        One decoded object per line.
+    """
     with open(path, encoding="utf-8") as handle:
         return [json.loads(line) for line in handle if line.strip()]
 
 
-def build_table(suite: str, preds: str, thresholds: tuple[float, float]) -> Table:
+def build_table(
+    suite: str,
+    preds: str,
+    thresholds: tuple[float, float],
+    exclude: frozenset[str] = frozenset(),
+) -> Table:
     """Join one arm's jailbreak and safety predictions by text; fire a head at its threshold.
 
+    Args:
+        suite: The suite's ``text/`` directory.
+        preds: The arm's predictions, as ``<task>/<file>.pred.jsonl``.
+        thresholds: The jailbreak and safety thresholds.
+        exclude: Texts to leave out of the join.
+
+    Returns:
+        One row per text that both heads scored.
+
     Raises:
-        SystemExit: A prediction file is missing, a score lacks the head's positive label, or
-            the two files share no text.
+        SystemExit: A prediction file is missing, names a row the suite file does not hold, or
+            lacks the head's positive label, or the two files share no text.
     """
     heads = {}
     for task, stem in (("jailbreak", JAILBREAK_FILE), ("safety", SAFETY_FILE)):
@@ -83,7 +113,11 @@ def build_table(suite: str, preds: str, thresholds: tuple[float, float]) -> Tabl
             raise SystemExit(f"missing {pred_path}")
         by_text = {}
         for entry in read_jsonl(pred_path):
-            row = rows[entry["id"]]
+            row = rows.get(entry["id"])
+            if row is None:
+                raise SystemExit(f"{pred_path}: {entry['id']!r} is not a row of {stem}")
+            if row["text"] in exclude:
+                continue
             if POSITIVE[task] not in entry["scores"]:
                 raise SystemExit(
                     f"{pred_path}: no {POSITIVE[task]!r} score in {sorted(entry['scores'])}"
@@ -112,10 +146,17 @@ def build_table(suite: str, preds: str, thresholds: tuple[float, float]) -> Tabl
 
 
 def matched_thresholds(reference: Table, other: Table) -> tuple[float, float]:
-    """The thresholds that make ``other`` fire on no more gold-negative texts than ``reference`` does.
+    """Find the thresholds that make ``other`` fire on no more gold-negative texts than ``reference``.
 
     Each head is matched alone: the share of its gold-negative texts it fires on (its false
     positive rate) is held at the reference's, by taking the lowest threshold that stays within it.
+
+    Args:
+        reference: The arm whose false positive rates are matched.
+        other: The arm whose thresholds are set.
+
+    Returns:
+        The jailbreak and safety thresholds for ``other``.
     """
     out = []
     for gold, ref_fires, score in (
@@ -133,22 +174,34 @@ def matched_thresholds(reference: Table, other: Table) -> tuple[float, float]:
 
 
 def refire(table: Table, thresholds: tuple[float, float]) -> Table:
-    """The same table with each head fired at the given thresholds."""
-    return Table(
-        table.jb_gold,
-        table.s_gold,
-        table.jb_score >= thresholds[0],
-        table.s_score >= thresholds[1],
-        table.group,
-        table.jb_score,
-        table.s_score,
+    """Fire each head of a table again at new thresholds.
+
+    Args:
+        table: The table.
+        thresholds: The jailbreak and safety thresholds.
+
+    Returns:
+        A copy of ``table`` with new ``jb_fires`` and ``s_fires``.
+    """
+    return replace(
+        table,
+        jb_fires=table.jb_score >= thresholds[0],
+        s_fires=table.s_score >= thresholds[1],
     )
 
 
 def miss_counts(
     table: Table, rows: np.ndarray | None = None
 ) -> dict[str, tuple[int, float, int]]:
-    """{cell: (observed misses, expected misses, texts)} over rule-positive cells."""
+    """Count observed and expected rule misses in each rule-positive cell.
+
+    Args:
+        table: The table.
+        rows: Row indices to count over, with repeats (a bootstrap draw); all rows when None.
+
+    Returns:
+        ``{cell: (observed misses, expected misses, texts)}`` for each non-empty cell.
+    """
     rows = np.arange(len(table.group)) if rows is None else rows
     cell = table.cell_index()[rows]
     jb_silent, s_silent = ~table.jb_fires[rows], ~table.s_fires[rows]
@@ -164,7 +217,14 @@ def miss_counts(
 
 
 def pooled_ratio(counts: dict[str, tuple[int, float, int]]) -> float:
-    """Observed over expected misses across rule-positive cells (nan when none are expected)."""
+    """Divide observed by expected misses across all rule-positive cells.
+
+    Args:
+        counts: The output of ``miss_counts``.
+
+    Returns:
+        The ratio, or nan when no miss is expected.
+    """
     expected = sum(e for _, e, _ in counts.values())
     return (
         sum(o for o, _, _ in counts.values()) / expected if expected > 0 else math.nan
@@ -172,16 +232,31 @@ def pooled_ratio(counts: dict[str, tuple[int, float, int]]) -> float:
 
 
 def cell_ratio(counts: dict[str, tuple[int, float, int]], cell: str) -> float:
-    """Observed over expected misses in one cell (nan when the cell is empty or none are expected)."""
+    """Divide observed by expected misses in one cell.
+
+    Args:
+        counts: The output of ``miss_counts``.
+        cell: The cell's name.
+
+    Returns:
+        The ratio, or nan when the cell is empty or no miss is expected.
+    """
     if cell not in counts or counts[cell][1] <= 0:
         return math.nan
     return counts[cell][0] / counts[cell][1]
 
 
 def mantel_haenszel(table: Table, rows: np.ndarray | None = None) -> float:
-    """Odds ratio of (jailbreak silent, safety silent) over the gold cells.
+    """Compute the Mantel-Haenszel odds ratio of both heads being silent, over the gold cells.
 
     A cell with an empty count has 0.5 added to each of its four counts.
+
+    Args:
+        table: The table.
+        rows: Row indices to count over, with repeats; all rows when None.
+
+    Returns:
+        The odds ratio; inf when only concordant silence occurs, nan when nothing does.
     """
     rows = np.arange(len(table.group)) if rows is None else rows
     cell = table.cell_index()[rows]
@@ -206,7 +281,15 @@ def mantel_haenszel(table: Table, rows: np.ndarray | None = None) -> float:
 
 
 def poisson_upper_tail(k: int, mean: float) -> float:
-    """P(X >= k) for X ~ Poisson(mean)."""
+    """Compute P(X >= k) for X ~ Poisson(mean).
+
+    Args:
+        k: The count.
+        mean: The Poisson mean.
+
+    Returns:
+        The upper tail probability.
+    """
     if k <= 0:
         return 1.0
     term, below = math.exp(-mean), 0.0
@@ -217,7 +300,15 @@ def poisson_upper_tail(k: int, mean: float) -> float:
 
 
 def smallest_detectable_ratio(expected: float, alpha: float = 0.025) -> float:
-    """The smallest observed to expected ratio a Poisson count would show significantly above 1."""
+    """Find the smallest observed to expected ratio a Poisson count would show above 1.
+
+    Args:
+        expected: The expected count under independence.
+        alpha: The one-sided significance level.
+
+    Returns:
+        The ratio, or inf when nothing is expected.
+    """
     if expected <= 0:
         return math.inf
     k = 1
@@ -227,9 +318,15 @@ def smallest_detectable_ratio(expected: float, alpha: float = 0.025) -> float:
 
 
 def bootstrap(tables: list[Table], rounds: int, seed: int) -> dict[str, np.ndarray]:
-    """Per-draw ratios and odds ratio for each arm, resampling whole groups with shared draws.
+    """Bootstrap each arm's ratios and odds ratio, resampling whole groups with shared draws.
 
-    All arms must hold the same texts in the same order.
+    Args:
+        tables: The arms, holding the same texts in the same order.
+        rounds: The number of draws.
+        seed: The random seed.
+
+    Returns:
+        ``ratio``, ``pooled`` and ``odds`` arrays, shaped (arms, rounds).
     """
     first = tables[0]
     members = collections.defaultdict(list)
@@ -252,17 +349,34 @@ def bootstrap(tables: list[Table], rounds: int, seed: int) -> dict[str, np.ndarr
 
 
 def interval(values: np.ndarray) -> list[float | None]:
+    """Read a 95% percentile interval from bootstrap draws.
+
+    Args:
+        values: The draws; nan and inf draws are dropped.
+
+    Returns:
+        The 2.5th and 97.5th percentiles, or two Nones when fewer than half the draws are finite.
+    """
     finite = values[np.isfinite(values)]
     if len(finite) < len(values) / 2:
         return [None, None]
     return [float(np.percentile(finite, 2.5)), float(np.percentile(finite, 97.5))]
 
 
-def summarize(tables: dict[str, Table], rounds: int, seed: int) -> dict:
-    """The report: power facts first, then each arm's numbers, then the paired difference."""
+def summarize(tables: dict[str, Table], rounds: int, seed: int) -> dict[str, Any]:
+    """Build the report: each arm's power facts and numbers, then the paired difference.
+
+    Args:
+        tables: The arms by name, holding the same texts in the same order.
+        rounds: The number of bootstrap draws.
+        seed: The random seed.
+
+    Returns:
+        The report; ``difference_ratio`` is the first arm minus the second when there are two.
+    """
     names = list(tables)
     draws = bootstrap([tables[n] for n in names], rounds, seed)
-    report: dict = {"rounds": rounds, "seed": seed, "arms": {}}
+    report: dict[str, Any] = {"rounds": rounds, "seed": seed, "arms": {}}
     for a, name in enumerate(names):
         table = tables[name]
         counts = miss_counts(table)
@@ -295,7 +409,7 @@ def summarize(tables: dict[str, Table], rounds: int, seed: int) -> dict:
     return report
 
 
-def verdict(report: dict, arm: str) -> str:
+def verdict(report: dict[str, Any], arm: str) -> str:
     """Read the #4669 gate on one shared-backbone arm against its baseline.
 
     A ratio above 1 alone is no evidence of a shared backbone, since separate
@@ -321,20 +435,51 @@ def verdict(report: dict, arm: str) -> str:
 
 
 def thresholds(value: str) -> tuple[float, float]:
+    """Parse a ``jailbreak,safety`` threshold pair.
+
+    Args:
+        value: The command line value.
+
+    Returns:
+        The two thresholds.
+    """
     jailbreak, safety = (float(v) for v in value.split(","))
     return jailbreak, safety
 
 
+def excluded_texts(path: str | None) -> frozenset[str]:
+    """Read the texts to leave out: a guard_overlap_scan.py report, or a JSON list of texts.
+
+    Args:
+        path: The file, or None for no exclusions.
+
+    Returns:
+        The texts.
+    """
+    if path is None:
+        return frozenset()
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    return frozenset(data["texts"] if isinstance(data, dict) else data)
+
+
 def main(argv: list[str] | None = None) -> int:
+    """Run the measurement and write its report.
+
+    Args:
+        argv: The command line, without the program name; ``sys.argv`` when None.
+
+    Returns:
+        The exit code.
+    """
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     p.add_argument("--suite", required=True, help="the suite's text/ directory")
-    p.add_argument("--a", required=True, help="join output of the arm that is gated")
+    p.add_argument("--a", required=True, help="predictions of the arm that is gated")
     p.add_argument(
         "--a-thresholds", type=thresholds, required=True, help="jailbreak,safety"
     )
-    p.add_argument("--b", help="join output of the comparison arm (vela1)")
+    p.add_argument("--b", help="predictions of the baseline arm")
     p.add_argument(
         "--b-thresholds", type=thresholds, help="jailbreak,safety, set by hand"
     )
@@ -342,6 +487,9 @@ def main(argv: list[str] | None = None) -> int:
         "--b-match-fpr",
         action="store_true",
         help="set --b's thresholds so each head fires on as many gold-negative texts as --a's",
+    )
+    p.add_argument(
+        "--exclude", help="texts to drop: a guard_overlap_scan.py report or a JSON list"
     )
     p.add_argument("--rounds", type=int, default=2000)
     p.add_argument("--seed", type=int, default=0)
@@ -351,25 +499,21 @@ def main(argv: list[str] | None = None) -> int:
         p.error("--b takes either --b-thresholds or --b-match-fpr")
     if not args.b and (args.b_thresholds or args.b_match_fpr):
         p.error("--b-thresholds and --b-match-fpr need --b")
-    tables = {"a": build_table(args.suite, args.a, args.a_thresholds)}
+    exclude = excluded_texts(args.exclude)
+    tables = {"a": build_table(args.suite, args.a, args.a_thresholds, exclude)}
+    used = {"a": list(args.a_thresholds)}
     if args.b:
-        tables["b"] = build_table(args.suite, args.b, (0.5, 0.5))
-        tables["b"] = refire(
-            tables["b"],
-            args.b_thresholds or matched_thresholds(tables["a"], tables["b"]),
-        )
+        tables["b"] = build_table(args.suite, args.b, (0.5, 0.5), exclude)
+        b_thresholds = args.b_thresholds or matched_thresholds(tables["a"], tables["b"])
+        tables["b"] = refire(tables["b"], b_thresholds)
+        used["b"] = list(b_thresholds)
         if not np.array_equal(tables["a"].group, tables["b"].group):
             raise SystemExit(
                 "the arms do not hold the same texts; join them on the same rows"
             )
     report = summarize(tables, args.rounds, args.seed)
-    report["thresholds"] = {
-        name: [
-            float(t.jb_score[t.jb_fires].min()) if t.jb_fires.any() else None,
-            float(t.s_score[t.s_fires].min()) if t.s_fires.any() else None,
-        ]
-        for name, t in tables.items()
-    }
+    report["thresholds"] = used
+    report["excluded_texts"] = len(exclude)
     report["verdict"] = verdict(report, "a")
     Path(args.out).write_text(
         json.dumps(report, indent=2, default=str) + "\n", encoding="utf-8"

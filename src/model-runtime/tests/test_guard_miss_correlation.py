@@ -190,3 +190,50 @@ def test_the_command_writes_a_report_with_a_matched_comparison_arm(
     assert report["arms"]["a"]["rule_positives"] == 80
     with pytest.raises(SystemExit):
         gm.main(["--suite", suite, "--a", str(tmp_path / "a"), "--a-thresholds", "0.5,0.5", "--b-match-fpr", "--out", str(out)])  # fmt: skip
+
+
+def test_a_bad_prediction_file_stops_the_join(gm, tmp_path) -> None:
+    gold = gold_cells(1, 0, 1)
+    suite = write_arm(tmp_path, "arm", np.zeros(2, bool), np.zeros(2, bool), gold)
+    with pytest.raises(SystemExit, match="missing"):
+        gm.build_table(suite, str(tmp_path / "none"), (0.5, 0.5))
+    path = tmp_path / "arm" / "safety" / "hold-toxicchat.pred.jsonl"
+    path.write_text(json.dumps({"id": "ghost", "scores": {"unsafe": 0.9}}) + "\n")
+    with pytest.raises(SystemExit, match="not a row"):
+        gm.build_table(suite, str(tmp_path / "arm"), (0.5, 0.5))
+    path.write_text(json.dumps({"id": "safety-0", "scores": {"safe": 0.9}}) + "\n")
+    with pytest.raises(SystemExit, match="no 'unsafe' score"):
+        gm.build_table(suite, str(tmp_path / "arm"), (0.5, 0.5))
+
+
+def test_an_interval_needs_most_draws_finite(gm) -> None:
+    assert gm.interval(np.array([1.0, 2.0, np.nan])) == [
+        pytest.approx(1.025),
+        pytest.approx(1.975),
+    ]
+    assert gm.interval(np.array([1.0, np.nan, np.inf])) == [None, None]
+
+
+def test_excluded_texts_leave_every_arm_and_the_thresholds_are_recorded(
+    gm, tmp_path
+) -> None:
+    gold = gold_cells(60, 20, 120)
+    rng = np.random.default_rng(5)
+    suite = write_arm(tmp_path, "a", rng.random(200) < 0.3, rng.random(200) < 0.3, gold)
+    write_arm(tmp_path, "b", rng.random(200) < 0.3, rng.random(200) < 0.3, gold)
+    # Drop ten both-positive texts and ten clean ones, as an overlap scan report.
+    dropped = [f"text {i}" for i in range(10)] + [f"text {i}" for i in range(80, 90)]
+    overlap = tmp_path / "overlap.json"
+    overlap.write_text(json.dumps({"texts": dropped, "hits": {}}))
+    out = tmp_path / "guard.json"
+    gm.main(["--suite", suite, "--a", str(tmp_path / "a"), "--a-thresholds", "0.5,0.5", "--b", str(tmp_path / "b"),
+             "--b-thresholds", "0.4,0.6", "--exclude", str(overlap), "--rounds", "20", "--out", str(out)])  # fmt: skip
+    report = json.loads(out.read_text())
+    assert report["excluded_texts"] == 20
+    for arm in report["arms"].values():
+        assert arm["texts"] == 180 and arm["cells"]["both"]["texts"] == 50
+    assert report["thresholds"] == {"a": [0.5, 0.5], "b": [0.4, 0.6]}
+    # A JSON list of texts works the same as a report.
+    assert gm.excluded_texts(None) == frozenset()
+    overlap.write_text(json.dumps(dropped))
+    assert gm.excluded_texts(str(overlap)) == frozenset(dropped)
