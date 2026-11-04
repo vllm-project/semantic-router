@@ -17807,9 +17807,7 @@
                               }
                             },
                             "required": [
-                              "deployment",
-                              "contract",
-                              "adapter"
+                              "deployment"
                             ]
                           },
                           "consumer": {
@@ -17820,6 +17818,9 @@
                           },
                           "editable": {
                             "type": "boolean"
+                          },
+                          "key": {
+                            "type": "string"
                           },
                           "model": {
                             "type": "string"
@@ -17847,6 +17848,7 @@
                         "required": [
                           "task_id",
                           "consumer",
+                          "key",
                           "recipe",
                           "deployment",
                           "model",
@@ -17909,9 +17911,7 @@
                           }
                         },
                         "required": [
-                          "deployment",
-                          "contract",
-                          "adapter"
+                          "deployment"
                         ]
                       }
                     },
@@ -18030,9 +18030,7 @@
                           }
                         },
                         "required": [
-                          "deployment",
-                          "contract",
-                          "adapter"
+                          "deployment"
                         ]
                       }
                     },

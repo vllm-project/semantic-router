@@ -304,6 +304,32 @@ type InlineModels struct {
 	// DecisionModel is global.model_catalog.system.decision_model, resolved
 	// to its canonical name.
 	DecisionModel string `yaml:"decision_model,omitempty"`
+	// EmbeddingDeployment and MultimodalEmbeddingDeployment are
+	// global.model_catalog.embeddings.default and .multimodal.
+	EmbeddingDeployment           string `yaml:"embedding_deployment,omitempty"`
+	MultimodalEmbeddingDeployment string `yaml:"multimodal_embedding_deployment,omitempty"`
+	// ModelResourceWarnings are the deprecated model fields the
+	// configuration was read with, and what they were read as.
+	ModelResourceWarnings []ConfigWarning `yaml:"-" json:"-"`
+	// AuthoredThresholds are the module thresholds the configuration sets;
+	// the others follow the model that answers (model_thresholds.go).
+	AuthoredThresholds map[string]bool `yaml:"-" json:"-"`
+
+	// modelResourcesTranslated is set once deprecated model fields were
+	// read as deployments and bindings (model_resource_translation.go).
+	modelResourcesTranslated bool
+	// modelResourceErrors fail the consumers whose deprecated model names
+	// no model when they run.
+	modelResourceErrors map[string]error
+	// legacyModelSources names the deprecated field a module's model came
+	// from, for its warning.
+	legacyModelSources map[string]string
+	// noModel are the modules model_ref: "" turned off: no decision model
+	// answers them.
+	noModel map[string]bool
+	// scopedBindings are a recipe scope's own bindings, before the global
+	// ones (ConfigForRecipe); nil outside a recipe scope.
+	scopedBindings map[string]ModelBinding
 }
 
 // IntelligentRouting captures user-facing signal and decision configuration.

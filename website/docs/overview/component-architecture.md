@@ -44,11 +44,11 @@ Every invocation without `--engine` (`-e`) starts Router mode. Passing MODEL
 alone does not select Engine mode. Dashboard reports the startup mode and
 manages deployments; it does not switch the instance mode.
 
-Model workers are prepared for actual consumers: native model grants, routing
-tasks, and enabled model-backed services. Declaring an unused deployment does
-not start it. A rule-only Chat router can therefore run without model workers
-when no other feature needs them. Semantic cache, embeddings, memory, and RAG
-can introduce additional consumers. “On demand” refers to this configuration
+Model workers are prepared only for deployments in actual use: native model
+grants, routing signals, and enabled model-backed services. Declaring an unused
+deployment does not start it. A rule-only Chat router can therefore run without
+model workers when no other feature needs them. Semantic cache, embeddings,
+memory, and RAG can put further deployments in use. “On demand” refers to this configuration
 demand, not loading every model on its first request.
 
 ## Separate protocol handling from routing policy

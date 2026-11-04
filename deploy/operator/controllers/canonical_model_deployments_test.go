@@ -16,6 +16,7 @@ func TestOperatorModelDeploymentsReachCanonicalConfig(t *testing.T) {
 	spec := vllmv1alpha1.ConfigSpec{
 		ModelDeployments: rawCanonicalRoutingJSON(t, `{"shared":{"artifact":"vllm-sr/checkpoint","revision":"`+strings.Repeat("a", 40)+`","provider":"model_runtime","device":"cpu","input":{"max_tokens":512,"overflow":"reject"}}}`),
 		ModelAdmission:   rawCanonicalRoutingJSON(t, `{"shared":{"max_concurrency":2,"max_queue":3,"queue_timeout_ms":500,"on_overflow":"shed"}}`),
+		ModelBindings:    rawCanonicalRoutingJSON(t, `{"domain":"shared","safety.private":{"deployment":"shared","head":"safety"}}`),
 		Routing:          rawCanonicalRoutingJSON(t, `{"model_bindings":{"pii_classifier":{"deployment":"shared","contract":"token_spans.v1","adapter":"mmbert","head":"pii","mapping_path":"mappings/pii.json"}}}`),
 	}
 	r := &SemanticRouterReconciler{}
@@ -43,6 +44,10 @@ func TestOperatorModelDeploymentsReachCanonicalConfig(t *testing.T) {
 	if roundTrip.Routing.ModelBindings["pii_classifier"] != wantBinding {
 		t.Fatalf("task binding was lost: %#v", roundTrip.Routing.ModelBindings)
 	}
+	wantGlobal := map[string]routerconfig.ModelBinding{"domain": {Deployment: "shared"}, "safety.private": {Deployment: "shared", Head: "safety"}}
+	if !reflect.DeepEqual(roundTrip.Global.ModelCatalog.Bindings, wantGlobal) {
+		t.Fatalf("global bindings were changed: %#v", roundTrip.Global.ModelCatalog.Bindings)
+	}
 	// Explicit empty override clears the previously supplied binding map.
 	routing, fields, err := canonicalRoutingFromKubernetesJSON(rawCanonicalRoutingJSON(t, `{"model_bindings":{}}`))
 	if err != nil {
@@ -63,5 +68,11 @@ func TestOperatorModelDeploymentRejectsUnknownFields(t *testing.T) {
 	}
 	if _, _, err := canonicalRoutingFromKubernetesJSON(rawCanonicalRoutingJSON(t, `{"model_bindings":{"pii_classifier":{"deploymnt":"typo"}}}`)); err == nil {
 		t.Fatal("unknown binding field silently discarded")
+	}
+	for _, raw := range []string{`null`, `[]`, `{"pii":{"deploymnt":"typo"}}`, `{"pii":["local"]}`} {
+		spec := vllmv1alpha1.ConfigSpec{ModelBindings: rawCanonicalRoutingJSON(t, raw)}
+		if err := applyOperatorModelDeployments(&routerconfig.CanonicalConfig{}, spec); err == nil || !strings.Contains(err.Error(), "config.model_bindings") {
+			t.Errorf("invalid global binding accepted: %s, %v", raw, err)
+		}
 	}
 }

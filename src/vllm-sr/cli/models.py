@@ -21,13 +21,12 @@ from pydantic import (
     StrictBool,
     StrictStr,
     field_validator,
+    model_serializer,
     model_validator,
 )
 
 from .algorithms import AlgorithmConfig, ModelRef
 from .config_contract import (
-    CLASSIFIER_TYPE_LLM,
-    CLASSIFIER_TYPE_LOCAL,
     ClassifierSignalType,
     UnknownPolicy,
 )
@@ -36,7 +35,6 @@ from .context_bands import normalize_token_count, validate_context_band
 from .durations import parse_duration
 
 RoutingStrategy = Literal["priority", "confidence"]
-SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT = 2
 PROMPT_MIN_CANDIDATES = 2
 MAX_DECISION_ANNOTATIONS = 32
 MAX_DECISION_ANNOTATION_BYTES = 4096
@@ -454,9 +452,12 @@ class ComplexityRule(BaseModel):
     """
 
     name: str
+    # A deployment scores the rule's difficulty question in place of the
+    # hard and easy example banks.
+    deployment: Optional[str] = None
     threshold: float = 0.1
-    hard: ComplexityCandidates
-    easy: ComplexityCandidates
+    hard: Optional[ComplexityCandidates] = None
+    easy: Optional[ComplexityCandidates] = None
     description: Optional[str] = None
     composer: Optional["Rules"] = None  # Forward reference, defined below
     prototype_scoring: Optional[PrototypeScoringConfig] = None
@@ -746,13 +747,18 @@ class TopicContinuityRule(BaseModel):
 
 
 class ClassifierSignal(BaseModel):
-    """Generic label-score classifier signal."""
+    """Generic label-score classifier signal.
+
+    The Router validates the model that answers the rule: its deployment, or
+    the deprecated type, model, model_path and use_cpu it reads as one.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     name: str
     description: Optional[str] = None
-    type: ClassifierSignalType
+    deployment: Optional[str] = None
+    type: Optional[ClassifierSignalType] = None
     model: Optional[str] = None
     model_path: Optional[str] = None
     labels: List[str]
@@ -772,45 +778,7 @@ class ClassifierSignal(BaseModel):
             raise ValueError("labels must be trimmed and cannot contain ':'")
         if len(set(self.labels)) != len(self.labels):
             raise ValueError("labels cannot contain duplicates")
-
-        if self.type == CLASSIFIER_TYPE_LOCAL:
-            self._validate_local()
-        elif self.type == CLASSIFIER_TYPE_LLM:
-            self._validate_llm()
-        else:
-            self._validate_sequence()
         return self
-
-    def _validate_local(self) -> None:
-        if len(self.labels) < SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT:
-            raise ValueError("local classifiers require at least two labels")
-        if self.model or self.disable_rationale:
-            raise ValueError(
-                "local classifiers do not accept model or disable_rationale"
-            )
-        if self.model_path and self.instructions:
-            raise ValueError("specialist local classifiers do not accept instructions")
-
-    def _validate_llm(self):
-        if not self.instructions:
-            raise ValueError("llm classifiers require instructions")
-        if self.model_path or self.use_cpu:
-            raise ValueError("llm classifiers do not accept model_path or use_cpu")
-
-    def _validate_sequence(self) -> None:
-        if len(self.labels) < SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT:
-            raise ValueError(
-                "sequence_classifier classifiers require at least two labels"
-            )
-        if (
-            self.model_path
-            or self.use_cpu
-            or self.instructions
-            or self.disable_rationale
-        ):
-            raise ValueError(
-                "sequence_classifier classifiers do not accept model_path, use_cpu, instructions or disable_rationale"
-            )
 
 
 class Signals(BaseModel):
@@ -1542,10 +1510,17 @@ class MemoryPluginConfig(BaseModel):
 
 
 class RAGRerankConfig(BaseModel):
-    """Select the number of neural-reranked vectorstore hits to inject."""
+    """Select the number of neural-reranked vectorstore hits to inject.
+
+    deployment names the deployment that scores the pairs, at the pair-scorer
+    exit layer and dimension select (zero: the model's full depth and width).
+    """
 
     model_config = ConfigDict(extra="forbid")
     top_k: Optional[int] = Field(default=None, ge=1)
+    deployment: Optional[str] = None
+    layer: int = 0
+    dimension: int = 0
 
 
 class RAGPluginConfig(BaseModel):
@@ -2764,29 +2739,41 @@ class OperatingPointReference(BaseModel):
 
 
 class ModelBinding(BaseModel):
-    """A shared task default or recipe-owned use of a model deployment."""
+    """The deployment that answers one shared-answer signal, globally or in one recipe.
+
+    A binding is written as the deployment's name (`pii: local-vela`); the
+    object form also takes a head. Its contract, adapter, mapping_path,
+    pair_scorer and operating_point are deprecated: the Router derives the
+    contract from the signal and the adapter from the deployment's provider.
+    A rule that asks its own question names its deployment on the rule.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     deployment: str
-    contract: str
-    # Required except on model_runtime deployments, whose card names the head.
-    adapter: str = ""
     head: Optional[str] = None
+    contract: Optional[str] = None
+    adapter: Optional[str] = None
     mapping_path: Optional[str] = None
     pair_scorer: Optional[PairScorerSelection] = None
     operating_point: Optional[OperatingPointReference] = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def read_deployment_name(cls, value):
+        if isinstance(value, str):
+            return {"deployment": value.strip()}
+        return value
 
-def _validate_unbound_classifier_selectors(profile):
-    for rule in profile.signals.classifiers or []:
-        if f"classifier.{rule.name}" in profile.model_bindings:
-            continue
-        if rule.type != CLASSIFIER_TYPE_LOCAL and not rule.model:
-            raise ValueError(
-                f"{rule.type} classifiers require model or a model binding"
-            )
-    return profile
+    @model_serializer(mode="wrap")
+    def write_deployment_name(self, handler):
+        if all(
+            getattr(self, name) is None
+            for name in type(self).model_fields
+            if name != "deployment"
+        ):
+            return self.deployment
+        return handler(self)
 
 
 class CandidateRequirements(BaseModel):
@@ -2917,25 +2904,18 @@ class UserConfig(BaseModel):
     global_: Optional[Dict[str, Any]] = Field(default=None, alias="global")
     setup: Optional[Dict[str, Any]] = None
 
+    @field_validator("global_")
+    @classmethod
+    def validate_routing_mode(cls, value):
+        router = (value or {}).get("router") or {}
+        if not isinstance(router.get("enabled", True), bool):
+            raise ValueError("global.router.enabled must be a boolean")
+        return value
+
     @property
     def routing_enabled(self) -> bool:
         router = (self.global_ or {}).get("router") or {}
-        enabled = router.get("enabled", True)
-        if not isinstance(enabled, bool):
-            raise ValueError("global.router.enabled must be a boolean")
-        return enabled
-
-    @model_validator(mode="after")
-    def validate_classifier_selectors(self):
-        # Global serving defaults are available only at document scope. Do not
-        # reject a valid inherited selector while parsing a child profile.
-        from cli.model_runtime_defaults import iter_effective_routing_profiles
-
-        if not self.routing_enabled:
-            return self
-        for _, profile in iter_effective_routing_profiles(self):
-            _validate_unbound_classifier_selectors(profile)
-        return self
+        return router.get("enabled", True)
 
     @property
     def signals(self) -> Signals:

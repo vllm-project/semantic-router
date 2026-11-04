@@ -30,6 +30,13 @@ func (f *fakeSystemOne) Card(deployment string) (modelservice.ModelCard, bool) {
 	return f.card, deployment == "hosted-d3"
 }
 
+func (f *fakeSystemOne) PrepareCard(_ context.Context, deployment string) (modelservice.ModelCard, error) {
+	if deployment != "hosted-d3" {
+		return modelservice.ModelCard{}, modelservice.ErrUnknownDeployment
+	}
+	return f.card, nil
+}
+
 func newFakeSystemOne() *fakeSystemOne {
 	return &fakeSystemOne{
 		fakeDecider: fakeDecider{calls: map[string]int{}, requests: map[string]modelservice.Request{}, failures: map[string]error{}, answers: map[string]modelservice.Answer{
