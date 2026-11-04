@@ -16975,6 +16975,10 @@
                             "criteria": {
                               "nullable": true
                             },
+                            "decision_adapter": {
+                              "nullable": true,
+                              "type": "boolean"
+                            },
                             "head": {
                               "nullable": true,
                               "type": "string"
@@ -17084,6 +17088,10 @@
                                   },
                                   "criteria": {
                                     "nullable": true
+                                  },
+                                  "decision_adapter": {
+                                    "nullable": true,
+                                    "type": "boolean"
                                   },
                                   "head": {
                                     "nullable": true,
@@ -19797,6 +19805,10 @@
                             "criteria": {
                               "nullable": true
                             },
+                            "decision_adapter": {
+                              "nullable": true,
+                              "type": "boolean"
+                            },
                             "head": {
                               "nullable": true,
                               "type": "string"
@@ -19906,6 +19918,10 @@
                                   },
                                   "criteria": {
                                     "nullable": true
+                                  },
+                                  "decision_adapter": {
+                                    "nullable": true,
+                                    "type": "boolean"
                                   },
                                   "head": {
                                     "nullable": true,

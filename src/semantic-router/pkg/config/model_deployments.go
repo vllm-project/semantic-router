@@ -34,6 +34,10 @@ type ModelDeployment struct {
 	// EnableSharedContext computes the shared state of a multi-question
 	// request once; unset leaves it to the model family (on for Decision 2.0).
 	EnableSharedContext *bool `yaml:"enable_shared_context,omitempty" json:"enable_shared_context,omitempty"`
+	// MaxModelLen is the most input tokens one question of a local Decision
+	// deployment may have: it lowers the package's limit and never raises it.
+	// Unset keeps the package's limit; attached endpoints and replicas refuse it.
+	MaxModelLen *int `yaml:"max_model_len,omitempty" json:"max_model_len,omitempty"`
 	// Endpoint attaches a model_runtime deployment to an engine the Router does
 	// not manage (unix:///path, http://host:port or https://host:port).
 	Endpoint string `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`

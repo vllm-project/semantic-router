@@ -490,6 +490,46 @@ func (p *PostgresStore) AttachResponse(ctx context.Context, id string, body stri
 	return fn()
 }
 
+// AttachPrompt stores the prompt of a record written without it.
+func (p *PostgresStore) AttachPrompt(ctx context.Context, id string, prompt string, truncated bool) error {
+	release, err := p.lifecycle.beginMutation()
+	if err != nil {
+		return err
+	}
+	defer release()
+	prompt = sanitizePostgresText(prompt)
+	//nolint:gosec // tableName is validated during store creation
+	query := fmt.Sprintf(`
+		UPDATE %s
+		SET prompt = $2,
+		    prompt_truncated = $3
+		WHERE id = $1
+	`, p.tableName)
+
+	fn := func() error {
+		result, err := p.db.ExecContext(ctx, query, id, prompt, truncated)
+		if err != nil {
+			return fmt.Errorf("failed to update prompt: %w", err)
+		}
+
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
+			return fmt.Errorf("record with ID %s not found", id)
+		}
+
+		return nil
+	}
+
+	if p.asyncWrites {
+		return p.runAsyncAndWait(ctx, fn)
+	}
+
+	return fn()
+}
+
 // AppendOutcome links post-route feedback to a replay record.
 func (p *PostgresStore) AppendOutcome(ctx context.Context, id string, outcome Outcome) error {
 	release, err := p.lifecycle.beginMutation()

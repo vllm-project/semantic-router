@@ -432,6 +432,9 @@ type BodyWriter interface {
 
 	// AttachResponse updates the response body for an existing record.
 	AttachResponse(ctx context.Context, id string, body string, truncated bool) error
+
+	// AttachPrompt stores the prompt of an existing record that was written without it.
+	AttachPrompt(ctx context.Context, id string, prompt string, truncated bool) error
 }
 
 // OutcomeWriter appends post-route feedback to replay records.

@@ -121,6 +121,7 @@ func (r *OpenAIRouter) startRouterReplay(
 		MaxToolTraceSteps:   policy.MaxToolTraceSteps,
 	})
 	record := buildReplayRoutingRecord(ctx, originalModel, selectedModel, decisionName)
+	prompt := record.Prompt
 	ctx.RouterReplayContentOmitted = !r.personalDataReplayAllowed(ctx)
 	applyReplayPrivacyEvidence(ctx, &record, !ctx.RouterReplayContentOmitted)
 	r.populateReplayIdentity(&record, ctx)
@@ -128,6 +129,9 @@ func (r *OpenAIRouter) startRouterReplay(
 		return
 	}
 	appendPendingTrustedFactsOutcomes(ctx, recorder)
+	if ctx.RouterReplayContentOmitted && prompt != "" {
+		r.attachPromptOnceVerified(ctx, recorder, prompt)
+	}
 }
 
 // populateReplayIdentity records the same explicit identity used by protection,
