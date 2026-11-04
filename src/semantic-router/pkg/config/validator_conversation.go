@@ -1,6 +1,9 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"regexp"
+)
 
 var validConversationFeatureTypes = map[string]bool{
 	"count":  true,
@@ -17,6 +20,7 @@ var validConversationSourceTypes = map[string]bool{
 	"active_tool_loop":     true,
 	"flow_tool_state":      true,
 	"image_content":        true,
+	"last_tool_call":       true,
 }
 
 var validConversationSourceRoles = map[string]bool{
@@ -50,7 +54,10 @@ func ValidateConversationRuleContract(rule ConversationRule) error {
 		return fmt.Errorf("unsupported feature.type %q; valid types: count, exists", rule.Feature.Type)
 	}
 	if !validConversationSourceTypes[rule.Feature.Source.Type] {
-		return fmt.Errorf("unsupported feature.source.type %q; valid types: message, tool_definition, tool_choice_required, tool_choice_none, assistant_tool_call, assistant_tool_cycle, active_tool_loop, flow_tool_state, image_content", rule.Feature.Source.Type)
+		return fmt.Errorf("unsupported feature.source.type %q; valid types: message, tool_definition, tool_choice_required, tool_choice_none, assistant_tool_call, assistant_tool_cycle, active_tool_loop, flow_tool_state, image_content, last_tool_call", rule.Feature.Source.Type)
+	}
+	if err := validateLastToolCallSource(rule.Feature.Source); err != nil {
+		return err
 	}
 	if rule.Feature.Source.Role != "" {
 		if rule.Feature.Source.Type != "message" {
@@ -75,6 +82,30 @@ func validateConversationPredicate(rule ConversationRule) error {
 	}
 	if rule.Feature.Type == "exists" {
 		return fmt.Errorf("feature.type \"exists\" does not accept a predicate")
+	}
+	return nil
+}
+
+func validateLastToolCallSource(source ConversationSource) error {
+	if source.Type != "last_tool_call" {
+		if len(source.Tools) > 0 || len(source.Calls) > 0 || source.Match != "" {
+			return fmt.Errorf("source.tools, source.calls and source.match are only valid when source.type is \"last_tool_call\", got source.type %q", source.Type)
+		}
+		return nil
+	}
+	if len(source.Tools) > 0 && len(source.Calls) > 0 {
+		return fmt.Errorf("source.tools and source.calls cannot both be set; list the names in a calls entry")
+	}
+	if source.Match != "" && source.Match != "match" && source.Match != "no_match" {
+		return fmt.Errorf("unsupported source.match %q; valid values: match, no_match", source.Match)
+	}
+	for i, call := range source.Calls {
+		if call.Argument != "" && call.Pattern == "" {
+			return fmt.Errorf("source.calls[%d].argument needs a pattern", i)
+		}
+		if _, err := regexp.Compile(call.Pattern); err != nil {
+			return fmt.Errorf("source.calls[%d].pattern: %w", i, err)
+		}
 	}
 	return nil
 }
