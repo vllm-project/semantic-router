@@ -1,10 +1,15 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"sort"
+	"io"
+	"math"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,6 +25,12 @@ const (
 	DefaultMilvusCollection       = "router_replay_records"
 	DefaultMilvusConsistencyLevel = "Session"
 	DefaultMilvusShardNum         = 2
+
+	milvusScanBatch = 100
+	// Default Milvus limit on offset+limit for one query.
+	milvusWindowRows = 16384
+	// max_length of the data column.
+	milvusMaxRecordBytes = 65535
 )
 
 // MilvusStore implements Storage using Milvus as the backend.
@@ -30,6 +41,7 @@ type MilvusStore struct {
 	consistencyLevel entity.ConsistencyLevel
 	wrote            atomic.Bool
 	ttl              time.Duration
+	sweep            retentionSweep
 	asyncWrites      bool
 	asyncChan        chan asyncOp
 	done             chan struct{}
@@ -266,13 +278,20 @@ func (m *MilvusStore) Add(ctx context.Context, record Record) (string, error) {
 		record.Timestamp = time.Now().UTC()
 	}
 
-	// Marshal record to JSON
-	data, err := json.Marshal(record)
+	data, err := encodeRecord(&record, milvusMaxRecordBytes)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal record: %w", err)
+		return "", err
 	}
 
-	fn := func() error { return m.insertRecord(ctx, record, data) }
+	fn := func() error {
+		if err := m.insertRecord(ctx, record, data); err != nil {
+			return err
+		}
+		if m.ttl > 0 && m.sweep.due() {
+			m.deleteExpired()
+		}
+		return nil
+	}
 
 	if m.asyncWrites {
 		if err := runAsyncOp(ctx, m.asyncChan, func() error {
@@ -307,7 +326,11 @@ func (m *MilvusStore) Get(ctx context.Context, id string) (Record, bool, error) 
 		return Record{}, false, err
 	}
 	defer release()
-	return m.getRecord(ctx, id)
+	record, found, err := m.getRecord(ctx, id)
+	if !found || isExpired(record, m.ttl) {
+		return Record{}, false, err
+	}
+	return record, true, nil
 }
 
 func (m *MilvusStore) getRecord(ctx context.Context, id string) (Record, bool, error) {
@@ -359,53 +382,252 @@ func (m *MilvusStore) List(ctx context.Context) ([]Record, error) {
 }
 
 func (m *MilvusStore) listRecords(ctx context.Context) ([]Record, error) {
-	// If async writes enabled, wait for all pending writes to complete
-	if m.asyncWrites {
-		if err := runAsyncOp(ctx, m.asyncChan, func() error { return nil }); err != nil {
-			return nil, err
+	if err := m.waitForWrites(ctx); err != nil {
+		return nil, err
+	}
+	return listAll(m.scan(ctx))
+}
+
+func (m *MilvusStore) QueryPage(ctx context.Context, filters QueryFilters, limit, offset int, details bool) (RecordPage, error) {
+	release, err := m.lifecycle.beginMutation()
+	if err != nil {
+		return RecordPage{}, err
+	}
+	defer release()
+	if err := m.waitForWrites(ctx); err != nil {
+		return RecordPage{}, err
+	}
+	count := func() (int, error) {
+		return m.count(ctx, m.liveExpr(""))
+	}
+	return collectPage(filters, limit, offset, count, m.scan(ctx))
+}
+
+func (m *MilvusStore) ScanMetadata(ctx context.Context, visit func(Record) error) error {
+	release, err := m.lifecycle.beginMutation()
+	if err != nil {
+		return err
+	}
+	defer release()
+	if err := m.waitForWrites(ctx); err != nil {
+		return err
+	}
+	return scanAll(m.scan(ctx), visit)
+}
+
+func (m *MilvusStore) waitForWrites(ctx context.Context) error {
+	if !m.asyncWrites {
+		return nil
+	}
+	return runAsyncOp(ctx, m.asyncChan, func() error { return nil })
+}
+
+type milvusRow struct {
+	id        string
+	timestamp int64
+}
+
+// Milvus queries cannot sort, so scan walks timestamp ranges newest first,
+// reading IDs before bodies. The timestamp column holds whole seconds, so each
+// second is ordered by its full timestamps in visitBucket.
+func (m *MilvusStore) scan(ctx context.Context) recordScan {
+	return func(from int, visit func(Record) bool) error {
+		floor := int64(math.MinInt64)
+		if m.ttl > 0 {
+			floor = retentionCutoff(m.ttl).Unix()
+		}
+		// Leave room for writers whose clocks run a little ahead.
+		top := time.Now().Unix() + 60
+		hi, width := int64(math.MaxInt64), int64(60)
+		for {
+			lo := max(min(hi, top)-width, floor)
+			rows, err := m.queryRows(ctx, lo, hi)
+			if err != nil {
+				return err
+			}
+			if len(rows) >= milvusWindowRows {
+				if min(hi, top)-lo > 1 {
+					width = (min(hi, top) - lo) / 2
+					continue
+				}
+				// One second fills the window, so page through it instead.
+				if rows, err = m.iterateRows(ctx, lo, hi); err != nil {
+					return err
+				}
+			}
+			var more bool
+			from, more, err = m.visitSeconds(ctx, rows, from, visit)
+			if err != nil || !more {
+				return err
+			}
+			if lo <= floor {
+				return nil
+			}
+			older, err := m.count(ctx, m.liveExpr(fmt.Sprintf("timestamp < %d", lo)))
+			if err != nil || older == 0 {
+				return err
+			}
+			hi = lo
+			if len(rows) < milvusWindowRows/4 && width < 1<<40 {
+				width *= 2
+			}
 		}
 	}
+}
 
-	// Query all records with a high limit (empty expression requires limit in Milvus)
-	result, err := m.client.Query(
-		ctx,
-		m.collectionName,
-		nil,
-		"",
-		[]string{"id", "timestamp", "data"},
-		client.WithLimit(10000),
-		client.WithSearchQueryConsistencyLevel(m.readLevel()),
-	)
+// visitSeconds visits rows from position from, one whole second at a time, and
+// returns what is left of from.
+func (m *MilvusStore) visitSeconds(ctx context.Context, rows []milvusRow, from int, visit func(Record) bool) (int, bool, error) {
+	slices.SortFunc(rows, func(a, b milvusRow) int { return cmp.Compare(b.timestamp, a.timestamp) })
+	for start := 0; start < len(rows); {
+		end := start + 1
+		for end < len(rows) && rows[end].timestamp == rows[start].timestamp {
+			end++
+		}
+		second := rows[start:end]
+		start = end
+		if from >= len(second) {
+			from -= len(second)
+			continue
+		}
+		ids := make([]string, len(second))
+		for i, row := range second {
+			ids[i] = row.id
+		}
+		more, err := visitBucket(ids, from, milvusScanBatch, func(ids []string) ([]Record, error) {
+			return m.fetch(ctx, ids)
+		}, visit)
+		if err != nil || !more {
+			return 0, false, err
+		}
+		from = 0
+	}
+	return from, true, nil
+}
+
+func rangeExpr(lo, hi int64) string {
+	expr := fmt.Sprintf("timestamp >= %d", lo)
+	if hi != math.MaxInt64 {
+		expr += fmt.Sprintf(" && timestamp < %d", hi)
+	}
+	return expr
+}
+
+func (m *MilvusStore) queryRows(ctx context.Context, lo, hi int64) ([]milvusRow, error) {
+	result, err := m.client.Query(ctx, m.collectionName, nil, rangeExpr(lo, hi), []string{"id", "timestamp"},
+		client.WithLimit(milvusWindowRows), client.WithSearchQueryConsistencyLevel(m.readLevel()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query records: %w", err)
 	}
+	return milvusRows(result)
+}
 
-	if result.Len() == 0 {
-		return []Record{}, nil
+// iterateRows reads every row in [lo, hi) with a query iterator, which pages
+// past the window that a single query is limited to.
+func (m *MilvusStore) iterateRows(ctx context.Context, lo, hi int64) ([]milvusRow, error) {
+	itr, err := m.client.QueryIterator(ctx, client.NewQueryIteratorOption(m.collectionName).
+		WithExpr(rangeExpr(lo, hi)).WithOutputFields("id", "timestamp").WithBatchSize(milvusWindowRows))
+	if err != nil {
+		return nil, fmt.Errorf("failed to query records: %w", err)
 	}
-
-	// Get data column
-	dataColumn := result.GetColumn("data")
-	dataVarChar, ok := dataColumn.(*entity.ColumnVarChar)
-	if !ok {
-		return nil, fmt.Errorf("unexpected column type for data")
-	}
-
-	// Parse all records
-	records := make([]Record, 0, len(dataVarChar.Data()))
-	for _, data := range dataVarChar.Data() {
-		var record Record
-		if err := json.Unmarshal([]byte(data), &record); err != nil {
-			continue // Skip malformed records
+	var rows []milvusRow
+	for {
+		result, err := itr.Next(ctx)
+		if errors.Is(err, io.EOF) {
+			return rows, nil
 		}
-		records = append(records, record)
+		if err != nil {
+			return nil, fmt.Errorf("failed to query records: %w", err)
+		}
+		batch, err := milvusRows(result)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, batch...)
 	}
+}
 
-	sort.Slice(records, func(i, j int) bool {
-		return records[i].Timestamp.After(records[j].Timestamp)
-	})
+func milvusRows(result client.ResultSet) ([]milvusRow, error) {
+	ids, okIDs := result.GetColumn("id").(*entity.ColumnVarChar)
+	timestamps, okTimestamps := result.GetColumn("timestamp").(*entity.ColumnInt64)
+	if result.Len() == 0 {
+		return nil, nil
+	}
+	if !okIDs || !okTimestamps {
+		return nil, fmt.Errorf("unexpected column types for id and timestamp")
+	}
+	rows := make([]milvusRow, len(ids.Data()))
+	for i, id := range ids.Data() {
+		rows[i] = milvusRow{id: id, timestamp: timestamps.Data()[i]}
+	}
+	return rows, nil
+}
 
+func (m *MilvusStore) fetch(ctx context.Context, ids []string) ([]Record, error) {
+	quoted := make([]string, len(ids))
+	for i, id := range ids {
+		quoted[i] = fmt.Sprintf("'%s'", id)
+	}
+	expr := fmt.Sprintf("id in [%s]", strings.Join(quoted, ","))
+	result, err := m.client.Query(ctx, m.collectionName, nil, expr, []string{"id", "data"},
+		client.WithSearchQueryConsistencyLevel(m.readLevel()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to query records: %w", err)
+	}
+	var records []Record
+	if data, ok := result.GetColumn("data").(*entity.ColumnVarChar); ok {
+		for _, raw := range data.Data() {
+			var record Record
+			if json.Unmarshal([]byte(raw), &record) == nil {
+				records = append(records, record)
+			}
+		}
+	}
 	return records, nil
+}
+
+func (m *MilvusStore) count(ctx context.Context, expr string) (int, error) {
+	result, err := m.client.Query(ctx, m.collectionName, nil, expr, []string{"count(*)"},
+		client.WithSearchQueryConsistencyLevel(m.readLevel()))
+	if err != nil {
+		return 0, fmt.Errorf("failed to count records: %w", err)
+	}
+	column := result.GetColumn("count(*)")
+	if column == nil {
+		return 0, nil
+	}
+	counts, ok := column.(*entity.ColumnInt64)
+	if !ok || len(counts.Data()) == 0 {
+		return 0, fmt.Errorf("unexpected count result")
+	}
+	return int(counts.Data()[0]), nil
+}
+
+func (m *MilvusStore) liveExpr(expr string) string {
+	if m.ttl <= 0 {
+		return expr
+	}
+	live := fmt.Sprintf("timestamp >= %d", retentionCutoff(m.ttl).Unix())
+	if expr == "" {
+		return live
+	}
+	return expr + " && " + live
+}
+
+func (m *MilvusStore) deleteExpired() {
+	go func() {
+		release, err := m.lifecycle.beginMutation()
+		if err != nil {
+			return
+		}
+		defer release()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		expr := fmt.Sprintf("timestamp < %d", retentionCutoff(m.ttl).Unix())
+		if err := m.client.Delete(ctx, m.collectionName, "", expr); err != nil {
+			logging.Warnf("router replay: failed to delete expired Milvus records: %v", err)
+		}
+	}()
 }
 
 // UpdateStatus updates the response status and flags for a record.
@@ -528,9 +750,9 @@ func (m *MilvusStore) updateRecordIf(ctx context.Context, id string, mutate func
 }
 
 func (m *MilvusStore) replaceRecord(ctx context.Context, record Record) error {
-	data, err := json.Marshal(record)
+	data, err := encodeRecord(&record, milvusMaxRecordBytes)
 	if err != nil {
-		return fmt.Errorf("failed to marshal record: %w", err)
+		return err
 	}
 	idColumn := entity.NewColumnVarChar("id", []string{record.ID})
 	timestampColumn := entity.NewColumnInt64("timestamp", []int64{record.Timestamp.Unix()})

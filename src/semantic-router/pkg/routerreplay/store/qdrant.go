@@ -4,23 +4,27 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/qdrant/go-client/qdrant"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 const (
 	DefaultQdrantCollection = "router_replay_records"
 	defaultQdrantPort       = 6334
+
+	qdrantScanBatch = 100
 )
 
 type QdrantStore struct {
 	client         *qdrant.Client
 	collectionName string
 	ttl            time.Duration
+	sweep          retentionSweep
 	asyncWrites    bool
 	asyncChan      chan asyncOp
 	done           chan struct{}
@@ -100,13 +104,22 @@ func (q *QdrantStore) ensureCollection(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to check collection existence: %w", err)
 	}
-	if exists {
-		return nil
+	if !exists {
+		if createErr := q.client.CreateCollection(ctx, &qdrant.CreateCollection{
+			CollectionName: q.collectionName,
+			VectorsConfig:  qdrant.NewVectorsConfigMap(map[string]*qdrant.VectorParams{}),
+		}); createErr != nil {
+			return createErr
+		}
 	}
-	return q.client.CreateCollection(ctx, &qdrant.CreateCollection{
+	// Ordered scrolls need a payload index on timestamp.
+	_, err = q.client.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
 		CollectionName: q.collectionName,
-		VectorsConfig:  qdrant.NewVectorsConfigMap(map[string]*qdrant.VectorParams{}),
+		FieldName:      "timestamp",
+		FieldType:      qdrant.FieldType_FieldTypeInteger.Enum(),
+		Wait:           qdrant.PtrOf(true),
 	})
+	return err
 }
 
 func (q *QdrantStore) asyncWriter() {
@@ -144,7 +157,15 @@ func (q *QdrantStore) Add(ctx context.Context, record Record) (string, error) {
 		record.Timestamp = time.Now().UTC()
 	}
 
-	fn := func() error { return q.upsert(ctx, record) }
+	fn := func() error {
+		if err := q.upsert(ctx, record); err != nil {
+			return err
+		}
+		if q.ttl > 0 && q.sweep.due() {
+			q.deleteExpired()
+		}
+		return nil
+	}
 
 	if q.asyncWrites {
 		if err := runAsyncOp(ctx, q.asyncChan, fn); err != nil {
@@ -165,7 +186,11 @@ func (q *QdrantStore) Get(ctx context.Context, id string) (Record, bool, error) 
 		return Record{}, false, err
 	}
 	defer release()
-	return q.getRecord(ctx, id)
+	record, found, err := q.getRecord(ctx, id)
+	if !found || isExpired(record, q.ttl) {
+		return Record{}, false, err
+	}
+	return record, true, nil
 }
 
 func (q *QdrantStore) getRecord(ctx context.Context, id string) (Record, bool, error) {
@@ -199,42 +224,158 @@ func (q *QdrantStore) List(ctx context.Context) ([]Record, error) {
 }
 
 func (q *QdrantStore) listRecords(ctx context.Context) ([]Record, error) {
-	if q.asyncWrites {
-		if err := runAsyncOp(ctx, q.asyncChan, func() error { return nil }); err != nil {
-			return nil, err
+	if err := q.waitForWrites(ctx); err != nil {
+		return nil, err
+	}
+	return listAll(q.scan(ctx))
+}
+
+func (q *QdrantStore) QueryPage(ctx context.Context, filters QueryFilters, limit, offset int, details bool) (RecordPage, error) {
+	release, err := q.lifecycle.beginMutation()
+	if err != nil {
+		return RecordPage{}, err
+	}
+	defer release()
+	if err := q.waitForWrites(ctx); err != nil {
+		return RecordPage{}, err
+	}
+	count := func() (int, error) {
+		n, err := q.client.Count(ctx, &qdrant.CountPoints{
+			CollectionName: q.collectionName,
+			Filter:         q.liveFilter(),
+			Exact:          qdrant.PtrOf(true),
+		})
+		return int(n), err //nolint:gosec // a collection cannot hold more points than int counts
+	}
+	return collectPage(filters, limit, offset, count, q.scan(ctx))
+}
+
+func (q *QdrantStore) ScanMetadata(ctx context.Context, visit func(Record) error) error {
+	release, err := q.lifecycle.beginMutation()
+	if err != nil {
+		return err
+	}
+	defer release()
+	if err := q.waitForWrites(ctx); err != nil {
+		return err
+	}
+	return scanAll(q.scan(ctx), visit)
+}
+
+func (q *QdrantStore) waitForWrites(ctx context.Context) error {
+	if !q.asyncWrites {
+		return nil
+	}
+	return runAsyncOp(ctx, q.asyncChan, func() error { return nil })
+}
+
+// The timestamp payload holds whole seconds, so each second is ordered by its
+// full timestamps in visitBucket.
+func (q *QdrantStore) scan(ctx context.Context) recordScan {
+	return func(from int, visit func(Record) bool) error {
+		var group []string
+		var seen []*qdrant.PointId
+		var second *int64
+		emit := func() (bool, error) {
+			if from >= len(group) {
+				from -= len(group)
+				group = group[:0]
+				return true, nil
+			}
+			more, err := visitBucket(group, from, qdrantScanBatch, func(ids []string) ([]Record, error) {
+				return q.fetch(ctx, ids)
+			}, visit)
+			from = 0
+			group = group[:0]
+			return more, err
+		}
+		for {
+			filter := q.liveFilter()
+			orderBy := &qdrant.OrderBy{Key: "timestamp", Direction: qdrant.Direction_Desc.Enum()}
+			if second != nil {
+				orderBy.StartFrom = qdrant.NewStartFromInt(*second)
+				filter.MustNot = []*qdrant.Condition{qdrant.NewHasID(seen...)}
+			}
+			points, err := q.client.Scroll(ctx, &qdrant.ScrollPoints{
+				CollectionName: q.collectionName,
+				Filter:         filter,
+				Limit:          qdrant.PtrOf(uint32(qdrantScanBatch)),
+				WithPayload:    qdrant.NewWithPayloadInclude("id", "timestamp"),
+				OrderBy:        orderBy,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to scroll records: %w", err)
+			}
+			for _, point := range points {
+				ts := point.Payload["timestamp"].GetIntegerValue()
+				if second == nil || ts != *second {
+					if more, err := emit(); err != nil || !more {
+						return err
+					}
+					second, seen = &ts, nil
+				}
+				seen = append(seen, point.Id)
+				group = append(group, point.Payload["id"].GetStringValue())
+			}
+			if len(points) < qdrantScanBatch {
+				_, err := emit()
+				return err
+			}
 		}
 	}
+}
 
-	var records []Record
-	var offset *qdrant.PointId
+func (q *QdrantStore) fetch(ctx context.Context, ids []string) ([]Record, error) {
+	pointIDs := make([]*qdrant.PointId, len(ids))
+	for i, id := range ids {
+		pointIDs[i] = arbitraryIDToUUID(id)
+	}
+	points, err := q.client.Get(ctx, &qdrant.GetPoints{
+		CollectionName: q.collectionName,
+		Ids:            pointIDs,
+		WithPayload:    qdrant.NewWithPayloadInclude("data"),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get records: %w", err)
+	}
+	records := make([]Record, 0, len(points))
+	for _, point := range points {
+		if record, ok, err := q.decodePoint(point); err == nil && ok {
+			records = append(records, record)
+		}
+	}
+	return records, nil
+}
 
-	for {
-		result, nextOffset, err := q.client.ScrollAndOffset(ctx, &qdrant.ScrollPoints{
+func (q *QdrantStore) liveFilter() *qdrant.Filter {
+	if q.ttl <= 0 {
+		return &qdrant.Filter{}
+	}
+	return &qdrant.Filter{Must: []*qdrant.Condition{
+		qdrant.NewRange("timestamp", &qdrant.Range{Gte: qdrant.PtrOf(float64(retentionCutoff(q.ttl).Unix()))}),
+	}}
+}
+
+func (q *QdrantStore) deleteExpired() {
+	go func() {
+		release, err := q.lifecycle.beginMutation()
+		if err != nil {
+			return
+		}
+		defer release()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		cutoff := float64(retentionCutoff(q.ttl).Unix())
+		_, err = q.client.Delete(ctx, &qdrant.DeletePoints{
 			CollectionName: q.collectionName,
-			Limit:          qdrant.PtrOf(uint32(100)),
-			WithPayload:    qdrant.NewWithPayload(true),
-			Offset:         offset,
+			Points: qdrant.NewPointsSelectorFilter(&qdrant.Filter{Must: []*qdrant.Condition{
+				qdrant.NewRange("timestamp", &qdrant.Range{Lt: &cutoff}),
+			}}),
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to scroll records: %w", err)
+			logging.Warnf("router replay: failed to delete expired Qdrant records: %v", err)
 		}
-		for _, pt := range result {
-			r, ok, err := q.decodePoint(pt)
-			if err != nil || !ok {
-				continue
-			}
-			records = append(records, r)
-		}
-		if nextOffset == nil {
-			break
-		}
-		offset = nextOffset
-	}
-
-	sort.Slice(records, func(i, j int) bool {
-		return records[i].Timestamp.After(records[j].Timestamp)
-	})
-	return records, nil
+	}()
 }
 
 func (q *QdrantStore) UpdateStatus(ctx context.Context, id string, status int, fromCache bool, streaming bool) error {
@@ -359,9 +500,9 @@ func (q *QdrantStore) updateRecordIf(ctx context.Context, id string, mutate func
 }
 
 func (q *QdrantStore) upsert(ctx context.Context, record Record) error {
-	data, err := json.Marshal(record)
+	data, err := encodeRecord(&record, MaxRecordBytes)
 	if err != nil {
-		return fmt.Errorf("failed to marshal record: %w", err)
+		return err
 	}
 	wait := true
 	_, err = q.client.Upsert(ctx, &qdrant.UpsertPoints{
