@@ -1,4 +1,5 @@
 {
   "anthropic_stream": "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"type\":\"thinking_delta\",\"estimated_tokens\":8},\"usage\":{\"iterations\":[{\"type\":\"message\",\"input_tokens\":2}],\"cache_creation\":{\"ephemeral_5m_input_tokens\":1}},\"context_management\":{\"applied_edits\":[]}}\n\n",
-  "chat_stream": "data: {\"id\":\"chatcmpl-real\",\"agent\":{\"pool\":\"a\"},\"choices\":[]}\n\n"
+  "chat_stream": "data: {\"id\":\"chatcmpl-real\",\"agent\":{\"pool\":\"a\"},\"choices\":[]}\n\n",
+  "chat_stream_cerebras": "data: {\"id\":\"chatcmpl-cerebras\",\"object\":\"chat.completion.chunk\",\"created\":100,\"model\":\"provider-model\",\"time_info\":{\"queue_time\":0.254,\"prompt_time\":0.05,\"completion_time\":0.6,\"total_time\":0.907,\"created\":1234567890},\"choices\":[{\"index\":0,\"finish_reason\":null,\"delta\":{\"role\":\"assistant\",\"content\":\"done\"}}]}\n\n"
 }

@@ -40,6 +40,7 @@ func TestDashboardContainerUsesOneCatalogCapableRuntime(t *testing.T) {
 		"find /app/cli -type d -exec chmod 0555 {} +",
 		"find /app/cli -type f -exec chmod 0444 {} +",
 		"RUN cd /tmp && gosu nonroot python3 -m cli.model_catalog_export >/dev/null",
+		"RUN cd /tmp && gosu nonroot python3 -m cli.builtin_recipes_json list >/dev/null",
 	} {
 		if !strings.Contains(canonicalDockerfile, required) {
 			t.Fatalf("canonical Dashboard Dockerfile omitted runtime contract %q", required)
