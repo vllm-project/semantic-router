@@ -116,6 +116,7 @@ func captureRequestHeaders(
 	skipProcessingGateEnabled bool,
 ) (string, string) {
 	requestHeaders := v.RequestHeaders.Headers
+	var acceptEncoding []string
 	for _, header := range requestHeaders.Headers {
 		headerValue := extractHeaderValue(header)
 		ctx.Headers[header.Key] = headerValue
@@ -125,6 +126,13 @@ func captureRequestHeaders(
 		// worry about casing. Internal request authentication runs after all
 		// headers have been captured so header order cannot affect validation.
 		lowerKey := strings.ToLower(header.Key)
+		// Accept-Encoding is a list, so its field lines form one value (RFC 9110
+		// section 5.3) that upstream encoding negotiation judges as a whole.
+		// Other repeated headers keep the last line, as before.
+		if lowerKey == "accept-encoding" {
+			acceptEncoding = append(acceptEncoding, headerValue)
+			ctx.Headers[header.Key] = strings.Join(acceptEncoding, ", ")
+		}
 		if lowerKey == headers.RequestID {
 			ctx.RequestID = headerValue
 		}
