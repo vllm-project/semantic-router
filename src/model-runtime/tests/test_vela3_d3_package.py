@@ -12,7 +12,7 @@ from vllm_srun.errors import PackageError
 from vllm_srun.families.decision3.family import Decision3Family
 from vllm_srun.families.vela3.family import Vela3Family
 from vllm_srun.families.vela3_d3.family import Vela3D3Family
-from vllm_srun.plugins.base import PackageRef, RegistryOptions
+from vllm_srun.plugins.base import DeviceInfo, PackageRef, RegistryOptions
 from vllm_srun.registry import builtin
 from vllm_srun.testing import vela3_d3 as fixture
 from vllm_srun.testing.fixtures import FAKE_BASE_REVISION
@@ -68,6 +68,25 @@ def test_verifies_the_package_its_adapters_and_its_base(written) -> None:
     assert (decision.rank, decision.alpha) == (4, 8)
     assert set(details.heads) == {"span", "ner", "relation"}
     assert verified.max_input_tokens == base.max_input_tokens
+
+
+def test_the_package_runs_its_base_kernel_choices(written) -> None:
+    verified = family(written).verify(PackageRef(written))
+    gfx942 = DeviceInfo(accelerator="rocm", index=0, name="MI325X", arch="gfx942")
+    assert family(written).kernel_choices(verified, gfx942) == {}
+    turbo = builtin.lookup("vllm-sr/d3-turbo")
+    base = replace(verified.details["base"], model_sha256=turbo.model_sha256)
+    on_turbo = replace(verified, details={**verified.details, "base": base})
+    recorded = family(written).kernel_choices(on_turbo, gfx942)
+    assert recorded == turbo.kernel_choices["rocm:gfx942"]
+    assert family(written).kernel_choices(on_turbo, replace(gfx942, arch="gfx90a")) == {}
+    # A base pinned at another revision of a built-in model runs that model's choices.
+    other = replace(
+        verified.details["base"],
+        ref=PackageRef(base_of(written), "vllm-sr/d3-turbo", "d" * 40),
+    )
+    on_other = replace(verified, details={**verified.details, "base": other})
+    assert family(written).kernel_choices(on_other, gfx942) == recorded
 
 
 def test_identity_covers_the_base(written, tmp_path) -> None:
