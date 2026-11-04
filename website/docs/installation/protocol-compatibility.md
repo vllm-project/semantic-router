@@ -33,7 +33,9 @@ start with [Connect an agent harness](agent-harness).
 | OpenAI Responses | `POST /v1/responses` | Supported | Supported | Requires `global.services.response_api` and its store to be available. Router-owned object operations are not forwarded to a model backend. |
 | Anthropic Messages | `POST /v1/messages` | Supported | Supported | Send the Anthropic request shape and an appropriate `anthropic-version` header. Client authentication remains deployment-specific. |
 
-The public listener also serves `GET /v1/models`. See the
+The public listener also serves `GET /v1/models` and Anthropic's
+`POST /v1/messages/count_tokens`, which coding agents use to size a file before
+reading it. See the
 [Router API](../api/router) for the complete method and path inventory,
 Responses object operations, and request examples.
 
