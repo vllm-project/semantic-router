@@ -268,6 +268,7 @@ type RouterOptions struct {
 	SkipProcessing         SkipProcessingConfig `yaml:"skip_processing,omitempty"`
 	AllowLossyTranslation  []string             `yaml:"allow_lossy_translation,omitempty"`
 	ProtocolLimits         ProtocolLimitsConfig `yaml:"protocol_limits,omitempty"`
+	RoutingInput           RoutingInputConfig   `yaml:"routing_input,omitempty"`
 }
 
 // RoutingEnabled controls the recipe pipeline independently of the frontend

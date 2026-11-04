@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -66,9 +67,10 @@ func TestResolveResponseVendorSnowflake(t *testing.T) {
 	}
 }
 
-// The gateway allowance is opt-in per profile: a vLLM-type profile earns it
-// only by declaring the relay, and a plain vLLM keeps the strict contract.
-func TestResolveResponseVendorOpenAICompatGateway(t *testing.T) {
+// The gateway allowance is opt-in per profile: a backend earns it only by
+// declaring the relay, and its wire format selects which relay contract
+// applies. A plain backend keeps the strict contract.
+func TestResolveResponseVendorCompatGateway(t *testing.T) {
 	tests := []struct {
 		name    string
 		profile *config.ProviderProfile
@@ -76,18 +78,72 @@ func TestResolveResponseVendorOpenAICompatGateway(t *testing.T) {
 	}{
 		{
 			name:    "vllm profile with the gateway opt-in",
-			profile: &config.ProviderProfile{Type: "vllm", BaseURL: "https://relay.example.com/v1", OpenAICompatGateway: true},
+			profile: &config.ProviderProfile{Type: "vllm", BaseURL: "https://relay.example.com/v1", CompatGateway: true},
 			vendor:  llmprotocol.ResponseVendorOpenAICompatGateway,
+		},
+		{
+			name: "openai-compatible Responses relay",
+			profile: &config.ProviderProfile{
+				Type: "openai-compatible", Protocol: "openai/responses@1", BaseURL: "https://relay.example.com/v1", CompatGateway: true,
+			},
+			vendor: llmprotocol.ResponseVendorOpenAICompatGateway,
+		},
+		{
+			name: "anthropic profile pointed at a Messages gateway",
+			profile: &config.ProviderProfile{
+				Type: "anthropic", Protocol: "anthropic/messages@1", BaseURL: "https://gateway.example.com/anthropic", CompatGateway: true,
+			},
+			vendor: llmprotocol.ResponseVendorAnthropicCompatGateway,
+		},
+		{
+			name: "anthropic-compatible gateway",
+			profile: &config.ProviderProfile{
+				Type: "anthropic-compatible", Protocol: "anthropic/messages@1", BaseURL: "https://gateway.example.com/anthropic", CompatGateway: true,
+			},
+			vendor: llmprotocol.ResponseVendorAnthropicCompatGateway,
+		},
+		{
+			name: "vllm serving Messages through a gateway",
+			profile: &config.ProviderProfile{
+				Type: "vllm", Protocol: "anthropic/messages@1", BaseURL: "https://relay.example.com", CompatGateway: true,
+			},
+			vendor: llmprotocol.ResponseVendorAnthropicCompatGateway,
 		},
 		{
 			name:    "plain vllm profile without the opt-in",
 			profile: &config.ProviderProfile{Type: "vllm", BaseURL: "https://vllm.example.com/v1"},
+		},
+		{
+			name:    "plain anthropic profile without the opt-in",
+			profile: &config.ProviderProfile{Type: "anthropic", Protocol: "anthropic/messages@1", BaseURL: "https://api.anthropic.com"},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.vendor, resolveResponseVendor(tt.profile))
 		})
+	}
+}
+
+// Config load rejects compat_gateway exactly where it would have no effect, so
+// every provider type and protocol it accepts must reach a relay contract, and
+// every one it rejects must keep its own.
+func TestCompatGatewayValidationMatchesVendorResolution(t *testing.T) {
+	registry, err := modelcatalog.BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, provider := range registry.Providers() {
+		for _, protocol := range provider.Protocols {
+			profile := &config.ProviderProfile{Type: provider.ID, Protocol: protocol, CompatGateway: true}
+			vendor := resolveResponseVendor(profile)
+			relay := vendor == llmprotocol.ResponseVendorOpenAICompatGateway ||
+				vendor == llmprotocol.ResponseVendorAnthropicCompatGateway
+			accepted := config.ValidateCompatGateway(provider.ID, protocol) == nil
+			if accepted != relay {
+				t.Fatalf("%s %s: config accepts compat_gateway=%v but the response vendor is %q", provider.ID, protocol, accepted, vendor)
+			}
+		}
 	}
 }
 

@@ -90,7 +90,7 @@ func validateExactJSONObject(body []byte, targetType reflect.Type) error {
 		if !found {
 			return fmt.Errorf("unknown field %q", name)
 		}
-		if err := validateExactJSONValue(value, dereferenceJSONType(fieldType)); err != nil {
+		if err := validateExactJSONValue(value, dereferenceJSONType(fieldType.typeOf)); err != nil {
 			return fmt.Errorf("field %q: %w", name, err)
 		}
 	}
@@ -471,6 +471,7 @@ func differentialProviderPolicies() []llmprotocol.Policy {
 		llmprotocol.ResponseVendorAzure,
 		llmprotocol.ResponseVendorCloudflare,
 		llmprotocol.ResponseVendorOpenAICompatGateway,
+		llmprotocol.ResponseVendorAnthropicCompatGateway,
 		llmprotocol.ResponseVendorSnowflake,
 	} {
 		policy := llmprotocol.DefaultPolicy()

@@ -41,6 +41,7 @@ describe('router defaults structured schemas', () => {
       capture_request_body: false,
       capture_response_body: true,
       capture_personal_data: false,
+      capture_tool_results: false,
       max_body_bytes: 0,
       max_tool_trace_steps: 0,
     }
@@ -58,6 +59,7 @@ describe('router defaults structured schemas', () => {
         'capture_request_body',
         'capture_response_body',
         'capture_personal_data',
+        'capture_tool_results',
       ]),
     )
     expect(card.save(card.editData)).toMatchObject({

@@ -36,6 +36,8 @@ type CanonicalRouterGlobal struct {
 	// instead of rejected. Every other loss keeps failing closed.
 	AllowLossyTranslation []string             `yaml:"allow_lossy_translation,omitempty"`
 	ProtocolLimits        ProtocolLimitsConfig `yaml:"protocol_limits,omitempty"`
+	// RoutingInput chooses the user text that routing reads.
+	RoutingInput RoutingInputConfig `yaml:"routing_input,omitempty"`
 }
 
 // CanonicalStreamedBody groups streaming request body controls.
@@ -295,6 +297,7 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 	cfg.Fallback = router.Fallback.Clone()
 	cfg.AllowLossyTranslation = router.AllowLossyTranslation
 	cfg.ProtocolLimits = router.ProtocolLimits
+	cfg.RoutingInput = router.RoutingInput
 }
 
 func applyCanonicalServiceGlobal(cfg *RouterConfig, services CanonicalServiceGlobal) {
