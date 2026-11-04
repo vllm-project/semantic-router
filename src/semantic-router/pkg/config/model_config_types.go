@@ -361,6 +361,9 @@ type VLLMEndpoint struct {
 	ProviderProfileName string `yaml:"provider_profile,omitempty"`
 	Model               string `yaml:"model,omitempty"`
 	Protocol            string `yaml:"protocol,omitempty"`
+	// Telemetry says where the backend's serving engine exposes load metrics;
+	// the zero value means the backend has none.
+	Telemetry EndpointTelemetry `yaml:"telemetry,omitempty"`
 }
 
 type ProviderProfile struct {

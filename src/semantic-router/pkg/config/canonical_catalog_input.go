@@ -132,6 +132,7 @@ func catalogProviderBinding(
 		Headers:     copyStringMap(backend.ExtraHeaders), APIVersion: backend.APIVersion,
 		AuthHeader: backend.AuthHeader, ChatPath: backend.ChatPath,
 		OpenAICompatGateway: backend.OpenAICompatGateway,
+		Telemetry:           instanceTelemetryFromBackendRef(backend),
 	}
 	if backend.AuthPrefix != nil {
 		instance.AuthPrefix = *backend.AuthPrefix

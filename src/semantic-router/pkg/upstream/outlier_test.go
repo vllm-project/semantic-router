@@ -15,7 +15,7 @@ import (
 // detachedCluster builds a cluster on a manual clock without any network.
 func detachedCluster(t *testing.T, spec ClusterSpec, clock Clock) *cluster {
 	t.Helper()
-	c := newCluster(spec, newShared(newPoolRegistry(nil, nil)), globalRand{}, clock)
+	c := newCluster(spec, newShared(newPoolRegistry(nil, nil)), globalRand{}, clock, nil)
 	c.retain()
 	c.start()
 	t.Cleanup(c.release)

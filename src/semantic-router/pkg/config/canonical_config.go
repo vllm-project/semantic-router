@@ -378,6 +378,9 @@ func validateCanonicalProviderModel(
 	if err := validateCanonicalProviderModelMetadata(model); err != nil {
 		return "", err
 	}
+	if err := validateCanonicalBackendTelemetry(model.Name, canonicalBackendRefs(model)); err != nil {
+		return "", err
+	}
 	if len(canonicalBackendRefs(model)) == 0 && !canonicalProviderModelHasMetadata(model) {
 		return "", fmt.Errorf("providers.models[%s] must define backend_refs or model metadata", model.Name)
 	}

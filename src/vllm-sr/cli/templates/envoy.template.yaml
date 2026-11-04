@@ -266,7 +266,8 @@ static_resources:
     {% if model.cluster_type == 'LOGICAL_DNS' %}
     dns_lookup_family: V4_ONLY
     {% endif %}
-    {% if model.reliability.lb_policy | default('round_robin') == 'least_request' %}
+    {# Envoy has no engine telemetry, so load_aware balances as least_request. #}
+    {% if model.reliability.lb_policy | default('round_robin') in ['least_request', 'load_aware'] %}
     lb_policy: LEAST_REQUEST
     least_request_lb_config:
       choice_count: 2

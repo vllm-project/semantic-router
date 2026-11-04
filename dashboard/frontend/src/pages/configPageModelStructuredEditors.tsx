@@ -9,6 +9,7 @@ import type {
   ModelPricing,
   ProviderReliability,
 } from './configPageSupport'
+import { BACKEND_ENGINES, PROVIDER_LB_POLICIES } from './configPageSupport'
 import { normalizeModelBackendRefs, normalizeModelReliability } from './configPageModelFormSupport'
 
 interface StructuredModelFieldProps {
@@ -31,6 +32,14 @@ const backendRefFields: ObjectEditorField<BackendRefEntry>[] = [
   { key: 'protocol', label: 'Protocol', type: 'select', options: ['http', 'https'] },
   { key: 'weight', label: 'Traffic weight', type: 'number', min: 0, step: 1, placeholder: '1' },
   { key: 'provider', label: 'Provider', placeholder: 'openai' },
+  {
+    key: 'engine',
+    label: 'Serving engine',
+    type: 'select',
+    options: BACKEND_ENGINES,
+    emptyValueLabel: 'None',
+    helpText: 'Lets backend telemetry read the load metrics of this backend.',
+  },
   { key: 'api_version', label: 'API version', placeholder: '2025-03-01' },
   { key: 'chat_path', label: 'Chat path', placeholder: '/chat/completions', fullWidth: true },
   {
@@ -185,7 +194,9 @@ const reliabilityFields: ObjectEditorField<ProviderReliability>[] = [
     key: 'lb_policy',
     label: 'Load balancing',
     type: 'select',
-    options: ['ROUND_ROBIN', 'LEAST_REQUEST', 'RING_HASH', 'MAGLEV'],
+    options: PROVIDER_LB_POLICIES,
+    helpText:
+      'load_aware prefers the replica whose serving engine reports the least load and needs backend telemetry.',
   },
   {
     key: 'retry_count',
