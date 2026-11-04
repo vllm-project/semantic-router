@@ -3,7 +3,8 @@
 Each package runs a pinned Decision 3.0 package unchanged and adds gated LoRA
 adapters over its text model and span heads over its final-norm states. The
 family verifies the package, fetches and verifies the base with the
-``decision3`` family, and folds the base's identity into its own.
+``decision3`` family, and folds the base's identity into its own. Where the
+base has recorded kernel choices for a device class, the package runs them.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ import torch
 from ...errors import PackageError
 from ...heads.span import SpanHead
 from ...plugins.base import (
+    DeviceInfo,
     EngineModel,
     GatedAdapterSpec,
     LoadedModel,
@@ -102,6 +104,25 @@ class Vela3D3Family(ModelFamily):
             loaded_parameters=pinned.loaded_parameters if pinned else None,
             details={"package": details, "base": base_package},
         )
+
+    def kernel_choices(
+        self, package: VerifiedPackage, device: DeviceInfo
+    ) -> dict[str, Any]:
+        """The base model's recorded choices: every pass runs its kernels at its shapes.
+
+        A base pinned at another revision than its built-in entry takes that entry's choices.
+        """
+        base: VerifiedPackage = package.details["base"]
+        recorded = builtin.kernel_choices(
+            base.model_sha256, device.accelerator, device.arch
+        )
+        known = builtin.lookup(base.ref.repo_id or "")
+        if recorded or known is None or not device.arch:
+            return recorded
+        choices: dict[str, Any] = known.kernel_choices.get(
+            f"{device.accelerator}:{device.arch}", {}
+        )
+        return choices
 
     def describe(self, package: VerifiedPackage) -> ModelSpec:
         """The base's own spec with every text adapter as a gated adapter on its Linears."""
