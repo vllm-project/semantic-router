@@ -21,12 +21,15 @@ jobs:
     timeout-minutes: 5
     outputs:
       qualify: ${{ steps.published.outputs.qualify }}
+      date: ${{ steps.published.outputs.date }}
     steps:
       - name: Skip a scheduled run when another run already covers this commit
         id: published
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # One date for every image and the chart, even when the run crosses midnight.
+          echo "date=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
           qualify=true
           if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
             covered="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/nightly-build.yml/runs?head_sha=$GITHUB_SHA&per_page=20" \
@@ -42,11 +45,12 @@ jobs:
     name: CI
     needs: head
     if: needs.head.outputs.qualify == 'true'
-    # A newer run qualifies a newer commit, so it cancels an older run's
-    # qualification. Publication is outside this group and is never cancelled.
+    # A dispatch is explicit intent, so it cancels the qualification it
+    # supersedes. A scheduled run waits for a running qualification instead.
+    # Publication is outside this group and is never cancelled.
     concurrency:
       group: nightly-qualification
-      cancel-in-progress: true
+      cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
@@ -56,6 +60,7 @@ jobs:
       security-events: write
     with:
       profile: nightly
+      date: ${{ needs.head.outputs.date }}
     secrets: inherit
 
   docker:
@@ -76,7 +81,7 @@ jobs:
   helm:
     name: Publish Nightly Helm Chart
     if: ${{ !cancelled() && needs.ci.result == 'success' }}
-    needs: ci
+    needs: [head, ci]
     permissions:
       contents: read
       actions: read
@@ -84,4 +89,5 @@ jobs:
     uses: ./.github/workflows/helm-publish.yml
     with:
       mode: nightly
+      date: ${{ needs.head.outputs.date }}
     secrets: inherit

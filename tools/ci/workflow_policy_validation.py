@@ -490,14 +490,24 @@ def validate_nightly_qualification(
     ci = nightly.jobs.get("ci", {})
     if ci.get("concurrency") != {
         "group": "nightly-qualification",
-        "cancel-in-progress": True,
+        "cancel-in-progress": "${{ github.event_name == 'workflow_dispatch' }}",
     } or "head" not in needs(ci):
         errors.append(
-            "nightly-build.yml: a newer run must cancel the qualification it supersedes"
+            "nightly-build.yml: a dispatch must cancel the qualification it supersedes, "
+            "and a scheduled run must wait for it"
         )
     for job_id in ("docker", "helm"):
         if "concurrency" in nightly.jobs.get(job_id, {}):
-            errors.append(f"nightly-build.yml: '{job_id}' publication must not be cancelled")
+            errors.append(
+                f"nightly-build.yml: '{job_id}' publication must not be cancelled"
+            )
+    for job_id in ("ci", "helm"):
+        if nightly.jobs.get(job_id, {}).get("with", {}).get("date") != (
+            "${{ needs.head.outputs.date }}"
+        ):
+            errors.append(
+                f"nightly-build.yml: '{job_id}' must use the run's one publication date"
+            )
     retry = workflows.get("nightly-retry.yml")
     trigger = retry.events.get("workflow_run", {}) if retry else {}
     job = retry.jobs.get("retry", {}) if retry else {}

@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import copy
 import os
+import re
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import yaml
 
@@ -14,6 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
 sys.path.insert(0, str(REPO_ROOT / "tools" / "ci"))
 
+import image_artifacts  # noqa: E402
 from validate_workflows import Workflow, load_workflows  # noqa: E402
 from workflow_policy_validation import validate_nightly_qualification  # noqa: E402
 
@@ -23,6 +26,7 @@ echo "$*" >> "$GH_LOG"
 case "$*" in
   *commits/main*) echo "$STUB_MAIN_SHA" ;;
   *nightly-build.yml/runs*) echo "$STUB_PASSED" ;;
+  *actions/runs/*) echo "${STUB_ATTEMPT:-1}" ;;
   "run list"*) echo "$STUB_ACTIVE" ;;
 esac
 """
@@ -37,8 +41,10 @@ def events(data: dict) -> dict:
     return data["on"] if "on" in data else data[True]
 
 
-def run_step(script: str, env: dict[str, str]) -> tuple[list[str], dict[str, str]]:
-    """Run a workflow step's script against the gh stub; return gh calls and outputs."""
+def run_step(
+    script: str, env: dict[str, str], check: bool = True
+) -> tuple[list[str], dict[str, str], int]:
+    """Run a step's script against the gh stub; return gh calls, outputs and exit code."""
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
         stub = root / "gh"
@@ -47,7 +53,7 @@ def run_step(script: str, env: dict[str, str]) -> tuple[list[str], dict[str, str
         log, output = root / "gh.log", root / "output"
         log.touch()
         output.touch()
-        subprocess.run(
+        process = subprocess.run(
             ["bash", "-e", "-c", script],
             env={
                 **os.environ,
@@ -57,20 +63,23 @@ def run_step(script: str, env: dict[str, str]) -> tuple[list[str], dict[str, str
                 "GITHUB_REPOSITORY": "vllm-project/semantic-router",
                 **env,
             },
-            check=True,
+            check=check,
             capture_output=True,
             text=True,
         )
         outputs = dict(
-            line.split("=", 1) for line in output.read_text().splitlines() if "=" in line
+            line.split("=", 1)
+            for line in output.read_text().splitlines()
+            if "=" in line
         )
-        return log.read_text().splitlines(), outputs
+        return log.read_text().splitlines(), outputs, process.returncode
 
 
 class NightlyQualificationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.nightly = load("nightly-build.yml")
         self.head = self.nightly["jobs"]["head"]["steps"][0]["run"]
+        self.env = {"GITHUB_SHA": "a" * 40, "GITHUB_RUN_ID": "7"}
 
     def test_repository_workflows_satisfy_the_nightly_policy(self) -> None:
         errors: list[str] = []
@@ -80,45 +89,86 @@ class NightlyQualificationTests(unittest.TestCase):
     def test_scheduled_run_skips_a_commit_another_run_covers(self) -> None:
         for covered, qualify in (("1", "false"), ("0", "true")):
             with self.subTest(covered=covered):
-                calls, outputs = run_step(
+                calls, outputs, _ = run_step(
                     self.head,
                     {
+                        **self.env,
                         "GITHUB_EVENT_NAME": "schedule",
-                        "GITHUB_SHA": "a" * 40,
-                        "GITHUB_RUN_ID": "7",
                         "STUB_PASSED": covered,
                     },
                 )
-                self.assertEqual(outputs, {"qualify": qualify})
+                self.assertEqual(outputs["qualify"], qualify)
                 self.assertIn(f"head_sha={'a' * 40}", calls[0])
                 # Its own run is still in progress and must not count.
                 self.assertIn("select(.id != 7)", calls[0])
-                self.assertIn('.conclusion == "success" or .status != "completed"', calls[0])
+                self.assertIn(
+                    '.conclusion == "success" or .status != "completed"', calls[0]
+                )
 
-    def test_dispatch_always_qualifies(self) -> None:
-        calls, outputs = run_step(
+    def test_dispatch_always_qualifies_under_one_date(self) -> None:
+        calls, outputs, _ = run_step(
             self.head,
+            {**self.env, "GITHUB_EVENT_NAME": "workflow_dispatch", "STUB_PASSED": "1"},
+        )
+        self.assertEqual((calls, outputs["qualify"]), ([], "true"))
+        self.assertRegex(outputs["date"], r"^\d{8}$")
+        for job in ("ci", "helm"):
+            self.assertEqual(
+                self.nightly["jobs"][job]["with"]["date"],
+                "${{ needs.head.outputs.date }}",
+            )
+
+    def test_a_dispatch_cancels_a_running_qualification_and_a_schedule_waits(
+        self,
+    ) -> None:
+        concurrency = self.nightly["jobs"]["ci"]["concurrency"]
+        self.assertEqual(concurrency["group"], "nightly-qualification")
+        expression = concurrency["cancel-in-progress"]
+        expression = expression.removeprefix("${{").removesuffix("}}").strip()
+        for event, cancels in (("workflow_dispatch", True), ("schedule", False)):
+            with self.subTest(event=event):
+                self.assertEqual(
+                    eval(
+                        expression.replace("github.event_name", repr(event)),
+                        {"__builtins__": {}},
+                    ),
+                    cancels,
+                )
+
+    def test_nightly_chart_requires_the_runs_date(self) -> None:
+        steps = load("helm-publish.yml")["jobs"]["package"]["steps"]
+        script = next(step["run"] for step in steps if step.get("id") == "versions")
+        _, outputs, _ = run_step(script, {"MODE": "nightly", "RUN_DATE": "20261105"})
+        self.assertEqual(
+            outputs,
             {
-                "GITHUB_EVENT_NAME": "workflow_dispatch",
-                "GITHUB_SHA": "a" * 40,
-                "GITHUB_RUN_ID": "7",
-                "STUB_PASSED": "1",
+                "chart_version": "0.0.0-nightly.20261105",
+                "app_version": "nightly-20261105",
             },
         )
-        self.assertEqual((calls, outputs), ([], {"qualify": "true"}))
+        _, _, code = run_step(script, {"MODE": "nightly", "RUN_DATE": ""}, check=False)
+        self.assertNotEqual(code, 0)
 
-    def test_policy_rejects_weekly_runs_and_cancellable_publication(self) -> None:
+    def test_policy_rejects_weekly_runs_cancellable_publication_and_two_dates(
+        self,
+    ) -> None:
         errors: list[str] = []
         workflows = load_workflows(errors)
         data = copy.deepcopy(workflows["nightly-build.yml"].data)
         events(data)["schedule"] = [{"cron": "0 2 * * 1"}]
         data["concurrency"] = {"group": "nightly", "cancel-in-progress": True}
-        workflows["nightly-build.yml"] = Workflow(workflows["nightly-build.yml"].path, data)
+        del data["jobs"]["helm"]["with"]["date"]
+        workflows["nightly-build.yml"] = Workflow(
+            workflows["nightly-build.yml"].path, data
+        )
         validate_nightly_qualification(workflows, errors)
         self.assertIn("nightly-build.yml must qualify main once every day", errors)
         self.assertIn(
             "nightly-build.yml must not let a newer run cancel an older run's publication",
             errors,
+        )
+        self.assertIn(
+            "nightly-build.yml: 'helm' must use the run's one publication date", errors
         )
 
 
@@ -131,29 +181,51 @@ class NightlyRetryTests(unittest.TestCase):
 
     def test_retries_only_a_first_failed_main_attempt(self) -> None:
         trigger = events(self.retry)["workflow_run"]
-        self.assertEqual(trigger, {"workflows": [load("nightly-build.yml")["name"]], "types": ["completed"]})
+        self.assertEqual(
+            trigger,
+            {"workflows": [load("nightly-build.yml")["name"]], "types": ["completed"]},
+        )
         for condition in (
             "github.event.workflow_run.conclusion == 'failure'",
             "github.event.workflow_run.run_attempt == 1",
             "github.event.workflow_run.head_branch == 'main'",
         ):
             self.assertIn(condition, self.job["if"])
-        self.assertEqual(self.job["permissions"], {"contents": "read", "actions": "write"})
-
-    def test_reruns_the_failed_jobs_of_mains_newest_qualification(self) -> None:
-        calls, _ = run_step(self.script, {**self.env, "STUB_MAIN_SHA": "a" * 40})
         self.assertEqual(
-            calls[-1], "run rerun 41376111657 --failed --repo vllm-project/semantic-router"
+            self.job["permissions"], {"contents": "read", "actions": "write"}
         )
 
-    def test_leaves_a_superseded_run_to_the_next_qualification(self) -> None:
+    def test_reruns_the_failed_jobs_of_mains_newest_qualification(self) -> None:
+        calls, _, _ = run_step(self.script, {**self.env, "STUB_MAIN_SHA": "a" * 40})
+        self.assertEqual(
+            calls[-1],
+            "run rerun 41376111657 --failed --repo vllm-project/semantic-router",
+        )
+
+    def test_stands_down_for_a_manual_rerun_or_a_newer_qualification(self) -> None:
         for name, env in (
+            ("re-run by hand", {"STUB_MAIN_SHA": "a" * 40, "STUB_ATTEMPT": "2"}),
             ("main moved", {"STUB_MAIN_SHA": "b" * 40}),
             ("another run active", {"STUB_MAIN_SHA": "a" * 40, "STUB_ACTIVE": "1"}),
         ):
             with self.subTest(name):
-                calls, _ = run_step(self.script, {**self.env, **env})
-                self.assertFalse([call for call in calls if call.startswith("run rerun")])
+                calls, _, _ = run_step(self.script, {**self.env, **env})
+                self.assertFalse(
+                    [call for call in calls if call.startswith("run rerun")]
+                )
+
+
+class RunDateTests(unittest.TestCase):
+    def test_images_take_the_runs_date(self) -> None:
+        with mock.patch.dict(os.environ, {"CI_RUN_DATE": "20261105"}):
+            self.assertEqual(image_artifacts.run_date(), "20261105")
+        with (
+            mock.patch.dict(os.environ, {"CI_RUN_DATE": "2026-11-05"}),
+            self.assertRaises(ValueError),
+        ):
+            image_artifacts.run_date()
+        with mock.patch.dict(os.environ, {"CI_RUN_DATE": ""}):
+            self.assertTrue(re.fullmatch(r"\d{8}", image_artifacts.run_date()))
 
 
 if __name__ == "__main__":

@@ -388,11 +388,11 @@ prerequisites succeeding, the planned job-launch budget is 700 versus 49 per
 week; that combined count also must not be translated into a cost percentage.
 
 Weekly qualification made one failure cost a week of nightly publication, so
-#5845 returned it to a daily schedule with the versioned inventory kept. A
-scheduled run of a commit that another run already passed or is still
-qualifying launches one short job instead of the full qualification, a newer
-run cancels the qualification it supersedes, and a failed first attempt re-runs
-only its failed jobs, once.
+issue #5845 returned it to a daily schedule with the versioned inventory kept.
+A scheduled run of a commit that another run already passed or is still
+qualifying launches one short job instead of the full qualification. A dispatch
+cancels the qualification it supersedes, a scheduled run waits for a running
+one, and a failed first attempt re-runs only its failed jobs, once.
 
 Routine Main source/component qualification remains. Expensive qualification
 and publication move to an explicit decision; they are not free when that
