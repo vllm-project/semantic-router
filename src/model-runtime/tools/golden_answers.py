@@ -28,6 +28,12 @@ from vllm_srun.config import ModelConfig, ServeConfig
 from vllm_srun.registry import builtin
 from vllm_srun.runtime import Runtime
 
+# Pinned by a family table but not served yet: the vela3 image package's
+# serving path is not implemented (#5625), so Runtime.load refuses it and a
+# family-wide run would stop before recording. An explicit --model still
+# loads it and fails loudly.
+UNSERVED = frozenset({"vllm-sr/vela3-fast-vision"})
+
 
 def answers(
     args: argparse.Namespace, model: str, revision: str | None
@@ -102,7 +108,11 @@ def main() -> None:
     if bool(args.model) == bool(args.family):
         parser.error("give a model or --family")
     targets = (
-        [(m.repo_id, m.revision) for m in builtin.all_models(args.family)]
+        [
+            (m.repo_id, m.revision)
+            for m in builtin.all_models(args.family)
+            if m.repo_id not in UNSERVED
+        ]
         if args.family
         else [(args.model, args.revision)]
     )
