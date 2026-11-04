@@ -431,17 +431,35 @@ func decodeAnthropicStreamUsage(wire anthropicUsageWire, initial bool, policy ll
 
 func decodeAnthropicMessageDeltaUsage(wire anthropicMessageDeltaUsageWire) llmprotocol.Usage {
 	// Presence-aware partial update: only the input buckets the delta
-	// explicitly reports settle evidence of their own, and the input total
-	// is left for the merge to refresh from the combined buckets.
+	// explicitly reports settle evidence of their own. A delta that reports
+	// every bucket also settles the input total; otherwise the total is left
+	// for the merge to refresh from the combined buckets.
 	usage := llmprotocol.Usage{State: llmprotocol.UsageAvailable}
+	cacheWrite := wire.CacheCreationInputTokens
+	if wire.CacheCreation != nil {
+		aggregate := int64(0)
+		if cacheWrite != nil {
+			aggregate = *cacheWrite
+		}
+		cacheWrite5m, cacheWrite1h, derivedAggregate := decodeAnthropicCacheCreationTiers(
+			wire.CacheCreation, aggregate, llmprotocol.Policy{}, nil,
+		)
+		usage.InputCacheWrite5m, usage.InputCacheWrite1h = cacheWrite5m, cacheWrite1h
+		if derivedAggregate != nil {
+			cacheWrite = derivedAggregate
+		}
+	}
 	if wire.InputTokens != nil {
 		usage.InputUncached = authoritative(*wire.InputTokens)
 	}
 	if wire.CacheReadInputTokens != nil {
 		usage.InputCacheRead = authoritative(*wire.CacheReadInputTokens)
 	}
-	if wire.CacheCreationInputTokens != nil {
-		usage.InputCacheWrite = authoritative(*wire.CacheCreationInputTokens)
+	if cacheWrite != nil {
+		usage.InputCacheWrite = authoritative(*cacheWrite)
+	}
+	if wire.InputTokens != nil && wire.CacheReadInputTokens != nil && cacheWrite != nil {
+		usage.InputTotal = authoritative(*wire.InputTokens + *wire.CacheReadInputTokens + *cacheWrite)
 	}
 	reasoning := wire.OutputTokensDetails.ThinkingTokens
 	other := wire.OutputTokens - reasoning
@@ -461,9 +479,9 @@ func encodeAnthropicMessageDeltaUsage(usage llmprotocol.Usage) *anthropicMessage
 		creation = full.CacheCreation
 	}
 	return &anthropicMessageDeltaUsageWire{
-		CacheCreationInputTokens: usage.InputCacheWrite.Value,
-		CacheReadInputTokens:     usage.InputCacheRead.Value,
-		InputTokens:              usage.InputUncached.Value,
+		CacheCreationInputTokens: &full.CacheCreationInputTokens,
+		CacheReadInputTokens:     &full.CacheReadInputTokens,
+		InputTokens:              &full.InputTokens,
 		OutputTokens:             full.OutputTokens,
 		CacheCreation:            creation,
 		OutputTokensDetails:      full.OutputTokensDetails,
