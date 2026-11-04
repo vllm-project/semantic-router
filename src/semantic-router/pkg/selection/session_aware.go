@@ -178,8 +178,15 @@ func (s *SessionAwareSelector) Select(ctx context.Context, selCtx *SelectionCont
 	driftDetected := s.decisionDriftDetected(selCtx, session)
 	trace := s.newPolicyTrace(selCtx, base, session, current, false, driftDetected)
 	owner := CurrentSessionCandidate(selCtx, base, current)
-	if current != "" && owner == nil &&
-		((session.ActiveToolLoop && s.config.ToolLoopHardLock) || (session.HasNonPortableContext && s.config.ContextPortabilityHardLock)) {
+	// A tool-loop lock binds a turn to the decision state that admitted it.
+	// Decision drift is itself a continuity boundary: the drifted decision
+	// releases the lock (traced as decision_drift) and routes from its own
+	// candidate set instead of rejecting every candidate and deadlocking the
+	// loop. Opaque provider state keeps the stricter rule: it stays physically
+	// bound to the model that created it.
+	toolLoopLocked := session.ActiveToolLoop && s.config.ToolLoopHardLock && !driftDetected
+	portabilityLocked := session.HasNonPortableContext && s.config.ContextPortabilityHardLock
+	if current != "" && owner == nil && (toolLoopLocked || portabilityLocked) {
 		return nil, fmt.Errorf("%w: excluded exact session owner %q", ErrNoEligibleCandidates, current)
 	}
 	if signal, reason := currentModelIssue(selCtx.CandidateModels, current); signal != "" {
