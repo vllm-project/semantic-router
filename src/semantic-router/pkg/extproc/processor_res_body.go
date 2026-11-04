@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"bytes"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -50,7 +51,12 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		responseBody = recoveredBody
 	}
 
-	return r.handleNonStreamingResponseBody(responseBody, ctx, completionLatency), nil
+	return r.handleNonStreamingResponseBody(
+		responseBody,
+		ctx,
+		completionLatency,
+		!bytes.Equal(responseBody, v.ResponseBody.Body),
+	), nil
 }
 
 func contextRecoveryFailClosed(ctx *RequestContext) bool {

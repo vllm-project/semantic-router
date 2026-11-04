@@ -53,7 +53,7 @@ func TestBlockedResponseRecordsMemoryPersistenceReceipt(t *testing.T) {
 			counter := metrics.PluginExecutionTotal.WithLabelValues("memory_persistence", requestDecisionStateKey(ctx), tc.status)
 			before := testutil.ToFloat64(counter)
 
-			response := router.handleNonStreamingResponseBody(extProcResponseFixture(ctx.SourceFormat), ctx, 0)
+			response := router.handleNonStreamingResponseBody(extProcResponseFixture(ctx.SourceFormat), ctx, 0, false)
 			require.NotNil(t, response.GetImmediateResponse(), "the safety policy must still block the response")
 			assert.EqualValues(t, 403, response.GetImmediateResponse().GetStatus().GetCode())
 			require.NoError(t, recorder.DrainOutcomes())

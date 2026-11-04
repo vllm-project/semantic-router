@@ -228,7 +228,7 @@ func TestOversizedMemoryResponseStillReachesClient(t *testing.T) {
 	// No runner is installed: oversized replies must be rejected before admission.
 	text := strings.Repeat("x", maxMemorySnapshotBytes+1)
 	body := []byte(strings.Replace(string(extProcResponseFixture(ctx.SourceFormat)), "hello", text, 1))
-	response := router.handleNonStreamingResponseBody(body, ctx, 0)
+	response := router.handleNonStreamingResponseBody(body, ctx, 0, false)
 	require.NotNil(t, response.GetResponseBody(), "the reply must continue to the client")
 	assert.Nil(t, response.GetResponseBody().GetResponse().GetBodyMutation())
 	assert.Equal(t, text, semanticAssistantContent(ctx.SemanticResponse))
