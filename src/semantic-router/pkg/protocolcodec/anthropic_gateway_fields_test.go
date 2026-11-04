@@ -161,7 +161,7 @@ func TestAnthropicContentBlockUnknownFieldsAreReported(t *testing.T) {
 	for _, item := range response.Output {
 		for _, content := range item.Content {
 			if content.ToolCall != nil {
-				arguments = string(content.ToolCall.Arguments)
+				arguments = content.ToolCall.Arguments
 			}
 		}
 	}

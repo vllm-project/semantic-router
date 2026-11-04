@@ -120,10 +120,6 @@ func decodeProviderValue(body []byte, target any, policy llmprotocol.Policy) err
 	return err
 }
 
-func decodeProviderValueTolerant(body []byte, target any, policy llmprotocol.Policy) ([]string, error) {
-	return decodeProviderJSON(body, target, policy, false)
-}
-
 // decodeProviderJSONCanonical validates body as received, then applies the
 // optional dialect rewrite, drops undeclared members and decodes the result.
 func decodeProviderJSONCanonical(

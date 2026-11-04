@@ -193,8 +193,8 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := rejectRouterExtensionFields(unknownFields); err != nil {
-		return nil, nil, err
+	if reservedErr := rejectRouterExtensionFields(unknownFields); reservedErr != nil {
+		return nil, nil, reservedErr
 	}
 	var diagnostics llmprotocol.Diagnostics
 	decoder.appendStreamUnknownFields(&diagnostics, llmprotocol.OpenAIChatV1, unknownFields)

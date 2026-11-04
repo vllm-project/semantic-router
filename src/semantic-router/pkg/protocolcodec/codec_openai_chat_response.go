@@ -13,8 +13,8 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
-	if err := rejectRouterExtensionFields(unknownFields); err != nil {
-		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
+	if reservedErr := rejectRouterExtensionFields(unknownFields); reservedErr != nil {
+		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, reservedErr
 	}
 	if err := validateChatResponseResource(wire); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err

@@ -54,8 +54,8 @@ func TestAnthropicGatewayReplyDecodesAndCachesCanonically(t *testing.T) {
 		t.Fatalf("cached body = %s, want the canonical encode without gateway fields", cached)
 	}
 	hitCtx := anthropicGatewayContext(llmprotocol.AnthropicMessagesV1)
-	if _, err := router.decodeCachedClientResponse(cached, hitCtx); err != nil {
-		t.Fatalf("decodeCachedClientResponse() error = %v on the cached body", err)
+	if _, hitErr := router.decodeCachedClientResponse(cached, hitCtx); hitErr != nil {
+		t.Fatalf("decodeCachedClientResponse() error = %v on the cached body", hitErr)
 	}
 
 	chatCtx := anthropicGatewayContext(llmprotocol.OpenAIChatV1)
