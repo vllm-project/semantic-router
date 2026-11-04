@@ -71,6 +71,16 @@ path is retained and the protocol operation suffix is appended exactly once;
 the protocol's default `/v1` base path is used only when the URL has no path.
 `chat_path` applies only to Chat Completions.
 
+With `--gateway extproc`, the generated Envoy cluster for an HTTPS backend
+verifies both the server
+certificate chain and its DNS hostname. An HTTPS replica pool must keep one
+hostname because the supported Envoy runtime shares its TLS context within a
+cluster; use separate model aliases for different HTTPS hosts. IP-literal HTTPS
+targets are rejected instead of silently weakening hostname verification. A
+custom Envoy image used with `vllm-sr serve` must provide the system CA bundle at
+`/etc/ssl/certs/ca-certificates.crt`; startup validation fails rather than
+silently disabling verification when that trust store is unavailable.
+
 ### Response fields the Router does not model
 
 Providers and gateways add fields of their own to replies: a gateway's cost or
@@ -144,16 +154,6 @@ fails to load with this message. Delete the field:
 ```text
 providers.models[claude-via-gateway].backend_refs[0]: compat_gateway was removed; gateway response fields are accepted by default, so delete it
 ```
-
-With `--gateway extproc`, the generated Envoy cluster for an HTTPS backend
-verifies both the server
-certificate chain and its DNS hostname. An HTTPS replica pool must keep one
-hostname because the supported Envoy runtime shares its TLS context within a
-cluster; use separate model aliases for different HTTPS hosts. IP-literal HTTPS
-targets are rejected instead of silently weakening hostname verification. A
-custom Envoy image used with `vllm-sr serve` must provide the system CA bundle at
-`/etc/ssl/certs/ca-certificates.crt`; startup validation fails rather than
-silently disabling verification when that trust store is unavailable.
 
 ## Client-to-backend matrix
 
@@ -300,6 +300,10 @@ schema, streaming, tools, or error translation.
 
 - Public requests are decoded into the neutral contract even when client and
   backend formats match. Unknown or unsupported request fields fail closed.
+- Backend replies are decoded into the same contract. A reply field that its
+  `api_format` does not define is dropped and reported instead of failing the
+  reply; see
+  [Response fields the Router does not model](#response-fields-the-router-does-not-model).
 - Cross-protocol requests preserve shared semantics. Target-specific features
   that cannot be represented return a typed protocol error.
 - Anthropic `tool_result.is_error: true` has no equivalent in OpenAI Chat or
