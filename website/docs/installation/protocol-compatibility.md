@@ -305,6 +305,12 @@ schema, streaming, tools, or error translation.
   as the Router passes it up to the error event, then the Router's error frame
   with a string `code` and no `[DONE]`, however the stream is split into body
   chunks, as long as each frame is within the Router's SSE frame limit.
+- A Chat or Responses request that omits its output limit reaches `openai` and
+  `responses` backends without one, so the backend's remaining context bounds
+  the output. Anthropic Messages requires a limit, so a route to an `anthropic`
+  backend sends `max_tokens: 4096` and reports `max_tokens` as `generated`.
+  Thinking counts toward that limit. A positive integer in the decision's
+  `request_params.default_max_tokens` replaces the 4096 for these requests.
 - `x-vsr-client-protocol`, `x-vsr-upstream-protocol`, and
   `x-vsr-protocol-warnings` expose translation details when applicable. See
   [VSR routing headers](../troubleshooting/vsr-headers).
@@ -330,6 +336,7 @@ The Router handles them as follows:
 | `client_metadata` | Accepted and not forwarded, because it carries Codex telemetry rather than model input. |
 | `input[].internal_chat_message_metadata_passthrough` | Accepted and not forwarded. Codex CLI 0.163 attaches it to every input message to record which instructions the message carries; it is client metadata, not model input. |
 | `text.verbosity` | Forwarded to `responses` backends, mapped to `verbosity` for `openai` Chat backends, and reported as `dropped` for `anthropic` Messages backends. The only accepted values are `low`, `medium`, and `high`. |
+| Omitted `max_output_tokens` | Codex CLI sends no output limit, so a route to an `anthropic` backend gets `max_tokens: 4096` as described above. A reasoning model can spend all of it before it answers, which Codex CLI reports as `Incomplete response returned, reason: max_output_tokens`. Set a positive integer `request_params.default_max_tokens` on the decisions that send Codex CLI to an `anthropic` backend. |
 
 Each accepted but unforwarded field appears as a `dropped` entry in
 `x-vsr-protocol-warnings`.
