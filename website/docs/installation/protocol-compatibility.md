@@ -125,6 +125,8 @@ providers:
 - When a Chat Completions reply names its usage counters `input_tokens` and
   `output_tokens`, as some relays in front of Anthropic models do, the Router
   reads them as `prompt_tokens` and `completion_tokens`.
+- Error bodies in a provider's own shape are decoded by the backend's
+  `provider`: `cloudflare-workers-ai`, `openrouter`, and `snowflake-cortex`.
 - A Chat reply that carries `fusion`, `flow`, or `reasoning_mom_responses` is
   refused. These names belong to the Router's own Looper output, so a client
   must not receive a backend's value under them.

@@ -39,11 +39,13 @@ func decodeOpenRouterTransportError(
 	format llmprotocol.WireFormat,
 ) (llmprotocol.TransportError, llmprotocol.Diagnostics, error) {
 	var wire openRouterTransportErrorWire
-	if _, _, err := decodeProviderWireVendorAware(body, &wire, policy); err != nil ||
-		wire.Error == nil || strings.TrimSpace(wire.Error.Message) == "" ||
+	_, unknownFields, err := decodeProviderWireTolerant(body, &wire, policy)
+	if err != nil || wire.Error == nil || strings.TrimSpace(wire.Error.Message) == "" ||
 		!openRouterMetadataIsObject(wire.Error.Metadata) {
 		return decodeOpenAITransportError(body, policy, format)
 	}
+	var diagnostics llmprotocol.Diagnostics
+	appendUnknownFieldDiagnostics(&diagnostics, policy, format, unknownFields)
 	detail := wire.Error
 	code, parameter := "", ""
 	if detail.Code != nil {
@@ -61,7 +63,7 @@ func decodeOpenRouterTransportError(
 		Code:      code,
 		Message:   detail.Message,
 		Parameter: parameter,
-	}}, nil, nil
+	}}, diagnostics, nil
 }
 
 func openRouterMetadataIsObject(metadata json.RawMessage) bool {
