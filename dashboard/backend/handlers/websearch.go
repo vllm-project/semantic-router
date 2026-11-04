@@ -683,8 +683,8 @@ func WebSearchRateLimitStatsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// PolicyMux may pass OPTIONS through as a preflight candidate; stats must
 		// remain GET-only so preflight cannot expose the aggregate snapshot.
-		if r.Method != http.MethodGet {
-			w.Header().Set("Allow", http.MethodGet)
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.Header().Set("Allow", "GET, HEAD")
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}

@@ -1,25 +1,55 @@
 package config
 
 import (
-	"os"
 	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v2"
 )
 
-func TestDecisionBalanceReplayActivatesPIIEvidence(t *testing.T) {
-	raw, err := os.ReadFile("../../../../config/recipes/decision-balance/config.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg, err := ParseYAMLBytes(raw)
+func TestReplayWithoutPersonalDataActivatesPIIEvidence(t *testing.T) {
+	cfg, err := ParseYAMLBytes([]byte(`version: v0.3
+providers:
+  defaults:
+    model: local
+  models:
+    - name: local
+      backend_refs:
+        - endpoint: local:8000
+routing:
+  signals:
+    pii:
+      - name: personal_data
+        include_history: false
+        pii_types_allowed: [GPE, ORGANIZATION, DATE_TIME, NRP, TITLE, DOMAIN_NAME]
+  decisions:
+    - name: fast
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: local
+global:
+  services:
+    router_replay:
+      enabled: true
+      capture_personal_data: false
+  model_catalog:
+    deployments:
+      primary:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.8B
+    system:
+      decision_model:
+        deployment: primary
+`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	policy := cfg.EffectiveRouterReplayConfig(nil)
 	if policy == nil || policy.CapturesPersonalData() || !cfg.ReplayNeedsPIIEvidence() || !cfg.NeedsPIIMappingForRouting() {
-		t.Fatal("DecisionBalance must prepare PII to suppress personal replay content")
+		t.Fatal("a PII rule must be prepared to suppress personal replay content")
 	}
 }
 

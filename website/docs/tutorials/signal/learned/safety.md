@@ -97,7 +97,7 @@ for a category-specific policy.
 ## Select Vela Shield
 
 Without an explicit specialist binding, Safety uses the selected decision
-deployment, Vela 2.0 0.3B by default.
+deployment, vela3-fast by default.
 [Vela Safety](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-Safety) and
 [Vela Shield](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-Shield)
 are specialist classifiers with the same `safe`/`unsafe` labels. Existing rules

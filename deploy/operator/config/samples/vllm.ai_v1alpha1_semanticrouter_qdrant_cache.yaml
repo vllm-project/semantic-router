@@ -34,7 +34,7 @@ spec:
       memory: 4Gi
     limits:
       cpu: 4000m
-      memory: 8Gi
+      memory: 12Gi
 
   # Semantic router configuration
   config:
