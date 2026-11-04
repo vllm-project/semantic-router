@@ -1167,6 +1167,14 @@ type Question struct {
 	// 1..255 labels to descriptions. Descriptions are non-blank text, an object or an array.
 	Criteria *interface{} `json:"criteria,omitempty"`
 
+	// DecisionAdapter Vela 3.0 d3 sizes (family `vela3_d3`) whose package declares `decision_opt_in`: true answers a
+	// Choice, Noul or Score question with the opt-in decision adapter (`decision_optin`, else the router
+	// adapter), as the package's runtime does. A router question keeps the router adapter; one the package
+	// routes to a task adapter takes the opt-in adapter instead. Only true turns it on; any other value, a
+	// package without opt-in, and a request with images, videos, assets or Box / track questions (which
+	// runs every adapter off) answer it as false. Other models answer the field with invalid_question.
+	DecisionAdapter *bool `json:"decision_adapter,omitempty"`
+
 	// Head Span questions on models with a broad span head: the head that answers (default: the model's routing,
 	// reported per question in `span_heads`). Models without one answer `broad` with invalid_question.
 	Head *QuestionHead `json:"head,omitempty"`
