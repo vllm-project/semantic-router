@@ -536,9 +536,9 @@ are `-0.00035`. The input total remains 100; the tier counts partition the
 80 cache-write tokens.
 
 Partial, unavailable, or invalid usage does not produce a no-cache estimate or
-cache savings. A Router response-cache hit makes no new provider request;
-Insights identifies it separately instead of showing replayed provider usage
-as new provider savings.
+cache savings. A Router response-cache hit makes no new provider request, so
+its record has no `provider_cache`; Insights identifies it separately instead
+of showing replayed provider usage as new provider savings.
 
 Aggregates use `summary.by_currency`, a sorted array with `currency`,
 `total_saved`, `baseline_spend`, `actual_spend`, and `cost_record_count` for each

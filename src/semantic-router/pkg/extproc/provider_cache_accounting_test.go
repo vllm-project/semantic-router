@@ -173,3 +173,26 @@ func TestProviderCacheAccountingEvidence(t *testing.T) {
 		t.Fatal("explicit free pricing must retain zero savings")
 	}
 }
+
+func TestProviderCacheAccountingOmittedForRouterCacheHit(t *testing.T) {
+	count := func(value int64) llmprotocol.TokenCount {
+		return llmprotocol.TokenCount{Value: llmprotocol.Int64(value), Provenance: llmprotocol.UsageAuthoritative}
+	}
+	router := &OpenAIRouter{Config: &config.RouterConfig{BackendModels: config.BackendModels{ModelConfig: map[string]config.ModelParams{
+		"claude": {Pricing: config.ModelPricing{Currency: "USD", PromptPer1M: 2, CachedInputPer1M: 1, CompletionPer1M: 10}},
+	}}}}
+	ctx := replayCostContext("claude", "claude")
+	ctx.SemanticResponse = &llmprotocol.Response{Usage: llmprotocol.Usage{
+		State: llmprotocol.UsageAvailable, InputTotal: count(100), InputUncached: count(50),
+		InputCacheRead: count(50), InputCacheWrite: count(0), OutputTotal: count(10),
+	}}
+	usage := responseUsageFromSemanticUsage(ctx.SemanticResponse.Usage)
+	if accounting := router.buildReplayUsageCost(ctx, usage).ProviderCache; accounting == nil || accounting.CacheSavings == nil {
+		t.Fatal("the cached body's usage must be complete provider evidence")
+	}
+	snapshot := router.buildCacheHitReplayUsage(ctx, usage)
+	if snapshot.ProviderCache != nil {
+		t.Fatalf("a Router response-cache hit reported provider cache accounting: %#v", snapshot.ProviderCache)
+	}
+	assertApproxFloat64(t, snapshot.ActualCost, 0)
+}
