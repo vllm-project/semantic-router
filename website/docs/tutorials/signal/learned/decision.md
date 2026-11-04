@@ -8,7 +8,8 @@ You write the question in plain language: pick one of a few options
 answer them, such as Vela 2.0, also take `set` questions (which of these
 labels apply?) and `span` questions (where in the text is each label?). The
 model runs in the [built-in model runtime](../../../model-runtime/overview.md),
-which the router starts for you.
+which the router starts for you, or behind a remote
+[System One API](#ask-a-remote-system-one-model).
 
 ## Key Advantages
 
@@ -117,6 +118,86 @@ routing:
       modelRefs:
         - model: large-coder
 ```
+
+### Ask a remote System One model
+
+A question can also ask a System One API that the router does not manage: a
+hosted Decision API, another vLLM-SR Engine, or a gateway in front of one.
+Declare it as a `systemone` deployment in `global.model_catalog.deployments`
+and name it as the question's `deployment`, as you would a `model_runtime`
+deployment. It answers decision questions only: it is not one of the
+`providers.models` that requests are routed to, and no model listing shows it.
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      d3-ultra-remote:
+        provider: systemone
+        endpoint: https://app.vllm-sr.ai/v1/systemone
+        model: vllm-sr/d3-ultra
+        auth:
+          api_key_env: VSR_APP_KEY
+        timeout_ms: 3000
+
+routing:
+  signals:
+    decision:
+      - name: support_team
+        deployment: d3-ultra-remote
+        question:
+          type: choice
+          instructions: Which team should handle this ticket?
+          choices:
+            - key: billing
+              description: Payments and refunds
+            - key: engineering
+              description: Outages and bugs
+```
+
+`endpoint` is the URL the API answers `POST` requests on, with any path
+prefix, and `model` is the model it answers with. The key comes from
+`auth.api_key_env` or from `auth.api_key_file` (an absolute path, read when a
+call needs it), never from the configuration itself, and goes as
+`Authorization: Bearer <key>`. For a gateway that takes the key in its own
+header, set `auth.header`, and `auth.prefix: ""` to send the key without a
+prefix:
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      gateway-d3:
+        provider: systemone
+        endpoint: https://gateway.example.com/Unified/v1/systemone
+        model: vLLM-SR-d3-27B
+        question_types: [choice, noul, score]
+        auth:
+          header: Ocp-Apim-Subscription-Key
+          prefix: ""
+          api_key_env: GATEWAY_KEY
+```
+
+- A request's questions to the deployment go in one System One call, with
+  their options as System One `criteria` and the call's deadline as
+  `options.deadline_ms`. A System One API answers a request with a failed
+  question as a whole, so one failed question leaves every signal of that
+  call unknown.
+- The question types the model answers come from `GET <endpoint>/models`
+  when the API lists the model, else from `question_types`, else they are the
+  System One types `choice`, `noul` and `score`. A `set` question is composed
+  from `noul` questions when the model has no native `set` support.
+- A network round trip takes longer than a local model. A question without
+  its own `timeout_ms` takes the deployment's `timeout_ms`, else the 1000 ms
+  default. A slow, failing or unreachable API leaves its signals unknown; it
+  never fails the request. The router logs each kind of failure once, without
+  the key.
+- `global.model_catalog.system.decision_model.deployment` can name a
+  `systemone` deployment too. Questions and
+  [decision selectors](../../algorithm/selection/decision.md) that name no
+  deployment then ask it; built-in signals keep their model runtime models.
+- A `systemone` deployment takes no device, engine arguments, replicas or
+  input budget, and no task binding can name it.
 
 | Question type | Matches when | Value a route can read |
 | --- | --- | --- |

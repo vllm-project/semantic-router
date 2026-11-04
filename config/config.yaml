@@ -772,8 +772,9 @@ routing:
           max_turn_bytes: 16384
           max_input_bytes: 147456
 
-    # Typed questions answered by a decision model through the built-in model
-    # runtime (global.model_catalog.deployments, provider model_runtime).
+    # Typed questions answered by a decision model, a deployment in
+    # global.model_catalog.deployments: the built-in model runtime
+    # (provider model_runtime) or a remote System One API (provider systemone).
     decision:
       - name: needs_reasoning
         description: The decision model judges that the request needs multi-step reasoning.
@@ -810,6 +811,17 @@ routing:
             - Hard
         predicate:
           gte: 1.5
+      - name: support_team
+        description: Which team should handle the request, asked of a remote System One API.
+        deployment: decision-remote
+        question:
+          type: choice
+          instructions: Which team should handle this request?
+          choices:
+            - key: billing
+              description: Payments and refunds
+            - key: engineering
+              description: Outages and bugs
 
     classifiers:
       - name: content-risk
@@ -2681,6 +2693,28 @@ global:
           - device: cpu
           - endpoint: http://decision-worker:8100
             served_name: decision-kai
+      # A remote System One API the Router asks decision questions, as it asks
+      # a model_runtime deployment; requests are never routed to it. The key
+      # comes from api_key_env or api_key_file, sent as "Bearer <key>" unless
+      # auth sets another header or prefix. question_types applies when
+      # GET <endpoint>/models lists none for the model.
+      decision-remote:
+        provider: systemone
+        endpoint: https://systemone.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
+        auth:
+          api_key_env: SYSTEMONE_DECISION_KEY
+        timeout_ms: 3000
+      # The same API behind a gateway with its own header and path prefix.
+      decision-gateway:
+        provider: systemone
+        endpoint: https://gateway.example.com/Unified/v1/systemone
+        model: vllm-sr/d3-ultra
+        question_types: [choice, noul, score]
+        auth:
+          header: Ocp-Apim-Subscription-Key
+          prefix: ""
+          api_key_file: /run/secrets/systemone-gateway-key
     embeddings:
       semantic:
         qwen3_model_path: models/mom-embedding-pro
