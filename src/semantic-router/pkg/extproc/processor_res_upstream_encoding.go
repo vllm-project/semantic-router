@@ -13,6 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/contentcoding"
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
@@ -45,7 +46,7 @@ func isGzipContentEncoding(headerMap *core.HeaderMap) bool {
 }
 
 func isGzipCoding(contentEncoding []string) bool {
-	coding, single := httputil.ContentCoding(contentEncoding)
+	coding, single := contentcoding.Parse(contentEncoding)
 	return single && coding == "gzip"
 }
 

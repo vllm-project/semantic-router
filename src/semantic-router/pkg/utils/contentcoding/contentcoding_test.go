@@ -1,8 +1,8 @@
-package http
+package contentcoding
 
 import "testing"
 
-func TestContentCoding(t *testing.T) {
+func TestParse(t *testing.T) {
 	tests := []struct {
 		values []string
 		coding string
@@ -23,9 +23,9 @@ func TestContentCoding(t *testing.T) {
 		{values: []string{"x-gzip", "gzip"}, single: false},
 	}
 	for _, tc := range tests {
-		coding, single := ContentCoding(tc.values)
+		coding, single := Parse(tc.values)
 		if single != tc.single || (single && coding != tc.coding) {
-			t.Errorf("ContentCoding(%q) = %q, %t; want %q, %t", tc.values, coding, single, tc.coding, tc.single)
+			t.Errorf("Parse(%q) = %q, %t; want %q, %t", tc.values, coding, single, tc.coding, tc.single)
 		}
 	}
 }
