@@ -38,52 +38,13 @@ func repoRootForTest(t *testing.T) string {
 	return filepath.Join(filepath.Dir(thisFile), "..", "..", "..")
 }
 
-// Gate A: registered-but-unreachable is an exact bounded debt ratchet.
-//
-// The invariant is unreachable == keys(KnownUnreachableDebt), checked in both
-// directions: a newly unreachable testcase fails until it gets a profile
-// mapping or a bounded disposition, and a resolved testcase fails until its
-// stale debt entry is deleted. The debt table can only shrink intentionally.
-func TestGateARegisteredButUnreachableMatchesKnownDebt(t *testing.T) {
+// Gate A: every registered testcase must belong to an executable profile.
+// Retired cases do not remain in an exception table: map a useful contract to
+// its owner, or remove its registration and source.
+func TestGateARegisteredButUnreachableIsEmpty(t *testing.T) {
 	inventory := buildInventoryForTest(t)
-
-	unreachable := make(map[string]bool)
 	for _, name := range inventory.Unreachable() {
-		unreachable[name] = true
-	}
-
-	unexpected := make([]string, 0)
-	for name := range unreachable {
-		if _, ok := KnownUnreachableDebt[name]; !ok {
-			unexpected = append(unexpected, name)
-		}
-	}
-	sort.Strings(unexpected)
-	for _, name := range unexpected {
-		t.Errorf("testcase %q is registered but unreachable from every registered profile; map it from a profile's GetTestCases() or record a bounded disposition in KnownUnreachableDebt", name)
-	}
-
-	stale := make([]string, 0)
-	for name := range KnownUnreachableDebt {
-		if !unreachable[name] {
-			stale = append(stale, name)
-		}
-	}
-	sort.Strings(stale)
-	for _, name := range stale {
-		t.Errorf("KnownUnreachableDebt entry %q is stale: the testcase is now reachable (or no longer registered); delete the resolved debt entry", name)
-	}
-}
-
-// Every debt entry must carry exactly one bounded disposition: an owning
-// child issue XOR a documented manual rationale.
-func TestGateADebtEntriesAreBounded(t *testing.T) {
-	for name, debt := range KnownUnreachableDebt {
-		hasIssue := debt.Issue != 0
-		hasRationale := debt.Rationale != ""
-		if hasIssue == hasRationale {
-			t.Errorf("KnownUnreachableDebt entry %q must set exactly one of Issue or Rationale", name)
-		}
+		t.Errorf("testcase %q is registered but unreachable from every registered profile; map it from a profile's GetTestCases() or retire the testcase", name)
 	}
 }
 

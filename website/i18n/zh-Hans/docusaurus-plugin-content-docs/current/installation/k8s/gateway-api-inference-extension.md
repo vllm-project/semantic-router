@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: Gateway API 推理扩展
 description: 将语义模型池选择与 Kubernetes InferencePool 内的端点选择结合。
 translation:

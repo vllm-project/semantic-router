@@ -1,11 +1,12 @@
 ---
+is_mtpe: false
 title: SemanticRouter 自定义资源参考
 sidebar_label: SemanticRouter 自定义资源
 description: vllm.ai/v1alpha1 SemanticRouter 自定义资源的顶层字段指南。
 translation:
   source_commit: "867155c924b6527d6a412e1412ce712a9e5cc9b8"
   source_file: "docs/api/semantic-router-crd.md"
-  outdated: false
+  outdated: true
 ---
 
 # SemanticRouter 自定义资源参考 {#semanticrouter-crd-reference}

@@ -84,9 +84,10 @@ def test_an_unusable_device_fails_before_the_model_is_resolved(
         Runtime(ServeConfig(models=(model,))).load()
 
 
-def test_cuda_is_marked_unvalidated_and_rocm_validated():
-    assert CUDAAccelerator.validated is False
+def test_cuda_and_rocm_are_validated():
+    assert CUDAAccelerator.validated is True
     assert ROCmAccelerator.validated is True
+    assert CUDAAccelerator.descriptor()["validated"] is True
 
 
 @pytest.mark.gpu
@@ -144,6 +145,19 @@ def test_a_cpu_without_lapack_refuses_models_that_require_it(monkeypatch, lapack
     assert message.startswith("no device can serve Decision-2.0-Eos-0.8B: cpu: ")
     assert "built without LAPACK" in message
     assert "the router's CPU image" in message and "a GPU device" in message
+
+
+def test_nvfp4_weights_require_fp4_tensor_cores_everywhere():
+    from vllm_srun.plugins.registry import names
+    from vllm_srun.quantization import NVFP4, QuantizedWeights
+
+    nvfp4 = QuantizedWeights(NVFP4, targets=("Linear",), ignore=(), group_size=16)
+    everywhere = dict.fromkeys(names("accelerators"), ("nvfp4",))
+    assert BackboneSpec("qwen3_5_text", {}, (), quantized=nvfp4).requires == {
+        **everywhere,
+        "cpu": ("lapack", "nvfp4"),
+    }
+    assert BackboneSpec("qwen3", {}, (), quantized=nvfp4).requires == everywhere
 
 
 def test_a_pytorch_without_the_private_lapack_flag_still_places_on_the_cpu(

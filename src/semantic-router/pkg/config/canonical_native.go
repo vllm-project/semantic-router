@@ -62,6 +62,11 @@ func validateNativeRoutingConfig(cfg *RouterConfig) error {
 		if !ok || !deployment.IsModelRuntime() {
 			return fmt.Errorf("providers.models[%s].deployment %q must reference a model_runtime deployment", alias, model.Deployment)
 		}
+		// A local alias is served through the decisions API even when no
+		// listener publishes it, and the worker plan does not apply this input.
+		if err := deployment.ValidateDecisionInput(model.Deployment); err != nil {
+			return fmt.Errorf("providers.models[%s]: %w", alias, err)
+		}
 	}
 	nativeRecipes := map[RecipeName]bool{}
 	chatRecipes := map[RecipeName]bool{}

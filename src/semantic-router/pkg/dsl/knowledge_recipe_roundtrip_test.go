@@ -41,8 +41,8 @@ func TestMaintainedKnowledgeRecipeParsesAndDecompilesWithoutError(t *testing.T) 
 		t.Fatal("expected mmlu recipe to resolve built-in mmlu_kb default")
 	}
 
-	if len(cfg.KBRules) == 0 {
-		t.Fatal("expected mmlu recipe to define kb signals")
+	if len(cfg.DecisionRules) == 0 {
+		t.Fatal("expected the knowledge recipe to define its subject question")
 	}
 }
 
@@ -58,8 +58,8 @@ func TestMaintainedKnowledgeRecipeDSLRoundTrip(t *testing.T) {
 		t.Fatalf("Compile errors: %v", errs)
 	}
 
-	if len(cfg.KBRules) == 0 {
-		t.Error("expected at least one kb rule from mmlu recipe")
+	if len(cfg.DecisionRules) == 0 {
+		t.Error("expected the subject question from the knowledge recipe")
 	}
 	if len(cfg.Decisions) == 0 {
 		t.Error("expected at least one decision from mmlu recipe")
@@ -75,8 +75,8 @@ func TestMaintainedKnowledgeRecipeDSLRoundTrip(t *testing.T) {
 		t.Fatalf("Round-trip compile errors: %v", errs2)
 	}
 
-	if len(cfg2.KBRules) != len(cfg.KBRules) {
-		t.Errorf("round-trip kb rules: %d -> %d", len(cfg.KBRules), len(cfg2.KBRules))
+	if len(cfg2.DecisionRules) != len(cfg.DecisionRules) {
+		t.Errorf("round-trip decision questions: %d -> %d", len(cfg.DecisionRules), len(cfg2.DecisionRules))
 	}
 	if len(cfg2.Decisions) != len(cfg.Decisions) {
 		t.Errorf("round-trip decisions: %d -> %d", len(cfg.Decisions), len(cfg2.Decisions))

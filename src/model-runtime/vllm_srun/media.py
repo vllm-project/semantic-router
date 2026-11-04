@@ -4,7 +4,7 @@ A family hands decoding (a module-level function and picklable arguments) to
 ``submit``. With workers it runs in one of the process's media worker
 processes, so decoding and resizing several images at once neither holds the
 interpreter lock the request threads and the device worker share nor waits
-for one preprocessing thread; without workers it runs on the calling thread.
+for the CPU device thread; without workers it runs on the calling thread.
 Either way the caller gets a future. Tensors come back through PyTorch's
 shared-memory pickling, so a decoded image is not copied through a pipe.
 

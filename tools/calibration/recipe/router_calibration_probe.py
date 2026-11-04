@@ -52,7 +52,7 @@ TOP_LEVEL_FIELDS = frozenset(
     }
 )
 ROUTING_ASSET_FIELDS = frozenset({"yaml", "dsl"})
-EVALUATION_FIELDS = frozenset({"request_timeout_seconds", "concurrency"})
+EVALUATION_FIELDS = frozenset({"request_timeout_seconds", "concurrency", "shards"})
 ACCEPTANCE_FIELDS = frozenset({"min_probe_pass_rate", "min_decision_pass_rate"})
 DECISION_FIELDS = frozenset(
     {

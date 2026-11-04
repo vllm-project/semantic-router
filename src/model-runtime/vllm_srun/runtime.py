@@ -12,6 +12,7 @@ worker. Requests name their model (optional while a process serves one);
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import gc
 import logging
 import math
@@ -27,6 +28,7 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import Any
 
+from . import assets as assetlib
 from . import dtypes, media
 from .accel.autotune import KernelChoices, freeze_autotune
 from .accel.cpu import cap_threads
@@ -36,6 +38,7 @@ from .errors import (
     RuntimeServiceError,
     UnsupportedDeviceError,
     VerificationError,
+    with_reason,
 )
 from .placement import Placement, check_device, device_kind, place
 from .plugins import registry
@@ -68,6 +71,8 @@ from .timing import RunTiming, ServerTiming
 
 log = logging.getLogger("vllm_srun")
 AUTO_ENGINE = "auto"
+# The families whose input limit max_model_len may lower: each reads it from package.max_input_tokens.
+MAX_MODEL_LEN_FAMILIES = frozenset({"decision1", "decision2", "decision3"})
 
 
 def _bf16_parameters(spec: ModelSpec, config: ModelConfig, dtype: str) -> int:
@@ -194,7 +199,15 @@ REMOVED_OPTIONS = {
     ),
 }
 SURFACE_FIELDS = {
-    "decisions": {"model", "state", "questions", "images", "videos", "options"},
+    "decisions": {
+        "model",
+        "state",
+        "questions",
+        "images",
+        "videos",
+        "assets",
+        "options",
+    },
     "classify": {"model", "input", "head", "options"},
     "embeddings": {
         "model",
@@ -218,7 +231,7 @@ SURFACE_FIELDS = {
     },
 }
 SURFACE_OPTIONS = {
-    "decisions": {"max_tokens"},
+    "decisions": {"max_tokens", "long_context"},
     "classify": {"overflow", "max_tokens", "window", "threshold", "return_tokens"},
     "embeddings": {"overflow", "max_tokens"},
     "rerank": {"overflow", "max_tokens"},
@@ -227,6 +240,10 @@ STATE_ORDER = {state: index for index, state in enumerate(STATES)}
 # Requests up to this many encoded bytes are planned on the event loop: their
 # rendering costs less than a hop to a worker thread.
 INLINE_PLAN_BYTES = 16 << 10
+# The call a task serves (``Runtime._serve``), until its work is submitted.
+_CALL: contextvars.ContextVar[object | None] = contextvars.ContextVar(
+    "vllm_srun_call", default=None
+)
 
 
 @dataclass
@@ -359,9 +376,21 @@ class ServedModel:
             offline=process.offline,
         )
         family = self._family(ref, options)
+        limit = self.requested_args.max_model_len
+        if limit is not None and family.name not in MAX_MODEL_LEN_FAMILIES:
+            raise RuntimeError(
+                f"max_model_len applies to Decision models only, not {family.name}"
+            )
         ref = family.fetch(ref)
         self.health.set("loading", "verifying the package")
         package = family.verify(ref)
+        if limit is not None:
+            if limit > package.max_input_tokens:
+                raise RuntimeError(
+                    f"max_model_len {limit} is above {package.model_name}'s "
+                    f"limit of {package.max_input_tokens} tokens"
+                )
+            package = replace(package, max_input_tokens=limit)
         spec = family.describe(package)
         parameters = package.loaded_parameters or 0
         budget = config.memory_budget_gib or process.memory_budget_gib
@@ -528,6 +557,7 @@ class ServedModel:
                 else self._inline()
             ),
             device_fault=placement.accelerator.device_fault,
+            planning=self.runtime.planning_before,
         )
         self.scheduler.start()
         self.health.set("warming", "running the golden check")
@@ -547,6 +577,13 @@ class ServedModel:
             self.health.golden = replace(
                 self.health.golden,
                 detail=f"golden references are recorded at --dtype auto, not {self.dtype}",
+            )
+        limit = self.requested_args.max_model_len
+        if self.health.golden.status == "failed" and limit is not None:
+            self.health.golden = replace(
+                self.health.golden,
+                detail=f"{self.health.golden.detail}; max_model_len {limit} "
+                "may be below the length of the model's golden questions",
             )
         if self.health.golden.status == "failed":
             raise VerificationError(self.health.golden.detail or "golden check failed")
@@ -657,11 +694,16 @@ class ServedModel:
         deadlines: list[float | None],
         timing: RunTiming | None = None,
         reference: bool = False,
+        alone: bool = False,
     ) -> list[Future[Results[Any]]]:
         if self.scheduler is None:
             raise RuntimeServiceError("not_ready", f"the model is {self.health.state}")
         return self.scheduler.submit_group(
-            item_lists, deadlines=deadlines, timing=timing, reference=reference
+            item_lists,
+            deadlines=deadlines,
+            timing=timing,
+            reference=reference,
+            alone=alone,
         )
 
     def run_items_now(
@@ -780,6 +822,10 @@ class ServedModel:
             card["presets"] = list(info.presets)
         if "decisions" in info.surfaces:
             card["modalities"] = list(info.modalities)
+            if "image" in info.modalities:
+                card["image_placements"] = list(info.image_placements or ("state",))
+            if info.usage is not None:
+                card["usage"] = info.usage
         return card
 
 
@@ -838,6 +884,11 @@ class Runtime:
     def __init__(self, config: ServeConfig, metrics: RuntimeMetrics | None = None):
         self.config = config
         self.metrics = metrics or RuntimeMetrics()
+        # Calls in ``_serve`` (on the event loop): a call serving alone submits jobs that need no window.
+        self._serving = 0
+        # Calls still being planned, with the time each was received: batching windows wait for them.
+        self._planning: dict[object, float] = {}
+        self._planning_lock = threading.Lock()
         self.served = [ServedModel(self, model) for model in config.served_models()]
         labels = [served.config.name for served in self.served if served.config.name]
         if len(labels) != len(set(labels)):
@@ -1002,6 +1053,10 @@ class Runtime:
             raise RuntimeServiceError(
                 "invalid_request", "options.return_meta must be a boolean"
             )
+        if not isinstance(options.get("long_context", False), bool):
+            raise RuntimeServiceError(
+                "invalid_request", "options.long_context must be a boolean"
+            )
         return deadline, return_meta, received
 
     # -- every surface -------------------------------------------------------
@@ -1054,6 +1109,10 @@ class Runtime:
         served, request, plan = prepared.served, prepared.request, prepared.plan
         assert served.model is not None
         body = served.model.finish_surface(plan, results)
+        if request.surface == "decisions":
+            for answer in body.get("answers", {}).values():
+                if isinstance(answer, dict):
+                    with_reason(answer)
         for kind, outcome in served.model.outcomes(request.surface, body):
             self.metrics.questions.labels(type=kind, outcome=outcome).inc()
         response: dict[str, Any] = {"model": served.served_id, **body}
@@ -1157,13 +1216,49 @@ class Runtime:
         """
         if timing is None:
             timing = ServerTiming()
+        call = object()
+        with self._planning_lock:
+            self._planning[call] = time.monotonic()
+        token = _CALL.set(call)
+        self._serving += 1
+        try:
+            return await self._serve_requests(requests, size, timing)
+        finally:
+            self._serving -= 1
+            _CALL.reset(token)
+            with self._planning_lock:
+                self._planning.pop(call, None)
+
+    def planning_before(self, opened: float) -> bool:
+        """Whether a call received before ``opened`` is still being planned (``Scheduler.planning``)."""
+        with self._planning_lock:
+            return any(received < opened for received in self._planning.values())
+
+    def _planned(self) -> None:
+        """The current call's requests are planned: batching windows stop waiting for it."""
+        call = _CALL.get()
+        if call is not None:
+            with self._planning_lock:
+                self._planning.pop(call, None)
+
+    async def _serve_requests(
+        self,
+        requests: list[tuple[str, Any]],
+        size: int | None,
+        timing: ServerTiming,
+    ) -> list[tuple[int, dict[str, Any]]]:
         received = time.monotonic()
         parts: list[tuple[str, Any, bool]] = []
         # Per request: where its parts start, and its states' names or the
         # error it already has.
         joins: list[tuple[int, list[str] | None, _Outcome | None]] = []
-        for surface, body in requests:
+        for surface, sent in requests:
+            body = sent
             try:
+                if surface == "decisions" and isinstance(sent, dict):
+                    # Assets are checked once for the whole request: every one must be
+                    # used somewhere in it, whichever of its states uses it.
+                    body = assetlib.prepare(sent, self.config.max_request_bytes)
                 split = split_states(body) if surface == "decisions" else None
             except ValueError as exc:
                 failed = _error_outcome(RuntimeServiceError.invalid(exc))
@@ -1291,11 +1386,15 @@ class Runtime:
                     lookup.misses,
                     [prepared.request.deadline for _, prepared in members],
                     lookup.run,
+                    alone=self._serving == 1,
                 )
         except Exception as exc:
             for index, _ in members:
                 outcomes[index] = _error_outcome(exc)
             return
+        finally:
+            # Not before its jobs are queued: a window that stops waiting for this call must find them.
+            self._planned()
         results = await asyncio.gather(
             *(asyncio.wrap_future(future) for future in futures),
             return_exceptions=True,

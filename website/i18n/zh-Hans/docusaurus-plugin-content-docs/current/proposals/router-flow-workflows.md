@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: Router Flow 工作流
 description: 定义已实现的 Router Flow M1 契约，用于有界的静态和动态多模型工作流。
 created: 2026-06-30

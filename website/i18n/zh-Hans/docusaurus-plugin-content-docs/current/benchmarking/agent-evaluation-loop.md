@@ -1,10 +1,11 @@
 ---
+is_mtpe: false
 title: 调优与验证 Recipe
 description: 用真实请求改善路由质量、时延、成本和 Agent 连续性。
 translation:
   source_commit: "68519cf498b94c947cf4c7cd9a2800a41276dea6"
   source_file: "docs/benchmarking/agent-evaluation-loop.md"
-  outdated: false
+  outdated: true
 ---
 
 # 调优与验证 Recipe {#tune-and-verify-a-recipe}

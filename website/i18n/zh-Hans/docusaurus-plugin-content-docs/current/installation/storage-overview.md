@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 数据与存储
 description: 为缓存、记忆、回放、响应历史和向量数据选择支撑服务。
 translation:

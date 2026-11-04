@@ -11,8 +11,9 @@ import (
 
 const decisionSelectorQuestionID = "selector"
 
-// newDecisionModelSelector binds the decision selector to the model runtime.
-// A selector that names no deployment asks the decision model's deployment.
+// newDecisionModelSelector binds the decision selector to the model runtime,
+// or to a systemone deployment's remote API. A selector that names no
+// deployment asks the decision model's deployment.
 func (r *OpenAIRouter) newDecisionModelSelector(cfg config.DecisionSelectionConfig) selection.Selector {
 	descriptions := make(map[string]string, len(r.Config.ModelConfig))
 	for model, params := range r.Config.ModelConfig {
@@ -23,17 +24,31 @@ func (r *OpenAIRouter) newDecisionModelSelector(cfg config.DecisionSelectionConf
 		decider = modelservice.Default()
 	}
 	cfg.Deployment = r.Config.DecisionSelectorDeployment(cfg)
-	scan := r.Config.ModelDeployments[cfg.Deployment].ScanBudget()
-	card, prepared := r.decisionCards[cfg.Deployment]
+	deployment := r.Config.ModelDeployments[cfg.Deployment]
+	timeout := cfg.EffectiveTimeout()
+	if deployment.IsSystemOne() && cfg.TimeoutMs == 0 && deployment.TimeoutMs > 0 {
+		timeout = deployment.CallTimeout()
+	}
+	scan := deployment.ScanBudget()
+	prepared, preparedOK := r.decisionCards[cfg.Deployment]
 	invoke := func(
 		ctx context.Context,
 		instructions string,
 		state string,
 		choices []selection.DecisionModelChoice,
 	) (selection.DecisionModelAnswer, error) {
-		callCtx, cancel := context.WithTimeout(ctx, cfg.EffectiveTimeout())
+		callCtx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
-		if !prepared {
+		card, ready, asked := prepared, preparedOK, decider
+		if deployment.IsSystemOne() {
+			if r.systemOneDecider == nil {
+				return selection.DecisionModelAnswer{}, modelservice.ErrUnavailable
+			}
+			// The API's listing may have answered since preparation.
+			card, ready = r.systemOneDecider.Card(cfg.Deployment)
+			asked = r.systemOneDecider
+		}
+		if !ready {
 			return selection.DecisionModelAnswer{}, fmt.Errorf("decision selector requires a prepared model card")
 		}
 		// Selection routes, so a long state is read only as far as its first tokens.
@@ -46,7 +61,7 @@ func (r *OpenAIRouter) newDecisionModelSelector(cfg config.DecisionSelectionConf
 		if err != nil {
 			return selection.DecisionModelAnswer{}, err
 		}
-		response, _, err := modelservice.ExecuteTaskPlans(callCtx, decider, cfg.Deployment, modelservice.Request{State: state, MaxTokens: scan}, []modelservice.TaskPlan{plan})
+		response, _, err := modelservice.ExecuteTaskPlans(callCtx, asked, cfg.Deployment, modelservice.Request{State: state, MaxTokens: scan}, []modelservice.TaskPlan{plan})
 		if err != nil {
 			modelservice.RecordUnknown(cfg.Deployment, modelservice.ErrorReason(err), 1)
 			return selection.DecisionModelAnswer{}, err

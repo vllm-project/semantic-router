@@ -125,6 +125,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: helm-chart-${{ github.run_id }}
           path: |
             ${{ steps.package.outputs.chart }}

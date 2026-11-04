@@ -26,12 +26,15 @@ SHA = "a" * 40
 MAX_GATE_ENV_BYTES = 4096
 
 
-def completed(paths=None, *, full=False, profile="pr"):
+def completed(
+    paths=None, *, full=False, profile="pr", execution_environment=None, **plan_options
+):
     plan = make_plan(
         paths or ["tools/make/build-run-test.mk"],
         source_sha=SHA,
         full=full,
         profile=profile,
+        **plan_options,
     )
     builds = [
         {"id": f"image:{name}", "sha256": "b" * 64, "source_sha": SHA}
@@ -90,7 +93,7 @@ def completed(paths=None, *, full=False, profile="pr"):
                 evidence,
                 source_sha=SHA,
                 execution_platform="linux/amd64",
-                environ={},
+                environ=execution_environment or {},
             )
         )
     return plan, receipts, builds
@@ -421,7 +424,13 @@ class GateTransportTests(unittest.TestCase):
     def test_shell_reconciles_large_file_plan_and_rejects_missing_or_changed_evidence(
         self,
     ):
-        plan, receipts, builds = completed(full=True)
+        actions_environment = {
+            "GITHUB_ACTIONS": "true",
+            "CI_RUNNER_ENVIRONMENT": "github-hosted",
+        }
+        plan, receipts, builds = completed(
+            full=True, execution_environment=actions_environment
+        )
         plan["paths"] = [
             f"website/docs/large-change-{index}.md" for index in range(5000)
         ]
@@ -454,10 +463,25 @@ class GateTransportTests(unittest.TestCase):
                         }
                     )
                 )
+            artifacts = {
+                record["id"]: f"ci-result-{record['id']}"
+                for record in plan["verifications"]
+            }
+            for field, prefix in (
+                ("component_batches", "ci-result-components-"),
+                ("platform_batches", "ci-result-"),
+                ("e2e_batches", "ci-result-"),
+            ):
+                for batch in plan[field]:
+                    for record in batch["verifications"]:
+                        artifacts[record["id"]] = prefix + batch["id"]
+            receipt_paths = {}
             for receipt in receipts:
-                output = results / f"ci-result-{receipt['id']}"
-                output.mkdir()
-                (output / "result.json").write_text(json.dumps(receipt))
+                output = results / artifacts[receipt["id"]]
+                output.mkdir(exist_ok=True)
+                receipt_path = output / f"{receipt['id']}.json"
+                receipt_path.write_text(json.dumps(receipt))
+                receipt_paths[receipt["id"]] = receipt_path
             plan_path = directory / "plan.json"
             plan_path.write_text(json.dumps(plan))
             self.assertGreater(plan_path.stat().st_size, 128 * 1024)
@@ -465,7 +489,12 @@ class GateTransportTests(unittest.TestCase):
                 "python3 tools/ci/check_ci_gate.py",
                 f"{shlex.quote(sys.executable)} {shlex.quote(str(ROOT / 'tools/ci/check_ci_gate.py'))}",
             )
-            environment = {**os.environ, **self.environment(jobs), "GITHUB_SHA": SHA}
+            environment = {
+                **os.environ,
+                **self.environment(jobs),
+                **actions_environment,
+                "GITHUB_SHA": SHA,
+            }
             environment.pop("GITHUB_STEP_SUMMARY", None)
 
             def run():
@@ -488,7 +517,7 @@ class GateTransportTests(unittest.TestCase):
             self.assertIn("plan schema or content digest is invalid", run().stdout)
             plan["paths"].pop()
             plan_path.write_text(json.dumps(plan))
-            (results / f"ci-result-{receipts[-1]['id']}" / "result.json").unlink()
+            receipt_paths[receipts[-1]["id"]].unlink()
             actual = run()
             self.assertEqual(actual.returncode, 1)
             self.assertIn(

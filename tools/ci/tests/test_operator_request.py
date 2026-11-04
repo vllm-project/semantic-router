@@ -150,7 +150,7 @@ class OperatorRequestTests(unittest.TestCase):
                 json.loads(output.read_text())["cases"][0]["status"], "passed"
             )
 
-    def test_every_workflow_variant_declares_the_route_exercised_by_the_probe(self):
+    def test_memory_deployment_declares_the_route_exercised_by_the_probe(self):
         workflow = yaml.safe_load(
             (ROOT / ".github/workflows/operator-ci.yml").read_text()
         )
@@ -160,34 +160,22 @@ class OperatorRequestTests(unittest.TestCase):
             for step in job.get("steps", [])
             if step.get("name") == "Create test SemanticRouter CR"
         )
-        for backend in [
-            "memory",
-            "redis",
-            "milvus",
-            "qdrant",
-            "hybrid",
-            "mmbert",
-            "complexity",
-        ]:
-            with (
-                self.subTest(backend=backend),
-                tempfile.TemporaryDirectory() as directory,
-            ):
-                output = Path(directory) / "resource.yaml"
-                command = script.replace(
-                    "${{ matrix.cache-backend }}", backend
-                ).replace("${{ matrix.cache-backend }}", backend)
-                subprocess.run(
-                    ["bash", "-eu", "-c", 'kubectl() { cat > "$OUTPUT"; }\n' + command],
-                    env={**os.environ, "OUTPUT": str(output)},
-                    check=True,
-                )
-                spec = yaml.safe_load(output.read_text())["spec"]
-                routing = spec["config"]["routing"]
-                self.assertEqual(len(routing["decisions"]), 1)
-                decision = routing["decisions"][0]
-                self.assertEqual(decision["name"], "operator_ci_route")
-                self.assertEqual(decision["rules"], {"operator": "AND"})
-                self.assertEqual(
-                    decision["modelRefs"][0]["model"], spec["vllmEndpoints"][0]["model"]
-                )
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "resource.yaml"
+            subprocess.run(
+                ["bash", "-eu", "-c", 'kubectl() { cat > "$OUTPUT"; }\n' + script],
+                env={**os.environ, "OUTPUT": str(output)},
+                check=True,
+            )
+            resource = yaml.safe_load(output.read_text())
+            self.assertEqual(resource["metadata"]["name"], "test-router-memory")
+            spec = resource["spec"]
+            self.assertEqual(spec["config"]["semantic_cache"]["backend_type"], "memory")
+            routing = spec["config"]["routing"]
+            self.assertEqual(len(routing["decisions"]), 1)
+            decision = routing["decisions"][0]
+            self.assertEqual(decision["name"], "operator_ci_route")
+            self.assertEqual(decision["rules"], {"operator": "AND"})
+            self.assertEqual(
+                decision["modelRefs"][0]["model"], spec["vllmEndpoints"][0]["model"]
+            )

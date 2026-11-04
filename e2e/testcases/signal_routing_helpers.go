@@ -124,6 +124,9 @@ func loadSignalRoutingCases(filepath string) ([]SignalRoutingCase, error) {
 	if err := json.Unmarshal(data, &cases); err != nil {
 		return nil, fmt.Errorf("failed to parse test cases: %w", err)
 	}
+	if len(cases) == 0 {
+		return nil, fmt.Errorf("signal routing test corpus %q is empty", filepath)
+	}
 
 	return cases, nil
 }

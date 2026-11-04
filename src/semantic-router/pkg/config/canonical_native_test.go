@@ -251,3 +251,33 @@ entrypoints:
 		t.Fatal("native alias became Chat quorum fallback")
 	}
 }
+
+func TestNativeCascadeRejectsATaskInputOnALocalAlias(t *testing.T) {
+	// Stage fast calls local-kai through the decisions API. The routed
+	// entrypoint stays on the listener; kai may or may not.
+	for _, publish := range []bool{false, true} {
+		base := nativeRoutingTestYAML
+		if publish {
+			base = strings.Replace(base, "models: [vllm-sr/auto]", "models: [vllm-sr/auto, kai]", 1)
+		}
+		for _, input := range []string{
+			"input: {max_tokens: 512, overflow: truncate}",
+			"input: {max_tokens: 32768, overflow: reject}",
+		} {
+			raw := strings.Replace(base, "device: cpu", "device: cpu\n        "+input, 1)
+			_, err := ParseYAMLBytes([]byte(raw))
+			if err == nil {
+				t.Fatalf("publish=%v %s was accepted", publish, input)
+			}
+			for _, want := range []string{"providers.models[kai]", "local-kai", "never truncate"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("publish=%v %s: %v", publish, input, err)
+				}
+			}
+		}
+		window := strings.Replace(base, "device: cpu", "device: cpu\n        input: {max_tokens: 32768, overflow: window}", 1)
+		if _, err := ParseYAMLBytes([]byte(window)); err != nil {
+			t.Fatalf("publish=%v window: %v", publish, err)
+		}
+	}
+}

@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 使用 Agent Router 部署
 description: 由 Semantic Router 负责模型选择或 Responses 状态，由 Agent Router（原 Envoy AI Gateway）负责提供商和网关策略。
 translation:

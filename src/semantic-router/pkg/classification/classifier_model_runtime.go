@@ -17,9 +17,11 @@ import (
 // they never resolve catalog paths or scan another recipe's configuration.
 type classifierModelRuntime struct {
 	runtime *serving.Runtime
-	plan    *config.ModelBindingPlan
-	cfg     *config.RouterConfig
-	recipe  config.RecipeName
+	// systemOne asks the systemone deployments' remote APIs.
+	systemOne modelservice.Remote
+	plan      *config.ModelBindingPlan
+	cfg       *config.RouterConfig
+	recipe    config.RecipeName
 	// Contrastive input policy is captured before the module window defaults.
 	jailbreakContrastiveFullContext *bool
 }
@@ -37,7 +39,7 @@ func newClassifierModelRuntime(cfg *config.RouterConfig, options RecipeRuntimeOp
 	if recipe == "" {
 		recipe = config.DefaultRecipeName
 	}
-	models := &classifierModelRuntime{runtime: runtime, plan: plan, cfg: cfg, recipe: recipe}
+	models := &classifierModelRuntime{runtime: runtime, systemOne: options.SystemOne, plan: plan, cfg: cfg, recipe: recipe}
 	if err := models.projectBindings(); err != nil {
 		return nil, err
 	}

@@ -8,6 +8,7 @@ models, the per-model result cache, bundle fusion and per-model readiness.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import math
 import shutil
@@ -16,6 +17,7 @@ import sys
 import zipfile
 from pathlib import Path
 
+import httpx
 import pytest
 from starlette.testclient import TestClient
 from vllm_srun.api.app import create_app
@@ -417,6 +419,83 @@ def test_a_forward_error_fails_only_its_request(client, runtime, monkeypatch):
     )
     assert served.status_code == 200
     assert client.get("/health").status_code == 200
+
+
+@pytest.mark.parametrize("extra", [-1, 1], ids=["short", "long"])
+def test_wrong_result_count_fails_the_bundle_and_keeps_serving(
+    example_plugin, keyword_package, monkeypatch, extra
+):
+    runtime = Runtime(
+        ServeConfig(
+            models=(
+                ModelConfig(
+                    model=str(keyword_package),
+                    name="keywords",
+                    device="cpu",
+                    engine="example_counts",
+                ),
+            ),
+            result_cache_entries=0,
+        )
+    )
+    runtime.start(background=False)
+    try:
+        model = keyword_model(runtime)
+        run = model.run
+        calls = []
+
+        def wrong_once(items):
+            values = run(items)
+            calls.append(len(items))
+            if len(calls) == 1:
+                return (values + values)[: len(items) + extra]
+            return values
+
+        monkeypatch.setattr(model, "run", wrong_once)
+        body = {
+            "tasks": [
+                {"id": name, "classify": {"model": "keywords", "input": [text]}}
+                for name, text in (("a", "refund invoice"), ("b", "parcel delivery"))
+            ]
+        }
+
+        async def scenario():
+            transport = httpx.ASGITransport(app=create_app(runtime))
+            async with httpx.AsyncClient(
+                transport=transport, base_url="http://testserver"
+            ) as client:
+                broken = await asyncio.wait_for(
+                    client.post("/v1/bundle", json=body), timeout=5
+                )
+                assert broken.status_code == 200
+                check("BundleResponse", broken.json())
+                results = broken.json()["results"]
+                assert [result["status"] for result in results] == [500, 500]
+                for result in results:
+                    assert result["error"]["code"] == "internal_error"
+                    assert (
+                        f"model result count mismatch: expected 2, got {2 + extra}"
+                        in result["error"]["message"]
+                    )
+                served = await asyncio.wait_for(
+                    client.post("/v1/bundle", json=body), timeout=5
+                )
+                assert served.status_code == 200
+                check("BundleResponse", served.json())
+                results = served.json()["results"]
+                assert [result["status"] for result in results] == [200, 200]
+                assert [
+                    result["classify"]["results"][0]["label"] for result in results
+                ] == [
+                    "billing",
+                    "shipping",
+                ]
+                assert (await client.get("/health")).status_code == 200
+
+        asyncio.run(scenario())
+        assert calls == [2, 2]
+    finally:
+        runtime.stop()
 
 
 def test_a_non_finite_answer_fails_only_its_task(client, runtime, monkeypatch):

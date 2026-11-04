@@ -632,6 +632,13 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
             'When off, Replay keeps route metadata but omits content when PII is detected or detection is unavailable. A decision can override this default.',
         },
         {
+          name: 'capture_tool_results',
+          label: 'Capture tool results',
+          type: 'boolean',
+          description:
+            'Stores client tool-result text in records, each result bounded by max_tool_trace_bytes. Requires personal data capture; callers without replay detail access still see results redacted. Intended for development and audit.',
+        },
+        {
           name: 'store_backend',
           label: 'Store Backend',
           type: 'select',
@@ -781,7 +788,7 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           name: 'model_id',
           label: 'Model ID Override',
           type: 'text',
-          placeholder: 'models/Vela-2.0-0.3B',
+          placeholder: 'models/vela3-fast',
         },
         { name: 'threshold', label: 'Threshold', type: 'percentage', placeholder: '70' },
         { name: 'use_cpu', label: 'Use CPU', type: 'boolean' },
@@ -813,7 +820,7 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           name: 'model_id',
           label: 'Model ID Override',
           type: 'text',
-          placeholder: 'models/Vela-2.0-0.3B',
+          placeholder: 'models/vela3-fast',
         },
         { name: 'threshold', label: 'Threshold', type: 'percentage', placeholder: '70' },
         { name: 'use_cpu', label: 'Use CPU', type: 'boolean' },
@@ -827,37 +834,37 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           name: 'prompt_guard',
           label: 'Prompt Guard Binding',
           type: 'text',
-          placeholder: 'models/Vela-2.0-0.3B',
+          placeholder: 'models/vela3-fast',
         },
         {
           name: 'domain_classifier',
           label: 'Domain Classifier Binding',
           type: 'text',
-          placeholder: 'models/Vela-2.0-0.3B',
+          placeholder: 'models/vela3-fast',
         },
         {
           name: 'pii_classifier',
           label: 'PII Classifier Binding',
           type: 'text',
-          placeholder: 'models/Vela-2.0-0.3B',
+          placeholder: 'models/vela3-fast',
         },
         {
           name: 'fact_check_classifier',
           label: 'Fact Check Binding',
           type: 'text',
-          placeholder: 'models/Vela-2.0-0.3B',
+          placeholder: 'models/vela3-fast',
         },
         {
           name: 'hallucination_detector',
           label: 'Hallucination Detector Binding',
           type: 'text',
-          placeholder: 'models/Vela-2.0-0.3B',
+          placeholder: 'models/vela3-fast',
         },
         {
           name: 'feedback_detector',
           label: 'Feedback Detector Binding',
           type: 'text',
-          placeholder: 'models/Vela-2.0-0.3B',
+          placeholder: 'models/vela3-fast',
         },
       ]
     case 'embedding_models':
@@ -1097,6 +1104,21 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
   return objectData ? { ...objectData } : asObject(cloneDefaultSection(key)) || {}
 }
 
+// A module threshold left empty is saved as no threshold, so the Router gives
+// the module the operating point of the model it runs.
+function withoutEmptyThreshold(module: Record<string, unknown>): Record<string, unknown> {
+  const threshold = module.threshold
+  if (typeof threshold === 'number' && Number.isFinite(threshold)) {
+    return module
+  }
+  if (typeof threshold === 'string' && threshold.trim() !== '') {
+    return module
+  }
+  const rest = { ...module }
+  delete rest.threshold
+  return rest
+}
+
 function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<ConfigData> {
   if (key === 'embedding_models') {
     return buildNestedPatch(
@@ -1136,17 +1158,23 @@ function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<Config
   if (key === 'classifier') {
     return buildNestedPatch(CURATED_ROUTER_SECTIONS[key].path, {
       ...data,
-      domain: asObject(data.domain) || {},
-      pii: asObject(data.pii) || {},
+      domain: withoutEmptyThreshold(asObject(data.domain) || {}),
+      pii: withoutEmptyThreshold(asObject(data.pii) || {}),
       mcp: asObject(data.mcp) || {},
       preference: asObject(data.preference) || {},
     }) as Partial<ConfigData>
+  }
+  if (key === 'prompt_guard' || key === 'feedback_detector') {
+    return buildNestedPatch(
+      CURATED_ROUTER_SECTIONS[key].path,
+      withoutEmptyThreshold(data),
+    ) as Partial<ConfigData>
   }
   if (key === 'hallucination_mitigation') {
     const hallucination: Record<string, unknown> = {
       ...data,
       enabled: Boolean(data.enabled),
-      fact_check: asObject(data.fact_check) || {},
+      fact_check: withoutEmptyThreshold(asObject(data.fact_check) || {}),
       detector: asObject(data.detector) || {},
     }
     delete hallucination.explainer

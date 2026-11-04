@@ -48,8 +48,15 @@ type modelState struct {
 	entries map[uint64]entry
 }
 
+// sync.Mutex, not sync.RWMutex: every exported method (SetMaxAge, Begin,
+// End, Get, Snapshot, Reset) takes the write lock, and Get/Snapshot mutate
+// map state via evictAndCount, so no production read path exists. An RWMutex
+// would pay reader-count maintenance on every Begin and End — the two hottest
+// calls on the request path, since load-aware selection consults Get per
+// candidate — for a read lock no code path can ever take. See also the
+// pkg/latency precedent (TPOTCache/TTFTCache on the same shape).
 var (
-	mu          sync.RWMutex
+	mu          sync.Mutex
 	states      = map[string]*modelState{}
 	maxAge      = DefaultMaxAge
 	nextTokenID uint64 // Never reset; stale tokens must not match later requests.

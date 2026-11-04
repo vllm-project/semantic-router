@@ -34,7 +34,15 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 		"moderation":                                             len(wire.Moderation) > 0,
 		"x_groq":                                                 len(wire.XGroq) > 0,
 		"usage_breakdown":                                        wire.hasUsageBreakdown(),
+		"citations":                                              wire.hasCitations(),
+		"search_results":                                         wire.hasSearchResults(),
 	}, "response request metadata is not model output")
+	if wire.hasTimeInfo() {
+		// A same-format response replays the original bytes, so unlike the
+		// shared family message this reason also states what the client sees.
+		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.OpenAIChatV1, "time_info",
+			"provider serving timing metadata is not model output; a same-format replay forwards it unchanged")
+	}
 	if err := decodeChatChoices(wire, &response, policy); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, err
 	}
@@ -46,7 +54,7 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	// from the neutral response, so render it again instead of leaking them.
 	// LiteLLM's provider_specific_fields are similarly non-canonical and must
 	// not be replayed.
-	needsReencode := wire.hasOpenRouterDecorations() || wire.hasLiteLLMDecorations()
+	needsReencode := wire.hasOpenRouterDecorations() || wire.hasLiteLLMDecorations() || chatChoicesHaveReasoningDetails(wire.Choices)
 	if needsReencode {
 		canonicalBody = nil
 	}

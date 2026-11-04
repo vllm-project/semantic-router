@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { dashboardSettingsResponse, mockAuthenticatedSession } from './support/auth'
+import { dashboardSettingsResponse, mockAuthenticatedSession, unavailableCapability } from './support/auth'
 
 const setupState = {
   setupMode: false,
@@ -272,6 +272,7 @@ async function mockCommon(
       permissions?: string[]
     }
     settings?: Record<string, unknown>
+    capabilities?: Record<string, Record<string, unknown>>
   } = {},
 ) {
   await mockAuthenticatedSession(page, options)
@@ -464,10 +465,7 @@ test.describe('Layout top navigation', () => {
     page,
   }) => {
     await mockCommon(page, {
-      settings: {
-        srBenchAvailable: false,
-        srBenchUnavailableReason: 'Evaluation is disabled for this deployment.',
-      },
+      capabilities: { evaluation: unavailableCapability('Evaluation is disabled for this deployment.') },
     })
     await page.goto('/dashboard')
 

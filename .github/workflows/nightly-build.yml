@@ -1,13 +1,15 @@
-name: Nightly
+name: Weekly Qualification
 
 on:
   schedule:
-    - cron: "0 2 * * *"
+    - cron: "0 2 * * 1"
   workflow_dispatch:
 
 permissions:
   contents: read
   actions: read
+  issues: read
+  pull-requests: read
 
 concurrency:
   group: nightly
@@ -23,6 +25,8 @@ jobs:
     permissions:
       contents: read
       actions: read
+      issues: read
+      pull-requests: read
       security-events: write
     with:
       profile: nightly

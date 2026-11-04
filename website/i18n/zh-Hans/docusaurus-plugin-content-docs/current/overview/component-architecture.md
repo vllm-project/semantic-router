@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 sidebar_position: 3
 title: 组件架构
 description: 前端、可选决策引擎与模型运行时如何组合，以及模型选择和副本调度的区别。
