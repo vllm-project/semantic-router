@@ -20,6 +20,7 @@ queries. See [Router management API](./apiserver).
 | `DELETE` | `/v1/responses/{id}` | OpenAI Responses | Deletes a stored response |
 | `GET` | `/v1/responses/{id}/input_items` | OpenAI Responses | Reads stored input items |
 | `POST` | `/v1/messages` | Anthropic Messages | The router translates when the selected backend uses another protocol |
+| `POST` | `/v1/messages/count_tokens` | Anthropic Messages | Counts with the Messages backend of the named model, or of the model that last served the session, at its `count_tokens` path; otherwise answers with its own estimate, which counts text by tokenizer-style pieces rather than bytes. No turn is routed or recorded. A recipe with candidate requirements, or with a decision that reads content (any signal but conversation shape and context size) or has a plugin, always gets the estimate. Rate limits, token budgets included, admit a count by its input before it is forwarded |
 | `POST` | `/openai/deployments/{deployment}/chat/completions` | Azure OpenAI Chat Completions | The deployment names the Router model; `api-version` is accepted and not forwarded |
 | `POST` | `/openai/responses` | Azure OpenAI Responses | Accepts the dated `api-version`; the model is in the request body and the Responses service must be enabled |
 | `POST` | `/openai/v1/responses` | Azure OpenAI Responses | The model is in the request body and the Responses service must be enabled |
