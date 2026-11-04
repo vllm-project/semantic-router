@@ -245,6 +245,7 @@
         "remote_host",
         "remote_port",
         "search_results",
+        "time_info",
         "usage_breakdown",
         "x_groq"
       ],
