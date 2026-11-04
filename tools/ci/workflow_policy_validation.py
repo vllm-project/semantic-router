@@ -300,6 +300,7 @@ def validate_release_contract(
     validate_release_images(release, errors)
     validate_stable_tag_owner(workflows, errors)
     validate_nightly_docker_owner(workflows, errors)
+    validate_nightly_qualification(workflows, errors)
     validate_fixture_tag_policy(workflows, errors)
 
 
@@ -468,6 +469,44 @@ def validate_nightly_docker_owner(
     docker = nightly.jobs.get("docker", {}) if nightly else {}
     if docker.get("with", {}).get("images") != "${{ needs.ci.outputs.publish_images }}":
         errors.append("nightly images must consume the planner publication inventory")
+
+
+def validate_nightly_qualification(
+    workflows: dict[str, WorkflowLike], errors: list[str]
+) -> None:
+    """Every day publishes the newest qualified main commit, whatever came before."""
+    nightly = workflows.get("nightly-build.yml")
+    if nightly is None:
+        errors.append("missing nightly qualification")
+        return
+    schedules = nightly.events.get("schedule") or []
+    crons = [entry.get("cron", "") for entry in schedules if isinstance(entry, dict)]
+    if len(crons) != 1 or crons[0].split()[2:] != ["*", "*", "*"]:
+        errors.append("nightly-build.yml must qualify main once every day")
+    if "concurrency" in nightly.data:
+        errors.append(
+            "nightly-build.yml must not let a newer run cancel an older run's publication"
+        )
+    ci = nightly.jobs.get("ci", {})
+    if ci.get("concurrency") != {
+        "group": "nightly-qualification",
+        "cancel-in-progress": True,
+    } or "head" not in needs(ci):
+        errors.append(
+            "nightly-build.yml: a newer run must cancel the qualification it supersedes"
+        )
+    for job_id in ("docker", "helm"):
+        if "concurrency" in nightly.jobs.get(job_id, {}):
+            errors.append(f"nightly-build.yml: '{job_id}' publication must not be cancelled")
+    retry = workflows.get("nightly-retry.yml")
+    trigger = retry.events.get("workflow_run", {}) if retry else {}
+    job = retry.jobs.get("retry", {}) if retry else {}
+    if trigger.get("workflows") != [nightly.data.get("name")] or trigger.get(
+        "types"
+    ) != ["completed"]:
+        errors.append("nightly-retry.yml must observe Nightly Qualification runs")
+    elif "github.event.workflow_run.run_attempt == 1" not in job.get("if", ""):
+        errors.append("nightly-retry.yml may re-run a qualification only once")
 
 
 def validate_fixture_tag_policy(

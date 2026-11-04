@@ -65,11 +65,17 @@ can increase the elapsed time of an individual worker.
   CLI is published only after its commit-addressed images exist. The six-image
   publication set is dashboard, operator, operator-bundle, and the CPU, CUDA,
   and ROCm router images; qualification can also need fixture images.
-- **Weekly qualification:** the existing `nightly-build.yml` entrypoint now runs
-  every Monday at 02:00 UTC, or on explicit dispatch. It uses the versioned full
-  CPU inventory and retains successful-run image/Helm publication. An absent
+- **Nightly qualification:** the `nightly-build.yml` entrypoint runs every day
+  at 02:00 UTC, or on explicit dispatch, against the newest main commit. It uses
+  the versioned full CPU inventory and retains successful-run image/Helm
+  publication. A scheduled run skips a commit that another run already passed
+  or is still qualifying, a newer run cancels the qualification it supersedes
+  (never a publication), and `nightly-retry.yml` re-runs a failed first
+  attempt's failed jobs once while it is still main's newest commit. An earlier
+  failure therefore delays a commit's publication by at most a day. An absent
   diff base does not make every repository file an affected product change.
-  Existing `nightly` profile and publication names remain compatibility identifiers.
+  Existing `nightly` profile and publication names remain compatibility
+  identifiers.
 - **Release and maintenance:** keep explicit artifact/version publication and
   repository maintenance separate from per-PR product qualification. The
   release workflow is an artifact/version pipeline; it does not itself invoke
@@ -89,7 +95,7 @@ there was no diff base. At the exact audit baseline, that expanded the plan to
 64 contracts and 39 E2E
 profiles, including optional deployments outside the versioned full CPU
 inventory. Without an explicit comparison base or supplied changed paths,
-weekly, release qualification, and Main publication now select the versioned
+nightly, release qualification, and Main publication now select the versioned
 baseline: 31 contracts and 11 E2E profiles after retiring CK, adding the
 model-runtime contract, separating Operator source qualification from deployment,
 moving five authoring contracts to affected/manual selection, and retiring four
@@ -158,7 +164,7 @@ Job IDs below come from the YAML, including reusable caller jobs. A caller job
 does not represent another machine in addition to its called workflow's jobs.
 “Automatic” means selected by the changed-path policy; it does not mean that
 every PR runs that row. “Approved/full” means affected PR work after approval,
-or complete weekly/explicit publication qualification.
+or complete nightly/explicit publication qualification.
 
 ### Planning and entrypoints
 
@@ -168,7 +174,8 @@ or complete weekly/explicit publication qualification.
 | [ci-status.yml](../../../.github/workflows/ci-status.yml) | `publish` | Trusted main code publishes PR Gate and updates one bot comment with the deferred scope and authorization command. | At most two short jobs from normal `in_progress`/`completed` events per attempt. Missing authorization remains pending without a resident runner; actual failures fail, and complete passing evidence succeeds. |
 | [manual-ci.yml](../../../.github/workflows/manual-ci.yml) | `authorize`, `rerun` | Validates a comment and frozen revision, then reruns its original PR run. Trusted controller code reacts to requests and explains rejection or trigger failures on the PR. | Retain as the approval entrypoint; run only for `/ci run` comments. The two jobs separate authorization from Actions write permission; both may write command feedback. |
 | [main.yml](../../../.github/workflows/main.yml) | `ci`, `images`, `helm`, `pypi` | Merged-source checks and explicit coherent development publication. | Change push behavior to source/component checks only. Publication jobs run after `publish: true` qualification; preserve CLI/image revision coupling. |
-| [nightly-build.yml](../../../.github/workflows/nightly-build.yml) | `ci`, `docker`, `helm` | Broad detection outside the affected-path selection and promotion after successful qualification. | Change daily execution to Monday weekly execution; retain manual dispatch and full coverage. Keep the filename/profile for existing consumers. |
+| [nightly-build.yml](../../../.github/workflows/nightly-build.yml) | `head`, `ci`, `docker`, `helm` | Broad detection outside the affected-path selection and promotion after successful qualification. | Daily execution of the newest main commit; a scheduled run skips a commit that another run already passed or is still qualifying, and a newer run cancels a superseded qualification but not its publication. Retain manual dispatch and full coverage. Keep the filename/profile for existing consumers. |
+| [nightly-retry.yml](../../../.github/workflows/nightly-retry.yml) | `retry` | Re-runs the failed jobs of a failed first Nightly Qualification attempt once, so one transient failure does not cost a day's publication. | One short job per failed run; it does nothing once main has moved or another qualification is active. |
 | [ci-changes.yml](../../../.github/workflows/ci-changes.yml) | `plan` | Resolves source/base, changed paths, approval, selected contracts, image dependencies, and display matrices. | Retain one planner. Approval changes execution eligibility without deleting required inventory. Scheduled full qualification uses the versioned inventory without treating all tracked files as affected changes. |
 | [ci.yml](../../../.github/workflows/ci.yml) | `plan`; `image-router`, `image-dashboard`, `image-operator`, `image-fixtures`, `image-distribution`; `quality`, `generated`, `security`, `core`, `storage`, `dashboard`, `operator-source`, `operator`, `local`, `recipes`, `platform`, `performance`, `package`, `tools`, `e2e-router`, `e2e-fixtures`, `e2e-dashboard`; `gate` | Connects producers to their actual consumers and reconciles independent receipts. | Retain the shared dispatcher. Merge compatible physical workers, not all jobs into an opaque shell script. Source checks start without waiting for images. Direct single-verification dispatch remains diagnostic. |
 

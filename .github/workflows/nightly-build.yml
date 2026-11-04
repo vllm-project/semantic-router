@@ -1,8 +1,8 @@
-name: Weekly Qualification
+name: Nightly Qualification
 
 on:
   schedule:
-    - cron: "0 2 * * 1"
+    - cron: "0 2 * * *"
   workflow_dispatch:
 
 permissions:
@@ -11,16 +11,42 @@ permissions:
   issues: read
   pull-requests: read
 
-concurrency:
-  group: nightly
-  cancel-in-progress: false
-
 jobs:
-  ci:
-    name: CI
+  head:
+    name: Select the Commit to Qualify
     if: >-
       github.repository == 'vllm-project/semantic-router'
       || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      qualify: ${{ steps.published.outputs.qualify }}
+    steps:
+      - name: Skip a scheduled run when another run already covers this commit
+        id: published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          qualify=true
+          if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
+            covered="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/nightly-build.yml/runs?head_sha=$GITHUB_SHA&per_page=20" \
+              --jq "[.workflow_runs[] | select(.id != $GITHUB_RUN_ID) | select(.conclusion == \"success\" or .status != \"completed\")] | length")"
+            if [[ "$covered" != 0 ]]; then
+              qualify=false
+              echo "::notice::Another Nightly Qualification run of $GITHUB_SHA passed or is still running."
+            fi
+          fi
+          echo "qualify=$qualify" >> "$GITHUB_OUTPUT"
+
+  ci:
+    name: CI
+    needs: head
+    if: needs.head.outputs.qualify == 'true'
+    # A newer run qualifies a newer commit, so it cancels an older run's
+    # qualification. Publication is outside this group and is never cancelled.
+    concurrency:
+      group: nightly-qualification
+      cancel-in-progress: true
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
