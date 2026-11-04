@@ -137,7 +137,10 @@ routing:
           timeout_ms: 1000
 ```
 
-A named deployment must use `provider: model_runtime`. The decision needs 2–255
+A named deployment must use `provider: model_runtime`, or `provider: systemone`
+for a [remote System One API](../../signal/learned/decision.md#ask-a-remote-system-one-model);
+a selector without its own `timeout_ms` then takes the deployment's. The
+decision needs 2–255
 different `modelRefs`, and `candidates` may describe only those models; a
 model without a description uses its configured description. When the model
 is not ready, answers late, is overloaded or returns an invalid answer, the

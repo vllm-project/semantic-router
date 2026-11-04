@@ -65,6 +65,12 @@ const ResponseVendorSnowflake ResponseVendor = "snowflake"
 // protocol-neutral response, including vLLM Responses transfer and per-turn fields.
 const ResponseVendorOpenAICompatGateway ResponseVendor = "openai-compat-gateway"
 
+// ResponseVendorAnthropicCompatGateway permits response extensions from
+// gateways that serve the Anthropic Messages format, such as their own usage
+// metering or cost fields. Extensions are omitted from the protocol-neutral
+// response; unlike the OpenAI-compatible gateway, no usage counter is renamed.
+const ResponseVendorAnthropicCompatGateway ResponseVendor = "anthropic-compat-gateway"
+
 type Policy struct {
 	UnknownFields      UnknownFieldPolicy
 	LossyFeatures      LossyPolicy

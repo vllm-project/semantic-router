@@ -69,7 +69,9 @@ var systemLines = []systemLine{
 }
 
 // applyDecisionModel resolves the default judgment resource, preserving every
-// explicitly authored specialist module and deployment declaration.
+// explicitly authored specialist module and deployment declaration. A
+// systemone deployment answers decision questions but serves no module
+// model, so the modules keep their defaults.
 func applyDecisionModel(resolved *CanonicalGlobal, raw *StructuredPayload) error {
 	system := &resolved.ModelCatalog.System
 	name := strings.TrimSpace(system.DecisionModel.Deployment)
@@ -80,8 +82,11 @@ func applyDecisionModel(resolved *CanonicalGlobal, raw *StructuredPayload) error
 	if !exists {
 		return fmt.Errorf("global.model_catalog.system.decision_model.deployment: unknown deployment %q", name)
 	}
+	if deployment.IsSystemOne() {
+		return nil
+	}
 	if !deployment.IsModelRuntime() {
-		return fmt.Errorf("global.model_catalog.system.decision_model.deployment %q must use provider model_runtime", name)
+		return fmt.Errorf("global.model_catalog.system.decision_model.deployment %q must use provider model_runtime or systemone", name)
 	}
 	explicit := explicitSystemLines(raw, *system)
 	defaults := decisionModelSpec(name, deployment).System
@@ -118,12 +123,27 @@ func explicitSystemLines(raw *StructuredPayload, system CanonicalSystemModels) m
 // DecisionModelSpec projects the selected deployment's model identity.
 func (c *RouterConfig) DecisionModelSpec() DecisionModelSpec {
 	name, deployment, _, err := c.DecisionModelDeployment()
-	if err != nil && (c == nil || c.DecisionModel == "") {
-		// Directly constructed module configurations still expose their normal
+	if err != nil && (c == nil || c.DecisionModel == "" || c.RemoteDecisionModel()) {
+		// Directly constructed module configurations, and a remote decision
+		// model, which serves no module model, still expose their normal
 		// built-in defaults. This does not manufacture a runtime deployment.
 		deployment, _ = ImplicitModelRuntimeDeployment(Vela3SignalModel, true)
 	}
 	return decisionModelSpec(name, deployment)
+}
+
+// RemoteDecisionModel reports whether the decision model is a systemone
+// deployment. It answers the decision questions and selectors that name no
+// deployment; module consumers keep their built-in models.
+func (c *RouterConfig) RemoteDecisionModel() bool {
+	if c == nil {
+		return false
+	}
+	name := c.DecisionModel
+	if name == "" {
+		name = DefaultDecisionDeployment
+	}
+	return c.IsSystemOneDeployment(name)
 }
 
 // RequiresGPU reports whether a module model runs on a GPU only.
@@ -170,6 +190,12 @@ func (c *RouterConfig) DecisionSelectorDeployment(selector DecisionSelectionConf
 func (c *RouterConfig) deploymentOrDecisionModel(deployment string) string {
 	if named := strings.TrimSpace(deployment); named != "" {
 		return named
+	}
+	if c.RemoteDecisionModel() {
+		if c.DecisionModel == "" {
+			return DefaultDecisionDeployment
+		}
+		return c.DecisionModel
 	}
 	name, _, ok, err := c.DecisionModelDeployment()
 	if !ok || err != nil {

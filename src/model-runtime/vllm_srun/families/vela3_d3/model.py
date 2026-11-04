@@ -288,6 +288,13 @@ class Vela3D3Model(Decision3Model):
             refuse_with_media if media else self._span_planner(request.state),
         )
 
+    def shared_context(self, items: list[Item], token_budget: int | None) -> int | None:
+        """The base's sharing of its own rows; span questions and replays run forwards of their own."""
+        part = partition(items, self.replay_gated)
+        if not part.base:
+            return 0
+        return super().shared_context([items[i] for i in part.base], token_budget)
+
     def exact_batches(self, items: list[Item]) -> list[list[int]]:
         part = partition(items, self.replay_gated)
         batches: list[list[int]] = []
@@ -463,8 +470,3 @@ class TurboDecisions(Vela3D3Model, StateOnceModel):
     ) -> list[list[float] | None]:
         base = super().run_shared
         return self._run_partition(items, lambda group: base(group, shared_prefix))
-
-    def shared_context(self, items: list[Item], token_budget: int | None) -> int | None:
-        if any(adapter_of(item) is not None for item in items):
-            return 0
-        return super().shared_context(items, token_budget)

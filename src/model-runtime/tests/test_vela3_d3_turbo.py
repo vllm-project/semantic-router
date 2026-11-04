@@ -9,11 +9,13 @@ from pathlib import Path
 
 import pytest
 import torch
+from vllm_srun.config import EngineArgs
 from vllm_srun.errors import PackageError
 from vllm_srun.families.decision3.family import BATCH_SIZE
 from vllm_srun.families.vela3_d3.gates import Gates
 from vllm_srun.families.vela3_d3.model import adapter_of
-from vllm_srun.plugins.base import AdapterGate, ForwardBatch
+from vllm_srun.plugins.base import AdapterGate, ForwardBatch, Job
+from vllm_srun.scheduler.batching import Batcher, SharedContext
 from vllm_srun.testing import vela3_d3 as fixture
 
 from .conftest import start_runtime
@@ -125,6 +127,27 @@ def test_replays_run_after_the_state_once_pass_in_chunks_of_the_batch_size(
         assert torch.allclose(
             torch.tensor(merged[index]), torch.tensor(value), atol=1e-5
         )
+
+
+def test_span_questions_and_replays_leave_the_state_once_pass_whole(runtimes) -> None:
+    vela, _ = runtimes
+    model = vela.lookup(None).model
+    span = {"type": "span", "criteria": ["thing"]}
+    questions = {"reasoning": NOUL, "topic": CHOICE, "attack": NOUL, "s": span}
+    items = list(model.plan(STATE, questions).items)
+    state = next(item.state for item in items if item.state is not None)
+    assert model.shared_context(items, None) == len(state.ids)
+    own = [item for item in items if item.state is None]
+    assert own and model.shared_context(own, None) == 0
+    batcher = Batcher(EngineArgs(), SharedContext())
+    batcher.bind(model)
+    [batch] = batcher.plan([Job(items=items, deadline=None, enqueued=0.0)], None)
+    assert batch.shared_prefix == len(state.ids)
+    _, together = call(vela, {"state": STATE, "questions": questions})
+    rest = {key: question for key, question in questions.items() if key != "s"}
+    _, alone = call(vela, {"state": STATE, "questions": rest})
+    assert {key: together["answers"][key] for key in rest} == alone["answers"]
+    assert "s" in together["spans"]
 
 
 def test_images_box_and_track_requests_take_the_base_alone(runtimes, png_url) -> None:
