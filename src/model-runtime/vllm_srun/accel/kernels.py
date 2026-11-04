@@ -12,6 +12,9 @@ example a different convolution); it runs only for models that name it
 A slot that only forwards merging requests run (``varlen_attention``: packed
 rows, which no released runtime ran) takes its preferred kernel, exact or
 not (``KernelSet.preferred``), since those forwards approximate anyway.
+An operator can opt one slot into one named source (``KernelSet.use_source``)
+without consenting to the device's other approximate kernels. ``flash_attention_3``
+does that for ``branch_attention`` on Hopper.
 """
 
 from __future__ import annotations
@@ -35,12 +38,18 @@ class Kernel:
 
 @dataclass
 class KernelSet:
-    """The kernels one device uses; ``select`` honours ``allow_approximate`` and the model's variants."""
+    """The kernels one device uses; ``select`` honours ``allow_approximate`` and the model's variants.
+
+    ``opt_in`` names one source per slot (``use_source``). That source runs even
+    when it is not bit-exact and ``allow_approximate`` is false, and it does not
+    select the device's other approximate kernels.
+    """
 
     device: str
     available: dict[str, list[Kernel]] = field(default_factory=dict)
     allow_approximate: bool = False
     variants: dict[str, str] = field(default_factory=dict)
+    opt_in: dict[str, str] = field(default_factory=dict)
 
     def register(self, kernel: Kernel) -> None:
         self.available.setdefault(kernel.name, []).insert(0, kernel)
@@ -49,8 +58,25 @@ class KernelSet:
         """Run each named slot with the given variant where this device registers it."""
         self.variants = dict(variants)
 
+    def use_source(self, name: str, source: str) -> None:
+        """Run ``name`` from ``source`` even when that kernel is not bit-exact.
+
+        Unlike ``allow_approximate``, this does not select the device's other
+        approximate kernels. The ``flash_attention_3`` engine argument uses it
+        for ``branch_attention``.
+        """
+        self.opt_in[name] = source
+
     def select(self, name: str) -> Kernel:
         candidates = self.available.get(name, [])
+        source = self.opt_in.get(name)
+        if source is not None:
+            for kernel in candidates:
+                if kernel.source == source:
+                    return kernel
+            raise KeyError(
+                f"no {source!r} kernel registered for {name!r} on {self.device}"
+            )
         for variant in dict.fromkeys((self.variants.get(name), None)):
             for kernel in candidates:
                 if kernel.variant == variant and (

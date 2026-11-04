@@ -179,7 +179,9 @@ def attention(
     if is_tree(mask):
         return tree_attention(query, key, value, mask, groups=groups, scaling=scaling)
     if is_branches(mask):
-        return branch_attention(query, key, value, mask, groups=groups, scaling=scaling)
+        return branch_attention(
+            query, key, value, mask, groups=groups, scaling=scaling, kernels=kernels
+        )
     if is_packed(mask):
         return packed_attention(
             kernels, query, key, value, mask, groups=groups, scaling=scaling

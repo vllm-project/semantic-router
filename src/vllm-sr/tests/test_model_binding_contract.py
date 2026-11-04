@@ -212,6 +212,7 @@ def test_classification_budget_is_checked_against_actual_loaded_checkpoint(limit
         ({"batch_window_ms": True}, "batch_window_ms must be"),
         ({"dtype": "fp16"}, "dtype must be"),
         ({"enable_shared_context": "yes"}, "enable_shared_context must be"),
+        ({"flash_attention_3": "yes"}, "flash_attention_3 must be"),
         ({"input": {"max_tokens": -1}}, "negative"),
         ({"external_model": "remote"}, "cannot set external_model"),
     ],

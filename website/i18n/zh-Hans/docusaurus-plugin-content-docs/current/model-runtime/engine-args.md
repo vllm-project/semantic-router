@@ -19,6 +19,7 @@ is_mtpe: true
 | `--batch-window-ms` | `batch_window_ms` | `2.0` | 第一个请求到达后，调度器再等多久收集更多请求。 |
 | `--dtype` | `dtype` | `auto` | 模型计算用的精度：`auto`、`float32`、`bfloat16` 或 `float16`。 |
 | `--enable-shared-context`、`--no-enable-shared-context` | `enable_shared_context` | 由模型家族决定 | 多问题决策请求的共享状态只算一次。 |
+| `--flash-attention-3`、`--no-flash-attention-3` | `flash_attention_3` | 关闭 | 在 Hopper 上用 FlashAttention-3 跑 state-once 分支注意力。头维度超出 64–256 会拒绝加载。 |
 
 ## 批处理 {#batching}
 
@@ -65,6 +66,12 @@ is_mtpe: true
 
 - **Ampere 及更新的 NVIDIA GPU，装有 Triton：** Decision 2.0 运行融合的逐元素 kernel，快 11% 到 48%，其[记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-fused-approximate.md)中没有决策改变。Vela 2.0 保留参考 kernel，因为融合 kernel 会改变它的部分片段答案。
 - **带 oneDNN 的 x86 CPU：** Vela 2.0 0.3B 和 Decision 1.0 Kai、Lex、Route 在线性层的预打包 FP32 副本上运行合并的前向，快 1.5–1.7 倍，没有决策改变。副本放在就绪检查所用的权重旁边：一个 Decision 1.0 编码器的三个层栈共 1.32 GB。
+
+## Hopper 上的 FlashAttention-3 {#flashattention-3-on-hopper}
+
+`--flash-attention-3` 用 FlashAttention-3 跑 state-once Decision 模型的变长注意力。不设置就保持关闭。在 H200 上，长 state 大约快 1.15 到 1.28 倍。204 个问题（含 30K 和 60K state）里有一个接近平局的决策变了，score 一致率是 98.4%，所以 BF16 Decision 3.0 不默认启用它（[记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-flash-attention-3.md)）。
+
+它需要 Hopper GPU（计算能力 9.x）、进程里的 `flash_attn_interface`，以及 64 到 256 的注意力头维度。CUDA 镜像不安装这个包。在其他设备上设置该参数，或者模型的头维度超出这个范围，会拒绝加载。它跑不了的调用不会退回 FlashAttention-2。它不会打开其余的近似 kernel。FP32 调用仍走参考注意力。参数保持关闭时，Ampere、ROCm 和 CPU 的前向仍走 FlashAttention-2 或参考实现。
 
 ## 设置方法 {#set-them}
 

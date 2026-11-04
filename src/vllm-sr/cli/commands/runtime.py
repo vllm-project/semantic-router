@@ -622,6 +622,14 @@ def _execute_serve(
     ),
 )
 @click.option(
+    "--flash-attention-3/--no-flash-attention-3",
+    default=None,
+    help=(
+        "Run state-once branched attention with FlashAttention-3 on Hopper "
+        "(runtime default: off; needs flash_attn_interface and compute capability 9.x)."
+    ),
+)
+@click.option(
     "--runtime-profile",
     hidden=True,
     expose_value=False,
@@ -666,6 +674,7 @@ def serve(
     batch_window_ms: float | None,
     dtype: str | None,
     enable_shared_context: bool | None,
+    flash_attention_3: bool | None,
 ) -> None:
     ctx = click.get_current_context()
     model_options = validate_model_options(
@@ -679,6 +688,7 @@ def serve(
             "batch_window_ms": batch_window_ms,
             "dtype": dtype,
             "enable_shared_context": enable_shared_context,
+            "flash_attention_3": flash_attention_3,
         },
     )
     resolved_target = resolve_target(target)

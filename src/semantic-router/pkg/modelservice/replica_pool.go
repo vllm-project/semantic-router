@@ -409,6 +409,8 @@ func engineArgsMismatch(declaration config.ModelDeployment, args EngineArgs) str
 		return "dtype"
 	case declaration.EnableSharedContext != nil && *declaration.EnableSharedContext != args.EnableSharedContext:
 		return "enable_shared_context"
+	case declaration.FlashAttention3 != nil && *declaration.FlashAttention3 != args.FlashAttention3:
+		return "flash_attention_3"
 	}
 	return ""
 }

@@ -441,6 +441,7 @@ class ServedModel:
             reduced_precision=self.dtype == "auto",
             threads=process.threads,
             cpu_neighbors=neighbors,
+            flash_attention_3=self.args.flash_attention_3,
         )
         needed = f"needs about {placement.estimated_bytes / (1 << 30):.1f} GiB"
         free = device.free_memory

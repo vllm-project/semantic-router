@@ -175,6 +175,15 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
         ),
     )
     parser.add_argument(
+        "--flash-attention-3",
+        action=argparse.BooleanOptionalAction,
+        default=ENGINE_DEFAULTS.flash_attention_3,
+        help=(
+            "run state-once branched attention with FlashAttention-3 on Hopper "
+            "(default: off; needs flash_attn_interface and compute capability 9.x)"
+        ),
+    )
+    parser.add_argument(
         "--media-workers",
         type=int,
         default=SERVE_DEFAULTS.media_workers,
@@ -255,6 +264,7 @@ def _engine_args(args: argparse.Namespace) -> EngineArgs:
             batch_window_ms=args.batch_window_ms,
             dtype=args.dtype,
             enable_shared_context=args.enable_shared_context,
+            flash_attention_3=args.flash_attention_3,
         )
     except ValueError as exc:
         raise SystemExit(f"--{str(exc).replace('_', '-')}") from exc

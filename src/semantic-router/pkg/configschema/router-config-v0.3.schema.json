@@ -4712,6 +4712,9 @@
         "enable_shared_context": {
           "type": "boolean"
         },
+        "flash_attention_3": {
+          "type": "boolean"
+        },
         "endpoint": {
           "type": "string"
         },

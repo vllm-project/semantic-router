@@ -41,6 +41,7 @@ type modelEntry struct {
 	BatchWindowMS       *float64 `json:"batch_window_ms,omitempty"`
 	Dtype               string   `json:"dtype,omitempty"`
 	EnableSharedContext *bool    `json:"enable_shared_context,omitempty"`
+	FlashAttention3     *bool    `json:"flash_attention_3,omitempty"`
 }
 
 // planProcesses assigns every logical deployment worker its own process. The
@@ -75,7 +76,7 @@ func planProcesses(deployments map[string]config.ModelDeployment, command []stri
 				plan.models = []modelEntry{{
 					Model: deployment.Artifact, Revision: deployment.Revision, Name: name, Device: device,
 					MaxNumSeqs: deployment.MaxNumSeqs, MaxNumBatchedTokens: deployment.MaxNumBatchedTokens, BatchWindowMS: deployment.BatchWindowMS,
-					Dtype: deployment.Dtype, EnableSharedContext: deployment.EnableSharedContext,
+					Dtype: deployment.Dtype, EnableSharedContext: deployment.EnableSharedContext, FlashAttention3: deployment.FlashAttention3,
 				}}
 				if device == "cpu" {
 					plan.threads = cpuThreads(cores)

@@ -789,6 +789,10 @@ type EngineArgs struct {
 	// EnableSharedContext Whether a multi-question decision request computes its shared state once.
 	EnableSharedContext bool `json:"enable_shared_context"`
 
+	// FlashAttention3 Whether state-once branched attention uses FlashAttention-3. Off unless set. Hopper
+	// (compute capability 9.x) with flash_attn_interface only; other devices refuse to load.
+	FlashAttention3 bool `json:"flash_attention_3"`
+
 	// MaxNumBatchedTokens The most tokens one merged forward holds: the sum of its rows, each rounded up to 8, for a model
 	// that packs merged rows, else its rows times its longest row. A value the engine arguments leave unset
 	// is the one the runtime chose for the device (its memory class, adjusted by the startup calibration).

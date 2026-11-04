@@ -663,6 +663,13 @@ def reference_attention(
     return torch.cat(outputs).to(query.dtype)
 
 
+def _varlen_kernel(kernels: KernelSet | None) -> Callable[..., torch.Tensor] | None:
+    """The ``branch_attention`` slot when the model has one, else the module's FlashAttention-2."""
+    if kernels is not None and kernels.has("branch_attention"):
+        return kernels("branch_attention")
+    return VARLEN
+
+
 def _attend(
     query: torch.Tensor,
     key: torch.Tensor,
@@ -673,17 +680,22 @@ def _attend(
     causal: bool,
     scale: float,
     groups: int,
+    kernels: KernelSet | None = None,
 ) -> torch.Tensor:
     """Variable-length attention: one kernel call on a GPU, else ``reference_attention``.
 
     ``cu_q`` / ``cu_k`` are (device boundaries, host boundaries, longest segment).
+    BF16 and FP16 CUDA calls take the selected ``branch_attention`` kernel
+    (FlashAttention-2, or FlashAttention-3 when the operator opts in). FP32 and
+    every other device keep ``reference_attention``.
     """
+    kernel = _varlen_kernel(kernels)
     if (
-        VARLEN is not None
+        kernel is not None
         and query.is_cuda
         and query.dtype in (torch.bfloat16, torch.float16)
     ):
-        return VARLEN(
+        return kernel(
             query, key, value, cu_q[0], cu_k[0], cu_q[2], cu_k[2], causal, scale
         )
     if cu_q[1] is None or cu_k[1] is None:
@@ -701,6 +713,7 @@ def branch_attention(
     *,
     groups: int,
     scaling: float,
+    kernels: KernelSet | None = None,
 ) -> torch.Tensor:
     """Attention over packed branches (``[1, H, T, D]`` inputs); returns ``[1, T, H, D]`` like ``common.attention``.
 
@@ -719,13 +732,13 @@ def branch_attention(
         states = (b.cu_states, b.cu_states_host, b.max_state)
         outputs.append(_attend(
             q[:split], k[:split], v[:split], states, states,
-            causal=not b.state_bidirectional, scale=scaling, groups=groups,
+            causal=not b.state_bidirectional, scale=scaling, groups=groups, kernels=kernels,
         ))  # fmt: skip
     outputs.append(_attend(
         q[split:], k[b.block_keys], v[b.block_keys],
         (b.cu_blocks, b.cu_blocks_host, b.max_block),
         (b.cu_keys, b.cu_keys_host, b.max_keys),
-        causal=not b.block_bidirectional, scale=scaling, groups=groups,
+        causal=not b.block_bidirectional, scale=scaling, groups=groups, kernels=kernels,
     ))  # fmt: skip
     return (torch.cat(outputs) if len(outputs) > 1 else outputs[0])[None]
 

@@ -321,7 +321,7 @@ func validateModelRuntimeEndpoint(endpoint string) error {
 
 // HasEngineArgs reports whether the deployment sets any engine argument.
 func (d ModelDeployment) HasEngineArgs() bool {
-	return d.MaxNumSeqs != nil || d.MaxNumBatchedTokens != nil || d.BatchWindowMS != nil || d.Dtype != "" || d.EnableSharedContext != nil
+	return d.MaxNumSeqs != nil || d.MaxNumBatchedTokens != nil || d.BatchWindowMS != nil || d.Dtype != "" || d.EnableSharedContext != nil || d.FlashAttention3 != nil
 }
 
 func (d ModelDeployment) validateEngineArgs() error {

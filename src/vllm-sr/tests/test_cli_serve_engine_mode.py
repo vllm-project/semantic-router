@@ -330,6 +330,7 @@ def test_engine_flags_set_the_default_deployments_engine_args(monkeypatch):
             "--dtype",
             "bfloat16",
             "--no-enable-shared-context",
+            "--flash-attention-3",
         ],
     )
     assert result.exit_code == 0, result.output
@@ -340,6 +341,7 @@ def test_engine_flags_set_the_default_deployments_engine_args(monkeypatch):
         "batch_window_ms": 0.0,
         "dtype": "bfloat16",
         "enable_shared_context": False,
+        "flash_attention_3": True,
     }
     document = {"version": "v0.3"}
     apply_instance_options(document, model_options=calls[0]["model_options"])
@@ -350,6 +352,7 @@ def test_engine_flags_set_the_default_deployments_engine_args(monkeypatch):
         "batch_window_ms": 0.0,
         "dtype": "bfloat16",
         "enable_shared_context": False,
+        "flash_attention_3": True,
     }
     assert "profile" not in primary
 

@@ -44,6 +44,7 @@ ENGINE_ARGUMENTS = (
     "max_num_batched_tokens",
     "batch_window_ms",
     "enable_shared_context",
+    "flash_attention_3",
     "dtype",
 )
 

@@ -76,7 +76,7 @@ digests before load, and code shipped inside packages is never executed.
 Families, engines and accelerators are entry-point plugins; batching is the
 runtime's own, set by the engine arguments (`--max-num-seqs`,
 `--max-num-batched-tokens`, `--batch-window-ms`, `--dtype`,
-`--enable-shared-context`).
+`--enable-shared-context`, `--flash-attention-3`).
 [`examples/third_party_plugin`](https://github.com/vllm-project/semantic-router/tree/main/src/model-runtime/examples/third_party_plugin)
 is a complete out-of-tree family and engine to start from.
 
