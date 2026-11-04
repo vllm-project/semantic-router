@@ -63,7 +63,6 @@ func TestOpenRouterErrorCategoryFollowsStatusCode(t *testing.T) {
 }
 
 func TestOpenRouterErrorEnvelopeKeepsStrictValidation(t *testing.T) {
-	policy := openRouterPolicy(llmprotocol.ResponseVendorOpenRouter)
 	for name, body := range map[string]string{
 		"duplicate field":   `{"error":{"message":"a","message":"b","code":429}}`,
 		"non-object meta":   `{"error":{"message":"m","code":429,"metadata":"raw"}}`,
@@ -71,9 +70,30 @@ func TestOpenRouterErrorEnvelopeKeepsStrictValidation(t *testing.T) {
 		"missing message":   `{"error":{"code":429}}`,
 		"unknown top-level": `{"error":{"message":"m","code":429},"extra":1}`,
 	} {
+		policy := openRouterPolicy(llmprotocol.ResponseVendorOpenRouter)
+		if strings.HasPrefix(name, "unknown") {
+			// An undeclared member is dropped for every backend; only the
+			// conformance contract rejects it.
+			policy.RejectUnknownUpstreamFields = true
+		}
 		if _, _, err := (OpenAIChatCodec{}).DecodeTransportError([]byte(body), policy); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
+	}
+}
+
+func TestOpenRouterErrorEnvelopeReportsUnknownMembers(t *testing.T) {
+	body := []byte(`{"error":{"message":"m","code":429,"extra":1},"trace":"t1"}`)
+	decoded, diagnostics, err := (OpenAIChatCodec{}).DecodeTransportError(body, openRouterPolicy(llmprotocol.ResponseVendorOpenRouter))
+	if err != nil || decoded.Error == nil || decoded.Error.Category != llmprotocol.ErrorRateLimited {
+		t.Fatalf("decoded = %+v err = %v", decoded, err)
+	}
+	reported := map[string]bool{}
+	for _, diagnostic := range diagnostics {
+		reported[diagnostic.Field] = diagnostic.Reason == unknownUpstreamFieldReason
+	}
+	if !reported["error.extra"] || !reported["trace"] {
+		t.Fatalf("diagnostics = %+v, want error.extra and trace reported", diagnostics)
 	}
 }
 

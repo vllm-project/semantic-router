@@ -165,6 +165,17 @@ domains:
     checks: [make test-semantic-router, make config-schema-check]
     verifications: [core]
 
+  # The Router's config tests load every YAML example of these pages and files
+  # (src/semantic-router/pkg/config/docs_examples_test.go).
+  router-checked-docs:
+    owner: router-core
+    documentation_check: true
+    paths:
+      - website/docs/installation/protocol-compatibility.md
+      - tools/docker/riscv64/standalone.yaml
+    checks: [make test-semantic-router]
+    verifications: [core]
+
   # The registry pins the Hub revisions that implicit model_runtime deployments serve.
   model-artifacts:
     owner: router-core

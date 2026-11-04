@@ -9,9 +9,12 @@ import (
 
 func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (llmprotocol.Response, llmprotocol.Envelope, llmprotocol.Diagnostics, error) {
 	var wire chatResponseWire
-	canonicalBody, vendorExtensions, err := decodeProviderWireVendorAware(body, &wire, policy)
+	_, unknownFields, err := decodeChatProviderWire(body, &wire, policy)
 	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
+	}
+	if reservedErr := rejectRouterExtensionFields(unknownFields); reservedErr != nil {
+		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, reservedErr
 	}
 	if err := validateChatResponseResource(wire); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
@@ -21,7 +24,7 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	}
 	response := decodeChatResponseEnvelope(wire)
 	var diagnostics llmprotocol.Diagnostics
-	appendVendorExtensionDiagnostics(&diagnostics, policy, llmprotocol.OpenAIChatV1, vendorExtensions)
+	appendUnknownFieldDiagnostics(&diagnostics, policy, llmprotocol.OpenAIChatV1, unknownFields)
 	appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIChatV1, map[string]bool{
 		"choices.message.tool_calls.function.TokenizedArguments": chatChoicesHaveTokenizedArguments(wire.Choices),
 		"choices.message.tool_calls.index":                       chatChoicesHaveToolCallIndex(wire.Choices),
@@ -55,10 +58,11 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	// LiteLLM's provider_specific_fields are similarly non-canonical and must
 	// not be replayed.
 	needsReencode := wire.hasOpenRouterDecorations() || wire.hasLiteLLMDecorations() || chatChoicesHaveReasoningDetails(wire.Choices)
+	replay := body
 	if needsReencode {
-		canonicalBody = nil
+		replay = nil
 	}
-	envelope := responseEnvelope(llmprotocol.OpenAIChatV1, canonicalBody, response.Generation, response.SourceStopReason, policy)
+	envelope := responseEnvelope(llmprotocol.OpenAIChatV1, replay, response.Generation, response.SourceStopReason, policy)
 	envelope.ResponseReencodeRequired = needsReencode
 	return response, envelope, diagnostics, nil
 }
