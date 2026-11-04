@@ -104,7 +104,7 @@ func TestPopulateEvalModelSelectionDoesNotInventFirstRecommendedModel(t *testing
 
 func TestPreviewContextValidatesAndPassesProtectionFacts(t *testing.T) {
 	for _, identity := range []string{strings.Repeat("a", 1025), "invalid\nidentity"} {
-		_, err := (IntentRequest{Text: "test", PreviewContext: &PreviewContext{SessionID: identity}}).resolveSignalInput()
+		_, err := (IntentRequest{Text: "test", PreviewContext: &PreviewContext{SessionID: identity}}).resolveSignalInput(nil)
 		if !errors.Is(err, ErrInvalidRequestFacts) {
 			t.Fatalf("invalid preview identity error=%v", err)
 		}
@@ -112,7 +112,7 @@ func TestPreviewContextValidatesAndPassesProtectionFacts(t *testing.T) {
 	seed := int64(17)
 	context := &PreviewContext{SessionID: "session", ConversationID: "conversation", SamplingSeed: &seed}
 	request := IntentRequest{Messages: []IntentMessage{{Role: "assistant", Content: json.RawMessage(`""`), ToolCalls: []json.RawMessage{json.RawMessage(`{"id":"call_1","type":"function","function":{"name":"lookup","arguments":"{}"}}`)}}, {Role: "tool", Content: json.RawMessage(`"result"`), ToolCallID: "call_1"}}, PreviewContext: context}
-	input, err := request.resolveSignalInput()
+	input, err := request.resolveSignalInput(nil)
 	if err != nil {
 		t.Fatal(err)
 	}

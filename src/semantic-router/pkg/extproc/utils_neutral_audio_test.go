@@ -20,7 +20,7 @@ func TestExtractSemanticRequestSignalsInlineUserAudio(t *testing.T) {
 		{"assistant output", llmprotocol.RoleAssistant, llmprotocol.Content{Kind: llmprotocol.ContentAudio, MediaType: "audio/wav", Data: "AAAA"}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			snapshot := extractSemanticRequestSignals(&llmprotocol.Request{Messages: []llmprotocol.Message{{Role: tc.role, Content: []llmprotocol.Content{tc.content}}}})
+			snapshot := extractSemanticRequestSignals(&llmprotocol.Request{Messages: []llmprotocol.Message{{Role: tc.role, Content: []llmprotocol.Content{tc.content}}}}, nil)
 			if snapshot.FirstAudio != tc.want {
 				t.Fatalf("audio reference = %q, want %q", snapshot.FirstAudio, tc.want)
 			}
@@ -30,7 +30,7 @@ func TestExtractSemanticRequestSignalsInlineUserAudio(t *testing.T) {
 
 func TestChatAudioWireReachesNeutralSignalSnapshot(t *testing.T) {
 	request := decodeSignalRequest(t, llmprotocol.OpenAIChatV1, `{"model":"audio-model","messages":[{"role":"user","content":[{"type":"input_audio","input_audio":{"data":"UklGRg==","format":"wav"}}]}]}`)
-	snapshot := extractSemanticRequestSignals(request)
+	snapshot := extractSemanticRequestSignals(request, nil)
 	if snapshot.FirstAudio != "data:audio/wav;base64,UklGRg==" {
 		t.Fatalf("wire audio did not reach routing: %q", snapshot.FirstAudio)
 	}

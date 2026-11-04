@@ -6,6 +6,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routinginput"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
 
@@ -67,8 +68,11 @@ func prependSemanticOutputText(output []llmprotocol.OutputItem, prefix string) b
 }
 
 // extractSemanticRequestSignals derives routing facts from the neutral request
-// accepted at ingress. Wire-specific JSON walkers are confined to codecs.
-func extractSemanticRequestSignals(request *llmprotocol.Request) *requestSignalSnapshot {
+// accepted at ingress. Wire-specific JSON walkers are confined to codecs. The
+// selector applies routing_input: user text and conversation facts describe
+// the routing view, while the jailbreak input and the context estimate keep
+// the request as sent.
+func extractSemanticRequestSignals(request *llmprotocol.Request, selector *routinginput.Selector) *requestSignalSnapshot {
 	result := &requestSignalSnapshot{
 		Model: request.Model, Stream: request.Stream,
 		JailbreakInput: extractJailbreakInput(request),
@@ -94,9 +98,11 @@ func extractSemanticRequestSignals(request *llmprotocol.Request) *requestSignalS
 		}
 		recordNonUserSignalMessage(result, string(instruction.Role), text)
 	}
-	for _, message := range request.Messages {
-		consumeSemanticMessage(result, message)
+	routing := selector.Walk()
+	for index, message := range request.Messages {
+		consumeSemanticMessage(result, message, index, routing)
 	}
+	result.RoutingInput = routing.Outcome()
 	result.ToolDefinitionCount = len(request.Tools)
 	estimate := llmprotocol.EstimateInput(request)
 	result.ContextTokenFloor = estimate.Tokens
@@ -107,10 +113,17 @@ func extractSemanticRequestSignals(request *llmprotocol.Request) *requestSignalS
 }
 
 //nolint:gocognit,cyclop,funlen // Signal extraction walks the complete neutral message content vocabulary.
-func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.Message) {
+func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.Message, index int, routing *routinginput.Walk) {
+	text := semanticText(message.Content)
+	if message.Role == llmprotocol.RoleUser {
+		routed, skipped := routing.UserMessage(index, text, textOnlyMessage(message))
+		if skipped {
+			return
+		}
+		text = routed
+	}
 	previousWasTool := result.LastMessageToolResult || result.LastMessageRole == string(llmprotocol.RoleTool)
 	role := string(message.Role)
-	text := semanticText(message.Content)
 	result.LastMessageRole = role
 	result.LastMessageToolResult = false
 	result.LastMessageFlowToolResult = false

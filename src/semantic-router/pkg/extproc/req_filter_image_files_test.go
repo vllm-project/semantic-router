@@ -77,7 +77,7 @@ func firstImageContent(t *testing.T, request *llmprotocol.Request) llmprotocol.C
 // no URL or inline data is present at ingress.
 func TestResponsesFileIDImageCountsAsImageInput(t *testing.T) {
 	request, _ := decodeImageFileRequest(t, &OpenAIRouter{}, responsesImageFileRequest("file_abc123"))
-	snapshot := extractSemanticRequestSignals(request)
+	snapshot := extractSemanticRequestSignals(request, nil)
 	if snapshot.ImageContentCount != 1 {
 		t.Fatalf("ImageContentCount = %d, want 1", snapshot.ImageContentCount)
 	}

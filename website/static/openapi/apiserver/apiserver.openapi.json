@@ -25620,6 +25620,12 @@
                                   ]
                                 }
                               },
+                              "routing_input_skipped_messages": {
+                                "type": "integer"
+                              },
+                              "routing_input_stripped_blocks": {
+                                "type": "integer"
+                              },
                               "selected_model": {
                                 "type": "string"
                               },
@@ -30373,6 +30379,12 @@
                               "request_generation"
                             ]
                           }
+                        },
+                        "routing_input_skipped_messages": {
+                          "type": "integer"
+                        },
+                        "routing_input_stripped_blocks": {
+                          "type": "integer"
                         },
                         "selected_model": {
                           "type": "string"

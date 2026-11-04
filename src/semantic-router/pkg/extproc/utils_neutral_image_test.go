@@ -33,7 +33,7 @@ func userImageRequest(content llmprotocol.Content) *llmprotocol.Request {
 func TestExtractSemanticRequestSignals_InlineImageBecomesDataURL(t *testing.T) {
 	snapshot := extractSemanticRequestSignals(userImageRequest(llmprotocol.Content{
 		Kind: llmprotocol.ContentImage, MediaType: "image/png", Data: tinyPNG,
-	}))
+	}), nil)
 	want := "data:image/png;base64," + tinyPNG
 	if snapshot.FirstImageURL != want {
 		t.Fatalf("FirstImageURL = %q, want inline data URI", snapshot.FirstImageURL)
@@ -47,7 +47,7 @@ func TestExtractSemanticRequestSignals_InlineImageBecomesDataURL(t *testing.T) {
 func TestExtractSemanticRequestSignals_RemoteImageURLStaysUnavailable(t *testing.T) {
 	snapshot := extractSemanticRequestSignals(userImageRequest(llmprotocol.Content{
 		Kind: llmprotocol.ContentImage, URL: "https://example.com/passport.png",
-	}))
+	}), nil)
 	if snapshot.FirstImageURL != "" {
 		t.Fatalf("FirstImageURL = %q, remote URL should remain unavailable to embeddings", snapshot.FirstImageURL)
 	}
@@ -60,7 +60,7 @@ func TestExtractSemanticRequestSignals_RemoteImageURLStaysUnavailable(t *testing
 func TestExtractSemanticRequestSignals_NonImageInlinePayloadRejected(t *testing.T) {
 	snapshot := extractSemanticRequestSignals(userImageRequest(llmprotocol.Content{
 		Kind: llmprotocol.ContentImage, MediaType: "text/html", Data: base64.StdEncoding.EncodeToString([]byte("<html></html>")),
-	}))
+	}), nil)
 	if snapshot.FirstImageURL != "" {
 		t.Fatalf("FirstImageURL = %q, non-image payload should be rejected", snapshot.FirstImageURL)
 	}

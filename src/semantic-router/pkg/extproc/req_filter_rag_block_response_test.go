@@ -82,7 +82,7 @@ func TestRAGBlockModePreRoutingResponseOmitsRetrievalErrorChain(t *testing.T) {
 	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
 	ctx.RequestModel = config.DefaultEntrypointModel
 
-	_, response := router.runRequestPreRoutingStages(config.DefaultEntrypointModel, request, extractSemanticRequestSignals(request), ctx)
+	_, response := router.runRequestPreRoutingStages(config.DefaultEntrypointModel, request, extractSemanticRequestSignals(request, nil), ctx)
 	require.NotNil(t, response)
 	immediate := response.GetImmediateResponse()
 	require.NotNil(t, immediate)

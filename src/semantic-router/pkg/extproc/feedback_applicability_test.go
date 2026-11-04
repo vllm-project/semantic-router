@@ -30,7 +30,7 @@ func TestFeedbackApplicabilityFromNeutralConversation(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			router := &OpenAIRouter{Config: &config.RouterConfig{}}
-			history := extractSignalConversationHistory(&llmprotocol.Request{Messages: tc.messages})
+			history := extractSignalConversationHistory(&llmprotocol.Request{Messages: tc.messages}, nil)
 			input := router.prepareSignalEvaluationInput(history)
 			assert.Equal(t, tc.want, input.hasAssistantReply)
 		})

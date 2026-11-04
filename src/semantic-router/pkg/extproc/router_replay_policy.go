@@ -19,7 +19,7 @@ func (r *OpenAIRouter) personalDataReplayAllowed(ctx *RequestContext) bool {
 	if ctx.RouterReplayPluginConfig.CapturesPersonalData() {
 		return true
 	}
-	prompt, _ := extractSemanticPromptAndTools(ctx.SemanticRequest)
+	prompt := replayPrompt(ctx, ctx.SemanticRequest)
 	if prompt == "" {
 		return false
 	}
@@ -50,7 +50,7 @@ var replayPromptEvidence = (*classification.Classifier).ReplayPromptEvidence
 // complete and clean.
 func (r *OpenAIRouter) attachPromptOnceVerified(ctx *RequestContext, recorder *routerreplay.Recorder, stored string) {
 	classifier := r.classifierForRequest(ctx)
-	prompt, _ := extractSemanticPromptAndTools(ctx.SemanticRequest)
+	prompt := replayPrompt(ctx, ctx.SemanticRequest)
 	if classifier == nil || classifier.Config == nil || !classifier.Config.ReplayNeedsPIIEvidence() || prompt == "" {
 		return
 	}

@@ -24,7 +24,7 @@ func TestIntentRequestResolveSignalInput_CollectsInputModalityFacts(t *testing.T
 		},
 	}
 
-	input, err := req.resolveSignalInput()
+	input, err := req.resolveSignalInput(nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, classification.InputModalityFacts{
@@ -38,7 +38,7 @@ func TestIntentRequestResolveSignalInput_CollectsInputModalityFacts(t *testing.T
 func TestIntentRequestResolveSignalInput_TextOnlyFallbackSetsTextFact(t *testing.T) {
 	req := IntentRequest{Text: "just plain text"}
 
-	input, err := req.resolveSignalInput()
+	input, err := req.resolveSignalInput(nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, classification.InputModalityFacts{TextContentCount: 1}, input.requestFacts.InputModality)
@@ -60,7 +60,7 @@ func TestIntentRequestResolveSignalInput_PromotedSystemTextIsNotUserText(t *test
 		},
 	}
 
-	input, err := req.resolveSignalInput()
+	input, err := req.resolveSignalInput(nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, classification.InputModalityFacts{AudioContentCount: 1}, input.requestFacts.InputModality,
@@ -80,7 +80,7 @@ func TestIntentRequestResolveSignalInput_TopLevelTextWithImageOnlyMessagesCounts
 		},
 	}
 
-	input, err := req.resolveSignalInput()
+	input, err := req.resolveSignalInput(nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, classification.InputModalityFacts{
@@ -105,7 +105,7 @@ func TestIntentRequestResolveSignalInput_NonUserMediaDoesNotCount(t *testing.T) 
 		},
 	}
 
-	input, err := req.resolveSignalInput()
+	input, err := req.resolveSignalInput(nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, classification.InputModalityFacts{TextContentCount: 1}, input.requestFacts.InputModality)
@@ -121,12 +121,12 @@ func TestIntentRequestResolveSignalInput_WhitespaceOnlyTextIsNotTextInput(t *tes
 	}
 
 	req := IntentRequest{Messages: []IntentMessage{imageOnlyTurn}}
-	input, err := req.resolveSignalInput()
+	input, err := req.resolveSignalInput(nil)
 	require.NoError(t, err)
 	assert.Equal(t, classification.InputModalityFacts{ImageContentCount: 1}, input.requestFacts.InputModality)
 
 	req = IntentRequest{Text: "   ", Messages: []IntentMessage{imageOnlyTurn}}
-	input, err = req.resolveSignalInput()
+	input, err = req.resolveSignalInput(nil)
 	require.NoError(t, err)
 	assert.Equal(t, classification.InputModalityFacts{ImageContentCount: 1}, input.requestFacts.InputModality,
 		"a whitespace-only top-level text must not promote a text fact")
@@ -142,7 +142,7 @@ func TestIntentRequestResolveSignalInput_BareImagePartIsNotAnImage(t *testing.T)
 			}),
 		}},
 	}
-	input, err := req.resolveSignalInput()
+	input, err := req.resolveSignalInput(nil)
 	require.NoError(t, err)
 	assert.Equal(t, classification.InputModalityFacts{TextContentCount: 1}, input.requestFacts.InputModality)
 	assert.Equal(t, 0, input.conversationFacts.ImageContentCount, "conversation image count must keep its Chat Completions part types")

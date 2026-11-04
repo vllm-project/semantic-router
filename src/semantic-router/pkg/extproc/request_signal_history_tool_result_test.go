@@ -52,7 +52,7 @@ func TestToolResultPayloadReachesPIIChannelAcrossWireFormats(t *testing.T) {
 				t.Fatal("prepareProtocolRequest() returned nil request")
 			}
 
-			snapshot := extractSemanticRequestSignals(request)
+			snapshot := extractSemanticRequestSignals(request, nil)
 			history := signalConversationHistoryFromRequest(request, snapshot)
 			if !reflect.DeepEqual(history.toolResultTexts, []string{wantPayload}) {
 				t.Fatalf("toolResultTexts = %#v, want [%q]", history.toolResultTexts, wantPayload)
@@ -97,7 +97,7 @@ func TestExtractSignalConversationHistoryKeepsToolResultPayloadInPIIChannel(t *t
 		},
 	}
 
-	history := extractSignalConversationHistory(req)
+	history := extractSignalConversationHistory(req, nil)
 	if !reflect.DeepEqual(history.toolResultTexts, []string{toolPayload}) {
 		t.Fatalf("toolResultTexts = %#v, want [%q]", history.toolResultTexts, toolPayload)
 	}
@@ -128,7 +128,7 @@ func TestSignalConversationHistoryFromRequestKeepsSnapshotPayloadFree(t *testing
 		},
 	}
 
-	snapshot := extractSemanticRequestSignals(req)
+	snapshot := extractSemanticRequestSignals(req, nil)
 	history := signalConversationHistoryFromRequest(req, snapshot)
 	if !reflect.DeepEqual(history.toolResultTexts, []string{toolPayload}) {
 		t.Fatalf("toolResultTexts = %#v, want [%q]", history.toolResultTexts, toolPayload)
@@ -154,7 +154,7 @@ func TestSignalConversationHistoryReportsIncompleteToolResultExtraction(t *testi
 		}},
 	}
 
-	history := extractSignalConversationHistory(req)
+	history := extractSignalConversationHistory(req, nil)
 	if len(history.toolResultTexts) != 0 {
 		t.Fatalf("toolResultTexts = %#v, want no text blocks", history.toolResultTexts)
 	}

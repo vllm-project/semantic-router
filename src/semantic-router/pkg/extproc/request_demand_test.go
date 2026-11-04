@@ -15,7 +15,7 @@ func TestRequestDemandSnapshotSeparatesPromptAndOutputReserve(t *testing.T) {
 	request := testNeutralRequest("vllm-sr/auto", "one two three four")
 	request.Generation = 7
 	request.Sampling.MaxOutputTokens = llmprotocol.Int64(256)
-	promptTokens := extractSemanticRequestSignals(request).ContextTokenFloor
+	promptTokens := extractSemanticRequestSignals(request, nil).ContextTokenFloor
 
 	snapshot := requestDemandSnapshot(
 		requestDemandStageOriginal,
@@ -45,7 +45,7 @@ func TestRequestDemandSnapshotMarksMissingOutputReserveUnknown(t *testing.T) {
 		requestDemandStageOriginal,
 		request,
 		"",
-		extractSemanticRequestSignals(request).ContextTokenFloor,
+		extractSemanticRequestSignals(request, nil).ContextTokenFloor,
 	)
 
 	if snapshot.OutputReserveSource != requestDemandOutputReserveUnknown || snapshot.TotalDemandKnown ||

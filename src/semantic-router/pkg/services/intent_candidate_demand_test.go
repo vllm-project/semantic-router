@@ -13,7 +13,7 @@ import (
 
 func TestPreviewCandidateDemandUsesEffectiveNeutralRequest(t *testing.T) {
 	req := IntentRequest{Messages: []IntentMessage{{Role: "user", Content: json.RawMessage(`[{"type":"text","text":"describe"},{"type":"image_url","image_url":{"url":"https://example.invalid/image"}}]`)}}, Tools: []json.RawMessage{json.RawMessage(`{"type":"function","function":{"name":"lookup","parameters":{"type":"object"}}}`)}, MaxCompletionTokens: json.RawMessage(`128`)}
-	input, err := req.resolveSignalInput()
+	input, err := req.resolveSignalInput(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestPreviewCandidateDemandUsesEffectiveNeutralRequest(t *testing.T) {
 
 func TestPreviewUnknownNeutralFactsRemainUnknown(t *testing.T) {
 	req := IntentRequest{Text: "hello", Functions: []json.RawMessage{json.RawMessage(`{"name":"legacy"}`)}}
-	input, err := req.resolveSignalInput()
+	input, err := req.resolveSignalInput(nil)
 	if err != nil {
 		t.Fatal(err)
 	}

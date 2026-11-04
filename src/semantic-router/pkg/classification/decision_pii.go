@@ -86,15 +86,15 @@ func prepareDecisionPII(models *classifierModelRuntime) (*decisionPIIBackend, er
 }
 
 func (c *Classifier) evaluateDecisionPIISignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, text string, history []string, backend *decisionPIIBackend) {
-	c.evaluateDecisionPIISignalWithToolResults(ctx, results, mu, text, history, nil, false, backend)
+	c.evaluateDecisionPIISignalWithToolResults(ctx, results, mu, []string{text}, history, nil, false, backend)
 }
 
-func (c *Classifier) evaluateDecisionPIISignalWithToolResults(ctx context.Context, results *SignalResults, mu *sync.Mutex, text string, history, toolTexts []string, toolIncomplete bool, backend *decisionPIIBackend) {
+func (c *Classifier) evaluateDecisionPIISignalWithToolResults(ctx context.Context, results *SignalResults, mu *sync.Mutex, current []string, history, toolTexts []string, toolIncomplete bool, backend *decisionPIIBackend) {
 	started := time.Now()
 	var contents []piiCacheKey
 	seen := map[piiCacheKey]bool{}
 	for _, rule := range c.Config.PIIRules {
-		for _, content := range collectPIIRuleContentsForSource(rule, text, history, toolTexts) {
+		for _, content := range collectPIIRuleContentsForSource(rule, current, history, toolTexts) {
 			key := piiCacheKey{source: piiCacheSource(rule.Source), content: content}
 			if !seen[key] {
 				seen[key] = true
@@ -125,7 +125,7 @@ func (c *Classifier) evaluateDecisionPIISignalWithToolResults(ctx context.Contex
 			verified = false
 		}
 	}
-	for _, content := range append(append([]string{text}, history...), toolTexts...) {
+	for _, content := range slices.Concat(current, history, toolTexts) {
 		if content != "" && !seen[piiCacheKey{source: "legacy", content: content}] && !seen[piiCacheKey{source: config.PIISourceToolResult, content: content}] {
 			verified = false
 		}
@@ -143,7 +143,7 @@ func (c *Classifier) evaluateDecisionPIISignalWithToolResults(ctx context.Contex
 		if incomplete {
 			code = piiEvaluationIncompleteCode
 		}
-		for _, content := range collectPIIRuleContentsForSource(rule, text, history, toolTexts) {
+		for _, content := range collectPIIRuleContentsForSource(rule, current, history, toolTexts) {
 			result := byContent[piiCacheKey{source: piiCacheSource(rule.Source), content: content}]
 			if result.err != nil {
 				failed = true

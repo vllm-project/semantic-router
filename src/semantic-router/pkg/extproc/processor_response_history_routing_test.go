@@ -24,7 +24,7 @@ func TestRetainedResponseHistoryPrecedesSignalsAndToolsPolicy(t *testing.T) {
 			}
 			t.Run(name, func(t *testing.T) {
 				router, model, request, ctx := retainedToolRoutingRequest(t, format)
-				currentOnly := extractSemanticRequestSignals(request)
+				currentOnly := extractSemanticRequestSignals(request, nil)
 				ingress, err := json.Marshal(ctx.ResponseObjectState.Input)
 				if err != nil {
 					t.Fatal(err)
@@ -64,7 +64,7 @@ func TestRetainedResponseHistoryPrecedesSignalsAndToolsPolicy(t *testing.T) {
 				if err != nil {
 					t.Fatalf("final provider request has invalid tool linkage: %v", err)
 				}
-				facts := extractSemanticRequestSignals(&decoded)
+				facts := extractSemanticRequestSignals(&decoded, nil)
 				wantTools := 1
 				if strip {
 					wantTools = 0

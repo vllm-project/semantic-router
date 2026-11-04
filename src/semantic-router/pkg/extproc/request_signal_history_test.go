@@ -23,7 +23,7 @@ func TestExtractSignalConversationHistoryMixedNeutralRoles(t *testing.T) {
 		},
 	}
 
-	history := extractSignalConversationHistory(req)
+	history := extractSignalConversationHistory(req, nil)
 	assert.Equal(t, "second question", history.currentUserMessage)
 	assert.Equal(t, []string{"first question"}, history.priorUserMessages)
 	assert.Equal(t, []string{"System prompt", "Developer policy", "first answer"}, history.nonUserMessages)
@@ -36,13 +36,13 @@ func TestExtractSignalConversationHistoryFlowToolStateRequiresTrailingResult(t *
 		{Role: llmprotocol.RoleUser, Content: textBlocks("run the workflow")},
 		neutralToolResult("flowtool_deadbeef__call_1", "done"),
 	}}
-	history := extractSignalConversationHistory(req)
+	history := extractSignalConversationHistory(req, nil)
 	assert.True(t, history.lastMessageFlowToolResult)
 
 	req.Messages = append(req.Messages, llmprotocol.Message{
 		Role: llmprotocol.RoleUser, Content: textBlocks("new request"),
 	})
-	history = extractSignalConversationHistory(req)
+	history = extractSignalConversationHistory(req, nil)
 	assert.False(t, history.lastMessageFlowToolResult)
 }
 
@@ -50,17 +50,17 @@ func TestExtractSignalConversationHistoryToolChoiceFacts(t *testing.T) {
 	req := &llmprotocol.Request{ToolChoice: llmprotocol.ToolChoice{
 		Mode: llmprotocol.ToolChoiceRequired,
 	}}
-	history := extractSignalConversationHistory(req)
+	history := extractSignalConversationHistory(req, nil)
 	assert.True(t, history.toolChoiceRequired)
 	assert.False(t, history.toolChoiceNone)
 
 	req.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceNamed, Name: "lookup"}
-	history = extractSignalConversationHistory(req)
+	history = extractSignalConversationHistory(req, nil)
 	assert.True(t, history.toolChoiceRequired)
 	assert.False(t, history.toolChoiceNone)
 
 	req.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceNone}
-	history = extractSignalConversationHistory(req)
+	history = extractSignalConversationHistory(req, nil)
 	assert.False(t, history.toolChoiceRequired)
 	assert.True(t, history.toolChoiceNone)
 }
@@ -79,7 +79,7 @@ func TestExtractToolTransitionContextFromNeutralHistory(t *testing.T) {
 	transition := extractToolTransitionContextFromRequest(req, 2, &RequestContext{
 		VSRSelectedCategory: "coding",
 		VSRSelectedDecision: &config.Decision{Name: "agent-tools"},
-	})
+	}, nil)
 	assert.Equal(t, []string{"lookup", "summarize"}, transition.RecentToolNames)
 	assert.Equal(t, 2, transition.UserMessageCount)
 	assert.Equal(t, 3, transition.ToolResultCount)
@@ -94,7 +94,7 @@ func TestExtractSignalConversationHistoryMarksUserAfterToolResult(t *testing.T) 
 		neutralToolResult("call-read_log", "TypeError: int + str"),
 		{Role: llmprotocol.RoleUser, Content: textBlocks("Now give the fix.")},
 	}}
-	history := extractSignalConversationHistory(req)
+	history := extractSignalConversationHistory(req, nil)
 	assert.Equal(t, "user", history.lastMessageRole)
 	assert.False(t, history.lastMessageToolResult)
 	assert.True(t, history.lastUserAfterToolResult)
@@ -108,7 +108,7 @@ func TestExtractSignalConversationHistoryBoundsPendingToolCallToTail(t *testing.
 		{Role: llmprotocol.RoleUser, Content: textBlocks("ordinary follow-up")},
 	}}
 
-	history := extractSignalConversationHistory(req)
+	history := extractSignalConversationHistory(req, nil)
 
 	assert.Equal(t, 1, history.assistantToolCallCount)
 	assert.Zero(t, history.toolResultCount)
@@ -141,7 +141,7 @@ func TestToolTransitionContextWindowAndCopy(t *testing.T) {
 }
 
 func TestExtractToolTransitionContextNilRequest(t *testing.T) {
-	transition := extractToolTransitionContextFromRequest(nil, 2, nil)
+	transition := extractToolTransitionContextFromRequest(nil, 2, nil, nil)
 	assert.Nil(t, transition.RecentToolNames)
 	assert.Zero(t, transition.UserMessageCount)
 	assert.Zero(t, transition.ToolResultCount)
