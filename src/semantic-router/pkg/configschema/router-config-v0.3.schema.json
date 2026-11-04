@@ -2709,6 +2709,24 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "DeploymentAuth": {
+      "properties": {
+        "header": {
+          "type": "string"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "api_key_env": {
+          "type": "string"
+        },
+        "api_key_file": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "DynamicRetrievalConfig": {
       "properties": {
         "enabled": {
@@ -4720,6 +4738,21 @@
         },
         "endpoint": {
           "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "auth": {
+          "$ref": "#/$defs/DeploymentAuth"
+        },
+        "timeout_ms": {
+          "type": "integer"
+        },
+        "question_types": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "replicas": {
           "items": {
