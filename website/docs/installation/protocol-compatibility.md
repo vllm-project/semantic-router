@@ -103,8 +103,8 @@ the model's `api_format` is `openai`, a gateway's Anthropic-style
 that serve the canonical contract.
 
 Startup rejects `compat_gateway` where it would have no effect: on
-`azure-openai`, `cloudflare-workers-ai` and `snowflake-cortex` backends, which
-keep their own response contracts, and on `systemone` models. Weighted backend
+`azure-openai`, `cloudflare-workers-ai`, `openrouter` and `snowflake-cortex`
+backends, which keep their own response contracts, and on `systemone` models. Weighted backend
 refs of one model must agree on it. `openai_compat_gateway` is the deprecated
 spelling and still works.
 
