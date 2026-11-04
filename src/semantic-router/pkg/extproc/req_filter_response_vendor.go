@@ -26,6 +26,12 @@ const cloudflareWorkersAIProviderType = "cloudflare-workers-ai"
 // selector.
 const snowflakeCortexProviderType = "snowflake-cortex"
 
+// openRouterProviderType is the catalog provider id for OpenRouter. Like the
+// other failure-envelope vendors it is selected by provider id only: a profile
+// that points an openai-type provider at OpenRouter's host keeps the strict
+// canonical contract.
+const openRouterProviderType = "openrouter"
+
 // anthropicMessagesProtocol is the catalog protocol of Anthropic-format
 // backends, whose relays need the Anthropic gateway contract.
 const anthropicMessagesProtocol = "anthropic/messages@1"
@@ -62,6 +68,9 @@ func resolveResponseVendor(profile *config.ProviderProfile) llmprotocol.Response
 	}
 	if strings.EqualFold(strings.TrimSpace(profile.Type), snowflakeCortexProviderType) {
 		return llmprotocol.ResponseVendorSnowflake
+	}
+	if strings.EqualFold(strings.TrimSpace(profile.Type), openRouterProviderType) {
+		return llmprotocol.ResponseVendorOpenRouter
 	}
 	if vendor := compatGatewayResponseVendor(profile); vendor != "" {
 		return vendor

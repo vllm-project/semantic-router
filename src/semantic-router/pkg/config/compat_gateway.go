@@ -7,6 +7,7 @@ import "fmt"
 var providerTypesWithResponseContract = map[string]bool{
 	"azure-openai":          true,
 	"cloudflare-workers-ai": true,
+	"openrouter":            true,
 	"snowflake-cortex":      true,
 }
 

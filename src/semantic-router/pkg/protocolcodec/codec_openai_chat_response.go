@@ -439,6 +439,9 @@ func (OpenAIChatCodec) DecodeTransportError(
 	if policy.ResponseVendor == llmprotocol.ResponseVendorCloudflare {
 		return decodeCloudflareTransportError(body, policy, llmprotocol.OpenAIChatV1)
 	}
+	if policy.ResponseVendor == llmprotocol.ResponseVendorOpenRouter {
+		return decodeOpenRouterTransportError(body, policy, llmprotocol.OpenAIChatV1)
+	}
 	return decodeOpenAITransportError(body, policy, llmprotocol.OpenAIChatV1)
 }
 
