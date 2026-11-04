@@ -1,14 +1,14 @@
 ---
 title: Engine arguments
-description: Tune batching, precision and shared context with vLLM-style engine arguments.
+description: Tune batching, precision, shared context and a Decision model's input limit with vLLM-style engine arguments.
 ---
 
 # Engine arguments
 
 The model runtime batches by default, like vLLM: rows of concurrent requests
 share forward passes, so a busy deployment answers more requests per second.
-Engine arguments tune that batching, the precision the model computes in and
-shared context. Set them per deployment; every argument you leave out keeps the
+Engine arguments tune that batching, the precision the model computes in,
+shared context and a Decision model's input limit. Set them per deployment; every argument you leave out keeps the
 runtime's default.
 
 | Argument | Deployment field | Default | Meaning |
@@ -18,6 +18,7 @@ runtime's default.
 | `--batch-window-ms` | `batch_window_ms` | `2.0` | How long the scheduler waits after the first request to collect more. |
 | `--dtype` | `dtype` | `auto` | Precision the model computes in: `auto`, `float32`, `bfloat16` or `float16`. |
 | `--enable-shared-context`, `--no-enable-shared-context` | `enable_shared_context` | the model family's | Compute the shared state of a multi-question decision request once. |
+| `--max-model-len` | `max_model_len` | the package's limit | Most input tokens one question of a Decision model may have; lowers the package's limit ([below](#input-limit)). |
 
 ## Batching
 
@@ -157,6 +158,39 @@ accuracy-neutral and a switch elsewhere:
   ([record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/state-once.md)),
   and `usage.input_tokens` counts the state once.
 - Encoders read a request whole and have no shared-context path.
+
+## Input limit
+
+A Decision model reads a question's whole prompt, and its package declares how
+long that prompt may be. A GPU with less memory than that length needs can run
+out partway through a forward. `max_model_len` lowers the limit to what the
+deployment's hardware holds:
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      decision-lux:
+        provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Lux-9B
+        device: rocm:0
+        max_model_len: 32768
+```
+
+- **The card reports it.** `limits.max_input_tokens` is the lowered limit, and
+  `engine_args.max_model_len` the setting (`null` when unset).
+- **A longer question fails before any forward.** It fails with
+  `max_length_exceeded`, a question error rather than HTTP 413; System One
+  answers 400 `question_failed`. A prompt exactly at the limit is read.
+- **Decision models only.** It applies to Decision 1.0, 2.0 and 3.0. Startup
+  refuses a value above the package's own limit and refuses the argument for
+  every other model, Vela 2.0 included. The router refuses it on a deployment
+  with an attached `endpoint` or `replicas`; pass `--max-model-len` to an
+  attached runtime yourself.
+- **The golden check reads the model's own questions.** A limit below them
+  fails that check at startup, and the reason names `max_model_len`.
+- **A prompt within the limit can still run out of memory.** That forward fails
+  as out of memory, as it does without the argument.
 
 ## Faster kernels at the published precision
 

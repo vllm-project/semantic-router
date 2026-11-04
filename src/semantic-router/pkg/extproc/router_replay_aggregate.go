@@ -58,6 +58,7 @@ func buildRouterReplayAggregatePayload(
 		RecordCount:          len(filteredRecords),
 		Lifecycle:            buildRouterReplayLifecycleSummary(filteredRecords),
 		Summary:              buildRouterReplayAggregateCostSummary(filteredRecords),
+		ProviderCache:        buildRouterReplayProviderCacheSummary(filteredRecords),
 		ModelSelection:       buildRouterReplayModelSelection(filteredRecords),
 		DecisionDistribution: buildRouterReplayDecisionDistribution(filteredRecords),
 		SignalDistribution:   buildRouterReplaySignalDistribution(filteredRecords),
