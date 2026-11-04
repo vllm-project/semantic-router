@@ -224,7 +224,9 @@ func (r *OpenAIRouter) executeContextRecoveryFollowup(
 	if err != nil {
 		return nil, err
 	}
-	decoded.Response.Model = requestCtx.RequestModel
+	// The reply names the model the upstream answered with, as one without
+	// recovery does.
+	decoded.Response.Model = firstNonEmpty(decoded.Response.Model, initial.Model, requestCtx.RequestModel)
 	decoded.Response.Generation++
 	format := requestCtx.SourceFormat
 	if format == "" {
