@@ -63,6 +63,7 @@ multimodal_embedding = "vllm_srun.families.multimodal_embedding.family:Multimoda
 task_heads = "vllm_srun.families.task_heads.family:TaskHeadsFamily"
 vela2 = "vllm_srun.families.vela2.family:Vela2Family"
 vela3 = "vllm_srun.families.vela3.family:Vela3Family"
+vela3_d3 = "vllm_srun.families.vela3_d3.family:Vela3D3Family"
 
 [project.entry-points."vllm_srun.engines"]
 native = "vllm_srun.engines.native.engine:NativeEngine"
@@ -85,6 +86,7 @@ vllm_srun = [
   "registry/golden_answers*.json",
   "registry/kernel_choices.json",
   "testing/data/*.jinja",
+  "testing/data/*.json",
 ]
 
 [tool.mypy]
