@@ -39,8 +39,20 @@ type ModelDeployment struct {
 	// Unset keeps the package's limit; attached endpoints and replicas refuse it.
 	MaxModelLen *int `yaml:"max_model_len,omitempty" json:"max_model_len,omitempty"`
 	// Endpoint attaches a model_runtime deployment to an engine the Router does
-	// not manage (unix:///path, http://host:port or https://host:port).
+	// not manage (unix:///path, http://host:port or https://host:port). For a
+	// systemone deployment it is the URL its System One API answers POST
+	// requests on, path prefix included (https://host/v1/systemone).
 	Endpoint string `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
+	// Model is the model a systemone deployment's API answers with.
+	Model string `yaml:"model,omitempty" json:"model,omitempty"`
+	// Auth is the credential a systemone deployment's API takes.
+	Auth *DeploymentAuth `yaml:"auth,omitempty" json:"auth,omitempty"`
+	// TimeoutMs bounds a call to a systemone deployment for a decision
+	// question or selector that sets no timeout_ms of its own.
+	TimeoutMs int `yaml:"timeout_ms,omitempty" json:"timeout_ms,omitempty"`
+	// QuestionTypes are the question types a systemone deployment's model
+	// answers when its API lists none for it.
+	QuestionTypes []string `yaml:"question_types,omitempty" json:"question_types,omitempty"`
 	// Replicas places independent workers for this logical resource. Omission
 	// uses the single device/endpoint placement above.
 	Replicas []ModelReplica `yaml:"replicas,omitempty" json:"replicas,omitempty"`
@@ -155,7 +167,12 @@ func (d ModelDeployment) validate(cfg *RouterConfig) error {
 	if d.PublicName != "" && (strings.TrimSpace(d.PublicName) != d.PublicName || strings.ContainsAny(d.PublicName, "\x00\r\n\t ") || strings.HasPrefix(d.PublicName, "/") || strings.Contains(d.PublicName, "://")) {
 		return fmt.Errorf("public_name must be a trimmed public model ID, not a path or endpoint")
 	}
+	if d.Provider != SystemOneProvider && (d.Model != "" || d.Auth != nil || d.TimeoutMs != 0 || len(d.QuestionTypes) > 0) {
+		return fmt.Errorf("model, auth, timeout_ms and question_types apply only to systemone deployments")
+	}
 	switch d.Provider {
+	case SystemOneProvider:
+		return d.validateSystemOne()
 	case "http":
 		if d.Artifact != "" || strings.TrimSpace(d.ExternalModel) == "" {
 			return fmt.Errorf("http deployment requires external_model and cannot set artifact")
@@ -246,6 +263,9 @@ func compileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 }
 
 func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDeployment) error {
+	if deployment.IsSystemOne() {
+		return fmt.Errorf("a systemone deployment answers decision signals and selectors only; bind %s to a model_runtime or http deployment", name)
+	}
 	if decl.Contract == DecisionTaskContract {
 		allowed := name == "pii_classifier" || name == "hallucination_detector" || name == "preference" || name == "reask" || name == "complexity" || strings.HasPrefix(name, "classifier.") || strings.HasPrefix(name, "safety.")
 		if !allowed || !deployment.IsModelRuntime() || decl.Head != "" || decl.MappingPath != "" || decl.OperatingPoint != nil || decl.PairScorer != nil {

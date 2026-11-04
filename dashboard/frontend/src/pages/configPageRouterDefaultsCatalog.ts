@@ -68,6 +68,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     capture_request_body: true,
     capture_response_body: true,
     capture_personal_data: true,
+    capture_tool_results: false,
     max_records: 10000,
     max_body_bytes: 4096,
     max_tool_trace_bytes: 0,

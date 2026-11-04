@@ -32,6 +32,7 @@ func assertReferenceConfigProviderCoverage(t testingT, root map[string]interface
 		collectNestedSliceItems(t, models, "backend_refs", "providers.models"),
 		reflect.TypeOf(CanonicalBackendRef{}),
 		"providers.models[].backend_refs",
+		"openai_compat_gateway",
 	)
 }
 

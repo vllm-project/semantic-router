@@ -71,7 +71,7 @@ for operator-managed proxies. Do not prune shared host images to test cold build
 Copy `standalone.yaml` outside the checkout. Set `provider_model_id` to the
 backend's served model ID and `base_url` to its OpenAI-compatible API base.
 The backend must be reachable from inside the container; `localhost` refers to
-the container. `openai_compat_gateway` accepts response extensions such as
+the container. `compat_gateway` accepts response extensions such as
 llama.cpp timing fields. Use HTTPS or an access-controlled trusted network.
 
 ```bash
