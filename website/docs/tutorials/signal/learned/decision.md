@@ -178,15 +178,22 @@ global:
           api_key_env: GATEWAY_KEY
 ```
 
-- A request's questions to the deployment go in one System One call, with
-  their options as System One `criteria` and the call's deadline as
-  `options.deadline_ms`. A System One API answers a request with a failed
-  question as a whole, so one failed question leaves every signal of that
-  call unknown.
-- The question types the model answers come from `GET <endpoint>/models`
-  when the API lists the model, else from `question_types`, else they are the
-  System One types `choice`, `noul` and `score`. A `set` question is composed
-  from `noul` questions when the model has no native `set` support.
+- A request stage's questions to the deployment, including those of the
+  built-in signals that ask it, go in one System One call: their options as
+  System One `criteria`, any other text they read as a further `states`
+  entry, and the call's deadline as `options.deadline_ms`. A System One API
+  fails a call with a failed question as a whole and names the question, so
+  the router asks the other questions once more within the same deadline:
+  only the failed question's signal is unknown. Any other failure leaves
+  every signal of the call unknown. Answers to the same questions about the
+  same text are reused for up to 10 minutes, until the configuration
+  changes.
+- The question types and ready-made questions (`pii`, `halu`) the model
+  answers come from `GET <endpoint>/models`, read when the configuration
+  loads, when the API lists the model; else from `question_types` and
+  `presets`; else they are the System One types `choice`, `noul` and `score`.
+  A `set` question is composed from `noul` questions when the model has no
+  native `set` support.
 - A network round trip takes longer than a local model. A question without
   its own `timeout_ms` takes the deployment's `timeout_ms`, else the 1000 ms
   default. A slow, failing or unreachable API leaves its signals unknown; it
@@ -195,7 +202,13 @@ global:
 - `global.model_catalog.system.decision_model.deployment` can name a
   `systemone` deployment too. Questions and
   [decision selectors](../../algorithm/selection/decision.md) that name no
-  deployment then ask it; built-in signals keep their model runtime models.
+  deployment then ask it, and so do the built-in signals whose module names
+  no model of its own. A module whose model a `global.model_catalog.system`
+  line or its own `model_id` names keeps that model, and hazard
+  classification, embeddings and reranking always run locally. On a model
+  that answers no span questions, PII and hallucination detection report a
+  yes/no verdict without positions, with a warning when the configuration
+  loads; a configuration that masks PII is then refused.
 - A `systemone` deployment takes no device, engine arguments, replicas or
   input budget, and no task binding can name it.
 

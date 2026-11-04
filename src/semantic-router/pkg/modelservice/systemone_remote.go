@@ -138,7 +138,7 @@ func (r *RemoteSystemOne) Card(name string) (ModelCard, bool) {
 // PrepareCard reads name's listing once, for at most
 // preparationListingTimeout, and returns its card as Card does. An API that
 // does not list leaves the declared or System One types; it never fails the
-// preparation.
+// preparation, and Card still reads the listing once in the background.
 func (r *RemoteSystemOne) PrepareCard(ctx context.Context, name string) (ModelCard, error) {
 	d := r.deployment(name)
 	if d == nil {
@@ -146,7 +146,6 @@ func (r *RemoteSystemOne) PrepareCard(ctx context.Context, name string) (ModelCa
 	}
 	d.prepared.Do(func() {
 		if d.listed.Load() == nil {
-			d.started.Store(true)
 			d.readListing(ctx, preparationListingTimeout)
 		}
 	})
