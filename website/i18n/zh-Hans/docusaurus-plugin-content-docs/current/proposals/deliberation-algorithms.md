@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: vLLM Semantic Router 的审议算法
 description: 评估多模型审议策略，并提出感知依据的综合作为下一算法。
 created: 2026-06-17

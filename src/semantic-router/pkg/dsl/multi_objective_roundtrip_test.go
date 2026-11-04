@@ -59,7 +59,14 @@ func assertMultiObjectiveScopedDSL(t *testing.T, source string) {
 	if got := strings.Count(source, "\nRECIPE "); got != 5 {
 		t.Fatalf("decompiled recipes = %d, want 5", got)
 	}
-	for _, expected := range []string{`planner: { model: "local/qwen3.6-27b-coder" }`} {
+	for _, expected := range []string{
+		`planner: { model: "local/qwen3.6-27b-coder" }`,
+		"SIGNAL decision deliberate",
+		"SIGNAL decision heavy",
+		"SIGNAL decision depth",
+		"SIGNAL decision workflow",
+		"SIGNAL decision attack",
+	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("decompiled multi-objective DSL missing %q", expected)
 		}

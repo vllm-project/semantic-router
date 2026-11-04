@@ -60,13 +60,27 @@ func (l *LocalLimiter) Name() string {
 }
 
 // Check evaluates all matching rules. If any rule's budget is exhausted,
-// the request is denied.
+// the request is denied and quota consumed from buckets checked earlier for
+// this request is refunded, so denied requests do not burn budget.
 func (l *LocalLimiter) Check(ctx Context) (*Decision, error) {
 	now := time.Now()
 
 	var mostRestrictiveRemaining int64 = -1
 	var mostRestrictiveLimit int64 = -1
 	var earliestReset time.Time
+
+	// Quota consumed so far for this request, refunded if a later bucket denies.
+	type consumption struct {
+		b         *bucket
+		cost      int64
+		windowEnd time.Time
+	}
+	var consumed []consumption
+	refundConsumed := func() {
+		for _, c := range consumed {
+			c.b.refund(c.cost, c.windowEnd)
+		}
+	}
 
 	for i := range l.rules {
 		rule := &l.rules[i]
@@ -79,6 +93,7 @@ func (l *LocalLimiter) Check(ctx Context) (*Decision, error) {
 			b := l.getOrCreateBucket(key, int64(rule.RequestsPerUnit), rule.Unit)
 			allowed, remaining, resetAt := b.tryConsume(1, now)
 			if !allowed {
+				refundConsumed()
 				return &Decision{
 					Allowed:    false,
 					Remaining:  remaining,
@@ -88,6 +103,7 @@ func (l *LocalLimiter) Check(ctx Context) (*Decision, error) {
 					Provider:   l.Name(),
 				}, nil
 			}
+			consumed = append(consumed, consumption{b: b, cost: 1, windowEnd: resetAt})
 			if mostRestrictiveRemaining < 0 || remaining < mostRestrictiveRemaining {
 				mostRestrictiveRemaining = remaining
 			}
@@ -108,6 +124,7 @@ func (l *LocalLimiter) Check(ctx Context) (*Decision, error) {
 			}
 			allowed, remaining, resetAt := b.tryConsume(cost, now)
 			if !allowed {
+				refundConsumed()
 				return &Decision{
 					Allowed:    false,
 					Remaining:  remaining,
@@ -116,6 +133,9 @@ func (l *LocalLimiter) Check(ctx Context) (*Decision, error) {
 					RetryAfter: time.Until(resetAt),
 					Provider:   l.Name(),
 				}, nil
+			}
+			if cost > 0 {
+				consumed = append(consumed, consumption{b: b, cost: cost, windowEnd: resetAt})
 			}
 			if mostRestrictiveRemaining < 0 || remaining < mostRestrictiveRemaining {
 				mostRestrictiveRemaining = remaining
@@ -237,6 +257,23 @@ func (b *bucket) consumeOnly(cost int64, now time.Time) {
 	}
 
 	b.count += cost
+}
+
+// refund returns quota that was consumed earlier for a request that was
+// ultimately denied. It is a no-op if the window has rolled over since the
+// consumption, so a refund never credits a fresh window.
+func (b *bucket) refund(cost int64, windowEnd time.Time) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if !b.windowEnd.Equal(windowEnd) {
+		return
+	}
+
+	b.count -= cost
+	if b.count < 0 {
+		b.count = 0
+	}
 }
 
 // ParseUnit converts a unit string to a time.Duration.

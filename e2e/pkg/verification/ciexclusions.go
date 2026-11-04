@@ -13,8 +13,8 @@ type CIExclusion struct {
 // set of testcases the profile selects at runtime that the override omits
 // from CI execution on main.
 //
-// Like KnownUnreachableDebt, this table is a ratchet, not an allowlist: Gate
-// D requires the actual excluded set to equal these keys in both directions.
+// This table is a ratchet, not an allowlist: Gate D requires the actual
+// excluded set to equal these keys in both directions.
 // A testcase newly selected by the profile but omitted from the CI list
 // fails the gate until it is added to the list or bounded here (the
 // silent-omission scenario); an entry whose testcase joins the CI list or

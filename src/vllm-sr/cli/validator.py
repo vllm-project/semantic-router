@@ -51,7 +51,10 @@ from cli.validator_signal_references import validate_signal_references
 from cli.validator_models import validate_model_references
 from cli.validator_native import validate_native_execution
 from cli.validator_reasoning import validate_reasoning_controls
-from cli.validator_model_runtime import validate_model_runtime_references
+from cli.validator_model_runtime import (
+    unpinned_hub_deployment_warnings,
+    validate_model_runtime_references,
+)
 from cli.config_schema import routing_surface_catalog
 
 log = get_logger(__name__)
@@ -600,7 +603,7 @@ def validate_user_config(
 
 def collect_validation_warnings(config: UserConfig) -> List[ValidationError]:
     """Return findings that leave the configuration valid but likely wrong."""
-    return []
+    return unpinned_hub_deployment_warnings(config)
 
 
 def print_validation_warnings(warnings: List[ValidationError]):

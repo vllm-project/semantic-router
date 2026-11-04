@@ -159,6 +159,7 @@ def test_parse_user_config_preserves_cache_pricing(tmp_path: Path) -> None:
         "prompt_per_1m": 2.0,
         "cached_input_per_1m": 0.25,
         "cache_write_per_1m": 2.5,
+        "cache_write_1h_per_1m": 2.0,
         "completion_per_1m": 6.0,
     }
     config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
@@ -169,8 +170,10 @@ def test_parse_user_config_preserves_cache_pricing(tmp_path: Path) -> None:
     assert pricing is not None
     assert pricing.cached_input_per_1m == 0.25
     assert pricing.cache_write_per_1m == 2.5
+    assert pricing.cache_write_1h_per_1m == 2.0
     assert pricing.model_dump()["cached_input_per_1m"] == 0.25
     assert pricing.model_dump()["cache_write_per_1m"] == 2.5
+    assert pricing.model_dump()["cache_write_1h_per_1m"] == 2.0
 
 
 @pytest.mark.parametrize(

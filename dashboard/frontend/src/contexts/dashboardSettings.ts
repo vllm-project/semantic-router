@@ -7,10 +7,6 @@ export interface DashboardSettings {
   platform: string
   envoyUrl: string
   routerEvalEndpoint: string
-  srBenchAvailable: boolean
-  srBenchUnavailableReason: string
-  mlPipelineAvailable: boolean
-  mlPipelineUnavailableReason: string
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -26,15 +22,11 @@ export const decodeDashboardSettings = (value: unknown): DashboardSettings => {
     'runtimeConfigWritable',
     'recipeStoreWritable',
     'setupMode',
-    'srBenchAvailable',
-    'mlPipelineAvailable',
   ] as const
   const stringFields = [
     'platform',
     'envoyUrl',
     'routerEvalEndpoint',
-    'srBenchUnavailableReason',
-    'mlPipelineUnavailableReason',
   ] as const
 
   for (const field of booleanFields) {
@@ -57,9 +49,5 @@ export const decodeDashboardSettings = (value: unknown): DashboardSettings => {
     platform: value.platform as string,
     envoyUrl: value.envoyUrl as string,
     routerEvalEndpoint: value.routerEvalEndpoint as string,
-    srBenchAvailable: value.srBenchAvailable as boolean,
-    srBenchUnavailableReason: value.srBenchUnavailableReason as string,
-    mlPipelineAvailable: value.mlPipelineAvailable as boolean,
-    mlPipelineUnavailableReason: value.mlPipelineUnavailableReason as string,
   }
 }

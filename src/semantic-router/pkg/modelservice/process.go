@@ -41,6 +41,7 @@ type modelEntry struct {
 	BatchWindowMS       *float64 `json:"batch_window_ms,omitempty"`
 	Dtype               string   `json:"dtype,omitempty"`
 	EnableSharedContext *bool    `json:"enable_shared_context,omitempty"`
+	MaxModelLen         *int     `json:"max_model_len,omitempty"`
 }
 
 // planProcesses assigns every logical deployment worker its own process. The
@@ -75,7 +76,7 @@ func planProcesses(deployments map[string]config.ModelDeployment, command []stri
 				plan.models = []modelEntry{{
 					Model: deployment.Artifact, Revision: deployment.Revision, Name: name, Device: device,
 					MaxNumSeqs: deployment.MaxNumSeqs, MaxNumBatchedTokens: deployment.MaxNumBatchedTokens, BatchWindowMS: deployment.BatchWindowMS,
-					Dtype: deployment.Dtype, EnableSharedContext: deployment.EnableSharedContext,
+					Dtype: deployment.Dtype, EnableSharedContext: deployment.EnableSharedContext, MaxModelLen: deployment.MaxModelLen,
 				}}
 				if device == "cpu" {
 					plan.threads = cpuThreads(cores)
@@ -128,8 +129,9 @@ func (p *processPlan) writeModelsFile(path string) error {
 // serves the router alone over its private socket, so the bound only has to
 // hold the largest request the router sends: a request stage's bundle, which
 // can carry images (two at the 20 MB per-image cap of the common chat APIs,
-// base64-encoded, fit).
-const ManagedRequestBytes = 64 << 20
+// base64-encoded, fit), or a public System One request at its 48 MiB limit
+// whose multipart images the router forwards as base64.
+const ManagedRequestBytes = 96 << 20
 
 // managedBundleTasks caps the tasks of a managed runtime's bundles. A request
 // stage sends each process one bundle with every call it makes, and PII alone

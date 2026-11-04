@@ -13,7 +13,7 @@ from cli.model_runtime_defaults import (
 )
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
-from cli.validator_decision_model import public_model_name
+from cli.validator_decision_model import _reference_error, public_model_name
 
 NATIVE_ALGORITHMS = {"cascade"}
 _UNAVAILABLE_NATIVE_CONTEXT = {
@@ -69,6 +69,12 @@ def validate_native_execution(config: UserConfig) -> list[ValidationError]:
                         field=field + ".deployment",
                     )
                 )
+            # A local alias is served through the decisions API even when no
+            # listener publishes it. A remote alias has no deployment.
+            elif model.api_format == "systemone" and (
+                message := _reference_error(deployments, model.deployment)
+            ):
+                errors.append(ValidationError(message, field=field + ".deployment"))
         elif name in native and not model.backend_refs:
             errors.append(
                 ValidationError(

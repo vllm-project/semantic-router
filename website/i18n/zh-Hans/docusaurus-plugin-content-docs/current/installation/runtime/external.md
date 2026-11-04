@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 外部服务
 description: 连接 Router 之外部署的分类器、防护模型或嵌入模型。
 translation:

@@ -2202,6 +2202,7 @@ SIGNAL keyword advanced_kw {
   bm25_threshold: 0.7
   ngram_threshold: 0.8
   ngram_arity: 4
+  include_history: true
 }`
 	cfg, errs := Compile(input)
 	if len(errs) > 0 {
@@ -2234,6 +2235,9 @@ SIGNAL keyword advanced_kw {
 	}
 	if kw.NgramArity != 4 {
 		t.Errorf("ngram_arity = %d", kw.NgramArity)
+	}
+	if !kw.IncludeHistory {
+		t.Error("expected include_history = true")
 	}
 }
 

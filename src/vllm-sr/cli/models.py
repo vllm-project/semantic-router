@@ -78,6 +78,13 @@ class ListenerSystemOne(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     models: List[str] = Field(min_length=1)
+    max_deadline_ms: Optional[int] = Field(
+        default=None,
+        gt=0,
+        description="The longest this listener waits for a model it calls "
+        "directly, however long a request's options.deadline_ms asks for. "
+        "Omitted, 600000 (10 minutes).",
+    )
 
     @field_validator("models")
     @classmethod
@@ -134,6 +141,8 @@ class KeywordSignal(BaseModel):
     operator: str
     keywords: List[str]
     case_sensitive: bool = False
+    # Also match prior user messages; False keeps current-turn-only matching.
+    include_history: bool = False
 
 
 class EmbeddingSignal(BaseModel):
@@ -857,6 +866,8 @@ class Signals(BaseModel):
 class Condition(BaseModel):
     """Routing condition node (leaf or composite boolean expression)."""
 
+    model_config = ConfigDict(extra="forbid")
+
     type: Optional[str] = None
     name: Optional[str] = None
     label: Optional[str] = None
@@ -931,9 +942,12 @@ class Rules(BaseModel):
     Formats 2 and 3 are auto-normalised to composite form.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     operator: str = "AND"
     conditions: List[Condition] = Field(default_factory=list)
     on_unknown: Optional[UnknownPolicy] = None
+    on_error: Optional[str] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -943,17 +957,35 @@ class Rules(BaseModel):
             return data
         # Leaf node: has type/name but no operator → wrap in AND
         if "type" in data and "operator" not in data:
-            leaf = {
-                key: data[key]
-                for key in ("type", "name", "label", "predicate", "on_error")
-                if key in data
-            }
+            leaf = {key: value for key, value in data.items() if key != "on_unknown"}
             leaf.setdefault("name", "")
             rules = {"operator": "AND", "conditions": [leaf]}
             if "on_unknown" in data:
                 rules["on_unknown"] = data["on_unknown"]
             return rules
         return data
+
+    @model_validator(mode="after")
+    def validate_on_unknown_conflict(self):
+        if self.on_unknown is not None and (
+            self.on_error or _any_condition_sets_on_error(self.conditions)
+        ):
+            raise ValueError(
+                "condition on_error has no effect when rules.on_unknown is set; "
+                "remove one of them"
+            )
+        if self.on_error:
+            raise ValueError("on_error only applies to leaf conditions")
+        return self
+
+
+def _any_condition_sets_on_error(conditions: Optional[List["Condition"]]) -> bool:
+    for condition in conditions or []:
+        if condition.on_error is not None:
+            return True
+        if _any_condition_sets_on_error(condition.conditions):
+            return True
+    return False
 
 
 PluginType = Enum(
@@ -1397,6 +1429,7 @@ class RouterReplayPluginConfig(BaseModel):
     capture_request_body: Optional[StrictBool] = None
     capture_response_body: Optional[StrictBool] = None
     capture_personal_data: Optional[StrictBool] = None
+    capture_tool_results: Optional[StrictBool] = None
     max_records: Optional[int] = Field(default=None, ge=0)
     max_body_bytes: Optional[int] = Field(default=None, ge=0)
     max_tool_trace_bytes: Optional[int] = Field(default=None, ge=0)
@@ -1726,6 +1759,7 @@ class RouterLearningIdentityHeadersConfig(BaseModel):
 
     session: Optional[StrictStr] = None
     conversation: Optional[StrictStr] = None
+    agent: Optional[StrictStr] = None
 
 
 class RouterLearningIdentityConfig(BaseModel):
@@ -2141,6 +2175,9 @@ class ModelPricing(BaseModel):
     prompt_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
     cached_input_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
     cache_write_per_1m: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    cache_write_1h_per_1m: Optional[float] = Field(
+        default=None, ge=0, allow_inf_nan=False
+    )
     completion_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
 
 
@@ -2640,6 +2677,13 @@ class BackendRef(BaseModel):
     chat_path: Optional[str] = None
     api_key: Optional[str] = None
     api_key_env: Optional[str] = None
+    # Marks a backend whose URL is a relay gateway that adds its own response
+    # fields (usage metering, cost): the router drops and reports the fields
+    # the backend's api_format does not define instead of rejecting the
+    # reply. Mirrors the Go CanonicalBackendRef field of the same name.
+    compat_gateway: bool = False
+    # Deprecated spelling of compat_gateway, still accepted by the router.
+    openai_compat_gateway: bool = False
 
     def resolve_api_key(self) -> Optional[str]:
         if self.api_key:

@@ -7,11 +7,15 @@ access. Its private manifest is supplied by the canonical CLI, not HTTP callers.
 from __future__ import annotations
 
 import argparse
-import fcntl
 import json
 import os
 import socketserver
 import threading
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - instance controller is Unix-only.
+    fcntl = None  # type: ignore[assignment]
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
@@ -21,8 +25,10 @@ from cli.instance_state import InstanceConflictError, InstanceController
 
 MAX_UNIX_SOCKET_PATH_BYTES = 103
 
+_UnixStreamServer = getattr(socketserver, "UnixStreamServer", socketserver.TCPServer)
 
-class ControllerServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
+
+class ControllerServer(socketserver.ThreadingMixIn, _UnixStreamServer):
     daemon_threads = True
     request_queue_size = 16
 
@@ -104,6 +110,8 @@ class ControllerHandler(BaseHTTPRequestHandler):
 
 
 def run(directory: Path):
+    if fcntl is None:
+        raise RuntimeError("Instance controller requires a POSIX host.")
     manifest = json.loads((directory / "manifest.json").read_text())
     with (directory / "controller.lock").open("a") as lock:
         os.chmod(lock.name, 0o600)

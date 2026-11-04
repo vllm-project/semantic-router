@@ -14,7 +14,7 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[3]
 GO_MAKEFILE = REPO_ROOT / "tools/make/golang.mk"
 DOCS_MAKEFILE = REPO_ROOT / "tools/make/docs.mk"
-WORKFLOW = REPO_ROOT / ".github/workflows/operator-ci.yml"
+WORKFLOW = REPO_ROOT / ".github/workflows/operator-source.yml"
 API_PACKAGE = Path("src/semantic-router/pkg/apis/vllm.ai/v1alpha1")
 CRD_DIRECTORIES = (
     Path("deploy/kubernetes/crds"),

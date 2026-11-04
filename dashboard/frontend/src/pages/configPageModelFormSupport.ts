@@ -261,12 +261,19 @@ export function normalizeModelPricing(value: unknown): ModelPricing | undefined 
   ) {
     normalized.cache_write_per_1m = pricing.cache_write_per_1m
   }
+  if (
+    typeof pricing.cache_write_1h_per_1m === 'number' &&
+    Number.isFinite(pricing.cache_write_1h_per_1m)
+  ) {
+    normalized.cache_write_1h_per_1m = pricing.cache_write_1h_per_1m
+  }
   if (typeof pricing.completion_per_1m === 'number' && Number.isFinite(pricing.completion_per_1m))
     normalized.completion_per_1m = pricing.completion_per_1m
   const hasRate = [
     normalized.prompt_per_1m,
     normalized.cached_input_per_1m,
     normalized.cache_write_per_1m,
+    normalized.cache_write_1h_per_1m,
     normalized.completion_per_1m,
   ].some((rate) => typeof rate === 'number')
   if (hasRate && !normalized.currency) normalized.currency = 'USD'

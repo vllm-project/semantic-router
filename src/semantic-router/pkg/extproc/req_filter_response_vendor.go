@@ -26,6 +26,10 @@ const cloudflareWorkersAIProviderType = "cloudflare-workers-ai"
 // selector.
 const snowflakeCortexProviderType = "snowflake-cortex"
 
+// anthropicMessagesProtocol is the catalog protocol of Anthropic-format
+// backends, whose relays need the Anthropic gateway contract.
+const anthropicMessagesProtocol = "anthropic/messages@1"
+
 // azureOpenAIHostSuffixes cover a profile pointed at an Azure endpoint without
 // declaring the Azure provider type. Azure resources are per-tenant subdomains,
 // so these are matched by suffix rather than exact host.
@@ -59,10 +63,31 @@ func resolveResponseVendor(profile *config.ProviderProfile) llmprotocol.Response
 	if strings.EqualFold(strings.TrimSpace(profile.Type), snowflakeCortexProviderType) {
 		return llmprotocol.ResponseVendorSnowflake
 	}
+	if vendor := compatGatewayResponseVendor(profile); vendor != "" {
+		return vendor
+	}
 	if isAzureOpenAIHost(normalizedProfileHost(profile)) {
 		return llmprotocol.ResponseVendorAzure
 	}
 	return ""
+}
+
+// compatGatewayResponseVendor selects the relay contract for the backend's wire
+// format. A backend tolerates a gateway's own response fields only when the
+// operator opts in, so every other backend keeps the strict contract even if
+// it ever starts emitting such fields.
+func compatGatewayResponseVendor(profile *config.ProviderProfile) llmprotocol.ResponseVendor {
+	if !profile.CompatGateway {
+		return ""
+	}
+	switch profile.Protocol {
+	case anthropicMessagesProtocol:
+		return llmprotocol.ResponseVendorAnthropicCompatGateway
+	case "", "openai/chat-completions@1", "openai/responses@1":
+		return llmprotocol.ResponseVendorOpenAICompatGateway
+	default:
+		return ""
+	}
 }
 
 func isAzureOpenAIHost(host string) bool {

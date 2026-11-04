@@ -67,6 +67,20 @@ func TestRecorderRequestPoliciesKeepConcurrentCaptureIndependent(t *testing.T) {
 	require.Equal(t, "sec", record.ToolTrace.Steps[0].Arguments)
 }
 
+func TestRecorderAttachPromptKeepsThePromptLimit(t *testing.T) {
+	owner := NewRecorder(store.NewMemoryStore(10, 0))
+	t.Cleanup(func() { require.NoError(t, owner.Close()) })
+	view := owner.WithCapturePolicy(CapturePolicy{MaxToolTraceBytes: 3})
+	id, err := view.AddRecord(RoutingRecord{ID: "withheld-prompt"})
+	require.NoError(t, err)
+	require.NoError(t, view.AttachPrompt(id, "abcdef"))
+	record, found := owner.GetRecord(id)
+	require.True(t, found)
+	require.Equal(t, "abc", record.Prompt)
+	require.True(t, record.PromptTruncated)
+	require.Error(t, view.AttachPrompt("missing-record", "abc"))
+}
+
 func TestRecorderRequestViewsShareLifecycleAndCloseOwnership(t *testing.T) {
 	storage := &uncancelableOutcomeStore{Storage: store.NewMemoryStore(10, 0), closed: make(chan struct{})}
 	owner := NewRecorder(storage)

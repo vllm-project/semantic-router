@@ -1,0 +1,11 @@
+plugin:
+  type: masking
+  configuration:
+    enabled: true
+    threshold: 0.85
+    entity_types:
+      - EMAIL_ADDRESS
+      - PHONE_NUMBER
+    placeholders:
+      EMAIL_ADDRESS: "[EMAIL_{index}]"
+      PHONE_NUMBER: "[PHONE_{index}]"

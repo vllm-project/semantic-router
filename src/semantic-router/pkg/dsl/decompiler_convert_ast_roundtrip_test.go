@@ -32,6 +32,7 @@ func TestDecompileToASTPreservesKeywordRuleFields(t *testing.T) {
 					BM25Threshold:  0.5,
 					NgramThreshold: 0.25,
 					NgramArity:     3,
+					IncludeHistory: true,
 				}},
 			},
 		},
@@ -49,6 +50,7 @@ func TestDecompileToASTPreservesKeywordRuleFields(t *testing.T) {
 	requireFloatField(t, sig, "bm25_threshold", 0.5)
 	requireFloatField(t, sig, "ngram_threshold", 0.25)
 	requireIntField(t, sig, "ngram_arity", 3)
+	requireBoolField(t, sig, "include_history", true)
 }
 
 // TestDecompileToASTPreservesContextRuleFields locks in the AST emit
@@ -150,7 +152,7 @@ func TestDecompileToASTOmitsZeroValuedKeywordRuleFields(t *testing.T) {
 
 	for _, omitted := range []string{
 		"case_sensitive", "method", "fuzzy_match", "fuzzy_threshold",
-		"bm25_threshold", "ngram_threshold", "ngram_arity",
+		"bm25_threshold", "ngram_threshold", "ngram_arity", "include_history",
 	} {
 		if _, ok := sig.Fields[omitted]; ok {
 			t.Errorf("expected %q to be omitted from AST when zero-valued, but it was present", omitted)

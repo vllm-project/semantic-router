@@ -112,6 +112,20 @@ type CanonicalBackendRef struct {
 	ChatPath     string            `yaml:"chat_path,omitempty"`
 	APIKey       string            `yaml:"api_key,omitempty"`
 	APIKeyEnv    string            `yaml:"api_key_env,omitempty"`
+	// CompatGateway marks a backend whose URL is a relay gateway that adds its
+	// own fields to responses, such as usage metering or cost. The response
+	// decoder drops the fields the backend's wire format does not define and
+	// reports each one, instead of rejecting the reply. A backend that serves
+	// the canonical contract must leave it unset.
+	CompatGateway bool `yaml:"compat_gateway,omitempty"`
+	// OpenAICompatGateway is the deprecated spelling of CompatGateway from
+	// when only vLLM-type backends could opt in.
+	OpenAICompatGateway bool `yaml:"openai_compat_gateway,omitempty"`
+}
+
+// compatGateway reports whether the backend opted in under either spelling.
+func (backend CanonicalBackendRef) compatGateway() bool {
+	return backend.CompatGateway || backend.OpenAICompatGateway
 }
 
 func canonicalProviderDefaults(providers CanonicalProviders) CanonicalProviderDefaults {

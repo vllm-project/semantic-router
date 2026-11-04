@@ -40,11 +40,40 @@ type chatResponseWire struct {
 	XGroq json.RawMessage `json:"x_groq,omitempty"`
 	// Groq reports per-model usage for compound requests and null otherwise.
 	UsageBreakdown json.RawMessage `json:"usage_breakdown,omitempty"`
+	// Cerebras reports serving timing metadata on every response. It is
+	// provider timing metadata, not output content.
+	TimeInfo json.RawMessage `json:"time_info,omitempty"`
+	// Perplexity Sonar responses carry model source citations and search
+	// results at the top level. Neither has a neutral slot here, so both are
+	// dropped with a diagnostic instead of failing the strict decode.
+	Citations     json.RawMessage `json:"citations,omitempty"`
+	SearchResults json.RawMessage `json:"search_results,omitempty"`
+}
+
+// hasTimeInfo reports Cerebras's top-level serving timing metadata.
+func (wire chatResponseWire) hasTimeInfo() bool {
+	return len(wire.TimeInfo) > 0 && !bytes.Equal(bytes.TrimSpace(wire.TimeInfo), []byte("null"))
 }
 
 // hasUsageBreakdown reports Groq's per-model usage, which has no neutral slot.
 func (wire chatResponseWire) hasUsageBreakdown() bool {
-	return len(wire.UsageBreakdown) > 0 && !bytes.Equal(bytes.TrimSpace(wire.UsageBreakdown), []byte("null"))
+	return jsonFieldPresent(wire.UsageBreakdown)
+}
+
+// jsonFieldPresent reports a raw JSON field that carries a value rather than
+// being absent or null.
+func jsonFieldPresent(raw json.RawMessage) bool {
+	return len(raw) > 0 && !bytes.Equal(bytes.TrimSpace(raw), []byte("null"))
+}
+
+// hasCitations reports Perplexity's top-level source citations.
+func (wire chatResponseWire) hasCitations() bool {
+	return jsonFieldPresent(wire.Citations)
+}
+
+// hasSearchResults reports Perplexity's top-level search results.
+func (wire chatResponseWire) hasSearchResults() bool {
+	return jsonFieldPresent(wire.SearchResults)
 }
 
 // hasLegacyKVTransferMetadata recognizes the flat KV-transfer response
@@ -57,14 +86,18 @@ func (wire chatResponseWire) hasLegacyKVTransferMetadata() bool {
 }
 
 type chatChoiceWire struct {
-	Index              int                 `json:"index"`
-	Message            chatMessageWire     `json:"message"`
-	FinishReason       *string             `json:"finish_reason"`
-	NativeFinishReason *string             `json:"native_finish_reason,omitempty"`
-	Logprobs           *chatLogprobsWire   `json:"logprobs,omitempty"`
-	StopReason         *chatStopReasonWire `json:"stop_reason,omitempty"`
-	TokenIDs           []int64             `json:"token_ids,omitempty"`
-	RoutedExperts      *chatNullOnlyWire   `json:"routed_experts,omitempty"`
+	Index              int               `json:"index"`
+	Message            chatMessageWire   `json:"message"`
+	FinishReason       *string           `json:"finish_reason"`
+	NativeFinishReason *string           `json:"native_finish_reason,omitempty"`
+	Logprobs           *chatLogprobsWire `json:"logprobs,omitempty"`
+	// LiteLLM wraps upstream fields that do not fit the OpenAI schema in
+	// provider_specific_fields on each choice. The content is opaque provider
+	// metadata and is not replayed to the client.
+	ProviderSpecificFields json.RawMessage     `json:"provider_specific_fields,omitempty"`
+	StopReason             *chatStopReasonWire `json:"stop_reason,omitempty"`
+	TokenIDs               []int64             `json:"token_ids,omitempty"`
+	RoutedExperts          *chatNullOnlyWire   `json:"routed_experts,omitempty"`
 }
 
 type chatServiceTierWire string

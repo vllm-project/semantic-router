@@ -30,8 +30,9 @@ func checkAnswers(questions []Question, response Response) Response {
 // question, with a confidence in [0, 1]. A Choice gives every declared option
 // a probability and no other option, and chooses a most probable one. A Noul
 // is a probability. A Score comes with a distribution over its levels and is
-// that distribution's expected level. Answer types the router does not ask for
-// pass unchecked.
+// that distribution's expected level. A Set gives every declared label an
+// independent probability and no other label. Answer types the router does not
+// ask for pass unchecked.
 func answerFits(question Question, answer Answer) bool {
 	if answer.Type != question.Type || answer.Confidence < 0 || answer.Confidence > 1 {
 		return false
@@ -45,6 +46,15 @@ func answerFits(question Question, answer Answer) bool {
 		return distributionOver(keys, answer.Probabilities) && mostProbable(answer.Choice, answer.Probabilities)
 	case "noul":
 		return answer.Noul >= 0 && answer.Noul <= 1
+	case "set":
+		if len(question.Labels) == 0 {
+			return true // No declared vocabulary to check the labels against.
+		}
+		keys := make([]string, len(question.Labels))
+		for index, label := range question.Labels {
+			keys[index] = label.Key
+		}
+		return coversExactly(keys, answer.Probabilities)
 	case "score":
 		keys := make([]string, len(question.Levels))
 		expected := 0.0
@@ -66,18 +76,29 @@ func answerFits(question Question, answer Answer) bool {
 // distributionOver reports whether probabilities cover exactly keys, each in
 // [0, 1], with a total within the tolerance of one.
 func distributionOver(keys []string, probabilities map[string]float64) bool {
-	if len(probabilities) != len(keys) {
+	if !coversExactly(keys, probabilities) {
 		return false
 	}
 	total := 0.0
+	for _, key := range keys {
+		total += probabilities[key]
+	}
+	return math.Abs(total-1) <= probabilitySumTolerance
+}
+
+// coversExactly reports whether probabilities hold a value in [0, 1] for every
+// key and for no other key. The values need not sum to one.
+func coversExactly(keys []string, probabilities map[string]float64) bool {
+	if len(probabilities) != len(keys) {
+		return false
+	}
 	for _, key := range keys {
 		probability, ok := probabilities[key]
 		if !ok || probability < 0 || probability > 1 {
 			return false
 		}
-		total += probability
 	}
-	return math.Abs(total-1) <= probabilitySumTolerance
+	return true
 }
 
 // mostProbable reports whether choice has the largest probability, ties

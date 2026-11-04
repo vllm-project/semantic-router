@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
@@ -173,7 +174,19 @@ func (m *MemoryStore) GetConversationChain(ctx context.Context, responseID strin
 	defer m.mu.RUnlock()
 	var chain []*responseapi.StoredResponse
 	currentID := responseID
-	for currentID != "" {
+	visited := make(map[string]bool)
+
+	// Maximum chain length to prevent infinite loops, mirroring the Redis backend.
+	const maxChainLength = 1000
+
+	for currentID != "" && len(chain) < maxChainLength {
+		// Prevent circular references from looping forever while holding the read lock.
+		if visited[currentID] {
+			logging.Warnf("MemoryStore: circular reference detected at %s", currentID)
+			break
+		}
+		visited[currentID] = true
+
 		response, exists := m.responses[currentID]
 		if !exists || (!response.TTL.IsZero() && time.Now().After(response.TTL)) {
 			break

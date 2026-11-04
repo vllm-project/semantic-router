@@ -115,6 +115,7 @@ export interface ModelPricing {
   prompt_per_1m?: number
   cached_input_per_1m?: number
   cache_write_per_1m?: number
+  cache_write_1h_per_1m?: number
   completion_per_1m?: number
 }
 
@@ -375,6 +376,7 @@ export interface NormalizedModel {
     prompt_per_1m?: number
     cached_input_per_1m?: number
     cache_write_per_1m?: number
+    cache_write_1h_per_1m?: number
     completion_per_1m?: number
   }
   reliability?: ProviderReliability
@@ -432,6 +434,7 @@ export interface RouterReplayConfig {
   capture_request_body?: boolean
   capture_response_body?: boolean
   capture_personal_data?: boolean
+  capture_tool_results?: boolean
   max_records?: number
   max_body_bytes?: number
   max_tool_trace_bytes?: number
@@ -787,6 +790,7 @@ export interface RouterCoreConfig {
   skip_processing?: { enabled?: boolean }
   model_selection?: ModelSelectionConfig
   learning?: RouterLearningConfig
+  allow_lossy_translation?: string[]
 }
 
 export interface CanonicalServiceGlobalConfig {
@@ -871,6 +875,7 @@ export interface RouterLearningConfig {
       headers?: {
         session?: string
         conversation?: string
+        agent?: string
       }
     }
     tuning?: {

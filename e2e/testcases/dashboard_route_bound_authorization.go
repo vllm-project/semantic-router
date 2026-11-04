@@ -19,7 +19,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("dashboard-route-bound-authorization", pkgtestcases.TestCase{
-		Description: "Verify invitation, read-only route policy, unknown API denial, and immediate session revocation",
+		Description: "Verify invitation, read-only route policy, WebSearch stats, unknown API denial, and immediate session revocation",
 		Tags:        []string{"dashboard", "auth", "security"},
 		Fn:          testDashboardRouteBoundAuthorization,
 	})
@@ -99,6 +99,25 @@ func testDashboardRouteBoundAuthorization(ctx context.Context, client *kubernete
 		nil, http.StatusOK, nil, "read config"); err != nil {
 		return err
 	}
+	if err := dashboardPolicyRequest(ctx, httpClient, baseURL, http.MethodGet, "/api/tools/web-search/stats", "",
+		nil, http.StatusUnauthorized, nil, "deny unauthenticated WebSearch stats"); err != nil {
+		return err
+	}
+	var webSearchStats map[string]int
+	if err := dashboardPolicyRequest(ctx, httpClient, baseURL, http.MethodGet, "/api/tools/web-search/stats", readToken,
+		nil, http.StatusOK, &webSearchStats, "read WebSearch stats"); err != nil {
+		return err
+	}
+	for _, field := range []string{"tracked_clients", "global_requests", "window_seconds", "per_client_limit", "global_limit"} {
+		if _, ok := webSearchStats[field]; !ok {
+			return fmt.Errorf("WebSearch stats response is missing field %q: %v", field, webSearchStats)
+		}
+	}
+	if len(webSearchStats) != 5 || webSearchStats["window_seconds"] != 60 ||
+		webSearchStats["per_client_limit"] != 5 || webSearchStats["global_limit"] != 30 ||
+		webSearchStats["tracked_clients"] < 0 || webSearchStats["global_requests"] < 0 {
+		return fmt.Errorf("unexpected WebSearch stats response: %v", webSearchStats)
+	}
 	if err := dashboardPolicyRequest(ctx, httpClient, baseURL, http.MethodPost, "/api/router/config/update", readToken,
 		map[string]any{}, http.StatusForbidden, nil, "deny config mutation"); err != nil {
 		return err
@@ -141,7 +160,7 @@ func testDashboardRouteBoundAuthorization(ctx context.Context, client *kubernete
 	}
 
 	if opts.Verbose {
-		fmt.Println("[Dashboard] route-bound authorization OK: read=200, mutation=403, unknown=403, disabled/deleted token=401")
+		fmt.Println("[Dashboard] route-bound authorization OK: read=200, WebSearch stats=200, mutation=403, unknown=403, disabled/deleted token=401")
 	}
 	return nil
 }

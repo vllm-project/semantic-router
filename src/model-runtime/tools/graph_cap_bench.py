@@ -67,10 +67,13 @@ def main() -> int:
     parser.add_argument("--device", default="rocm:0")
     parser.add_argument("--base-path")
     args = parser.parse_args()
+
+    requests = stream(args.stream, [int(size) for size in args.questions.split(",")])
+    if not requests:
+        raise SystemExit(f"--stream {args.stream} contains no requests")
     args.no_graphs = args.no_fused = False
     import torch
 
-    requests = stream(args.stream, [int(size) for size in args.questions.split(",")])
     model = load(args)
     graphs = model.engine_model.graphs
     graphs.max_tokens = args.cap

@@ -102,3 +102,47 @@ func TestClassificationItemErrorsAreStableAndDoNotEchoPayload(t *testing.T) {
 		}
 	}
 }
+
+// Typed inputs must be normalized before selector-aware resolution, while
+// retaining the legacy representation's treatment of standalone text/media.
+func TestClassificationInputMatchesLegacyWithRoutingSelector(t *testing.T) {
+	selector := previewSelector(t)
+	for _, body := range []string{
+		`{"type":"text","text":"<relevant-memories>private</relevant-memories> question"}`,
+		`{"type":"text","text":"OpenClaw runtime context: metadata End OpenClaw runtime context."}`,
+		`{"type":"image","image_url":"DATA:IMAGE/PNG;BASE64,YQ=="}`,
+	} {
+		t.Run(body, func(t *testing.T) {
+			var item ClassificationInput
+			if err := json.Unmarshal([]byte(body), &item); err != nil {
+				t.Fatal(err)
+			}
+			legacy, err := item.intentRequest(nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want, err := legacy.resolveSignalInputWith(selector)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := (IntentRequest{Input: &item}).resolveSignalInputWith(selector)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("selector-aware typed input differs from legacy: %#v != %#v", got, want)
+			}
+			if item.Type == "image" && (got.imageURL != "data:image/png;base64,YQ==" || got.requestFacts.InputModality.ImageContentCount != 1) {
+				t.Fatalf("image lost: %+v", got)
+			}
+		})
+	}
+}
+
+func TestSelectorAwareTypedInputRejectsMixedForms(t *testing.T) {
+	text := "typed"
+	_, err := (IntentRequest{Text: "legacy", Input: &ClassificationInput{Type: "text", Text: &text}}).resolveSignalInputWith(previewSelector(t))
+	if !errors.Is(err, ErrInvalidClassificationInput) {
+		t.Fatalf("got %v", err)
+	}
+}

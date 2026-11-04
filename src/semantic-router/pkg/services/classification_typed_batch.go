@@ -78,6 +78,7 @@ func (s *ClassificationService) ClassifyInputsContext(ctx context.Context, input
 	}
 	requests := make([]IntentRequest, len(inputs))
 	resolved := make([]intentSignalInput, len(inputs))
+	selector := s.routingInputSelectorSnapshot()
 	for index, input := range inputs {
 		request, itemErr := input.intentRequest(options)
 		if itemErr == nil && input.Type == "image" {
@@ -94,7 +95,7 @@ func (s *ClassificationService) ClassifyInputsContext(ctx context.Context, input
 			itemErr = ErrClassifierUnavailable
 		}
 		if itemErr == nil && task == "intent" {
-			resolved[index], itemErr = request.resolveSignalInput()
+			resolved[index], itemErr = request.resolveSignalInputWith(selector)
 		}
 		response.Results[index].Error = ClassificationErrorForItem(itemErr)
 		requests[index] = request

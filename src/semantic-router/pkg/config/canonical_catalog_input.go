@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // canonicalCatalogInput adapts the existing v0.3 hierarchy to the catalog's
@@ -89,6 +90,12 @@ func (builder *catalogInputBuilder) addModel(model CanonicalProviderModel, model
 	cardID := effectiveCanonicalCardID(model)
 	alias := catalogModelAlias(model, cardID)
 	for backendIndex, backend := range model.BackendRefs {
+		if backend.OpenAICompatGateway {
+			logging.ComponentWarnEvent("config", "deprecated_openai_compat_gateway", map[string]interface{}{
+				"deprecated": fmt.Sprintf("providers.models[%d].backend_refs[%d].openai_compat_gateway", modelIndex, backendIndex),
+				"canonical":  "compat_gateway",
+			})
+		}
 		instance, binding := catalogProviderBinding(builder.builtIn, model, backend, backendIndex)
 		builder.input.Providers = append(builder.input.Providers, instance)
 		alias.Providers = append(alias.Providers, binding)
@@ -131,6 +138,7 @@ func catalogProviderBinding(
 		Credentials: modelcatalog.CredentialsRef{APIKey: backend.APIKey, APIKeyEnv: backend.APIKeyEnv},
 		Headers:     copyStringMap(backend.ExtraHeaders), APIVersion: backend.APIVersion,
 		AuthHeader: backend.AuthHeader, ChatPath: backend.ChatPath,
+		CompatGateway: backend.compatGateway(),
 	}
 	if backend.AuthPrefix != nil {
 		instance.AuthPrefix = *backend.AuthPrefix
@@ -297,7 +305,8 @@ func catalogPricing(value ModelPricing) modelcatalog.Pricing {
 	return modelcatalog.Pricing{
 		Currency: value.Currency, PromptPer1M: value.PromptPer1M,
 		CompletionPer1M: value.CompletionPer1M, CachedInputPer1M: value.CachedInputPer1M,
-		CacheWritePer1M: value.CacheWritePer1M,
+		CacheWritePer1M:   value.CacheWritePer1M,
+		CacheWrite1hPer1M: value.CacheWrite1hPer1M,
 	}
 }
 

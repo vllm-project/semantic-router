@@ -94,7 +94,31 @@ func (c *RouterConfig) NeedsCategoryMappingForRouting() bool {
 // NeedsPIIMappingForRouting returns true when routing actually depends on the
 // local file-backed PII classifier assets.
 func (c *RouterConfig) NeedsPIIMappingForRouting() bool {
-	return c != nil && c.IsPIIClassifierEnabled() && c.UsesSignalTypeInReachableRouting(SignalTypePII)
+	return c != nil && c.IsPIIClassifierEnabled() && c.UsesPIIClassifierInReachableRouting()
+}
+
+// UsesPIIClassifierInReachableRouting reports whether a request-reachable
+// routing profile depends on the PII classifier. It has two consumers: a
+// decision rule that reads a pii rule, and the masking plugin, which scans at
+// the dispatch boundary without declaring any rule. The signal-type walk
+// alone misses masking, the mapping then stays unloaded, IsPIIEnabled stays
+// false, and because masking fails closed every request on that route answers
+// 503 (#3566).
+func (c *RouterConfig) UsesPIIClassifierInReachableRouting() bool {
+	if c == nil {
+		return false
+	}
+	if c.UsesSignalTypeInReachableRouting(SignalTypePII) {
+		return true
+	}
+	decisions := c.routingConsumerDecisions()
+	for i := range decisions {
+		plugin := decisions[i].GetMaskingConfig()
+		if plugin != nil && plugin.Enabled {
+			return true
+		}
+	}
+	return false
 }
 
 // NeedsJailbreakMappingForRouting returns true when routing actually depends on

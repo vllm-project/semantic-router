@@ -534,10 +534,17 @@ def vela1_scores(task: str, outputs: dict[str, Any]) -> dict[str, float] | None:
     if item.get("windows"):
         positive = {"jailbreak": "jailbreak", "safety": "unsafe"}.get(task, "")
         index = labels.index(positive) if positive in labels else 0
-        probabilities = max(
-            (w["probabilities"] for w in item["windows"]), key=lambda p: p[index]
-        )
-    return dict(zip(labels, probabilities, strict=True)) if probabilities else None
+        candidates = [
+            window["probabilities"]
+            for window in item["windows"]
+            if len(window.get("probabilities") or []) > index
+        ]
+        if not candidates:
+            return None
+        probabilities = max(candidates, key=lambda p: p[index])
+    if not probabilities or len(probabilities) != len(labels):
+        return None
+    return dict(zip(labels, probabilities, strict=True))
 
 
 def vela2_scores(task: str, outputs: dict[str, Any]) -> dict[str, float] | None:
@@ -602,6 +609,7 @@ def cmd_join(args: argparse.Namespace) -> None:
     missing: collections.Counter[str] = collections.Counter()
     seen: set[str] = set()
     failed = 0
+    unknown = 0
     for run, log_dir in zip(args.run, args.log_dir, strict=True):
         answers = Answers([log_dir])
         for result in read_jsonl(run):
@@ -610,7 +618,10 @@ def cmd_join(args: argparse.Namespace) -> None:
             if result.get("status") != 200:
                 failed += 1
                 continue
-            row = rows[result["id"]]
+            row = rows.get(result["id"])
+            if row is None:
+                unknown += 1
+                continue
             body = row["body"]
             text = body.get("text") or body["messages"][-1]["content"]
             kind = "feedback" if row["task"] == "feedback" else "request"
@@ -634,7 +645,8 @@ def cmd_join(args: argparse.Namespace) -> None:
                 json.dumps(entry, ensure_ascii=False) + "\n" for entry in entries
             )
     print(
-        f"{len(seen)} rows joined; previews that failed: {failed}; without a recorded answer: {dict(missing)}"
+        f"{len(seen)} rows joined; previews that failed: {failed}; rows without a "
+        f"matching row: {unknown}; without a recorded answer: {dict(missing)}"
     )
 
 
@@ -1025,14 +1037,17 @@ def top_label(scores: dict[str, Any]) -> tuple[str, float]:
     return max(items, key=lambda item: item[1]) if items else ("", 0.0)
 
 
-def matched_threshold(rate: float, values: Any, above: bool) -> float:
+def matched_threshold(rate: float, values: Any, above: bool) -> float | None:
     """The threshold whose share of ``values`` at or above it (``above``), or below it, is
     closest to ``rate`` (the lower share on a tie). Candidates sit midway between distinct
-    values, so tied values (a span model's zero for "no span") stay on one side."""
+    values, so tied values (a span model's zero for "no span") stay on one side. None when
+    there is nothing to fit (a group with no usable scores)."""
     import numpy as np
 
     v = np.asarray(values, dtype=float)
     distinct = np.unique(v)
+    if not len(distinct):
+        return None
     candidates = np.concatenate(
         [
             [distinct[0] / 2],
@@ -1150,6 +1165,9 @@ def cmd_calibrate(args: argparse.Namespace) -> None:
                 )
                 confidences = [top_label(pb[r["id"]]["scores"])[1] for r in rows]
                 matched = matched_threshold(float(below), confidences, above=False)
+                if matched is None:
+                    print(f"{task}: no usable dev scores; skipped", flush=True)
+                    continue
                 # Reported, and shipped, at the matched threshold to two decimals or more.
                 t2 = shipped_threshold(matched, confidences, above=False)
                 point = {
@@ -1174,6 +1192,9 @@ def cmd_calibrate(args: argparse.Namespace) -> None:
                 matched = matched_threshold(
                     float(false_positives), negative_scores, above=True
                 )
+                if matched is None:
+                    print(f"{task}: no usable dev scores; skipped", flush=True)
+                    continue
                 t2 = shipped_threshold(matched, negative_scores, above=True)
                 point = {
                     "a": t1,

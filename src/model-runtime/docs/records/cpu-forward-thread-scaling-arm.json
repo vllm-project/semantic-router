@@ -60,9 +60,25 @@
     "vela1_29tok": {"threads": {"16": 85.0, "1": 96.2}, "n": 12},
     "vela2_662tok_4signal": {"threads": {"16": 524.2, "8": 707.8}, "n": 30},
     "adaptive_resolver_end_to_end": {
-      "note": "explore-then-serve resolver (VLLM_SRUN_CPU_ADAPTIVE_THREADS), 16-thread budget",
+      "note": "explore-then-serve resolver (VLLM_SRUN_CPU_ADAPTIVE_THREADS), 16-thread budget; measured on the earlier 40-request exploration design, superseded by levels_head_rerun_920",
       "vela1_29tok": {"static16": 85.0, "converged": 85.5, "exploration_req0_39": [125.7, 128.5]},
       "vela2_4signal": {"static16": 524.2, "converged_req40_59": 562.8}
+    },
+    "levels_head_rerun_920": {
+      "note": "commit 8663dd842 (level 1 learns and reports, level 2 serves), kunpeng920, taskset 0-31, background load ~12 on 384 cores",
+      "vela1_29tok_threads16": {
+        "static16": 79.4, "static1": 92.2,
+        "level1": {"exploration_req0_49_p50_ms": 286.2, "report_steady_req50_59_p50_ms": 81.0},
+        "level2": {"exploration_req0_49_p50_ms": 289.1, "transition_req50_59_p50_ms": 78.7,
+                    "serving_req60_89_p50_ms": [78.7, 79.3, 84.7]}
+      },
+      "vela2_662tok_4signal_counts_1_2": {
+        "note": "--threads 2; the counts 1-2 rows the earlier runs did not cover",
+        "static1": 1293.3, "static2": 1279.7,
+        "level1": {"exploration_req0_49_p50_ms": 2526.6, "report_steady_req50_59_p50_ms": 1240.1},
+        "level2": {"exploration_req0_49_p50_ms": 2544.5, "transition_req50_59_p50_ms": 1234.2,
+                    "serving_req60_89_p50_ms": [1373.2, 1180.0, 1116.8]}
+      }
     }
   },
   "omp_wait_policy": {

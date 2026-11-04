@@ -20,7 +20,9 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -586,32 +588,17 @@ func (a *AutoMixSelector) updateValueFunctionLocked() {
 	}
 }
 
+// paramSizePattern matches the parameter-count token in common model names
+// ("7b", "13b", "0.5b", "70B"). Digit boundaries keep "14b" from matching
+// inside "114b", and version fragments like the "3.1" in llama-3.1-8b do
+// not match because the size token must be directly followed by the unit.
+var paramSizePattern = regexp.MustCompile(`(?:^|[^0-9.])([0-9]+(?:\.[0-9]+)?)b(?:$|[^0-9])`)
+
 // estimateParamSize estimates model size from name
 func (a *AutoMixSelector) estimateParamSize(model string) float64 {
-	// Extract size from common naming patterns (7b, 13b, 70b, etc.)
-	sizes := []struct {
-		pattern string
-		size    float64
-	}{
-		{"405b", 405.0},
-		{"70b", 70.0},
-		{"72b", 72.0},
-		{"34b", 34.0},
-		{"32b", 32.0},
-		{"14b", 14.0},
-		{"13b", 13.0},
-		{"8b", 8.0},
-		{"7b", 7.0},
-		{"3b", 3.0},
-		{"1.8b", 1.8},
-		{"1.5b", 1.5},
-		{"0.5b", 0.5},
-	}
-
-	modelLower := strings.ToLower(model)
-	for _, s := range sizes {
-		if strings.Contains(modelLower, s.pattern) {
-			return s.size
+	if match := paramSizePattern.FindStringSubmatch(strings.ToLower(model)); match != nil {
+		if size, err := strconv.ParseFloat(match[1], 64); err == nil && size > 0 {
+			return size
 		}
 	}
 
@@ -720,7 +707,10 @@ func (a *AutoMixSelector) GetEscalationChain(candidates []config.ModelRef) []str
 	sorted := make([]config.ModelRef, len(candidates))
 	copy(sorted, candidates)
 
-	sort.Slice(sorted, func(i, j int) bool {
+	// SliceStable keeps candidates with equal estimates (unknown names all
+	// fall back to the default) in configuration order, so the chain is
+	// deterministic across runs.
+	sort.SliceStable(sorted, func(i, j int) bool {
 		sizeI := a.estimateParamSize(sorted[i].Model)
 		sizeJ := a.estimateParamSize(sorted[j].Model)
 		return sizeI < sizeJ

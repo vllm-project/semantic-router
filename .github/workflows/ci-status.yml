@@ -1,0 +1,45 @@
+name: PR CI Status
+
+on:
+  workflow_run:
+    workflows: [Pull Request]
+    types: [in_progress, completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Pull Request workflow run to reconcile against the current PR revision.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-status-${{ github.event.workflow_run.id || inputs.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish PR qualification status
+    if: >-
+      github.event_name == 'workflow_run'
+      || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      checks: write
+      issues: write
+      # PR guidance uses /issues APIs but still writes to a PR resource.
+      pull-requests: write
+    steps:
+      - name: Check out the trusted status publisher
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Reconcile the current run and update PR guidance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/ci/pr_ci_status.py --event "$GITHUB_EVENT_PATH"

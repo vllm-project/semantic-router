@@ -98,7 +98,7 @@ func TestDecodeRejectsOutOfRangeSetAndSpanProbabilities(t *testing.T) {
 		for _, preset := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/preset=%t", name, preset), func(t *testing.T) {
 				kind, noul := "noul", 0.5
-				sets := map[string]api.SetAnswer{"topics": {Probabilities: map[string]float64{"billing": probability}}}
+				sets := map[string]api.SetAnswer{"topics": {Probabilities: map[string]float64{"billing": probability, "shipping": 0.5}}}
 				spans := map[string][]api.Span{"cities": {{Label: "city", Text: "Paris", End: 5, Probability: probability}}}
 				body := api.DecisionResponse{
 					Answers: map[string]api.Answer{"cities": {Type: &kind, Noul: &noul}},

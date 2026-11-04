@@ -4,7 +4,7 @@ import "testing"
 
 func TestVelaHaluDefaultAndLegacyIdentity(t *testing.T) {
 	cfg := DefaultGlobalConfig()
-	if got := cfg.HallucinationMitigation.HallucinationModel.ModelID; got != Vela2SignalModel {
+	if got := cfg.HallucinationMitigation.HallucinationModel.ModelID; got != Vela3SignalModel {
 		t.Fatalf("Halu default = %q", got)
 	}
 	model := GetModelByPath(Vela1SystemModels().HallucinationDetector)

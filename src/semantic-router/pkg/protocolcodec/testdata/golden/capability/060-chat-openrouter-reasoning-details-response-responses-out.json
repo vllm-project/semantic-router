@@ -1,0 +1,163 @@
+{
+  "cases": [
+    {
+      "name": "openrouter_nvidia_recorded_tool_turn",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "created_at": 100,
+          "error": null,
+          "id": "gen-openrouter-1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "routed-model",
+          "object": "response",
+          "output": [
+            {
+              "content": [
+                {
+                  "text": "The user is asking for the current weather in Paris and wants me to use the tool. I need to call the get_weather function with city set to \"Paris\". Let me do that.",
+                  "type": "reasoning_text"
+                }
+              ],
+              "id": "item_63941a0bc238944da6d2b9f8",
+              "summary": [],
+              "type": "reasoning"
+            },
+            {
+              "arguments": "{\"city\":\"Paris\"}",
+              "call_id": "call_1",
+              "id": "item_5e759701d1962c4879531e91",
+              "name": "get_weather",
+              "type": "function_call"
+            }
+          ],
+          "parallel_tool_calls": true,
+          "status": "completed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null,
+          "usage": {
+            "input_tokens": 282,
+            "input_tokens_details": {
+              "cache_write_tokens": 0,
+              "cached_tokens": 0
+            },
+            "output_tokens": 65,
+            "output_tokens_details": {
+              "reasoning_tokens": 41
+            },
+            "total_tokens": 347
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "choices.message.tool_calls.index",
+            "action": "dropped"
+          },
+          {
+            "field": "choices.native_finish_reason",
+            "action": "dropped"
+          },
+          {
+            "field": "provider",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.completion_tokens_details.image_tokens",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.cost",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.cost_details",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.is_byok",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.prompt_tokens_details.video_tokens",
+            "action": "dropped"
+          },
+          {
+            "field": "reasoning_details",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "openrouter_all_detail_variants",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "created_at": 100,
+          "error": null,
+          "id": "gen-openrouter-1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "routed-model",
+          "object": "response",
+          "output": [
+            {
+              "content": [
+                {
+                  "text": "Plan the lookup. Use the tool.",
+                  "type": "reasoning_text"
+                }
+              ],
+              "id": "item_63941a0bc238944da6d2b9f8",
+              "summary": [],
+              "type": "reasoning"
+            },
+            {
+              "arguments": "{\"city\":\"Paris\"}",
+              "call_id": "call_9",
+              "id": "item_5e759701d1962c4879531e91",
+              "name": "get_weather",
+              "type": "function_call"
+            }
+          ],
+          "parallel_tool_calls": true,
+          "status": "completed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null,
+          "usage": {
+            "input_tokens": 20,
+            "input_tokens_details": {
+              "cached_tokens": null
+            },
+            "output_tokens": 30,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 50
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "choices.native_finish_reason",
+            "action": "dropped"
+          },
+          {
+            "field": "provider",
+            "action": "dropped"
+          },
+          {
+            "field": "reasoning_details",
+            "action": "dropped"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -14,7 +14,14 @@ global:
   integrations:
     looper:
       timeout_seconds: 300
-
+  model_catalog:
+    deployments:
+      primary:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.8B
+    system:
+      decision_model:
+        deployment: primary
 providers:
   defaults:
     model: qwen-coordinator
@@ -115,34 +122,72 @@ evaluation:
 routing:
   modelCards:
     - name: local/omni
-      capabilities: [chat, image_understanding, multimodal, omni, text, vision]
+      capabilities:
+        - chat
+        - image_understanding
+        - multimodal
+        - omni
+        - text
+        - vision
       modality: omni
     - name: qwen-coordinator
       context_window_size: 32768
       description: Local planner and synthesis model for Router Flow dynamic plans.
-      capabilities: [chat, planning, synthesis, code]
+      capabilities:
+        - chat
+        - planning
+        - synthesis
+        - code
       modality: text
-      tags: [deployment:self_hosted, role:planner]
+      tags:
+        - deployment:self_hosted
+        - role:planner
     - name: opus48-worker
       context_window_size: 1000000
       description: OpenRouter worker for long-horizon agentic work.
-      capabilities: [chat, code, reasoning, long-context]
+      capabilities:
+        - chat
+        - code
+        - reasoning
+        - long-context
       modality: text
-      tags: [deployment:openrouter, role:worker]
+      tags:
+        - deployment:openrouter
+        - role:worker
     - name: gemini31-worker
       context_window_size: 1000000
       description: OpenRouter worker for broad reasoning and coding.
-      capabilities: [chat, code, reasoning, long-context]
+      capabilities:
+        - chat
+        - code
+        - reasoning
+        - long-context
       modality: text
-      tags: [deployment:openrouter, role:worker]
+      tags:
+        - deployment:openrouter
+        - role:worker
     - name: gpt55-worker
       context_window_size: 1048576
       description: OpenRouter worker for long-context planning and frontier synthesis.
-      capabilities: [chat, code, reasoning, long-context, planning, synthesis]
+      capabilities:
+        - chat
+        - code
+        - reasoning
+        - long-context
+        - planning
+        - synthesis
       modality: text
-      tags: [deployment:openrouter, role:worker, role:planner]
-
+      tags:
+        - deployment:openrouter
+        - role:worker
+        - role:planner
   signals:
+    context:
+      - name: accuracy_long_context
+        min_tokens: 16K
+        max_tokens: 1M
+        description: Long inputs stay on one capable worker to avoid multiplying context cost across a
+          fan-out workflow.
     conversation:
       - name: accuracy_has_images
         description: Request contains at least one image content part.
@@ -150,54 +195,40 @@ routing:
           type: exists
           source:
             type: image_content
-    keywords:
-      - name: accuracy_workflow_request
-        operator: OR
-        keywords:
-          - investigate and produce an implementation plan
-          - research, compare, and synthesize
-          - diagnose the root cause and verify the fix
-          - break this into independent workstreams
-          - use tools to gather evidence
-          - 调研、比较并综合
-          - 分解为独立任务并验证
-          - 根因分析并验证修复
-      - name: accuracy_deliberation_request
-        operator: OR
-        keywords:
-          - debate both sides
-          - compare competing hypotheses
-          - adversarial review
-          - independent expert opinions
-          - challenge the proposed solution
-          - compare multiple approaches and reach a verdict
-          - 比较多个假设并得出结论
-          - 从正反两面论证
-          - 对方案进行对抗性审查
-      - name: accuracy_direct_request
-        operator: OR
-        keywords:
-          - answer the question directly
-          - do not debate
-          - do not compare
-          - do not create workstreams
-          - use a single model
-          - without multi-model fan-out
-          - 直接回答问题
-          - 不要比较多个方案
-          - 不要创建并行工作流
-    context:
-      - name: accuracy_long_context
-        min_tokens: 16K
-        max_tokens: 1M
-        description: Long inputs stay on one capable worker to avoid multiplying context cost across a fan-out workflow.
-
+    decision:
+      - name: accuracy_mode
+        description: The way of working the request asks for.
+        question:
+          type: choice
+          instructions: Which way of working does this request ask for?
+          choices:
+            - key: direct
+              description: A single direct answer, explanation or summary, including when the user asks
+                not to split the work, compare options or use several models
+            - key: workstreams
+              description: An investigation or plan with several workstreams, such as research, diagnosis
+                or evidence gathering
+            - key: independent_review
+              description: Independent opinions, a debate or an adversarial review that ends in a verdict
+      - name: accuracy_difficulty
+        description: How much reasoning a strong expert needs, from 0 (none) to 4 (research level).
+        question:
+          type: score
+          instructions: How much reasoning does a strong expert need to answer this request well?
+          levels:
+            - Answer immediately, with no thinking
+            - A little thought, one or two simple steps
+            - Multi-step reasoning or a careful check
+            - Deep expert reasoning on a hard problem
+            - Research-level work on an open or frontier problem
+        predicate:
+          gte: 1.5
   decisions:
     - name: omni
       description: Understand image-bearing requests with the dedicated visual-language model.
       priority: 200
       rules:
-        operator: OR
+        operator: AND
         conditions:
           - type: conversation
             name: accuracy_has_images
@@ -205,15 +236,21 @@ routing:
         - model: local/omni
       algorithm:
         type: static
-
     - name: accuracy_workflow
-      description: Decompose evidence-gathering and tool-heavy tasks into a bounded parallel workflow.
+      description: 'Several workstreams (accuracy_mode: workstreams) that need multi-step reasoning (accuracy_difficulty
+        1.5 or more) run as a bounded parallel workflow.'
       priority: 100
       rules:
-        operator: OR
+        operator: AND
+        on_unknown: no_match
         conditions:
-          - type: keyword
-            name: accuracy_workflow_request
+          - type: decision
+            name: accuracy_mode
+            label: workstreams
+            predicate:
+              gte: 0.6
+          - type: decision
+            name: accuracy_difficulty
       modelRefs:
         - model: opus48-worker
           use_reasoning: true
@@ -239,10 +276,11 @@ routing:
           include_intermediate_responses: true
           on_error: skip
     - name: accuracy_long_context_direct
-      description: Keep long-context work on one frontier model instead of paying the latency and token multiplier of fan-out.
+      description: Keep long-context work on one frontier model instead of paying the latency and token
+        multiplier of fan-out.
       priority: 95
       rules:
-        operator: OR
+        operator: AND
         conditions:
           - type: context
             name: accuracy_long_context
@@ -253,17 +291,27 @@ routing:
       algorithm:
         type: static
     - name: accuracy_deliberation
-      description: Use independent frontier perspectives for ambiguous, adversarial, or high-stakes judgments.
+      description: 'Independent opinions or a verdict (accuracy_mode: independent_review) that need multi-step
+        reasoning (accuracy_difficulty 1.5 or more) get independent frontier perspectives.'
       priority: 90
       rules:
         operator: AND
+        on_unknown: no_match
         conditions:
-          - type: keyword
-            name: accuracy_deliberation_request
+          - type: decision
+            name: accuracy_mode
+            label: independent_review
+            predicate:
+              gte: 0.6
+          - type: decision
+            name: accuracy_difficulty
           - operator: NOT
             conditions:
-              - type: keyword
-                name: accuracy_direct_request
+              - type: decision
+                name: accuracy_mode
+                label: workstreams
+                predicate:
+                  gte: 0.6
       modelRefs:
         - model: opus48-worker
           use_reasoning: true
@@ -290,15 +338,28 @@ routing:
           include_intermediate_responses: true
           on_error: skip
     - name: accuracy_direct
-      description: Default to one frontier worker when orchestration has no explicit expected-quality benefit.
+      description: Everything else, including a request for one direct answer and requests the decision
+        model cannot answer, goes to one frontier worker that the decision model picks.
       priority: 10
       modelRefs:
         - model: gpt55-worker
           use_reasoning: true
           reasoning_effort: medium
+        - model: opus48-worker
+          use_reasoning: true
+          reasoning_effort: medium
+        - model: gemini31-worker
+          use_reasoning: true
+          reasoning_effort: medium
       algorithm:
-        type: static
-
+        type: decision
+        decision:
+          instructions: Which worker should answer this request?
+          candidates:
+            gpt55-worker: Long-context reading, planning and synthesis across many sources
+            opus48-worker: Long-horizon agentic work and large code changes
+            gemini31-worker: Broad reasoning, mathematics and everyday coding
+          timeout_ms: 30000
 entrypoints:
   - model_names: ["vllm-sr/auto"]
     recipe: default

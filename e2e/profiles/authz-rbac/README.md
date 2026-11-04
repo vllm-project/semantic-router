@@ -57,6 +57,8 @@ kubectl logs --namespace envoy-gateway-system \
   -l gateway.envoyproxy.io/owning-gateway-name=semantic-router
 ```
 
-`ratelimit-limitor` is not part of this profile because its direct client
-identity headers conflict with the anti-spoofing filter. Test rate limits with
-a trusted post-auth identity source or in the profile that owns that contract.
+Rate-limit enforcement is checked directly with post-authentication request
+contexts in `src/semantic-router/pkg/extproc/processor_req_body_rate_limit_test.go`
+and limiter cases in `src/semantic-router/pkg/ratelimit/ratelimit_test.go`.
+This profile checks the gateway's identity-header stripping; it does not claim
+an authenticated rate-limit deployment test.

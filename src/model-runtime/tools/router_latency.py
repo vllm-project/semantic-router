@@ -343,7 +343,9 @@ def paired_interval(diffs: list[float]) -> list[float]:
     mean = statistics.fmean(diffs)
     if len(diffs) < 2:
         return [mean, float("nan"), float("nan")]
-    half = T975[len(diffs) - 1] * statistics.stdev(diffs) / len(diffs) ** 0.5
+    df = len(diffs) - 1
+    t = T975[max(k for k in T975 if k <= df)]
+    half = t * statistics.stdev(diffs) / len(diffs) ** 0.5
     return [mean, mean - half, mean + half]
 
 

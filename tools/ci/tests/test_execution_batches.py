@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import os
 import socket
+import subprocess
 import sys
 import tempfile
 import time
@@ -21,6 +22,28 @@ from run_platform_batch import run_batch, run_command  # noqa: E402
 
 
 class ExecutionBatchTests(unittest.TestCase):
+    def test_timed_out_worker_command_cannot_leave_a_listener(self):
+        command = (
+            "import pathlib,socket,sys,time; "
+            "s=socket.socket(); s.bind(('127.0.0.1',0)); s.listen(); "
+            "pathlib.Path(sys.argv[1]).write_text(str(s.getsockname()[1])); time.sleep(60)"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            port_file = Path(directory) / "port"
+            with self.assertRaises(subprocess.TimeoutExpired):
+                run_command(
+                    [sys.executable, "-c", command, str(port_file)],
+                    cwd=ROOT,
+                    env=os.environ.copy(),
+                    check=False,
+                    timeout=1,
+                )
+            self.assertTrue(port_file.exists())
+            with self.assertRaises(OSError):
+                socket.create_connection(
+                    ("127.0.0.1", int(port_file.read_text())), timeout=0.1
+                )
+
     def test_completed_platform_command_cannot_leave_a_listener_for_the_next_contract(
         self,
     ):
@@ -79,7 +102,7 @@ class ExecutionBatchTests(unittest.TestCase):
             self.assertTrue(run_batch(batch, Path(directory), run=process))
         self.assertEqual(budgets, [7190, 7180, 7170])
 
-    def test_platform_contracts_get_independent_workers(self):
+    def test_platform_contracts_share_setup_and_keep_distinct_contracts(self):
         plan = make_plan(
             [],
             source_sha="a" * 40,
@@ -89,22 +112,23 @@ class ExecutionBatchTests(unittest.TestCase):
             ),
         )
         batches = plan["platform_batches"]
-        self.assertEqual(len(batches), 2)
+        self.assertEqual(len(batches), 1)
         for batch in batches:
             validate_execution_batch(batch, "platform")
             self.assertEqual(batch["dispatch_job"], "platform")
             self.assertEqual(batch["runtime"], "model-runtime")
-        self.assertEqual(len({batch["display_name"] for batch in batches}), 2)
+        self.assertEqual(len(batches[0]["verifications"]), 2)
+        self.assertEqual(batches[0]["timeout_minutes"], 240)
 
     def test_e2e_profiles_preserve_all_contracts_once_with_bounded_cost(self):
         plan = make_plan([], source_sha="a" * 40, full=True)
         records = [row for row in plan["verifications"] if row["executor"] == "e2e"]
-        self.assertEqual(len(plan["e2e_batches"]), len(records))
+        self.assertLess(len(plan["e2e_batches"]), len(records))
         seen = []
         for batch in plan["e2e_batches"]:
             validate_execution_batch(batch, "e2e")
             self.assertLessEqual(batch["timeout_minutes"] + 30, 360)
-            self.assertEqual(len(batch["verifications"]), 1)
+            self.assertLessEqual(len(batch["verifications"]), 3)
             for record in batch["verifications"]:
                 self.assertEqual(sorted(record["images"]), batch["images"])
                 self.assertEqual(record["runtime"], batch["runtime"])
@@ -129,9 +153,12 @@ class ExecutionBatchTests(unittest.TestCase):
         self.assertTrue(any(label.endswith(" / model-runtime") for label in labels))
         display_dispatch(plan)
 
-    def test_large_resource_class_profiles_get_separate_workers(self):
+    def test_explicit_exclusive_profiles_get_separate_workers(self):
         plan = make_plan([], source_sha="a" * 40, requested=("e2e.vela-omni",))
         record = plan["verifications"][0]
+        self.assertEqual(record["batch_policy"], "exclusive")
+        # Presentation metadata does not decide packing policy.
+        record = {**record, "resource_class": "standard"}
         records = []
         for i in range(3):
             candidate = {**record, "id": f"e2e.model-{i}", "profile": f"model-{i}"}
@@ -146,6 +173,23 @@ class ExecutionBatchTests(unittest.TestCase):
         batches = e2e_batches(records)
         self.assertEqual([len(row["verifications"]) for row in batches], [1, 1, 1])
         self.assertTrue(all("model-" not in row["display_name"] for row in batches))
+
+    def test_standard_workers_obey_count_and_time_limits_deterministically(self):
+        record = make_plan([], source_sha="a" * 40, requested=("e2e.standalone",))[
+            "verifications"
+        ][0]
+        records = [
+            {**record, "id": f"e2e.standard-{index}", "timeout_minutes": 90}
+            for index in range(8)
+        ]
+        batches = e2e_batches(records)
+        self.assertEqual([len(batch["verifications"]) for batch in batches], [3, 3, 2])
+        self.assertEqual(batches, e2e_batches(list(reversed(records))))
+        records = [{**row, "timeout_minutes": 140} for row in records[:2]]
+        self.assertEqual(len(e2e_batches(records)), 2)
+        for budget in (0, -1, 331):
+            with self.subTest(budget=budget), self.assertRaises(ValueError):
+                e2e_batches([{**record, "timeout_minutes": budget}])
 
     def test_tampered_duplicate_or_mixed_worker_contracts_are_rejected(self):
         plan = make_plan(
@@ -197,18 +241,9 @@ class ExecutionBatchTests(unittest.TestCase):
             return SimpleNamespace(returncode=0)
 
         with tempfile.TemporaryDirectory() as directory:
-            outcomes = {
-                batch["verifications"][0]["id"]: run_batch(
-                    batch, Path(directory) / batch["id"], run=process
-                )
-                for batch in batches
-            }
-            self.assertEqual(
-                outcomes,
-                {
-                    "platform.image-calibration-cpu": False,
-                    "platform.models-cpu": True,
-                },
+            self.assertEqual(len(batches), 1)
+            self.assertFalse(
+                run_batch(batches[0], Path(directory) / batches[0]["id"], run=process)
             )
             results = list(Path(directory).glob("*/results/*.json"))
             self.assertEqual([path.stem for path in results], ["platform.models-cpu"])

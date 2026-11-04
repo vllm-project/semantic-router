@@ -350,6 +350,16 @@ func mergeMonotonicUsage(current, update llmprotocol.Usage) (llmprotocol.Usage, 
 		merged[index] = value
 	}
 	result := usageFromCounts(mergedUsageState(current.State, update.State), merged)
+	if result.InputCacheWrite.Value != nil &&
+		result.InputCacheWrite5m.Value != nil && result.InputCacheWrite1h.Value != nil {
+		if *result.InputCacheWrite5m.Value+*result.InputCacheWrite1h.Value != *result.InputCacheWrite.Value {
+			result.InputCacheWrite5m = llmprotocol.TokenCount{}
+			result.InputCacheWrite1h = llmprotocol.TokenCount{}
+		}
+	}
+	if update.InputTotal.Value == nil {
+		refreshInputTotal(&result)
+	}
 	if err := deriveUsageTotal(&result); err != nil {
 		return llmprotocol.Usage{}, err
 	}
@@ -357,6 +367,34 @@ func mergeMonotonicUsage(current, update llmprotocol.Usage) (llmprotocol.Usage, 
 		return llmprotocol.Usage{}, err
 	}
 	return result, nil
+}
+
+// refreshInputTotal re-derives the input total from its buckets after an
+// update that reported buckets without a total merged beside retained
+// evidence. Anthropic's message delta updates individual input buckets
+// without a total, so the running total must follow the merged buckets;
+// usage with unknown buckets keeps its declared total, and totals that
+// already match stay untouched.
+func refreshInputTotal(usage *llmprotocol.Usage) {
+	parts := []llmprotocol.TokenCount{usage.InputUncached, usage.InputCacheRead, usage.InputCacheWrite}
+	var sum int64
+	for _, part := range parts {
+		if part.Value == nil || *part.Value < 0 {
+			return
+		}
+		if *part.Value > math.MaxInt64-sum {
+			return
+		}
+		sum += *part.Value
+	}
+	if usage.InputTotal.Value != nil && *usage.InputTotal.Value == sum {
+		return
+	}
+	provenance := usage.InputTotal.Provenance
+	if provenance == "" {
+		provenance = llmprotocol.UsageDerived
+	}
+	usage.InputTotal = llmprotocol.TokenCount{Value: llmprotocol.Int64(sum), Provenance: provenance}
 }
 
 func mergeTokenCount(existing, incoming llmprotocol.TokenCount) (llmprotocol.TokenCount, error) {
@@ -385,6 +423,7 @@ func mergedUsageState(current, update llmprotocol.UsageState) llmprotocol.UsageS
 func usageCounts(usage llmprotocol.Usage) []llmprotocol.TokenCount {
 	return []llmprotocol.TokenCount{
 		usage.InputUncached, usage.InputCacheRead, usage.InputCacheWrite,
+		usage.InputCacheWrite5m, usage.InputCacheWrite1h,
 		usage.OutputReasoning, usage.OutputOther, usage.InputTotal, usage.OutputTotal, usage.Total,
 	}
 }
@@ -392,8 +431,9 @@ func usageCounts(usage llmprotocol.Usage) []llmprotocol.TokenCount {
 func usageFromCounts(state llmprotocol.UsageState, counts []llmprotocol.TokenCount) llmprotocol.Usage {
 	return llmprotocol.Usage{
 		State: state, InputUncached: counts[0], InputCacheRead: counts[1], InputCacheWrite: counts[2],
-		OutputReasoning: counts[3], OutputOther: counts[4], InputTotal: counts[5],
-		OutputTotal: counts[6], Total: counts[7],
+		InputCacheWrite5m: counts[3], InputCacheWrite1h: counts[4],
+		OutputReasoning: counts[5], OutputOther: counts[6], InputTotal: counts[7],
+		OutputTotal: counts[8], Total: counts[9],
 	}
 }
 

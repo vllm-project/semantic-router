@@ -17,6 +17,7 @@ import provider_mocker_image as mocker
 
 DUAL = ["linux/amd64", "linux/arm64"]
 ROUTER_DOCKERFILE = "tools/docker/Dockerfile.extproc"
+ATTACHED_DOCKERFILE = "tools/docker/Dockerfile.attached"
 DEFINITIONS = {
     "dashboard": (".", "dashboard/backend/Dockerfile", DUAL),
     mocker.IMAGE: (mocker.CONTEXT, mocker.CONTEXT + "/Dockerfile", DUAL),
@@ -24,12 +25,14 @@ DEFINITIONS = {
     "operator": (".", "deploy/operator/Dockerfile", DUAL),
     "operator-bundle": ("deploy/operator", "deploy/operator/bundle/Dockerfile", DUAL),
     "vllm-sr": (".", ROUTER_DOCKERFILE, DUAL),
+    "vllm-sr-riscv64": (".", ATTACHED_DOCKERFILE, ["linux/riscv64"]),
     "vllm-sr-cuda": (".", ROUTER_DOCKERFILE, ["linux/amd64"]),
     "vllm-sr-rocm": (".", ROUTER_DOCKERFILE, ["linux/amd64"]),
 }
 # Router images are one Dockerfile target per accelerator: (target, accelerator).
 ROUTER_BUILDS = {
     "vllm-sr": ("vllm-sr", "cpu"),
+    "vllm-sr-riscv64": ("vllm-sr-attached", "cpu"),
     "vllm-sr-cuda": ("vllm-sr", "cuda"),
     "vllm-sr-rocm": ("vllm-sr", "rocm"),
 }
@@ -51,9 +54,19 @@ IMAGE_ENV = {
 }
 
 
+def file_digest(stream, digest="sha256"):
+    """Compute digest of a binary file stream with Python 3.10 fallback."""
+    if hasattr(hashlib, "file_digest"):
+        return hashlib.file_digest(stream, digest)
+    hasher = hashlib.new(digest) if isinstance(digest, str) else digest()
+    while chunk := stream.read(65536):
+        hasher.update(chunk)
+    return hasher
+
+
 def sha256(path: Path) -> str:
     with path.open("rb") as stream:
-        return hashlib.file_digest(stream, "sha256").hexdigest()
+        return file_digest(stream, "sha256").hexdigest()
 
 
 def source_sha() -> str:
@@ -275,7 +288,7 @@ def main() -> None:
         parser.error("--image is required")
     context, dockerfile, supported = DEFINITIONS[args.image]
     target, accelerator = ROUTER_BUILDS.get(args.image, ("", ""))
-    platforms = supported if args.multiarch else ["linux/amd64"]
+    platforms = supported if args.multiarch else supported[:1]
     if args.command == "definition":
         values = {
             "context": context,

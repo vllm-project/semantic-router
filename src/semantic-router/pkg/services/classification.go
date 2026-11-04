@@ -13,6 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routinginput"
 )
 
 // Global classification service instance
@@ -55,6 +56,18 @@ func (s *ClassificationService) evalModelSelectorSnapshot() EvalModelSelector {
 	s.configMutex.RLock()
 	defer s.configMutex.RUnlock()
 	return s.evalSelector
+}
+
+func (s *ClassificationService) routingInputSelectorSnapshot() *routinginput.Selector {
+	if s == nil {
+		return nil
+	}
+	s.configMutex.RLock()
+	defer s.configMutex.RUnlock()
+	if s.config == nil {
+		return nil
+	}
+	return routinginput.For(s.config.RoutingInput)
 }
 
 // NewRecipeClassificationService creates a model-aware service backed by
@@ -171,7 +184,7 @@ func (s *ClassificationService) classifyIntent(ctx context.Context, req IntentRe
 		return nil, err
 	}
 
-	input, err := req.resolveSignalInput()
+	input, err := req.resolveSignalInputWith(s.routingInputSelectorSnapshot())
 	if err != nil {
 		return nil, err
 	}

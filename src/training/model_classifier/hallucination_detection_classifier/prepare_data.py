@@ -29,7 +29,7 @@ Usage:
         --output-dir ./data
 
 Dependencies:
-    pip install datasets tqdm
+    uv sync --locked  (from this directory; see README.md)
 """
 
 import argparse
@@ -48,7 +48,7 @@ except ImportError:
     print(
         "Warning: 'datasets' library not installed. Cannot download from HuggingFace."
     )
-    print("Install with: pip install datasets")
+    print("Install with: uv sync --locked (from this directory)")
 
 from tqdm import tqdm
 

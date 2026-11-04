@@ -55,7 +55,7 @@ func TestStoreImportsListsAndIdempotentlyInstallsExactFiveZIP(t *testing.T) {
 		t.Fatalf("List() = %#v, %v", list, err)
 	}
 	var record packageRecord
-	if err := readStrictJSONFile(recordRefPath(store.root, packageRecord{ID: "accuracy", Version: "0.1.0"}), 1<<20, &record); err != nil {
+	if err := readStrictJSONFile(recordRefPath(store.root, packageRecord{ID: "accuracy", Version: "0.2.0"}), 1<<20, &record); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(record.SourceURL, "signature") || strings.Contains(record.SourceURL, "hidden") {

@@ -100,6 +100,23 @@ describe('model form backend targets', () => {
       currency: 'USD',
     })
   })
+
+  it('preserves cache_write_1h_per_1m on model save and defaults currency', () => {
+    const pricing = {
+      currency: 'USD',
+      prompt_per_1m: 3.0,
+      cached_input_per_1m: 0.3,
+      cache_write_per_1m: 3.75,
+      cache_write_1h_per_1m: 6.0,
+      completion_per_1m: 15.0,
+    }
+    expect(normalizeModelPricing(pricing)).toEqual(pricing)
+    expect(buildProviderModelPayload('claude-3-5-sonnet', { pricing }).pricing).toEqual(pricing)
+    expect(normalizeModelPricing({ cache_write_1h_per_1m: 6.0 })).toEqual({
+      cache_write_1h_per_1m: 6.0,
+      currency: 'USD',
+    })
+  })
 })
 
 describe('model form catalog and reasoning payloads', () => {

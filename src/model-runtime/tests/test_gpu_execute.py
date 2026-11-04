@@ -13,8 +13,15 @@ from vllm_srun.accel.rocm import ROCmAccelerator
 from vllm_srun.plugins.base import DeviceInfo
 
 
+class HostBacked(ROCmAccelerator):
+    """Takes the per-device locks without making any GPU current, so it needs no GPUs."""
+
+    def torch_device(self, device: DeviceInfo) -> torch.device:
+        return torch.device("cpu")
+
+
 def test_device_work_on_one_gpu_never_overlaps_while_other_gpus_run_in_parallel():
-    accelerator = ROCmAccelerator()
+    accelerator = HostBacked()
     devices = [DeviceInfo("rocm", index, f"gpu{index}") for index in (0, 1)]
     guard = threading.Lock()
     running = {0: 0, 1: 0}
@@ -80,10 +87,6 @@ def test_device_work_runs_with_its_gpu_as_the_current_device(accelerator, monkey
 def test_device_work_of_a_host_backed_accelerator_leaves_the_current_gpu_alone(
     monkeypatch,
 ):
-    class HostBacked(ROCmAccelerator):
-        def torch_device(self, device: DeviceInfo) -> torch.device:
-            return torch.device("cpu")
-
     def device(target):
         raise AssertionError(f"set the current GPU for a host device: {target}")
 

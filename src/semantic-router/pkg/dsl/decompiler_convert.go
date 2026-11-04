@@ -50,6 +50,9 @@ func (d *decompiler) keywordToSignal(kw *config.KeywordRule) *SignalDecl {
 	if kw.NgramArity != 0 {
 		fields["ngram_arity"] = IntValue{V: kw.NgramArity}
 	}
+	if kw.IncludeHistory {
+		fields["include_history"] = BoolValue{V: true}
+	}
 	return &SignalDecl{SignalType: "keyword", Name: kw.Name, Fields: fields}
 }
 

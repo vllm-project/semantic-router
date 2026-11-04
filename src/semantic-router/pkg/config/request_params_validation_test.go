@@ -56,3 +56,34 @@ func TestRequestParamsDefaultValidationAndRoundTrip(t *testing.T) {
 		t.Fatal("canonical field missing")
 	}
 }
+
+// A configured limit caps the client's value, so a non-positive one would
+// rewrite every request to an invalid max_tokens or n.
+func TestRequestParamsRejectsNonPositiveLimits(t *testing.T) {
+	template := `routing:
+  decisions:
+    - name: bounded
+      plugins:
+        - type: request_params
+          configuration:
+            %s
+`
+	for _, field := range []string{
+		"max_tokens_limit: 0", "max_tokens_limit: -1", "max_n: 0", "max_n: -1",
+		"{max_tokens_limit: 0, default_max_tokens: 10}",
+	} {
+		configuration := field
+		if strings.HasPrefix(field, "{") {
+			configuration = strings.Trim(field, "{}")
+			configuration = strings.ReplaceAll(configuration, ", ", "\n            ")
+		}
+		if _, err := ParseRoutingYAMLBytes([]byte(fmt.Sprintf(template, configuration))); err == nil {
+			t.Errorf("accepted a non-positive limit: %s", field)
+		}
+	}
+	for _, field := range []string{"max_tokens_limit: 8192", "max_n: 4"} {
+		if _, err := ParseRoutingYAMLBytes([]byte(fmt.Sprintf(template, field))); err != nil {
+			t.Errorf("rejected a positive limit %s: %v", field, err)
+		}
+	}
+}

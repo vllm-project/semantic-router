@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -148,6 +149,76 @@ func TestBuildHybridSelectionConfigMergesDecisionOverrides(t *testing.T) {
 	}
 	if got.AutoMixWeight != selection.DefaultHybridConfig().AutoMixWeight || !got.NormalizeScores {
 		t.Fatalf("expected decision-scoped hybrid config to preserve remaining defaults, got %+v", got)
+	}
+}
+
+// TestHybridCostAdjustmentPreservesResolvedGlobalWeight drives the real
+// selection path: buildSelectionContext fills the request-level default
+// weights (0.5 when no decision weight is configured), while
+// newDecisionHybridSelector resolves the effective hybrid configuration from
+// the global block plus any decision override. The cost adjustment must
+// consume the resolved configuration — the request default must neither
+// replace a configured global weight nor re-enable a disabled one.
+func TestHybridCostAdjustmentPreservesResolvedGlobalWeight(t *testing.T) {
+	newRouter := func(globalCostWeight float64) *OpenAIRouter {
+		return &OpenAIRouter{Config: &config.RouterConfig{
+			IntelligentRouting: config.IntelligentRouting{
+				ModelSelection: config.ModelSelectionConfig{
+					Hybrid: config.HybridSelectionConfig{CostWeight: globalCostWeight},
+				},
+			},
+			BackendModels: config.BackendModels{
+				ModelConfig: map[string]config.ModelParams{
+					"model-cheap": {Pricing: config.ModelPricing{PromptPer1M: 1.0}},
+					"model-dear":  {Pricing: config.ModelPricing{PromptPer1M: 2.0}},
+				},
+			},
+		}}
+	}
+	candidates := []config.ModelRef{{Model: "model-cheap"}, {Model: "model-dear"}}
+
+	// With global cost_weight=0.2 the cheap candidate earns the configured
+	// bonus on its 0.5 blended base: 0.5 * (1 + 0.2) = 0.6, not the request
+	// default's 0.75.
+	weighted := newRouter(0.2)
+	selCtx := weighted.buildSelectionContext(candidates, "pick", "solve", nil, "", nil, nil)
+	result, err := weighted.newDecisionHybridSelector(nil, nil).Select(context.Background(), selCtx)
+	if err != nil {
+		t.Fatalf("hybrid selection returned error: %v", err)
+	}
+	if result.SelectedModel != "model-cheap" {
+		t.Fatalf("expected the cheap model to win the configured cost bonus, got %q", result.SelectedModel)
+	}
+	if result.Score != 0.6 {
+		t.Fatalf("cheap candidate score = %v, want 0.6", result.Score)
+	}
+
+	// With global cost_weight=0 the adjustment stays disabled: the request
+	// default of 0.5 must not re-enable cost weighting.
+	disabled := newRouter(0)
+	selCtx = disabled.buildSelectionContext(candidates, "pick", "solve", nil, "", nil, nil)
+	result, err = disabled.newDecisionHybridSelector(nil, nil).Select(context.Background(), selCtx)
+	if err != nil {
+		t.Fatalf("hybrid selection returned error: %v", err)
+	}
+	if result.Score != 0.5 {
+		t.Fatalf("score with cost weighting disabled = %v, want 0.5", result.Score)
+	}
+
+	// An explicit decision-level cost_weight still reaches the adjustment
+	// through the resolved configuration: 0.5 * (1 + 0.9) = 0.95.
+	decisionOverride := &config.HybridSelectionConfig{CostWeight: 0.9}
+	overridden := newRouter(0)
+	selCtx = overridden.buildSelectionContext(candidates, "pick", "solve", nil, "", nil, nil)
+	result, err = overridden.newDecisionHybridSelector(decisionOverride, nil).Select(context.Background(), selCtx)
+	if err != nil {
+		t.Fatalf("hybrid selection returned error: %v", err)
+	}
+	if result.SelectedModel != "model-cheap" {
+		t.Fatalf("expected the cheap model to win the decision cost bonus, got %q", result.SelectedModel)
+	}
+	if result.Score != 0.95 {
+		t.Fatalf("cheap candidate score with decision override = %v, want 0.95", result.Score)
 	}
 }
 
