@@ -140,9 +140,12 @@ func (decoder *anthropicStreamDecoder) decodeAnthropicWireFrame(
 	frame []byte,
 ) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	var wire anthropicEventWire
-	if err := decodeProviderWire(data, &wire, decoder.policy); err != nil {
+	_, vendorExtensions, err := decodeProviderWireVendorAware(data, &wire, decoder.policy)
+	if err != nil {
 		return nil, nil, err
 	}
+	var vendorDiagnostics llmprotocol.Diagnostics
+	appendVendorExtensionDiagnostics(&vendorDiagnostics, decoder.policy, llmprotocol.AnthropicMessagesV1, vendorExtensions)
 	if wire.Type == "" {
 		wire.Type = eventType
 	}
@@ -158,6 +161,7 @@ func (decoder *anthropicStreamDecoder) decodeAnthropicWireFrame(
 		}
 	}
 	events, diagnostics, err := decoder.decodeEvent(wire, frame)
+	diagnostics = appendDiagnostics(vendorDiagnostics, diagnostics, decoder.policy.Limits.Diagnostics)
 	if err != nil {
 		return events, diagnostics, err
 	}

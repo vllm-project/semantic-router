@@ -84,10 +84,20 @@ def test_realize_runtime_config_applies_overrides_without_mutating_source(
     assert stat.S_IMODE(target.stat().st_mode) == 0o600
 
 
-def test_realize_runtime_config_round_trips_gateway_opt_in(tmp_path: Path):
-    """A backend_ref carrying the OpenAI-compatible gateway opt-in passes the
-    strict CLI validation and survives realization unchanged (issue #5046
-    review: the field must round-trip through the supported entry point)."""
+@pytest.mark.parametrize(
+    ("provider", "field"),
+    [
+        ("vllm", "openai_compat_gateway"),
+        ("vllm", "compat_gateway"),
+        ("anthropic", "compat_gateway"),
+    ],
+)
+def test_realize_runtime_config_round_trips_gateway_opt_in(
+    tmp_path: Path, provider: str, field: str
+):
+    """A backend_ref carrying the gateway opt-in, under either spelling,
+    passes the strict CLI validation and survives realization unchanged (the
+    field must round-trip through the supported entry point)."""
 
     source = tmp_path / "raw.yaml"
     source.write_bytes(
@@ -102,8 +112,8 @@ def test_realize_runtime_config_round_trips_gateway_opt_in(tmp_path: Path):
                                 {
                                     "name": "relay",
                                     "endpoint": "https://relay.example.com/v1",
-                                    "provider": "vllm",
-                                    "openai_compat_gateway": True,
+                                    "provider": provider,
+                                    field: True,
                                 }
                             ],
                         }
@@ -138,7 +148,7 @@ def test_realize_runtime_config_round_trips_gateway_opt_in(tmp_path: Path):
 
     realized = yaml.safe_load(target.read_text(encoding="utf-8"))
     backend_ref = realized["providers"]["models"][0]["backend_refs"][0]
-    assert backend_ref["openai_compat_gateway"] is True
+    assert backend_ref[field] is True
 
 
 def test_realize_runtime_config_strict_atomic_replace(tmp_path: Path, monkeypatch):
