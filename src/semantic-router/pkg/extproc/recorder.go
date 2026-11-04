@@ -295,7 +295,8 @@ func buildReplayRoutingRecord(
 		if !replayCapturesToolResults(ctx) {
 			replayRequest = replaySafeSemanticRequest(replayRequest)
 		}
-		prompt, toolDefinitions := extractSemanticPromptAndTools(&replayRequest)
+		_, toolDefinitions := extractSemanticPromptAndTools(&replayRequest)
+		prompt := replayPrompt(ctx, &replayRequest)
 		// Tool definitions are operator-authored, not user content, so they
 		// are kept even when the prompt is suppressed.
 		record.ToolDefinitions = toolDefinitions

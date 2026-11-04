@@ -1277,6 +1277,9 @@
             ]
           },
           "type": "array"
+        },
+        "routing_input": {
+          "$ref": "#/$defs/RoutingInputConfig"
         }
       },
       "additionalProperties": false,
@@ -6902,6 +6905,46 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "RoutingInputConfig": {
+      "properties": {
+        "skip_user_messages_matching": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "maxItems": 32
+        },
+        "strip_blocks": {
+          "items": {
+            "$ref": "#/$defs/RoutingInputStripBlock"
+          },
+          "type": "array",
+          "maxItems": 32
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RoutingInputStripBlock": {
+      "properties": {
+        "start": {
+          "type": "string",
+          "maxLength": 256,
+          "minLength": 1
+        },
+        "end": {
+          "type": "string",
+          "maxLength": 256,
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "start",
+        "end"
+      ]
     },
     "RoutingModel": {
       "properties": {

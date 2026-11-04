@@ -2093,6 +2093,17 @@ global:
     # those backends as user text, for chat templates that accept a system
     # message only first. Empty keeps every lossy translation failing closed.
     allow_lossy_translation: []
+    # The user text that routing reads. A user message whose text matches a
+    # skip pattern (RE2) is never routing text, and each strip block cuts its
+    # literal start...end spans from the routing text. Jailbreak, PII and
+    # content-safety signals still scan both; the request sent to the model is
+    # unchanged. Empty lists route on the last user message that has text.
+    routing_input:
+      skip_user_messages_matching:
+        - '(?s)^\s*OpenClaw runtime context:.*End OpenClaw runtime context\.\s*$'
+      strip_blocks:
+        - start: '<relevant-memories>'
+          end: '</relevant-memories>'
     model_selection:
       method: hybrid
       enabled: true

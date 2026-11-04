@@ -30,6 +30,19 @@ cases:
       body: '{"model":"vllm-sr/auto","messages":[{"role":"user","content":"Write a short poem about rivers."}],"max_tokens":64}'
     upstream: anthropic-ok
 
+  # global.router.routing_input routes on the question: the trailing runtime
+  # context turn is skipped and the recalled-memory block is stripped, so the
+  # essay route wins over the memory's code keyword. The body reaches the
+  # model unchanged.
+  - name: auto-routing-input-question
+    request:
+      method: POST
+      path: /v1/chat/completions
+      headers:
+        - [content-type, application/json]
+      body: '{"model":"vllm-sr/auto","messages":[{"role":"user","content":"<relevant-memories>\n- maintains a python service\n</relevant-memories>\n\nWrite a short poem about rivers."},{"role":"user","content":"OpenClaw runtime context:\nConversation info: {\"chat_id\": \"chat-example\"}\nEnd OpenClaw runtime context."}],"max_tokens":64}'
+    upstream: anthropic-ok
+
   - name: auto-no-match-default-model
     request:
       method: POST

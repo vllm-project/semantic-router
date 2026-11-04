@@ -250,6 +250,8 @@ type RouteDiagnostics struct {
 	ContextCompressionQuality      string                               `json:"context_compression_quality,omitempty"`
 	ContextCompressionFallback     string                               `json:"context_compression_fallback,omitempty"`
 	ContextCompressionCostSaved    float64                              `json:"context_compression_cost_saved,omitempty"`
+	RoutingInputSkippedMessages    int                                  `json:"routing_input_skipped_messages,omitempty"`
+	RoutingInputStrippedBlocks     int                                  `json:"routing_input_stripped_blocks,omitempty"`
 	RequestDemandSnapshots         []RequestDemandSnapshot              `json:"request_demand_snapshots,omitempty"`
 	Annotations                    map[string]interface{}               `json:"annotations,omitempty"`
 	SignalErrors                   map[string]string                    `json:"signal_errors,omitempty"`
