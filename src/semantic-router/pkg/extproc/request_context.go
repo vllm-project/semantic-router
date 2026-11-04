@@ -20,6 +20,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routinginput"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
@@ -111,6 +112,9 @@ type RequestContext struct {
 	RequestModel      string
 	RequestQuery      string
 	CacheRequestModel string
+	// RoutingInput records what global.router.routing_input changed in this
+	// request; UserContent holds the routing text it selected.
+	RoutingInput routinginput.Outcome
 	// CacheQuery is the semantic-cache lookup key (may include user scope); empty means fall back to RequestQuery.
 	CacheQuery                    string
 	CacheExactFingerprint         string
@@ -161,6 +165,10 @@ type RequestContext struct {
 	// this request (e.g. response headers not processed). The cache-write path
 	// reads it to avoid caching non-2xx error bodies (cache poisoning).
 	UpstreamStatusCode int
+	// UpstreamResponseGzip is set at every response-header phase from that
+	// reply's Content-Encoding. The response-body phase decodes a gzip reply
+	// before any phase reads it.
+	UpstreamResponseGzip bool
 
 	// UpstreamBackendAddress is the Envoy-selected upstream host:port for this request.
 	UpstreamBackendAddress string
