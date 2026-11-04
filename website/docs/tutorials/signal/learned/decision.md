@@ -128,7 +128,7 @@ and name it as the question's `deployment`, as you would a `model_runtime`
 deployment. It answers decision questions only: it is not one of the
 `providers.models` that requests are routed to, and no model listing shows it.
 
-```yaml
+```yaml alternative
 global:
   model_catalog:
     deployments:
