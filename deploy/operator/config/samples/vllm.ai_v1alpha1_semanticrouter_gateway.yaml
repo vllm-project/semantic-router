@@ -28,7 +28,7 @@ spec:
       memory: 1Gi
     limits:
       cpu: "2"
-      memory: 4Gi
+      memory: 12Gi
 ---
 # This route is user-managed; the Operator does not create HTTPRoutes.
 apiVersion: gateway.networking.k8s.io/v1

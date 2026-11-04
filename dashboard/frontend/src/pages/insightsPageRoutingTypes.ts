@@ -14,9 +14,10 @@ export interface ReplayCandidateTrace {
 
 export interface ReplaySessionPolicy {
   identity?: {
-    headers?: { session?: string; conversation?: string }
+    headers?: { session?: string; conversation?: string; agent?: string }
     session?: { source?: string; status?: string }
     conversation?: { source?: string; status?: string }
+    agent?: { source?: string; status?: string }
   }
   mode?: string
   scope?: string

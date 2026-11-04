@@ -55,6 +55,21 @@ configuration, place a deployment on the NPU with `device: npu:0` — the same
 [placement rules](../model-runtime/deploy.md#place-and-scale-replicas) as for
 GPUs, with the runtime installed next to torch_npu.
 
+### Precision: bf16 as an opt-in
+
+`--dtype bfloat16` runs a model at bf16 precision on the NPU (held bf16
+weights with the reference kernels); it is an explicit engine argument, and
+`--dtype auto` keeps each model's published (fp32) precision. Readiness
+reports unverified under bf16 — the golden references are recorded at
+`--dtype auto` — and accuracy rests on an offline per-request diff
+(the [bf16 record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/npu-bf16-ascend950dt.md)):
+2.5x on the 665-token Vela 2.0 member (84.8 → 214.1 requests/s at
+concurrency 8) and no change on the 195-token member; zero label flips on
+both models over this corpus. Confidence leaves can drift past the 0.02
+tolerance (0.8% / 4.3% of them per model), so a routing rule whose threshold
+sits on a confidence boundary can flip under bf16 — prefer fp32 for those
+deployments.
+
 ## Run the NPU runtime in a container
 
 There is no dedicated NPU image (decided in

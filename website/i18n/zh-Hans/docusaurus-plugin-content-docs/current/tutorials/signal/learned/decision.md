@@ -29,7 +29,7 @@ translation:
 
 ## 配置 {#configuration}
 
-未指定 `deployment` 的问题使用 `global.model_catalog.system.decision_model` 指向的 Router 判断模型，默认为 Vela 2.0 0.3B，也可以[选择其他规模](/model-runtime/choose-a-model.md#choose-a-size)。它会与输入兼容的内置问题一起加入请求阶段的批处理。复用部署可以避免重复加载模型，但不保证完整路由请求只执行一次前向计算：
+未指定 `deployment` 的问题使用 `global.model_catalog.system.decision_model` 指向的 Router 判断模型，默认为 Vela 3.0 vela3-fast，也可以[选择其他模型](/model-runtime/choose-a-model.md#choose-a-size)。它会与输入兼容的内置问题一起加入请求阶段的批处理。复用部署可以避免重复加载模型，但不保证完整路由请求只执行一次前向计算：
 
 ```yaml
 routing:

@@ -35,8 +35,8 @@ your question.
 ## Configuration
 
 A question that names no `deployment` asks the Router's decision model,
-`global.model_catalog.system.decision_model` (Vela 2.0 0.3B unless you
-[choose a size](../../../model-runtime/choose-a-model.md#choose-a-size)). It joins the
+`global.model_catalog.system.decision_model` (Vela 3.0 vela3-fast unless you
+[choose another model](../../../model-runtime/choose-a-model.md#choose-a-size)). It joins the
 request-stage batch with compatible built-in questions. Reusing a deployment
 avoids loading another copy of the model; it does not guarantee one forward
 pass for the complete routed request:

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -27,6 +28,20 @@ func TestBalanceRecipePreservesAMDLocalAliasContract(t *testing.T) {
 
 	if recipe.Providers.Defaults.DefaultModel != "qwen/qwen3.5-rocm" {
 		t.Fatalf("expected AMD recipe default model to stay on the local Qwen alias, got %q", recipe.Providers.Defaults.DefaultModel)
+	}
+	deployment := recipe.Global.ModelCatalog.Deployments["primary"]
+	if deployment.Provider != "model_runtime" || deployment.Artifact != "vllm-sr/Vela-2.0-0.8B" {
+		t.Fatalf("balance must pin the decision deployment to Vela 2.0 0.8B, got provider=%q artifact=%q", deployment.Provider, deployment.Artifact)
+	}
+	if recipe.Global.ModelCatalog.System.DecisionModel.Deployment != "primary" {
+		t.Fatalf("balance decision_model must select the primary deployment, got %q", recipe.Global.ModelCatalog.System.DecisionModel.Deployment)
+	}
+	loaded, err := Parse(filepath.Join("..", "..", "..", "..", asset))
+	if err != nil {
+		t.Fatalf("failed to parse %s: %v", asset, err)
+	}
+	if got := loaded.DecisionModelSpec().Model; got != Vela2Model08B {
+		t.Fatalf("balance resolved decision model %q, want %q (an unset binding follows the vela3-fast default)", got, Vela2Model08B)
 	}
 	assertBalanceProviderContract(t, recipe)
 	assertBalanceModelCardContract(t, recipe)
