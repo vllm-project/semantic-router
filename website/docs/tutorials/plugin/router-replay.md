@@ -93,8 +93,11 @@ override an inherited value; omit a field when you want to inherit it.
 Set `capture_personal_data: false` globally or on a decision's `router_replay`
 plugin. The record keeps routing evidence, model, signals and detected PII types,
 while personal-data requests omit request and response bodies, prompts, tool
-definitions and tool traces. The recipe's configured PII signals are evaluated
-when needed for this capture setting, even if no decision references them.
+definitions and tool traces. The prompt is checked after routing, so requests
+never wait for it: unless a routing decision already read it with a PII signal,
+the record is written without the prompt, and the recipe's configured PII rules
+then read the latest user message alone. The prompt is added to the record once
+that read completes without finding personal data.
 
 When PII evidence is unavailable, classification fails, or the recipe has no
 PII detector configured, capture omits content conservatively. A PII signal is
