@@ -573,6 +573,9 @@
         "api_key_env": {
           "type": "string"
         },
+        "compat_gateway": {
+          "type": "boolean"
+        },
         "openai_compat_gateway": {
           "type": "boolean"
         }

@@ -69,6 +69,43 @@ path is retained and the protocol operation suffix is appended exactly once;
 the protocol's default `/v1` base path is used only when the URL has no path.
 `chat_path` applies only to Chat Completions.
 
+### Gateways that add response fields
+
+The Router decodes backend replies strictly. A reply that carries a field its
+`api_format` does not define fails as an invalid response, so a client sees a
+502 for a buffered reply or an error event for a stream. Some relay gateways
+add their own fields to every reply, such as usage metering or a cost inside
+`usage`. Set `compat_gateway: true` on the backend ref that points at such a
+gateway:
+
+```yaml
+providers:
+  models:
+    - name: claude-via-gateway
+      provider_model_id: example-claude
+      api_format: anthropic
+      backend_refs:
+        - name: gateway
+          provider: anthropic
+          base_url: https://gateway.example.com/anthropic
+          compat_gateway: true
+```
+
+The Router then drops each field the backend's wire format does not define and
+reports it as a dropped-field diagnostic. Usage, accounting, the response
+cache and Router Replay keep the canonical counters. The opt-in applies to the
+first attempt and to native fallback, for buffered and streamed replies. When
+the model's `api_format` is `openai`, a gateway's Anthropic-style
+`input_tokens` and `output_tokens` usage names are also read as
+`prompt_tokens` and `completion_tokens`. Leave the field unset for backends
+that serve the canonical contract.
+
+Startup rejects `compat_gateway` where it would have no effect: on
+`azure-openai`, `cloudflare-workers-ai` and `snowflake-cortex` backends, which
+keep their own response contracts, and on `systemone` models. Weighted backend
+refs of one model must agree on it. `openai_compat_gateway` is the deprecated
+spelling and still works.
+
 With `--gateway extproc`, the generated Envoy cluster for an HTTPS backend
 verifies both the server
 certificate chain and its DNS hostname. An HTTPS replica pool must keep one

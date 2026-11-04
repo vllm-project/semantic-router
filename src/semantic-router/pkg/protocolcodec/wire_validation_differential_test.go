@@ -471,6 +471,7 @@ func differentialProviderPolicies() []llmprotocol.Policy {
 		llmprotocol.ResponseVendorAzure,
 		llmprotocol.ResponseVendorCloudflare,
 		llmprotocol.ResponseVendorOpenAICompatGateway,
+		llmprotocol.ResponseVendorAnthropicCompatGateway,
 		llmprotocol.ResponseVendorSnowflake,
 	} {
 		policy := llmprotocol.DefaultPolicy()
