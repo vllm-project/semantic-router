@@ -70,6 +70,15 @@ def engine_args_error(deployment: dict) -> str | None:
     shared = deployment.get("enable_shared_context")
     if shared is not None and not isinstance(shared, bool):
         return "enable_shared_context must be a boolean"
+    limit = deployment.get("max_model_len")
+    if limit is not None:
+        if not _is_int(limit) or limit < 1:
+            return "max_model_len must be an integer of at least 1"
+        if deployment.get("endpoint") or deployment.get("replicas"):
+            return (
+                "max_model_len applies only to a managed worker, "
+                "not to an attached endpoint or replicas"
+            )
     return None
 
 
@@ -310,8 +319,11 @@ def _selector_errors(
             _reference_error(deployments, decision_model) if decision_model else None
         )
     models = [ref.model for ref in decision.modelRefs or []]
-    if message is None and not (
-        MIN_SELECTOR_CANDIDATES <= len(models) <= MAX_SELECTOR_CANDIDATES
+    # A model-free built-in Recipe receives its candidates through assignments.
+    if (
+        message is None
+        and models
+        and not MIN_SELECTOR_CANDIDATES <= len(models) <= MAX_SELECTOR_CANDIDATES
     ):
         message = (
             f"needs {MIN_SELECTOR_CANDIDATES}..{MAX_SELECTOR_CANDIDATES} "

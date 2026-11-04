@@ -51,6 +51,12 @@ func (r *OpenAIRouter) handleContextRecoveryFollowup(
 	if len(calls) > contextRecoveryLimit(plugin) {
 		return responseBody, fmt.Errorf("context recovery retrieval limit exceeded")
 	}
+	// The followup keeps only this turn's retrieval calls and is sent through
+	// a Looper client, so neither this turn's nor the history's continuity
+	// blocks would reach the provider.
+	if carriesReasoningContinuity(requestCtx.SemanticRequest, &decoded.Response) {
+		return responseBody, fmt.Errorf("context recovery cannot carry reasoning continuity blocks")
+	}
 	toolMessages, err := r.loadContextRecoveryToolMessages(
 		ctx,
 		requestCtx,
