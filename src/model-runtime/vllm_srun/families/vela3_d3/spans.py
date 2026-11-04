@@ -21,7 +21,8 @@ from ...errors import SCAN_BUDGET_EXCEEDED, QuestionError
 from ...systemone import listed_options, named_options, require_full_input
 from ..decision3.family import Item
 from ..vela3_shared import expand_preset, invalid, text, threshold_of
-from .span_policy import Definitions, Policy, Route
+from .package import SPAN_TARGET_TOKENS, Route
+from .span_policy import Definitions, Policy
 from .span_render import Renderer, Window
 
 FIELDS = frozenset(
@@ -39,10 +40,6 @@ FIELDS = frozenset(
 )
 # A span question reads its whole target, in windows: the one overflow it takes.
 WINDOWED = "window"
-# The most target tokens a span question reads, in about 21 windows: the vela3 family's default
-# scan budget on a CPU (4 x 8,192). It bounds one question's forwards on every size, whatever the
-# base's question cap (vela3-lite, -mini and -flash's bases allow 262,144 tokens).
-SPAN_TARGET_TOKENS = 32768
 
 
 def is_span(question: Any) -> bool:

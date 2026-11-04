@@ -10,7 +10,8 @@ import pytest
 from vllm_srun.errors import QuestionError
 from vllm_srun.families.decision3.prompt import render
 from vllm_srun.families.vela3_d3 import span_render, spans
-from vllm_srun.families.vela3_d3.span_policy import Policy, SpanConfig
+from vllm_srun.families.vela3_d3.package import SpanConfig
+from vllm_srun.families.vela3_d3.span_policy import Policy
 from vllm_srun.families.vela3_d3.span_read import combine
 from vllm_srun.families.vela3_d3.span_render import Renderer, Window
 from vllm_srun.plugins.base import AdapterGate
@@ -31,8 +32,11 @@ def no_limit(length):
     return None
 
 
-def policy(heads=("span", "ner", "relation")) -> Policy:
-    return Policy(SpanConfig.parse(SPAN_CONFIG), set(heads))
+def policy(without=()) -> Policy:
+    """The fixture's policy, without the ``span`` sections (and so the heads) named in ``without``."""
+    return Policy(
+        SpanConfig.parse({k: v for k, v in SPAN_CONFIG.items() if k not in without})
+    )
 
 
 # ------------------------------------------------------------------ routing and thresholds
@@ -64,9 +68,10 @@ def test_routes_follow_the_released_rules(names, instructions, route) -> None:
 
 def test_without_a_relation_or_ner_head_questions_take_the_span_head() -> None:
     assert (
-        policy(("span", "ner")).route(None, ["x"], "Which spans relate to y?") == "span"
+        policy(without=("relation",)).route(None, ["x"], "Which spans relate to y?")
+        == "span"
     )
-    assert policy(("span",)).route(None, ["x"], None) == "span"
+    assert policy(without=("ner", "relation")).route(None, ["x"], None) == "span"
 
 
 def test_thresholds_follow_the_label_set_and_the_route() -> None:
@@ -211,7 +216,7 @@ def test_open_labels_without_descriptions_leave_the_ner_head_unless_it_takes_nam
     None
 ):
     config = {**SPAN_CONFIG, "ner": {**SPAN_CONFIG["ner"], "names_only_route": "span"}}
-    strict = Policy(SpanConfig.parse(config), {"span", "ner", "relation"})
+    strict = Policy(SpanConfig.parse(config))
     drug = [("drug", "")]
     assert strict.resolve(drug, None, no_definitions).route == "span"
     assert policy().resolve(drug, None, no_definitions).route == "ner"

@@ -35,7 +35,7 @@ from ..vela3_shared import PRESETS
 from . import package as pkg
 from .gates import Gates
 from .model import GatedDecisions, SpanSetup, TurboDecisions, Vela3D3Model
-from .span_policy import ROUTES, Policy
+from .span_policy import Policy
 from .span_read import SpanReader
 from .span_render import Renderer
 
@@ -150,16 +150,15 @@ class Vela3D3Family(ModelFamily):
         )
         assert isinstance(model, Vela3D3Model)
         heads = {
-            route: _head(details.root / details.heads[route], engine_model.device)
-            for route in ROUTES
-            if route in details.heads
+            route: _head(details.root / file, engine_model.device)
+            for route, file in details.span.heads.items()
         }
         model.attach(
             Gates.from_config(
                 details.vela3, details.router_questions, details.adapters
             ),
             SpanSetup(
-                policy=Policy(details.span, set(heads)),
+                policy=Policy(details.span),
                 renderer=Renderer(model.tokenizer, model.codes),
                 reader=SpanReader(engine_model, heads),
                 definitions=_names_only,

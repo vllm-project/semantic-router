@@ -18,7 +18,7 @@ import torch
 
 from ...plugins.base import AdapterGate, ForwardBatch
 from .decode import decode, evidence_spans
-from .span_policy import Route
+from .package import Route
 from .span_render import Window
 from .spans import SpanItem
 
