@@ -12,6 +12,10 @@ import (
 )
 
 type responsesResponseWire struct {
+	KVTransferParams  json.RawMessage     `json:"kv_transfer_params,omitempty" response_extension:"true"`
+	ECTransferParams  json.RawMessage     `json:"ec_transfer_params,omitempty" response_extension:"true"`
+	InputMessages     json.RawMessage     `json:"input_messages,omitempty" response_extension:"true"`
+	OutputMessages    json.RawMessage     `json:"output_messages,omitempty" response_extension:"true"`
 	ID                string              `json:"id"`
 	Object            string              `json:"object,omitempty"`
 	CreatedAt         float64             `json:"created_at"`
@@ -83,14 +87,19 @@ type responsesUsageWire struct {
 }
 
 type responsesInputUsageDetails struct {
-	CachedTokens        *int64 `json:"cached_tokens"`
-	CacheWriteTokens    *int64 `json:"cache_write_tokens,omitempty"`
-	CreatedCacheTokens  *int64 `json:"created_cache_tokens,omitempty"`
-	CacheCreationTokens *int64 `json:"cache_creation_tokens,omitempty"`
+	InputTokensPerTurn  json.RawMessage `json:"input_tokens_per_turn,omitempty" response_extension:"true"`
+	CachedTokensPerTurn json.RawMessage `json:"cached_tokens_per_turn,omitempty" response_extension:"true"`
+	CachedTokens        *int64          `json:"cached_tokens"`
+	CacheWriteTokens    *int64          `json:"cache_write_tokens,omitempty"`
+	CreatedCacheTokens  *int64          `json:"created_cache_tokens,omitempty"`
+	CacheCreationTokens *int64          `json:"cache_creation_tokens,omitempty"`
 }
 
 type responsesOutputUsageDetails struct {
-	ReasoningTokens int64 `json:"reasoning_tokens"`
+	OutputTokensPerTurn     json.RawMessage `json:"output_tokens_per_turn,omitempty" response_extension:"true"`
+	ToolOutputTokensPerTurn json.RawMessage `json:"tool_output_tokens_per_turn,omitempty" response_extension:"true"`
+	ToolOutputTokens        json.RawMessage `json:"tool_output_tokens,omitempty" response_extension:"true"`
+	ReasoningTokens         int64           `json:"reasoning_tokens"`
 }
 
 type responsesErrorWire struct {
@@ -164,13 +173,18 @@ func responsesResponseMetadataDiagnostics(wire responsesResponseWire, policy llm
 
 func responsesProviderDecorationDiagnostics(wire responsesResponseWire, policy llmprotocol.Policy, prefix string) llmprotocol.Diagnostics {
 	var diagnostics llmprotocol.Diagnostics
-	appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, map[string]bool{
+	fields := map[string]bool{
 		prefix + "access_programs":   rawJSONNonNull(wire.AccessPrograms),
 		prefix + "billing":           rawJSONNonNull(wire.Billing),
 		prefix + "frequency_penalty": rawJSONNonNull(wire.FrequencyPenalty),
 		prefix + "presence_penalty":  rawJSONNonNull(wire.PresencePenalty),
 		prefix + "tool_usage":        rawJSONNonNull(wire.ToolUsage),
-	}, "provider response decoration has no protocol-neutral representation")
+	}
+	for _, field := range responsesProviderDefaults(wire) {
+		fields[prefix+field.path] = rawJSONNonNull(field.value)
+	}
+	appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, fields,
+		"provider response decoration has no protocol-neutral representation")
 	return diagnostics
 }
 

@@ -76,6 +76,30 @@ func (c *Classifier) evaluatePIISignal(ctx context.Context, results *SignalResul
 	c.evaluatePIISignalWithToolResults(ctx, results, mu, piiText, nonUserMessages, nil, false)
 }
 
+// ReplayPromptEvidence reads one prompt alone with the PII rules, for Replay
+// after routing: the evidence about exactly that prompt, unknown coverage
+// when it could not be read.
+func (c *Classifier) ReplayPromptEvidence(ctx context.Context, prompt string) PrivacyEvidence {
+	unverified := NewPrivacyEvidence("request", prompt, false, false)
+	if c == nil || c.Config == nil || len(c.Config.PIIRules) == 0 || prompt == "" {
+		return unverified
+	}
+	results := &SignalResults{
+		Metrics:            &SignalMetricsCollection{},
+		SignalConfidences:  make(map[string]float64),
+		SignalValues:       make(map[string]float64),
+		SignalErrors:       make(map[string]string),
+		SignalErrorMatches: make(map[string]bool),
+	}
+	c.evaluatePIISignal(ctx, results, &sync.Mutex{}, prompt, nil)
+	for _, evidence := range results.PIIEvidence {
+		if evidence.Stage == unverified.Stage && evidence.InputSHA256 == unverified.InputSHA256 {
+			return evidence
+		}
+	}
+	return unverified
+}
+
 func (c *Classifier) evaluatePIISignalWithToolResults(ctx context.Context, results *SignalResults, mu *sync.Mutex, piiText string, nonUserMessages []string, toolResultTexts []string, toolResultScanIncomplete bool) {
 	if backend := decisionPIIInference(c.piiInference); backend != nil {
 		c.evaluateDecisionPIISignalWithToolResults(ctx, results, mu, piiText, nonUserMessages, toolResultTexts, toolResultScanIncomplete, backend)
