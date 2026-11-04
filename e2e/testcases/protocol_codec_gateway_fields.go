@@ -63,7 +63,7 @@ func assertAnthropicGatewayFields(client protocolCodecE2EClient, streamed bool, 
 			return err
 		}
 		if reply.Usage.PromptTokens != 6 || reply.Usage.CompletionTokens != 3 {
-			return fmt.Errorf("Chat usage = %d/%d, want the provider's 6/3", reply.Usage.PromptTokens, reply.Usage.CompletionTokens)
+			return fmt.Errorf("chat usage = %d/%d, want the provider's 6/3", reply.Usage.PromptTokens, reply.Usage.CompletionTokens)
 		}
 	}
 	return nil
