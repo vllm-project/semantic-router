@@ -286,12 +286,15 @@ func buildReplayRoutingRecord(
 		record.PreviousResponseID = state.PreviousResponseID
 		record.ConversationID = state.ConversationID
 	}
-	// The sanitiser drops tool-result payloads on every route; a masking route
-	// additionally persists no request text at all, because Replay snapshots
-	// the request before masking runs (D3, #3566).
+	// The sanitiser drops tool-result payloads unless the route captures tool
+	// results; a masking route persists no request text at all, because Replay
+	// snapshots the request before masking runs (D3, #3566).
 	suppressBody := replaySuppressesBody(ctx)
 	if ctx.SemanticRequest != nil {
-		replayRequest := replaySafeSemanticRequest(*ctx.SemanticRequest)
+		replayRequest := *ctx.SemanticRequest
+		if !replayCapturesToolResults(ctx) {
+			replayRequest = replaySafeSemanticRequest(replayRequest)
+		}
 		prompt, toolDefinitions := extractSemanticPromptAndTools(&replayRequest)
 		// Tool definitions are operator-authored, not user content, so they
 		// are kept even when the prompt is suppressed.

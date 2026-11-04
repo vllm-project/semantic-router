@@ -434,6 +434,7 @@ export interface RouterReplayConfig {
   capture_request_body?: boolean
   capture_response_body?: boolean
   capture_personal_data?: boolean
+  capture_tool_results?: boolean
   max_records?: number
   max_body_bytes?: number
   max_tool_trace_bytes?: number

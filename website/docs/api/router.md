@@ -472,6 +472,14 @@ requests without a selected decision use the global defaults.
 `capture_personal_data: false` retains routing evidence but suppresses content
 when personal data is detected or PII evidence is unavailable.
 
+Client tool results are stored only with `capture_tool_results: true`, which
+requires `capture_personal_data: true`. A `client_tool_result` step then carries
+the result text in `output` with `content_redacted: false`, cut to
+`max_tool_trace_bytes` and flagged `truncated` when cut, and a trajectory's
+tool message carries it as `content` with `content_truncated`. Otherwise the
+step keeps only its call ID and `status`. Without `replay.detail`, outputs,
+request bodies and trajectory content are returned redacted either way.
+
 ### Configured-rate cost estimates
 
 Insights uses recorded token usage and configured input, cached-input,
