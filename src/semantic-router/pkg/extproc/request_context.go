@@ -142,7 +142,7 @@ type RequestContext struct {
 	// Semi-streaming body handler (non-nil when Envoy sends STREAMED body chunks)
 	StreamedBody          *StreamedBodyHandler
 	FullDuplexRequestBody bool // true when the data plane negotiated FULL_DUPLEX_STREAMED
-	SkipProcessing        bool // true only when the configured opt-out header is valid
+	SkipProcessing        bool // the configured opt-out header, or a count_tokens answer passed back unchanged
 	BufferedRequestBody   bool // true when the data plane negotiated BUFFERED or BUFFERED_PARTIAL
 	// Arrival diagnostics, set at end of stream in STREAMED modes only.
 	StreamedBodyStats StreamedBodyStats
