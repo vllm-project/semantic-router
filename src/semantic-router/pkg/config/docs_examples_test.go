@@ -9,9 +9,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Pages and files whose YAML examples the Router must load. A page listed
-// here is also registered in tools/agent/domains.yaml, so editing it runs
-// this test in PR CI.
+// Pages and files whose YAML examples the Router must load. Each one is also
+// a path of the router-checked-docs domain, so editing it runs this test in
+// PR CI.
 var routerCheckedDocPages = []string{
 	repoRel("website", "docs", "installation", "protocol-compatibility.md"),
 }

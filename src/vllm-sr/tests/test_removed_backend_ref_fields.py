@@ -18,7 +18,9 @@ if str(PROJECT_ROOT) not in sys.path:
 from cli.models import REMOVED_BACKEND_REF_FIELDS  # noqa: E402
 from cli.parser import ConfigParseError, parse_user_config  # noqa: E402
 
-ROUTER_SOURCE = REPO_ROOT / "src/semantic-router/pkg/config/removed_backend_ref_fields.go"
+ROUTER_SOURCE = (
+    REPO_ROOT / "src/semantic-router/pkg/config/removed_backend_ref_fields.go"
+)
 HINT = "was removed; gateway response fields are accepted by default, so delete it"
 
 
