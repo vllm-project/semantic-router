@@ -53,6 +53,9 @@ type ModelDeployment struct {
 	// QuestionTypes are the question types a systemone deployment's model
 	// answers when its API lists none for it.
 	QuestionTypes []string `yaml:"question_types,omitempty" json:"question_types,omitempty"`
+	// Presets are the ready-made questions (pii, halu) a systemone
+	// deployment's model defines when its API lists none for it.
+	Presets []string `yaml:"presets,omitempty" json:"presets,omitempty"`
 	// Replicas places independent workers for this logical resource. Omission
 	// uses the single device/endpoint placement above.
 	Replicas []ModelReplica `yaml:"replicas,omitempty" json:"replicas,omitempty"`
@@ -167,8 +170,8 @@ func (d ModelDeployment) validate(cfg *RouterConfig) error {
 	if d.PublicName != "" && (strings.TrimSpace(d.PublicName) != d.PublicName || strings.ContainsAny(d.PublicName, "\x00\r\n\t ") || strings.HasPrefix(d.PublicName, "/") || strings.Contains(d.PublicName, "://")) {
 		return fmt.Errorf("public_name must be a trimmed public model ID, not a path or endpoint")
 	}
-	if d.Provider != SystemOneProvider && (d.Model != "" || d.Auth != nil || d.TimeoutMs != 0 || len(d.QuestionTypes) > 0) {
-		return fmt.Errorf("model, auth, timeout_ms and question_types apply only to systemone deployments")
+	if d.Provider != SystemOneProvider && (d.Model != "" || d.Auth != nil || d.TimeoutMs != 0 || len(d.QuestionTypes) > 0 || len(d.Presets) > 0) {
+		return fmt.Errorf("model, auth, timeout_ms, question_types and presets apply only to systemone deployments")
 	}
 	switch d.Provider {
 	case SystemOneProvider:

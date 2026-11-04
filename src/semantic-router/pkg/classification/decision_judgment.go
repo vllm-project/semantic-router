@@ -20,6 +20,8 @@ type decisionJudgment struct {
 	attached   *serving.Runtime
 	plan       modelservice.TaskPlan
 	scan       int
+	// remote is set for a systemone deployment.
+	remote bool
 }
 
 func newDecisionJudgment(models *classifierModelRuntime, consumer, taskID string, question *modelservice.Question) (*decisionJudgment, error) {
@@ -30,10 +32,10 @@ func newDecisionJudgment(models *classifierModelRuntime, consumer, taskID string
 	if !available {
 		return nil, nil
 	}
-	name, deployment, ok, err := models.cfg.DecisionModelDeployment()
+	name, deployment, ok, err := models.cfg.DecisionModelResource()
 	generic := false
 	if spec, explicit := models.plan.Lookup(models.recipe, consumer); explicit {
-		if !spec.Deployment.IsModelRuntime() || spec.Binding.Head != "" || spec.Binding.OperatingPoint != nil {
+		if (!spec.Deployment.IsModelRuntime() && !spec.Deployment.IsSystemOne()) || spec.Binding.Head != "" || spec.Binding.OperatingPoint != nil {
 			return nil, nil
 		}
 		name, deployment, ok, err = spec.Binding.Deployment, spec.Deployment, true, nil
@@ -44,12 +46,14 @@ func newDecisionJudgment(models *classifierModelRuntime, consumer, taskID string
 	if !ok || err != nil {
 		return nil, err
 	}
-	j := &decisionJudgment{deployment: name, decider: decider, scan: deployment.ScanBudget()}
+	j := &decisionJudgment{deployment: name, decider: decider, scan: deployment.ScanBudget(), remote: deployment.IsSystemOne()}
 	card, ready := modelservice.ModelCard{}, false
 	// Explicit generic tasks have a model-independent adapter. Implicit and
 	// native bindings still require metadata to select their precise adapter;
 	// readiness must not silently choose between PII verdicts and token spans.
-	if generic && !deployment.Managed() {
+	// A systemone deployment's card is the one its API lists while the
+	// generation prepares.
+	if generic && !deployment.Managed() && !deployment.IsSystemOne() {
 		j.attached = models.runtime
 		card, ready = models.runtime.CurrentDeploymentCard(name)
 	} else {

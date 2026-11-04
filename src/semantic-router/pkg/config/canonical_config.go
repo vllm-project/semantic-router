@@ -183,6 +183,7 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	if applyErr := applyCanonicalGlobal(&cfg, &global); applyErr != nil {
 		return nil, applyErr
 	}
+	cfg.AuthoredModuleModels = authoredModuleModels(canonical.Global, canonical.globalOverrideRaw)
 
 	applyCanonicalRoutingState(&cfg, canonical)
 	if err := applyCanonicalRecipeState(&cfg, canonical); err != nil {

@@ -91,7 +91,7 @@ func (a *DeploymentAuth) Key() (string, error) {
 func (d ModelDeployment) validateSystemOne() error {
 	if d.Artifact != "" || d.Revision != "" || d.ExternalModel != "" || d.Device != "" || d.HasEngineArgs() ||
 		len(d.Replicas) != 0 || d.ServedName != "" || d.PublicName != "" {
-		return fmt.Errorf("a systemone deployment takes endpoint, model, auth, timeout_ms and question_types; artifact, revision, external_model, device, engine arguments, replicas, served_name and public_name belong to other providers")
+		return fmt.Errorf("a systemone deployment takes endpoint, model, auth, timeout_ms, question_types and presets; artifact, revision, external_model, device, engine arguments, replicas, served_name and public_name belong to other providers")
 	}
 	if d.Input.MaxTokens != 0 || (d.Input.Overflow != "" && d.Input.Overflow != "reject") {
 		return fmt.Errorf("a systemone deployment takes no input budget: its API reads one bounded input")
@@ -120,6 +120,16 @@ func (d ModelDeployment) validateSystemOne() error {
 			return fmt.Errorf("question_types lists %q twice", questionType)
 		}
 		seen[questionType] = true
+	}
+	presets := make(map[string]bool, len(d.Presets))
+	for _, preset := range d.Presets {
+		if strings.TrimSpace(preset) == "" || preset != strings.TrimSpace(preset) {
+			return fmt.Errorf("presets must name ready-made questions, such as pii and halu")
+		}
+		if presets[preset] {
+			return fmt.Errorf("presets lists %q twice", preset)
+		}
+		presets[preset] = true
 	}
 	return d.Auth.validate()
 }

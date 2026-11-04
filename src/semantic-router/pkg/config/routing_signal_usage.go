@@ -108,8 +108,14 @@ func (c *RouterConfig) UsesPIIClassifierInReachableRouting() bool {
 	if c == nil {
 		return false
 	}
-	if c.UsesSignalTypeInReachableRouting(SignalTypePII) {
-		return true
+	return c.UsesSignalTypeInReachableRouting(SignalTypePII) || c.UsesMaskingInReachableRouting()
+}
+
+// UsesMaskingInReachableRouting reports whether a request-reachable decision
+// masks PII, which replaces each detection by its position.
+func (c *RouterConfig) UsesMaskingInReachableRouting() bool {
+	if c == nil {
+		return false
 	}
 	decisions := c.routingConsumerDecisions()
 	for i := range decisions {

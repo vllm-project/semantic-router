@@ -87,6 +87,9 @@ func (c *RouterConfig) ImplicitTaskDeployment(consumer string) (name string, dep
 	if !ok {
 		return "", ModelDeployment{}, false, nil
 	}
+	if selected, resource, follows := c.remoteDecisionModelFor(module); follows {
+		return selected, resource, true, nil
+	}
 	// A default task uses the declared resource, including its device/profile.
 	// Sharing is by resource identity, not by a newly manufactured module alias.
 	if selected, resource, found, resolveErr := c.DecisionModelDeployment(); found && resolveErr == nil && module.model == c.DecisionModelSpec().Model {
@@ -166,7 +169,7 @@ func implicitTaskDeploymentsInUse(cfg *RouterConfig, plan *ModelBindingPlan) map
 				continue
 			}
 			name, deployment, ok, err := scoped.ImplicitTaskDeployment(consumer)
-			if ok && err == nil {
+			if ok && err == nil && deployment.IsModelRuntime() {
 				used[name] = deployment.WithDefaults()
 			}
 		}

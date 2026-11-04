@@ -4757,6 +4757,12 @@
           },
           "type": "array"
         },
+        "presets": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "replicas": {
           "items": {
             "$ref": "#/$defs/ModelReplica"

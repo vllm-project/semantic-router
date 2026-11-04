@@ -75,6 +75,14 @@ func prepareDecisionPII(models *classifierModelRuntime) (*decisionPIIBackend, er
 	if explicitSpanBinding(models, "pii_classifier") {
 		return nil, fmt.Errorf("%w: explicit pii_classifier token_spans.v1 binding requires a span model; use decision.v1 for presence/categories", binding.ErrCapability)
 	}
+	if judgment.remote {
+		if err = rejectMaskingWithoutSpans(models.cfg, judgment.deployment); err != nil {
+			return nil, err
+		}
+		if !explicit || spec.Binding.Contract != config.DecisionTaskContract {
+			reportSpanFallback("pii_classifier", judgment)
+		}
+	}
 	definition, _ := modelservice.BuiltinTask("pii_categories")
 	question := definition.Question
 	question.ID = "pii_classifier:categories"

@@ -101,6 +101,9 @@ func (d *HallucinationDetector) Initialize() error {
 			if d.config.MinSpanLength > 1 || d.config.MinSpanConfidence > 0 {
 				return fmt.Errorf("%w: hallucination span filters require native span capability", binding.ErrCapability)
 			}
+			if judgment.remote && (!bound || explicit.Binding.Contract != config.DecisionTaskContract) {
+				reportSpanFallback("hallucination_detector", judgment)
+			}
 			d.judgment, d.initialized = judgment, true
 			return nil
 		}

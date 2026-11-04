@@ -117,7 +117,7 @@ func TestSystemOneDeploymentsTakeOnlyTheirOwnFields(t *testing.T) {
 	for name, tc := range map[string]struct{ old, replacement, want string }{
 		"an engine argument": {
 			"        timeout_ms: 3000\n", "        timeout_ms: 3000\n        max_num_seqs: 4\n",
-			"a systemone deployment takes endpoint, model, auth, timeout_ms and question_types",
+			"a systemone deployment takes endpoint, model, auth, timeout_ms, question_types and presets",
 		},
 		"a device": {
 			"        timeout_ms: 3000\n", "        timeout_ms: 3000\n        device: cpu\n",
@@ -169,7 +169,7 @@ func TestSystemOneDeploymentsTakeOnlyTheirOwnFields(t *testing.T) {
 		},
 		"systemone fields on a model_runtime deployment": {
 			"    system:\n", "      local-d3: {provider: model_runtime, artifact: vllm-sr/vela3-fast, device: cpu, timeout_ms: 100}\n    system:\n",
-			"model, auth, timeout_ms and question_types apply only to systemone deployments",
+			"model, auth, timeout_ms, question_types and presets apply only to systemone deployments",
 		},
 		"a task binding": {
 			"    system:\n", "    bindings:\n      domain_classifier: {deployment: hosted-d3, contract: label_distribution.v1, adapter: vela}\n    system:\n",

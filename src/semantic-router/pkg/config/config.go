@@ -304,6 +304,10 @@ type InlineModels struct {
 	// DecisionModel is global.model_catalog.system.decision_model, resolved
 	// to its canonical name.
 	DecisionModel string `yaml:"decision_model,omitempty"`
+	// AuthoredModuleModels are the built-in modules whose model the
+	// configuration names itself (see authoredModuleModels); with a
+	// systemone decision model, the others follow it.
+	AuthoredModuleModels map[string]bool `yaml:"-" json:"-"`
 }
 
 // IntelligentRouting captures user-facing signal and decision configuration.

@@ -10,6 +10,8 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -20,11 +22,23 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// listingTimeout bounds one read of a remote models listing; it runs beside
-// requests, never on their path.
-const listingTimeout = 10 * time.Second
+// listingTimeout bounds one read of a remote models listing beside requests;
+// preparationListingTimeout bounds the read a generation's preparation waits
+// for, so an API that does not list never holds a generation back long.
+const (
+	listingTimeout            = 10 * time.Second
+	preparationListingTimeout = 5 * time.Second
+)
 
 const listingLimit = 1 << 20
+
+// remoteStateLimit is how many texts one System One call asks about: the
+// request's own state and its further states.
+const remoteStateLimit = 8
+
+// remoteCacheTTL is how long a remote answer serves a repeated call. The
+// cache belongs to one configuration generation and is dropped with it.
+const remoteCacheTTL = 10 * time.Minute
 
 // Remote answers decision questions with deployments the model runtime does
 // not serve: systemone deployments, which a remote System One API serves.
@@ -33,11 +47,18 @@ type Remote interface {
 	// Card is the model card questions to name compile against; ok is false
 	// for a name Remote does not serve.
 	Card(name string) (card ModelCard, ok bool)
+	// PrepareCard is the card a generation's preparation checks name's
+	// consumers against, its models listing read now if it can be.
+	PrepareCard(ctx context.Context, name string) (ModelCard, error)
 }
 
 // RemoteSystemOne asks the systemone deployments of one configuration their
 // decision questions over their System One APIs. It is a signal provider
 // beside the model runtime and never serves a request's model.
+//
+// In a request stage, every question to one deployment travels in one call
+// (see Bundle), and a call answers a repeated question from the generation's
+// result cache.
 type RemoteSystemOne struct {
 	deployments map[string]*systemOneDeployment
 	ctx         context.Context
@@ -51,8 +72,11 @@ type systemOneDeployment struct {
 	model    string
 	auth     *config.DeploymentAuth
 	declared []string
+	presets  []string
 	client   *http.Client
+	cache    *resultCache
 	started  atomic.Bool
+	prepared sync.Once
 	listed   atomic.Pointer[ModelCard]
 	failures sync.Map
 }
@@ -85,16 +109,18 @@ func NewRemoteSystemOne(cfg *config.RouterConfig) (*RemoteSystemOne, error) {
 		listing.RawPath = ""
 		remote.deployments[name] = &systemOneDeployment{
 			name: name, url: endpoint, models: listing.String(), model: deployment.Model,
-			auth: deployment.Auth, declared: append([]string(nil), deployment.QuestionTypes...), client: client,
+			auth: deployment.Auth, declared: slices.Clone(deployment.QuestionTypes), presets: slices.Clone(deployment.Presets),
+			client: client, cache: newExpiringResultCache(ResultCacheEntries(), remoteCacheTTL),
 		}
 	}
 	return remote, nil
 }
 
-// Card is the card name's questions compile against: the question types its
-// API lists for the model in GET <endpoint>/models, else the declared
-// question_types, else the System One types. The first call reads the listing
-// in the background; until it answers, the declared or System One types apply.
+// Card is the card name's questions compile against: the question types and
+// presets its API lists for the model in GET <endpoint>/models, else the
+// declared question_types and presets, else the System One types. The first
+// call reads the listing in the background unless a preparation has read it;
+// until it answers, the declared or System One types apply.
 func (r *RemoteSystemOne) Card(name string) (ModelCard, bool) {
 	d := r.deployment(name)
 	if d == nil {
@@ -104,25 +130,79 @@ func (r *RemoteSystemOne) Card(name string) (ModelCard, bool) {
 		return *card, true
 	}
 	if d.started.CompareAndSwap(false, true) {
-		go d.readListing(r.ctx)
+		go d.readListing(r.ctx, listingTimeout)
 	}
-	return RemoteCard(d.model, d.declared, nil), true
+	return d.declaredCard(), true
 }
 
-// Decide asks name every question of request in one System One call. The API
-// answers a request with a failed question as a whole, so the call's questions
-// share one outcome.
+// PrepareCard reads name's listing once, for at most
+// preparationListingTimeout, and returns its card as Card does. An API that
+// does not list leaves the declared or System One types; it never fails the
+// preparation.
+func (r *RemoteSystemOne) PrepareCard(ctx context.Context, name string) (ModelCard, error) {
+	d := r.deployment(name)
+	if d == nil {
+		return ModelCard{}, ErrUnknownDeployment
+	}
+	d.prepared.Do(func() {
+		if d.listed.Load() == nil {
+			d.started.Store(true)
+			d.readListing(ctx, preparationListingTimeout)
+		}
+	})
+	if card := d.listed.Load(); card != nil {
+		return *card, nil
+	}
+	return d.declaredCard(), nil
+}
+
+// Serves reports whether name is one of the deployments r asks.
+func (r *RemoteSystemOne) Serves(name string) bool {
+	return r.deployment(name) != nil
+}
+
+// Empty reports whether the configuration declares no systemone deployment.
+func (r *RemoteSystemOne) Empty() bool {
+	return r == nil || len(r.deployments) == 0
+}
+
+// Decide asks name the questions of request. In a request stage the call
+// parks in the stage's bundle and travels with the stage's other questions
+// to name; alone it is one System One call. An answer the generation's cache
+// holds is not asked again.
 func (r *RemoteSystemOne) Decide(ctx context.Context, name string, request Request) (Response, error) {
 	d := r.deployment(name)
 	if d == nil {
 		requestsTotal.WithLabelValues(name, ErrorReason(ErrUnknownDeployment)).Inc()
 		return Response{}, ErrUnknownDeployment
 	}
-	started := time.Now()
-	response, err := d.decide(ctx, request)
-	requestDuration.WithLabelValues(name, "decisions").Observe(time.Since(started).Seconds())
-	requestsTotal.WithLabelValues(name, ErrorReason(err)).Inc()
-	return response, err
+	request.Model = d.model
+	request = boundedRead(request)
+	body, err := systemOneBody(ctx, request)
+	if err != nil {
+		return Response{}, err
+	}
+	decision := &decisionCall{request: request, cache: d.cache.active(), deployment: name}
+	if bundle := bundleFrom(ctx); bundle != nil {
+		return bundle.decideRemote(ctx, d, decision, body)
+	}
+	call := &bundleCall{ctx: ctx, task: api.BundleTask{Decisions: &body}, done: make(chan struct{}), decision: decision}
+	for _, task := range answerCached(fuseDecisions(1, []*bundleCall{call})) {
+		d.send(ctx, task)
+	}
+	<-call.done
+	return decision.response, call.err
+}
+
+// ResetCache drops every cached answer, for a generation that takes over
+// this client from the one before it.
+func (r *RemoteSystemOne) ResetCache() {
+	if r == nil {
+		return
+	}
+	for _, d := range r.deployments {
+		d.cache.reset()
+	}
 }
 
 // Close stops listing reads and drops idle connections.
@@ -144,33 +224,106 @@ func (r *RemoteSystemOne) deployment(name string) *systemOneDeployment {
 	return r.deployments[name]
 }
 
-func (d *systemOneDeployment) decide(ctx context.Context, request Request) (Response, error) {
-	request.Model = d.model
-	body, err := EncodeSystemOneRequest(ctx, request)
+func (d *systemOneDeployment) declaredCard() ModelCard {
+	return RemoteCard(d.model, d.declared, d.presets)
+}
+
+func (d *systemOneDeployment) stateLimit() int { return remoteStateLimit }
+
+// send asks a fused task's questions in one System One call. A System One
+// API fails a call with a failed question as a whole and names the question;
+// send then asks the rest once more without it, within the same deadline,
+// and leaves only that question unknown. Any other failure leaves every
+// question of the task unknown.
+func (d *systemOneDeployment) send(ctx context.Context, task *bundleTask) {
+	plan := sentAs(task)
+	status, data, err := d.post(ctx, *task.task.Decisions)
+	var failure *questionFailure
+	if err == nil {
+		if failed, ok := failedQuestion(status, data); ok && ctx.Err() == nil {
+			if retry, ok := plan.without(task, failed.question); ok {
+				systemOneRetries.WithLabelValues(d.name).Inc()
+				logging.ComponentDebugEvent("model_runtime", "systemone_question_retried", map[string]interface{}{
+					"deployment": d.name, "question": failed.question, "question_error": failed.code,
+				})
+				failure, plan = &failed, retry
+				status, data, err = d.post(ctx, plan.body)
+			}
+		}
+	}
+	var responses []Response
+	if err == nil {
+		responses, err = plan.decode(task, status, data)
+		if err != nil {
+			d.reportFailure(status, ErrorReason(err), nil)
+		}
+	}
+	if err == nil && failure != nil {
+		failure.answer(task, responses)
+	}
+	if err == nil && task.decision.cache != nil {
+		for _, call := range task.calls {
+			cacheTotal.WithLabelValues(call.decision.deployment, "miss").Inc()
+		}
+		if failure == nil && completeAll(responses) {
+			if len(responses) == 1 {
+				task.decision.cache.put(task.decision.key, responses[0])
+			} else {
+				task.decision.cache.put(task.decision.key, responses)
+			}
+		}
+	}
+	task.deliver(responses, err)
+}
+
+// post makes one System One call with body, its deadline the time ctx has
+// left, and returns the API's status and answer; err is set when there is
+// none.
+func (d *systemOneDeployment) post(ctx context.Context, body api.DecisionRequest) (int, []byte, error) {
+	started := time.Now()
+	status, data, err := d.exchangeDecisions(ctx, body)
+	outcome := err
+	if outcome == nil {
+		outcome = systemOneStatusError(status)
+	}
+	requestDuration.WithLabelValues(d.name, "decisions").Observe(time.Since(started).Seconds())
+	requestsTotal.WithLabelValues(d.name, ErrorReason(outcome)).Inc()
+	return status, data, err
+}
+
+func (d *systemOneDeployment) exchangeDecisions(ctx context.Context, body api.DecisionRequest) (int, []byte, error) {
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining := math.Floor(float64(time.Until(deadline)) / float64(time.Millisecond))
+		if remaining < 1 {
+			<-ctx.Done()
+			return 0, nil, ctx.Err()
+		}
+		options := api.RequestOptions{}
+		if body.Options != nil {
+			options = *body.Options
+		}
+		options.DeadlineMs = &remaining
+		body.Options = &options
+	}
+	encoded, err := marshalSystemOne(body)
 	if err != nil {
-		return Response{}, err
+		return 0, nil, err
 	}
 	header, err := d.header("application/json")
 	if err != nil {
 		d.reportFailure(0, "credential", err)
-		return Response{}, fmt.Errorf("%w: systemone deployment %q: %w", ErrFailed, d.name, err)
+		return 0, nil, fmt.Errorf("%w: systemone deployment %q: %w", ErrFailed, d.name, err)
 	}
 	header.Set("Content-Type", "application/json")
-	done := Await(ctx)
-	status, data, err := d.exchange(ctx, http.MethodPost, d.url, body, header)
-	done()
+	status, data, err := d.exchange(ctx, http.MethodPost, d.url, encoded, header)
 	if ctxErr := ctx.Err(); ctxErr != nil {
-		return Response{}, ctxErr
+		return 0, nil, ctxErr
 	}
 	if err != nil {
 		d.reportFailure(0, "transport", err)
-		return Response{}, fmt.Errorf("%w: systemone deployment %q: %w", ErrFailed, d.name, err)
+		return 0, nil, fmt.Errorf("%w: systemone deployment %q: %w", ErrFailed, d.name, err)
 	}
-	response, err := DecodeSystemOneResponse(status, data, request.Questions)
-	if err != nil {
-		d.reportFailure(status, ErrorReason(err), nil)
-	}
-	return response, err
+	return status, data, nil
 }
 
 // header carries the credential, read when the call needs it.
@@ -211,13 +364,13 @@ func (d *systemOneDeployment) exchange(ctx context.Context, method, target strin
 	return response.StatusCode, data, nil
 }
 
-func (d *systemOneDeployment) readListing(parent context.Context) {
-	ctx, cancel := context.WithTimeout(parent, listingTimeout)
+func (d *systemOneDeployment) readListing(parent context.Context, timeout time.Duration) {
+	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	card, err := d.listing(ctx)
 	if err != nil {
 		logging.ComponentEvent("model_runtime", "systemone_deployment_unlisted", map[string]interface{}{
-			"deployment": d.name, "reason": err.Error(), "question_types": RemoteCard(d.model, d.declared, nil).QuestionTypes,
+			"deployment": d.name, "reason": err.Error(), "question_types": d.declaredCard().QuestionTypes,
 		})
 		return
 	}
@@ -268,13 +421,17 @@ func (d *systemOneDeployment) reportFailure(status int, reason string, err error
 	logging.ComponentWarnEvent("model_runtime", "systemone_deployment_failed", fields)
 }
 
+// RemoteDevice is the device and precision a remote decision model's card
+// reports: the model runs behind its API, not on a device of this host.
+const RemoteDevice = "remote"
+
 // RemoteCard is the card of a remote decision model: it answers questionTypes
 // on the decisions surface, the System One types (choice, noul and score)
-// when there are none.
+// when there are none, and defines presets.
 func RemoteCard(id string, questionTypes, presets []string) ModelCard {
 	return ModelCard{
-		ID: id, Surfaces: []string{"decisions"}, Ready: true, Status: "ready",
-		QuestionTypes: append([]string(nil), questionTypes...), Presets: append([]string(nil), presets...),
+		ID: id, Surfaces: []string{"decisions"}, Ready: true, Status: "ready", Device: RemoteDevice, Dtype: RemoteDevice,
+		QuestionTypes: slices.Clone(questionTypes), Presets: slices.Clone(presets),
 	}
 }
 
@@ -285,19 +442,33 @@ func RemoteCard(id string, questionTypes, presets []string) ModelCard {
 // milliseconds. A System One API reads one bounded input, so neither a scan
 // budget nor truncation goes.
 func EncodeSystemOneRequest(ctx context.Context, request Request) ([]byte, error) {
-	request = boundedRead(request)
-	body, err := encodeDecisionRequest(ctx, request)
+	body, err := systemOneBody(ctx, boundedRead(request))
 	if err != nil {
 		return nil, err
+	}
+	return marshalSystemOne(body)
+}
+
+func systemOneBody(ctx context.Context, request Request) (api.DecisionRequest, error) {
+	body, err := encodeDecisionRequest(ctx, request)
+	if err != nil {
+		return api.DecisionRequest{}, err
 	}
 	if deadline := body.Options.DeadlineMs; deadline != nil {
 		whole := math.Max(1, math.Floor(*deadline))
 		body.Options.DeadlineMs = &whole
-	} else {
-		body.Options = nil
 	}
 	for _, question := range request.Questions {
 		body.Questions[question.ID] = systemOneQuestion(question)
+	}
+	return body, nil
+}
+
+// marshalSystemOne encodes body without empty options, which a fused call
+// whose callers set no deadline carries.
+func marshalSystemOne(body api.DecisionRequest) ([]byte, error) {
+	if body.Options != nil && reflect.ValueOf(*body.Options).IsZero() {
+		body.Options = nil
 	}
 	return json.Marshal(body)
 }
@@ -328,12 +499,20 @@ func systemOneQuestion(question Question) api.Question {
 // decisions answer. A System One API answers a request with a failed question
 // as a whole, with an error status, so the call's questions share its error.
 func DecodeSystemOneResponse(status int, body []byte, questions []Question) (Response, error) {
-	if err := systemOneStatusError(status); err != nil {
+	decoded, err := decodeSystemOneBody(status, body)
+	if err != nil {
 		return Response{}, err
+	}
+	return decodeResponse(decoded, questions), nil
+}
+
+func decodeSystemOneBody(status int, body []byte) (api.DecisionResponse, error) {
+	if err := systemOneStatusError(status); err != nil {
+		return api.DecisionResponse{}, err
 	}
 	var decoded api.DecisionResponse
 	if len(body) > SystemOneResponseLimit || json.Unmarshal(body, &decoded) != nil || decoded.Answers == nil {
-		return Response{}, fmt.Errorf("%w: invalid System One response", ErrFailed)
+		return api.DecisionResponse{}, fmt.Errorf("%w: invalid System One response", ErrFailed)
 	}
-	return decodeResponse(decoded, questions), nil
+	return decoded, nil
 }

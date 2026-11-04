@@ -21,7 +21,7 @@ from cli.models_decision import (
 from cli.validation_error import ValidationError
 
 MODEL_RUNTIME_PROVIDER = "model_runtime"
-SYSTEMONE_FIELDS = {"provider", "endpoint", "model", "auth", "timeout_ms", "question_types"}
+SYSTEMONE_FIELDS = {"provider", "endpoint", "model", "auth", "timeout_ms", "question_types", "presets"}
 SYSTEMONE_AUTH_FIELDS = {"header", "prefix", "api_key_env", "api_key_file"}
 HTTP_HEADER_NAME = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
 # The runtime owns accelerator names, plugins' included: the validator checks
@@ -234,8 +234,8 @@ def systemone_deployment_error(deployment: dict) -> str | None:
     extra = sorted(set(deployment) - SYSTEMONE_FIELDS)
     if extra:
         return (
-            "a systemone deployment takes endpoint, model, auth, timeout_ms and "
-            f"question_types, not {', '.join(extra)}"
+            "a systemone deployment takes endpoint, model, auth, timeout_ms, "
+            f"question_types and presets, not {', '.join(extra)}"
         )
     endpoint = urlparse(deployment.get("endpoint") or "")
     if endpoint.scheme not in {"http", "https"} or not endpoint.hostname or endpoint.fragment:
@@ -255,6 +255,13 @@ def systemone_deployment_error(deployment: dict) -> str | None:
     unknown = [kind for kind in types if kind not in DECISION_QUESTION_TYPES]
     if unknown or len(set(types)) != len(types):
         return "question_types lists distinct types among choice, noul, score, set and span"
+    presets = deployment.get("presets") or []
+    if (
+        not isinstance(presets, list)
+        or any(not isinstance(preset, str) or not preset.strip() or preset.strip() != preset for preset in presets)
+        or len(set(presets)) != len(presets)
+    ):
+        return "presets lists distinct ready-made questions, such as pii and halu"
     return _systemone_auth_error(deployment.get("auth"))
 
 

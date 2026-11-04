@@ -159,6 +159,10 @@ def test_systemone_deployments_answer_questions_selectors_and_the_default():
             "question_types lists distinct types",
         ),
         (
+            lambda d: _deployment("gateway-d3")(d).update({"presets": ["pii", "pii"]}),
+            "presets lists distinct ready-made questions",
+        ),
+        (
             lambda d: _deployment("hosted-d3")(d).update({"timeout_ms": 90000}),
             "timeout_ms must be within",
         ),
@@ -166,6 +170,13 @@ def test_systemone_deployments_answer_questions_selectors_and_the_default():
 )
 def test_systemone_deployments_take_only_their_own_fields(mutate, message):
     assert any(message in error for error in _errors(_config(mutate)))
+
+
+def test_a_systemone_deployment_declares_its_presets():
+    document = _config(
+        lambda d: _deployment("hosted-d3")(d).update({"presets": ["pii", "halu"]})
+    )
+    assert not _errors(document)
 
 
 def test_a_task_never_binds_a_systemone_deployment():

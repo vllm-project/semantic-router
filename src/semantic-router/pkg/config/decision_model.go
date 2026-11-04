@@ -70,8 +70,9 @@ var systemLines = []systemLine{
 
 // applyDecisionModel resolves the default judgment resource, preserving every
 // explicitly authored specialist module and deployment declaration. A
-// systemone deployment answers decision questions but serves no module
-// model, so the modules keep their defaults.
+// systemone deployment serves no module model, so the module lines keep their
+// defaults; the modules that name no model of their own ask it their
+// questions instead (see remoteDecisionModelFor).
 func applyDecisionModel(resolved *CanonicalGlobal, raw *StructuredPayload) error {
 	system := &resolved.ModelCatalog.System
 	name := strings.TrimSpace(system.DecisionModel.Deployment)
@@ -134,7 +135,8 @@ func (c *RouterConfig) DecisionModelSpec() DecisionModelSpec {
 
 // RemoteDecisionModel reports whether the decision model is a systemone
 // deployment. It answers the decision questions and selectors that name no
-// deployment; module consumers keep their built-in models.
+// deployment, and the built-in signals whose module names no model of its
+// own.
 func (c *RouterConfig) RemoteDecisionModel() bool {
 	if c == nil {
 		return false
