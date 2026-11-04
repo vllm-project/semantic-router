@@ -29,8 +29,10 @@ export interface ToolTraceStep {
   arguments?: string
   raw_arguments?: string
   raw_output?: string
+  output?: string
   status?: string
   content_redacted?: boolean
+  truncated?: boolean
 }
 
 export interface ToolTrace {
@@ -206,6 +208,7 @@ export interface InsightsTrajectoryMessage {
   tool_name?: string
   status?: 'succeeded' | 'failed'
   content_redacted?: boolean
+  content_truncated?: boolean
   turn_index: number
 }
 

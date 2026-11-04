@@ -28188,6 +28188,9 @@
                           "content": {
                             "type": "string"
                           },
+                          "content_truncated": {
+                            "type": "boolean"
+                          },
                           "conversation_id": {
                             "type": "string"
                           },
