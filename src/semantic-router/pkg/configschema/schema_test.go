@@ -144,6 +144,28 @@ func TestSchemaPublishesEveryRoutingSurface(t *testing.T) {
 	}
 }
 
+func TestModelRefMaxCompletionTokensRequiresPositiveBound(t *testing.T) {
+	var document struct {
+		Definitions map[string]struct {
+			Properties map[string]struct {
+				Type    string      `json:"type"`
+				Minimum json.Number `json:"minimum"`
+			} `json:"properties"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(Document(), &document); err != nil {
+		t.Fatal(err)
+	}
+	modelRef, ok := document.Definitions["ModelRef"]
+	if !ok {
+		t.Fatal("ModelRef schema is missing")
+	}
+	field, ok := modelRef.Properties["max_completion_tokens"]
+	if !ok || field.Type != "integer" || field.Minimum.String() != "1" {
+		t.Fatalf("ModelRef.max_completion_tokens = %#v, want integer minimum 1", field)
+	}
+}
+
 func TestSchemaMapsCustomScalarTypesToTheirPublicYAMLShape(t *testing.T) {
 	type scalarBranch struct {
 		Type    string      `json:"type"`

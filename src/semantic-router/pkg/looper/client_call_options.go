@@ -51,10 +51,12 @@ func responseMode(streaming bool) ResponseMode {
 // CallOptions carries request-scoped Looper execution metadata. Keeping this
 // data off Client allows one Client to be reused safely by concurrent calls.
 type CallOptions struct {
-	DecisionName string
-	Iteration    int
-	Mode         ResponseMode
-	Logprobs     *LogprobsConfig
+	DecisionName          string
+	Iteration             int
+	Mode                  ResponseMode
+	Logprobs              *LogprobsConfig
+	ClientMaxOutputTokens *int64
+	StageMaxOutputTokens  *int64
 
 	// ToolStage is this attempt's trusted-facts role. Every call that keeps
 	// tools must name one: an empty stage matches no configured role, so an

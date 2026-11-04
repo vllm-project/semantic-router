@@ -26,6 +26,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/outputtokens"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
@@ -219,10 +220,14 @@ func (r *OpenAIRouter) buildLooperRequest(
 	if isResponseAPIRequest(reqCtx) {
 		streaming = false
 	}
+	algorithmType := ""
+	if decision.Algorithm != nil {
+		algorithmType = decision.Algorithm.Type
+	}
 	logging.ComponentEvent("extproc", "looper_execution_started", map[string]interface{}{
 		"request_id":       reqCtx.RequestID,
 		"decision":         decision.Name,
-		"algorithm":        decision.Algorithm.Type,
+		"algorithm":        algorithmType,
 		"candidate_models": len(modelRefs),
 		"streaming":        streaming,
 		"response_api":     isResponseAPIRequest(reqCtx),
@@ -245,20 +250,22 @@ func (r *OpenAIRouter) buildLooperRequest(
 			openAIRequest, err = parseOpenAIRequest(encoded.Body)
 			if err == nil {
 				looperReq := &looper.Request{
-					OriginalRequest:       openAIRequest,
-					CandidateRequirements: r.candidateRequirements(reqCtx).Clone(),
-					PermittedModels:       looperPermittedModels(modelRefs, decision.Algorithm),
-					Grounding:             r.groundingForRecipe(reqCtx.Routing.RecipeName()),
-					BaseContextTokens:     reqCtx.VSRContextTokenCount,
-					ModelRefs:             modelRefs,
-					ModelParams:           r.getModelParams(),
-					Algorithm:             decision.Algorithm,
-					IsStreaming:           streaming,
-					DecisionName:          decision.Name,
-					RecipeName:            reqCtx.Routing.RecipeName(),
-					OutputContract:        decision.OutputContract,
-					OutputContractSpec:    decision.OutputContractSpec,
-					ToolStageGate:         r.looperToolStageGate(request, decision, reqCtx),
+					OriginalRequest:              openAIRequest,
+					CandidateRequirements:        r.candidateRequirements(reqCtx).Clone(),
+					PermittedModels:              looperPermittedModels(modelRefs, decision.Algorithm),
+					Grounding:                    r.groundingForRecipe(reqCtx.Routing.RecipeName()),
+					BaseContextTokens:            reqCtx.VSRContextTokenCount,
+					ModelRefs:                    modelRefs,
+					ModelParams:                  r.getModelParams(),
+					Algorithm:                    decision.Algorithm,
+					IsStreaming:                  streaming,
+					DecisionName:                 decision.Name,
+					RecipeName:                   reqCtx.Routing.RecipeName(),
+					OutputContract:               decision.OutputContract,
+					OutputContractSpec:           decision.OutputContractSpec,
+					PluginMaxOutputTokens:        pluginMaxOutputTokens(decision),
+					ClientMaxOutputTokensBlocked: decisionBlocksOutputTokenLimit(decision),
+					ToolStageGate:                r.looperToolStageGate(request, decision, reqCtx),
 				}
 				if params := decision.GetRequestParamsConfig(); params != nil && params.MaxTokensLimit != nil {
 					limit := *params.MaxTokensLimit
@@ -352,6 +359,17 @@ func (r *OpenAIRouter) updateLooperReplayUsage(ctx *RequestContext, usage looper
 		CompletionTokens: replayIntPtr(completionTokens),
 		TotalTokens:      replayIntPtr(totalTokens),
 	})
+}
+
+func pluginMaxOutputTokens(decision *config.Decision) *int64 {
+	if decision == nil {
+		return nil
+	}
+	params := decision.GetRequestParamsConfig()
+	if params == nil {
+		return nil
+	}
+	return outputtokens.FromInt(params.MaxTokensLimit)
 }
 
 func (r *OpenAIRouter) groundingForRecipe(recipe config.RecipeName) *looper.GroundingBackends {

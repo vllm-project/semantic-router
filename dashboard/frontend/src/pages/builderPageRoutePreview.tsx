@@ -1,12 +1,13 @@
 import React, { useMemo } from 'react'
 
 import {
+  astModelToInput,
   formatDslName,
   getAlgorithmFieldSchema,
   quoteDSLString,
   serializeFields,
 } from '@/lib/dslMutations'
-import type { ASTAlgoSpec, ASTModelRef, ASTPluginRef, DSLFieldObject } from '@/types/dsl'
+import type { ASTAlgoSpec, ASTPluginRef, DSLFieldObject } from '@/types/dsl'
 import type { RouteAlgoInput, RouteModelInput, RoutePluginInput } from '@/lib/dslMutations'
 
 import styles from './BuilderPage.module.css'
@@ -43,6 +44,13 @@ function generateRouteDslPreview(
         if (m.effort) attrs.push(`effort = ${quoteDSLString(m.effort)}`)
         if (m.paramSize) attrs.push(`param_size = ${quoteDSLString(m.paramSize)}`)
         if (m.weight !== undefined) attrs.push(`weight = ${m.weight}`)
+        if (
+          typeof m.maxCompletionTokens === 'number' &&
+          Number.isSafeInteger(m.maxCompletionTokens) &&
+          m.maxCompletionTokens >= 1
+        ) {
+          attrs.push(`max_completion_tokens = ${m.maxCompletionTokens}`)
+        }
         const attrStr = attrs.length > 0 ? ` (${attrs.join(', ')})` : ''
         return `${quoteDSLString(m.model)}${attrStr}`
       })
@@ -113,6 +121,21 @@ function validateRouteInput(
       message: 'No model specified — route needs at least one MODEL',
     })
   }
+  models.forEach((model, index) => {
+    if (model.maxCompletionTokens === undefined || model.maxCompletionTokens === null) {
+      return
+    }
+    if (
+      typeof model.maxCompletionTokens !== 'number' ||
+      !Number.isSafeInteger(model.maxCompletionTokens) ||
+      model.maxCompletionTokens < 1
+    ) {
+      issues.push({
+        level: 'error',
+        message: `model ${model.model.trim() || `#${index + 1}`} max_completion_tokens must be a finite integer >= 1`,
+      })
+    }
+  })
 
   // Algorithm field validation
   if (algorithm?.algoType) {
@@ -250,6 +273,15 @@ function validateRouteInput(
   }
 
   return issues
+}
+
+function routeInputHasErrors(
+  routeName: string,
+  models: RouteModelInput[],
+  algorithm: RouteAlgoInput | undefined,
+  plugins: RoutePluginInput[],
+): boolean {
+  return validateRouteInput(routeName, models, algorithm, plugins).some((issue) => issue.level === 'error')
 }
 
 function extractWorkflowPlannerModel(fields: Record<string, unknown>): string {
@@ -423,19 +455,6 @@ const RouteDslPreviewPanel: React.FC<{
 // Route Editor Form (editable)
 // ===================================================================
 
-function astModelToInput(m: ASTModelRef): RouteModelInput {
-  return {
-    model: m.model,
-    reasoning: m.reasoning,
-    effort: m.effort,
-    mode: m.mode,
-    lora: m.lora,
-    paramSize: m.paramSize,
-    weight: m.weight,
-    reasoningFamily: m.reasoningFamily,
-  }
-}
-
 function astAlgoToInput(a?: ASTAlgoSpec): RouteAlgoInput | undefined {
   if (!a) return undefined
   return { algoType: a.algoType, fields: { ...a.fields } }
@@ -451,5 +470,6 @@ export {
   astModelToInput,
   astPluginRefToInput,
   generateRouteDslPreview,
+  routeInputHasErrors,
   validateRouteInput,
 }

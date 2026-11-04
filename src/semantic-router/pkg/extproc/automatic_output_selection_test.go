@@ -39,6 +39,7 @@ func TestAutomaticOutputSurvivesRuntimeSelectionAndLearning(t *testing.T) {
 			}
 			if test.explicit {
 				ctx.SemanticRequest.Sampling.MaxOutputTokens = llmprotocol.Int64(12)
+				snapshotClientMaxOutputTokens(*ctx.SemanticRequest, ctx)
 			}
 			d := ctx.VSRSelectedDecision
 			d.Algorithm.Type = test.algorithm

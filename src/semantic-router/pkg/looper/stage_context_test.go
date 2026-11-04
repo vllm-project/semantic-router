@@ -141,3 +141,39 @@ func TestWorkflowsRejectsOversizedGeneratedStageBeforeBackendDispatch(t *testing
 		t.Fatalf("backend received %d calls after context gate rejection", got)
 	}
 }
+
+func TestAttachOutputTokenBoundsSnapshotsClientOnly(t *testing.T) {
+	original := &openai.ChatCompletionNewParams{MaxCompletionTokens: openai.Int(256)}
+	options := CallOptions{StageMaxOutputTokens: authoredStageMaxOutputTokens(64)}
+	attachOutputTokenBounds(&options, &Request{OriginalRequest: original})
+	if options.ClientMaxOutputTokens == nil || *options.ClientMaxOutputTokens != 256 {
+		t.Fatalf("client bound = %v, want 256", options.ClientMaxOutputTokens)
+	}
+	if options.StageMaxOutputTokens == nil || *options.StageMaxOutputTokens != 64 {
+		t.Fatalf("authored stage bound = %v, want 64", options.StageMaxOutputTokens)
+	}
+}
+
+func TestAttachOutputTokenBoundsOmitsUnauthoredStageLimit(t *testing.T) {
+	original := &openai.ChatCompletionNewParams{MaxCompletionTokens: openai.Int(256)}
+	options := CallOptions{}
+	attachOutputTokenBounds(&options, &Request{OriginalRequest: original})
+	if options.ClientMaxOutputTokens == nil || *options.ClientMaxOutputTokens != 256 {
+		t.Fatalf("client bound = %v, want 256", options.ClientMaxOutputTokens)
+	}
+	if options.StageMaxOutputTokens != nil {
+		t.Fatalf("inherited client limit must not be labeled as a stage bound, got %v", options.StageMaxOutputTokens)
+	}
+}
+
+func TestAttachOutputTokenBoundsKeepsAuthoredStageEqualToClient(t *testing.T) {
+	original := &openai.ChatCompletionNewParams{MaxCompletionTokens: openai.Int(256)}
+	options := CallOptions{StageMaxOutputTokens: authoredStageMaxOutputTokens(256)}
+	attachOutputTokenBounds(&options, &Request{OriginalRequest: original})
+	if options.ClientMaxOutputTokens == nil || *options.ClientMaxOutputTokens != 256 {
+		t.Fatalf("client bound = %v, want 256", options.ClientMaxOutputTokens)
+	}
+	if options.StageMaxOutputTokens == nil || *options.StageMaxOutputTokens != 256 {
+		t.Fatalf("independently authored equal stage bound = %v, want 256", options.StageMaxOutputTokens)
+	}
+}

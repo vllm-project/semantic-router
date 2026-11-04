@@ -446,12 +446,13 @@ func candidateIterationConfigToDecl(iter config.CandidateIterationConfig) *Candi
 
 func configModelRefToDSLModelRef(model config.ModelRef) *ModelRef {
 	return &ModelRef{
-		Model:     model.Model,
-		Reasoning: model.UseReasoning,
-		Mode:      model.ReasoningMode,
-		Effort:    model.ReasoningEffort,
-		LoRA:      model.LoRAName,
-		Weight:    model.Weight,
+		Model:               model.Model,
+		Reasoning:           model.UseReasoning,
+		Mode:                model.ReasoningMode,
+		Effort:              model.ReasoningEffort,
+		LoRA:                model.LoRAName,
+		Weight:              model.Weight,
+		MaxCompletionTokens: model.MaxCompletionTokens,
 	}
 }
 
@@ -555,6 +556,9 @@ func modelRefOptions(mr *config.ModelRef, modelConfig map[string]config.ModelPar
 	}
 	if mr.Weight != 0 {
 		opts = append(opts, fmt.Sprintf("weight = %g", mr.Weight))
+	}
+	if mr.MaxCompletionTokens != nil {
+		opts = append(opts, fmt.Sprintf("max_completion_tokens = %d", *mr.MaxCompletionTokens))
 	}
 	if size := routeParamSize(modelConfig, mr.Model); size != "" {
 		opts = append(opts, fmt.Sprintf("param_size = %q", size))

@@ -9,7 +9,7 @@
  * After each mutation, the caller should call parseAST() to refresh the AST.
  */
 
-import type { BoolExprNode, DSLFieldObject, DSLFieldValue } from '@/types/dsl'
+import type { ASTModelRef, BoolExprNode, DSLFieldObject, DSLFieldValue } from '@/types/dsl'
 
 import { keepRouteSettingsOutsideForm } from './dslRouteBlock'
 
@@ -496,6 +496,7 @@ export interface RouteModelInput {
   paramSize?: string
   weight?: number
   reasoningFamily?: string
+  maxCompletionTokens?: number
 }
 
 export interface RouteAlgoInput {
@@ -517,6 +518,35 @@ export interface RouteInput {
   plugins: RoutePluginInput[]
 }
 
+export function astModelToInput(model: ASTModelRef): RouteModelInput {
+  return {
+    model: model.model,
+    reasoning: model.reasoning,
+    effort: model.effort,
+    mode: model.mode,
+    lora: model.lora,
+    paramSize: model.paramSize,
+    weight: model.weight,
+    reasoningFamily: model.reasoningFamily,
+    maxCompletionTokens: model.maxCompletionTokens,
+  }
+}
+
+function isPositiveInt(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1
+}
+
+function assertValidRouteModelCeiling(model: RouteModelInput, index: number): void {
+  if (model.maxCompletionTokens === undefined || model.maxCompletionTokens === null) {
+    return
+  }
+  if (!isPositiveInt(model.maxCompletionTokens)) {
+    throw new Error(
+      `model ${model.model.trim() || `#${index + 1}`} max_completion_tokens must be a finite integer >= 1`,
+    )
+  }
+}
+
 function serializeRouteBody(input: RouteInput): string {
   const lines: string[] = []
 
@@ -532,7 +562,8 @@ function serializeRouteBody(input: RouteInput): string {
 
   // Models
   if (input.models.length > 0) {
-    const modelParts = input.models.map((m) => {
+    const modelParts = input.models.map((m, index) => {
+      assertValidRouteModelCeiling(m, index)
       const attrs: string[] = []
       if (m.mode) attrs.push(`mode = "${m.mode}"`)
       if (m.reasoning !== undefined) attrs.push(`reasoning = ${m.reasoning}`)
@@ -541,6 +572,9 @@ function serializeRouteBody(input: RouteInput): string {
       if (m.paramSize) attrs.push(`param_size = ${quoteDSLString(m.paramSize)}`)
       if (m.weight !== undefined) attrs.push(`weight = ${m.weight}`)
       if (m.reasoningFamily) attrs.push(`reasoning_family = ${quoteDSLString(m.reasoningFamily)}`)
+      if (m.maxCompletionTokens !== undefined) {
+        attrs.push(`max_completion_tokens = ${m.maxCompletionTokens}`)
+      }
       const attrStr = attrs.length > 0 ? ` (${attrs.join(', ')})` : ''
       return `${quoteDSLString(m.model)}${attrStr}`
     })

@@ -27,6 +27,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 func TestCallModelWithOptionsUsesRequestScopedMetadata(t *testing.T) {
@@ -39,6 +40,20 @@ func TestCallModelWithOptionsUsesRequestScopedMetadata(t *testing.T) {
 		}
 		if got := request.Header.Get("Authorization"); got != "Bearer secret-a" {
 			t.Errorf("Authorization = %q, want Bearer secret-a", got)
+		}
+		if got := request.Header.Get(testHopClientMaxOutputTokens); got != "256" {
+			t.Errorf("%s = %q, want 256", testHopClientMaxOutputTokens, got)
+		}
+		if got := request.Header.Get(testHopStageMaxOutputTokens); got != "128" {
+			t.Errorf("%s = %q, want 128", testHopStageMaxOutputTokens, got)
+		}
+		for _, internal := range []string{
+			headers.VSRLooperClientMaxOutputTokens, headers.VSRLooperStageMaxOutputTokens,
+			headers.VSRInternalAuth, headers.VSRLooperRequest,
+		} {
+			if got := request.Header.Get(internal); got != "" {
+				t.Errorf("hop sent retired internal header %s = %q", internal, got)
+			}
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
@@ -65,9 +80,11 @@ func TestCallModelWithOptionsUsesRequestScopedMetadata(t *testing.T) {
 		request,
 		ModelTarget{Name: "model-a", AccessKey: "secret-a"},
 		CallOptions{
-			DecisionName: "decision-a",
-			Iteration:    2,
-			Mode:         ResponseJSON,
+			DecisionName:          "decision-a",
+			Iteration:             2,
+			Mode:                  ResponseJSON,
+			ClientMaxOutputTokens: looperTestInt64(256),
+			StageMaxOutputTokens:  looperTestInt64(128),
 		},
 	)
 	if err != nil {
@@ -78,6 +95,38 @@ func TestCallModelWithOptionsUsesRequestScopedMetadata(t *testing.T) {
 	}
 	if request.Model != "original-model" {
 		t.Fatalf("CallModelWithOptions() mutated caller model to %q", request.Model)
+	}
+}
+
+func TestCallModelWithOptionsOmitsNonPositiveOutputTokenBounds(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if got := request.Header.Get(testHopClientMaxOutputTokens); got != "" {
+			t.Errorf("non-positive client bound = %q", got)
+		}
+		if got := request.Header.Get(testHopStageMaxOutputTokens); got != "" {
+			t.Errorf("non-positive stage bound = %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"choices": []map[string]interface{}{{
+				"message": map[string]interface{}{"role": "assistant", "content": "ok"},
+			}},
+		})
+	}))
+	defer server.Close()
+
+	client := hopsTo(&config.LooperConfig{}, server.URL)
+	if _, err := client.CallModelWithOptions(
+		context.Background(),
+		openai.ChatCompletionNewParams{Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hello")}},
+		ModelTarget{Name: "model-a"},
+		CallOptions{
+			Iteration:             1,
+			ClientMaxOutputTokens: looperTestInt64(0),
+			StageMaxOutputTokens:  looperTestInt64(-8),
+		},
+	); err != nil {
+		t.Fatalf("CallModelWithOptions() error = %v", err)
 	}
 }
 
@@ -214,4 +263,8 @@ func TestCallModelWithOptionsValidatesRequiredFields(t *testing.T) {
 			}
 		})
 	}
+}
+
+func looperTestInt64(value int64) *int64 {
+	return &value
 }

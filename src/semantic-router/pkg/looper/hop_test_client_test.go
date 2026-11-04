@@ -15,8 +15,10 @@ import (
 
 // Headers that label a test hop for the fake model server it reaches.
 const (
-	testHopIteration = "X-Test-Hop-Iteration"
-	testHopDecision  = "X-Test-Hop-Decision"
+	testHopIteration             = "X-Test-Hop-Iteration"
+	testHopDecision              = "X-Test-Hop-Decision"
+	testHopClientMaxOutputTokens = "X-Test-Hop-Client-Max-Output-Tokens"
+	testHopStageMaxOutputTokens  = "X-Test-Hop-Stage-Max-Output-Tokens"
 )
 
 // hopsTo returns a hop client whose calls reach the fake model server at url,
@@ -40,6 +42,8 @@ func (h labeledHops) Call(ctx context.Context, req *graph.HopRequest) (*graph.Ho
 	}
 	httpReq.Header.Set(testHopIteration, strconv.Itoa(req.Hop.Iteration))
 	httpReq.Header.Set(testHopDecision, req.Hop.Decision)
+	setTestHopIntHeader(httpReq.Header, testHopClientMaxOutputTokens, req.Hop.ClientMaxOutputTokens)
+	setTestHopIntHeader(httpReq.Header, testHopStageMaxOutputTokens, req.Hop.StageMaxOutputTokens)
 	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
 		return nil, err
@@ -47,6 +51,13 @@ func (h labeledHops) Call(ctx context.Context, req *graph.HopRequest) (*graph.Ho
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	return &graph.HopResponse{Status: resp.StatusCode, Header: routing.Header{{Name: "content-type", Value: resp.Header.Get("Content-Type")}}, Body: body}, err
+}
+
+func setTestHopIntHeader(header http.Header, name string, value *int64) {
+	if value == nil || *value < 1 {
+		return
+	}
+	header.Set(name, strconv.FormatInt(*value, 10))
 }
 
 // fusionHopsTo is a Fusion Looper whose calls reach the fake server at url
