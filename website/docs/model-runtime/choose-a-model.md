@@ -124,7 +124,20 @@ question is read by its instructions alone, so one that describes `false` or
 `true` is invalid. A `set` question takes one of its trained router texts; it answers no `score`
 questions. Its answers match the package's own runtime bit for bit on a CPU
 ([parity record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela3-parity.md)).
-The larger Vela 3.0 sizes are not served yet.
+The larger Vela 3.0 sizes, `vllm-sr/vela3-lite`, `-mini`, `-flash` and
+`-turbo`, run a pinned Decision 3.0 package (d3-lite, d3-mini, d3-flash and
+d3-turbo at the revisions their adapters were trained on) with gated LoRA
+adapters over it. The router's built-in question IDs run on trained
+adapters; every other `choice`, `noul` and `score` question answers as that
+d3 package does. They also answer `span` questions, routed by label set and
+wording as vela3-fast's are. vela3-turbo answers each request on d3-turbo's
+state-once path first, then the router questions again with their adapter
+on. Requests with images run with every adapter off and refuse span
+questions. A span question reads a target of up to 32,768 tokens in
+windows; a longer target fails that question with `scan_budget_exceeded`.
+vela3-mini and vela3-flash run open span labels without a
+description by name, where their packages write a definition with the base
+first ([parity record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela3-d3-parity.md)).
 
 `vllm-srun models` prints every built-in model with its pinned revision.
 

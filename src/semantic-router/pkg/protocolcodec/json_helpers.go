@@ -202,22 +202,23 @@ func hasJSONObjectEnvelope(body []byte) bool {
 
 var jsonUnmarshalerType = reflect.TypeOf((*json.Unmarshaler)(nil)).Elem()
 
-// structFieldsByType caches exactJSONStructFields: every request body is
-// validated against the same few wire types.
-var structFieldsByType sync.Map // reflect.Type -> map[string]reflect.Type
-
-// exactJSONStructFields maps a struct type's JSON member names to their field
-// types. The map is shared; callers must not modify it.
-func exactJSONStructFields(targetType reflect.Type) map[string]reflect.Type {
-	if cached, ok := structFieldsByType.Load(targetType); ok {
-		return cached.(map[string]reflect.Type)
-	}
-	cached, _ := structFieldsByType.LoadOrStore(targetType, buildExactJSONStructFields(targetType))
-	return cached.(map[string]reflect.Type)
+type jsonStructField struct {
+	typeOf          reflect.Type
+	vendorExtension bool
 }
 
-func buildExactJSONStructFields(targetType reflect.Type) map[string]reflect.Type {
-	fields := make(map[string]reflect.Type)
+var structFieldsByType sync.Map
+
+func exactJSONStructFields(targetType reflect.Type) map[string]jsonStructField {
+	if cached, ok := structFieldsByType.Load(targetType); ok {
+		return cached.(map[string]jsonStructField)
+	}
+	cached, _ := structFieldsByType.LoadOrStore(targetType, buildExactJSONStructFields(targetType))
+	return cached.(map[string]jsonStructField)
+}
+
+func buildExactJSONStructFields(targetType reflect.Type) map[string]jsonStructField {
+	fields := make(map[string]jsonStructField)
 	for index := 0; index < targetType.NumField(); index++ {
 		field := targetType.Field(index)
 		if field.PkgPath != "" {
@@ -240,7 +241,7 @@ func buildExactJSONStructFields(targetType reflect.Type) map[string]reflect.Type
 		if name == "" {
 			name = field.Name
 		}
-		fields[name] = field.Type
+		fields[name] = jsonStructField{typeOf: field.Type, vendorExtension: field.Tag.Get("response_extension") == "true"}
 	}
 	return fields
 }
@@ -476,7 +477,7 @@ func (walker *jsonWalker) value(depth int, shape reflect.Type) error {
 }
 
 func (walker *jsonWalker) object(depth int, shape reflect.Type) error {
-	var fields map[string]reflect.Type
+	var fields map[string]jsonStructField
 	if shape != nil {
 		fields = exactJSONStructFields(shape)
 	}
@@ -502,7 +503,7 @@ func (walker *jsonWalker) object(depth int, shape reflect.Type) error {
 		if fields != nil {
 			memberType, known := fields[key]
 			if known {
-				memberShape = exactJSONShape(memberType)
+				memberShape = exactJSONShape(memberType.typeOf)
 			} else {
 				walker.fieldError(fmt.Errorf("%w: unknown field %q", errNonCanonicalField, key))
 			}
