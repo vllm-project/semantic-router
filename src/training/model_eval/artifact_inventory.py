@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
+from copy import deepcopy
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -50,6 +51,15 @@ DECISION_MODEL_RECORD = (
 )
 HF_ORG = "vllm-sr"
 MODEL_PREFIX = "models/"
+SCHEMA_PATH = (
+    REPO_ROOT
+    / "src"
+    / "semantic-router"
+    / "pkg"
+    / "configschema"
+    / "router-config-v0.3.schema.json"
+)
+DEFAULT_DECISION_DEPLOYMENT = "primary"
 MODEL_PATH_KEYS = ("model_id", "model_path")
 
 # ``system:`` reference name -> evaluation task name.
@@ -92,17 +102,6 @@ VELA1_HAZARD_MODEL = "models/Vela-1.0-Encoder-307M-Hazard"
 
 # The Vela 1.0 specialists, mirroring Vela1SystemModels in the Router's
 # canonical defaults: the system table of the ``Vela-1.0`` decision model.
-VELA1_SYSTEM_MODELS = {
-    "safety": "models/Vela-1.0-Encoder-307M-Safety",
-    "hazard": VELA1_HAZARD_MODEL,
-    "prompt_guard": "models/Vela-1.0-Encoder-307M-Guard",
-    "domain_classifier": "models/Vela-1.0-Encoder-307M-Domain",
-    "pii_classifier": "models/Vela-1.0-Encoder-307M-PII",
-    "fact_check_classifier": "models/Vela-1.0-Encoder-307M-FactCheck",
-    "hallucination_detector": "models/Vela-1.0-Encoder-307M-Halu",
-    "feedback_detector": "models/Vela-1.0-Encoder-307M-Feedback",
-}
-
 # Module thresholds of a model that is not a Vela 2.0 size, mirroring
 # vela1ModuleThresholds in the Router's canonical operating points. Vela 2.0
 # thresholds are not copied here; they are read from the published record.
@@ -130,9 +129,10 @@ class DecisionModel:
     """What a decision model binds, mirroring DecisionModelSpec in Go."""
 
     name: str
-    # The one model that answers every built-in signal; None for Vela 1.0,
-    # whose specialists answer them instead.
-    model: str | None
+    # The one model that answers every built-in signal: the deployment's
+    # served artifact, translated to its registered local path when the
+    # built-in registry knows it.
+    model: str
     # The modality classifier's model when it names none.
     modality: str
     # The system table this decision model fills unset lines from.
@@ -153,14 +153,65 @@ DECISION_MODELS = (
     _vela2_decision_model("Vela-2.0-0.8B", "models/Vela-2.0-0.8B"),
     _vela2_decision_model("Vela-2.0-4B", "models/Vela-2.0-4B"),
     _vela2_decision_model("Vela-2.0-9B", "models/Vela-2.0-9B"),
-    DecisionModel(
-        name="Vela-1.0",
-        model=None,
-        modality="models/Vela-1.0-Encoder-307M-Modality",
-        system=dict(VELA1_SYSTEM_MODELS),
-    ),
 )
-DEFAULT_DECISION_MODEL = DECISION_MODELS[0]
+
+# The built-in registry's repo-id to local-path translation, mirroring
+# DefaultModelRegistry in the Router's config package: decisionModelSpec
+# rewrites a served artifact to its registered local path and leaves an
+# unregistered artifact as declared.
+_REGISTRY_LOCAL_PATHS = {
+    "KRLabsOrg/lettucedect-base-modernbert-en-v1": "models/mom-halugate-detector",
+    "KRLabsOrg/lettucedect-v2-mmbert-base": "models/lettucedect-v2-mmbert-base",
+    "Qwen/Qwen3-Embedding-0.6B": "models/mom-embedding-pro",
+    "google/embeddinggemma-300m": "models/mom-embedding-flash",
+    "sentence-transformers/all-MiniLM-L12-v2": "models/mom-embedding-light",
+    "vllm-sr/Vela-1.0-Encoder-307M": "models/Vela-1.0-Encoder-307M",
+    "vllm-sr/Vela-1.0-Encoder-307M-Domain": "models/Vela-1.0-Encoder-307M-Domain",
+    "vllm-sr/Vela-1.0-Encoder-307M-Embedding": "models/Vela-1.0-Encoder-307M-Embedding",
+    "vllm-sr/Vela-1.0-Encoder-307M-FactCheck": "models/Vela-1.0-Encoder-307M-FactCheck",
+    "vllm-sr/Vela-1.0-Encoder-307M-Feedback": "models/Vela-1.0-Encoder-307M-Feedback",
+    "vllm-sr/Vela-1.0-Encoder-307M-Guard": "models/Vela-1.0-Encoder-307M-Guard",
+    "vllm-sr/Vela-1.0-Encoder-307M-Halu": "models/Vela-1.0-Encoder-307M-Halu",
+    "vllm-sr/Vela-1.0-Encoder-307M-Hazard": "models/Vela-1.0-Encoder-307M-Hazard",
+    "vllm-sr/Vela-1.0-Encoder-307M-Modality": "models/Vela-1.0-Encoder-307M-Modality",
+    "vllm-sr/Vela-1.0-Encoder-307M-PII": "models/Vela-1.0-Encoder-307M-PII",
+    "vllm-sr/Vela-1.0-Encoder-307M-Reranker": "models/Vela-1.0-Encoder-307M-Reranker",
+    "vllm-sr/Vela-1.0-Encoder-307M-Safety": "models/Vela-1.0-Encoder-307M-Safety",
+    "vllm-sr/Vela-1.0-Encoder-307M-Shield": "models/Vela-1.0-Encoder-307M-Shield",
+    "vllm-sr/Vela-1.0-Omni-Mini": "models/vela-1.0-omni-mini",
+    "vllm-sr/Vela-1.0-Omni-Nano": "models/vela-1.0-omni-nano",
+    "vllm-sr/feedback-detector": "models/mom-feedback-detector",
+    "vllm-sr/halugate-sentinel": "models/mom-halugate-sentinel",
+    "vllm-sr/jailbreak_classifier_modernbert-base_model": "models/mom-jailbreak-classifier",
+    "vllm-sr/lora_intent_classifier_bert-base-uncased_model": "models/mom-domain-classifier",
+    "vllm-sr/lora_pii_detector_bert-base-uncased_model": "models/mom-pii-classifier",
+    "vllm-sr/mmbert-embed-32k-2d-matryoshka": "models/mmbert-embed-32k-2d-matryoshka",
+    "vllm-sr/mmbert-pii-detector-merged": "models/mom-mmbert-pii-detector",
+    "vllm-sr/mmbert32k-factcheck-classifier-lora": "models/mmbert32k-factcheck-classifier-lora",
+    "vllm-sr/mmbert32k-factcheck-classifier-merged": "models/mmbert32k-factcheck-classifier-merged",
+    "vllm-sr/mmbert32k-feedback-detector-lora": "models/mmbert32k-feedback-detector-lora",
+    "vllm-sr/mmbert32k-feedback-detector-merged": "models/mmbert32k-feedback-detector-merged",
+    "vllm-sr/mmbert32k-intent-classifier-lora": "models/mmbert32k-intent-classifier-lora",
+    "vllm-sr/mmbert32k-intent-classifier-merged": "models/mmbert32k-intent-classifier-merged",
+    "vllm-sr/mmbert32k-jailbreak-detector-lora": "models/mmbert32k-jailbreak-detector-lora",
+    "vllm-sr/mmbert32k-jailbreak-detector-merged": "models/mmbert32k-jailbreak-detector-merged",
+    "vllm-sr/mmbert32k-modality-router-merged": "models/mmbert32k-modality-router-merged",
+    "vllm-sr/mmbert32k-pii-detector-lora": "models/mmbert32k-pii-detector-lora",
+    "vllm-sr/mmbert32k-pii-detector-merged": "models/mmbert32k-pii-detector-merged",
+    "vllm-sr/multi-modal-embed-small": "models/mom-embedding-multimodal",
+}
+
+# The inverse: the Hub repo id each registered local path is registered
+# under. decisionModelSpec rewrites a served artifact to that path, so the
+# repo id has to be recoverable from the path alone.
+_REGISTRY_REPO_IDS = {path: repo for repo, path in _REGISTRY_LOCAL_PATHS.items()}
+
+# The built-in registry's repo-id form of each decision model, the shape
+# ServedModel returns for a managed deployment.
+DECISION_MODELS_BY_REPO = {
+    f"{HF_ORG}/{spec.model.removeprefix(MODEL_PREFIX)}": spec
+    for spec in DECISION_MODELS
+}
 
 
 @dataclass(frozen=True)
@@ -189,7 +240,13 @@ class ServedArtifact:
 
     @property
     def hf_repo(self) -> str:
-        return f"{HF_ORG}/{self.artifact_name}"
+        """The Hub repository: a registered local path's repo id, or the
+        repo-id an unregistered artifact's deployment declared."""
+        if self.model_path.startswith(MODEL_PREFIX):
+            return _REGISTRY_REPO_IDS.get(
+                self.model_path, f"{HF_ORG}/{self.artifact_name}"
+            )
+        return self.model_path
 
     @property
     def thresholds(self) -> tuple[float, ...]:
@@ -238,19 +295,77 @@ def _system_block(config: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
-def _decision_model(system: dict[str, Any]) -> DecisionModel:
-    """Resolve ``system.decision_model``; an unset name is the default."""
-    raw = system.get("decision_model")
-    name = raw.strip() if isinstance(raw, str) and raw.strip() else ""
-    if not name:
-        return DEFAULT_DECISION_MODEL
-    for spec in DECISION_MODELS:
-        if spec.name.lower() == name.lower():
-            return spec
-    choices = ", ".join(spec.name for spec in DECISION_MODELS)
-    raise ValueError(
-        f"decision_model {raw!r} is not a decision model; choose {choices}"
+@lru_cache(maxsize=1)
+def _builtin_deployments() -> dict[str, dict[str, Any]]:
+    """The schema's built-in deployments: the Router's own defaults."""
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    return deepcopy(
+        schema["$defs"]["CanonicalModelCatalog"]["properties"]["deployments"]["default"]
     )
+
+
+def _effective_deployments(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """The deployments a decision binding resolves against: the schema's
+    built-ins merged by key with the config's declarations, the same
+    whole-entry override cli.model_runtime_defaults and the Router's canonical
+    load perform."""
+    catalog = ((config or {}).get("global") or {}).get("model_catalog") or {}
+    if "deployments" in catalog and catalog["deployments"] is None:
+        return {}
+    return {
+        **deepcopy(_builtin_deployments()),
+        **deepcopy(catalog.get("deployments") or {}),
+    }
+
+
+def _served_model(key: str, deployment: dict[str, Any]) -> str:
+    """deployment.ServedModel: the artifact, or, for an attached runtime without
+    one, the model the runtime serves under served_name or the deployment's
+    name."""
+    artifact = deployment.get("artifact") or ""
+    if artifact or not deployment.get("endpoint"):
+        return artifact
+    return deployment.get("served_name") or key
+
+
+def _decision_model(
+    system: dict[str, Any], deployments: dict[str, dict[str, Any]]
+) -> DecisionModel:
+    """Resolve ``system.decision_model`` the way the Router's
+    ``applyDecisionModel`` does: the binding names one declared model_runtime
+    deployment, whose served artifact fills every unset system line while
+    Hazard stays on the Vela 1.0 Hazard model. A binding that is not the
+    canonical ``{deployment: <key>}`` mapping, an unknown deployment, or a
+    non-model_runtime deployment is the Router's load error, never a silent
+    fallback."""
+    binding = system.get("decision_model")
+    if binding is None:
+        key = DEFAULT_DECISION_DEPLOYMENT
+    elif isinstance(binding, dict) and set(binding) == {"deployment"}:
+        key = binding["deployment"]
+        if not isinstance(key, str) or not key or key.strip() != key:
+            raise ValueError(
+                "decision_model.deployment must be a non-empty, trimmed deployment key"
+            )
+    else:
+        raise ValueError(
+            "decision_model must be {deployment: <declared deployment key>}"
+        )
+    deployment = deployments.get(key)
+    if deployment is None:
+        raise ValueError(f"decision_model.deployment: unknown deployment {key!r}")
+    if deployment.get("provider") != "model_runtime":
+        raise ValueError(
+            f"decision_model.deployment {key!r} must use provider model_runtime"
+        )
+    model = _served_model(key, deployment)
+    model = _REGISTRY_LOCAL_PATHS.get(model, model)
+    spec = DECISION_MODELS_BY_REPO.get(model)
+    if spec is not None:
+        return spec
+    system_table = dict.fromkeys(SYSTEM_KEYS, model)
+    system_table["hazard"] = VELA1_HAZARD_MODEL
+    return DecisionModel(name=key, model=model, modality=model, system=system_table)
 
 
 def system_refs(config: dict[str, Any]) -> dict[str, str]:
@@ -261,7 +376,7 @@ def system_refs(config: dict[str, Any]) -> dict[str, str]:
     fills them at load.
     """
     system = _system_block(config)
-    refs = dict(_decision_model(system).system)
+    refs = dict(_decision_model(system, _effective_deployments(config)).system)
     for key, value in system.items():
         if key in refs and isinstance(value, str) and value.startswith(MODEL_PREFIX):
             refs[key] = value
@@ -277,7 +392,7 @@ def load_sites(config: dict[str, Any]) -> list[LoadSite]:
     ``model_path`` loads the decision model's modality model.
     """
     system = _system_block(config)
-    decision = _decision_model(system)
+    decision = _decision_model(system, _effective_deployments(config))
     refs = system_refs(config)
     sites: list[LoadSite] = []
     for location, block in _walk_mappings(config):
