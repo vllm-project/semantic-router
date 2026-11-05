@@ -215,8 +215,9 @@ type Listener struct {
 	SystemOne *ListenerSystemOne `yaml:"systemone,omitempty"`
 	// TLS, when set, makes a standalone Router serve this listener over TLS.
 	TLS *ListenerTLS `yaml:"tls,omitempty"`
-	// Identity, when set, decides whether a standalone Router keeps the client
-	// identity headers that requests on this listener carry.
+	// Identity, when set, decides whether the listener keeps the client
+	// identity headers its requests carry: a standalone Router does, and so
+	// does the Envoy listener the CLI generates for --gateway extproc.
 	Identity *ListenerIdentity `yaml:"identity,omitempty"`
 }
 
@@ -228,9 +229,9 @@ type ListenerSystemOne struct {
 	MaxDeadlineMs *int `yaml:"max_deadline_ms,omitempty"`
 }
 
-// ListenerIdentity names the identity sources a standalone listener trusts.
-// It trusts none by default: with no authenticator in front of the Router,
-// a client could claim any identity, so its identity headers are dropped.
+// ListenerIdentity names the identity sources a listener trusts. It trusts
+// none by default: with no authenticator in front of the Router, a client
+// could claim any identity, so its identity headers are dropped.
 type ListenerIdentity struct {
 	// TrustHeaders keeps the identity headers (the x-authz-* set and the
 	// names global.services.authz.identity sets) that an authenticating proxy
@@ -238,7 +239,8 @@ type ListenerIdentity struct {
 	TrustHeaders bool `yaml:"trust_headers,omitempty"`
 	// TrustedPeers, when set, keeps those headers only on connections whose
 	// peer address is in one of these CIDRs; X-Forwarded-For is never read.
-	// Empty, every peer of a listener that trusts headers is trusted.
+	// Empty, every peer of a listener that trusts headers is trusted. Only a
+	// standalone Router checks it; the CLI refuses it for --gateway extproc.
 	TrustedPeers []string `yaml:"trusted_peers,omitempty"`
 }
 

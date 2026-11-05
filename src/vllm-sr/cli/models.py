@@ -56,7 +56,7 @@ class ListenerTLS(BaseModel):
 
 
 class ListenerIdentity(BaseModel):
-    """The identity sources a standalone listener trusts."""
+    """The identity sources a listener trusts."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -64,12 +64,15 @@ class ListenerIdentity(BaseModel):
         default=False,
         description="Keep the client identity headers (x-authz-* and the "
         "global.services.authz.identity names) that an authenticating proxy "
-        "in front of this listener sets. Off, the Router drops them.",
+        "in front of this listener sets. Off, the listener drops them: the "
+        "Router in standalone mode, the generated Envoy listener with "
+        "--gateway extproc.",
     )
     trusted_peers: Optional[List[str]] = Field(
         default=None,
         description="CIDRs whose connections may carry trusted identity "
-        "headers; the TCP peer is checked, never X-Forwarded-For.",
+        "headers; the TCP peer is checked, never X-Forwarded-For. Standalone "
+        "mode checks it; --gateway extproc rejects it.",
     )
 
 
@@ -129,8 +132,7 @@ class Listener(BaseModel):
     )
     identity: Optional[ListenerIdentity] = Field(
         default=None,
-        description="The identity sources this listener trusts in standalone "
-        "mode; by default none.",
+        description="The identity sources this listener trusts; by default none.",
     )
 
 
