@@ -498,8 +498,8 @@ func encodeAnthropicMessageDeltaUsage(usage llmprotocol.Usage) *anthropicMessage
 		creation = full.CacheCreation
 	}
 	return &anthropicMessageDeltaUsageWire{
-		CacheCreationInputTokens: &full.CacheCreationInputTokens,
-		CacheReadInputTokens:     &full.CacheReadInputTokens,
+		CacheCreationInputTokens: full.CacheCreationInputTokens,
+		CacheReadInputTokens:     full.CacheReadInputTokens,
 		InputTokens:              &full.InputTokens,
 		OutputTokens:             full.OutputTokens,
 		CacheCreation:            creation,
