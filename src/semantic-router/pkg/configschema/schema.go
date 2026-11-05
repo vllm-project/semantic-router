@@ -315,6 +315,7 @@ func setCoreEnums(root *jsonschema.Schema) {
 			lossy.Items.Enum = append(lossy.Items.Enum, field)
 		}
 	}
+	setDefinitionPropertyEnum(root, "RouterHeadersConfig", "debug", routerconfig.SupportedDebugHeadersModes())
 	setDefinitionPropertyEnum(root, "AlgorithmConfig", "type", routerconfig.SupportedDecisionAlgorithmTypes())
 	setDefinitionPropertyEnum(root, "CandidateRequirements", "capabilities", []string{routerconfig.CandidateCapabilitiesDeclared})
 	setDefinitionPropertyEnum(root, "CandidateRequirements", "context", []string{routerconfig.CandidateContextKnownLimits})

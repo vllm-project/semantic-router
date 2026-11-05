@@ -2121,6 +2121,15 @@ global:
       timeout_sec: 15
     skip_processing:
       enabled: false
+    # Who may turn on the debug response headers with x-vsr-debug: true. They
+    # name the signal and guard rules a request matched, so keep them from
+    # untrusted clients: none (the default), any client, or authenticated: only
+    # the users and groups below, as the identity headers assert them.
+    headers:
+      debug: authenticated
+      debug_principals:
+        users: [oncall-bot]
+        groups: [platform-sre]
     # Protocol losses to translate with an x-vsr-protocol-warnings entry instead
     # of rejecting them. tool_result.is_error omits the Anthropic failed tool
     # call flag that OpenAI Chat and Responses backends cannot carry, and

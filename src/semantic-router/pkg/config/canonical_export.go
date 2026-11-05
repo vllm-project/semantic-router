@@ -322,6 +322,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 
 			AllowLossyTranslation: cfg.AllowLossyTranslation,
 			RoutingInput:          cfg.RoutingInput,
+			Headers:               cfg.Headers,
 		},
 		Services: CanonicalServiceGlobal{
 			API:           cfg.API,

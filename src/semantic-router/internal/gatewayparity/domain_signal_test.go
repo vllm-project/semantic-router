@@ -75,6 +75,9 @@ routing:
         - model: general-model
           use_reasoning: false
 global:
+  router:
+    headers:
+      debug: any
   model_catalog:
     external:
       - name: domain-service
