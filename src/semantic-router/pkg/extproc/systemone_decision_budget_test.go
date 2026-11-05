@@ -128,6 +128,7 @@ recipes:
 		{name: "simple", decision: "simple", deadline: 150 * time.Millisecond, wantCalls: []string{"kai"}, signalCalls: 1},
 		{name: "hard", decision: "hard", deadline: 200 * time.Millisecond, wantCalls: []string{"kai", "vega"}, signalCalls: 1},
 		{name: "signals exhaust request budget", decision: "hard", signalCalls: 3},
+		{name: "signals exhaust the selected decision budget", decision: "simple", deadline: 150 * time.Millisecond, signalCalls: 2},
 		{name: "canceled", decision: "simple", signalCalls: 1, cancel: true},
 		{name: "deadline during signal evaluation", decision: "hard", waitSignal: true},
 	} {
@@ -189,10 +190,11 @@ recipes:
 				}
 				return
 			}
-			if tc.name == "signals exhaust request budget" {
+			if strings.HasPrefix(tc.name, "signals exhaust") {
 				var exhausted *systemone.BudgetExhaustedError
-				if !errors.As(routeErr, &exhausted) || exhausted.Calls != tc.signalCalls || status != http.StatusServiceUnavailable || len(calls) != 0 {
-					t.Fatalf("signals did not stop at the request budget: status=%d calls=%v err=%v", status, calls, routeErr)
+				if !errors.As(routeErr, &exhausted) || exhausted.Reason != "max_calls" || exhausted.Calls != tc.signalCalls ||
+					status != http.StatusServiceUnavailable || len(calls) != 0 {
+					t.Fatalf("signals did not stop at the applicable call budget: status=%d calls=%v err=%v", status, calls, routeErr)
 				}
 				return
 			}
