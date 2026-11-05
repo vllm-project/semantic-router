@@ -284,7 +284,11 @@ func upstreamPart(mode config.GatewayMode) configsnapshot.PartBuilder {
 			if !candidate.Config().RoutingEnabled() {
 				return upstream.New(upstream.Topology{}, upstream.Options{})
 			}
-			set, err := buildUpstream(mode, candidate.Config(), prev)
+			var telemetry upstream.TelemetryReader
+			if part, ok := candidate.Part(configsnapshot.ComponentBackendTelemetry).(*backendTelemetryRuntime); ok && part.store != nil {
+				telemetry = part.store
+			}
+			set, err := buildUpstream(mode, candidate.Config(), prev, telemetry)
 			if err != nil && mode != config.GatewayStandalone {
 				// Envoy carries the client traffic and accepts backends the
 				// in-process client refuses, so only request-graph hops fail.
@@ -313,7 +317,7 @@ func upstreamPart(mode config.GatewayMode) configsnapshot.PartBuilder {
 // belong to whoever owns the data path: the Router in standalone mode, Envoy
 // in ext_proc mode, where the Router's hops keep passive outlier detection
 // only.
-func buildUpstream(mode config.GatewayMode, cfg *config.RouterConfig, previous *upstream.Set) (*upstream.Set, error) {
+func buildUpstream(mode config.GatewayMode, cfg *config.RouterConfig, previous *upstream.Set, telemetry upstream.TelemetryReader) (*upstream.Set, error) {
 	topology, err := upstream.Compile(cfg)
 	if err != nil {
 		return nil, err
@@ -321,7 +325,7 @@ func buildUpstream(mode config.GatewayMode, cfg *config.RouterConfig, previous *
 	if mode != config.GatewayStandalone {
 		topology = topology.WithoutActiveHealthChecks()
 	}
-	return upstream.New(topology, upstream.Options{Previous: previous, Telemetry: backendTelemetryStore})
+	return upstream.New(topology, upstream.Options{Previous: previous, Telemetry: telemetry})
 }
 
 // validateNativeListeners refuses a reload that changes what the native

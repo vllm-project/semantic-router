@@ -1,6 +1,9 @@
 package upstream
 
 import (
+	"math"
+	"slices"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/backendtelemetry"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
@@ -15,77 +18,95 @@ const (
 	loadAwareAllUnhealthy  = "fallback_unhealthy"
 )
 
-// loadAware prefers the healthy endpoint whose engine reports the fewest
-// queued requests, counting the requests this Router has in flight to it so
-// picks between two scrapes spread out instead of piling onto one replica.
-//
-// It trusts telemetry only when it covers the whole host set: if any
-// endpoint names no engine, has no fresh observation, or did not report its
-// queue depth, the pick falls back to least-request for every endpoint, so a
-// replica is never preferred because its load is unknown. An unhealthy
-// observation removes its endpoint from the pick but cannot return an
-// endpoint that health checks or outlier ejection took out of rotation.
+// loadAware prefers the healthy endpoint with the fewest queued and locally
+// active requests. Weight breaks equal-load ties; it is not a traffic quota.
+// Telemetry must cover the whole healthy host set, including tried hosts,
+// otherwise selection falls back to least-request for the whole pool.
 type loadAware struct {
-	cluster   string
-	telemetry TelemetryReader
-	rnd       Rand
-	fallback  *leastRequest
+	cluster  string
+	rnd      Rand
+	fallback *leastRequest
 }
 
-func (b *loadAware) pick(set *hostSet) *endpoint {
+func (b *loadAware) pick(set *hostSet, telemetry TelemetryReader) *endpoint {
+	return b.pickAvoiding(set, telemetry, nil)
+}
+
+func (b *loadAware) pickAvoiding(set *hostSet, telemetry TelemetryReader, tried []*endpoint) *endpoint {
 	if len(set.hosts) <= 1 {
-		return b.fallback.pick(set)
+		return b.fallback.pick(set, nil)
 	}
-	ep, outcome := b.pickByTelemetry(set)
+	ep, outcome := b.pickByTelemetryAvoiding(set, telemetry, tried)
 	metrics.RecordUpstreamLoadAwarePick(b.cluster, outcome)
-	if ep == nil {
-		return b.fallback.pick(set)
+	if ep != nil {
+		return ep
+	}
+	ep = b.fallback.pick(set, nil)
+	for i := 0; i < hostSelectionRetries && ep != nil && slices.Contains(tried, ep); i++ {
+		ep = b.fallback.pick(set, nil)
 	}
 	return ep
 }
 
-func (b *loadAware) pickByTelemetry(set *hostSet) (*endpoint, string) {
-	if b.telemetry == nil {
+func (b *loadAware) pickByTelemetry(set *hostSet, telemetry TelemetryReader) (*endpoint, string) {
+	return b.pickByTelemetryAvoiding(set, telemetry, nil)
+}
+
+func (b *loadAware) pickByTelemetryAvoiding(set *hostSet, telemetry TelemetryReader, tried []*endpoint) (*endpoint, string) {
+	if telemetry == nil {
 		return nil, loadAwareNoTelemetry
 	}
-	var best *endpoint
-	var bestScore int64
-	ties := 0
+	var untried, retried loadChoice
 	for _, host := range set.hosts {
-		score, eligible, outcome := b.score(host)
+		score, eligible, outcome := b.score(host, telemetry)
 		if outcome != "" {
 			return nil, outcome
 		}
 		if !eligible {
 			continue
 		}
-		switch {
-		case best == nil || score < bestScore ||
-			(score == bestScore && host.spec.Weight > best.spec.Weight):
-			best, bestScore, ties = host, score, 1
-		case score == bestScore && host.spec.Weight == best.spec.Weight:
-			// Reservoir sampling keeps an equal chance for every tied host.
-			ties++
-			if b.rnd.Uint64()%uint64(ties) == 0 {
-				best = host
-			}
+		if slices.Contains(tried, host) {
+			retried.consider(host, score, b.rnd)
+		} else {
+			untried.consider(host, score, b.rnd)
 		}
 	}
-	if best == nil {
-		return nil, loadAwareAllUnhealthy
+	if untried.host != nil {
+		return untried.host, loadAwareTelemetry
 	}
-	return best, loadAwareTelemetry
+	if retried.host != nil {
+		return retried.host, loadAwareTelemetry
+	}
+	return nil, loadAwareAllUnhealthy
 }
 
-// score is an endpoint's load. eligible is false for an endpoint its engine
-// reports unhealthy; a non-empty outcome means the host set cannot be
-// compared and names why.
-func (b *loadAware) score(host *endpoint) (score int64, eligible bool, outcome string) {
+type loadChoice struct {
+	host  *endpoint
+	score int64
+	ties  uint64
+}
+
+func (c *loadChoice) consider(host *endpoint, score int64, rnd Rand) {
+	switch {
+	case c.host == nil || score < c.score || (score == c.score && host.spec.Weight > c.host.spec.Weight):
+		c.host, c.score, c.ties = host, score, 1
+	case score == c.score && host.spec.Weight == c.host.spec.Weight:
+		// Reservoir sampling keeps an equal chance for every tied host.
+		c.ties++
+		if rnd.Uint64()%c.ties == 0 {
+			c.host = host
+		}
+	}
+}
+
+// score excludes an engine-reported unhealthy host. A non-empty outcome means
+// the full pool cannot be compared, even if that host was already tried.
+func (b *loadAware) score(host *endpoint, telemetry TelemetryReader) (score int64, eligible bool, outcome string) {
 	id := host.spec.Telemetry
 	if id.Engine == "" {
 		return 0, false, loadAwareNoEngine
 	}
-	observation, fresh := b.telemetry.Fresh(id)
+	observation, fresh := telemetry.Fresh(id)
 	if !fresh {
 		return 0, false, loadAwareStale
 	}
@@ -96,5 +117,9 @@ func (b *loadAware) score(host *endpoint) (score int64, eligible bool, outcome s
 	if !ok {
 		return 0, false, loadAwareMissingMetric
 	}
-	return queued + host.active.Load(), true, ""
+	active := host.active.Load()
+	if active > math.MaxInt64-queued {
+		return math.MaxInt64, true, ""
+	}
+	return queued + active, true, ""
 }

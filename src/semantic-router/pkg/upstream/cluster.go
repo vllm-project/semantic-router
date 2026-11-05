@@ -48,7 +48,7 @@ type cluster struct {
 	closed    bool
 }
 
-func newCluster(spec ClusterSpec, sh *shared, rnd Rand, clock Clock, telemetry TelemetryReader) *cluster {
+func newCluster(spec ClusterSpec, sh *shared, rnd Rand, clock Clock) *cluster {
 	endpoints := make([]*endpoint, len(spec.Endpoints))
 	for i := range spec.Endpoints {
 		endpoints[i] = &endpoint{spec: spec.Endpoints[i]}
@@ -58,7 +58,7 @@ func newCluster(spec ClusterSpec, sh *shared, rnd Rand, clock Clock, telemetry T
 		spec:      spec,
 		shared:    sh,
 		pool:      sh.pools.acquire(poolKeyFor(&spec, connect)),
-		balancer:  newBalancer(spec.Name, spec.LBPolicy, rnd, telemetry),
+		balancer:  newBalancer(spec.Name, spec.LBPolicy, rnd),
 		breaker:   newBreaker(spec.Name, spec.Breakers),
 		clock:     clock,
 		endpoints: endpoints,
@@ -88,17 +88,20 @@ func (c *cluster) start() {
 	}
 }
 
-func (c *cluster) pick() *endpoint {
-	return c.balancer.pick(c.hosts.Load())
+func (c *cluster) pick(telemetry TelemetryReader) *endpoint {
+	return c.balancer.pick(c.hosts.Load(), telemetry)
 }
 
 // pickAvoiding prefers an endpoint the call has not tried, re-picking up to
 // hostSelectionRetries times as Envoy's previous_hosts predicate does, and
 // settles for the last pick when every candidate was tried.
-func (c *cluster) pickAvoiding(tried []*endpoint) *endpoint {
-	ep := c.pick()
+func (c *cluster) pickAvoiding(tried []*endpoint, telemetry TelemetryReader) *endpoint {
+	if balancer, ok := c.balancer.(*loadAware); ok {
+		return balancer.pickAvoiding(c.hosts.Load(), telemetry, tried)
+	}
+	ep := c.pick(telemetry)
 	for i := 0; i < hostSelectionRetries && ep != nil && slices.Contains(tried, ep); i++ {
-		ep = c.pick()
+		ep = c.pick(telemetry)
 	}
 	return ep
 }

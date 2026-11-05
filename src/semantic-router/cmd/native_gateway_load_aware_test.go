@@ -101,14 +101,14 @@ routing:
 `
 }
 
-// waitForQueueDepth waits until the shared store holds a fresh observation of
-// a backend with the given queue depth.
-func waitForQueueDepth(t *testing.T, ref string, depth int64) {
+// waitForQueueDepth waits until this generation's store holds a fresh
+// observation of a backend with the given queue depth.
+func waitForQueueDepth(t *testing.T, store *backendtelemetry.Store, ref string, depth int64) {
 	t.Helper()
 	id := backendtelemetry.Identity{Model: "m", BackendRef: ref, Engine: backendtelemetry.EngineVLLM}
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		if o, ok := backendTelemetryStore.Fresh(id); ok {
+		if o, ok := store.Fresh(id); ok {
 			if got, _ := o.QueueDepth.Get(); got == depth {
 				return
 			}
@@ -118,12 +118,12 @@ func waitForQueueDepth(t *testing.T, ref string, depth int64) {
 	t.Fatalf("%s never reported a fresh queue depth of %d", ref, depth)
 }
 
-func waitUntilStale(t *testing.T, ref string) {
+func waitUntilStale(t *testing.T, store *backendtelemetry.Store, ref string) {
 	t.Helper()
 	id := backendtelemetry.Identity{Model: "m", BackendRef: ref, Engine: backendtelemetry.EngineVLLM}
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		if _, ok := backendTelemetryStore.Fresh(id); !ok {
+		if _, ok := store.Fresh(id); !ok {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -150,13 +150,8 @@ func servedBy(t *testing.T, front string, n int) map[string]int {
 	return counts
 }
 
-// TestNativeGatewayLoadAwareRoutesByEngineQueueDepth drives the whole
-// standalone serving path: the snapshot's collector scrapes two vLLM backends,
-// and the load_aware cluster sends client requests to the one with the
-// shorter queue, follows the queues when they swap, and falls back to
-// least_request when one backend's metrics disappear.
-func TestNativeGatewayLoadAwareRoutesByEngineQueueDepth(t *testing.T) {
-	a, b := newFakeVLLM(t, "gpu-a", 50), newFakeVLLM(t, "gpu-b", 0)
+func newLoadAwareGateway(t *testing.T, a, b *fakeVLLM) (*extproc.Server, *httptest.Server) {
+	t.Helper()
 	t.Setenv(configsnapshot.HistoryDirEnv, t.TempDir())
 	previous := modelservice.DefaultManager()
 	modelservice.SetDefault(nil)
@@ -171,14 +166,24 @@ func TestNativeGatewayLoadAwareRoutesByEngineQueueDepth(t *testing.T) {
 		t.Fatal(err)
 	}
 	server, err := extproc.NewServer(path, 0, false, "", routerruntime.NewRegistry(cfg),
-		extproc.WithConfigParts(upstreamPart(config.GatewayStandalone), backendTelemetryPart(backendTelemetryStore)))
+		extproc.WithConfigParts(backendTelemetryPart(), upstreamPart(config.GatewayStandalone)))
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	served := make(chan error, 1)
 	go func() { served <- server.StartContextWithoutExtProc(ctx, nil) }()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case serveErr := <-served:
+			if serveErr != nil {
+				t.Error(serveErr)
+			}
+		case <-time.After(10 * time.Second):
+			t.Error("gateway did not stop")
+		}
+	})
 	if err = server.WaitForServing(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -189,28 +194,38 @@ func TestNativeGatewayLoadAwareRoutesByEngineQueueDepth(t *testing.T) {
 		t.Fatal(err)
 	}
 	front := httptest.NewServer(handler)
-	defer front.Close()
+	t.Cleanup(front.Close)
+	return server, front
+}
 
-	waitForQueueDepth(t, "gpu-a", 50)
-	waitForQueueDepth(t, "gpu-b", 0)
+// Drives the standalone serving path, including live engine queue changes
+// and conservative fallback when a backend stops exporting metrics.
+func TestNativeGatewayLoadAwareRoutesByEngineQueueDepth(t *testing.T) {
+	a, b := newFakeVLLM(t, "gpu-a", 50), newFakeVLLM(t, "gpu-b", 0)
+	server, front := newLoadAwareGateway(t, a, b)
+	lease, err := server.Pin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := lease.Snapshot.Part(configsnapshot.ComponentBackendTelemetry).(*backendTelemetryRuntime).store
+	lease.Release()
+	waitForQueueDepth(t, store, "gpu-a", 50)
+	waitForQueueDepth(t, store, "gpu-b", 0)
 	if counts := servedBy(t, front.URL, 20); counts["gpu-b"] != 20 {
 		t.Fatalf("served = %v, want every request on gpu-b, whose engine queue is empty", counts)
 	}
 
 	a.waiting.Store(0)
 	b.waiting.Store(50)
-	waitForQueueDepth(t, "gpu-a", 0)
-	waitForQueueDepth(t, "gpu-b", 50)
+	waitForQueueDepth(t, store, "gpu-a", 0)
+	waitForQueueDepth(t, store, "gpu-b", 50)
 	if counts := servedBy(t, front.URL, 20); counts["gpu-a"] != 20 {
 		t.Fatalf("served = %v, want every request on gpu-a once the queues swap", counts)
 	}
 
 	b.metricsDown.Store(true)
-	waitUntilStale(t, "gpu-b")
+	waitUntilStale(t, store, "gpu-b")
 	if counts := servedBy(t, front.URL, 60); counts["gpu-a"] == 0 || counts["gpu-b"] == 0 {
 		t.Fatalf("served = %v, want least_request to use both backends once gpu-b's telemetry is stale", counts)
 	}
-
-	cancel()
-	<-served
 }
