@@ -247,7 +247,6 @@ config:
         enabled: true
         backend_type: memory
         embedding_model: mmbert
-        file_storage_dir: /tmp/vsr-data
     integrations: {}
     model_catalog:
       kbs: []
