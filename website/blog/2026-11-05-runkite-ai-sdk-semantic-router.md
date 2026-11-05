@@ -15,7 +15,7 @@ An incident investigation can begin with a small request: read the incident and 
 
 The conversation has moved from reading to reasoning to acting. Those requests can use different model routes, but changing the model should not change the agent's permission to act. And if the process running the agent restarts along the way, the next question still belongs to the same conversation.
 
-That is the path I wanted to test by connecting **[Runkite](https://getrunkite.com/)** with **vLLM Semantic Router**. Runkite's existing managed Vercel AI SDK runner would execute the agent. Semantic Router would select the model backend for its inference requests. The SDK would keep its native tool loop. The model pool comes from your router configuration; the Qwen models used below are one reproducible local example.
+That is the path I wanted to test by connecting **[Runkite](https://getrunkite.com/)** with **vLLM Semantic Router**. Runkite's existing managed Vercel AI SDK runner would execute the agent. Semantic Router would select the model backend for its inference requests. The SDK would keep its native tool loop, while model selection would live in the router configuration.
 
 I followed one conversation through three turns: read an incident, restart the runner and ask for a diagnosis, then request a service restart the agent was forbidden to perform. The incident and tool service are fictional. The model calls, streamed tool requests and durable results are real.
 
@@ -46,6 +46,8 @@ There is also a connection between one turn and the next: conversation state. If
 
 [Runkite](https://github.com/getrunkite/runkite) is an Apache-2.0 self-hosted agent control plane. It gives dispatch, conversation records, connector authorization and audit a home outside the agent's logic. It represents the conversation as a **Thread** and each execution as a **Run**.
 
+**vLLM Semantic Router** provides the inference decision layer. The agent uses one logical model name at one inference endpoint; the router evaluates request signals and routing rules to select a backend from your configured model pool. This keeps model-selection policy outside the agent loop.
+
 For this experiment, the application starts a run through Runkite's HTTP API. The plane admits and dispatches it to the TypeScript runner, which executes the native AI SDK `ToolLoopAgent` and reports events and results.
 
 Once Runkite has dispatched the run, the SDK's model provider calls Semantic Router's OpenAI-compatible endpoint, where the router chooses a backend. A tool request takes a return path through Runkite's run-bound connector proxy, where the requested action is checked before it can reach the tool service.
@@ -53,7 +55,7 @@ Once Runkite has dispatched the run, the SDK's model provider calls Semantic Rou
 <ArticleFigure
   src="/img/blog/runkite-ai-sdk-semantic-router/architecture.svg"
   width={960} height={1200}
-  alt="Managed execution from application to Runkite, then the native AI SDK runner, Semantic Router and user-configured model backends. A separate tool-call branch returns through Runkite's connector gate."
+  alt="Managed execution from application to Runkite, then the native AI SDK runner, vLLM Semantic Router and configured LLM backends. A separate tool-call branch returns through Runkite's connector gate."
   diagram
 >
   Read top to bottom: the app starts a run in Runkite, Runkite dispatches the agent, and the agent calls Semantic Router to reach a model. Tool requests return through Runkite's connector gate. The Go plane owns admission and dispatch; inference HTTP originates in the runner. Open the image for full size.
@@ -61,9 +63,7 @@ Once Runkite has dispatched the run, the SDK's model provider calls Semantic Rou
 
 This is **managed execution**: the agent loop runs in a Runkite runner, and the application creates Runkite runs. An existing Next or Nuxt app that keeps its SDK loop inside the app remains a different integration. Runkite's decision-only governance API can govern submitted operations from that app, but it does not turn those calls into managed Threads/Runs.
 
-You choose the model backends, local or hosted, within the protocols and capabilities supported by your Semantic Router version and SDK provider. This example uses **Chat Completions with streaming tool calls**. Other compatible models can fill the same routing roles; configure their endpoints, credentials, provider dialect and model options as needed.
-
-For the local experiment, I used two **Qwen** models served by **Ollama** to make the results easy to reproduce. Semantic Router is the routing layer, separate from whichever model-serving system you configure.
+Behind the router, you configure the LLM backends: **vLLM**, **Ollama**, or another compatible model-serving endpoint. The serving engine and model family are deployment choices. This integration uses **Chat Completions with streaming tool calls**; configure backend endpoints, credentials, provider dialect and model options to match the capabilities supported by your Semantic Router version and SDK provider.
 
 ## Connect the existing interfaces
 
@@ -86,12 +86,9 @@ The explicit `.chat(...)` matters. The provider's default model factory uses the
 
 The [full factory](https://gist.github.com/sharanharsoor/84f4dbd4913106d06f8b8156fa8f47a9) also supplies opaque tenant/thread correlation headers and captures selected routing headers and per-call token observations. These identifiers provide correlation, not authentication.
 
-The next step was to give that one endpoint a choice of backends. The model name `vllm-sr/runkite` stays constant in the SDK. For the recorded local test, the router configuration maps two backend aliases:
+The next step was to give that one endpoint a choice of backends. The model name `vllm-sr/runkite` stays constant in the SDK, while the router configuration defines the `local-fast` and `local-specialist` model aliases and their backend bindings. Those names describe roles in the example configuration. In your deployment, bind routing roles to your own compatible model pool.
 
-- `local-fast` maps to `qwen3:0.6b`.
-- `local-specialist` maps to `qwen3:1.7b`.
-
-These aliases are configuration roles, not fixed model identities or measured claims about speed or answer quality. In your deployment, map routing roles to your own compatible model pool. The two Qwen mappings above describe this test. To make its expected routes reproducible, the example uses an explicit keyword signal. Requests containing `diagnose`, `specialist`, `code` or `algorithm` select the specialist route; other requests use the default model.
+To make the example's route choices reproducible, I used an explicit keyword signal. Requests containing `diagnose`, `specialist`, `code` or `algorithm` select the specialist route; other requests use the default model. The alias names are not measured claims about speed or answer quality.
 
 The relevant decision is small:
 
@@ -147,7 +144,12 @@ This is why the tool's execution path matters as much as its definition. A nativ
 
 The conversation begins with a catalog service that is degraded after a deployment. In the fixture, HTTP concurrency increased from 10 to 40, all 20 database pool connections are active, and requests are timing out while acquiring a connection. These are fixed fictional observations, so the example is safe to reproduce.
 
-The three turns below record that local test and follow the same Thread. Each turn creates a new managed Run, giving us a durable record to compare with the model stream and the tool service's counters.
+For the recorded test below, I used two **Qwen** models served by **Ollama**. The tested backend bindings were:
+
+- `local-fast` mapped to `qwen3:0.6b`.
+- `local-specialist` mapped to `qwen3:1.7b`.
+
+The three turns follow the same Thread. Each turn creates a new managed Run, giving us a durable record to compare with the model stream and the tool service's counters.
 
 <ArticleFigure
   src="/img/blog/runkite-ai-sdk-semantic-router/conversation.svg"

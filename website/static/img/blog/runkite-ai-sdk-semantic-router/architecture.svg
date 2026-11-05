@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="1200" viewBox="0 0 960 1200" role="img" aria-labelledby="title desc">
   <title id="title">From a Runkite managed run to a Semantic Router model call</title>
-  <desc id="desc">Follow five numbered stages from top to bottom. An application creates a Thread and Run through the Runkite HTTP API. The Runkite Go control plane dispatches an assignment over gRPC to a separate TypeScript runner. Its native AI SDK agent calls the Envoy inference listener and vLLM Semantic Router over Chat Completions HTTP. Semantic Router selects a configured compatible model backend. The local test uses Qwen3 models served by Ollama; these are example backends, not a model-family requirement. The runner reports events and results back to the plane. A separate tool request branch returns from the agent over run-bound HTTP to Runkite's connector gate; only allowed calls reach the small fictional incident MCP fixture. Model requests leave the SDK directly for the inference listener, not through the Go plane.</desc>
+  <desc id="desc">Follow five numbered stages from top to bottom. An application creates a Thread and Run through the Runkite HTTP API. The Runkite Go control plane dispatches an assignment over gRPC to a separate TypeScript runner. Its native AI SDK agent calls the Envoy inference listener and vLLM Semantic Router over Chat Completions HTTP. Semantic Router applies routing policy and selects a configured LLM backend. The runner reports events and results back to the plane. A separate tool request branch returns from the agent over run-bound HTTP to Runkite's connector gate; only allowed calls reach the configured MCP tool service. Model requests leave the SDK directly for the inference listener, not through the Go plane.</desc>
   <defs>
     <marker id="amber-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1 1L7 4L1 7" fill="none" stroke="#b66f0e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
     <marker id="blue-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1 1L7 4L1 7" fill="none" stroke="#087ba9" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
@@ -49,9 +49,9 @@
     <path d="M638 350H708" fill="none" stroke="#b66f0e" stroke-width="2.1" marker-end="url(#amber-arrow)"/>
     <text x="715" y="286" font-size="17" fill="#845009">Allowed calls only</text>
     <rect x="714" y="304" width="214" height="108" rx="10" fill="#ffffff" stroke="#d8c7a7"/>
-    <text x="732" y="337" font-size="20" font-weight="650">Incident MCP</text>
-    <text x="732" y="364" font-size="20" font-weight="650">service</text>
-    <text x="732" y="391" font-size="16" fill="#526479">Fictional read / restart</text>
+    <text x="732" y="337" font-size="20" font-weight="650">Tool service</text>
+    <text x="732" y="364" font-size="20" font-weight="650">MCP endpoint</text>
+    <text x="732" y="391" font-size="16" fill="#526479">Configured connector</text>
 
     <path d="M350 644V726" fill="none" stroke="#087ba9" stroke-width="2.3" marker-end="url(#blue-arrow)"/>
     <text x="371" y="692" font-size="18" fill="#086d94">HTTP · Chat Completions</text>
@@ -61,22 +61,21 @@
     <circle cx="73" cy="773" r="17" fill="#c9e8f5"/>
     <text x="73" y="780" text-anchor="middle" font-size="20" font-weight="700" fill="#155f7f">4</text>
     <text x="105" y="782" font-size="28" font-weight="720" letter-spacing="-.4">vLLM Semantic Router</text>
-    <text x="62" y="813" font-size="19" fill="#28617d">Envoy inference frontend · configured model selection</text>
+    <text x="62" y="813" font-size="19" fill="#28617d">Envoy inference frontend · one inference endpoint</text>
     <rect x="62" y="832" width="274" height="80" rx="8" fill="#ffffff" stroke="#bedce9"/>
     <rect x="364" y="832" width="274" height="80" rx="8" fill="#ffffff" stroke="#bedce9"/>
-    <text x="199" y="865" text-anchor="middle" font-size="21" font-weight="650" fill="#155f7f">local-fast</text>
-    <text x="199" y="892" text-anchor="middle" font-size="18" fill="#526479">Default route</text>
-    <text x="501" y="865" text-anchor="middle" font-size="21" font-weight="650" fill="#155f7f">local-specialist</text>
-    <text x="501" y="892" text-anchor="middle" font-size="18" fill="#526479">Keyword-selected route</text>
+    <text x="199" y="865" text-anchor="middle" font-size="21" font-weight="650" fill="#155f7f">Routing policy</text>
+    <text x="199" y="892" text-anchor="middle" font-size="18" fill="#526479">Request signals + rules</text>
+    <text x="501" y="865" text-anchor="middle" font-size="21" font-weight="650" fill="#155f7f">Model selection</text>
+    <text x="501" y="892" text-anchor="middle" font-size="18" fill="#526479">Configured backend pool</text>
 
     <path d="M350 942V1018" fill="none" stroke="#087ba9" stroke-width="2.3" marker-end="url(#blue-arrow)"/>
     <text x="371" y="986" font-size="18" fill="#086d94">Selected backend</text>
 
     <rect x="40" y="1024" width="620" height="100" rx="12" fill="#ffffff" stroke="#b9d7e4" stroke-width="1.5"/>
-    <circle cx="73" cy="1062" r="17" fill="#eaf6fc"/>
-    <text x="73" y="1069" text-anchor="middle" font-size="20" font-weight="700" fill="#155f7f">5</text>
-    <text x="105" y="1070" font-size="25" font-weight="700">Configured model backends</text>
-    <text x="62" y="1101" font-size="20" fill="#526479">Local test: Qwen models served by Ollama</text>
+    <circle cx="73" cy="1074" r="17" fill="#eaf6fc"/>
+    <text x="73" y="1081" text-anchor="middle" font-size="20" font-weight="700" fill="#155f7f">5</text>
+    <text x="105" y="1082" font-size="25" font-weight="700">Configured LLM backends</text>
 
     <path d="M32 1151H928" stroke="#dce3ec"/>
     <text x="480" y="1179" text-anchor="middle" font-size="18" fill="#526479">The SDK calls the inference listener directly. Tool calls return to Runkite.</text>
