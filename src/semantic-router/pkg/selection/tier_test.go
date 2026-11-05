@@ -66,8 +66,6 @@ func TestExperimentalAlgorithms_Tier(t *testing.T) {
 		selector Selector
 	}{
 		{"automix", NewAutoMixSelector(DefaultAutoMixConfig())},
-		{"rl_driven", NewRLDrivenSelector(DefaultRLDrivenConfig())},
-		{"gmtrouter", NewGMTRouterSelector(DefaultGMTRouterConfig())},
 	}
 
 	for _, tt := range tests {
@@ -147,8 +145,6 @@ func TestRegistry_AllSelectors_HaveTier(t *testing.T) {
 		MethodHybrid:       TierSupported,
 		MethodRandom:       TierSupported,
 		MethodAutoMix:      TierExperimental,
-		MethodRLDriven:     TierExperimental,
-		MethodGMTRouter:    TierExperimental,
 	}
 
 	for method, expectedTier := range expectedTiers {

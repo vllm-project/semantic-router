@@ -23,7 +23,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// defaultAutoSaveInterval is the fallback cadence for Elo/RL rating persistence
+// defaultAutoSaveInterval is the fallback cadence for Elo rating persistence
 // used whenever a configured interval is missing or invalid, so a misconfigured
 // value can neither panic time.NewTicker nor silently disable periodic saves.
 const defaultAutoSaveInterval = 30 * time.Second

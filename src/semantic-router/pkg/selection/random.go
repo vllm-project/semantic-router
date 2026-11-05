@@ -9,7 +9,6 @@ import (
 
 // RandomSelector picks uniformly from the candidates it is given. Eligibility,
 // fallback and recovery belong to the shared pipeline, never here (#3273).
-// Unrelated to RLDrivenSelector.selectRandomModel, which is RL exploration.
 type RandomSelector struct {
 	// Overridden only by tests in this package; production has no seed knob.
 	intn func(int) int

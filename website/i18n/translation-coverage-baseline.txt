@@ -140,7 +140,6 @@ zh-Hans	tutorials/algorithm/looper/workflows.md
 zh-Hans	tutorials/algorithm/overview.md
 zh-Hans	tutorials/algorithm/selection/automix.md
 zh-Hans	tutorials/algorithm/selection/decision.md
-zh-Hans	tutorials/algorithm/selection/gmtrouter.md
 zh-Hans	tutorials/algorithm/selection/hybrid.md
 zh-Hans	tutorials/algorithm/selection/kmeans.md
 zh-Hans	tutorials/algorithm/selection/knn.md

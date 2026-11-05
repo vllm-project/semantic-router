@@ -33,7 +33,7 @@ type ModelSelectionConfig struct {
 	// Method specifies the selection algorithm to use
 	Method string `yaml:"method"`
 
-	// Elo configuration (used when method is "elo")
+	// Elo configuration (the experience component of the hybrid method)
 	Elo *EloConfig `yaml:"elo,omitempty"`
 
 	// RouterDC configuration (used when method is "router_dc")
@@ -47,14 +47,6 @@ type ModelSelectionConfig struct {
 
 	// ML configuration (used for knn, kmeans, svm methods)
 	ML *MLSelectorConfig `yaml:"ml,omitempty"`
-
-	// RLDriven configuration (used when method is "rl_driven")
-	// Implements Router-R1 reward structure for RL training
-	RLDriven *RLDrivenConfig `yaml:"rl_driven,omitempty"`
-
-	// GMTRouter configuration (used when method is "gmtrouter")
-	// Implements heterogeneous graph learning for personalized routing
-	GMTRouter *GMTRouterConfig `yaml:"gmtrouter,omitempty"`
 
 	// MultiFactor configuration (used when method is "multi_factor")
 	// Implements weighted quality/latency/cost/load composition. Issue #37.
@@ -144,15 +136,6 @@ func (f *Factory) defaultEmbeddingFunc() func(context.Context, string) ([]float3
 	return f.embeddingFuncFor(f.defaultEmbeddingConfig)
 }
 
-func backgroundEmbeddingFunc(embed func(context.Context, string) ([]float32, error)) func(string) ([]float32, error) {
-	if embed == nil {
-		return nil
-	}
-	return func(text string) ([]float32, error) {
-		return embed(context.Background(), text)
-	}
-}
-
 // WithLookupTable sets the lookup table used by selectors that support data-driven
 // constant resolution (e.g. HybridSelector's quality-gap threshold).
 func (f *Factory) WithLookupTable(lt lookuptable.LookupTable) *Factory {
@@ -167,13 +150,6 @@ func (f *Factory) Create() Selector {
 	var selector Selector
 
 	switch method {
-	case MethodElo:
-		eloSelector := NewEloSelector(f.cfg.Elo)
-		if f.modelConfig != nil {
-			eloSelector.InitializeFromConfig(f.modelConfig, f.categories)
-		}
-		selector = eloSelector
-
 	case MethodRouterDC:
 		routerDCSelector := NewRouterDCSelector(f.cfg.RouterDC)
 		if embed := f.defaultEmbeddingFunc(); embed != nil {
@@ -206,23 +182,6 @@ func (f *Factory) Create() Selector {
 			hybridSelector.SetLookupTable(f.lookupTable)
 		}
 		selector = hybridSelector
-
-	case MethodGMTRouter:
-		gmtRouterSelector := NewGMTRouterSelector(f.cfg.GMTRouter)
-		if f.modelConfig != nil {
-			gmtRouterSelector.InitializeFromConfig(f.modelConfig)
-		}
-		if embed := f.defaultEmbeddingFunc(); embed != nil {
-			gmtRouterSelector.SetEmbeddingFunc(backgroundEmbeddingFunc(embed))
-		}
-		selector = gmtRouterSelector
-
-	case MethodRLDriven:
-		rlDrivenSelector := NewRLDrivenSelector(f.cfg.RLDriven)
-		if f.modelConfig != nil {
-			rlDrivenSelector.InitializeFromConfig(f.modelConfig, f.categories)
-		}
-		selector = rlDrivenSelector
 
 	case MethodLatencyAware:
 		selector = NewLatencyAwareSelector(nil)
@@ -366,31 +325,6 @@ func (f *Factory) CreateAll() *Registry {
 		mlpAdapter.setContextEmbeddingFunc(mlSelectorEmbedding)
 		registry.Register(MethodMLP, mlpAdapter)
 	}
-
-	// Create RL-Driven selector
-	rlDrivenCfg := f.cfg.RLDriven
-	if rlDrivenCfg == nil {
-		rlDrivenCfg = DefaultRLDrivenConfig()
-	}
-	rlDrivenSelector := NewRLDrivenSelector(rlDrivenCfg)
-	if f.modelConfig != nil {
-		rlDrivenSelector.InitializeFromConfig(f.modelConfig, f.categories)
-	}
-	registry.Register(MethodRLDriven, rlDrivenSelector)
-
-	// Create GMTRouter selector
-	gmtRouterCfg := f.cfg.GMTRouter
-	if gmtRouterCfg == nil {
-		gmtRouterCfg = DefaultGMTRouterConfig()
-	}
-	gmtRouterSelector := NewGMTRouterSelector(gmtRouterCfg)
-	if f.modelConfig != nil {
-		gmtRouterSelector.InitializeFromConfig(f.modelConfig)
-	}
-	if embed := f.defaultEmbeddingFunc(); embed != nil {
-		gmtRouterSelector.SetEmbeddingFunc(backgroundEmbeddingFunc(embed))
-	}
-	registry.Register(MethodGMTRouter, gmtRouterSelector)
 
 	// Create LatencyAware selector
 	latencyAwareSelector := NewLatencyAwareSelector(nil)

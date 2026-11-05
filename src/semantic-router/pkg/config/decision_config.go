@@ -122,17 +122,13 @@ type AlgorithmConfig struct {
 	ReMoM             *ReMoMAlgorithmConfig        `yaml:"remom,omitempty"`
 	Fusion            *FusionAlgorithmConfig       `yaml:"fusion,omitempty"`
 	Workflows         *WorkflowsAlgorithmConfig    `yaml:"workflows,omitempty"`
-	Elo               *EloSelectionConfig          `yaml:"-"`
 	RouterDC          *RouterDCSelectionConfig     `yaml:"router_dc,omitempty"`
 	AutoMix           *AutoMixSelectionConfig      `yaml:"automix,omitempty"`
 	Hybrid            *HybridSelectionConfig       `yaml:"hybrid,omitempty"`
-	RLDriven          *RLDrivenSelectionConfig     `yaml:"-"`
-	GMTRouter         *GMTRouterSelectionConfig    `yaml:"-"`
 	LatencyAware      *LatencyAwareAlgorithmConfig `yaml:"latency_aware,omitempty"`
 	MultiFactor       *MultiFactorSelectionConfig  `yaml:"multi_factor,omitempty"`
 	Prompt            *PromptSelectionConfig       `yaml:"prompt,omitempty"`
 	Decision          *DecisionSelectionConfig     `yaml:"decision,omitempty"`
-	SessionAware      *SessionAwareSelectionConfig `yaml:"-"`
 	OnError           string                       `yaml:"on_error,omitempty"`
 	// Extensions holds the blocks of algorithm types registered outside the
 	// Router, each under its type's name.

@@ -112,8 +112,8 @@ Inside a ROUTE block:
   MODEL "<name>" (reasoning = true, effort = "high", lora = "<name>", weight = 1.0, param_size = "3b")
 
 ### Algorithm Types
-  confidence, ratings, remom, elo, router_dc, automix, hybrid, rl_driven,
-  gmtrouter, latency_aware, static, knn, kmeans, svm, random
+  confidence, ratings, remom, router_dc, automix, hybrid, latency_aware,
+  static, knn, kmeans, svm, random
 
 ### Plugin Types (inline)
   system_prompt, semantic_cache, hallucination, memory, rag, tools,

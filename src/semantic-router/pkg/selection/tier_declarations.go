@@ -91,45 +91,6 @@ func (a *AutoMixSelector) ExternalDependencies() []Dependency {
 }
 
 // Tier returns the production readiness tier
-func (r *RLDrivenSelector) Tier() AlgorithmTier {
-	return TierExperimental
-}
-
-// ExternalDependencies returns external dependencies for RL-driven selection
-func (r *RLDrivenSelector) ExternalDependencies() []Dependency {
-	deps := []Dependency{}
-	if r.config.EnableLLMRouting && r.config.RouterR1ServerURL != "" {
-		deps = append(deps, Dependency{
-			Name:        "Router-R1 Server",
-			Type:        DependencyExternalService,
-			Description: "LLM-as-Router for advanced routing decisions (arXiv:2506.09033)",
-			HealthURL:   r.config.RouterR1ServerURL + "/health",
-			Required:    false,
-		})
-	}
-	return deps
-}
-
-// Tier returns the production readiness tier
-func (g *GMTRouterSelector) Tier() AlgorithmTier {
-	return TierExperimental
-}
-
-// ExternalDependencies returns external dependencies for GMTRouter
-func (g *GMTRouterSelector) ExternalDependencies() []Dependency {
-	deps := []Dependency{}
-	if g.config.StoragePath != "" {
-		deps = append(deps, Dependency{
-			Name:        "Pre-trained graph model",
-			Type:        DependencyPretrainedModel,
-			Description: "Heterogeneous graph model weights (arXiv:2511.08590)",
-			Required:    false,
-		})
-	}
-	return deps
-}
-
-// Tier returns the production readiness tier
 func (a *MLSelectorAdapter) Tier() AlgorithmTier {
 	return TierExperimental
 }

@@ -126,7 +126,7 @@ listeners:
 - 每个 listener 只为自己的请求做决定，重新加载会应用修改。在不信任身份的 listener 上，请求是匿名的。
 - 两种模式下，身份 header 都不会到达模型提供方：Router 和生成的 Envoy listener 会从每个上游请求中删除它们。
 
-Memory、router replay 和按用户学习的选择算法（`gmtrouter`、`rl_driven`）会记录每个请求的用户。没有信任身份的 listener
+Memory 和 router replay 会记录每个请求的用户。没有信任身份的 listener
 时，它们仍会加载，并把每个请求视为匿名请求；Router 会在启动时记录一条点名这些功能的警告。
 
 ### 哪些需要 `extproc`

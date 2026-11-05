@@ -316,36 +316,6 @@ func validateDecisionAdaptationMode(decisionName string, field string, mode stri
 	}
 }
 
-func isSessionAwareSelectionConfigConfigured(cfg SessionAwareSelectionConfig) bool {
-	return cfg.BaseMethod != "" || anyTrue(
-		cfg.IdleTimeoutSeconds != nil,
-		cfg.MinTurnsBeforeSwitch != nil,
-		cfg.SwitchMargin != nil,
-		cfg.StayBias != nil,
-		cfg.ToolLoopHardLock != nil,
-		cfg.ContextPortabilityHardLock != nil,
-		cfg.DecisionDriftReset != nil,
-		cfg.ToolLoopStayBias != nil,
-		cfg.PrefixCacheWeight != nil,
-		cfg.HandoffPenaltyWeight != nil,
-		cfg.DefaultHandoffPenalty != nil,
-		cfg.QualityGapMultiplier != nil,
-		cfg.MaxCacheCostMultiplier != nil,
-		cfg.SwitchHistoryWeight != nil,
-		cfg.RemainingTurnPriorWeight != nil,
-		cfg.RemainingTurnPriorHorizon != nil,
-		cfg.MinRemainingTurnPriorSamples != nil,
-	)
-}
-
-func isModelSwitchGateConfigured(cfg ModelSwitchGateConfig) bool {
-	return cfg.Enabled ||
-		cfg.Mode != "" ||
-		cfg.MinSwitchAdvantage != 0 ||
-		cfg.DefaultHandoffPenalty != 0 ||
-		cfg.CacheWarmthWeight != 0
-}
-
 func isLookupTableConfigConfigured(cfg LookupTableConfig) bool {
 	return cfg.Enabled ||
 		cfg.StoragePath != "" ||
@@ -366,15 +336,6 @@ func isEloSelectionConfigConfigured(cfg EloSelectionConfig) bool {
 		cfg.CostScalingFactor != 0 ||
 		cfg.StoragePath != "" ||
 		cfg.AutoSaveInterval != ""
-}
-
-func anyTrue(values ...bool) bool {
-	for _, value := range values {
-		if value {
-			return true
-		}
-	}
-	return false
 }
 
 func validateProtectionRelease(cfg RouterLearningProtectionConfig) error {

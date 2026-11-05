@@ -530,7 +530,7 @@ func validateDecisionAlgorithmConfig(decisionName string, modelRefs []ModelRef, 
 		return minimumErr
 	}
 
-	configuredBlocks := configuredAlgorithmBlocks(algorithm)
+	configuredBlocks := configuredDecisionAlgorithmBlocks(algorithm)
 	terminal, err := validateAlgorithmBlockContract(
 		decisionName,
 		normalizedType,
@@ -578,17 +578,13 @@ func normalizeDecisionAlgorithmType(
 	if displayType == "" {
 		displayType = "<empty>"
 	}
-	if normalizedType == "session_aware" || algorithm.SessionAware != nil {
+	if normalizedType == "session_aware" {
 		return "", "", fmt.Errorf(
 			"decision '%s': algorithm.type=session_aware is no longer supported; remove algorithm.type=session_aware and enable global.router.learning.protection. If this decision needs an explicit base selector, configure a normal algorithm.type; otherwise omit algorithm",
 			decisionName,
 		)
 	}
-	if err := validateMigratedLearningAlgorithm(
-		decisionName,
-		normalizedType,
-		algorithm,
-	); err != nil {
+	if err := validateMigratedLearningAlgorithm(decisionName, normalizedType); err != nil {
 		return "", "", err
 	}
 	return normalizedType, displayType, nil
@@ -634,7 +630,7 @@ func blocklessAlgorithmTypeSupported(normalizedType string) bool {
 	return supported && configField == ""
 }
 
-func validateMigratedLearningAlgorithm(decisionName string, normalizedType string, algorithm *AlgorithmConfig) error {
+func validateMigratedLearningAlgorithm(decisionName string, normalizedType string) error {
 	migrations := map[string]string{
 		"elo":             "global.router.learning.adaptation",
 		"rl_driven":       "global.router.learning.adaptation",
@@ -650,31 +646,7 @@ func validateMigratedLearningAlgorithm(decisionName string, normalizedType strin
 			target,
 		)
 	}
-	if algorithm.Elo != nil {
-		return fmt.Errorf("decision '%s': algorithm.elo is no longer supported; use global.router.learning.adaptation", decisionName)
-	}
-	if algorithm.RLDriven != nil {
-		return fmt.Errorf("decision '%s': algorithm.rl_driven is no longer supported; use global.router.learning.adaptation", decisionName)
-	}
-	if algorithm.GMTRouter != nil {
-		return fmt.Errorf("decision '%s': algorithm.gmtrouter is no longer supported; use global.router.learning.adaptation", decisionName)
-	}
 	return nil
-}
-
-func configuredAlgorithmBlocks(algorithm *AlgorithmConfig) []string {
-	configuredBlocks := configuredDecisionAlgorithmBlocks(algorithm)
-	addBlock := func(name string, configured bool) {
-		if configured {
-			configuredBlocks = append(configuredBlocks, name)
-		}
-	}
-
-	addBlock("elo", algorithm.Elo != nil)
-	addBlock("rl_driven", algorithm.RLDriven != nil)
-	addBlock("gmtrouter", algorithm.GMTRouter != nil)
-	addBlock("session_aware", algorithm.SessionAware != nil)
-	return configuredBlocks
 }
 
 func expectedAlgorithmBlock(normalizedType string) (string, bool) {

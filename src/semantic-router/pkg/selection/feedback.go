@@ -18,16 +18,14 @@ package selection
 
 import (
 	"errors"
-	"math"
 	"strings"
 )
 
 var (
-	ErrFeedbackRequired        = errors.New("feedback is required")
-	ErrFeedbackModelRequired   = errors.New("either winner_model or loser_model is required")
-	ErrFeedbackWinnerRequired  = errors.New("winner_model is required")
-	ErrFeedbackSelfComparison  = errors.New("winner_model and loser_model must be different models")
-	ErrFeedbackConfidenceRange = errors.New("confidence must be between 0.0 and 1.0")
+	ErrFeedbackRequired       = errors.New("feedback is required")
+	ErrFeedbackModelRequired  = errors.New("either winner_model or loser_model is required")
+	ErrFeedbackWinnerRequired = errors.New("winner_model is required")
+	ErrFeedbackSelfComparison = errors.New("winner_model and loser_model must be different models")
 )
 
 // NormalizeFeedback canonicalizes fields that identify selector state and then
@@ -40,10 +38,6 @@ func NormalizeFeedback(feedback *Feedback) error {
 	feedback.WinnerModel = strings.TrimSpace(feedback.WinnerModel)
 	feedback.LoserModel = strings.TrimSpace(feedback.LoserModel)
 	feedback.DecisionName = strings.TrimSpace(feedback.DecisionName)
-	feedback.UserID = strings.TrimSpace(feedback.UserID)
-	feedback.SessionID = strings.TrimSpace(feedback.SessionID)
-	feedback.ConversationID = strings.TrimSpace(feedback.ConversationID)
-	feedback.FeedbackType = strings.TrimSpace(feedback.FeedbackType)
 
 	return ValidateFeedback(feedback)
 }
@@ -63,11 +57,6 @@ func ValidateFeedback(feedback *Feedback) error {
 
 	if winnerModel != "" && loserModel != "" && winnerModel == loserModel {
 		return ErrFeedbackSelfComparison
-	}
-
-	if math.IsNaN(feedback.Confidence) || math.IsInf(feedback.Confidence, 0) ||
-		feedback.Confidence < 0 || feedback.Confidence > 1 {
-		return ErrFeedbackConfidenceRange
 	}
 
 	return nil

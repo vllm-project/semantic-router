@@ -451,11 +451,6 @@ func TestFactory_Create(t *testing.T) {
 		expectedMethod SelectionMethod
 	}{
 		{
-			name:           "create elo selector",
-			method:         "elo",
-			expectedMethod: MethodElo,
-		},
-		{
 			name:           "create router_dc selector",
 			method:         "router_dc",
 			expectedMethod: MethodRouterDC,

@@ -19,20 +19,14 @@ package selection
 import (
 	"context"
 	"errors"
-	"math"
 	"testing"
 )
 
 func TestNormalizeFeedbackCanonicalizesStateKeys(t *testing.T) {
 	feedback := &Feedback{
-		WinnerModel:    " model-a ",
-		LoserModel:     " model-b ",
-		DecisionName:   " coding ",
-		UserID:         " user-1 ",
-		SessionID:      " session-1 ",
-		ConversationID: " conversation-1 ",
-		FeedbackType:   " satisfied ",
-		Confidence:     0.75,
+		WinnerModel:  " model-a ",
+		LoserModel:   " model-b ",
+		DecisionName: " coding ",
 	}
 
 	if err := NormalizeFeedback(feedback); err != nil {
@@ -42,10 +36,8 @@ func TestNormalizeFeedbackCanonicalizesStateKeys(t *testing.T) {
 	if feedback.WinnerModel != "model-a" || feedback.LoserModel != "model-b" {
 		t.Fatalf("expected model names to be trimmed, got winner=%q loser=%q", feedback.WinnerModel, feedback.LoserModel)
 	}
-	if feedback.DecisionName != "coding" || feedback.UserID != "user-1" ||
-		feedback.SessionID != "session-1" || feedback.ConversationID != "conversation-1" ||
-		feedback.FeedbackType != "satisfied" {
-		t.Fatalf("expected metadata keys to be trimmed, got %#v", feedback)
+	if feedback.DecisionName != "coding" {
+		t.Fatalf("expected the decision name to be trimmed, got %#v", feedback)
 	}
 }
 
@@ -81,30 +73,6 @@ func TestValidateFeedbackRejectsInvalidContracts(t *testing.T) {
 			},
 			wantErr: ErrFeedbackSelfComparison,
 		},
-		{
-			name: "negative confidence",
-			feedback: &Feedback{
-				WinnerModel: "model-a",
-				Confidence:  -0.01,
-			},
-			wantErr: ErrFeedbackConfidenceRange,
-		},
-		{
-			name: "nan confidence",
-			feedback: &Feedback{
-				WinnerModel: "model-a",
-				Confidence:  math.NaN(),
-			},
-			wantErr: ErrFeedbackConfidenceRange,
-		},
-		{
-			name: "infinite confidence",
-			feedback: &Feedback{
-				WinnerModel: "model-a",
-				Confidence:  math.Inf(1),
-			},
-			wantErr: ErrFeedbackConfidenceRange,
-		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := ValidateFeedback(tc.feedback)
@@ -119,7 +87,6 @@ func TestValidateFeedbackAllowsSingleModelFeedback(t *testing.T) {
 	for _, feedback := range []*Feedback{
 		{WinnerModel: "model-a"},
 		{LoserModel: "model-b"},
-		{WinnerModel: "model-a", Confidence: 1},
 	} {
 		if err := ValidateFeedback(feedback); err != nil {
 			t.Fatalf("ValidateFeedback(%#v) error = %v", feedback, err)
@@ -148,29 +115,12 @@ func TestEloSelectorRejectsInvalidFeedbackBeforeMutation(t *testing.T) {
 	}
 }
 
-func TestRLDrivenSelectorRejectsInvalidFeedbackBeforeMutation(t *testing.T) {
-	selector := NewRLDrivenSelector(nil)
-
-	err := selector.UpdateFeedback(context.Background(), &Feedback{
-		WinnerModel: "model-a",
-		LoserModel:  "model-a",
-		Confidence:  0.8,
-	})
-	if !errors.Is(err, ErrFeedbackSelfComparison) {
-		t.Fatalf("expected self-comparison error, got %v", err)
-	}
-	if pref := selector.getGlobalPreference("model-a"); pref != nil {
-		t.Fatalf("expected invalid feedback not to create preference, got %#v", pref)
-	}
-}
-
 func TestHybridSelectorRejectsFeedbackBeforeFanoutWhenWinnerRequired(t *testing.T) {
 	selector := NewHybridSelector(DefaultHybridConfig())
 	selector.eloSelector.setGlobalRating("model-a", &ModelRating{Model: "model-a", Rating: 1500})
 
 	err := selector.UpdateFeedback(context.Background(), &Feedback{
 		LoserModel: " model-a ",
-		Confidence: 0.7,
 	})
 	if !errors.Is(err, ErrFeedbackWinnerRequired) {
 		t.Fatalf("expected winner-required error, got %v", err)

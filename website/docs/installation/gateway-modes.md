@@ -164,10 +164,9 @@ listeners:
 - No identity header reaches a model provider, in either mode: the Router and
   the generated Envoy listener remove them from every upstream request.
 
-Memory, router replay and the per-user selection algorithms (`gmtrouter`,
-`rl_driven`) record the user of each request. Without a trusting listener they
-still load and treat every request as anonymous, and the Router logs one
-warning at startup that names them.
+Memory and router replay record the user of each request. Without a trusting
+listener they still load and treat every request as anonymous, and the Router
+logs one warning at startup that names them.
 
 ### What needs `extproc`
 

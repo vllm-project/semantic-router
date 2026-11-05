@@ -130,20 +130,14 @@ func TestIsModelDirectory(t *testing.T) {
 func TestExtractModelPathsSkipsRootLevelModelFiles(t *testing.T) {
 	cfg := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
-				{
-					Name: "default-route",
-					Algorithm: &config.AlgorithmConfig{
-						GMTRouter: &config.GMTRouterSelectionConfig{
-							ModelPath: "models/gmtrouter.pt",
-						},
-					},
-				},
-			},
+			Signals: config.Signals{ClassifierRules: []config.ClassifierSignalRule{{
+				Name:      "risk",
+				ModelPath: "models/risk-classifier.pt",
+			}}},
 		},
 	}
 
-	if got := ExtractModelPaths(cfg); slices.Contains(got, "models/gmtrouter.pt") {
+	if got := ExtractModelPaths(cfg); slices.Contains(got, "models/risk-classifier.pt") {
 		t.Fatalf("ExtractModelPaths() unexpectedly included root-level model file: %v", got)
 	}
 }

@@ -91,11 +91,6 @@ func TestUntrustedIdentityWarningNamesTheFeaturesThatRecordAUser(t *testing.T) {
 		!strings.Contains(warning, "listeners[].identity.trust_headers") {
 		t.Fatalf("warning = %q", warning)
 	}
-	cfg.Decisions = []Decision{{Name: "personal", Algorithm: &AlgorithmConfig{Type: "gmtrouter"}}}
-	if warning := UntrustedIdentityWarning(cfg); !strings.Contains(warning,
-		"memory, router replay and per-user model selection (gmtrouter) record") {
-		t.Fatalf("warning = %q", warning)
-	}
 	cfg.Listeners[0].Identity = &ListenerIdentity{TrustHeaders: true}
 	if warning := UntrustedIdentityWarning(cfg); warning != "" {
 		t.Fatalf("a trusting listener needs no warning: %q", warning)
