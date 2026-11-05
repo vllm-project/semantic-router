@@ -64,7 +64,7 @@ func TestOpenRouterBufferedReplyKeepsUnknownFieldsClosed(t *testing.T) {
 		"cost_details": strings.Replace(body, `"server_tool_cost": null`, `"server_tool_cost": null, "unknown": true`, 1),
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, _, _, err := NewBuiltinEngine().DecodeResponse(llmprotocol.OpenAIChatV1, []byte(changed))
+			_, _, _, err := conformanceEngine().DecodeResponse(llmprotocol.OpenAIChatV1, []byte(changed))
 			assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json")
 		})
 	}

@@ -25,6 +25,11 @@ on:
         required: false
         default: ""
         type: string
+      date:
+        description: The nightly run's publication date (YYYYMMDD), shared with its images.
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -56,6 +61,7 @@ jobs:
           MODE: ${{ inputs.mode }}
           RELEASE_VERSION: ${{ inputs.version }}
           RELEASE_TAG: ${{ inputs.tag }}
+          RUN_DATE: ${{ inputs.date }}
         run: |
           case "$MODE" in
             release)
@@ -68,9 +74,12 @@ jobs:
               APP_VERSION="$RELEASE_TAG"
               ;;
             nightly)
-              DATE="$(date -u +'%Y%m%d')"
-              CHART_VERSION="0.0.0-nightly.${DATE}"
-              APP_VERSION="nightly-${DATE}"
+              if [[ ! "$RUN_DATE" =~ ^[0-9]{8}$ ]]; then
+                echo "::error::A nightly chart needs its run's date, the one its images carry"
+                exit 1
+              fi
+              CHART_VERSION="0.0.0-nightly.${RUN_DATE}"
+              APP_VERSION="nightly-${RUN_DATE}"
               ;;
             main)
               CHART_VERSION="0.0.0-latest"

@@ -380,10 +380,6 @@ type ProviderProfile struct {
 	ExtraHeaders  map[string]string `yaml:"extra_headers,omitempty"`
 	APIVersion    string            `yaml:"api_version,omitempty"`
 	ChatPath      string            `yaml:"chat_path,omitempty"`
-	// CompatGateway marks a profile whose URL is a relay gateway that adds its
-	// own response fields, so the response decoder drops and reports the
-	// fields the wire format does not define instead of rejecting the reply.
-	CompatGateway bool `yaml:"compat_gateway,omitempty"`
 }
 
 type ModelPricing struct {
