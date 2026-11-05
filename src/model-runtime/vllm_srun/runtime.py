@@ -71,6 +71,8 @@ from .timing import RunTiming, ServerTiming
 
 log = logging.getLogger("vllm_srun")
 AUTO_ENGINE = "auto"
+# The families whose input limit max_model_len may lower: each reads it from package.max_input_tokens.
+MAX_MODEL_LEN_FAMILIES = frozenset({"decision1", "decision2", "decision3"})
 
 
 def _bf16_parameters(spec: ModelSpec, config: ModelConfig, dtype: str) -> int:
@@ -374,9 +376,21 @@ class ServedModel:
             offline=process.offline,
         )
         family = self._family(ref, options)
+        limit = self.requested_args.max_model_len
+        if limit is not None and family.name not in MAX_MODEL_LEN_FAMILIES:
+            raise RuntimeError(
+                f"max_model_len applies to Decision models only, not {family.name}"
+            )
         ref = family.fetch(ref)
         self.health.set("loading", "verifying the package")
         package = family.verify(ref)
+        if limit is not None:
+            if limit > package.max_input_tokens:
+                raise RuntimeError(
+                    f"max_model_len {limit} is above {package.model_name}'s "
+                    f"limit of {package.max_input_tokens} tokens"
+                )
+            package = replace(package, max_input_tokens=limit)
         spec = family.describe(package)
         parameters = package.loaded_parameters or 0
         budget = config.memory_budget_gib or process.memory_budget_gib
@@ -563,6 +577,13 @@ class ServedModel:
             self.health.golden = replace(
                 self.health.golden,
                 detail=f"golden references are recorded at --dtype auto, not {self.dtype}",
+            )
+        limit = self.requested_args.max_model_len
+        if self.health.golden.status == "failed" and limit is not None:
+            self.health.golden = replace(
+                self.health.golden,
+                detail=f"{self.health.golden.detail}; max_model_len {limit} "
+                "may be below the length of the model's golden questions",
             )
         if self.health.golden.status == "failed":
             raise VerificationError(self.health.golden.detail or "golden check failed")

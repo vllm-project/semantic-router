@@ -1,0 +1,191 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1640" height="1170" viewBox="0 0 1640 1170" role="img"><title>Vela 3.0: one request, every question</title><desc>How system_one sends each question to a network, in vela3-fast (left) and the d3 sizes (right). Read top to bottom.</desc>
+<defs><marker id="arrow" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L12 5 L0 10 L3 5 Z" fill="#111"/></marker></defs>
+        <style>text{font-family:Arial,Helvetica,sans-serif;fill:#111;font-weight:400}.math{font-family:Georgia,'Times New Roman',serif;font-style:italic}.serif{font-family:Georgia,'Times New Roman',serif}</style>
+<text x="420" y="60.0" font-size="28" text-anchor="middle" class="serif">(a) vela3-fast</text>
+<g data-box="100.0 100 640 84">
+<rect x="100.0" y="100" width="640" height="84" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="420" y="136.12" font-size="24" text-anchor="middle" class="">system_one(state, questions)</text>
+<text x="420" y="164.2" font-size="24" text-anchor="middle" class="">each question routed on its own</text>
+</g>
+<g data-box="95.0 250 320 84">
+<rect x="95.0" y="250" width="320" height="84" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="255" y="286.85499999999996" font-size="21" text-anchor="middle" class="">choice / noul,</text>
+<text x="255" y="311.42499999999995" font-size="21" text-anchor="middle" class="">not a router text</text>
+</g>
+<g data-box="425.0 250 330 84">
+<rect x="425.0" y="250" width="330" height="84" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="590" y="286.85499999999996" font-size="21" text-anchor="middle" class="">Decision backbone</text>
+<text x="590" y="311.42499999999995" font-size="21" text-anchor="middle" class="">no adapter</text>
+</g>
+<path d="M416,292 L423,292" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="95.0 362 320 84">
+<rect x="95.0" y="362" width="320" height="84" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="255" y="398.85499999999996" font-size="21" text-anchor="middle" class="">choice / set with one</text>
+<text x="255" y="423.42499999999995" font-size="21" text-anchor="middle" class="">of the router texts</text>
+</g>
+<g data-box="425.0 362 330 84">
+<rect x="425.0" y="362" width="330" height="84" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="590" y="398.85499999999996" font-size="21" text-anchor="middle" class="">Router adapter or</text>
+<text x="590" y="423.42499999999995" font-size="21" text-anchor="middle" class="">domain / fact-check / feedback</text>
+</g>
+<path d="M416,404 L423,404" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="95.0 474 320 84">
+<rect x="95.0" y="474" width="320" height="84" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="255" y="510.85499999999996" font-size="21" text-anchor="middle" class="">span: PII or</text>
+<text x="255" y="535.425" font-size="21" text-anchor="middle" class="">hallucination label set</text>
+</g>
+<g data-box="425.0 474 330 84">
+<rect x="425.0" y="474" width="330" height="84" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="590" y="510.85499999999996" font-size="21" text-anchor="middle" class="">Span-set adapter</text>
+<text x="590" y="535.425" font-size="21" text-anchor="middle" class="">(own thresholds)</text>
+</g>
+<path d="M416,516 L423,516" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="95.0 586 320 84">
+<rect x="95.0" y="586" width="320" height="84" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="255" y="622.855" font-size="21" text-anchor="middle" class="">span: evidence</text>
+<text x="255" y="647.4250000000001" font-size="21" text-anchor="middle" class="">label or wording</text>
+</g>
+<g data-box="425.0 586 330 84">
+<rect x="425.0" y="586" width="330" height="84" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="590" y="622.855" font-size="21" text-anchor="middle" class="">Evidence adapter</text>
+<text x="590" y="647.4250000000001" font-size="21" text-anchor="middle" class="">one window ≤ 32,768</text>
+</g>
+<path d="M416,628 L423,628" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="95.0 698 320 84">
+<rect x="95.0" y="698" width="320" height="84" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="255" y="734.855" font-size="21" text-anchor="middle" class="">span: relation</text>
+<text x="255" y="759.4250000000001" font-size="21" text-anchor="middle" class="">wording</text>
+</g>
+<g data-box="425.0 698 330 84">
+<rect x="425.0" y="698" width="330" height="84" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="590" y="734.855" font-size="21" text-anchor="middle" class="">Relation adapter</text>
+<text x="590" y="759.4250000000001" font-size="21" text-anchor="middle" class="">rank 128</text>
+</g>
+<path d="M416,740 L423,740" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="95.0 810 320 84">
+<rect x="95.0" y="810" width="320" height="84" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="255" y="846.855" font-size="21" text-anchor="middle" class="">span: names-only</text>
+<text x="255" y="871.4250000000001" font-size="21" text-anchor="middle" class="">entity labels</text>
+</g>
+<g data-box="425.0 810 330 84">
+<rect x="425.0" y="810" width="330" height="84" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="590" y="846.855" font-size="21" text-anchor="middle" class="">NER adapter</text>
+<text x="590" y="871.4250000000001" font-size="21" text-anchor="middle" class="">rank 128</text>
+</g>
+<path d="M416,852 L423,852" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="95.0 922 320 84">
+<rect x="95.0" y="922" width="320" height="84" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="255" y="958.855" font-size="21" text-anchor="middle" class="">any other span</text>
+<text x="255" y="983.4250000000001" font-size="21" text-anchor="middle" class="">question</text>
+</g>
+<g data-box="425.0 922 330 84">
+<rect x="425.0" y="922" width="330" height="84" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="590" y="958.855" font-size="21" text-anchor="middle" class="">Span adapter</text>
+<text x="590" y="983.4250000000001" font-size="21" text-anchor="middle" class="">8,192-token windows</text>
+</g>
+<path d="M416,964 L423,964" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M420,184 L420,212 L75,212 L75,964" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M75,292 L93,292" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M75,404 L93,404" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M75,516 L93,516" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M75,628 L93,628" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M75,740 L93,740" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M75,852 L93,852" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M75,964 L93,964" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="420" y="1054.0" font-size="21" text-anchor="middle" class="">Rules are checked top to bottom. Adapter passes share the</text>
+<text x="420" y="1078.57" font-size="21" text-anchor="middle" class="">frozen weights; the decision pass never loads an adapter.</text>
+<text x="1220" y="60.0" font-size="28" text-anchor="middle" class="serif">(b) vela3-lite · -mini · -flash · -turbo</text>
+<g data-box="900.0 100 640 84">
+<rect x="900.0" y="100" width="640" height="84" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="1220" y="136.12" font-size="24" text-anchor="middle" class="">system_one(state, questions)</text>
+<text x="1220" y="164.2" font-size="24" text-anchor="middle" class="">each question routed on its own</text>
+</g>
+<g data-box="895.0 250 320 84">
+<rect x="895.0" y="250" width="320" height="84" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="1055" y="286.85499999999996" font-size="21" text-anchor="middle" class="">choice / noul / score,</text>
+<text x="1055" y="311.42499999999995" font-size="21" text-anchor="middle" class="">not a router id</text>
+</g>
+<g data-box="1225.0 250 330 84">
+<rect x="1225.0" y="250" width="330" height="84" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="1390" y="286.85499999999996" font-size="21" text-anchor="middle" class="">d3 base</text>
+<text x="1390" y="311.42499999999995" font-size="21" text-anchor="middle" class="">every adapter off</text>
+</g>
+<path d="M1216,292 L1223,292" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="895.0 362 320 84">
+<rect x="895.0" y="362" width="320" height="84" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="1055" y="398.85499999999996" font-size="21" text-anchor="middle" class="">router question id</text>
+<text x="1055" y="423.42499999999995" font-size="21" text-anchor="middle" class="">(attack, domain, …)</text>
+</g>
+<g data-box="1225.0 362 330 84">
+<rect x="1225.0" y="362" width="330" height="84" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="1390" y="398.85499999999996" font-size="21" text-anchor="middle" class="">Decision LoRA (some ids:</text>
+<text x="1390" y="423.42499999999995" font-size="21" text-anchor="middle" class="">their own LoRA)</text>
+</g>
+<path d="M1216,404 L1223,404" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="895.0 474 320 84">
+<rect x="895.0" y="474" width="320" height="84" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="1055" y="510.85499999999996" font-size="21" text-anchor="middle" class="">span: PII / halu / toxic</text>
+<text x="1055" y="535.425" font-size="21" text-anchor="middle" class="">label set</text>
+</g>
+<g data-box="1225.0 474 330 84">
+<rect x="1225.0" y="474" width="330" height="84" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="1390" y="510.85499999999996" font-size="21" text-anchor="middle" class="">Span LoRA + span head</text>
+<text x="1390" y="535.425" font-size="21" text-anchor="middle" class="">(halu + image: image-halu†)</text>
+</g>
+<path d="M1216,516 L1223,516" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="895.0 586 320 84">
+<rect x="895.0" y="586" width="320" height="84" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="1055" y="622.855" font-size="21" text-anchor="middle" class="">span: relation</text>
+<text x="1055" y="647.4250000000001" font-size="21" text-anchor="middle" class="">wording</text>
+</g>
+<g data-box="1225.0 586 330 84">
+<rect x="1225.0" y="586" width="330" height="84" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="1390" y="622.855" font-size="21" text-anchor="middle" class="">Relation LoRA</text>
+<text x="1390" y="647.4250000000001" font-size="21" text-anchor="middle" class="">+ relation head</text>
+</g>
+<path d="M1216,628 L1223,628" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="895.0 698 320 84">
+<rect x="895.0" y="698" width="320" height="84" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="1055" y="734.855" font-size="21" text-anchor="middle" class="">span: evidence or</text>
+<text x="1055" y="759.4250000000001" font-size="21" text-anchor="middle" class="">answer wording</text>
+</g>
+<g data-box="1225.0 698 330 84">
+<rect x="1225.0" y="698" width="330" height="84" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="1390" y="734.855" font-size="21" text-anchor="middle" class="">Span LoRA</text>
+<text x="1390" y="759.4250000000001" font-size="21" text-anchor="middle" class="">+ span head</text>
+</g>
+<path d="M1216,740 L1223,740" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="895.0 810 320 84">
+<rect x="895.0" y="810" width="320" height="84" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="1055" y="846.855" font-size="21" text-anchor="middle" class="">span: entity question,</text>
+<text x="1055" y="871.4250000000001" font-size="21" text-anchor="middle" class="">open labels</text>
+</g>
+<g data-box="1225.0 810 330 84">
+<rect x="1225.0" y="810" width="330" height="84" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="1390" y="846.855" font-size="21" text-anchor="middle" class="">NER LoRA + NER head</text>
+<text x="1390" y="871.4250000000001" font-size="21" text-anchor="middle" class="">(+ label definitions*)</text>
+</g>
+<path d="M1216,852 L1223,852" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="895.0 922 320 84">
+<rect x="895.0" y="922" width="320" height="84" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="1055" y="958.855" font-size="21" text-anchor="middle" class="">any other span</text>
+<text x="1055" y="983.4250000000001" font-size="21" text-anchor="middle" class="">question</text>
+</g>
+<g data-box="1225.0 922 330 84">
+<rect x="1225.0" y="922" width="330" height="84" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="1390" y="958.855" font-size="21" text-anchor="middle" class="">Span LoRA</text>
+<text x="1390" y="983.4250000000001" font-size="21" text-anchor="middle" class="">+ span head</text>
+</g>
+<path d="M1216,964 L1223,964" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1220,184 L1220,212 L875,212 L875,964" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M875,292 L893,292" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M875,404 L893,404" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M875,516 L893,516" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M875,628 L893,628" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M875,740 L893,740" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M875,852 L893,852" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M875,964 L893,964" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="1220" y="1054.0" font-size="21" text-anchor="middle" class="">* vela3-mini and -flash write a one-line definition per</text>
+<text x="1220" y="1078.57" font-size="21" text-anchor="middle" class="">named label (adapters off, causal), cached per label set.</text>
+<text x="1220" y="1103.14" font-size="21" text-anchor="middle" class="">† not on vela3-turbo. Rules are checked top to bottom.</text>
+</svg>

@@ -1487,8 +1487,8 @@ prints a short summary (--verbose prints every detail). Saved routing
 configuration is retained.
 
 MODEL overrides the configured default judgment deployment's artifact.
-Omitting MODEL preserves that deployment (a new configuration uses Vela 2.0
-0.3B). Only explicit model, placement and engine options override saved
+Omitting MODEL preserves that deployment (a new configuration uses Vela 3.0
+vela3-fast). Only explicit model, placement and engine options override saved
 settings: --max-num-seqs, --max-num-batched-tokens, --batch-window-ms, --dtype
 and --enable-shared-context set the deployment's engine arguments.
 Backend LLMs, named deployments, listeners and API grants belong in --config.

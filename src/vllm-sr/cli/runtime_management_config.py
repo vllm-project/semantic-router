@@ -7,6 +7,7 @@ from cli.runtime_env_names import runtime_env_name_is_allowed
 
 _MAX_PORT = 65_535
 _DEFAULT_READY_ROLES = frozenset({"viewer", "operator", "admin"})
+ROUTER_MANAGEMENT_PORT_PATH = "/tmp/vllm-sr-management-port"
 
 
 def _configured_management_port(user_config: dict) -> int:

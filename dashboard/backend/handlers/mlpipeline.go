@@ -77,7 +77,7 @@ func (h *MLPipelineHandler) ListJobsHandler() http.HandlerFunc {
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -98,7 +98,7 @@ func (h *MLPipelineHandler) GetJobHandler() http.HandlerFunc {
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -376,7 +376,7 @@ func (h *MLPipelineHandler) DownloadOutputHandler() http.HandlerFunc {
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -459,6 +459,12 @@ func (h *MLPipelineHandler) StreamProgressHandler() http.HandlerFunc {
 		flusher, ok := w.(http.Flusher)
 		if !ok {
 			http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+			return
+		}
+
+		// HEAD needs only the stream headers, never a subscriber or heartbeat loop.
+		if r.Method == http.MethodHead {
+			w.WriteHeader(http.StatusOK)
 			return
 		}
 
