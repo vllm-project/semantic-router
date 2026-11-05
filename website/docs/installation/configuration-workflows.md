@@ -45,7 +45,9 @@ After activation, open **Build → Routing → Models** to connect physical Chat
 backends. **Mixture-of-Models** has three tabs:
 
 - **Models** publishes and manages public model entrypoints;
-- **Recipes** manages the policies those entrypoints select;
+- **Recipes** manages the policies those entrypoints select and lists the
+  built-in Recipes installed with vLLM-SR; **Create model** on a built-in
+  Recipe assigns your Models to its decisions and publishes it;
 - **Probes** inspects recipe scenarios and supports generation or routing-only
   validation.
 

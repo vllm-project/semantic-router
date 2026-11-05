@@ -1,4 +1,4 @@
-"""Checks for model_runtime deployments and the decision signals and selectors that use them."""
+"""Checks for model_runtime and systemone deployments and the decision signals and selectors that use them."""
 
 import re
 from pathlib import PurePosixPath
@@ -7,14 +7,23 @@ from urllib.parse import urlparse
 from cli.config_contract import iter_condition_leaves, iter_routing_profiles
 from cli.decision_model import (
     DECISION_MODEL_FIELD,
+    SYSTEMONE_PROVIDER,
     configured_decision_model,
     decision_model_deployment,
+    remote_decision_model,
 )
 from cli.models import UserConfig
-from cli.models_decision import OPTION_QUESTION_TYPES
+from cli.models_decision import (
+    DECISION_QUESTION_TYPES,
+    MAX_DECISION_TIMEOUT_MS,
+    OPTION_QUESTION_TYPES,
+)
 from cli.validation_error import ValidationError
 
 MODEL_RUNTIME_PROVIDER = "model_runtime"
+SYSTEMONE_FIELDS = {"provider", "endpoint", "model", "auth", "timeout_ms", "question_types"}
+SYSTEMONE_AUTH_FIELDS = {"header", "prefix", "api_key_env", "api_key_file"}
+HTTP_HEADER_NAME = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
 # The runtime owns accelerator names, plugins' included: the validator checks
 # their shape and leaves an unknown name to the runtime.
 MODEL_RUNTIME_DEVICE = re.compile(r"^[a-z][a-z0-9_]*(:[0-9]+)?$")
@@ -70,6 +79,15 @@ def engine_args_error(deployment: dict) -> str | None:
     shared = deployment.get("enable_shared_context")
     if shared is not None and not isinstance(shared, bool):
         return "enable_shared_context must be a boolean"
+    limit = deployment.get("max_model_len")
+    if limit is not None:
+        if not _is_int(limit) or limit < 1:
+            return "max_model_len must be an integer of at least 1"
+        if deployment.get("endpoint") or deployment.get("replicas"):
+            return (
+                "max_model_len applies only to a managed worker, "
+                "not to an attached endpoint or replicas"
+            )
     return None
 
 
@@ -198,13 +216,74 @@ def _reference_error(deployments: dict, name: str) -> str | None:
     return None
 
 
+def _decision_reference_error(deployments: dict, name: str) -> str | None:
+    """A decision question or selector asks a model_runtime or a systemone deployment."""
+    provider = (deployments.get(name) or {}).get("provider")
+    if provider == SYSTEMONE_PROVIDER:
+        return None
+    if name in deployments and provider != MODEL_RUNTIME_PROVIDER:
+        return (
+            f"deployment '{name}' must use provider {MODEL_RUNTIME_PROVIDER} "
+            f"or {SYSTEMONE_PROVIDER}"
+        )
+    return _reference_error(deployments, name)
+
+
+def systemone_deployment_error(deployment: dict) -> str | None:
+    """A remote System One API the Router asks decision questions, never a request target."""
+    extra = sorted(set(deployment) - SYSTEMONE_FIELDS)
+    if extra:
+        return (
+            "a systemone deployment takes endpoint, model, auth, timeout_ms and "
+            f"question_types, not {', '.join(extra)}"
+        )
+    endpoint = urlparse(deployment.get("endpoint") or "")
+    if endpoint.scheme not in {"http", "https"} or not endpoint.hostname or endpoint.fragment:
+        return (
+            "endpoint must be the http:// or https:// URL the System One API answers "
+            "POST requests on, such as https://api.example.com/v1/systemone"
+        )
+    if endpoint.username or endpoint.password:
+        return "endpoint must not carry credentials; set auth.api_key_env or auth.api_key_file"
+    model = deployment.get("model")
+    if not isinstance(model, str) or not model.strip() or model.strip() != model:
+        return "model must name the model the API answers with, such as vllm-sr/d3-ultra"
+    timeout = deployment.get("timeout_ms", 0)
+    if not isinstance(timeout, int) or not 0 <= timeout <= MAX_DECISION_TIMEOUT_MS:
+        return f"timeout_ms must be within [1, {MAX_DECISION_TIMEOUT_MS}] when set"
+    types = deployment.get("question_types") or []
+    unknown = [kind for kind in types if kind not in DECISION_QUESTION_TYPES]
+    if unknown or len(set(types)) != len(types):
+        return "question_types lists distinct types among choice, noul, score, set and span"
+    return _systemone_auth_error(deployment.get("auth"))
+
+
+def _systemone_auth_error(auth) -> str | None:
+    if auth is None:
+        return None
+    if not isinstance(auth, dict) or set(auth) - SYSTEMONE_AUTH_FIELDS:
+        return "auth takes header, prefix and one of api_key_env and api_key_file"
+    header = auth.get("header")
+    if header is not None and not HTTP_HEADER_NAME.fullmatch(str(header)):
+        return "auth.header must be an HTTP header name, such as Authorization"
+    prefix = auth.get("prefix")
+    if prefix is not None and (not isinstance(prefix, str) or prefix.split() not in ([], [prefix])):
+        return "auth.prefix must be one word, such as Bearer, or empty to send the bare key"
+    if bool(auth.get("api_key_env")) == bool(auth.get("api_key_file")):
+        return "auth takes exactly one of api_key_env and api_key_file; a key is never written inline"
+    if auth.get("api_key_file") and not PurePosixPath(auth["api_key_file"]).is_absolute():
+        return "auth.api_key_file must be an absolute path"
+    return None
+
+
 def _decision_model(config: UserConfig) -> tuple[str | None, list[ValidationError]]:
     """The configured decision model, canonical, or the error that names it."""
 
     try:
         document = {"global": config.global_ or {}}
         key = configured_decision_model(document)
-        decision_model_deployment(document)
+        if remote_decision_model(document) is None:
+            decision_model_deployment(document)
         return key, []
     except ValueError as error:
         return None, [ValidationError(str(error), field=DECISION_MODEL_FIELD)]
@@ -218,10 +297,10 @@ def validate_decision_model_references(
         prefix = "routing" if name == "default" else f"recipes.{name}.routing"
         for rule in profile.signals.decision or []:
             if rule.deployment:
-                message = _reference_error(deployments, rule.deployment)
+                message = _decision_reference_error(deployments, rule.deployment)
             else:
                 message = (
-                    _reference_error(deployments, decision_model)
+                    _decision_reference_error(deployments, decision_model)
                     if decision_model
                     else None
                 )
@@ -304,14 +383,19 @@ def _selector_errors(
         return []
     field = f"{prefix}.decisions.{decision.name}.algorithm.decision"
     if algorithm.decision.deployment:
-        message = _reference_error(deployments, algorithm.decision.deployment)
+        message = _decision_reference_error(deployments, algorithm.decision.deployment)
     else:
         message = (
-            _reference_error(deployments, decision_model) if decision_model else None
+            _decision_reference_error(deployments, decision_model)
+            if decision_model
+            else None
         )
     models = [ref.model for ref in decision.modelRefs or []]
-    if message is None and not (
-        MIN_SELECTOR_CANDIDATES <= len(models) <= MAX_SELECTOR_CANDIDATES
+    # A model-free built-in Recipe receives its candidates through assignments.
+    if (
+        message is None
+        and models
+        and not MIN_SELECTOR_CANDIDATES <= len(models) <= MAX_SELECTOR_CANDIDATES
     ):
         message = (
             f"needs {MIN_SELECTOR_CANDIDATES}..{MAX_SELECTOR_CANDIDATES} "

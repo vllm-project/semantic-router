@@ -6,12 +6,15 @@ import json
 import shutil
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 from vllm_srun.accel.cpu import CPUAccelerator
 from vllm_srun.config import ModelConfig, ServeConfig
+from vllm_srun.engines.native import engine
 from vllm_srun.engines.native.engine import NativeEngine
+from vllm_srun.engines.native.models.lora import LoRALinear
 from vllm_srun.errors import PackageError
 from vllm_srun.families.vela2.encoder_layout import EncoderSequence
 from vllm_srun.families.vela3 import routing
@@ -95,6 +98,50 @@ def test_a_missing_adapter_routes_off(package, tmp_path) -> None:
     roster = verified.details["package"].roster
     assert "relation" not in roster.tasks
     assert "relation_adapter.safetensors" not in verified.details["package"].files
+
+
+def _set_q(value):
+    """A config edit that gives ``[Q]`` the token ID ``value(config)``."""
+    return lambda config: config["decision"]["marker_ids"].update(
+        {"[Q]": value(config)}
+    )
+
+
+@pytest.mark.parametrize(
+    ("edit", "message"),
+    [
+        (_set_q(lambda config: config["vocab_size"]), "below vocab_size"),
+        (_set_q(lambda config: 1_000_000_000), "below vocab_size"),
+        (_set_q(lambda config: -1), "below vocab_size"),
+        (_set_q(lambda config: True), "below vocab_size"),
+        (_set_q(lambda config: 384.0), "below vocab_size"),
+        (_set_q(lambda config: config["decision"]["marker_ids"]["[O]"]), "distinct"),
+        (lambda config: config["decision"]["marker_ids"].pop("[Q]"), "must name"),
+        (lambda config: config["decision"].pop("marker_ids"), "must name"),
+        (lambda config: config.update({"vocab_size": "392"}), "vocab_size"),
+    ],
+    ids=[
+        "at-vocab-size",
+        "past-vocab",
+        "negative",
+        "bool",
+        "float",
+        "duplicate",
+        "missing-marker",
+        "no-marker-ids",
+        "vocab-size-not-int",
+    ],
+)
+def test_marker_ids_must_index_the_backbone_vocabulary(
+    package, tmp_path, edit, message
+) -> None:
+    copy = Path(shutil.copytree(package, tmp_path / "copy"))
+    config = json.loads((copy / "config.json").read_text(encoding="utf-8"))
+    edit(config)
+    (copy / "config.json").write_text(json.dumps(config), encoding="utf-8")
+    (copy / "SHA256SUMS").unlink()
+    with pytest.raises(PackageError, match=message):
+        Vela3Family().verify(PackageRef(copy))
 
 
 def test_bundled_runtime_is_never_imported(model) -> None:
@@ -184,6 +231,22 @@ def test_golden_request_answers_every_question(model) -> None:
             question_id in response["spans"] and question_id in response["thresholds"]
         )
     assert response["usage"]["input_tokens"] > 0
+
+
+def test_folded_lora_scaling_answers_bit_for_bit(package, model, monkeypatch) -> None:
+    layers = [
+        layer
+        for stack in model.engine_model.stacks().values()
+        for layer in stack.modules()
+        if isinstance(layer, LoRALinear)
+    ]
+    assert model.engine_model.receipt()["lora_folded"] == len(layers) > 0
+    monkeypatch.setattr(engine, "fold_scaling", lambda module: 0)
+    unfolded = load(package)
+    assert "lora_folded" not in unfolded.engine_model.receipt()
+    assert ask(model, GOLDEN_STATE, GOLDEN_QUESTIONS) == ask(
+        unfolded, GOLDEN_STATE, GOLDEN_QUESTIONS
+    )
 
 
 def test_span_thresholds_follow_the_route(model) -> None:
@@ -290,7 +353,21 @@ def test_unanswerable_questions_fail_alone(model) -> None:
             },
             "broad": {"type": "span", "criteria": {"a": None}, "head": "broad"},
             "preset": {"preset": "relevance"},
+            "described": {
+                "type": "noul",
+                "instructions": "Is it text?",
+                "criteria": {"true": "The input is text"},
+            },
+            "listed": {
+                "type": "noul",
+                "choices": [{"key": "true", "description": "The input is text"}],
+            },
             "fine": {"type": "noul", "instructions": "Is it text?"},
+            "undescribed": {
+                "type": "noul",
+                "instructions": "Is it text?",
+                "criteria": {"true": None},
+            },
         },
     )
     answers = response["answers"]
@@ -300,9 +377,14 @@ def test_unanswerable_questions_fail_alone(model) -> None:
         "wrong": "invalid_question",
         "broad": "invalid_question",
         "preset": "invalid_question",
+        "described": "invalid_question",
+        "listed": "invalid_question",
         "fine": None,
+        "undescribed": None,
     }
     assert answers["set"]["reason"] == "type_unsupported"
+    assert "instructions" in answers["described"]["message"]
+    assert answers["undescribed"]["noul"] == answers["fine"]["noul"]
 
 
 def test_long_inputs_fail_decisions_and_window_spans(model) -> None:
@@ -357,6 +439,61 @@ def test_calls_never_share_a_forward_and_batch_by_length() -> None:
         item(30, first),
     ]
     assert batches(items) == [[0, 2], [5], [1, 3], [4]]
+
+
+def test_merged_batches_share_equal_calls_across_requests_only(model) -> None:
+    questions = {
+        "custom": {"type": "noul", "instructions": "Is the request urgent?"},
+        "toxic": {"type": "span", "criteria": {"Violence": None}, "over": "user"},
+        "described": {"type": "span", "criteria": {"drug": "a medicine"}},
+    }
+    first = model.plan(STATE, questions).items
+    other = {**STATE, "user": STATE["user"].replace("Tom Baker", "Ann Smith")}
+    second = model.plan(other, questions).items
+    # Two span questions of one request run on one adapter, as two calls.
+    assert batches(first, merged=True) == batches(first)
+    items = first + second
+    owners = [0] * len(first) + [1] * len(second)
+    assert all(len({owners[i] for i in group}) == 1 for group in batches(items))
+    merged = batches(items, merged=True)
+    assert all(len({owners[i] for i in group}) == 2 for group in merged)
+    assert len(merged) == len(batches(first))
+    alone = model.run(items)
+    together = model.networks.run(items, merged=True)
+    for (logits, spans), (merged_logits, merged_spans) in zip(
+        alone, together, strict=True
+    ):
+        for row, merged_row in zip(logits, merged_logits, strict=True):
+            np.testing.assert_allclose(merged_row, row, atol=1e-5)
+        if spans is not None:
+            np.testing.assert_allclose(merged_spans, spans, atol=1e-5)
+
+
+@pytest.mark.parametrize(("device", "merged"), [("cpu", False), ("cuda", True)])
+def test_only_gpus_share_forwards_between_requests(
+    model, monkeypatch, device, merged
+) -> None:
+    seen: list[bool] = []
+
+    def run(items, merged: bool = False):
+        seen.append(merged)
+        return []
+
+    monkeypatch.setattr(model.networks, "run", run)
+    monkeypatch.setattr(model.engine_model, "device", SimpleNamespace(type=device))
+    model.run_approximate([])
+    assert seen == [merged]
+
+
+def test_merged_forwards_keep_one_length_class() -> None:
+    def item(length: int) -> Vela3Item:
+        sequence = EncoderSequence(list(range(length)), [])
+        return Vela3Item(sequence, Call("router", 4096, rows=8))
+
+    # One item per request: a long row would pad the short ones to its length.
+    items = [item(10), item(200), item(12)]
+    assert batches(items) == [[0], [1], [2]]
+    assert batches(items, merged=True) == [[0, 2], [1]]
 
 
 def test_routing_regexes_are_the_released_ones() -> None:
