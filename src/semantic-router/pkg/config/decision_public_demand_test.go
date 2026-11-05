@@ -20,6 +20,8 @@ func TestDecisionPublicIdentityNeverUsesRuntimePrivateNames(t *testing.T) {
 
 func TestSystemOneListenerIsExactModelDemand(t *testing.T) {
 	cfg := DefaultGlobalConfig()
+	// Isolate the listener grant from unrelated legacy global-cache demand.
+	cfg.SemanticCache.Enabled = false
 	cfg.ModelDeployments["published"] = ModelDeployment{Provider: ModelRuntimeProvider, Artifact: "org/decision", PublicName: "public-model"}
 	cfg.ModelDeployments["unused"] = ModelDeployment{Provider: ModelRuntimeProvider, Artifact: "org/other"}
 	cfg.Listeners = []Listener{{Name: "public", SystemOne: &ListenerSystemOne{Models: []string{"public-model"}}}}

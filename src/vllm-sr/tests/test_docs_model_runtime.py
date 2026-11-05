@@ -61,7 +61,13 @@ REQUEST_SCHEMAS = {
     "/v1/bundle": "BundleRequest",
 }
 # Fragments that are not router configuration documents.
-NON_ROUTER_TITLES = {"legacy.yaml", "legacy.migrated.yaml", "models.yaml"}
+NON_ROUTER_TITLES = {
+    "legacy.yaml",
+    "legacy.migrated.yaml",
+    "models.yaml",
+    # Helm chart values for the router Deployment.
+    "values.yaml",
+}
 
 
 @dataclass(frozen=True)
