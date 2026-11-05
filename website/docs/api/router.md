@@ -93,20 +93,22 @@ you leave response metadata disabled.
 }
 ```
 
-`model_calls` counts physical inference attempts within the selected algorithm,
-including its transport retries. Signal calls are outside this counter and have
-their own timeouts and request cancellation. It is not a count of GPU forwards. `usage`
-belongs to the returned native candidate and is not total cascade billing.
+`model_calls` counts physical inference attempts across signal evaluation and
+the selected algorithm, including remote decision-model calls and transport
+retries. Signal timeouts remain upper bounds inside the shared request deadline.
+It is not a count of GPU forwards. `usage` belongs to the returned native
+candidate and is not total cascade billing.
 The `quality` field names the configured acceptance method; it is not an
 accuracy score. Native discovery marks recipe entrypoints with `routing: true`
 and concrete models with `routing: false`.
 
 Malformed or unsupported auto questions return `400`. If no complete answer
-passes the declared acceptance rule within the call budget, the request
-returns `503` with `systemone_unresolved`; expiration of the algorithm deadline
-returns `504` with `systemone_deadline_exceeded`. Failed
-candidates never become empty successful answers. Direct model requests keep
-their existing native API contract and do not run the cascade.
+passes the declared acceptance rule, the request returns `503` with
+`systemone_unresolved`. Exhausting the shared physical-call limit returns
+`503`; exhausting its deadline returns `504`. Both budget errors use
+`systemone_budget_exhausted` and include the reason and `model_calls` count.
+Failed candidates never become empty successful answers. Direct model requests
+keep their existing native API contract and do not run the cascade.
 
 A remote Engine backend must expose a concrete model. Native backend calls
 carry `X-VSR-SystemOne-Backend: 1`; a receiving Router returns `409`
