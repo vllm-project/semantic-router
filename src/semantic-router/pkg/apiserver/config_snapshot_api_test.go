@@ -75,14 +75,17 @@ func newSnapshotAPIServer(t *testing.T, reject error) (*ClassificationAPIServer,
 }
 
 // watchAndApply plays the file watcher: once the persisted document changes,
-// it hands that document to the lifecycle.
+// it hands that document to the lifecycle. Apply writes a history backup, so
+// the test waits for that goroutine before TempDir removes the directory.
 func watchAndApply(t *testing.T, manager *configsnapshot.Manager, path string) {
 	t.Helper()
 	before, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		deadline := time.Now().Add(5 * time.Second)
 		for time.Now().Before(deadline) {
 			data, readErr := os.ReadFile(path)
@@ -100,6 +103,7 @@ func watchAndApply(t *testing.T, manager *configsnapshot.Manager, path string) {
 			time.Sleep(time.Millisecond)
 		}
 	}()
+	t.Cleanup(func() { <-done })
 }
 
 func putConfig(t *testing.T, server *ClassificationAPIServer, path string) (*httptest.ResponseRecorder, RouterConfigUpdateResponse) {

@@ -188,7 +188,7 @@ func (s *InMemoryStore) List(ctx context.Context, opts ListOptions) (*ListResult
 		return nil, err
 	}
 	sortMemoriesForList(matching)
-	page := pageMemories(matching, offset, limit)
+	page := cloneMemories(pageMemories(matching, offset, limit))
 
 	return &ListResult{
 		Memories: page,
@@ -196,6 +196,31 @@ func (s *InMemoryStore) List(ctx context.Context, opts ListOptions) (*ListResult
 		Limit:    limit,
 		Offset:   offset,
 	}, nil
+}
+
+// cloneMemories copies each memory before the store lock is released. List
+// callers, including background consolidation, must not observe later Update
+// mutations of the stored objects.
+func cloneMemories(memories []*Memory) []*Memory {
+	if memories == nil {
+		return nil
+	}
+	cloned := make([]*Memory, len(memories))
+	for i, mem := range memories {
+		cloned[i] = cloneMemory(mem)
+	}
+	return cloned
+}
+
+func cloneMemory(mem *Memory) *Memory {
+	if mem == nil {
+		return nil
+	}
+	cloned := *mem
+	if mem.Embedding != nil {
+		cloned.Embedding = append([]float32(nil), mem.Embedding...)
+	}
+	return &cloned
 }
 
 // Get retrieves a memory by ID.
@@ -270,6 +295,48 @@ func (s *InMemoryStore) Forget(ctx context.Context, id string) error {
 	delete(s.memories, id)
 	logging.Debugf("InMemoryStore: deleted memory id=%s", id)
 	return nil
+}
+
+func (s *InMemoryStore) supportsAtomicGroupReplacement() bool { return true }
+
+// replaceCurrentGroup creates the summary and removes all listed sources under
+// one lock. A changed or missing source leaves the whole group untouched.
+func (s *InMemoryStore) replaceCurrentGroup(ctx context.Context, versions []memoryVersion, summary *Memory) (bool, int, error) {
+	if err := ctx.Err(); err != nil {
+		return false, 0, err
+	}
+	if !s.enabled {
+		return false, 0, fmt.Errorf("store not enabled")
+	}
+	if summary == nil || len(versions) < 2 {
+		return false, 0, fmt.Errorf("at least two source memories and a summary are required")
+	}
+	if len(summary.Embedding) == 0 {
+		embedding, err := embedForWrite(ctx, summary.Content, s.embeddingConfig)
+		if err != nil {
+			return false, 0, fmt.Errorf("failed to generate summary embedding: %w", err)
+		}
+		summary.Embedding = embedding
+	}
+	if summary.CreatedAt.IsZero() {
+		summary.CreatedAt = time.Now()
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.memories[summary.ID]; exists {
+		return false, 0, fmt.Errorf("memory with ID %s already exists", summary.ID)
+	}
+	for _, want := range versions {
+		if !sameVersion(want, s.memories[want.id]) {
+			return false, 0, nil
+		}
+	}
+	s.memories[summary.ID] = summary
+	for _, want := range versions {
+		delete(s.memories, want.id)
+	}
+	return true, len(versions), nil
 }
 
 // ForgetByScope deletes all memories matching the scope.

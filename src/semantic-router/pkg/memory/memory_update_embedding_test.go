@@ -13,6 +13,7 @@ import (
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	glideoptions "github.com/valkey-io/valkey-glide/go/v2/options"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
@@ -302,6 +303,43 @@ func (c *memoryUpdateValkeyClient) Del(_ context.Context, keys []string) (int64,
 		}
 	}
 	return deleted, nil
+}
+
+func (c *memoryUpdateValkeyClient) InvokeScriptWithOptions(
+	_ context.Context,
+	_ glideoptions.Script,
+	scriptOptions glideoptions.ScriptOptions,
+) (any, error) {
+	if len(scriptOptions.Keys) != 1 || len(scriptOptions.Args) < 1 {
+		return int64(0), nil
+	}
+	key := scriptOptions.Keys[0]
+	fields := c.hashes[key]
+	if fields == nil || fields["id"] != scriptOptions.Args[0] {
+		return int64(0), nil
+	}
+	updates := make(map[string]string)
+	args := scriptOptions.Args[1:]
+	for i := 0; i+1 < len(args); i += 2 {
+		updates[args[i]] = args[i+1]
+	}
+	c.hsetCalls++
+	c.lastHSetKey = key
+	c.lastHSet = updates
+	if content, ok := updates["content"]; ok {
+		c.writtenContents = append(c.writtenContents, content)
+	}
+	if raw, ok := updates["embedding"]; ok {
+		c.writtenEmbeddings = append(c.writtenEmbeddings, valkeyBytesToFloat32([]byte(raw)))
+	}
+	if c.failNextHSet {
+		c.failNextHSet = false
+		return nil, errors.New("injected Valkey HSET failure")
+	}
+	for name, value := range updates {
+		fields[name] = value
+	}
+	return int64(1), nil
 }
 
 func TestValkeyStore_UpdateEmbedding(t *testing.T) {

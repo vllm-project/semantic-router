@@ -2,6 +2,8 @@ package memory
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -333,5 +335,89 @@ func TestInMemoryStore_Retrieve_ThresholdWithMultipleUsers(t *testing.T) {
 			"Result score %.4f should be >= 0.6 threshold", result.Score)
 		assert.NotEqual(t, "user2_mem", result.Memory.ID,
 			"User2's memory should not appear in user1's results")
+	}
+}
+
+func TestInMemoryStoreListSnapshotsLiveMemories(t *testing.T) {
+	store := newTestInMemoryStore()
+	ctx := context.Background()
+	createdAt := time.Unix(1_700_000_000, 0).UTC()
+	require.NoError(t, store.Store(ctx, &Memory{
+		ID:         "m1",
+		Type:       MemoryTypeSemantic,
+		Content:    "  keep  ",
+		UserID:     "user1",
+		Embedding:  []float32{1, 2},
+		CreatedAt:  createdAt,
+		Importance: 0.4,
+	}))
+
+	listed, err := store.List(ctx, ListOptions{UserID: "user1", Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, listed.Memories, 1)
+	snapshot := listed.Memories[0]
+
+	require.NoError(t, store.Update(ctx, "m1", &Memory{
+		Content: "updated fact",
+		Type:    MemoryTypeSemantic,
+	}))
+	assert.Equal(t, "  keep  ", snapshot.Content)
+	assert.Equal(t, []float32{1, 2}, snapshot.Embedding)
+
+	snapshot.Content = "caller mutated"
+	snapshot.Embedding[0] = 99
+	got, err := store.Get(ctx, "m1")
+	require.NoError(t, err)
+	assert.Equal(t, "updated fact", got.Content)
+	assert.NotEqual(t, float32(99), got.Embedding[0])
+}
+
+func TestInMemoryStoreListDoesNotRaceWithUpdate(t *testing.T) {
+	store := newTestInMemoryStore()
+	ctx := context.Background()
+	require.NoError(t, store.Store(ctx, &Memory{
+		ID:        "m1",
+		Type:      MemoryTypeSemantic,
+		Content:   "original",
+		UserID:    "user1",
+		Embedding: []float32{1, 2, 3},
+		CreatedAt: time.Unix(1_700_000_000, 0).UTC(),
+	}))
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, 2)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 40; i++ {
+			if err := store.Update(ctx, "m1", &Memory{
+				Content: fmt.Sprintf("updated-%d", i),
+				Type:    MemoryTypeSemantic,
+			}); err != nil {
+				errCh <- err
+				return
+			}
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 40; i++ {
+			listed, err := store.List(ctx, ListOptions{UserID: "user1", Limit: 10})
+			if err != nil {
+				errCh <- err
+				return
+			}
+			if len(listed.Memories) != 1 || listed.Memories[0] == nil {
+				errCh <- fmt.Errorf("list returned %d memories", len(listed.Memories))
+				return
+			}
+			_ = listed.Memories[0].Content
+			_ = listed.Memories[0].Embedding[0]
+		}
+	}()
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		require.NoError(t, err)
 	}
 }
