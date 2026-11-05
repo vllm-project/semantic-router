@@ -311,4 +311,6 @@ recipes:
 	if got := testutil.ToFloat64(metrics.SystemOneStageCalls.WithLabelValues("cascade", "fast", "fast")) - stageMetricBefore; got != 2 {
 		t.Fatalf("stage telemetry=%v, want 2 physical exchanges including retry", got)
 	}
+	t.Logf("HTTP %d: model_calls=%d signal_calls=%d fast_attempts=%d strong_attempts=%d",
+		response.Code, result.Error.Calls, signalCalls.Load(), fastAttempts.Load(), strongAttempts.Load())
 }
