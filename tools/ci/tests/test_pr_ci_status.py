@@ -754,6 +754,24 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(result["state"], "running")
         self.assertIn("qualification_incomplete", result["reason_codes"])
 
+    def test_hidden_awaiting_approval_gate_stays_deferred(self):
+        client = DiagnosticClient()
+        client.plan.update(
+            expected_verification_ids=["quality"],
+            required_verification_ids=["quality", "e2e.dashboard"],
+            deferred_verifications=["e2e.dashboard"],
+        )
+        client.refresh_report()
+        client.checks[0].update(status="in_progress", conclusion=None)
+        client.visible = {70}
+        result = self.diagnose(client)
+        self.assertEqual(result["state"], "deferred")
+        self.assertIn("qualification_deferred", result["reason_codes"])
+        self.assertFalse(result["evidence"]["full_qualification"])
+        self.assertTrue(result["evidence"]["snapshot_current"])
+        self.assertEqual(len(result["checks"]["all"]), 2)
+        self.assertEqual(len(result["checks"]["latest"]), 1)
+
     def test_failed_current_qualification_stays_failed(self):
         for field in ("run", "native_job", "own_check"):
             with self.subTest(field=field):

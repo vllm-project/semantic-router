@@ -889,12 +889,12 @@ def diagnose(
             evidence["full_qualification"] = (
                 run.get("status") == "completed" and qualification == "success"
             )
-            if run.get("status") == "completed" and (
-                qualification == "failure" or (replacements and not green)
-            ):
+            if run.get("status") == "completed" and qualification == "failure":
                 state, reason = "failed", "current_qualification_failed"
             elif qualification == "awaiting-approval":
                 state, reason = "deferred", "qualification_deferred"
+            elif run.get("status") == "completed" and replacements and not green:
+                state, reason = "failed", "current_qualification_failed"
             elif evidence["full_qualification"]:
                 try:
                     identity = source_identity(client, repo, number)
