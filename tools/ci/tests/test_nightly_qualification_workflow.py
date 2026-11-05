@@ -215,6 +215,77 @@ class NightlyRetryTests(unittest.TestCase):
                 )
 
 
+HELM_STUB = """#!/usr/bin/env bash
+echo "$*" >> "$HELM_LOG"
+if [[ "$1 $2" == "show chart" ]]; then
+  if [[ "$STUB_CHART" == published ]]; then exit 0; fi
+  echo "Error: $STUB_CHART" >&2
+  exit 1
+fi
+"""
+
+
+class PublishedNightlyDateTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.jobs = load("nightly-build.yml")["jobs"]
+        steps = load("helm-publish.yml")["jobs"]["publish"]["steps"]
+        script = next(
+            step["run"] for step in steps if step.get("name") == "Publish chart"
+        )
+        self.publish_chart = re.sub(r"\$\{\{[^}]*\}\}", "ghcr.io", script)
+
+    def test_publishers_wait_for_the_date_check(self) -> None:
+        reserve = self.jobs["reserve"]
+        self.assertEqual(set(reserve["needs"]), {"head", "ci"})
+        script = reserve["steps"][-1]["run"]
+        self.assertIn("tools/ci/nightly_tags.py", script)
+        self.assertEqual(
+            reserve["steps"][-1]["env"]["DATE"], "${{ needs.head.outputs.date }}"
+        )
+        for job in ("docker", "helm"):
+            self.assertIn("reserve", self.jobs[job]["needs"])
+            self.assertIn(
+                "needs.reserve.outputs.publish == 'true'", self.jobs[job]["if"]
+            )
+
+    def run_publish(self, mode: str, chart: str) -> tuple[list[str], int]:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            stub, log = root / "helm", root / "helm.log"
+            stub.write_text(HELM_STUB)
+            stub.chmod(0o755)
+            log.touch()
+            process = subprocess.run(
+                ["bash", "-e", "-c", self.publish_chart],
+                env={
+                    **os.environ,
+                    "PATH": f"{root}:{os.environ['PATH']}",
+                    "HELM_LOG": str(log),
+                    "RUNNER_TEMP": str(root),
+                    "MODE": mode,
+                    "VERSION": "0.0.0-nightly.20261105",
+                    "CHART": "semantic-router-0.0.0-nightly.20261105.tgz",
+                    "STUB_CHART": chart,
+                },
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            return log.read_text().splitlines(), process.returncode
+
+    def test_a_published_nightly_chart_is_never_pushed_again(self) -> None:
+        for mode, chart, pushed, code in (
+            ("nightly", "published", False, 0),
+            ("nightly", "0.0.0-nightly.20261105: not found", True, 0),
+            ("nightly", "unauthorized: authentication required", False, 1),
+            ("main", "published", True, 0),
+        ):
+            with self.subTest(mode=mode, chart=chart):
+                calls, returncode = self.run_publish(mode, chart)
+                self.assertEqual(any(c.startswith("push ") for c in calls), pushed)
+                self.assertEqual(returncode, code)
+
+
 class RunDateTests(unittest.TestCase):
     def test_images_take_the_runs_date(self) -> None:
         with mock.patch.dict(os.environ, {"CI_RUN_DATE": "20261105"}):
