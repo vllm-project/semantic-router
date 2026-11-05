@@ -316,7 +316,7 @@ def presentation(
     if state in {"awaiting-approval", "legacy", "stale"}:
         lines += [
             "",
-            "Approval applies to this revision only. New commits or a changed merge base require fresh qualification.",
+            "Approval applies to this revision only. New commits require fresh qualification.",
         ]
     return titles[state], "\n".join(lines)
 
