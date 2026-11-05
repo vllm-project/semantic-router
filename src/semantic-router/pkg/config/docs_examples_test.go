@@ -11,9 +11,12 @@ import (
 
 // Pages and files whose YAML examples the Router must load. Each one is also
 // a path of the router-checked-docs domain, so editing it runs this test in
-// PR CI.
+// PR CI. A block titled values.yaml holds Helm chart values; the Helm gate
+// renders those (deploy/helm/test_data_volume.py).
 var routerCheckedDocPages = []string{
 	repoRel("website", "docs", "installation", "protocol-compatibility.md"),
+	repoRel("website", "docs", "installation", "storage-overview.md"),
+	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "installation", "storage-overview.md"),
 }
 
 var routerCheckedConfigFiles = []string{
@@ -22,8 +25,13 @@ var routerCheckedConfigFiles = []string{
 
 type docFence struct {
 	lang string
+	info string
 	body string
 	line int
+}
+
+func (f docFence) helmValues() bool {
+	return strings.Contains(f.info, `title="values.yaml"`)
 }
 
 // docFences returns the fenced blocks of a Markdown page, with a fence's own
@@ -37,8 +45,8 @@ func docFences(page string) []docFence {
 			continue
 		}
 		indent := len(lines[index]) - len(trimmed)
-		fence := docFence{line: index + 1}
-		if info := strings.Fields(strings.TrimPrefix(trimmed, "```")); len(info) > 0 {
+		fence := docFence{line: index + 1, info: strings.TrimPrefix(trimmed, "```")}
+		if info := strings.Fields(fence.info); len(info) > 0 {
 			fence.lang = info[0]
 		}
 		var body []string
@@ -101,7 +109,7 @@ func TestDocYAMLExamplesLoad(t *testing.T) {
 			fences := docFences(string(content))
 			checked := 0
 			for index, fence := range fences {
-				if fence.lang != "yaml" {
+				if fence.lang != "yaml" || fence.helmValues() {
 					continue
 				}
 				checked++
