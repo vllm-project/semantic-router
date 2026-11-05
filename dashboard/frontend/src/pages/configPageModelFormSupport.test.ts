@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 
+import { ROUTER_CONFIG_SCHEMA } from '../generated/routerConfigContract'
 import type { ProviderModel } from '../types/config'
 
 import {
@@ -47,9 +48,16 @@ describe('model form backend targets', () => {
       chat_path: '/chat/completions',
       api_key: 'test-only-key',
       api_key_env: 'PROVIDER_API_KEY',
+      auth: { header: 'x-api-key', prefix: '', api_key_env: 'PROVIDER_API_KEY' },
+      headers: { 'X-Org': 'acme' },
     } as const
 
     expect(normalizeModelBackendRefs([backend])).toEqual([backend])
+    // Every field the Router's schema defines for a backend survives an
+    // editor save (the guard from #5195).
+    expect(Object.keys(backend).sort()).toEqual(
+      Object.keys(ROUTER_CONFIG_SCHEMA.$defs.CanonicalBackendRef.properties).sort(),
+    )
   })
 
   it('preserves an explicitly empty authentication prefix through the model payload', () => {

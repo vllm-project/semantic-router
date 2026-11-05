@@ -25,7 +25,7 @@ func TestHTTPTokenClassifierGenericTaskFixtures(t *testing.T) {
 				}
 				return wireSpans(tc.Spans)
 			})
-			backend, err := newHTTPTokenClassifierInference(cfg, labels, 0)
+			backend, err := newHTTPTokenClassifierInference(externalClassifyDeployment(cfg, 0), labels)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -52,7 +52,7 @@ func TestHTTPTokenClassifierGenericLabelZeroAndPartialMetadata(t *testing.T) {
 		}
 	})
 	labels := tasks.TokenLabelSet{Labels: []string{"UNSUPPORTED"}}
-	backend, err := newHTTPTokenClassifierInference(cfg, labels, 0)
+	backend, err := newHTTPTokenClassifierInference(externalClassifyDeployment(cfg, 0), labels)
 	if err != nil {
 		t.Fatal(err)
 	}

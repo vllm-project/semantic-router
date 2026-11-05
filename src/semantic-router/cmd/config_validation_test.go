@@ -54,7 +54,7 @@ func runValidation(t *testing.T, document string) (int, configValidationReport) 
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	status := validateConfigFile(path, config.GatewayStandalone, &out)
+	status := validateConfigFile(path, config.GatewayStandalone, false, &out)
 	var report configValidationReport
 	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 		t.Fatalf("stdout is not one JSON report: %q", out.String())
@@ -87,10 +87,62 @@ func TestValidateConfigReportsTheRoutersWarnings(t *testing.T) {
 
 func TestValidateConfigReportsAnUnreadableFile(t *testing.T) {
 	var out bytes.Buffer
-	if status := validateConfigFile(filepath.Join(t.TempDir(), "missing.yaml"), config.GatewayExtProc, &out); status != 1 {
+	if status := validateConfigFile(filepath.Join(t.TempDir(), "missing.yaml"), config.GatewayExtProc, false, &out); status != 1 {
 		t.Fatalf("status = %d for a missing file", status)
 	}
 	if !strings.Contains(out.String(), `"valid":false`) {
 		t.Fatalf("report = %s", out.String())
+	}
+}
+
+// -migrate-config writes the deprecated model fields in the forms that
+// replace them; the migrated file loads with no deprecated field.
+func TestMigrateConfigRewritesDeprecatedModelFields(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	document := `version: v0.3
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, base_url: "http://127.0.0.1:8000/v1", provider: vllm, weight: 1}]
+routing:
+  signals:
+    pii: [{name: personal, threshold: 0.5}]
+  decisions:
+    - name: route
+      priority: 100
+      rules: {operator: OR, conditions: [{type: pii, name: personal}]}
+      modelRefs: [{model: general}]
+global:
+  model_catalog:
+    modules:
+      classifier:
+        pii: {model_id: models/Vela-1.0-Encoder-307M-PII, use_cpu: true}
+`
+	if err := os.WriteFile(path, []byte(document), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if status := validateConfigFile(path, config.GatewayStandalone, true, &out); status != 0 {
+		t.Fatalf("status %d: %s", status, out.String())
+	}
+	var report configValidationReport
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.Migrated == "" || len(report.Kept) > 0 || report.MigrationError != "" {
+		t.Fatalf("migration report %+v", report)
+	}
+	migrated, err := config.ParseYAMLBytesWithoutEnvExpansion([]byte(report.Migrated))
+	if err != nil {
+		t.Fatalf("the migrated file does not load: %v\n%s", err, report.Migrated)
+	}
+	for _, warning := range config.Warnings(migrated) {
+		if warning.Code == "deprecated_model_field" {
+			t.Fatalf("the migrated file keeps a deprecated field: %+v\n%s", warning, report.Migrated)
+		}
+	}
+	if !strings.Contains(report.Migrated, "pii: ") || strings.Contains(report.Migrated, "model_id") || strings.Contains(report.Migrated, "base_url") {
+		t.Fatalf("the migrated file is not in the canonical form:\n%s", report.Migrated)
 	}
 }

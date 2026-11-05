@@ -34,7 +34,7 @@ const (
 func main() {
 	opts := parseRuntimeOptions()
 	if opts.validateConfig {
-		os.Exit(validateConfigFile(opts.configPath, opts.gateway, os.Stdout))
+		os.Exit(validateConfigFile(opts.configPath, opts.gateway, opts.migrateConfig, os.Stdout))
 	}
 	logo.PrintVLLMLogo()
 	initializeRuntimeLogger()
