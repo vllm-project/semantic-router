@@ -182,6 +182,10 @@ func decodeResponsesInputItem(
 		return err
 	}
 	if item.Namespace != "" && strings.TrimSpace(item.Name) != "" {
+		// Flattening shortens long parts, so bound them as the client sent them.
+		if limit := policy.Limits.ToolNameBytes; limit > 0 && (len(item.Namespace) > limit || len(item.Name) > limit) {
+			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "tool_call_limit", "tool call namespace or name exceeds the configured limit", nil)
+		}
 		item.Name = llmprotocol.FlattenToolName(item.Namespace, item.Name)
 		request.Generation++
 	}

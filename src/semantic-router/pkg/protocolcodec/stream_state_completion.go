@@ -118,6 +118,19 @@ func (state *streamState) mergeStreamToolIdentity(current, incoming llmprotocol.
 		}
 		current.Name = incoming.Name
 	}
+	// A Responses client learns a call's namespace with its name, which a Chat
+	// stream may send after the call's first fragment.
+	if incoming.Namespace != "" {
+		if current.Namespace != "" && current.Namespace != incoming.Namespace {
+			return llmprotocol.ToolCall{}, llmprotocol.NewError(
+				llmprotocol.ErrorUpstreamUnavailable,
+				"stream_tool_identity_mismatch",
+				"upstream stream changed a tool namespace",
+				nil,
+			)
+		}
+		current.Namespace = incoming.Namespace
+	}
 	return current, nil
 }
 

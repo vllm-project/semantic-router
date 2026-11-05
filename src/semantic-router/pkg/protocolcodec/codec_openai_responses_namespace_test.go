@@ -86,6 +86,28 @@ func TestResponsesNamespaceCustomHistoryCallFlattens(t *testing.T) {
 	require.Equal(t, llmprotocol.ToolKindCustom, request.Messages[0].Content[0].ToolCall.Kind)
 }
 
+// Flattening shortens a long namespace or name, so the limit applies to both
+// as the client sent them, for function and custom calls alike.
+func TestResponsesNamespaceHistoryCallsKeepTheToolNameLimit(t *testing.T) {
+	long := strings.Repeat("a", 257)
+	for name, items := range map[string]string{
+		"function name":      `{"type":"function_call","call_id":"call_1","namespace":"ns","name":"` + long + `","arguments":"{}"},{"type":"function_call_output","call_id":"call_1","output":"done"}`,
+		"function namespace": `{"type":"function_call","call_id":"call_1","namespace":"` + long + `","name":"tool","arguments":"{}"},{"type":"function_call_output","call_id":"call_1","output":"done"}`,
+		"custom name":        `{"type":"custom_tool_call","call_id":"call_1","namespace":"ns","name":"` + long + `","input":"x"},{"type":"custom_tool_call_output","call_id":"call_1","output":"done"}`,
+		"custom namespace":   `{"type":"custom_tool_call","call_id":"call_1","namespace":"` + long + `","name":"tool","input":"x"},{"type":"custom_tool_call_output","call_id":"call_1","output":"done"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, _, _, err := NewBuiltinEngine().DecodeRequestForMutation(llmprotocol.OpenAIResponsesV1, []byte(`{"model":"m","input":[`+items+`]}`))
+			requireProtocolErrorCode(t, err, "tool_call_limit")
+		})
+	}
+	atLimit := strings.Repeat("a", 256)
+	_, _, _, err := NewBuiltinEngine().DecodeRequestForMutation(llmprotocol.OpenAIResponsesV1, []byte(`{"model":"m","input":[`+
+		`{"type":"function_call","call_id":"call_1","namespace":"`+atLimit+`","name":"`+atLimit+`","arguments":"{}"},`+
+		`{"type":"function_call_output","call_id":"call_1","output":"done"}]}`))
+	require.NoError(t, err)
+}
+
 func TestResponsesNamespaceIsRejectedOutsideToolCalls(t *testing.T) {
 	_, _, _, err := NewBuiltinEngine().DecodeRequestForMutation(llmprotocol.OpenAIResponsesV1, []byte(
 		`{"model":"m","input":[{"type":"message","role":"user","namespace":"ns","content":"hi"}]}`,
@@ -349,6 +371,40 @@ data: {"type":"message_stop"}
 			requireNamespacedCallFrames(t, append(frames, final...))
 		})
 	}
+}
+
+// A Chat stream may name the tool only after the call's first fragment; every
+// item event and the completed response still carry the namespace.
+func TestResponsesNamespaceSurvivesALateStreamedName(t *testing.T) {
+	wire := `data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"m","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"arguments":""}}]},"finish_reason":null}]}
+
+data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"m","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"name":"mcp__echo__echo","arguments":"{\"text\":\"hi\"}"}}]},"finish_reason":null}]}
+
+data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"m","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
+
+data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"m","choices":[],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}
+
+data: [DONE]
+
+`
+	_, mutation := namespaceRestoreMutation()
+	stream, err := NewBuiltinEngine().NewStreamWithMutation(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIResponsesV1, llmprotocol.StreamContext{PublicModel: "m"}, mutation)
+	require.NoError(t, err)
+	frames, _, _, err := stream.Push([]byte(wire))
+	require.NoError(t, err)
+	final, _, _, err := stream.Finalize(nil)
+	require.NoError(t, err)
+	requireNamespacedCallFrames(t, append(frames, final...))
+}
+
+func TestStreamToolIdentityRejectsAChangedNamespace(t *testing.T) {
+	state := &streamState{policy: llmprotocol.DefaultPolicy()}
+	current := llmprotocol.ToolCall{ID: "call_1", Name: "echo", Namespace: "mcp__echo"}
+	_, err := state.mergeStreamToolIdentity(current, llmprotocol.ToolCall{ID: "call_1", Name: "echo", Namespace: "mcp__other"})
+	requireProtocolErrorCode(t, err, "stream_tool_identity_mismatch")
+	merged, err := state.mergeStreamToolIdentity(llmprotocol.ToolCall{ID: "call_1"}, llmprotocol.ToolCall{Name: "echo", Namespace: "mcp__echo"})
+	require.NoError(t, err)
+	require.Equal(t, "mcp__echo", merged.Namespace)
 }
 
 func requireNamespacedCallFrames(t *testing.T, frames [][]byte) {
