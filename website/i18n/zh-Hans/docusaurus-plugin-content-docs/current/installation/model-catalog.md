@@ -131,7 +131,7 @@ routing:
 
 ## 阈值 {#thresholds}
 
-未写出的模块阈值来自回答的模型：内置模型的模型卡上的校准值；`systemone` 模型不发布阈值，使用 0.5（加载时警告 `uncalibrated_threshold`）；其他情况使用 Vela 1.0 的默认值。你写出的 `threshold` 按原值使用。
+未写出的模块阈值来自回答的模型：`vela3-fast`、Vela 2.0 各尺寸或 Vela 1.0 专用模型的校准值；其他模型（本地或 `systemone`）没有校准值，使用 0.5（加载时警告 `uncalibrated_preset`）。远程分类器沿用 Vela 1.0 的默认值。你写出的 `threshold` 按原值使用。
 
 ## 准入 {#admission}
 

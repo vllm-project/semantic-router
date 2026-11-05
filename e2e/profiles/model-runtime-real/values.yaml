@@ -4,9 +4,8 @@
 #
 # - Decision 2.0 Kai-0.6B answers the request_kind decision signal, in its own
 #   "decisions" process;
-# - Vela Domain, PII and Guard are the module defaults, which the Router turns
-#   into the implicit deployments @domain_classifier, @pii_classifier and
-#   @prompt_guard.
+# - the decision model (vela3-fast, the primary deployment) answers the built-in
+#   domain, PII and jailbreak signals.
 #
 # testcases/model_runtime_real.go asserts what these models decide for clear
 # prompts, and that the Router routes on Kai's own answer.

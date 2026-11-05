@@ -43,7 +43,9 @@ type TaskCapability struct {
 }
 
 // TaskPlan is immutable preparation input. It retains the semantic question
-// and the exact native questions used to implement it.
+// and the exact native questions used to implement it, which may go out
+// under other IDs (a family's trained IDs); answers come back under the
+// semantic question's ID.
 type TaskPlan struct {
 	Definition     TaskDefinition
 	Question       Question
@@ -75,10 +77,12 @@ func PrepareTaskQuestion(definition TaskDefinition, question Question) (Question
 }
 
 // CompileTask selects an implemented output adapter from the actual card.
-// Family and training ancestry intentionally do not participate in admission.
+// Family and training ancestry intentionally do not participate in admission;
+// they only choose the wire form of a built-in question the family was
+// trained on (trainedPlan).
 func CompileTask(definition TaskDefinition, question Question, card ModelCard) (TaskPlan, error) {
 	question, err := PrepareTaskQuestion(definition, question)
-	plan := TaskPlan{Definition: definition, Question: question, Implementation: "native"}
+	plan := TaskPlan{Definition: definition, Question: question, Implementation: implementationNative}
 	if err != nil {
 		return plan, err
 	}
@@ -87,6 +91,10 @@ func CompileTask(definition TaskDefinition, question Question, card ModelCard) (
 			return plan, fmt.Errorf("%w: model %s does not define preset %s", ErrRejected, card.ID, question.Preset)
 		}
 		plan.Questions = []Question{question}
+		return plan, nil
+	}
+	if trained, implementation, ok := trainedPlan(definition.ID, question, card); ok {
+		plan.Questions, plan.Implementation = trained, implementation
 		return plan, nil
 	}
 	if card.Answers(question.Type) {
@@ -99,7 +107,7 @@ func CompileTask(definition TaskDefinition, question Question, card ModelCard) (
 	if len(question.Labels) == 0 {
 		return plan, fmt.Errorf("%w: set task %s requires labels", ErrRejected, definition.ID)
 	}
-	plan.Implementation = "composed_noul"
+	plan.Implementation = implementationComposedNoul
 	for index, label := range question.Labels {
 		plan.Questions = append(plan.Questions, Question{
 			ID: fmt.Sprintf("%s:label:%d", question.ID, index), Type: "noul", Truncate: question.Truncate,
@@ -123,16 +131,26 @@ func CapabilityForTask(definition TaskDefinition, card ModelCard) TaskCapability
 
 // ExecuteTaskPlans shares one native request when plans read the same input.
 // Separate calls still participate in the existing multi-state Bundle fusion.
+// Plans that compile to the same question under one ID (two consumers of a
+// family's trained question) share its one answer.
 func ExecuteTaskPlans(ctx context.Context, decider Decider, deployment string, input Request, plans []TaskPlan) (Response, map[string]TaskResult, error) {
 	started := time.Now()
 	input.Questions = nil
-	seen := make(map[string]bool)
+	planned := make(map[string]bool, len(plans))
+	asked := make(map[string]Question)
 	for _, plan := range plans {
+		if planned[plan.Question.ID] {
+			return Response{}, nil, fmt.Errorf("%w: duplicate compiled question %q", ErrRejected, plan.Question.ID)
+		}
+		planned[plan.Question.ID] = true
 		for _, question := range plan.Questions {
-			if seen[question.ID] {
-				return Response{}, nil, fmt.Errorf("%w: duplicate compiled question %q", ErrRejected, question.ID)
+			if previous, exists := asked[question.ID]; exists {
+				if !sameWireQuestion(previous, question) {
+					return Response{}, nil, fmt.Errorf("%w: duplicate compiled question %q", ErrRejected, question.ID)
+				}
+				continue
 			}
-			seen[question.ID] = true
+			asked[question.ID] = question
 			input.Questions = append(input.Questions, question)
 		}
 	}
@@ -171,8 +189,8 @@ func ExecuteTaskPlans(ctx context.Context, decider Decider, deployment string, i
 }
 
 func reduceTaskAnswer(plan TaskPlan, response Response) Answer {
-	if plan.Implementation == "native" {
-		answer, ok := response.Answers[plan.Question.ID]
+	if plan.Implementation == implementationNative || plan.Implementation == implementationTrained {
+		answer, ok := response.Answers[plan.Questions[0].ID]
 		if !ok {
 			return Answer{Type: plan.Question.Type, Error: "missing_answer"}
 		}

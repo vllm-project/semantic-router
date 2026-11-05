@@ -87,7 +87,9 @@ func (q signalQuestion) labels() []string {
 }
 
 // question is the decisions question a binding asks. Its ID carries the
-// consumer's name and a ':', which no decision signal's name contains.
+// consumer's name and a ':', which no decision signal's name contains; a
+// model family trained on the question is asked it under the trained ID
+// (modelservice.CompileTask), and the answer comes back under this one.
 func (q signalQuestion) question(spec config.ResolvedModelBinding) modelservice.Question {
 	return modelservice.Question{TaskID: q.task, Stage: "request", ID: spec.Name + ":" + q.key, Type: "choice", Instructions: q.instructions, Choices: q.options}
 }

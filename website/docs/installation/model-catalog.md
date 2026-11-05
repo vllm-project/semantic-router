@@ -151,9 +151,10 @@ in a routing profile that embeds with its own model, through its
 ## Thresholds
 
 A module threshold you do not write comes from the model that answers: the
-calibrated value on a built-in model's card; 0.5 for a `systemone` model, which
-publishes none (the load warns `uncalibrated_threshold`); otherwise the Vela 1.0
-defaults. A `threshold` you write is used as written.
+calibrated value of `vela3-fast`, a Vela 2.0 size or a Vela 1.0 specialist;
+0.5 for any other model, local or `systemone`, which has none (the load warns
+`uncalibrated_preset`). A remote classifier keeps the Vela 1.0 defaults. A
+`threshold` you write is used as written.
 
 ## Admission
 

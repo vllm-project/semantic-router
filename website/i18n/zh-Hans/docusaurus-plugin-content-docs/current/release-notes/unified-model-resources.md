@@ -38,7 +38,7 @@ global:
 
 ## 行为变化 {#behavior-changes}
 
-- `systemone` 决策模型现在也回答内置信号。以前这些信号在本地的 `vela3-fast` 上运行。除非配置写出阈值，它们的阈值为 0.5，加载时警告 `uncalibrated_threshold`。
+- `systemone` 决策模型现在也回答内置信号。以前这些信号在本地的 `vela3-fast` 上运行。除非配置写出阈值，它们的阈值为 0.5，加载时警告 `uncalibrated_preset`。
 - 安全规则的 hazard 部分没有自己的模型时，在任何决策模型下都使用预先声明的 `hazard` 部署（Vela 1.0 Hazard）。以前，含有这种 hazard 部分的配置在 `systemone` 决策模型下无法加载。
 
 其他一切都解析到与之前相同的模型。

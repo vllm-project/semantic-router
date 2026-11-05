@@ -15,7 +15,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("model-runtime-real-routing", pkgtestcases.TestCase{
-		Description: "Real Kai-0.6B and Vela Domain, PII and Guard route clear requests, and the Router routes on Kai's own answers",
+		Description: "Real Kai-0.6B and the vela3-fast decision model route clear requests, and the Router routes on Kai's own answers",
 		Tags:        []string{"model-runtime", "real-models", "routing", "decision"},
 		Fn:          testModelRuntimeRealRouting,
 	})
@@ -30,9 +30,9 @@ const (
 	mrRealReadyTimeout = 30 * time.Minute
 )
 
-// mrRealDeployments are Kai and the implicit deployments the Router makes of
-// the Vela module defaults.
-var mrRealDeployments = []string{mrRealKai, "@domain_classifier", "@pii_classifier", "@prompt_guard"}
+// mrRealDeployments are Kai and the decision model, the primary deployment
+// that answers the built-in domain, PII and jailbreak signals.
+var mrRealDeployments = []string{mrRealKai, "primary"}
 
 // mrRealCase is a request whose route real models decide without doubt.
 type mrRealCase struct {
