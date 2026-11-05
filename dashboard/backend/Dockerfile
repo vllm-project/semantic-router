@@ -93,6 +93,7 @@ COPY src/semantic-router/pkg/startupstatus/ /app/src/semantic-router/pkg/startup
 COPY src/semantic-router/pkg/trainingcontract/ /app/src/semantic-router/pkg/trainingcontract/
 COPY src/semantic-router/pkg/systemone/ /app/src/semantic-router/pkg/systemone/
 COPY src/semantic-router/pkg/upstream/ /app/src/semantic-router/pkg/upstream/
+COPY src/semantic-router/pkg/utils/contentcoding/ /app/src/semantic-router/pkg/utils/contentcoding/
 COPY src/semantic-router/pkg/topiccontinuity/ /app/src/semantic-router/pkg/topiccontinuity/
 COPY src/semantic-router/pkg/configsnapshot/historylock/ /app/src/semantic-router/pkg/configsnapshot/historylock/
 
@@ -177,8 +178,10 @@ RUN groupadd --gid 65532 nonroot && \
       /app/dashboard-backend \
       /usr/local/bin/dashboard-backend
 # Exercise the same interpreter, user and isolated working directory as the
-# catalog HTTP handler. A root-only smoke test misses unreadable package data.
+# catalog and built-in recipe HTTP handlers. A root-only smoke test misses
+# unreadable package data.
 RUN cd /tmp && gosu nonroot python3 -m cli.model_catalog_export >/dev/null
+RUN cd /tmp && gosu nonroot python3 -m cli.builtin_recipes_json list >/dev/null
 # This directory contains only bundled public ToolsDB and knowledge-base
 # assets at build time. Keep them readable under a restrictive build context
 # umask without changing mounted runtime configuration or user state.

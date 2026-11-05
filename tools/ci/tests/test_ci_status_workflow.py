@@ -37,6 +37,24 @@ class CIStatusWorkflowTests(unittest.TestCase):
         validate_pr_contract(self.workflows, errors)
         self.assertEqual(errors, [])
 
+    def test_gates_cannot_block_cancellation_or_hide_failed_prerequisites(self) -> None:
+        for filename, job in (("pr.yml", "pr-gate"), ("ci.yml", "gate")):
+            for condition in ("always()", "success()", None):
+                with self.subTest(workflow=filename, condition=condition):
+                    workflows = copy.deepcopy(self.workflows)
+                    gate = workflows[filename].jobs[job]
+                    gate["if"] = condition
+                    errors: list[str] = []
+                    validate_pr_contract(workflows, errors)
+                    self.assertTrue(
+                        any(
+                            f"{filename} gate must reconcile failures without blocking workflow cancellation"
+                            in error
+                            for error in errors
+                        ),
+                        errors,
+                    )
+
     def test_queue_checks_on_drafts_that_need_no_new_ci_request(self) -> None:
         errors: list[str] = []
         validate_mergify_contract(errors)

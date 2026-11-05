@@ -267,6 +267,7 @@ type RouterOptions struct {
 	StreamedBodyTimeoutSec int                  `yaml:"streamed_body_timeout_sec,omitempty"`
 	SkipProcessing         SkipProcessingConfig `yaml:"skip_processing,omitempty"`
 	AllowLossyTranslation  []string             `yaml:"allow_lossy_translation,omitempty"`
+	RoutingInput           RoutingInputConfig   `yaml:"routing_input,omitempty"`
 }
 
 // RoutingEnabled controls the recipe pipeline independently of the frontend

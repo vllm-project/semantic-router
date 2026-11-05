@@ -60,4 +60,55 @@ describe('InsightsRecordTrace', () => {
     expect(markup).toContain('Turn 2')
     expect(markup).not.toContain(' open=""')
   })
+
+  it('shows a captured tool result from the record and marks its truncation', () => {
+    const markup = renderToStaticMarkup(
+      <InsightsRecordTrace
+        record={{
+          ...record,
+          tool_trace: {
+            steps: [
+              { type: 'user_input', text: 'Check the weather.' },
+              {
+                type: 'client_tool_result',
+                tool_call_id: 'call-1',
+                tool_name: 'get_weather',
+                status: 'succeeded',
+                output: 'Sunny, 21C',
+                truncated: true,
+              },
+            ],
+          },
+        }}
+        trajectory={null}
+      />,
+    )
+    expect(markup).toContain('get_weather result')
+    expect(markup).toContain('Sunny, 21C')
+    expect(markup).toContain('Result truncated at the configured tool trace byte limit')
+    expect(markup).not.toContain('Result hidden')
+  })
+
+  it('keeps a redacted tool result hidden with its status', () => {
+    const markup = renderToStaticMarkup(
+      <InsightsRecordTrace
+        record={{
+          ...record,
+          tool_trace: {
+            steps: [
+              {
+                type: 'client_tool_result',
+                tool_call_id: 'call-1',
+                status: 'failed',
+                content_redacted: true,
+              },
+            ],
+          },
+        }}
+        trajectory={null}
+      />,
+    )
+    expect(markup).toContain('Result hidden · failed')
+    expect(markup).not.toContain('truncated')
+  })
 })

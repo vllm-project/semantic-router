@@ -26,7 +26,10 @@ type signalRuntime struct {
 	// configuration lifecycle names it, and never shared while empty.
 	key string
 
-	modelLease        *modelservice.Lease
+	modelLease *modelservice.Lease
+	// systemOne asks the systemone deployments' remote APIs. Their
+	// definitions are runtime models, so a change builds another runtime.
+	systemOne         *modelservice.RemoteSystemOne
 	serving           *serving.Runtime
 	embeddings        *embedding.Set
 	serviceEmbeddings *embedding.Set
@@ -68,6 +71,10 @@ func (s *signalRuntime) build(cfg *config.RouterConfig, pool *binding.Pool) erro
 	s.serving = serving.New(services, pool)
 
 	var err error
+	if s.systemOne, err = modelservice.NewRemoteSystemOne(cfg); err != nil {
+		return err
+	}
+	s.resources.add(s.systemOne.Close)
 	if s.embeddings, err = modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, s.serving); err != nil {
 		return err
 	}
@@ -92,7 +99,7 @@ func (s *signalRuntime) build(cfg *config.RouterConfig, pool *binding.Pool) erro
 	s.resources.add(func() error { return modelruntime.CloseRerankers(s.rerankers) })
 
 	s.recipeClassifiers, s.classifier, err = buildRecipeClassifiers(cfg, classification.RecipeRuntimeOptions{
-		Runtime: s.serving, Embeddings: s.embeddings,
+		Runtime: s.serving, Embeddings: s.embeddings, SystemOne: s.systemOne,
 	})
 	if err != nil {
 		return err

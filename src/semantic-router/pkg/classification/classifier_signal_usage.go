@@ -22,10 +22,7 @@ func (c *Classifier) getUsedSignalsForDecisions(decisions []config.Decision) map
 	for _, decision := range decisions {
 		c.analyzeRuleCombination(decision.Rules, usedSignals)
 	}
-	// Replay uses available PII rules even if a decision does not route on PII.
-	if c.Config.ReplayNeedsPIIEvidence() {
-		collectSignalKeys(usedSignals, config.SignalTypePII, c.Config.PIIRules, func(r config.PIIRule) string { return r.Name })
-	}
+	// Replay's privacy check reads the PII rules after routing (ReplayPromptEvidence), never here.
 	c.expandTransitiveSignalDependencies(usedSignals)
 
 	return usedSignals
