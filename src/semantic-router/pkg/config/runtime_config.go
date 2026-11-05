@@ -364,6 +364,7 @@ type RouterReplayConfig struct {
 	CaptureRequestBody  *bool                       `json:"capture_request_body,omitempty" yaml:"capture_request_body,omitempty"`
 	CaptureResponseBody *bool                       `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
 	CapturePersonalData *bool                       `json:"capture_personal_data,omitempty" yaml:"capture_personal_data,omitempty"`
+	CaptureToolResults  *bool                       `json:"capture_tool_results,omitempty" yaml:"capture_tool_results,omitempty"`
 	MaxRecords          *int                        `json:"max_records,omitempty" yaml:"max_records,omitempty"`
 	MaxBodyBytes        *int                        `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
 	MaxToolTraceBytes   *int                        `json:"max_tool_trace_bytes,omitempty" yaml:"max_tool_trace_bytes,omitempty"`

@@ -8,7 +8,8 @@ import (
 )
 
 // azureDecoratedChatResponse is the shape Azure OpenAI / AI Foundry returns: a
-// canonical chat completion plus Azure's own decorations. Reported in #3496.
+// canonical chat completion plus members the Chat contract does not declare.
+// Reported in #3496.
 const azureDecoratedChatResponse = `{"id":"chatcmpl-1","object":"chat.completion","created":1,` +
 	`"model":"gpt-4.1-mini",` +
 	`"prompt_filter_results":[{"prompt_index":0,"content_filter_results":{}}],` +
@@ -20,17 +21,15 @@ const azureDecoratedChatResponse = `{"id":"chatcmpl-1","object":"chat.completion
 
 func azureResponseContext() *RequestContext {
 	return &RequestContext{
-		RequestID:      "req-1",
-		SourceFormat:   llmprotocol.OpenAIChatV1,
-		TargetFormat:   llmprotocol.OpenAIChatV1,
-		ResponseVendor: llmprotocol.ResponseVendorAzure,
+		RequestID:    "req-1",
+		SourceFormat: llmprotocol.OpenAIChatV1,
+		TargetFormat: llmprotocol.OpenAIChatV1,
 	}
 }
 
-// The miss-to-hit path: the bytes persisted on a cache miss must decode under
-// the strict contract the cache reader uses. Before this, a same-format Azure
-// response was forwarded verbatim and cached verbatim, so the first success
-// poisoned its own partition and every later hit returned 502.
+// The miss-to-hit path: a same-format response is forwarded verbatim, but the
+// bytes persisted on a cache miss are the canonical encode, so one request's
+// upstream metadata is never replayed to later clients.
 func TestCacheableClientResponseIsReadableByTheCacheReader(t *testing.T) {
 	router := &OpenAIRouter{}
 	ctx := azureResponseContext()
@@ -40,8 +39,8 @@ func TestCacheableClientResponseIsReadableByTheCacheReader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decodeClientResponse() error = %v, want nil", err)
 	}
-	if !ctx.ResponseVendorExtensions {
-		t.Fatal("ResponseVendorExtensions = false, want true for a decorated response")
+	if !ctx.ResponseUnknownFields {
+		t.Fatal("ResponseUnknownFields = false, want true for a decorated response")
 	}
 
 	// Write: a same-format response is forwarded verbatim, so the cache must
@@ -56,24 +55,21 @@ func TestCacheableClientResponseIsReadableByTheCacheReader(t *testing.T) {
 		}
 	}
 
-	// Hit: the cache reader decodes without any backend vendor allowance.
+	// Hit: the cache reader decodes the canonical entry.
 	hitCtx := azureResponseContext()
-	hitCtx.ResponseVendor = ""
 	if _, err := router.decodeCachedClientResponse(cached, hitCtx); err != nil {
 		t.Fatalf("decodeCachedClientResponse() error = %v, want nil on the cached body", err)
 	}
 }
 
-// The regression itself: the raw upstream bytes are what used to be cached, and
-// the cache reader cannot decode them.
-func TestCacheReaderRejectsRawDecoratedUpstreamBody(t *testing.T) {
+// An entry that still holds raw upstream bytes, written before the canonical
+// write existed, is served instead of failing the hit.
+func TestCacheReaderToleratesRawDecoratedUpstreamBody(t *testing.T) {
 	router := &OpenAIRouter{}
 	hitCtx := azureResponseContext()
-	hitCtx.ResponseVendor = ""
 
-	_, err := router.decodeCachedClientResponse([]byte(azureDecoratedChatResponse), hitCtx)
-	if err == nil {
-		t.Fatal("decodeCachedClientResponse() error = nil on a decorated body, want rejection")
+	if _, err := router.decodeCachedClientResponse([]byte(azureDecoratedChatResponse), hitCtx); err != nil {
+		t.Fatalf("decodeCachedClientResponse() error = %v on a decorated body, want nil", err)
 	}
 }
 
@@ -90,8 +86,8 @@ func TestCacheableClientResponseLeavesUndecoratedBodyUntouched(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decodeClientResponse() error = %v, want nil", err)
 	}
-	if ctx.ResponseVendorExtensions {
-		t.Fatal("ResponseVendorExtensions = true, want false for a canonical response")
+	if ctx.ResponseUnknownFields {
+		t.Fatal("ResponseUnknownFields = true, want false for a canonical response")
 	}
 
 	cached := router.cacheableClientResponse(body, false, *semanticResponse, ctx)
@@ -101,11 +97,11 @@ func TestCacheableClientResponseLeavesUndecoratedBodyUntouched(t *testing.T) {
 }
 
 // A cross-format response is already re-encoded before the cache write, so the
-// vendor path must not encode it a second time.
+// canonical write must not encode it a second time.
 func TestCacheableClientResponseKeepsAlreadyRewrittenBody(t *testing.T) {
 	router := &OpenAIRouter{}
 	ctx := azureResponseContext()
-	ctx.ResponseVendorExtensions = true
+	ctx.ResponseUnknownFields = true
 	rewritten := []byte(`{"object":"response"}`)
 
 	cached := router.cacheableClientResponse(rewritten, true, llmprotocol.Response{}, ctx)

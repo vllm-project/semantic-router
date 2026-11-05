@@ -26,7 +26,7 @@ func TestChatResponseAcceptsNullAnnotationsWithoutWeakeningUnknownFields(t *test
 	}
 
 	unknown := bytes.Replace(withNull, []byte(`"annotations":null`), []byte(`"annotations":null,"future_field":true`), 1)
-	if _, err := engine.TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, unknown, func(*llmprotocol.Response) error { return nil }); err == nil {
+	if _, err := conformanceEngine().TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, unknown, func(*llmprotocol.Response) error { return nil }); err == nil {
 		t.Fatal("unknown Chat response field was accepted")
 	}
 }
