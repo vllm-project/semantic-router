@@ -22,7 +22,6 @@ const LANGUAGE_NAMES: Record<string, string> = {
 const IDENTIFIER_LABELS: Record<string, string> = {
   latency_aware: 'Latency-Aware',
   multi_factor: 'Multi-Factor',
-  rl_driven: 'RL-Driven',
   router_dc: 'Router DC',
 }
 

@@ -100,67 +100,68 @@ func TestBuildModelSpecsPreservesDefaultAPIOnlyModels(t *testing.T) {
 }
 
 func TestBuildModelSpecsSkipsUnreachableNamedRecipeModels(t *testing.T) {
-	const unreachableModel = "models/unreachable-router"
-	cfg := &config.RouterConfig{
-		MoMRegistry: map[string]string{
-			unreachableModel: "test/unreachable-router",
-		},
-		Recipes: []config.RoutingRecipe{
-			{Name: config.DefaultRecipeName},
-			{
-				Name: "unmapped",
-				Profile: config.RoutingProfile{Decisions: []config.Decision{{
-					Name: "unmapped-route",
-					Algorithm: &config.AlgorithmConfig{
-						GMTRouter: &config.GMTRouterSelectionConfig{ModelPath: unreachableModel},
-					},
-				}}},
-			},
-		},
-	}
-	cfg.EmbeddingModels.EmbeddingConfig.Backend = config.EmbeddingBackendOpenAICompatible
+	cfg := loadGenericMultiRecipeModelNeedsConfig(t)
+	entrypoints := cfg.Entrypoints
+	cfg.Entrypoints = slices.DeleteFunc(slices.Clone(entrypoints), func(entrypoint config.EntrypointMapping) bool {
+		return entrypoint.Recipe == "verification"
+	})
 
 	specs, err := BuildModelSpecs(cfg)
 	if err != nil {
 		t.Fatalf("BuildModelSpecs() error = %v", err)
 	}
-	if len(specs) != 0 {
-		t.Fatalf("unreachable named recipe produced model specs: %#v", specs)
-	}
+	assertExactModelSpecs(t, specs, []string{testFeedbackModel})
 
-	cfg.Entrypoints = []config.EntrypointMapping{{
-		ModelNames: []string{"vllm-sr/unmapped"},
-		Recipe:     "unmapped",
-	}}
+	cfg.Entrypoints = entrypoints
 	specs, err = BuildModelSpecs(cfg)
 	if err != nil {
 		t.Fatalf("BuildModelSpecs() with entrypoint error = %v", err)
 	}
-	assertExactModelSpecs(t, specs, []string{unreachableModel})
+	assertExactModelSpecs(t, specs, []string{
+		testFactCheckModel,
+		testFeedbackModel,
+		testHallucinationDetectorModel,
+	})
 }
 
 func TestBuildModelSpecsAccountsForDefaultAutoReachability(t *testing.T) {
-	const defaultModel = "models/default-router"
-	cfg := &config.RouterConfig{
-		MoMRegistry: map[string]string{
-			defaultModel: "test/default-router",
-		},
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{
-				Name: "default-route",
-				Algorithm: &config.AlgorithmConfig{
-					GMTRouter: &config.GMTRouterSelectionConfig{ModelPath: defaultModel},
-				},
-			}},
-		},
-	}
-	cfg.EmbeddingModels.EmbeddingConfig.Backend = config.EmbeddingBackendOpenAICompatible
+	cfg := parseModelNeedsConfig(t, []byte(`
+version: v0.3
+
+routing:
+  signals:
+    fact_check:
+      - name: verification-needed
+        description: Requests that require verification.
+  decisions:
+    - name: default-route
+      rules:
+        type: fact_check
+        name: verification-needed
+      plugins:
+        - type: hallucination
+          configuration:
+            enabled: true
+
+global:
+  model_catalog:
+    system:
+      fact_check_classifier: models/test-fact-check
+      hallucination_detector: models/test-hallucination-detector
+    modules:
+      hallucination_mitigation:
+        fact_check:
+          model_ref: fact_check_classifier
+        detector:
+          model_ref: hallucination_detector
+`))
+	want := []string{testFactCheckModel, testHallucinationDetectorModel}
 
 	specs, err := BuildModelSpecs(cfg)
 	if err != nil {
 		t.Fatalf("BuildModelSpecs() error = %v", err)
 	}
-	assertExactModelSpecs(t, specs, []string{defaultModel})
+	assertExactModelSpecs(t, specs, want)
 
 	// Renaming the default public entrypoint preserves its model dependencies.
 	cfg.Entrypoints = []config.EntrypointMapping{{ModelNames: []string{"special"}, Recipe: config.DefaultRecipeName}}
@@ -168,7 +169,7 @@ func TestBuildModelSpecsAccountsForDefaultAutoReachability(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildModelSpecs() with an explicit default entrypoint: %v", err)
 	}
-	assertExactModelSpecs(t, specs, []string{defaultModel})
+	assertExactModelSpecs(t, specs, want)
 }
 
 func loadGenericMultiRecipeModelNeedsConfig(t *testing.T) *config.RouterConfig {
@@ -178,9 +179,14 @@ func loadGenericMultiRecipeModelNeedsConfig(t *testing.T) *config.RouterConfig {
 	if err != nil {
 		t.Fatalf("read generic multi-recipe fixture: %v", err)
 	}
+	return parseModelNeedsConfig(t, data)
+}
+
+func parseModelNeedsConfig(t *testing.T, data []byte) *config.RouterConfig {
+	t.Helper()
 	cfg, err := config.ParseYAMLBytes(data)
 	if err != nil {
-		t.Fatalf("parse generic multi-recipe fixture: %v", err)
+		t.Fatalf("parse model needs config: %v", err)
 	}
 
 	cfg.EmbeddingModels.EmbeddingConfig.Backend = config.EmbeddingBackendOpenAICompatible
