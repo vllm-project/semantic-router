@@ -1,6 +1,6 @@
 ---
 slug: runkite-ai-sdk-semantic-router
-title: "Run Multi-Model AI SDK Agents with Runkite and vLLM Semantic Router"
+title: "One Conversation, Multiple Models: Runkite and vLLM Semantic Router"
 description: "Connect a native AI SDK agent to user-configured model backends with Runkite and vLLM Semantic Router. Preserve chat history and enforce tool permissions."
 authors: [sharanharsoor]
 tags: [runkite, ai-sdk, agents, routing, semantic-router, community]
