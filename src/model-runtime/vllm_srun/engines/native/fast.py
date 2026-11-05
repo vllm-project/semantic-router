@@ -23,12 +23,15 @@ four scored panels), so it runs at the published precision by default:
   ``MAX_GRAPH_TOKENS`` padded tokens run eagerly: they are GPU-bound (on
   Eos-0.8B a graph saves 6% at 2,800 tokens and nothing from 11,000), and
   concurrent traffic forms many distinct large shapes whose captures would cost
-  several forwards each. Once graph count or captured bytes crosses three
-  quarters of its limit, a new shape must be observed
+  several forwards each. Once graph count or captured bytes reaches three
+  quarters of its limit, an ordinary new shape must be observed
   ``HOT_CAPTURE_AFTER`` times before capture, so early sparse traffic does not
-  immediately consume the remaining capacity. This is admission control, not
-  eviction: the hard limits still win. Captured graphs are never destroyed
-  while serving: on ROCm, evicting large graphs from the shared memory pool
+  immediately consume the remaining capacity. Shapes configured to capture on
+  first use keep that contract under pressure. The hard limits still win:
+  ``MAX_GRAPHS`` captures or the lesser of ``MAX_GRAPH_BYTES`` and half the free
+  device memory at the first capture. This is admission control, not eviction.
+  Captured graphs are never destroyed while serving: on ROCm, evicting large
+  graphs from the shared memory pool
   between large eager batches of Index traffic led to GPU memory access faults.
   On CUDA the same runner also replays Vela 2.0's forest forward
   (``models/forest.py``) per exact forest shape; ROCm
@@ -40,6 +43,7 @@ from __future__ import annotations
 
 import math
 import types
+from collections import OrderedDict
 from collections.abc import Callable, Hashable
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
@@ -82,6 +86,7 @@ FUSED_SLOTS: dict[str | None, tuple[str, ...]] = {
 }
 MAX_GRAPH_TOKENS = 4096
 MAX_GRAPHS = 512
+MAX_GRAPH_CANDIDATES = 1 << 16
 MAX_GRAPH_BYTES = 4 << 30
 CAPTURE_AFTER = 2
 # After three quarters of capacity, require four times the reuse evidence.
@@ -788,8 +793,10 @@ class Graphs:
         max_bytes: int = MAX_GRAPH_BYTES,
         first_capture_tokens: int = 0,
     ):
-        """Below cache pressure, a shape of at most ``first_capture_tokens`` tokens is captured
-        on first use, any other on use ``capture_after``; under pressure, both wait for ``hot_capture_after``.
+        """Shapes up to ``first_capture_tokens`` tokens capture on first use.
+
+        Ordinary shapes capture on use ``capture_after`` or, under cache pressure,
+        ``hot_capture_after``.
         """
         self.backbone = backbone
         self.first_capture_tokens = first_capture_tokens
@@ -800,7 +807,7 @@ class Graphs:
         self.max_tokens = max_tokens
         self.max_bytes = max_bytes
         self.graphs: dict[Hashable, dict[str, Any]] = {}
-        self.seen: dict[Hashable, int] = {}
+        self.seen: OrderedDict[Hashable, int] = OrderedDict()
         self.failed: set[Hashable] = set()
         self.budget: int | None = None
         self.spent = 0
@@ -812,7 +819,6 @@ class Graphs:
             "captures": 0,
             "replays": 0,
             "eager": 0,
-            "full": 0,
             "failed": 0,
         }
         self.eager_reasons = {
@@ -854,23 +860,26 @@ class Graphs:
                 return self._run_eager("too_large", inputs, body)
             if not torch.is_inference_mode_enabled():
                 return self._run_eager("not_inference", inputs, body)
-            if len(self.seen) > 1 << 16:
-                self.seen.clear()
-            observed = self.seen[key] = self.seen.get(key, 0) + 1
+            # Evict only the oldest candidate evidence, never a captured graph.
+            observed = self.seen.pop(key, 0) + 1
+            self.seen[key] = observed
+            if len(self.seen) > MAX_GRAPH_CANDIDATES:
+                self.seen.popitem(last=False)
             pressure = self._under_pressure()
-            needed = 1 if tokens <= self.first_capture_tokens else self.capture_after
-            if pressure:
+            if tokens <= self.first_capture_tokens:
+                needed = 1
+            elif pressure:
                 needed = self.hot_capture_after
+            else:
+                needed = self.capture_after
             if observed < needed:
                 reason = "pressure" if pressure else "warmup"
                 return self._run_eager(reason, inputs, body)
             entry = self._capture(key, inputs, body)
+            self.seen.pop(key, None)
             if entry is None:
                 reason = "capture_failed" if key in self.failed else "full"
-                if reason == "capture_failed":
-                    self.seen.pop(key, None)
                 return self._run_eager(reason, inputs, body)
-            self.seen.pop(key, None)
         for static, value in zip(entry["inputs"], inputs, strict=True):
             static.copy_(value)
         entry["graph"].replay()
@@ -879,7 +888,12 @@ class Graphs:
         return output
 
     def _under_pressure(self) -> bool:
-        """Whether ordinary captures have crossed three quarters of a hard limit."""
+        """Whether ordinary captures have crossed three quarters of a hard limit.
+
+        Caches smaller than four graphs have no count-based reserve. The byte
+        budget is fixed from free memory at the first capture; until then only
+        graph count contributes to pressure.
+        """
         graph_margin = self.max_graphs // GRAPH_PRESSURE_DIVISOR
         if graph_margin and len(self.graphs) >= self.max_graphs - graph_margin:
             return True
@@ -914,7 +928,6 @@ class Graphs:
     ) -> dict[str, Any] | None:
         budget = self.max_bytes if self.budget is None else self.budget
         if len(self.graphs) >= self.max_graphs or self.spent >= budget:
-            self.stats["full"] += 1
             return None
         # A graph costs far more than its output. torch.cuda.graph empties the
         # allocator's cache when a capture begins, so with the cache emptied before
@@ -976,8 +989,19 @@ class Graphs:
         return entry
 
     def receipt(self) -> dict[str, Any]:
+        """Fixed benchmark schema; ``full`` counts rejected capture attempts.
+
+        At capacity, other misses still wait in ``warmup`` or ``pressure`` before
+        attempting capture. ``full`` aliases ``eager_reasons["full"]``.
+        """
         return {
-            **self.stats,
+            "lookups": self.stats["lookups"],
+            "misses": self.stats["misses"],
+            "captures": self.stats["captures"],
+            "replays": self.stats["replays"],
+            "eager": self.stats["eager"],
+            "full": self.eager_reasons["full"],
+            "failed": self.stats["failed"],
             "cached": len(self.graphs),
             "candidates": len(self.seen),
             "spent_bytes": self.spent,

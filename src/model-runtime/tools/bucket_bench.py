@@ -14,8 +14,8 @@ answered, so the shapes a forward sees, and therefore its graphs, repeat across 
 compute is the price. The first --warmup prompts are answered once untimed, the rest once, timed, in
 waves of --concurrency requests submitted together through the scheduler (2 ms window). No request
 repeats, so a graph is replayed only when a later batch has the same shape. Reported: requests/s,
-mean wave latency, the timed pass's graph captures / replays / eager forwards, and the padded tokens
-per answered token.
+mean wave latency, the timed pass's graph lookups / misses / captures / replays / eager forwards,
+and the padded tokens per answered token.
 """
 
 from __future__ import annotations
@@ -88,6 +88,14 @@ def install_buckets(
         )
 
     engine.forward = bucketed
+
+
+def graph_delta(before: dict, after: dict) -> dict:
+    """Timed counters and final occupancy; ``full`` counts rejected capture attempts."""
+    return {
+        key: after.get(key, 0) - before.get(key, 0)
+        for key in ("lookups", "misses", "captures", "replays", "eager", "full")
+    } | {"cached": after["cached"]}
 
 
 def main() -> int:
@@ -191,11 +199,7 @@ def main() -> int:
         "seconds": seconds,
         "requests_per_s": len(timed) / seconds,
         "wave_ms_mean": statistics.mean(latencies) if latencies else None,
-        "graphs": {
-            key: after[key] - before.get(key, 0)
-            for key in ("captures", "replays", "eager", "full")
-        }
-        | {"cached": after["cached"]},
+        "graphs": graph_delta(before, after),
         "padded_per_answered_token": (
             tally["padded"] / tally["answered"] if tally["answered"] else None
         ),

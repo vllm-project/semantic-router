@@ -254,8 +254,9 @@ class NativeEngineModel(EngineModel):
         if getattr(backbone, "state_once", False) and options.graphs:
             # Branched forwards replay per bucket (``models/branch.py`` ``static_layout``). A bucket
             # of at most BRANCH_GRAPH_TOKENS rows is captured the first time it runs: its capture
-            # costs a few short forwards, and such buckets (concurrent short requests) recur. A
-            # longer one is captured the second time, so a bucket seen once runs eager.
+            # costs a few short forwards, and such buckets (concurrent short requests) recur.
+            # Longer buckets normally capture on second use; pressure requires more
+            # reuse evidence but never delays the first-use buckets.
             self.branch_graphs = fast.Graphs(
                 backbone,
                 cast(Any, None),

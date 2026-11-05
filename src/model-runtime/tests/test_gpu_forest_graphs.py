@@ -190,16 +190,19 @@ def test_no_graph_is_captured_past_the_memory_budget(tmp_path):
     ), stats
 
 
-def test_cache_pressure_admits_a_late_hot_shape(tmp_path):
+@pytest.mark.parametrize("pressure", ["graphs", "bytes"])
+def test_cache_pressure_admits_a_late_hot_shape(tmp_path, pressure):
     """At 75% capacity, a later shape waits until it proves it is hot."""
     graphed, eager = load(tmp_path, (True, False))
     graphs = graphed.graphs
     assert graphs is not None
-    graphs.max_graphs = 4
     graphs.hot_capture_after = 4
-    graphs.budget = 1 << 60  # Isolate graph-count pressure from byte pressure.
+    early_count = 3 if pressure == "graphs" else 1
+    if pressure == "graphs":
+        graphs.max_graphs = 4
+        graphs.budget = 1 << 60  # Isolate graph-count pressure from byte pressure.
     generator = torch.Generator().manual_seed(5)
-    early = [forest(*case, generator) for case in FORESTS[:3]]
+    early = [forest(*case, generator) for case in FORESTS[:early_count]]
     late = rows(ROWS[0], generator)
 
     def assert_same(batch):
@@ -211,30 +214,42 @@ def test_cache_pressure_admits_a_late_hot_shape(tmp_path):
     for batch in early:
         assert_same(batch)
         assert_same(batch)
-    assert graphed.receipt()["graphs"]["cached"] == 3
+    assert graphed.receipt()["graphs"]["cached"] == early_count
+    if pressure == "bytes":
+        assert graphs.budget is not None and graphs.spent > 0
+        # Use the real capture's footprint, not synthetic spent bytes, to cross 75%.
+        graphs.budget = graphs.spent * 4 // 3
+    assert graphs._under_pressure()
 
     for _ in range(3):
         assert_same(late)
     before = graphed.receipt()["graphs"]
     assert (
-        before["cached"] == 3
+        before["cached"] == early_count
         and before["candidates"] == 1
-        and before["lookups"] == before["eager"] + before["replays"] == 9
-        and before["misses"] == 9
-        and before["eager_reasons"]["warmup"] == 3
+        and before["lookups"]
+        == before["eager"] + before["replays"]
+        == early_count * 2 + 3
+        and before["misses"] == before["lookups"]
+        and before["eager_reasons"]["warmup"] == early_count
         and before["eager_reasons"]["pressure"] == 3
+        and before["spent_bytes"] < before["budget_bytes"]
     ), before
 
     assert_same(late)
     after = graphed.receipt()["graphs"]
     assert (
-        after["cached"] == 4
+        after["cached"] == early_count + 1
         and after["candidates"] == 0
-        and after["captures"] == 4
-        and after["lookups"] == after["eager"] + after["replays"] == 10
-        and after["misses"] == 10
-        and after["spent_bytes"] < after["budget_bytes"]
+        and after["captures"] == early_count + 1
+        and after["lookups"] == after["eager"] + after["replays"] == early_count * 2 + 4
+        and after["misses"] == after["lookups"]
+        and after["budget_bytes"] == before["budget_bytes"]
     ), after
+    assert_same(late)
+    replayed = graphed.receipt()["graphs"]
+    assert replayed["misses"] == after["misses"]
+    assert replayed["replays"] == after["replays"] + 1
 
 
 def test_eager_memory_does_not_spend_the_graph_budget(tmp_path):
