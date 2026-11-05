@@ -1,77 +1,84 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="900" viewBox="0 0 960 900" role="img" aria-labelledby="title desc">
-  <title id="title">One native AI SDK loop, connected to Runkite and vLLM Semantic Router</title>
-  <desc id="desc">Runkite and vLLM Semantic Router are separate peers connected by a TypeScript runner. The application creates a managed run through Runkite's HTTP API. The Runkite Go plane exchanges assignments and events with the runner over RunnerProtocol gRPC. The native AI SDK owns its model and tool loop. Model calls go directly to the Envoy inference frontend and Semantic Router, which selects one of two Qwen3 models served by Ollama. Tool calls go over run-bound HTTP to Runkite's connector gate. Only allowed tool calls reach the small fictional incident MCP fixture. Model traffic does not pass through the Go plane.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1200" viewBox="0 0 960 1200" role="img" aria-labelledby="title desc">
+  <title id="title">From a Runkite managed run to a Semantic Router model call</title>
+  <desc id="desc">Follow five numbered stages from top to bottom. An application creates a Thread and Run through the Runkite HTTP API. The Runkite Go control plane dispatches an assignment over gRPC to a separate TypeScript runner. Its native AI SDK agent calls the Envoy inference listener and vLLM Semantic Router over Chat Completions HTTP. Semantic Router selects a Qwen3 backend served by Ollama. The runner reports events and results back to the plane. A separate tool request branch returns from the agent over run-bound HTTP to Runkite's connector gate; only allowed calls reach the small fictional incident MCP fixture. Model requests leave the SDK directly for the inference listener, not through the Go plane.</desc>
   <defs>
     <marker id="amber-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1 1L7 4L1 7" fill="none" stroke="#b66f0e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
     <marker id="blue-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1 1L7 4L1 7" fill="none" stroke="#087ba9" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
   </defs>
-  <rect width="960" height="900" rx="18" fill="#f7f9fc"/>
+  <rect width="960" height="1200" rx="18" fill="#f7f9fc"/>
   <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" fill="#14263c">
-    <text x="32" y="47" font-size="31" font-weight="720" letter-spacing="-.7">One agent loop. Two clear responsibilities.</text>
-    <text x="32" y="80" font-size="20" fill="#526479">The application starts each Run through Runkite's HTTP API.</text>
+    <text x="32" y="47" font-size="31" font-weight="720" letter-spacing="-.7">From a managed run to a routed model call.</text>
+    <text x="32" y="80" font-size="20" fill="#526479">Follow the run through Runkite, the agent and Semantic Router.</text>
 
-    <rect x="224" y="117" width="512" height="154" rx="14" fill="#ffffff" stroke="#bbc9da" stroke-width="1.5"/>
-    <text x="480" y="154" text-anchor="middle" font-size="24" font-weight="700">TypeScript runner</text>
-    <text x="480" y="186" text-anchor="middle" font-size="22" fill="#394f68">Native AI SDK ToolLoopAgent</text>
-    <rect x="250" y="207" width="460" height="40" rx="7" fill="#eff3f8"/>
-    <text x="480" y="234" text-anchor="middle" font-size="20" fill="#526479">messages → model → tool result → model</text>
+    <rect x="40" y="112" width="620" height="76" rx="12" fill="#ffffff" stroke="#bbc9da" stroke-width="1.5"/>
+    <circle cx="73" cy="150" r="17" fill="#eff3f8"/>
+    <text x="73" y="157" text-anchor="middle" font-size="20" font-weight="700">1</text>
+    <text x="105" y="158" font-size="25" font-weight="700">Application / chat client</text>
+    <path d="M350 188V232" fill="none" stroke="#b66f0e" stroke-width="2.3" marker-end="url(#amber-arrow)"/>
+    <text x="371" y="219" font-size="18" fill="#845009">HTTP · create Thread / Run</text>
 
-    <path d="M224 195H112V397" fill="none" stroke="#b66f0e" stroke-width="2.2" marker-start="url(#amber-arrow)" marker-end="url(#amber-arrow)"/>
-    <rect x="32" y="298" width="213" height="63" rx="7" fill="#f7f9fc"/>
-    <text x="40" y="322" font-size="19" fill="#845009">Assignments + events</text>
-    <text x="40" y="349" font-size="18" fill="#845009">RunnerProtocol · gRPC</text>
+    <rect x="40" y="238" width="620" height="190" rx="14" fill="#fff6e5" stroke="#dcba7d" stroke-width="1.5"/>
+    <path d="M55 238H645" stroke="#d9942a" stroke-width="3"/>
+    <circle cx="73" cy="278" r="17" fill="#f7dfb4"/>
+    <text x="73" y="285" text-anchor="middle" font-size="20" font-weight="700" fill="#845009">2</text>
+    <text x="105" y="287" font-size="28" font-weight="720">Runkite control plane</text>
+    <text x="62" y="316" font-size="19" fill="#845009">Threads, Runs, admission and durable records · Go service</text>
+    <rect x="62" y="334" width="576" height="70" rx="8" fill="#ffffff" stroke="#ead8b8"/>
+    <text x="80" y="361" font-size="21" font-weight="650">Connector gate</text>
+    <text x="80" y="387" font-size="18" fill="#526479">Tool authorization, dispatch and audit</text>
 
-    <path d="M334 271V397" fill="none" stroke="#b66f0e" stroke-width="2.2" marker-end="url(#amber-arrow)"/>
-    <rect x="263" y="301" width="142" height="60" rx="7" fill="#f7f9fc"/>
-    <text x="334" y="325" text-anchor="middle" font-size="20" font-weight="600" fill="#845009">Tool calls</text>
-    <text x="334" y="352" text-anchor="middle" font-size="18" fill="#845009">run-bound HTTP</text>
+    <path d="M350 428V494" fill="none" stroke="#b66f0e" stroke-width="2.3" marker-end="url(#amber-arrow)"/>
+    <text x="371" y="468" font-size="18" fill="#845009">gRPC · assignment</text>
+    <path d="M120 500V433" fill="none" stroke="#b66f0e" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#amber-arrow)"/>
+    <rect x="48" y="446" width="144" height="24" rx="5" fill="#f7f9fc"/>
+    <text x="120" y="464" text-anchor="middle" font-size="16" fill="#845009">Events + result</text>
 
-    <path d="M626 271V397" fill="none" stroke="#087ba9" stroke-width="2.2" marker-end="url(#blue-arrow)"/>
-    <rect x="525" y="301" width="202" height="60" rx="7" fill="#f7f9fc"/>
-    <text x="626" y="325" text-anchor="middle" font-size="20" font-weight="600" fill="#086d94">Model calls</text>
-    <text x="626" y="352" text-anchor="middle" font-size="18" fill="#086d94">Chat Completions</text>
+    <rect x="40" y="500" width="620" height="144" rx="14" fill="#ffffff" stroke="#bbc9da" stroke-width="1.5"/>
+    <circle cx="73" cy="538" r="17" fill="#eff3f8"/>
+    <text x="73" y="545" text-anchor="middle" font-size="20" font-weight="700">3</text>
+    <text x="105" y="546" font-size="25" font-weight="700">Runkite TypeScript runner</text>
+    <text x="62" y="579" font-size="22" fill="#394f68">Native AI SDK ToolLoopAgent</text>
+    <rect x="62" y="596" width="576" height="30" rx="6" fill="#eff3f8"/>
+    <text x="350" y="618" text-anchor="middle" font-size="19" fill="#526479">messages → model → tool result → model</text>
 
-    <rect x="32" y="402" width="420" height="264" rx="14" fill="#fff6e5" stroke="#dcba7d" stroke-width="1.5"/>
-    <rect x="508" y="402" width="420" height="264" rx="14" fill="#eaf6fc" stroke="#76bad7" stroke-width="1.5"/>
-    <path d="M47 402H437" stroke="#d9942a" stroke-width="3"/>
-    <path d="M523 402H913" stroke="#149ac8" stroke-width="3"/>
+    <path d="M660 585H690V382H642" fill="none" stroke="#b66f0e" stroke-width="2.1" marker-end="url(#amber-arrow)"/>
+    <circle cx="660" cy="585" r="3.5" fill="#b66f0e"/>
+    <text x="710" y="516" font-size="20" font-weight="650" fill="#845009">Tool request</text>
+    <text x="710" y="543" font-size="18" fill="#845009">run-bound HTTP</text>
+    <text x="710" y="570" font-size="17" fill="#526479">Back to Runkite's gate</text>
+    <path d="M638 350H708" fill="none" stroke="#b66f0e" stroke-width="2.1" marker-end="url(#amber-arrow)"/>
+    <text x="715" y="286" font-size="17" fill="#845009">Allowed calls only</text>
+    <rect x="714" y="304" width="214" height="108" rx="10" fill="#ffffff" stroke="#d8c7a7"/>
+    <text x="732" y="337" font-size="20" font-weight="650">Incident MCP</text>
+    <text x="732" y="364" font-size="20" font-weight="650">service</text>
+    <text x="732" y="391" font-size="16" fill="#526479">Fictional read / restart</text>
 
-    <text x="54" y="444" font-size="28" font-weight="720">Runkite</text>
-    <text x="54" y="475" font-size="20" fill="#845009">Agent control plane · Go service</text>
-    <rect x="54" y="495" width="376" height="64" rx="8" fill="#ffffff" stroke="#ead8b8"/>
-    <text x="72" y="521" font-size="21" font-weight="650">Threads + Runs</text>
-    <text x="72" y="546" font-size="18" fill="#526479">Durable history and lifecycle records</text>
-    <rect x="54" y="570" width="376" height="64" rx="8" fill="#ffffff" stroke="#ead8b8"/>
-    <text x="72" y="596" font-size="21" font-weight="650">Connector gate</text>
-    <text x="72" y="621" font-size="18" fill="#526479">Allow / deny, tool dispatch and audit</text>
-    <text x="54" y="652" font-size="16" fill="#845009">SQLite stores this local fixture's state.</text>
+    <path d="M350 644V726" fill="none" stroke="#087ba9" stroke-width="2.3" marker-end="url(#blue-arrow)"/>
+    <text x="371" y="692" font-size="18" fill="#086d94">HTTP · Chat Completions</text>
 
-    <text x="530" y="444" font-size="28" font-weight="720" letter-spacing="-.4">vLLM Semantic Router</text>
-    <text x="530" y="475" font-size="20" fill="#28617d">Inference routing · Envoy frontend</text>
-    <rect x="530" y="495" width="376" height="64" rx="8" fill="#ffffff" stroke="#bedce9"/>
-    <text x="548" y="521" font-size="21" font-weight="650">One inference endpoint</text>
-    <text x="548" y="546" font-size="18" fill="#526479">Request signal → configured route</text>
-    <rect x="530" y="570" width="181" height="64" rx="8" fill="#ffffff" stroke="#bedce9"/>
-    <rect x="725" y="570" width="181" height="64" rx="8" fill="#ffffff" stroke="#bedce9"/>
-    <text x="620.5" y="609" text-anchor="middle" font-size="20" font-weight="650" fill="#155f7f">local-fast</text>
-    <text x="815.5" y="609" text-anchor="middle" font-size="20" font-weight="650" fill="#155f7f">local-specialist</text>
-    <text x="530" y="652" font-size="16" fill="#28617d">The SDK keeps one logical model name.</text>
+    <rect x="40" y="732" width="620" height="210" rx="14" fill="#eaf6fc" stroke="#76bad7" stroke-width="1.5"/>
+    <path d="M55 732H645" stroke="#149ac8" stroke-width="3"/>
+    <circle cx="73" cy="773" r="17" fill="#c9e8f5"/>
+    <text x="73" y="780" text-anchor="middle" font-size="20" font-weight="700" fill="#155f7f">4</text>
+    <text x="105" y="782" font-size="28" font-weight="720" letter-spacing="-.4">vLLM Semantic Router</text>
+    <text x="62" y="813" font-size="19" fill="#28617d">Envoy inference frontend · configured model selection</text>
+    <rect x="62" y="832" width="274" height="80" rx="8" fill="#ffffff" stroke="#bedce9"/>
+    <rect x="364" y="832" width="274" height="80" rx="8" fill="#ffffff" stroke="#bedce9"/>
+    <text x="199" y="865" text-anchor="middle" font-size="21" font-weight="650" fill="#155f7f">local-fast</text>
+    <text x="199" y="892" text-anchor="middle" font-size="18" fill="#526479">Default route</text>
+    <text x="501" y="865" text-anchor="middle" font-size="21" font-weight="650" fill="#155f7f">local-specialist</text>
+    <text x="501" y="892" text-anchor="middle" font-size="18" fill="#526479">Keyword-selected route</text>
 
-    <path d="M242 666V752" fill="none" stroke="#b66f0e" stroke-width="2.2" marker-end="url(#amber-arrow)"/>
-    <rect x="143" y="688" width="198" height="34" rx="7" fill="#f7f9fc"/>
-    <text x="242" y="712" text-anchor="middle" font-size="19" fill="#845009">Allowed calls only</text>
-    <path d="M718 666V752" fill="none" stroke="#087ba9" stroke-width="2.2" marker-end="url(#blue-arrow)"/>
-    <rect x="621" y="688" width="194" height="34" rx="7" fill="#f7f9fc"/>
-    <text x="718" y="712" text-anchor="middle" font-size="19" fill="#086d94">Selected backend</text>
+    <path d="M350 942V1018" fill="none" stroke="#087ba9" stroke-width="2.3" marker-end="url(#blue-arrow)"/>
+    <text x="371" y="986" font-size="18" fill="#086d94">Selected backend</text>
 
-    <rect x="32" y="757" width="420" height="84" rx="11" fill="#ffffff" stroke="#d8dfe8"/>
-    <text x="52" y="791" font-size="22" font-weight="650">Incident MCP service</text>
-    <text x="52" y="820" font-size="18" fill="#526479">Fictional read / restart fixture</text>
-    <rect x="508" y="757" width="420" height="84" rx="11" fill="#ffffff" stroke="#d8dfe8"/>
-    <text x="528" y="791" font-size="22" font-weight="650">Ollama</text>
-    <text x="528" y="820" font-size="18" fill="#526479">Qwen3:0.6b or Qwen3:1.7b</text>
+    <rect x="40" y="1024" width="620" height="100" rx="12" fill="#ffffff" stroke="#b9d7e4" stroke-width="1.5"/>
+    <circle cx="73" cy="1062" r="17" fill="#eaf6fc"/>
+    <text x="73" y="1069" text-anchor="middle" font-size="20" font-weight="700" fill="#155f7f">5</text>
+    <text x="105" y="1070" font-size="25" font-weight="700">Ollama · model serving</text>
+    <text x="62" y="1101" font-size="20" fill="#526479">Qwen3:0.6b or Qwen3:1.7b</text>
 
-    <path d="M32 863H928" stroke="#dce3ec"/>
-    <text x="480" y="887" text-anchor="middle" font-size="17" fill="#526479">Model traffic goes directly from the SDK to the inference listener.</text>
+    <path d="M32 1151H928" stroke="#dce3ec"/>
+    <text x="480" y="1179" text-anchor="middle" font-size="18" fill="#526479">The SDK calls the inference listener directly. Tool calls return to Runkite.</text>
   </g>
 </svg>

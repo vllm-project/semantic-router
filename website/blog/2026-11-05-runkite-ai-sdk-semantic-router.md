@@ -48,15 +48,15 @@ There is also a connection between one turn and the next: conversation state. If
 
 For this experiment, the application starts a run through Runkite's HTTP API. The plane admits and dispatches it to the TypeScript runner, which executes the native AI SDK `ToolLoopAgent` and reports events and results.
 
-The SDK now has two paths to follow. For inference, its model provider calls Semantic Router's OpenAI-compatible endpoint, where the router chooses a backend. For a tool request, its executor calls Runkite's run-bound connector proxy, where the requested action is checked before it can reach the tool service.
+Once Runkite has dispatched the run, the SDK's model provider calls Semantic Router's OpenAI-compatible endpoint, where the router chooses a backend. A tool request takes a return path through Runkite's run-bound connector proxy, where the requested action is checked before it can reach the tool service.
 
 <ArticleFigure
   src="/img/blog/runkite-ai-sdk-semantic-router/architecture.svg"
-  width={960} height={900}
-  alt="Runkite and vLLM Semantic Router shown side by side: the native AI SDK runner connects to Runkite for managed execution and tool authorization, and to Semantic Router for inference routing."
+  width={960} height={1200}
+  alt="Managed execution from application to Runkite, then the native AI SDK runner, Semantic Router and Ollama. A separate tool-call branch returns through Runkite's connector gate."
   diagram
 >
-  Model requests leave the SDK for the inference listener. Tool requests return through Runkite's connector gate. The Go plane does not proxy every model call. Open the image for full size.
+  Read top to bottom: the app starts a run in Runkite, Runkite dispatches the agent, and the agent calls Semantic Router to reach a model. Tool requests return through Runkite's connector gate. The Go plane owns admission and dispatch; inference HTTP originates in the runner. Open the image for full size.
 </ArticleFigure>
 
 This is **managed execution**: the agent loop runs in a Runkite runner, and the application creates Runkite runs. An existing Next or Nuxt app that keeps its SDK loop inside the app remains a different integration. Runkite's decision-only governance API can govern submitted operations from that app, but it does not turn those calls into managed Threads/Runs.
