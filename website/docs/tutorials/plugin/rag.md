@@ -160,3 +160,58 @@ models, invalid scores and input-limit failures follow the existing RAG
 and scorer identity. Runtime tracing records actual rerank latency and scores;
 route preview does not execute retrieval or invent a reranker timing. Other RAG
 backends currently reject `rerank` until they expose structured candidates.
+
+### SystemOne relevance scoring
+
+To score retrieved documents with a Decision Model, explicitly select
+`decision.v1` for the same recipe-local binding:
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      relevance-judge:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.3B
+        device: cpu
+routing:
+  model_bindings:
+    rag.reranker:
+      deployment: relevance-judge
+      contract: decision.v1
+```
+
+Keep the vectorstore RAG plugin and its `rerank.top_k` configuration above.
+Omit `adapter`, `head`, `mapping_path` and `pair_scorer`: this binding asks a
+Score question through the shared runtime. Readiness and Score capability are
+checked at preparation, including a full-input warmup. A task-specific training
+label is not required. Existing `relevance_scores.v1` bindings retain their
+cross-encoder behavior.
+
+Each candidate is judged against the query, with four ordered levels: unrelated,
+related but not answering, partially answering, and directly answering. Scores
+are in `[0, 3]` and are reported as `decision_relevance`. They are uncalibrated
+ordinal scores, not probabilities, embedding similarities or cross-encoder
+logits. Equal scores preserve retrieval order and all file/chunk metadata.
+
+Scoring starts after retrieval and before context formatting. Each document is
+a separate state; compatible calls use the existing runtime bundle and fusion
+implementation. A bundle does not imply one model forward. The first slice
+bounds a batch to 32 candidates, 1 MiB of query/document UTF-8 bytes (counting the
+query once per candidate), and 30 seconds of inference, or the caller's earlier
+deadline. Runtime token limits still apply. Input is never silently truncated.
+
+Every answer must prove `input_coverage: complete`. Missing proof, invalid
+scores, unavailable models and timeouts follow the configured RAG `on_failure`
+policy. Select `block` when a failed scorer must prevent retrieval context from
+being used. Candidate text remains untrusted evidence, never a tool command.
+
+Retrieval cache identity includes model content/revision, question wording and
+levels, score contract and read policy. A deployment without a model-content
+digest disables this retrieval cache path. Diagnostics report coverage and
+runtime-reported input tokens separately from native paired-token usage.
+
+Use the [RAG relevance comparison driver](https://github.com/vllm-project/semantic-router/tree/main/bench/rag_relevance)
+to compare identical labeled candidates against retrieval order and the existing
+cross-encoder. Evaluate quality and latency for your documents before selecting
+this backend; capability support alone establishes neither.

@@ -437,8 +437,12 @@ func validateDecisionRAGAndMemoryPlugins(cfg *RouterConfig, decision *Decision) 
 			return fmt.Errorf("decision '%s': RAG plugin: %w", decision.Name, err)
 		}
 		if ragCfg.Enabled && ragCfg.Rerank != nil {
-			if _, ok := cfg.ModelBindings[RAGRerankerConsumer]; !ok {
+			binding, ok := cfg.ModelBindings[RAGRerankerConsumer]
+			if !ok {
 				return fmt.Errorf("decision %q: rerank requires recipe-local model_bindings.%s", decision.Name, RAGRerankerConsumer)
+			}
+			if binding.Contract == DecisionTaskContract && ragCfg.TopK != nil && *ragCfg.TopK > MaxDecisionRAGCandidates {
+				return fmt.Errorf("decision %q: decision RAG relevance allows at most %d candidates", decision.Name, MaxDecisionRAGCandidates)
 			}
 		}
 	}

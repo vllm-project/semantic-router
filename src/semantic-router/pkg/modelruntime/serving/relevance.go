@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"unicode/utf8"
@@ -15,9 +16,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
-// RelevanceScorer serves a RAG reranker binding through a model_runtime
-// deployment at one fixed pair-scorer exit. Scores are raw relevance logits
-// in input order.
+// RelevanceScorer serves a RAG ranking binding through a model_runtime
+// deployment. Scores preserve input order and identify their native logit
+// or Decision relevance semantics.
 type RelevanceScorer struct {
 	call      *binding.Resolved[[]tasks.QueryDocument, tasks.RelevanceScores]
 	selection config.PairScorerSelection
@@ -38,10 +39,13 @@ func (s *RelevanceScorer) ScorePairs(ctx context.Context, recipe string, pairs [
 	return s.call.Call(ctx, recipe, pairs)
 }
 
-// Relevance prepares a reranker binding. Inputs are scored whole: the
-// deployment's input policy must reject inputs over budget, never truncate them.
+// Relevance prepares the explicitly selected ranking contract. Both backends
+// require complete input; Decision models may use their declared scan budget.
 func (r *Runtime) Relevance(ctx context.Context, spec config.ResolvedModelBinding) (_ *RelevanceScorer, callErr error) {
 	defer func() { observePreparationFailure(spec, callErr) }()
+	if spec.Binding.Contract == config.DecisionTaskContract {
+		return r.decisionRelevance(ctx, spec)
+	}
 	input := spec.Deployment.WithDefaults().Input
 	if spec.Binding.Contract != config.RelevanceScoresContract || input.Overflow != "reject" {
 		return nil, fmt.Errorf("%w: a relevance scorer needs the %s contract and the reject input policy", binding.ErrCapability, config.RelevanceScoresContract)
@@ -173,6 +177,9 @@ func rerankPairs(ctx context.Context, services Services, deployment string, temp
 func (r *Runtime) DiagnoseRerank(ctx context.Context, recipe, name string, pairs []tasks.QueryDocument) (DiagnosticResult[tasks.RelevanceScores], error) {
 	var response DiagnosticResult[tasks.RelevanceScores]
 	handle, metadata, err := binding.LookupPrepared[[]tasks.QueryDocument, tasks.RelevanceScores](r.prepared, recipe, name, config.RelevanceScoresContract)
+	if errors.Is(err, binding.ErrNotPrepared) {
+		handle, metadata, err = binding.LookupPrepared[[]tasks.QueryDocument, tasks.RelevanceScores](r.prepared, recipe, name, config.DecisionTaskContract)
+	}
 	if err != nil {
 		return response, err
 	}

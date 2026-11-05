@@ -59,6 +59,11 @@ test-router-flow-bench: $(HARNESS_VENV_DEPS) ## Test the Router Flow EvalScope h
 test-agent-crew: bench-test-deps ## Test the agent crew harness against its stub router
 	@"$(AGENT_PYTHON)" -m pytest -q bench/agent_crew
 
-test-bench-tools: test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew ## Test every registered bench/ research tool
+test-rag-relevance-bench: $(HARNESS_VENV_DEPS) ## Test RAG relevance evaluation metrics and input validation
+	@"$(AGENT_PYTHON)" -m unittest discover -s bench/rag_relevance -p 'test_*.py'
+
+.PHONY: test-rag-relevance-bench
+
+test-bench-tools: test-rag-relevance-bench test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew ## Test every registered bench/ research tool
 
 .PHONY: bench-test-deps test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-bench-tools

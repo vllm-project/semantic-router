@@ -58,7 +58,8 @@ func (r *OpenAIRouter) rerankVectorStoreResults(traceCtx context.Context, ctx *R
 		ctx.RAGRerankScores[i] = output.Scores[index]
 	}
 	ctx.RAGRerankerIdentity = scorer.CacheIdentity()
-	span.SetAttributes(attribute.String("rag.reranker_identity", ctx.RAGRerankerIdentity), attribute.String("rag.rerank_score_type", "relevance_logit"), attribute.Float64Slice("rag.rerank_scores", float64Relevance(ctx.RAGRerankScores)))
+	ctx.RAGRerankScoreType = output.Semantics().Unit
+	span.SetAttributes(attribute.String("rag.reranker_identity", ctx.RAGRerankerIdentity), attribute.String("rag.rerank_score_type", output.Semantics().Unit), attribute.Float64Slice("rag.rerank_scores", float64Relevance(ctx.RAGRerankScores)))
 	return reordered, nil
 }
 

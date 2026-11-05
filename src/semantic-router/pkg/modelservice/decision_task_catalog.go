@@ -215,6 +215,9 @@ func taskConsumers(cfg *config.RouterConfig) []taskConsumer {
 		{"reask", "reask", config.DecisionTaskContract},
 		{"complexity", "complexity", config.DecisionTaskContract},
 	}
+	if b := cfg.EffectiveModelBindings(cfg.Signals, cfg.ModelBindings)[config.RAGRerankerConsumer]; b.Contract == config.DecisionTaskContract {
+		consumers = append(consumers, taskConsumer{"rag_relevance", config.RAGRerankerConsumer, config.DecisionTaskContract})
+	}
 	for _, rule := range cfg.SafetyRules {
 		consumers = append(consumers, taskConsumer{"safety", "safety." + rule.Name, config.RemoteClassifierContractLabelDistribution})
 		if rule.Hazard != nil {

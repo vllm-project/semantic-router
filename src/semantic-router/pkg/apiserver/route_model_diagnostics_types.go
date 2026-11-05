@@ -119,9 +119,11 @@ type ModelDiagnosticEmbeddingResult struct {
 	Input     *ModelDiagnosticInputUsage `json:"input,omitempty"`
 }
 type ModelDiagnosticRerankResult struct {
-	Scores    []float32                    `json:"scores"`
-	ScoreType string                       `json:"score_type"`
-	Inputs    []*ModelDiagnosticInputUsage `json:"inputs"`
+	Coverage    []string                     `json:"coverage,omitempty"`
+	InputTokens *int                         `json:"input_tokens,omitempty"`
+	Scores      []float32                    `json:"scores"`
+	ScoreType   string                       `json:"score_type"`
+	Inputs      []*ModelDiagnosticInputUsage `json:"inputs"`
 }
 
 func diagnosticBinding(info binding.PreparedBinding) ModelDiagnosticBinding {
