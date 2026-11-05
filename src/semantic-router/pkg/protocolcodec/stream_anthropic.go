@@ -413,31 +413,20 @@ func decodeAnthropicContentDelta(wire anthropicEventWire) (llmprotocol.Event, er
 
 func decodeAnthropicMessageStartUsage(wire anthropicUsageWire, policy llmprotocol.Policy, diagnostics *llmprotocol.Diagnostics) llmprotocol.Usage {
 	cacheWrite := wire.CacheCreationInputTokens
-	cacheWriteAggregate := int64(0)
-	if cacheWrite != nil {
-		cacheWriteAggregate = *cacheWrite
-	}
 	cacheWrite5m, cacheWrite1h, derivedAggregate := decodeAnthropicCacheCreationTiers(
-		wire.CacheCreation, cacheWriteAggregate, policy, diagnostics,
+		wire.CacheCreation, cacheWrite, policy, diagnostics,
 	)
 	if derivedAggregate != nil {
-		cacheWrite = derivedAggregate
-	}
-	inputTotal := wire.InputTokens
-	if wire.CacheReadInputTokens != nil {
-		inputTotal += *wire.CacheReadInputTokens
-	}
-	if cacheWrite != nil {
-		inputTotal += *cacheWrite
+		cacheWrite = *derivedAggregate
 	}
 	usage := llmprotocol.Usage{
 		State:             llmprotocol.UsageAvailable,
 		InputUncached:     authoritative(wire.InputTokens),
-		InputCacheRead:    optionalAuthoritative(wire.CacheReadInputTokens),
-		InputCacheWrite:   optionalAuthoritative(cacheWrite),
+		InputCacheRead:    authoritative(wire.CacheReadInputTokens),
+		InputCacheWrite:   authoritative(cacheWrite),
 		InputCacheWrite5m: cacheWrite5m,
 		InputCacheWrite1h: cacheWrite1h,
-		InputTotal:        authoritative(inputTotal),
+		InputTotal:        authoritative(wire.InputTokens + wire.CacheReadInputTokens + cacheWrite),
 	}
 	// message_start's output count is provisional. A reasoning/other split
 	// taken from it can shrink once message_delta reports the thinking count,
@@ -498,8 +487,8 @@ func encodeAnthropicMessageDeltaUsage(usage llmprotocol.Usage) *anthropicMessage
 		creation = full.CacheCreation
 	}
 	return &anthropicMessageDeltaUsageWire{
-		CacheCreationInputTokens: full.CacheCreationInputTokens,
-		CacheReadInputTokens:     full.CacheReadInputTokens,
+		CacheCreationInputTokens: &full.CacheCreationInputTokens,
+		CacheReadInputTokens:     &full.CacheReadInputTokens,
 		InputTokens:              &full.InputTokens,
 		OutputTokens:             full.OutputTokens,
 		CacheCreation:            creation,
