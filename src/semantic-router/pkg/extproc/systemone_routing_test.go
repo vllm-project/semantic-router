@@ -3,6 +3,7 @@ package extproc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
@@ -313,4 +315,99 @@ recipes:
 	}
 	t.Logf("HTTP %d: model_calls=%d signal_calls=%d fast_attempts=%d strong_attempts=%d",
 		response.Code, result.Error.Calls, signalCalls.Load(), fastAttempts.Load(), strongAttempts.Load())
+}
+
+func TestSystemOneBudgetDeadlineIncludesRemoteSignal(t *testing.T) {
+	var signalCalls atomic.Int64
+	decisionServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/v1/systemone/models" {
+			http.NotFound(w, r)
+			return
+		}
+		signalCalls.Add(1)
+		time.Sleep(250 * time.Millisecond)
+		_ = json.NewEncoder(w).Encode(map[string]any{"answers": map[string]any{
+			"task_kind": map[string]any{"type": "choice", "choice": "simple", "probabilities": map[string]float64{"simple": 1, "hard": 0}},
+		}})
+	}))
+	defer decisionServer.Close()
+	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.3
+listeners:
+  - name: native
+    port: 8801
+    systemone: {models: [vllm-sr/auto]}
+providers:
+  models:
+    - name: fast
+      api_format: systemone
+      provider_model_id: fast-native
+      backend_refs: [{provider: systemone-compatible, base_url: http://unused.invalid/v1}]
+global:
+  model_catalog:
+    deployments:
+      remote-kai: {provider: systemone, endpoint: %s/v1/systemone, model: vllm-sr/decision}
+routing: {}
+entrypoints:
+  - {api: systemone, model_names: [vllm-sr/auto], recipe: native}
+recipes:
+  - name: native
+    routing:
+      signals:
+        decision:
+          - name: task_kind
+            deployment: remote-kai
+            timeout_ms: 1000
+            question:
+              type: choice
+              instructions: Is the task simple?
+              choices: [{key: simple}, {key: hard}]
+      decisions:
+        - name: simple
+          rules: {type: decision, name: task_kind, label: simple}
+          modelRefs: [{model: fast}]
+          algorithm:
+            type: cascade
+            budget: {deadline: 100ms, max_calls: 2}
+            quality:
+              type: uncalibrated
+              acceptance:
+                rules: [{question_type: noul, field: top_probability, predicate: {gte: 0}}]
+            stages: [{name: answer, kind: native, model: fast}]
+`, decisionServer.URL)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer classifiers.Close()
+	classifier, ok := classifiers.ForRecipe("native")
+	if !ok {
+		t.Fatal("native recipe classifier unavailable")
+	}
+	remoteSignals, err := modelservice.NewRemoteSystemOne(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer remoteSignals.Close()
+	classifier.SetSystemOneDecider(remoteSignals)
+	executors, err := prepareNativeExecutors(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := &OpenAIRouter{Config: cfg, RecipeClassifiers: classifiers, nativeExecutors: executors}
+	var backendCalls atomic.Int64
+	body := json.RawMessage(`{"model":"vllm-sr/auto","state":"hello","questions":{"task":{"type":"noul"}}}`)
+	status, _, routeErr := router.RouteSystemOne(context.Background(), "vllm-sr/auto", body, func(context.Context, string, json.RawMessage) (int, []byte, error) {
+		backendCalls.Add(1)
+		return http.StatusOK, []byte(`{"answers":{"task":{"type":"noul","noul":0.9}}}`), nil
+	})
+	var exhausted *systemone.BudgetExhaustedError
+	if !errors.As(routeErr, &exhausted) || exhausted.Reason != "deadline" || exhausted.Calls != 1 ||
+		status != http.StatusGatewayTimeout || signalCalls.Load() != 1 || backendCalls.Load() != 0 {
+		t.Fatalf("status=%d signal_calls=%d backend_calls=%d err=%v", status, signalCalls.Load(), backendCalls.Load(), routeErr)
+	}
+	t.Logf("HTTP %d: reason=%s model_calls=%d signal_calls=%d backend_calls=%d",
+		status, exhausted.Reason, exhausted.Calls, signalCalls.Load(), backendCalls.Load())
 }
