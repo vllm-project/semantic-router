@@ -1429,6 +1429,7 @@ class RouterReplayPluginConfig(BaseModel):
     capture_request_body: Optional[StrictBool] = None
     capture_response_body: Optional[StrictBool] = None
     capture_personal_data: Optional[StrictBool] = None
+    capture_tool_results: Optional[StrictBool] = None
     max_records: Optional[int] = Field(default=None, ge=0)
     max_body_bytes: Optional[int] = Field(default=None, ge=0)
     max_tool_trace_bytes: Optional[int] = Field(default=None, ge=0)
@@ -2658,6 +2659,11 @@ class ReasoningFamily(BaseModel):
     disabled: Optional[str] = None
 
 
+# Backend ref settings the Router removed; mirrors removedBackendRefFields in
+# src/semantic-router/pkg/config/removed_backend_ref_fields.go.
+REMOVED_BACKEND_REF_FIELDS = ("compat_gateway", "openai_compat_gateway")
+
+
 class BackendRef(BaseModel):
     """Inline backend access details carried under providers.models[].backend_refs."""
 
@@ -2676,11 +2682,21 @@ class BackendRef(BaseModel):
     chat_path: Optional[str] = None
     api_key: Optional[str] = None
     api_key_env: Optional[str] = None
-    # Opts a vLLM-type backend in to the OpenAI-compatible gateway response
-    # contract: the backend is a relay that injects its own usage metering
-    # fields, so the router decoder tolerates them. Mirrors the Go
-    # CanonicalBackendRef field of the same name.
-    openai_compat_gateway: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_removed_fields(cls, data):
+        # Every backend now accepts response fields its api_format does not
+        # define, so the opt-ins are gone; name them instead of reporting a
+        # generic extra field, as the Router does.
+        if isinstance(data, dict):
+            for field in REMOVED_BACKEND_REF_FIELDS:
+                if field in data:
+                    raise ValueError(
+                        f"{field} was removed; gateway response fields are "
+                        "accepted by default, so delete it"
+                    )
+        return data
 
     def resolve_api_key(self) -> Optional[str]:
         if self.api_key:

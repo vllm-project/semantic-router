@@ -236,6 +236,18 @@ func (b *Bundle) waiting(p *participant) func() {
 	}
 }
 
+// Await counts the caller of ctx as asked and blocked in its bundle while it
+// waits for an exchange the bundle does not carry, such as a call to a remote
+// System One model, so the bundle sends the stage's other calls without
+// waiting for it. Call the returned function when the exchange ends.
+func Await(ctx context.Context) func() {
+	bundle := bundleFrom(ctx)
+	if bundle == nil {
+		return func() {}
+	}
+	return bundle.waiting(bundle.participantOf(ctx))
+}
+
 // Fan runs work(i) for every i in [0, n) in its own goroutine, each a
 // participant of the context's bundle like the caller, and waits for all of
 // them. While it waits, the caller cannot add a call, so it counts as blocked,

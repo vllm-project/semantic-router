@@ -77,6 +77,21 @@ func TestCompileModelBindingsRejectsInvalidPreparation(t *testing.T) {
 			d.MaxNumSeqs = intPtr(0)
 			cfg.ModelDeployments["shared-encoder"] = d
 		}, "max_num_seqs must be at least 1"},
+		{"no input tokens", func(cfg *RouterConfig) {
+			d := cfg.ModelDeployments["shared-encoder"]
+			d.MaxModelLen = intPtr(0)
+			cfg.ModelDeployments["shared-encoder"] = d
+		}, "max_model_len must be at least 1"},
+		{"input limit on an attached endpoint", func(cfg *RouterConfig) {
+			d := cfg.ModelDeployments["shared-encoder"]
+			d.MaxModelLen, d.Device, d.Endpoint = intPtr(32000), "", "http://runtime:8000"
+			cfg.ModelDeployments["shared-encoder"] = d
+		}, "max_model_len applies only to a managed worker"},
+		{"input limit on replicas", func(cfg *RouterConfig) {
+			d := cfg.ModelDeployments["shared-encoder"]
+			d.MaxModelLen, d.Device, d.Replicas = intPtr(32000), "", []ModelReplica{{Device: "cpu"}, {Device: "cpu"}}
+			cfg.ModelDeployments["shared-encoder"] = d
+		}, "max_model_len applies only to a managed worker"},
 		{"unknown dtype", func(cfg *RouterConfig) {
 			d := cfg.ModelDeployments["shared-encoder"]
 			d.Dtype = "half"
@@ -120,6 +135,7 @@ func TestEngineArgumentsCompileOnModelRuntimeDeployments(t *testing.T) {
 	window, shared := 0.5, false
 	d.MaxNumSeqs, d.MaxNumBatchedTokens, d.BatchWindowMS = intPtr(1), intPtr(4096), &window
 	d.Dtype, d.EnableSharedContext = "bfloat16", &shared
+	d.MaxModelLen = intPtr(32000)
 	cfg.ModelDeployments["shared-encoder"] = d
 	if _, err := CompileModelBindings(cfg); err != nil {
 		t.Fatalf("engine arguments within their ranges compile: %v", err)

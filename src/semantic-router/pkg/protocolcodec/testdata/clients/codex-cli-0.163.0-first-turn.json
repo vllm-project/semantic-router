@@ -1,0 +1,261 @@
+[{
+  "model": "vllm-sr/agent",
+  "stream": true,
+  "input": [
+    {
+      "type": "message",
+      "id": "msg_00000000-0000-4000-8000-000000000001",
+      "role": "developer",
+      "content": [
+        {
+          "type": "input_text",
+          "text": "You are a coding agent running in the Codex CLI, a terminal-based coding assista\n(Shortened for this fixture.)"
+        }
+      ],
+      "internal_chat_message_metadata_passthrough": {
+        "content_item_kinds": [
+          "model.base_instructions"
+        ]
+      }
+    },
+    {
+      "type": "message",
+      "id": "msg_00000000-0000-4000-8000-000000000002",
+      "role": "developer",
+      "content": [
+        {
+          "type": "input_text",
+          "text": "<skills_instructions>\n(Shortened for this fixture.)"
+        },
+        {
+          "type": "input_text",
+          "text": "<permissions instructions>\n(Shortened for this fixture.)"
+        }
+      ],
+      "internal_chat_message_metadata_passthrough": {
+        "turn_id": "00000000-0000-4000-8000-000000000003",
+        "create_time": 1793555165.0560672,
+        "content_item_kinds": [
+          "host_skills.instructions",
+          "permissions.instructions"
+        ]
+      }
+    },
+    {
+      "type": "message",
+      "id": "msg_00000000-0000-4000-8000-000000000004",
+      "role": "user",
+      "content": [
+        {
+          "type": "input_text",
+          "text": "<environment_context>\n(Shortened for this fixture.)"
+        }
+      ],
+      "internal_chat_message_metadata_passthrough": {
+        "turn_id": "00000000-0000-4000-8000-000000000003",
+        "create_time": 1793555165.0560727,
+        "content_item_kinds": [
+          "environments.environment_context"
+        ]
+      }
+    },
+    {
+      "type": "message",
+      "id": "msg_00000000-0000-4000-8000-000000000005",
+      "role": "user",
+      "content": [
+        {
+          "type": "input_text",
+          "text": "I just made some changes to my personal site and checked out master, but now I can't find those changes. Please help me find them and merge them into master.\n"
+        }
+      ],
+      "internal_chat_message_metadata_passthrough": {
+        "turn_id": "00000000-0000-4000-8000-000000000003",
+        "create_time": 1793555165.0598145,
+        "content_item_kinds": [
+          "user.text"
+        ]
+      }
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "name": "exec_command",
+      "description": "Runs a command in a PTY, returning output or a session ID for ongoing interaction.",
+      "strict": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "cmd": {
+            "type": "string",
+            "description": "Shell command to execute."
+          },
+          "justification": {
+            "type": "string",
+            "description": "User-facing approval question for `require_escalated`; omit otherwise."
+          },
+          "login": {
+            "type": "boolean",
+            "description": "True runs the shell with -l/-i semantics; false disables them. Defaults to true."
+          },
+          "max_output_tokens": {
+            "type": "number",
+            "description": "Output token budget. Defaults to 10000 tokens; larger requests may be capped by policy."
+          },
+          "prefix_rule": {
+            "type": "array",
+            "description": "Reusable approval prefix for `cmd`, only with `sandbox_permissions: \"require_escalated\"`; for example [\"git\", \"pull\"].",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sandbox_permissions": {
+            "type": "string",
+            "description": "Per-command sandbox override. Defaults to `use_default`; use `require_escalated` for unsandboxed execution.",
+            "enum": [
+              "use_default",
+              "require_escalated"
+            ]
+          },
+          "shell": {
+            "type": "string",
+            "description": "Shell binary to launch. Defaults to the user's default shell."
+          },
+          "tty": {
+            "type": "boolean",
+            "description": "True allocates a PTY for the command; false or omitted uses plain pipes."
+          },
+          "workdir": {
+            "type": "string",
+            "description": "Working directory for the command. Defaults to the turn cwd."
+          },
+          "yield_time_ms": {
+            "type": "number",
+            "description": "Wait before yielding output. Defaults to 10000 ms; effective range is 250-30000 ms."
+          }
+        },
+        "required": [
+          "cmd"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "type": "function",
+      "name": "write_stdin",
+      "description": "Writes characters to an existing unified exec session and returns recent output.",
+      "strict": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "chars": {
+            "type": "string",
+            "description": "Bytes to write to stdin. Defaults to empty, which polls without writing."
+          },
+          "max_output_tokens": {
+            "type": "number",
+            "description": "Output token budget. Defaults to 10000 tokens; larger requests may be capped by policy."
+          },
+          "session_id": {
+            "type": "number",
+            "description": "Identifier of the running unified exec session."
+          },
+          "yield_time_ms": {
+            "type": "number",
+            "description": "Wait before yielding output. Non-empty writes default to 250 ms and cap at 30000 ms; empty polls wai (shortened)"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "type": "function",
+      "name": "request_user_input",
+      "description": "Request user input for one to three short questions and wait for the response. This tool is only available in Plan mode.",
+      "strict": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "questions": {
+            "type": "array",
+            "description": "Questions to show the user. Prefer 1 and do not exceed 3",
+            "items": {
+              "type": "object",
+              "properties": {
+                "header": {
+                  "type": "string",
+                  "description": "Short header label shown in the UI (12 or fewer chars)."
+                },
+                "id": {
+                  "type": "string",
+                  "description": "Stable identifier for mapping answers (snake_case)."
+                },
+                "options": {
+                  "type": "array",
+                  "description": "Provide 2-3 mutually exclusive choices. Put the recommended option first and suffix its label with \" (shortened)",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "description": {
+                        "type": "string",
+                        "description": "One short sentence explaining impact/tradeoff if selected."
+                      },
+                      "label": {
+                        "type": "string",
+                        "description": "User-facing label (1-5 words)."
+                      }
+                    },
+                    "required": [
+                      "label",
+                      "description"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "question": {
+                  "type": "string",
+                  "description": "Single-sentence prompt shown to the user."
+                }
+              },
+              "required": [
+                "id",
+                "header",
+                "question",
+                "options"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "questions"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ],
+  "tool_choice": "auto",
+  "parallel_tool_calls": true,
+  "reasoning": {
+    "summary": "auto"
+  },
+  "store": false,
+  "include": [
+    "reasoning.encrypted_content"
+  ],
+  "prompt_cache_key": "00000000-0000-4000-8000-000000000006",
+  "client_metadata": {
+    "root_turn_id": "00000000-0000-4000-8000-000000000003",
+    "session_id": "00000000-0000-4000-8000-000000000006",
+    "x-codex-turn-metadata": "{\"installation_id\":\"00000000-0000-4000-8000-000000000007\",\"session_id\":\"00000000-0000-4000-8000-000000000006\",\"thread_id\":\"00000000-0000-4000-8000-000000000006\",\"agent_name\":\"/root\",\"turn_id\":\"00000000-0000-4000-8000-000000000003\",\"window_id\":\"00000000-0000-4000-8000-000000000006:0\",\"window_number\":0,\"context_window_id\":\"00000000-0000-4000-8000-000000000008\",\"request_kind\":\"turn\",\"history_initialization\":\"new\",\"root_turn_id\":\"00000000-0000-4000-8000-000000000003\",\"thread_source\":\"user\",\"turn_trigger\":\"exec\",\"sandbox\":\"none\",\"sandbox_mode\":\"danger-full-access\",\"auto_review_enabled\":false,\"node_repl_auto_review_required\":false,\"node_repl_disabled\":false,\"workspaces\":{\"/app/personal-site\":{\"latest_git_commit_hash\":\"0000000000000000000000000000000000000000\",\"has_changes\":false}},\"turn_started_at_unix_ms\":1793555165039,\"analytics_enabled\":true,\"model\":\"vllm-sr/agent\"}",
+    "thread_id": "00000000-0000-4000-8000-000000000006",
+    "mcp_attribution": "{\"status\":\"none\"}",
+    "x-codex-window-id": "00000000-0000-4000-8000-000000000006:0",
+    "turn_id": "00000000-0000-4000-8000-000000000003",
+    "x-codex-installation-id": "00000000-0000-4000-8000-000000000007"
+  }
+}]

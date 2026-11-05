@@ -481,8 +481,11 @@ configuration.
 Set `capture_personal_data: false` globally or in the decision plugin to retain
 routing evidence while omitting content when PII is detected or its status is
 unknown. Missing PII detectors suppress content conservatively rather than
-preventing startup. Rejected requests without a selected decision use global
-capture defaults. These controls do not govern other stores or backend retention.
+preventing startup. Client tool results stay redacted unless
+`capture_tool_results: true`, which requires `capture_personal_data: true`;
+startup refuses the combination with `capture_personal_data: false`. Rejected
+requests without a selected decision use global capture defaults. These
+controls do not govern other stores or backend retention.
 See [Router Replay](../tutorials/plugin/router-replay) for the complete fields and
 examples, or inspect `vllm-sr config schema --section global.services.router_replay`.
 
