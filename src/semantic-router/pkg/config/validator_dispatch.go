@@ -32,6 +32,7 @@ var (
 		validateGlobalRouterLearningConfig,
 		validateLossyTranslationContracts,
 		validateRoutingInputContracts,
+		validateRouterHeadersContracts,
 		validateFlowContracts,
 		validateAdvancedToolFilteringConfig,
 		validatePromptCompressionContracts,

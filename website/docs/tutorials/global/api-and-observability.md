@@ -307,6 +307,27 @@ or stripping the header on trust grounds. Background on the AI Gateway
 interop pattern that motivates this gate lives in
 [issue #1808](https://github.com/vllm-project/semantic-router/issues/1808).
 
+### Debug Headers
+
+`global.router.headers.debug` decides who may turn on the debug response
+headers with `x-vsr-debug: true`. They name the signal and guard rules a
+request matched, so the default, `none`, ignores the header from every client.
+`any` honors it from every client, for development and tests. `authenticated`
+honors it only from the users and groups in `debug_principals`, as the identity
+headers your authenticator sets assert them.
+
+```yaml
+global:
+  router:
+    headers:
+      debug: authenticated
+      debug_principals:
+        groups: [platform-sre]
+```
+
+See [VSR routing headers](../../troubleshooting/vsr-headers#who-may-turn-on-the-debug-headers)
+for the headers it covers.
+
 ### Router Replay
 
 ```yaml

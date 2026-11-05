@@ -1448,6 +1448,9 @@
         },
         "routing_input": {
           "$ref": "#/$defs/RoutingInputConfig"
+        },
+        "headers": {
+          "$ref": "#/$defs/RouterHeadersConfig"
         }
       },
       "additionalProperties": false,
@@ -2308,6 +2311,24 @@
         },
         "role": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DebugPrincipals": {
+      "properties": {
+        "users": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "groups": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -6839,6 +6860,23 @@
         },
         "use_capabilities": {
           "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RouterHeadersConfig": {
+      "properties": {
+        "debug": {
+          "type": "string",
+          "enum": [
+            "none",
+            "any",
+            "authenticated"
+          ]
+        },
+        "debug_principals": {
+          "$ref": "#/$defs/DebugPrincipals"
         }
       },
       "additionalProperties": false,

@@ -46,6 +46,9 @@ type CanonicalRouterGlobal struct {
 	AllowLossyTranslation []string `yaml:"allow_lossy_translation,omitempty"`
 	// RoutingInput chooses the user text that routing reads.
 	RoutingInput RoutingInputConfig `yaml:"routing_input,omitempty"`
+	// Headers governs the optional response headers, such as who may turn on
+	// the debug headers.
+	Headers RouterHeadersConfig `yaml:"headers,omitempty"`
 }
 
 // CanonicalStreamedBody groups streaming request body controls.
@@ -311,6 +314,7 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 	cfg.Fallback = router.Fallback.Clone()
 	cfg.AllowLossyTranslation = router.AllowLossyTranslation
 	cfg.RoutingInput = router.RoutingInput
+	cfg.Headers = router.Headers
 }
 
 func applyCanonicalServiceGlobal(cfg *RouterConfig, services CanonicalServiceGlobal) {

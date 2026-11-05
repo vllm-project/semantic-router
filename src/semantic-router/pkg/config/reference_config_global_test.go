@@ -17,6 +17,8 @@ func assertReferenceConfigRouterGlobalCoverage(t testingT, router map[string]int
 	assertMapCoversStructFields(t, mustMapAt(t, router, "fallback", "circuit_breaker"), reflect.TypeOf(fallback.CircuitBreakerConfig{}), "global.router.fallback.circuit_breaker")
 	assertMapCoversStructFields(t, mustMapAt(t, router, "streamed_body"), reflect.TypeOf(CanonicalStreamedBody{}), "global.router.streamed_body")
 	assertMapCoversStructFields(t, mustMapAt(t, router, "skip_processing"), reflect.TypeOf(SkipProcessingConfig{}), "global.router.skip_processing")
+	assertMapCoversStructFields(t, mustMapAt(t, router, "headers"), reflect.TypeOf(RouterHeadersConfig{}), "global.router.headers")
+	assertMapCoversStructFields(t, mustMapAt(t, router, "headers", "debug_principals"), reflect.TypeOf(DebugPrincipals{}), "global.router.headers.debug_principals")
 	assertMapCoversStructFields(t, mustMapAt(t, router, "routing_input"), reflect.TypeOf(RoutingInputConfig{}), "global.router.routing_input")
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, router, "routing_input", "strip_blocks"), reflect.TypeOf(RoutingInputStripBlock{}), "global.router.routing_input.strip_blocks")
 	assertMapCoversStructFields(t, modelSelection, reflect.TypeOf(ModelSelectionConfig{}), "global.router.model_selection")
