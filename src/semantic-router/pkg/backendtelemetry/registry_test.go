@@ -57,6 +57,12 @@ func TestRegistryNewFailures(t *testing.T) {
 	if _, err := r.New(EngineSGLang, AdapterConfig{}); err == nil {
 		t.Fatal("accepted an adapter built for another engine")
 	}
+	if err := r.Register(EngineVLLM, func(AdapterConfig) (Adapter, error) { return nil, nil }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.New(EngineVLLM, AdapterConfig{}); err == nil {
+		t.Fatal("accepted a nil adapter from a constructor")
+	}
 	boom := errors.New("boom")
 	if err := r.Register(EngineTensorRTLLM, func(AdapterConfig) (Adapter, error) { return nil, boom }); err != nil {
 		t.Fatal(err)

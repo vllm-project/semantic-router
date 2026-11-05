@@ -82,47 +82,6 @@ func (f Families) Gauge(names ...string) (sum float64, series int, ok bool) {
 	return sum, series, series > 0
 }
 
-// Counter sums a counter or untyped family over its series.
-func (f Families) Counter(names ...string) (float64, bool) {
-	family := f.first(names...)
-	if family == nil {
-		return 0, false
-	}
-	var sum float64
-	var series int
-	for _, m := range family.GetMetric() {
-		switch {
-		case m.GetCounter() != nil:
-			sum += m.GetCounter().GetValue()
-		case m.GetUntyped() != nil:
-			sum += m.GetUntyped().GetValue()
-		default:
-			continue
-		}
-		series++
-	}
-	return sum, series > 0
-}
-
-// Histogram sums a histogram family's sample sum and count over its series.
-func (f Families) Histogram(names ...string) (sum, count float64, ok bool) {
-	family := f.first(names...)
-	if family == nil {
-		return 0, 0, false
-	}
-	var series int
-	for _, m := range family.GetMetric() {
-		h := m.GetHistogram()
-		if h == nil {
-			continue
-		}
-		sum += h.GetSampleSum()
-		count += float64(h.GetSampleCount())
-		series++
-	}
-	return sum, count, series > 0
-}
-
 func (f Families) first(names ...string) *dto.MetricFamily {
 	for _, name := range names {
 		if family, ok := f[name]; ok {

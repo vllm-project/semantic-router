@@ -118,6 +118,23 @@ func TestStoreUpsertManyKeepsValidObservations(t *testing.T) {
 	}
 }
 
+func TestStoreClear(t *testing.T) {
+	store, _ := newTestStore(0)
+	o := validObservation()
+	o.QueueDepth = Observed[int64](3)
+	if err := store.Upsert(o); err != nil {
+		t.Fatal(err)
+	}
+	store.Clear()
+	store.Clear()
+	if _, ok := store.Get(o.Identity); ok {
+		t.Fatal("Clear kept samples from the previous generation")
+	}
+	if err := store.Upsert(o); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestStoreReturnsIndependentCopies(t *testing.T) {
 	store, _ := newTestStore(0)
 	o := validObservation()

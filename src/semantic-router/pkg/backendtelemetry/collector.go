@@ -2,6 +2,7 @@ package backendtelemetry
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 )
@@ -63,9 +64,7 @@ func collectRound(ctx context.Context, opts CollectorOptions) {
 			if ctx.Err() != nil {
 				return
 			}
-			if storeErr := opts.Store.UpsertMany(observations); storeErr != nil && err == nil {
-				err = storeErr
-			}
+			err = errors.Join(err, opts.Store.UpsertMany(observations))
 			if opts.Report != nil {
 				opts.Report(adapter.Engine(), observations, err)
 			}

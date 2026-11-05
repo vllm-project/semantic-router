@@ -119,6 +119,13 @@ func (s *Store) Remove(id Identity) {
 	delete(s.byID, id)
 }
 
+// Clear forgets every sample when its telemetry generation stops collecting.
+func (s *Store) Clear() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	clear(s.byID)
+}
+
 func (s *Store) ttl(o Observation) time.Duration {
 	if o.TTL > 0 {
 		return o.TTL

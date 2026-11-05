@@ -4,13 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extension"
 )
 
 // Target is one replica an adapter collects from.
 type Target struct {
 	Identity Identity
+	// EndpointName is the runtime endpoint name used to join telemetry and
+	// upstream metrics. Adapters still key observations by Identity.
+	EndpointName string
 	// MetricsURL is the absolute URL the adapter reads, such as
 	// http://10.0.0.1:8000/metrics.
 	MetricsURL string
@@ -40,13 +44,12 @@ type Constructor func(AdapterConfig) (Adapter, error)
 // Registry maps each engine to the constructor of its adapter. It is safe for
 // concurrent use.
 type Registry struct {
-	mu           sync.RWMutex
-	constructors map[Engine]Constructor
+	constructors *extension.Registry[Constructor]
 }
 
 // NewRegistry returns an empty registry.
 func NewRegistry() *Registry {
-	return &Registry{constructors: make(map[Engine]Constructor)}
+	return &Registry{constructors: extension.NewRegistry[Constructor]("backend telemetry adapter")}
 }
 
 // Register adds the constructor for an engine. Registering an unknown engine,
@@ -58,13 +61,7 @@ func (r *Registry) Register(engine Engine, constructor Constructor) error {
 	if constructor == nil {
 		return fmt.Errorf("engine %s: constructor is nil", engine)
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if _, ok := r.constructors[engine]; ok {
-		return fmt.Errorf("engine %s: adapter already registered", engine)
-	}
-	r.constructors[engine] = constructor
-	return nil
+	return r.constructors.Register(string(engine), constructor)
 }
 
 // ErrNoAdapter reports an engine without a registered adapter.
@@ -72,15 +69,16 @@ var ErrNoAdapter = errors.New("no adapter registered")
 
 // New builds the adapter for an engine.
 func (r *Registry) New(engine Engine, cfg AdapterConfig) (Adapter, error) {
-	r.mu.RLock()
-	constructor, ok := r.constructors[engine]
-	r.mu.RUnlock()
+	constructor, ok := r.constructors.Lookup(string(engine))
 	if !ok {
 		return nil, fmt.Errorf("engine %s: %w", engine, ErrNoAdapter)
 	}
 	adapter, err := constructor(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("engine %s: %w", engine, err)
+	}
+	if adapter == nil {
+		return nil, fmt.Errorf("engine %s: constructor built a nil adapter", engine)
 	}
 	if adapter.Engine() != engine {
 		return nil, fmt.Errorf("engine %s: constructor built an adapter for %s", engine, adapter.Engine())
@@ -90,8 +88,6 @@ func (r *Registry) New(engine Engine, cfg AdapterConfig) (Adapter, error) {
 
 // Has reports whether an engine has a registered adapter.
 func (r *Registry) Has(engine Engine) bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	_, ok := r.constructors[engine]
+	_, ok := r.constructors.Lookup(string(engine))
 	return ok
 }

@@ -110,55 +110,34 @@ func TestCollectMapsGauges(t *testing.T) {
 	}
 }
 
-func TestCollectDerivesWindowMeansFromDeltas(t *testing.T) {
-	server := newMetricsServer(t, exposition(0, 0, 0, 10, 5, 2, 4))
+func TestCollectDefersUnusedWindowMetrics(t *testing.T) {
+	server := newMetricsServer(t, "")
 	a, now := newTestAdapter(t, target("gpu-a", server.srv.URL))
-	if _, err := a.Collect(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	// Four more requests took 2s to first token in total; 3 of 6 lookups hit.
-	server.set(exposition(0, 0, 0, 12, 9, 5, 10), http.StatusOK)
-	*now = now.Add(2 * time.Second)
-	observations, err := a.Collect(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	o := observations[0]
-	if v, ok := o.TTFT.Get(); !ok || v != 500*time.Millisecond {
-		t.Fatalf("ttft = %v, %v; want 500ms", v, ok)
-	}
-	if o.LatencyWindow != 2*time.Second {
-		t.Fatalf("latency window = %v", o.LatencyWindow)
-	}
-	if v, ok := o.PrefixCacheHitRate.Get(); !ok || v != 0.5 {
-		t.Fatalf("prefix cache hit rate = %v, %v", v, ok)
-	}
-	if o.TPOT.Present() || o.E2E.Present() {
-		t.Fatal("latencies the engine did not expose were reported")
-	}
-	if err := o.Validate(); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestCollectDropsWindowMeansAcrossACounterReset(t *testing.T) {
-	server := newMetricsServer(t, exposition(0, 0, 0, 10, 5, 4, 8))
-	a, now := newTestAdapter(t, target("gpu-a", server.srv.URL))
-	if _, err := a.Collect(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	server.set(exposition(1, 0, 0, 1, 1, 0, 1), http.StatusOK) // the engine restarted
-	*now = now.Add(time.Second)
-	observations, err := a.Collect(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	o := observations[0]
-	if o.TTFT.Present() || o.PrefixCacheHitRate.Present() || o.LatencyWindow != 0 {
-		t.Fatalf("a counter reset produced window means: %+v", o)
-	}
-	if v, _ := o.QueueDepth.Get(); v != 1 {
-		t.Fatalf("queue depth = %d; gauges still apply after a reset", v)
+	for _, body := range []string{
+		exposition(7, 3, 0.4, 10, 5, 2, 4),
+		exposition(7, 3, 0.4, 12, 9, 5, 10),
+		exposition(7, 3, 0.4, 12, 9, 5, 10),
+		exposition(7, 3, 0.4, 1, 1, 0, 1),
+	} {
+		server.set(body+`# TYPE vllm:inter_token_latency_seconds histogram
+vllm:inter_token_latency_seconds_sum 2
+vllm:inter_token_latency_seconds_count 4
+# TYPE vllm:e2e_request_latency_seconds histogram
+vllm:e2e_request_latency_seconds_sum 10
+vllm:e2e_request_latency_seconds_count 4
+`, http.StatusOK)
+		*now = now.Add(time.Second)
+		observations, err := a.Collect(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		o := observations[0]
+		if o.TTFT.Present() || o.TPOT.Present() || o.E2E.Present() || o.PrefixCacheHitRate.Present() || o.LatencyWindow != 0 {
+			t.Fatalf("unused window metrics should stay absent: %+v", o)
+		}
+		if v, _ := o.QueueDepth.Get(); v != 7 {
+			t.Fatalf("queue depth = %d; gauges must remain available", v)
+		}
 	}
 }
 
@@ -211,6 +190,28 @@ vllm:gpu_cache_usage_perc{engine="1"} 0.6
 	}
 	if v, _ := o.KVCacheUsage.Get(); v < 0.3999 || v > 0.4001 {
 		t.Fatalf("kv cache usage = %v, want the engines' mean 0.4 from the legacy metric", v)
+	}
+}
+
+func TestCollectInvalidGaugesStayAbsent(t *testing.T) {
+	for _, value := range []string{"-1", "NaN", "+Inf", "9.223372036854776e18"} {
+		t.Run(value, func(t *testing.T) {
+			server := newMetricsServer(t, fmt.Sprintf("# TYPE vllm:num_requests_waiting gauge\nvllm:num_requests_waiting %s\n"+
+				"# TYPE vllm:num_requests_running gauge\nvllm:num_requests_running %s\n"+
+				"# TYPE vllm:kv_cache_usage_perc gauge\nvllm:kv_cache_usage_perc %s\n", value, value, value))
+			a, _ := newTestAdapter(t, target("gpu-a", server.srv.URL))
+			observations, err := a.Collect(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			o := observations[0]
+			if o.QueueDepth.Present() || o.ActiveRequests.Present() || o.KVCacheUsage.Present() {
+				t.Fatalf("invalid gauges became observed load: %+v", o)
+			}
+			if err := o.Validate(); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
 
