@@ -213,6 +213,17 @@ x-vsr-matched-projections: use-reasoning-model
 x-vsr-replay-id: replay_01J...
 ```
 
+## 身份头 {#identity-headers}
+
+这些头由 Router 前面的认证组件设置，Router 用它们做角色绑定、限流、记忆，以及 user、team、tenant 三种响应缓存范围。除非 listener 信任身份头（见 [Gateway 模式](../installation/gateway-modes#identity-headers)），否则客户端发来的这些头会被丢弃；任何身份头都不会到达模型提供方。
+
+| 头 | 说明 |
+| --- | --- |
+| `x-authz-user-id` | 已认证的用户。可用 `global.services.authz.identity.user_id_header` 改用其他头。 |
+| `x-authz-user-groups` | 用户所属的组，逗号分隔。可用 `global.services.authz.identity.user_groups_header` 改用其他头。 |
+| `x-authz-team-id` | 团队，用于 `team` 响应缓存范围。 |
+| `x-authz-tenant-id` | 租户，用于 `tenant` 响应缓存范围。 |
+
 ## 兼容性与解读
 
 - 解析可选头之前先看 `x-vsr-schema-version`；当前值为 `2`。未由响应缓存返回的路由推理响应携带它。改由 Router 自身处理器应答的响应（例如 `GET /v1/models`）从不携带该头，因此那里缺失属于预期，而不是合约违规。
