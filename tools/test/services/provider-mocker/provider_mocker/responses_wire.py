@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from .images import FIXTURE_PNG
+from .mock_tools import mock_tool_name
 from .tokens import estimate_tokens
 
 
@@ -482,7 +483,7 @@ def build_responses_tool_response(body: dict[str, Any]) -> dict[str, Any]:
                 "type": "function_call",
                 "id": "item_mock_lookup",
                 "call_id": "call_mock_lookup",
-                "name": "lookup",
+                "name": mock_tool_name(body.get("input")),
                 "arguments": '{"query":"weather"}',
                 "status": "completed",
             }

@@ -132,11 +132,40 @@
     {
       "name": "namespace",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_tool"
-        }
+        "status": "ok",
+        "body": {
+          "max_tokens": 4096,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "Use the selected tool.",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "tool_choice": {
+            "type": "auto"
+          },
+          "tools": [
+            {
+              "description": "Weather tools.\n\nLook up a value",
+              "input_schema": {
+                "type": "object"
+              },
+              "name": "weather__lookup"
+            }
+          ]
+        },
+        "diagnostics": [
+          {
+            "field": "max_tokens",
+            "action": "generated"
+          }
+        ]
       }
     },
     {

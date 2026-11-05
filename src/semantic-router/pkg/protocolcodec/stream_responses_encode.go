@@ -150,7 +150,7 @@ func (encoder *responsesStreamEncoder) ensureResponsesOutputStarted(
 	case responsesOutputTool:
 		item.Type = "function_call"
 		if event.ToolCall != nil {
-			item.CallID, item.Name = event.ToolCall.ID, event.ToolCall.Name
+			item.CallID, item.Name, item.Namespace = event.ToolCall.ID, event.ToolCall.Name, event.ToolCall.Namespace
 			// The input is carried by delta events. Starting with the first
 			// fragment here would duplicate it when clients reconstruct the call.
 			item.Arguments = ""
@@ -596,7 +596,7 @@ func (encoder *responsesStreamEncoder) encodeCompletedResponsesOutput(
 	}
 	item := responsesItemWire{
 		Type: "function_call", ID: id, Status: "completed",
-		CallID: event.ToolCall.ID, Name: event.ToolCall.Name, Arguments: event.ToolCall.Arguments,
+		CallID: event.ToolCall.ID, Name: event.ToolCall.Name, Namespace: event.ToolCall.Namespace, Arguments: event.ToolCall.Arguments,
 	}
 	if event.ToolCall.Kind == llmprotocol.ToolKindCustom {
 		item.Type, item.Input, item.Arguments = "custom_tool_call", event.ToolCall.Arguments, ""

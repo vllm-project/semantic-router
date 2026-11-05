@@ -151,6 +151,7 @@ type InputItem struct {
 	// Function call fields are retained so a previous_response_id continuation
 	// can materialize the complete tool lifecycle for a stateless backend.
 	Name      string          `json:"name,omitempty"`
+	Namespace string          `json:"namespace,omitempty"`
 	CallID    string          `json:"call_id,omitempty"`
 	Arguments string          `json:"arguments,omitempty"`
 	Output    json.RawMessage `json:"output,omitempty"`
@@ -184,6 +185,7 @@ type OutputItem struct {
 
 	// Function call fields
 	Name      string `json:"name,omitempty"`
+	Namespace string `json:"namespace,omitempty"`
 	CallID    string `json:"call_id,omitempty"`
 	Arguments string `json:"arguments,omitempty"`
 	Output    string `json:"output,omitempty"`

@@ -101,10 +101,6 @@
             "action": "dropped"
           },
           {
-            "field": "output.namespace",
-            "action": "dropped"
-          },
-          {
             "field": "output.status",
             "action": "dropped"
           }

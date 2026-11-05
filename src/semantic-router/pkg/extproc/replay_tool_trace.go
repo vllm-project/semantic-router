@@ -203,10 +203,17 @@ func buildReplayStreamingToolTrace(ctx *RequestContext) *routerreplay.ToolTrace 
 	)
 }
 
+// replayToolCallStep records a call by the name the backend saw. A call
+// restored to its Responses namespace for the client keeps the flat name, so a
+// tool has one name across request history and response.
 func replayToolCallStep(source, role, apiType string, call llmprotocol.ToolCall) routerreplay.ToolTraceStep {
+	name := call.Name
+	if call.Namespace != "" {
+		name = llmprotocol.FlattenToolName(call.Namespace, call.Name)
+	}
 	return routerreplay.ToolTraceStep{
 		Type: replayToolStepAssistantToolCall, Source: source, Role: role,
-		ToolName: call.Name, ToolCallID: call.ID,
+		ToolName: name, ToolCallID: call.ID,
 		Arguments: call.Arguments, RawArguments: call.Arguments, APIType: apiType,
 	}
 }
