@@ -1,7 +1,7 @@
 ---
 slug: "training-embedding-models-huggingface"
 title: "How vLLM Semantic Router Trains Embedding Models and Publishes Them to Hugging Face"
-description: "End-to-end walkthrough of fine-tuning cache LoRA and domain-adapted embeddings, evaluating them, uploading to llm-semantic-router on Hugging Face, and using them for routing and semantic cache."
+description: "End-to-end walkthrough of fine-tuning cache LoRA and domain-adapted embeddings, evaluating them, uploading to Hugging Face, and using them for routing and semantic cache."
 authors: [aayushsaini101, anupsharma]
 tags: ["training", "embeddings", "huggingface", "semantic-cache"]
 image: /img/blog/training-embeddings-hf-hero.png
@@ -32,10 +32,10 @@ to download.
 
 Training does **not** live inside the Go router. It lives under
 [`src/training/model_embeddings/`](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_embeddings)
-(Python). The router later **loads** the published models from the
-[`llm-semantic-router`](https://huggingface.co/llm-semantic-router) org.
+(Python). Maintained models and datasets live under the official
+[`vllm-sr`](https://huggingface.co/vllm-sr) organization.
 
-For full technical details, see the maintained [Router Embeddings & Hugging Face Guide](/docs/training/router-embeddings-huggingface).
+For full technical details, see the maintained [Router Embeddings & Hugging Face Guide](/docs/next/training/router-embeddings-huggingface).
 
 ## End-to-end picture
 
@@ -48,7 +48,7 @@ Fine-tune base embedding model (LoRA or full)
         ↓
 Evaluate (margin / MRR / recall)
         ↓
-Upload to Hugging Face (llm-semantic-router/...)
+Upload to Hugging Face (<your-hf-namespace>/... or vllm-sr/...)
         ↓
 Users / CI download model
         ↓
@@ -75,13 +75,13 @@ questions). See
 
 ### Step 2 — Generate triplets with an LLM
 
-`generate_training_data.py` (optionally via vLLM) builds contrastive samples:
+`generate_training_data.py` runs vLLM in-process on local GPUs (requiring CUDA and tensor parallelism support) to build contrastive triplets from input JSONL rows containing `{"query": "..."}`:
 
 | Field | Meaning | Example |
 |---|---|---|
-| **Anchor** | Paraphrase | “How do doctors diagnose diabetes?” |
-| **Positive** | Same meaning | Original query |
-| **Negative** | Related but different intent | “What are diabetes symptoms?” |
+| **Anchor** | Paraphrase (generated query variant) | “How do doctors diagnose diabetes?” |
+| **Positive** | Same meaning (original seed query) | Original query |
+| **Negative** | Distinct question / related but different intent | “What are diabetes symptoms?” |
 
 That teaches: paraphrases should be close; near-misses should stay apart —
 exactly what a cache needs.
@@ -131,13 +131,13 @@ python3 src/training/model_embeddings/cache_embeddings/evaluate_multi_domain.py 
 
 ### Step 5 — Push to Hugging Face
 
-Authenticate using standard environment variables and upload to the community org:
+Authenticate using standard environment variables and upload to your Hugging Face namespace (or `vllm-sr` if authorized):
 
 ```bash
 cd models/cache/medical-cache-lora
 export HF_TOKEN="hf_your_token"
 huggingface-cli login --token "$HF_TOKEN"
-huggingface-cli upload llm-semantic-router/medical-cache-lora . --repo-type model
+huggingface-cli upload <your-hf-namespace>/medical-cache-lora . --repo-type model
 ```
 
 ### Step 6 — Consume
@@ -152,10 +152,12 @@ from peft import PeftModel
 base_model = SentenceTransformer("sentence-transformers/all-MiniLM-L12-v2")
 base_model[0].auto_model = PeftModel.from_pretrained(
     base_model[0].auto_model,
-    "llm-semantic-router/medical-cache-lora",
+    "<your-hf-namespace>/medical-cache-lora",
 )
 embedding = base_model.encode("What are the symptoms of diabetes?")
 ```
+
+*(Note: Cache LoRA adapters can be verified through PEFT directly in Python; native Router-side LoRA loading is a separate capability, and production Semantic Router configurations bind full embedding models.)*
 
 ---
 
@@ -190,13 +192,13 @@ python prepare_data.py \
 5. Repeat about two iterations, **accumulating** triplets.
 
 Base model is often
-[mmbert-embed-32k-2d-matryoshka](https://huggingface.co/llm-semantic-router/mmbert-embed-32k-2d-matryoshka).
+[mmbert-embed-32k-2d-matryoshka](https://huggingface.co/vllm-sr/mmbert-embed-32k-2d-matryoshka).
 
 ```bash
 python train.py \
   --data-dir data \
   --output-dir models/trained \
-  --base-model llm-semantic-router/mmbert-embed-32k-2d-matryoshka \
+  --base-model vllm-sr/mmbert-embed-32k-2d-matryoshka \
   --iterations 2 \
   --learning-rate 5e-5 \
   --margin 0.1
@@ -207,14 +209,14 @@ and accumulate triplets across iterations.
 
 ### Step 3 — Measure gains
 
-On MedQuAD, MRR@5 improved about **71%** versus baseline after two iterations.
+On MedQuAD, MRR@5 improved by **+71.18%** (from 0.4284 to 0.7333) versus baseline after two iterations (`lr=5e-5`).
 The published model is
-[mmbert-embed-medical](https://huggingface.co/llm-semantic-router/mmbert-embed-medical).
+[mmbert-embed-medical](https://huggingface.co/vllm-sr/mmbert-embed-medical).
 
 ### Step 4 — Upload the full model to Hugging Face
 
 Same pattern: local `models/trained/best` → `huggingface-cli upload` to
-`llm-semantic-router/...`.
+`<your-hf-namespace>/...` (or `vllm-sr/...` when approved for official publication).
 
 ---
 
@@ -222,8 +224,8 @@ Same pattern: local `models/trained/best` → `huggingface-cli upload` to
 
 | Phase | What happens |
 |---|---|
-| **Publish** | Login with a token that can write to `llm-semantic-router`, then upload model or dataset repos |
-| **Discover** | [huggingface.co/llm-semantic-router](https://huggingface.co/llm-semantic-router) |
+| **Publish** | Authenticate with `HF_TOKEN` and upload to your personal namespace (`<your-hf-namespace>`) or the official `vllm-sr` org |
+| **Discover** | [huggingface.co/vllm-sr](https://huggingface.co/vllm-sr) |
 | **Pull** | CI, docs, and users use `snapshot_download` / `hf_hub_download` / model id in config |
 | **Iterate** | New domain data or a better recipe → retrain → new revision on the Hub |
 
@@ -254,16 +256,16 @@ those models on Hugging Face as shared community assets.
 
 | Track | Start here |
 |---|---|
-| Maintained Guide | [Router Embeddings & Hugging Face Guide](/docs/training/router-embeddings-huggingface) |
+| Maintained Guide | [Router Embeddings & Hugging Face Guide](/docs/next/training/router-embeddings-huggingface) |
 | Cache LoRA | [`cache_embeddings/README.md`](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_embeddings/cache_embeddings/README.md) |
 | Domain full fine-tune | [`domain_adapted_embeddings/USAGE.md`](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_embeddings/domain_adapted_embeddings/USAGE.md) |
-| Hub org | [llm-semantic-router](https://huggingface.co/llm-semantic-router) |
+| Hub org | [vllm-sr](https://huggingface.co/vllm-sr) |
 
 ---
 
 ## One-line summary
 
 **vLLM Semantic Router fine-tunes embedding models with contrastive/triplet
-learning on domain triplets, uploads them to the `llm-semantic-router` Hugging
-Face org, and downloads them at runtime so routing and semantic cache similarity
+learning on domain triplets, uploads them to Hugging Face (such as the `vllm-sr`
+organization or community repositories), and downloads them at runtime so routing and semantic cache similarity
 stay accurate.**

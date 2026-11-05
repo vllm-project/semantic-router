@@ -50,16 +50,18 @@ Code location: [`src/training/model_embeddings/cache_embeddings/`](https://githu
 Training consumes JSON Lines (`.jsonl`) files where each row specifies a contrastive triplet:
 
 ```json
-{"anchor": "How is type 2 diabetes diagnosed?", "positive": "Which diagnostic tests confirm type 2 diabetes?", "negative": "How is type 2 diabetes managed with metformin?"}
+{"anchor": "Which diagnostic tests confirm type 2 diabetes?", "positive": "How is type 2 diabetes diagnosed?", "negative": "How is type 2 diabetes managed with metformin?"}
 ```
 
-- **Anchor**: The reference query.
-- **Positive**: A true paraphrase with identical semantic intent.
-- **Negative**: A query from the same domain that shares terminology but represents a different factual question.
+- **Anchor**: The generated paraphrase variant (the query tested against the cache).
+- **Positive**: The original seed query sharing identical semantic intent (safe to reuse).
+- **Negative**: A query from the same domain that shares terminology but represents a different factual question (must miss the cache).
 
 ### 2. Triplet Generation
 
-Use `generate_training_data.py` with domain prompt definitions from `domains/prompts.yaml` and a local vLLM generation endpoint:
+Use `generate_training_data.py` with domain prompt definitions from `domains/prompts.yaml`. The script does not query an external HTTP endpoint; instead, it imports `vllm.LLM` directly in-process, downloading and loading the generation model onto the local GPU(s) using the configured `--tensor-parallel` settings.
+
+Input files must be JSON Lines where each row provides a seed query in the format `{"query": "..."}`:
 
 ```bash
 python src/training/model_embeddings/cache_embeddings/generate_training_data.py \
@@ -73,7 +75,7 @@ Always perform a manual label review on synthetic triplet batches to prune hallu
 
 ### 3. LoRA Adapter Fine-Tuning
 
-Train the LoRA adapter with Multiple Negatives Ranking (MNR) loss:
+Train the LoRA adapter with Multiple Negatives Ranking (MNR) loss using `--lr`:
 
 ```bash
 python src/training/model_embeddings/cache_embeddings/lora_trainer.py \
@@ -82,7 +84,7 @@ python src/training/model_embeddings/cache_embeddings/lora_trainer.py \
   --base-model sentence-transformers/all-MiniLM-L12-v2 \
   --output models/medical-cache-lora \
   --epochs 2 \
-  --learning-rate 2e-4
+  --lr 2e-4
 ```
 
 To create a **multi-domain adapter**, concatenate reviewed domain datasets (e.g. medical, legal, code) and train in a single pass.
@@ -96,6 +98,13 @@ python src/training/model_embeddings/cache_embeddings/evaluate_multi_domain.py \
   --lora-path models/medical-cache-lora \
   --sample-size 2000
 ```
+
+By default, the evaluator looks for domain test sets locally:
+- `--medical-test data/cache_embeddings/medical/test_set.jsonl`
+- `--law-test data/cache_embeddings/law/test_triplets.jsonl`
+- `--programming-test data/cache_embeddings/programming/test_triplets.jsonl`
+
+When these local files are absent, the evaluator downloads them from `vllm-sr/cache-embedding-test-sets` on Hugging Face Hub. Because this repository requires authenticated access, unauthenticated requests will return HTTP 401. Ensure you either supply your own local test triplet files via the flags above, or set an authorized token via `export HF_TOKEN="<token>"`.
 
 The primary metric is the **mean similarity margin**:
 
@@ -146,7 +155,7 @@ python src/training/model_embeddings/domain_adapted_embeddings/train.py \
 
 ### 3. Retrieval Metrics
 
-Evaluate Mean Reciprocal Rank (MRR@5) and Recall on the held-out test split. Domain adaptation routinely achieves +50% to +70% MRR@5 improvements over untuned general-purpose baselines on dense technical texts.
+Evaluate Mean Reciprocal Rank (MRR@5) and Recall on the held-out test split. On the MedQuAD medical Q&A benchmark, domain adaptation achieved a +71.18% MRR@5 improvement over the baseline (evaluated in `src/training/model_embeddings/domain_adapted_embeddings/train.py` with `lr=5e-5`). Results from one domain do not establish performance across other domains; always evaluate on representative held-out domain splits.
 
 ---
 
@@ -179,49 +188,78 @@ huggingface-cli login --token "$HF_TOKEN"
 
 ### Uploading Artifacts
 
-Upload models or datasets to the community organization:
+Upload models or datasets to Hugging Face Hub using your personal or organization namespace:
 
 ```bash
 # Upload a trained LoRA adapter
 cd models/medical-cache-lora
-huggingface-cli upload llm-semantic-router/medical-cache-lora . --repo-type model
+huggingface-cli upload <your-hf-namespace>/medical-cache-lora . --repo-type model
 
 # Upload a domain-adapted full embedding model
 cd models/domain-adapted-fin/best
-huggingface-cli upload llm-semantic-router/financial-embedding-l12 . --repo-type model
+huggingface-cli upload <your-hf-namespace>/financial-embedding-l12 . --repo-type model
 ```
+
+*Note:* Official models maintained by the project live under the [`vllm-sr`](https://huggingface.co/vllm-sr) organization.
 
 ---
 
 ## Using Published Models in Semantic Router
 
-### 1. Semantic Cache Configuration
+### 1. Router Deployment & Model Catalog Binding
 
-Reference the published model in your Semantic Router configuration file:
+Loading a LoRA adapter directly in the router is a separate runtime capability; a cache LoRA can currently be tested offline through Python and PEFT, but cannot be activated by Router configuration.
+
+To deploy a fine-tuned embedding model in Semantic Router, deploy the domain-adapted full embedding model using the canonical v0.3 `global.model_catalog` deployment and binding contract:
 
 ```yaml
 version: v0.3
 
-providers:
-  - name: embedding-backend
-    type: vllm
-    endpoint: http://model-service:8000/v1
-    model: sentence-transformers/all-MiniLM-L12-v2
-
 listeners:
-  - name: llm-entrypoint
+  - name: default
     address: 0.0.0.0:8080
-    plugins:
-      - name: semantic-cache
-        configuration:
-          similarity_threshold: 0.88
-          embedding_provider: embedding-backend
-          lora_adapter: llm-semantic-router/medical-cache-lora
+
+global:
+  model_catalog:
+    deployments:
+      domain-embedding:
+        provider: model_runtime
+        artifact: <your-hf-namespace>/financial-embedding-l12
+        device: cpu
+        input:
+          max_tokens: 8192
+          overflow: truncate
+    bindings:
+      embedding:
+        deployment: domain-embedding
+        contract: embedding.v1
 ```
 
-### 2. Direct Python Inference
+If serving the embedding model through an external OpenAI-compatible service (such as `vllm serve`), configure the semantic embedding endpoint under `global.model_catalog.embeddings.semantic`:
 
-To verify adapter inference in local scripts using `sentence-transformers` and `peft`:
+```yaml
+version: v0.3
+
+listeners:
+  - name: default
+    address: 0.0.0.0:8080
+
+global:
+  model_catalog:
+    embeddings:
+      semantic:
+        embedding_config:
+          backend: openai_compatible
+          model_type: remote
+          target_dimension: 768
+        endpoint:
+          base_url: http://model-service:8000/v1
+          model: <your-hf-namespace>/financial-embedding-l12
+```
+
+### 2. Direct Python & PEFT Inference
+
+To verify LoRA adapter inference in local evaluation scripts using `sentence-transformers` and `peft`:
 
 ```python
 from sentence_transformers import SentenceTransformer
@@ -233,7 +271,7 @@ base = SentenceTransformer("sentence-transformers/all-MiniLM-L12-v2")
 # Attach the published LoRA adapter
 base[0].auto_model = PeftModel.from_pretrained(
     base[0].auto_model,
-    "llm-semantic-router/medical-cache-lora"
+    "<your-hf-namespace>/medical-cache-lora"
 )
 
 # Generate domain-optimized embeddings

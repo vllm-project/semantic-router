@@ -459,8 +459,7 @@
           "label": "Embedding Models",
           "items": [
             "training/mmbert-32k-models",
-            "training/multimodal-embeddings",
-            "training/router-embeddings-huggingface"
+            "training/multimodal-embeddings"
           ]
         },
         {
