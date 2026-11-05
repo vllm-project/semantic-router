@@ -1,6 +1,7 @@
 package modeldownload
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -14,6 +15,7 @@ import (
 // and request-reachable recipes. Unregistered paths are supplied locally and
 // validated by actual provider preparation, not by the download registry.
 func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
+	cfg = config.WithModelResources(cfg)
 	plan, err := config.CompileModelBindings(cfg)
 	if err != nil {
 		return nil, err
@@ -25,12 +27,7 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 	defaultScope.SemanticCache.Enabled = false
 	defaultScope.Tools.Enabled, defaultScope.Memory.Enabled = false, false
 	defaultScope.VectorStore = nil
-	serviceScope := cfg.ConfigForGlobalModelServices()
-	projectedServices, err := config.ProjectRecipeModelBindings(serviceScope, plan, config.GlobalModelScope)
-	if err != nil {
-		return nil, err
-	}
-	if err := inventory.addScope(projectedServices, plan); err != nil {
+	if err := inventory.addScope(cfg.ConfigForGlobalModelServices(), plan); err != nil {
 		return nil, err
 	}
 
@@ -43,11 +40,7 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 		}
 	}
 	for _, scope := range scopes {
-		projected, err := config.ProjectRecipeModelBindings(scope, plan, scope.RoutingScope)
-		if err != nil {
-			return nil, err
-		}
-		if err := inventory.addScope(projected, plan); err != nil {
+		if err := inventory.addScope(scope, plan); err != nil {
 			return nil, err
 		}
 	}
@@ -83,8 +76,11 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 	if global {
 		explicitEmbedding, hasEmbedding = plan.LookupGlobal("embedding")
 	}
+	// A remote default embedding model serves every embedding model keyword,
+	// unless the scope binds a local model of its own.
+	remote := cfg.UsesRemoteEmbeddings() && (!hasEmbedding || explicitEmbedding.Deployment.Provider == config.OpenAIEmbeddingsProvider)
 	for model, path := range paths {
-		if !needed[model] || (cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() && !hasEmbedding) || (hasEmbedding && model == primary) {
+		if !needed[model] || remote || (hasEmbedding && model == primary) {
 			*path = ""
 		}
 	}
@@ -126,7 +122,7 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 		}
 	}
 
-	for name := range cfg.ModelBindings {
+	for name := range active {
 		spec, ok := plan.Lookup(cfg.RoutingScope, name)
 		if global {
 			spec, ok = plan.LookupGlobal(name)
@@ -146,7 +142,7 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 			}
 		}
 	}
-	if hasEmbedding && needed[primary] && explicitEmbedding.Deployment.Provider != "http" {
+	if hasEmbedding && needed[primary] && explicitEmbedding.Deployment.IsModelRuntime() {
 		explicitPaths[config.ResolveModelPath(explicitEmbedding.Deployment.Artifact)] = true
 	}
 	for _, path := range filterDisabledOptionalModelPaths(&scoped, ExtractModelPaths(&scoped)) {
@@ -157,21 +153,50 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 			return err
 		}
 	}
-	mappings := []struct{ consumer, path, model string }{
-		{"domain_classifier", cfg.CategoryMappingPath, cfg.CategoryModel.ModelID},
-		{"pii_classifier", cfg.PIIMappingPath, cfg.PIIModel.ModelID},
-		{"prompt_guard", cfg.PromptGuard.JailbreakMappingPath, cfg.PromptGuard.ModelID},
-		{"feedback_detector", cfg.FeedbackDetector.FeedbackMappingPath, cfg.FeedbackDetector.ModelID},
+	// A model path a deprecated module or rule field named is served from
+	// the directory the Router downloads it to.
+	for name, on := range active {
+		if !on {
+			continue
+		}
+		legacy := ""
+		resolved, ok, err := cfg.ResolveTask(name)
+		var deferred *config.DeferredModelError
+		switch {
+		case errors.As(err, &deferred):
+			legacy = deferred.Path
+		case err == nil && ok && resolved.Deployment.Translated():
+			legacy = resolved.Deployment.LegacyModelPath()
+		}
+		if legacy == "" {
+			continue
+		}
+		path := config.ResolveModelPath(legacy)
+		if explicitPaths[path] || servedPaths[path] {
+			continue
+		}
+		if err := i.addDefault(ModelSpec{LocalPath: path, RequiredFiles: append(slices.Clone(DefaultRequiredFiles), required[path]...), ExcludePatterns: excludes[path]}); err != nil {
+			return err
+		}
+	}
+	mappings := []struct{ consumer, path string }{
+		{"domain_classifier", cfg.CategoryMappingPath},
+		{"pii_classifier", cfg.PIIMappingPath},
+		{"prompt_guard", cfg.PromptGuard.JailbreakMappingPath},
+		{"feedback_detector", cfg.FeedbackDetector.FeedbackMappingPath},
 	}
 	for _, mapping := range mappings {
 		if !active[mapping.consumer] || mapping.path == "" {
 			continue
 		}
-		var err error
-		if spec, ok := plan.Lookup(cfg.RoutingScope, mapping.consumer); ok {
-			err = i.addFile(mapping.path, spec.Deployment.Artifact, spec.Deployment.Revision)
+		resolved, ok, err := cfg.ResolveTask(mapping.consumer)
+		if err != nil || !ok {
+			continue
+		}
+		if spec := config.GetModelByPath(resolved.Deployment.Artifact); resolved.Deployment.Translated() && spec != nil {
+			err = i.addDefaultFile(mapping.path, spec.LocalPath)
 		} else {
-			err = i.addDefaultFile(mapping.path, mapping.model)
+			err = i.addFile(mapping.path, resolved.Deployment.Artifact, resolved.Deployment.Revision)
 		}
 		if err != nil {
 			return err

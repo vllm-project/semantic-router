@@ -55,10 +55,10 @@ func TestScoringHTTPBackend_AcceptsTheObjectShape(t *testing.T) {
 	}))
 	defer server.Close()
 
-	backend, err := newScoringHTTPBackend(&config.ExternalModelConfig{
+	backend, err := newScoringHTTPBackend(externalClassifyDeployment(&config.ExternalModelConfig{
 		ModelEndpoint: endpointForTestServer(t, server),
 		ModelName:     "difficulty-scorer-svc",
-	}, time.Second)
+	}, time.Second))
 	if err != nil {
 		t.Fatalf("newScoringHTTPBackend: %v", err)
 	}

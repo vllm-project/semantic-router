@@ -103065,8 +103065,9 @@ const builtInCatalogJSON = `{
       "description": "StepFun flagship multimodal MoE preview for agentic software engineering and knowledge work.",
       "display_name": "Step 5 Preview",
       "distribution": {
-        "source": "https://platform.stepfun.ai/docs/en/guides/models/step-5-preview",
-        "type": "proprietary_api"
+        "license": "StepFun Model License 1.0",
+        "source": "https://huggingface.co/stepfun-ai/Step-5-Preview",
+        "type": "open_weights"
       },
       "family": "step-5",
       "id": "stepfun/step-5-preview",
@@ -103095,7 +103096,7 @@ const builtInCatalogJSON = `{
       "reasoning_family": "step-3.7",
       "released_at": "2026-09-18",
       "tags": [
-        "proprietary",
+        "open_weights",
         "reasoning",
         "multimodal",
         "agentic",
@@ -103104,9 +103105,9 @@ const builtInCatalogJSON = `{
       ],
       "verification": {
         "authority": "StepFun",
-        "source": "https://www.stepfun.com/step-5-preview",
+        "source": "https://huggingface.co/stepfun-ai/Step-5-Preview",
         "status": "claimed",
-        "verified_at": "2026-09-24"
+        "verified_at": "2026-10-18"
       }
     },
     {
@@ -104575,7 +104576,7 @@ const builtInCatalogJSON = `{
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b",
+        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -104665,7 +104666,7 @@ const builtInCatalogJSON = `{
         "tools"
       ],
       "verification": {
-        "asset_sha256": "sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b",
+        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -104758,7 +104759,7 @@ const builtInCatalogJSON = `{
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b",
+        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -104870,7 +104871,7 @@ const builtInCatalogJSON = `{
         "orchestration"
       ],
       "verification": {
-        "asset_sha256": "sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b",
+        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -104940,7 +104941,7 @@ const builtInCatalogJSON = `{
         "private_deployment"
       ],
       "verification": {
-        "asset_sha256": "sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b",
+        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -106431,13 +106432,73 @@ const builtInCatalogJSON = `{
       },
       "category": "model_api",
       "conformance": {
-        "status": "unverified"
+        "status": "live_verified",
+        "verified_at": "2026-09-22"
       },
       "default_base_url": "https://api.groq.com/openai/v1",
       "default_protocol": "openai/chat-completions@1",
       "description": "Low-latency hosted inference.",
       "display_name": "Groq",
       "id": "groq",
+      "models": [
+        {
+          "catalog": "openai/gpt-oss-120b",
+          "id": "openai/gpt-oss-120b",
+          "lifecycle": "active",
+          "pricing": {
+            "completion_per_1m": 0.6,
+            "currency": "USD",
+            "prompt_per_1m": 0.15
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "verification": {
+            "source": "https://console.groq.com/docs/models",
+            "status": "reproduced",
+            "verified_at": "2026-09-22"
+          }
+        },
+        {
+          "catalog": "openai/gpt-oss-20b",
+          "id": "openai/gpt-oss-20b",
+          "lifecycle": "active",
+          "pricing": {
+            "completion_per_1m": 0.3,
+            "currency": "USD",
+            "prompt_per_1m": 0.075
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "verification": {
+            "source": "https://console.groq.com/docs/models",
+            "status": "reproduced",
+            "verified_at": "2026-09-22"
+          }
+        },
+        {
+          "catalog": "qwen/qwen3.8-27b",
+          "id": "qwen/qwen3.8-27b",
+          "lifecycle": "experimental",
+          "pricing": {
+            "completion_per_1m": 4.0,
+            "currency": "USD",
+            "prompt_per_1m": 0.8
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "verification": {
+            "source": "https://console.groq.com/docs/models",
+            "status": "reproduced",
+            "verified_at": "2026-09-22"
+          }
+        }
+      ],
       "presentation": {
         "logo": "package:groq",
         "monochrome": true,
@@ -110139,14 +110200,17 @@ const builtInCatalogJSON = `{
       },
       "protocols": [
         "openai/chat-completions@1",
-        "openai/responses@1"
+        "openai/responses@1",
+        "anthropic/messages@1"
       ],
       "support_tier": "runtime",
       "supported_operations": [
         "openai/chat-completions@1#create",
         "openai/chat-completions@1#list_models",
         "openai/responses@1#create",
-        "openai/responses@1#list_models"
+        "openai/responses@1#list_models",
+        "anthropic/messages@1#create",
+        "anthropic/messages@1#list_models"
       ]
     },
     {

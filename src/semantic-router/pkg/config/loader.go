@@ -249,6 +249,7 @@ func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
 		rejectUnsupportedRouterLearningFields,
 		rejectRemovedModelExecutionFields,
 		rejectRemovedDeploymentProfile,
+		rejectRemovedBackendRefFields,
 	}
 	for _, validate := range validators {
 		if err := validate(raw); err != nil {

@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -70,6 +71,41 @@ func TestReloadChecksGatewayCapabilitiesBeforePreparation(t *testing.T) {
 	}
 	if err := checkGatewayCapabilities(candidate, config.GatewayStandalone); err != nil {
 		t.Fatalf("the native gateway honors every reliability field: %v", err)
+	}
+}
+
+func TestReloadRefusesUnwritableStorageBeforePreparation(t *testing.T) {
+	restore := stubReloadSeams(t)
+	defer restore()
+	previous := &OpenAIRouter{Config: &config.RouterConfig{}}
+	server := &Server{service: NewRouterService(previous)}
+	buildReloadRouter = func(*config.RouterConfig, ...*binding.Pool) (*OpenAIRouter, error) {
+		t.Fatal("a rejected candidate reached runtime preparation")
+		return nil, nil
+	}
+	file := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(file, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	candidate := &config.RouterConfig{VectorStore: &config.VectorStoreConfig{
+		Enabled: true, FileStorageDir: filepath.Join(file, "data"),
+	}}
+	for _, source := range []string{"file", "kubernetes"} {
+		err := server.reloadRouterFromConfig(source, "config.yaml", candidate)
+		reasons := configsnapshot.ReasonsOf(err)
+		if len(reasons) != 1 || reasons[0].Stage != configsnapshot.StageValidate ||
+			reasons[0].Code != configsnapshot.CodeStorageUnavailable ||
+			reasons[0].Path != "global.stores.vector_store.file_storage_dir" ||
+			!strings.Contains(err.Error(), "not a directory") {
+			t.Fatalf("%s reload error = %v (%+v)", source, err, reasons)
+		}
+		if server.service.GetRouter() != previous {
+			t.Fatal("a rejected candidate replaced the live generation")
+		}
+	}
+	candidate.VectorStore.FileStorageDir = t.TempDir()
+	if err := checkLocalStorage(candidate); err != nil {
+		t.Fatalf("a writable directory was refused: %v", err)
 	}
 }
 
