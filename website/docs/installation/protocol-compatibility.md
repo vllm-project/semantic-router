@@ -71,43 +71,6 @@ path is retained and the protocol operation suffix is appended exactly once;
 the protocol's default `/v1` base path is used only when the URL has no path.
 `chat_path` applies only to Chat Completions.
 
-### Gateways that add response fields
-
-The Router decodes backend replies strictly. A reply that carries a field its
-`api_format` does not define fails as an invalid response, so a client sees a
-502 for a buffered reply or an error event for a stream. Some relay gateways
-add their own fields to every reply, such as usage metering or a cost inside
-`usage`. Set `compat_gateway: true` on the backend ref that points at such a
-gateway:
-
-```yaml
-providers:
-  models:
-    - name: claude-via-gateway
-      provider_model_id: example-claude
-      api_format: anthropic
-      backend_refs:
-        - name: gateway
-          provider: anthropic
-          base_url: https://gateway.example.com/anthropic
-          compat_gateway: true
-```
-
-The Router then drops each field the backend's wire format does not define and
-reports it as a dropped-field diagnostic. Usage, accounting, the response
-cache and Router Replay keep the canonical counters. The opt-in applies to the
-first attempt and to native fallback, for buffered and streamed replies. When
-the model's `api_format` is `openai`, a gateway's Anthropic-style
-`input_tokens` and `output_tokens` usage names are also read as
-`prompt_tokens` and `completion_tokens`. Leave the field unset for backends
-that serve the canonical contract.
-
-Startup rejects `compat_gateway` where it would have no effect: on
-`azure-openai`, `cloudflare-workers-ai` and `snowflake-cortex` backends, which
-keep their own response contracts, and on `systemone` models. Weighted backend
-refs of one model must agree on it. `openai_compat_gateway` is the deprecated
-spelling and still works.
-
 With `--gateway extproc`, the generated Envoy cluster for an HTTPS backend
 verifies both the server
 certificate chain and its DNS hostname. An HTTPS replica pool must keep one
@@ -117,6 +80,82 @@ targets are rejected instead of silently weakening hostname verification. A
 custom Envoy image used with `vllm-sr serve` must provide the system CA bundle at
 `/etc/ssl/certs/ca-certificates.crt`; startup validation fails rather than
 silently disabling verification when that trust store is unavailable.
+
+### Response fields the Router does not model
+
+Providers and gateways add fields of their own to replies: a gateway's cost or
+trace ID, provider metadata, or a field a provider ships before the Router
+models it. Any backend can send them, and no setting is needed. These two
+backends, one serving the Anthropic Messages format through a gateway and one
+serving Chat Completions through a relay, need nothing beyond their addresses,
+even when every reply carries a field such as `"total_cost": 3e-05` inside
+`usage`:
+
+```yaml
+providers:
+  models:
+    - name: claude-via-gateway
+      provider_model_id: example-claude
+      api_format: anthropic
+      backend_refs:
+        - name: gateway
+          provider: anthropic-compatible
+          base_url: https://gateway.example.com/anthropic
+    - name: gpt-via-relay
+      provider_model_id: example-gpt
+      api_format: openai
+      backend_refs:
+        - name: relay
+          provider: openai-compatible
+          base_url: https://relay.example.com/v1
+```
+
+- A reply, a stream event, or an error body that carries a field its
+  `api_format` does not define still succeeds. A client that uses the
+  backend's format receives the reply unchanged, field included. A client of
+  another format receives the translated reply without the field.
+- Each such field is reported as a `dropped` diagnostic. It is counted in
+  `llm_translation_lossy_total` and logged at debug level, and buffered
+  replies list it in `x-vsr-protocol-warnings`.
+- Fields the Router models are still validated: their types and values, the
+  usage totals, the rule that a streamed usage counter never decreases, and
+  the rule that no counter is negative. A field the Router does not model
+  never counts toward usage, and the response cache stores the reply without
+  it.
+- When a Chat Completions reply names its usage counters `input_tokens` and
+  `output_tokens`, as some relays in front of Anthropic models do, the Router
+  reads them as `prompt_tokens` and `completion_tokens`.
+- Error bodies in a provider's own shape are decoded by the backend's
+  `provider`: `cloudflare-workers-ai`, `openrouter`, and `snowflake-cortex`.
+- A Chat reply that carries `fusion`, `flow`, or `reasoning_mom_responses` is
+  refused. These names belong to the Router's own Looper output, so a client
+  must not receive a backend's value under them.
+
+This applies to the first attempt and to native fallback, and to buffered,
+streamed, and gzip-compressed replies.
+
+Earlier releases had a backend-ref setting named `compat_gateway`, also spelled
+`openai_compat_gateway`, that enabled this behavior for one backend. It was
+removed. A configuration that still sets it:
+
+```yaml
+providers:
+  models:
+    - name: claude-via-gateway
+      provider_model_id: example-claude
+      api_format: anthropic
+      backend_refs:
+        - name: gateway
+          provider: anthropic-compatible
+          base_url: https://gateway.example.com/anthropic
+          compat_gateway: true
+```
+
+fails to load with this message. Delete the field:
+
+```text
+providers.models[claude-via-gateway].backend_refs[0]: compat_gateway was removed; gateway response fields are accepted by default, so delete it
+```
 
 ## Client-to-backend matrix
 
@@ -263,6 +302,10 @@ schema, streaming, tools, or error translation.
 
 - Public requests are decoded into the neutral contract even when client and
   backend formats match. Unknown or unsupported request fields fail closed.
+- Backend replies are decoded into the same contract. A reply field that its
+  `api_format` does not define is dropped and reported instead of failing the
+  reply; see
+  [Response fields the Router does not model](#response-fields-the-router-does-not-model).
 - Cross-protocol requests preserve shared semantics. Target-specific features
   that cannot be represented return a typed protocol error.
 - Anthropic `tool_result.is_error: true` has no equivalent in OpenAI Chat or

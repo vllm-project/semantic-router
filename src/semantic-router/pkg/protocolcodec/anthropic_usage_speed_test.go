@@ -61,7 +61,7 @@ func TestAnthropicResponseUsageSpeedStaysStrict(t *testing.T) {
 	})
 	t.Run("unrelated unknown usage field", func(t *testing.T) {
 		body := strings.Replace(anthropicSpeedResponseFixture, `"speed":"fast"`, `"speed":"fast","x_unknown":1`, 1)
-		_, _, _, err := engine.DecodeResponse(llmprotocol.AnthropicMessagesV1, []byte(body))
+		_, _, _, err := conformanceEngine().DecodeResponse(llmprotocol.AnthropicMessagesV1, []byte(body))
 		assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json")
 	})
 }
@@ -105,7 +105,7 @@ func TestAnthropicStreamAcceptsUsageSpeed(t *testing.T) {
 }
 
 func TestAnthropicStreamUsageSpeedStaysStrict(t *testing.T) {
-	decoder := AnthropicMessagesCodec{}.NewDecoder(llmprotocol.StreamContext{Context: context.Background()}, llmprotocol.DefaultPolicy())
+	decoder := AnthropicMessagesCodec{}.NewDecoder(llmprotocol.StreamContext{Context: context.Background()}, conformancePolicy())
 	_, _, err := decoder.Push(anthropicSpeedStream(`{"input_tokens":12,"output_tokens":1,"speed":"standard","x_unknown":1}`))
 	assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json")
 }

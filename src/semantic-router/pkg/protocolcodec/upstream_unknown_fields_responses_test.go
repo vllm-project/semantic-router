@@ -8,9 +8,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-func TestAzureResponsesResponseReportsDroppedVendorExtensions(t *testing.T) {
+func TestResponsesResponseReportsDroppedUnknownFields(t *testing.T) {
 	policy := llmprotocol.DefaultPolicy()
-	policy.ResponseVendor = llmprotocol.ResponseVendorAzure
 	body := []byte(`{"id":"resp_1","object":"response","created_at":1,"model":"provider-model","status":"completed","output":[],"azure_trace":{"region":"eastus"}}`)
 
 	response, _, diagnostics, err := (OpenAIResponsesCodec{}).DecodeResponse(body, policy)
@@ -23,9 +22,8 @@ func TestAzureResponsesResponseReportsDroppedVendorExtensions(t *testing.T) {
 	assertDroppedResponseExtensions(t, diagnostics, "azure_trace")
 }
 
-func TestAzureResponsesStreamReportsDroppedVendorExtensions(t *testing.T) {
+func TestResponsesStreamReportsDroppedUnknownFields(t *testing.T) {
 	policy := llmprotocol.DefaultPolicy()
-	policy.ResponseVendor = llmprotocol.ResponseVendorAzure
 	engine, err := NewEngine(NewBuiltinRegistry(), policy)
 	if err != nil {
 		t.Fatal(err)
@@ -51,9 +49,8 @@ func TestAzureResponsesStreamReportsDroppedVendorExtensions(t *testing.T) {
 	assertDroppedResponseExtensions(t, diagnostics, "azure_trace")
 }
 
-func TestAzureResponsesResponseReportsNestedVendorExtensions(t *testing.T) {
+func TestResponsesResponseReportsNestedUnknownFields(t *testing.T) {
 	policy := llmprotocol.DefaultPolicy()
-	policy.ResponseVendor = llmprotocol.ResponseVendorAzure
 	body := []byte(`{"id":"resp_1","object":"response","created_at":1,"model":"provider-model","status":"completed","output":[{"type":"message","id":"msg_1","role":"assistant","status":"completed","content":[{"type":"output_text","text":"hello","annotations":[],"azure_content":{"region":"eastus"}}],"azure_item":{"region":"eastus"}}]}`)
 
 	response, _, diagnostics, err := (OpenAIResponsesCodec{}).DecodeResponse(body, policy)
@@ -69,9 +66,8 @@ func TestAzureResponsesResponseReportsNestedVendorExtensions(t *testing.T) {
 	)
 }
 
-func TestAzureResponsesStreamReportsNestedItemVendorExtensions(t *testing.T) {
+func TestResponsesStreamReportsNestedItemUnknownFields(t *testing.T) {
 	policy := llmprotocol.DefaultPolicy()
-	policy.ResponseVendor = llmprotocol.ResponseVendorAzure
 	engine, err := NewEngine(NewBuiltinRegistry(), policy)
 	if err != nil {
 		t.Fatal(err)
@@ -102,17 +98,17 @@ func TestAzureResponsesStreamReportsNestedItemVendorExtensions(t *testing.T) {
 	assertDroppedResponseExtensions(t, diagnostics, "output[].azure_item")
 }
 
-func TestResponsesNestedVendorExtensionsRemainStrictWithoutAzure(t *testing.T) {
+func TestResponsesNestedUnknownFieldsFailConformance(t *testing.T) {
 	body := []byte(`{"id":"resp_1","object":"response","created_at":1,"model":"provider-model","status":"completed","output":[{"type":"message","id":"msg_1","role":"assistant","status":"completed","content":[],"azure_item":{}}]}`)
 
-	_, _, _, err := (OpenAIResponsesCodec{}).DecodeResponse(body, llmprotocol.DefaultPolicy())
+	_, _, _, err := (OpenAIResponsesCodec{}).DecodeResponse(body, conformancePolicy())
 	if err == nil || !strings.Contains(err.Error(), "invalid_upstream_json") {
 		t.Fatalf("DecodeResponse() error = %v, want invalid_upstream_json", err)
 	}
 }
 
-func TestResponsesStreamNestedVendorExtensionsRemainStrictWithoutAzure(t *testing.T) {
-	engine, err := NewEngine(NewBuiltinRegistry(), llmprotocol.DefaultPolicy())
+func TestResponsesStreamNestedUnknownFieldsFailConformance(t *testing.T) {
+	engine, err := NewEngine(NewBuiltinRegistry(), conformancePolicy())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +140,7 @@ func assertDroppedResponseExtensions(t *testing.T, diagnostics llmprotocol.Diagn
 	for _, diagnostic := range diagnostics {
 		if diagnostic.Action == llmprotocol.DiagnosticDropped &&
 			diagnostic.Source == llmprotocol.OpenAIResponsesV1 &&
-			diagnostic.Reason == vendorExtensionReason {
+			diagnostic.Reason == unknownUpstreamFieldReason {
 			dropped[diagnostic.Field] = true
 		}
 	}
@@ -154,6 +150,6 @@ func assertDroppedResponseExtensions(t *testing.T, diagnostics llmprotocol.Diagn
 		}
 	}
 	if len(dropped) != len(fields) {
-		t.Errorf("vendor diagnostics = %v, want %v", dropped, fields)
+		t.Errorf("unknown-field diagnostics = %v, want %v", dropped, fields)
 	}
 }
