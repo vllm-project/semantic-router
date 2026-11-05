@@ -84,6 +84,10 @@ func (r *OpenAIRouter) RouteSystemOne(ctx context.Context, model string, body js
 		}
 		return 0, nil, contextErr
 	}
+	// A signal's equal-deadline timer can fire before the request timer.
+	if deadline, ok := ctx.Deadline(); ok && !time.Now().Before(deadline) {
+		return systemOneBudgetExhausted(http.StatusGatewayTimeout, "deadline", context.DeadlineExceeded, ledger)
+	}
 	if ledger.Remaining() <= 0 {
 		return systemOneBudgetExhausted(http.StatusServiceUnavailable, "max_calls", budget.ErrExhausted, ledger)
 	}
