@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="1200" viewBox="0 0 960 1200" role="img" aria-labelledby="title desc">
   <title id="title">From a Runkite managed run to a Semantic Router model call</title>
-  <desc id="desc">Follow five numbered stages from top to bottom. An application creates a Thread and Run through the Runkite HTTP API. The Runkite Go control plane dispatches an assignment over gRPC to a separate TypeScript runner. Its native AI SDK agent calls the Envoy inference listener and vLLM Semantic Router over Chat Completions HTTP. Semantic Router selects a Qwen3 backend served by Ollama. The runner reports events and results back to the plane. A separate tool request branch returns from the agent over run-bound HTTP to Runkite's connector gate; only allowed calls reach the small fictional incident MCP fixture. Model requests leave the SDK directly for the inference listener, not through the Go plane.</desc>
+  <desc id="desc">Follow five numbered stages from top to bottom. An application creates a Thread and Run through the Runkite HTTP API. The Runkite Go control plane dispatches an assignment over gRPC to a separate TypeScript runner. Its native AI SDK agent calls the Envoy inference listener and vLLM Semantic Router over Chat Completions HTTP. Semantic Router selects a configured compatible model backend. The local test uses Qwen3 models served by Ollama; these are example backends, not a model-family requirement. The runner reports events and results back to the plane. A separate tool request branch returns from the agent over run-bound HTTP to Runkite's connector gate; only allowed calls reach the small fictional incident MCP fixture. Model requests leave the SDK directly for the inference listener, not through the Go plane.</desc>
   <defs>
     <marker id="amber-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1 1L7 4L1 7" fill="none" stroke="#b66f0e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
     <marker id="blue-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1 1L7 4L1 7" fill="none" stroke="#087ba9" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
@@ -75,8 +75,8 @@
     <rect x="40" y="1024" width="620" height="100" rx="12" fill="#ffffff" stroke="#b9d7e4" stroke-width="1.5"/>
     <circle cx="73" cy="1062" r="17" fill="#eaf6fc"/>
     <text x="73" y="1069" text-anchor="middle" font-size="20" font-weight="700" fill="#155f7f">5</text>
-    <text x="105" y="1070" font-size="25" font-weight="700">Ollama · model serving</text>
-    <text x="62" y="1101" font-size="20" fill="#526479">Qwen3:0.6b or Qwen3:1.7b</text>
+    <text x="105" y="1070" font-size="25" font-weight="700">Configured model backends</text>
+    <text x="62" y="1101" font-size="20" fill="#526479">Local test: Qwen models served by Ollama</text>
 
     <path d="M32 1151H928" stroke="#dce3ec"/>
     <text x="480" y="1179" text-anchor="middle" font-size="18" fill="#526479">The SDK calls the inference listener directly. Tool calls return to Runkite.</text>

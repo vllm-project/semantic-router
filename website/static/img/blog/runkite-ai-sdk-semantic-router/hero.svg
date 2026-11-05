@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
   <title id="title">Runkite + vLLM Semantic Router</title>
-  <desc id="desc">One conversation uses Qwen3 0.6b, then Qwen3 1.7b, then Qwen3 0.6b. Read tools remain allowed and a restart tool is denied by the same Runkite connector policy.</desc>
+  <desc id="desc">A sample conversation follows the configured local-fast, local-specialist and local-fast routes. These are example configuration aliases for compatible model backends. Read tools remain allowed and a restart tool is denied by the same Runkite connector policy.</desc>
   <defs>
     <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
       <stop stop-color="#101e33"/>
@@ -32,7 +32,7 @@
       <text x="240" y="30" fill="#f1f5f9" font-size="22" font-weight="650">vLLM Semantic Router</text>
     </g>
     <text x="56" y="168" fill="#f6f8fc" font-size="53" font-weight="720" letter-spacing="-1.7">Runkite + vLLM Semantic Router</text>
-    <text x="58" y="218" fill="#c3d0df" font-size="28" letter-spacing="-.3">One conversation. Two models. The same tool permissions.</text>
+    <text x="58" y="218" fill="#c3d0df" font-size="28" letter-spacing="-.3">One conversation. Your models. The same tool permissions.</text>
     <text x="58" y="278" fill="#899eb7" font-size="14" font-weight="700" letter-spacing="2.2">ONE DURABLE THREAD</text>
     <path d="M95 313H1105" stroke="url(#thread)" stroke-width="2"/>
     <g fill="#0b1526" stroke-width="2">
@@ -44,7 +44,7 @@
       <rect width="348" height="180" rx="14" fill="#132136" stroke="#344158"/>
       <path d="M16 0H332" stroke="#f5a524" stroke-width="3"/>
       <text x="24" y="34" fill="#9bacc2" font-size="15" font-weight="650" letter-spacing="1">RUN 01 · STATUS</text>
-      <text x="24" y="78" fill="#f5f8fc" font-size="31" font-weight="650" letter-spacing="-.7">Qwen3:0.6b</text>
+      <text x="24" y="78" fill="#f5f8fc" font-size="31" font-weight="650" letter-spacing="-.7">local-fast</text>
       <text x="24" y="110" fill="#9eb3cb" font-size="17">Read the incident</text>
       <rect x="24" y="131" width="300" height="30" rx="6" fill="#153b37"/>
       <text x="37" y="151" fill="#92dfc3" font-size="16" font-weight="600">read_incident allowed</text>
@@ -53,7 +53,7 @@
       <rect width="348" height="180" rx="14" fill="#122537" stroke="#36546b"/>
       <path d="M16 0H332" stroke="#55c5ee" stroke-width="3"/>
       <text x="24" y="34" fill="#a5bdd0" font-size="15" font-weight="650" letter-spacing="1">RUN 02 · DIAGNOSE</text>
-      <text x="24" y="78" fill="#f5f8fc" font-size="31" font-weight="650" letter-spacing="-.7">Qwen3:1.7b</text>
+      <text x="24" y="78" fill="#f5f8fc" font-size="31" font-weight="650" letter-spacing="-.7">local-specialist</text>
       <text x="24" y="110" fill="#a5bfd2" font-size="17">Continue with retained history</text>
       <rect x="24" y="131" width="300" height="30" rx="6" fill="#153b37"/>
       <text x="37" y="151" fill="#92dfc3" font-size="16" font-weight="600">read_incident allowed</text>
@@ -62,7 +62,7 @@
       <rect width="348" height="180" rx="14" fill="#132136" stroke="#344158"/>
       <path d="M16 0H332" stroke="#f5a524" stroke-width="3"/>
       <text x="24" y="34" fill="#9bacc2" font-size="15" font-weight="650" letter-spacing="1">RUN 03 · RESTART</text>
-      <text x="24" y="78" fill="#f5f8fc" font-size="31" font-weight="650" letter-spacing="-.7">Qwen3:0.6b</text>
+      <text x="24" y="78" fill="#f5f8fc" font-size="31" font-weight="650" letter-spacing="-.7">local-fast</text>
       <text x="24" y="110" fill="#9eb3cb" font-size="17">Request a service restart</text>
       <rect x="24" y="131" width="300" height="30" rx="6" fill="#452d27"/>
       <text x="37" y="151" fill="#ffb9a4" font-size="16" font-weight="600">restart_service denied</text>
@@ -73,6 +73,6 @@
     <text x="272" y="586" fill="#a4b5ca" font-size="18">Routed inference</text>
     <circle cx="442" cy="580" r="2.5" fill="#506780"/>
     <text x="462" y="586" fill="#a4b5ca" font-size="18">Governed tools</text>
-    <text x="1142" y="586" text-anchor="end" fill="#7e93ad" font-size="15">LOCAL QUALIFICATION</text>
+    <text x="1142" y="586" text-anchor="end" fill="#7e93ad" font-size="15">EXAMPLE ROUTES</text>
   </g>
 </svg>
