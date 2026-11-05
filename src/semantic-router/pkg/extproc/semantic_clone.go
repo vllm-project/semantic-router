@@ -40,7 +40,28 @@ func cloneSemanticRequestForReplay(request *llmprotocol.Request) (*llmprotocol.R
 			cloned.Tools[i].InputSchema = nil
 		}
 	}
+	// Preserve-mode passthrough fields ride the messages with json:"-", so
+	// the round-trip above drops them. Copy them per message: a later
+	// provider attempt re-encodes from this clone and must still forward
+	// every captured field on its own message.
+	for i := range request.Messages {
+		cloned.Messages[i].Unknown = clonePassthroughFields(request.Messages[i].Unknown)
+	}
+	for i := range request.Instructions {
+		cloned.Instructions[i].Unknown = clonePassthroughFields(request.Instructions[i].Unknown)
+	}
 	return &cloned, nil
+}
+
+func clonePassthroughFields(fields map[string]json.RawMessage) map[string]json.RawMessage {
+	if fields == nil {
+		return nil
+	}
+	cloned := make(map[string]json.RawMessage, len(fields))
+	for name, value := range fields {
+		cloned[name] = append(json.RawMessage(nil), value...)
+	}
+	return cloned
 }
 
 func cloneSemanticResponseForCommit(response *llmprotocol.Response) (*llmprotocol.Response, error) {

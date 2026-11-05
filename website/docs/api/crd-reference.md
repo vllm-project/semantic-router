@@ -213,6 +213,7 @@ _Appears in:_
 | `api` _[APIConfig](#apiconfig)_ | API configuration |  | Optional: \{\} <br /> |
 | `observability` _[ObservabilityConfig](#observabilityconfig)_ | Observability configuration |  | Optional: \{\} <br /> |
 | `streamed_body` _[StreamedBodyConfig](#streamedbodyconfig)_ | StreamedBody enables streamed request body handling. Mirrors<br />global.router.streamed_body; the gateway must send bodies to ExtProc in<br />STREAMED or FullDuplexStreamed mode for it to take effect. |  | Optional: \{\} <br /> |
+| `protocol` _[ProtocolConfig](#protocolconfig)_ | Protocol tunes wire-protocol handling for request processing. Mirrors<br />global.router.protocol in the router config. |  | Optional: \{\} <br /> |
 
 #### DecisionConfig
 
@@ -866,6 +867,18 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `size` _integer_ | Size is the inference window budget, including special tokens. |  | Minimum: 1 <br /> |
 | `overlap` _integer_ | Overlap counts content tokens shared by consecutive windows. |  | Minimum: 0 <br />Optional: \{\} <br /> |
+
+#### ProtocolConfig
+
+ProtocolConfig defines wire-protocol handling for request and response processing.
+
+_Appears in:_
+
+- [ConfigSpec](#configspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `preserve_unknown_chat_fields` _boolean_ | PreserveUnknownChatFields keeps OpenAI Chat fields the router's<br />protocol-neutral model does not map, in both directions: unknown<br />request fields (top-level and per-message) are re-merged into the<br />mutated request while it stays in the same wire format, and provider<br />response fields (streamed logprobs, audio, execution fields, vendor<br />extensions) are forwarded to a same-format client. Disabled by<br />default; the default strict behavior rejects such requests at<br />ingress and such responses after decode. |  | Optional: \{\} <br /> |
 
 #### PrototypeScoringConfig
 

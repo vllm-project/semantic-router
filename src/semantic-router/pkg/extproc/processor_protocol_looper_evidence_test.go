@@ -48,11 +48,22 @@ func TestConfidenceLogprobsReachBackendAfterNeutralReencoding(t *testing.T) {
 
 func TestLooperLogprobsKeepPublicAndCrossProtocolContractsClosed(t *testing.T) {
 	body := []byte(`{"model":"model","messages":[{"role":"user","content":"hello"}],"logprobs":true,"top_logprobs":2}`)
-	router := &OpenAIRouter{}
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+
+	strict := &RequestContext{SourceFormat: llmprotocol.OpenAIChatV1}
+	_, immediate := router.prepareProtocolRequest(body, strict)
+	require.NotNil(t, immediate, "the default policy keeps the strict contract")
+	require.NotNil(t, strict.ImmediateProtocolError)
+
+	router = &OpenAIRouter{Config: &config.RouterConfig{}}
+	router.Config.RouterOptions.PreserveUnknownChatFields = true
 	public := &RequestContext{SourceFormat: llmprotocol.OpenAIChatV1}
-	_, immediate := router.prepareProtocolRequest(body, public)
-	require.NotNil(t, immediate, "public logprobs contract remains unsupported")
-	require.NotNil(t, public.ImmediateProtocolError)
+	request, immediate := router.prepareProtocolRequest(body, public)
+	require.Nil(t, immediate, "the opt-in passthrough forwards public logprobs")
+	require.NotNil(t, request)
+	require.Nil(t, public.ImmediateProtocolError)
+	require.Contains(t, public.ProtocolEnvelope.RequestPassthrough, "logprobs")
+
 	for _, target := range []llmprotocol.WireFormat{llmprotocol.OpenAIResponsesV1, llmprotocol.AnthropicMessagesV1} {
 		ctx := &RequestContext{LooperRequest: true, SourceFormat: llmprotocol.OpenAIChatV1, TargetFormat: target}
 		_, immediate = router.prepareProtocolRequest(body, ctx)

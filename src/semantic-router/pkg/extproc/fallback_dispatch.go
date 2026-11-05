@@ -432,6 +432,18 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 		if format == "" {
 			format = llmprotocol.OpenAIChatV1
 		}
+		// A streamed fallback response is synthesized from neutral events,
+		// which carry no preserved top-level provider fields; report the
+		// loss instead of dropping it silently (the buffered branch replays
+		// or merges them).
+		if len(translated.Envelope.ResponsePassthrough) > 0 {
+			streamDiags = append(streamDiags, llmprotocol.Diagnostic{
+				Source: format,
+				Field:  "response.passthrough",
+				Action: llmprotocol.DiagnosticDropped,
+				Reason: "fallback stream re-encode drops preserved provider response fields",
+			})
+		}
 		streamBody, diags, streamErr := engine.EncodeResponseStream(format, candidateResponse, llmprotocol.StreamContext{
 			Context:            ctx.TraceContext,
 			Source:             format,
@@ -441,6 +453,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 			ResponseID:         candidateResponse.ID,
 			PreviousResponseID: responseObjectPreviousID(ctx),
 		})
+		streamDiags = append(streamDiags, diags...)
 		if streamErr != nil {
 			attemptOutcome.Error = streamErr
 			attemptOutcome.Discarded = true
@@ -453,7 +466,6 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 			evalResult := orch.EvaluateAttempt(callCtx, ctx.FallbackRecord, attemptOutcome, commit)
 			return nil, evalResult, fmt.Errorf("fallback stream wire validation failed: %w", validateErr)
 		}
-		streamDiags = diags
 		responseBody = streamBody
 		contentType = "text/event-stream"
 	} else {

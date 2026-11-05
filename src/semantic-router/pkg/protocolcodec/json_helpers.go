@@ -46,6 +46,14 @@ func decodeWireJSON(body []byte, target any, policy llmprotocol.Policy, requireO
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	if exactType != nil {
 		decoder.DisallowUnknownFields()
+	} else if policy.UnknownFields == llmprotocol.UnknownPreserveSameFormat {
+		// Unknown fields are forwarded to the backend, but a case variant of a
+		// modelled name would create a second key the neutral contract silently
+		// ignores. Keep exact casing for known fields while leaving extension
+		// names open.
+		if err := validateExactJSONFieldNamesAllowUnknown(body, reflect.TypeOf(target)); err != nil {
+			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_json", "request JSON contains a non-canonical field", err)
+		}
 	}
 	if err := decoder.Decode(target); err != nil {
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_json", "request JSON is invalid", err)
@@ -211,8 +219,76 @@ type jsonStructField struct {
 	typeOf reflect.Type
 }
 
+// validateExactJSONFieldNamesAllowUnknown keeps exact casing for modelled
+// fields while accepting names the struct does not declare. The preserve-
+// same-format policy forwards those names to the backend, which owns their
+// validation; a case variant of a known name is still rejected because it
+// would split one field into two.
+func validateExactJSONFieldNamesAllowUnknown(body []byte, targetType reflect.Type) error {
+	return validateExactJSONValueAllowUnknown(body, dereferenceJSONType(targetType))
+}
+
+func validateExactJSONValueAllowUnknown(body []byte, targetType reflect.Type) error {
+	if targetType == nil || bytes.Equal(bytes.TrimSpace(body), []byte("null")) ||
+		reflect.PointerTo(targetType).Implements(jsonUnmarshalerType) {
+		return nil
+	}
+	switch targetType.Kind() {
+	case reflect.Struct:
+		return validateExactJSONObjectAllowUnknown(body, targetType)
+	case reflect.Slice, reflect.Array:
+		return validateExactJSONArrayAllowUnknown(body, targetType)
+	case reflect.Map, reflect.Interface:
+		return nil
+	}
+	return nil
+}
+
+func validateExactJSONObjectAllowUnknown(body []byte, targetType reflect.Type) error {
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(body, &object); err != nil {
+		return err
+	}
+	fields := exactJSONStructFields(targetType)
+	folded := make(map[string]string, len(fields))
+	for name := range fields {
+		folded[strings.ToLower(name)] = name
+	}
+	for name, value := range object {
+		fieldType, found := fields[name]
+		if !found {
+			if canonical, exists := folded[strings.ToLower(name)]; exists && canonical != name {
+				return fmt.Errorf("field %q is not canonical; use %q", name, canonical)
+			}
+			continue
+		}
+		if err := validateExactJSONValueAllowUnknown(value, dereferenceJSONType(fieldType.typeOf)); err != nil {
+			return fmt.Errorf("field %q: %w", name, err)
+		}
+	}
+	return nil
+}
+
+func validateExactJSONArrayAllowUnknown(body []byte, targetType reflect.Type) error {
+	if targetType.Elem() == reflect.TypeOf(json.RawMessage{}) {
+		return nil
+	}
+	var elements []json.RawMessage
+	if err := json.Unmarshal(body, &elements); err != nil {
+		return err
+	}
+	for index, element := range elements {
+		if err := validateExactJSONValueAllowUnknown(element, dereferenceJSONType(targetType.Elem())); err != nil {
+			return fmt.Errorf("element %d: %w", index, err)
+		}
+	}
+	return nil
+}
+
 var structFieldsByType sync.Map
 
+// exactJSONStructFields maps a struct type's JSON member names to their field
+// types. The map is shared; callers must not modify it.
 func exactJSONStructFields(targetType reflect.Type) map[string]jsonStructField {
 	if cached, ok := structFieldsByType.Load(targetType); ok {
 		return cached.(map[string]jsonStructField)
@@ -370,13 +446,14 @@ func decodeProviderEventType(body []byte, fallback string, policy llmprotocol.Po
 	return eventType, nil
 }
 
-func rejectUnknownFields(body []byte, policy llmprotocol.Policy) bool {
+func rejectUnknownFields(_ []byte, policy llmprotocol.Policy) bool {
 	if policy.UnknownFields == llmprotocol.UnknownReject {
 		return true
 	}
-	return policy.UnknownFields == llmprotocol.UnknownPreserveSameFormat &&
-		(policy.SourcePreservation != llmprotocol.SourceBoundedSameFormat ||
-			policy.Limits.SourceEnvelopeBytes <= 0 || len(body) > policy.Limits.SourceEnvelopeBytes)
+	// Preserve-same-format accepts unknown fields for every body size. The
+	// envelope-byte limit only controls whether the original bytes are kept
+	// for replay; the codec carries unmodeled fields separately.
+	return false
 }
 
 func requireEOF(decoder *json.Decoder) error {

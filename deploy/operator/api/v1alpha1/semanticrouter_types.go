@@ -376,6 +376,25 @@ type ConfigSpec struct {
 	// STREAMED or FullDuplexStreamed mode for it to take effect.
 	// +optional
 	StreamedBody *StreamedBodyConfig `json:"streamed_body,omitempty"`
+
+	// Protocol tunes wire-protocol handling for request processing. Mirrors
+	// global.router.protocol in the router config.
+	// +optional
+	Protocol *ProtocolConfig `json:"protocol,omitempty"`
+}
+
+// ProtocolConfig defines wire-protocol handling for request and response processing.
+type ProtocolConfig struct {
+	// PreserveUnknownChatFields keeps OpenAI Chat fields the router's
+	// protocol-neutral model does not map, in both directions: unknown
+	// request fields (top-level and per-message) are re-merged into the
+	// mutated request while it stays in the same wire format, and provider
+	// response fields (streamed logprobs, audio, execution fields, vendor
+	// extensions) are forwarded to a same-format client. Disabled by
+	// default; the default strict behavior rejects such requests at
+	// ingress and such responses after decode.
+	// +optional
+	PreserveUnknownChatFields bool `json:"preserve_unknown_chat_fields,omitempty"`
 }
 
 // StreamedBodyConfig defines streamed request body handling.

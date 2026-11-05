@@ -2061,6 +2061,23 @@ spec:
                       rule: '!has(self.window) || self.window.size <= (has(self.max_sequence_length)
                         && self.max_sequence_length > 0 ? self.max_sequence_length
                         : 512)'
+                  protocol:
+                    description: |-
+                      Protocol tunes wire-protocol handling for request processing. Mirrors
+                      global.router.protocol in the router config.
+                    properties:
+                      preserve_unknown_chat_fields:
+                        description: |-
+                          PreserveUnknownChatFields keeps OpenAI Chat fields the router's
+                          protocol-neutral model does not map, in both directions: unknown
+                          request fields (top-level and per-message) are re-merged into the
+                          mutated request while it stays in the same wire format, and provider
+                          response fields (streamed logprobs, audio, execution fields, vendor
+                          extensions) are forwarded to a same-format client. Disabled by
+                          default; the default strict behavior rejects such requests at
+                          ingress and such responses after decode.
+                        type: boolean
+                    type: object
                   reasoning_effort:
                     description: |-
                       ReasoningEffort is the default reasoning effort for model bindings that do

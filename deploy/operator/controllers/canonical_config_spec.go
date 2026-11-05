@@ -38,6 +38,11 @@ func (r *SemanticRouterReconciler) applyOperatorConfigSpec(canonical *routerconf
 			TimeoutSec: spec.StreamedBody.TimeoutSec,
 		}
 	}
+	if spec.Protocol != nil {
+		canonical.Global.Router.Protocol = routerconfig.CanonicalProtocol{
+			PreserveUnknownChatFields: spec.Protocol.PreserveUnknownChatFields,
+		}
+	}
 	return nil
 }
 

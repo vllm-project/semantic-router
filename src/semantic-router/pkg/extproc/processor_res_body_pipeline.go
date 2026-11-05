@@ -420,17 +420,22 @@ func isResponseAPIRequest(ctx *RequestContext) bool {
 }
 
 // cacheableClientResponse returns the bytes that may be persisted as the public
-// response. A cache partition is keyed on the ingress protocol and may be
-// served to a request that never touches the same backend, so an entry holds
-// only the canonical contract.
+// response. The cache is read back by decodeCachedClientResponse with the
+// router's configured policy (strict by default; preserve when
+// preserve_unknown_chat_fields is on). A cache partition is keyed on the
+// ingress protocol and may be served to a request that never touches the same
+// backend.
 //
-// A same-format response is forwarded to the client verbatim, so when the
-// upstream added members its wire contract does not declare, such as a
-// gateway's own cost or trace fields, those bytes still carry them. Persisting
-// them would replay one request's gateway metadata to later clients.
-// Re-encoding from the neutral response yields the canonical equivalent. When
-// that encode fails, nothing is cached: a miss is recoverable, a wrong entry
-// is not.
+// A same-format response is forwarded to the client verbatim. Under the strict
+// policy an upstream that added members the wire contract does not declare,
+// such as a gateway's own cost or trace fields, gets them dropped with a
+// diagnostic, so the verbatim bytes are not canonical: persisting them would
+// replay one request's gateway metadata to later clients, and a later strict
+// read would report them dropped again. Re-encoding from the neutral response
+// yields the canonical equivalent. Under the preserve policy no member is
+// dropped, so the verbatim bytes already match what a preserve reader expects
+// and are cached unchanged. When the canonical encode fails, nothing is
+// cached: a miss is recoverable, a wrong entry is not.
 func (r *OpenAIRouter) cacheableClientResponse(
 	clientBody []byte,
 	rewritten bool,
