@@ -116,7 +116,7 @@ providers:
       backend_refs:
         - name: primary
           provider: openai
-          api_key_env: OPENAI_API_KEY
+          auth: {api_key_env: OPENAI_API_KEY}
 
 routing:
   decisions:
@@ -159,7 +159,7 @@ providers:
       backend_refs:
         - name: primary
           provider: provider-id
-          api_key_env: PROVIDER_API_KEY
+          auth: {api_key_env: PROVIDER_API_KEY}
 ```
 
 内置卡片不需要 `routing.modelCards`。有意覆盖时，用规范目录身份作为卡片名：

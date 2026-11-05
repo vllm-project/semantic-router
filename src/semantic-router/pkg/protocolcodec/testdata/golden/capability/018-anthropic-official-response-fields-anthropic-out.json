@@ -536,6 +536,10 @@
           {
             "field": "usage.service_tier",
             "action": "dropped"
+          },
+          {
+            "field": "usage.speed",
+            "action": "dropped"
           }
         ]
       }

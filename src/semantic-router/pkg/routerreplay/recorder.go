@@ -349,6 +349,16 @@ func (r *Recorder) AttachRequest(id string, requestBody []byte) error {
 	return r.storage.AttachRequest(ctx, id, body, truncated)
 }
 
+// AttachPrompt stores the prompt a record withheld when it was written, under
+// the same byte limit AddRecord applies to it.
+func (r *Recorder) AttachPrompt(id string, prompt string) error {
+	policy := r.policySnapshot()
+	prompt, truncated := truncateString(prompt, policy.maxToolTraceBytes)
+	ctx, cancel := r.replayOperationContext()
+	defer cancel()
+	return r.storage.AttachPrompt(ctx, id, prompt, truncated)
+}
+
 func (r *Recorder) AttachResponse(id string, responseBody []byte) error {
 	policy := r.policySnapshot()
 	if !policy.captureResponseBody {
