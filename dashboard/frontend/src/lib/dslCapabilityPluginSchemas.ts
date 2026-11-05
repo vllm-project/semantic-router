@@ -1,3 +1,4 @@
+import { X_VSR_CACHE_CONTROL, X_VSR_COMPRESSION_CONTROL } from '../generated/vsrHeaders'
 import type { FieldSchema } from './dslSchemas'
 
 const promptCacheFields: FieldSchema[] = [
@@ -106,7 +107,7 @@ export function getCapabilityPluginFieldSchema(pluginType: string): FieldSchema[
               key: 'header',
               label: 'Header',
               type: 'string',
-              placeholder: 'x-vsr-cache-control',
+              placeholder: X_VSR_CACHE_CONTROL,
             },
             {
               key: 'allowed',
@@ -246,7 +247,7 @@ export function getCapabilityPluginFieldSchema(pluginType: string): FieldSchema[
               key: 'header',
               label: 'Header',
               type: 'string',
-              placeholder: 'x-vsr-compression-control',
+              placeholder: X_VSR_COMPRESSION_CONTROL,
             },
             { key: 'allowed', label: 'Allowed Directives', type: 'string[]' },
             { key: 'max_target_tokens', label: 'Maximum Target Tokens', type: 'number' },

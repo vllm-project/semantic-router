@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
 
@@ -22,7 +23,7 @@ func TestNativeRemoteAdapterPreservesTaskAndUsesProviderAuth(t *testing.T) {
 		if r.URL.Path != "/custom/v1/systemone" || r.Header.Get("Authorization") != "Bearer private-test-key" {
 			t.Errorf("wrong native path or configured credential")
 		}
-		if r.Header.Get(BackendRequestHeader) != "1" {
+		if r.Header.Get(headers.VSRSystemOneBackend) != "1" {
 			t.Error("native backend request lost its recursion guard")
 		}
 		var body map[string]json.RawMessage
@@ -144,7 +145,7 @@ func TestForwardedNativeActionCannotEnterAnotherRoutingChain(t *testing.T) {
 				return http.StatusOK, []byte(certainResponse), nil
 			}
 			r := httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(`{"model":"`+tc.model+`"}`))
-			r.Header.Set(BackendRequestHeader, "1")
+			r.Header.Set(headers.VSRSystemOneBackend, "1")
 			r.Header.Set("Api-Key", tc.key)
 			w := httptest.NewRecorder()
 			Handler(cfg, listener, invoke)(w, r)

@@ -5,6 +5,7 @@ import (
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 // ConfigSource defines where to load dynamic configuration from.
@@ -162,16 +163,12 @@ type GatewayCredentialConfig struct {
 	Header string `yaml:"header,omitempty"`
 }
 
-// DefaultGatewayCredentialHeader is the header read when the contract is
-// enabled without a header name.
-const DefaultGatewayCredentialHeader = "x-vsr-gateway-credential" // #nosec G101 -- header name, not a credential
-
 // GetHeader returns the configured header name, lowercased, or the default.
 func (c GatewayCredentialConfig) GetHeader() string {
 	if header := strings.ToLower(strings.TrimSpace(c.Header)); header != "" {
 		return header
 	}
-	return DefaultGatewayCredentialHeader
+	return headers.VSRGatewayCredential
 }
 
 // IdentityConfig controls how the router reads user identity from request headers.
@@ -182,14 +179,14 @@ type IdentityConfig struct {
 
 func (ic IdentityConfig) GetUserIDHeader() string {
 	if ic.UserIDHeader == "" {
-		return "x-authz-user-id"
+		return headers.AuthzUserID
 	}
 	return ic.UserIDHeader
 }
 
 func (ic IdentityConfig) GetUserGroupsHeader() string {
 	if ic.UserGroupsHeader == "" {
-		return "x-authz-user-groups"
+		return headers.AuthzUserGroups
 	}
 	return ic.UserGroupsHeader
 }

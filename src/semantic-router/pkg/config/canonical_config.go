@@ -319,7 +319,7 @@ func validateGatewayCredentialHeader(credential GatewayCredentialConfig, identit
 	if reserved {
 		return fmt.Errorf(
 			"global.services.authz.gateway_credential.header %q carries a client credential or an identity; name a dedicated header the authenticator sets, such as %s",
-			header, DefaultGatewayCredentialHeader,
+			header, headers.VSRGatewayCredential,
 		)
 	}
 	return nil

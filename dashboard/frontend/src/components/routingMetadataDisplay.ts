@@ -1,3 +1,16 @@
+import {
+  X_VSR_LOOPER_ALGORITHM,
+  X_VSR_MATCHED_LANGUAGE,
+  X_VSR_SELECTED_ALGORITHM,
+  X_VSR_SELECTED_DECISION,
+} from '../generated/vsrHeaders'
+
+// Matched-signal headers are named x-vsr-matched-<signal family>.
+export const MATCHED_SIGNAL_HEADER_PREFIX = 'x-vsr-matched-'
+
+export const matchedSignalHeader = (signalFamily: string): string =>
+  `${MATCHED_SIGNAL_HEADER_PREFIX}${signalFamily}`
+
 const ACRONYMS: Record<string, string> = {
   api: 'API',
   kb: 'Knowledge Base',
@@ -51,16 +64,16 @@ export const formatRoutingMetadataValue = (key: string, value: string): string =
   if (!trimmed) return trimmed
   const normalizedKey = key.toLowerCase()
 
-  if (normalizedKey === 'x-vsr-matched-language') {
+  if (normalizedKey === X_VSR_MATCHED_LANGUAGE) {
     return LANGUAGE_NAMES[trimmed.toLowerCase()] ?? humanizeIdentifier(trimmed, false)
   }
-  if (normalizedKey === 'x-vsr-selected-decision') {
+  if (normalizedKey === X_VSR_SELECTED_DECISION) {
     return humanizeIdentifier(trimmed, true)
   }
   if (
-    normalizedKey === 'x-vsr-selected-algorithm' ||
-    normalizedKey === 'x-vsr-looper-algorithm' ||
-    normalizedKey.startsWith('x-vsr-matched-')
+    normalizedKey === X_VSR_SELECTED_ALGORITHM ||
+    normalizedKey === X_VSR_LOOPER_ALGORITHM ||
+    normalizedKey.startsWith(MATCHED_SIGNAL_HEADER_PREFIX)
   ) {
     return humanizeIdentifier(trimmed, false)
   }

@@ -1,3 +1,9 @@
+import {
+  X_AUTHZ_USER_GROUPS,
+  X_AUTHZ_USER_ID,
+  X_CONVERSATION_ID,
+  X_SESSION_ID,
+} from '../generated/vsrHeaders'
 import type { RouterSystemKey } from './configPageRouterSectionCatalog'
 import type {
   APIConfig,
@@ -44,8 +50,8 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
       scope: 'conversation',
       identity: {
         headers: {
-          session: 'x-session-id',
-          conversation: 'x-conversation-id',
+          session: X_SESSION_ID,
+          conversation: X_CONVERSATION_ID,
         },
       },
       tuning: {},
@@ -77,8 +83,8 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   authz: {
     fail_open: false,
     identity: {
-      user_id_header: 'x-authz-user-id',
-      user_groups_header: 'x-authz-user-groups',
+      user_id_header: X_AUTHZ_USER_ID,
+      user_groups_header: X_AUTHZ_USER_GROUPS,
     },
     providers: [],
   } satisfies AuthzConfig,

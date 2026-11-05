@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
 
@@ -89,7 +90,7 @@ func BackendInvoker(cfg *config.RouterConfig, listener string, local Invoke, rem
 		}
 		header := http.Header{"Content-Type": {"application/json"}}
 		if model.APIFormat == config.APIFormatSystemOne {
-			header.Set(BackendRequestHeader, "1")
+			header.Set(headers.VSRSystemOneBackend, "1")
 		}
 		endpoint, _ := cfg.GetEndpointByName(endpointName)
 		if endpoint.APIKey != "" {

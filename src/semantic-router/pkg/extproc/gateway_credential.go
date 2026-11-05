@@ -61,14 +61,20 @@ func (r *OpenAIRouter) gatewayCredentialHeadersForRemoval() []string {
 	return names
 }
 
-// appendGatewayCredentialRemoval adds the credential headers to a header-phase
-// mutation so every branch after the header phase, skip-processing included,
-// sends the upstream a request without them.
+// appendGatewayCredentialRemoval adds a renamed credential header to a
+// header-phase mutation so every branch after the header phase,
+// skip-processing included, sends the upstream a request without it. The
+// default name is already one of the headers every provider-bound request
+// drops (headers.KeptFromProviders).
 func (r *OpenAIRouter) appendGatewayCredentialRemoval(mutation *ext_proc.HeaderMutation) {
 	if mutation == nil {
 		return
 	}
-	mutation.RemoveHeaders = append(mutation.RemoveHeaders, r.gatewayCredentialHeadersForRemoval()...)
+	for _, name := range r.gatewayCredentialHeadersForRemoval() {
+		if name != headers.VSRGatewayCredential {
+			mutation.RemoveHeaders = append(mutation.RemoveHeaders, name)
+		}
+	}
 }
 
 // captureGatewayCredential moves the credential off ctx.Headers onto the

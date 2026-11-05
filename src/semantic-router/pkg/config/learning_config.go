@@ -32,8 +32,8 @@ const (
 )
 
 const (
-	routerLearningDefaultSessionHeader      = "x-session-id"
-	routerLearningDefaultConversationHeader = "x-conversation-id"
+	routerLearningDefaultSessionHeader      = headers.XSessionID
+	routerLearningDefaultConversationHeader = headers.XConversationID
 
 	defaultProtectionReleaseMinUserTurnsBetween = 2
 )

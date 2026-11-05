@@ -130,7 +130,9 @@ domains:
       - src/semantic-router/pkg/config/**/*.go
       - src/semantic-router/pkg/configschema/**/*.go
       - src/semantic-router/pkg/configschema/router-config-v0.3.schema.json
+      - src/semantic-router/pkg/headers/**
       - tools/codegen/configschema/**
+      - tools/codegen/headers/**
       - tools/codegen/openapi/**
       - tools/codegen/embed_generated_index.py
       - tools/make/docs.mk
@@ -148,7 +150,10 @@ domains:
       - dashboard/frontend/scripts/generate-decision-runtime-catalog.py
       - dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.json
       - dashboard/frontend/src/generated/routerConfigContract.ts
+      - dashboard/frontend/src/generated/vsrHeaders.ts
       - website/docs/api/apiserver.md
+      - website/docs/troubleshooting/vsr-headers.md
+      - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/troubleshooting/vsr-headers.md
       - website/static/openapi/apiserver/**
     checks: [make generated-contract-check]
     verifications: [generated-contracts]
@@ -159,14 +164,18 @@ domains:
       - src/semantic-router/**
       - config/**
       - tools/codegen/configschema/**
+      - tools/codegen/headers/**
       - dashboard/frontend/src/generated/routerConfigContract.ts
+      - dashboard/frontend/src/generated/vsrHeaders.ts
       - go.mod
       - go.sum
     checks: [make test-semantic-router, make config-schema-check]
     verifications: [core]
 
-  # The Router's config tests load every YAML example of these pages and files
-  # (src/semantic-router/pkg/config/docs_examples_test.go).
+  # The Router's tests read these pages and files: the config tests load every
+  # YAML example (src/semantic-router/pkg/config/docs_examples_test.go), and
+  # the header registry tests check the generated header reference
+  # (src/semantic-router/pkg/headers).
   router-checked-docs:
     owner: router-core
     documentation_check: true
@@ -174,6 +183,8 @@ domains:
       - website/docs/installation/protocol-compatibility.md
       - website/docs/installation/storage-overview.md
       - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/installation/storage-overview.md
+      - website/docs/troubleshooting/vsr-headers.md
+      - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/troubleshooting/vsr-headers.md
       - tools/docker/riscv64/standalone.yaml
     checks: [make test-semantic-router]
     verifications: [core]

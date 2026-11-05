@@ -14,12 +14,12 @@ import (
 // carriers. A shadow copy never carries them, and forward_headers may not
 // list them. Names are lower-case.
 var shadowCredentialHeaders = map[string]struct{}{
-	"authorization":                    {},
+	headers.Authorization:              {},
 	"proxy-authorization":              {},
 	"cookie":                           {},
-	"x-api-key":                        {},
-	"api-key":                          {},
-	"x-goog-api-key":                   {},
+	headers.XAPIKey:                    {},
+	headers.APIKey:                     {},
+	headers.XGoogAPIKey:                {},
 	headers.UserOpenAIKey:              {},
 	headers.UserAnthropicKey:           {},
 	headers.UserAzureOpenAIKey:         {},

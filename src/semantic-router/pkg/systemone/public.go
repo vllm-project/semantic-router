@@ -15,6 +15,7 @@ import (
 	"time"
 
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
 )
 
@@ -146,7 +147,7 @@ func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener,
 			publicSystemOneError(w, http.StatusNotFound, "systemone_routing_disabled")
 			return
 		}
-		if r.Header.Get(BackendRequestHeader) != "" {
+		if r.Header.Get(headers.VSRSystemOneBackend) != "" {
 			remoteAlias := config.IsSystemOneBackend(model) && config.ModelConfig[model].Deployment == ""
 			if routed || remoteAlias {
 				publicSystemOneError(w, http.StatusConflict, "systemone_nested_routing")

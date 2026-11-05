@@ -50,8 +50,8 @@ func (r *OpenAIRouter) bindBenchmarkConfigResponse(response *ext_proc.Processing
 				output.RequestHeaders.Response.HeaderMutation.RemoveHeaders,
 				headers.SRBenchExpectedConfigHash, headers.SRBenchMaxInferenceCalls, headers.VSRConfigHash, headers.VSRModelUsage, headers.VSRInferenceCallCount,
 			)
-			setHeaderValue(output.RequestHeaders.Response.HeaderMutation, "x-envoy-max-retries", "0")
-			setHeaderValue(output.RequestHeaders.Response.HeaderMutation, "x-envoy-hedge-on-per-try-timeout", "false")
+			setHeaderValue(output.RequestHeaders.Response.HeaderMutation, headers.EnvoyMaxRetries, "0")
+			setHeaderValue(output.RequestHeaders.Response.HeaderMutation, headers.EnvoyHedgeOnPerTryTimeout, "false")
 		}
 		return
 	case *ext_proc.ProcessingResponse_RequestBody:
@@ -60,8 +60,8 @@ func (r *OpenAIRouter) bindBenchmarkConfigResponse(response *ext_proc.Processing
 				output.RequestBody.Response.HeaderMutation = &ext_proc.HeaderMutation{}
 			}
 			output.RequestBody.Response.HeaderMutation.RemoveHeaders = append(output.RequestBody.Response.HeaderMutation.RemoveHeaders, headers.SRBenchExpectedConfigHash, headers.SRBenchMaxInferenceCalls, headers.VSRConfigHash, headers.VSRModelUsage, headers.VSRInferenceCallCount)
-			setHeaderValue(output.RequestBody.Response.HeaderMutation, "x-envoy-max-retries", "0")
-			setHeaderValue(output.RequestBody.Response.HeaderMutation, "x-envoy-hedge-on-per-try-timeout", "false")
+			setHeaderValue(output.RequestBody.Response.HeaderMutation, headers.EnvoyMaxRetries, "0")
+			setHeaderValue(output.RequestBody.Response.HeaderMutation, headers.EnvoyHedgeOnPerTryTimeout, "false")
 		}
 		return
 	case *ext_proc.ProcessingResponse_ResponseHeaders:

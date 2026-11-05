@@ -1,5 +1,6 @@
 import type { EditFormData, FieldConfig } from '../components/EditModal'
 import { ROUTER_CONFIG_EXTENSION } from '../generated/routerConfigContract'
+import { X_AUTHZ_USER_ID } from '../generated/vsrHeaders'
 import {
   decisionBindingsBadges,
   decisionBindingsEditData,
@@ -281,7 +282,7 @@ function summaryForKey(
         { label: 'Fail open', value: stringOrFallback(section?.fail_open, 'Disabled') },
         {
           label: 'User header',
-          value: stringOrFallback(asObject(section?.identity)?.user_id_header, 'x-authz-user-id'),
+          value: stringOrFallback(asObject(section?.identity)?.user_id_header, X_AUTHZ_USER_ID),
         },
         { label: 'Providers', value: `${(asArray(section?.providers) || []).length}` },
       ]

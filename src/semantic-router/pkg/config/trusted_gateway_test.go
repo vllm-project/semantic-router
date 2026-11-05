@@ -3,6 +3,8 @@ package config
 import (
 	"strings"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 func trustedGatewayConfig(backendRefs string, enabled bool) string {
@@ -49,7 +51,7 @@ func TestTrustedGatewayBackendMaterializesWithoutAStaticKey(t *testing.T) {
 	if key := cfg.GetModelAccessKey("gateway-model"); key != "" {
 		t.Fatalf("a trusted gateway has no static key, got %q", key)
 	}
-	if !cfg.Authz.GatewayCredential.Enabled || cfg.Authz.GatewayCredential.GetHeader() != DefaultGatewayCredentialHeader {
+	if !cfg.Authz.GatewayCredential.Enabled || cfg.Authz.GatewayCredential.GetHeader() != headers.VSRGatewayCredential {
 		t.Fatalf("gateway credential contract = %+v", cfg.Authz.GatewayCredential)
 	}
 

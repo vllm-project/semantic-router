@@ -50,14 +50,36 @@
             }
           ],
           "remove": [
+            "x-authz-team-id",
+            "x-authz-tenant-id",
+            "x-authz-user-groups",
+            "x-authz-user-id",
+            "x-disable-router-memory",
+            "x-sr-bench-expected-config-hash",
+            "x-sr-bench-max-inference-calls",
+            "x-user-anthropic-key",
+            "x-user-azure-openai-key",
+            "x-user-bedrock-key",
+            "x-user-cloudflare-workers-ai-key",
+            "x-user-gemini-key",
+            "x-user-minimax-key",
+            "x-user-openai-key",
+            "x-user-vertex-ai-key",
+            "x-vsr-cache-control",
+            "x-vsr-compression-control",
+            "x-vsr-debug",
             "x-vsr-fusion-depth",
             "x-vsr-gateway-credential",
             "x-vsr-internal-auth",
             "x-vsr-looper-decision",
             "x-vsr-looper-iteration",
             "x-vsr-looper-request",
+            "x-vsr-looper-secret",
+            "x-vsr-outcome-principal",
+            "x-vsr-outcome-source",
             "x-vsr-protection-release",
-            "x-vsr-selected-recipe"
+            "x-vsr-selected-recipe",
+            "x-vsr-skip-processing"
           ]
         }
       }
@@ -191,10 +213,6 @@
       {
         "name": "content-type",
         "value": "application/json"
-      },
-      {
-        "name": "x-vsr-skip-processing",
-        "value": "true"
       },
       {
         "name": "x-forwarded-proto",

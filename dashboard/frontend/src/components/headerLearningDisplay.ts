@@ -1,3 +1,10 @@
+import {
+  X_VSR_LEARNING_ACTIONS,
+  X_VSR_LEARNING_METHODS,
+  X_VSR_LEARNING_REASONS,
+  X_VSR_LEARNING_SCOPES,
+} from '../generated/vsrHeaders'
+
 const LEARNING_METHOD_LABELS: Record<string, string> = {
   adaptation: 'adaptation',
   protection: 'protection',
@@ -39,9 +46,16 @@ const LEARNING_REASON_LABELS: Record<string, string> = {
 }
 
 const HUMANIZED_VALUE_BY_HEADER: Record<string, Record<string, string>> = {
-  'x-vsr-learning-actions': LEARNING_ACTION_LABELS,
-  'x-vsr-learning-reasons': LEARNING_REASON_LABELS,
+  [X_VSR_LEARNING_ACTIONS]: LEARNING_ACTION_LABELS,
+  [X_VSR_LEARNING_REASONS]: LEARNING_REASON_LABELS,
 }
+
+const LEARNING_HEADERS: string[] = [
+  X_VSR_LEARNING_METHODS,
+  X_VSR_LEARNING_ACTIONS,
+  X_VSR_LEARNING_SCOPES,
+  X_VSR_LEARNING_REASONS,
+]
 
 function splitHeaderList(rawValue: string): string[] {
   return rawValue
@@ -80,18 +94,14 @@ function formatLearningMethods(rawValue: string): string {
 }
 
 export function isLearningHeader(key: string): boolean {
-  return key.startsWith('x-vsr-learning-')
+  return LEARNING_HEADERS.includes(key)
 }
 
 export function formatLearningHeaderValue(key: string, rawValue: string): string {
-  if (key === 'x-vsr-learning-methods') {
+  if (key === X_VSR_LEARNING_METHODS) {
     return formatLearningMethods(rawValue)
   }
-  if (
-    key === 'x-vsr-learning-actions' ||
-    key === 'x-vsr-learning-scopes' ||
-    key === 'x-vsr-learning-reasons'
-  ) {
+  if (isLearningHeader(key)) {
     return formatLearningPairs(key, rawValue)
   }
   return rawValue

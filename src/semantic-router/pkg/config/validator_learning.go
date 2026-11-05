@@ -368,13 +368,13 @@ func validateProtectionRelease(cfg RouterLearningProtectionConfig) error {
 // protectionReleaseHeaderReserved rejects names whose removal before the backend
 // would break a standard, credential, gateway or router control header.
 func protectionReleaseHeaderReserved(header string) bool {
-	if !strings.HasPrefix(header, "x-") || IsShadowCredentialHeader(header) || header == "x-request-id" {
+	if !strings.HasPrefix(header, headers.ExtensionPrefix) || IsShadowCredentialHeader(header) || header == headers.RequestID {
 		return true
 	}
-	for _, prefix := range []string{"x-envoy-", "x-authz-", "x-forwarded-"} {
+	for _, prefix := range []string{headers.EnvoyPrefix, headers.AuthzPrefix, headers.ForwardedPrefix} {
 		if strings.HasPrefix(header, prefix) {
 			return true
 		}
 	}
-	return strings.HasPrefix(header, "x-vsr-") && header != headers.VSRProtectionRelease
+	return strings.HasPrefix(header, headers.VSRPrefix) && header != headers.VSRProtectionRelease
 }

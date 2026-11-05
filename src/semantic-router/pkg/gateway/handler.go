@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
@@ -163,7 +164,7 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 		return
 	}
 	ctx = routing.WithListenerModels(ctx, serving.Models)
-	x.record.RequestID = r.Header.Get("X-Request-ID")
+	x.record.RequestID = r.Header.Get(headers.RequestID)
 	body, err := readBody(r, h.opts.MaxRequestBodyBytes)
 	if errors.Is(err, errBodyTooLarge) {
 		writeError(w, http.StatusRequestEntityTooLarge, "request_too_large", "The request body is too large.")
@@ -178,7 +179,7 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 		strip = headerSet(append(append([]string(nil), identityHeaders...), serving.IdentityHeaders...))
 	}
 	req := routingRequest(r, body, strip)
-	x.record.RequestID = req.Header.Get("x-request-id")
+	x.record.RequestID = req.Header.Get(headers.RequestID)
 	plan, err := serving.Engine.Plan(ctx, req)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "routing_error", "The router could not process the request.")

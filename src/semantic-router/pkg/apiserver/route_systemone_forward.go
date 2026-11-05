@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
@@ -60,7 +61,7 @@ func (s *ClassificationAPIServer) handleSystemOneForward(w http.ResponseWriter, 
 	request.Header.Set("Authorization", forwarded.Authorization)
 	request.Header.Set("Api-Key", forwarded.APIKey)
 	if forwarded.BackendRequest {
-		request.Header.Set(systemone.BackendRequestHeader, "1")
+		request.Header.Set(headers.VSRSystemOneBackend, "1")
 	}
 	systemone.Handler(cfg, listener, retainedSystemOneInvoker(snapshot, router, listener.Name))(w, request)
 }

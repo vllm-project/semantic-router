@@ -1,9 +1,6 @@
 package headers
 
 import (
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -90,82 +87,5 @@ func TestResponseWarningsCodes(t *testing.T) {
 	}
 	if ResponseWarningJailbreak != "response_jailbreak" {
 		t.Errorf("ResponseWarningJailbreak = %q, want %q", ResponseWarningJailbreak, "response_jailbreak")
-	}
-}
-
-func TestVSRRoutingHeadersAreDocumented(t *testing.T) {
-	docPath := filepath.Join("..", "..", "..", "..", "website", "docs", "troubleshooting", "vsr-headers.md")
-	content, err := os.ReadFile(docPath)
-	if err != nil {
-		t.Fatalf("failed to read %s: %v", docPath, err)
-	}
-	doc := string(content)
-
-	headers := []string{
-		XSessionID,
-		VSRSkipProcessing,
-		VSRDebug,
-		VSRClientProtocol,
-		VSRUpstreamProtocol,
-		VSRProtocolWarnings,
-		VSRResponseWarnings,
-		RouterReplayID,
-		VSRSelectedCategory,
-		VSRSelectedRecipe,
-		VSRSelectedDecision,
-		VSRSelectedConfidence,
-		VSRAppliedUnknownPolicy,
-		VSRSelectedReasoning,
-		VSRSelectedModality,
-		VSRSelectedModel,
-		VSREffectiveInputTokens,
-		VSREffectiveMaxOutputTokens,
-		VSRSelectedAlgorithm,
-		VSRRoutingLatencyMs,
-		VSRCost,
-		VSRCostCurrency,
-		VSRSessionPhase,
-		VSRLearningMethods,
-		VSRLearningActions,
-		VSRLearningScopes,
-		VSRLearningReasons,
-		VSRInjectedSystemPrompt,
-		VSRPromptCacheAction,
-		VSRPromptCacheReason,
-		VSRPromptCacheInserted,
-		VSRPromptCachePreserved,
-		VSRMatchedKeywords,
-		VSRMatchedEmbeddings,
-		VSRMatchedDomains,
-		VSRMatchedFactCheck,
-		VSRMatchedUserFeedback,
-		VSRMatchedReask,
-		VSRMatchedPreference,
-		VSRMatchedLanguage,
-		VSRMatchedContext,
-		VSRContextTokenCount,
-		VSRMatchedStructure,
-		VSRMatchedComplexity,
-		VSRMatchedModality,
-		VSRMatchedAuthz,
-		VSRMatchedJailbreak,
-		VSRMatchedPII,
-		VSRMatchedKB,
-		VSRMatchedConversation,
-		VSRMatchedEvent,
-		VSRMatchedInputModality,
-		VSRMatchedDecisionModel,
-		VSRMatchedProjection,
-		VSRCacheHit,
-		VSRFastResponse,
-		VSRToolsStrategy,
-		VSRToolsConfidence,
-		VSRToolsLatencyMs,
-	}
-
-	for _, header := range headers {
-		if !strings.Contains(doc, header) {
-			t.Fatalf("%s should document public routing header %q", docPath, header)
-		}
 	}
 }

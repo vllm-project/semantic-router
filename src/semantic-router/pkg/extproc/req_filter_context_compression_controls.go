@@ -5,9 +5,8 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
-
-const defaultContextCompressionControlHeader = "x-vsr-compression-control"
 
 func applyContextCompressionRequestControls(
 	ctx *RequestContext,
@@ -35,7 +34,7 @@ func contextCompressionControlHeader(
 ) string {
 	header := strings.TrimSpace(controls.Header)
 	if header == "" {
-		return defaultContextCompressionControlHeader
+		return headers.VSRCompressionControl
 	}
 	return header
 }

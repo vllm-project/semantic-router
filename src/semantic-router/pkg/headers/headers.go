@@ -22,6 +22,10 @@ const (
 	// when router-derived session IDs are insufficient.
 	XSessionID = "x-session-id"
 
+	// XConversationID is the default header Router Learning protection reads a
+	// stable conversation identifier from.
+	XConversationID = "x-conversation-id"
+
 	// XClaudeCodeSessionID is the per-conversation UUID the Claude Code CLI
 	// emits on every /v1/messages request belonging to the same chat thread.
 	// The router mirrors this into RequestContext.SessionID with priority
@@ -56,6 +60,14 @@ const (
 	// decision on the request's protection key. Any non-empty value requests
 	// it; global.router.learning.protection.release.header can rename it.
 	VSRProtectionRelease = "x-vsr-protection-release"
+
+	// VSRCacheControl is the default header of the response_cache plugin's
+	// request controls; request_controls.header names another.
+	VSRCacheControl = "x-vsr-cache-control"
+
+	// VSRCompressionControl is the default header of the context_compression
+	// plugin's request controls; request_controls.header names another.
+	VSRCompressionControl = "x-vsr-compression-control"
 )
 
 // VSR Decision Tracking Headers
@@ -192,6 +204,9 @@ const (
 	// VSRCacheHit indicates that the response was served from cache.
 	// Value: "true"
 	VSRCacheHit = "x-vsr-cache-hit"
+
+	// VSRCacheSimilarity is the similarity score of the response-cache lookup.
+	VSRCacheSimilarity = "x-vsr-cache-similarity"
 
 	// Retention directive headers expose the matched decision's EMIT retention
 	// block to the inference pool / operators (issue #2009). They are emitted
@@ -465,6 +480,12 @@ const (
 	// VSROutcomePrincipal carries an opaque, server-attested identity used to
 	// isolate outcome-ingest rate limits. It is not persisted with the outcome.
 	VSROutcomePrincipal = "x-vsr-outcome-principal"
+
+	// VSRSystemOneBackend marks a System One request one Router forwards to
+	// another, so the receiving Router refuses to forward it again. It only
+	// restricts the receiving request; it never grants authorization or
+	// trusts a caller's identity.
+	VSRSystemOneBackend = "x-vsr-systemone-backend"
 )
 
 // Retired Looper hop headers. Looper hops run in process with their context
@@ -475,6 +496,7 @@ const (
 	VSRLooperIteration = "x-vsr-looper-iteration"
 	VSRLooperDecision  = "x-vsr-looper-decision"
 	VSRFusionDepth     = "x-vsr-fusion-depth"
+	VSRLooperSecret    = "x-vsr-looper-secret" // #nosec G101 -- header name, not a credential
 )
 
 // VSR Cross-Model KV Transfer Request Headers (issue #2976)

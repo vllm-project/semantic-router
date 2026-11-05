@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 )
 
@@ -48,11 +49,11 @@ func routingRequest(r *http.Request, body []byte, strip map[string]bool) *routin
 			header = append(header, routing.HeaderField{Name: lower, Value: value})
 		}
 	}
-	if !header.Has("x-forwarded-proto") {
-		header = append(header, routing.HeaderField{Name: "x-forwarded-proto", Value: scheme})
+	if !header.Has(headers.XForwardedProto) {
+		header = append(header, routing.HeaderField{Name: headers.XForwardedProto, Value: scheme})
 	}
-	if !header.Has("x-request-id") {
-		header = append(header, routing.HeaderField{Name: "x-request-id", Value: newRequestID()})
+	if !header.Has(headers.RequestID) {
+		header = append(header, routing.HeaderField{Name: headers.RequestID, Value: newRequestID()})
 	}
 	return &routing.Request{Header: header, Body: body}
 }
@@ -102,10 +103,10 @@ func newRequestID() string {
 // Envoy deployments. The native gateway has no such authenticator, so a
 // client-sent value is dropped before routing sees it.
 var identityHeaders = []string{
-	"x-authz-user-id", "x-authz-user-groups", "x-authz-team-id", "x-authz-tenant-id",
+	headers.AuthzUserID, headers.AuthzUserGroups, headers.AuthzTeamID, headers.AuthzTenantID,
 	// The deployment authenticator's gateway credential is an authentication
 	// output too, and a client must not supply its own.
-	"x-vsr-gateway-credential",
+	headers.VSRGatewayCredential,
 }
 
 func headerSet(names []string) map[string]bool {
