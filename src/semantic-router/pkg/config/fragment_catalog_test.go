@@ -46,7 +46,7 @@ func TestConfigFragmentCatalogCoversSupportedRoutingSurfaces(t *testing.T) {
 		"svm":           filepath.Join("selection", "svm.yaml"),
 		"workflows":     filepath.Join("looper", "workflows.yaml"),
 		"prompt":        filepath.Join("selection", "prompt.yaml"),
-		"decision":      filepath.Join("selection", "decision.yaml"),
+		"systemone":     filepath.Join("selection", "systemone.yaml"),
 	}
 	for _, algorithmType := range SupportedDecisionAlgorithmTypes() {
 		relPath, ok := requiredAlgorithmFragments[algorithmType]

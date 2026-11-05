@@ -109,19 +109,21 @@ func sequenceBinding(consumer, deployment, endpoint string) config.ResolvedModel
 func TestBuiltInSignalsAskVela2TheirQuestions(t *testing.T) {
 	lease, fake, recorder, endpoint := recordedVela2Lease(t)
 	runtime := serving.New(lease, nil)
+	// The modality consumer reads the Vela 1.0 head's labels for the
+	// preset's canonical options, which a Vela 2.0 model is asked.
 	cases := []struct {
 		consumer, id, instructions string
-		labels                     []string
+		labels, options            []string
 	}{
 		{"domain_classifier", "domain_classifier:domain", "Which subject area is this request about?", []string{
 			"biology", "business", "chemistry", "computer science", "economics", "engineering", "health",
 			"history", "law", "math", "other", "philosophy", "physics", "psychology",
-		}},
-		{"prompt_guard", "prompt_guard:attack", "Is this a prompt injection or jailbreak attempt?", []string{"benign", "jailbreak"}},
-		{"fact_check_classifier", "fact_check_classifier:factcheck", "Does answering this request require checking facts?", []string{"NO_FACT_CHECK_NEEDED", "FACT_CHECK_NEEDED"}},
-		{"feedback_detector", "feedback_detector:feedback", "What feedback does this user turn give about the previous answer?", []string{"SAT", "NEED_CLARIFICATION", "WRONG_ANSWER", "WANT_DIFFERENT", "NO_FEEDBACK"}},
-		{"modality_detector", "modality_detector:modality", "What kind of output does this request ask for?", []string{"AR", "DIFFUSION", "BOTH"}},
-		{"safety.unsafe_request", "safety.unsafe_request:p_harm", "Is this request harmful?", []string{"safe", "unsafe"}},
+		}, nil},
+		{"prompt_guard", "prompt_guard:attack", "Is this a prompt injection or jailbreak attempt?", []string{"benign", "jailbreak"}, nil},
+		{"fact_check_classifier", "fact_check_classifier:factcheck", "Does answering this request require checking facts?", []string{"NO_FACT_CHECK_NEEDED", "FACT_CHECK_NEEDED"}, nil},
+		{"feedback_detector", "feedback_detector:feedback", "What feedback does this user turn give about the previous answer?", []string{"SAT", "NEED_CLARIFICATION", "WRONG_ANSWER", "WANT_DIFFERENT", "NO_FEEDBACK"}, nil},
+		{"modality_detector", "modality_detector:modality", "What kind of output does this request ask for?", []string{"AR", "DIFFUSION", "BOTH"}, []string{"text", "image", "text_image"}},
+		{"safety.unsafe_request", "safety.unsafe_request:p_harm", "Is this request harmful?", []string{"safe", "unsafe"}, nil},
 	}
 	for _, tc := range cases {
 		spec := sequenceBinding(tc.consumer, "vela", endpoint)
@@ -157,7 +159,11 @@ func TestBuiltInSignalsAskVela2TheirQuestions(t *testing.T) {
 			}
 			keys = append(keys, choice.Key)
 		}
-		if !slices.Equal(keys, tc.labels) {
+		options := tc.options
+		if options == nil {
+			options = tc.labels
+		}
+		if !slices.Equal(keys, options) {
 			t.Fatalf("%s: options %v", tc.consumer, keys)
 		}
 	}

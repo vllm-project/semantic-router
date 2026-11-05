@@ -152,7 +152,7 @@ var modelBackedSignalTypes = map[string]bool{
 	config.SignalTypeJailbreak:    true,
 	config.SignalTypePII:          true,
 	config.SignalTypeClassifier:   true,
-	config.SignalTypeDecision:     true,
+	config.SignalTypeSystemOne:    true,
 	config.SignalTypeEmbedding:    true,
 	config.SignalTypeComplexity:   true,
 	config.SignalTypeKB:           true,

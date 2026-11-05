@@ -67,23 +67,36 @@ func decisionGroup(call *bundleCall) string {
 	return fmt.Sprintf("%s|%p", key, call.decision.cache)
 }
 
-// stateText is the fusion key of a call's state: its text, or its named parts.
+// stateText is the fusion key of a call's state: its text, or its named
+// parts, and the images and videos every question of it sees.
 func stateText(request Request) string {
-	if request.Parts == nil {
-		return "s" + request.State
-	}
-	names := make([]string, 0, len(request.Parts))
-	for name := range request.Parts {
-		names = append(names, name)
-	}
-	sort.Strings(names)
 	var key strings.Builder
-	key.WriteByte('p')
-	for _, name := range names {
-		for _, field := range []string{name, request.Parts[name]} {
-			key.WriteString(strconv.Itoa(len(field)))
-			key.WriteByte(':')
-			key.WriteString(field)
+	field := func(value string) {
+		key.WriteString(strconv.Itoa(len(value)))
+		key.WriteByte(':')
+		key.WriteString(value)
+	}
+	if request.Parts == nil {
+		key.WriteByte('s')
+		field(request.State)
+	} else {
+		names := make([]string, 0, len(request.Parts))
+		for name := range request.Parts {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		key.WriteByte('p')
+		key.WriteString(strconv.Itoa(len(names)))
+		for _, name := range names {
+			field(name)
+			field(request.Parts[name])
+		}
+	}
+	for _, media := range [][]string{request.Images, request.Videos} {
+		key.WriteByte('m')
+		key.WriteString(strconv.Itoa(len(media)))
+		for _, item := range media {
+			field(item)
 		}
 	}
 	return key.String()
@@ -235,7 +248,8 @@ func (t *bundleTask) prepareDecision() {
 		states := make(map[string]api.DecisionState, len(d.states)-1)
 		for index, state := range d.states[1:] {
 			state.name = strconv.Itoa(index + 1)
-			states[state.name] = api.DecisionState{State: state.calls[0].task.Decisions.State, Questions: state.questions()}
+			own := state.calls[0].task.Decisions
+			states[state.name] = api.DecisionState{State: own.State, Images: own.Images, Videos: own.Videos, Questions: state.questions()}
 		}
 		body.States = &states
 	}

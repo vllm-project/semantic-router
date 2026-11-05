@@ -76,7 +76,7 @@ var supportedProjectionInputTypes = []string{
 	SignalTypeConversation,
 	SignalTypeEvent,
 	SignalTypeInputModality,
-	SignalTypeDecision,
+	SignalTypeSystemOne,
 	ProjectionInputKBMetric,
 	SignalTypeProjection,
 }

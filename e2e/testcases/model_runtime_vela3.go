@@ -145,20 +145,25 @@ func checkModelRuntimeVela3Case(
 }
 
 // vela3Matches is what the Router lists for vela3-fast's answers
-// (classification.applyDecisionAnswer): a Noul signal's name when its answer
+// (classification.applySystemOneAnswer): a Noul signal's name when its answer
 // meets the predicate, and "signal:label" for each span label one of whose
-// spans meets it.
+// spans meets it, with the signal's name when one does.
 func vela3Matches(signals map[string]mrVela3Signal, answered modelruntime.DecisionsResponse) []string {
 	var want []string
 	for name, signal := range signals {
 		if signal.question.Type == "span" {
+			found := false
 			for _, label := range signal.question.Labels {
 				for _, span := range answered.Spans[name] {
 					if span.Label == label.Key && span.Probability >= signal.gte {
 						want = append(want, name+":"+label.Key)
+						found = true
 						break
 					}
 				}
+			}
+			if found {
+				want = append(want, name)
 			}
 			continue
 		}
@@ -180,7 +185,7 @@ func vela3DecisionSignals(valuesPath string) (map[string]mrVela3Signal, error) {
 		Config struct {
 			Routing struct {
 				Signals struct {
-					Decision []struct {
+					SystemOne []struct {
 						Name     string `yaml:"name"`
 						Question struct {
 							Type         string                `yaml:"type"`
@@ -190,7 +195,7 @@ func vela3DecisionSignals(valuesPath string) (map[string]mrVela3Signal, error) {
 						Predicate struct {
 							GTE float64 `yaml:"gte"`
 						} `yaml:"predicate"`
-					} `yaml:"decision"`
+					} `yaml:"systemone"`
 				} `yaml:"signals"`
 			} `yaml:"routing"`
 		} `yaml:"config"`
@@ -199,7 +204,7 @@ func vela3DecisionSignals(valuesPath string) (map[string]mrVela3Signal, error) {
 		return nil, fmt.Errorf("%s: %w", valuesPath, err)
 	}
 	signals := map[string]mrVela3Signal{}
-	for _, rule := range values.Config.Routing.Signals.Decision {
+	for _, rule := range values.Config.Routing.Signals.SystemOne {
 		signals[rule.Name] = mrVela3Signal{
 			question: modelruntime.Question{Type: rule.Question.Type, Instructions: rule.Question.Instructions, Labels: rule.Question.Labels},
 			gte:      rule.Predicate.GTE,

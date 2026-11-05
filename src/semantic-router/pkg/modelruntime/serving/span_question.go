@@ -11,54 +11,67 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/presets"
 )
 
-// A decision model that defines a ready-made span question (Vela 2.0's pii
-// and halu presets, answered by its router span head) serves the PII and
-// hallucination bindings through /v1/decisions instead of a classify head.
-// The binding asks the preset and reads its spans as token_spans.v1, so its
-// consumer is unchanged. In a request stage the question travels in the same
-// call as the stage's other questions to the deployment (see
-// modelservice.Bundle).
+// A decision model serves the PII and hallucination bindings through
+// /v1/decisions instead of a classify head: it answers the consumer's span
+// preset, as the model's own ready-made question when its card defines it
+// (the pii and halu questions the Vela 2.0 and Vela 3.0 families were
+// trained on, answered by their router span head; presets.Binding
+// ModelPreset), else as the preset's canonical span question. The binding
+// reads the spans as token_spans.v1, so its consumer is unchanged. In a
+// request stage the question travels in the same call as the stage's other
+// questions to the deployment (see modelservice.Bundle).
 
-// spanPresets names the ready-made question each span consumer asks.
-var spanPresets = map[string]string{
-	"pii_classifier":         "pii",
-	"hallucination_detector": "halu",
+// spanTask is the span preset a consumer asks, in its stage, the built-in
+// task that asks it and the ready-made question a model defines for it.
+type spanTask struct {
+	preset, stage, task, modelPreset string
 }
 
-// spanQuestion is a binding's preset and the ID its question carries in a
-// decisions call. A decision signal's name never contains ':', so the ID
-// cannot collide with one of the signals asked in the same call.
+var spanTasks = map[string]spanTask{
+	"pii_classifier":         {presets.PII, presets.StageRequest, "pii_spans", "pii"},
+	"hallucination_detector": {presets.Hallucination, presets.StageResponse, "hallucination_spans", "halu"},
+}
+
+// spanQuestion is a binding's model preset and the ID its question carries
+// in a decisions call: the consumer's name, a ':' and the preset, never a
+// systemone rule's ID (systemone:<rule>).
 func spanQuestion(spec config.ResolvedModelBinding, preset string) modelservice.Question {
 	return modelservice.Question{ID: spec.Name + ":" + preset, Preset: preset}
 }
 
-// spanPreset returns the ready-made question a binding asks when its
-// deployment's model answers decisions rather than classify heads.
+// spanPreset reports whether a binding asks a span preset of a deployment
+// whose model answers decisions rather than classify heads, and the model's
+// own preset question it asks, empty for the canonical one.
 func spanPreset(spec config.ResolvedModelBinding, card modelservice.ModelCard) (string, bool) {
-	preset, ok := spanPresets[spec.Name]
-	return preset, ok && card.Serves("decisions") && (spec.Binding.Head == "" || spec.Binding.Head == config.DecisionSpanHeadRouter)
+	task, ok := spanTasks[spec.Name]
+	if !ok || !card.Serves("decisions") || (spec.Binding.Head != "" && spec.Binding.Head != config.SystemOneSpanHeadRouter) {
+		return "", false
+	}
+	if card.HasPreset(task.modelPreset) {
+		return task.modelPreset, true
+	}
+	return "", true
 }
 
 // prepareSpanQuestion checks a span binding against its deployment's card:
-// the model must define the preset, which its router span head answers, and
-// a decision model reads its whole input, so the binding sets no head other
-// than router, no label mapping and, on a declared deployment, no input
-// budget.
+// the model must answer span questions or define the preset its family was
+// trained on, which its router span head answers, and a decision model reads
+// its whole input, so the binding sets no head other than router, no label
+// mapping and, on a declared deployment, no input budget.
 func (r *Runtime) prepareSpanQuestion(ctx context.Context, spec config.ResolvedModelBinding, card modelservice.ModelCard, preset string) (*target, binding.Capability, modelservice.Decider, error) {
 	decider, ok := r.services.(modelservice.Decider)
 	if !ok {
 		return nil, binding.Capability{}, nil, fmt.Errorf("%w: the model runtime services of deployment %q answer no decisions", binding.ErrCapability, spec.Binding.Deployment)
 	}
-	if !card.HasPreset(preset) && !card.Answers("span") {
-		return nil, binding.Capability{}, nil, fmt.Errorf("%w: deployment %q serves %s, which has no native span capability or ready-made %s question; bind a token head or a model that supports the %s task", binding.ErrCapability, spec.Binding.Deployment, card.ID, preset, preset)
-	}
-	if spec.Binding.Head != "" && spec.Binding.Head != config.DecisionSpanHeadRouter {
-		return nil, binding.Capability{}, nil, fmt.Errorf("%w: the %s question of deployment %q is answered by its router span head; set head to router or remove it", binding.ErrCapability, preset, spec.Binding.Deployment)
+	task := spanTasks[spec.Name]
+	if preset == "" && !card.Answers("span") {
+		return nil, binding.Capability{}, nil, fmt.Errorf("%w: deployment %q serves %s, which answers no span questions and defines no ready-made %s question; bind a token head or a span-capable model", binding.ErrCapability, spec.Binding.Deployment, card.ID, task.preset)
 	}
 	if spec.Binding.MappingPath != "" {
-		return nil, binding.Capability{}, nil, fmt.Errorf("%w: the %s question of deployment %q names its own labels; remove mapping_path", binding.ErrCapability, preset, spec.Binding.Deployment)
+		return nil, binding.Capability{}, nil, fmt.Errorf("%w: the %s question of deployment %q names its own labels; remove mapping_path", binding.ErrCapability, task.preset, spec.Binding.Deployment)
 	}
 	scan, err := questionScanBudget(spec, card)
 	if err != nil {
@@ -95,7 +108,7 @@ func askSpans(ctx context.Context, decider modelservice.Decider, deployment stri
 		return nil, fmt.Errorf("%w: the %s question has no answer", binding.ErrInvalidResult, question.Preset)
 	case answer.Error != "":
 		return nil, itemError(answer.Error)
-	case answer.Type != config.DecisionQuestionSpan:
+	case answer.Type != config.SystemOneQuestionSpan:
 		return nil, fmt.Errorf("%w: the %s question of deployment %q is a %s question, not a span question", binding.ErrCapability, question.Preset, deployment, answer.Type)
 	}
 	spans := append([]modelservice.Span(nil), answer.Spans...)
@@ -112,27 +125,30 @@ func spanResult(text string, spans []modelservice.Span) (tasks.TokenClassificati
 	return tasks.TokenClassificationResult{Entities: entities, ScoresAvailable: &scored}, nil
 }
 
-// spanTokens binds a text span consumer (PII) to the deployment's preset.
+// spanBindingQuestion is the question a span binding asks: the model's own
+// preset question, or the canonical question of the consumer's span preset
+// under the consumer's ID.
+func spanBindingQuestion(spec config.ResolvedModelBinding, preset string, capability *binding.Capability) modelservice.Question {
+	task := spanTasks[spec.Name]
+	question := spanQuestion(spec, preset)
+	if preset == "" {
+		definition, _ := modelservice.BuiltinTask(task.task)
+		question = definition.Question
+		question.ID = spec.Name + ":" + task.task
+		capability.Preset, capability.Question = "", task.task
+	}
+	question.TaskID, question.Stage = task.task, task.stage
+	return question
+}
+
+// spanTokens binds a text span consumer (PII) to the deployment's span
+// question.
 func (r *Runtime) spanTokens(ctx context.Context, spec config.ResolvedModelBinding, card modelservice.ModelCard, preset string) (*binding.Resolved[string, tasks.TokenClassificationResult], error) {
 	t, capability, decider, err := r.prepareSpanQuestion(ctx, spec, card, preset)
 	if err != nil {
 		return nil, err
 	}
-	question := spanQuestion(spec, preset)
-	if !card.HasPreset(preset) {
-		taskID := "pii_spans"
-		if spec.Name == "hallucination_detector" {
-			taskID = "hallucination_spans"
-		}
-		definition, _ := modelservice.BuiltinTask(taskID)
-		question = definition.Question
-		question.ID = spec.Name + ":" + taskID
-		capability.Preset, capability.Question = "", taskID
-	}
-	question.TaskID, question.Stage = "pii_spans", "request"
-	if spec.Name == "hallucination_detector" {
-		question.TaskID, question.Stage = "hallucination_spans", "response"
-	}
+	question := spanBindingQuestion(spec, preset, &capability)
 	return publish(ctx, r.tokens, t, capability, func(ctx context.Context, _ io.Closer, text string) (tasks.TokenClassificationResult, error) {
 		spans, err := askSpans(ctx, decider, t.deployment, readPolicy(modelservice.Request{State: text, Questions: []modelservice.Question{question}}, true, t.scan), card)
 		if err != nil {
@@ -142,29 +158,15 @@ func (r *Runtime) spanTokens(ctx context.Context, spec config.ResolvedModelBindi
 	}, "warmup")
 }
 
-// spanGrounded binds the hallucination consumer to the deployment's preset:
-// the state's request, context and answer are the question, the grounding
-// context and the answer, and the spans refer to the answer.
+// spanGrounded binds the hallucination consumer to the deployment's span
+// question: the state's request, context and answer are the question, the
+// grounding context and the answer, and the spans refer to the answer.
 func (r *Runtime) spanGrounded(ctx context.Context, spec config.ResolvedModelBinding, card modelservice.ModelCard, preset string) (*binding.Resolved[tasks.GroundedTextRequest, tasks.TokenClassificationResult], error) {
 	t, capability, decider, err := r.prepareSpanQuestion(ctx, spec, card, preset)
 	if err != nil {
 		return nil, err
 	}
-	question := spanQuestion(spec, preset)
-	if !card.HasPreset(preset) {
-		taskID := "pii_spans"
-		if spec.Name == "hallucination_detector" {
-			taskID = "hallucination_spans"
-		}
-		definition, _ := modelservice.BuiltinTask(taskID)
-		question = definition.Question
-		question.ID = spec.Name + ":" + taskID
-		capability.Preset, capability.Question = "", taskID
-	}
-	question.TaskID, question.Stage = "pii_spans", "request"
-	if spec.Name == "hallucination_detector" {
-		question.TaskID, question.Stage = "hallucination_spans", "response"
-	}
+	question := spanBindingQuestion(spec, preset, &capability)
 	warmup := tasks.GroundedTextRequest{Context: "A warmup sentence.", Question: "What is this?", Answer: "A sentence."}
 	return publish(ctx, r.grounded, t, capability, func(ctx context.Context, _ io.Closer, input tasks.GroundedTextRequest) (tasks.TokenClassificationResult, error) {
 		parts := map[string]string{"context": input.Context, "answer": input.Answer}

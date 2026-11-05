@@ -292,7 +292,7 @@ export const X_VSR_MATCHED_CONTEXT = 'x-vsr-matched-context'
 /** Matched `conversation` rules. Surface: debug. */
 export const X_VSR_MATCHED_CONVERSATION = 'x-vsr-matched-conversation'
 
-/** Matched decision-model signals: rule names, `rule:choice` for choices and `rule:label` for labels. Surface: debug. */
+/** Matched `systemone` rules: rule names, `rule:choice` for choices and `rule:label` for labels. Surface: debug. */
 export const X_VSR_MATCHED_DECISION_MODEL = 'x-vsr-matched-decision-model'
 
 /** Matched `domain` rules. Surface: debug. */

@@ -98,7 +98,7 @@ func NewRemoteSystemOne(cfg *config.RouterConfig) (*RemoteSystemOne, error) {
 		transport := deployment
 		transport.TimeoutMs = 0
 		client, err := connector.ForDeployment(transport, connector.Options{
-			AttemptTimeout: time.Duration(config.MaxDecisionTimeoutMs) * time.Millisecond, MaxRetries: 0,
+			AttemptTimeout: time.Duration(config.MaxSystemOneTimeoutMs) * time.Millisecond, MaxRetries: 0,
 			MaxRequestBytes: systemOneRequestLimit, MaxResponseBytes: SystemOneResponseLimit, MaxErrorBytes: SystemOneResponseLimit,
 		})
 		if err != nil {

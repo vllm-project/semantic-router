@@ -35,7 +35,7 @@
                     },
                     "type": "choice"
                   },
-                  "effort": {
+                  "systemone:effort": {
                     "confidence": 0,
                     "legend": {
                       "0": "A one-line answer",
@@ -50,7 +50,7 @@
                     "score": 1.0544021,
                     "type": "score"
                   },
-                  "entities": {
+                  "systemone:entities": {
                     "noul": 0.968253,
                     "type": "noul"
                   },
@@ -99,7 +99,7 @@
                     },
                     "type": "choice"
                   },
-                  "tone": {
+                  "systemone:tone": {
                     "abstain_probability": 0.2769098,
                     "choice": "formal",
                     "confidence": 0.2873458,
@@ -110,29 +110,29 @@
                     },
                     "type": "choice"
                   },
-                  "topics.account": {
+                  "systemone:topics.account": {
                     "noul": 0.8839412,
                     "type": "noul"
                   },
-                  "topics.billing": {
+                  "systemone:topics.billing": {
                     "noul": 0.0002253,
                     "type": "noul"
                   },
-                  "topics.medication": {
+                  "systemone:topics.medication": {
                     "noul": 0.0006356,
                     "type": "noul"
                   },
-                  "topics.shipping": {
+                  "systemone:topics.shipping": {
                     "noul": 0.0001912,
                     "type": "noul"
                   },
-                  "urgent": {
+                  "systemone:urgent": {
                     "noul": 0.3146498,
                     "type": "noul"
                   }
                 },
                 "sets": {
-                  "topics": {
+                  "systemone:topics": {
                     "probabilities": {
                       "account": 0.8839412,
                       "billing": 0.0002253,
@@ -145,7 +145,7 @@
                   }
                 },
                 "spans": {
-                  "entities": [
+                  "systemone:entities": [
                     {
                       "end": 80,
                       "label": "organization",
@@ -179,9 +179,9 @@
                   ]
                 },
                 "thresholds": {
-                  "entities": 0.5,
+                  "systemone:entities": 0.5,
                   "pii_classifier:pii": 0.6990786,
-                  "topics": 0.3
+                  "systemone:topics": 0.3
                 },
                 "usage": {
                   "input_tokens": 788,
@@ -219,7 +219,7 @@
                     },
                     "type": "choice"
                   },
-                  "effort": {
+                  "systemone:effort": {
                     "confidence": 0.7919684,
                     "legend": {
                       "0": "A one-line answer",
@@ -234,7 +234,7 @@
                     "score": 0.1386877,
                     "type": "score"
                   },
-                  "entities": {
+                  "systemone:entities": {
                     "noul": 0.0436889,
                     "type": "noul"
                   },
@@ -283,7 +283,7 @@
                     },
                     "type": "choice"
                   },
-                  "tone": {
+                  "systemone:tone": {
                     "abstain_probability": 0.0054187,
                     "choice": "casual",
                     "confidence": 0.5917007,
@@ -294,29 +294,29 @@
                     },
                     "type": "choice"
                   },
-                  "topics.account": {
+                  "systemone:topics.account": {
                     "noul": 0.0000145,
                     "type": "noul"
                   },
-                  "topics.billing": {
+                  "systemone:topics.billing": {
                     "noul": 0.0000018,
                     "type": "noul"
                   },
-                  "topics.medication": {
+                  "systemone:topics.medication": {
                     "noul": 0.0000248,
                     "type": "noul"
                   },
-                  "topics.shipping": {
+                  "systemone:topics.shipping": {
                     "noul": 0.0000061,
                     "type": "noul"
                   },
-                  "urgent": {
+                  "systemone:urgent": {
                     "noul": 0.2157964,
                     "type": "noul"
                   }
                 },
                 "sets": {
-                  "topics": {
+                  "systemone:topics": {
                     "probabilities": {
                       "account": 0.0000145,
                       "billing": 0.0000018,
@@ -327,13 +327,13 @@
                   }
                 },
                 "spans": {
-                  "entities": [],
+                  "systemone:entities": [],
                   "pii_classifier:pii": []
                 },
                 "thresholds": {
-                  "entities": 0.5,
+                  "systemone:entities": 0.5,
                   "pii_classifier:pii": 0.75,
-                  "topics": 0.3
+                  "systemone:topics": 0.3
                 },
                 "usage": {
                   "input_tokens": 758,
@@ -456,7 +456,7 @@
                     },
                     "type": "choice"
                   },
-                  "effort": {
+                  "systemone:effort": {
                     "confidence": 0.7225216,
                     "legend": {
                       "0": "A one-line answer",
@@ -471,7 +471,7 @@
                     "score": 0.1849856,
                     "type": "score"
                   },
-                  "entities": {
+                  "systemone:entities": {
                     "noul": 0.0000258,
                     "type": "noul"
                   },
@@ -533,7 +533,7 @@
                     },
                     "type": "choice"
                   },
-                  "tone": {
+                  "systemone:tone": {
                     "abstain_probability": 0.9994868,
                     "choice": "formal",
                     "confidence": 0.1605314,
@@ -544,29 +544,29 @@
                     },
                     "type": "choice"
                   },
-                  "topics.account": {
+                  "systemone:topics.account": {
                     "noul": 0.0000347,
                     "type": "noul"
                   },
-                  "topics.billing": {
+                  "systemone:topics.billing": {
                     "noul": 0.0001161,
                     "type": "noul"
                   },
-                  "topics.medication": {
+                  "systemone:topics.medication": {
                     "noul": 0.0000161,
                     "type": "noul"
                   },
-                  "topics.shipping": {
+                  "systemone:topics.shipping": {
                     "noul": 0.0000118,
                     "type": "noul"
                   },
-                  "urgent": {
+                  "systemone:urgent": {
                     "noul": 0.0389055,
                     "type": "noul"
                   }
                 },
                 "sets": {
-                  "topics": {
+                  "systemone:topics": {
                     "probabilities": {
                       "account": 0.0000347,
                       "billing": 0.0001161,
@@ -577,13 +577,13 @@
                   }
                 },
                 "spans": {
-                  "entities": [],
+                  "systemone:entities": [],
                   "pii_classifier:pii": []
                 },
                 "thresholds": {
-                  "entities": 0.5,
+                  "systemone:entities": 0.5,
                   "pii_classifier:pii": 0.75,
-                  "topics": 0.3
+                  "systemone:topics": 0.3
                 },
                 "usage": {
                   "input_tokens": 857,
@@ -621,7 +621,7 @@
                     },
                     "type": "choice"
                   },
-                  "effort": {
+                  "systemone:effort": {
                     "confidence": 0.5635336,
                     "legend": {
                       "0": "A one-line answer",
@@ -636,7 +636,7 @@
                     "score": 0.2909776,
                     "type": "score"
                   },
-                  "entities": {
+                  "systemone:entities": {
                     "noul": 0.0102937,
                     "type": "noul"
                   },
@@ -685,7 +685,7 @@
                     },
                     "type": "choice"
                   },
-                  "tone": {
+                  "systemone:tone": {
                     "abstain_probability": 0.0021728,
                     "choice": "upset",
                     "confidence": 0.5253349,
@@ -696,29 +696,29 @@
                     },
                     "type": "choice"
                   },
-                  "topics.account": {
+                  "systemone:topics.account": {
                     "noul": 0.0031265,
                     "type": "noul"
                   },
-                  "topics.billing": {
+                  "systemone:topics.billing": {
                     "noul": 0.0033916,
                     "type": "noul"
                   },
-                  "topics.medication": {
+                  "systemone:topics.medication": {
                     "noul": 0.0085544,
                     "type": "noul"
                   },
-                  "topics.shipping": {
+                  "systemone:topics.shipping": {
                     "noul": 0.0003966,
                     "type": "noul"
                   },
-                  "urgent": {
+                  "systemone:urgent": {
                     "noul": 0.2234024,
                     "type": "noul"
                   }
                 },
                 "sets": {
-                  "topics": {
+                  "systemone:topics": {
                     "probabilities": {
                       "account": 0.0031265,
                       "billing": 0.0033916,
@@ -729,13 +729,13 @@
                   }
                 },
                 "spans": {
-                  "entities": [],
+                  "systemone:entities": [],
                   "pii_classifier:pii": []
                 },
                 "thresholds": {
-                  "entities": 0.5,
+                  "systemone:entities": 0.5,
                   "pii_classifier:pii": 0.75,
-                  "topics": 0.3
+                  "systemone:topics": 0.3
                 },
                 "usage": {
                   "input_tokens": 762,
@@ -819,7 +819,7 @@
                     },
                     "type": "choice"
                   },
-                  "effort": {
+                  "systemone:effort": {
                     "confidence": 0.746937,
                     "legend": {
                       "0": "A one-line answer",
@@ -834,7 +834,7 @@
                     "score": 0.1687087,
                     "type": "score"
                   },
-                  "entities": {
+                  "systemone:entities": {
                     "noul": 0.0687582,
                     "type": "noul"
                   },
@@ -883,7 +883,7 @@
                     },
                     "type": "choice"
                   },
-                  "tone": {
+                  "systemone:tone": {
                     "abstain_probability": 0.0051021,
                     "choice": "formal",
                     "confidence": 0.7125004,
@@ -894,29 +894,29 @@
                     },
                     "type": "choice"
                   },
-                  "topics.account": {
+                  "systemone:topics.account": {
                     "noul": 0.0001945,
                     "type": "noul"
                   },
-                  "topics.billing": {
+                  "systemone:topics.billing": {
                     "noul": 0.0001624,
                     "type": "noul"
                   },
-                  "topics.medication": {
+                  "systemone:topics.medication": {
                     "noul": 0.0000644,
                     "type": "noul"
                   },
-                  "topics.shipping": {
+                  "systemone:topics.shipping": {
                     "noul": 0.0003663,
                     "type": "noul"
                   },
-                  "urgent": {
+                  "systemone:urgent": {
                     "noul": 0.4009895,
                     "type": "noul"
                   }
                 },
                 "sets": {
-                  "topics": {
+                  "systemone:topics": {
                     "probabilities": {
                       "account": 0.0001945,
                       "billing": 0.0001624,
@@ -927,13 +927,13 @@
                   }
                 },
                 "spans": {
-                  "entities": [],
+                  "systemone:entities": [],
                   "pii_classifier:pii": []
                 },
                 "thresholds": {
-                  "entities": 0.5,
+                  "systemone:entities": 0.5,
                   "pii_classifier:pii": 0.75,
-                  "topics": 0.3
+                  "systemone:topics": 0.3
                 },
                 "usage": {
                   "input_tokens": 764,
@@ -971,7 +971,7 @@
                     },
                     "type": "choice"
                   },
-                  "effort": {
+                  "systemone:effort": {
                     "confidence": 0.2338778,
                     "legend": {
                       "0": "A one-line answer",
@@ -986,7 +986,7 @@
                     "score": 0.5107482,
                     "type": "score"
                   },
-                  "entities": {
+                  "systemone:entities": {
                     "noul": 0.0078891,
                     "type": "noul"
                   },
@@ -1035,7 +1035,7 @@
                     },
                     "type": "choice"
                   },
-                  "tone": {
+                  "systemone:tone": {
                     "abstain_probability": 0.8187107,
                     "choice": "casual",
                     "confidence": 0.0750464,
@@ -1046,29 +1046,29 @@
                     },
                     "type": "choice"
                   },
-                  "topics.account": {
+                  "systemone:topics.account": {
                     "noul": 0.0001107,
                     "type": "noul"
                   },
-                  "topics.billing": {
+                  "systemone:topics.billing": {
                     "noul": 0.0000262,
                     "type": "noul"
                   },
-                  "topics.medication": {
+                  "systemone:topics.medication": {
                     "noul": 0.000366,
                     "type": "noul"
                   },
-                  "topics.shipping": {
+                  "systemone:topics.shipping": {
                     "noul": 0.0000391,
                     "type": "noul"
                   },
-                  "urgent": {
+                  "systemone:urgent": {
                     "noul": 0.2171115,
                     "type": "noul"
                   }
                 },
                 "sets": {
-                  "topics": {
+                  "systemone:topics": {
                     "probabilities": {
                       "account": 0.0001107,
                       "billing": 0.0000262,
@@ -1079,13 +1079,13 @@
                   }
                 },
                 "spans": {
-                  "entities": [],
+                  "systemone:entities": [],
                   "pii_classifier:pii": []
                 },
                 "thresholds": {
-                  "entities": 0.5,
+                  "systemone:entities": 0.5,
                   "pii_classifier:pii": 0.75,
-                  "topics": 0.3
+                  "systemone:topics": 0.3
                 },
                 "usage": {
                   "input_tokens": 772,
@@ -1123,7 +1123,7 @@
                     },
                     "type": "choice"
                   },
-                  "effort": {
+                  "systemone:effort": {
                     "confidence": 0.6896809,
                     "legend": {
                       "0": "A one-line answer",
@@ -1138,7 +1138,7 @@
                     "score": 0.2068794,
                     "type": "score"
                   },
-                  "entities": {
+                  "systemone:entities": {
                     "noul": 0.0047215,
                     "type": "noul"
                   },
@@ -1187,7 +1187,7 @@
                     },
                     "type": "choice"
                   },
-                  "tone": {
+                  "systemone:tone": {
                     "abstain_probability": 0.0047234,
                     "choice": "formal",
                     "confidence": 0.1865665,
@@ -1198,29 +1198,29 @@
                     },
                     "type": "choice"
                   },
-                  "topics.account": {
+                  "systemone:topics.account": {
                     "noul": 0.0001648,
                     "type": "noul"
                   },
-                  "topics.billing": {
+                  "systemone:topics.billing": {
                     "noul": 0.0001331,
                     "type": "noul"
                   },
-                  "topics.medication": {
+                  "systemone:topics.medication": {
                     "noul": 0.0001846,
                     "type": "noul"
                   },
-                  "topics.shipping": {
+                  "systemone:topics.shipping": {
                     "noul": 0.0000295,
                     "type": "noul"
                   },
-                  "urgent": {
+                  "systemone:urgent": {
                     "noul": 0.2991833,
                     "type": "noul"
                   }
                 },
                 "sets": {
-                  "topics": {
+                  "systemone:topics": {
                     "probabilities": {
                       "account": 0.0001648,
                       "billing": 0.0001331,
@@ -1231,13 +1231,13 @@
                   }
                 },
                 "spans": {
-                  "entities": [],
+                  "systemone:entities": [],
                   "pii_classifier:pii": []
                 },
                 "thresholds": {
-                  "entities": 0.5,
+                  "systemone:entities": 0.5,
                   "pii_classifier:pii": 0.75,
-                  "topics": 0.3
+                  "systemone:topics": 0.3
                 },
                 "usage": {
                   "input_tokens": 764,
@@ -1275,7 +1275,7 @@
                     },
                     "type": "choice"
                   },
-                  "effort": {
+                  "systemone:effort": {
                     "confidence": 0.515164,
                     "legend": {
                       "0": "A one-line answer",
@@ -1290,7 +1290,7 @@
                     "score": 0.323224,
                     "type": "score"
                   },
-                  "entities": {
+                  "systemone:entities": {
                     "noul": 0.0046675,
                     "type": "noul"
                   },
@@ -1339,7 +1339,7 @@
                     },
                     "type": "choice"
                   },
-                  "tone": {
+                  "systemone:tone": {
                     "abstain_probability": 0.0395225,
                     "choice": "upset",
                     "confidence": 0.3453495,
@@ -1350,29 +1350,29 @@
                     },
                     "type": "choice"
                   },
-                  "topics.account": {
+                  "systemone:topics.account": {
                     "noul": 0.0017885,
                     "type": "noul"
                   },
-                  "topics.billing": {
+                  "systemone:topics.billing": {
                     "noul": 0.0002999,
                     "type": "noul"
                   },
-                  "topics.medication": {
+                  "systemone:topics.medication": {
                     "noul": 0.8920261,
                     "type": "noul"
                   },
-                  "topics.shipping": {
+                  "systemone:topics.shipping": {
                     "noul": 0.0004389,
                     "type": "noul"
                   },
-                  "urgent": {
+                  "systemone:urgent": {
                     "noul": 0.4327633,
                     "type": "noul"
                   }
                 },
                 "sets": {
-                  "topics": {
+                  "systemone:topics": {
                     "probabilities": {
                       "account": 0.0017885,
                       "billing": 0.0002999,
@@ -1385,7 +1385,7 @@
                   }
                 },
                 "spans": {
-                  "entities": [],
+                  "systemone:entities": [],
                   "pii_classifier:pii": [
                     {
                       "end": 86,
@@ -1397,9 +1397,9 @@
                   ]
                 },
                 "thresholds": {
-                  "entities": 0.5,
+                  "systemone:entities": 0.5,
                   "pii_classifier:pii": 0.3968089,
-                  "topics": 0.3
+                  "systemone:topics": 0.3
                 },
                 "usage": {
                   "input_tokens": 808,
@@ -1437,7 +1437,7 @@
                     },
                     "type": "choice"
                   },
-                  "effort": {
+                  "systemone:effort": {
                     "confidence": 0,
                     "legend": {
                       "0": "A one-line answer",
@@ -1452,7 +1452,7 @@
                     "score": 1.0284051,
                     "type": "score"
                   },
-                  "entities": {
+                  "systemone:entities": {
                     "noul": 0.8653448,
                     "type": "noul"
                   },
@@ -1501,7 +1501,7 @@
                     },
                     "type": "choice"
                   },
-                  "tone": {
+                  "systemone:tone": {
                     "abstain_probability": 0.6203967,
                     "choice": "formal",
                     "confidence": 0.5846089,
@@ -1512,29 +1512,29 @@
                     },
                     "type": "choice"
                   },
-                  "topics.account": {
+                  "systemone:topics.account": {
                     "noul": 0.0050291,
                     "type": "noul"
                   },
-                  "topics.billing": {
+                  "systemone:topics.billing": {
                     "noul": 0.0011861,
                     "type": "noul"
                   },
-                  "topics.medication": {
+                  "systemone:topics.medication": {
                     "noul": 0.0008237,
                     "type": "noul"
                   },
-                  "topics.shipping": {
+                  "systemone:topics.shipping": {
                     "noul": 0.5392284,
                     "type": "noul"
                   },
-                  "urgent": {
+                  "systemone:urgent": {
                     "noul": 0.4892863,
                     "type": "noul"
                   }
                 },
                 "sets": {
-                  "topics": {
+                  "systemone:topics": {
                     "probabilities": {
                       "account": 0.0050291,
                       "billing": 0.0011861,
@@ -1547,7 +1547,7 @@
                   }
                 },
                 "spans": {
-                  "entities": [
+                  "systemone:entities": [
                     {
                       "end": 11,
                       "label": "location",
@@ -1581,9 +1581,9 @@
                   ]
                 },
                 "thresholds": {
-                  "entities": 0.5,
+                  "systemone:entities": 0.5,
                   "pii_classifier:pii": 0.4374654,
-                  "topics": 0.3
+                  "systemone:topics": 0.3
                 },
                 "usage": {
                   "input_tokens": 804,
@@ -1621,7 +1621,7 @@
                     },
                     "type": "choice"
                   },
-                  "effort": {
+                  "systemone:effort": {
                     "confidence": 0.6565562,
                     "legend": {
                       "0": "A one-line answer",
@@ -1636,7 +1636,7 @@
                     "score": 0.2289626,
                     "type": "score"
                   },
-                  "entities": {
+                  "systemone:entities": {
                     "noul": 0.0121941,
                     "type": "noul"
                   },
@@ -1685,7 +1685,7 @@
                     },
                     "type": "choice"
                   },
-                  "tone": {
+                  "systemone:tone": {
                     "abstain_probability": 0.0058651,
                     "choice": "upset",
                     "confidence": 0.140202,
@@ -1696,29 +1696,29 @@
                     },
                     "type": "choice"
                   },
-                  "topics.account": {
+                  "systemone:topics.account": {
                     "noul": 0.0114044,
                     "type": "noul"
                   },
-                  "topics.billing": {
+                  "systemone:topics.billing": {
                     "noul": 0.0005146,
                     "type": "noul"
                   },
-                  "topics.medication": {
+                  "systemone:topics.medication": {
                     "noul": 0.0034415,
                     "type": "noul"
                   },
-                  "topics.shipping": {
+                  "systemone:topics.shipping": {
                     "noul": 0.0004358,
                     "type": "noul"
                   },
-                  "urgent": {
+                  "systemone:urgent": {
                     "noul": 0.3846523,
                     "type": "noul"
                   }
                 },
                 "sets": {
-                  "topics": {
+                  "systemone:topics": {
                     "probabilities": {
                       "account": 0.0114044,
                       "billing": 0.0005146,
@@ -1729,13 +1729,13 @@
                   }
                 },
                 "spans": {
-                  "entities": [],
+                  "systemone:entities": [],
                   "pii_classifier:pii": []
                 },
                 "thresholds": {
-                  "entities": 0.5,
+                  "systemone:entities": 0.5,
                   "pii_classifier:pii": 0.75,
-                  "topics": 0.3
+                  "systemone:topics": 0.3
                 },
                 "usage": {
                   "input_tokens": 768,
@@ -1773,7 +1773,7 @@
                     },
                     "type": "choice"
                   },
-                  "effort": {
+                  "systemone:effort": {
                     "confidence": 0.3838959,
                     "legend": {
                       "0": "A one-line answer",
@@ -1788,7 +1788,7 @@
                     "score": 0.4107361,
                     "type": "score"
                   },
-                  "entities": {
+                  "systemone:entities": {
                     "noul": 0.8505915,
                     "type": "noul"
                   },
@@ -1837,7 +1837,7 @@
                     },
                     "type": "choice"
                   },
-                  "tone": {
+                  "systemone:tone": {
                     "abstain_probability": 0.0139404,
                     "choice": "formal",
                     "confidence": 0.3011617,
@@ -1848,29 +1848,29 @@
                     },
                     "type": "choice"
                   },
-                  "topics.account": {
+                  "systemone:topics.account": {
                     "noul": 0.0093793,
                     "type": "noul"
                   },
-                  "topics.billing": {
+                  "systemone:topics.billing": {
                     "noul": 0.5157702,
                     "type": "noul"
                   },
-                  "topics.medication": {
+                  "systemone:topics.medication": {
                     "noul": 0.002868,
                     "type": "noul"
                   },
-                  "topics.shipping": {
+                  "systemone:topics.shipping": {
                     "noul": 0.5627053,
                     "type": "noul"
                   },
-                  "urgent": {
+                  "systemone:urgent": {
                     "noul": 0.4029445,
                     "type": "noul"
                   }
                 },
                 "sets": {
-                  "topics": {
+                  "systemone:topics": {
                     "probabilities": {
                       "account": 0.0093793,
                       "billing": 0.5157702,
@@ -1884,7 +1884,7 @@
                   }
                 },
                 "spans": {
-                  "entities": [
+                  "systemone:entities": [
                     {
                       "end": 107,
                       "label": "location",
@@ -1918,9 +1918,9 @@
                   ]
                 },
                 "thresholds": {
-                  "entities": 0.5,
+                  "systemone:entities": 0.5,
                   "pii_classifier:pii": 0.4604647,
-                  "topics": 0.3
+                  "systemone:topics": 0.3
                 },
                 "usage": {
                   "input_tokens": 802,
@@ -1958,7 +1958,7 @@
                     },
                     "type": "choice"
                   },
-                  "effort": {
+                  "systemone:effort": {
                     "confidence": 0.8310068,
                     "legend": {
                       "0": "A one-line answer",
@@ -1973,7 +1973,7 @@
                     "score": 0.9582079,
                     "type": "score"
                   },
-                  "entities": {
+                  "systemone:entities": {
                     "noul": 0.0391292,
                     "type": "noul"
                   },
@@ -2022,7 +2022,7 @@
                     },
                     "type": "choice"
                   },
-                  "tone": {
+                  "systemone:tone": {
                     "abstain_probability": 0.676984,
                     "choice": "formal",
                     "confidence": 0.3885201,
@@ -2033,29 +2033,29 @@
                     },
                     "type": "choice"
                   },
-                  "topics.account": {
+                  "systemone:topics.account": {
                     "noul": 0.0000688,
                     "type": "noul"
                   },
-                  "topics.billing": {
+                  "systemone:topics.billing": {
                     "noul": 0.0000108,
                     "type": "noul"
                   },
-                  "topics.medication": {
+                  "systemone:topics.medication": {
                     "noul": 0.0000813,
                     "type": "noul"
                   },
-                  "topics.shipping": {
+                  "systemone:topics.shipping": {
                     "noul": 0.0000249,
                     "type": "noul"
                   },
-                  "urgent": {
+                  "systemone:urgent": {
                     "noul": 0.1734018,
                     "type": "noul"
                   }
                 },
                 "sets": {
-                  "topics": {
+                  "systemone:topics": {
                     "probabilities": {
                       "account": 0.0000688,
                       "billing": 0.0000108,
@@ -2066,13 +2066,13 @@
                   }
                 },
                 "spans": {
-                  "entities": [],
+                  "systemone:entities": [],
                   "pii_classifier:pii": []
                 },
                 "thresholds": {
-                  "entities": 0.5,
+                  "systemone:entities": 0.5,
                   "pii_classifier:pii": 0.75,
-                  "topics": 0.3
+                  "systemone:topics": 0.3
                 },
                 "usage": {
                   "input_tokens": 766,
@@ -2282,7 +2282,7 @@
                     },
                     "type": "choice"
                   },
-                  "effort": {
+                  "systemone:effort": {
                     "confidence": 0.2281682,
                     "legend": {
                       "0": "A one-line answer",
@@ -2297,7 +2297,7 @@
                     "score": 0.6753994,
                     "type": "score"
                   },
-                  "entities": {
+                  "systemone:entities": {
                     "noul": 0.2105075,
                     "type": "noul"
                   },
@@ -2359,7 +2359,7 @@
                     },
                     "type": "choice"
                   },
-                  "tone": {
+                  "systemone:tone": {
                     "abstain_probability": 0.1006821,
                     "choice": "upset",
                     "confidence": 0.3172077,
@@ -2370,29 +2370,29 @@
                     },
                     "type": "choice"
                   },
-                  "topics.account": {
+                  "systemone:topics.account": {
                     "noul": 0.0005466,
                     "type": "noul"
                   },
-                  "topics.billing": {
+                  "systemone:topics.billing": {
                     "noul": 0.0025256,
                     "type": "noul"
                   },
-                  "topics.medication": {
+                  "systemone:topics.medication": {
                     "noul": 0.0027059,
                     "type": "noul"
                   },
-                  "topics.shipping": {
+                  "systemone:topics.shipping": {
                     "noul": 0.0008455,
                     "type": "noul"
                   },
-                  "urgent": {
+                  "systemone:urgent": {
                     "noul": 0.2263084,
                     "type": "noul"
                   }
                 },
                 "sets": {
-                  "topics": {
+                  "systemone:topics": {
                     "probabilities": {
                       "account": 0.0005466,
                       "billing": 0.0025256,
@@ -2403,17 +2403,17 @@
                   }
                 },
                 "span_heads": {
-                  "entities": "broad",
+                  "systemone:entities": "broad",
                   "pii_classifier:pii": "router"
                 },
                 "spans": {
-                  "entities": [],
+                  "systemone:entities": [],
                   "pii_classifier:pii": []
                 },
                 "thresholds": {
-                  "entities": 0.35,
+                  "systemone:entities": 0.35,
                   "pii_classifier:pii": 0.2914,
-                  "topics": 0.2
+                  "systemone:topics": 0.2
                 },
                 "usage": {
                   "input_tokens": 2285,
@@ -2451,7 +2451,7 @@
                     },
                     "type": "choice"
                   },
-                  "effort": {
+                  "systemone:effort": {
                     "confidence": 0.2866427,
                     "legend": {
                       "0": "A one-line answer",
@@ -2466,7 +2466,7 @@
                     "score": 1.109335,
                     "type": "score"
                   },
-                  "entities": {
+                  "systemone:entities": {
                     "noul": 0.9305994,
                     "type": "noul"
                   },
@@ -2515,7 +2515,7 @@
                     },
                     "type": "choice"
                   },
-                  "tone": {
+                  "systemone:tone": {
                     "abstain_probability": 0.0546911,
                     "choice": "upset",
                     "confidence": 0.0963153,
@@ -2526,29 +2526,29 @@
                     },
                     "type": "choice"
                   },
-                  "topics.account": {
+                  "systemone:topics.account": {
                     "noul": 0.0028332,
                     "type": "noul"
                   },
-                  "topics.billing": {
+                  "systemone:topics.billing": {
                     "noul": 0.5324337,
                     "type": "noul"
                   },
-                  "topics.medication": {
+                  "systemone:topics.medication": {
                     "noul": 0.0014263,
                     "type": "noul"
                   },
-                  "topics.shipping": {
+                  "systemone:topics.shipping": {
                     "noul": 0.8915357,
                     "type": "noul"
                   },
-                  "urgent": {
+                  "systemone:urgent": {
                     "noul": 0.1439698,
                     "type": "noul"
                   }
                 },
                 "sets": {
-                  "topics": {
+                  "systemone:topics": {
                     "probabilities": {
                       "account": 0.0028332,
                       "billing": 0.5324337,
@@ -2562,11 +2562,11 @@
                   }
                 },
                 "span_heads": {
-                  "entities": "broad",
+                  "systemone:entities": "broad",
                   "pii_classifier:pii": "router"
                 },
                 "spans": {
-                  "entities": [
+                  "systemone:entities": [
                     {
                       "end": 17,
                       "label": "location",
@@ -2614,9 +2614,9 @@
                   ]
                 },
                 "thresholds": {
-                  "entities": 0.35,
+                  "systemone:entities": 0.35,
                   "pii_classifier:pii": 0.2914,
-                  "topics": 0.2
+                  "systemone:topics": 0.2
                 },
                 "usage": {
                   "input_tokens": 2133,

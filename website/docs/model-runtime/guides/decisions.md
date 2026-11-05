@@ -14,9 +14,9 @@ registered judgment tasks, custom questions, and backend selection:
   classification, safety, PII and hallucination; capability checks use the
   model's actual question types (see
   [Choose a model for a signal](../../installation/choose-a-model-for-a-signal.md));
-- a [`decision` signal](tutorials/signal/learned/decision.md) asks a
+- a [`systemone` signal](tutorials/signal/learned/systemone.md) asks a
   question and routes on the answer;
-- the [`decision` selection algorithm](tutorials/algorithm/selection/decision.md)
+- the [`systemone` selection algorithm](tutorials/algorithm/selection/systemone.md)
   asks which of a route's models should answer.
 
 ## Kinds of questions
@@ -52,7 +52,7 @@ global:
         device: auto
 routing:
   signals:
-    decision:
+    systemone:
       - name: needs_reasoning
         deployment: decision-kai
         question:
@@ -80,10 +80,10 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: request_kind
             label: code
-          - type: decision
+          - type: systemone
             name: needs_reasoning
       modelRefs:
         - model: large-coder
@@ -102,15 +102,15 @@ routing:
       rules:
         operator: AND
         conditions:
-          - type: decision
+          - type: systemone
             name: request_kind
             label: code
       modelRefs:
         - model: qwen3-8b
         - model: qwen3-32b
       algorithm:
-        type: decision
-        decision:
+        type: systemone
+        systemone:
           deployment: decision-kai
           instructions: Which model should answer this request?
           candidates:
@@ -141,7 +141,7 @@ global:
         device: cpu
 routing:
   signals:
-    decision:
+    systemone:
       - name: support_topics
         deployment: vela2
         question:
@@ -166,10 +166,10 @@ routing:
       rules:
         operator: AND
         conditions:
-          - type: decision
+          - type: systemone
             name: support_topics
             label: billing
-          - type: decision
+          - type: systemone
             name: places
             label: city
       modelRefs:
@@ -179,17 +179,18 @@ routing:
 A `set` label matches when the model selects it, and a `span` label when the
 model finds a span of it; a `predicate` on the rule matches on the label's
 probability instead. Every label's probability is a signal value
-(`decision:support_topics:billing`). On models with a broad span head (0.8B,
+(`systemone:support_topics:billing`). On models with a broad span head (0.8B,
 4B, 9B), `head: router | broad` picks the head that answers a span question;
 `threshold` replaces the model's own threshold. See the
-[signal reference](tutorials/signal/learned/decision.md#set-and-span-questions).
+[signal reference](tutorials/signal/learned/systemone.md#set-and-span-questions).
 
 The Router compiles each question against the selected model's capabilities.
 A `set` can use a native set head or composed Noul judgments, including on
 Decision 1.0 and 2.0. A `span` needs native span support; a model that lacks it
-cannot provide exact positions. Managed models are checked during preparation.
-Offline attached models remain unavailable until their current card can be
-checked. The public System One API accepts the model's native question types,
+cannot provide exact positions, and the configuration is refused with
+`span_required` when it loads. Attached models whose model is known only once
+they run are checked during preparation, and offline attached models remain
+unavailable until their current card can be checked. The public System One API accepts the model's native question types,
 so use Vela 2.0 for direct Set and Span requests.
 
 Vela 2.0 also answers PII and unsupported claims with its router span head:
@@ -214,5 +215,5 @@ compatible questions within a routing stage. See
 
 Ask the model the same question directly with `/v1/decisions`; see the
 [Quickstart](model-runtime/quickstart.md#3-send-a-request). Through the router,
-`x-vsr-matched-decision-model` lists the decision signals that matched and
+`x-vsr-matched-decision-model` lists the `systemone` signals that matched and
 `x-vsr-selected-model` the model the selector chose.

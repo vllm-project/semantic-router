@@ -148,11 +148,11 @@ func ProjectTaskCatalog(cfg *config.RouterConfig, statuses []DeploymentStatus) T
 		// A decision selector names its deployment in its algorithm block,
 		// which the decision's own editor writes.
 		for _, decision := range scoped.Decisions {
-			if decision.Algorithm == nil || decision.Algorithm.Decision == nil || !strings.EqualFold(strings.TrimSpace(decision.Algorithm.Type), config.DecisionAlgorithmDecision) {
+			if decision.Algorithm == nil || decision.Algorithm.SystemOne == nil || !strings.EqualFold(strings.TrimSpace(decision.Algorithm.Type), config.DecisionAlgorithmSystemOne) {
 				continue
 			}
-			name, source := scoped.DecisionSelectorDeployment(*decision.Algorithm.Decision), "rule"
-			if strings.TrimSpace(decision.Algorithm.Decision.Deployment) == "" {
+			name, source := scoped.SystemOneSelectorDeployment(*decision.Algorithm.SystemOne), "rule"
+			if strings.TrimSpace(decision.Algorithm.SystemOne.Deployment) == "" {
 				source = "default"
 			}
 			status := observed[name]

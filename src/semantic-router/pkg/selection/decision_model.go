@@ -40,20 +40,20 @@ type DecisionModelInvoke func(
 // ModelRefs should answer. The probabilities become the candidate scores;
 // any failure falls back through the Router's selection fallback.
 type DecisionModelSelector struct {
-	config       config.DecisionSelectionConfig
+	config       config.SystemOneSelectionConfig
 	invoke       DecisionModelInvoke
 	descriptions map[string]string
 }
 
 func NewDecisionModelSelector(
-	cfg config.DecisionSelectionConfig,
+	cfg config.SystemOneSelectionConfig,
 	invoke DecisionModelInvoke,
 	descriptions map[string]string,
 ) *DecisionModelSelector {
 	return &DecisionModelSelector{config: cfg, invoke: invoke, descriptions: descriptions}
 }
 
-func (s *DecisionModelSelector) Method() SelectionMethod { return MethodDecision }
+func (s *DecisionModelSelector) Method() SelectionMethod { return MethodSystemOne }
 
 func (s *DecisionModelSelector) Tier() AlgorithmTier { return TierSupported }
 
@@ -103,7 +103,7 @@ func (s *DecisionModelSelector) Select(ctx context.Context, selCtx *SelectionCon
 		LoRAName:          selected.LoRAName,
 		Score:             answer.Probabilities[selected.Model],
 		Confidence:        answer.Confidence,
-		Method:            MethodDecision,
+		Method:            MethodSystemOne,
 		Tier:              s.Tier(),
 		Reasoning:         fmt.Sprintf("decision model %s chose %s", s.config.Deployment, selected.Model),
 		CandidateScores:   scores,

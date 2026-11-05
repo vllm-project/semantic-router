@@ -113,7 +113,7 @@ type CanonicalSignals struct {
 	Classifiers   []ClassifierSignalRule `yaml:"classifiers,omitempty"`
 	InputModality []InputModalityRule    `yaml:"input_modality,omitempty"`
 	Actions       []ActionRule           `yaml:"actions,omitempty"`
-	Decision      []DecisionSignalRule   `yaml:"decision,omitempty"`
+	SystemOne     []SystemOneRule        `yaml:"systemone,omitempty"`
 
 	// TopicContinuity declares context-policy evidence sources.
 	TopicContinuity []TopicContinuityRule `yaml:"topic_continuity,omitempty"`
@@ -643,7 +643,7 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 		ClassifierRules:    append([]ClassifierSignalRule(nil), signals.Classifiers...),
 		InputModalityRules: append([]InputModalityRule(nil), signals.InputModality...),
 		ActionRules:        append([]ActionRule(nil), signals.Actions...),
-		DecisionRules:      append([]DecisionSignalRule(nil), signals.Decision...),
+		SystemOneRules:     append([]SystemOneRule(nil), signals.SystemOne...),
 
 		TopicContinuityRules: append([]TopicContinuityRule(nil), signals.TopicContinuity...),
 	}

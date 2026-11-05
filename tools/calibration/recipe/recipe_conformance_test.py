@@ -77,7 +77,7 @@ class RecipeConformanceTest(unittest.TestCase):
         self.assertEqual(sum(mom.probe_shard_sizes), mom.variants)
         self.assertEqual(
             set(mom.algorithms),
-            {"static", "decision", "multi_factor", "fusion", "workflows"},
+            {"static", "systemone", "multi_factor", "fusion", "workflows"},
         )
         self.assertTrue(mom.coverage["passed"])
 

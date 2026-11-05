@@ -33,7 +33,7 @@ func assertMultiObjectiveQuestions(t *testing.T, recipe *RoutingRecipe, want map
 	t.Helper()
 	signals := recipe.Profile.Signals
 	got := map[string]float64{}
-	for _, rule := range signals.DecisionRules {
+	for _, rule := range signals.SystemOneRules {
 		if rule.Predicate == nil || rule.Predicate.GTE == nil {
 			t.Fatalf("recipe %q question %q has no threshold", recipe.Name, rule.Name)
 		}
@@ -214,7 +214,7 @@ func assertMultiObjectiveVerifiedDecision(t *testing.T, accuracy *RoutingRecipe)
 	t.Helper()
 	verified := multiObjectiveDecision(t, accuracy, "unified_frontier_verified_answer")
 	if verified.Rules.Operator != "AND" || len(verified.Rules.Conditions) != 2 ||
-		verified.Rules.Conditions[0].Type != SignalTypeDecision ||
+		verified.Rules.Conditions[0].Type != SignalTypeSystemOne ||
 		verified.Rules.Conditions[0].Name != "verification" {
 		t.Fatalf("frontier verification must require the user's explicit verification request: %+v", verified.Rules)
 	}

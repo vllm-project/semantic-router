@@ -24,7 +24,7 @@ export type ModelBindings = Record<string, ModelBindingValue>
 
 /**
  * The signal types a binding is keyed by. Rules that ask a question of their
- * own (decision, classifier, safety and its hazard part, complexity) name
+ * own (systemone, classifier, safety and its hazard part, complexity) name
  * their deployment on the rule instead.
  */
 export const SIGNAL_BINDING_KEYS = [
@@ -78,7 +78,7 @@ export function bindingSpellings(key: string): string[] {
 
 /** The rules of one signal collection a rule-level task consumer names. */
 export interface RuleTarget {
-  collection: 'classifiers' | 'safety' | 'complexity' | 'decision'
+  collection: 'classifiers' | 'safety' | 'complexity' | 'systemone'
   /** Every rule of the collection when absent. */
   rule?: string
   /** The rule's hazard part rather than the rule. */
@@ -88,7 +88,7 @@ export interface RuleTarget {
 /**
  * The rules a task consumer of the Router's catalog stands for when the rule
  * names its own deployment: classifier.<rule>, safety.<rule>,
- * safety.<rule>.hazard, complexity, complexity.<rule> and decision.<rule>.
+ * safety.<rule>.hazard, complexity, complexity.<rule> and systemone.<rule>.
  */
 export function ruleTarget(consumer: string): RuleTarget | undefined {
   if (consumer === 'complexity') return { collection: 'complexity' }
@@ -100,7 +100,7 @@ export function ruleTarget(consumer: string): RuleTarget | undefined {
     classifier: 'classifiers',
     safety: 'safety',
     complexity: 'complexity',
-    decision: 'decision',
+    systemone: 'systemone',
   } as const
   const separator = consumer.indexOf('.')
   const type = consumer.slice(0, separator) as keyof typeof collections

@@ -135,7 +135,7 @@ context are in
 ## 4. Use it from the router
 
 The router runs models for you. Name the model as a **deployment** with
-`provider: model_runtime`, then ask it questions in a `decision` signal. Save
+`provider: model_runtime`, then ask it questions in a `systemone` signal. Save
 this as `config.yaml`, replacing `host.docker.internal:8000` with an
 OpenAI-compatible backend that answers your users:
 
@@ -160,7 +160,7 @@ routing:
   modelCards:
     - name: answer-model
   signals:
-    decision:
+    systemone:
       - name: needs_reasoning
         deployment: primary
         question:
@@ -175,7 +175,7 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: needs_reasoning
       modelRefs:
         - model: answer-model
@@ -219,7 +219,7 @@ curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \
 ```
 
 `x-vsr-selected-decision` names the route, and
-`x-vsr-matched-decision-model` lists the decision signals that matched. If the
+`x-vsr-matched-decision-model` lists the `systemone` signals that matched. If the
 runtime restarts later, the signal is unknown until the model is back and
 `on_unknown: no_match` sends requests to `default-route` meanwhile.
 

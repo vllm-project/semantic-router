@@ -141,7 +141,7 @@ domains:
       - src/model-runtime/vllm_srun/registry/tables/*.py
       - src/model-runtime/vllm_srun/registry/releases.generated.json
       - src/model-runtime/vllm_srun/families/vela2/request.py
-      - src/semantic-router/pkg/modelservice/decision_catalog.generated.json
+      - src/semantic-router/pkg/config/decision_catalog.generated.json
       - src/model-runtime/vllm_srun/systemone.py
       - src/model-runtime/vllm_srun/families/decision1/family.py
       - src/model-runtime/vllm_srun/families/decision1/questions.py
@@ -454,12 +454,12 @@ domains:
     paths:
       - website/docs/model-runtime/**
       - website/docs/tutorials/global/model-runtime.md
-      - website/docs/tutorials/signal/learned/decision.md
-      - website/docs/tutorials/algorithm/selection/decision.md
+      - website/docs/tutorials/signal/learned/systemone.md
+      - website/docs/tutorials/algorithm/selection/systemone.md
       - website/i18n/*/docusaurus-plugin-content-docs/current/model-runtime/**
       - website/i18n/*/docusaurus-plugin-content-docs/current/tutorials/global/model-runtime.md
-      - website/i18n/*/docusaurus-plugin-content-docs/current/tutorials/signal/learned/decision.md
-      - website/i18n/*/docusaurus-plugin-content-docs/current/tutorials/algorithm/selection/decision.md
+      - website/i18n/*/docusaurus-plugin-content-docs/current/tutorials/signal/learned/systemone.md
+      - website/i18n/*/docusaurus-plugin-content-docs/current/tutorials/algorithm/selection/systemone.md
     checks: [make vllm-sr-test]
     verifications: [cli-unit]
 

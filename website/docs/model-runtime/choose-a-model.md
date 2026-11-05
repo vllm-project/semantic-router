@@ -304,7 +304,7 @@ Specialist bindings stay in place when you select another decision model.
 ## Choose a size {#choose-a-size}
 
 The decision model is the deployment that answers the Router's judgment tasks
-and [`decision` questions](../tutorials/signal/learned/decision.md) that no
+and [`systemone` questions](../tutorials/signal/learned/systemone.md) that no
 binding or rule gives another deployment. Declare the deployment once, then
 name its exact key.
 Without an override, the built-in default is vela3-fast. Passing a model

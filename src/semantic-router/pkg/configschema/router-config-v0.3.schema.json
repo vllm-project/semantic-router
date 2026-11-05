@@ -172,7 +172,6 @@
             "automix",
             "cascade",
             "confidence",
-            "decision",
             "fusion",
             "hybrid",
             "kmeans",
@@ -187,6 +186,7 @@
             "router_dc",
             "static",
             "svm",
+            "systemone",
             "workflows"
           ]
         },
@@ -238,8 +238,8 @@
         "prompt": {
           "$ref": "#/$defs/PromptSelectionConfig"
         },
-        "decision": {
-          "$ref": "#/$defs/DecisionSelectionConfig"
+        "systemone": {
+          "$ref": "#/$defs/SystemOneSelectionConfig"
         },
         "on_error": {
           "type": "string"
@@ -1752,9 +1752,9 @@
           },
           "type": "array"
         },
-        "decision": {
+        "systemone": {
           "items": {
-            "$ref": "#/$defs/DecisionSignalRule"
+            "$ref": "#/$defs/SystemOneRule"
           },
           "type": "array"
         },
@@ -2451,18 +2451,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "DecisionChoice": {
-      "properties": {
-        "key": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "DecisionLearningAdaptationConfig": {
       "properties": {
         "mode": {
@@ -2864,42 +2852,6 @@
         "configuration"
       ]
     },
-    "DecisionQuestion": {
-      "properties": {
-        "type": {
-          "type": "string"
-        },
-        "instructions": {
-          "type": "string"
-        },
-        "choices": {
-          "items": {
-            "$ref": "#/$defs/DecisionChoice"
-          },
-          "type": "array"
-        },
-        "levels": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "labels": {
-          "items": {
-            "$ref": "#/$defs/DecisionChoice"
-          },
-          "type": "array"
-        },
-        "threshold": {
-          "type": "number"
-        },
-        "head": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "DecisionReliability": {
       "properties": {
         "total_timeout": {
@@ -2939,51 +2891,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "DecisionSelectionConfig": {
-      "properties": {
-        "deployment": {
-          "type": "string"
-        },
-        "instructions": {
-          "type": "string"
-        },
-        "candidates": {
-          "additionalProperties": {
-            "type": "string"
-          },
-          "type": "object"
-        },
-        "timeout_ms": {
-          "type": "integer"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "DecisionSignalRule": {
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "deployment": {
-          "type": "string"
-        },
-        "question": {
-          "$ref": "#/$defs/DecisionQuestion"
-        },
-        "predicate": {
-          "$ref": "#/$defs/NumericPredicate"
-        },
-        "timeout_ms": {
-          "type": "integer"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "DeploymentAuth": {
       "properties": {
         "header": {
@@ -3011,6 +2918,12 @@
           "type": "array"
         },
         "presets": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "modalities": {
           "items": {
             "type": "string"
           },
@@ -5915,7 +5828,7 @@
             "conversation",
             "event",
             "input_modality",
-            "decision",
+            "systemone",
             "kb_metric",
             "projection"
           ]
@@ -7445,7 +7358,6 @@
             "complexity",
             "context",
             "conversation",
-            "decision",
             "domain",
             "embedding",
             "event",
@@ -7462,6 +7374,7 @@
             "reask",
             "safety",
             "structure",
+            "systemone",
             "user_feedback",
             "projection"
           ]
@@ -7773,6 +7686,166 @@
         },
         "name": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SystemOneInput": {
+      "properties": {
+        "history": {
+          "type": "boolean"
+        },
+        "previous_turns": {
+          "type": "integer"
+        },
+        "answer": {
+          "type": "boolean"
+        },
+        "context": {
+          "type": "boolean"
+        },
+        "tool_results": {
+          "type": "boolean"
+        },
+        "image": {
+          "type": "boolean"
+        },
+        "audio": {
+          "type": "boolean"
+        },
+        "video": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SystemOneOption": {
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SystemOneQuestion": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "choices": {
+          "items": {
+            "$ref": "#/$defs/SystemOneOption"
+          },
+          "type": "array"
+        },
+        "levels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "labels": {
+          "items": {
+            "$ref": "#/$defs/SystemOneOption"
+          },
+          "type": "array"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "head": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SystemOneRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "question": {
+          "$ref": "#/$defs/SystemOneQuestion"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ignore_labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "predicate": {
+          "$ref": "#/$defs/NumericPredicate"
+        },
+        "deployment": {
+          "type": "string"
+        },
+        "stage": {
+          "type": "string",
+          "enum": [
+            "request",
+            "response"
+          ]
+        },
+        "input": {
+          "$ref": "#/$defs/SystemOneInput"
+        },
+        "coverage": {
+          "type": "string",
+          "enum": [
+            "truncate",
+            "full"
+          ]
+        },
+        "on_unscanned": {
+          "type": "string",
+          "enum": [
+            "match",
+            "no_match",
+            "unknown"
+          ]
+        },
+        "timeout_ms": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SystemOneSelectionConfig": {
+      "properties": {
+        "deployment": {
+          "type": "string"
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "candidates": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "timeout_ms": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -8787,13 +8860,13 @@
         "schema_ref": "#/$defs/ActionRule"
       },
       {
-        "type": "decision",
-        "display_name": "Decision Model",
-        "collection": "decision",
-        "observation_key": "decision",
+        "type": "systemone",
+        "display_name": "System One",
+        "collection": "systemone",
+        "observation_key": "systemone",
         "decision_referenceable": true,
         "reference_qualifier": "label",
-        "schema_ref": "#/$defs/DecisionSignalRule"
+        "schema_ref": "#/$defs/SystemOneRule"
       },
       {
         "type": "topic_continuity",
@@ -8954,14 +9027,14 @@
         "schema_ref": "#/$defs/PromptSelectionConfig"
       },
       {
-        "type": "decision",
-        "display_name": "Decision Model",
-        "description": "Ask a decision model which declared candidate should answer.",
+        "type": "systemone",
+        "display_name": "System One",
+        "description": "Ask a System One model which declared candidate should answer.",
         "tier": "supported",
         "execution": "selector",
-        "config_field": "decision",
+        "config_field": "systemone",
         "payload_shape": "nested",
-        "schema_ref": "#/$defs/DecisionSelectionConfig"
+        "schema_ref": "#/$defs/SystemOneSelectionConfig"
       }
     ],
     "plugins": [
@@ -9100,7 +9173,7 @@
       "conversation",
       "event",
       "input_modality",
-      "decision",
+      "systemone",
       "kb_metric",
       "projection"
     ],

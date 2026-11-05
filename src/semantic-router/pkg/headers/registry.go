@@ -206,7 +206,7 @@ var registry = []Header{
 	{VSRMatchedConversation, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.3", "Matched `conversation` rules."},
 	{VSRMatchedEvent, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.3", "Matched `event` rules."},
 	{VSRMatchedInputModality, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.4", "Matched `input_modality` rules."},
-	{VSRMatchedDecisionModel, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.5", "Matched decision-model signals: rule names, `rule:choice` for choices and `rule:label` for labels."},
+	{VSRMatchedDecisionModel, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.5", "Matched `systemone` rules: rule names, `rule:choice` for choices and `rule:label` for labels."},
 	{VSRMatchedProjection, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.3", "Matched projection outputs."},
 
 	// The Looper's execution trace.

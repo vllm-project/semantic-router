@@ -303,7 +303,7 @@ decisions:
 `match` sends a request you could not grade to the stronger model, which is
 usually the safer default; `fail_request` refuses it outright. `on_unknown`
 belongs on the root `rules` node and applies to the whole decision - the
-per-condition `on_error` field is accepted only on `classifier` and `decision` conditions,
+per-condition `on_error` field is accepted only on `classifier` and `systemone` conditions,
 so putting it on a `complexity` condition is rejected at config load.
 
 The scorer's number is published as `complexity:<rule>:score`, in the model's

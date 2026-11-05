@@ -86,7 +86,7 @@ class TestServeManagedModelRuntime(MockUpstreamMixin, ServeSessionMixin, CLITest
         """The test stack's config plus the Quickstart's signal, route and
         deployment; returns the route that needs the signal's answer."""
         page = quickstart_router_config()
-        signal = copy.deepcopy(page["routing"]["signals"]["decision"][0])
+        signal = copy.deepcopy(page["routing"]["signals"]["systemone"][0])
         route = copy.deepcopy(
             next(
                 decision
@@ -114,7 +114,7 @@ class TestServeManagedModelRuntime(MockUpstreamMixin, ServeSessionMixin, CLITest
         default_route = config["routing"]["decisions"][0]
         route["priority"] = default_route["priority"] + 100
         route["modelRefs"] = copy.deepcopy(default_route["modelRefs"])
-        config["routing"]["signals"] = {"decision": [signal]}
+        config["routing"]["signals"] = {"systemone": [signal]}
         config["routing"]["decisions"].insert(0, route)
         config["global"]["model_catalog"]["deployments"] = deployments
         # The route check reads x-vsr-matched-decision-model, a debug header.

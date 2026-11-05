@@ -223,9 +223,9 @@ spec:
 
 ## 模型还没就绪的时候 {#when-a-model-is-not-ready}
 
-router 只有把它为这个配置跑的模型都加载好了，才开始伺候这个配置。启动时它等每一个托管部署：路由用到的任务模型（domain、PII、guard、safety、fact-check、feedback 和 hallucination 模型，以及你自己的分类器），加上 `decision` 信号和 `decision` 选择算法问的决策模型。挂接的 runtime 作为决策模型回答的信号、或通过选择头的绑定回答的信号，准备阶段也需要模型元数据，所以要赶在 Router 前面起那些 runtime。等的时候，`/health` 应声，`/ready` 返 `503`；`/startup-status` 逐个托管部署列它的状态（`starting`、`loading`、`warming`、`ready`……），`vllm-sr serve` 打印它还在等的那些。这次等待——含首次下载——由 `VLLM_SRUN_READY_TIMEOUT` 兜底（默认 10 分钟）。有模型加载失败或没能及时就绪，router 就不启动；它的日志和它最后的启动状态（`phase: error`）会点出部署和原因（见[故障排查](model-runtime/troubleshooting.md#the-runtime-reports-failed)）。
+router 只有把它为这个配置跑的模型都加载好了，才开始伺候这个配置。启动时它等每一个托管部署：路由用到的任务模型（domain、PII、guard、safety、fact-check、feedback 和 hallucination 模型，以及你自己的分类器），加上 `systemone` 信号和 `systemone` 选择算法问的决策模型。挂接的 runtime 作为决策模型回答的信号、或通过选择头的绑定回答的信号，准备阶段也需要模型元数据，所以要赶在 Router 前面起那些 runtime。等的时候，`/health` 应声，`/ready` 返 `503`；`/startup-status` 逐个托管部署列它的状态（`starting`、`loading`、`warming`、`ready`……），`vllm-sr serve` 打印它还在等的那些。这次等待——含首次下载——由 `VLLM_SRUN_READY_TIMEOUT` 兜底（默认 10 分钟）。有模型加载失败或没能及时就绪，router 就不启动；它的日志和它最后的启动状态（`phase: error`）会点出部署和原因（见[故障排查](model-runtime/troubleshooting.md#the-runtime-reports-failed)）。
 
-自定义 `decision` 问题可以指向离线的挂接 runtime，不阻塞启动。它们一直未知，直到当前模型卡就绪且支持所需的任务。恢复不绕过能力检查：就绪但不兼容的卡会拒绝该任务。选择头的绑定仍然需要它们自己的元数据；就绪不会把 PII 片段检测器悄悄换成只判断有无。
+自定义 `systemone` 问题可以指向离线的挂接 runtime，不阻塞启动。它们一直未知，直到当前模型卡就绪且支持所需的任务。恢复不绕过能力检查：就绪但不兼容的卡会拒绝该任务。选择头的绑定仍然需要它们自己的元数据；就绪不会把 PII 片段检测器悄悄换成只判断有无。
 
 声明了但没人用的部署永远不会启动，也不拖住启动。
 
@@ -242,7 +242,7 @@ router 开始服务后，请求绝不会等一个答不上来的模型：
 | 一个进程里的模型全部加载失败 | 未知；router 按同样的退避重启该进程，直到模型加载成功 |
 | 输入超过部署允许的长度且 `overflow: reject` | 这条输入报错 |
 
-未知的信号不参与匹配。决策的 `rules.on_unknown` 决定未知信号对这条路由意味着什么（默认 `no_match`，或 `fail_request`），guard 和 PII 模块有 `on_error: allow | block`。`decision` 选择算法回退到 `modelRefs` 里的第一个模型。
+未知的信号不参与匹配。决策的 `rules.on_unknown` 决定未知信号对这条路由意味着什么（默认 `no_match`，或 `fail_request`），guard 和 PII 模块有 `on_error: allow | block`。`systemone` 选择算法回退到 `modelRefs` 里的第一个模型。
 
 ## 看看什么在跑 {#check-what-is-running}
 

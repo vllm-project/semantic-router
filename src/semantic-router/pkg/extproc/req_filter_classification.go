@@ -98,9 +98,9 @@ func (r *OpenAIRouter) selectorForDecisionMethod(method selection.SelectionMetho
 		algorithm.Prompt != nil {
 		return r.newDecisionPromptSelector(*algorithm.Prompt)
 	}
-	if method == selection.MethodDecision && algorithm != nil &&
-		algorithm.Decision != nil {
-		return r.newDecisionModelSelector(*algorithm.Decision)
+	if method == selection.MethodSystemOne && algorithm != nil &&
+		algorithm.SystemOne != nil {
+		return r.newDecisionModelSelector(*algorithm.SystemOne)
 	}
 	if selector := r.extensionAlgorithmSelector(method, algorithm, ctx); selector != nil {
 		return selector

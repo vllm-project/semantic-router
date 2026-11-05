@@ -9,7 +9,7 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Annotated, Any, Dict, List, Literal, Optional
 
-from .models_decision import DecisionSignalRule
+from .models_systemone import SystemOneRule
 from .models_native import CalibrationArtifact
 from .models_predicates import NumericPredicate
 from .models_safety import SafetyRule
@@ -38,7 +38,7 @@ RoutingStrategy = Literal["priority", "confidence"]
 PROMPT_MIN_CANDIDATES = 2
 MAX_DECISION_ANNOTATIONS = 32
 MAX_DECISION_ANNOTATION_BYTES = 4096
-LABELED_CONDITION_TYPES = frozenset({"classifier", "decision"})
+LABELED_CONDITION_TYPES = frozenset({"classifier", "systemone"})
 
 
 class ListenerTLS(BaseModel):
@@ -810,7 +810,7 @@ class Signals(BaseModel):
     classifiers: Optional[List[ClassifierSignal]] = []
     input_modality: Optional[List[InputModalityRule]] = []
     actions: Optional[List[ActionRule]] = []
-    decision: Optional[List[DecisionSignalRule]] = []
+    systemone: Optional[List[SystemOneRule]] = []
     topic_continuity: Optional[List[TopicContinuityRule]] = []
 
     @model_validator(mode="after")
@@ -888,13 +888,13 @@ class Condition(BaseModel):
             raise ValueError("leaf condition node cannot define child conditions")
         if self.label is not None and self.type not in LABELED_CONDITION_TYPES:
             raise ValueError(
-                "label is only valid for classifier and decision conditions"
+                "label is only valid for classifier and systemone conditions"
             )
         if self.type == "classifier" and self.label is None:
             raise ValueError("classifier conditions require a label")
         if self.on_error is not None and self.type not in LABELED_CONDITION_TYPES:
             raise ValueError(
-                "on_error is only valid for classifier and decision conditions"
+                "on_error is only valid for classifier and systemone conditions"
             )
         if self.on_unknown is not None:
             raise ValueError("on_unknown is only valid on the root rules node")

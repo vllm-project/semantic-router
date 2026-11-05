@@ -44,7 +44,7 @@ const (
 	bindingKeySafety     = SignalTypeSafety
 	bindingKeyHazard     = "hazard"
 	bindingKeyClassifier = SignalTypeClassifier
-	bindingKeyDecision   = SignalTypeDecision
+	bindingKeySystemOne  = SignalTypeSystemOne
 )
 
 // BindingConsumer is the consumer a binding key names: the signal type's
@@ -70,10 +70,10 @@ func knownBindingKey(key string) bool {
 	switch key {
 	case "domain_classifier", "prompt_guard", "pii_classifier", "fact_check_classifier", "feedback_detector",
 		"modality_detector", "hallucination_detector", "preference", "reask", "complexity", "embedding",
-		RAGRerankerConsumer, bindingKeySafety, bindingKeyHazard, bindingKeyClassifier, bindingKeyDecision:
+		RAGRerankerConsumer, bindingKeySafety, bindingKeyHazard, bindingKeyClassifier, bindingKeySystemOne:
 		return true
 	}
-	for _, prefix := range []string{"safety.", "classifier.", "complexity.", "decision."} {
+	for _, prefix := range []string{"safety.", "classifier.", "complexity.", "systemone."} {
 		if strings.HasPrefix(key, prefix) && len(key) > len(prefix) {
 			return true
 		}
@@ -91,8 +91,8 @@ func ruleConsumer(key string) string {
 		return "safety._.hazard"
 	case bindingKeyClassifier:
 		return "classifier._"
-	case bindingKeyDecision:
-		return "decision._"
+	case bindingKeySystemOne:
+		return "systemone._"
 	}
 	return key
 }

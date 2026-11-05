@@ -12,15 +12,18 @@ import (
 // Definitions are internal templates; custom decision questions compile into
 // the same plans without introducing another authored configuration tree.
 type TaskDefinition struct {
-	ID          string                  `json:"id"`
-	Title       string                  `json:"title"`
-	Description string                  `json:"description"`
-	Stage       string                  `json:"stage"`
-	Input       string                  `json:"input"`
-	Output      string                  `json:"output"`
-	FullInput   bool                    `json:"full_input"`
-	Question    Question                `json:"-"`
-	Consumers   []TaskConsumerReference `json:"consumers,omitempty"`
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Stage       string `json:"stage"`
+	Input       string `json:"input"`
+	Output      string `json:"output"`
+	FullInput   bool   `json:"full_input"`
+	// Preset names the preset the task asks (presets), whose trained
+	// bindings choose the question's wire form per model family.
+	Preset    string                  `json:"preset,omitempty"`
+	Question  Question                `json:"-"`
+	Consumers []TaskConsumerReference `json:"consumers,omitempty"`
 }
 
 // TaskConsumerReference describes a registry-owned consumer requirement.
@@ -44,13 +47,15 @@ type TaskCapability struct {
 
 // TaskPlan is immutable preparation input. It retains the semantic question
 // and the exact native questions used to implement it, which may go out
-// under other IDs (a family's trained IDs); answers come back under the
-// semantic question's ID.
+// under other IDs (a family's trained IDs) and with other options (a
+// family's trained options, each answering the canonical option Canonical
+// names); answers come back under the semantic question's ID and options.
 type TaskPlan struct {
 	Definition     TaskDefinition
 	Question       Question
 	Implementation string
 	Questions      []Question
+	Canonical      map[string]string
 }
 
 // TaskResult keeps unknown separate from a negative answer. Coverage describes
@@ -78,9 +83,18 @@ func PrepareTaskQuestion(definition TaskDefinition, question Question) (Question
 
 // CompileTask selects an implemented output adapter from the actual card.
 // Family and training ancestry intentionally do not participate in admission;
-// they only choose the wire form of a built-in question the family was
-// trained on (trainedPlan).
+// they only choose the wire form of a preset the family was trained on
+// (presetPlan), and mark the questions no adapter was trained on for a family
+// with an opt-in decision adapter (withDecisionAdapter).
 func CompileTask(definition TaskDefinition, question Question, card ModelCard) (TaskPlan, error) {
+	plan, err := compileTask(definition, question, card)
+	if err != nil {
+		return plan, err
+	}
+	return withDecisionAdapter(plan, card), nil
+}
+
+func compileTask(definition TaskDefinition, question Question, card ModelCard) (TaskPlan, error) {
 	question, err := PrepareTaskQuestion(definition, question)
 	plan := TaskPlan{Definition: definition, Question: question, Implementation: implementationNative}
 	if err != nil {
@@ -93,8 +107,11 @@ func CompileTask(definition TaskDefinition, question Question, card ModelCard) (
 		plan.Questions = []Question{question}
 		return plan, nil
 	}
-	if trained, implementation, ok := trainedPlan(definition.ID, question, card); ok {
-		plan.Questions, plan.Implementation = trained, implementation
+	if form, ok := presetPlan(definition, question, card); ok {
+		plan.Questions, plan.Implementation, plan.Canonical = form.questions, form.implementation, form.canonical
+		if form.semantic.ID != "" {
+			plan.Question = form.semantic
+		}
 		return plan, nil
 	}
 	if card.Answers(question.Type) {
@@ -194,6 +211,7 @@ func reduceTaskAnswer(plan TaskPlan, response Response) Answer {
 		if !ok {
 			return Answer{Type: plan.Question.Type, Error: "missing_answer"}
 		}
+		answer = canonicalAnswer(answer, plan.Canonical)
 		if answer.Error == "" && plan.Question.Type != "" && answer.Type != plan.Question.Type {
 			answer.Error = "unexpected_answer_type"
 		}
@@ -227,6 +245,28 @@ func reduceTaskAnswer(plan TaskPlan, response Response) Answer {
 	return answer
 }
 
+// canonicalAnswer reads an answer to a family's trained options as the
+// canonical options they answer.
+func canonicalAnswer(answer Answer, canonical map[string]string) Answer {
+	if len(canonical) == 0 || answer.Error != "" {
+		return answer
+	}
+	if key, ok := canonical[answer.Choice]; ok {
+		answer.Choice = key
+	}
+	if answer.Probabilities != nil {
+		probabilities := make(map[string]float64, len(answer.Probabilities))
+		for key, probability := range answer.Probabilities {
+			if mapped, ok := canonical[key]; ok {
+				key = mapped
+			}
+			probabilities[key] = probability
+		}
+		answer.Probabilities = probabilities
+	}
+	return answer
+}
+
 // A legacy or attached runtime may ignore a newly added request field. Its
 // successful scalar is not evidence that the full input was inspected.
 func requireInputCoverage(question Question, answer Answer) Answer {
@@ -244,12 +284,13 @@ func ExecuteQuestions(ctx context.Context, decider Decider, deployment string, c
 	for _, question := range request.Questions {
 		taskID, stage := question.TaskID, question.Stage
 		if taskID == "" {
-			taskID = "decision"
+			taskID = "systemone"
 		}
 		if stage == "" {
 			stage = "request"
 		}
-		plan, err := CompileTask(TaskDefinition{ID: taskID, Stage: stage, Output: question.Type, FullInput: !question.Truncate}, question, card)
+		definition := TaskDefinition{ID: taskID, Stage: stage, Output: question.Type, FullInput: !question.Truncate, Preset: builtinTaskPresets()[taskID]}
+		plan, err := CompileTask(definition, question, card)
 		if err != nil {
 			return Response{}, err
 		}

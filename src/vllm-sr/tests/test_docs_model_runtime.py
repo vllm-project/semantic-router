@@ -41,8 +41,8 @@ DOCS = REPO_ROOT / "website" / "docs"
 PAGES = [
     *sorted((DOCS / "model-runtime").rglob("*.md")),
     DOCS / "tutorials/global/model-runtime.md",
-    DOCS / "tutorials/signal/learned/decision.md",
-    DOCS / "tutorials/algorithm/selection/decision.md",
+    DOCS / "tutorials/signal/learned/systemone.md",
+    DOCS / "tutorials/algorithm/selection/systemone.md",
 ]
 RUNTIME = REPO_ROOT / "src" / "model-runtime" / "vllm_srun"
 FENCE = re.compile(r"^```(\w*)([^\n]*)\n(.*?)^```", re.M | re.S)

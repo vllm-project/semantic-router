@@ -585,8 +585,8 @@ func (v *Validator) checkProjectionScoreInput(context string, pos Position, inpu
 		return
 	}
 	name := input.SignalName
-	if strings.EqualFold(input.SignalType, config.SignalTypeDecision) {
-		// A decision input may read one option of its question: "<question>:<option>".
+	if strings.EqualFold(input.SignalType, config.SignalTypeSystemOne) {
+		// A systemone input may read one option of its question: "<rule>:<option>".
 		name, _, _ = strings.Cut(name, ":")
 	}
 	if !v.isSignalDefined(input.SignalType, name) {

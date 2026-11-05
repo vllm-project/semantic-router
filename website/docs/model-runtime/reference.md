@@ -251,8 +251,8 @@ in windows. An input over its scan budget fails instead of being read:
 The only byte limit is `--max-request-bytes`, on a request as a whole.
 
 The router reads a long request through Vela 2.0 in two ways. A routing
-question (domain, fact check, feedback, modality, decision questions and the
-decision model selector) truncates. A safety question (prompt guard, safety,
+question (domain, fact check, feedback, modality, `systemone` questions
+without `coverage: full`, and the `systemone` selector) truncates. A safety question (prompt guard, safety,
 PII and hallucination) reads it whole, up to the model's scan budget or the
 deployment's `input.max_tokens` with `overflow: window`. Content past it, or
 a safety scan that misses the signals' deadline

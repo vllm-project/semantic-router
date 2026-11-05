@@ -79,7 +79,7 @@ decisions:
   - id: contract_clause_analysis
     query: Provide a legal analysis of the indemnity clause, liability cap, and compliance obligations in this contract.
     expected_signals:
-      decision:
+      systemone:
       - task:legal
     tags:
     - baseline
@@ -88,7 +88,7 @@ decisions:
     query: Assess the legal risk in this agreement by analyzing indemnification, limitation of liability, and the
       compliance duties each party assumes.
     expected_signals:
-      decision:
+      systemone:
       - task:legal
     tags:
     - paraphrase
@@ -104,7 +104,7 @@ decisions:
   - id: irrationality_proof
     query: Prove rigorously that the square root of 2 is irrational.
     expected_signals:
-      decision:
+      systemone:
       - task:proof
     tags:
     - baseline
@@ -112,7 +112,7 @@ decisions:
   - id: integer_ratio_proof
     query: Give a formal proof that sqrt(2) cannot be expressed as a ratio of integers.
     expected_signals:
-      decision:
+      systemone:
       - task:proof
     tags:
     - paraphrase
@@ -120,7 +120,7 @@ decisions:
   - id: infinite_primes
     query: Prove that there are infinitely many prime numbers by assuming a largest prime exists.
     expected_signals:
-      decision:
+      systemone:
       - task:proof
     tags:
     - robustness
@@ -128,7 +128,7 @@ decisions:
   - id: odd_integer_sum_proof
     query: Prove that the sum of the first n odd positive integers is n squared.
     expected_signals:
-      decision:
+      systemone:
       - task:proof
     tags:
     - language:en
@@ -137,7 +137,7 @@ decisions:
   - id: consecutive_odds_answer_only_zh
     query: 严格证明任意两个连续奇数之和能被4整除。只输出答案。
     expected_signals:
-      decision:
+      systemone:
       - task:proof
     tags:
     - language:zh
@@ -154,7 +154,7 @@ decisions:
   - id: av_ethics
     query: Compare utilitarianism and deontology, then argue which framework better handles autonomous-vehicle dilemmas.
     expected_signals:
-      decision:
+      systemone:
       - task:argument
     tags:
     - baseline
@@ -163,7 +163,7 @@ decisions:
     query: Compare deductive, inductive, and abductive reasoning in general terms, without anchoring the discussion
       to any one domain.
     expected_signals:
-      decision:
+      systemone:
       - task:argument
     tags:
     - paraphrase
@@ -171,7 +171,7 @@ decisions:
   - id: first_principles_tradeoffs
     query: From first principles, compare three ways to reason under uncertainty and justify which one is most robust.
     expected_signals:
-      decision:
+      systemone:
       - task:argument
     tags:
     - robustness
@@ -179,7 +179,7 @@ decisions:
   - id: scarce_resource_ethics
     query: Compare virtue ethics and consequentialism for allocating a scarce public resource; defend your reasoning.
     expected_signals:
-      decision:
+      systemone:
       - task:argument
     tags:
     - language:en
@@ -188,7 +188,7 @@ decisions:
   - id: research_methods_without_sources
     query: Compare inductive, deductive, and abductive methods as tools for generating research hypotheses.
     expected_signals:
-      decision:
+      systemone:
       - task:argument
     tags:
     - language:en
@@ -208,7 +208,7 @@ decisions:
     query: Plan a zero-downtime monolith-to-microservices migration with checkpoints, rollback steps, owners, and
       validation after each phase.
     expected_signals:
-      decision:
+      systemone:
       - task:systems
     tags:
     - baseline
@@ -217,7 +217,7 @@ decisions:
     query: Create a phased runbook for consolidating two internal platforms, with owners, dependencies, rollback
       criteria, and verification gates for every phase.
     expected_signals:
-      decision:
+      systemone:
       - task:systems
     tags:
     - paraphrase
@@ -226,7 +226,7 @@ decisions:
     query: Create a phased incident-recovery runbook with owners, checkpoints, rollback criteria, and verification
       gates for each stage.
     expected_signals:
-      decision:
+      systemone:
       - task:systems
     tags:
     - robustness
@@ -235,7 +235,7 @@ decisions:
     query: Design the software architecture for a distributed rate limiter in a microservices platform, including
       service boundaries and consistency tradeoffs.
     expected_signals:
-      decision:
+      systemone:
       - task:systems
     tags:
     - baseline
@@ -244,7 +244,7 @@ decisions:
     query: Design the architecture for a multi-region feature-flag service, including storage boundaries, cache
       strategy, and consistency tradeoffs.
     expected_signals:
-      decision:
+      systemone:
       - task:systems
     tags:
     - paraphrase
@@ -253,7 +253,7 @@ decisions:
     query: In electrochemistry terms, compare SEI growth, lithium plating, and cathode cracking as causes of lithium-ion
       battery degradation, then propose experiments to isolate the dominant mechanism.
     expected_signals:
-      decision:
+      systemone:
       - task:science
     tags:
     - baseline
@@ -262,7 +262,7 @@ decisions:
     query: In quantum-computing terms, compare dielectric loss, flux noise, and quasiparticle poisoning as causes
       of qubit decoherence, then propose experiments to isolate the dominant mechanism.
     expected_signals:
-      decision:
+      systemone:
       - task:science
     tags:
     - paraphrase
@@ -287,7 +287,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
     tags:
     - baseline
@@ -306,7 +306,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
     tags:
     - paraphrase
@@ -325,7 +325,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
     tags:
     - robustness
@@ -343,7 +343,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
     tags:
     - feedback
@@ -361,7 +361,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
     tags:
     - feedback
@@ -382,7 +382,7 @@ decisions:
   - id: python_stack_trace
     query: Debug this Python stack trace and suggest the most likely fix.
     expected_signals:
-      decision:
+      systemone:
       - task:code
     tags:
     - baseline
@@ -391,7 +391,7 @@ decisions:
     query: A Java unit test is failing after a refactor; explain the most likely cause and suggest the first fix
       to try.
     expected_signals:
-      decision:
+      systemone:
       - task:code
     tags:
     - paraphrase
@@ -400,7 +400,7 @@ decisions:
     query: After a refactor, an integration test started failing in a Java codebase. Explain the most likely cause
       and the first code change to inspect.
     expected_signals:
-      decision:
+      systemone:
       - task:code
     tags:
     - robustness
@@ -408,7 +408,7 @@ decisions:
   - id: urgent_bug_zh
     query: 这太离谱了！！！马上告诉我该怎么处理这个 bug。
     expected_signals:
-      decision:
+      systemone:
       - task:code
     tags:
     - robustness
@@ -417,7 +417,7 @@ decisions:
   - id: python_deduplicate_answer_only_zh
     query: 写一个 Python 函数，返回列表去重后的结果并保持原顺序。只输出答案。
     expected_signals:
-      decision:
+      systemone:
       - task:code
     tags:
     - language:zh
@@ -432,7 +432,7 @@ decisions:
     - role: user
       content: Now write a pytest unit test for that function.
     expected_signals:
-      decision:
+      systemone:
       - task:code
     tags:
     - language:en
@@ -451,7 +451,7 @@ decisions:
   - id: iron_deficiency
     query: What are the early symptoms of iron deficiency? Please cite reliable medical sources.
     expected_signals:
-      decision:
+      systemone:
       - task:health
     tags:
     - baseline
@@ -459,7 +459,7 @@ decisions:
   - id: sleep_apnea_sources
     query: What are common early signs of sleep apnea? Answer with citations to reliable medical sources.
     expected_signals:
-      decision:
+      systemone:
       - task:health
     tags:
     - paraphrase
@@ -476,7 +476,7 @@ decisions:
     query: 'Verify this claim with evidence: compare two B2B SaaS pricing strategies and cite sources for the market-share
       claim.'
     expected_signals:
-      decision:
+      systemone:
       - task:explain
       - verification
     tags:
@@ -485,7 +485,7 @@ decisions:
   - id: churn_benchmark_sources
     query: Compare enterprise SaaS churn benchmarks and verify the claim with sources before drawing a conclusion.
     expected_signals:
-      decision:
+      systemone:
       - task:explain
       - verification
     tags:
@@ -494,7 +494,7 @@ decisions:
   - id: roman_republic_with_citations
     query: Explain why the Roman Republic collapsed, and verify the claim with citations.
     expected_signals:
-      decision:
+      systemone:
       - task:explain
       - verification
     tags:
@@ -503,7 +503,7 @@ decisions:
   - id: burnout_sources
     query: Explain burnout patterns in high-pressure knowledge work and support the answer with reputable sources.
     expected_signals:
-      decision:
+      systemone:
       - task:explain
       - verification
     tags:
@@ -512,7 +512,7 @@ decisions:
   - id: planning_fallacy_with_evidence
     query: Explain the planning fallacy and compare recent peer-reviewed findings with citations.
     expected_signals:
-      decision:
+      systemone:
       - task:explain
       - verification
     tags:
@@ -532,7 +532,7 @@ decisions:
     query: Explain when a mid-market SaaS company should prefer product-led growth over sales-led growth, and outline
       the trade-offs.
     expected_signals:
-      decision:
+      systemone:
       - task:explain
     tags:
     - baseline
@@ -540,7 +540,7 @@ decisions:
   - id: roman_republic_plain
     query: In plain language, explain why the Roman Republic collapsed.
     expected_signals:
-      decision:
+      systemone:
       - task:explain
     tags:
     - baseline
@@ -548,7 +548,7 @@ decisions:
   - id: procrastination
     query: Why do people procrastinate even when the task matters, and what interventions tend to help?
     expected_signals:
-      decision:
+      systemone:
       - task:explain
     tags:
     - baseline
@@ -556,7 +556,7 @@ decisions:
   - id: confirmation_bias
     query: Why do people fall into confirmation bias, and what strategies usually help reduce it?
     expected_signals:
-      decision:
+      systemone:
       - task:explain
     tags:
     - paraphrase
@@ -564,7 +564,7 @@ decisions:
   - id: planning_fallacy_explanation
     query: Explain why people misjudge how long a task will take and suggest two practical ways to plan better.
     expected_signals:
-      decision:
+      systemone:
       - task:explain
     tags:
     - language:en
@@ -581,7 +581,7 @@ decisions:
   - id: tea_house_taglines
     query: Invent three evocative taglines for a fictional tea house called Moonleaf.
     expected_signals:
-      decision:
+      systemone:
       - task:creative
     tags:
     - baseline
@@ -589,7 +589,7 @@ decisions:
   - id: pottery_branding
     query: Invent three concise names and taglines for a boutique pottery studio with a calm, modern feel.
     expected_signals:
-      decision:
+      systemone:
       - task:creative
     tags:
     - paraphrase
@@ -597,7 +597,7 @@ decisions:
   - id: roommate_text
     query: I am overwhelmed right now!! Help me write a calm text to my roommate and keep it supportive.
     expected_signals:
-      decision:
+      systemone:
       - task:creative
     tags:
     - emotion
@@ -605,7 +605,7 @@ decisions:
   - id: dinner_reschedule
     query: This is ridiculous!! Help me write a calm message to reschedule tonight's dinner.
     expected_signals:
-      decision:
+      systemone:
       - task:creative
     tags:
     - emotion
@@ -613,7 +613,7 @@ decisions:
   - id: fictional_bakery_names
     query: Invent two playful names and a one-line slogan for a fictional cloud-shaped bakery.
     expected_signals:
-      decision:
+      systemone:
       - task:creative
     tags:
     - language:en
@@ -622,7 +622,7 @@ decisions:
   - id: poem_answer_only_zh
     query: 写一首诗，描述秋雨，共四行。只输出答案。
     expected_signals:
-      decision:
+      systemone:
       - task:creative
     tags:
     - language:zh
@@ -631,7 +631,7 @@ decisions:
   - id: celebratory_reply_zh
     query: 太好了！！！我终于拿到 offer 了，帮我写一段兴奋但得体的回复。
     expected_signals:
-      decision:
+      systemone:
       - task:creative
     tags:
     - zh
@@ -639,7 +639,7 @@ decisions:
   - id: defense_celebration_zh
     query: 我刚顺利通过答辩，帮我写两句开心但谦逊的回复。
     expected_signals:
-      decision:
+      systemone:
       - task:creative
     tags:
     - language:zh
@@ -655,7 +655,7 @@ decisions:
     - role: user
       content: Great, thanks! Now write a short poem about autumn leaves.
     expected_signals:
-      decision:
+      systemone:
       - task:creative
     tags:
     - language:en
@@ -682,7 +682,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - clarify
     tags:
     - baseline
@@ -700,7 +700,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - clarify
     tags:
     - paraphrase
@@ -718,7 +718,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - clarify
     tags:
     - robustness
@@ -736,7 +736,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - clarify
     tags:
     - feedback
@@ -753,7 +753,7 @@ decisions:
   - id: australia_capital
     query: 'Verify this with a source: Is the capital of Australia Sydney or Canberra?'
     expected_signals:
-      decision:
+      systemone:
       - task:facts
     tags:
     - baseline
@@ -761,7 +761,7 @@ decisions:
   - id: light_vs_sound
     query: Verify with a source whether light travels faster than sound.
     expected_signals:
-      decision:
+      systemone:
       - task:facts
     tags:
     - paraphrase
@@ -769,7 +769,7 @@ decisions:
   - id: paris_source
     query: 法国的首都是巴黎吗？给出处。
     expected_signals:
-      decision:
+      systemone:
       - task:facts
     tags:
     - baseline
@@ -777,7 +777,7 @@ decisions:
   - id: jupiter_verify
     query: 太阳系最大的行星是木星吗？请核实并给来源。
     expected_signals:
-      decision:
+      systemone:
       - task:facts
     tags:
     - paraphrase
@@ -785,7 +785,7 @@ decisions:
   - id: arithmetic
     query: What is 2 + 2? Answer briefly.
     expected_signals:
-      decision:
+      systemone:
       - task:facts
     tags:
     - paraphrase
@@ -793,7 +793,7 @@ decisions:
   - id: water_formula
     query: 水的化学式是什么？请简短回答。
     expected_signals:
-      decision:
+      systemone:
       - task:facts
     tags:
     - baseline
@@ -801,7 +801,7 @@ decisions:
   - id: months_in_year
     query: 一年有几个月？请简短回答。
     expected_signals:
-      decision:
+      systemone:
       - task:facts
     tags:
     - paraphrase
@@ -809,7 +809,7 @@ decisions:
   - id: seconds_per_minute_zh
     query: 一分钟有多少秒？只写答案。
     expected_signals:
-      decision:
+      systemone:
       - task:facts
     tags:
     - language:zh
@@ -819,7 +819,7 @@ decisions:
   - id: days_per_week_zh
     query: 一周有几天？请用一句话回答。
     expected_signals:
-      decision:
+      systemone:
       - task:facts
     tags:
     - language:zh
@@ -829,7 +829,7 @@ decisions:
   - id: quarters_answer_only_zh
     query: 一年有几个季度？仅给答案。
     expected_signals:
-      decision:
+      systemone:
       - task:facts
     tags:
     - language:zh
@@ -840,7 +840,7 @@ decisions:
     query: How many days are there in a leap year?
     repeat: 2000
     expected_signals:
-      decision:
+      systemone:
       - task:facts
     tags:
     - language:en
@@ -855,7 +855,7 @@ decisions:
     - role: user
       content: Thanks. How many days are there in a leap year?
     expected_signals:
-      decision:
+      systemone:
       - task:facts
     tags:
     - language:en
@@ -874,7 +874,7 @@ decisions:
   - id: casual_greeting
     query: hi
     expected_signals:
-      decision:
+      systemone:
       - task:chat
     tags:
     - baseline
@@ -884,7 +884,7 @@ decisions:
     - role: user
       content: hi
     expected_signals:
-      decision:
+      systemone:
       - task:chat
     tags:
     - baseline
@@ -894,7 +894,7 @@ decisions:
   - id: induction_cooktops
     query: In one short paragraph, explain how induction cooktops work for a home kitchen user.
     expected_signals:
-      decision:
+      systemone:
       - task:chat
     tags:
     - baseline
@@ -902,7 +902,7 @@ decisions:
   - id: refrigerator_cooling
     query: In one short paragraph, explain how a refrigerator keeps food cold.
     expected_signals:
-      decision:
+      systemone:
       - task:chat
     tags:
     - paraphrase
@@ -910,7 +910,7 @@ decisions:
   - id: composting_plain
     query: In one short paragraph, explain how composting works for a first-time apartment resident.
     expected_signals:
-      decision:
+      systemone:
       - task:chat
     tags:
     - robustness
@@ -918,7 +918,7 @@ decisions:
   - id: who_are_you
     query: Who are you? Answer briefly.
     expected_signals:
-      decision:
+      systemone:
       - task:chat
     tags:
     - baseline
@@ -936,10 +936,10 @@ decisions:
     - role: user
       content: ' '
     expected_signal_errors:
-      decision:task: decision_rejected
-      decision:verification: decision_rejected
-      decision:correction: decision_rejected
-      decision:clarify: decision_rejected
+      systemone:task: systemone_rejected
+      systemone:verification: systemone_rejected
+      systemone:correction: systemone_rejected
+      systemone:clarify: systemone_rejected
     tags:
     - fallback
     - negative

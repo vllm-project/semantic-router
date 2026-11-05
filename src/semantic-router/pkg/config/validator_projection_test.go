@@ -14,11 +14,11 @@ func TestProjectionRejectsEnvelopeAndLabelledClassifierInputs(t *testing.T) {
 	}
 }
 
-func decisionProjectionYAML(input string) []byte {
+func systemOneProjectionYAML(input string) []byte {
 	return []byte(`
 routing:
   signals:
-    decision:
+    systemone:
       - name: difficulty
         question:
           type: score
@@ -41,8 +41,8 @@ routing:
       - name: effort
         method: weighted_sum
         inputs:
-          - {type: decision, name: difficulty, weight: 0.3, value_source: raw}
-          - {type: decision, name: ` + input + `, weight: 0.4, value_source: raw}
+          - {type: systemone, name: difficulty, weight: 0.3, value_source: raw}
+          - {type: systemone, name: ` + input + `, weight: 0.4, value_source: raw}
     mappings:
       - name: effort_band
         source: effort
@@ -59,18 +59,18 @@ routing:
 `)
 }
 
-func TestProjectionInputsReadOneOptionOfADecisionQuestion(t *testing.T) {
+func TestProjectionInputsReadOneOptionOfASystemOneQuestion(t *testing.T) {
 	for _, input := range []string{"needs:deliberation", "needs", "precise_facts"} {
-		if _, err := ParseRoutingYAMLBytes(decisionProjectionYAML(input)); err != nil {
+		if _, err := ParseRoutingYAMLBytes(systemOneProjectionYAML(input)); err != nil {
 			t.Fatalf("%s: %v", input, err)
 		}
 	}
 	for input, want := range map[string]string{
 		"needs:creativity":   `names "creativity", which is not an option of the set question "needs"`,
 		"precise_facts:true": `names "true", which is not an option of the noul question "precise_facts"`,
-		"missing:tools":      `input decision("missing:tools") is not declared in routing.signals`,
+		"missing:tools":      `input systemone("missing:tools") is not declared in routing.signals`,
 	} {
-		_, err := ParseRoutingYAMLBytes(decisionProjectionYAML(input))
+		_, err := ParseRoutingYAMLBytes(systemOneProjectionYAML(input))
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Fatalf("%s: want an error containing %q, got %v", input, want, err)
 		}

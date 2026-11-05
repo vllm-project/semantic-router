@@ -100,9 +100,9 @@ func summarizeResolution(cfg *RouterConfig) resolutionSummary {
 				summary.Signals[key] = resolvedIdentity(resolved.Name, resolved.Deployment)
 			}
 		}
-		for _, rule := range scoped.DecisionRules {
-			name := scoped.DecisionQuestionDeployment(rule)
-			summary.Signals[string(recipe)+"/decision."+rule.Name] = resolvedIdentity(name, cfg.ModelDeployments[name])
+		for _, rule := range scoped.SystemOneRules {
+			name := scoped.SystemOneRuleDeployment(rule)
+			summary.Signals[string(recipe)+"/systemone."+rule.Name] = resolvedIdentity(name, cfg.ModelDeployments[name])
 		}
 	}
 	for name, deployment := range ModelRuntimeDeploymentsInUse(cfg) {

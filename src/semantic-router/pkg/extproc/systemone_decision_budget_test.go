@@ -64,7 +64,7 @@ recipes:
     routing:
       fallback: {enabled: false}
       signals:
-        decision:
+        systemone:
           - name: task_kind
             deployment: local-kai
             timeout_ms: 2000
@@ -74,7 +74,7 @@ recipes:
               choices: [{key: simple, description: Routine task}, {key: hard, description: Complex task}]
       decisions:
         - name: simple
-          rules: {type: decision, name: task_kind, label: simple}
+          rules: {type: systemone, name: task_kind, label: simple}
           modelRefs: [{model: kai}]
           algorithm:
             type: cascade
@@ -85,7 +85,7 @@ recipes:
                 rules: [{question_type: noul, field: top_probability, predicate: {gte: 0}}]
             stages: [{name: answer, kind: native, model: kai}]
         - name: hard
-          rules: {type: decision, name: task_kind, label: hard}
+          rules: {type: systemone, name: task_kind, label: hard}
           modelRefs: [{model: kai}, {model: vega}]
           algorithm:
             type: cascade
@@ -159,7 +159,7 @@ recipes:
 					return modelservice.Response{}, context.Canceled
 				}
 				return modelservice.Response{Answers: map[string]modelservice.Answer{
-					"task_kind": {Type: "choice", Choice: tc.decision, Probabilities: map[string]float64{"simple": 0.5, "hard": 0.5}},
+					"systemone:task_kind": {Type: "choice", Choice: tc.decision, Probabilities: map[string]float64{"simple": 0.5, "hard": 0.5}},
 				}}, nil
 			}))
 			var calls []string

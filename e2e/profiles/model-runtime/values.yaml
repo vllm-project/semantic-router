@@ -86,7 +86,7 @@ config:
           keywords: [vsr-portable-observation-probe]
           case_sensitive: false
       # testcases/decision_runtime_routing.go asks the runtimes these questions.
-      decision:
+      systemone:
         - name: answered
           description: Matches whenever the managed decision model answers.
           deployment: decision-fixture
@@ -205,7 +205,7 @@ config:
           operator: AND
           on_unknown: no_match
           conditions:
-            - type: decision
+            - type: systemone
               name: offline
         modelRefs:
           - model: general-expert
@@ -217,9 +217,9 @@ config:
           operator: AND
           on_unknown: no_match
           conditions:
-            - type: decision
+            - type: systemone
               name: answered
-            - type: decision
+            - type: systemone
               name: attached_answered
         modelRefs:
           - model: general-expert
@@ -227,8 +227,8 @@ config:
           - model: math-expert
             use_reasoning: false
         algorithm:
-          type: decision
-          decision:
+          type: systemone
+          systemone:
             deployment: decision-fixture
             instructions: Which model should answer this request?
             candidates:
@@ -265,13 +265,13 @@ config:
             - {type: classifier, name: user_reaction, label: WRONG_ANSWER, predicate: {gte: 0.5}}
             - {type: classifier, name: user_reaction, label: WANT_DIFFERENT, predicate: {gte: 0.5}}
             - {type: classifier, name: user_reaction, label: NO_FEEDBACK, predicate: {gte: 0.5}}
-            - {type: decision, name: request_kind, label: code}
-            - {type: decision, name: request_kind, label: math}
-            - {type: decision, name: request_kind, label: chat}
-            - {type: decision, name: topics, label: billing}
-            - {type: decision, name: topics, label: shipping}
-            - {type: decision, name: names, label: city}
-            - {type: decision, name: names, label: person}
+            - {type: systemone, name: request_kind, label: code}
+            - {type: systemone, name: request_kind, label: math}
+            - {type: systemone, name: request_kind, label: chat}
+            - {type: systemone, name: topics, label: billing}
+            - {type: systemone, name: topics, label: shipping}
+            - {type: systemone, name: names, label: city}
+            - {type: systemone, name: names, label: person}
             # A BOTH condition needs an AR and a diffusion model; the BOTH rule
             # still reports a BOTH answer.
             - {type: modality, name: AR}

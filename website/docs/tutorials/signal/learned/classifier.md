@@ -116,7 +116,7 @@ The flag applies only to rules answered by an `openai_chat` deployment.
 The model must report a score for every declared
 label; each score must be between `0` and `1`, and the complete distribution
 must sum to approximately `1.0`. These are model-reported confidence scores,
-not calibrated classifier probabilities. Classifier and decision-model leaves
+not calibrated classifier probabilities. Classifier and System One leaves
 accept condition-level `on_error`; classifier failures expose the bounded
 `classifier_evaluation_failed` code in eval/replay diagnostics.
 

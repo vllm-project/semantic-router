@@ -169,7 +169,7 @@ class DomainRegistryTests(unittest.TestCase):
             "src/model-runtime/vllm_srun/registry/tables/decision2.py",
             "src/model-runtime/vllm_srun/registry/tables/vela2.py",
             "src/model-runtime/vllm_srun/families/vela2/request.py",
-            "src/semantic-router/pkg/modelservice/decision_catalog.generated.json",
+            "src/semantic-router/pkg/config/decision_catalog.generated.json",
             "src/model-runtime/vllm_srun/registry/tables/common.py",
             "src/model-runtime/vllm_srun/systemone.py",
             "src/model-runtime/vllm_srun/families/decision1/family.py",
@@ -218,10 +218,10 @@ class DomainRegistryTests(unittest.TestCase):
         for path in (
             "website/docs/model-runtime/reference.md",
             "website/docs/model-runtime/guides/pii.md",
-            "website/docs/tutorials/signal/learned/decision.md",
+            "website/docs/tutorials/signal/learned/systemone.md",
             f"{translated}/model-runtime/deploy.md",
             f"{translated}/model-runtime/guides/decisions.md",
-            f"{translated}/tutorials/algorithm/selection/decision.md",
+            f"{translated}/tutorials/algorithm/selection/systemone.md",
         ):
             with self.subTest(path=path):
                 result = classify([path])

@@ -92,7 +92,7 @@ type SignalMatches struct {
 	ClassifierRules    []string // generic classifier label names matched
 	InputModalityRules []string // structural input-modality presence rule names matched
 	ActionRules        []string // the request's single action, when declared
-	DecisionRules      []string // decision-model answers matched: noul/score rule names, "rule:choice" for choices
+	SystemOneRules     []string // decision-model answers matched: noul/score rule names, "rule:choice" for choices
 	ProjectionRules    []string // Derived routing outputs from routing.projections.mappings
 
 	Observations       []SignalObservation
@@ -428,26 +428,26 @@ func (e *DecisionEngine) evalLeaf(
 			matched = slices.Contains(signals.ClassifierRules, node.Name+":"+node.Label)
 		}
 	}
-	if normalizedType == config.SignalTypeDecision {
+	if normalizedType == config.SignalTypeSystemOne {
 		reference := node.Name
 		if node.Label != "" {
 			reference += ":" + node.Label
 		}
-		matched = slices.Contains(signals.DecisionRules, reference)
+		matched = slices.Contains(signals.SystemOneRules, reference)
 	}
 	unresolved := signalFailed(signals, normalizedType, node.Name) &&
 		(!matched || signalErrorMatch(signals, normalizedType, node.Name))
 	if unresolved && policy != "" {
 		return nodeEvaluation{state: evaluationUnknown}
 	}
-	if unresolved && (normalizedType == config.SignalTypeClassifier || normalizedType == config.SignalTypeDecision) && strings.EqualFold(node.OnError, "match") {
+	if unresolved && (normalizedType == config.SignalTypeClassifier || normalizedType == config.SignalTypeSystemOne) && strings.EqualFold(node.OnError, "match") {
 		return nodeEvaluation{state: evaluationTrue, confidence: 1, matchedRules: []string{formatMatchedRule(node)}, onError: true}
 	}
 	if !matched {
 		return nodeEvaluation{state: evaluationFalse, onError: unresolved}
 	}
 	confidence, reported := signalConfidence(signals.SignalConfidences, normalizedType, node.Name)
-	if normalizedType == config.SignalTypeClassifier || (normalizedType == config.SignalTypeDecision && node.Label != "") {
+	if normalizedType == config.SignalTypeClassifier || (normalizedType == config.SignalTypeSystemOne && node.Label != "") {
 		confidence, reported = signalPredicateValue(signals, normalizedType, node.Name, node.Label)
 	}
 	kind := config.SignalScoreKind(normalizedType)
@@ -588,7 +588,7 @@ func (e *DecisionEngine) matchesSignalType(
 	if normalizedType == "domain" {
 		return e.matchesDomainCondition(name, signals.DomainRules), true
 	}
-	if normalizedType == config.SignalTypeClassifier || normalizedType == config.SignalTypeDecision {
+	if normalizedType == config.SignalTypeClassifier || normalizedType == config.SignalTypeSystemOne {
 		// The leaf evaluator handles raw-score predicates and label-qualified
 		// matches separately.
 		return false, true

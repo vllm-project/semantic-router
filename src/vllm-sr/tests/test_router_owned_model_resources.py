@@ -238,7 +238,7 @@ def _rule_deployments(document):
             }
         ],
         "complexity": [{"name": "hard", "deployment": "local-vela"}],
-        "decision": [
+        "systemone": [
             {
                 "name": "billing",
                 "deployment": "d3-remote",
@@ -252,12 +252,12 @@ def _rule_deployments(document):
             "priority": 1,
             "rules": {
                 "operator": "AND",
-                "conditions": [{"type": "decision", "name": "billing"}],
+                "conditions": [{"type": "systemone", "name": "billing"}],
             },
             "modelRefs": [{"model": "small"}, {"model": "large"}],
             "algorithm": {
-                "type": "decision",
-                "decision": {
+                "type": "systemone",
+                "systemone": {
                     "deployment": "local-vela",
                     "instructions": "Which model should answer?",
                 },
@@ -553,6 +553,12 @@ def test_offline_runs_only_the_structural_checks(monkeypatch, tmp_path):
 def test_migrate_writes_the_routers_rewrite_of_the_model_fields(monkeypatch, tmp_path):
     source = _write(tmp_path, BASE)
     rewritten = yaml.safe_dump(BASE, sort_keys=False) + "# the Router's rewrite\n"
+    changed = {
+        "code": "migration_change",
+        "field": "global.model_catalog",
+        "message": "deprecated model fields are written as the deployments, "
+        "bindings and rule deployments the Router reads them as",
+    }
     kept = {
         "code": "deprecated_model_field",
         "field": 'global.model_catalog.external["rewriter"]',
@@ -565,7 +571,7 @@ def test_migrate_writes_the_routers_rewrite_of_the_model_fields(monkeypatch, tmp
         "sys.stdin.read()\n"
         "report = {'valid': True, 'warnings': []}\n"
         "if '-migrate-config' in sys.argv:\n"
-        f"    report.update(migrated={rewritten!r}, kept=[{kept!r}])\n"
+        f"    report.update(migrated={rewritten!r}, kept=[{changed!r}, {kept!r}])\n"
         "print(json.dumps(report))\n",
         encoding="utf-8",
     )

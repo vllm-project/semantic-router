@@ -212,7 +212,7 @@ decisions:
           name: needs_reasoning:hard
 ```
 
-`match` 把无法评级的请求送到更强模型，通常是更安全的默认；`fail_request` 直接拒绝。`on_unknown` 属于根 `rules` 节点，并作用于整条决策——逐条件 `on_error` 字段只在 `classifier` 和 `decision` 条件上接受，因此把它放在 `complexity` 条件上会在配置加载时被拒绝。
+`match` 把无法评级的请求送到更强模型，通常是更安全的默认；`fail_request` 直接拒绝。`on_unknown` 属于根 `rules` 节点，并作用于整条决策——逐条件 `on_error` 字段只在 `classifier` 和 `systemone` 条件上接受，因此把它放在 `complexity` 条件上会在配置加载时被拒绝。
 
 打分器的数字以模型自身单位发布为 `complexity:<rule>:score`，而本地打分发布 `complexity:<rule>:margin` 及其文本/图像分量。这些到达回放记录与可观测性；决策条件匹配判定（`<rule>:<verdict>`），而不是数字，因此对 `:score` 的数值谓词不是路由机制。
 

@@ -135,7 +135,7 @@ func TestSpanBindingsFailPreparationTheModelCannotServe(t *testing.T) {
 		"a model without the preset": spanBinding("pii_classifier", "kai", endpoint),
 		"the broad head": func() config.ResolvedModelBinding {
 			spec := spanBinding("pii_classifier", "vela", endpoint)
-			spec.Binding.Head = config.DecisionSpanHeadBroad
+			spec.Binding.Head = config.SystemOneSpanHeadBroad
 			return spec
 		}(),
 		"a label mapping": func() config.ResolvedModelBinding {
@@ -155,7 +155,7 @@ func TestSpanBindingsFailPreparationTheModelCannotServe(t *testing.T) {
 		}
 	}
 	router := spanBinding("pii_classifier", "vela", endpoint)
-	router.Binding.Head = config.DecisionSpanHeadRouter
+	router.Binding.Head = config.SystemOneSpanHeadRouter
 	if _, err := runtime.Tokens(context.Background(), router); err != nil {
 		t.Fatalf("head router names the head that answers: %v", err)
 	}

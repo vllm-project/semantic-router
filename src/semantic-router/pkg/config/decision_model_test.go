@@ -24,19 +24,19 @@ func mustParseDecisionModel(t *testing.T, raw string) *RouterConfig {
 }
 
 func withDecisionQuestion(raw string) string {
-	return strings.Replace(raw, "  signals:\n", "  signals:\n    decision:\n      - name: needs_tools\n"+
+	return strings.Replace(raw, "  signals:\n", "  signals:\n    systemone:\n      - name: needs_tools\n"+
 		"        question: {type: noul, instructions: \"Does the request need a tool?\"}\n", 1)
 }
 
 func withDecisionSelector(raw, deployment string) string {
-	selector := "        decision:\n          instructions: Which model should answer?\n"
+	selector := "        systemone:\n          instructions: Which model should answer?\n"
 	if deployment != "" {
 		selector += "          deployment: " + deployment + "\n"
 	}
 	return strings.Replace(raw, "  decisions:\n", "  decisions:\n    - name: choose\n      priority: 200\n"+
 		"      rules: {operator: AND, conditions: [{type: domain, name: math}]}\n"+
 		"      modelRefs: [{model: general}, {model: other-model}]\n"+
-		"      algorithm:\n        type: decision\n"+selector, 1)
+		"      algorithm:\n        type: systemone\n"+selector, 1)
 }
 
 func withOtherModel(raw string) string {
@@ -61,7 +61,7 @@ func TestDecisionModelDefaultUsesDeclaredResource(t *testing.T) {
 			t.Fatalf("%s duplicated resource: %s %+v %v", consumer, got, deployment, err)
 		}
 	}
-	if cfg.DecisionQuestionDeployment(cfg.DecisionRules[0]) != name {
+	if cfg.SystemOneRuleDeployment(cfg.SystemOneRules[0]) != name {
 		t.Fatal("question did not inherit default deployment")
 	}
 }
@@ -74,7 +74,7 @@ func TestDecisionModelAcceptsGenericDeclaredFamilies(t *testing.T) {
 			if err != nil || !ok || name != "selected" || deployment.Artifact != artifact {
 				t.Fatalf("selection %s %+v %v", name, deployment, err)
 			}
-			if cfg.DecisionQuestionDeployment(cfg.DecisionRules[0]) != "selected" || cfg.DecisionSelectorDeployment(*cfg.GetDecisionByName("choose").Algorithm.Decision) != "selected" {
+			if cfg.SystemOneRuleDeployment(cfg.SystemOneRules[0]) != "selected" || cfg.SystemOneSelectorDeployment(*cfg.GetDecisionByName("choose").Algorithm.SystemOne) != "selected" {
 				t.Fatal("wrong consumer default")
 			}
 			used := ModelRuntimeDeploymentsInUse(cfg)

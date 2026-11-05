@@ -41,7 +41,7 @@ func TestMaintainedKnowledgeRecipeParsesAndDecompilesWithoutError(t *testing.T) 
 		t.Fatal("expected mmlu recipe to resolve built-in mmlu_kb default")
 	}
 
-	if len(cfg.DecisionRules) == 0 {
+	if len(cfg.SystemOneRules) == 0 {
 		t.Fatal("expected the knowledge recipe to define its subject question")
 	}
 }
@@ -58,7 +58,7 @@ func TestMaintainedKnowledgeRecipeDSLRoundTrip(t *testing.T) {
 		t.Fatalf("Compile errors: %v", errs)
 	}
 
-	if len(cfg.DecisionRules) == 0 {
+	if len(cfg.SystemOneRules) == 0 {
 		t.Error("expected the subject question from the knowledge recipe")
 	}
 	if len(cfg.Decisions) == 0 {
@@ -75,8 +75,8 @@ func TestMaintainedKnowledgeRecipeDSLRoundTrip(t *testing.T) {
 		t.Fatalf("Round-trip compile errors: %v", errs2)
 	}
 
-	if len(cfg2.DecisionRules) != len(cfg.DecisionRules) {
-		t.Errorf("round-trip decision questions: %d -> %d", len(cfg.DecisionRules), len(cfg2.DecisionRules))
+	if len(cfg2.SystemOneRules) != len(cfg.SystemOneRules) {
+		t.Errorf("round-trip decision questions: %d -> %d", len(cfg.SystemOneRules), len(cfg2.SystemOneRules))
 	}
 	if len(cfg2.Decisions) != len(cfg.Decisions) {
 		t.Errorf("round-trip decisions: %d -> %d", len(cfg.Decisions), len(cfg2.Decisions))

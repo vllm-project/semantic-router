@@ -96,7 +96,7 @@ func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 		Classifiers:   append([]ClassifierSignalRule(nil), signals.ClassifierRules...),
 		InputModality: append([]InputModalityRule(nil), signals.InputModalityRules...),
 		Actions:       append([]ActionRule(nil), signals.ActionRules...),
-		Decision:      append([]DecisionSignalRule(nil), signals.DecisionRules...),
+		SystemOne:     append([]SystemOneRule(nil), signals.SystemOneRules...),
 
 		TopicContinuity: append([]TopicContinuityRule(nil), signals.TopicContinuityRules...),
 	}

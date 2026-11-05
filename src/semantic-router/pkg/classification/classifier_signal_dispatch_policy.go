@@ -101,16 +101,12 @@ func (c *Classifier) buildPolicySignalDispatchers(
 			func(context.Context) { c.evaluateInputModalitySignal(results, mu, requestFacts, usedSignals) },
 		},
 		{
-			config.SignalTypeDecision, "Decision",
+			config.SignalTypeSystemOne, "SystemOne",
 			func(ctx context.Context) {
-				c.evaluateDecisionModelSignals(
-					ctx,
-					results,
-					mu,
-					textForSignal(config.SignalTypeDecision),
-					textForSignal(decisionModelQuestionText),
-					usedSignals,
-				)
+				c.evaluateSystemOneSignals(ctx, results, mu, systemOneReading{
+					request: textForSignal(systemOneQuestionText), history: priorUserMessages, turns: requestFacts.Turns,
+					toolResults: toolResultTexts, images: requestFacts.Images, videos: requestFacts.Videos,
+				}, usedSignals)
 			},
 		},
 		{

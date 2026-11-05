@@ -302,7 +302,7 @@ generates this table; run `make headers-generate` after changing it.
 | `x-vsr-matched-complexity` | response | debug | none | signals | v0.2 | Matched `complexity` rules with their levels, such as `code_complexity:hard`. |
 | `x-vsr-matched-context` | response | debug | none | signals | v0.2 | Matched `context` rules. |
 | `x-vsr-matched-conversation` | response | debug | none | signals | v0.3 | Matched `conversation` rules. |
-| `x-vsr-matched-decision-model` | response | debug | none | signals | v0.5 | Matched decision-model signals: rule names, `rule:choice` for choices and `rule:label` for labels. |
+| `x-vsr-matched-decision-model` | response | debug | none | signals | v0.5 | Matched `systemone` rules: rule names, `rule:choice` for choices and `rule:label` for labels. |
 | `x-vsr-matched-domains` | response | debug | none | signals | v0.1 | Matched `domain` rules. |
 | `x-vsr-matched-embeddings` | response | debug | none | signals | v0.1 | Matched `embedding` rules. |
 | `x-vsr-matched-event` | response | debug | none | signals | v0.3 | Matched `event` rules. |

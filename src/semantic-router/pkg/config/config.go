@@ -342,6 +342,9 @@ type InlineModels struct {
 	// ModelResourceWarnings are the deprecated model fields the
 	// configuration was read with, and what they were read as.
 	ModelResourceWarnings []ConfigWarning `yaml:"-" json:"-"`
+	// FormWarnings are the renamed forms the document was written in, which
+	// it was read as their canonical forms (config_forms.go).
+	FormWarnings []ConfigWarning `yaml:"-" json:"-"`
 	// AuthoredThresholds are the module thresholds the configuration sets;
 	// the others follow the model that answers (model_thresholds.go).
 	AuthoredThresholds map[string]bool `yaml:"-" json:"-"`

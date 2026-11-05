@@ -110,7 +110,7 @@ routing:
 | [Fact Check](./learned/fact-check) | 检测可能需要证据核验的提示 |
 | [Hallucination](./learned/hallucination) | 对照给定依据上下文检查模型回答 |
 | [Jailbreak](./learned/jailbreak) | 检测提示注入或越狱企图 |
-| [Decision](./learned/decision) | 使用判断模型提出 choice、score、noul、set 或 span 问题 |
+| [System One](./learned/systemone) | 使用判断模型提出 choice、score、noul、set 或 span 问题 |
 | [Safety](./learned/safety) | 检测不安全内容及可选风险类别 |
 | [PII](./learned/pii) | 检测敏感个人数据 |
 | [Preference](./learned/preference) | 推断响应风格偏好 |

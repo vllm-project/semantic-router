@@ -130,8 +130,13 @@ global:
 	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 		t.Fatal(err)
 	}
-	if report.Migrated == "" || len(report.Kept) > 0 || report.MigrationError != "" {
+	if report.Migrated == "" || report.MigrationError != "" {
 		t.Fatalf("migration report %+v", report)
+	}
+	for _, note := range report.Kept {
+		if note.Code != "migration_change" {
+			t.Fatalf("a deprecated field stays or needs an action: %+v", note)
+		}
 	}
 	migrated, err := config.ParseYAMLBytesWithoutEnvExpansion([]byte(report.Migrated))
 	if err != nil {

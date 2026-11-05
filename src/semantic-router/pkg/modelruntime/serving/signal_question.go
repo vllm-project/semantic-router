@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -12,11 +13,11 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
-// A Vela 2.0 deployment answers the Router's built-in classifier signals as
-// Choice questions: the wording its model card gives for the Vela 1.0 signals
-// it was trained on, with the options in the label order of the Vela 1.0
-// head each signal ran on, so a consumer's label mapping, thresholds and
-// policies read the answer as they read the head's. In a request stage the
+// A decision model deployment answers the Router's built-in classifier
+// signals as their presets' Choice questions, with the options in the label
+// order of the Vela 1.0 head each signal ran on, so a consumer's label
+// mapping, thresholds and policies read the answer as they read the head's.
+// In a request stage the
 // questions travel in one /v1/decisions call with the stage's other
 // questions to the deployment (see modelservice.Bundle).
 //
@@ -29,19 +30,30 @@ import (
 // the same budget, so a stage's questions about one text still travel in one
 // call and read the model input they would read alone.
 
-// signalQuestion is the question one built-in signal consumer asks; a safety
+// signalQuestion is the question one built-in signal consumer asks: a
+// preset-backed task's canonical question (modelservice.BuiltinTasks), which
+// a family trained on the preset is asked in its trained form; a safety
 // question reads the whole text, a routing question its first tokens.
+// Labels are what the consumer reads for each option, in option order.
 type signalQuestion struct {
 	task         string
 	key          string
 	instructions string
 	options      []modelservice.Choice
+	consumer     []string
 	safety       bool
 }
 
-func signalTask(id, key string) signalQuestion {
+func signalTask(id, key string, consumer ...string) signalQuestion {
 	definition, _ := modelservice.BuiltinTask(id)
-	return signalQuestion{task: id, key: key, instructions: definition.Question.Instructions, options: definition.Question.Choices, safety: definition.FullInput}
+	question := signalQuestion{task: id, key: key, instructions: definition.Question.Instructions, options: definition.Question.Choices, safety: definition.FullInput}
+	question.consumer = consumer
+	if len(consumer) == 0 {
+		for _, option := range question.options {
+			question.consumer = append(question.consumer, option.Key)
+		}
+	}
+	return question
 }
 
 var (
@@ -50,7 +62,10 @@ var (
 	harmQuestion      = signalTask("safety", "p_harm")
 	factCheckQuestion = signalTask("fact_check", "factcheck")
 	feedbackQuestion  = signalTask("user_feedback", "feedback")
-	modalityQuestion  = signalTask("modality", "modality")
+	// The modality consumer reads the labels of the Vela 1.0 head it
+	// replaced, AR, DIFFUSION and BOTH, for the modality preset's text, image
+	// and text_image, until the modality signal reads the canonical labels.
+	modalityQuestion = signalTask("modality", "modality", "AR", "DIFFUSION", "BOTH")
 )
 
 // signalQuestions maps each built-in label-distribution consumer to its question.
@@ -79,17 +94,14 @@ func questionFor(spec config.ResolvedModelBinding, card modelservice.ModelCard) 
 }
 
 func (q signalQuestion) labels() []string {
-	labels := make([]string, len(q.options))
-	for i, option := range q.options {
-		labels[i] = option.Key
-	}
-	return labels
+	return slices.Clone(q.consumer)
 }
 
-// question is the decisions question a binding asks. Its ID carries the
-// consumer's name and a ':', which no decision signal's name contains; a
-// model family trained on the question is asked it under the trained ID
-// (modelservice.CompileTask), and the answer comes back under this one.
+// question is the decisions question a binding asks. Its ID is the
+// consumer's name, a ':' and its key, so it is neither a trained ID nor a
+// systemone rule's (systemone:<rule>); a model family trained on the question
+// is asked it under the trained ID (modelservice.CompileTask), and the answer
+// comes back under this one.
 func (q signalQuestion) question(spec config.ResolvedModelBinding) modelservice.Question {
 	return modelservice.Question{TaskID: q.task, Stage: "request", ID: spec.Name + ":" + q.key, Type: "choice", Instructions: q.instructions, Choices: q.options}
 }

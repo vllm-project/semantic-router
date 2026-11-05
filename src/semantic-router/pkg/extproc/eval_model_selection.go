@@ -277,7 +277,7 @@ func configuredLooperFinalModel(decision *config.Decision) (string, bool) {
 // model, which keeps no state between requests.
 func evalSupportsDryRunSelection(method selection.SelectionMethod) bool {
 	switch method {
-	case selection.MethodStatic, selection.MethodMultiFactor, selection.MethodLatencyAware, selection.MethodDecision:
+	case selection.MethodStatic, selection.MethodMultiFactor, selection.MethodLatencyAware, selection.MethodSystemOne:
 		return true
 	default:
 		return false

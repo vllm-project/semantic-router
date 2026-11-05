@@ -132,7 +132,7 @@ the detector's `threshold` applies to Vela 1.0 Halu only; `min_span_length`
 and `min_span_confidence` filter the spans of both. The
 check runs at the response stage, in that stage's call to the deployment. The
 same deployment can answer the request's
-[`decision`](decision.md) and
+[`systemone`](systemone.md) and
 [`pii`](pii.md#vela-20) questions.
 
 ## Verdicts without spans

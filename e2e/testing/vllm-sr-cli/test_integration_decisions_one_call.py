@@ -124,7 +124,7 @@ class TestServeAsksADecisionModelOneCallPerStage(
             "pii": [
                 {"name": "personal_data", "threshold": 0.99, "include_history": True}
             ],
-            "decision": [
+            "systemone": [
                 {
                     "name": "answered",
                     "deployment": DEPLOYMENT,
@@ -146,7 +146,7 @@ class TestServeAsksADecisionModelOneCallPerStage(
                 "priority": default_route["priority"] + 200,
                 "rules": {
                     "operator": "AND",
-                    "conditions": [{"type": "decision", "name": "answered"}],
+                    "conditions": [{"type": "systemone", "name": "answered"}],
                 },
                 "modelRefs": refs,
             },

@@ -39,8 +39,8 @@ var algorithmSubConfigCompilers = map[string]algorithmSubConfigCompiler{
 	"prompt": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
 		algo.Prompt = c.compilePromptAlgo(fields)
 	},
-	"decision": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
-		algo.Decision = c.compileDecisionModelAlgo(fields)
+	"systemone": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
+		algo.SystemOne = c.compileSystemOneAlgo(fields)
 	},
 	"static": func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
 	"knn":    func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
@@ -70,24 +70,24 @@ func (c *Compiler) compilePromptAlgo(
 	return cfg
 }
 
-func (c *Compiler) compileDecisionModelAlgo(
+func (c *Compiler) compileSystemOneAlgo(
 	fields map[string]Value,
-) *config.DecisionSelectionConfig {
-	cfg := &config.DecisionSelectionConfig{}
-	decision, ok := fields["decision"].(ObjectValue)
+) *config.SystemOneSelectionConfig {
+	cfg := &config.SystemOneSelectionConfig{}
+	selector, ok := fields["systemone"].(ObjectValue)
 	if !ok {
 		return cfg
 	}
-	if value, ok := getStringField(decision.Fields, "deployment"); ok {
+	if value, ok := getStringField(selector.Fields, "deployment"); ok {
 		cfg.Deployment = value
 	}
-	if value, ok := getStringField(decision.Fields, "instructions"); ok {
+	if value, ok := getStringField(selector.Fields, "instructions"); ok {
 		cfg.Instructions = value
 	}
-	if value, ok := getIntField(decision.Fields, "timeout_ms"); ok {
+	if value, ok := getIntField(selector.Fields, "timeout_ms"); ok {
 		cfg.TimeoutMs = value
 	}
-	if candidates, ok := decision.Fields["candidates"].(ObjectValue); ok {
+	if candidates, ok := selector.Fields["candidates"].(ObjectValue); ok {
 		cfg.Candidates = make(map[string]string, len(candidates.Fields))
 		for name := range candidates.Fields {
 			if value, ok := getStringField(candidates.Fields, name); ok {

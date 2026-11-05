@@ -263,24 +263,24 @@ func (c *Compiler) compileTopicContinuitySignal(s *SignalDecl) {
 	c.config.TopicContinuityRules = append(c.config.TopicContinuityRules, rule)
 }
 
-func (c *Compiler) compileDecisionModelSignal(s *SignalDecl) {
+func (c *Compiler) compileSystemOneSignal(s *SignalDecl) {
 	payload := fieldsToMap(s.Fields)
 	payload["name"] = s.Name
 	raw, err := yaml.Marshal(payload)
 	if err != nil {
-		c.addError(s.Pos, "failed to encode decision signal %q: %v", s.Name, err)
+		c.addError(s.Pos, "failed to encode systemone signal %q: %v", s.Name, err)
 		return
 	}
-	var rule config.DecisionSignalRule
+	var rule config.SystemOneRule
 	if err := yaml.Unmarshal(raw, &rule); err != nil {
-		c.addError(s.Pos, "failed to decode decision signal %q: %v", s.Name, err)
+		c.addError(s.Pos, "failed to decode systemone signal %q: %v", s.Name, err)
 		return
 	}
-	if err := config.ValidateDecisionSignalRuleContract(rule); err != nil {
+	if err := config.ValidateSystemOneRuleContract(rule); err != nil {
 		c.addError(s.Pos, "%v", err)
 		return
 	}
-	c.config.DecisionRules = append(c.config.DecisionRules, rule)
+	c.config.SystemOneRules = append(c.config.SystemOneRules, rule)
 }
 
 func (c *Compiler) compileClassifierSignal(s *SignalDecl) {

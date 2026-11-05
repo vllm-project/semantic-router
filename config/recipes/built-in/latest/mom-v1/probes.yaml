@@ -183,7 +183,7 @@ decisions:
       conversation:
       - has_image
       - has_tools
-      decision:
+      systemone:
       - task:agentic
   - id: balance_long__image_tools__image_tools_in_30k_60k_band
     display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected service,
@@ -514,7 +514,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -534,7 +534,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -554,7 +554,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -574,7 +574,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -594,7 +594,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -609,7 +609,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -629,7 +629,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -649,7 +649,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -669,7 +669,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -689,7 +689,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -709,7 +709,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -729,7 +729,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -749,7 +749,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -789,7 +789,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -860,7 +860,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - task:agentic
   - id: balance_agentic__loop_without_tools
     messages:
@@ -902,7 +902,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - task:agentic
   - id: balance_agentic__lookup_status_zh
     query: 请使用状态查询函数返回所选服务的状态。
@@ -919,7 +919,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - task:agentic
   - id: balance_agentic__required_tool_choice
     query: Return the current service state.
@@ -996,7 +996,7 @@ decisions:
       conversation:
       - tool_loop
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -1064,7 +1064,7 @@ decisions:
     - language:en
     - positive
     expected_signals:
-      decision:
+      systemone:
       - precise_facts
       - task:facts
   - id: balance_facts__nobel_zh
@@ -1073,7 +1073,7 @@ decisions:
     - language:zh
     - positive
     expected_signals:
-      decision:
+      systemone:
       - precise_facts
       - task:facts
   - id: balance_facts__release_years
@@ -1082,7 +1082,7 @@ decisions:
     - language:en
     - positive
     expected_signals:
-      decision:
+      systemone:
       - precise_facts
       - task:facts
   - id: balance_facts__census_ja
@@ -1091,7 +1091,7 @@ decisions:
     - language:ja
     - positive
     expected_signals:
-      decision:
+      systemone:
       - precise_facts
       - task:facts
   - id: balance_facts__treaty_es
@@ -1100,13 +1100,13 @@ decisions:
     - language:es
     - positive
     expected_signals:
-      decision:
+      systemone:
       - precise_facts
       - task:facts
 - id: balance_frontier
   expected_recipe: balance
   expected_decision: frontier
-  expected_algorithm: decision
+  expected_algorithm: systemone
   expected_plugins:
   - request_params
   plugin_match: exact
@@ -1121,7 +1121,7 @@ decisions:
     expected_signals:
       projection:
       - effort_max
-      decision:
+      systemone:
       - difficulty
   - id: balance_frontier__nof_disjointness
     query: Formulate and prove a sharp lower bound on the communication complexity of set disjointness for k-party
@@ -1132,7 +1132,7 @@ decisions:
     expected_signals:
       projection:
       - effort_max
-      decision:
+      systemone:
       - difficulty
   - id: balance_frontier__rg_two_loop
     query: Derive the renormalization group flow of the O(N) model to two loops in 4 - epsilon dimensions and compute
@@ -1143,10 +1143,10 @@ decisions:
     expected_signals:
       projection:
       - effort_max
-      decision:
+      systemone:
       - difficulty
     expected_signal_values:
-      decision:needs:
+      systemone:needs:
         gte: 0.5
         lte: 1
   - id: balance_frontier__byzantine_optimal
@@ -1158,7 +1158,7 @@ decisions:
     expected_signals:
       projection:
       - effort_max
-      decision:
+      systemone:
       - difficulty
   - id: balance_frontier__onsager_zh
     query: 推导二维伊辛模型在方格点阵上的精确配分函数（Onsager 解），并证明临界温度处比热的对数发散。
@@ -1168,7 +1168,7 @@ decisions:
     expected_signals:
       projection:
       - effort_max
-      decision:
+      systemone:
       - difficulty
   - id: balance_frontier__navier_stokes
     query: Prove global existence and smoothness of solutions to the three-dimensional incompressible Navier-Stokes
@@ -1179,7 +1179,7 @@ decisions:
     expected_signals:
       projection:
       - effort_max
-      decision:
+      systemone:
       - difficulty
   - id: balance_frontier__group_classification
     query: Let G be a finite group of order p^2 q^2 for distinct primes p, q. Determine all such G that are not solvable,
@@ -1187,7 +1187,7 @@ decisions:
     expected_signals:
       projection:
       - effort_max
-      decision:
+      systemone:
       - difficulty
       - task:stem
     tags:
@@ -1207,10 +1207,10 @@ decisions:
     - language:en
     - positive
     expected_signals:
-      decision:
+      systemone:
       - task:code
     expected_signal_values:
-      decision:task:
+      systemone:task:
         gte: 0.5
         lte: 1
   - id: balance_code__lru_ttl_go
@@ -1219,7 +1219,7 @@ decisions:
     - language:en
     - positive
     expected_signals:
-      decision:
+      systemone:
       - task:code
   - id: balance_code__manacher
     query: Write a Python function that finds the longest palindromic substring in linear time using Manacher's
@@ -1228,7 +1228,7 @@ decisions:
     - language:en
     - positive
     expected_signals:
-      decision:
+      systemone:
       - task:code
   - id: balance_code__dijkstra_ts
     query: Implement Dijkstra's algorithm in TypeScript with a binary heap and explain its time complexity.
@@ -1236,7 +1236,7 @@ decisions:
     - language:en
     - positive
     expected_signals:
-      decision:
+      systemone:
       - task:code
       projection:
       - effort_high
@@ -1248,14 +1248,14 @@ decisions:
     - positive
     - collision
     expected_signals:
-      decision:
+      systemone:
       - task:code
       projection:
       - effort_high
   - id: balance_code__interval_merge
     query: Write a Go function that merges overlapping intervals and returns them sorted. Include tests.
     expected_signals:
-      decision:
+      systemone:
       - task:code
       projection:
       - effort_medium
@@ -1264,7 +1264,7 @@ decisions:
   - id: balance_code__chinese_quicksort
     query: 用 Python 写一个快速排序，并解释时间复杂度。
     expected_signals:
-      decision:
+      systemone:
       - task:code
     tags:
     - language:zh
@@ -1274,7 +1274,7 @@ decisions:
     - language:en
     - positive
     expected_signals:
-      decision:
+      systemone:
       - task:code
       projection:
       - effort_medium
@@ -1285,7 +1285,7 @@ decisions:
     - language:zh
     - positive
     expected_signals:
-      decision:
+      systemone:
       - task:code
       projection:
       - effort_medium
@@ -1301,7 +1301,7 @@ decisions:
     notes: Correction wording without an earlier answer in the conversation is not recovery; on Vela 2.0 0.8B the request
       is a code task at medium effort.
     expected_signals:
-      decision:
+      systemone:
       - task:code
       projection:
       - effort_medium
@@ -1321,7 +1321,7 @@ decisions:
     - recovery
     - positive
     expected_signals:
-      decision:
+      systemone:
       - task:code
       projection:
       - effort_medium
@@ -1343,7 +1343,7 @@ decisions:
     expected_signals:
       projection:
       - effort_high
-      decision:
+      systemone:
       - task:stem
   - id: balance_hard__letter_only_chemistry
     query: 'A chemist heats (E)-1,2-dideuterio-1-phenylpropene with a catalytic amount of a palladium(II) complex
@@ -1366,7 +1366,7 @@ decisions:
     - collision
     notes: A letter-only reply still needs the reasoning effort.
     expected_signals:
-      decision:
+      systemone:
       - task:stem
       - difficulty
   - id: balance_hard__tradeoff_zh
@@ -1425,7 +1425,7 @@ decisions:
     expected_signals:
       projection:
       - effort_high
-      decision:
+      systemone:
       - task:stem
   - id: balance_hard__sqrt3_de
     query: Beweise, dass die Wurzel aus 3 irrational ist, und verallgemeinere den Beweis auf die Wurzel jeder natürlichen
@@ -1436,7 +1436,7 @@ decisions:
     expected_signals:
       projection:
       - effort_high
-      decision:
+      systemone:
       - task:stem
       - needs:deliberation
   - id: balance_hard__bayes_fr
@@ -1483,7 +1483,7 @@ decisions:
     expected_signals:
       projection:
       - effort_high
-      decision:
+      systemone:
       - difficulty
       - needs:deliberation
       - task:stem
@@ -1494,7 +1494,7 @@ decisions:
     expected_signals:
       projection:
       - effort_high
-      decision:
+      systemone:
       - difficulty
       - needs:deliberation
       - task:stem
@@ -1523,7 +1523,7 @@ decisions:
     expected_signals:
       projection:
       - effort_high
-      decision:
+      systemone:
       - difficulty
       - task:stem
     tags:
@@ -1532,7 +1532,7 @@ decisions:
   - id: balance_standard__sky_physics
     query: Why is the sky blue? Explain the physics.
     expected_signals:
-      decision:
+      systemone:
       - task:stem
       - difficulty
       projection:
@@ -1701,7 +1701,7 @@ decisions:
     expected_signals:
       projection:
       - effort_off
-      decision:
+      systemone:
       - task:code
   - id: balance_fast__brief_request
     query: 'Quick answer: what''s the time complexity of binary search?'
@@ -2513,7 +2513,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
     notes: The request comes before the long record, where the routing questions read it; the record does not replace
       the tool task.
@@ -2533,7 +2533,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
     notes: Actual tool execution or an active client tool loop selects the low-latency tool policy; an image or
       long record does not replace this task.
@@ -2575,7 +2575,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
     notes: Actual tool execution or an active client tool loop selects the low-latency tool policy; an image or
       long record does not replace this task.
@@ -2596,7 +2596,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
     notes: Actual tool execution or an active client tool loop selects the low-latency tool policy; an image or
       long record does not replace this task.
@@ -2636,7 +2636,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
   - id: speed_tools__tools_in_60k_120k_band
     display_prompt: Use the lookup tool to verify the key facts in this long neutral record, then summarize the
@@ -2674,7 +2674,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
   - id: speed_tools__tools_in_120k_240k_band
     display_prompt: Use the lookup tool to verify the key facts in this long neutral record, then summarize the
@@ -2712,7 +2712,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
   - id: speed_tools__active_tool_loop_without_redeclared_tools
     messages:
@@ -2764,7 +2764,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
     notes: Actual tool execution or an active client tool loop selects the low-latency tool policy; an image or
       long record does not replace this task.
@@ -2792,7 +2792,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
     notes: Actual tool execution or an active client tool loop selects the low-latency tool policy; an image or
       long record does not replace this task.
@@ -2834,7 +2834,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
   - id: speed_image_tools__image_tools_in_60k_120k_band
     display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected
@@ -2874,7 +2874,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
   - id: speed_image_tools__image_tools_in_120k_240k_band
     display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected
@@ -2914,7 +2914,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
   expected_algorithm: multi_factor
 - id: speed_reasoning
@@ -2935,7 +2935,7 @@ decisions:
     - positive
     - demo
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -2947,7 +2947,7 @@ decisions:
     - positive
     - demo
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -2958,7 +2958,7 @@ decisions:
     - heavy
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -2972,7 +2972,7 @@ decisions:
     - heavy
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -2983,7 +2983,7 @@ decisions:
     - heavy
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -2994,7 +2994,7 @@ decisions:
     - heavy
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -3008,7 +3008,7 @@ decisions:
     - heavy
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -3020,7 +3020,7 @@ decisions:
     - heavy
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -3033,7 +3033,7 @@ decisions:
     - heavy
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -3047,7 +3047,7 @@ decisions:
     - heavy
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -3060,7 +3060,7 @@ decisions:
     - heavy
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -3072,7 +3072,7 @@ decisions:
     - collision
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -3083,7 +3083,7 @@ decisions:
     - signal:complexity
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -3106,7 +3106,7 @@ decisions:
     - priority
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
   - id: speed_image_tools__deliberate_image_tools_collision
     messages:
@@ -3132,7 +3132,7 @@ decisions:
     - collision
     - priority
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Tool execution remains matched, but the explicit hard/deliberate task selects the higher-priority
       reasoning policy.
@@ -3431,7 +3431,7 @@ decisions:
     - hard-negative
     - collision
     expected_signals:
-      decision:
+      systemone:
       - quoted
   - id: cost_direct_economy__negated_reasoning_request
     query: Do not analyze the tradeoffs; give one direct sentence.
@@ -3481,7 +3481,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
     notes: The request comes before the long record, where the routing questions read it; the record does not replace
       the tool task.
@@ -3510,7 +3510,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
     notes: The request authorizes a tool operation; cost ranking operates inside the tool-capable candidate set.
   - id: cost_image__image_tools_in_30k_60k_band
@@ -3550,7 +3550,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
   - id: cost_image__image_tools_in_60k_120k_band
     display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected
@@ -3589,7 +3589,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
   - id: cost_image__image_tools_in_120k_240k_band
     display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected
@@ -3628,7 +3628,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
   - id: cost_direct_economy__tools_in_30k_60k_band
     display_prompt: Use the lookup tool to verify the key facts in this long neutral record, then summarize the
@@ -3665,7 +3665,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
   - id: cost_direct_economy__tools_in_60k_120k_band
     display_prompt: Use the lookup tool to verify the key facts in this long neutral record, then summarize the
@@ -3702,7 +3702,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
   - id: cost_direct_economy__tools_in_120k_240k_band
     display_prompt: Use the lookup tool to verify the key facts in this long neutral record, then summarize the
@@ -3739,7 +3739,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
   - id: cost_direct_economy__economy_tools_supported
     query: Use the inventory function to look up the api-gateway service and return only its version field.
@@ -3758,7 +3758,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
     notes: The request authorizes a tool operation; cost ranking operates inside the tool-capable candidate set.
   expected_algorithm: multi_factor
@@ -3778,7 +3778,7 @@ decisions:
     - positive
     - demo
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   - id: cost_bounded_reasoning__reasoning_zh
@@ -3789,7 +3789,7 @@ decisions:
     - positive
     - demo
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   - id: cost_bounded_reasoning__reasoning_es
@@ -3799,7 +3799,7 @@ decisions:
     - reasoning
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   - id: cost_bounded_reasoning__reasoning_fr
@@ -3809,7 +3809,7 @@ decisions:
     - reasoning
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   - id: cost_bounded_reasoning__reasoning_ja
@@ -3819,7 +3819,7 @@ decisions:
     - reasoning
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   - id: cost_bounded_reasoning__reasoning_de
@@ -3829,7 +3829,7 @@ decisions:
     - reasoning
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   - id: cost_bounded_reasoning__reasoning_pt
@@ -3839,7 +3839,7 @@ decisions:
     - reasoning
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   - id: cost_bounded_reasoning__reasoning_ko
@@ -3849,7 +3849,7 @@ decisions:
     - reasoning
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   - id: cost_bounded_reasoning__reasoning_ar
@@ -3859,7 +3859,7 @@ decisions:
     - reasoning
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   - id: cost_bounded_reasoning__reasoning_hi
@@ -3869,7 +3869,7 @@ decisions:
     - reasoning
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   - id: cost_bounded_reasoning__reasoning_ru
@@ -3879,7 +3879,7 @@ decisions:
     - reasoning
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   - id: cost_bounded_reasoning__ordered_reasoning
@@ -3889,7 +3889,7 @@ decisions:
     - structured-output
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   - id: cost_bounded_reasoning__hard_semantic_reasoning
@@ -3899,7 +3899,7 @@ decisions:
     - signal:complexity
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   expected_algorithm: multi_factor
@@ -4211,7 +4211,7 @@ decisions:
     - collision
     - priority
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Use a single reasoning model for client tool continuation, factual scrutiny, or multiple reasoning paths
       without an independent multi-model execution request.
@@ -4224,7 +4224,7 @@ decisions:
     - positive
     - demo
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Use a single reasoning model for client tool continuation, factual scrutiny, or multiple reasoning paths
       without an independent multi-model execution request.
@@ -4237,7 +4237,7 @@ decisions:
     notes: Use a single reasoning model for client tool continuation, factual scrutiny, or multiple reasoning paths
       without an independent multi-model execution request.
     expected_signals:
-      decision:
+      systemone:
       - depth
   - id: accuracy_multi_round_exploration__recursive_search_ar
     query: استكشف عدة مسارات للاستدلال وادمج الحل الأكثر صرامة قبل الإجابة.
@@ -4248,7 +4248,7 @@ decisions:
     notes: Use a single reasoning model for client tool continuation, factual scrutiny, or multiple reasoning paths
       without an independent multi-model execution request.
     expected_signals:
-      decision:
+      systemone:
       - depth
   - id: accuracy_direct__hard_without_multipath_intent
     query: Diagnose a complex distributed-system failure with incomplete evidence and provide one direct recommendation.
@@ -4261,7 +4261,7 @@ decisions:
     - collision
     - priority
     expected_signals:
-      decision:
+      systemone:
       - depth
   - id: accuracy_confidence_escalation__factual_escalation
     query: Fact-check the claim that the first Moon landing occurred in 1972, and escalate if uncertain before stating
@@ -4272,7 +4272,7 @@ decisions:
     - positive
     - demo
     expected_signals:
-      decision:
+      systemone:
       - correction
     notes: Use a single reasoning model for client tool continuation, factual scrutiny, or multiple reasoning paths
       without an independent multi-model execution request.
@@ -4285,7 +4285,7 @@ decisions:
     notes: Use a single reasoning model for client tool continuation, factual scrutiny, or multiple reasoning paths
       without an independent multi-model execution request.
     expected_signals:
-      decision:
+      systemone:
       - verification
   - id: accuracy_image_through_120k__image_followup_paraphrase
     messages:
@@ -4310,7 +4310,7 @@ decisions:
     notes: Use a single reasoning model for client tool continuation, factual scrutiny, or multiple reasoning paths
       without an independent multi-model execution request.
     expected_signals:
-      decision:
+      systemone:
       - depth
   - id: accuracy_direct__pending_tool_call_without_result
     messages:
@@ -4404,7 +4404,7 @@ decisions:
     - negative
     - negative:workflow
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Explanation or translation of routing vocabulary is a direct request, not authorization to execute the
       quoted workflow, review, or escalation.
@@ -4417,7 +4417,7 @@ decisions:
     - negative
     - negative:fusion
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Explanation or translation of routing vocabulary is a direct request, not authorization to execute the
       quoted workflow, review, or escalation.
@@ -4430,7 +4430,7 @@ decisions:
     - negative
     - negative:confidence
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Explanation or translation of routing vocabulary is a direct request, not authorization to execute the
       quoted workflow, review, or escalation.
@@ -4443,7 +4443,7 @@ decisions:
     - negative
     - negative:multi-round
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Explanation or translation of routing vocabulary is a direct request, not authorization to execute the
       quoted workflow, review, or escalation.
@@ -4455,7 +4455,7 @@ decisions:
     - collision
     - negative
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Explanation or translation of routing vocabulary is a direct request, not authorization to execute the
       quoted workflow, review, or escalation.
@@ -4467,7 +4467,7 @@ decisions:
     - collision
     - negative
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Explanation or translation of routing vocabulary is a direct request, not authorization to execute the
       quoted workflow, review, or escalation.
@@ -4479,7 +4479,7 @@ decisions:
     - collision
     - negative
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Explanation or translation of routing vocabulary is a direct request, not authorization to execute the
       quoted workflow, review, or escalation.
@@ -4491,7 +4491,7 @@ decisions:
     - collision
     - negative
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Explanation or translation of routing vocabulary is a direct request, not authorization to execute the
       quoted workflow, review, or escalation.
@@ -4503,7 +4503,7 @@ decisions:
     - collision
     - negative
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Explanation or translation of routing vocabulary is a direct request, not authorization to execute the
       quoted workflow, review, or escalation.
@@ -4664,7 +4664,7 @@ decisions:
     - collision
     - priority
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Explanation or translation of routing vocabulary is a direct request, not authorization to execute the
       quoted workflow, review, or escalation.
@@ -4733,7 +4733,7 @@ decisions:
     notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
       eligible models without creating another business decision.
     expected_signals:
-      decision:
+      systemone:
       - quoted
   - id: accuracy_direct__exact_json_direct
     query: Return exactly one JSON object that must preserve identifier 9007199254740993 and include at least three
@@ -4754,7 +4754,7 @@ decisions:
     notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
       eligible models without creating another business decision.
     expected_signals:
-      decision:
+      systemone:
       - quoted
   - id: accuracy_direct__direct_fr
     query: 'Remplis le champ « définition » de ce formulaire en y copiant le texte fourni. Terme : mutex.
@@ -4773,7 +4773,7 @@ decisions:
     - direct
     - negative
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
       eligible models without creating another business decision.
@@ -4784,7 +4784,7 @@ decisions:
     - direct
     - negative
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
       eligible models without creating another business decision.
@@ -4797,7 +4797,7 @@ decisions:
     notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
       eligible models without creating another business decision.
     expected_signals:
-      decision:
+      systemone:
       - quoted
   - id: accuracy_direct__direct_ko
     query: 다음 정의에서 띄어쓰기 한 곳만 고치세요. "뮤텍스는 한번에 하나의 접근만 허용합니다." "한번에"를 "한 번에"로 바꾸고 다른 단어는 그대로 두세요.
@@ -4824,7 +4824,7 @@ decisions:
     - direct
     - negative
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
       eligible models without creating another business decision.
@@ -4836,7 +4836,7 @@ decisions:
     - direct
     - negative
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
       eligible models without creating another business decision.
@@ -4895,7 +4895,7 @@ decisions:
     - negative
     - negative:fanout
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Task decomposition does not request additional workers; tools, images, and context length
       only constrain eligible models.
@@ -4909,7 +4909,7 @@ decisions:
     - negative
     - negative:fanout
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Task decomposition does not request additional workers; tools, images, and context length
       only constrain eligible models.
@@ -4921,7 +4921,7 @@ decisions:
     - negative
     - negative:fanout
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Task decomposition does not request additional workers; tools, images, and context length
       only constrain eligible models.
@@ -5032,11 +5032,11 @@ decisions:
     - negative
     - negative:fanout
     expected_signals:
-      decision:
+      systemone:
       - mode:experts
     notes: Comparing hypotheses or supplied opinions does not request new independent model responses.
     expected_signal_values:
-      decision:mode:
+      systemone:mode:
         gte: 0.7
         lte: 1
   expected_algorithm: fusion
@@ -5055,12 +5055,12 @@ decisions:
     - semantic
     - paraphrase
     expected_signals:
-      decision:
+      systemone:
       - mode:experts
     notes: An operative request to obtain independent assessments from multiple experts authorizes bounded
       multi-model review.
     expected_signal_values:
-      decision:mode:
+      systemone:mode:
         gte: 0.7
         lte: 1
   expected_algorithm: fusion
@@ -5079,7 +5079,7 @@ decisions:
     - negative
     - negative:fanout
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Comparing hypotheses or supplied opinions does not request new independent model responses.
   - id: accuracy_expert_fusion__fusion_over_confidence_collision
@@ -5091,7 +5091,7 @@ decisions:
     - negative
     - negative:fanout
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Comparing hypotheses or supplied opinions does not request new independent model responses.
   expected_algorithm: multi_factor
@@ -5549,7 +5549,7 @@ decisions:
     - image
     - paraphrase
     expected_signals:
-      decision:
+      systemone:
       - confidential
     notes: Declared private/confidential artifacts or personal identifiers require sensitive handling; tool stripping
       and retention denial apply across Vault.
@@ -5576,7 +5576,7 @@ decisions:
     - collision
     - priority
     expected_signals:
-      decision:
+      systemone:
       - confidential
     notes: Declared private/confidential artifacts or personal identifiers require sensitive handling; tool stripping
       and retention denial apply across Vault.
@@ -5590,7 +5590,7 @@ decisions:
     - positive
     - demo
     expected_signals:
-      decision:
+      systemone:
       - confidential
     notes: Declared private/confidential artifacts or personal identifiers require sensitive handling; tool stripping
       and retention denial apply across Vault.
@@ -5602,7 +5602,7 @@ decisions:
     - sensitive
     - paraphrase
     expected_signals:
-      decision:
+      systemone:
       - confidential
     notes: Declared private/confidential artifacts or personal identifiers require sensitive handling; tool stripping
       and retention denial apply across Vault.
@@ -5617,7 +5617,7 @@ decisions:
     - signal:kb
     - positive
     expected_signals:
-      decision:
+      systemone:
       - confidential
   - id: vault_sensitive__explicit_identifier
     query: My SSN is 123-45-6789.
@@ -5669,7 +5669,7 @@ decisions:
     - collision
     - priority
     expected_signals:
-      decision:
+      systemone:
       - confidential
     notes: Declared private/confidential artifacts or personal identifiers require sensitive handling; tool stripping
       and retention denial apply across Vault.
@@ -5709,7 +5709,7 @@ decisions:
     - collision
     - confidential:current-turn
     expected_signals:
-      decision:
+      systemone:
       - confidential
   - id: vault_sensitive__age_and_zip_with_name
     query: I am 34 years old and live in ZIP code 94110 with my partner Sam Rivera. Suggest a weekend plan for us.
@@ -5900,7 +5900,7 @@ decisions:
     notes: Actionable domain advice asserts the domain and consequential intent. A separate factual-query
       counterpart asserts FactCheck for the same domain.
     expected_signals:
-      decision:
+      systemone:
       - stakes
   expected_algorithm: multi_factor
 - id: accuracy_v2_definition_health
@@ -5920,7 +5920,7 @@ decisions:
       changes the effect of another medicine." Return only the supplied definition in one sentence.'
     notes: A short definition in the same domain is not personalized high-stakes advice.
     expected_signals:
-      decision:
+      systemone:
       - quoted
   expected_algorithm: multi_factor
 - id: accuracy_v2_stakes_law
@@ -5941,7 +5941,7 @@ decisions:
     notes: Actionable domain advice asserts the domain and consequential intent. A separate factual-query
       counterpart asserts FactCheck for the same domain.
     expected_signals:
-      decision:
+      systemone:
       - stakes
   expected_algorithm: multi_factor
 - id: accuracy_v2_definition_law
@@ -5962,7 +5962,7 @@ decisions:
       stated in the entry and add no personal recommendation.'
     notes: A short definition in the same domain is not personalized high-stakes advice.
     expected_signals:
-      decision:
+      systemone:
       - quoted
   expected_algorithm: multi_factor
 - id: accuracy_v2_stakes_business
@@ -5983,7 +5983,7 @@ decisions:
     notes: Actionable domain advice asserts the domain and consequential intent. A separate factual-query
       counterpart asserts FactCheck for the same domain.
     expected_signals:
-      decision:
+      systemone:
       - stakes
   expected_algorithm: multi_factor
 - id: accuracy_v2_definition_business
@@ -6002,7 +6002,7 @@ decisions:
     query: In one sentence, what is a company organizational chart?
     notes: A short definition in the same domain is not personalized high-stakes advice.
     expected_signals:
-      decision:
+      systemone:
       - quoted
   expected_algorithm: multi_factor
 - id: accuracy_v2_stakes_economics
@@ -6023,7 +6023,7 @@ decisions:
     notes: Actionable domain advice asserts the domain and consequential intent. A separate factual-query
       counterpart asserts FactCheck for the same domain.
     expected_signals:
-      decision:
+      systemone:
       - depth
   expected_algorithm: multi_factor
 - id: accuracy_v2_definition_economics
@@ -6044,7 +6044,7 @@ decisions:
       the entry and add no personal recommendation.'
     notes: A short definition in the same domain is not personalized high-stakes advice.
     expected_signals:
-      decision:
+      systemone:
       - quoted
   expected_algorithm: multi_factor
 - id: accuracy_v2_implicit_correction
@@ -6070,7 +6070,7 @@ decisions:
         reverses those two rules, so it is not correct.
     notes: Correctness rejection is distinct from parallel expert authorization.
     expected_signals:
-      decision:
+      systemone:
       - correction
   expected_algorithm: multi_factor
 - id: accuracy_v2_satisfied_followup
@@ -6112,7 +6112,7 @@ decisions:
     query: Use one model to compare competing hypotheses for a database outage and justify the most likely cause.
     notes: An explicit single-model request prevents fusion even when hypotheses are compared.
     expected_signals:
-      decision:
+      systemone:
       - depth
   expected_algorithm: multi_factor
 - id: vault_v2_private_visibility_term
@@ -6181,7 +6181,7 @@ decisions:
     notes: Route harmful content to the responsible private model, which must refuse actionable facilitation. Guard
       separately contains prompt attacks.
     expected_signals:
-      decision:
+      systemone:
       - risk
   expected_algorithm: multi_factor
 - id: speed_v2_quoted_tool_instruction
@@ -6233,7 +6233,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - quoted
   expected_algorithm: multi_factor
 - id: accuracy_v2_independent_visual_review
@@ -6260,10 +6260,10 @@ decisions:
         fixture: mom_v1_architecture
     notes: Explicit independent visual review requires the real multi-model path with vision-capable stage candidates.
     expected_signals:
-      decision:
+      systemone:
       - mode:experts
     expected_signal_values:
-      decision:mode:
+      systemone:mode:
         gte: 0.7
         lte: 1
   expected_algorithm: fusion
@@ -6295,7 +6295,7 @@ decisions:
     notes: The same explicit correction repeated after an answer activates Cost recovery; repetition alone remains
       insufficient.
     expected_signals:
-      decision:
+      systemone:
       - correction
   expected_algorithm: multi_factor
 - id: vault_v3_vh01
@@ -6318,7 +6318,7 @@ decisions:
     - negative
     notes: Verify support through a real routed request; Preview alone checks routing.
     expected_signals:
-      decision:
+      systemone:
       - personal_advice
   expected_algorithm: multi_factor
   forbidden_signals:
@@ -6343,7 +6343,7 @@ decisions:
     - positive
     notes: Verify refusal through a real routed request; Preview alone checks routing.
     expected_signals:
-      decision:
+      systemone:
       - personal_advice
   expected_algorithm: multi_factor
   forbidden_signals:
@@ -6368,7 +6368,7 @@ decisions:
     - negative
     notes: Verify support through a real routed request; Preview alone checks routing.
     expected_signals:
-      decision:
+      systemone:
       - personal_advice
   expected_algorithm: multi_factor
   forbidden_signals:
@@ -6393,7 +6393,7 @@ decisions:
     - positive
     notes: Verify refusal through a real routed request; Preview alone checks routing.
     expected_signals:
-      decision:
+      systemone:
       - personal_advice
   expected_algorithm: multi_factor
   forbidden_signals:
@@ -6441,7 +6441,7 @@ decisions:
     - positive
     notes: Verify refusal through a real routed request; Preview alone checks routing.
     expected_signals:
-      decision:
+      systemone:
       - risk
   expected_algorithm: multi_factor
   forbidden_signals:
@@ -6489,7 +6489,7 @@ decisions:
     - positive
     notes: Verify refusal through a real routed request; Preview alone checks routing.
     expected_signals:
-      decision:
+      systemone:
       - risk
   expected_algorithm: multi_factor
   forbidden_signals:
@@ -6538,7 +6538,7 @@ decisions:
     - negative
     notes: Verify responsible_guidance through a real routed request; Preview alone checks routing.
     expected_signals:
-      decision:
+      systemone:
       - personal_advice
   expected_algorithm: multi_factor
   forbidden_signals:
@@ -6586,7 +6586,7 @@ decisions:
     - positive
     notes: Verify refusal through a real routed request; Preview alone checks routing.
     expected_signals:
-      decision:
+      systemone:
       - risk
   expected_algorithm: multi_factor
   forbidden_signals:
@@ -6611,7 +6611,7 @@ decisions:
     - positive
     notes: Verify immediate through a real routed request; Preview alone checks routing.
     expected_signals:
-      decision:
+      systemone:
       - attack
   expected_selection_status: not_required
 - id: vault_v3_vh14
@@ -6697,10 +6697,10 @@ decisions:
     - contract
     - orchestration
     expected_signals:
-      decision:
+      systemone:
       - mode:workers
     expected_signal_values:
-      decision:mode:
+      systemone:mode:
         gte: 0.7
         lte: 1
 - id: contract-workflow-delegation
@@ -6717,10 +6717,10 @@ decisions:
     - contract
     - orchestration
     expected_signals:
-      decision:
+      systemone:
       - mode:workers
     expected_signal_values:
-      decision:mode:
+      systemone:mode:
         gte: 0.7
         lte: 1
 - id: contract-workflow-plan-only
@@ -6752,7 +6752,7 @@ decisions:
     - negative
     - orchestration
     expected_signals:
-      decision:
+      systemone:
       - quoted
 - id: contract-independent-review
   expected_recipe: accuracy
@@ -6768,10 +6768,10 @@ decisions:
     - contract
     - review
     expected_signals:
-      decision:
+      systemone:
       - mode:experts
     expected_signal_values:
-      decision:mode:
+      systemone:mode:
         gte: 0.7
         lte: 1
 - id: contract-correctness-repair
@@ -6788,7 +6788,7 @@ decisions:
     - contract
     - correction
     expected_signals:
-      decision:
+      systemone:
       - correction
 - id: contract-correction-prohibited
   expected_recipe: cost
@@ -6846,7 +6846,7 @@ decisions:
     - contract
     - support
     expected_signals:
-      decision:
+      systemone:
       - personal_advice
 - id: contract-direct-result-repair
   expected_recipe: cost
@@ -6863,7 +6863,7 @@ decisions:
     - contract
     - correction
     expected_signals:
-      decision:
+      systemone:
       - correction
 - id: contract-plural-workflow-start
   expected_recipe: accuracy
@@ -6880,10 +6880,10 @@ decisions:
     - contract
     - orchestration
     expected_signals:
-      decision:
+      systemone:
       - mode:workers
     expected_signal_values:
-      decision:mode:
+      systemone:mode:
         gte: 0.7
         lte: 1
 - id: contract-single-worker-workflow
@@ -6917,7 +6917,7 @@ decisions:
     - negative
     - correction
     expected_signals:
-      decision:
+      systemone:
       - quoted
 - id: contract-fresh-independent-assessments
   expected_recipe: accuracy
@@ -6934,10 +6934,10 @@ decisions:
     - authorization
     - multi-assessment
     expected_signals:
-      decision:
+      systemone:
       - mode:experts
     expected_signal_values:
-      decision:mode:
+      systemone:mode:
         gte: 0.7
         lte: 1
 - id: contract-supplied-assessments
@@ -6958,7 +6958,7 @@ decisions:
     - authorization
     - supplied-assessments
     expected_signals:
-      decision:
+      systemone:
       - depth
 - id: contract-vault-action-guidance
   expected_recipe: vault
@@ -6983,7 +6983,7 @@ decisions:
     - contract
     - positive
     expected_signals:
-      decision:
+      systemone:
       - personal_advice
   - id: zh
     query: 房东要求我明天前接受一条新的租约条款。请告诉我在作出承诺之前，从法律角度下一步该如何处理。
@@ -6992,7 +6992,7 @@ decisions:
     - contract
     - positive
     expected_signals:
-      decision:
+      systemone:
       - personal_advice
 - id: contract-vault-action-discussion
   expected_recipe: vault
@@ -7046,7 +7046,7 @@ decisions:
     - collision
     - quoted-context
     expected_signals:
-      decision:
+      systemone:
       - personal_advice
 - id: contract-vault-routine-action
   expected_recipe: vault
@@ -7116,7 +7116,7 @@ decisions:
     - contract
     - positive
     expected_signals:
-      decision:
+      systemone:
       - personal_data
   - id: nationality_ja
     query: 申請者の国籍は日本人と記録されています。この項目を読みやすく整えてください。
@@ -7125,7 +7125,7 @@ decisions:
     - contract
     - positive
     expected_signals:
-      decision:
+      systemone:
       - personal_data
 - id: contract-vault-attribute-information
   expected_recipe: vault
@@ -7224,7 +7224,7 @@ decisions:
     - positive
     - quoted-context
     expected_signals:
-      decision:
+      systemone:
       - personal_data
   - id: name_zh
     query: 翻译这段联系人资料：“姓名：林晓雨”。保留姓名原样。
@@ -7234,7 +7234,7 @@ decisions:
     - positive
     - quoted-context
     expected_signals:
-      decision:
+      systemone:
       - personal_data
 - id: accuracy_v2_facts_health
   expected_algorithm: multi_factor
@@ -7255,7 +7255,7 @@ decisions:
     - positive
     - stakes
     expected_signals:
-      decision:
+      systemone:
       - stakes
 - id: accuracy_v2_facts_law
   expected_algorithm: multi_factor
@@ -7276,7 +7276,7 @@ decisions:
     - positive
     - stakes
     expected_signals:
-      decision:
+      systemone:
       - stakes
 - id: accuracy_v2_facts_business
   expected_algorithm: multi_factor
@@ -7298,7 +7298,7 @@ decisions:
     - positive
     - stakes
     expected_signals:
-      decision:
+      systemone:
       - stakes
 - id: accuracy_v2_facts_economics
   expected_algorithm: multi_factor
@@ -7319,5 +7319,5 @@ decisions:
     - positive
     - stakes
     expected_signals:
-      decision:
+      systemone:
       - verification

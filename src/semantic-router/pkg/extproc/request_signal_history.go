@@ -37,6 +37,9 @@ type signalConversationHistory struct {
 	toolResultCount           int
 	imageContentCount         int
 	inputModality             classification.InputModalityFacts
+	turns                     []classification.ConversationTurn
+	userImages                []string
+	userVideos                []string
 	assistantToolNames        []string
 	lastMessageRole           string
 	lastMessageToolResult     bool
@@ -75,6 +78,9 @@ func signalConversationHistoryFromSnapshot(result *requestSignalSnapshot) signal
 		toolResultCount:           result.ToolResultCount,
 		imageContentCount:         result.ImageContentCount,
 		inputModality:             result.InputModality,
+		turns:                     result.PriorTurns(),
+		userImages:                append([]string(nil), result.UserImages...),
+		userVideos:                append([]string(nil), result.UserVideos...),
 		assistantToolNames:        append([]string(nil), result.AssistantToolNames...),
 		lastMessageRole:           result.LastMessageRole,
 		lastMessageToolResult:     result.LastMessageToolResult,

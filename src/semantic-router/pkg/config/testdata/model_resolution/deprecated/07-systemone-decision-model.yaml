@@ -10,7 +10,7 @@ routing:
     domains: [{name: math, description: Mathematics}]
     safety:
       - {name: unsafe, threshold: 0.5}
-    decision:
+    systemone:
       - name: needs_tools
         question: {type: noul, instructions: "Does the request need a tool?"}
   decisions:
@@ -21,7 +21,7 @@ routing:
         conditions:
           - {type: domain, name: math}
           - {type: safety, name: unsafe}
-          - {type: decision, name: needs_tools}
+          - {type: systemone, name: needs_tools}
       modelRefs: [{model: general}]
 global:
   model_catalog:

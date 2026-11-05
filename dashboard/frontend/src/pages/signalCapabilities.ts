@@ -93,19 +93,19 @@ export function signalAvailability(
   fields: Record<string, unknown> = {},
 ): SignalAvailability {
   if (!data) return { supported: false, reason: 'Model capabilities are not available yet.' }
-  if (signalType === 'decision') {
+  if (signalType === 'systemone') {
     const types = decisionQuestionTypes(data, scope, fields)
     const question = fields.question as Record<string, unknown> | undefined
     if (!types.length)
       return {
         supported: false,
         reason:
-          'Select a decision deployment with supported question types in System One → Decision Models.',
+          'Select a System One deployment with supported question types in System One → Decision Models.',
       }
     if (typeof question?.type === 'string' && !types.includes(question.type))
       return {
         supported: false,
-        reason: `The selected decision deployment does not support ${question.type} questions.`,
+        reason: `The selected System One deployment does not support ${question.type} questions.`,
       }
     return available
   }

@@ -345,9 +345,9 @@ const (
 	// Example: "image_input,audio_input"
 	VSRMatchedInputModality = "x-vsr-matched-input-modality"
 
-	// VSRMatchedDecisionModel contains comma-separated list of matched decision
-	// signals answered by a decision model: noul and score rule names, and
-	// "rule:choice" for choice questions.
+	// VSRMatchedDecisionModel contains comma-separated list of matched systemone
+	// rules: rule names, "rule:choice" for choice questions and "rule:label"
+	// for set and span labels.
 	// Example: "needs_reasoning,request_kind:code"
 	VSRMatchedDecisionModel = "x-vsr-matched-decision-model"
 

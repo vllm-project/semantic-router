@@ -1,0 +1,44 @@
+# Conditions, composer conditions and projection inputs of type decision are type systemone.
+version: v0.3
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+routing:
+  signals:
+    keywords:
+      - {name: urgent, operator: any, keywords: [urgent]}
+    systemone:
+      - name: needs_tools
+        question: {type: noul, instructions: "Does the request need a tool?"}
+      - name: difficulty
+        question: {type: score, instructions: "How difficult is this request?", levels: [easy, medium, hard]}
+        predicate: {gte: 1}
+  projections:
+    scores:
+      - name: effort
+        method: weighted_sum
+        inputs:
+          - {type: systemone, name: difficulty, weight: 0.5, value_source: raw}
+          - {type: keyword, name: urgent, weight: 0.5}
+    mappings:
+      - name: effort_band
+        source: effort
+        method: threshold_bands
+        outputs: [{name: effort_high, gte: 0.5}]
+  decisions:
+    - name: tools
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - {type: systemone, name: needs_tools}
+          - operator: NOT
+            conditions:
+              - {type: systemone, name: difficulty}
+      modelRefs: [{model: general}]
+    - name: deliberate
+      priority: 50
+      rules: {type: projection, name: effort_high}
+      modelRefs: [{model: general}]

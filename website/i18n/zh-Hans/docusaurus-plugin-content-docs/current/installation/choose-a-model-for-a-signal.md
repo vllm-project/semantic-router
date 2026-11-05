@@ -19,7 +19,7 @@ Router 询问的每个模型都在 `global.model_catalog.deployments` 下按名�
 
 | 层级 | 部署名称写在哪里 | 适用于 |
 | --- | --- | --- |
-| 规则 | 规则上的 `deployment:` | 自己提问的规则：`decision`、`classifiers`、`safety`（及其 `hazard` 部分）、`complexity`，以及决策选择器 `algorithm.decision` |
+| 规则 | 规则上的 `deployment:` | 自己提问的规则：`systemone`、`classifiers`、`safety`（及其 `hazard` 部分）、`complexity`，以及 System One 选择器 `algorithm.systemone` |
 | 信号类型 | `global.model_catalog.bindings.<type>`，或配方中的 `routing.model_bindings.<type>` | 规则是同一个共享回答之上的标签或阈值的信号类型：`domain`、`jailbreak`、`pii`、`fact_check`、`user_feedback`、`modality`、`hallucination`、`preference`、`reask` |
 | 默认 | `global.model_catalog.system.decision_model` | 上面两个层级未覆盖的所有问题类信号和选择器 |
 
@@ -71,7 +71,7 @@ global:
       decision_model: {deployment: d3-remote}
 ```
 
-- 每个内置问题类信号、自定义 decision 信号和选择器都询问 `d3-remote`。Router 在加载时检查该部署能回答配置所提的每种问题类型。
+- 每个内置问题类信号、自定义 `systemone` 信号和选择器都询问 `d3-remote`。Router 在加载时检查该部署能回答配置所提的每种问题类型。
 - 在一个请求阶段内，发给同一部署的所有问题合并为一次调用。API 报告失败的问题会单独再问一次。
 - 阈值来自回答的模型：它的模型卡，或你写的 `threshold`。没有校准阈值的模型（本地或远程）使用 0.5，加载时报告 `uncalibrated_preset` 警告。
 - PII 和幻觉检测需要片段。既不回答 span 问题、也没有 `pii`/`halu` 预设的模型只能以是/否回答它们，Router 在 `vsr_signal_span_verdict_fallbacks_total` 中记录每个这样的信号。以 API 的 `/models` 为该模型列出的能力为准，未列出时才用声明的 `capabilities`；声明的能力已经不含片段时，加载时报告 `span_fallback` 警告。masking 插件需要 PII 片段，因此会拒绝这样的部署。
@@ -97,7 +97,7 @@ global:
 
 `pii` 解析到 `local-vela`；其他所有信号解析到 `d3-remote`。绑定的键是信号类型，与 `routing.signals` 中的命名一致；值是部署名称。
 
-## S4. decision 信号和 domain 信号共用默认值，再各改一个 {#s4-a-decision-signal-and-the-domain-signal-share-the-default-then-one-of-each-is-changed}
+## S4. systemone 信号和 domain 信号共用默认值，再各改一个 {#s4-a-systemone-signal-and-the-domain-signal-share-the-default-then-one-of-each-is-changed}
 
 ```yaml title="s4-type-and-rule-overrides"
 global:
@@ -120,7 +120,7 @@ routing:                           # or recipes[].routing, which affects only th
     domain: d3-remote              # signal type: every domain rule shares one answer
   signals:
     domains: [{name: math, description: Mathematics, mmlu_categories: [math]}]
-    decision:
+    systemone:
       - name: needs_reasoning      # no deployment: asks the default, kai
         question: {type: noul, instructions: "Does answering need multi-step reasoning?"}
       - name: support_team
@@ -177,7 +177,7 @@ routing:
   decisions:
     - name: pick-model
       modelRefs: [{model: general}, {model: small}]
-      algorithm: {type: decision, decision: {deployment: kai, instructions: Pick the cheapest capable model.}}
+      algorithm: {type: systemone, systemone: {deployment: kai, instructions: Pick the cheapest capable model.}}
 ```
 
 `content-risk`、`d3-remote` 和 `kai` 是已声明的部署，这里分别是一个 `classify` 服务、一个 System One API 和一个 Decision 模型。`risk` 询问 `content-risk`，`harmful` 询问 `d3-remote`，它的 hazard 部分询问 `hazard`，`pick-model` 选择器询问 `kai`。

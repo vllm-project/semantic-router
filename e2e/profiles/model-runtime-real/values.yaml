@@ -48,7 +48,7 @@ config:
         - name: prompt_attack
           threshold: 0.5
           description: Prompt injection or jailbreak.
-      decision:
+      systemone:
         - name: request_kind
           description: Which kind of work the request asks for.
           deployment: kai
@@ -91,7 +91,7 @@ config:
           operator: AND
           on_unknown: no_match
           conditions:
-            - {type: decision, name: request_kind, label: code}
+            - {type: systemone, name: request_kind, label: code}
         modelRefs:
           - model: general-expert
             use_reasoning: false

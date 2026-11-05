@@ -1,36 +1,30 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/presets"
+)
 
 // ModuleThresholds are the thresholds of the built-in modules that set one.
 type ModuleThresholds struct {
 	PromptGuard, Domain, PII, FactCheck, Feedback float32
 }
 
-// A threshold belongs to its model. The module thresholds of vela3-fast and of
-// each Vela 2.0 size are calibrated on the router signal suite's dev split to
-// keep the Vela 1.0 specialists' operating points (src/model-runtime/docs/
-// records/vela3-router-signals.md, vela2-router-signals.md and
-// vela2-decision-model-sizes.md), so a module that sets none takes the
-// thresholds of the model it runs. A Vela 1.0 specialist keeps its own
+// A threshold belongs to its model. A module that sets none takes the
+// threshold calibrated for its preset on the model it runs (presets), which
+// vela3-fast and each Vela 2.0 size have. A Vela 1.0 specialist keeps its own
 // thresholds, which the modules defaulted to before. No other model has
 // calibrated thresholds: it takes the neutral ones, and the load warns.
-var (
-	vela1ModuleThresholds = ModuleThresholds{PromptGuard: 0.5, Domain: 0.5, PII: 0.9, FactCheck: 0.95, Feedback: 0.7}
-
-	calibratedModuleThresholds = map[string]ModuleThresholds{
-		Vela3SignalModel: {PromptGuard: 0.88, Domain: 0.41, PII: 0.18, FactCheck: 0.9999, Feedback: 0.47},
-		Vela2SignalModel: {PromptGuard: 0.75, Domain: 0.28, PII: 0.01, FactCheck: 0.93, Feedback: 0.37},
-		Vela2Model08B:    {PromptGuard: 0.71, Domain: 0.38, PII: 0.07, FactCheck: 0.994, Feedback: 0.34},
-		Vela2Model4B:     {PromptGuard: 0.63, Domain: 0.45, PII: 0.05, FactCheck: 0.9984, Feedback: 0.33},
-		Vela2Model9B:     {PromptGuard: 0.42, Domain: 0.46, PII: 0.14, FactCheck: 0.998, Feedback: 0.35},
-	}
-)
+var vela1ModuleThresholds = ModuleThresholds{PromptGuard: 0.5, Domain: 0.5, PII: 0.9, FactCheck: 0.95, Feedback: 0.7}
 
 // neutralModuleThresholds apply to a module answered by a model without
 // calibrated thresholds: the natural boundary of a probability, never another
 // model's calibration.
-var neutralModuleThresholds = ModuleThresholds{PromptGuard: 0.5, Domain: 0.5, PII: 0.5, FactCheck: 0.5, Feedback: 0.5}
+var neutralModuleThresholds = ModuleThresholds{
+	PromptGuard: presets.NeutralThreshold, Domain: presets.NeutralThreshold, PII: presets.NeutralThreshold,
+	FactCheck: presets.NeutralThreshold, Feedback: presets.NeutralThreshold,
+}
 
 // thresholdsOf returns the module thresholds calibrated for a model the
 // model runtime serves, and whether it has any: vela3-fast's and each Vela
@@ -40,13 +34,36 @@ func thresholdsOf(model string) (ModuleThresholds, bool) {
 	if spec == nil {
 		return neutralModuleThresholds, false
 	}
-	if thresholds, ok := calibratedModuleThresholds[spec.LocalPath]; ok {
+	if thresholds, ok := calibratedModuleThresholds(spec.RepoID); ok {
 		return thresholds, true
 	}
 	if spec.Purpose == PurposeRoutingSignals {
 		return neutralModuleThresholds, false
 	}
 	return vela1ModuleThresholds, true
+}
+
+// calibratedModuleThresholds are a model's calibrated thresholds of the
+// presets the modules ask, when it has every one of them.
+func calibratedModuleThresholds(repo string) (ModuleThresholds, bool) {
+	var thresholds ModuleThresholds
+	for _, module := range []struct {
+		preset string
+		value  *float32
+	}{
+		{presets.Jailbreak, &thresholds.PromptGuard},
+		{presets.Domain, &thresholds.Domain},
+		{presets.PII, &thresholds.PII},
+		{presets.FactCheck, &thresholds.FactCheck},
+		{presets.Feedback, &thresholds.Feedback},
+	} {
+		threshold, ok := presets.Threshold(repo, module.preset, presets.StageRequest)
+		if !ok {
+			return ModuleThresholds{}, false
+		}
+		*module.value = float32(threshold)
+	}
+	return thresholds, true
 }
 
 // RegisteredModel is the built-in model a path, alias or Hub repository

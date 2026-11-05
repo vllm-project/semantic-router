@@ -53,7 +53,7 @@ func newClassifierModelRuntime(cfg *config.RouterConfig, options RecipeRuntimeOp
 	return models, nil
 }
 
-// decider answers decision signals through the generation's deployments.
+// decider answers systemone signals through the generation's deployments.
 func (m *classifierModelRuntime) decider() (modelservice.Decider, bool) {
 	if m == nil || m.runtime == nil {
 		return nil, false

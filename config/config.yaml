@@ -790,7 +790,7 @@ routing:
     # the built-in model runtime (provider model_runtime) or a remote System
     # One API (provider systemone). A question without one asks the decision
     # model.
-    decision:
+    systemone:
       - name: needs_reasoning
         description: The decision model judges that the request needs multi-step reasoning.
         deployment: decision-kai
@@ -800,6 +800,8 @@ routing:
         predicate:
           gte: 0.7
         timeout_ms: 1000
+      # labels are the options the rule matches; a condition can still name
+      # any option with its own label.
       - name: request_kind
         description: What kind of work the request asks for.
         deployment: decision-kai
@@ -813,6 +815,7 @@ routing:
               description: Mathematics or quantitative reasoning
             - key: chat
               description: Anything else
+        labels: [code, math]
         timeout_ms: 1000
       - name: difficulty
         description: Expected difficulty on a three-level scale.
@@ -837,6 +840,53 @@ routing:
               description: Payments and refunds
             - key: engineering
               description: Outages and bugs
+      # input adds what the rule reads besides the current user turn, as
+      # named parts of the state. coverage: full reads all of it, in windows
+      # past one model input; on_unscanned says what an answer that could
+      # not read it all means. ignore_labels never count toward the rule.
+      - name: support_topics
+        description: The support topics of the conversation, read whole with its earlier turns and tool results.
+        deployment: decision-kai
+        question:
+          type: set
+          instructions: Which topics does the conversation ask about?
+          labels:
+            - key: billing
+              description: payments, invoices or refunds
+            - key: shipping
+              description: deliveries, tracking or returns
+            - key: other
+              description: anything else
+        ignore_labels: [other]
+        input:
+          history: true
+          previous_turns: 4
+          tool_results: true
+        coverage: full
+        on_unscanned: unknown
+      # Image and video parts of the current turn go to a deployment that
+      # declares the input modality (input.audio is refused until one can).
+      - name: chart_request
+        description: Whether the request's image or video shows a chart to read.
+        deployment: decision-gateway
+        question:
+          type: noul
+          instructions: Does the attached image or video show a chart or a table to read?
+        input:
+          image: true
+          video: true
+      # A response-stage rule reads the model's answer and its grounding
+      # context; a response plugin reads it, never a decision's rules.
+      - name: unsupported_claims
+        description: Whether the answer makes claims its grounding context does not support.
+        deployment: decision-kai
+        stage: response
+        question:
+          type: noul
+          instructions: Does the answer make a claim the grounding context does not support?
+        input:
+          answer: true
+          context: true
 
     # A classifier rule asks its own question: deployment names the deployment
     # that answers it, and the deployment's provider decides how it is asked.
@@ -1694,10 +1744,10 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: request_kind
             label: code
-          - type: decision
+          - type: systemone
             name: needs_reasoning
       modelRefs:
         - model: qwen3-8b
@@ -1705,8 +1755,8 @@ routing:
         - model: qwen3-32b
           use_reasoning: true
       algorithm:
-        type: decision
-        decision:
+        type: systemone
+        systemone:
           deployment: decision-kai
           instructions: Which model should answer this request?
           candidates:
@@ -2849,9 +2899,9 @@ global:
           api_key_env: SYSTEMONE_DECISION_KEY
         timeout_ms: 3000
       # The same API behind a gateway with its own header and path prefix;
-      # prefix "" sends the bare key. capabilities declares the question types
-      # and presets the model answers, used only when GET <endpoint>/models
-      # lists none for it.
+      # prefix "" sends the bare key. capabilities declares the question types,
+      # presets and input modalities the model answers and reads, used only
+      # when GET <endpoint>/models lists none for it.
       decision-gateway:
         provider: systemone
         endpoint: https://gateway.example.com/Unified/v1/systemone
@@ -2863,6 +2913,7 @@ global:
         capabilities:
           question_types: [choice, noul, score]
           presets: [pii, halu]
+          modalities: [text, image, video]
       # A chat model used as the tool-risk classifier: POST
       # <endpoint>/chat/completions. generation sets max_tokens and
       # temperature of its completions.

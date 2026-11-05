@@ -198,7 +198,7 @@ routing:
           type: exists
           source:
             type: image_content
-    decision:
+    systemone:
       - name: accuracy_mode
         description: The way of working the request asks for.
         question:
@@ -247,12 +247,12 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: accuracy_mode
             label: workstreams
             predicate:
               gte: 0.6
-          - type: decision
+          - type: systemone
             name: accuracy_difficulty
       modelRefs:
         - model: opus48-worker
@@ -301,16 +301,16 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: accuracy_mode
             label: independent_review
             predicate:
               gte: 0.6
-          - type: decision
+          - type: systemone
             name: accuracy_difficulty
           - operator: NOT
             conditions:
-              - type: decision
+              - type: systemone
                 name: accuracy_mode
                 label: workstreams
                 predicate:
@@ -355,8 +355,8 @@ routing:
           use_reasoning: true
           reasoning_effort: medium
       algorithm:
-        type: decision
-        decision:
+        type: systemone
+        systemone:
           instructions: Which worker should answer this request?
           candidates:
             gpt55-worker: Long-context reading, planning and synthesis across many sources

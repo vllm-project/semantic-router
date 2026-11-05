@@ -92,7 +92,7 @@ decisions:
         expected_signals:
           reask:
             - persistently_dissatisfied
-          decision:
+          systemone:
             - sources
         tags:
           - language:en
@@ -131,7 +131,7 @@ decisions:
           - role: user
             content: "That is still wrong. Fix this Python function. It crashes with TypeError: list indices must be integers, not str."
         expected_signals:
-          decision: [code, wrong]
+          systemone: [code, wrong]
         tags: [feedback, code, boundary, messages, one-reask]
       - id: code_without_verification
         query: "The previous code is wrong and still raises TypeError. Fix it directly; do not research or cite sources."
@@ -192,7 +192,7 @@ decisions:
         expected_signals:
           reask:
             - persistently_dissatisfied
-          decision:
+          systemone:
             - code
             - sources
         tags:
@@ -229,7 +229,7 @@ decisions:
           - role: user
             content: Eso no es correcto, un huevo pasado por agua no se cocina veinte minutos. Explica otra vez la receta.
         expected_signals:
-          decision: [wrong]
+          systemone: [wrong]
         tags: [language:es, multi-turn, feedback]
       - id: compound_interest_retry
         query: "That answer was wrong. Explain compound interest vs simple interest again in plain English."
@@ -347,7 +347,7 @@ decisions:
           - role: user
             content: もう少し分かりやすく、簡単な例を一つ挙げて説明してください。
         expected_signals:
-          decision: [clarify]
+          systemone: [clarify]
         tags: [language:ja, multi-turn, clarification]
       - id: rainbow_clarification
         query: Explain your previous description of rainbows more clearly, with one example.

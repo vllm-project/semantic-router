@@ -41,35 +41,35 @@ func TestBalanceQuestionPolicy(t *testing.T) {
 	for _, l := range lanes {
 		tests = append(tests, evaluateSignalsCase{
 			name:             "task " + l.label + " picks " + l.lane,
-			signals:          &SignalMatches{DecisionRules: []string{"task:" + l.label}},
+			signals:          &SignalMatches{SystemOneRules: []string{"task:" + l.label}},
 			expectedDecision: l.lane,
 		})
 	}
 	unknown := map[string]string{}
 	for _, name := range []string{"task", "verification", "correction", "clarify"} {
-		unknown["decision:"+name] = "decision_rejected"
+		unknown["systemone:"+name] = "systemone_rejected"
 	}
 	tests = append(tests, []evaluateSignalsCase{
 		{
 			name:             "an explanation with a source request is verified",
-			signals:          &SignalMatches{DecisionRules: []string{"task:explain", "verification"}},
+			signals:          &SignalMatches{SystemOneRules: []string{"task:explain", "verification"}},
 			expectedDecision: "verified_explainer",
 		},
 		{
 			name:             "a source request alone picks no lane",
-			signals:          &SignalMatches{DecisionRules: []string{"verification"}},
+			signals:          &SignalMatches{SystemOneRules: []string{"verification"}},
 			expectedDecision: "casual_chat",
 		},
 		{
 			name:             "a correction needs an earlier answer",
-			signals:          &SignalMatches{DecisionRules: []string{"task:code", "correction"}},
+			signals:          &SignalMatches{SystemOneRules: []string{"task:code", "correction"}},
 			expectedDecision: "medium_code_general",
 		},
 		{
 			name: "a correction after an answer outranks the code lane",
 			signals: &SignalMatches{
 				ConversationRules: []string{"has_prior_answer"},
-				DecisionRules:     []string{"task:code", "correction"},
+				SystemOneRules:    []string{"task:code", "correction"},
 			},
 			expectedDecision: "feedback_wrong_answer_verified",
 		},
@@ -77,7 +77,7 @@ func TestBalanceQuestionPolicy(t *testing.T) {
 			name: "the legal lane outranks a correction",
 			signals: &SignalMatches{
 				ConversationRules: []string{"has_prior_answer"},
-				DecisionRules:     []string{"task:legal", "correction"},
+				SystemOneRules:    []string{"task:legal", "correction"},
 			},
 			expectedDecision: "premium_legal",
 		},
@@ -85,7 +85,7 @@ func TestBalanceQuestionPolicy(t *testing.T) {
 			name: "a clarification after an answer outranks the explainer lane",
 			signals: &SignalMatches{
 				ConversationRules: []string{"has_prior_answer"},
-				DecisionRules:     []string{"task:explain", "clarify"},
+				SystemOneRules:    []string{"task:explain", "clarify"},
 			},
 			expectedDecision: "feedback_need_clarification",
 		},
@@ -93,7 +93,7 @@ func TestBalanceQuestionPolicy(t *testing.T) {
 			name: "a clarification that is also a correction recovers",
 			signals: &SignalMatches{
 				ConversationRules: []string{"has_prior_answer"},
-				DecisionRules:     []string{"task:chat", "clarify", "correction"},
+				SystemOneRules:    []string{"task:chat", "clarify", "correction"},
 			},
 			expectedDecision: "feedback_wrong_answer_verified",
 		},
@@ -101,7 +101,7 @@ func TestBalanceQuestionPolicy(t *testing.T) {
 			name: "an image goes to the visual lane whatever the task",
 			signals: &SignalMatches{
 				ConversationRules: []string{"has_image"},
-				DecisionRules:     []string{"task:legal"},
+				SystemOneRules:    []string{"task:legal"},
 			},
 			expectedDecision: "omni",
 		},
@@ -125,18 +125,18 @@ func TestBalanceQuestionPolicy(t *testing.T) {
 func TestPrivacyQuestionsKeepWorkLocal(t *testing.T) {
 	engine := maintainedRecipeEngine(t, "privacy")
 	unknown := map[string]string{
-		"decision:attack":        "decision_rejected",
-		"decision:confidential":  "decision_rejected",
-		"decision:personal_data": "decision_rejected",
-		"decision:depth":         "decision_rejected",
+		"systemone:attack":        "systemone_rejected",
+		"systemone:confidential":  "systemone_rejected",
+		"systemone:personal_data": "systemone_rejected",
+		"systemone:depth":         "systemone_rejected",
 	}
 	tests := []evaluateSignalsCase{
-		{name: "an attack outranks private material", signals: &SignalMatches{DecisionRules: []string{"attack", "confidential"}}, expectedDecision: "local_security_containment"},
-		{name: "private material stays local", signals: &SignalMatches{DecisionRules: []string{"confidential"}}, expectedDecision: "local_privacy_policy"},
-		{name: "personal data stays local", signals: &SignalMatches{DecisionRules: []string{"personal_data"}}, expectedDecision: "local_privacy_policy"},
-		{name: "deep reasoning on private material stays local", signals: &SignalMatches{DecisionRules: []string{"depth", "confidential"}}, expectedDecision: "local_privacy_policy"},
-		{name: "deep reasoning with personal data stays local", signals: &SignalMatches{DecisionRules: []string{"depth", "personal_data"}}, expectedDecision: "local_privacy_policy"},
-		{name: "only non-sensitive deep reasoning leaves", signals: &SignalMatches{DecisionRules: []string{"depth"}}, expectedDecision: "cloud_frontier_reasoning"},
+		{name: "an attack outranks private material", signals: &SignalMatches{SystemOneRules: []string{"attack", "confidential"}}, expectedDecision: "local_security_containment"},
+		{name: "private material stays local", signals: &SignalMatches{SystemOneRules: []string{"confidential"}}, expectedDecision: "local_privacy_policy"},
+		{name: "personal data stays local", signals: &SignalMatches{SystemOneRules: []string{"personal_data"}}, expectedDecision: "local_privacy_policy"},
+		{name: "deep reasoning on private material stays local", signals: &SignalMatches{SystemOneRules: []string{"depth", "confidential"}}, expectedDecision: "local_privacy_policy"},
+		{name: "deep reasoning with personal data stays local", signals: &SignalMatches{SystemOneRules: []string{"depth", "personal_data"}}, expectedDecision: "local_privacy_policy"},
+		{name: "only non-sensitive deep reasoning leaves", signals: &SignalMatches{SystemOneRules: []string{"depth"}}, expectedDecision: "cloud_frontier_reasoning"},
 		{name: "ordinary work stays local", signals: &SignalMatches{}, expectedDecision: "local_standard"},
 		{name: "an unanswered request stays on the privacy lane", signals: &SignalMatches{SignalErrors: unknown}, expectedDecision: "local_privacy_policy"},
 	}
@@ -152,8 +152,8 @@ func TestAgentQuestionsKeepPrivacyPriority(t *testing.T) {
 	engine := maintainedRecipeEngine(t, "agent")
 	answers := func(difficulty float64, rules ...string) *SignalMatches {
 		return &SignalMatches{
-			DecisionRules: rules,
-			SignalValues:  map[string]float64{"decision:difficulty": difficulty},
+			SystemOneRules: rules,
+			SignalValues:   map[string]float64{"systemone:difficulty": difficulty},
 		}
 	}
 	tests := []evaluateSignalsCase{

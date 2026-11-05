@@ -228,8 +228,8 @@ func runtimeConfig(deployments map[string]config.ModelDeployment) *config.Router
 		if name == "unused" {
 			continue
 		}
-		cfg.DecisionRules = append(cfg.DecisionRules, config.DecisionSignalRule{
-			Name: "hard_" + name, Deployment: name, Question: config.DecisionQuestion{Type: "noul", Instructions: "Hard?"},
+		cfg.SystemOneRules = append(cfg.SystemOneRules, config.SystemOneRule{
+			Name: "hard_" + name, Deployment: name, Question: config.SystemOneQuestion{Type: "noul", Instructions: "Hard?"},
 		})
 	}
 	return cfg

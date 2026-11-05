@@ -219,7 +219,7 @@ def migrate_config_command(
     notes = MigrationNotes()
     migrated = migrate_config_data(data, notes)
     rendered = yaml.safe_dump(migrated, sort_keys=False, allow_unicode=True)
-    rendered = _migrate_model_resources(rendered, config_path, notes, offline=offline)
+    rendered = _migrate_with_router(rendered, config_path, notes, offline=offline)
 
     destination = (
         Path(output_path)
@@ -271,23 +271,24 @@ def _print_migration_notes(notes: MigrationNotes) -> None:
         warning(f"{note.path}: {note.message}")
 
 
-def _migrate_model_resources(
+def _migrate_with_router(
     rendered: str, config_path: str, notes: MigrationNotes, *, offline: bool
 ) -> str:
-    """The document with its deprecated model fields in the forms that replace
-    them, as the Router reads them.
+    """The document with the forms the Router no longer reads (removed and
+    renamed forms, deprecated model fields) in the forms that replace them.
 
-    The Router owns the model resources, so it writes them: the CLI's output
-    goes to a local Router once with -migrate-config. Without one (or with
-    offline) the model fields stay, and the notes say how to rewrite them.
+    Every rewrite lives in the Router: the CLI's output goes to a local Router
+    once with -migrate-config. Without one (or with offline) those forms stay,
+    and the notes say how to rewrite them.
     """
 
     path = "global.model_catalog"
     if offline:
         notes.changed(
-            path,
-            "model fields were not checked for deprecated forms (--offline); "
-            "run `vllm-sr config migrate` where a Router can run to rewrite them",
+            "configuration",
+            "removed and renamed forms and deprecated model fields were not "
+            "rewritten (--offline); run `vllm-sr config migrate` where a Router "
+            "can run to rewrite them",
         )
         return rendered
     verdict, unavailable = ask_router(
@@ -295,27 +296,28 @@ def _migrate_model_resources(
     )
     if verdict is None:
         notes.changed(
-            path,
-            f"model fields were not checked for deprecated forms: {unavailable}; "
-            f"set {ROUTER_BINARY_ENV} to a Router binary to rewrite them",
+            "configuration",
+            "removed and renamed forms and deprecated model fields were not "
+            f"rewritten: {unavailable}; set {ROUTER_BINARY_ENV} to a Router "
+            "binary to rewrite them",
         )
         return rendered
-    if not verdict.valid or verdict.migration_error or not verdict.migrated:
+    # The Router rewrites a file it refuses as written (removed forms), so
+    # only its own migration error stops the rewrite.
+    if verdict.migration_error or not verdict.migrated:
         if verdict.migration_error:
             notes.action(
                 path,
-                f"the Router could not rewrite the deprecated model fields: {verdict.migration_error}",
+                f"the Router could not migrate the configuration: {verdict.migration_error}",
             )
         return rendered
-    if verdict.migrated != rendered:
-        notes.changed(
-            path,
-            "deprecated model fields are written as the deployments, bindings "
-            "and rule deployments the Router reads them as",
-        )
     for note in verdict.kept:
-        # migration_action says what to do for the file to work as before;
-        # every other note is a deprecated field with no replacement.
+        # migration_change is a form the Router rewrote; migration_action says
+        # what to do for the file to work as before; every other note is a
+        # deprecated field with no replacement.
+        if note.code == "migration_change":
+            notes.changed(note.field or path, note.message)
+            continue
         message = (
             note.message if note.code == "migration_action" else f"kept: {note.message}"
         )

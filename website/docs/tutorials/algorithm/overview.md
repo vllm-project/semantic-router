@@ -84,7 +84,7 @@ same final validation but are not replaced by another model.
 
 | Type | Status | Goal | Main dependency | Guide |
 |---|---|---|---|---|
-| `decision` | supported | Ask a typed choice question over the matched candidates | Decision deployment with Choice support | [Decision](./selection/decision) |
+| `systemone` | supported | Ask a typed choice question over the matched candidates | System One deployment with Choice support | [System One](./selection/systemone) |
 | `static` | supported | Use declared order or fixed domain scores | None | [Static](./selection/static) |
 | `random` | supported | Pick uniformly among eligible declared candidates | None | [Random](./selection/random) |
 | `router_dc` | supported | Match request semantics to model descriptions | Embedding runtime and useful model cards | [Router DC](./selection/router-dc) |

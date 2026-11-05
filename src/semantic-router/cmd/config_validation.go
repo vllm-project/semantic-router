@@ -18,9 +18,11 @@ type configValidationReport struct {
 	Valid    bool                   `json:"valid"`
 	Error    string                 `json:"error,omitempty"`
 	Warnings []config.ConfigWarning `json:"warnings"`
-	// Migrated is the file with its deprecated model fields in the forms
-	// that replace them (-migrate-config); Kept are its notes: the deprecated
-	// fields that have no replacement and stay, and what an operator must do
+	// Migrated is the file with its removed and renamed forms and its
+	// deprecated model fields in the forms that replace them
+	// (-migrate-config), whether or not the file itself loads; Kept are its
+	// notes: what migrate rewrote (migration_change), the deprecated fields
+	// that have no replacement and stay, and what an operator must do
 	// (migration_action); MigrationError is why it could not be written.
 	Migrated       string                 `json:"migrated,omitempty"`
 	Kept           []config.ConfigWarning `json:"kept,omitempty"`
@@ -41,7 +43,7 @@ func validateConfigFile(path string, gateway config.GatewayMode, migrate bool, o
 		report.Error = err.Error()
 	}
 	report.Valid = err == nil
-	if migrate && report.Valid {
+	if migrate && data != nil {
 		migrateConfigInto(&report, data)
 	}
 	encoded, encodeErr := json.Marshal(report)
@@ -58,7 +60,7 @@ func validateConfigFile(path string, gateway config.GatewayMode, migrate bool, o
 
 // migrateConfigInto writes the file's migration into the report.
 func migrateConfigInto(report *configValidationReport, data []byte) {
-	migrated, kept, err := config.MigrateModelResources(data)
+	migrated, kept, err := config.MigrateConfig(data)
 	if err != nil {
 		report.MigrationError = err.Error()
 		return

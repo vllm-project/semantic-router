@@ -31,7 +31,7 @@ var matchedSignalResolvers = map[string]func(*MatchedSignals) *[]string{
 	config.SignalTypeClassifier:    func(target *MatchedSignals) *[]string { return &target.Classifier },
 	config.SignalTypeInputModality: func(target *MatchedSignals) *[]string { return &target.InputModality },
 	config.SignalTypeAction:        func(target *MatchedSignals) *[]string { return &target.Action },
-	config.SignalTypeDecision:      func(target *MatchedSignals) *[]string { return &target.Decision },
+	config.SignalTypeSystemOne:     func(target *MatchedSignals) *[]string { return &target.SystemOne },
 	config.SignalTypeProjection:    func(target *MatchedSignals) *[]string { return &target.Projection },
 }
 
@@ -64,7 +64,7 @@ func buildMatchedSignals(signals *classification.SignalResults) *MatchedSignals 
 		Classifier:    signals.MatchedClassifierRules,
 		InputModality: signals.MatchedInputModalityRules,
 		Action:        signals.MatchedActionRules,
-		Decision:      signals.MatchedDecisionRules,
+		SystemOne:     signals.MatchedSystemOneRules,
 		Projection:    signals.MatchedProjectionRules,
 	}
 }
@@ -138,7 +138,7 @@ func getUnmatchedSignals(
 	collectUnmatchedClassifierRules(&unmatched.Classifier, cfg.ClassifierRules, signals.MatchedClassifierRules)
 	collectUnmatchedRuleNames(&unmatched.InputModality, cfg.InputModalityRules, signals.MatchedInputModalityRules, func(rule config.InputModalityRule) string { return rule.Name })
 	collectUnmatchedRuleNames(&unmatched.Action, cfg.ActionRules, signals.MatchedActionRules, func(rule config.ActionRule) string { return rule.Name })
-	collectUnmatchedDecisionRules(&unmatched.Decision, cfg.DecisionRules, signals.MatchedDecisionRules)
+	collectUnmatchedSystemOneRules(&unmatched.SystemOne, cfg.SystemOneRules, signals.MatchedSystemOneRules)
 
 	return unmatched
 }
@@ -222,9 +222,9 @@ func makeStringSet(values []string) map[string]bool {
 	return set
 }
 
-// collectUnmatchedDecisionRules lists decision signals with no matched answer;
-// a choice rule matches as "rule:choice".
-func collectUnmatchedDecisionRules(target *[]string, rules []config.DecisionSignalRule, matched []string) {
+// collectUnmatchedSystemOneRules lists systemone rules with no matched
+// reference, the rule's own or "rule:label".
+func collectUnmatchedSystemOneRules(target *[]string, rules []config.SystemOneRule, matched []string) {
 	for _, rule := range rules {
 		hit := false
 		for _, name := range matched {

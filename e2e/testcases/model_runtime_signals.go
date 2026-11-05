@@ -215,10 +215,10 @@ func sameScore(values map[string]float64, key string, want float64) error {
 }
 
 // onlyOfflineSignalError allows the one signal error the profile plants: the
-// decision signal of the deployment that has no runtime.
+// systemone signal of the deployment that has no runtime.
 func onlyOfflineSignalError(signalErrors map[string]string) error {
 	for signal, reason := range signalErrors {
-		if signal != "decision:offline" || reason != "decision_unavailable" {
+		if signal != "systemone:offline" || reason != "systemone_unavailable" {
 			return fmt.Errorf("routing preview reported signal errors %v", signalErrors)
 		}
 	}

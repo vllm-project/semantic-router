@@ -384,7 +384,7 @@ const SignalEditorForm: React.FC<{
   const { data, scope } = useSignalCapabilities();
   const availability = signalAvailability(data, scope, signal.signalType, signal.name, localFields);
   const schema =
-    signal.signalType === "decision"
+    signal.signalType === "systemone"
       ? signalCapabilitySchema(
           getSignalFieldSchema(signal.signalType),
           decisionQuestionTypes(data, scope, localFields),

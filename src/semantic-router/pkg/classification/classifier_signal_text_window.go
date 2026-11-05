@@ -400,13 +400,14 @@ func (c *Classifier) hasLongContextClassifier(signalType string) bool {
 	return false
 }
 
+// systemOneQuestionText is the text a systemone rule reads as the current
+// turn: the request as it came.
+const systemOneQuestionText = "systemone_request"
+
 // signalReadsWholeText reports whether a signal's prepared model asks a Vela
 // 2.0 model the signal's question. That model reads a whole text up to its own
 // input budget, so the signal asks about the request as it is, in the same
 // call as the request's other questions about it.
-// decisionModelQuestionText is the text a decision question that names no
-// deployment reads: the decision model reads the request as it came.
-const decisionModelQuestionText = "decision_model"
 
 func (c *Classifier) signalReadsWholeText(signalType string) bool {
 	if c == nil {
@@ -414,7 +415,7 @@ func (c *Classifier) signalReadsWholeText(signalType string) bool {
 	}
 	var consumer interface{}
 	switch signalType {
-	case decisionModelQuestionText:
+	case systemOneQuestionText:
 		return true
 	case config.SignalTypeDomain:
 		consumer = c.categoryInference

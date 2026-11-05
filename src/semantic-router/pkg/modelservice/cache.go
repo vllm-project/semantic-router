@@ -139,6 +139,12 @@ func (w *keyWriter) request(request Request) {
 	} else {
 		w.int(-1)
 	}
+	for _, media := range [][]string{request.Images, request.Videos} {
+		w.int(len(media))
+		for _, item := range media {
+			w.string(item)
+		}
+	}
 	w.int(len(request.Questions))
 	for _, question := range request.Questions {
 		w.question(question)
@@ -157,6 +163,11 @@ func (w *keyWriter) question(question Question) {
 		w.int(0)
 	}
 	if question.Truncate {
+		w.int(1)
+	} else {
+		w.int(0)
+	}
+	if question.DecisionAdapter {
 		w.int(1)
 	} else {
 		w.int(0)

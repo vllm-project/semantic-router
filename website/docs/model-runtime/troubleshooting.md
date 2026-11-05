@@ -44,7 +44,7 @@ deployment in `model_deployments` with its state:
 curl -s localhost:8080/startup-status
 ```
 
-An offline attached runtime does not block custom `decision` questions from
+An offline attached runtime does not block custom `systemone` questions from
 being prepared. Those questions remain unavailable until current capability
 metadata is ready and compatible. Signals it answers as the decision model, or
 through a binding that selects a head, may still need metadata at startup. See

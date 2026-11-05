@@ -141,14 +141,14 @@ def _document(system=None):
     }
     document["routing"] = {
         "modelCards": [{"name": "small"}],
-        "signals": {"decision": [dict(QUESTION)]},
+        "signals": {"systemone": [dict(QUESTION)]},
         "decisions": [
             {
                 "name": "tools",
                 "priority": 10,
                 "rules": {
                     "operator": "AND",
-                    "conditions": [{"type": "decision", "name": "needs_tools"}],
+                    "conditions": [{"type": "systemone", "name": "needs_tools"}],
                 },
                 "modelRefs": [{"model": "small"}],
             }

@@ -58,7 +58,7 @@ translation:
 - `metadata`
 - `classifier`
 - `input_modality`
-- `decision`
+- `systemone`
 - `safety`
 - `jailbreak`
 - `pii`

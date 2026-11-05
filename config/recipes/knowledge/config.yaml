@@ -80,7 +80,7 @@ routing:
         type: exists
         source:
           type: image_content
-    decision:
+    systemone:
     - name: knowledge_subject
       description: The subject a knowledge question is about.
       question:
@@ -140,31 +140,31 @@ routing:
       operator: OR
       on_unknown: no_match
       conditions:
-      - type: decision
+      - type: systemone
         name: knowledge_subject
         label: biology
-      - type: decision
+      - type: systemone
         name: knowledge_subject
         label: business
-      - type: decision
+      - type: systemone
         name: knowledge_subject
         label: computer_science
-      - type: decision
+      - type: systemone
         name: knowledge_subject
         label: economics
-      - type: decision
+      - type: systemone
         name: knowledge_subject
         label: history
-      - type: decision
+      - type: systemone
         name: knowledge_subject
         label: math
-      - type: decision
+      - type: systemone
         name: knowledge_subject
         label: other
-      - type: decision
+      - type: systemone
         name: knowledge_subject
         label: philosophy
-      - type: decision
+      - type: systemone
         name: knowledge_subject
         label: psychology
     modelRefs:
