@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 sidebar_position: 3
 sidebar_label: Kubernetes 操作符
 title: 使用 Kubernetes 操作符部署

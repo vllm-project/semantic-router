@@ -1,0 +1,451 @@
+{
+ "context": {
+  "date": "2026-10-21",
+  "hardware": "NVIDIA A100",
+  "image": "runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404",
+  "head": "ec307ad6ed081dd220b5dbb3571a1f9987d06914",
+  "legacy_commit": "61aa7eb2db0cfd9f00bfa06abd4944b3864cf38d",
+  "device": "cuda:0",
+  "threads": 16,
+  "pair_rounds": 5,
+  "window_rounds": 5,
+  "concurrency": 4,
+  "seconds": 20,
+  "profile": "batching",
+  "tool": "src/model-runtime/tools/legacy_parity.py ab",
+  "cpu_baseline": {
+   "threads": 16
+  }
+ },
+ "jobs": [
+  {
+   "job": "domain",
+   "pairs": 2765,
+   "legacy_p50_ms": 98.19,
+   "runtime_p50_ms": 5.93,
+   "legacy_p95_ms": 655.31,
+   "runtime_p95_ms": 10.64,
+   "p50_ratio_ci": [
+    16.33,
+    16.92
+   ],
+   "p95_ratio_ci": [
+    55.73,
+    66.1
+   ],
+   "median_speedup": 17.67,
+   "median_speedup_ci": [
+    17.31,
+    18.16
+   ],
+   "legacy_per_s": 19.5,
+   "exact_per_s": 230.8,
+   "batching_per_s": 298.1,
+   "exact_over_legacy": {
+    "geometric_mean": 11.8,
+    "low": 11.25,
+    "high": 12.37,
+    "verdict": "Better"
+   },
+   "batching_over_legacy": {
+    "geometric_mean": 15.23,
+    "low": 14.38,
+    "high": 16.13,
+    "verdict": "Better"
+   },
+   "p50_verdict": "Better",
+   "p95_verdict": "Better",
+   "throughput_verdict": "Better"
+  },
+  {
+   "job": "guard",
+   "pairs": 2750,
+   "legacy_p50_ms": 103.18,
+   "runtime_p50_ms": 5.94,
+   "legacy_p95_ms": 650.18,
+   "runtime_p95_ms": 10.53,
+   "p50_ratio_ci": [
+    17.05,
+    17.74
+   ],
+   "p95_ratio_ci": [
+    58.32,
+    66.45
+   ],
+   "median_speedup": 18.31,
+   "median_speedup_ci": [
+    17.91,
+    18.68
+   ],
+   "legacy_per_s": 16.5,
+   "exact_per_s": 191.3,
+   "batching_per_s": 246.4,
+   "exact_over_legacy": {
+    "geometric_mean": 11.62,
+    "low": 11.01,
+    "high": 12.27,
+    "verdict": "Better"
+   },
+   "batching_over_legacy": {
+    "geometric_mean": 14.7,
+    "low": 13.84,
+    "high": 15.6,
+    "verdict": "Better"
+   },
+   "p50_verdict": "Better",
+   "p95_verdict": "Better",
+   "throughput_verdict": "Better"
+  },
+  {
+   "job": "safety",
+   "pairs": 2765,
+   "legacy_p50_ms": 98.86,
+   "runtime_p50_ms": 5.26,
+   "legacy_p95_ms": 653.49,
+   "runtime_p95_ms": 9.86,
+   "p50_ratio_ci": [
+    18.48,
+    19.07
+   ],
+   "p95_ratio_ci": [
+    63.37,
+    69.22
+   ],
+   "median_speedup": 19.94,
+   "median_speedup_ci": [
+    19.68,
+    20.45
+   ],
+   "legacy_per_s": 18.8,
+   "exact_per_s": 235.6,
+   "batching_per_s": 303.1,
+   "exact_over_legacy": {
+    "geometric_mean": 12.16,
+    "low": 11.67,
+    "high": 12.67,
+    "verdict": "Better"
+   },
+   "batching_over_legacy": {
+    "geometric_mean": 15.71,
+    "low": 15.1,
+    "high": 16.35,
+    "verdict": "Better"
+   },
+   "p50_verdict": "Better",
+   "p95_verdict": "Better",
+   "throughput_verdict": "Better"
+  },
+  {
+   "job": "shield",
+   "pairs": 2765,
+   "legacy_p50_ms": 97.86,
+   "runtime_p50_ms": 5.12,
+   "legacy_p95_ms": 635.35,
+   "runtime_p95_ms": 9.57,
+   "p50_ratio_ci": [
+    18.79,
+    19.49
+   ],
+   "p95_ratio_ci": [
+    62.74,
+    70.78
+   ],
+   "median_speedup": 20.18,
+   "median_speedup_ci": [
+    19.74,
+    20.58
+   ],
+   "legacy_per_s": 19.0,
+   "exact_per_s": 238.8,
+   "batching_per_s": 303.4,
+   "exact_over_legacy": {
+    "geometric_mean": 12.52,
+    "low": 11.96,
+    "high": 13.11,
+    "verdict": "Better"
+   },
+   "batching_over_legacy": {
+    "geometric_mean": 15.84,
+    "low": 14.99,
+    "high": 16.74,
+    "verdict": "Better"
+   },
+   "p50_verdict": "Better",
+   "p95_verdict": "Better",
+   "throughput_verdict": "Better"
+  },
+  {
+   "job": "factcheck",
+   "pairs": 2765,
+   "legacy_p50_ms": 98.98,
+   "runtime_p50_ms": 5.3,
+   "legacy_p95_ms": 629.92,
+   "runtime_p95_ms": 9.69,
+   "p50_ratio_ci": [
+    18.39,
+    19.14
+   ],
+   "p95_ratio_ci": [
+    61.34,
+    70.0
+   ],
+   "median_speedup": 20.06,
+   "median_speedup_ci": [
+    19.73,
+    20.39
+   ],
+   "legacy_per_s": 18.7,
+   "exact_per_s": 235.2,
+   "batching_per_s": 303.6,
+   "exact_over_legacy": {
+    "geometric_mean": 12.74,
+    "low": 11.95,
+    "high": 13.58,
+    "verdict": "Better"
+   },
+   "batching_over_legacy": {
+    "geometric_mean": 16.19,
+    "low": 14.92,
+    "high": 17.56,
+    "verdict": "Better"
+   },
+   "p50_verdict": "Better",
+   "p95_verdict": "Better",
+   "throughput_verdict": "Better"
+  },
+  {
+   "job": "feedback",
+   "pairs": 2765,
+   "legacy_p50_ms": 99.49,
+   "runtime_p50_ms": 5.81,
+   "legacy_p95_ms": 658.25,
+   "runtime_p95_ms": 10.3,
+   "p50_ratio_ci": [
+    16.82,
+    17.48
+   ],
+   "p95_ratio_ci": [
+    61.53,
+    67.81
+   ],
+   "median_speedup": 18.12,
+   "median_speedup_ci": [
+    17.78,
+    18.49
+   ],
+   "legacy_per_s": 19.7,
+   "exact_per_s": 231.6,
+   "batching_per_s": 293.2,
+   "exact_over_legacy": {
+    "geometric_mean": 11.67,
+    "low": 11.32,
+    "high": 12.03,
+    "verdict": "Better"
+   },
+   "batching_over_legacy": {
+    "geometric_mean": 14.94,
+    "low": 14.51,
+    "high": 15.38,
+    "verdict": "Better"
+   },
+   "p50_verdict": "Better",
+   "p95_verdict": "Better",
+   "throughput_verdict": "Better"
+  },
+  {
+   "job": "modality",
+   "pairs": 2765,
+   "legacy_p50_ms": 98.05,
+   "runtime_p50_ms": 5.33,
+   "legacy_p95_ms": 626.66,
+   "runtime_p95_ms": 9.95,
+   "p50_ratio_ci": [
+    17.92,
+    18.71
+   ],
+   "p95_ratio_ci": [
+    59.88,
+    66.75
+   ],
+   "median_speedup": 19.14,
+   "median_speedup_ci": [
+    18.75,
+    19.51
+   ],
+   "legacy_per_s": 18.9,
+   "exact_per_s": 235.5,
+   "batching_per_s": 293.8,
+   "exact_over_legacy": {
+    "geometric_mean": 12.51,
+    "low": 11.92,
+    "high": 13.12,
+    "verdict": "Better"
+   },
+   "batching_over_legacy": {
+    "geometric_mean": 15.63,
+    "low": 14.53,
+    "high": 16.83,
+    "verdict": "Better"
+   },
+   "p50_verdict": "Better",
+   "p95_verdict": "Better",
+   "throughput_verdict": "Better"
+  },
+  {
+   "job": "hazard",
+   "pairs": 2765,
+   "legacy_p50_ms": 98.35,
+   "runtime_p50_ms": 5.35,
+   "legacy_p95_ms": 656.11,
+   "runtime_p95_ms": 10.05,
+   "p50_ratio_ci": [
+    17.98,
+    18.8
+   ],
+   "p95_ratio_ci": [
+    62.4,
+    70.9
+   ],
+   "median_speedup": 19.58,
+   "median_speedup_ci": [
+    19.26,
+    20.03
+   ],
+   "legacy_per_s": 17.3,
+   "exact_per_s": 142.7,
+   "batching_per_s": 164.5,
+   "exact_over_legacy": {
+    "geometric_mean": 8.19,
+    "low": 7.89,
+    "high": 8.5,
+    "verdict": "Better"
+   },
+   "batching_over_legacy": {
+    "geometric_mean": 9.45,
+    "low": 9.12,
+    "high": 9.79,
+    "verdict": "Better"
+   },
+   "p50_verdict": "Better",
+   "p95_verdict": "Better",
+   "throughput_verdict": "Better"
+  },
+  {
+   "job": "pii",
+   "pairs": 2765,
+   "legacy_p50_ms": 98.85,
+   "runtime_p50_ms": 6.23,
+   "legacy_p95_ms": 640.5,
+   "runtime_p95_ms": 11.0,
+   "p50_ratio_ci": [
+    15.56,
+    16.24
+   ],
+   "p95_ratio_ci": [
+    54.64,
+    61.04
+   ],
+   "median_speedup": 16.79,
+   "median_speedup_ci": [
+    16.46,
+    17.13
+   ],
+   "legacy_per_s": 16.4,
+   "exact_per_s": 136.7,
+   "batching_per_s": 160.9,
+   "exact_over_legacy": {
+    "geometric_mean": 8.2,
+    "low": 7.73,
+    "high": 8.7,
+    "verdict": "Better"
+   },
+   "batching_over_legacy": {
+    "geometric_mean": 9.67,
+    "low": 8.94,
+    "high": 10.45,
+    "verdict": "Better"
+   },
+   "p50_verdict": "Better",
+   "p95_verdict": "Better",
+   "throughput_verdict": "Better"
+  },
+  {
+   "job": "pii_truncate",
+   "pairs": 2765,
+   "legacy_p50_ms": 198.28,
+   "runtime_p50_ms": 6.13,
+   "legacy_p95_ms": 713.51,
+   "runtime_p95_ms": 11.03,
+   "p50_ratio_ci": [
+    32.05,
+    32.92
+   ],
+   "p95_ratio_ci": [
+    60.64,
+    70.27
+   ],
+   "median_speedup": 33.93,
+   "median_speedup_ci": [
+    33.48,
+    34.44
+   ],
+   "legacy_per_s": 12.6,
+   "exact_per_s": 218.9,
+   "batching_per_s": 277.0,
+   "exact_over_legacy": {
+    "geometric_mean": 17.47,
+    "low": 16.41,
+    "high": 18.59,
+    "verdict": "Better"
+   },
+   "batching_over_legacy": {
+    "geometric_mean": 21.96,
+    "low": 20.45,
+    "high": 23.58,
+    "verdict": "Better"
+   },
+   "p50_verdict": "Better",
+   "p95_verdict": "Better",
+   "throughput_verdict": "Better"
+  },
+  {
+   "job": "halu",
+   "pairs": 320,
+   "legacy_p50_ms": 4674.19,
+   "runtime_p50_ms": 31.15,
+   "legacy_p95_ms": 114904.4,
+   "runtime_p95_ms": 251.96,
+   "p50_ratio_ci": [
+    129.46,
+    165.43
+   ],
+   "p95_ratio_ci": [
+    172.91,
+    471.62
+   ],
+   "median_speedup": 157.35,
+   "median_speedup_ci": [
+    147.64,
+    163.53
+   ],
+   "legacy_per_s": 0.6,
+   "exact_per_s": 26.0,
+   "batching_per_s": 27.4,
+   "exact_over_legacy": {
+    "geometric_mean": 44.4,
+    "low": 41.81,
+    "high": 47.15,
+    "verdict": "Better"
+   },
+   "batching_over_legacy": {
+    "geometric_mean": 46.81,
+    "low": 44.19,
+    "high": 49.58,
+    "verdict": "Better"
+   },
+   "p50_verdict": "Better",
+   "p95_verdict": "Better",
+   "throughput_verdict": "Better"
+  }
+ ]
+}

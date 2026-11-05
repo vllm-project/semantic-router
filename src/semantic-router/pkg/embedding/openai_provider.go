@@ -33,7 +33,7 @@ type OpenAICompatibleConfig struct {
 	BaseURL           string
 	Model             string
 	APIKeyEnv         string
-	TimeoutSeconds    int
+	TimeoutSeconds    float64
 	MaxRetries        int
 	MaxResponseBytes  int64
 	Dimensions        int
@@ -104,11 +104,10 @@ func NewOpenAICompatibleProvider(cfg OpenAICompatibleConfig) (*OpenAICompatibleP
 		return nil, err
 	}
 
-	timeoutSeconds := cfg.TimeoutSeconds
-	if timeoutSeconds == 0 {
-		timeoutSeconds = defaultTimeoutSeconds
+	timeout := config.DurationFromSeconds(cfg.TimeoutSeconds)
+	if timeout == 0 {
+		timeout = time.Duration(defaultTimeoutSeconds) * time.Second
 	}
-	timeout := time.Duration(timeoutSeconds) * time.Second
 	client := cfg.HTTPClient
 	if client == nil {
 		client = &http.Client{Timeout: timeout}

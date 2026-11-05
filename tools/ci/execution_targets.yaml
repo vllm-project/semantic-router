@@ -1,0 +1,28 @@
+version: 1
+# Placement is separate from test contracts and batching. Only real, supported
+# targets are enabled. A runner label alone never establishes GPU qualification.
+targets:
+  linux-amd64-cpu:
+    enabled: true
+    adapter: cpu-v1
+    runner: ubuntu-24.04
+    runner_environment: github-hosted
+    platform: linux/amd64
+    runtimes: [none, model-runtime]
+    devices: [none, cpu]
+    executors:
+      - quality
+      - generated
+      - security
+      - core
+      - storage
+      - dashboard
+      - operator
+      - operator-source
+      - local
+      - recipes
+      - platform
+      - performance
+      - package
+      - tools
+      - e2e

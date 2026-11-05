@@ -11,7 +11,7 @@ import (
 // GET /api/router/config/deployments
 func ConfigDeploymentsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -22,7 +22,8 @@ func ConfigDeploymentsHandler() http.HandlerFunc {
 
 		deployments, err := configProjectionStore.ListDeployments()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("failed to list deployments: %v", err)
+			http.Error(w, "failed to list deployments", http.StatusInternalServerError)
 			return
 		}
 
@@ -37,7 +38,7 @@ func ConfigDeploymentsHandler() http.HandlerFunc {
 // GET /api/router/config/deployments/{version}
 func ConfigDeploymentDetailHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -55,10 +56,11 @@ func ConfigDeploymentDetailHandler() http.HandlerFunc {
 		deployment, err := configProjectionStore.GetDeployment(version)
 		if err != nil {
 			if strings.Contains(err.Error(), "not found") {
-				http.Error(w, err.Error(), http.StatusNotFound)
+				http.Error(w, "deployment not found", http.StatusNotFound)
 				return
 			}
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("failed to get deployment: %v", err)
+			http.Error(w, "failed to get deployment", http.StatusInternalServerError)
 			return
 		}
 
@@ -73,7 +75,7 @@ func ConfigDeploymentDetailHandler() http.HandlerFunc {
 // GET /api/router/config/active-projection
 func ActiveConfigProjectionHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -84,7 +86,8 @@ func ActiveConfigProjectionHandler() http.HandlerFunc {
 
 		projection, err := configProjectionStore.GetActiveProjection()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("failed to get active projection: %v", err)
+			http.Error(w, "failed to get active projection", http.StatusInternalServerError)
 			return
 		}
 

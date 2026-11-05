@@ -1,0 +1,321 @@
+{
+ "context": {
+  "hardware": "NVIDIA H200",
+  "image": "runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404",
+  "head": "ec307ad6ed081dd220b5dbb3571a1f9987d06914",
+  "date": "2026-10-20",
+  "device": "cuda:0",
+  "note": "Promoted metric is end-to-end call only. direct/scheduler live in the source .rounds.json files, not this summary."
+ },
+ "panel": "mmlu_pro 400",
+ "metric": "end-to-end Runtime.call minus bundled package runtime (ms; rps higher is better)",
+ "jobs": [
+  {
+   "model": "Decision-1.0-Eos-0.8B",
+   "rounds": 5,
+   "fla_pinned": true,
+   "requests_per_round": 400,
+   "call_minus_bundled": {
+    "p50_ms": {
+     "diff": -25.062723,
+     "low": -25.591403,
+     "high": -24.534044,
+     "rounds": 5,
+     "baseline": 33.110361,
+     "verdict": "Better"
+    },
+    "p95_ms": {
+     "diff": -32.816805,
+     "low": -34.999389,
+     "high": -30.63422,
+     "rounds": 5,
+     "baseline": 42.218626,
+     "verdict": "Better"
+    },
+    "mean_ms": {
+     "diff": -25.832476,
+     "low": -26.096421,
+     "high": -25.56853,
+     "rounds": 5,
+     "baseline": 34.035969,
+     "verdict": "Better"
+    },
+    "requests_per_second": {
+     "diff": 92.682327,
+     "low": 86.974766,
+     "high": 98.389889,
+     "rounds": 5,
+     "baseline": 29.384719,
+     "verdict": "Better"
+    }
+   }
+  },
+  {
+   "model": "Decision-1.0-Kai-0.6B",
+   "rounds": 5,
+   "fla_pinned": false,
+   "requests_per_round": 400,
+   "call_minus_bundled": {
+    "p50_ms": {
+     "diff": -0.741593,
+     "low": -1.215106,
+     "high": -0.268081,
+     "rounds": 5,
+     "baseline": 23.957214,
+     "verdict": "Better"
+    },
+    "p95_ms": {
+     "diff": -7.269673,
+     "low": -8.273049,
+     "high": -6.266297,
+     "rounds": 5,
+     "baseline": 35.219083,
+     "verdict": "Better"
+    },
+    "mean_ms": {
+     "diff": -2.860554,
+     "low": -3.366052,
+     "high": -2.355056,
+     "rounds": 5,
+     "baseline": 25.959969,
+     "verdict": "Better"
+    },
+    "requests_per_second": {
+     "diff": 4.827707,
+     "low": 3.535674,
+     "high": 6.119739,
+     "rounds": 5,
+     "baseline": 38.562258,
+     "verdict": "Better"
+    }
+   },
+   "call_p50_ms_by_round": [
+    {
+     "round": 0,
+     "bundled": 22.85640500485897,
+     "call": 22.00278826057911
+    },
+    {
+     "round": 1,
+     "bundled": 24.56742152571678,
+     "call": 23.3454592525959
+    },
+    {
+     "round": 2,
+     "bundled": 24.40682426095009,
+     "call": 23.55712279677391
+    },
+    {
+     "round": 3,
+     "bundled": 23.470474407076836,
+     "call": 23.281078785657883
+    },
+    {
+     "round": 4,
+     "bundled": 24.484945461153984,
+     "call": 23.89165572822094
+    }
+   ]
+  },
+  {
+   "model": "Decision-1.0-Lex-0.6B",
+   "rounds": 10,
+   "fla_pinned": false,
+   "requests_per_round": 400,
+   "call_minus_bundled": {
+    "p50_ms": {
+     "diff": -0.064007,
+     "low": -1.261691,
+     "high": 1.133677,
+     "rounds": 10,
+     "baseline": 21.532239,
+     "verdict": "Level"
+    },
+    "p95_ms": {
+     "diff": -6.976574,
+     "low": -7.337989,
+     "high": -6.615159,
+     "rounds": 10,
+     "baseline": 34.396826,
+     "verdict": "Better"
+    },
+    "mean_ms": {
+     "diff": -2.25625,
+     "low": -3.310022,
+     "high": -1.202478,
+     "rounds": 10,
+     "baseline": 23.234482,
+     "verdict": "Better"
+    },
+    "requests_per_second": {
+     "diff": 4.163395,
+     "low": 2.241342,
+     "high": 6.085448,
+     "rounds": 10,
+     "baseline": 44.417817,
+     "verdict": "Better"
+    }
+   }
+  },
+  {
+   "model": "Decision-1.0-Lux-9B",
+   "rounds": 5,
+   "fla_pinned": true,
+   "requests_per_round": 400,
+   "call_minus_bundled": {
+    "p50_ms": {
+     "diff": -27.454039,
+     "low": -28.690315,
+     "high": -26.217764,
+     "rounds": 5,
+     "baseline": 45.117277,
+     "verdict": "Better"
+    },
+    "p95_ms": {
+     "diff": -35.501434,
+     "low": -36.240288,
+     "high": -34.76258,
+     "rounds": 5,
+     "baseline": 57.887264,
+     "verdict": "Better"
+    },
+    "mean_ms": {
+     "diff": -29.047874,
+     "low": -29.903326,
+     "high": -28.192422,
+     "rounds": 5,
+     "baseline": 47.322774,
+     "verdict": "Better"
+    },
+    "requests_per_second": {
+     "diff": 33.621694,
+     "low": 31.689691,
+     "high": 35.553698,
+     "rounds": 5,
+     "baseline": 21.132148,
+     "verdict": "Better"
+    }
+   }
+  },
+  {
+   "model": "Decision-1.0-Nox-4B",
+   "rounds": 5,
+   "fla_pinned": true,
+   "requests_per_round": 400,
+   "call_minus_bundled": {
+    "p50_ms": {
+     "diff": -31.897974,
+     "low": -33.270169,
+     "high": -30.525779,
+     "rounds": 5,
+     "baseline": 45.935993,
+     "verdict": "Better"
+    },
+    "p95_ms": {
+     "diff": -38.666794,
+     "low": -40.798751,
+     "high": -36.534838,
+     "rounds": 5,
+     "baseline": 56.83208,
+     "verdict": "Better"
+    },
+    "mean_ms": {
+     "diff": -32.344745,
+     "low": -32.692636,
+     "high": -31.996854,
+     "rounds": 5,
+     "baseline": 47.121995,
+     "verdict": "Better"
+    },
+    "requests_per_second": {
+     "diff": 46.574797,
+     "low": 42.956263,
+     "high": 50.193332,
+     "rounds": 5,
+     "baseline": 21.225008,
+     "verdict": "Better"
+    }
+   }
+  },
+  {
+   "model": "Decision-1.0-Route-0.6B",
+   "rounds": 5,
+   "fla_pinned": false,
+   "requests_per_round": 400,
+   "call_minus_bundled": {
+    "p50_ms": {
+     "diff": -0.855552,
+     "low": -1.820676,
+     "high": 0.109573,
+     "rounds": 5,
+     "baseline": 19.330815,
+     "verdict": "Level"
+    },
+    "p95_ms": {
+     "diff": -7.83917,
+     "low": -8.189309,
+     "high": -7.489031,
+     "rounds": 5,
+     "baseline": 33.659109,
+     "verdict": "Better"
+    },
+    "mean_ms": {
+     "diff": -2.301848,
+     "low": -3.241854,
+     "high": -1.361841,
+     "rounds": 5,
+     "baseline": 20.354169,
+     "verdict": "Better"
+    },
+    "requests_per_second": {
+     "diff": 6.533427,
+     "low": 2.557778,
+     "high": 10.509077,
+     "rounds": 5,
+     "baseline": 49.362428,
+     "verdict": "Better"
+    }
+   }
+  },
+  {
+   "model": "Decision-1.0-Sol-2B",
+   "rounds": 5,
+   "fla_pinned": true,
+   "requests_per_round": 400,
+   "call_minus_bundled": {
+    "p50_ms": {
+     "diff": -24.760026,
+     "low": -25.771471,
+     "high": -23.74858,
+     "rounds": 5,
+     "baseline": 33.917707,
+     "verdict": "Better"
+    },
+    "p95_ms": {
+     "diff": -29.477666,
+     "low": -31.719245,
+     "high": -27.236086,
+     "rounds": 5,
+     "baseline": 40.399437,
+     "verdict": "Better"
+    },
+    "mean_ms": {
+     "diff": -25.212779,
+     "low": -25.726339,
+     "high": -24.699218,
+     "rounds": 5,
+     "baseline": 34.647777,
+     "verdict": "Better"
+    },
+    "requests_per_second": {
+     "diff": 77.284056,
+     "low": 72.058606,
+     "high": 82.509505,
+     "rounds": 5,
+     "baseline": 28.870455,
+     "verdict": "Better"
+    }
+   }
+  }
+ ]
+}

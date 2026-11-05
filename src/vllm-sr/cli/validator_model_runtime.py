@@ -1,5 +1,6 @@
 """Model-runtime checks that do not load local or remote model resources."""
 
+from cli.model_revision import builtin_releases
 from cli.model_runtime_defaults import (
     effective_model_deployments,
     global_model_bindings,
@@ -8,8 +9,10 @@ from cli.model_runtime_defaults import (
 from cli.model_runtime_retired import ENGINE_ARGUMENTS
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
+from cli.decision_model import SYSTEMONE_PROVIDER
 from cli.validator_decision_model import (
     model_runtime_deployment_error,
+    systemone_deployment_error,
     validate_decision_model_references,
     validate_systemone_listener_models,
 )
@@ -102,6 +105,11 @@ def _binding_error(
     consumer, binding, deployment, profile=None, *, global_default=False
 ):
     provider = deployment.get("provider")
+    if provider == SYSTEMONE_PROVIDER:
+        return (
+            "a systemone deployment answers decision signals and selectors only; "
+            f"bind {consumer} to a model_runtime or http deployment"
+        )
     runtime = provider == "model_runtime"
     if runtime and consumer == "hallucination_explainer":
         return (
@@ -260,7 +268,12 @@ def _deployment_error(name, deployment, external_names):
     provider = deployment.get("provider")
     if provider == "model_runtime":
         return model_runtime_deployment_error(deployment)
-    if any(deployment.get(field) is not None for field in ENGINE_ARGUMENTS) or any(
+    if provider == SYSTEMONE_PROVIDER:
+        return systemone_deployment_error(deployment)
+    if any(
+        deployment.get(field) is not None
+        for field in (*ENGINE_ARGUMENTS, "max_model_len")
+    ) or any(
         deployment.get(field)
         for field in ("endpoint", "process", "served_name", "replicas")
     ):
@@ -285,3 +298,31 @@ def _deployment_error(name, deployment, external_names):
     if (budget.get("overflow") or "reject") not in {"reject", "truncate", "window"}:
         return "input.overflow must be reject, truncate or window"
     return None
+
+
+def unpinned_hub_deployment_warnings(config: UserConfig) -> list[ValidationError]:
+    """Managed deployments of a Hub repository the runtime cannot load without a revision."""
+    built_in = {name.lower() for name in builtin_releases()}
+    warnings = []
+    for name, deployment in effective_model_deployments(config).items():
+        artifact = (deployment.get("artifact") or "").strip()
+        replicas = deployment.get("replicas") or [deployment]
+        if (
+            deployment.get("provider") != "model_runtime"
+            or not artifact
+            or artifact.startswith("/")
+            or deployment.get("revision")
+            or artifact.lower() in built_in
+            or all(replica.get("endpoint") for replica in replicas)
+        ):
+            continue
+        warnings.append(
+            ValidationError(
+                f"{artifact} is not a built-in model and sets no revision; the "
+                "runtime refuses to load it",
+                field=f"global.model_catalog.deployments.{name}",
+                hint="Set revision to the 40-hex commit to load, or use an "
+                "absolute path for a local package.",
+            )
+        )
+    return warnings

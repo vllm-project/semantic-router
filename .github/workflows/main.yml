@@ -1,6 +1,12 @@
 name: Main
 
 on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Qualify and publish the complete development CLI and commit-addressed images.
+        type: boolean
+        default: false
   push:
     branches: [main]
 
@@ -8,18 +14,26 @@ permissions:
   contents: read
   actions: read
   pull-requests: read
+  issues: read
 
 jobs:
   ci:
     name: CI
+    # A push run checks only its own commit's paths, so it never shares a group.
+    # A newer publication dispatch cancels an older one's qualification.
+    concurrency:
+      group: ${{ github.event_name == 'workflow_dispatch' && inputs.publish && 'main-publication' || format('main-{0}', github.run_id) }}
+      cancel-in-progress: true
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
       actions: read
       pull-requests: read
+      issues: read
       security-events: write
     with:
       profile: main
+      publish: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish }}
     secrets: inherit
 
   images:

@@ -171,9 +171,32 @@ class ImpactTests(unittest.TestCase):
         result = harness.build_impact(["tools/make/agent.mk"], "cpu")
 
         self.assertEqual(
-            result["domains"], [{"name": "harness", "owner": "maintainers"}]
+            result["domains"],
+            [
+                {"name": "harness", "owner": "maintainers"},
+                {"name": "component-execution", "owner": "maintainers"},
+            ],
         )
         self.assertEqual(result["checks"], ["make harness-check"])
+        self.assertEqual(
+            {job["name"] for job in result["candidate_ci_jobs"]},
+            {
+                "quality",
+                "security",
+                "cli-unit",
+                "model-runtime",
+                "bench-tools",
+                "training",
+                "onnx-artifacts",
+                "mock-provider",
+                "learning-tools",
+                "harness-tools",
+                "e2e-unit",
+                "soak-tools",
+            },
+        )
+        self.assertEqual(result["optional_e2e_profiles"], [])
+        self.assertEqual(result["pr_images"], [])
         self.assertNotIn("primary_skill", result)
         self.assertNotIn("completion_boundary", result)
         self.assertNotIn("loop_mode", result)

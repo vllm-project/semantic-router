@@ -214,7 +214,7 @@ func RollbackHandler(configPath string, readonlyMode bool, configDir string) htt
 // GET /api/router/config/versions
 func ConfigVersionsHandler(configPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -268,7 +268,8 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 		return
 	}
 
-	if _, err := routerconfig.ParseYAMLBytes(yamlBytes); err != nil {
+	// The Router resolves ${VAR} references with its own environment, which the Dashboard may not share.
+	if err := routerconfig.ValidateYAMLBytesDeferringEnv(yamlBytes); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]string{

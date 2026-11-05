@@ -18,6 +18,18 @@ func selectionDecisionStateKey(selCtx *selection.SelectionContext) string {
 	return config.RoutingDecisionKey(selCtx.RecipeName, selCtx.DecisionName)
 }
 
+// selectionDecisionDrift reports whether the session was last routed under a
+// different decision state than the one now admitting the request. Drift is a
+// continuity boundary: locks created under the previous decision state do not
+// outlive it.
+func selectionDecisionDrift(selCtx *selection.SelectionContext) bool {
+	if selCtx == nil || selCtx.AgenticSession == nil {
+		return false
+	}
+	session := selCtx.AgenticSession
+	return session.LastDecisionName != "" && session.LastDecisionName != selectionDecisionStateKey(selCtx)
+}
+
 func requestDecisionStateKey(ctx *RequestContext) string {
 	if ctx == nil {
 		return ""

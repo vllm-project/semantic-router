@@ -20,7 +20,7 @@ import (
 
 // handleToolSelectionForRequest handles tool selection for the request.
 func (r *OpenAIRouter) handleToolSelectionForRequest(request *llmprotocol.Request, response *ext_proc.ProcessingResponse, ctx *RequestContext) {
-	fast := extractSemanticRequestSignals(request)
+	fast := extractSemanticRequestSignalsWith(request, r.routingInputSelector())
 	if err := r.handleToolSelection(request, fast.UserContent, fast.NonUserMessages, &response, ctx); err != nil {
 		logging.Errorf("Error in tool selection: %v", err)
 		// Continue without failing the request
@@ -172,6 +172,13 @@ func (r *OpenAIRouter) handleToolSelection(
 
 	tsPlugin := ctx.VSRSelectedDecision.GetToolSelectionConfig()
 	toolsCfg := resolveDecisionToolsConfig(ctx)
+
+	// The trusted-facts gate runs before the decision-plugin branch and
+	// before relevance/ranking so deny and narrow close the bypass for
+	// tool_selection flows too: neither outcome can widen the tool set.
+	if r.applyTrustedFactsGate(request, ctx, toolsCfg, trustedFactsRequestStage) {
+		return nil
+	}
 
 	handled, err := r.handleToolSelectionDecisionPlugin(request, userContent, nonUserMessages, response, ctx, tsPlugin, toolsCfg)
 	if err != nil {
@@ -378,7 +385,7 @@ func (r *OpenAIRouter) findToolsForQueryExt(
 	}
 
 	if config.IsHybridHistoryRetrieval(advanced) {
-		transition := extractToolTransitionContextFromRequest(request, config.ResolveHybridHistoryHorizon(advanced), ctx)
+		transition := extractToolTransitionContextFromRequest(request, config.ResolveHybridHistoryHorizon(advanced), ctx, r.routingInputSelector())
 		decisionConfidence := float64(0)
 		if ctx != nil && ctx.VSRSelectedDecisionConfidenceScored {
 			decisionConfidence = float64(ctx.VSRSelectedDecisionConfidence)

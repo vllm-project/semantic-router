@@ -290,7 +290,8 @@ func (r *OpenAIRouter) parseLooperRequestForPlugins(
 		})
 		return nil, err
 	}
-	ctx.UserContent = extractSemanticRequestSignals(ctx.SemanticRequest).UserContent
+	snapshot := extractSemanticRequestSignalsWith(ctx.SemanticRequest, r.routingInputSelector())
+	ctx.UserContent, ctx.RoutingInput = snapshot.UserContent, snapshot.RoutingInput
 	return ctx.SemanticRequest, nil
 }
 
@@ -307,7 +308,7 @@ func (r *OpenAIRouter) runLooperInternalPlugins(
 	}
 
 	if err := r.executeRAGPlugin(ctx, decisionName); err != nil {
-		return r.createErrorResponse(503, fmt.Sprintf("RAG failed: %v", err))
+		return r.createErrorResponse(503, "RAG retrieval failed")
 	}
 
 	return nil

@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 常见错误
 sidebar_label: 常见错误
 translation:

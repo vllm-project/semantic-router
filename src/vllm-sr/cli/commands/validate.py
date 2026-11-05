@@ -163,6 +163,7 @@ def validate_command(
         echo(f"  Checked by {verdict.source} as well as the CLI.")
         print_validation_warnings(
             [ValidationError(item.message) for item in verdict.warnings]
+            + collect_validation_warnings(user_config)
         )
     else:
         if unavailable:

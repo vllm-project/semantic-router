@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: Gateway 模式
 description: 选择客户端流量从哪里进入 Router：standalone 直接服务，或放在基于 Envoy 的网关之后；适用于 docker 和 kubernetes 两种目标。
 translation:

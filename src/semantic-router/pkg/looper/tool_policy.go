@@ -16,7 +16,54 @@ limitations under the License.
 
 package looper
 
-import "github.com/openai/openai-go"
+import (
+	"github.com/openai/openai-go"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+)
+
+// ToolStageGate decides which tools one Looper attempt may send. stage is the
+// attempt's trusted-facts role; an empty stage names no role. It returns the
+// request to send and must not mutate req.
+type ToolStageGate func(stage llmprotocol.TrustedStage, req *openai.ChatCompletionNewParams) *openai.ChatCompletionNewParams
+
+// WithoutToolUse returns a copy of req with no tools, tool choice, or legacy
+// function calls.
+func WithoutToolUse(req *openai.ChatCompletionNewParams) *openai.ChatCompletionNewParams {
+	return stripFusionToolUse(req)
+}
+
+// NarrowToolUse returns a copy of req keeping only tools that pass the
+// decision's allow and block lists. When it removes any tool, the tool choice
+// is cleared so a forced choice cannot point at a removed tool.
+func NarrowToolUse(req *openai.ChatCompletionNewParams, allowTools, blockTools []string) *openai.ChatCompletionNewParams {
+	if req == nil {
+		return nil
+	}
+	allowSet := make(map[string]bool, len(allowTools))
+	for _, name := range allowTools {
+		allowSet[name] = true
+	}
+	blockSet := make(map[string]bool, len(blockTools))
+	for _, name := range blockTools {
+		blockSet[name] = true
+	}
+	kept := make([]openai.ChatCompletionToolParam, 0, len(req.Tools))
+	for _, tool := range req.Tools {
+		name := tool.Function.Name
+		if blockSet[name] || (len(allowSet) > 0 && !allowSet[name]) {
+			continue
+		}
+		kept = append(kept, tool)
+	}
+	if len(kept) == len(req.Tools) {
+		return req
+	}
+	narrowed := cloneRequest(req)
+	narrowed.Tools = kept
+	narrowed.ToolChoice = openai.ChatCompletionToolChoiceOptionUnionParam{}
+	return narrowed
+}
 
 // toolFreeLooperRequest creates a private request for algorithms whose output
 // cannot represent or resume multiple independent tool trajectories. Workflow

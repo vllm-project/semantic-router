@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 sidebar_position: 999
 title: 常见问题
 description: 了解 vLLM Semantic Router 的定位、它与 llm-d 和 AI 网关的区别，以及如何衡量路由价值和排查错误路由。

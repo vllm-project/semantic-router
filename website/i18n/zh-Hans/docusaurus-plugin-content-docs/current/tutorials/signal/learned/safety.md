@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "fddd53d7c446c30ae183d16b6d63ec54f7a00a3e"
   source_file: "docs/tutorials/signal/learned/safety.md"

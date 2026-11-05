@@ -7,7 +7,7 @@ import pytest
 import yaml
 from cli import decision_model, execution_platform, runtime_lifecycle
 from cli.bootstrap import build_bootstrap_config
-from cli.commands import runtime
+from cli.commands import runtime, runtime_mode_config
 from cli.commands.runtime_mode_config import (
     ENGINE_ARGUMENTS,
     apply_instance_options,
@@ -15,9 +15,11 @@ from cli.commands.runtime_mode_config import (
 )
 from cli.commands.runtime_serve_config import _prepare_docker_runtime_config
 from cli.main import main
+from cli.model_revision import builtin_releases
 from cli.models import UserConfig
 from cli.validator import validate_user_config
 from click.testing import CliRunner
+from huggingface_hub import HfApi
 
 MODEL = "vllm-sr/Decision-2.0-Kai-0.6B"
 
@@ -71,6 +73,24 @@ def test_engine_bootstrap_has_native_grant_and_no_invented_provider():
         validate_user_config(UserConfig.model_validate(document), log_summary=False)
         == []
     )
+
+
+@pytest.mark.parametrize("model", ["vllm-sr/d3-turbo", "vllm-sr/d3-ultra"])
+def test_a_state_once_d3_serves_at_its_built_in_release_without_the_hub(
+    monkeypatch, model
+):
+    def no_hub(*args, **kwargs):
+        raise AssertionError("a built-in model resolves without the Hub")
+
+    monkeypatch.setattr(HfApi, "model_info", no_hub)
+    document = {"version": "v0.3", "setup": {"mode": True}}
+    apply_instance_options(
+        document, engine=True, model_options=options(model), platform="rocm"
+    )
+    deployment = document["global"]["model_catalog"]["deployments"]["primary"]
+    assert deployment["artifact"] == model
+    assert deployment["revision"] == builtin_releases()[model]
+    assert document["listeners"][0]["systemone"]["models"] == [model]
 
 
 def test_generated_engine_bootstrap_preserves_listener_settings():
@@ -162,6 +182,38 @@ def test_same_artifact_keeps_revision_and_engine_args_when_unspecified():
     apply_instance_options(document, model_options=options(MODEL))
     assert selected(document)["revision"] == "b" * 40
     assert selected(document)["batch_window_ms"] == 0.5
+
+
+def test_saved_revision_off_the_release_pin_names_the_pin(monkeypatch):
+    pin = builtin_releases()[MODEL]
+    warnings = []
+    monkeypatch.setattr(
+        runtime_mode_config.log,
+        "warning",
+        lambda message, *args: warnings.append(message % args),
+    )
+    saved = {
+        "provider": "model_runtime",
+        "artifact": MODEL,
+        "revision": "b" * 40,
+        "device": "cpu",
+    }
+    apply_instance_options(declaration(dict(saved)), model_options=options(MODEL))
+    assert warnings == [
+        f"{MODEL} is served at revision {'b' * 12}, saved in this configuration; "
+        f"this vllm-sr pins {pin[:12]}. Serve with --revision {pin[:12]} to switch."
+    ]
+    warnings.clear()
+    apply_instance_options(
+        declaration({**saved, "revision": pin}), model_options=options(MODEL)
+    )
+    apply_instance_options(
+        declaration(dict(saved)), model_options=options(MODEL, revision="b" * 40)
+    )
+    document = declaration(dict(saved))
+    apply_instance_options(document, model_options=options(MODEL, revision=pin[:12]))
+    assert selected(document)["revision"] == pin
+    assert warnings == []
 
 
 def test_new_multi_gpu_workers_use_available_devices():
@@ -387,6 +439,7 @@ def test_startup_mode_preserves_source_and_resets_engine_without_flag(
 def test_serve_projects_host_ids_once_and_forwards_the_existing_mask(
     tmp_path, monkeypatch
 ):
+    monkeypatch.setattr(execution_platform.sys, "platform", "linux")
     monkeypatch.setattr(
         execution_platform,
         "_host_devices",

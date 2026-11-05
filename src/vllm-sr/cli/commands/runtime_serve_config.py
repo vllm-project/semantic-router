@@ -41,6 +41,7 @@ from cli.container_services import container_status_strict
 from cli.decision_model import (
     decision_model_deployment,
     gpu_requirement_error,
+    remote_decision_model,
 )
 from cli.parser import parse_user_config
 from cli.recipe_activation_recovery import (
@@ -82,6 +83,8 @@ def _check_served_decision_model(
 ) -> None:
     """Fail before startup when the config's decision model needs a GPU it lacks."""
 
+    if remote_decision_model(document):
+        return
     try:
         deployment = decision_model_deployment(document)
     except ValueError as error:

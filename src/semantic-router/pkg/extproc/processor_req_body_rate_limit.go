@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -73,7 +74,8 @@ func splitRateLimitGroups(value string) []string {
 func (r *OpenAIRouter) createRateLimitResponse(decision *ratelimit.Decision) *ext_proc.ProcessingResponse {
 	retryAfter := "60"
 	if decision != nil && decision.RetryAfter > 0 {
-		retryAfter = fmt.Sprintf("%d", int(decision.RetryAfter.Seconds()))
+		// Retry-After is whole seconds; round up so the client does not retry inside the window.
+		retryAfter = fmt.Sprintf("%d", int(math.Ceil(decision.RetryAfter.Seconds())))
 	}
 	body := []byte(fmt.Sprintf(
 		`{"error":{"message":"Rate limit exceeded. Retry after %s seconds.","type":"rate_limit_error","code":429}}`,

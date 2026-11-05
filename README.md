@@ -60,7 +60,7 @@ For pip, uv, or agent-driven installation, see the **[Installation Guide](https:
 
 Point your harness at the Router's inference endpoint. Use a public model ID such as `vllm-sr/auto`.
 
-Follow **[Connect an agent harness](https://vllm-sr.ai/docs/installation/agent-harness/)** for setup and compatibility.
+Follow **[Connect an agent harness](https://vllm-sr.ai/docs/next/installation/agent-harness/)** for setup and compatibility.
 
 ### Online playground
 

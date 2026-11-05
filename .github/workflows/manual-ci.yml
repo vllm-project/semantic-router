@@ -1,0 +1,92 @@
+name: Requested CI
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+jobs:
+  authorize:
+    name: Authorize requested CI
+    if: >-
+      github.event.issue.pull_request != null
+      && startsWith(github.event.comment.body, '/ci run')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+      # PR timeline feedback needs PR write access even through /issues APIs.
+      pull-requests: write
+    outputs:
+      authorized: ${{ steps.request.outputs.authorized }}
+      pr_run_id: ${{ steps.request.outputs.pr_run_id }}
+    steps:
+      - name: Check out the trusted command handler
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Authorize this comment and freeze the PR revision
+        id: request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 tools/ci/manual_ci.py authorize
+          --event "$GITHUB_EVENT_PATH"
+          --output authorization.json
+      - uses: actions/upload-artifact@v4
+        id: authorization-artifact
+        if: steps.request.outputs.authorized == 'true'
+        with:
+          name: ci-manual-authorization-${{ steps.request.outputs.pr_run_id }}
+          path: authorization.json
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7
+      - name: Explain authorization artifact failure
+        if: failure() && steps.authorization-artifact.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 tools/ci/manual_ci.py feedback
+          --event "$GITHUB_EVENT_PATH" --reason controller
+
+  rerun:
+    name: Rerun the authorized pull-request workflow
+    needs: authorize
+    if: needs.authorize.outputs.authorized == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    concurrency:
+      group: requested-ci-${{ needs.authorize.outputs.pr_run_id }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      actions: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        id: authorization-artifact
+        with:
+          name: ci-manual-authorization-${{ needs.authorize.outputs.pr_run_id }}
+          path: request
+      - name: Recheck authorization and rerun the original PR event
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/ci/manual_ci.py rerun --authorization request/authorization.json
+      - name: Explain authorization artifact failure
+        if: failure() && steps.authorization-artifact.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 tools/ci/manual_ci.py feedback
+          --event "$GITHUB_EVENT_PATH" --reason controller

@@ -11,6 +11,12 @@ import subprocess
 from pathlib import Path
 
 from ci_plan import digest
+from execution_targets import (
+    TARGET_FIELDS,
+    execution_observation,
+    observation_errors,
+    target_errors,
+)
 from release_guard_waiver import waiver_evidence_errors
 
 STATUSES = frozenset({"passed", "failed", "skipped"})
@@ -97,10 +103,20 @@ def actual_platform() -> str:
     return f"{platform.system().lower()}/{machine}"
 
 
-def execution_errors(verification: dict, producer_platform: str) -> list[str]:
+def execution_errors(
+    verification: dict,
+    producer_platform: str,
+    observation: dict | None = None,
+    *,
+    require_actions: bool = False,
+) -> list[str]:
+    errors = target_errors(verification)
     if producer_platform != verification["platform"]:
-        return ["receipt producer ran on a different platform"]
-    return []
+        errors.append("receipt producer ran on a different platform")
+    errors.extend(
+        observation_errors(verification, observation, require_actions=require_actions)
+    )
+    return errors
 
 
 def make_receipt(
@@ -124,7 +140,10 @@ def make_receipt(
             errors.append(
                 f"actual {key} {evidence.get(key)!r} differs from planned {verification[key]!r}"
             )
-    errors.extend(execution_errors(verification, execution_platform))
+    observation = execution_observation(
+        verification, execution_platform, environ=environ
+    )
+    errors.extend(execution_errors(verification, execution_platform, observation))
     artifacts = artifact_records(evidence, environ=environ)
     required = {f"image:{image}" for image in verification["images"]}
     missing = required - {record["id"] for record in artifacts}
@@ -138,6 +157,8 @@ def make_receipt(
         "source_sha": source_sha,
         "contract_sha256": verification["contract_sha256"],
         "inventory": verification["inventory"],
+        **{key: verification[key] for key in TARGET_FIELDS},
+        "execution": observation,
         "runtime": evidence["runtime"],
         "device": evidence["device"],
         "platform": evidence["platform"],

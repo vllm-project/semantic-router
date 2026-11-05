@@ -253,9 +253,16 @@ class AdaptiveThreads:
                 f"{edges[bucket]}: {count} threads"
                 for bucket, count in sorted(table.items())
             )
+            # A table that picked only the configured count verifies nothing
+            # new: level 2 serves it at once, with no transition to await.
+            state = (
+                "serving after transition"
+                if self._transition
+                else "serving" if self.serving else "report only"
+            )
             log.info(
                 "learned intra-op thread counts (%s): %s%s",
-                "serving after transition" if self._transition else "report only",
+                state,
                 learned,
                 "" if self.serving else "; set --threads to apply them",
             )

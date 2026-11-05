@@ -15672,6 +15672,30 @@
                             "nullable": true,
                             "type": "number"
                           },
+                          "box": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "bottom": {
+                                "type": "number"
+                              },
+                              "left": {
+                                "type": "number"
+                              },
+                              "right": {
+                                "type": "number"
+                              },
+                              "top": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "bottom",
+                              "left",
+                              "right",
+                              "top"
+                            ]
+                          },
                           "choice": {
                             "nullable": true,
                             "type": "string"
@@ -15710,9 +15734,65 @@
                               "type": "number"
                             }
                           },
+                          "reason": {
+                            "nullable": true,
+                            "type": "string"
+                          },
                           "score": {
                             "nullable": true,
                             "type": "number"
+                          },
+                          "time": {
+                            "nullable": true,
+                            "type": "number"
+                          },
+                          "track": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "box": {
+                                  "type": "object",
+                                  "properties": {
+                                    "bottom": {
+                                      "type": "number"
+                                    },
+                                    "left": {
+                                      "type": "number"
+                                    },
+                                    "right": {
+                                      "type": "number"
+                                    },
+                                    "top": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "bottom",
+                                    "left",
+                                    "right",
+                                    "top"
+                                  ]
+                                },
+                                "confidence": {
+                                  "nullable": true,
+                                  "type": "number"
+                                },
+                                "time": {
+                                  "type": "number"
+                                },
+                                "visible": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "box",
+                                "confidence",
+                                "time",
+                                "visible"
+                              ]
+                            }
                           },
                           "type": {
                             "nullable": true,
@@ -15897,6 +15977,30 @@
                                   "nullable": true,
                                   "type": "number"
                                 },
+                                "box": {
+                                  "nullable": true,
+                                  "type": "object",
+                                  "properties": {
+                                    "bottom": {
+                                      "type": "number"
+                                    },
+                                    "left": {
+                                      "type": "number"
+                                    },
+                                    "right": {
+                                      "type": "number"
+                                    },
+                                    "top": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "bottom",
+                                    "left",
+                                    "right",
+                                    "top"
+                                  ]
+                                },
                                 "choice": {
                                   "nullable": true,
                                   "type": "string"
@@ -15935,9 +16039,65 @@
                                     "type": "number"
                                   }
                                 },
+                                "reason": {
+                                  "nullable": true,
+                                  "type": "string"
+                                },
                                 "score": {
                                   "nullable": true,
                                   "type": "number"
+                                },
+                                "time": {
+                                  "nullable": true,
+                                  "type": "number"
+                                },
+                                "track": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "box": {
+                                        "type": "object",
+                                        "properties": {
+                                          "bottom": {
+                                            "type": "number"
+                                          },
+                                          "left": {
+                                            "type": "number"
+                                          },
+                                          "right": {
+                                            "type": "number"
+                                          },
+                                          "top": {
+                                            "type": "number"
+                                          }
+                                        },
+                                        "required": [
+                                          "bottom",
+                                          "left",
+                                          "right",
+                                          "top"
+                                        ]
+                                      },
+                                      "confidence": {
+                                        "nullable": true,
+                                        "type": "number"
+                                      },
+                                      "time": {
+                                        "type": "number"
+                                      },
+                                      "visible": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "box",
+                                      "confidence",
+                                      "time",
+                                      "visible"
+                                    ]
+                                  }
                                 },
                                 "type": {
                                   "nullable": true,
@@ -16722,6 +16882,32 @@
                   "request": {
                     "type": "object",
                     "properties": {
+                      "assets": {
+                        "nullable": true,
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "object",
+                          "properties": {
+                            "data_base64": {
+                              "nullable": true,
+                              "type": "string"
+                            },
+                            "format": {
+                              "nullable": true,
+                              "type": "string"
+                            },
+                            "part": {
+                              "nullable": true,
+                              "type": "string"
+                            },
+                            "type": {
+                              "nullable": true,
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
                       "images": {
                         "nullable": true,
                         "type": "array",
@@ -16741,6 +16927,10 @@
                             "nullable": true,
                             "type": "number"
                           },
+                          "long_context": {
+                            "nullable": true,
+                            "type": "boolean"
+                          },
                           "max_tokens": {
                             "nullable": true,
                             "type": "integer"
@@ -16758,6 +16948,10 @@
                         "additionalProperties": {
                           "type": "object",
                           "properties": {
+                            "at": {
+                              "nullable": true,
+                              "type": "number"
+                            },
                             "choices": {
                               "nullable": true,
                               "type": "array",
@@ -16780,6 +16974,10 @@
                             },
                             "criteria": {
                               "nullable": true
+                            },
+                            "decision_adapter": {
+                              "nullable": true,
+                              "type": "boolean"
                             },
                             "head": {
                               "nullable": true,
@@ -16824,6 +17022,10 @@
                               "nullable": true,
                               "type": "string"
                             },
+                            "rate": {
+                              "nullable": true,
+                              "type": "integer"
+                            },
                             "require_full_input": {
                               "nullable": true,
                               "type": "boolean"
@@ -16860,6 +17062,10 @@
                               "additionalProperties": {
                                 "type": "object",
                                 "properties": {
+                                  "at": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
                                   "choices": {
                                     "nullable": true,
                                     "type": "array",
@@ -16882,6 +17088,10 @@
                                   },
                                   "criteria": {
                                     "nullable": true
+                                  },
+                                  "decision_adapter": {
+                                    "nullable": true,
+                                    "type": "boolean"
                                   },
                                   "head": {
                                     "nullable": true,
@@ -16925,6 +17135,10 @@
                                   "preset": {
                                     "nullable": true,
                                     "type": "string"
+                                  },
+                                  "rate": {
+                                    "nullable": true,
+                                    "type": "integer"
                                   },
                                   "require_full_input": {
                                     "nullable": true,
@@ -19498,6 +19712,32 @@
                   "request": {
                     "type": "object",
                     "properties": {
+                      "assets": {
+                        "nullable": true,
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "object",
+                          "properties": {
+                            "data_base64": {
+                              "nullable": true,
+                              "type": "string"
+                            },
+                            "format": {
+                              "nullable": true,
+                              "type": "string"
+                            },
+                            "part": {
+                              "nullable": true,
+                              "type": "string"
+                            },
+                            "type": {
+                              "nullable": true,
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
                       "images": {
                         "nullable": true,
                         "type": "array",
@@ -19517,6 +19757,10 @@
                             "nullable": true,
                             "type": "number"
                           },
+                          "long_context": {
+                            "nullable": true,
+                            "type": "boolean"
+                          },
                           "max_tokens": {
                             "nullable": true,
                             "type": "integer"
@@ -19534,6 +19778,10 @@
                         "additionalProperties": {
                           "type": "object",
                           "properties": {
+                            "at": {
+                              "nullable": true,
+                              "type": "number"
+                            },
                             "choices": {
                               "nullable": true,
                               "type": "array",
@@ -19556,6 +19804,10 @@
                             },
                             "criteria": {
                               "nullable": true
+                            },
+                            "decision_adapter": {
+                              "nullable": true,
+                              "type": "boolean"
                             },
                             "head": {
                               "nullable": true,
@@ -19600,6 +19852,10 @@
                               "nullable": true,
                               "type": "string"
                             },
+                            "rate": {
+                              "nullable": true,
+                              "type": "integer"
+                            },
                             "require_full_input": {
                               "nullable": true,
                               "type": "boolean"
@@ -19636,6 +19892,10 @@
                               "additionalProperties": {
                                 "type": "object",
                                 "properties": {
+                                  "at": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
                                   "choices": {
                                     "nullable": true,
                                     "type": "array",
@@ -19658,6 +19918,10 @@
                                   },
                                   "criteria": {
                                     "nullable": true
+                                  },
+                                  "decision_adapter": {
+                                    "nullable": true,
+                                    "type": "boolean"
                                   },
                                   "head": {
                                     "nullable": true,
@@ -19701,6 +19965,10 @@
                                   "preset": {
                                     "nullable": true,
                                     "type": "string"
+                                  },
+                                  "rate": {
+                                    "nullable": true,
+                                    "type": "integer"
                                   },
                                   "require_full_input": {
                                     "nullable": true,
@@ -24793,6 +25061,146 @@
                           "prompt_truncated": {
                             "type": "boolean"
                           },
+                          "provider_cache": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "cache_read": {
+                                "type": "object",
+                                "properties": {
+                                  "cost": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "provenance": {
+                                    "type": "string"
+                                  },
+                                  "tokens": {
+                                    "nullable": true,
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "provenance"
+                                ]
+                              },
+                              "cache_savings": {
+                                "nullable": true,
+                                "type": "number"
+                              },
+                              "cache_write": {
+                                "type": "object",
+                                "properties": {
+                                  "cost": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "provenance": {
+                                    "type": "string"
+                                  },
+                                  "tokens": {
+                                    "nullable": true,
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "provenance"
+                                ]
+                              },
+                              "cache_write_1h": {
+                                "type": "object",
+                                "properties": {
+                                  "cost": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "provenance": {
+                                    "type": "string"
+                                  },
+                                  "tokens": {
+                                    "nullable": true,
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "provenance"
+                                ]
+                              },
+                              "cache_write_5m": {
+                                "type": "object",
+                                "properties": {
+                                  "cost": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "provenance": {
+                                    "type": "string"
+                                  },
+                                  "tokens": {
+                                    "nullable": true,
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "provenance"
+                                ]
+                              },
+                              "no_cache_cost": {
+                                "nullable": true,
+                                "type": "number"
+                              },
+                              "output": {
+                                "type": "object",
+                                "properties": {
+                                  "cost": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "provenance": {
+                                    "type": "string"
+                                  },
+                                  "tokens": {
+                                    "nullable": true,
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "provenance"
+                                ]
+                              },
+                              "state": {
+                                "type": "string"
+                              },
+                              "uncached_input": {
+                                "type": "object",
+                                "properties": {
+                                  "cost": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "provenance": {
+                                    "type": "string"
+                                  },
+                                  "tokens": {
+                                    "nullable": true,
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "provenance"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "state",
+                              "uncached_input",
+                              "cache_read",
+                              "cache_write",
+                              "output",
+                              "cache_write_5m",
+                              "cache_write_1h"
+                            ]
+                          },
                           "rag_backend": {
                             "type": "string"
                           },
@@ -25351,6 +25759,12 @@
                                     "request_generation"
                                   ]
                                 }
+                              },
+                              "routing_input_skipped_messages": {
+                                "type": "integer"
+                              },
+                              "routing_input_stripped_blocks": {
+                                "type": "integer"
                               },
                               "selected_model": {
                                 "type": "string"
@@ -26408,6 +26822,139 @@
                     "object": {
                       "type": "string"
                     },
+                    "provider_cache": {
+                      "type": "object",
+                      "properties": {
+                        "actual_spend": {
+                          "type": "number"
+                        },
+                        "by_currency": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "actual_spend": {
+                                "type": "number"
+                              },
+                              "currency": {
+                                "type": "string"
+                              },
+                              "net_savings": {
+                                "type": "number"
+                              },
+                              "no_cache_spend": {
+                                "type": "number"
+                              },
+                              "priced_records": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "currency",
+                              "no_cache_spend",
+                              "actual_spend",
+                              "net_savings",
+                              "priced_records"
+                            ]
+                          }
+                        },
+                        "by_decision": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "actual_spend": {
+                                "type": "number"
+                              },
+                              "currency": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "net_savings": {
+                                "type": "number"
+                              },
+                              "no_cache_spend": {
+                                "type": "number"
+                              },
+                              "priced_records": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "currency",
+                              "no_cache_spend",
+                              "actual_spend",
+                              "net_savings",
+                              "priced_records"
+                            ]
+                          }
+                        },
+                        "by_selected_model": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "actual_spend": {
+                                "type": "number"
+                              },
+                              "currency": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "net_savings": {
+                                "type": "number"
+                              },
+                              "no_cache_spend": {
+                                "type": "number"
+                              },
+                              "priced_records": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "currency",
+                              "no_cache_spend",
+                              "actual_spend",
+                              "net_savings",
+                              "priced_records"
+                            ]
+                          }
+                        },
+                        "currency": {
+                          "type": "string"
+                        },
+                        "excluded_records": {
+                          "type": "integer"
+                        },
+                        "net_savings": {
+                          "type": "number"
+                        },
+                        "no_cache_spend": {
+                          "type": "number"
+                        },
+                        "priced_records": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "no_cache_spend",
+                        "actual_spend",
+                        "net_savings",
+                        "priced_records",
+                        "excluded_records",
+                        "by_decision",
+                        "by_selected_model"
+                      ]
+                    },
                     "record_count": {
                       "type": "integer"
                     },
@@ -26583,6 +27130,7 @@
                     "record_count",
                     "lifecycle",
                     "summary",
+                    "provider_cache",
                     "model_selection",
                     "decision_distribution",
                     "signal_distribution",
@@ -27919,6 +28467,9 @@
                         "properties": {
                           "content": {
                             "type": "string"
+                          },
+                          "content_truncated": {
+                            "type": "boolean"
                           },
                           "conversation_id": {
                             "type": "string"
@@ -29544,6 +30095,146 @@
                     "prompt_truncated": {
                       "type": "boolean"
                     },
+                    "provider_cache": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "cache_read": {
+                          "type": "object",
+                          "properties": {
+                            "cost": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "provenance": {
+                              "type": "string"
+                            },
+                            "tokens": {
+                              "nullable": true,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "provenance"
+                          ]
+                        },
+                        "cache_savings": {
+                          "nullable": true,
+                          "type": "number"
+                        },
+                        "cache_write": {
+                          "type": "object",
+                          "properties": {
+                            "cost": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "provenance": {
+                              "type": "string"
+                            },
+                            "tokens": {
+                              "nullable": true,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "provenance"
+                          ]
+                        },
+                        "cache_write_1h": {
+                          "type": "object",
+                          "properties": {
+                            "cost": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "provenance": {
+                              "type": "string"
+                            },
+                            "tokens": {
+                              "nullable": true,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "provenance"
+                          ]
+                        },
+                        "cache_write_5m": {
+                          "type": "object",
+                          "properties": {
+                            "cost": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "provenance": {
+                              "type": "string"
+                            },
+                            "tokens": {
+                              "nullable": true,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "provenance"
+                          ]
+                        },
+                        "no_cache_cost": {
+                          "nullable": true,
+                          "type": "number"
+                        },
+                        "output": {
+                          "type": "object",
+                          "properties": {
+                            "cost": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "provenance": {
+                              "type": "string"
+                            },
+                            "tokens": {
+                              "nullable": true,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "provenance"
+                          ]
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "uncached_input": {
+                          "type": "object",
+                          "properties": {
+                            "cost": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "provenance": {
+                              "type": "string"
+                            },
+                            "tokens": {
+                              "nullable": true,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "provenance"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "uncached_input",
+                        "cache_read",
+                        "cache_write",
+                        "output",
+                        "cache_write_5m",
+                        "cache_write_1h"
+                      ]
+                    },
                     "rag_backend": {
                       "type": "string"
                     },
@@ -30102,6 +30793,12 @@
                               "request_generation"
                             ]
                           }
+                        },
+                        "routing_input_skipped_messages": {
+                          "type": "integer"
+                        },
+                        "routing_input_stripped_blocks": {
+                          "type": "integer"
                         },
                         "selected_model": {
                           "type": "string"

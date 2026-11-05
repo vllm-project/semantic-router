@@ -32,6 +32,11 @@ type CanonicalRouterGlobal struct {
 	ModelSelection    ModelSelectionConfig     `yaml:"model_selection"`
 	Learning          RouterLearningConfig     `yaml:"learning,omitempty"`
 	Fallback          *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
+	// AllowLossyTranslation names protocol losses translated with a warning
+	// instead of rejected. Every other loss keeps failing closed.
+	AllowLossyTranslation []string `yaml:"allow_lossy_translation,omitempty"`
+	// RoutingInput chooses the user text that routing reads.
+	RoutingInput RoutingInputConfig `yaml:"routing_input,omitempty"`
 }
 
 // CanonicalStreamedBody groups streaming request body controls.
@@ -289,6 +294,8 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 	cfg.ModelSelection = router.ModelSelection
 	cfg.RouterLearning = router.Learning
 	cfg.Fallback = router.Fallback.Clone()
+	cfg.AllowLossyTranslation = router.AllowLossyTranslation
+	cfg.RoutingInput = router.RoutingInput
 }
 
 func applyCanonicalServiceGlobal(cfg *RouterConfig, services CanonicalServiceGlobal) {

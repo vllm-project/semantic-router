@@ -218,6 +218,12 @@ global:
 
 Supported backends: `memory`, `milvus`, `llama_stack`, `valkey`, `qdrant`.
 
+The uploaded files themselves stay on the Router's disk, in `file_storage_dir`
+(`/var/lib/vsr/data` by default).
+[Files on the Router's disk](../../installation/storage-overview#router-local-files)
+explains how each deployment keeps that directory writable and how to make it
+persistent.
+
 `metadata_store` controls the registry for vector-store and uploaded-file
 metadata. Use `postgres` for restart-safe local or production-like stacks; the
 CLI local runtime will provision Postgres and fill `metadata_postgres` connection

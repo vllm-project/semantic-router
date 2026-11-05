@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 路由学习：自我改进的模型路由
 description: 记录已实现的在线适配、路由保护和离线配方学习契约。
 created: 2026-06-20

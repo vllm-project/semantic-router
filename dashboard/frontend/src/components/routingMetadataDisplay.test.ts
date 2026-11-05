@@ -54,8 +54,8 @@ describe('formatRoutingMetadataValue', () => {
     )
 
     expect(decisions).toHaveLength(21)
-    expect(signals.length).toBeGreaterThan(40)
-    expect(projections).toHaveLength(14)
+    expect(signals).toHaveLength(23)
+    expect(projections).toHaveLength(0)
 
     for (const decision of decisions) {
       expect(formatRoutingMetadataValue('x-vsr-selected-decision', decision)).not.toMatch(

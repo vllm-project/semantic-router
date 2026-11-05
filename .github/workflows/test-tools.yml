@@ -13,17 +13,25 @@ permissions:
 jobs:
   tests:
     name: Execute Contracts
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    runs-on: ${{ fromJSON(inputs.batch).runner }}
+    timeout-minutes: ${{ fromJSON(inputs.batch).job_timeout_minutes }}
     steps:
+      - name: Record Runner Environment
+        working-directory: ${{ github.workspace }}
+        env:
+          OBSERVED_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: echo "CI_RUNNER_ENVIRONMENT=$OBSERVED_RUNNER_ENVIRONMENT" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: pip
+          cache-dependency-path: tools/agent/requirements.txt
       - uses: actions/setup-go@v5
         if: fromJSON(inputs.batch).go
         with:
           go-version: '1.25'
+          cache-dependency-path: '**/go.sum'
       - name: Prepare Shared Python Environment
         run: make harness-venv-install
       - name: Execute Selected Component Contracts
@@ -37,6 +45,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: ci-result-components-${{ fromJSON(inputs.batch).id }}
           path: .agent-harness/ci/components/${{ fromJSON(inputs.batch).id }}/results/*.json
           include-hidden-files: true
@@ -45,6 +54,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: component-evidence-${{ fromJSON(inputs.batch).id }}
           path: .agent-harness/ci/components/${{ fromJSON(inputs.batch).id }}/raw/
           include-hidden-files: true
