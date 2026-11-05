@@ -478,7 +478,7 @@ type RequestContext struct {
 	ResponseBodyNeedsRewrite bool // The decoded client wire differs from the provider body.
 	ProtocolDiagnostics      llmprotocol.Diagnostics
 	ResponseVendor           llmprotocol.ResponseVendor
-	ResponseVendorExtensions bool // Upstream response carried vendor decorations that were dropped on decode
+	ResponseUnknownFields    bool // Upstream response carried members its wire contract does not declare
 	ImmediateProtocolError   *llmprotocol.ProtocolError
 	ImmediateResponseEncoded bool
 

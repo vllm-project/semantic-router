@@ -2659,6 +2659,11 @@ class ReasoningFamily(BaseModel):
     disabled: Optional[str] = None
 
 
+# Backend ref settings the Router removed; mirrors removedBackendRefFields in
+# src/semantic-router/pkg/config/removed_backend_ref_fields.go.
+REMOVED_BACKEND_REF_FIELDS = ("compat_gateway", "openai_compat_gateway")
+
+
 class BackendRef(BaseModel):
     """Inline backend access details carried under providers.models[].backend_refs."""
 
@@ -2677,13 +2682,21 @@ class BackendRef(BaseModel):
     chat_path: Optional[str] = None
     api_key: Optional[str] = None
     api_key_env: Optional[str] = None
-    # Marks a backend whose URL is a relay gateway that adds its own response
-    # fields (usage metering, cost): the router drops and reports the fields
-    # the backend's api_format does not define instead of rejecting the
-    # reply. Mirrors the Go CanonicalBackendRef field of the same name.
-    compat_gateway: bool = False
-    # Deprecated spelling of compat_gateway, still accepted by the router.
-    openai_compat_gateway: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_removed_fields(cls, data):
+        # Every backend now accepts response fields its api_format does not
+        # define, so the opt-ins are gone; name them instead of reporting a
+        # generic extra field, as the Router does.
+        if isinstance(data, dict):
+            for field in REMOVED_BACKEND_REF_FIELDS:
+                if field in data:
+                    raise ValueError(
+                        f"{field} was removed; gateway response fields are "
+                        "accepted by default, so delete it"
+                    )
+        return data
 
     def resolve_api_key(self) -> Optional[str]:
         if self.api_key:

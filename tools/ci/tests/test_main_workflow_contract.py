@@ -23,6 +23,28 @@ class MainWorkflowContractTests(unittest.TestCase):
             workflow,
             "main push runs must remain per-commit so change classification cannot skip a commit",
         )
+        group = workflow["jobs"]["ci"]["concurrency"]["group"]
+        expression = group.removeprefix("${{").removesuffix("}}").strip()
+        for event, publish, expected in (
+            ("push", None, "main-7"),
+            ("workflow_dispatch", False, "main-7"),
+            ("workflow_dispatch", True, "main-publication"),
+        ):
+            with self.subTest(event=event, publish=publish):
+                python = (
+                    expression.replace("github.event_name", repr(event))
+                    .replace("inputs.publish", repr(publish))
+                    .replace("github.run_id", "'7'")
+                    .replace("&&", " and ")
+                    .replace("||", " or ")
+                )
+                actual = eval(
+                    python,
+                    {"__builtins__": {}},
+                    {"format": lambda text, value: text.replace("{0}", value)},
+                )
+                self.assertEqual(actual, expected)
+        self.assertTrue(workflow["jobs"]["ci"]["concurrency"]["cancel-in-progress"])
 
     def test_pypi_accepts_only_qualified_main_dispatch_or_stable_tag(self) -> None:
         workflow = yaml.safe_load(
