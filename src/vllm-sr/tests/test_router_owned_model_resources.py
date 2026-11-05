@@ -83,7 +83,7 @@ DEPRECATED = {
     "message": "contract: the signal decides the contract; write pii: local-vela",
 }
 UNCALIBRATED = {
-    "code": "uncalibrated_threshold",
+    "code": "uncalibrated_preset",
     "field": "global.model_catalog.modules.prompt_guard.threshold",
     "message": "jailbreak asks d3-remote, which has no calibrated threshold",
 }

@@ -12,8 +12,9 @@ type ModuleThresholds struct {
 // keep the Vela 1.0 specialists' operating points (src/model-runtime/docs/
 // records/vela3-router-signals.md, vela2-router-signals.md and
 // vela2-decision-model-sizes.md), so a module that sets none takes the
-// thresholds of the model it runs. Any other model keeps the Vela 1.0
-// specialists' thresholds, which the modules defaulted to before.
+// thresholds of the model it runs. A Vela 1.0 specialist keeps its own
+// thresholds, which the modules defaulted to before. No other model has
+// calibrated thresholds: it takes the neutral ones, and the load warns.
 var (
 	vela1ModuleThresholds = ModuleThresholds{PromptGuard: 0.5, Domain: 0.5, PII: 0.9, FactCheck: 0.95, Feedback: 0.7}
 
@@ -26,23 +27,26 @@ var (
 	}
 )
 
-// neutralModuleThresholds apply to a module answered by a remote decision
-// model that publishes no calibrated thresholds: the natural boundary of a
-// probability, never another model's calibration.
+// neutralModuleThresholds apply to a module answered by a model without
+// calibrated thresholds: the natural boundary of a probability, never another
+// model's calibration.
 var neutralModuleThresholds = ModuleThresholds{PromptGuard: 0.5, Domain: 0.5, PII: 0.5, FactCheck: 0.5, Feedback: 0.5}
 
-// thresholdsOf returns the module thresholds of a module model; remote is a
-// module served by a backend rather than a model it names.
-func thresholdsOf(model string, remote bool) ModuleThresholds {
-	if remote {
-		return vela1ModuleThresholds
+// thresholdsOf returns the module thresholds calibrated for a model the
+// model runtime serves, and whether it has any: vela3-fast's and each Vela
+// 2.0 size's own, a Vela 1.0 specialist's, and none for any other model.
+func thresholdsOf(model string) (ModuleThresholds, bool) {
+	spec := registeredModel(model)
+	if spec == nil {
+		return neutralModuleThresholds, false
 	}
-	if spec := registeredModel(model); spec != nil {
-		if thresholds, ok := calibratedModuleThresholds[spec.LocalPath]; ok {
-			return thresholds
-		}
+	if thresholds, ok := calibratedModuleThresholds[spec.LocalPath]; ok {
+		return thresholds, true
 	}
-	return vela1ModuleThresholds
+	if spec.Purpose == PurposeRoutingSignals {
+		return neutralModuleThresholds, false
+	}
+	return vela1ModuleThresholds, true
 }
 
 // RegisteredModel is the built-in model a path, alias or Hub repository
@@ -61,21 +65,22 @@ func registeredModel(model string) *ModelSpec {
 	return nil
 }
 
-// ModuleThresholdsOf returns the module thresholds calibrated for a module
-// model: vela3-fast's or a Vela 2.0 size's own, else the Vela 1.0 specialists'.
+// ModuleThresholdsOf returns the module thresholds of a module model: its
+// calibrated ones, else the neutral ones.
 func ModuleThresholdsOf(model string) ModuleThresholds {
-	return thresholdsOf(model, false)
+	thresholds, _ := thresholdsOf(model)
+	return thresholds
 }
 
 // ThresholdsOfDeployment are the module thresholds of the model a
-// deployment serves: its calibrated ones for a built-in model the model
-// runtime serves, the Vela 1.0 specialists' for another local model or a
-// remote classifier, and the neutral ones for a remote decision model.
-// calibrated is false for the neutral ones.
+// deployment serves: the calibrated ones of a model the model runtime serves
+// (thresholdsOf), the Vela 1.0 specialists' for a remote classifier, and the
+// neutral ones for a remote decision model or a local model without
+// calibration. calibrated is false for the neutral ones.
 func ThresholdsOfDeployment(name string, deployment ModelDeployment) (thresholds ModuleThresholds, calibrated bool) {
 	switch {
 	case deployment.IsModelRuntime():
-		return thresholdsOf(deployment.ServedModel(name), false), true
+		return thresholdsOf(deployment.ServedModel(name))
 	case deployment.IsSystemOne():
 		return neutralModuleThresholds, false
 	}
@@ -146,9 +151,9 @@ func (c *RouterConfig) applyModuleThresholds() {
 	}
 }
 
-// uncalibratedThresholdWarnings name the modules a scope runs on a remote
-// decision model with the neutral thresholds, because neither the model nor
-// the configuration gives one.
+// uncalibratedThresholdWarnings name the modules a scope runs with the
+// neutral thresholds, because neither the answering model nor the
+// configuration gives one.
 func (c *RouterConfig) uncalibratedThresholdWarnings(scope RecipeName) []ConfigWarning {
 	var warnings []ConfigWarning
 	for _, threshold := range moduleThresholdFields {
@@ -163,8 +168,8 @@ func (c *RouterConfig) uncalibratedThresholdWarnings(scope RecipeName) []ConfigW
 			continue
 		}
 		warnings = append(warnings, ConfigWarning{
-			Code: "uncalibrated_threshold", Field: threshold.field,
-			Message: fmt.Sprintf("%s runs on deployment %q, which publishes no calibrated threshold; it uses %.2f until the threshold is set", BindingKey(threshold.consumer), resolved.Name, *threshold.value(c)),
+			Code: "uncalibrated_preset", Field: threshold.field,
+			Message: fmt.Sprintf("%s runs on deployment %q, whose model has no calibrated threshold for it; it uses %.2f until the threshold is set", BindingKey(threshold.consumer), resolved.Name, *threshold.value(c)),
 		})
 	}
 	return warnings

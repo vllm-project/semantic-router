@@ -127,9 +127,11 @@ questions. Its answers match the package's own runtime bit for bit on a CPU
 The larger Vela 3.0 sizes, `vllm-sr/vela3-lite`, `-mini`, `-flash` and
 `-turbo`, run a pinned Decision 3.0 package (d3-lite, d3-mini, d3-flash and
 d3-turbo at the revisions their adapters were trained on) with gated LoRA
-adapters over it. The router's built-in question IDs run on trained
-adapters; every other `choice`, `noul` and `score` question answers as that
-d3 package does. They also answer `span` questions, routed by label set and
+adapters over it. The router asks its built-in questions under the IDs
+these packages were trained on, so they run on trained adapters, and asks
+harm categories as one `hazard:` Noul per category, which vela3-lite's
+hazard adapter answers; every other `choice`, `noul` and `score` question
+answers as that d3 package does. They also answer `span` questions, routed by label set and
 wording as vela3-fast's are. vela3-turbo answers each request on d3-turbo's
 state-once path first, then the router questions again with their adapter
 on. Requests with images run with every adapter off and refuse span

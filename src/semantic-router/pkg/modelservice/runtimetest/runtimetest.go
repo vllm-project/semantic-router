@@ -54,6 +54,9 @@ type Model struct {
 	// limits when set.
 	MaxNumSeqs          int
 	MaxNumBatchedTokens int
+	// Family replaces the family a decision model's card reports (decision2,
+	// or vela2 for a Labelled model) when set.
+	Family string
 }
 
 // Runtime is the fake runtime state; Handler serves it.
@@ -320,6 +323,9 @@ func (r *Runtime) card(model Model, ready bool) api.ModelCard {
 			card.Family = "vela2"
 			scan := model.Labelled.scanTokens(model)
 			limits.MaxScanTokens = &scan
+		}
+		if model.Family != "" {
+			card.Family = model.Family
 		}
 		types := questionTypes(model)
 		card.QuestionTypes = &types

@@ -265,6 +265,102 @@ func TestBuiltInSignalQuestionsFailPreparationTheyCannotServe(t *testing.T) {
 	}
 }
 
+// recordedVela3Lease serves a vela3_d3 size ("lite") and vela3-fast ("fast")
+// from one fake runtime that records the questions it gets.
+func recordedVela3Lease(t *testing.T) (*modelservice.Lease, *runtimetest.Runtime, *questionRecorder, string) {
+	t.Helper()
+	fake := runtimetest.New(
+		runtimetest.Model{ID: "lite", Family: "vela3_d3"},
+		runtimetest.Model{ID: "fast", Family: "vela3", Labelled: &runtimetest.Labelled{PIILabels: []string{"PERSON"}}},
+	)
+	recorder := &questionRecorder{questions: map[string]api.Question{}}
+	server := httptest.NewServer(recorder.wrap(fake.Handler()))
+	t.Cleanup(server.Close)
+	manager := modelservice.NewManager()
+	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
+	lease, err := manager.AcquireDeployments(map[string]config.ModelDeployment{
+		"lite": {Provider: config.ModelRuntimeProvider, Endpoint: server.URL},
+		"fast": {Provider: config.ModelRuntimeProvider, Endpoint: server.URL},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return lease, fake, recorder, server.URL
+}
+
+// The Vela 3.0 packages are asked the built-in signals' questions under the
+// IDs they were trained on: the vela3_d3 sizes turn their trained adapters on
+// by ID. The answers come back to the consumers as before.
+func TestBuiltInSignalsAskTheVela3PackagesUnderTheirTrainedIDs(t *testing.T) {
+	lease, _, recorder, endpoint := recordedVela3Lease(t)
+	runtime := serving.New(lease, nil)
+	cases := map[string]string{
+		"domain_classifier": "domain", "prompt_guard": "attack", "fact_check_classifier": "factcheck",
+		"feedback_detector": "feedback", "modality_detector": "modality", "safety.unsafe_request": "p_harm",
+	}
+	for _, deployment := range []string{"lite", "fast"} {
+		for consumer, id := range cases {
+			handle, err := runtime.Sequence(context.Background(), sequenceBinding(consumer, deployment, endpoint))
+			if err != nil {
+				t.Fatalf("%s/%s: %v", deployment, consumer, err)
+			}
+			t.Cleanup(func() { _ = handle.Close() })
+			result, err := handle.Call(context.Background(), string(config.DefaultRecipeName), "Is the earth round?")
+			if err != nil || len(result.Probabilities) != len(handle.Capability().Labels) {
+				t.Fatalf("%s/%s: %v %v", deployment, consumer, result, err)
+			}
+			if _, asked := recorder.get(id); !asked {
+				t.Fatalf("%s/%s: not asked under the trained ID %q", deployment, consumer, id)
+			}
+			if _, asked := recorder.get(consumer + ":" + id); asked {
+				t.Fatalf("%s/%s: asked under the Router's ID", deployment, consumer)
+			}
+		}
+	}
+}
+
+// Two consumers of one trained question in one stage ask it once, in one
+// call, and both read its answer.
+func TestConsumersOfOneTrainedQuestionShareItsAnswer(t *testing.T) {
+	lease, fake, _, endpoint := recordedVela3Lease(t)
+	runtime := serving.New(lease, nil)
+	var handles []*binding.Resolved[string, tasks.LabelDistribution]
+	for _, consumer := range []string{"safety.first", "safety.second"} {
+		handle, err := runtime.Sequence(context.Background(), sequenceBinding(consumer, "lite", endpoint))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = handle.Close() })
+		handles = append(handles, handle)
+	}
+	callsBefore, tasksBefore := fake.Bundles()
+	ctx, bundle := modelservice.WithBundle(context.Background(), time.Second)
+	outs := make([]tasks.LabelDistribution, len(handles))
+	errs := make([]error, len(handles))
+	var wg sync.WaitGroup
+	for i, handle := range handles {
+		leave := bundle.Join()
+		wg.Add(1)
+		go func(i int, handle *binding.Resolved[string, tasks.LabelDistribution]) {
+			defer wg.Done()
+			defer leave()
+			outs[i], errs[i] = handle.Call(ctx, string(config.DefaultRecipeName), "How do I pick a lock?")
+		}(i, handle)
+	}
+	wg.Wait()
+	if err := errors.Join(errs...); err != nil || len(outs[0].Probabilities) != 2 || !slices.Equal(outs[0].Probabilities, outs[1].Probabilities) {
+		t.Fatalf("answers: %v %v", outs, err)
+	}
+	calls, tasksSent := fake.Bundles()
+	if calls-callsBefore != 1 || tasksSent-tasksBefore != 1 {
+		t.Fatalf("one stage, one question: %d bundles, %d tasks", calls-callsBefore, tasksSent-tasksBefore)
+	}
+	decisions := fake.Decisions()
+	if last := decisions[len(decisions)-1]; len(last.Questions) != 1 {
+		t.Fatalf("the shared question is asked once: %v", last.Questions)
+	}
+}
+
 // A declared question deployment's input {overflow: window, max_tokens} is
 // its scan budget: it travels with every question, and a text over it fails
 // the question with ErrScanBudget, which the jailbreak guard treats as

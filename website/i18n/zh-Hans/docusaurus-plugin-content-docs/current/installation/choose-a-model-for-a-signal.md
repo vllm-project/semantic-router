@@ -73,7 +73,7 @@ global:
 
 - 每个内置问题类信号、自定义 decision 信号和选择器都询问 `d3-remote`。Router 在加载时检查该部署能回答配置所提的每种问题类型。
 - 在一个请求阶段内，发给同一部署的所有问题合并为一次调用。API 报告失败的问题会单独再问一次。
-- 阈值来自回答的模型：它的模型卡，或你写的 `threshold`。没有校准阈值的远程模型使用 0.5，加载时报告 `uncalibrated_threshold` 警告。
+- 阈值来自回答的模型：它的模型卡，或你写的 `threshold`。没有校准阈值的模型（本地或远程）使用 0.5，加载时报告 `uncalibrated_preset` 警告。
 - PII 和幻觉检测需要片段。既不回答 span 问题、也没有 `pii`/`halu` 预设的模型只能以是/否回答它们，Router 在 `vsr_signal_span_verdict_fallbacks_total` 中记录每个这样的信号。以 API 的 `/models` 为该模型列出的能力为准，未列出时才用声明的 `capabilities`；声明的能力已经不含片段时，加载时报告 `span_fallback` 警告。masking 插件需要 PII 片段，因此会拒绝这样的部署。
 - Embedding、重排序和 hazard 头仍使用各自的本地部署。
 

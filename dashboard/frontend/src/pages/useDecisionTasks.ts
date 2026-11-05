@@ -47,7 +47,7 @@ export interface DecisionTasks {
     tasks: Array<{
       task_id: string
       supported: boolean
-      implementation?: 'native' | 'composed_noul'
+      implementation?: 'native' | 'trained' | 'composed_noul' | 'trained_noul'
       reason?: string
       quality: 'unevaluated'
     }>

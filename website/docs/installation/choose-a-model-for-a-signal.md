@@ -83,8 +83,8 @@ global:
 - In one request stage, every question to the same deployment travels in one
   call. A question the API reports as failed is asked once more on its own.
 - Thresholds come from the model that answers: its model card, or the
-  `threshold` you write. A remote model without calibrated thresholds uses
-  0.5, and the load reports an `uncalibrated_threshold` warning.
+  `threshold` you write. A model without calibrated thresholds, local or
+  remote, uses 0.5, and the load reports an `uncalibrated_preset` warning.
 - PII and hallucination need spans. A model that answers neither span
   questions nor the `pii`/`halu` presets answers them yes/no, and the Router
   counts each such signal in `vsr_signal_span_verdict_fallbacks_total`. What

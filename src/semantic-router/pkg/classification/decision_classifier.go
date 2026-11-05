@@ -68,7 +68,8 @@ func prepareDecisionSafety(models *classifierModelRuntime, consumer string, labe
 		}
 	}
 	// Keep the published binary safety question byte-for-byte: its option
-	// descriptions are semantic input, not merely display labels.
+	// descriptions are semantic input, not merely display labels, and a
+	// family trained on it is asked it under the trained ID.
 	if !multiLabel && slices.Equal(labels, []string{"safe", "unsafe"}) {
 		definition, _ := modelservice.BuiltinTask("safety")
 		question = definition.Question

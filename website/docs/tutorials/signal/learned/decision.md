@@ -206,7 +206,7 @@ global:
   deployment then ask it, and so do the built-in signals that no binding
   gives another deployment. The hazard part of a safety rule, embeddings and
   reranking keep their own deployments. Module thresholds the configuration
-  does not write are 0.5 on such a model, with an `uncalibrated_threshold`
+  does not write are 0.5 on such a model, with an `uncalibrated_preset`
   warning. On a model that answers no span questions, PII and hallucination
   detection report a yes/no verdict without positions, with a `span_fallback`
   warning when the configuration loads; a configuration that masks PII is

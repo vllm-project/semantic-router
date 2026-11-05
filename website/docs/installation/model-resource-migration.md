@@ -40,7 +40,7 @@ fields stay as written and the output says which setting.
 
 - A `systemone` decision model now answers the built-in signals too. Before,
   they ran on a local `vela3-fast`. Their thresholds are 0.5 unless the
-  configuration writes them, and the load warns `uncalibrated_threshold`.
+  configuration writes them, and the load warns `uncalibrated_preset`.
 - A safety rule's hazard part without its own model uses the pre-declared
   `hazard` deployment (Vela 1.0 Hazard) under every decision model. Before, a
   configuration with such a part failed to load under a `systemone` decision
