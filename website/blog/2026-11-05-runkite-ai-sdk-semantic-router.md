@@ -1,0 +1,258 @@
+---
+slug: runkite-ai-sdk-semantic-router
+title: "Run Multi-Model AI SDK Agents with Runkite and vLLM Semantic Router"
+description: "Run a native AI SDK agent across two local models with Runkite and vLLM Semantic Router. Preserve chat history and enforce tool permissions."
+authors: [sharanharsoor]
+tags: [runkite, ai-sdk, agents, routing, semantic-router, community]
+image: /img/blog/runkite-ai-sdk-semantic-router/hero.jpg
+---
+
+import { ArticleFigure } from '@site/src/components/ArticleMedia';
+
+**[Runkite website](https://getrunkite.com/) · [GitHub](https://github.com/getrunkite/runkite) · [Runnable example and recorded results](https://gist.github.com/sharanharsoor/84f4dbd4913106d06f8b8156fa8f47a9)**
+
+An incident agent needs room to investigate and a clear limit on what it can change. It should be able to read an incident, examine the observations and explain a likely cause. Restarting the service is a separate permission.
+
+Now give that agent a choice of models. A status request can take one route; a diagnostic follow-up can take another. The conversation still needs to survive, and the permission to restart a service still needs an owner.
+
+I'm Sharan Harsoor, the founder and maintainer of **[Runkite](https://getrunkite.com/)**, an Apache-2.0 self-hosted agent control plane. I built it to keep agent logic in the SDK while giving operational concerns, including dispatch, conversation records, connector authorization and audit, a place of their own.
+
+I connected Runkite's existing managed Vercel AI SDK runner to vLLM Semantic Router and followed one conversation through three turns: read an incident, restart the runner and ask for a diagnosis, then request a forbidden service restart.
+
+The incident and tool service are fictional. The model calls, streamed tool requests and durable results are real. Here is how the pieces fit, what the experiment established and how to run it yourself.
+
+<!-- truncate -->
+
+<ArticleFigure
+  src="/img/blog/runkite-ai-sdk-semantic-router/hero.jpg"
+  width={1200} height={630}
+  alt="Runkite and vLLM Semantic Router: one conversation uses two model routes while incident reads are allowed and the service restart is denied."
+/>
+
+## Start with the loop
+
+An agent turn contains more than a prompt and an answer. The model can request a tool. The SDK executes that tool, adds its result to the conversation and asks the model what to do next. A single user turn can therefore make several inference calls.
+
+That gives us two decisions at different boundaries:
+
+- Which model should serve this inference request?
+- May this agent execute the requested tool?
+
+vLLM Semantic Router makes the first decision from the configured routing policy. The SDK keeps running its loop. In this example, Runkite enforces the second decision when a tool crosses its connector gate.
+
+Conversation state connects those decisions over time. If the process running the SDK restarts between turns, the next model call still needs the previous messages and completed tool results. A model endpoint alone does not supply that agent lifecycle.
+
+## Give each layer a job
+
+Runkite represents the conversation as a **Thread** and each execution as a **Run**. An application starts a run through Runkite's HTTP API. The plane admits and dispatches it to the TypeScript runner, which executes the native AI SDK `ToolLoopAgent` and reports events and results.
+
+Inside that runner, the SDK's model provider calls Semantic Router's OpenAI-compatible inference endpoint. The router chooses a backend. When the model requests a tool, its executor calls Runkite's run-bound connector proxy.
+
+<ArticleFigure
+  src="/img/blog/runkite-ai-sdk-semantic-router/architecture.svg"
+  width={760} height={1088}
+  alt="Architecture of the local experiment: Runkite manages the run and connector authorization; a separate native AI SDK runner sends model requests through Envoy and Semantic Router to Ollama."
+  diagram
+>
+  Model requests leave the SDK for the inference listener. Tool requests return through Runkite's connector gate. The Go plane does not proxy every model call. Open the image for full size.
+</ArticleFigure>
+
+This is **managed execution**: the agent loop runs in a Runkite runner, and the application creates Runkite runs. An existing Next or Nuxt app that keeps its SDK loop inside the app remains a different integration. Runkite's decision-only governance API can govern submitted operations from that app, but it does not turn those calls into managed Threads/Runs.
+
+For the local experiment, the model backends run in **Ollama**. Semantic Router is the routing layer; using it does not require the model backends in this guide to run in the vLLM serving runtime.
+
+## Connect the existing interfaces
+
+The managed AI SDK runner already loads a per-run factory. Its context includes the thread, tenant, run, generation and cancellation signal, plus the configuration needed by the connector helpers. I used that factory to construct the model provider and two tool executors.
+
+For this Compose stack, the provider connection reduces to:
+
+```typescript
+import { createOpenAI } from '@ai-sdk/openai';
+
+const provider = createOpenAI({
+  baseURL: 'http://127.0.0.1:18899/v1',
+  apiKey: 'local-semantic-router',
+});
+
+const model = provider.chat('vllm-sr/runkite');
+```
+
+The explicit `.chat(...)` matters. The provider's default model factory uses the Responses API; this minimal stack enables Chat Completions. The placeholder key belongs to this private local listener. Runkite's client and runner credentials are separate, and a deployed inference listener needs its own access controls.
+
+The [full factory](https://gist.github.com/sharanharsoor/84f4dbd4913106d06f8b8156fa8f47a9) also supplies opaque tenant/thread correlation headers and captures selected routing headers and per-call token observations. These identifiers provide correlation, not authentication.
+
+The model name `vllm-sr/runkite` stays constant in the SDK. The router configuration maps the two backend aliases:
+
+- `local-fast` maps to `qwen3:0.6b`.
+- `local-specialist` maps to `qwen3:1.7b`.
+
+Those are configured roles, not measured claims about speed or answer quality. To make the expected routes reproducible, the example uses an explicit keyword signal. Requests containing `diagnose`, `specialist`, `code` or `algorithm` select the specialist route; other requests use the default model.
+
+The relevant decision is small:
+
+```yaml
+routing:
+  decisions:
+    - name: specialist-route
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: keyword
+            name: specialist-request
+      modelRefs:
+        - model: local-specialist
+          use_reasoning: false
+      algorithm:
+        type: static
+```
+
+This is an excerpt. Use the full checked-in configuration for the signal, backend bindings and disabled optional model consumers. The fixture exercises routing and SDK compatibility without requiring classifier downloads or claiming an evaluation of learned semantic routing.
+
+### Put the tool call through the gate
+
+The agent exposes `read_incident` and `restart_service`. Both executors use the same existing connector helper. The important part of the read executor is:
+
+```typescript
+import { proxyConnectorMcp } from 'runkite-runner';
+
+const response = await proxyConnectorMcp(
+  context.runkiteConfig,
+  'incidents',
+  {
+    jsonrpc: '2.0',
+    id: crypto.randomUUID(),
+    method: 'tools/call',
+    params: {
+      name: 'read_incident',
+      arguments: { incident_id: 'INC-1042' },
+    },
+  },
+  { signal: context.signal, timeoutMs: 10_000 },
+);
+```
+
+The factory's `context` binds the call to its managed execution. The full executor checks JSON-RPC errors and MCP `isError` before returning a successful tool result.
+
+The generated Runkite configuration grants `read_incident` and denies `restart_service` on the `incidents` connector. I deliberately left the restart tool visible to the model so the experiment would exercise enforcement when an actual request arrived. Its upstream implementation is harmless and increments a counter if reached.
+
+A native tool that bypasses this proxy does not receive this connector authorization. The route to the tool is part of the design.
+
+## Follow one conversation through three runs
+
+The fixture's catalog service is degraded after a deployment. HTTP concurrency increased from 10 to 40, all 20 database pool connections are active, and requests are timing out while acquiring a connection. These are fixed fictional observations, so the example is safe to reproduce.
+
+<ArticleFigure
+  src="/img/blog/runkite-ai-sdk-semantic-router/conversation.svg"
+  width={760} height={846}
+  alt="Recorded conversation: a status read on Qwen 0.6B, a runner restart between completed runs, a diagnostic follow-up on Qwen 1.7B, and a denied restart request on Qwen 0.6B."
+  diagram
+>
+  One Thread, three managed Runs. The observed model change happens between user turns; this test does not establish model switching between tool steps inside one turn. Open the image for full size.
+</ArticleFigure>
+
+### First, read the incident
+
+The first request explicitly asks the agent to call `read_incident` for `INC-1042` and report its status and service. The model requests the tool, Runkite allows the connector call, and the fixture returns the incident record. The SDK uses that result in its next inference call and completes the turn.
+
+Both inference calls in this run reported `qwen3:0.6b`, matching the router's `local-fast` response header. The native stream completed, and `/wait` agreed with the durable run output.
+
+### Then restart the runner and ask a follow-up
+
+After the first run completed, the verifier stopped and restarted the TypeScript runner process. It then submitted a diagnostic follow-up on the same thread, asking the agent to read the incident again before explaining a likely cause.
+
+The word `diagnose` selected `specialist-route`. Both model responses reported `qwen3:1.7b`, matching `local-specialist`. The saved native conversation retained the first user turn and its completed tool result, and the second read reached the fixture.
+
+This establishes conversation continuity across a runner restart between completed turns. It is a different test from crashing halfway through a side effect, and it does not rank the models' diagnostic quality.
+
+### Finally, request the forbidden operation
+
+The third request asks for `restart_service`. The model actually requests that tool. Runkite denies it and records `policy_tool_denied`; the SDK receives a tool error and completes the conversational turn.
+
+The run finishes successfully because the agent handled the denied tool request. That status is not evidence that the service restarted. The authorization audit and service counter answer the execution question:
+
+```json
+{
+  "fixture_counts": {
+    "read_incident": 2,
+    "restart_service": 0
+  },
+  "governance": {
+    "durable_denials": 1,
+    "reason_codes": ["policy_tool_denied"],
+    "upstream_restart_calls": 0
+  }
+}
+```
+
+These fields come from the [sanitized qualification report](https://gist.github.com/sharanharsoor/84f4dbd4913106d06f8b8156fa8f47a9). The model made the request; the service never received it. Changing the model route had not changed the connector's permission.
+
+## A successful completion request was not enough
+
+The first live integration exposed a useful compatibility trap. A normal completion through Semantic Router 0.4.0 and Ollama 0.40.3 worked. The streamed tool loop failed.
+
+Ollama added a top-level `timings` object to the final streaming usage chunk. The stable router's strict response decoder rejected it with `invalid_upstream_json`, after the stream had already emitted a tool-call chunk. Receiving HTTP 200 and seeing a tool name were insufficient evidence of a completed agent turn.
+
+The working example pins **Ollama 0.34.3**, the version identified in Semantic Router's [recorded Ollama stream fixture](https://github.com/vllm-project/semantic-router/blob/6573123715e214a9eaa3ad23372ee5157411e519/src/semantic-router/pkg/extproc/processor_res_ollama_stream_test.go). Both backend bindings identify the `ollama` provider dialect so the router can also adapt output limits correctly.
+
+The verifier checks complete native stream events and matching durable output. It also exercises an unreachable inference endpoint, which produces a durable error without tool execution, and cancellation of an active model call, which reaches the runner over gRPC and the native SDK signal and leaves the run interrupted. The endpoint test changes its own runner's target; it does not shut down the shared router or test failover.
+
+Cancellation remains cooperative. It does not prove that backend compute stopped, undo a tool that already executed or guarantee exactly-once external effects. Routing headers and token observations also do not establish dollar savings: Runkite's existing AI SDK run usage is an aggregate tagged with its final observed model.
+
+## Run the same experiment
+
+The [public example](https://gist.github.com/sharanharsoor/84f4dbd4913106d06f8b8156fa8f47a9) contains the source patch, reproduction README, engineering note and sanitized results. The example is distributed as a patch against the tested Runkite revision; it uses the existing managed AI SDK runner. Starting from that revision keeps the setup reproducible as both projects evolve.
+
+You need Docker Compose, Node.js 22.13 or later, Python 3.9 or later, and a Go toolchain satisfying Runkite's `go.mod`. Allow several GB for the images and model weights. No provider account or real incident system is required.
+
+First, clone the tested source:
+
+```bash
+git clone https://github.com/getrunkite/runkite.git
+cd runkite
+git checkout edf36c133955aeea3d9c28b353e64b0a64a3a3b4
+```
+
+Download the recorded patch revision from the Gist, then apply it:
+
+```bash
+curl -fL 'https://gist.githubusercontent.com/sharanharsoor/84f4dbd4913106d06f8b8156fa8f47a9/raw/6735e6fc9436a3ef893b17ea445d1c7cf6db8676/runkite-semantic-router.patch' \
+  -o ../runkite-semantic-router.patch
+git apply --check ../runkite-semantic-router.patch
+git apply ../runkite-semantic-router.patch
+```
+
+From the repository root:
+
+```bash
+CGO_ENABLED=0 go build -o ./runkite ./cmd
+npm --prefix typescript/runkite-runner ci
+npm --prefix examples/semantic_router_ai_sdk ci
+docker compose -p runkite-sr-lab -f examples/semantic_router_ai_sdk/compose.yaml up -d
+docker compose -p runkite-sr-lab -f examples/semantic_router_ai_sdk/compose.yaml exec -T ollama ollama pull qwen3:0.6b
+docker compose -p runkite-sr-lab -f examples/semantic_router_ai_sdk/compose.yaml exec -T ollama ollama pull qwen3:1.7b
+RUNKITE_BINARY="$PWD/runkite" python3 examples/semantic_router_ai_sdk/verify.py --extended
+```
+
+The verifier prints a report path and a top-level `status: passed` when the scenario completes. Open that report and check the individual results: three visible main Runs, two incident reads, zero upstream restarts, and passed `router_outage` and `cancellation` checks. A cancellation that loses the race to completion is inconclusive, not a passed cancellation test.
+
+The tested stack uses Runkite runner **0.6.1**, AI SDK **7.0.155**, `@ai-sdk/openai` **4.0.104**, Semantic Router **0.4.0**, Envoy **1.35.3** and Ollama **0.34.3**. Compose pins the container digests. Stable Semantic Router uses the separate Envoy inference frontend; current development documentation may describe a different deployment mode.
+
+The harness creates its own authenticated Runkite plane, SQLite database, runner and loopback MCP fixture, then stops those processes. It leaves the Compose stack running for inspection. Inference is published at `127.0.0.1:18899`; the router management API and Ollama remain on the private container network. The Go dev listeners bind all interfaces and use ephemeral client and runner credentials.
+
+Read the generated report before the process logs. It records selected models, native response identities, durable completion, history, fixture counters and the two extended checks. Raw runtime files contain ephemeral credentials and conversation data; publish the sanitized report rather than the entire artifact directory.
+
+When finished, stop this example's stack:
+
+```bash
+docker compose -p runkite-sr-lab -f examples/semantic_router_ai_sdk/compose.yaml down
+```
+
+## Bring your own agent next
+
+The useful starting point is a tool your agent may read and an operation it must not execute. Connect your model pool, choose a routing policy, and watch what crosses each boundary. Check the actual route, the durable conversation and the service that would receive the action.
+
+This integration extends the operating model I wanted when I built Runkite: keep the native SDK's agent logic, give model selection to Semantic Router, and keep agent execution and connector authority inspectable on infrastructure you own.
+
+**[Run the example](https://gist.github.com/sharanharsoor/84f4dbd4913106d06f8b8156fa8f47a9)**, explore **[Runkite on GitHub](https://github.com/getrunkite/runkite)**, or visit **[getrunkite.com](https://getrunkite.com/)** for the project and documentation. If you try it with another model backend or hit a protocol edge, bring the reproduction and observed result to the project. That is how the next integration becomes easier to operate.

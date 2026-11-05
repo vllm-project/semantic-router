@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="1088" viewBox="0 0 760 1088" role="img" aria-labelledby="title desc">
+  <title id="title">Runkite and Semantic Router architecture</title>
+  <desc id="desc">A client creates managed runs in the Runkite Go service. Runkite stores threads and runs in SQLite for this local fixture and dispatches assignments to the already running TypeScript runner over RunnerProtocol gRPC. The native AI SDK loop sends Chat Completions inference directly through Envoy and Semantic Router to two Qwen3 models served by Ollama. Tool requests return over run-bound HTTP to the Runkite connector gate, which authorizes calls before dispatching to the fictional incident MCP service. Model traffic does not pass through the Go service.</desc>
+  <defs>
+    <marker id="amber-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1 1L7 4L1 7" fill="none" stroke="#b66f0e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+    <marker id="blue-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1 1L7 4L1 7" fill="none" stroke="#087ba9" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+  </defs>
+  <rect width="760" height="1088" rx="18" fill="#f7f9fc"/>
+  <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" fill="#14263c">
+    <text x="32" y="46" font-size="28" font-weight="720" letter-spacing="-.7">The SDK owns the agent loop.</text>
+    <text x="32" y="76" font-size="18" fill="#526479">Runkite governs execution. Semantic Router routes inference.</text>
+
+    <rect x="128" y="107" width="240" height="65" rx="11" fill="#ffffff" stroke="#ccd6e3"/>
+    <text x="248" y="147" text-anchor="middle" font-size="21" font-weight="650">Client</text>
+    <path d="M248 172V217" fill="none" stroke="#b66f0e" stroke-width="2" marker-end="url(#amber-arrow)"/>
+    <text x="267" y="201" font-size="16" fill="#845009">Runs API</text>
+
+    <rect x="32" y="222" width="696" height="170" rx="13" fill="#fff6e5" stroke="#dcba7d" stroke-width="1.5"/>
+    <text x="52" y="255" font-size="22" font-weight="700">Runkite</text>
+    <text x="148" y="255" font-size="17" fill="#845009">Go service</text>
+    <rect x="52" y="274" width="390" height="96" rx="8" fill="#ffffff" stroke="#ead8b8"/>
+    <text x="70" y="302" font-size="19" font-weight="650">Threads + Runs</text>
+    <text x="70" y="328" font-size="17" fill="#526479">History, lifecycle and operational records</text>
+    <text x="70" y="352" font-size="16" fill="#845009">SQLite in this local fixture</text>
+    <rect x="466" y="274" width="242" height="96" rx="8" fill="#ffffff" stroke="#ead8b8"/>
+    <text x="484" y="308" font-size="19" font-weight="650">Connector gate</text>
+    <text x="484" y="338" font-size="17" fill="#526479">Tool policy + dispatch</text>
+
+    <path d="M248 392V458" fill="none" stroke="#b66f0e" stroke-width="2" marker-end="url(#amber-arrow)"/>
+    <rect x="102" y="411" width="292" height="25" rx="6" fill="#f7f9fc"/>
+    <text x="248" y="430" text-anchor="middle" font-size="16" fill="#845009">RunnerProtocol · gRPC</text>
+    <rect x="32" y="463" width="440" height="131" rx="12" fill="#ffffff" stroke="#d1dbe6" stroke-width="1.5"/>
+    <text x="52" y="498" font-size="22" font-weight="700">TypeScript runner</text>
+    <text x="52" y="528" font-size="20" fill="#394f68">Native AI SDK loop</text>
+    <rect x="52" y="548" width="113" height="28" rx="6" fill="#eff3f8"/>
+    <text x="108.5" y="568" text-anchor="middle" font-size="16" fill="#526479">messages</text>
+    <rect x="175" y="548" width="81" height="28" rx="6" fill="#eff3f8"/>
+    <text x="215.5" y="568" text-anchor="middle" font-size="16" fill="#526479">tools</text>
+    <rect x="266" y="548" width="92" height="28" rx="6" fill="#eff3f8"/>
+    <text x="312" y="568" text-anchor="middle" font-size="16" fill="#526479">stream</text>
+
+    <path d="M472 508H552V375" fill="none" stroke="#b66f0e" stroke-width="2" marker-end="url(#amber-arrow)"/>
+    <circle cx="472" cy="508" r="4" fill="#b66f0e"/>
+    <text x="495" y="541" font-size="16" fill="#845009">Tool call</text>
+    <text x="495" y="563" font-size="16" fill="#845009">via HTTP</text>
+    <path d="M668 370V689" fill="none" stroke="#b66f0e" stroke-width="2" marker-end="url(#amber-arrow)"/>
+    <rect x="610" y="613" width="106" height="50" rx="6" fill="#f7f9fc"/>
+    <text x="663" y="634" text-anchor="middle" font-size="16" fill="#845009">Allowed</text>
+    <text x="663" y="656" text-anchor="middle" font-size="16" fill="#845009">calls only</text>
+
+    <path d="M248 594V689" fill="none" stroke="#087ba9" stroke-width="2" marker-end="url(#blue-arrow)"/>
+    <rect x="139" y="622" width="218" height="28" rx="6" fill="#f7f9fc"/>
+    <text x="248" y="642" text-anchor="middle" font-size="16" fill="#086d94">Chat Completions</text>
+    <rect x="32" y="694" width="440" height="130" rx="12" fill="#eaf6fc" stroke="#76bad7" stroke-width="1.5"/>
+    <text x="52" y="731" font-size="22" font-weight="700">Envoy + Semantic Router</text>
+    <text x="52" y="761" font-size="18" fill="#28617d">One inference endpoint</text>
+    <path d="M52 781H452" stroke="#bedce9"/>
+    <text x="52" y="806" font-size="17" fill="#28617d">Request signal → configured route</text>
+
+    <rect x="504" y="694" width="224" height="130" rx="12" fill="#ffffff" stroke="#d5c4a5" stroke-width="1.5"/>
+    <text x="524" y="732" font-size="19" font-weight="650">Fictional incident</text>
+    <text x="524" y="759" font-size="19" font-weight="650">MCP service</text>
+    <text x="524" y="800" font-size="16" fill="#845009">Connector destination</text>
+
+    <path d="M248 824V889" fill="none" stroke="#087ba9" stroke-width="2" marker-end="url(#blue-arrow)"/>
+    <rect x="164" y="842" width="168" height="27" rx="6" fill="#f7f9fc"/>
+    <text x="248" y="862" text-anchor="middle" font-size="16" fill="#086d94">Selected backend</text>
+    <rect x="32" y="894" width="440" height="114" rx="12" fill="#ffffff" stroke="#b9d7e4" stroke-width="1.5"/>
+    <text x="52" y="929" font-size="21" font-weight="700">Ollama</text>
+    <text x="145" y="929" font-size="17" fill="#526479">local model serving</text>
+    <rect x="52" y="947" width="183" height="38" rx="7" fill="#eaf6fc"/>
+    <text x="143.5" y="972" text-anchor="middle" font-size="18" fill="#155f7f" font-weight="600">Qwen3:0.6b</text>
+    <rect x="247" y="947" width="203" height="38" rx="7" fill="#eaf6fc"/>
+    <text x="348.5" y="972" text-anchor="middle" font-size="18" fill="#155f7f" font-weight="600">Qwen3:1.7b</text>
+    <path d="M32 1035H728" stroke="#dce3ec"/>
+    <path d="M33 1061H60" stroke="#b66f0e" stroke-width="3"/>
+    <text x="71" y="1067" font-size="16" fill="#526479">Managed execution + tools</text>
+    <path d="M371 1061H398" stroke="#087ba9" stroke-width="3"/>
+    <text x="409" y="1067" font-size="16" fill="#526479">Inference</text>
+  </g>
+</svg>
