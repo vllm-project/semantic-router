@@ -311,8 +311,8 @@ func validateProjectionScoreInput(
 	if strings.EqualFold(input.Type, SignalTypeProjection) {
 		return validateProjectionInputProjectionRef(scoreName, input, outputToSource)
 	}
-	if strings.EqualFold(input.Type, SignalTypeDecision) {
-		if err := validateDecisionProjectionInput(cfg, scoreName, input); err != nil {
+	if strings.EqualFold(input.Type, SignalTypeSystemOne) {
+		if err := validateSystemOneProjectionInput(cfg, scoreName, input); err != nil {
 			return err
 		}
 		return validateProjectionInputValueSource(scoreName, input)
@@ -328,12 +328,12 @@ func validateProjectionScoreInput(
 	return validateProjectionInputValueSource(scoreName, input)
 }
 
-// validateDecisionProjectionInput checks a decision input: a declared question,
-// or "<question>:<option>" for one option of a choice, set or span question,
+// validateSystemOneProjectionInput checks a systemone input: a declared rule,
+// or "<rule>:<option>" for one option of a choice, set or span question,
 // whose value is that option's probability.
-func validateDecisionProjectionInput(cfg *RouterConfig, scoreName string, input ProjectionScoreInput) error {
+func validateSystemOneProjectionInput(cfg *RouterConfig, scoreName string, input ProjectionScoreInput) error {
 	name, option, labelled := strings.Cut(input.Name, ":")
-	rule := decisionSignalRuleByName(cfg.DecisionRules, name)
+	rule := systemOneRuleByName(cfg.SystemOneRules, name)
 	if rule == nil {
 		return fmt.Errorf(
 			"routing.projections.scores[%q]: input %s(%q) is not declared in routing.signals",
@@ -425,7 +425,7 @@ func projectionDeclaredSignals(cfg *RouterConfig) map[string]map[string]struct{}
 		SignalTypeClassifier:    collectClassifierRuleNames(cfg.ClassifierRules),
 		SignalTypeInputModality: collectInputModalityRuleNames(cfg.InputModalityRules),
 		SignalTypeAction:        collectActionRuleNames(cfg.ActionRules),
-		SignalTypeDecision:      collectDecisionSignalRuleNames(cfg.DecisionRules),
+		SignalTypeSystemOne:     collectSystemOneRuleNames(cfg.SystemOneRules),
 	}
 	return declared
 }

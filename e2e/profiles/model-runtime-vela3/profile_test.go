@@ -12,13 +12,13 @@ type values struct {
 	Config struct {
 		Routing struct {
 			Signals struct {
-				Decision []struct {
+				SystemOne []struct {
 					Name       string `yaml:"name"`
 					Deployment string `yaml:"deployment"`
 					Question   struct {
 						Type string `yaml:"type"`
 					} `yaml:"question"`
-				} `yaml:"decision"`
+				} `yaml:"systemone"`
 			} `yaml:"signals"`
 			Decisions []struct {
 				Name string `yaml:"name"`
@@ -75,7 +75,7 @@ func TestProfileServesPinnedVela3FastAsTheDecisionModel(t *testing.T) {
 		t.Fatal("one vela3-fast deployment must answer every signal")
 	}
 	kinds := map[string]string{}
-	for _, rule := range profile.Config.Routing.Signals.Decision {
+	for _, rule := range profile.Config.Routing.Signals.SystemOne {
 		if rule.Deployment != "primary" {
 			t.Fatalf("decision signal %s must ask primary", rule.Name)
 		}

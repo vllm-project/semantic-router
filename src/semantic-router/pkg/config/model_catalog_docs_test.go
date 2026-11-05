@@ -32,7 +32,7 @@ var allSignals = []string{"domain", "jailbreak", "pii", "fact_check", "user_feed
 
 // docExampleResolutions is what each documented example resolves to: a
 // signal type, rule (classifier.<rule>, safety.<rule>, safety.<rule>.hazard,
-// complexity.<rule>, decision.<rule>), selector.<decision>, embedding,
+// complexity.<rule>, systemone.<rule>), selector.<decision>, embedding,
 // multimodal or rerank, optionally prefixed with recipe:<name>/, to the
 // deployment that answers it. "*" sets every signal in allSignals.
 var docExampleResolutions = map[string]map[string]string{
@@ -42,7 +42,7 @@ var docExampleResolutions = map[string]map[string]string{
 	},
 	"s3-mixed": {"*": "d3-remote", "pii": "local-vela", "safety.probe.hazard": "hazard"},
 	"s4-type-and-rule-overrides": {
-		"*": "kai", "domain": "d3-remote", "decision.needs_reasoning": "kai", "decision.support_team": "d3-remote",
+		"*": "kai", "domain": "d3-remote", "systemone.needs_reasoning": "kai", "systemone.support_team": "d3-remote",
 	},
 	"s4-recipe-scope": {"*": "kai", "recipe:support/domain": "d3-remote", "recipe:support/pii": "kai"},
 	"s5-rule-level": {
@@ -158,17 +158,17 @@ func resolveDocKey(cfg *RouterConfig, key string) string {
 		return name
 	case key == "rerank":
 		key = RAGRerankerConsumer
-	case strings.HasPrefix(key, "decision."):
-		for _, rule := range scoped.DecisionRules {
-			if "decision."+rule.Name == key {
-				return scoped.DecisionQuestionDeployment(rule)
+	case strings.HasPrefix(key, "systemone."):
+		for _, rule := range scoped.SystemOneRules {
+			if "systemone."+rule.Name == key {
+				return scoped.SystemOneRuleDeployment(rule)
 			}
 		}
 		return "no rule " + key
 	case strings.HasPrefix(key, "selector."):
 		for _, decision := range scoped.Decisions {
-			if "selector."+decision.Name == key && decision.Algorithm != nil && decision.Algorithm.Decision != nil {
-				return scoped.DecisionSelectorDeployment(*decision.Algorithm.Decision)
+			if "selector."+decision.Name == key && decision.Algorithm != nil && decision.Algorithm.SystemOne != nil {
+				return scoped.SystemOneSelectorDeployment(*decision.Algorithm.SystemOne)
 			}
 		}
 		return "no selector " + key
@@ -298,8 +298,8 @@ func ruleKeys(cfg *RouterConfig) []string {
 	for _, rule := range cfg.ComplexityRules {
 		keys = append(keys, "complexity."+rule.Name)
 	}
-	for _, rule := range cfg.DecisionRules {
-		keys = append(keys, "decision."+rule.Name)
+	for _, rule := range cfg.SystemOneRules {
+		keys = append(keys, "systemone."+rule.Name)
 	}
 	return keys
 }

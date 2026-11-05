@@ -45,7 +45,7 @@ deployment 及其状态：
 curl -s localhost:8080/startup-status
 ```
 
-离线的挂接运行时不会阻塞自定义 `decision` 问题的准备；当前能力信息就绪且兼容之前，这些问题不可用。它作为决策模型回答的信号、或通过选择头的绑定回答的信号，仍可能需要在启动时读取模型元数据。见[部署就绪规则](./deploy#when-a-model-is-not-ready)。
+离线的挂接运行时不会阻塞自定义 `systemone` 问题的准备；当前能力信息就绪且兼容之前，这些问题不可用。它作为决策模型回答的信号、或通过选择头的绑定回答的信号，仍可能需要在启动时读取模型元数据。见[部署就绪规则](./deploy#when-a-model-is-not-ready)。
 
 首次启动要下载模型，因此比之后的启动更久。等待在 `VLLM_SRUN_READY_TIMEOUT`（默认 10 分钟）后结束，
 并报告 `did not become ready within 10m0s`；再次启动即可从缓存继续下载，或在路由器的环境中调大该超时。

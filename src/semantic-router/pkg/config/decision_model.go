@@ -155,14 +155,14 @@ func (c *RouterConfig) DecisionModelDeployment() (name string, deployment ModelD
 
 // DecisionQuestionDeployment returns the deployment a decision question asks:
 // its own, or the decision model's shared deployment when it names none.
-func (c *RouterConfig) DecisionQuestionDeployment(rule DecisionSignalRule) string {
+func (c *RouterConfig) SystemOneRuleDeployment(rule SystemOneRule) string {
 	return c.deploymentOrDecisionModel(rule.Deployment)
 }
 
 // DecisionSelectorDeployment returns the deployment a decision selector asks:
 // its own, or the decision model's shared deployment when it names none, so
 // the model that answered the request's signals also chooses its model.
-func (c *RouterConfig) DecisionSelectorDeployment(selector DecisionSelectionConfig) string {
+func (c *RouterConfig) SystemOneSelectorDeployment(selector SystemOneSelectionConfig) string {
 	return c.deploymentOrDecisionModel(selector.Deployment)
 }
 

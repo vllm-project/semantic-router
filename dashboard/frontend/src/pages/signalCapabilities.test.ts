@@ -124,14 +124,14 @@ describe('signal capability admission', () => {
     const scope = { recipe: 'default' }
     expect(decisionQuestionTypes(data, scope, {})).toEqual(['choice', 'noul', 'set'])
     expect(
-      signalAvailability(data, scope, 'decision', 'needs', { question: { type: 'set' } }).supported,
+      signalAvailability(data, scope, 'systemone', 'needs', { question: { type: 'set' } }).supported,
     ).toBe(true)
     expect(
-      signalAvailability(data, scope, 'decision', 'difficulty', { question: { type: 'score' } })
+      signalAvailability(data, scope, 'systemone', 'difficulty', { question: { type: 'score' } })
         .supported,
     ).toBe(false)
     const schema = signalCapabilitySchema(
-      getSignalFieldSchema('decision'),
+      getSignalFieldSchema('systemone'),
       decisionQuestionTypes(data, scope, {}),
     )
     const questionType = schema
@@ -199,7 +199,7 @@ describe('signal capability admission', () => {
   it('does not guess an unavailable model capability', () => {
     expect(signalAvailability(null, { recipe: 'default' }, 'domain').supported).toBe(false)
     expect(
-      signalAvailability(catalog(), { recipe: 'default' }, 'decision', '', {
+      signalAvailability(catalog(), { recipe: 'default' }, 'systemone', '', {
         deployment: 'missing',
       }).supported,
     ).toBe(false)

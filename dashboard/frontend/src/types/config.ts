@@ -254,25 +254,42 @@ export interface TopicContinuitySignal {
   }
 }
 
-export interface DecisionModelChoice {
+export interface SystemOneOption {
   key: string
   description?: string
 }
 
-export interface DecisionModelSignal {
+export interface SystemOneInput {
+  history?: boolean
+  previous_turns?: number
+  answer?: boolean
+  context?: boolean
+  tool_results?: boolean
+  image?: boolean
+  audio?: boolean
+  video?: boolean
+}
+
+export interface SystemOneSignal {
   name: string
   description?: string
   deployment: string
   question: {
     type: 'choice' | 'noul' | 'score' | 'set' | 'span'
     instructions: string
-    choices?: DecisionModelChoice[]
+    choices?: SystemOneOption[]
     levels?: string[]
-    labels?: DecisionModelChoice[]
+    labels?: SystemOneOption[]
     threshold?: number
     head?: 'router' | 'broad'
   }
+  labels?: string[]
+  ignore_labels?: string[]
   predicate?: NumericPredicate
+  stage?: 'request' | 'response'
+  input?: SystemOneInput
+  coverage?: 'truncate' | 'full'
+  on_unscanned?: 'match' | 'no_match' | 'unknown'
   timeout_ms?: number
 }
 
@@ -379,7 +396,7 @@ export interface Signals {
   metadata?: MetadataSignal[]
   classifiers?: ClassifierSignal[]
   input_modality?: InputModalitySignal[]
-  decision?: DecisionModelSignal[]
+  systemone?: SystemOneSignal[]
   topic_continuity?: TopicContinuitySignal[]
 }
 
@@ -410,7 +427,7 @@ export type DecisionConditionType =
   | 'metadata'
   | 'classifier'
   | 'input_modality'
-  | 'decision'
+  | 'systemone'
   | 'projection'
 export interface DecisionCondition {
   type: DecisionConditionType

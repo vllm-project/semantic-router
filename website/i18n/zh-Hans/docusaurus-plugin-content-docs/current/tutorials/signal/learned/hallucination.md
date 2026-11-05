@@ -81,7 +81,7 @@ global:
       hallucination: vela2
 ```
 
-模型读取完整回答并使用自身校准后的阈值，因此检测器的 `threshold` 只作用于 Vela 1.0 Halu；`min_span_length` 与 `min_span_confidence` 对两者的片段都生效。检查在响应阶段进行，使用该阶段对该部署的调用。同一个部署还可以回答请求的 [`decision`](decision.md) 与 [`pii`](pii.md#vela-20) 问题。
+模型读取完整回答并使用自身校准后的阈值，因此检测器的 `threshold` 只作用于 Vela 1.0 Halu；`min_span_length` 与 `min_span_confidence` 对两者的片段都生效。检查在响应阶段进行，使用该阶段对该部署的调用。同一个部署还可以回答请求的 [`systemone`](systemone.md) 与 [`pii`](pii.md#vela-20) 问题。
 
 ## 不含片段的判断 {#verdicts-without-spans}
 

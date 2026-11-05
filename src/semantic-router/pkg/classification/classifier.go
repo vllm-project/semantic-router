@@ -84,9 +84,9 @@ type Classifier struct {
 	contextClassifier *ContextClassifier
 
 	admissionRegistry *admission.Registry
-	// decisionDecider answers decision signals; nil uses the process-wide model runtime manager.
+	// decisionDecider answers systemone signals; nil uses the process-wide model runtime manager.
 	decisionDecider modelservice.Decider
-	// systemOneDecider answers decision signals to systemone deployments; nil
+	// systemOneDecider answers systemone signals to systemone deployments; nil
 	// uses the signal runtime's remote System One clients.
 	systemOneDecider modelservice.Remote
 	// Immutable cards captured while preparing this classifier generation.

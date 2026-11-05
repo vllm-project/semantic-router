@@ -39,7 +39,7 @@ global:
         contract: token_spans.v1
 routing:
   signals:
-    decision:
+    systemone:
       - name: topics
         deployment: vela2
         question:
@@ -72,10 +72,10 @@ routing:
       rules:
         operator: AND
         conditions:
-          - type: decision
+          - type: systemone
             name: topics
             label: billing
-          - type: decision
+          - type: systemone
             name: places
             label: city
           - type: pii
@@ -111,18 +111,18 @@ func TestVela2SetSpanAndPIIAnswersRouteFromOneCall(t *testing.T) {
 	text := "please refund the billing for person in city"
 	results := classifier.evaluateAllSignalsWithContext(SignalEvaluationInput{Text: text, RequestFacts: RequestFacts{Context: context.Background()}}, classifier.Config.Decisions, true)
 	for _, want := range []string{"topics:billing", "places:city"} {
-		if !slices.Contains(results.MatchedDecisionRules, want) {
-			t.Fatalf("matched decision rules %v lack %q", results.MatchedDecisionRules, want)
+		if !slices.Contains(results.MatchedSystemOneRules, want) {
+			t.Fatalf("matched decision rules %v lack %q", results.MatchedSystemOneRules, want)
 		}
 	}
-	if slices.Contains(results.MatchedDecisionRules, "topics:shipping") {
-		t.Fatalf("an unselected set label must not match: %v", results.MatchedDecisionRules)
+	if slices.Contains(results.MatchedSystemOneRules, "topics:shipping") {
+		t.Fatalf("an unselected set label must not match: %v", results.MatchedSystemOneRules)
 	}
-	if _, asked := results.SignalValues["decision:urgent"]; asked {
+	if _, asked := results.SignalValues["systemone:urgent"]; asked {
 		t.Fatal("a rule no decision reads is not asked")
 	}
 	values := results.SignalValues
-	if values["decision:topics:billing"] != 0.9 || values["decision:topics:shipping"] != 0.1 || values["decision:places:city"] != 0.95 || values["decision:places"] != 0.95 {
+	if values["systemone:topics:billing"] != 0.9 || values["systemone:topics:shipping"] != 0.1 || values["systemone:places:city"] != 0.95 || values["systemone:places"] != 0.95 {
 		t.Fatalf("every label probability is a signal value: %v", values)
 	}
 	if !slices.Contains(results.MatchedPIIRules, "personal_data") || !slices.Contains(results.PIIEntities, "PERSON") {
@@ -182,7 +182,7 @@ func TestGenericDecisionSetCompositionAndNativeSpanCapability(t *testing.T) {
 	yaml = strings.Replace(vela2RoutingConfig, "      - name: places\n        deployment: vela2", "      - name: places\n        deployment: kai", 1)
 	classifier, _ = vela2Classifier(t, yaml)
 	err := classifier.InitializeRuntime()
-	if err == nil || !strings.Contains(err.Error(), "routing.signals.decision[places]") || !strings.Contains(err.Error(), "span") {
+	if err == nil || !strings.Contains(err.Error(), "routing.signals.systemone[places]: span_required: ") {
 		t.Fatalf("precise spans require a native span capability, got %v", err)
 	}
 }

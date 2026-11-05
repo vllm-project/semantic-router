@@ -139,7 +139,6 @@ zh-Hans	tutorials/algorithm/looper/remom.md
 zh-Hans	tutorials/algorithm/looper/workflows.md
 zh-Hans	tutorials/algorithm/overview.md
 zh-Hans	tutorials/algorithm/selection/automix.md
-zh-Hans	tutorials/algorithm/selection/decision.md
 zh-Hans	tutorials/algorithm/selection/hybrid.md
 zh-Hans	tutorials/algorithm/selection/kmeans.md
 zh-Hans	tutorials/algorithm/selection/knn.md
@@ -150,6 +149,7 @@ zh-Hans	tutorials/algorithm/selection/prompt.md
 zh-Hans	tutorials/algorithm/selection/router-dc.md
 zh-Hans	tutorials/algorithm/selection/static.md
 zh-Hans	tutorials/algorithm/selection/svm.md
+zh-Hans	tutorials/algorithm/selection/systemone.md
 zh-Hans	tutorials/decision/and.md
 zh-Hans	tutorials/decision/composite.md
 zh-Hans	tutorials/decision/not.md
@@ -205,7 +205,6 @@ zh-Hans	tutorials/signal/heuristic/metadata.md
 zh-Hans	tutorials/signal/heuristic/structure.md
 zh-Hans	tutorials/signal/learned/classifier.md
 zh-Hans	tutorials/signal/learned/complexity.md
-zh-Hans	tutorials/signal/learned/decision.md
 zh-Hans	tutorials/signal/learned/domain.md
 zh-Hans	tutorials/signal/learned/embedding.md
 zh-Hans	tutorials/signal/learned/fact-check.md
@@ -217,5 +216,6 @@ zh-Hans	tutorials/signal/learned/pii.md
 zh-Hans	tutorials/signal/learned/preference.md
 zh-Hans	tutorials/signal/learned/reask.md
 zh-Hans	tutorials/signal/learned/safety.md
+zh-Hans	tutorials/signal/learned/systemone.md
 zh-Hans	tutorials/signal/learned/user-feedback.md
 zh-Hans	tutorials/signal/overview.md

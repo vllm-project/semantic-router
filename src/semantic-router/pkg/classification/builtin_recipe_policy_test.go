@@ -35,16 +35,16 @@ func builtinPolicyClassifier(t *testing.T, name string) *Classifier {
 // controlled inputs to the shipped projections and rules, not model output.
 func balanceAnswers(task string, difficulty, deliberation float64, matched ...string) SignalResults {
 	in := SignalResults{
-		MatchedDecisionRules: append([]string{"task:" + task}, matched...),
+		MatchedSystemOneRules: append([]string{"task:" + task}, matched...),
 		SignalValues: map[string]float64{
-			"decision:difficulty":         difficulty,
-			"decision:needs:deliberation": deliberation,
-			"decision:needs:verification": 0,
-			"decision:needs:tools":        0,
+			"systemone:difficulty":         difficulty,
+			"systemone:needs:deliberation": deliberation,
+			"systemone:needs:verification": 0,
+			"systemone:needs:tools":        0,
 		},
 	}
 	if difficulty >= 2 {
-		in.MatchedDecisionRules = append(in.MatchedDecisionRules, "difficulty")
+		in.MatchedSystemOneRules = append(in.MatchedSystemOneRules, "difficulty")
 	}
 	return in
 }
@@ -67,10 +67,10 @@ func TestBuiltinBalanceEffortLanes(t *testing.T) {
 	c := builtinPolicyClassifier(t, "balance")
 	unknown := SignalResults{SignalErrors: map[string]string{}}
 	for _, name := range []string{"task", "difficulty", "precise_facts", "needs", "correction", "tool_use"} {
-		unknown.SignalErrors["decision:"+name] = "unavailable"
+		unknown.SignalErrors["systemone:"+name] = "unavailable"
 	}
 	tools := balanceAnswers("chat", 0.5, 0)
-	tools.SignalValues["decision:needs:tools"] = 0.7
+	tools.SignalValues["systemone:needs:tools"] = 0.7
 	tests := []struct {
 		name string
 		in   SignalResults
@@ -129,7 +129,7 @@ func TestBuiltinHardNamedToolRequiresCapableCandidate(t *testing.T) {
 	for _, recipe := range []string{"balance", "speed", "cost", "accuracy"} {
 		t.Run(recipe, func(t *testing.T) {
 			c := builtinPolicyClassifier(t, recipe)
-			in := &SignalResults{MatchedDecisionRules: []string{"depth"}, MatchedConversationRules: []string{"has_tools", "tool_required"}}
+			in := &SignalResults{MatchedSystemOneRules: []string{"depth"}, MatchedConversationRules: []string{"has_tools", "tool_required"}}
 			want := "reasoning"
 			if recipe == "balance" {
 				answers := balanceWith(balanceAnswers("agentic", 2.5, 0.2), []string{"has_tools"}, nil, nil)

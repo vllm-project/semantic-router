@@ -23,7 +23,7 @@ func unguardedClassifierConditions(node *RuleNode) []string {
 		return nil
 	}
 	if node.IsLeaf() {
-		if (strings.EqualFold(node.Type, SignalTypeClassifier) || strings.EqualFold(node.Type, SignalTypeDecision)) && node.OnError == "" {
+		if (strings.EqualFold(node.Type, SignalTypeClassifier) || strings.EqualFold(node.Type, SignalTypeSystemOne)) && node.OnError == "" {
 			return []string{node.Name}
 		}
 		return nil

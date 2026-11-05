@@ -128,7 +128,7 @@ type AlgorithmConfig struct {
 	LatencyAware      *LatencyAwareAlgorithmConfig `yaml:"latency_aware,omitempty"`
 	MultiFactor       *MultiFactorSelectionConfig  `yaml:"multi_factor,omitempty"`
 	Prompt            *PromptSelectionConfig       `yaml:"prompt,omitempty"`
-	Decision          *DecisionSelectionConfig     `yaml:"decision,omitempty"`
+	SystemOne         *SystemOneSelectionConfig    `yaml:"systemone,omitempty"`
 	OnError           string                       `yaml:"on_error,omitempty"`
 	// Extensions holds the blocks of algorithm types registered outside the
 	// Router, each under its type's name.

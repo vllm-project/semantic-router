@@ -39,30 +39,30 @@ var algorithmFieldExporters = map[string]algorithmFieldExporter{
 	"prompt": func(algo *config.AlgorithmConfig, fields map[string]Value) {
 		promptAlgorithmToFields(algo.Prompt, fields)
 	},
-	"decision": func(algo *config.AlgorithmConfig, fields map[string]Value) {
-		decisionModelAlgorithmToFields(algo.Decision, fields)
+	"systemone": func(algo *config.AlgorithmConfig, fields map[string]Value) {
+		systemOneAlgorithmToFields(algo.SystemOne, fields)
 	},
 }
 
-func decisionModelAlgorithmToFields(
-	decision *config.DecisionSelectionConfig,
+func systemOneAlgorithmToFields(
+	selector *config.SystemOneSelectionConfig,
 	fields map[string]Value,
 ) {
-	if decision == nil {
+	if selector == nil {
 		return
 	}
-	decisionFields := map[string]Value{}
-	setStringValue(decisionFields, "deployment", decision.Deployment)
-	setStringValue(decisionFields, "instructions", decision.Instructions)
-	setIntValue(decisionFields, "timeout_ms", decision.TimeoutMs)
-	if len(decision.Candidates) > 0 {
+	selectorFields := map[string]Value{}
+	setStringValue(selectorFields, "deployment", selector.Deployment)
+	setStringValue(selectorFields, "instructions", selector.Instructions)
+	setIntValue(selectorFields, "timeout_ms", selector.TimeoutMs)
+	if len(selector.Candidates) > 0 {
 		candidates := map[string]Value{}
-		for name, description := range decision.Candidates {
+		for name, description := range selector.Candidates {
 			candidates[name] = StringValue{V: description}
 		}
-		decisionFields["candidates"] = ObjectValue{Fields: candidates}
+		selectorFields["candidates"] = ObjectValue{Fields: candidates}
 	}
-	fields["decision"] = ObjectValue{Fields: decisionFields}
+	fields["systemone"] = ObjectValue{Fields: selectorFields}
 }
 
 func promptAlgorithmToFields(

@@ -100,7 +100,7 @@ global:
 
 The model reads the whole answer and applies its own calibrated threshold, so
 the detector's `threshold` applies to Vela 1.0 Halu only. The same
-deployment can answer the request's [decision questions](model-runtime/guides/decisions.md) and
+deployment can answer the request's [System One questions](model-runtime/guides/decisions.md) and
 its [PII question](model-runtime/guides/pii.md#on-vela-20).
 
 ## Check it

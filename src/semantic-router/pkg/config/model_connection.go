@@ -78,11 +78,13 @@ type DeploymentLimits struct {
 }
 
 // DeploymentCapabilities declares what a remote model answers when its API
-// does not list it: question types and presets (systemone), and the vector
-// dimensions of an embedding model.
+// does not list it: question types, presets and the input modalities a
+// decisions request may carry (systemone), and the vector dimensions of an
+// embedding model.
 type DeploymentCapabilities struct {
 	QuestionTypes []string `yaml:"question_types,omitempty" json:"question_types,omitempty"`
 	Presets       []string `yaml:"presets,omitempty" json:"presets,omitempty"`
+	Modalities    []string `yaml:"modalities,omitempty" json:"modalities,omitempty"`
 	Dimensions    int      `yaml:"dimensions,omitempty" json:"dimensions,omitempty"`
 }
 
@@ -101,6 +103,14 @@ func (d ModelDeployment) DeclaredPresets() []string {
 		return nil
 	}
 	return slices.Clone(d.Capabilities.Presets)
+}
+
+// DeclaredModalities are the input modalities a deployment declares.
+func (d ModelDeployment) DeclaredModalities() []string {
+	if d.Capabilities == nil {
+		return nil
+	}
+	return slices.Clone(d.Capabilities.Modalities)
 }
 
 // DeclaredDimensions is the embedding dimension a deployment declares, zero
@@ -328,8 +338,8 @@ func (d ModelDeployment) validateRemote() error {
 			return err
 		}
 	}
-	if len(d.QuestionTypes) > 0 || (d.Capabilities != nil && (len(d.Capabilities.QuestionTypes) > 0 || len(d.Capabilities.Presets) > 0)) {
-		return fmt.Errorf("question types and presets apply to systemone deployments")
+	if len(d.QuestionTypes) > 0 || (d.Capabilities != nil && (len(d.Capabilities.QuestionTypes) > 0 || len(d.Capabilities.Presets) > 0 || len(d.Capabilities.Modalities) > 0)) {
+		return fmt.Errorf("question types, presets and modalities apply to systemone deployments")
 	}
 	if d.Capabilities != nil && d.Capabilities.Dimensions != 0 && d.Provider != OpenAIEmbeddingsProvider {
 		return fmt.Errorf("capabilities.dimensions applies to openai_embeddings deployments")

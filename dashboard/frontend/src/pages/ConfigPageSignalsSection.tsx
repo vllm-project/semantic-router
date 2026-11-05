@@ -145,7 +145,7 @@ function SignalDefinitionEditor({
   capabilityRef.current = data
   const availability = signalAvailability(data, scope, value.type, name, value.fields)
   const schema =
-    value.type === 'decision'
+    value.type === 'systemone'
       ? signalCapabilitySchema(
           getSignalFieldSchema(value.type),
           decisionQuestionTypes(data, scope, value.fields),

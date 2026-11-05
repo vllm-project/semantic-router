@@ -61,15 +61,15 @@ func decisionObservation(types ...string) modelservice.ModelCard {
 func TestAttachedDecisionQuestionsRecoverWithoutDiscovery(t *testing.T) {
 	models, services := attachedDecisionModels(t, false)
 	c := &Classifier{Config: models.cfg, models: models}
-	if err := c.prepareDecisionSignals(); err != nil {
+	if err := c.prepareSystemOneSignals(); err != nil {
 		t.Fatalf("offline attached provider blocked preparation: %v", err)
 	}
 	evaluate := func() *SignalResults {
 		r := &SignalResults{SignalErrors: map[string]string{}, SignalValues: map[string]float64{}, SignalConfidences: map[string]float64{}}
-		c.evaluateDecisionDeployment(t.Context(), r, &sync.Mutex{}, "needs tools", "primary", models.cfg.DecisionRules)
+		c.evaluateSystemOneDeployment(t.Context(), r, &sync.Mutex{}, &systemOneCall{deployment: "primary", request: modelservice.Request{State: "needs tools"}, rules: models.cfg.SystemOneRules})
 		return r
 	}
-	if result := evaluate(); result.SignalErrors["decision:needs"] == "" || len(services.requests) != 0 {
+	if result := evaluate(); result.SignalErrors["systemone:needs"] == "" || len(services.requests) != 0 {
 		t.Fatalf("offline model must remain unknown without a native call: %+v", result)
 	}
 	services.card, services.ready = decisionObservation("noul"), true
@@ -82,27 +82,28 @@ func TestAttachedDecisionQuestionsRecoverWithoutDiscovery(t *testing.T) {
 		}
 	}
 	services.card = decisionObservation("choice")
-	if result := evaluate(); result.SignalErrors["decision:needs"] == "" || len(services.requests) != 1 {
+	if result := evaluate(); result.SignalErrors["systemone:needs"] == "" || len(services.requests) != 1 {
 		t.Fatal("changed attached capabilities reused an old card or bypassed compilation")
 	}
-	if err := c.prepareDecisionSignals(); !errors.Is(err, modelservice.ErrRejected) {
+	if err := c.prepareSystemOneSignals(); !errors.Is(err, modelservice.ErrRejected) {
 		t.Fatalf("known unsupported capability must reject preparation: %v", err)
 	}
 }
 
 func TestAttachedDecisionSpanIsNeverComposedOrSilentlyAccepted(t *testing.T) {
 	models, services := attachedDecisionModels(t, false)
-	models.cfg.DecisionRules[0].Question.Type = "span"
+	models.cfg.SystemOneRules[0].Question.Type = "span"
 	c := &Classifier{Config: models.cfg, models: models}
-	if err := c.prepareDecisionSignals(); err != nil {
+	if err := c.prepareSystemOneSignals(); err != nil {
 		t.Fatal(err)
 	}
 	services.card, services.ready = decisionObservation("noul"), true
-	if err := c.prepareDecisionSignals(); !errors.Is(err, modelservice.ErrRejected) {
+	want := `routing.signals.systemone[needs]: span_required: resolves to deployment "primary", which cannot answer span questions`
+	if err := c.prepareSystemOneSignals(); err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Fatalf("Noul cannot provide locations: %v", err)
 	}
 	services.card = decisionObservation("span")
-	if err := c.prepareDecisionSignals(); err != nil {
+	if err := c.prepareSystemOneSignals(); err != nil {
 		t.Fatalf("native Span capability was lost: %v", err)
 	}
 }

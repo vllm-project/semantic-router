@@ -14,7 +14,7 @@ const decisionSelectorQuestionID = "selector"
 // newDecisionModelSelector binds the decision selector to the model runtime,
 // or to a systemone deployment's remote API. A selector that names no
 // deployment asks the decision model's deployment.
-func (r *OpenAIRouter) newDecisionModelSelector(cfg config.DecisionSelectionConfig) selection.Selector {
+func (r *OpenAIRouter) newDecisionModelSelector(cfg config.SystemOneSelectionConfig) selection.Selector {
 	descriptions := make(map[string]string, len(r.Config.ModelConfig))
 	for model, params := range r.Config.ModelConfig {
 		descriptions[model] = params.Description
@@ -23,7 +23,7 @@ func (r *OpenAIRouter) newDecisionModelSelector(cfg config.DecisionSelectionConf
 	if decider == nil {
 		decider = modelservice.Default()
 	}
-	cfg.Deployment = r.Config.DecisionSelectorDeployment(cfg)
+	cfg.Deployment = r.Config.SystemOneSelectorDeployment(cfg)
 	deployment := r.Config.ModelDeployments[cfg.Deployment]
 	timeout := cfg.EffectiveTimeout()
 	if deployment.IsSystemOne() && cfg.TimeoutMs == 0 && deployment.TimeoutMs > 0 {
@@ -52,7 +52,7 @@ func (r *OpenAIRouter) newDecisionModelSelector(cfg config.DecisionSelectionConf
 			return selection.DecisionModelAnswer{}, fmt.Errorf("decision selector requires a prepared model card")
 		}
 		// Selection routes, so a long state is read only as far as its first tokens.
-		question := modelservice.Question{ID: decisionSelectorQuestionID, Type: config.DecisionQuestionChoice, Instructions: instructions, Truncate: true}
+		question := modelservice.Question{ID: decisionSelectorQuestionID, Type: config.SystemOneQuestionChoice, Instructions: instructions, Truncate: true}
 		for _, choice := range choices {
 			question.Choices = append(question.Choices, modelservice.Choice{Key: choice.Key, Description: choice.Description})
 		}

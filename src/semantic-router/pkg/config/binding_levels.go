@@ -34,7 +34,7 @@ var ruleLevelDeployment = map[string]string{
 	SignalTypeClassifier: "routing.signals.classifiers[].deployment",
 	SignalTypeSafety:     "routing.signals.safety[].deployment",
 	bindingKeyHazard:     "routing.signals.safety[].hazard.deployment",
-	SignalTypeDecision:   "routing.signals.decision[].deployment",
+	SignalTypeSystemOne:  "routing.signals.systemone[].deployment",
 	SignalTypeComplexity: "routing.signals.complexity[].deployment",
 }
 
@@ -60,8 +60,8 @@ func checkBindingKeys(path string, bindings map[string]ModelBinding) ([]ConfigWa
 			note = "complexity rules ask their own question; set deployment on each rule (routing.signals.complexity[].deployment)"
 		case strings.HasPrefix(key, "classifier.") || strings.HasPrefix(key, "safety.") || strings.HasPrefix(key, "complexity."):
 			note = fmt.Sprintf("a binding for one rule is deprecated; set deployment on the rule (%s)", ruleDeploymentPath(key))
-		case strings.HasPrefix(key, "decision."):
-			return nil, fmt.Errorf("%s.%s: decision rules each ask their own question; set deployment on the rule (routing.signals.decision[].deployment)", path, key)
+		case strings.HasPrefix(key, "systemone."):
+			return nil, fmt.Errorf("%s.%s: systemone rules each ask their own question; set deployment on the rule (routing.signals.systemone[].deployment)", path, key)
 		case ruleLevelDeployment[key] != "":
 			fallback := "system.decision_model"
 			if key == bindingKeyHazard {

@@ -113,13 +113,13 @@ func ModelRuntimeDeploymentsInUse(cfg *RouterConfig) map[string]ModelDeployment 
 		return used
 	}
 	scan := func(signals Signals, decisions []Decision) {
-		for _, rule := range signals.DecisionRules {
+		for _, rule := range signals.SystemOneRules {
 			mark(rule.Deployment)
 		}
 		for _, decision := range decisions {
-			if decision.Algorithm != nil && decision.Algorithm.Decision != nil &&
-				strings.EqualFold(strings.TrimSpace(decision.Algorithm.Type), DecisionAlgorithmDecision) {
-				mark(decision.Algorithm.Decision.Deployment)
+			if decision.Algorithm != nil && decision.Algorithm.SystemOne != nil &&
+				strings.EqualFold(strings.TrimSpace(decision.Algorithm.Type), DecisionAlgorithmSystemOne) {
+				mark(decision.Algorithm.SystemOne.Deployment)
 			}
 		}
 	}

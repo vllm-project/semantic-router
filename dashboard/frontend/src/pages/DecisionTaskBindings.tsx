@@ -23,7 +23,7 @@ const RULE_KEY_TYPES: Record<RuleTarget['collection'], string> = {
   classifiers: 'classifier',
   safety: 'safety',
   complexity: 'complexity',
-  decision: 'decision',
+  systemone: 'systemone',
 }
 
 // The legacy fields a rule named its model with; its deployment replaces them.
@@ -31,7 +31,7 @@ const RULE_MODEL_FIELDS: Record<RuleTarget['collection'], string[]> = {
   classifiers: ['type', 'model', 'model_path', 'use_cpu'],
   safety: ['model'],
   complexity: [],
-  decision: [],
+  systemone: [],
 }
 
 function taskConsumer(binding: DecisionTaskBinding): string {

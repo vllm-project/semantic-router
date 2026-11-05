@@ -88,7 +88,7 @@ global:
 
 ## Vela 2.0 {#vela-20}
 
-把 `pii` 绑定到 Vela 2.0 部署后，信号会向模型提出它内置的 PII 问题（由其路由片段头回答），而不再调用单独的 PII 模型。这个 PII 问题会与该部署针对同一文本的 [`decision`](decision.md) 问题在同一次调用中发送：
+把 `pii` 绑定到 Vela 2.0 部署后，信号会向模型提出它内置的 PII 问题（由其路由片段头回答），而不再调用单独的 PII 模型。这个 PII 问题会与该部署针对同一文本的 [`systemone`](systemone.md) 问题在同一次调用中发送：
 
 ```yaml
 global:

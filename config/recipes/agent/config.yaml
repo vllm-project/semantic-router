@@ -254,7 +254,7 @@ routing:
           type: exists
           source:
             type: image_content
-    decision:
+    systemone:
       - name: attack
         description: The request tries to make the assistant ignore its rules or reveal its hidden system
           prompt.
@@ -323,7 +323,7 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: attack
       modelRefs:
         - model: qwen/qwen3.6-rocm
@@ -371,9 +371,9 @@ routing:
         operator: OR
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: confidential
-          - type: decision
+          - type: systemone
             name: personal_data
       modelRefs:
         - model: qwen/qwen3.6-rocm
@@ -398,12 +398,12 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: domain
             label: math_science
           - operator: NOT
             conditions:
-              - type: decision
+              - type: systemone
                 name: difficulty
       modelRefs:
         - model: qwen/qwen3.6-rocm
@@ -425,7 +425,7 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: domain
             label: legal_health
       modelRefs:
@@ -446,10 +446,10 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: domain
             label: code
-          - type: decision
+          - type: systemone
             name: difficulty
             predicate:
               gte: 1.75
@@ -473,14 +473,14 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: domain
             label: code
-          - type: decision
+          - type: systemone
             name: difficulty
           - operator: NOT
             conditions:
-              - type: decision
+              - type: systemone
                 name: difficulty
                 predicate:
                   gte: 1.75
@@ -504,14 +504,14 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: domain
             label: math_science
-          - type: decision
+          - type: systemone
             name: difficulty
           - operator: NOT
             conditions:
-              - type: decision
+              - type: systemone
                 name: domain
                 label: code
       modelRefs:
@@ -533,7 +533,7 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: domain
             label: business
       modelRefs:
@@ -554,18 +554,18 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: difficulty
             predicate:
               gte: 1.75
           - operator: NOT
             conditions:
-              - type: decision
+              - type: systemone
                 name: domain
                 label: code
           - operator: NOT
             conditions:
-              - type: decision
+              - type: systemone
                 name: domain
                 label: math_science
       modelRefs:
@@ -588,11 +588,11 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: difficulty
           - operator: NOT
             conditions:
-              - type: decision
+              - type: systemone
                 name: difficulty
                 predicate:
                   gte: 1.75

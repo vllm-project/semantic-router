@@ -99,7 +99,7 @@ recipes:
       - name: wrong_answer
         description: The user says an earlier answer was wrong; recovery also needs
           the correction question.
-      decision:
+      systemone:
       - name: task
         description: What kind of work the request asks for.
         question:
@@ -201,15 +201,15 @@ recipes:
       - name: effort_score
         method: weighted_sum
         inputs:
-        - type: decision
+        - type: systemone
           name: difficulty
           weight: 0.3
           value_source: raw
-        - type: decision
+        - type: systemone
           name: needs:deliberation
           weight: 0.35
           value_source: raw
-        - type: decision
+        - type: systemone
           name: needs:verification
           weight: 0.1
           value_source: raw
@@ -286,7 +286,7 @@ recipes:
           conditions:
           - type: conversation
             name: tool_loop
-        - type: decision
+        - type: systemone
           name: correction
         - type: user_feedback
           name: wrong_answer
@@ -320,15 +320,15 @@ recipes:
               name: tool_disabled
           - operator: OR
             conditions:
-            - type: decision
+            - type: systemone
               name: task
               label: agentic
-            - type: decision
+            - type: systemone
               name: needs
               label: tools
               predicate:
                 gte: 0.5
-            - type: decision
+            - type: systemone
               name: tool_use
             - type: conversation
               name: tool_required
@@ -350,17 +350,17 @@ recipes:
         operator: AND
         on_unknown: no_match
         conditions:
-        - type: decision
+        - type: systemone
           name: precise_facts
         - operator: OR
           conditions:
-          - type: decision
+          - type: systemone
             name: task
             label: facts
-          - type: decision
+          - type: systemone
             name: task
             label: analysis
-          - type: decision
+          - type: systemone
             name: task
             label: writing
         - operator: NOT
@@ -387,9 +387,9 @@ recipes:
         - type: projection
           name: effort_max
       algorithm:
-        type: decision
+        type: systemone
         minimum_candidates: 2
-        decision:
+        systemone:
           instructions: Which model should answer this research-level request?
           timeout_ms: 15000
       adaptations:
@@ -407,7 +407,7 @@ recipes:
         operator: AND
         on_unknown: no_match
         conditions:
-        - type: decision
+        - type: systemone
           name: task
           label: code
         - operator: OR
@@ -438,10 +438,10 @@ recipes:
           name: effort_high
         - operator: AND
           conditions:
-          - type: decision
+          - type: systemone
             name: task
             label: stem
-          - type: decision
+          - type: systemone
             name: difficulty
       algorithm:
         type: multi_factor
@@ -543,7 +543,7 @@ recipes:
             type: tool_definition
         predicate:
           gte: 1
-      decision:
+      systemone:
       - name: tool_use
         description: Whether the user asks the assistant to call one of the request's
           tools now.
@@ -599,7 +599,7 @@ recipes:
             conditions:
             - type: conversation
               name: tool_required
-            - type: decision
+            - type: systemone
               name: tool_use
         on_unknown: no_match
       algorithm:
@@ -634,7 +634,7 @@ recipes:
       rules:
         operator: OR
         conditions:
-        - type: decision
+        - type: systemone
           name: depth
         on_unknown: match
       algorithm:
@@ -723,7 +723,7 @@ recipes:
             type: tool_definition
         predicate:
           gte: 1
-      decision:
+      systemone:
       - name: tool_use
         description: Whether the user asks the assistant to call one of the request's
           tools now.
@@ -810,7 +810,7 @@ recipes:
             conditions:
             - type: conversation
               name: tool_required
-            - type: decision
+            - type: systemone
               name: tool_use
         on_unknown: no_match
       algorithm:
@@ -845,15 +845,15 @@ recipes:
       rules:
         operator: OR
         conditions:
-        - type: decision
+        - type: systemone
           name: depth
         - operator: AND
           conditions:
-          - type: decision
+          - type: systemone
             name: correction
           - operator: NOT
             conditions:
-            - type: decision
+            - type: systemone
               name: quoted
         on_unknown: match
       algorithm:
@@ -937,7 +937,7 @@ recipes:
           type: exists
           source:
             type: flow_tool_state
-      decision:
+      systemone:
       - name: mode
         description: Whether one assistant, several workers or several independent
           models should do the work.
@@ -1050,7 +1050,7 @@ recipes:
           name: flow
         - operator: AND
           conditions:
-          - type: decision
+          - type: systemone
             name: mode
             label: workers
           - operator: NOT
@@ -1063,7 +1063,7 @@ recipes:
               name: tool_required
           - operator: NOT
             conditions:
-            - type: decision
+            - type: systemone
               name: quoted
         on_unknown: no_match
       algorithm:
@@ -1095,7 +1095,7 @@ recipes:
       rules:
         operator: AND
         conditions:
-        - type: decision
+        - type: systemone
           name: mode
           label: experts
         - operator: NOT
@@ -1108,7 +1108,7 @@ recipes:
             name: tool_required
         - operator: NOT
           conditions:
-          - type: decision
+          - type: systemone
             name: quoted
         on_unknown: no_match
       algorithm:
@@ -1143,17 +1143,17 @@ recipes:
           conditions:
           - operator: NOT
             conditions:
-            - type: decision
+            - type: systemone
               name: quoted
           - operator: OR
             conditions:
-            - type: decision
+            - type: systemone
               name: depth
-            - type: decision
+            - type: systemone
               name: verification
-            - type: decision
+            - type: systemone
               name: stakes
-            - type: decision
+            - type: systemone
               name: correction
         on_unknown: match
       algorithm:
@@ -1236,7 +1236,7 @@ recipes:
         - NRP
         - ZIP_CODE
         - AGE
-      decision:
+      systemone:
       - name: attack
         description: Whether the message itself tries to make the assistant ignore
           its rules or reveal its hidden system prompt.
@@ -1335,7 +1335,7 @@ recipes:
         conditions:
         - type: jailbreak
           name: prompt_attack
-        - type: decision
+        - type: systemone
           name: attack
         on_unknown: fail_request
       adaptations:
@@ -1368,13 +1368,13 @@ recipes:
         conditions:
         - type: pii
           name: personal_data
-        - type: decision
+        - type: systemone
           name: confidential
-        - type: decision
+        - type: systemone
           name: personal_data
-        - type: decision
+        - type: systemone
           name: risk
-        - type: decision
+        - type: systemone
           name: personal_advice
         on_unknown: fail_request
       algorithm:

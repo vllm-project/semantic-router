@@ -155,7 +155,7 @@ func decisionSignalQuestion(valuesPath, signal string) (modelruntime.Question, e
 		Config struct {
 			Routing struct {
 				Signals struct {
-					Decision []struct {
+					SystemOne []struct {
 						Name     string `yaml:"name"`
 						Question struct {
 							Type         string `yaml:"type"`
@@ -165,7 +165,7 @@ func decisionSignalQuestion(valuesPath, signal string) (modelruntime.Question, e
 								Description string `yaml:"description"`
 							} `yaml:"choices"`
 						} `yaml:"question"`
-					} `yaml:"decision"`
+					} `yaml:"systemone"`
 				} `yaml:"signals"`
 			} `yaml:"routing"`
 		} `yaml:"config"`
@@ -173,7 +173,7 @@ func decisionSignalQuestion(valuesPath, signal string) (modelruntime.Question, e
 	if err := yaml.Unmarshal(data, &values); err != nil {
 		return modelruntime.Question{}, fmt.Errorf("%s: %w", valuesPath, err)
 	}
-	for _, rule := range values.Config.Routing.Signals.Decision {
+	for _, rule := range values.Config.Routing.Signals.SystemOne {
 		if rule.Name != signal {
 			continue
 		}

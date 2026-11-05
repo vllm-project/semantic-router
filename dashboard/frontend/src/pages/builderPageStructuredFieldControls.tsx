@@ -310,6 +310,11 @@ function StringMatrixField({
   )
 }
 
+// Classifier and System One conditions name a label and set their own on_error.
+function labelledCondition(type: unknown): boolean {
+  return type === 'classifier' || type === 'systemone'
+}
+
 function RuleNodeEditor({
   value,
   onChange,
@@ -397,9 +402,9 @@ function RuleNodeEditor({
                 placeholder="technical"
               />
             </label>
-            {node.type === 'classifier' || node.label !== undefined ? (
+            {labelledCondition(node.type) || node.label !== undefined ? (
               <label className={styles.structuredMiniLabel}>
-                Classifier Label
+                {node.type === 'systemone' ? 'Option or Label' : 'Classifier Label'}
                 <input
                   className={styles.fieldInput}
                   value={typeof node.label === 'string' ? node.label : ''}
@@ -408,11 +413,11 @@ function RuleNodeEditor({
                       updateStructuredObjectField(node, 'label', event.target.value || undefined),
                     )
                   }
-                  placeholder="SAFE"
+                  placeholder={node.type === 'systemone' ? 'billing' : 'SAFE'}
                 />
               </label>
             ) : null}
-            {node.type === 'classifier' || node.on_error !== undefined ? (
+            {labelledCondition(node.type) || node.on_error !== undefined ? (
               <label className={styles.structuredMiniLabel}>
                 On Error
                 <select

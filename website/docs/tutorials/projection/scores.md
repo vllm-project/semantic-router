@@ -60,7 +60,7 @@ Supported input types include:
 - `metadata`
 - `classifier`
 - `input_modality`
-- `decision`
+- `systemone`
 - `safety`
 - `kb_metric`
 - `projection`

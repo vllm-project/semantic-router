@@ -41,8 +41,8 @@ func TestMaintainedBalanceRecipeHasNoUndefinedComplexitySignals(t *testing.T) {
 func TestMaintainedBalanceLanesReadNamedQuestions(t *testing.T) {
 	cfg := mustLoadMaintainedBalanceRouterConfig(t, maintainedBalanceAsset("config.yaml"))
 
-	questions := make(map[string]bool, len(cfg.DecisionRules))
-	for _, rule := range cfg.DecisionRules {
+	questions := make(map[string]bool, len(cfg.SystemOneRules))
+	for _, rule := range cfg.SystemOneRules {
 		questions[rule.Name] = true
 	}
 	for _, name := range []string{"task", "verification", "correction", "clarify"} {
@@ -60,7 +60,7 @@ func TestMaintainedBalanceLanesReadNamedQuestions(t *testing.T) {
 		case "omni", "casual_chat":
 			continue
 		}
-		if !ruleTreeReadsSignalType(&decision.Rules, config.SignalTypeDecision) {
+		if !ruleTreeReadsSignalType(&decision.Rules, config.SignalTypeSystemOne) {
 			t.Fatalf("expected %s to read a decision-model question", decision.Name)
 		}
 	}
@@ -139,10 +139,10 @@ func assertMaintainedBalanceDecisionTiers(t *testing.T, decisions []config.Decis
 func assertMaintainedBalanceDSLMarkers(t *testing.T, dslPath, dslText string) {
 	t.Helper()
 	for _, marker := range []string{
-		"SIGNAL decision task",
-		"SIGNAL decision verification",
-		"SIGNAL decision correction",
-		"SIGNAL decision clarify",
+		"SIGNAL systemone task",
+		"SIGNAL systemone verification",
+		"SIGNAL systemone correction",
+		"SIGNAL systemone clarify",
 		"ROUTE formal_math_proof",
 		"ROUTE reasoning_deep",
 		"ROUTE complex_specialist",

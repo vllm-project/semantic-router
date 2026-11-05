@@ -22,7 +22,7 @@ providers:
       backend_refs: [{name: other, endpoint: "127.0.0.1:8001", protocol: http}]
 routing:
   signals:
-    decision:
+    systemone:
       - name: support_team
         deployment: gateway-d3
         question: {type: choice, instructions: "Which team should handle this request?", choices: [{key: billing}, {key: engineering}]}
@@ -34,18 +34,18 @@ routing:
       rules:
         operator: AND
         on_unknown: no_match
-        conditions: [{type: decision, name: support_team, label: engineering}]
+        conditions: [{type: systemone, name: support_team, label: engineering}]
       modelRefs: [{model: general}]
     - name: choose
       priority: 100
       rules:
         operator: AND
         on_unknown: no_match
-        conditions: [{type: decision, name: needs_tools}]
+        conditions: [{type: systemone, name: needs_tools}]
       modelRefs: [{model: general}, {model: other-model}]
       algorithm:
-        type: decision
-        decision: {instructions: "Which model should answer?"}
+        type: systemone
+        systemone: {instructions: "Which model should answer?"}
 global:
   model_catalog:
     deployments:
@@ -71,12 +71,12 @@ func TestSystemOneDeploymentsAnswerDecisionQuestions(t *testing.T) {
 		t.Fatal("both deployments are systemone and hosted-d3 is the decision model")
 	}
 	want := map[string]string{"support_team": "gateway-d3", "needs_tools": "hosted-d3"}
-	for _, rule := range cfg.DecisionRules {
-		if got := cfg.DecisionQuestionDeployment(rule); got != want[rule.Name] {
+	for _, rule := range cfg.SystemOneRules {
+		if got := cfg.SystemOneRuleDeployment(rule); got != want[rule.Name] {
 			t.Fatalf("rule %s asks %q, want %q", rule.Name, got, want[rule.Name])
 		}
 	}
-	if got := cfg.DecisionSelectorDeployment(*cfg.Decisions[1].Algorithm.Decision); got != "hosted-d3" {
+	if got := cfg.SystemOneSelectorDeployment(*cfg.Decisions[1].Algorithm.SystemOne); got != "hosted-d3" {
 		t.Fatalf("selector asks %q", got)
 	}
 	gateway := cfg.ModelDeployments["gateway-d3"]

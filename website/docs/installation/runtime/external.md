@@ -21,7 +21,7 @@ each signal's deployment is named.
 | Chat API (`POST <endpoint>/chat/completions`) | `openai_chat` | Prompt attacks, hallucination detection, preference, LLM classification |
 | OpenAI-compatible embedding API (`POST <endpoint>/embeddings`) | `openai_embeddings` | [Remote embeddings](../../model-runtime/guides/embeddings.md#use-an-external-embedding-service) |
 | Rerank API (`POST <endpoint>/rerank`) | `rerank` | [RAG reranking](../../tutorials/plugin/rag.md#neural-reranking) |
-| System One API | `systemone` | [Decision questions](../../tutorials/signal/learned/decision.md#ask-a-remote-system-one-model) and every built-in question-style signal |
+| System One API | `systemone` | [System One questions](../../tutorials/signal/learned/systemone.md#ask-a-remote-system-one-model) and every built-in question-style signal |
 | MCP tool | `modules.classifier.mcp` | Classification through an MCP server |
 
 Fact-check, user feedback and output-modality classification have no

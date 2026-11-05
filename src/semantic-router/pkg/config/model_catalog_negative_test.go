@@ -105,8 +105,8 @@ func TestModelCatalogRefusesWhatCannotWork(t *testing.T) {
 			"global: {model_catalog: {bindings: {pii: kai, pii_classifier: kai}}}",
 			"bind the same signal",
 		},
-		"a decision question the remote model does not answer": {
-			"global: {model_catalog: {deployments: {d3-remote: {capabilities: {question_types: [choice]}}}}}\nrouting: {signals: {decision: [{name: tools, deployment: d3-remote, question: {type: noul, instructions: \"Does it need a tool?\"}}]}}",
+		"a systemone question the remote model does not answer": {
+			"global: {model_catalog: {deployments: {d3-remote: {capabilities: {question_types: [choice]}}}}}\nrouting: {signals: {systemone: [{name: tools, deployment: d3-remote, question: {type: noul, instructions: \"Does it need a tool?\"}}]}}",
 			"noul",
 		},
 		"complexity rules split between a remote scorer and the decision model": {

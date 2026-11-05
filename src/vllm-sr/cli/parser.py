@@ -13,6 +13,7 @@ from cli.config_contract import (
     iter_routing_profiles,
 )
 from cli.config_migration_looper import LOOPER_ENDPOINT_PATH
+from cli.config_renamed_forms import read_renamed_forms
 from cli.config_schema.validation import validate_config_structure
 from cli.config_yaml import safe_load_router_config
 from cli.context_bands import references_environment
@@ -311,6 +312,7 @@ def parse_user_config_data(
 
     ``config_path`` names the document in error messages only.
     """
+    data = read_renamed_forms(data)
     _reject_invalid_config_surfaces(data, config_path)
     _warn_retired_looper_endpoint(data, config_path)
 

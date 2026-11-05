@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -132,7 +133,7 @@ func (d ModelDeployment) validateSystemOne() error {
 	seen := make(map[string]bool)
 	for _, questionType := range d.DeclaredQuestionTypes() {
 		switch questionType {
-		case DecisionQuestionChoice, DecisionQuestionNoul, DecisionQuestionScore, DecisionQuestionSet, DecisionQuestionSpan:
+		case SystemOneQuestionChoice, SystemOneQuestionNoul, SystemOneQuestionScore, SystemOneQuestionSet, SystemOneQuestionSpan:
 		default:
 			return fmt.Errorf("question_types lists %q; the types are choice, noul, score, set and span", questionType)
 		}
@@ -151,7 +152,29 @@ func (d ModelDeployment) validateSystemOne() error {
 		}
 		presets[preset] = true
 	}
-	return d.validateConnection(endpoint, MaxDecisionTimeoutMs)
+	if err := validateDeclaredModalities(d.DeclaredModalities()); err != nil {
+		return err
+	}
+	return d.validateConnection(endpoint, MaxSystemOneTimeoutMs)
+}
+
+// validateDeclaredModalities checks the input modalities a systemone
+// deployment declares: text, image and video, the parts a System One
+// decisions request carries. The API carries no audio part.
+func validateDeclaredModalities(modalities []string) error {
+	for index, modality := range modalities {
+		switch modality {
+		case "text", SystemOneModalityImage, SystemOneModalityVideo:
+		case SystemOneModalityAudio:
+			return fmt.Errorf("capabilities.modalities lists audio; a System One decisions request carries no audio part")
+		default:
+			return fmt.Errorf("capabilities.modalities lists %q; the modalities are text, image and video", modality)
+		}
+		if slices.Contains(modalities[:index], modality) {
+			return fmt.Errorf("capabilities.modalities lists %q twice", modality)
+		}
+	}
+	return nil
 }
 
 func (a *DeploymentAuth) validate() error {

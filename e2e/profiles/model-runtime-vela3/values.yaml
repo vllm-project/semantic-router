@@ -48,7 +48,7 @@ config:
           # vela3-fast's calibrated prompt guard threshold.
           threshold: 0.88
           description: Prompt injection or jailbreak.
-      decision:
+      systemone:
         - name: account_access
           description: The request needs access to the customer's account.
           deployment: primary
@@ -97,7 +97,7 @@ config:
           operator: AND
           on_unknown: no_match
           conditions:
-            - {type: decision, name: order_numbers, label: order number}
+            - {type: systemone, name: order_numbers, label: order number}
         modelRefs:
           - model: general-expert
             use_reasoning: false
@@ -108,7 +108,7 @@ config:
           operator: AND
           on_unknown: no_match
           conditions:
-            - {type: decision, name: account_access}
+            - {type: systemone, name: account_access}
         modelRefs:
           - model: math-expert
             use_reasoning: false

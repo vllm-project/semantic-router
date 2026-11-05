@@ -61,7 +61,7 @@ func questionConsumer(consumer string) bool {
 		return false
 	}
 	return strings.HasPrefix(consumer, "classifier.") || strings.HasPrefix(consumer, "safety.") ||
-		strings.HasPrefix(consumer, "complexity.") || strings.HasPrefix(consumer, "decision.")
+		strings.HasPrefix(consumer, "complexity.") || strings.HasPrefix(consumer, "systemone.")
 }
 
 // bindingKeysOf lists the binding keys a consumer reads, most specific
@@ -76,8 +76,8 @@ func bindingKeysOf(consumer string) []string {
 		return []string{consumer, bindingKeyClassifier}
 	case strings.HasPrefix(consumer, "complexity."):
 		return []string{consumer, "complexity"}
-	case strings.HasPrefix(consumer, "decision."):
-		return []string{consumer, bindingKeyDecision}
+	case strings.HasPrefix(consumer, "systemone."):
+		return []string{consumer, bindingKeySystemOne}
 	}
 	return []string{consumer}
 }
@@ -128,9 +128,9 @@ func (c *RouterConfig) ruleDeployment(consumer string) string {
 				return rule.Deployment
 			}
 		}
-	case strings.HasPrefix(consumer, "decision."):
-		for _, rule := range c.DecisionRules {
-			if consumer == "decision."+rule.Name {
+	case strings.HasPrefix(consumer, "systemone."):
+		for _, rule := range c.SystemOneRules {
+			if consumer == "systemone."+rule.Name {
 				return rule.Deployment
 			}
 		}

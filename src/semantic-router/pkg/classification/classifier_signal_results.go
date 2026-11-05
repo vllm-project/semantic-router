@@ -69,7 +69,7 @@ type SignalResults struct {
 	MatchedMetadataRules      []string // Matched untrusted request metadata rules
 	MatchedClassifierRules    []string // Matched generic classifier label names
 	MatchedInputModalityRules []string // Matched structural input-modality presence rules
-	MatchedDecisionRules      []string // Matched decision-model answers: noul/score rule names, "rule:choice" for choices
+	MatchedSystemOneRules     []string // Matched decision-model answers: noul/score rule names, "rule:choice" for choices
 	MatchedProjectionRules    []string // Matched derived routing outputs from routing.projections.mappings
 	ProjectionScores          map[string]float64
 	ProjectionTrace           *projectiontrace.Trace // Explainability payload for projections (replay / dashboard)
@@ -127,5 +127,5 @@ type SignalMetricsCollection struct {
 	Classifier    SignalMetrics `json:"classifier"`
 	InputModality SignalMetrics `json:"input_modality"`
 	Action        SignalMetrics `json:"action"`
-	Decision      SignalMetrics `json:"decision"`
+	SystemOne     SignalMetrics `json:"systemone"`
 }

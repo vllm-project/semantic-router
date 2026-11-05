@@ -77,7 +77,7 @@ routing:
       - {name: wrong_answer}
     modality:
       - {name: DIFFUSION}
-    decision:
+    systemone:
       - name: tone
         deployment: vela2
         timeout_ms: 60000
@@ -137,11 +137,11 @@ routing:
           - {type: fact_check, name: needs_fact_check}
           - {type: user_feedback, name: wrong_answer}
           - {type: modality, name: DIFFUSION}
-          - {type: decision, name: tone, label: formal}
-          - {type: decision, name: urgent}
-          - {type: decision, name: effort}
-          - {type: decision, name: topics, label: billing}
-          - {type: decision, name: entities, label: location}
+          - {type: systemone, name: tone, label: formal}
+          - {type: systemone, name: urgent}
+          - {type: systemone, name: effort}
+          - {type: systemone, name: topics, label: billing}
+          - {type: systemone, name: entities, label: location}
       modelRefs:
         - model: m
 `
@@ -446,31 +446,33 @@ func checkVela2Signals(t *testing.T, cfg *config.RouterConfig, results *SignalRe
 			t.Fatalf("signal %s = %v (set %t), the call answered %v", key, got, ok, want)
 		}
 	}
-	for _, rule := range cfg.DecisionRules {
-		key := "decision:" + rule.Name
+	for _, rule := range cfg.SystemOneRules {
+		key, id := "systemone:"+rule.Name, SystemOneQuestionID(rule.Name)
 		switch rule.Question.Type {
-		case config.DecisionQuestionNoul:
-			expect(key, number(own, "answers", rule.Name, "noul"))
-		case config.DecisionQuestionScore:
-			expect(key, number(own, "answers", rule.Name, "score"))
-		case config.DecisionQuestionSet:
+		case config.SystemOneQuestionNoul:
+			expect(key, number(own, "answers", id, "noul"))
+		case config.SystemOneQuestionScore:
+			expect(key, number(own, "answers", id, "score"))
+		case config.SystemOneQuestionSet:
 			for _, label := range rule.Question.Labels {
-				expect(key+":"+label.Key, number(own, "sets", rule.Name, "probabilities", label.Key))
+				expect(key+":"+label.Key, number(own, "sets", id, "probabilities", label.Key))
 			}
-		case config.DecisionQuestionSpan:
-			expect(key, number(own, "answers", rule.Name, "noul"))
+		case config.SystemOneQuestionSpan:
+			highest := 0.0
 			for _, label := range rule.Question.Labels {
 				best := 0.0
-				for _, span := range spanList(own, rule.Name) {
+				for _, span := range spanList(own, id) {
 					if span["label"] == label.Key {
 						best = math.Max(best, number(span, "probability"))
 					}
 				}
 				expect(key+":"+label.Key, best)
+				highest = math.Max(highest, best)
 			}
+			expect(key, highest)
 		default:
 			for _, choice := range rule.Question.Choices {
-				expect(key+":"+choice.Key, number(own, "answers", rule.Name, "probabilities", choice.Key))
+				expect(key+":"+choice.Key, number(own, "answers", id, "probabilities", choice.Key))
 			}
 		}
 	}

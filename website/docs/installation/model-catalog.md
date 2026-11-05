@@ -130,9 +130,9 @@ routing:
 Binding keys are the signal types whose rules share one answer: `domain`,
 `jailbreak`, `pii`, `fact_check`, `user_feedback`, `modality`,
 `hallucination`, `preference` and `reask`. Rules that ask their own question
-write `deployment:` on the rule: `routing.signals.decision[]`,
+write `deployment:` on the rule: `routing.signals.systemone[]`,
 `classifiers[]`, `safety[]` and `safety[].hazard`, `complexity[]`, and
-`algorithm.decision` of a decision. One remote score drives every complexity
+`algorithm.systemone` of a decision. One remote score drives every complexity
 rule, so complexity rules answered by a `classify` deployment name the same
 one.
 

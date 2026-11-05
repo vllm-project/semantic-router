@@ -102,7 +102,7 @@ const sidebars: SidebarsConfig = {
               label: 'Learned',
               items: [
                 'tutorials/signal/learned/classifier',
-                'tutorials/signal/learned/decision',
+                'tutorials/signal/learned/systemone',
                 'tutorials/signal/learned/complexity',
                 'tutorials/signal/learned/domain',
                 'tutorials/signal/learned/embedding',
@@ -160,7 +160,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/algorithm/selection/mlp',
                 'tutorials/algorithm/selection/multi-factor',
                 'tutorials/algorithm/selection/prompt',
-                'tutorials/algorithm/selection/decision',
+                'tutorials/algorithm/selection/systemone',
                 'tutorials/algorithm/selection/random',
                 'tutorials/algorithm/selection/router-dc',
                 'tutorials/algorithm/selection/static',

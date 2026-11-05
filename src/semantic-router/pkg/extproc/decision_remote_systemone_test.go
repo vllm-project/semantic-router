@@ -39,7 +39,7 @@ providers:
       backend_refs: [{name: deep, endpoint: "BACKEND", protocol: http, weight: 1}]
 routing:
   signals:
-    decision:
+    systemone:
       - name: support_team
         deployment: gateway-d3
         question:
@@ -54,7 +54,7 @@ routing:
       rules:
         operator: AND
         on_unknown: no_match
-        conditions: [{type: decision, name: support_team, label: engineering}]
+        conditions: [{type: systemone, name: support_team, label: engineering}]
       modelRefs: [{model: deep}]
     - name: everything-else
       priority: 10
@@ -208,7 +208,7 @@ func TestSystemOneDeploymentRoutesChatAndPreview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if gateway.asked.Load() != asked+1 || preview.SignalConfidences["decision:support_team"] < 0.8 || preview.DecisionResult == nil || preview.DecisionResult.DecisionName != "engineering" {
+	if gateway.asked.Load() != asked+1 || preview.SignalConfidences["systemone:support_team"] < 0.8 || preview.DecisionResult == nil || preview.DecisionResult.DecisionName != "engineering" {
 		t.Fatalf("routing preview asks the deployment: confidences %v errors %v decision %+v", preview.SignalConfidences, preview.SignalErrors, preview.DecisionResult)
 	}
 }
@@ -234,8 +234,8 @@ routing:
       rules: {operator: AND, conditions: []}
       modelRefs: [{model: fast}, {model: deep}]
       algorithm:
-        type: decision
-        decision:
+        type: systemone
+        systemone:
           deployment: gateway-d3
           instructions: Which model should answer this request?
           candidates:
@@ -264,13 +264,13 @@ global:
 	defer remote.Close()
 	router := &OpenAIRouter{Config: cfg, decisionCards: cards, systemOneDecider: remote}
 	decision := cfg.GetDecisionByName("choose")
-	result, err := router.newDecisionModelSelector(*decision.Algorithm.Decision).Select(t.Context(), &selection.SelectionContext{
+	result, err := router.newDecisionModelSelector(*decision.Algorithm.SystemOne).Select(t.Context(), &selection.SelectionContext{
 		Query: "Prove that the square root of two is irrational.", DecisionName: decision.Name, CandidateModels: decision.ModelRefs,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.SelectedModel != "deep" || result.Method != selection.MethodDecision || gateway.asked.Load() != 1 {
+	if result.SelectedModel != "deep" || result.Method != selection.MethodSystemOne || gateway.asked.Load() != 1 {
 		t.Fatalf("result %+v after %d remote calls", result, gateway.asked.Load())
 	}
 	if body, _ := gateway.body.Load().(string); !strings.Contains(body, `"criteria":{"fast":"Quick answers to routine requests","deep":"Careful multi-step reasoning"}`) {

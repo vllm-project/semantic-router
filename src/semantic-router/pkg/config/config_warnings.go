@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -26,7 +27,7 @@ func Warnings(cfg *RouterConfig) []ConfigWarning {
 	if cfg == nil || cfg.RoutingScope != "" {
 		return nil
 	}
-	var warnings []ConfigWarning
+	warnings := append([]ConfigWarning(nil), cfg.FormWarnings...)
 	if warning, ok := modalityDetectorOffWarning(cfg); ok {
 		warnings = append(warnings, warning)
 	}
@@ -87,7 +88,7 @@ func logConfigWarnings(cfg *RouterConfig) error {
 			"reason": warning.Message,
 		})
 	}
-	for _, warning := range append(cfg.ModelResourceTranslation(), modelResolutionWarnings(cfg)...) {
+	for _, warning := range slices.Concat(cfg.FormWarnings, cfg.ModelResourceTranslation(), modelResolutionWarnings(cfg)) {
 		logging.ComponentWarnEvent("config", warning.Code, map[string]interface{}{
 			"field":  warning.Field,
 			"reason": warning.Message,

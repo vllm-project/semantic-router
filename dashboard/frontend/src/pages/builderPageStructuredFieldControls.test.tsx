@@ -170,6 +170,43 @@ describe('Builder structured field controls', () => {
     expect(markup).not.toContain('<textarea')
   })
 
+  it('lets a System One condition name an option and its own error policy', () => {
+    const rules: FieldSchema = { key: 'rules', label: 'Rules', type: 'rule' }
+    const markup = renderToStaticMarkup(
+      createElement(FieldEditor, {
+        schema: rules,
+        value: { type: 'systemone', name: 'request_kind', label: 'code' },
+        onChange: vi.fn(),
+      }),
+    )
+
+    expect(markup).toContain('Option or Label')
+    expect(markup).toContain('value="code"')
+    expect(markup).toContain('Use root policy')
+  })
+
+  it('offers every System One rule field in the signal editor', () => {
+    const keys = getSignalFieldSchema('systemone').map((field) => field.key)
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        'question',
+        'labels',
+        'ignore_labels',
+        'predicate',
+        'deployment',
+        'stage',
+        'input',
+        'coverage',
+        'on_unscanned',
+        'timeout_ms',
+      ]),
+    )
+    const input = requireField(getSignalFieldSchema('systemone'), 'input')
+    expect((input.fields || []).map((field) => field.key)).toEqual(
+      expect.arrayContaining(['history', 'previous_turns', 'tool_results', 'image', 'video']),
+    )
+  })
+
   it('keeps raw JSON textarea handling out of the schema renderer', () => {
     const source = readFileSync(new URL('./builderPageFieldControls.tsx', import.meta.url), 'utf8')
     expect(source).not.toContain('case "json"')

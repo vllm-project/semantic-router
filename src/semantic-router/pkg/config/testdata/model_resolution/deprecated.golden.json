@@ -72,18 +72,18 @@
   },
   "07-systemone-decision-model.yaml": {
     "signals": {
-      "default/decision.needs_tools": "systemone https://systemone.example.com/v1/systemone vllm-sr/d3-ultra",
       "default/domain": "systemone https://systemone.example.com/v1/systemone vllm-sr/d3-ultra",
-      "default/safety.unsafe": "systemone https://systemone.example.com/v1/systemone vllm-sr/d3-ultra"
+      "default/safety.unsafe": "systemone https://systemone.example.com/v1/systemone vllm-sr/d3-ultra",
+      "default/systemone.needs_tools": "systemone https://systemone.example.com/v1/systemone vllm-sr/d3-ultra"
     },
     "deprecated_fields": 1
   },
   "08-systemone-hazard-without-model.yaml": {
     "signals": {
-      "default/decision.needs_tools": "systemone https://systemone.example.com/v1/systemone vllm-sr/d3-ultra",
       "default/domain": "systemone https://systemone.example.com/v1/systemone vllm-sr/d3-ultra",
       "default/safety.unsafe-privacy": "systemone https://systemone.example.com/v1/systemone vllm-sr/d3-ultra",
-      "default/safety.unsafe-privacy.hazard": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Hazard@5dd25f2cc3c98f338e6a79b667662d60f936a28d cpu replicas=0"
+      "default/safety.unsafe-privacy.hazard": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Hazard@5dd25f2cc3c98f338e6a79b667662d60f936a28d cpu replicas=0",
+      "default/systemone.needs_tools": "systemone https://systemone.example.com/v1/systemone vllm-sr/d3-ultra"
     },
     "started": [
       "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Hazard@5dd25f2cc3c98f338e6a79b667662d60f936a28d cpu replicas=0"

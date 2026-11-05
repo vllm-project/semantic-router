@@ -12,10 +12,10 @@ type values struct {
 	Config struct {
 		Routing struct {
 			Signals struct {
-				Decision []struct {
+				SystemOne []struct {
 					Name       string `yaml:"name"`
 					Deployment string `yaml:"deployment"`
-				} `yaml:"decision"`
+				} `yaml:"systemone"`
 			} `yaml:"signals"`
 			ModelBindings map[string]any `yaml:"model_bindings"`
 			Decisions     []struct {
@@ -71,7 +71,7 @@ func TestProfileServesRealKaiAndTheDecisionModel(t *testing.T) {
 		t.Fatal("bindings would move the built-in signals off the decision model the cases wait for")
 	}
 	signals := map[string]string{}
-	for _, rule := range profile.Config.Routing.Signals.Decision {
+	for _, rule := range profile.Config.Routing.Signals.SystemOne {
 		signals[rule.Name] = rule.Deployment
 	}
 	if signals["request_kind"] != "kai" {

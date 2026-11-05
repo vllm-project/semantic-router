@@ -123,7 +123,7 @@ routing:
     domain: d3-remote
 ```
 
-绑定键是规则共享同一个回答的信号类型：`domain`、`jailbreak`、`pii`、`fact_check`、`user_feedback`、`modality`、`hallucination`、`preference` 和 `reask`。自己提问的规则在规则上写 `deployment:`：`routing.signals.decision[]`、`classifiers[]`、`safety[]` 和 `safety[].hazard`、`complexity[]`，以及决策的 `algorithm.decision`。所有 complexity 规则由同一个远程分数驱动，因此由 `classify` 部署回答的 complexity 规则都指向同一个部署。
+绑定键是规则共享同一个回答的信号类型：`domain`、`jailbreak`、`pii`、`fact_check`、`user_feedback`、`modality`、`hallucination`、`preference` 和 `reask`。自己提问的规则在规则上写 `deployment:`：`routing.signals.systemone[]`、`classifiers[]`、`safety[]` 和 `safety[].hazard`、`complexity[]`，以及决策的 `algorithm.systemone`。所有 complexity 规则由同一个远程分数驱动，因此由 `classify` 部署回答的 complexity 规则都指向同一个部署。
 
 绑定也可以写成对象，用于选择多头 `model_runtime` 部署的某个头：`pii: {deployment: local-vela, head: pii}`。工作点通过 `operating_point` 固定在部署上。
 

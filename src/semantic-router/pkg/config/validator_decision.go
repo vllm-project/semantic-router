@@ -25,7 +25,7 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 	if err := validateInputModalityContracts(cfg); err != nil {
 		return err
 	}
-	if err := validateDecisionSignalContracts(cfg); err != nil {
+	if err := validateSystemOneContracts(cfg); err != nil {
 		return err
 	}
 	if err := validateDecisionModelContracts(cfg); err != nil {
@@ -86,17 +86,17 @@ func validateDecisionLeafNode(
 	decisionName string,
 	node *RuleNode,
 ) error {
-	labelled := strings.EqualFold(node.Type, SignalTypeClassifier) || strings.EqualFold(node.Type, SignalTypeDecision)
+	labelled := strings.EqualFold(node.Type, SignalTypeClassifier) || strings.EqualFold(node.Type, SignalTypeSystemOne)
 	if node.Label != "" && !labelled {
-		return fmt.Errorf("decision '%s': label is only supported on classifier and decision conditions", decisionName)
+		return fmt.Errorf("decision '%s': label is only supported on classifier and systemone conditions", decisionName)
 	}
 	if strings.EqualFold(node.Type, SignalTypeClassifier) {
 		if err := validateClassifierDecisionLeaf(cfg, decisionName, node); err != nil {
 			return err
 		}
 	}
-	if strings.EqualFold(node.Type, SignalTypeDecision) {
-		if err := validateDecisionModelLeaf(cfg, decisionName, node); err != nil {
+	if strings.EqualFold(node.Type, SignalTypeSystemOne) {
+		if err := validateSystemOneLeaf(cfg, decisionName, node); err != nil {
 			return err
 		}
 	}
@@ -118,7 +118,7 @@ func validateDecisionLeafNode(
 	}
 	if node.OnError != "" && !labelled {
 		return fmt.Errorf(
-			"decision '%s': condition %s(%q) on_error is only supported for classifier and decision conditions",
+			"decision '%s': condition %s(%q) on_error is only supported for classifier and systemone conditions",
 			decisionName,
 			node.Type,
 			node.Name,
@@ -668,8 +668,8 @@ func validateSpecializedAlgorithmConfig(decisionName string, modelRefs []ModelRe
 		return validateDecisionWorkflowsAlgorithm(decisionName, modelRefs, algorithm.Workflows)
 	case "prompt":
 		return validatePromptAlgorithmConfig(decisionName, modelRefs, algorithm)
-	case DecisionAlgorithmDecision:
-		return validateDecisionSelectorConfig(decisionName, modelRefs, algorithm)
+	case DecisionAlgorithmSystemOne:
+		return validateSystemOneSelectorConfig(decisionName, modelRefs, algorithm)
 	case "multi_factor":
 		return validateDecisionMultiFactorAlgorithm(decisionName, algorithm.MultiFactor)
 	}

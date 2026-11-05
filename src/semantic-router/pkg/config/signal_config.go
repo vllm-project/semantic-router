@@ -35,7 +35,7 @@ type Signals struct {
 	ClassifierRules    []ClassifierSignalRule `yaml:"classifiers,omitempty"`
 	InputModalityRules []InputModalityRule    `yaml:"input_modality,omitempty"`
 	ActionRules        []ActionRule           `yaml:"actions,omitempty"`
-	DecisionRules      []DecisionSignalRule   `yaml:"decision,omitempty"`
+	SystemOneRules     []SystemOneRule        `yaml:"systemone,omitempty"`
 	// TopicContinuityRules are context-policy evidence sources; they are not
 	// decision-referenceable.
 	TopicContinuityRules []TopicContinuityRule `yaml:"topic_continuity,omitempty"`

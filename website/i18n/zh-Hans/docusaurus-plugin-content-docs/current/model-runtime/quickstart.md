@@ -103,7 +103,7 @@ curl -s localhost:8899/v1/systemone -H 'content-type: application/json' -d '{
 ## 4. 在路由器中使用 {#4-use-it-from-the-router}
 
 路由器会替你运行模型。把模型声明为 `provider: model_runtime` 的 **deployment**，
-然后在 `decision` 信号中向它提问。把下面的内容保存为 `config.yaml`，并把 `host.docker.internal:8000`
+然后在 `systemone` 信号中向它提问。把下面的内容保存为 `config.yaml`，并把 `host.docker.internal:8000`
 换成为你的用户提供回答的 OpenAI 兼容后端：
 
 ```yaml
@@ -127,7 +127,7 @@ routing:
   modelCards:
     - name: answer-model
   signals:
-    decision:
+    systemone:
       - name: needs_reasoning
         deployment: primary
         question:
@@ -142,7 +142,7 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: needs_reasoning
       modelRefs:
         - model: answer-model

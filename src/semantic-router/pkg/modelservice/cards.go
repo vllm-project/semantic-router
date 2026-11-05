@@ -7,11 +7,11 @@ import (
 )
 
 // ModelCard is a served model's description from /v1/models: identity,
-// surfaces, the question types and presets a decision model answers, heads,
-// embedding and rerank exits, limits and placement. Preparation checks every
-// task binding against it. MaxScanTokens is the scan budget of a decision
-// model that reads a long state part in windows (Vela 2.0), zero for one that
-// reads one bounded input.
+// surfaces, the question types and presets a decision model answers and the
+// input modalities it reads, heads, embedding and rerank exits, limits and
+// placement. Preparation checks every task binding against it. MaxScanTokens
+// is the scan budget of a decision model that reads a long state part in
+// windows (Vela 2.0), zero for one that reads one bounded input.
 type ModelCard struct {
 	ID             string
 	Family         string
@@ -22,6 +22,7 @@ type ModelCard struct {
 	Surfaces       []string
 	QuestionTypes  []string
 	Presets        []string
+	Modalities     []string
 	Heads          []HeadCard
 	Embedding      *EmbeddingCard
 	Rerank         *RerankCard
@@ -98,6 +99,26 @@ func (c ModelCard) HasPreset(name string) bool {
 	return c.Serves("decisions") && slices.Contains(c.Presets, name)
 }
 
+// AnsweredTypes are the question types the model answers on /v1/decisions.
+func (c ModelCard) AnsweredTypes() []string {
+	answered := []string{}
+	for _, questionType := range []string{"choice", "noul", "score", "set", "span"} {
+		if c.Answers(questionType) {
+			answered = append(answered, questionType)
+		}
+	}
+	return answered
+}
+
+// ReadModalities are the input modalities the model reads; a card that lists
+// none reads text.
+func (c ModelCard) ReadModalities() []string {
+	if len(c.Modalities) == 0 {
+		return []string{"text"}
+	}
+	return slices.Clone(c.Modalities)
+}
+
 // Head returns the named head, or the primary (first) head when name is empty.
 func (c ModelCard) Head(name string) (HeadCard, bool) {
 	if name == "" {
@@ -126,7 +147,7 @@ func (h HeadCard) Accepts(input string) bool {
 func decodeCard(card api.ModelCard) ModelCard {
 	decoded := ModelCard{
 		ID: card.Id, Family: card.Family, Surfaces: append([]string(nil), card.Surfaces...), Ready: card.Ready,
-		QuestionTypes: derefSlice(card.QuestionTypes), Presets: derefSlice(card.Presets),
+		QuestionTypes: derefSlice(card.QuestionTypes), Presets: derefSlice(card.Presets), Modalities: derefSlice(card.Modalities),
 		Repo: deref(card.Repo), Revision: deref(card.Revision), ModelSHA256: deref(card.ModelSha256),
 		ManifestSHA256: deref(card.ManifestSha256), Numerics: string(deref(card.Numerics)), Engine: deref(card.Engine),
 		Accelerator: deref(card.Accelerator), Device: deref(card.Device), Dtype: deref(card.Dtype),

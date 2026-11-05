@@ -61,11 +61,11 @@ func assertMultiObjectiveScopedDSL(t *testing.T, source string) {
 	}
 	for _, expected := range []string{
 		`planner: { model: "local/qwen3.6-27b-coder" }`,
-		"SIGNAL decision deliberate",
-		"SIGNAL decision heavy",
-		"SIGNAL decision depth",
-		"SIGNAL decision workflow",
-		"SIGNAL decision attack",
+		"SIGNAL systemone deliberate",
+		"SIGNAL systemone heavy",
+		"SIGNAL systemone depth",
+		"SIGNAL systemone workflow",
+		"SIGNAL systemone attack",
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("decompiled multi-objective DSL missing %q", expected)

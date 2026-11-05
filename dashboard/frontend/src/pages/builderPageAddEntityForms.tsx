@@ -91,7 +91,7 @@ const AddSignalForm: React.FC<{
   const { data, scope } = useSignalCapabilities();
   const availability = signalAvailability(data, scope, signalType, name, fields);
   const schema =
-    signalType === "decision"
+    signalType === "systemone"
       ? signalCapabilitySchema(
           getSignalFieldSchema(signalType),
           decisionQuestionTypes(data, scope, fields),

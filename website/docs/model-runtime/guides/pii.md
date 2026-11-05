@@ -81,7 +81,7 @@ beginning, and `reject` makes the signal unknown for longer requests.
 
 Vela 2.0 finds the same 17 types with its router span head, as a ready-made
 question. Bind `pii` to a Vela 2.0 deployment and the PII question travels in
-the same call as the [decision questions](model-runtime/guides/decisions.md)
+the same call as the [System One questions](model-runtime/guides/decisions.md)
 the request asks that deployment about the same text:
 
 ```yaml alternative

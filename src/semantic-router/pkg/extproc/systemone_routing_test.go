@@ -176,7 +176,7 @@ func TestSystemOneBudgetIncludesRemoteSignalAndTransportRetries(t *testing.T) {
 		}
 		signalCalls.Add(1)
 		_ = json.NewEncoder(w).Encode(map[string]any{"answers": map[string]any{
-			"task_kind": map[string]any{"type": "choice", "choice": "simple", "probabilities": map[string]float64{"simple": 1, "hard": 0}},
+			"systemone:task_kind": map[string]any{"type": "choice", "choice": "simple", "probabilities": map[string]float64{"simple": 1, "hard": 0}},
 		}})
 	}))
 	defer decisionServer.Close()
@@ -235,7 +235,7 @@ recipes:
   - name: native
     routing:
       signals:
-        decision:
+        systemone:
           - name: task_kind
             deployment: remote-kai
             timeout_ms: 1000
@@ -245,7 +245,7 @@ recipes:
               choices: [{key: simple}, {key: hard}]
       decisions:
         - name: simple
-          rules: {type: decision, name: task_kind, label: simple}
+          rules: {type: systemone, name: task_kind, label: simple}
           modelRefs: [{model: fast}, {model: strong}]
           algorithm:
             type: cascade
@@ -327,7 +327,7 @@ func TestSystemOneBudgetDeadlineIncludesRemoteSignal(t *testing.T) {
 		signalCalls.Add(1)
 		time.Sleep(250 * time.Millisecond)
 		_ = json.NewEncoder(w).Encode(map[string]any{"answers": map[string]any{
-			"task_kind": map[string]any{"type": "choice", "choice": "simple", "probabilities": map[string]float64{"simple": 1, "hard": 0}},
+			"systemone:task_kind": map[string]any{"type": "choice", "choice": "simple", "probabilities": map[string]float64{"simple": 1, "hard": 0}},
 		}})
 	}))
 	defer decisionServer.Close()
@@ -353,7 +353,7 @@ recipes:
   - name: native
     routing:
       signals:
-        decision:
+        systemone:
           - name: task_kind
             deployment: remote-kai
             timeout_ms: 1000
@@ -363,7 +363,7 @@ recipes:
               choices: [{key: simple}, {key: hard}]
       decisions:
         - name: simple
-          rules: {type: decision, name: task_kind, label: simple}
+          rules: {type: systemone, name: task_kind, label: simple}
           modelRefs: [{model: fast}]
           algorithm:
             type: cascade

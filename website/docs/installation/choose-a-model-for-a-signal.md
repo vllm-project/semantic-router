@@ -18,7 +18,7 @@ specific level wins.
 
 | Level | Where you write the deployment name | Applies to |
 | --- | --- | --- |
-| Rule | `deployment:` on the rule | Rules that ask their own question: `decision`, `classifiers`, `safety` (and its `hazard` part), `complexity`, and the decision selector `algorithm.decision` |
+| Rule | `deployment:` on the rule | Rules that ask their own question: `systemone`, `classifiers`, `safety` (and its `hazard` part), `complexity`, and the System One selector `algorithm.systemone` |
 | Signal type | `global.model_catalog.bindings.<type>`, or `routing.model_bindings.<type>` in a recipe | Signal types whose rules are labels or thresholds over one shared answer: `domain`, `jailbreak`, `pii`, `fact_check`, `user_feedback`, `modality`, `hallucination`, `preference`, `reask` |
 | Default | `global.model_catalog.system.decision_model` | Every question-style signal and selector the two levels above do not cover |
 
@@ -77,7 +77,7 @@ global:
       decision_model: {deployment: d3-remote}
 ```
 
-- Every built-in question-style signal, custom decision signal and selector
+- Every built-in question-style signal, custom `systemone` signal and selector
   asks `d3-remote`. The Router checks at load that the deployment answers each
   question type the configuration asks.
 - In one request stage, every question to the same deployment travels in one
@@ -116,7 +116,7 @@ global:
 Binding keys are signal types, as they are named in `routing.signals`; values
 are deployment names.
 
-## S4. A decision signal and the domain signal share the default, then one of each is changed
+## S4. A systemone signal and the domain signal share the default, then one of each is changed
 
 ```yaml title="s4-type-and-rule-overrides"
 global:
@@ -139,7 +139,7 @@ routing:                           # or recipes[].routing, which affects only th
     domain: d3-remote              # signal type: every domain rule shares one answer
   signals:
     domains: [{name: math, description: Mathematics, mmlu_categories: [math]}]
-    decision:
+    systemone:
       - name: needs_reasoning      # no deployment: asks the default, kai
         question: {type: noul, instructions: "Does answering need multi-step reasoning?"}
       - name: support_team
@@ -199,7 +199,7 @@ routing:
   decisions:
     - name: pick-model
       modelRefs: [{model: general}, {model: small}]
-      algorithm: {type: decision, decision: {deployment: kai, instructions: Pick the cheapest capable model.}}
+      algorithm: {type: systemone, systemone: {deployment: kai, instructions: Pick the cheapest capable model.}}
 ```
 
 `content-risk`, `d3-remote` and `kai` are declared deployments, here a

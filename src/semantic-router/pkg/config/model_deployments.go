@@ -401,7 +401,7 @@ func impliedContract(consumer string, decl ModelBinding, deployment ModelDeploym
 	case consumer == "preference" && deployment.Provider == OpenAIChatProvider:
 		// The chat model picks a route by name; no task contract applies.
 		return ""
-	case consumer == "preference" || consumer == "reask" || strings.HasPrefix(consumer, "decision."):
+	case consumer == "preference" || consumer == "reask" || strings.HasPrefix(consumer, "systemone."):
 		return DecisionTaskContract
 	case consumer == "prompt_guard" && deployment.Provider == OpenAIChatProvider:
 		return RemoteClassifierContractLabelDecision
@@ -443,7 +443,7 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 		return nil
 	}
 	if decl.Contract == DecisionTaskContract {
-		allowed := name == "pii_classifier" || name == "hallucination_detector" || name == "preference" || name == "reask" || name == "complexity" || strings.HasPrefix(name, "complexity.") || strings.HasPrefix(name, "classifier.") || strings.HasPrefix(name, "safety.") || strings.HasPrefix(name, "decision.")
+		allowed := name == "pii_classifier" || name == "hallucination_detector" || name == "preference" || name == "reask" || name == "complexity" || strings.HasPrefix(name, "complexity.") || strings.HasPrefix(name, "classifier.") || strings.HasPrefix(name, "safety.") || strings.HasPrefix(name, "systemone.")
 		if !allowed || !deployment.IsModelRuntime() || decl.Head != "" || decl.MappingPath != "" || decl.OperatingPoint != nil || decl.PairScorer != nil {
 			return fmt.Errorf("decision.v1 requires a supported judgment consumer and model_runtime deployment, without head, mapping_path or a classifier operating point")
 		}

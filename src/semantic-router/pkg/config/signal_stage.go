@@ -60,14 +60,23 @@ func (c *RouterConfig) jailbreakRulesAt(stage SignalStage) []JailbreakRule {
 // The stage sits on the rule rather than on the type, so the "type:name" key,
 // and with it SignalConfidences, SignalErrors and the condition shape, are
 // exactly what they are for a request-stage rule. Jailbreak rules carry a
-// direction; hallucination rules check the model's answer and so are always
-// response-stage; every other type is request-stage.
+// direction and systemone rules a stage; hallucination rules check the
+// model's answer and so are always response-stage; every other type is
+// request-stage. A systemone name may name one of the rule's options
+// ("<rule>:<label>").
 func (c *RouterConfig) SignalStageOf(signalType, name string) SignalStage {
 	if c == nil {
 		return SignalStageRequest
 	}
 	if strings.EqualFold(signalType, SignalTypeHallucination) {
 		return SignalStageResponse
+	}
+	if strings.EqualFold(signalType, SignalTypeSystemOne) {
+		ruleName, _, _ := strings.Cut(name, ":")
+		if rule := systemOneRuleByName(c.SystemOneRules, ruleName); rule != nil && rule.EffectiveStage() == SystemOneStageResponse {
+			return SignalStageResponse
+		}
+		return SignalStageRequest
 	}
 	if !strings.EqualFold(signalType, SignalTypeJailbreak) {
 		return SignalStageRequest
