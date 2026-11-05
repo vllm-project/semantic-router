@@ -10,6 +10,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 func TestHandleCachingWithoutBackendSkipsIdentityButKeepsModelAndQuery(t *testing.T) {
@@ -78,7 +79,7 @@ func TestHandleCachingWithoutBackendStillAppliesRequestControls(t *testing.T) {
 	router := &OpenAIRouter{Config: cfg, Cache: cache.NewInMemoryCache(cache.InMemoryCacheOptions{Enabled: false})}
 	ctx := &RequestContext{
 		RequestID:           "cache-disabled-controls",
-		Headers:             map[string]string{defaultCacheControlHeader: "no-store"},
+		Headers:             map[string]string{headers.VSRCacheControl: "no-store"},
 		SemanticRequest:     testNeutralRequest("test-model", "What is 2+2?"),
 		TraceContext:        context.Background(),
 		VSRSelectedDecision: &decision,

@@ -450,7 +450,7 @@ func addDecisionDetailHeaders(builder *responseHeaderMutationBuilder, ctx *Reque
 	builder.addBool(headers.VSRInjectedSystemPrompt, ctx.VSRInjectedSystemPrompt)
 	addPromptCacheReceiptHeaders(builder, ctx)
 	if ctx.VSRCacheSimilarity > 0 {
-		builder.addFloat("x-vsr-cache-similarity", float64(ctx.VSRCacheSimilarity))
+		builder.addFloat(headers.VSRCacheSimilarity, float64(ctx.VSRCacheSimilarity))
 	}
 }
 

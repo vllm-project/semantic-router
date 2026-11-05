@@ -3,6 +3,7 @@ package config
 import (
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 // ConfigSource defines where to load dynamic configuration from.
@@ -151,14 +152,14 @@ type IdentityConfig struct {
 
 func (ic IdentityConfig) GetUserIDHeader() string {
 	if ic.UserIDHeader == "" {
-		return "x-authz-user-id"
+		return headers.AuthzUserID
 	}
 	return ic.UserIDHeader
 }
 
 func (ic IdentityConfig) GetUserGroupsHeader() string {
 	if ic.UserGroupsHeader == "" {
-		return "x-authz-user-groups"
+		return headers.AuthzUserGroups
 	}
 	return ic.UserGroupsHeader
 }

@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -12,11 +13,11 @@ import (
 // asks Envoy's router to apply a decision's reliability block. The block is
 // their only writer.
 var ReliabilityHeaders = []string{
-	"x-envoy-upstream-rq-timeout-ms",
-	"x-envoy-upstream-rq-per-try-timeout-ms",
-	"x-envoy-max-retries",
-	"x-envoy-retry-on",
-	"x-envoy-retriable-status-codes",
+	headers.EnvoyUpstreamRqTimeoutMs,
+	headers.EnvoyUpstreamRqPerTryTimeoutMs,
+	headers.EnvoyMaxRetries,
+	headers.EnvoyRetryOn,
+	headers.EnvoyRetriableStatusCodes,
 }
 
 func isReliabilityHeader(name string) bool {

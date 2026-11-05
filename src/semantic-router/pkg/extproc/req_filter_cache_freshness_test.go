@@ -7,6 +7,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 // Fixed lookup metadata avoids sleeps, embeddings, and external services.
@@ -69,8 +70,8 @@ func TestDiscoveryCacheRequestFreshness(t *testing.T) {
 				}
 				ctx := &RequestContext{
 					Headers: map[string]string{
-						"x-authz-user-id":         "cache-test-user",
-						defaultCacheControlHeader: tc.directive,
+						"x-authz-user-id":       "cache-test-user",
+						headers.VSRCacheControl: tc.directive,
 					},
 					RequestID:           "freshness-probe",
 					SemanticRequest:     testNeutralRequest("gpt-4o", "hello"),

@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"slices"
 	"strings"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -13,6 +14,7 @@ var looperInternalContextHeaders = []string{
 	headers.VSRLooperRequest,
 	headers.VSRLooperIteration,
 	headers.VSRLooperDecision,
+	headers.VSRLooperSecret,
 	headers.VSRFusionDepth,
 	headers.VSRSelectedRecipe,
 }
@@ -42,13 +44,22 @@ func removeHeaderValueCI(ctx *RequestContext, canonical string) {
 	}
 }
 
-func looperInternalHeadersForRemoval() []string {
-	return append([]string(nil), looperInternalContextHeaders...)
+// providerBoundRemovals are the request headers removed before a request
+// reaches a provider: the Looper's internal context and every header the
+// registry keeps from providers, such as the Router's control headers.
+func providerBoundRemovals() []string {
+	removals := slices.Clone(looperInternalContextHeaders)
+	for _, name := range headers.KeptFromProviders() {
+		if !slices.Contains(removals, name) {
+			removals = append(removals, name)
+		}
+	}
+	return removals
 }
 
 func buildLooperInternalHeaderRemovalMutation() *ext_proc.HeaderMutation {
 	return &ext_proc.HeaderMutation{
-		RemoveHeaders: looperInternalHeadersForRemoval(),
+		RemoveHeaders: providerBoundRemovals(),
 	}
 }
 

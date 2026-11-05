@@ -4,7 +4,8 @@ import React, { useCallback, useMemo, useState } from 'react'
 import type { Diagnostic, EditorMode, DSLFieldObject } from '@/types/dsl'
 import { useDSLStore } from '@/stores/dslStore'
 import type { RouteInput } from '@/lib/dslMutations'
-import { formatRoutingMetadataValue } from '@/components/routingMetadataDisplay'
+import { formatRoutingMetadataValue, matchedSignalHeader } from '@/components/routingMetadataDisplay'
+import { X_VSR_MATCHED_PROJECTIONS, X_VSR_SELECTED_DECISION } from '@/generated/vsrHeaders'
 
 import styles from './BuilderPage.module.css'
 import { ModelIcon, PluginIcon, RouteIcon, SignalIcon } from './builderPageFormPrimitives'
@@ -298,7 +299,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
                 <SignalIcon className={styles.sidebarItemIcon} />
                 <span className={styles.sidebarItemName}>
                   {formatRoutingMetadataValue(
-                    `x-vsr-matched-${s.signalType.replace('_', '-')}`,
+                    matchedSignalHeader(s.signalType.replace('_', '-')),
                     s.name,
                   )}
                 </span>
@@ -330,7 +331,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
               >
                 <SignalIcon className={styles.sidebarItemIcon} />
                 <span className={styles.sidebarItemName}>
-                  {formatRoutingMetadataValue('x-vsr-matched-projections', partition.name)}
+                  {formatRoutingMetadataValue(X_VSR_MATCHED_PROJECTIONS, partition.name)}
                 </span>
                 <span className={styles.sidebarItemType}>partition</span>
               </SidebarEntityItem>
@@ -358,7 +359,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
               >
                 <RouteIcon className={styles.sidebarItemIcon} />
                 <span className={styles.sidebarItemName}>
-                  {formatRoutingMetadataValue('x-vsr-matched-projections', score.name)}
+                  {formatRoutingMetadataValue(X_VSR_MATCHED_PROJECTIONS, score.name)}
                 </span>
                 <span className={styles.sidebarItemType}>score</span>
               </SidebarEntityItem>
@@ -386,7 +387,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
               >
                 <RouteIcon className={styles.sidebarItemIcon} />
                 <span className={styles.sidebarItemName}>
-                  {formatRoutingMetadataValue('x-vsr-matched-projections', mapping.name)}
+                  {formatRoutingMetadataValue(X_VSR_MATCHED_PROJECTIONS, mapping.name)}
                 </span>
                 <span className={styles.sidebarItemType}>mapping</span>
               </SidebarEntityItem>
@@ -415,7 +416,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
               >
                 <RouteIcon className={styles.sidebarItemIcon} />
                 <span className={styles.sidebarItemName}>
-                  {formatRoutingMetadataValue('x-vsr-selected-decision', r.name)}
+                  {formatRoutingMetadataValue(X_VSR_SELECTED_DECISION, r.name)}
                 </span>
                 <span className={styles.sidebarItemType}>P{r.priority}</span>
               </SidebarEntityItem>

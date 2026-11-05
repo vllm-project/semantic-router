@@ -1,6 +1,10 @@
 package config
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+)
 
 const (
 	// RouterLearningScopeConversation protects one agent conversation while
@@ -28,8 +32,8 @@ const (
 )
 
 const (
-	routerLearningDefaultSessionHeader      = "x-session-id"
-	routerLearningDefaultConversationHeader = "x-conversation-id"
+	routerLearningDefaultSessionHeader      = headers.XSessionID
+	routerLearningDefaultConversationHeader = headers.XConversationID
 )
 
 // RouterLearningConfig is the public cross-request routing intelligence

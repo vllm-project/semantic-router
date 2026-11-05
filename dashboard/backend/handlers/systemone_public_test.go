@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
 )
 
@@ -58,7 +59,7 @@ func TestPublicSystemOneForwardsClientCredentialsOnlyInsideNativeEnvelope(t *tes
 		request.Header.Set("Authorization", "Bearer client-key")
 		request.Header.Set("Api-Key", "client-fallback")
 		request.Header.Set("Cookie", "session=browser")
-		request.Header.Set(systemone.BackendRequestHeader, "1")
+		request.Header.Set(headers.VSRSystemOneBackend, "1")
 		response := httptest.NewRecorder()
 		handler(response, request)
 		if response.Code != want || response.Header().Get("Cache-Control") != "no-store" {

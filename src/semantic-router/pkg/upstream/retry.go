@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
@@ -134,7 +135,7 @@ func (p *RetryPolicy) decide(resp *Response, failure *Error, sent bool) retryDec
 }
 
 func (p *RetryPolicy) decideResponse(resp *Response) retryDecision {
-	if resp.Header.Get("X-Envoy-Ratelimited") != "" {
+	if resp.Header.Get(headers.EnvoyRateLimited) != "" {
 		if p.On&RetryEnvoyRateLimited != 0 {
 			return retryWithBackOff
 		}

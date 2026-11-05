@@ -50,6 +50,9 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		detectStreamingExpectation(ctx)
 		mutation := buildLooperInternalHeaderRemovalMutation()
 		mutation.RemoveHeaders = append(mutation.RemoveHeaders, headers.SelectedModel)
+		// Per-user keys reach a provider only as its credential, which a
+		// skipped request never gets.
+		mutation.RemoveHeaders = append(mutation.RemoveHeaders, r.CredentialResolver.HeadersToStrip()...)
 		if isAzureOpenAIPath(path) {
 			mutation.RemoveHeaders = append(mutation.RemoveHeaders, azureAPIKeyHeader)
 		}
@@ -230,7 +233,7 @@ func buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
 				Value: "identity",
 			},
 		}},
-		RemoveHeaders: looperInternalHeadersForRemoval(),
+		RemoveHeaders: providerBoundRemovals(),
 	}
 }
 

@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"golang.org/x/net/http/httpguts"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 // The providers a deployment names: the API the Router speaks to it.
@@ -225,7 +227,9 @@ func (t *DeploymentTLS) validate(endpoint *url.URL) error {
 
 // credentialHeaders cannot be set in headers: a credential goes in auth,
 // read from an environment variable or a file.
-var credentialHeaders = []string{"authorization", "proxy-authorization", "x-api-key", "api-key", "ocp-apim-subscription-key", "cookie"}
+var credentialHeaders = []string{
+	headers.Authorization, "proxy-authorization", headers.XAPIKey, headers.APIKey, headers.OcpApimSubscriptionKey, "cookie",
+}
 
 func validateConnectionHeaders(headers map[string]string, auth *DeploymentAuth) error {
 	for name, value := range headers {

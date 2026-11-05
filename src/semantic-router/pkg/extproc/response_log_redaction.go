@@ -7,6 +7,8 @@ import (
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 const (
@@ -23,11 +25,11 @@ const (
 // Anthropic, custom names via provider profiles), so a verbatim dump of the
 // ext_proc header mutation would otherwise leak it (CWE-532).
 var sensitiveHeaderKeys = map[string]bool{
-	"authorization":       true,
+	headers.Authorization: true,
 	"proxy-authorization": true,
-	"x-api-key":           true,
-	"api-key":             true,
-	"x-goog-api-key":      true,
+	headers.XAPIKey:       true,
+	headers.APIKey:        true,
+	headers.XGoogAPIKey:   true,
 }
 
 // isSensitiveHeaderKey reports whether a header's value should be redacted from

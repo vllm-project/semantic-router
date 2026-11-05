@@ -1,6 +1,10 @@
 package routing
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+)
 
 // proxyControlHeaders are the proxy-control headers only a trusted proxy may
 // set: the internal-request marker and the retry, timeout and tracing
@@ -16,21 +20,21 @@ import "strings"
 // x-envoy-downstream-service-cluster, x-envoy-downstream-service-node,
 // x-envoy-original-path and x-envoy-original-host) passes in both modes.
 var proxyControlHeaders = map[string]bool{
-	"x-envoy-internal":                         true,
-	"x-envoy-retriable-status-codes":           true,
-	"x-envoy-retriable-header-names":           true,
-	"x-envoy-retry-on":                         true,
-	"x-envoy-retry-grpc-on":                    true,
-	"x-envoy-max-retries":                      true,
-	"x-envoy-upstream-alt-stat-name":           true,
-	"x-envoy-upstream-rq-timeout-ms":           true,
-	"x-envoy-upstream-rq-per-try-timeout-ms":   true,
-	"x-envoy-upstream-rq-timeout-alt-response": true,
-	"x-envoy-expected-rq-timeout-ms":           true,
-	"x-envoy-force-trace":                      true,
-	"x-envoy-ip-tags":                          true,
-	"x-envoy-original-url":                     true,
-	"x-envoy-hedge-on-per-try-timeout":         true,
+	headers.EnvoyInternal:                     true,
+	headers.EnvoyRetriableStatusCodes:         true,
+	headers.EnvoyRetriableHeaderNames:         true,
+	headers.EnvoyRetryOn:                      true,
+	headers.EnvoyRetryGRPCOn:                  true,
+	headers.EnvoyMaxRetries:                   true,
+	headers.EnvoyUpstreamAltStatName:          true,
+	headers.EnvoyUpstreamRqTimeoutMs:          true,
+	headers.EnvoyUpstreamRqPerTryTimeoutMs:    true,
+	headers.EnvoyUpstreamRqTimeoutAltResponse: true,
+	headers.EnvoyExpectedRqTimeoutMs:          true,
+	headers.EnvoyForceTrace:                   true,
+	headers.EnvoyIPTags:                       true,
+	headers.EnvoyOriginalURL:                  true,
+	headers.EnvoyHedgeOnPerTryTimeout:         true,
 }
 
 // IsProxyControlHeader reports whether name is a proxy-control header that
