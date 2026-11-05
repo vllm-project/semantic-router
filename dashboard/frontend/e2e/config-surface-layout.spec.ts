@@ -191,8 +191,9 @@ test.describe('Config surface layout regressions', () => {
     });
     await page.route('**/api/router/config/global/update', async route => {
       const modelCatalog = route.request().postDataJSON().model_catalog;
-      systemModels = modelCatalog.system;
-      expect(Object.keys(modelCatalog)).toEqual(['system']);
+      expect(modelCatalog).toEqual({ system: { decision_model: { deployment: 'alternate-judge' } } });
+      // The backend merges the patch into the saved section.
+      systemModels = { ...systemModels, ...modelCatalog.system };
       await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"success"}' });
     });
 
