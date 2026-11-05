@@ -8,10 +8,15 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
+
+	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
@@ -22,6 +27,7 @@ func TestSystemOneAutoUsesRecipeSignalsAndNativeBackends(t *testing.T) {
 		if r.URL.Path != "/v1/systemone" {
 			t.Error("native task entered Chat transport")
 		}
+
 		var request struct {
 			Model string `json:"model"`
 			State string `json:"state"`
@@ -142,5 +148,167 @@ recipes:
 	handler(w, r)
 	if w.Code != http.StatusServiceUnavailable || len(called) != 0 {
 		t.Fatal("unmatched native decision used a Chat fallback")
+	}
+}
+
+func TestSystemOneBudgetIncludesRemoteSignalAndTransportRetries(t *testing.T) {
+	var signalCalls, fastAttempts, strongAttempts atomic.Int64
+	signalMetricBefore := testutil.ToFloat64(metrics.SystemOneSignalCalls)
+	stageMetricBefore := testutil.ToFloat64(metrics.SystemOneStageCalls.WithLabelValues("cascade", "fast", "fast"))
+	decisionServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/v1/systemone/models" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Path != "/v1/systemone" {
+			t.Errorf("remote decision used unexpected path %q", r.URL.Path)
+		}
+		var request struct {
+			Questions map[string]json.RawMessage `json:"questions"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Error(err)
+		}
+		if len(request.Questions) != 1 {
+			t.Errorf("remote decision questions=%v", request.Questions)
+		}
+		signalCalls.Add(1)
+		_ = json.NewEncoder(w).Encode(map[string]any{"answers": map[string]any{
+			"task_kind": map[string]any{"type": "choice", "choice": "simple", "probabilities": map[string]float64{"simple": 1, "hard": 0}},
+		}})
+	}))
+	defer decisionServer.Close()
+	backendServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			Model string `json:"model"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Errorf("decode backend request: %v", err)
+			return
+		}
+		if request.Model == "fast-native" {
+			if fastAttempts.Add(1) == 1 {
+				http.Error(w, "retry", http.StatusInternalServerError)
+				return
+			}
+		} else {
+			strongAttempts.Add(1)
+		}
+		probability := 0.6
+		if request.Model == "strong-native" {
+			probability = 0.99
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"model": request.Model,
+			"answers": map[string]any{
+				"task": map[string]any{"type": "choice", "choice": "chat", "probabilities": map[string]float64{"chat": probability, "code": 1 - probability}},
+			},
+		})
+	}))
+	defer backendServer.Close()
+	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.3
+listeners:
+  - name: native
+    port: 8801
+    systemone: {models: [vllm-sr/auto]}
+providers:
+  models:
+    - name: fast
+      api_format: systemone
+      provider_model_id: fast-native
+      reliability: {retry_count: 1, retry_on: 5xx, retriable_status_codes: [500]}
+      backend_refs: [{provider: systemone-compatible, base_url: %s/v1}]
+    - name: strong
+      api_format: systemone
+      provider_model_id: strong-native
+      backend_refs: [{provider: systemone-compatible, base_url: %s/v1}]
+entrypoints:
+  - {api: systemone, model_names: [vllm-sr/auto], recipe: native}
+global:
+  model_catalog:
+    deployments:
+      remote-kai: {provider: systemone, endpoint: %s/v1/systemone, model: vllm-sr/decision}
+routing: {}
+recipes:
+  - name: native
+    routing:
+      signals:
+        decision:
+          - name: task_kind
+            deployment: remote-kai
+            timeout_ms: 1000
+            question:
+              type: choice
+              instructions: Is the task simple?
+              choices: [{key: simple}, {key: hard}]
+      decisions:
+        - name: simple
+          rules: {type: decision, name: task_kind, label: simple}
+          modelRefs: [{model: fast}, {model: strong}]
+          algorithm:
+            type: cascade
+            budget: {deadline: 2s, max_calls: 3}
+            quality:
+              type: uncalibrated
+              acceptance:
+                rules: [{question_type: choice, field: top_probability, predicate: {gte: 0.9}}]
+            stages:
+              - name: fast
+                kind: native
+                model: fast
+                accept:
+                  rules: [{question_type: choice, field: top_probability, predicate: {gte: 0.9}}]
+              - {name: strong, kind: native, model: strong}
+`, backendServer.URL, backendServer.URL, decisionServer.URL)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer classifiers.Close()
+	classifier, ok := classifiers.ForRecipe("native")
+	if !ok {
+		t.Fatal("native recipe classifier unavailable")
+	}
+	remoteSignals, err := modelservice.NewRemoteSystemOne(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer remoteSignals.Close()
+	classifier.SetSystemOneDecider(remoteSignals)
+	executors, err := prepareNativeExecutors(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := &OpenAIRouter{Config: cfg, RecipeClassifiers: classifiers, nativeExecutors: executors}
+	remote, err := upstream.Build(cfg, upstream.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer remote.Close(context.Background())
+	handler := systemone.Handler(cfg, &cfg.Listeners[0], systemone.ServingInvoker(cfg, "native", router, nil, remote))
+	body := `{"model":"vllm-sr/auto","state":"hello","questions":{"task":{"type":"choice","instructions":"Type?","criteria":{"chat":"Chat","code":"Code"}}}}`
+	request := httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(body))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusServiceUnavailable || signalCalls.Load() != 1 || fastAttempts.Load() != 2 || strongAttempts.Load() != 0 ||
+		!strings.Contains(response.Body.String(), `"code":"systemone_budget_exhausted"`) {
+		t.Fatalf("status=%d signal calls=%d fast attempts=%d strong attempts=%d body=%s", response.Code, signalCalls.Load(), fastAttempts.Load(), strongAttempts.Load(), response.Body.String())
+	}
+	var result struct {
+		Error struct {
+			Calls int `json:"model_calls"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil || result.Error.Calls != int(signalCalls.Load()+fastAttempts.Load()+strongAttempts.Load()) {
+		t.Fatalf("physical attempts missing from response accounting: %s", response.Body.String())
+	}
+	if got := testutil.ToFloat64(metrics.SystemOneSignalCalls) - signalMetricBefore; got != 1 {
+		t.Fatalf("signal telemetry=%v, want 1 physical exchange", got)
+	}
+	if got := testutil.ToFloat64(metrics.SystemOneStageCalls.WithLabelValues("cascade", "fast", "fast")) - stageMetricBefore; got != 2 {
+		t.Fatalf("stage telemetry=%v, want 2 physical exchanges including retry", got)
 	}
 }
