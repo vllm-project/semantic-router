@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -15,17 +16,15 @@ const (
 	ProviderLBPolicyLoadAware = "load_aware"
 )
 
+// SupportedProviderLBPolicies is the canonical inventory used by validation
+// and the generated configuration contract.
+func SupportedProviderLBPolicies() []string {
+	return []string{ProviderLBPolicyRoundRobin, ProviderLBPolicyLeastRequest, ProviderLBPolicyLoadAware}
+}
+
 func validateProviderReliability(modelName string, reliability ProviderReliability) error {
-	switch strings.TrimSpace(reliability.LBPolicy) {
-	case "", ProviderLBPolicyRoundRobin, ProviderLBPolicyLeastRequest, ProviderLBPolicyLoadAware:
-	default:
-		return fmt.Errorf(
-			"providers.models[%s].reliability.lb_policy must be %q, %q or %q",
-			modelName,
-			ProviderLBPolicyRoundRobin,
-			ProviderLBPolicyLeastRequest,
-			ProviderLBPolicyLoadAware,
-		)
+	if policy := strings.TrimSpace(reliability.LBPolicy); policy != "" && !slices.Contains(SupportedProviderLBPolicies(), policy) {
+		return fmt.Errorf("providers.models[%s].reliability.lb_policy must be one of %s", modelName, strings.Join(SupportedProviderLBPolicies(), ", "))
 	}
 	if err := validateProviderRetry(modelName, reliability); err != nil {
 		return err

@@ -11,7 +11,17 @@ import {
   normalizeModelPricing,
   normalizeModelReliability,
 } from './configPageModelFormSupport'
+import { BACKEND_ENGINES, PROVIDER_LB_POLICIES } from './configPageSupport'
 import { newModelFormData } from './configPageModelsSectionSupport'
+
+it('derives backend engines and load-balancing options from the generated contract', () => {
+  expect(BACKEND_ENGINES).toEqual(
+    ROUTER_CONFIG_SCHEMA.$defs.CanonicalBackendRef.properties.engine.enum.filter(Boolean),
+  )
+  expect(PROVIDER_LB_POLICIES).toEqual(
+    ROUTER_CONFIG_SCHEMA.$defs.ProviderReliability.properties.lb_policy.enum.filter(Boolean),
+  )
+})
 
 describe('model form backend targets', () => {
   it('keeps every canonical API format in the public dashboard config type', () => {
@@ -82,6 +92,13 @@ describe('model form backend targets', () => {
         metrics: { port: 9100, path: '/custom-metrics' },
       },
     ])
+  })
+
+  it('keeps only load-balancing policies accepted by the generated contract', () => {
+    for (const policy of PROVIDER_LB_POLICIES) {
+      expect(normalizeModelReliability({ lb_policy: policy })).toEqual({ lb_policy: policy })
+    }
+    expect(normalizeModelReliability({ lb_policy: 'RING_HASH' })).toBeUndefined()
   })
 
   it('drops an unknown engine and an empty metrics block', () => {

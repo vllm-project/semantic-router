@@ -1,4 +1,4 @@
-import { BACKEND_ENGINES } from './configPageSupport'
+import { BACKEND_ENGINES, PROVIDER_LB_POLICIES } from './configPageSupport'
 import type {
   BackendEngine,
   BackendMetrics,
@@ -11,6 +11,7 @@ import type {
   ModelReasoningConfig,
   NormalizedModel,
   ProviderReliability,
+  ProviderLBPolicy,
 } from './configPageSupport'
 
 export function normalizeModelLoras(value: unknown): LoRAAdapter[] {
@@ -331,7 +332,6 @@ export function normalizeModelReliability(value: unknown): ProviderReliability |
   const source = value as Record<string, unknown>
   const normalized: ProviderReliability = {}
   const stringFields = [
-    'lb_policy',
     'retry_on',
     'base_ejection_time',
     'health_check_path',
@@ -354,6 +354,10 @@ export function normalizeModelReliability(value: unknown): ProviderReliability |
     'retry_budget_min_concurrency',
   ] as const
 
+  const policy = typeof source.lb_policy === 'string' ? source.lb_policy.trim() : ''
+  if ((PROVIDER_LB_POLICIES as readonly string[]).includes(policy)) {
+    normalized.lb_policy = policy as ProviderLBPolicy
+  }
   for (const field of stringFields) {
     if (typeof source[field] === 'string' && source[field].trim()) {
       normalized[field] = source[field].trim()

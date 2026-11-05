@@ -613,7 +613,14 @@
           "type": "object"
         },
         "engine": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "",
+            "vllm",
+            "sglang",
+            "atom",
+            "tensorrt-llm"
+          ]
         },
         "metrics": {
           "$ref": "#/$defs/CanonicalBackendMetrics"
@@ -6066,7 +6073,13 @@
     "ProviderReliability": {
       "properties": {
         "lb_policy": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "",
+            "round_robin",
+            "least_request",
+            "load_aware"
+          ]
         },
         "retry_count": {
           "type": "integer"
