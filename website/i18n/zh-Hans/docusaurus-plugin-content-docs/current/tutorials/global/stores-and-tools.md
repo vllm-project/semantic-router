@@ -145,6 +145,8 @@ global:
 
 支持的后端：`memory`、`milvus`、`llama_stack`、`valkey`、`qdrant`。
 
+上传的文件本身保存在 Router 的磁盘上，位于 `file_storage_dir`（默认 `/var/lib/vsr/data`）。[Router 本地磁盘上的文件](../../installation/storage-overview#router-local-files)说明了每种部署方式如何让该目录可写，以及如何让它持久保存。
+
 `metadata_store` 控制向量存储和已上传文件元数据的注册表。本地或类生产堆栈若需重启安全，请使用 `postgres`；CLI 本地运行时在设置 `metadata_store: postgres` 时会配置 Postgres 并填充 `metadata_postgres` 连接默认值。仅对短暂的本地实验使用 `memory`，因为存储和文件元数据会在路由器重启后丢失。
 
 使用来自[模型运行时](../../model-runtime/guides/embeddings)的嵌入（包括 Vela Embedding）时，每个新向量存储都会记录创建向量所用的表示身份。旧存储仍可见，上传文件仍保留。搜索不兼容或无身份标记的存储，或向其中关联文件，会返回 `409 EMBEDDING_REINDEX_REQUIRED`。请创建新向量存储并重新关联原上传文件 ID，以生成兼容向量。客户端元数据不能替换 Router 管理的 `_router_embedding_identity` 字段。

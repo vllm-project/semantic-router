@@ -98,3 +98,9 @@ resources:
   requests:
     cpu: 500m
     memory: 2Gi
+# Uploaded files stay at the default file_storage_dir, /var/lib/vsr/data, on
+# the data volume's claim, so the restart test can read them back.
+data:
+  persistence:
+    enabled: true
+    size: 1Gi

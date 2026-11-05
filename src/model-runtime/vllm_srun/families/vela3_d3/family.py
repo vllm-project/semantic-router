@@ -29,15 +29,19 @@ from ...plugins.base import (
 )
 from ...registry import builtin
 from ...registry.resolve import download
-from ..decision3.family import Decision3Family, Decision3Model
-from ..decision3.package import STATE_ONCE_MODES
+from ..decision3.family import Decision3Family
+from ..decision3.package import is_state_once
 from ..vela3_shared import PRESETS
 from . import package as pkg
 from .gates import Gates
-from .model import GatedDecisions, SpanSetup, TurboDecisions, Vela3D3Model
-from .span_policy import ROUTES, Policy
+from .model import GatedDecisions, TurboDecisions, Vela3D3Model
+from .span_policy import Policy
 from .span_read import SpanReader
 from .span_render import Renderer
+from .spans import Spans
+
+# The one way a state-once base answers its gated rows again (``decisions.attention``): vela3-turbo's.
+NONCAUSAL_REPLAYS = "noncausal"
 
 
 class Vela3D3Family(ModelFamily):
@@ -82,6 +86,13 @@ class Vela3D3Family(ModelFamily):
         base_package = Decision3Family(self.options).verify(
             PackageRef(self._base_root(base), base.repo_id, base.revision)
         )
+        if is_state_once(base_package.details["package"].decision_config):
+            replays = (details.vela3.get("decisions") or {}).get("attention")
+            if replays != NONCAUSAL_REPLAYS:
+                raise PackageError(
+                    f"a state-once base needs decisions.attention {NONCAUSAL_REPLAYS!r}; "
+                    f"the package declares {replays!r}"
+                )
         model_sha256 = pkg.identity(details, base_package.model_sha256)
         if pinned is not None and model_sha256 != pinned.model_sha256:
             raise PackageError(
@@ -145,24 +156,21 @@ class Vela3D3Family(ModelFamily):
     ) -> LoadedModel[Any, Any]:
         details: pkg.Vela3D3Package = package.details["package"]
         base = package.details["base"]
-        model = Decision3Family(self.options).load(
-            base, spec, engine_model, _model_class(details, base)
+        model = Decision3Family(self.options).load_as(
+            base, spec, engine_model, _model_class(base)
         )
-        assert isinstance(model, Vela3D3Model)
         heads = {
-            route: _head(details.root / details.heads[route], engine_model.device)
-            for route in ROUTES
-            if route in details.heads
+            route: _head(details.root / file, engine_model.device)
+            for route, file in details.span.heads.items()
         }
         model.attach(
             Gates.from_config(
                 details.vela3, details.router_questions, details.adapters
             ),
-            SpanSetup(
-                policy=Policy(details.span, set(heads)),
+            Spans(
+                policy=Policy(details.span, _names_only),
                 renderer=Renderer(model.tokenizer, model.codes),
                 reader=SpanReader(engine_model, heads),
-                definitions=_names_only,
             ),
         )
         model.info = replace(
@@ -203,21 +211,7 @@ def _names_only(names: list[str], only: set[str]) -> dict[str, str]:
     return {}
 
 
-# The one way a state-once base answers its gated rows again (``decisions.attention``): vela3-turbo's.
-NONCAUSAL_REPLAYS = "noncausal"
-
-
-def _model_class(
-    details: pkg.Vela3D3Package, base: VerifiedPackage
-) -> type[Decision3Model]:
-    """``GatedDecisions`` over a causal base, ``TurboDecisions`` over a state-once one that replays noncausally."""
-    layout = base.details["package"].decision_config.get("attention_mode", "causal")
-    if layout not in STATE_ONCE_MODES:
-        return GatedDecisions
-    replays = (details.vela3.get("decisions") or {}).get("attention")
-    if replays != NONCAUSAL_REPLAYS:
-        raise PackageError(
-            f"a state-once base needs decisions.attention {NONCAUSAL_REPLAYS!r}; "
-            f"the package declares {replays!r}"
-        )
-    return TurboDecisions
+def _model_class(base: VerifiedPackage) -> type[Vela3D3Model]:
+    if is_state_once(base.details["package"].decision_config):
+        return TurboDecisions
+    return GatedDecisions

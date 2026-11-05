@@ -110,6 +110,13 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 		))
 	}()
 
+	// Checked before the downloads, which can take minutes, rather than when
+	// the first writer opens its directory.
+	if !opts.downloadOnly {
+		if err = routerruntime.CheckLocalStorage(cfg); err != nil {
+			return recordStartupError(startupWriter, "check local storage", err)
+		}
+	}
 	if err = ensureModelsDownloaded(ctx, cfg, startupWriter); err != nil {
 		return recordStartupError(startupWriter, "ensure models are downloaded", err)
 	}
