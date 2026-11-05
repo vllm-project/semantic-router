@@ -68,6 +68,36 @@ routing:
 
 [内容安全](./content-safety) 打包了三个受支持插件，而不是额外的插件类型。
 
+## 相似度：`match` 块 {#match-block}
+
+所有查找相似项的功能都使用同一个 `match` 块：
+
+```yaml
+match:
+  recall: {method: embedding, top_k: 20, min_similarity: 0.3}   # 缩小候选范围：embedding | bm25
+  judge:  {preset: relevance, top_k: 6, min_score: 0.5}         # 用一道 System One 题决定
+```
+
+- **阶段。** 块只运行写出的阶段，至少一个；空块在加载时报 `match_empty`。功能没有写块时运行其缺省值（见下表）；写出的块整体替换缺省值。
+- **`recall`** 按索引相似度缩小候选范围：
+  - `method: embedding`（缺省）在存储的 embedding 空间中比较向量，`min_similarity` 是 [-1, 1] 内的余弦相似度；`method: bm25` 使用词法索引，`min_similarity` 是 BM25 分数；
+  - `top_k` 限定候选数量；候选来自索引时必须填写。
+- **`judge`** 在一次调用中，由决策模型或指定的 `deployment` 回答一道关于请求和候选的 System One 题：
+  - `preset: relevance | same_request | tool_rank`，或自定义 `question`（`choice`、`noul` 或 `score`）；
+  - choice 题（`tool_rank`）在候选中选择，候选就是它的选项（最多 255 个），每个候选的分数是它的概率；noul 或 score 题对每个候选各问一次，分数是 P(yes) 或期望档位；
+  - `top_k`、`min_score`（绝对值）和 `min_ratio`（相对最高分的比例，取值 (0, 1]）决定保留哪些候选，按分数从高到低排列；
+  - judge 失败或超时时，`on_error: skip`（缺省）保留召回结果，没有召回时保持候选原样；`on_error: fail` 让该功能的匹配失败；`timeout_ms` 限定这次调用（未设置时取部署的 `timeout_ms`，再缺省为 1000 毫秒）。
+
+| 功能 | 缺省 `match` | 说明 |
+|---|---|---|
+| `response_cache.semantic.match` | `recall: {method: embedding, top_k: 3, min_similarity: 0.8}` | 加上 `judge: {preset: same_request}` 可减少误命中 |
+| `context.sources[rag].match` | `recall: {method: embedding, top_k: 20, min_similarity: 0.3}`，`judge: {preset: relevance, top_k: 6, min_score: 0.5}` | 用 `embedding` 或 `bm25` 召回 |
+| `context.sources[memory].match` | `recall: {method: embedding, top_k: 5, min_similarity: 0.7}` | |
+| `context.compress.match` | `judge: {preset: relevance}` | 片段来自请求本身；只能用 `bm25` 召回；保留多少由预算决定 |
+| `tools.select.match` | `judge: {preset: tool_rank, top_k: 3, min_ratio: 0.1}` | 不召回；候选工具最多 255 个 |
+
+每个阶段都计入 `vsr_match_recall_total`（feature、method、outcome）或 `vsr_match_judge_total`（feature、preset、outcome），并在 `vsr_match_stage_duration_seconds` 中计时。
+
 ## 运维边界 {#operational-boundaries}
 
 - 当多个插件改写绑定提供商的请求或响应时，它们会相互作用。Router 管道固定其执行顺序；在 YAML 中重排条目不会改变该顺序。
