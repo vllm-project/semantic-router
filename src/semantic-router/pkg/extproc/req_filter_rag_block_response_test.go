@@ -73,7 +73,7 @@ func TestRAGBlockModePreRoutingResponseOmitsRetrievalErrorChain(t *testing.T) {
 	decision.ModelRefs = []config.ModelRef{{Model: chatModel}}
 	router.Config.Decisions = []config.Decision{decision}
 
-	classifier, err := classification.NewClassifier(router.Config, nil, nil, nil)
+	classifier, err := classification.NewClassifier(router.Config)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = classifier.Close() })
 	router.Classifier = classifier

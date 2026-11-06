@@ -46,34 +46,27 @@ routing:
           - private
           - restricted
         case_sensitive: false
-    embeddings:
       - name: business_analysis
-        threshold: 0.76
-        candidates:
+        operator: OR
+        keywords:
           - I need to analyze business metrics and performance
           - Can you help me with strategic business planning?
           - We need insights on market trends and competition
-        aggregation_method: max
+        case_sensitive: false
       - name: legal_review
-        threshold: 0.8
-        candidates:
+        operator: OR
+        keywords:
           - This document needs legal review and compliance check
           - We need to ensure regulatory compliance
           - Can you review this for legal implications?
-        aggregation_method: mean
+        case_sensitive: false
     domains:
       - name: business
         description: Business and management
-        mmlu_categories:
-          - business
       - name: law
         description: Legal questions and law-related topics
-        mmlu_categories:
-          - law
       - name: economics
         description: Economics and financial topics
-        mmlu_categories:
-          - economics
   decisions:
     - name: compliance_legal
       description: Compliance and legal queries with full protection
@@ -83,7 +76,7 @@ routing:
         conditions:
           - type: keyword
             name: compliance
-          - type: embedding
+          - type: keyword
             name: legal_review
           - type: domain
             name: law
@@ -102,7 +95,7 @@ routing:
         conditions:
           - type: keyword
             name: confidential
-          - type: embedding
+          - type: keyword
             name: business_analysis
           - type: domain
             name: business
@@ -118,7 +111,7 @@ routing:
       rules:
         operator: OR
         conditions:
-          - type: embedding
+          - type: keyword
             name: business_analysis
           - type: domain
             name: economics
@@ -141,8 +134,6 @@ global:
     api:
       batch_classification:
         max_batch_size: 100
-        concurrency_threshold: 5
-        max_concurrency: 8
         metrics:
           sample_rate: 1
           duration_buckets:
@@ -230,49 +221,8 @@ global:
           enable_soft_matching: true
           top_k: 1
           min_score_threshold: 0.5
-    system:
-      prompt_guard: models/mmbert32k-jailbreak-detector-merged
-      domain_classifier: models/mmbert32k-intent-classifier-merged
-      pii_classifier: models/mmbert32k-pii-detector-merged
+    system: {}
     modules:
-      safety:
-        safety:
-          use_cpu: false
-        hazard:
-          use_cpu: false
       prompt_compression:
         enabled: false
         max_tokens: 0
-      prompt_guard:
-        enabled: true
-        threshold: 0.7
-        use_cpu: true
-        jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
-        model_ref: prompt_guard
-      classifier:
-        domain:
-          threshold: 0.5
-          use_cpu: true
-          category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
-          model_ref: domain_classifier
-        mcp:
-          enabled: false
-          transport_type: ""
-        pii:
-          threshold: 0.9
-          use_cpu: true
-          pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
-          model_ref: pii_classifier
-        preference: {}
-      complexity: {}
-      hallucination_mitigation:
-        fact_check:
-          use_cpu: false
-        detector:
-          use_cpu: false
-      feedback_detector:
-        enabled: false
-        use_cpu: false
-        feedback_mapping_path: ""
-      modality_detector:
-        enabled: false

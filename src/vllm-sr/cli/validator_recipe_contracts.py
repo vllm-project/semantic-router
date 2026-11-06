@@ -23,28 +23,8 @@ def validate_domain_references(config: UserConfig) -> list[ValidationError]:
     """
     errors = []
     for profile_name, routing in iter_routing_profiles(config):
-        domains = routing.signals.domains or []
-        decisions = routing.decisions
-        effective_domains = [
-            domain.model_dump(mode="json", exclude_none=True) for domain in domains
-        ]
-        if not effective_domains:
-            generated_names = {
-                condition.name
-                for decision in decisions
-                for condition in iter_condition_leaves(decision.rules.conditions)
-                if condition.type == CONDITION_TYPE_DOMAIN and condition.name
-            }
-            effective_domains = [
-                {
-                    "name": name,
-                    "description": name,
-                    "mmlu_categories": ["other"],
-                }
-                for name in sorted(generated_names)
-            ]
-        domain_names = {domain["name"] for domain in effective_domains}
-        for decision in decisions:
+        domain_names = {domain.name for domain in routing.signals.domains or []}
+        for decision in routing.decisions:
             for condition in iter_condition_leaves(decision.rules.conditions):
                 if (
                     condition.type == CONDITION_TYPE_DOMAIN

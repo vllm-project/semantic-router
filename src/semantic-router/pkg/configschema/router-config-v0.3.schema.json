@@ -313,12 +313,6 @@
         "max_batch_size": {
           "type": "integer"
         },
-        "concurrency_threshold": {
-          "type": "integer"
-        },
-        "max_concurrency": {
-          "type": "integer"
-        },
         "metrics": {
           "$ref": "#/$defs/BatchClassificationMetricsConfig"
         }
@@ -592,57 +586,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "CanonicalCategoryModule": {
-      "properties": {
-        "max_sequence_length": {
-          "type": "integer"
-        },
-        "enabled": {
-          "type": "boolean"
-        },
-        "model_id": {
-          "type": "string"
-        },
-        "threshold": {
-          "type": "number"
-        },
-        "use_cpu": {
-          "type": "boolean"
-        },
-        "backend": {
-          "$ref": "#/$defs/RemoteClassifierBackend"
-        },
-        "category_mapping_path": {
-          "type": "string"
-        },
-        "fallback_category": {
-          "type": "string"
-        },
-        "model_ref": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "CanonicalClassifierModule": {
-      "properties": {
-        "domain": {
-          "$ref": "#/$defs/CanonicalCategoryModule"
-        },
-        "mcp": {
-          "$ref": "#/$defs/MCPCategoryModel"
-        },
-        "pii": {
-          "$ref": "#/$defs/CanonicalPIIModule"
-        },
-        "preference": {
-          "$ref": "#/$defs/PreferenceModelConfig"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "CanonicalEmbeddingModels": {
       "properties": {
         "default": {
@@ -743,57 +686,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "CanonicalFactCheckModule": {
-      "properties": {
-        "enabled": {
-          "type": "boolean"
-        },
-        "max_sequence_length": {
-          "type": "integer"
-        },
-        "model_id": {
-          "type": "string"
-        },
-        "threshold": {
-          "type": "number"
-        },
-        "use_cpu": {
-          "type": "boolean"
-        },
-        "model_ref": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "CanonicalFeedbackDetectorModule": {
-      "properties": {
-        "max_sequence_length": {
-          "type": "integer"
-        },
-        "enabled": {
-          "type": "boolean"
-        },
-        "model_id": {
-          "type": "string"
-        },
-        "threshold": {
-          "type": "number"
-        },
-        "use_cpu": {
-          "type": "boolean"
-        },
-        "feedback_mapping_path": {
-          "type": "string"
-        },
-        "model_ref": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "CanonicalGlobal": {
       "properties": {
         "router": {
@@ -810,54 +702,6 @@
         },
         "model_catalog": {
           "$ref": "#/$defs/CanonicalModelCatalog"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "CanonicalHallucinationDetector": {
-      "properties": {
-        "backend": {
-          "type": "string"
-        },
-        "include_explanation": {
-          "type": "boolean"
-        },
-        "model_id": {
-          "type": "string"
-        },
-        "threshold": {
-          "type": "number"
-        },
-        "use_cpu": {
-          "type": "boolean"
-        },
-        "min_span_length": {
-          "type": "integer"
-        },
-        "min_span_confidence": {
-          "type": "number"
-        },
-        "context_window_size": {
-          "type": "integer"
-        },
-        "model_ref": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "CanonicalHallucinationModule": {
-      "properties": {
-        "enabled": {
-          "type": "boolean"
-        },
-        "fact_check": {
-          "$ref": "#/$defs/CanonicalFactCheckModule"
-        },
-        "detector": {
-          "$ref": "#/$defs/CanonicalHallucinationDetector"
         }
       },
       "additionalProperties": false,
@@ -961,16 +805,6 @@
           },
           "type": "object",
           "default": {
-            "hazard": {
-              "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Hazard",
-              "revision": "5dd25f2cc3c98f338e6a79b667662d60f936a28d",
-              "provider": "model_runtime",
-              "device": "cpu",
-              "input": {
-                "max_tokens": 32768,
-                "overflow": "reject"
-              }
-            },
             "omni-nano": {
               "artifact": "vllm-sr/Vela-1.0-Omni-Nano",
               "revision": "2ff2d66385dbdd661a560ec3e8bcb45a0527d92e",
@@ -1010,12 +844,6 @@
           },
           "type": "array"
         },
-        "kbs": {
-          "items": {
-            "$ref": "#/$defs/KnowledgeBaseConfig"
-          },
-          "type": "array"
-        },
         "modules": {
           "$ref": "#/$defs/CanonicalModelModules"
         },
@@ -1034,68 +862,8 @@
     },
     "CanonicalModelModules": {
       "properties": {
-        "safety": {
-          "$ref": "#/$defs/SafetyModelsConfig"
-        },
         "prompt_compression": {
           "$ref": "#/$defs/PromptCompressionConfig"
-        },
-        "prompt_guard": {
-          "$ref": "#/$defs/CanonicalPromptGuardModule"
-        },
-        "classifier": {
-          "$ref": "#/$defs/CanonicalClassifierModule"
-        },
-        "complexity": {
-          "$ref": "#/$defs/ComplexityModelConfig"
-        },
-        "hallucination_mitigation": {
-          "$ref": "#/$defs/CanonicalHallucinationModule"
-        },
-        "feedback_detector": {
-          "$ref": "#/$defs/CanonicalFeedbackDetectorModule"
-        },
-        "modality_detector": {
-          "$ref": "#/$defs/ModalityDetectorConfig"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "CanonicalPIIModule": {
-      "properties": {
-        "window": {
-          "$ref": "#/$defs/SequenceHeadWindowConfig"
-        },
-        "max_sequence_length": {
-          "type": "integer"
-        },
-        "enabled": {
-          "type": "boolean"
-        },
-        "model_id": {
-          "type": "string"
-        },
-        "threshold": {
-          "type": "number"
-        },
-        "use_cpu": {
-          "type": "boolean"
-        },
-        "pii_mapping_path": {
-          "type": "string"
-        },
-        "backend": {
-          "$ref": "#/$defs/RemoteClassifierBackend"
-        },
-        "on_error": {
-          "type": "string"
-        },
-        "on_unscanned": {
-          "type": "string"
-        },
-        "model_ref": {
-          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -1120,51 +888,6 @@
             "$ref": "#/$defs/ProjectionMapping"
           },
           "type": "array"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "CanonicalPromptGuardModule": {
-      "properties": {
-        "max_sequence_length": {
-          "type": "integer"
-        },
-        "backend": {
-          "$ref": "#/$defs/RemoteClassifierBackend"
-        },
-        "window": {
-          "$ref": "#/$defs/SequenceHeadWindowConfig"
-        },
-        "enabled": {
-          "type": "boolean"
-        },
-        "model_id": {
-          "type": "string"
-        },
-        "threshold": {
-          "type": "number"
-        },
-        "use_cpu": {
-          "type": "boolean"
-        },
-        "jailbreak_mapping_path": {
-          "type": "string"
-        },
-        "positive_labels": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "on_error": {
-          "type": "string"
-        },
-        "on_unscanned": {
-          "type": "string"
-        },
-        "model_ref": {
-          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -1614,12 +1337,6 @@
           },
           "type": "array"
         },
-        "embeddings": {
-          "items": {
-            "$ref": "#/$defs/EmbeddingRule"
-          },
-          "type": "array"
-        },
         "domains": {
           "items": {
             "$ref": "#/$defs/Category"
@@ -1635,18 +1352,6 @@
         "user_feedbacks": {
           "items": {
             "$ref": "#/$defs/UserFeedbackRule"
-          },
-          "type": "array"
-        },
-        "reasks": {
-          "items": {
-            "$ref": "#/$defs/ReaskRule"
-          },
-          "type": "array"
-        },
-        "preferences": {
-          "items": {
-            "$ref": "#/$defs/PreferenceRule"
           },
           "type": "array"
         },
@@ -1704,15 +1409,21 @@
           },
           "type": "array"
         },
-        "pii": {
+        "refusal": {
           "items": {
-            "$ref": "#/$defs/PIIRule"
+            "$ref": "#/$defs/RefusalRule"
           },
           "type": "array"
         },
-        "kb": {
+        "turn_relation": {
           "items": {
-            "$ref": "#/$defs/KBSignalRule"
+            "$ref": "#/$defs/TurnRelationRule"
+          },
+          "type": "array"
+        },
+        "pii": {
+          "items": {
+            "$ref": "#/$defs/PIIRule"
           },
           "type": "array"
         },
@@ -1734,12 +1445,6 @@
           },
           "type": "array"
         },
-        "classifiers": {
-          "items": {
-            "$ref": "#/$defs/ClassifierSignalRule"
-          },
-          "type": "array"
-        },
         "input_modality": {
           "items": {
             "$ref": "#/$defs/InputModalityRule"
@@ -1755,12 +1460,6 @@
         "systemone": {
           "items": {
             "$ref": "#/$defs/SystemOneRule"
-          },
-          "type": "array"
-        },
-        "topic_continuity": {
-          "items": {
-            "$ref": "#/$defs/TopicContinuityRule"
           },
           "type": "array"
         }
@@ -1805,30 +1504,6 @@
       "properties": {
         "decision_model": {
           "$ref": "#/$defs/DecisionModelBinding"
-        },
-        "safety": {
-          "type": "string"
-        },
-        "hazard": {
-          "type": "string"
-        },
-        "prompt_guard": {
-          "type": "string"
-        },
-        "domain_classifier": {
-          "type": "string"
-        },
-        "pii_classifier": {
-          "type": "string"
-        },
-        "fact_check_classifier": {
-          "type": "string"
-        },
-        "hallucination_detector": {
-          "type": "string"
-        },
-        "feedback_detector": {
-          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -1881,11 +1556,20 @@
         "description": {
           "type": "string"
         },
-        "mmlu_categories": {
+        "labels": {
           "items": {
             "type": "string"
           },
           "type": "array"
+        },
+        "predicate": {
+          "$ref": "#/$defs/NumericPredicate"
+        },
+        "deployment": {
+          "type": "string"
+        },
+        "timeout_ms": {
+          "type": "integer"
         },
         "model_scores": {
           "items": {
@@ -1919,45 +1603,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "ClassifierSignalRule": {
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "deployment": {
-          "type": "string"
-        },
-        "type": {
-          "type": "string"
-        },
-        "model": {
-          "type": "string"
-        },
-        "model_path": {
-          "type": "string"
-        },
-        "labels": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "instructions": {
-          "type": "string"
-        },
-        "disable_rationale": {
-          "type": "boolean"
-        },
-        "use_cpu": {
-          "type": "boolean"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "ClassifierVLLMEndpoint": {
       "properties": {
         "address": {
@@ -1982,73 +1627,25 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "ComplexityCandidates": {
-      "properties": {
-        "candidates": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "image_candidates": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "ComplexityModelConfig": {
-      "properties": {
-        "prototype_scoring": {
-          "$ref": "#/$defs/PrototypeScoringConfig"
-        },
-        "backend": {
-          "$ref": "#/$defs/RemoteClassifierBackend"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "ComplexityRule": {
       "properties": {
         "name": {
           "type": "string"
         },
-        "deployment": {
-          "type": "string"
-        },
-        "prototype_scoring": {
-          "$ref": "#/$defs/PrototypeScoringConfig"
-        },
-        "threshold": {
-          "type": "number"
-        },
-        "hard": {
-          "$ref": "#/$defs/ComplexityCandidates"
-        },
-        "easy": {
-          "$ref": "#/$defs/ComplexityCandidates"
-        },
-        "hard_above": {
-          "type": "number"
-        },
-        "easy_below": {
-          "type": "number"
-        },
-        "hard_below": {
-          "type": "number"
-        },
-        "easy_above": {
-          "type": "number"
-        },
         "description": {
           "type": "string"
         },
-        "composer": {
-          "$ref": "#/$defs/RuleNode"
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "deployment": {
+          "type": "string"
+        },
+        "timeout_ms": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -3066,51 +2663,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "EmbeddingRule": {
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "threshold": {
-          "type": "number"
-        },
-        "candidates": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "image_candidates": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "negative_candidates": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "negative_image_candidates": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "aggregation_method": {
-          "type": "string"
-        },
-        "query_modality": {
-          "type": "string"
-        },
-        "prototype_scoring": {
-          "$ref": "#/$defs/PrototypeScoringConfig"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "EmitDirective": {
       "properties": {
         "kind": {
@@ -3176,12 +2728,6 @@
         "llm_timeout_seconds": {
           "type": "number"
         },
-        "parser_type": {
-          "type": "string"
-        },
-        "threshold": {
-          "type": "number"
-        },
         "access_key": {
           "type": "string"
         },
@@ -3230,6 +2776,21 @@
         },
         "description": {
           "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "predicate": {
+          "$ref": "#/$defs/NumericPredicate"
+        },
+        "deployment": {
+          "type": "string"
+        },
+        "timeout_ms": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -3498,6 +3059,15 @@
         },
         "description": {
           "type": "string"
+        },
+        "predicate": {
+          "$ref": "#/$defs/NumericPredicate"
+        },
+        "deployment": {
+          "type": "string"
+        },
+        "timeout_ms": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -3714,62 +3284,43 @@
         "name": {
           "type": "string"
         },
-        "method": {
-          "type": "string"
-        },
-        "threshold": {
-          "type": "number"
-        },
-        "include_history": {
-          "type": "boolean"
-        },
         "description": {
           "type": "string"
         },
-        "jailbreak_patterns": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+        "predicate": {
+          "$ref": "#/$defs/NumericPredicate"
         },
-        "benign_patterns": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+        "stage": {
+          "type": "string",
+          "enum": [
+            "request",
+            "response"
+          ]
         },
-        "direction": {
+        "input": {
+          "$ref": "#/$defs/JailbreakRuleInput"
+        },
+        "deployment": {
           "type": "string"
+        },
+        "timeout_ms": {
+          "type": "integer"
+        },
+        "on_unknown": {
+          "type": "string",
+          "enum": [
+            "match",
+            "no_match"
+          ]
         }
       },
       "additionalProperties": false,
       "type": "object"
     },
-    "KBSignalRule": {
+    "JailbreakRuleInput": {
       "properties": {
-        "name": {
-          "type": "string"
-        },
-        "kb": {
-          "type": "string"
-        },
-        "target": {
-          "$ref": "#/$defs/KBSignalTarget"
-        },
-        "match": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "KBSignalTarget": {
-      "properties": {
-        "kind": {
-          "type": "string"
-        },
-        "value": {
-          "type": "string"
+        "history": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -3911,75 +3462,6 @@
         },
         "include_history": {
           "type": "boolean"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "KnowledgeBaseConfig": {
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "source": {
-          "$ref": "#/$defs/KnowledgeBaseSource"
-        },
-        "threshold": {
-          "type": "number"
-        },
-        "label_thresholds": {
-          "additionalProperties": {
-            "type": "number"
-          },
-          "type": "object"
-        },
-        "groups": {
-          "additionalProperties": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "type": "object"
-        },
-        "metrics": {
-          "items": {
-            "$ref": "#/$defs/KnowledgeBaseMetricConfig"
-          },
-          "type": "array"
-        },
-        "prototype_scoring": {
-          "$ref": "#/$defs/PrototypeScoringConfig"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "KnowledgeBaseMetricConfig": {
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "type": {
-          "type": "string"
-        },
-        "positive_group": {
-          "type": "string"
-        },
-        "negative_group": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "KnowledgeBaseSource": {
-      "properties": {
-        "path": {
-          "type": "string"
-        },
-        "manifest": {
-          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -4151,48 +3633,6 @@
         },
         "flow": {
           "$ref": "#/$defs/FlowRuntimeConfig"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "MCPCategoryModel": {
-      "properties": {
-        "enabled": {
-          "type": "boolean"
-        },
-        "transport_type": {
-          "type": "string"
-        },
-        "command": {
-          "type": "string"
-        },
-        "args": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "env": {
-          "additionalProperties": {
-            "type": "string"
-          },
-          "type": "object"
-        },
-        "url": {
-          "type": "string"
-        },
-        "tool_name": {
-          "type": "string"
-        },
-        "threshold": {
-          "type": "number"
-        },
-        "timeout_seconds": {
-          "type": "integer"
-        },
-        "max_response_bytes": {
-          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -4854,54 +4294,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "ModalityClassifierConfig": {
-      "properties": {
-        "max_sequence_length": {
-          "type": "integer"
-        },
-        "model_path": {
-          "type": "string"
-        },
-        "use_cpu": {
-          "type": "boolean"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "ModalityDetectorConfig": {
-      "properties": {
-        "enabled": {
-          "type": "boolean"
-        },
-        "method": {
-          "type": "string"
-        },
-        "classifier": {
-          "$ref": "#/$defs/ModalityClassifierConfig"
-        },
-        "keywords": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "both_keywords": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "confidence_threshold": {
-          "type": "number"
-        },
-        "lower_threshold_ratio": {
-          "type": "number"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "ModalityRule": {
       "properties": {
         "name": {
@@ -4909,6 +4301,21 @@
         },
         "description": {
           "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "predicate": {
+          "$ref": "#/$defs/NumericPredicate"
+        },
+        "deployment": {
+          "type": "string"
+        },
+        "timeout_ms": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -5543,59 +4950,45 @@
         "name": {
           "type": "string"
         },
-        "threshold": {
-          "type": "number"
+        "description": {
+          "type": "string"
         },
-        "pii_types_allowed": {
+        "predicate": {
+          "$ref": "#/$defs/NumericPredicate"
+        },
+        "ignore_labels": {
           "items": {
             "type": "string"
           },
           "type": "array"
         },
-        "include_history": {
-          "type": "boolean"
+        "input": {
+          "$ref": "#/$defs/PIIRuleInput"
         },
-        "source": {
+        "deployment": {
           "type": "string"
         },
-        "description": {
-          "type": "string"
+        "timeout_ms": {
+          "type": "integer"
+        },
+        "on_unknown": {
+          "type": "string",
+          "enum": [
+            "match",
+            "no_match"
+          ]
         }
       },
       "additionalProperties": false,
       "type": "object"
     },
-    "PreferenceModelConfig": {
+    "PIIRuleInput": {
       "properties": {
-        "use_contrastive": {
+        "history": {
           "type": "boolean"
         },
-        "embedding_model": {
-          "type": "string"
-        },
-        "prototype_scoring": {
-          "$ref": "#/$defs/PrototypeScoringConfig"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "PreferenceRule": {
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "examples": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "threshold": {
-          "type": "number"
+        "tool_results": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -5771,12 +5164,9 @@
           "type": "string",
           "enum": [
             "keyword",
-            "embedding",
             "domain",
             "fact_check",
             "user_feedback",
-            "reask",
-            "preference",
             "language",
             "context",
             "structure",
@@ -5786,22 +5176,15 @@
             "jailbreak",
             "safety",
             "pii",
-            "kb",
+            "turn_relation",
             "conversation",
             "event",
             "input_modality",
             "systemone",
-            "kb_metric",
             "projection"
           ]
         },
         "name": {
-          "type": "string"
-        },
-        "kb": {
-          "type": "string"
-        },
-        "metric": {
           "type": "string"
         },
         "weight": {
@@ -6277,24 +5660,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "ReaskRule": {
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "threshold": {
-          "type": "number"
-        },
-        "lookback_turns": {
-          "type": "integer"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "RedisConfig": {
       "properties": {
         "connection": {
@@ -6412,18 +5777,21 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "RemoteClassifierBackend": {
+    "RefusalRule": {
       "properties": {
-        "protocol": {
+        "name": {
           "type": "string"
         },
-        "contract": {
+        "description": {
           "type": "string"
         },
-        "model": {
+        "predicate": {
+          "$ref": "#/$defs/NumericPredicate"
+        },
+        "deployment": {
           "type": "string"
         },
-        "deadline_ms": {
+        "timeout_ms": {
           "type": "integer"
         }
       },
@@ -6686,29 +6054,25 @@
           "enum": [
             "action",
             "authz",
-            "classifier",
             "complexity",
             "context",
             "conversation",
             "domain",
-            "embedding",
             "event",
             "fact_check",
             "hallucination",
             "input_modality",
             "jailbreak",
-            "kb",
             "keyword",
             "language",
             "metadata",
             "modality",
             "pii",
-            "preference",
-            "reask",
+            "refusal",
             "safety",
             "structure",
             "systemone",
-            "topic_continuity",
+            "turn_relation",
             "user_feedback",
             "projection"
           ]
@@ -7398,27 +6762,23 @@
           "enum": [
             "action",
             "authz",
-            "classifier",
             "complexity",
             "context",
             "conversation",
             "domain",
-            "embedding",
             "event",
             "fact_check",
             "input_modality",
             "jailbreak",
-            "kb",
             "keyword",
             "language",
             "metadata",
             "modality",
             "pii",
-            "preference",
-            "reask",
             "safety",
             "structure",
             "systemone",
+            "turn_relation",
             "user_feedback",
             "projection"
           ]
@@ -7456,45 +6816,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "SafetyHazardRule": {
-      "properties": {
-        "deployment": {
-          "type": "string"
-        },
-        "model": {
-          "type": "string"
-        },
-        "labels": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "categories": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "threshold": {
-          "type": "number"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "SafetyModelsConfig": {
-      "properties": {
-        "safety": {
-          "$ref": "#/$defs/SequenceHeadModelConfig"
-        },
-        "hazard": {
-          "$ref": "#/$defs/SequenceHeadModelConfig"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "SafetyRule": {
       "properties": {
         "name": {
@@ -7503,61 +6824,26 @@
         "description": {
           "type": "string"
         },
-        "deployment": {
-          "type": "string"
-        },
-        "model": {
-          "type": "string"
-        },
         "labels": {
           "items": {
             "type": "string"
           },
           "type": "array"
         },
-        "unsafe_labels": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+        "predicate": {
+          "$ref": "#/$defs/NumericPredicate"
         },
-        "threshold": {
-          "type": "number"
+        "stage": {
+          "type": "string",
+          "enum": [
+            "request",
+            "response"
+          ]
         },
-        "hazard": {
-          "$ref": "#/$defs/SafetyHazardRule"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "SequenceHeadModelConfig": {
-      "properties": {
-        "model_id": {
+        "deployment": {
           "type": "string"
         },
-        "model_ref": {
-          "type": "string"
-        },
-        "use_cpu": {
-          "type": "boolean"
-        },
-        "max_sequence_length": {
-          "type": "integer"
-        },
-        "window": {
-          "$ref": "#/$defs/SequenceHeadWindowConfig"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "SequenceHeadWindowConfig": {
-      "properties": {
-        "size": {
-          "type": "integer"
-        },
-        "overlap": {
+        "timeout_ms": {
           "type": "integer"
         }
       },
@@ -8082,54 +7368,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "TopicContinuityEvidenceLimits": {
-      "properties": {
-        "max_prior_turns": {
-          "type": "integer"
-        },
-        "max_turn_bytes": {
-          "type": "integer"
-        },
-        "max_input_bytes": {
-          "type": "integer"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "TopicContinuityRule": {
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "include_assistant": {
-          "type": "boolean"
-        },
-        "thresholds": {
-          "$ref": "#/$defs/TopicContinuityThresholds"
-        },
-        "limits": {
-          "$ref": "#/$defs/TopicContinuityEvidenceLimits"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "TopicContinuityThresholds": {
-      "properties": {
-        "continuation": {
-          "type": "number"
-        },
-        "change": {
-          "type": "number"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "TracingConfig": {
       "properties": {
         "enabled": {
@@ -8220,6 +7458,42 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "TurnRelationRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "input": {
+          "$ref": "#/$defs/TurnRelationRuleInput"
+        },
+        "deployment": {
+          "type": "string"
+        },
+        "timeout_ms": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TurnRelationRuleInput": {
+      "properties": {
+        "previous_turns": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "UserFeedbackRule": {
       "properties": {
         "name": {
@@ -8227,6 +7501,21 @@
         },
         "description": {
           "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "predicate": {
+          "$ref": "#/$defs/NumericPredicate"
+        },
+        "deployment": {
+          "type": "string"
+        },
+        "timeout_ms": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -8718,19 +8007,12 @@
         "schema_ref": "#/$defs/KeywordRule"
       },
       {
-        "type": "embedding",
-        "display_name": "Embeddings",
-        "collection": "embeddings",
-        "observation_key": "embeddings",
-        "decision_referenceable": true,
-        "schema_ref": "#/$defs/EmbeddingRule"
-      },
-      {
         "type": "domain",
         "display_name": "Domain",
         "collection": "domains",
         "observation_key": "domains",
         "decision_referenceable": true,
+        "reference_qualifier": "label",
         "schema_ref": "#/$defs/Category"
       },
       {
@@ -8739,6 +8021,7 @@
         "collection": "fact_check",
         "observation_key": "fact_check",
         "decision_referenceable": true,
+        "reference_qualifier": "label",
         "schema_ref": "#/$defs/FactCheckRule"
       },
       {
@@ -8747,23 +8030,8 @@
         "collection": "user_feedbacks",
         "observation_key": "user_feedback",
         "decision_referenceable": true,
+        "reference_qualifier": "label",
         "schema_ref": "#/$defs/UserFeedbackRule"
-      },
-      {
-        "type": "reask",
-        "display_name": "Reask",
-        "collection": "reasks",
-        "observation_key": "reask",
-        "decision_referenceable": true,
-        "schema_ref": "#/$defs/ReaskRule"
-      },
-      {
-        "type": "preference",
-        "display_name": "Preference",
-        "collection": "preferences",
-        "observation_key": "preferences",
-        "decision_referenceable": true,
-        "schema_ref": "#/$defs/PreferenceRule"
       },
       {
         "type": "language",
@@ -8795,12 +8063,7 @@
         "collection": "complexity",
         "observation_key": "complexity",
         "decision_referenceable": true,
-        "reference_suffixes": [
-          "easy",
-          "medium",
-          "hard"
-        ],
-        "reference_qualifier": "fixed_suffix",
+        "reference_qualifier": "label",
         "schema_ref": "#/$defs/ComplexityRule"
       },
       {
@@ -8809,6 +8072,7 @@
         "collection": "modality",
         "observation_key": "modality",
         "decision_referenceable": true,
+        "reference_qualifier": "label",
         "schema_ref": "#/$defs/ModalityRule"
       },
       {
@@ -8825,6 +8089,7 @@
         "collection": "jailbreak",
         "observation_key": "jailbreak",
         "decision_referenceable": true,
+        "reference_qualifier": "label",
         "schema_ref": "#/$defs/JailbreakRule"
       },
       {
@@ -8833,6 +8098,7 @@
         "collection": "safety",
         "observation_key": "safety",
         "decision_referenceable": true,
+        "reference_qualifier": "label",
         "schema_ref": "#/$defs/SafetyRule"
       },
       {
@@ -8843,20 +8109,29 @@
         "schema_ref": "#/$defs/HallucinationRule"
       },
       {
+        "type": "refusal",
+        "display_name": "Refusal",
+        "collection": "refusal",
+        "decision_referenceable": false,
+        "schema_ref": "#/$defs/RefusalRule"
+      },
+      {
+        "type": "turn_relation",
+        "display_name": "Turn Relation",
+        "collection": "turn_relation",
+        "observation_key": "turn_relation",
+        "decision_referenceable": true,
+        "reference_qualifier": "label",
+        "schema_ref": "#/$defs/TurnRelationRule"
+      },
+      {
         "type": "pii",
         "display_name": "PII",
         "collection": "pii",
         "observation_key": "pii",
         "decision_referenceable": true,
+        "reference_qualifier": "label",
         "schema_ref": "#/$defs/PIIRule"
-      },
-      {
-        "type": "kb",
-        "display_name": "KB",
-        "collection": "kb",
-        "observation_key": "kb",
-        "decision_referenceable": true,
-        "schema_ref": "#/$defs/KBSignalRule"
       },
       {
         "type": "conversation",
@@ -8883,15 +8158,6 @@
         "schema_ref": "#/$defs/MetadataRule"
       },
       {
-        "type": "classifier",
-        "display_name": "Classifier",
-        "collection": "classifiers",
-        "observation_key": "classifier",
-        "decision_referenceable": true,
-        "reference_qualifier": "label",
-        "schema_ref": "#/$defs/ClassifierSignalRule"
-      },
-      {
         "type": "input_modality",
         "display_name": "Input Modality",
         "collection": "input_modality",
@@ -8915,13 +8181,6 @@
         "decision_referenceable": true,
         "reference_qualifier": "label",
         "schema_ref": "#/$defs/SystemOneRule"
-      },
-      {
-        "type": "topic_continuity",
-        "display_name": "Topic Continuity",
-        "collection": "topic_continuity",
-        "decision_referenceable": false,
-        "schema_ref": "#/$defs/TopicContinuityRule"
       }
     ],
     "algorithms": [
@@ -9196,12 +8455,9 @@
     ],
     "projection_input_types": [
       "keyword",
-      "embedding",
       "domain",
       "fact_check",
       "user_feedback",
-      "reask",
-      "preference",
       "language",
       "context",
       "structure",
@@ -9211,12 +8467,11 @@
       "jailbreak",
       "safety",
       "pii",
-      "kb",
+      "turn_relation",
       "conversation",
       "event",
       "input_modality",
       "systemone",
-      "kb_metric",
       "projection"
     ],
     "global_sections": [
@@ -9409,25 +8664,6 @@
         ]
       },
       {
-        "key": "kbs",
-        "layer": "model_catalog",
-        "display_name": "Kbs",
-        "path": [
-          "model_catalog",
-          "kbs"
-        ]
-      },
-      {
-        "key": "safety",
-        "layer": "model_catalog",
-        "display_name": "Safety",
-        "path": [
-          "model_catalog",
-          "modules",
-          "safety"
-        ]
-      },
-      {
         "key": "prompt_compression",
         "layer": "model_catalog",
         "display_name": "Prompt Compression",
@@ -9435,66 +8671,6 @@
           "model_catalog",
           "modules",
           "prompt_compression"
-        ]
-      },
-      {
-        "key": "prompt_guard",
-        "layer": "model_catalog",
-        "display_name": "Prompt Guard",
-        "path": [
-          "model_catalog",
-          "modules",
-          "prompt_guard"
-        ]
-      },
-      {
-        "key": "classifier",
-        "layer": "model_catalog",
-        "display_name": "Classifier",
-        "path": [
-          "model_catalog",
-          "modules",
-          "classifier"
-        ]
-      },
-      {
-        "key": "complexity",
-        "layer": "model_catalog",
-        "display_name": "Complexity",
-        "path": [
-          "model_catalog",
-          "modules",
-          "complexity"
-        ]
-      },
-      {
-        "key": "hallucination_mitigation",
-        "layer": "model_catalog",
-        "display_name": "Hallucination Mitigation",
-        "path": [
-          "model_catalog",
-          "modules",
-          "hallucination_mitigation"
-        ]
-      },
-      {
-        "key": "feedback_detector",
-        "layer": "model_catalog",
-        "display_name": "Feedback Detector",
-        "path": [
-          "model_catalog",
-          "modules",
-          "feedback_detector"
-        ]
-      },
-      {
-        "key": "modality_detector",
-        "layer": "model_catalog",
-        "display_name": "Modality Detector",
-        "path": [
-          "model_catalog",
-          "modules",
-          "modality_detector"
         ]
       },
       {

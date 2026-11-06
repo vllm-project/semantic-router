@@ -13,42 +13,6 @@ import (
 
 const deploymentRevision = "abcabcabcabcabcabcabcabcabcabcabcabcabca"
 
-// deploymentConfig binds the domain classifier to a model_runtime deployment
-// of artifact, pinned when artifact is a repository.
-func deploymentConfig(artifact string) *config.RouterConfig {
-	cfg := &config.RouterConfig{MoMRegistry: map[string]string{"models/old": "test/old", artifact: "test/new"}}
-	deployment := config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: artifact}
-	if !filepath.IsAbs(artifact) {
-		deployment.Revision = deploymentRevision
-	}
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"new": deployment}
-	cfg.CategoryModel.ModelID = "models/old"
-	cfg.CategoryMappingPath = "labels.json"
-	cfg.ModelBindings = map[string]config.ModelBinding{"domain_classifier": {Deployment: "new", Contract: "label_distribution.v1", Adapter: "mmbert32k"}}
-	cfg.Decisions = []config.Decision{{Name: "route", Rules: config.RuleNode{Type: config.SignalTypeDomain, Name: "billing"}}}
-	return cfg
-}
-
-// The runtime downloads a bound deployment's artifact; the router fetches only
-// the binding's label map, at the release the runtime serves.
-func TestBoundDeploymentProvisionsOnlyItsMappingAtItsRelease(t *testing.T) {
-	cfg := deploymentConfig("models/new")
-	binding := cfg.ModelBindings["domain_classifier"]
-	binding.MappingPath = "models/new/labels.json"
-	cfg.ModelBindings["domain_classifier"] = binding
-	specs, err := BuildModelSpecs(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(specs) != 1 || specs[0].LocalPath != "models/new" || specs[0].Revision != deploymentRevision || !specs[0].FilesOnly ||
-		!slices.Equal(specs[0].RequiredFiles, []string{"labels.json"}) {
-		t.Fatalf("specs=%#v", specs)
-	}
-	if cfg.CategoryModel.ModelID != "models/old" {
-		t.Fatal("source configuration mutated")
-	}
-}
-
 func TestUnregisteredLocalArtifactsDoNotRequireRegistry(t *testing.T) {
 	cfg := deploymentConfig(filepath.Join(t.TempDir(), "custom-model"))
 	cfg.MoMRegistry = nil
@@ -67,15 +31,13 @@ func TestUnregisteredLocalArtifactsDoNotRequireRegistry(t *testing.T) {
 func TestBoundMappingInASeparateSnapshotIsFilesOnly(t *testing.T) {
 	cfg := deploymentConfig("models/backbone")
 	cfg.MoMRegistry["models/mappings"] = "test/maps"
-	binding := cfg.ModelBindings["domain_classifier"]
-	binding.MappingPath = "models/mappings/domain.json"
-	cfg.ModelBindings["domain_classifier"] = binding
+	cfg.ModelBindings["embedding"] = embeddingBinding("new", "models/mappings/labels.json")
 	specs, err := BuildModelSpecs(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	mapping, ok := findSpecByPath(specs, "models/mappings")
-	if len(specs) != 1 || !ok || !mapping.FilesOnly || !slices.Contains(mapping.RequiredFiles, "domain.json") || mapping.Revision != "" {
+	if len(specs) != 1 || !ok || !mapping.FilesOnly || !slices.Contains(mapping.RequiredFiles, "labels.json") || mapping.Revision != "" {
 		t.Fatalf("specs=%#v", specs)
 	}
 }
@@ -140,7 +102,7 @@ func TestBindingsProvisionOnlyReachableRecipeArtifacts(t *testing.T) {
 	cfg.MoMRegistry["models/dormant"] = "test/dormant"
 	profile := func(deployment string) config.RoutingProfile {
 		artifact := cfg.ModelDeployments[deployment].Artifact
-		return config.RoutingProfile{ModelBindings: map[string]config.ModelBinding{"domain_classifier": {Deployment: deployment, Contract: "label_distribution.v1", Adapter: "mmbert32k", MappingPath: artifact + "/labels.json"}}, Decisions: cfg.Decisions}
+		return config.RoutingProfile{ModelBindings: map[string]config.ModelBinding{"embedding": embeddingBinding(deployment, artifact+"/labels.json")}, Decisions: cfg.Decisions}
 	}
 	cfg.Recipes = []config.RoutingRecipe{{Name: config.DefaultRecipeName, Profile: profile("new")}, {Name: "private", Profile: profile("private")}, {Name: "dormant", Profile: profile("dormant")}}
 	cfg.Entrypoints = []config.EntrypointMapping{{ModelNames: []string{"private"}, Recipe: "private"}}
@@ -155,20 +117,6 @@ func TestBindingsProvisionOnlyReachableRecipeArtifacts(t *testing.T) {
 		if _, ok := findSpecByPath(specs, path); !ok {
 			t.Fatalf("missing %s", path)
 		}
-	}
-}
-
-func TestUnreachableDefaultStillProvisionsDeclaredPublicAPIModel(t *testing.T) {
-	cfg := &config.RouterConfig{MoMRegistry: map[string]string{"models/fact": "test/fact"}}
-
-	cfg.HallucinationMitigation.FactCheckModel.ModelID = "models/fact"
-	cfg.FactCheckRules = []config.FactCheckRule{{Name: "api-check"}}
-	specs, err := BuildModelSpecs(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(specs) != 1 || specs[0].LocalPath != "models/fact" {
-		t.Fatalf("public API model omitted: %#v", specs)
 	}
 }
 
@@ -295,4 +243,23 @@ func TestGlobalServiceDownloadsIgnoreRecipeOverrides(t *testing.T) {
 			}
 		})
 	}
+}
+
+// deploymentConfig binds the embedding model a router_dc decision reads to a
+// model_runtime deployment of artifact, pinned when artifact is a repository.
+func deploymentConfig(artifact string) *config.RouterConfig {
+	cfg := &config.RouterConfig{MoMRegistry: map[string]string{artifact: "test/new"}}
+	deployment := config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: artifact}
+	if !filepath.IsAbs(artifact) {
+		deployment.Revision = deploymentRevision
+	}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"new": deployment}
+	cfg.EmbeddingConfig.ModelType = "mmbert"
+	cfg.ModelBindings = map[string]config.ModelBinding{"embedding": embeddingBinding("new", "")}
+	cfg.Decisions = []config.Decision{{Name: "route", Algorithm: &config.AlgorithmConfig{Type: "router_dc"}}}
+	return cfg
+}
+
+func embeddingBinding(deployment, mappingPath string) config.ModelBinding {
+	return config.ModelBinding{Deployment: deployment, Contract: "embedding.v1", Adapter: "mmbert", MappingPath: mappingPath}
 }

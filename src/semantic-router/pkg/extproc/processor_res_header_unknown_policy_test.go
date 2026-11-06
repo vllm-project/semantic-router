@@ -78,21 +78,6 @@ func TestAppliedUnknownPolicyHeaderAcrossPolicies(t *testing.T) {
 	}
 }
 
-func evaluateGuardedPolicy(policy config.UnknownPolicy) (*RequestContext, error) {
-	threshold := 0.5
-	engine := decision.NewDecisionEngine(nil, nil, nil, []config.Decision{{Name: "guarded", Rules: config.RuleNode{
-		Type:      config.SignalTypeClassifier,
-		Name:      "risk",
-		Label:     "RISKY",
-		Predicate: &config.NumericPredicate{GTE: &threshold},
-		OnUnknown: policy,
-	}}}, config.RoutingStrategyPriority)
-	_, diagnostics, err := engine.EvaluateDecisionsWithDiagnostics(&decision.SignalMatches{
-		SignalErrors: map[string]string{"classifier:risk": "timeout"},
-	})
-	return &RequestContext{VSRDecisionDiagnostics: diagnostics}, err
-}
-
 func appliedPolicyResponseHeader(t *testing.T, router *OpenAIRouter, ctx *RequestContext) string {
 	t.Helper()
 	resp, err := router.handleResponseHeaders(&ext_proc.ProcessingRequest_ResponseHeaders{
@@ -107,4 +92,19 @@ func appliedPolicyResponseHeader(t *testing.T, router *OpenAIRouter, ctx *Reques
 		}
 	}
 	return ""
+}
+
+func evaluateGuardedPolicy(policy config.UnknownPolicy) (*RequestContext, error) {
+	threshold := 0.5
+	engine := decision.NewDecisionEngine([]config.Decision{{Name: "guarded", Rules: config.RuleNode{
+		Type:      config.SignalTypeSystemOne,
+		Name:      "risk",
+		Label:     "RISKY",
+		Predicate: &config.NumericPredicate{GTE: &threshold},
+		OnUnknown: policy,
+	}}}, config.RoutingStrategyPriority)
+	_, diagnostics, err := engine.EvaluateDecisionsWithDiagnostics(&decision.SignalMatches{
+		SignalErrors: map[string]string{"systemone:risk": "timeout"},
+	})
+	return &RequestContext{VSRDecisionDiagnostics: diagnostics}, err
 }

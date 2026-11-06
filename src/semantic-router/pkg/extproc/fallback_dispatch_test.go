@@ -2404,7 +2404,7 @@ func TestFallbackResponsesAPIStreamingWithPersistence(t *testing.T) {
 }
 
 func TestFallbackResponsePolicyJailbreakBlock(t *testing.T) {
-	server := newJailbreakScoreServer(t, 0.95, 0.05)
+	server := newJailbreakDecider(0.95)
 	router, ctx := newResponseStageRouter(t, server, "", config.ResponseGuardBlock)
 
 	policy := fallback.DefaultEnabledPolicy()
@@ -2499,7 +2499,7 @@ func TestFallbackResponsePolicyJailbreakBlock(t *testing.T) {
 }
 
 func TestFallbackResponsePolicyJailbreakWarningAndMemorySuppression(t *testing.T) {
-	server := newJailbreakScoreServer(t, 0.95, 0.05)
+	server := newJailbreakDecider(0.95)
 	router, ctx := newResponseStageRouter(t, server, "", config.ResponseGuardAnnotate)
 
 	policy := fallback.DefaultEnabledPolicy()
@@ -3260,7 +3260,7 @@ func TestFallbackWritesClientResponseToCache(t *testing.T) {
 }
 
 func TestFallbackBlockedResponseNotCached(t *testing.T) {
-	server := newJailbreakScoreServer(t, 0.95, 0.05)
+	server := newJailbreakDecider(0.95)
 	router, ctx := newResponseStageRouter(t, server, "", config.ResponseGuardBlock)
 
 	policy := fallback.DefaultEnabledPolicy()

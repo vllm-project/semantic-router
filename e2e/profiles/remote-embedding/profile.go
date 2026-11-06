@@ -24,6 +24,8 @@ const (
 var gatewayResources = []string{
 	"deploy/kubernetes/routing-strategies/aigw-resources/base-model.yaml",
 	"deploy/kubernetes/routing-strategies/aigw-resources/gwapi-resources.yaml",
+	// Serves the System One fixture billing_support asks.
+	"deploy/kubernetes/hallucination/provider-mocker.yaml",
 }
 
 // Profile validates text embedding routing through an external OpenAI-compatible provider.
@@ -40,6 +42,7 @@ func NewProfile() *Profile {
 			ResourceManifests:        gatewayResources,
 			WaitDeployments: []helpers.DeploymentRef{
 				{Namespace: "default", Name: "vllm-llama3-8b-instruct"},
+				{Namespace: "default", Name: "provider-mocker"},
 			},
 		}),
 	}

@@ -10,7 +10,8 @@ routing:
   signals:
     pii:
       - name: support_masking
-        threshold: 0.6
+        predicate:
+          gte: 0.6
         description: Personal data masked before the request leaves the Router.
   decisions:
     - name: support

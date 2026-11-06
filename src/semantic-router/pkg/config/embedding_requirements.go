@@ -17,21 +17,6 @@ func EmbeddingRequirements(cfg *RouterConfig, primary string, sharedServices boo
 	cacheNeeded := sharedServices && cfg.NeedsSemanticResponseCache()
 	cfg = cfg.ModelConsumerScope()
 	var result []EmbeddingRequirement
-	if len(cfg.EmbeddingRules) > 0 {
-		options := cfg.EmbeddingConfig.WithDefaults()
-		for _, rule := range cfg.EmbeddingRules {
-			if rule.HasImageCandidates() {
-				result = append(result, EmbeddingRequirement{Model: primary, Consumer: "embedding image candidates " + rule.Name, Dimension: options.TargetDimension, Modality: "image"})
-			}
-			if len(rule.Candidates)+len(rule.NegativeCandidates) > 0 {
-				result = append(result, EmbeddingRequirement{Model: primary, Consumer: "embedding text candidates " + rule.Name, Dimension: options.TargetDimension, Layer: options.TargetLayer, LocalLayerHint: true, Modality: "text"})
-			}
-			result = append(result, EmbeddingRequirement{Model: primary, Consumer: "embedding signal " + rule.Name, Dimension: options.TargetDimension, Layer: options.TargetLayer, LocalLayerHint: true, Modality: string(rule.EffectiveQueryModality())})
-		}
-	}
-	if HasImageCandidatesInRules(cfg.ComplexityRules) {
-		result = append(result, EmbeddingRequirement{Model: "multimodal", Consumer: "complexity image candidates", Modality: "image"})
-	}
 	for _, decision := range cfg.Decisions {
 		if compression := decision.GetContextCompressionConfig(); compression != nil && compression.EffectiveScoring().Method != ContextCompressionScoringBM25 {
 			result = append(result, EmbeddingRequirement{Model: primary, Consumer: "context compression", Dimension: cfg.EmbeddingConfig.TargetDimension, Layer: cfg.EmbeddingConfig.TargetLayer, LocalLayerHint: true})

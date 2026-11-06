@@ -469,12 +469,10 @@ func addPromptCacheReceiptHeaders(
 // this request.
 func addMatchedSignalHeaders(builder *responseHeaderMutationBuilder, ctx *RequestContext) {
 	builder.addJoined(headers.VSRMatchedKeywords, ctx.VSRMatchedKeywords)
-	builder.addJoined(headers.VSRMatchedEmbeddings, ctx.VSRMatchedEmbeddings)
 	builder.addJoined(headers.VSRMatchedDomains, ctx.VSRMatchedDomains)
 	builder.addJoined(headers.VSRMatchedFactCheck, ctx.VSRMatchedFactCheck)
 	builder.addJoined(headers.VSRMatchedUserFeedback, ctx.VSRMatchedUserFeedback)
-	builder.addJoined(headers.VSRMatchedReask, ctx.VSRMatchedReask)
-	builder.addJoined(headers.VSRMatchedPreference, ctx.VSRMatchedPreference)
+	builder.addJoined(headers.VSRMatchedTurnRelation, ctx.VSRMatchedTurnRelation)
 	builder.addJoined(headers.VSRMatchedLanguage, ctx.VSRMatchedLanguage)
 	builder.addJoined(headers.VSRMatchedAction, ctx.VSRMatchedAction)
 	builder.addJoined(headers.VSRMatchedContext, ctx.VSRMatchedContext)
@@ -486,7 +484,6 @@ func addMatchedSignalHeaders(builder *responseHeaderMutationBuilder, ctx *Reques
 	builder.addJoined(headers.VSRMatchedJailbreak, ctx.VSRMatchedJailbreak)
 	builder.addJoined(headers.VSRMatchedSafety, ctx.VSRMatchedSafety)
 	builder.addJoined(headers.VSRMatchedPII, ctx.VSRMatchedPII)
-	builder.addJoined(headers.VSRMatchedKB, ctx.VSRMatchedKB)
 	builder.addJoined(headers.VSRMatchedConversation, ctx.VSRMatchedConversation)
 	builder.addJoined(headers.VSRMatchedEvent, ctx.VSRMatchedEvent)
 	builder.addJoined(headers.VSRMatchedInputModality, ctx.VSRMatchedInputModality)

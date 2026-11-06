@@ -53,7 +53,7 @@ def test_runtime_realization_scopes_default_collector_without_source_changes(
     original = source.read_bytes()
     runtime = tmp_path / "active.yaml"
 
-    realize_runtime_config(source, runtime, package_activation=True)
+    realize_runtime_config(source, runtime)
 
     expected_host = (
         "vllm-sr-jaeger"
@@ -66,7 +66,7 @@ def test_runtime_realization_scopes_default_collector_without_source_changes(
     )
     assert source.read_bytes() == original
     assert runtime.read_bytes() == build_effective_config_bytes(
-        source, None, False, None, package_activation=True
+        source, None, False, None
     )
 
 

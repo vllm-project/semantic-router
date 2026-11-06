@@ -10,7 +10,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -857,13 +856,6 @@ func TestEnvoyActivationVerifierPollsUntilReady(t *testing.T) {
 	}
 	if calls.Load() < 2 {
 		t.Fatalf("calls = %d", calls.Load())
-	}
-}
-
-func TestRecipeRuntimeMaterializeArgsForceSideEffectFreePackageMode(t *testing.T) {
-	args := runtimeMaterializeArgs("/state/raw.yaml", "/state/realized.yaml", runtimeMaterialization{packageActivation: true})
-	if !slices.Contains(args, "--package-activation") {
-		t.Fatalf("runtime materialize args = %#v", args)
 	}
 }
 

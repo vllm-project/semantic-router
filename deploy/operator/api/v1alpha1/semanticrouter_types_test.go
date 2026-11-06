@@ -275,6 +275,13 @@ func TestHNSWEmbeddingConfig(t *testing.T) {
 	}
 }
 
+func candidateCount(candidates *ComplexityCandidates) int {
+	if candidates == nil {
+		return 0
+	}
+	return len(candidates.Candidates)
+}
+
 func TestComplexityRulesConfig(t *testing.T) {
 	tests := []struct {
 		name   string

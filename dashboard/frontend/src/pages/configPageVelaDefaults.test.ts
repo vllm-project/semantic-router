@@ -238,7 +238,6 @@ describe('Vela defaults and explicit legacy models', () => {
           domain: { model_ref: 'domain_classifier', threshold: 0.4 },
           pii: { model_id: 'm' },
         },
-        complexity: { backend: { model: 'remote' }, prototype_scoring: { enabled: true } },
       },
       routerDefaults: null,
       toolsData: [],
@@ -255,10 +254,7 @@ describe('Vela defaults and explicit legacy models', () => {
       model_catalog: { modules: { classifier: { domain: { threshold: 0.4 }, pii: {} } } },
     })
     expect(JSON.stringify(saved('classifier'))).not.toMatch(/model_ref|model_id/)
-    expect(saved('complexity')).toEqual({
-      model_catalog: { modules: { complexity: { prototype_scoring: { enabled: true } } } },
-    })
-    for (const key of ['prompt_guard', 'feedback_detector', 'complexity']) {
+    for (const key of ['prompt_guard', 'feedback_detector']) {
       const names = card(key).editFields.map((field) => field.name)
       expect(names).not.toContain('model_ref')
       expect(names).not.toContain('model_id')

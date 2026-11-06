@@ -27,8 +27,6 @@ configOverride:
       routing:
         decisions: []
   global:
-    model_catalog:
-      kbs: []
     stores:
       response_cache:
         enabled: false

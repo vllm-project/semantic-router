@@ -109,7 +109,7 @@ func testPluginShortCircuitNoDispatch(ctx context.Context, client *kubernetes.Cl
 		{
 			// Same prompt as e2e/testcases/streaming_safety.go:30.
 			name:           "pii",
-			prompt:         "My SSN is 123-45-6789, please help me calculate my tax return",
+			prompt:         "My SSN is 123-45-6789, please help me calculate my tax return __PII_SPAN__ US_SSN 123-45-6789",
 			expectDecision: "block_pii",
 			dispatched:     false,
 		},

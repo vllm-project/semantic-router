@@ -102,10 +102,8 @@ routing:
 
 | 信号 | 用于 |
 | ------ | --------- |
-| [Classifier](./learned/classifier) | 暴露自定义本地分类器或外部 LLM 的标签 |
 | [Complexity](./learned/complexity) | 估计 easy、medium 或 hard 推理流量 |
 | [Domain](./learned/domain) | 对请求主题分类 |
-| [Embedding](./learned/embedding) | 用代表性示例匹配语义意图 |
 | [Modality](./learned/modality) | 分类文本、图像生成或混合输出意图 |
 | [Fact Check](./learned/fact-check) | 检测可能需要证据核验的提示 |
 | [Hallucination](./learned/hallucination) | 对照给定依据上下文检查模型回答 |
@@ -113,9 +111,8 @@ routing:
 | [System One](./learned/systemone) | 使用判断模型提出 choice、score、noul、set 或 span 问题 |
 | [Safety](./learned/safety) | 检测不安全内容及可选风险类别 |
 | [PII](./learned/pii) | 检测敏感个人数据 |
-| [Preference](./learned/preference) | 推断响应风格偏好 |
-| [Reask](./learned/reask) | 检测近期对话历史中的重复提问 |
-| [Knowledge Base](./learned/kb) | 匹配可复用示例集中的标签或分组 |
+| [Refusal](./learned/refusal) | 检测拒绝请求的回答 |
+| [Turn Relation](./learned/turn-relation) | 检测对话中的重复提问或话题切换 |
 | [User Feedback](./learned/user-feedback) | 检测纠正、不满或升级反馈 |
 
 请遵守：

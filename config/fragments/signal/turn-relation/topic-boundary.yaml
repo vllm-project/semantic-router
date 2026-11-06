@@ -1,0 +1,8 @@
+routing:
+  signals:
+    turn_relation:
+      - name: topic_boundary
+        description: Whether the live turn still depends on retained history.
+        labels: [continue, shift]
+        input:
+          previous_turns: 8

@@ -186,20 +186,6 @@ func formatDSLFieldValue(value Value) string {
 	return formatPluginConfigValue(dslFieldValueFromValue(value).asInterface())
 }
 
-func decompileComposerObj(node *config.RuleCombination) string {
-	if node == nil {
-		return "{}"
-	}
-	if node.Type != "" {
-		return fmt.Sprintf("{ type: %q, name: %q }", node.Type, node.Name)
-	}
-	var parts []string
-	for i := range node.Conditions {
-		parts = append(parts, decompileComposerObj(&node.Conditions[i]))
-	}
-	return fmt.Sprintf("{ operator: %q, conditions: [%s] }", normalizedRuleOperator(node.Operator), strings.Join(parts, ", "))
-}
-
 func (d *decompiler) decompileDecisions() {
 	for _, dec := range d.cfg.Decisions {
 		d.decompileDecision(dec)

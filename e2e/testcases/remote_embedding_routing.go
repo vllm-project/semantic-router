@@ -19,7 +19,7 @@ const remoteEmbeddingExpectedDimension = 4
 
 func init() {
 	pkgtestcases.Register("remote-embedding-routing", pkgtestcases.TestCase{
-		Description: "Verify remote embedding provider startup and deterministic embedding-signal routing",
+		Description: "Verify remote embedding provider startup and deterministic billing_support routing",
 		Tags:        []string{"embedding", "remote-provider", "routing", "openai-compatible"},
 		Fn:          testRemoteEmbeddingRouting,
 	})
@@ -66,8 +66,8 @@ func testRemoteEmbeddingRouting(
 
 	cases := []remoteEmbeddingRouteCase{
 		{
-			Name:             "billing prompt matches remote embedding signal",
-			Prompt:           "Please explain the invoice charge on my subscription and issue a refund.",
+			Name:             "billing prompt matches billing_support",
+			Prompt:           "Please explain the invoice charge on my subscription and issue a refund. __SYSTEMONE_YES__",
 			ExpectedDecision: "billing-route",
 		},
 		{

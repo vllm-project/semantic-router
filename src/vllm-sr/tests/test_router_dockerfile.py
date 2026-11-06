@@ -16,7 +16,6 @@ MODEL_RUNTIME = REPO_ROOT / "src" / "model-runtime"
 STAGE = re.compile(r"^FROM\s+(?:--platform=\S+\s+)?(\S+)\s+AS\s+(\S+)\s*$", re.M)
 STAGES = (
     "router-build",
-    "image-routing-assets",
     "python-base",
     "torch-cpu",
     "torch-rocm-base",
@@ -182,10 +181,6 @@ def test_router_images_carry_no_onnx_runtime_or_prepared_bundles() -> None:
 def test_router_images_share_the_model_assets() -> None:
     router = stages()["vllm-sr"][1]
 
-    assert (
-        "COPY --link --from=image-routing-assets /out/ /app/share/image-routing/"
-        in (router)
-    )
     assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in router
     assert "ENV VLLM_SRUN_CACHE_DIR=/app/models/model-runtime" in router
     # The charts' root filesystem is read-only: GPU caches live in the model volume.

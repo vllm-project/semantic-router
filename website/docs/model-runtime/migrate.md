@@ -150,8 +150,8 @@ when every deployment is ready.
 ## A complete example
 
 This configuration uses ONNX Runtime on an AMD GPU for embeddings, candle on
-an NVIDIA GPU for a domain classifier, an older jailbreak model and the NLI
-explainer:
+an NVIDIA GPU for a domain classifier, and the response cache's NLI polarity
+guard:
 
 ```yaml title="legacy.yaml"
 version: v0.3
@@ -186,19 +186,6 @@ global:
         provider: candle
         device: cuda:0
         precision: fp16
-    modules:
-      prompt_guard:
-        enabled: true
-        model_id: models/mom-jailbreak-classifier
-        variant: candle
-      hallucination_mitigation:
-        enabled: true
-        detector:
-          backend: candle
-          model_id: models/Vela-1.0-Encoder-307M-Halu
-          enable_nli_filtering: true
-        explainer:
-          model_id: models/mom-halugate-explainer
   stores:
     response_cache:
       enabled: true
@@ -227,16 +214,6 @@ routing:
 global:
   model_catalog:
     deployments:
-      Vela-1.0-Encoder-307M-Guard:
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Guard
-        revision: 087f9e401012df839c83717b746967ac7aebfa3e
-        provider: model_runtime
-        device: cpu
-      Vela-1.0-Encoder-307M-Halu:
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Halu
-        revision: ca87531211e414ac21c641b2faa8b8e21619de8f
-        provider: model_runtime
-        device: cpu
       vela-domain:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain
         provider: model_runtime
@@ -245,14 +222,6 @@ global:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Embedding
         provider: model_runtime
         device: rocm:0
-    modules:
-      prompt_guard:
-        enabled: true
-      hallucination_mitigation:
-        enabled: true
-    bindings:
-      hallucination: Vela-1.0-Encoder-307M-Halu
-      jailbreak: Vela-1.0-Encoder-307M-Guard
   stores:
     response_cache:
       enabled: true

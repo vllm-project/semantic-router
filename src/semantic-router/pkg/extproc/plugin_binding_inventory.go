@@ -43,11 +43,9 @@ func (r *OpenAIRouter) InspectPluginBinding(binding pluginruntime.Binding, plugi
 	case *config.RouterReplayPluginConfig:
 		add("replay_store", r.ReplayRecorder != nil || r.ReplayRecorders[config.RoutingDecisionKey(binding.Recipe, binding.Decision)] != nil)
 	case *config.ResponseGuardPluginConfig:
-		for _, signalType := range []string{config.SignalTypeJailbreak, config.SignalTypeHallucination} {
-			if policy.Reads(signalType) {
-				add(signalType+"_signal", classifier != nil && classifier.ResponseSignalReady(signalType))
-			}
-		}
+		// The recipe's classifier asks the response-stage rules of the
+		// decision model or their deployments.
+		add("response_signals", classifier != nil)
 	case *config.ToolsPluginConfig:
 		if policy.SelectionEnabled() {
 			add("tool_retriever", r.ToolsDatabase != nil && r.ToolsDatabase.IsEnabled())

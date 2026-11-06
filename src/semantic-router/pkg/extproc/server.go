@@ -58,12 +58,6 @@ var (
 				SkipReason: "embedding_runtime_not_ready_for_tools",
 				Load:       router.LoadToolsDatabase,
 			},
-			{
-				Name:       "knowledge_bases",
-				Ready:      state.KnowledgeBasesReady,
-				SkipReason: "embedding_runtime_not_ready_for_knowledge_bases",
-				Load:       router.PreloadKnowledgeBases,
-			},
 		}, modelruntime.WarmupRouterOptions{
 			Component:      "extproc",
 			MaxParallelism: 2,
@@ -177,14 +171,6 @@ func (s *Server) WarmupRouter(
 			SkipReason: "embedding_runtime_not_ready_for_tools",
 			Load: func() error {
 				return generation.withLease(generation.router.LoadToolsDatabase)
-			},
-		},
-		{
-			Name:       "knowledge_bases",
-			Ready:      state.KnowledgeBasesReady,
-			SkipReason: "embedding_runtime_not_ready_for_knowledge_bases",
-			Load: func() error {
-				return generation.withLease(generation.router.PreloadKnowledgeBases)
 			},
 		},
 	}, options)
@@ -893,10 +879,5 @@ func (r *OpenAIRouter) embeddingRuntimeState() modelruntime.EmbeddingRuntimeStat
 	state := modelruntime.EmbeddingState(r.Config, r.Embeddings)
 	state.AnyReady = state.AnyReady || r.serviceEmbeddings.Ready() || r.cacheEmbeddings.Ready() || r.RecipeClassifiers.HasAnyPreparedEmbeddings()
 	state.ToolsReady = r.ToolsDatabase != nil && r.ToolsDatabase.IsEnabled() && r.serviceEmbeddings.Has("")
-	if r.RecipeClassifiers != nil {
-		state.KnowledgeBasesReady = r.RecipeClassifiers.HasPreparedKnowledgeBases()
-	} else {
-		state.KnowledgeBasesReady = r.Classifier.HasPreparedKnowledgeBases()
-	}
 	return state
 }

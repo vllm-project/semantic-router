@@ -24,7 +24,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/topiccontinuity"
 )
 
 // SessionProvenance identifies how RequestContext.SessionID was derived. A
@@ -284,12 +283,10 @@ type RequestContext struct {
 
 	// VSR signal tracking - stores all matched signals for response headers
 	VSRMatchedKeywords        []string // Matched keyword rule names
-	VSRMatchedEmbeddings      []string // Matched embedding rule names
 	VSRMatchedDomains         []string // Matched domain rule names
 	VSRMatchedFactCheck       []string // Matched fact-check signals
 	VSRMatchedUserFeedback    []string // Matched user feedback signals
-	VSRMatchedReask           []string // Matched repeated-question dissatisfaction signals
-	VSRMatchedPreference      []string // Matched preference signals
+	VSRMatchedTurnRelation    []string // Matched turn_relation rules and rule:label references
 	VSRMatchedLanguage        []string // Matched language signals
 	VSRMatchedAction          []string // Matched action signal names
 	VSRMatchedContext         []string // Matched context rule names (e.g. "low_token_count")
@@ -304,11 +301,9 @@ type RequestContext struct {
 	VSRMatchedJailbreak       []string // Matched jailbreak rule names (confidence >= threshold)
 	VSRMatchedSafety          []string // Matched safety rule names (confidence >= threshold)
 	VSRMatchedPII             []string // Matched PII rule names (denied PII types detected)
-	VSRMatchedKB              []string // Matched knowledge-base signal names
 	VSRMatchedConversation    []string // Matched conversation-shape signal names
 	VSRMatchedEvent           []string // Matched event signal names
 	VSRMatchedMetadata        []string // Matched untrusted request metadata signal names
-	VSRMatchedClassifier      []string // Matched generic classifier signal names
 	VSRMatchedInputModality   []string // Matched structural input-modality signal names
 	VSRMatchedDecisionModel   []string // Matched decision-model signals (rule or rule:choice)
 	VSRConversationFacts      classification.ConversationFacts
@@ -415,17 +410,7 @@ type RequestContext struct {
 	ContextRequestIR         *contextcompression.RequestIR
 	ContextHistorySteps      []contextcompression.TransformationStep
 	ProtectedContextMessages map[int]contextcompression.Protection
-	// originalConversation memoizes one decode of OriginalContextHistory for
-	// the request. It is read-only by contract: consumers must not mutate it.
-	originalConversation       *contextcompression.ConversationHistory
-	originalConversationLoaded bool
-	// TopicContinuityEvaluations holds the selected recipe's topic-continuity
-	// results in rule declaration order, with content-free cost receipts.
-	TopicContinuityEvaluations []topiccontinuity.RuleEvaluation
-	// TopicContinuityResults indexes the same results by rule name. Values are
-	// plain structs, so reads are detached copies.
-	TopicContinuityResults map[string]topiccontinuity.Result
-	SemanticResponse       *llmprotocol.Response
+	SemanticResponse         *llmprotocol.Response
 	// PrimaryOutputDigest hashes the answer the selected model produced, taken
 	// before any response-stage plugin rewrites it. A body warning prepends
 	// router text to SemanticResponse in place, so hashing that later would
@@ -445,9 +430,6 @@ type RequestContext struct {
 	// Masking is the request-scoped placeholder allocator: created on the
 	// first masked dispatch, never persisted, logged or shared (D5).
 	Masking *masking.Allocator
-	// PIIScans holds the request's PII classifications by text, so masking
-	// does not ask the model again about text routing already read.
-	PIIScans *classification.PIIScans
 
 	// RAG (Retrieval-Augmented Generation) tracking
 	RAGRetrievedContext string  // Retrieved context from RAG plugin

@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"slices"
 	"testing"
 )
 
@@ -15,14 +16,14 @@ func TestHistoryForHistoryAwareSignals_IncludesPriorUserTurns(t *testing.T) {
 
 	// Must contain every non-user message (existing behavior preserved).
 	for _, want := range nonUserMessages {
-		if !containsString(got, want) {
+		if !slices.Contains(got, want) {
 			t.Errorf("expected history to preserve non-user message %q, got %v", want, got)
 		}
 	}
 
 	// Must ALSO contain the prior user message carrying the secret (the fix).
 	for _, want := range priorUserMessages {
-		if !containsString(got, want) {
+		if !slices.Contains(got, want) {
 			t.Errorf("SECURITY: prior user message %q must be scanned by history-aware signals, got %v", want, got)
 		}
 	}
@@ -34,14 +35,14 @@ func TestHistoryForHistoryAwareSignals_NoDuplicatesAndDropsEmpty(t *testing.T) {
 
 	got := historyForHistoryAwareSignals(priorUserMessages, nonUserMessages)
 
-	if containsString(got, "") {
+	if slices.Contains(got, "") {
 		t.Errorf("expected empty strings to be dropped, got %v", got)
 	}
 	if countString(got, "shared") != 1 {
 		t.Errorf("expected %q to appear exactly once, got %v", "shared", got)
 	}
 	for _, want := range []string{"user-only", "assistant-only", "shared"} {
-		if !containsString(got, want) {
+		if !slices.Contains(got, want) {
 			t.Errorf("expected merged history to contain %q, got %v", want, got)
 		}
 	}

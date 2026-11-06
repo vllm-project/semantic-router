@@ -34,34 +34,6 @@ func EmbeddingModelsNeeded(cfg *RouterConfig, primary string, sharedServices boo
 	if sharedServices && cfg.API.Embeddings.Enabled {
 		needed[primary] = true
 	}
-	if len(cfg.EmbeddingRules) > 0 || (len(cfg.ReaskRules) > 0 && !cfg.ReaskUsesDecisionTask()) || len(cfg.KnowledgeBases) > 0 {
-		needed[primary] = true
-	}
-	if _, remote, _ := cfg.ComplexityRemoteTask(); !remote {
-		for _, rule := range cfg.ComplexityRules {
-			if cfg.ComplexityRuleUsesPrototypes(rule) {
-				needed[primary] = true
-			}
-		}
-	}
-	if len(cfg.PreferenceRules) > 0 && cfg.PreferenceUsesPrototypes() {
-		model := strings.ToLower(strings.TrimSpace(cfg.PreferenceModel.EmbeddingModel))
-		if model == "" {
-			model = "mmbert"
-		}
-		if cfg.UsesRemoteEmbeddings() {
-			model = primary
-		}
-		needed[model] = true
-	}
-	for _, rule := range cfg.JailbreakRules {
-		if rule.Method == "contrastive" {
-			needed[primary] = true
-		}
-	}
-	if HasImageCandidatesInRules(cfg.ComplexityRules) {
-		needed["multimodal"] = true
-	}
 	if sharedServices && cfg.Tools.Enabled {
 		needed[primary] = true
 	}

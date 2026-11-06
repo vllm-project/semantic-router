@@ -127,7 +127,7 @@ func dispatchWithPromptCompression(t *testing.T, path string, apiFormat string, 
 	t.Helper()
 	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(promptCompressionDispatchConfigYAML, apiFormat)))
 	require.NoError(t, err)
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg)
 	require.NoError(t, err)
 	router := &OpenAIRouter{
 		Config:             cfg,

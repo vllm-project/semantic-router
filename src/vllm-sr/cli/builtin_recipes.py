@@ -10,10 +10,6 @@ from typing import Any
 import yaml
 
 from cli.catalog_provider_projection import validate_provider_model_configuration
-from cli.commands.runtime_kb import (
-    validate_kb_source_output_location,
-    validate_kb_sources,
-)
 from cli.config_yaml import safe_load_router_config
 from cli.decision_model import DEFAULT_DECISION_MODEL, configured_decision_model
 from cli.model_bundle import MODEL_BUNDLE_FILES
@@ -185,12 +181,11 @@ def compose_builtin_recipe(
 ) -> dict[str, Any]:
     """Return a validated copy of config that publishes one installed recipe.
 
-    config is the provider config read from config_path, which anchors its
-    config-relative KB sources. Every selected decision is bound to
-    operator-supplied provider model refs, and the new entrypoint serves
-    model_names, the first as its primary name. The original package, provider
-    document, and authored model metadata are unchanged. Algorithm contracts
-    and minimum pools remain authoritative.
+    config is the provider config read from config_path. Every selected
+    decision is bound to operator-supplied provider model refs, and the new
+    entrypoint serves model_names, the first as its primary name. The original
+    package, provider document, and authored model metadata are unchanged.
+    Algorithm contracts and minimum pools remain authoritative.
     """
     _, document, _ = _bundle(bundle, version)
     recipes = [
@@ -201,7 +196,6 @@ def compose_builtin_recipe(
             f"Bundle '{bundle}' has no recipe '{name}'; run recipe builtin list"
         )
     selected = copy.deepcopy(recipes[0])
-    validate_kb_sources(config, config_path)
     candidate = copy.deepcopy(config)
     models = {
         model["name"] for model in candidate.get("providers", {}).get("models", [])
@@ -322,7 +316,6 @@ def initialize_builtin_recipe(
     if output.exists():
         raise ValueError(f"Output file already exists: {output}")
     config = load_provider_config(config_path)
-    validate_kb_source_output_location(config, config_path, output)
     candidate = compose_builtin_recipe(
         name,
         bundle=bundle,

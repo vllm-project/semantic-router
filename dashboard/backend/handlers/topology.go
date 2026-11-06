@@ -248,7 +248,7 @@ func callRouterAPI(ctx context.Context, req TestQueryRequest, routerAPIURL, conf
 	if err != nil {
 		log.Printf("Router API preview failed: %v", err)
 		if errors.Is(err, context.DeadlineExceeded) {
-			return failedTestQueryResult(req, "Router preview timed out. Retry after the classifiers finish warming up.", http.StatusGatewayTimeout)
+			return failedTestQueryResult(req, "Router preview timed out. Retry after the models finish warming up.", http.StatusGatewayTimeout)
 		}
 		return failedTestQueryResult(req, "Router API unavailable; live preview could not complete.", http.StatusBadGateway)
 	}

@@ -28,32 +28,31 @@ var modelCatalogDocPages = []string{
 var titledYAMLBlock = regexp.MustCompile("(?ms)^```ya?ml title=\"([^\"]+)\"\\n(.*?)^```")
 
 // allSignals are the signal types every expectation that names "*" means.
-var allSignals = []string{"domain", "jailbreak", "pii", "fact_check", "user_feedback", "hallucination", "preference", "complexity.probe", "classifier.probe", "safety.probe"}
+var allSignals = []string{
+	"domain", "fact_check", "user_feedback", "jailbreak", "safety", "pii", "hallucination", "refusal", "turn_relation", "complexity", "modality",
+}
 
-// docExampleResolutions is what each documented example resolves to: a
-// signal type, rule (classifier.<rule>, safety.<rule>, safety.<rule>.hazard,
-// complexity.<rule>, systemone.<rule>), selector.<decision>, embedding,
-// multimodal or rerank, optionally prefixed with recipe:<name>/, to the
-// deployment that answers it. "*" sets every signal in allSignals.
+// docExampleResolutions is what each documented example resolves to: an
+// application signal type, a rule (<type>.<rule>, systemone.<rule>),
+// selector.<decision>, embedding, multimodal or rerank, optionally prefixed
+// with recipe:<name>/, to the deployment that answers it. "*" sets every
+// signal in allSignals.
 var docExampleResolutions = map[string]map[string]string{
-	"s1-defaults": {"*": "primary", "safety.probe.hazard": "hazard", "embedding": "vela-embedding", "multimodal": "omni-nano"},
-	"s2-remote-systemone": {
-		"*": "d3-remote", "safety.probe.hazard": "hazard", "embedding": "vela-embedding", "multimodal": "omni-nano",
-	},
-	"s3-mixed": {"*": "d3-remote", "pii": "local-vela", "safety.probe.hazard": "hazard"},
+	"s1-defaults":         {"*": "primary", "embedding": "vela-embedding", "multimodal": "omni-nano"},
+	"s2-remote-systemone": {"*": "d3-remote", "embedding": "vela-embedding", "multimodal": "omni-nano"},
+	"s3-mixed":            {"*": "d3-remote", "pii": "local-vela"},
 	"s4-type-and-rule-overrides": {
 		"*": "kai", "domain": "d3-remote", "systemone.needs_reasoning": "kai", "systemone.support_team": "d3-remote",
 	},
 	"s4-recipe-scope": {"*": "kai", "recipe:support/domain": "d3-remote", "recipe:support/pii": "kai"},
 	"s5-rule-level": {
-		"classifier.risk": "content-risk", "safety.harmful": "d3-remote", "safety.harmful.hazard": "hazard",
-		"selector.pick-model": "kai", "domain": "primary",
+		"domain.math": "primary", "domain.law": "kai", "safety.harmful": "d3-remote", "selector.pick-model": "kai", "domain": "primary",
 	},
 	"field-reference":      {"*": "primary", "pii": "primary", "embedding": "vela-embedding", "multimodal": "omni-nano"},
 	"r1-remote-embedding":  {"embedding": "remote-embed", "*": "primary"},
 	"r2-attached-reranker": {"rerank": "document-ranker"},
-	"r3-classify-and-chat": {"jailbreak": "guard", "classifier.tool-risk": "chat-judge", "domain": "primary"},
-	"r4-systemone-gateway": {"*": "d3-gateway", "safety.probe.hazard": "hazard"},
+	"r3-remote-judge":      {"jailbreak": "d3-judge", "hallucination": "d3-judge", "domain": "primary"},
+	"r4-systemone-gateway": {"*": "d3-gateway"},
 	"r5-attached-runtime":  {"*": "decision-kai"},
 	"r6-request-backends":  {"*": "primary"},
 }
@@ -165,6 +164,16 @@ func resolveDocKey(cfg *RouterConfig, key string) string {
 			}
 		}
 		return "no rule " + key
+	case isApplicationConsumer(key) && !strings.Contains(key, ".") && BindingConsumer(key) == key:
+		name, _ := scoped.ApplicationTypeDeployment(key)
+		return name
+	case strings.Contains(key, ".") && isApplicationConsumer(strings.SplitN(key, ".", 2)[0]):
+		for _, rule := range scoped.ApplicationRules() {
+			if rule.Type+"."+rule.Rule.Name == key {
+				return scoped.deploymentOrDecisionModel(rule.Rule.Deployment)
+			}
+		}
+		return "no rule " + key
 	case strings.HasPrefix(key, "selector."):
 		for _, decision := range scoped.Decisions {
 			if "selector."+decision.Name == key && decision.Algorithm != nil && decision.Algorithm.SystemOne != nil {
@@ -259,7 +268,7 @@ func effectiveDeployments(cfg *RouterConfig, keys []string) map[string]string {
 	effective := map[string]string{}
 	for _, key := range keys {
 		name := resolveDocKey(cfg, key)
-		if consumer := BindingConsumer(key); !moduleSwitchedOn(cfg, consumer) || name == "none" {
+		if name == "none" {
 			effective[key] = "no model"
 			continue
 		}
@@ -271,37 +280,6 @@ func effectiveDeployments(cfg *RouterConfig, keys []string) map[string]string {
 	admission, _ := yaml.Marshal(canonical.Global.ModelCatalog.Admission)
 	effective["admission"] = string(admission)
 	return effective
-}
-
-// moduleSwitchedOn reports whether a module that has its own switch is on.
-func moduleSwitchedOn(cfg *RouterConfig, consumer string) bool {
-	switch consumer {
-	case "domain_classifier":
-		return cfg.CategoryModel.Active()
-	case "pii_classifier":
-		return cfg.PIIModel.Active()
-	}
-	return true
-}
-
-func ruleKeys(cfg *RouterConfig) []string {
-	var keys []string
-	for _, rule := range cfg.ClassifierRules {
-		keys = append(keys, "classifier."+rule.Name)
-	}
-	for _, rule := range cfg.SafetyRules {
-		keys = append(keys, "safety."+rule.Name)
-		if rule.Hazard != nil {
-			keys = append(keys, "safety."+rule.Name+".hazard")
-		}
-	}
-	for _, rule := range cfg.ComplexityRules {
-		keys = append(keys, "complexity."+rule.Name)
-	}
-	for _, rule := range cfg.SystemOneRules {
-		keys = append(keys, "systemone."+rule.Name)
-	}
-	return keys
 }
 
 func TestModelResourceMigrationPairsResolveToTheSameDeployments(t *testing.T) {
@@ -339,7 +317,7 @@ func TestModelResourceMigrationPairsResolveToTheSameDeployments(t *testing.T) {
 			if warnings := warningCodes(current)[warningDeprecatedModelField]; warnings > 0 {
 				t.Errorf("the new form writes %d deprecated fields: %+v", warnings, Warnings(current))
 			}
-			keys := append([]string{"domain", "jailbreak", "pii", "fact_check", "user_feedback", "hallucination", "preference", "embedding", "multimodal", "rerank"}, ruleKeys(old)...)
+			keys := append([]string{"domain", "jailbreak", "pii", "fact_check", "user_feedback", "hallucination", "embedding", "multimodal", "rerank"}, ruleKeys(old)...)
 			keys = append(keys, ruleKeys(current)...)
 			was, now := effectiveDeployments(old, keys), effectiveDeployments(current, keys)
 			for _, key := range sortedStringKeys(was) {
@@ -372,4 +350,15 @@ func TestModelCatalogDocExamplesMatchTheirTranslations(t *testing.T) {
 			}
 		}
 	}
+}
+
+func ruleKeys(cfg *RouterConfig) []string {
+	var keys []string
+	for _, rule := range cfg.SystemOneRules {
+		keys = append(keys, "systemone."+rule.Name)
+	}
+	for _, rule := range cfg.ApplicationRules() {
+		keys = append(keys, rule.Type+"."+rule.Rule.Name)
+	}
+	return keys
 }

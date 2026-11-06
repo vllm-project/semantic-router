@@ -1,93 +1,21 @@
 {
-  "01-system-lines.yaml": {
-    "signals": {
-      "default/domain": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Domain@f6354f54adcf38770f635ad903be2b00577f6c11 cpu replicas=0",
-      "default/fact_check": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-FactCheck@99ede1aba1563e59e416f744d25b3f6b7e9d8274 cpu replicas=0",
-      "default/jailbreak": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Guard@087f9e401012df839c83717b746967ac7aebfa3e cpu replicas=0",
-      "default/pii": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-PII@6d3300c4bd7975f30a664503f6c725cf1fbbad48 cpu replicas=0",
-      "default/user_feedback": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Feedback@47434a7fd7c245c0c7c17564a000b3c56ccfec41 cpu replicas=0"
-    },
-    "started": [
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Domain@f6354f54adcf38770f635ad903be2b00577f6c11 cpu replicas=0",
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-FactCheck@99ede1aba1563e59e416f744d25b3f6b7e9d8274 cpu replicas=0",
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Feedback@47434a7fd7c245c0c7c17564a000b3c56ccfec41 cpu replicas=0",
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Guard@087f9e401012df839c83717b746967ac7aebfa3e cpu replicas=0",
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-PII@6d3300c4bd7975f30a664503f6c725cf1fbbad48 cpu replicas=0"
-    ],
-    "deprecated_fields": 5
-  },
-  "02-module-model-id.yaml": {
-    "signals": {
-      "default/domain": "none",
-      "default/jailbreak": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Guard@087f9e401012df839c83717b746967ac7aebfa3e cpu replicas=0",
-      "default/pii": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-PII@6d3300c4bd7975f30a664503f6c725cf1fbbad48 auto replicas=0"
-    },
-    "started": [
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Guard@087f9e401012df839c83717b746967ac7aebfa3e cpu replicas=0",
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-PII@6d3300c4bd7975f30a664503f6c725cf1fbbad48 auto replicas=0"
-    ],
-    "deprecated_fields": 3
-  },
-  "03-module-backends.yaml": {
-    "signals": {
-      "default/complexity.hard": "remote http://difficulty.example.com:8000 difficulty",
-      "default/domain": "remote http://domain.example.com:8080",
-      "default/jailbreak": "remote https://guard.example.com:443 gpt-4.1-mini",
-      "default/pii": "remote https://pii.example.com:8443"
-    },
-    "deprecated_fields": 8
-  },
-  "04-http-deployments-and-object-bindings.yaml": {
-    "signals": {
-      "default/domain": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Domain@0b4f9da14f8e8b8d1ae28d3e8d42a4d785c5a3bb cpu replicas=0",
-      "default/jailbreak": "remote https://guard.example.com:443"
-    },
-    "started": [
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Domain@0b4f9da14f8e8b8d1ae28d3e8d42a4d785c5a3bb cpu replicas=0"
-    ],
-    "deprecated_fields": 3
-  },
-  "05-classifier-and-safety-rules.yaml": {
-    "signals": {
-      "default/classifier.remote-risk": "remote http://risk.example.com:8080",
-      "default/classifier.safety-head": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Safety@6e70e725a5f4d86da10f5be5e4dfd1da0358bb85 cpu replicas=0",
-      "default/classifier.tool-risk": "remote https://llm.example.com:443 gpt-4.1-mini",
-      "default/safety.unsafe": "remote http://safety.example.com:8080",
-      "default/safety.unsafe.hazard": "remote http://hazard.example.com:8080"
-    },
-    "started": [
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Safety@6e70e725a5f4d86da10f5be5e4dfd1da0358bb85 cpu replicas=0"
-    ],
-    "deprecated_fields": 9
-  },
   "06-remote-embeddings-and-reranker.yaml": {
     "signals": {
-      "default/embedding": "openai_embeddings https://embed.example.com/v1 BAAI/bge-m3",
-      "default/rag.reranker": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Reranker@a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf cpu replicas=0"
+      "default/rag.reranker": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Reranker@a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf cpu replicas=0",
+      "default/systemone.billing": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     },
     "started": [
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Reranker@a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf cpu replicas=0"
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Reranker@a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf cpu replicas=0",
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     ],
     "deprecated_fields": 2
   },
   "07-systemone-decision-model.yaml": {
     "signals": {
-      "default/domain": "systemone https://systemone.example.com/v1/systemone vllm-sr/d3-ultra",
+      "default/domain.math": "systemone https://systemone.example.com/v1/systemone vllm-sr/d3-ultra",
       "default/safety.unsafe": "systemone https://systemone.example.com/v1/systemone vllm-sr/d3-ultra",
       "default/systemone.needs_tools": "systemone https://systemone.example.com/v1/systemone vllm-sr/d3-ultra"
     },
-    "deprecated_fields": 1
-  },
-  "08-systemone-hazard-without-model.yaml": {
-    "signals": {
-      "default/domain": "systemone https://systemone.example.com/v1/systemone vllm-sr/d3-ultra",
-      "default/safety.unsafe-privacy": "systemone https://systemone.example.com/v1/systemone vllm-sr/d3-ultra",
-      "default/safety.unsafe-privacy.hazard": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Hazard@5dd25f2cc3c98f338e6a79b667662d60f936a28d cpu replicas=0",
-      "default/systemone.needs_tools": "systemone https://systemone.example.com/v1/systemone vllm-sr/d3-ultra"
-    },
-    "started": [
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Hazard@5dd25f2cc3c98f338e6a79b667662d60f936a28d cpu replicas=0"
-    ],
     "deprecated_fields": 1
   }
 }

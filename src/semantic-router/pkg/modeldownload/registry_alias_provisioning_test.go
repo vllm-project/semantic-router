@@ -84,60 +84,6 @@ global:
           model_type: %s
 `
 
-func TestExtractModelPathsCanonicalAliasScope(t *testing.T) {
-	cfg := &config.RouterConfig{}
-	cfg.Qwen3ModelPath = "qwen3"
-	cfg.MmBertModelPath = "models/mom-embedding-pro"
-	cfg.MultiModalModelPath = "/opt/local-model"
-	cfg.CategoryModel.ModelID = "models/local-weights.safetensors"
-	if got := ExtractModelPaths(cfg); !reflect.DeepEqual(got, []string{"models/mom-embedding-pro"}) {
-		t.Fatalf("alias deduplication or nonlocal/file scope changed: %v", got)
-	}
-}
-
-func TestAliasedModelRequirementsShareCanonicalKey(t *testing.T) {
-	cfg := &config.RouterConfig{}
-	cfg.Qwen3ModelPath = "qwen3"
-	cfg.MmBertModelPath = "models/qwen3"
-	required := embeddingModelRequiredFiles(cfg)
-	if _, exists := required["qwen3"]; exists {
-		t.Fatal("runtime requirements retained a bare alias key")
-	}
-	if _, exists := required["models/qwen3"]; exists {
-		t.Fatal("runtime requirements retained a prefixed alias key")
-	}
-	want := []string{"model.safetensors", "tokenizer.json"}
-	if got := required["models/mom-embedding-pro"]; !reflect.DeepEqual(got, want) {
-		t.Fatalf("merged runtime requirements = %v, want %v", got, want)
-	}
-	cfg.CategoryMappingPath = "models/domain-classifier/category_mapping.json"
-	if got := ExtractRequiredFilesByModel(cfg)["models/mom-domain-classifier"]; !reflect.DeepEqual(got, []string{"category_mapping.json"}) {
-		t.Fatalf("mapping requirements lost canonical identity: %v", got)
-	}
-}
-
-func TestBuildModelSpecsAliasedFeatureGate(t *testing.T) {
-	for _, active := range []bool{false, true} {
-		t.Run(fmt.Sprint(active), func(t *testing.T) {
-			cfg := &config.RouterConfig{MoMRegistry: config.ToLegacyRegistry()}
-			cfg.CategoryModel.ModelID = "domain-classifier"
-			if active {
-				cfg.ClassifierRules = []config.ClassifierSignalRule{{
-					Name: "topic", Type: "local", ModelPath: "models/mom-domain-classifier", Labels: []string{"general"},
-				}}
-			}
-			specs, err := BuildModelSpecs(cfg)
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, found := findSpecByPath(specs, "models/mom-domain-classifier")
-			if found != active {
-				t.Fatalf("alias feature gate found=%v, active=%v: %+v", found, active, specs)
-			}
-		})
-	}
-}
-
 func TestBuildModelSpecsRemoteProviderAliasIsNotLocalArtifact(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.3
 providers:

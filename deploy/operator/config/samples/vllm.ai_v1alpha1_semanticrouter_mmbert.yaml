@@ -81,16 +81,6 @@ spec:
         hnsw_ef_construction: 200
         max_memory_entries: 5000
 
-    # Prompt guard (jailbreak detection)
-    prompt_guard:
-      enabled: true
-      threshold: "0.88"
-      # Optional token windows on the local model; omission uses whole input.
-      # max_sequence_length: 32768
-      # window:
-      #   size: 128
-      #   overlap: 63
-
     # Tools auto-selection
     tools:
       enabled: true

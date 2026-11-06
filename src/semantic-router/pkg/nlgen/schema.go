@@ -34,27 +34,40 @@ Matches queries containing specific keywords.
   Fields: keywords (string[]), operator ("any"|"all"), case_sensitive (bool), method (string),
           fuzzy_match (bool), fuzzy_threshold (int), bm25_threshold (float), ngram_threshold (float)
 
-### embedding
-Matches queries semantically similar to candidate phrases.
-  Fields: threshold (float 0-1), candidates (string[]), aggregation_method (string)
-
 ### domain
-Classifies queries into academic/topical domains.
-  Fields: description (string), mmlu_categories (string[])
+Asks the decision model which academic or topical domain a query belongs to.
+  Fields: description (string), labels (string[] of domains; default [name]),
+          predicate: { gte (float) }
 
 ### jailbreak
 Detects jailbreak/prompt-injection attempts.
-  Fields: method (string), threshold (float 0-1), include_history (bool), description (string),
-          jailbreak_patterns (string[]), benign_patterns (string[])
+  Fields: description (string), predicate: { gte (float) }, stage ("request"|"response"),
+          input: { history (bool) }
+
+### safety
+Detects unsafe content; labels name harm categories.
+  Fields: description (string), labels (string[]), predicate: { gte (float) }, stage ("request"|"response")
 
 ### pii
 Detects personally identifiable information.
-  Fields: threshold (float 0-1), pii_types_allowed (string[]), include_history (bool), description (string)
+  Fields: description (string), predicate: { gte (float) }, ignore_labels (string[]),
+          input: { history (bool), tool_results (bool) }
+
+### hallucination
+Checks the answer against its grounding context (response stage).
+  Fields: description (string), predicate: { gte (float) }
+
+### refusal
+Detects answers that decline the request (response stage).
+  Fields: description (string), predicate: { gte (float) }
+
+### turn_relation
+How the current turn relates to the conversation: continue, reask, shift or return.
+  Fields: description (string), labels (string[]), input: { previous_turns (int) }
 
 ### complexity
-Classifies query difficulty.
-  Fields: threshold (float 0-1), description (string),
-          hard: { candidates (string[]) }, easy: { candidates (string[]) }
+Classifies query difficulty: easy, medium or hard.
+  Fields: description (string), labels (string[])
 
 ### language
 Detects the language of the query.
@@ -66,29 +79,21 @@ Matches based on conversation context length (inclusive token band).
   min_tokens == max_tokens matches exactly that token count.
 
 ### modality
-Detects input modality (text, image, audio, etc.).
-  Fields: description (string)
-
-### preference
-Matches user preference patterns.
-  Fields: description (string), examples (string[]), threshold (float 0-1)
+Detects the requested output modality: text, image, text_image, ...
+  Fields: description (string), labels (string[]), predicate: { gte (float) }
 
 ### fact_check
 Flags queries needing factual verification.
-  Fields: description (string)
+  Fields: description (string), labels (["FACT_CHECK_NEEDED"]|["NO_FACT_CHECK_NEEDED"])
 
 ### user_feedback
 Reacts to user feedback signals.
-  Fields: description (string)
+  Fields: description (string), labels (string[], e.g. ["WRONG_ANSWER"])
 
 ### authz
 Role-based access control signal.
   Fields: role (string), description (string),
           subjects: [{ kind (string), name (string) }]
-
-### kb
-Knowledge base retrieval signal.
-  Fields: kb (string), target: { kind (string), value (string) }, match (string)
 
 ### structure
 Detects structural patterns in queries (code, JSON, URLs, etc.).
@@ -208,6 +213,7 @@ SIGNAL domain math {
 
 SIGNAL domain coding {
   description: "Programming and software development queries"
+  labels: ["computer science"]
 }
 
 ROUTE math_route {
@@ -246,8 +252,7 @@ SIGNAL keyword billing {
 }
 
 SIGNAL jailbreak detector {
-  method: "classifier"
-  threshold: 0.8
+  predicate: { gte: 0.8 }
 }
 
 ROUTE jailbreak_block {
@@ -282,8 +287,7 @@ ROUTE fallback {
 # Example 3: Decision tree with safety guardrails
 
 SIGNAL jailbreak detector {
-  method: "classifier"
-  threshold: 0.85
+  predicate: { gte: 0.85 }
 }
 
 SIGNAL domain math {
@@ -327,8 +331,8 @@ SIGNAL domain math {
 }
 
 SIGNAL complexity hard_problem {
-  threshold: 0.7
   description: "Complex problems requiring deep reasoning"
+  labels: ["hard"]
 }
 
 ROUTE hard_math {
@@ -354,21 +358,19 @@ ROUTE default {
   MODEL "qwen2.5:7b"
 }
 
-# Example 5: Embedding signals with OR logic
+# Example 5: Domain signals with OR logic
 
-SIGNAL embedding ai_topics {
-  threshold: 0.75
-  candidates: ["machine learning", "neural networks", "deep learning", "AI safety"]
+SIGNAL domain math {
+  labels: ["math"]
 }
 
-SIGNAL embedding web_dev {
-  threshold: 0.75
-  candidates: ["React", "CSS layout", "REST API design", "web performance"]
+SIGNAL domain physics {
+  labels: ["physics"]
 }
 
-ROUTE ai_or_webdev {
+ROUTE stem {
   PRIORITY 100
-  WHEN embedding("ai_topics") OR embedding("web_dev")
+  WHEN domain("math") OR domain("physics")
   MODEL "gpt-4o"
 }
 
@@ -377,33 +379,18 @@ ROUTE general {
   MODEL "qwen2.5:3b"
 }
 
-# Example 6: Knowledge base routing with projections
+# Example 6: A repeated question goes to a stronger model
 
-SIGNAL kb privacy_policy {
-  kb: "privacy_kb"
-  target: { kind: "group", value: "privacy_policy" }
-  match: "best"
+SIGNAL turn_relation repeated {
+  description: "The user asks again for what they asked before"
+  labels: ["reask"]
+  input: { previous_turns: 2 }
 }
 
-PROJECTION score privacy_score {
-  method: "weighted_sum"
-  inputs: [{ type: "kb", kb: "privacy_kb", metric: "relevance", weight: 1.0, value_source: "score" }]
-}
-
-ROUTE privacy_route {
+ROUTE retry_strong {
   PRIORITY 200
-  WHEN kb("privacy_policy")
+  WHEN turn_relation("repeated")
   MODEL "qwen2.5:14b"
-  PLUGIN rag {
-    enabled: true
-    backend: "privacy_kb"
-    top_k: 5
-  }
-  PLUGIN tools {
-    enabled: true
-    mode: "passthrough"
-    semantic_selection: true
-  }
 }
 
 ROUTE default {
@@ -414,8 +401,8 @@ ROUTE default {
 # Example 7: PII and authz with plugin configuration
 
 SIGNAL pii detector {
-  threshold: 0.9
-  pii_types_allowed: ["name", "email"]
+  predicate: { gte: 0.9 }
+  ignore_labels: ["PERSON", "EMAIL_ADDRESS"]
 }
 
 SIGNAL authz admin_only {

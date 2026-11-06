@@ -58,7 +58,7 @@ routing:
     domains:
       - name: general
         description: General requests
-        mmlu_categories: [other]
+        labels: [other]
   modelCards:
     - name: qwen3
   decisions:
@@ -116,7 +116,7 @@ routing:
     domains:
       - name: general
         description: General requests
-        mmlu_categories: [other]
+        labels: [other]
   modelCards:
     - name: gpt-4o
   decisions:

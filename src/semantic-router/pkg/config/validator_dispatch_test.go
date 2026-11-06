@@ -22,10 +22,6 @@ func TestConfigContractValidatorsRejectNil(t *testing.T) {
 			return validateConfigContractsAtStage(cfg, staticConfigValidation)
 		}, "router configuration is nil"},
 		{"deployments", validateModelDeploymentContracts, "model bindings require router configuration"},
-		{"complexity", validateComplexityModelBackendContracts, "complexity model configuration is nil"},
-		{"complexity_public", ValidateComplexityModelBackend, "complexity model configuration is nil"},
-		{"pii", validatePIIModelBackendContracts, "PII model configuration is nil"},
-		{"pii_public", ValidatePIIModelBackend, "PII model configuration is nil"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if err := tc.validate(nil); err == nil || err.Error() != tc.want {
@@ -54,25 +50,14 @@ func TestConfigLoadValidatesGlobalsForEverySource(t *testing.T) {
 		{"embedding_dimensions", remoteEmbeddingGlobal("dimensions: 64"), "must match embedding_config.target_dimension"},
 		{"embedding_retries", remoteEmbeddingGlobal("max_retries: -1"), "endpoint.max_retries"},
 		{"embedding_timeout", remoteEmbeddingGlobal("timeout_seconds: -1"), "endpoint.timeout_seconds"},
-		{"admission_overflow", `model_catalog: {admission: {prompt_guard: {max_concurrency: 1, on_overflow: drop}}}`, "on_overflow"},
-		{"admission_queue", `model_catalog: {admission: {prompt_guard: {max_concurrency: 1, max_queue: -1}}}`, "max_queue"},
+		{"admission_overflow", `model_catalog: {admission: {primary: {max_concurrency: 1, on_overflow: drop}}}`, "on_overflow"},
+		{"admission_queue", `model_catalog: {admission: {primary: {max_concurrency: 1, max_queue: -1}}}`, "max_queue"},
 		{"deployment_provider", `model_catalog: {deployments: {encoder: {artifact: models/encoder, provider: unknown}}}`, "unsupported provider"},
 		{"tool_filter", `integrations: {tools: {advanced_filtering: {enabled: true, min_combined_score: 1.5}}}`, "min_combined_score"},
 		{"prompt_profile", `model_catalog: {modules: {prompt_compression: {profile: unknown}}}`, "prompt_compression.profile"},
-		{"modality_method", `model_catalog: {modules: {modality_detector: {enabled: true, method: unknown}}}`, "modality_detection.method"},
-		{"hallucination_backend", `model_catalog: {modules: {hallucination_mitigation: {detector: {backend: unknown}}}}`, "hallucination detector backend"},
 		{"remom_models", `integrations: {looper: {remom: {model_names: [""]}}}`, "remom.model_names was removed"},
 		{"fusion_models", `integrations: {looper: {fusion: {model_names: [""]}}}`, "fusion.model_names was removed"},
 		{"flow_backend", `integrations: {looper: {flow: {state: {store_backend: unknown}}}}`, "state.store_backend"},
-		{"category_backend", `model_catalog: {modules: {classifier: {domain: {backend: {protocol: unknown, model: classifier}}}}}`, "classifier.domain.backend.protocol"},
-		{"complexity_backend", `model_catalog: {modules: {complexity: {backend: {protocol: unknown, model: classifier}}}}`, "complexity.backend.protocol"},
-		{"pii_error_policy", `model_catalog: {modules: {classifier: {pii: {on_error: unknown}}}}`, "classifier.pii.on_error"},
-		{"pii_window_size", `model_catalog: {modules: {classifier: {pii: {window: {size: 0}}}}}`, "classifier.pii.window.size"},
-		{"pii_window_overlap", `model_catalog: {modules: {classifier: {pii: {window: {size: 128, overlap: 128}}}}}`, "classifier.pii.window.overlap"},
-		{"prompt_guard_window_size", `model_catalog: {modules: {prompt_guard: {window: {size: 0}}}}`, "prompt_guard.window.size"},
-		{"prompt_guard_window_overlap", `model_catalog: {modules: {prompt_guard: {window: {size: 128, overlap: -1}}}}`, "prompt_guard.window.overlap"},
-		{"prompt_guard_window_labels", `model_catalog: {modules: {prompt_guard: {window: {size: 128}, positive_labels: [unsafe, unsafe]}}}`, "prompt_guard.positive_labels"},
-		{"prompt_guard_wiring", `model_catalog: {external: [], modules: {prompt_guard: {enabled: true, backend: {protocol: http_chat, model: guard, contract: label_decision.v1}}}}`, "not declared"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -117,7 +102,7 @@ stores:
   memory: {default_similarity_threshold: 0}
 model_catalog:
   admission:
-    prompt_guard: {max_concurrency: 1, max_queue: 1, on_overflow: wait}
+    primary: {max_concurrency: 1, max_queue: 1, on_overflow: wait}
 `)
 			cfg, err := ParseYAMLBytes(raw)
 			if err != nil {
@@ -177,25 +162,13 @@ func TestKubernetesValidationDefersRoutingUntilCRDsAreMerged(t *testing.T) {
 			want: "model name cannot be empty",
 		},
 		{
-			name: "complexity_recipe_boundaries",
+			name: "recipe_application_rule_label",
 			mutate: func(cfg *RouterConfig) {
 				cfg.Recipes = []RoutingRecipe{{Name: "internal", Profile: RoutingProfile{Signals: Signals{
-					ComplexityRules: []ComplexityRule{{Name: "difficulty", HardBelow: floatPtr(0.4), EasyAbove: floatPtr(0.8)}},
+					ComplexityRules: []ComplexityRule{{Name: "difficulty", Labels: []string{"impossible"}}},
 				}}}}
 			},
-			want: "declares hard_below/easy_above",
-		},
-		{
-			name: "recipe_classifier_missing_model",
-			mutate: func(cfg *RouterConfig) {
-				for _, name := range []RecipeName{"private", "public"} {
-					cfg.Recipes = append(cfg.Recipes, RoutingRecipe{Name: name, Profile: RoutingProfile{Signals: Signals{
-						ClassifierRules: []ClassifierSignalRule{{Name: "risk", Type: "local", ModelPath: "models/" + string(name), Labels: []string{"SAFE", "RISKY"}}},
-					}}})
-				}
-				cfg.Recipes[1].Profile.Signals.ClassifierRules[0].ModelPath = ""
-			},
-			want: "local classifiers require model_path",
+			want: `"impossible" is not a complexity label`,
 		},
 	}
 	for _, tc := range cases {
@@ -211,76 +184,6 @@ func TestKubernetesValidationDefersRoutingUntilCRDsAreMerged(t *testing.T) {
 			cfg.ConfigSource = ConfigSourceFile
 			if err := validateConfigStructure(cfg); err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("file validation error = %v, want %q", err, tc.want)
-			}
-		})
-	}
-}
-
-func TestConfigValidationDefersWindowBindingBudgets(t *testing.T) {
-	for _, tc := range []struct {
-		consumer, contract string
-		configure          func(*RouterConfig)
-	}{
-		{"prompt_guard", RemoteClassifierContractLabelDistribution, func(cfg *RouterConfig) {
-			cfg.PromptGuard = PromptGuardConfig{
-				MaxSequenceLength: 64,
-				Window:            &SequenceHeadWindowConfig{Size: 128, Overlap: 63},
-			}
-		}},
-		{"pii_classifier", RemoteClassifierContractTokenSpans, func(cfg *RouterConfig) {
-			cfg.PIIModel = PIIModel{
-				MaxSequenceLength: 64,
-				Window:            &SequenceHeadWindowConfig{Size: 128, Overlap: 63},
-			}
-		}},
-	} {
-		t.Run(tc.consumer, func(t *testing.T) {
-			cfg := &RouterConfig{ConfigSource: ConfigSourceKubernetes}
-			tc.configure(cfg)
-			cfg.ModelDeployments = map[string]ModelDeployment{
-				"large": {Provider: ModelRuntimeProvider, Artifact: "models/test", Input: ModelInputBudget{MaxTokens: 256, Overflow: "window"}},
-				"small": {Provider: ModelRuntimeProvider, Artifact: "models/test", Input: ModelInputBudget{MaxTokens: 64, Overflow: "window"}},
-			}
-			for _, name := range []RecipeName{DefaultRecipeName, "private"} {
-				cfg.Recipes = append(cfg.Recipes, RoutingRecipe{Name: name, Profile: RoutingProfile{
-					ModelBindings: map[string]ModelBinding{tc.consumer: {
-						Deployment: "large", Contract: tc.contract, Adapter: "mmbert32k",
-					}},
-				}})
-			}
-			// Explicit bindings supply the window budget instead of the smaller
-			// module budget, so static validation cannot check that compatibility.
-			if err := validateConfigStructure(cfg); err != nil {
-				t.Fatalf("static validation inspected window binding compatibility: %v", err)
-			}
-			if err := ValidateKubernetesConfigContracts(cfg); err != nil {
-				t.Fatalf("valid explicit window bindings rejected: %v", err)
-			}
-			cfg.ConfigSource = ConfigSourceFile
-			if err := validateConfigStructure(cfg); err != nil {
-				t.Fatalf("file source rejected valid window bindings: %v", err)
-			}
-
-			binding := cfg.Recipes[1].Profile.ModelBindings[tc.consumer]
-			binding.Deployment = "small"
-			cfg.Recipes[1].Profile.ModelBindings[tc.consumer] = binding
-			cfg.ConfigSource = ConfigSourceKubernetes
-			if err := validateConfigStructure(cfg); err != nil {
-				t.Fatalf("static validation inspected recipe window budget: %v", err)
-			}
-			for _, validate := range []struct {
-				name string
-				run  func(*RouterConfig) error
-			}{
-				{"complete", ValidateKubernetesConfigContracts},
-				{"file", func(cfg *RouterConfig) error {
-					cfg.ConfigSource = ConfigSourceFile
-					return validateConfigStructure(cfg)
-				}},
-			} {
-				if err := validate.run(cfg); err == nil || !strings.Contains(err.Error(), `recipe "private"`) || !strings.Contains(err.Error(), "window.size") {
-					t.Fatalf("%s validation must reject the private recipe budget, got %v", validate.name, err)
-				}
 			}
 		})
 	}

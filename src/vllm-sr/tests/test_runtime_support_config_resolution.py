@@ -12,7 +12,7 @@ from cli.commands.runtime_support import (
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
-def test_resolve_effective_config_path_keeps_amd_embeddings_and_enables_other_gpu_models(
+def test_resolve_effective_config_path_keeps_amd_embeddings_on_cpu(
     tmp_path: Path, monkeypatch
 ):
     monkeypatch.delenv("VLLM_SR_ROCM_FORCE_GPU", raising=False)
@@ -29,12 +29,6 @@ def test_resolve_effective_config_path_keeps_amd_embeddings_and_enables_other_gp
                                 "use_cpu": True,
                                 "embedding_config": {"model_type": "mmbert"},
                             }
-                        },
-                        "modules": {
-                            "prompt_guard": {"use_cpu": True},
-                            "classifier": {
-                                "domain": {"use_cpu": True},
-                            },
                         },
                     }
                 },
@@ -54,16 +48,6 @@ def test_resolve_effective_config_path_keeps_amd_embeddings_and_enables_other_gp
     assert (
         effective["global"]["model_catalog"]["embeddings"]["semantic"]["use_cpu"]
         is True
-    )
-    assert (
-        effective["global"]["model_catalog"]["modules"]["prompt_guard"]["use_cpu"]
-        is False
-    )
-    assert (
-        effective["global"]["model_catalog"]["modules"]["classifier"]["domain"][
-            "use_cpu"
-        ]
-        is False
     )
 
 
@@ -85,12 +69,6 @@ def test_resolve_effective_config_path_enables_nvidia_gpu_by_default(
                                 "embedding_config": {"model_type": "mmbert"},
                             }
                         },
-                        "modules": {
-                            "prompt_guard": {"use_cpu": True},
-                            "classifier": {
-                                "domain": {"use_cpu": True},
-                            },
-                        },
                     }
                 },
             },
@@ -108,16 +86,6 @@ def test_resolve_effective_config_path_enables_nvidia_gpu_by_default(
     effective = yaml.safe_load(effective_path.read_text())
     assert (
         effective["global"]["model_catalog"]["embeddings"]["semantic"]["use_cpu"]
-        is False
-    )
-    assert (
-        effective["global"]["model_catalog"]["modules"]["prompt_guard"]["use_cpu"]
-        is False
-    )
-    assert (
-        effective["global"]["model_catalog"]["modules"]["classifier"]["domain"][
-            "use_cpu"
-        ]
         is False
     )
 
@@ -140,9 +108,6 @@ def test_resolve_effective_config_path_preserves_nvidia_use_cpu_when_requested(
                                 "embedding_config": {"model_type": "mmbert"},
                             }
                         },
-                        "modules": {
-                            "prompt_guard": {"use_cpu": True},
-                        },
                     }
                 },
             },
@@ -160,10 +125,6 @@ def test_resolve_effective_config_path_preserves_nvidia_use_cpu_when_requested(
     effective = yaml.safe_load(effective_path.read_text())
     assert (
         effective["global"]["model_catalog"]["embeddings"]["semantic"]["use_cpu"]
-        is True
-    )
-    assert (
-        effective["global"]["model_catalog"]["modules"]["prompt_guard"]["use_cpu"]
         is True
     )
 
@@ -186,12 +147,6 @@ def test_resolve_effective_config_path_preserves_amd_use_cpu_when_requested(
                                 "embedding_config": {"model_type": "mmbert"},
                             }
                         },
-                        "modules": {
-                            "prompt_guard": {"use_cpu": True},
-                            "classifier": {
-                                "domain": {"use_cpu": True},
-                            },
-                        },
                     }
                 },
             },
@@ -209,16 +164,6 @@ def test_resolve_effective_config_path_preserves_amd_use_cpu_when_requested(
     effective = yaml.safe_load(effective_path.read_text())
     assert (
         effective["global"]["model_catalog"]["embeddings"]["semantic"]["use_cpu"]
-        is True
-    )
-    assert (
-        effective["global"]["model_catalog"]["modules"]["prompt_guard"]["use_cpu"]
-        is True
-    )
-    assert (
-        effective["global"]["model_catalog"]["modules"]["classifier"]["domain"][
-            "use_cpu"
-        ]
         is True
     )
 
@@ -321,13 +266,7 @@ def test_resolve_effective_config_path_injects_missing_amd_gpu_defaults_by_defau
     effective = yaml.safe_load(effective_path.read_text())
     model_catalog = effective["global"]["model_catalog"]
     assert model_catalog["embeddings"]["semantic"]["use_cpu"] is True
-    assert model_catalog["modules"]["prompt_guard"]["use_cpu"] is False
-    assert model_catalog["modules"]["classifier"]["domain"]["use_cpu"] is False
-    assert model_catalog["modules"]["classifier"]["pii"]["use_cpu"] is False
-    assert model_catalog["modules"]["feedback_detector"]["use_cpu"] is False
-    assert (
-        model_catalog["modules"]["modality_detector"]["classifier"]["use_cpu"] is False
-    )
+    assert "modules" not in model_catalog
     assert "bert" not in model_catalog["embeddings"]
 
 
@@ -389,7 +328,6 @@ def test_effective_config_preserves_explicit_embedding_execution(
             "model_catalog": {
                 "deployments": {"gpu-embedding": deployment},
                 "embeddings": {"semantic": semantic},
-                "modules": {"classifier": {"domain": {"use_cpu": True}}},
             }
         },
     }
@@ -402,7 +340,7 @@ def test_effective_config_preserves_explicit_embedding_execution(
     effective = yaml.safe_load(effective_path.read_text())
     catalog = effective["global"]["model_catalog"]
     assert catalog["embeddings"]["semantic"]["use_cpu"] is expected
-    assert catalog["modules"]["classifier"]["domain"]["use_cpu"] is False
+    assert "modules" not in catalog
     assert catalog["deployments"] == {"gpu-embedding": deployment}
     assert effective["routing"]["model_bindings"] == {"embedding": binding}
     assert config_path.read_bytes() == original

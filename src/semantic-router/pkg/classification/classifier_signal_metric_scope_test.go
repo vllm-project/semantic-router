@@ -14,10 +14,6 @@ func matchCount(signalType, signalName string) float64 {
 	return testutil.ToFloat64(metrics.SignalMatchTotal.WithLabelValues(signalType, signalName))
 }
 
-func extractionCount(signalType, signalName string) float64 {
-	return testutil.ToFloat64(metrics.SignalExtractionTotal.WithLabelValues(signalType, signalName))
-}
-
 func newMetricScopeResults() *SignalResults {
 	return &SignalResults{
 		SignalConfidences: map[string]float64{},
@@ -62,57 +58,6 @@ func TestMetadataSignalMatchMetricUsesRecipeScope(t *testing.T) {
 		t.Fatalf("scoped match counter moved by %v, want 1", got)
 	}
 	if got := matchCount(config.SignalTypeMetadata, ruleName) - beforeLocal; got != 0 {
-		t.Fatalf("unscoped match counter moved by %v, want 0", got)
-	}
-}
-
-func TestGenericClassifierSignalMetricsUseRecipeScope(t *testing.T) {
-	const ruleName = "metric_scope_classifier_rule"
-	classifier := &Classifier{
-		Config: &config.RouterConfig{
-			RoutingScope: "metric-scope-recipe",
-			IntelligentRouting: config.IntelligentRouting{
-				Signals: config.Signals{ClassifierRules: []config.ClassifierSignalRule{{
-					Name:   ruleName,
-					Type:   "llm",
-					Model:  "risk-model",
-					Labels: []string{"SAFE", "RISKY"},
-				}}},
-			},
-		},
-		genericClassifiers: map[string]labelClassifier{
-			ruleName: fakeLabelClassifier{result: labelClassification{
-				Scores: map[string]float64{"SAFE": 0, "RISKY": 1},
-			}},
-		},
-	}
-	scopedRule := config.RoutingNamespaceKey(classifier.Config.RoutingScope, ruleName)
-	label := ruleName + ":RISKY"
-	scopedLabel := config.RoutingNamespaceKey(classifier.Config.RoutingScope, label)
-	beforeExtraction := extractionCount(config.SignalTypeClassifier, scopedRule)
-	beforeMatch := matchCount(config.SignalTypeClassifier, scopedLabel)
-	beforeLocalExtraction := extractionCount(config.SignalTypeClassifier, ruleName)
-	beforeLocalMatch := matchCount(config.SignalTypeClassifier, label)
-
-	var mu sync.Mutex
-	classifier.evaluateGenericClassifierSignals(
-		newMetricScopeResults(),
-		&mu,
-		"text",
-		map[string]bool{config.SignalTypeClassifier + ":" + ruleName: true},
-		t.Context(),
-	)
-
-	if got := extractionCount(config.SignalTypeClassifier, scopedRule) - beforeExtraction; got != 1 {
-		t.Fatalf("scoped extraction counter moved by %v, want 1", got)
-	}
-	if got := matchCount(config.SignalTypeClassifier, scopedLabel) - beforeMatch; got != 1 {
-		t.Fatalf("scoped match counter moved by %v, want 1", got)
-	}
-	if got := extractionCount(config.SignalTypeClassifier, ruleName) - beforeLocalExtraction; got != 0 {
-		t.Fatalf("unscoped extraction counter moved by %v, want 0", got)
-	}
-	if got := matchCount(config.SignalTypeClassifier, label) - beforeLocalMatch; got != 0 {
 		t.Fatalf("unscoped match counter moved by %v, want 0", got)
 	}
 }

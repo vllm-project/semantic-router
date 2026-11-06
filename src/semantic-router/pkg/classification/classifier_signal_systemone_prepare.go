@@ -6,23 +6,33 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/presets"
 )
 
-// preparedSystemOneRules are the rules a generation prepares: the
-// request-stage rules its decisions use, and every response-stage rule, which
-// a response plugin asks.
-func (c *Classifier) preparedSystemOneRules() []config.SystemOneRule {
+// preparedSystemOneRules are the systemone and application rules a
+// generation prepares: the request-stage rules its decisions use, every
+// response-stage rule, which a response plugin asks, and the hallucination
+// question a grounding fusion asks about each answer.
+func (c *Classifier) preparedSystemOneRules() []askedRule {
 	if c == nil || c.Config == nil {
 		return nil
 	}
-	var used map[string]bool
-	if c.usesRoutingSignalType(config.SignalTypeSystemOne) {
-		used = c.getUsedSignals()
-	}
-	var rules []config.SystemOneRule
+	used := c.getUsedSignals()
+	var rules []askedRule
 	for _, rule := range c.Config.SystemOneRules {
 		if rule.EffectiveStage() == config.SystemOneStageResponse || signalRuleUsed(used, config.SignalTypeSystemOne, rule.Name) {
-			rules = append(rules, rule)
+			rules = append(rules, systemOneAsked(rule))
+		}
+	}
+	for _, rule := range c.applicationRules {
+		if rule.Rule.EffectiveStage() == config.SystemOneStageResponse || signalRuleUsed(used, rule.Type, rule.Rule.Name) {
+			rules = append(rules, applicationAsked(rule))
+		}
+	}
+	if decision, grounds := c.Config.GroundingFusionDecision(); grounds {
+		if asked, _, err := c.presetAsked(config.SignalTypeHallucination, presets.Hallucination, presets.StageResponse); err == nil {
+			asked.path = c.Config.ScopePath("decisions[" + decision + "].algorithm.fusion.grounding")
+			rules = append(rules, asked)
 		}
 	}
 	return rules
@@ -38,10 +48,26 @@ func (c *Classifier) preparedSystemOneRules() []config.SystemOneRule {
 func (c *Classifier) prepareSystemOneSignals() error {
 	services := c.models != nil && c.models.runtime != nil && c.models.runtime.Services() != nil
 	cards := make(map[string]modelservice.ModelCard)
-	for _, rule := range c.preparedSystemOneRules() {
+	for _, asked := range c.preparedSystemOneRules() {
+		rule := asked.rule
 		name, deployment := c.systemOneRuleDeployment(rule)
 		path := c.Config.ScopePath("signals.systemone[" + rule.Name + "]")
 		definition := modelservice.TaskDefinition{ID: config.SignalTypeSystemOne, Stage: rule.EffectiveStage()}
+		check := func(questionTypes, modalities []string) error {
+			return config.CheckSystemOneAnswerer(path, name, rule, questionTypes, modalities)
+		}
+		if asked.preset != "" {
+			path = c.Config.ApplicationRulePath(asked.signalType, rule.Name)
+			definition = modelservice.TaskDefinition{ID: modelservice.PresetTask(asked.preset), Stage: rule.EffectiveStage(), Preset: asked.preset}
+			application := config.ApplicationRule{Type: asked.signalType, Preset: asked.preset, Rule: rule}
+			check = func(questionTypes, modalities []string) error {
+				return config.CheckApplicationAnswerer(path, c.Config.ScopePath(""), name, application, questionTypes, modalities)
+			}
+		}
+		if asked.path != "" {
+			path = asked.path
+		}
+		question := askedQuestion(asked)
 		if deployment.IsSystemOne() {
 			declared := deployment.DeclaredQuestionTypes()
 			if len(declared) == 0 {
@@ -51,10 +77,10 @@ func (c *Classifier) prepareSystemOneSignals() error {
 			if len(deployment.DeclaredModalities()) > 0 {
 				modalities = deployment.DeclaredModalities()
 			}
-			if err := config.CheckSystemOneAnswerer(path, name, rule, declared, modalities); err != nil {
+			if err := check(declared, modalities); err != nil {
 				return err
 			}
-			if _, err := modelservice.CompileTask(definition, systemOneRuleQuestion(rule), modelservice.RemoteCard(deployment.Model, declared, deployment.DeclaredPresets())); err != nil {
+			if _, err := modelservice.CompileTask(definition, question, modelservice.RemoteCard(deployment.Model, declared, deployment.DeclaredPresets())); err != nil {
 				return fmt.Errorf("%s: systemone deployment %q: %w", path, name, err)
 			}
 			continue
@@ -79,10 +105,10 @@ func (c *Classifier) prepareSystemOneSignals() error {
 			}
 			cards[name] = card
 		}
-		if err := config.CheckSystemOneAnswerer(path, name, rule, card.AnsweredTypes(), card.ReadModalities()); err != nil {
+		if err := check(card.AnsweredTypes(), card.ReadModalities()); err != nil {
 			return err
 		}
-		if _, err := modelservice.CompileTask(definition, systemOneRuleQuestion(rule), card); err != nil {
+		if _, err := modelservice.CompileTask(definition, question, card); err != nil {
 			return fmt.Errorf("%s: deployment %q: %w", path, name, err)
 		}
 	}

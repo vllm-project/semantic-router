@@ -66,40 +66,30 @@ func ruleBindingDeployment(bindings map[string]ModelBinding, keys ...string) (st
 	return "", "", false
 }
 
-// moveRuleBindings writes on each rule of signals that asks its own question
-// the deployment a scope's or the global binding names for it, and drops
-// the scope's bindings it wrote.
+// moveRuleBindings writes on each safety and complexity rule the deployment
+// a binding for that one rule (a deprecated safety.<rule> or
+// complexity.<rule> key) names in the scope or globally, and drops the
+// scope's bindings it wrote.
 func moveRuleBindings(signals *CanonicalSignals, scope, global map[string]ModelBinding) {
 	used := map[string]bool{}
-	take := func(keys ...string) string {
-		if name, key, ok := ruleBindingDeployment(scope, keys...); ok {
-			used[key] = true
+	take := func(key string) string {
+		if name, scopeKey, ok := ruleBindingDeployment(scope, key); ok {
+			used[scopeKey] = true
 			return name
 		}
-		name, _, _ := ruleBindingDeployment(global, keys...)
+		name, _, _ := ruleBindingDeployment(global, key)
 		return name
-	}
-	for i := range signals.Classifiers {
-		rule := &signals.Classifiers[i]
-		if rule.Deployment == "" {
-			rule.Deployment = take("classifier."+rule.Name, bindingKeyClassifier)
-		}
 	}
 	for i := range signals.Safety {
 		rule := &signals.Safety[i]
 		if rule.Deployment == "" {
-			rule.Deployment = take("safety."+rule.Name, bindingKeySafety)
-		}
-		if rule.Hazard != nil && rule.Hazard.Deployment == "" {
-			hazard := *rule.Hazard
-			hazard.Deployment = take("safety."+rule.Name+".hazard", bindingKeyHazard)
-			rule.Hazard = &hazard
+			rule.Deployment = take("safety." + rule.Name)
 		}
 	}
 	for i := range signals.Complexity {
 		rule := &signals.Complexity[i]
 		if rule.Deployment == "" {
-			rule.Deployment = take("complexity."+rule.Name, SignalTypeComplexity)
+			rule.Deployment = take("complexity." + rule.Name)
 		}
 	}
 	for key := range used {
@@ -107,29 +97,24 @@ func moveRuleBindings(signals *CanonicalSignals, scope, global map[string]ModelB
 	}
 }
 
-// canonicalizeRuleBindings moves every rule binding a document's scopes and
-// global catalog name onto the rules, and drops the global ones for types
-// whose rules ask their own question.
+// canonicalizeRuleBindings moves every binding for one rule a document's
+// scopes and global catalog name onto the rule.
 func canonicalizeRuleBindings(doc *CanonicalConfig) {
 	var global map[string]ModelBinding
 	if doc.Global != nil {
 		global = doc.Global.ModelCatalog.Bindings
 	}
-	doc.Routing.Signals.Classifiers = slices.Clone(doc.Routing.Signals.Classifiers)
 	doc.Routing.Signals.Safety = slices.Clone(doc.Routing.Signals.Safety)
 	doc.Routing.Signals.Complexity = slices.Clone(doc.Routing.Signals.Complexity)
 	moveRuleBindings(&doc.Routing.Signals, doc.Routing.ModelBindings, global)
 	for i := range doc.Recipes {
 		signals := &doc.Recipes[i].Routing.Signals
-		signals.Classifiers = slices.Clone(signals.Classifiers)
 		signals.Safety = slices.Clone(signals.Safety)
 		signals.Complexity = slices.Clone(signals.Complexity)
 		moveRuleBindings(signals, doc.Recipes[i].Routing.ModelBindings, global)
 	}
 	for key := range global {
-		_, typeLevel := ruleLevelDeployment[key]
-		ruleKey := startsWithAny(key, "classifier.", "safety.", "complexity.")
-		if _, _, moved := ruleBindingDeployment(global, key); moved && (typeLevel || ruleKey) {
+		if _, _, moved := ruleBindingDeployment(global, key); moved && startsWithAny(key, "safety.", "complexity.") {
 			delete(global, key)
 		}
 	}

@@ -33,7 +33,7 @@ routing:
     domains:
       - name: general
         description: General queries for memory testing
-        mmlu_categories: [other]
+        labels: [other]
     keywords: []
   decisions:
     - name: default_route

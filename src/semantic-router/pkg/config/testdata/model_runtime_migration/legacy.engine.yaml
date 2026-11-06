@@ -31,14 +31,6 @@ global:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain
         provider: model_runtime
         device: cuda:0
-    modules:
-      prompt_guard:
-        enabled: true
-        model_id: models/Vela-1.0-Encoder-307M-Guard
-      hallucination_mitigation:
-        enabled: true
-        detector:
-          model_id: models/Vela-1.0-Encoder-307M-Halu
   stores:
     response_cache:
       enabled: true

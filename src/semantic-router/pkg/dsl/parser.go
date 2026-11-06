@@ -324,12 +324,6 @@ func rawToProjectionScore(r *rawProjectionDecl) *ProjectionScoreDecl {
 			if signalName, ok := getStringField(ov.Fields, "name"); ok {
 				input.SignalName = signalName
 			}
-			if kb, ok := getStringField(ov.Fields, "kb"); ok {
-				input.KB = kb
-			}
-			if metric, ok := getStringField(ov.Fields, "metric"); ok {
-				input.Metric = metric
-			}
 			if weight, ok := getFloat64Field(ov.Fields, "weight"); ok {
 				input.Weight = weight
 			}

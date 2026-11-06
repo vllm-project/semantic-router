@@ -132,35 +132,44 @@ config:
       domains:
         - name: code_keywords
           description: Programming and software development queries
-          mmlu_categories:
+          labels:
             - "computer science"
-        - name: urgent_request
-          description: Urgent and time-sensitive requests
-        - name: sensitive_data
-          description: Requests involving sensitive personal data
         - name: business
           description: Business and management related queries
-          mmlu_categories:
+          labels:
             - business
         - name: other
           description: General knowledge and miscellaneous topics
-          mmlu_categories:
+          labels:
             - other
       jailbreak:
         - name: jailbreak_standard
-          threshold: 0.88
-          include_history: false
           description: Standard jailbreak detection for streaming tests
+          predicate:
+            gte: 0.88
       pii:
         - name: pii_deny_all
-          threshold: 0.18
-          include_history: false
           description: Block all PII
+          predicate:
+            gte: 0.18
     modelCards:
       - name: base-model
   global:
     model_catalog:
-      kbs: []
+      deployments:
+        # provider-mocker's System One fixture answers the jailbreak and PII
+        # rules, so the shared detection cases are pinned by their markers
+        # (tools/test/services/provider-mocker/README.md).
+        fake-systemone:
+          provider: systemone
+          endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/systemone
+          model: e2e/fake-systemone
+          timeout_ms: 5000
+          capabilities:
+            question_types: [choice, noul, span]
+      bindings:
+        jailbreak: fake-systemone
+        pii: fake-systemone
     router:
       streamed_body:
         enabled: true
@@ -178,8 +187,6 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
-          concurrency_threshold: 5
-          max_concurrency: 8
       observability:
         tracing:
           enabled: true

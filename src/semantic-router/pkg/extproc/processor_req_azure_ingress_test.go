@@ -238,7 +238,7 @@ func newAzureIngressTestRouter(t *testing.T) *OpenAIRouter {
 	t.Helper()
 	cfg, err := config.ParseYAMLBytes([]byte(azureIngressTestConfig))
 	require.NoError(t, err)
-	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
+	classifier, err := classification.NewClassifier(cfg)
 	require.NoError(t, err)
 	return &OpenAIRouter{
 		Config:             cfg,

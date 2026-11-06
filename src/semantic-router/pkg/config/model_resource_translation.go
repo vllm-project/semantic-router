@@ -1,7 +1,6 @@
 package config
 
 import (
-	"cmp"
 	"fmt"
 	"net/url"
 	"path/filepath"
@@ -101,33 +100,14 @@ func (c *RouterConfig) cloneModelResources() *RouterConfig {
 	clone.ModelBindings = cloneModelMap(c.ModelBindings)
 	clone.scopedBindings = cloneModelMap(c.scopedBindings)
 	clone.ModelAdmission = cloneAdmissionMap(c.ModelAdmission)
-	clone.ClassifierRules = slices.Clone(c.ClassifierRules)
-	clone.SafetyRules = cloneSafetyRules(c.SafetyRules)
 	clone.ExternalModels = slices.Clone(c.ExternalModels)
-	if c.ModalityDetector.Classifier != nil {
-		classifier := *c.ModalityDetector.Classifier
-		clone.ModalityDetector.Classifier = &classifier
-	}
 	clone.Recipes = slices.Clone(c.Recipes)
 	for i := range clone.Recipes {
 		profile := &clone.Recipes[i].Profile
 		profile.ModelBindings = cloneModelMap(profile.ModelBindings)
-		profile.Signals.ClassifierRules = slices.Clone(profile.Signals.ClassifierRules)
-		profile.Signals.SafetyRules = cloneSafetyRules(profile.Signals.SafetyRules)
 	}
 	clone.modelResourceErrors = nil
 	return &clone
-}
-
-func cloneSafetyRules(rules []SafetyRule) []SafetyRule {
-	cloned := slices.Clone(rules)
-	for i := range cloned {
-		if cloned[i].Hazard != nil {
-			hazard := *cloned[i].Hazard
-			cloned[i].Hazard = &hazard
-		}
-	}
-	return cloned
 }
 
 // translateModelResources translates the configuration in place.
@@ -154,9 +134,6 @@ func (c *RouterConfig) translateModelResources() error {
 			return err
 		}
 	}
-	if err := t.normalizeAdmissionKeys(); err != nil {
-		return err
-	}
 	for _, name := range sortedModelKeys(c.ModelDeployments) {
 		deployment := c.ModelDeployments[name]
 		path := "global.model_catalog.deployments." + name
@@ -178,13 +155,7 @@ func (c *RouterConfig) translateModelResources() error {
 	if err := t.translateHTTPDeployments(); err != nil {
 		return err
 	}
-	first := t.translateModuleBackends()
-	t.translateModuleModels()
-	first = cmp.Or(first, t.translateRules())
-	if err := t.translateEmbeddings(); err != nil {
-		first = cmp.Or(first, err)
-	}
-	t.translatePreference()
+	first := t.translateEmbeddings()
 	t.translateMemoryRewrite()
 	c.ModelResourceWarnings = append(c.ModelResourceWarnings, t.warnings...)
 	if len(t.errors) > 0 {
@@ -192,55 +163,6 @@ func (c *RouterConfig) translateModelResources() error {
 	}
 	c.modelResourcesTranslated = true
 	return first
-}
-
-// normalizeAdmissionKeys keys a signal's own admission gate by its consumer,
-// accepting the signal type and, with a warning, the consumer name of earlier
-// releases.
-func (t *translationState) normalizeAdmissionKeys() error {
-	for _, key := range sortedAdmissionKeys(t.cfg.ModelAdmission) {
-		if _, declared := t.cfg.ModelDeployments[key]; declared {
-			continue
-		}
-		consumer := BindingConsumer(key)
-		if consumer != key && admissionDeploymentKeys[consumer] {
-			if _, both := t.cfg.ModelAdmission[consumer]; both {
-				return fmt.Errorf("global.model_catalog.admission: %s and %s gate the same signal; keep %s", key, consumer, key)
-			}
-			t.cfg.ModelAdmission[consumer] = t.cfg.ModelAdmission[key]
-			delete(t.cfg.ModelAdmission, key)
-			continue
-		}
-		if public := BindingKey(key); public != key && admissionDeploymentKeys[key] {
-			t.warn("global.model_catalog.admission."+key, fmt.Sprintf("%s is deprecated; key the signal's admission as %s", key, public))
-		}
-	}
-	return nil
-}
-
-func sortedAdmissionKeys(admission map[string]AdmissionConfig) []string {
-	keys := make([]string, 0, len(admission))
-	for key := range admission {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
-}
-
-// publicAdmission keys a signal's own admission gate by its signal type for
-// a written configuration.
-func publicAdmission(admission map[string]AdmissionConfig) map[string]AdmissionConfig {
-	if admission == nil {
-		return nil
-	}
-	public := make(map[string]AdmissionConfig, len(admission))
-	for key, gate := range admission {
-		if admissionDeploymentKeys[key] {
-			key = BindingKey(key)
-		}
-		public[key] = gate
-	}
-	return public
 }
 
 // uniqueName returns base, or base with a numeric suffix when another
@@ -435,274 +357,6 @@ func (t *translationState) bind(consumer string, binding ModelBinding) {
 	t.cfg.GlobalModelBindings[consumer] = binding
 }
 
-// translateModuleBackends reads modules.*.backend as a remote deployment.
-func (t *translationState) translateModuleBackends() error {
-	// Each module's backend is checked as it was before translation, so a
-	// configuration that failed to load still does, with the same error.
-	modules := []struct {
-		consumer, field string
-		backend         **RemoteClassifierBackend
-		validate        func(*RouterConfig) error
-	}{
-		{"domain_classifier", "global.model_catalog.modules.classifier.domain.backend", &t.cfg.CategoryModel.Backend, ValidateCategoryModelBackend},
-		{"pii_classifier", "global.model_catalog.modules.classifier.pii.backend", &t.cfg.PIIModel.Backend, validatePIIModelBackendContracts},
-		{"prompt_guard", "global.model_catalog.modules.prompt_guard.backend", &t.cfg.PromptGuard.Backend, validatePromptGuardWiring},
-		{"complexity", "global.model_catalog.modules.complexity.backend", &t.cfg.ComplexityModel.Backend, validateComplexityModelBackendContracts},
-	}
-	var first error
-	for _, module := range modules {
-		backend := *module.backend
-		if backend == nil {
-			continue
-		}
-		name, err := t.moduleBackendDeployment(module.field, backend, module.validate)
-		*module.backend = nil
-		if err != nil {
-			t.errors[module.consumer] = err
-			first = cmp.Or(first, err)
-			continue
-		}
-		t.bind(module.consumer, ModelBinding{Deployment: name, Contract: backend.Contract, Adapter: backend.Protocol})
-		t.warn(module.field, fmt.Sprintf("backend is deprecated; read as bindings.%s: %s", BindingKey(module.consumer), name))
-	}
-	return first
-}
-
-func (t *translationState) moduleBackendDeployment(field string, backend *RemoteClassifierBackend, validate func(*RouterConfig) error) (string, error) {
-	if err := validate(t.cfg); err != nil {
-		return "", err
-	}
-	timeout := time.Duration(backend.EffectiveDeadlineMs()) * time.Millisecond
-	name, err := t.remoteDeployment(backend.Model, providerOfProtocol(backend.Protocol), timeout)
-	if err != nil {
-		return "", fmt.Errorf("%s: %w", strings.TrimSuffix(field, ".backend"), err)
-	}
-	return name, nil
-}
-
-// moduleModel is one module's deprecated model field.
-type moduleModelField struct {
-	consumer string
-	field    string
-	model    *string
-	useCPU   bool
-}
-
-func (t *translationState) moduleModelFields() []moduleModelField {
-	c := t.cfg
-	fields := []moduleModelField{
-		{"domain_classifier", "global.model_catalog.modules.classifier.domain.model_id", &c.CategoryModel.ModelID, c.CategoryModel.UseCPU},
-		{"pii_classifier", "global.model_catalog.modules.classifier.pii.model_id", &c.PIIModel.ModelID, c.PIIModel.UseCPU},
-		{"prompt_guard", "global.model_catalog.modules.prompt_guard.model_id", &c.PromptGuard.ModelID, c.PromptGuard.UseCPU},
-		{"fact_check_classifier", "global.model_catalog.modules.hallucination_mitigation.fact_check.model_id", &c.HallucinationMitigation.FactCheckModel.ModelID, c.HallucinationMitigation.FactCheckModel.UseCPU},
-		{"feedback_detector", "global.model_catalog.modules.feedback_detector.model_id", &c.FeedbackDetector.ModelID, c.FeedbackDetector.UseCPU},
-		{"hallucination_detector", "global.model_catalog.modules.hallucination_mitigation.detector.model_id", &c.HallucinationMitigation.HallucinationModel.ModelID, c.HallucinationMitigation.HallucinationModel.UseCPU},
-		{bindingKeySafety, "global.model_catalog.modules.safety.safety.model_id", &c.SafetyModels.Safety.ModelID, c.SafetyModels.Safety.UseCPU},
-		{bindingKeyHazard, "global.model_catalog.modules.safety.hazard.model_id", &c.SafetyModels.Hazard.ModelID, c.SafetyModels.Hazard.UseCPU},
-	}
-	if classifier := c.ModalityDetector.Classifier; classifier != nil {
-		fields = append(fields, moduleModelField{"modality_detector", "global.model_catalog.modules.modality_detector.classifier.model_path", &classifier.ModelPath, classifier.UseCPU})
-	}
-	return fields
-}
-
-// translateModuleModels reads each module's model path (from its model_id,
-// or the system line its model_ref names) as a deployment and binding.
-func (t *translationState) translateModuleModels() {
-	for _, module := range t.moduleModelFields() {
-		model := strings.TrimSpace(*module.model)
-		*module.model = ""
-		if model == "" {
-			continue
-		}
-		field := module.field
-		if source, ok := t.cfg.legacyModelSources[module.consumer]; ok {
-			field = source
-		}
-		if _, bound := t.cfg.GlobalModelBindings[module.consumer]; bound {
-			t.warn(field, fmt.Sprintf("the model %q is deprecated and ignored: bindings.%s already names the deployment", model, BindingKey(module.consumer)))
-			continue
-		}
-		name, err := t.localDeployment(model, module.useCPU)
-		if err != nil {
-			t.errors[module.consumer] = &DeferredModelError{Err: fmt.Errorf("%s: %w", field, err), Path: model}
-			t.warn(field, fmt.Sprintf("model paths are deprecated; %q names no model: %v", model, err))
-			continue
-		}
-		t.bind(module.consumer, ModelBinding{Deployment: name})
-		t.warn(field, fmt.Sprintf("model paths are deprecated; read as bindings.%s: %s (%s)", BindingKey(module.consumer), name, describeDeployment(t.cfg.ModelDeployments[name])))
-	}
-}
-
-func describeDeployment(deployment ModelDeployment) string {
-	switch {
-	case deployment.IsModelRuntime() && deployment.Artifact != "":
-		return fmt.Sprintf("model_runtime %s on %s", deployment.Artifact, deployment.WithDefaults().Device)
-	case deployment.Endpoint != "":
-		return fmt.Sprintf("%s %s", deployment.Provider, deployment.Endpoint)
-	}
-	return deployment.Provider
-}
-
-// translateRules reads the deprecated model fields of classifier and safety
-// rules, at the top level and in each recipe.
-func (t *translationState) translateRules() error {
-	scopes := []struct {
-		path       string
-		classifier []ClassifierSignalRule
-		safety     []SafetyRule
-		bindings   map[string]ModelBinding
-	}{{"routing.signals", t.cfg.ClassifierRules, t.cfg.SafetyRules, t.cfg.ModelBindings}}
-	for _, recipe := range t.cfg.Recipes {
-		scopes = append(scopes, struct {
-			path       string
-			classifier []ClassifierSignalRule
-			safety     []SafetyRule
-			bindings   map[string]ModelBinding
-		}{fmt.Sprintf("recipes[%s].routing.signals", recipe.Name), recipe.Profile.Signals.ClassifierRules, recipe.Profile.Signals.SafetyRules, recipe.Profile.ModelBindings})
-	}
-	var first error
-	for _, scope := range scopes {
-		bound := func(key string) bool {
-			_, local := scope.bindings[key]
-			_, global := t.cfg.GlobalModelBindings[key]
-			return local || global
-		}
-		for i := range scope.classifier {
-			rule := &scope.classifier[i]
-			if err := t.translateClassifierRule(scope.path, rule, bound("classifier."+rule.Name)); err != nil {
-				t.errors["classifier."+rule.Name] = err
-				first = cmp.Or(first, err)
-			}
-		}
-		for i := range scope.safety {
-			rule := &scope.safety[i]
-			if err := t.translateSafetyRule(scope.path, rule, bound); err != nil {
-				t.errors["safety."+rule.Name] = err
-				first = cmp.Or(first, err)
-			}
-		}
-	}
-	return first
-}
-
-func (t *translationState) translateClassifierRule(path string, rule *ClassifierSignalRule, bound bool) error {
-	field := fmt.Sprintf("%s.classifiers[%q]", path, rule.Name)
-	legacyType, model, modelPath, useCPU := rule.Type, rule.Model, rule.ModelPath, rule.UseCPU
-	if legacyType == "" && model == "" && modelPath == "" && !useCPU {
-		return nil
-	}
-	if rule.Deployment != "" {
-		if model != "" || modelPath != "" {
-			return fmt.Errorf("%s: deployment replaces type, model and model_path; set one", field)
-		}
-		rule.Type, rule.UseCPU = "", false
-		return nil
-	}
-	if !bound {
-		if err := validateLegacyClassifierRule(t.cfg, *rule); err != nil {
-			return err
-		}
-	}
-	rule.legacyType = legacyType
-	rule.Type, rule.Model, rule.ModelPath, rule.UseCPU = "", "", "", false
-	if bound {
-		t.warn(field, "type, model and model_path are deprecated and ignored: a classifier binding names the deployment")
-		return nil
-	}
-	switch legacyType {
-	case ClassifierSignalTypeLLM, ClassifierSignalTypeSequenceClassifier:
-		if model == "" {
-			return fmt.Errorf("%s: a %s classifier names its external model", field, legacyType)
-		}
-		provider := OpenAIChatProvider
-		if legacyType == ClassifierSignalTypeSequenceClassifier {
-			provider = ClassifyProvider
-		}
-		external, err := findNamedExternalModel(t.cfg, model)
-		if err != nil {
-			return fmt.Errorf("%s: %w", field, err)
-		}
-		timeout := time.Duration(0)
-		if provider == OpenAIChatProvider {
-			timeout = DurationFromSeconds(external.TimeoutSeconds)
-		}
-		name, err := t.remoteDeployment(model, provider, timeout)
-		if err != nil {
-			return fmt.Errorf("%s: %w", field, err)
-		}
-		rule.Deployment = name
-	case ClassifierSignalTypeLocal, "":
-		if modelPath == "" {
-			if model != "" {
-				return fmt.Errorf("%s: a local classifier takes model_path, not model", field)
-			}
-			if legacyType != "" {
-				t.warn(field, "type: local is deprecated; a classifier without a deployment asks the decision model")
-			}
-			return nil
-		}
-		name, err := t.localDeployment(modelPath, useCPU)
-		if err != nil {
-			t.errors["classifier."+rule.Name] = &DeferredModelError{Err: fmt.Errorf("%s: %w", field, err), Path: modelPath}
-			t.warn(field, fmt.Sprintf("model_path is deprecated; %q names no model: %v", modelPath, err))
-			return nil
-		}
-		rule.Deployment = name
-	default:
-		return fmt.Errorf("%s: unsupported type %q (supported: %s, %s, %s)", field, legacyType, ClassifierSignalTypeLocal, ClassifierSignalTypeLLM, ClassifierSignalTypeSequenceClassifier)
-	}
-	t.warn(field, fmt.Sprintf("type, model and model_path are deprecated; read as deployment: %s", rule.Deployment))
-	return nil
-}
-
-func (t *translationState) translateSafetyRule(path string, rule *SafetyRule, bound func(string) bool) error {
-	field := fmt.Sprintf("%s.safety[%q]", path, rule.Name)
-	if rule.Model != "" {
-		model := rule.Model
-		rule.Model = ""
-		switch {
-		case rule.Deployment != "":
-			return fmt.Errorf("%s: deployment replaces model; set one", field)
-		case bound("safety." + rule.Name):
-			t.warn(field+".model", "model is deprecated and ignored: a safety binding names the deployment")
-		default:
-			legacy := ClassifierSignalRule{Name: rule.Name, Type: ClassifierSignalTypeSequenceClassifier, Model: model, Labels: rule.EffectiveLabels()}
-			if err := validateSequenceClassifierSignal(t.cfg, legacy); err != nil {
-				return fmt.Errorf("safety %q: %w", rule.Name, err)
-			}
-			name, err := t.remoteDeployment(model, ClassifyProvider, 0)
-			if err != nil {
-				return fmt.Errorf("%s: %w", field, err)
-			}
-			rule.Deployment = name
-			t.warn(field+".model", fmt.Sprintf("model is deprecated; read as deployment: %s", name))
-		}
-	}
-	if rule.Hazard != nil && rule.Hazard.Model != "" {
-		model := rule.Hazard.Model
-		rule.Hazard.Model = ""
-		switch {
-		case rule.Hazard.Deployment != "":
-			return fmt.Errorf("%s.hazard: deployment replaces model; set one", field)
-		case bound("safety." + rule.Name + ".hazard"):
-			t.warn(field+".hazard.model", "model is deprecated and ignored: a hazard binding names the deployment")
-		default:
-			legacy := ClassifierSignalRule{Name: rule.Name, Type: ClassifierSignalTypeSequenceClassifier, Model: model, Labels: rule.Hazard.Labels}
-			if err := validateSequenceClassifierSignal(t.cfg, legacy); err != nil {
-				return fmt.Errorf("safety %q hazard: %w", rule.Name, err)
-			}
-			name, err := t.remoteDeployment(model, ClassifyProvider, 0)
-			if err != nil {
-				return fmt.Errorf("%s.hazard: %w", field, err)
-			}
-			rule.Hazard.Deployment = name
-			t.warn(field+".hazard.model", fmt.Sprintf("model is deprecated; read as hazard.deployment: %s", name))
-		}
-	}
-	return nil
-}
-
 // translateEmbeddings reads embeddings.semantic.endpoint as an
 // openai_embeddings deployment.
 func (t *translationState) translateEmbeddings() error {
@@ -743,29 +397,6 @@ func (t *translationState) translateEmbeddings() error {
 		t.bind("embedding", ModelBinding{Deployment: name})
 	}
 	return nil
-}
-
-// translatePreference binds the preference signal to the external[] model
-// with model_role: preference, which it used to find by role.
-func (t *translationState) translatePreference() {
-	if _, bound := t.cfg.GlobalModelBindings["preference"]; bound {
-		return
-	}
-	if contrastive := t.cfg.PreferenceModel.UseContrastive; contrastive != nil && *contrastive {
-		return
-	}
-	for _, external := range t.cfg.ExternalModels {
-		if external.ModelRole != ModelRolePreference || external.Name == "" {
-			continue
-		}
-		name, err := t.remoteDeployment(external.Name, OpenAIChatProvider, DurationFromSeconds(external.TimeoutSeconds))
-		if err != nil {
-			return
-		}
-		t.bind("preference", ModelBinding{Deployment: name})
-		t.warn(fmt.Sprintf("global.model_catalog.external[%q].model_role", external.Name), fmt.Sprintf("finding the preference model by model_role is deprecated; read as bindings.preference: %s", name))
-		return
-	}
 }
 
 // ModelResourceTranslation lists the deployment each translated consumer

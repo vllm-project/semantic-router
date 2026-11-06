@@ -75,6 +75,5 @@ routing:
 
 ## 相关信号 {#related-signals}
 
-- [`modality`](../learned/modality.md) — 预期输出模态（`AR`、`DIFFUSION`、`BOTH`）。
-- 带 `query_modality: image` 的 [`embedding`](../learned/embedding.md) — 图像内容的语义分类。
+- [`modality`](../learned/modality.md) — 预期输出模态（`text`、`image`、`text_image`）。
 - [`conversation`](conversation.md) — 请求形态事实；其 `image_content` 源仍受支持，并共享同一底层图像计数。

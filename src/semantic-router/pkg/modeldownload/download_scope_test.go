@@ -73,21 +73,6 @@ func TestBuildModelSpecsExcludesOnnxWeightsForAliasedEmbeddingModel(t *testing.T
 	}
 }
 
-// TestEmbeddingExcludePatternsLeaveOtherModelsUnfiltered limits the blast radius to the
-// embedding runtime: other locally provisioned models keep the full snapshot until their
-// own runtime contract is encoded.
-func TestEmbeddingExcludePatternsLeaveOtherModelsUnfiltered(t *testing.T) {
-	cfg := newEmbeddingOnlyConfig()
-	cfg.CategoryModel.ModelID = "models/mom-domain-classifier"
-	excluded := embeddingModelExcludePatterns(cfg)
-	if patterns, ok := excluded["models/mom-domain-classifier"]; ok {
-		t.Fatalf("a classifier snapshot is filtered: %#v", patterns)
-	}
-	if got := excluded[config.ResolveModelPath(testEmbeddingModelPath)]; !reflect.DeepEqual(got, onnxWeightExcludePatterns) {
-		t.Fatalf("embedding ExcludePatterns = %#v", got)
-	}
-}
-
 // TestOnnxWeightExcludePatternsNeverMatchRuntimeRequiredFiles keeps the exclude list
 // and the completeness contract aligned: a pattern that matched a hard-loaded file
 // would make every download incomplete and loop forever.

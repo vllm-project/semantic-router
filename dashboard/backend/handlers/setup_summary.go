@@ -49,12 +49,9 @@ func countConfiguredModels(configData *routerconfig.CanonicalConfig) int {
 
 func countCanonicalSignals(signals routerconfig.CanonicalSignals) int {
 	return len(signals.Keywords) +
-		len(signals.Embeddings) +
 		len(signals.Domains) +
 		len(signals.FactCheck) +
 		len(signals.UserFeedbacks) +
-		len(signals.Reasks) +
-		len(signals.Preferences) +
 		len(signals.Language) +
 		len(signals.Context) +
 		len(signals.Structure) +
@@ -62,10 +59,13 @@ func countCanonicalSignals(signals routerconfig.CanonicalSignals) int {
 		len(signals.Modality) +
 		len(signals.RoleBindings) +
 		len(signals.Jailbreak) +
+		len(signals.Safety) +
+		len(signals.Hallucination) +
+		len(signals.Refusal) +
+		len(signals.TurnRelation) +
 		len(signals.PII) +
-		len(signals.KB) +
 		len(signals.Conversation) +
 		len(signals.EventRules) +
 		len(signals.Metadata) +
-		len(signals.Classifiers)
+		len(signals.SystemOne)
 }

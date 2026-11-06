@@ -15,7 +15,7 @@ func TestTaskCatalogSeparatesAvailableTasksFromActiveBindings(t *testing.T) {
 	if response.DefaultDeployment != "primary" || len(response.Tasks) != len(BuiltinTasks()) || len(response.Models) != 30 {
 		t.Fatalf("catalog unavailable: %d %d", len(response.Tasks), len(response.Models))
 	}
-	if response.DefaultBindings["pii_classifier"].Contract != config.DecisionTaskContract {
+	if response.DefaultBindings[config.SignalTypePII].Contract != config.DecisionTaskContract {
 		t.Fatal("generic default falsely requires token locations")
 	}
 	for _, model := range response.Models {
@@ -31,8 +31,8 @@ func TestTaskCatalogSeparatesAvailableTasksFromActiveBindings(t *testing.T) {
 		}
 	}
 	for _, task := range response.Tasks {
-		if task.ID == "pii_spans" && (len(task.Consumers) != 1 || !task.Consumers[0].Optional || task.Consumers[0].Binding != "pii_classifier") {
-			t.Fatal("span consumer disabled presence")
+		if task.ID == "pii_spans" && (len(task.Consumers) != 1 || task.Consumers[0].Optional || task.Consumers[0].Binding != "pii") {
+			t.Fatal("a pii rule requires span answers")
 		}
 	}
 }
@@ -62,7 +62,7 @@ func TestTaskCatalogPreservesExplicitSpecialistBindingAndDemand(t *testing.T) {
 	cfg := config.DefaultGlobalConfig()
 	cfg.GlobalModelBindings = map[string]config.ModelBinding{"pii_classifier": {Deployment: "specialist", Contract: config.RemoteClassifierContractTokenSpans}}
 	cfg.ModelDeployments["specialist"] = config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: "org/pii-specialist"}
-	cfg.PIIRules = []config.PIIRule{{Name: "personal", Threshold: .7}}
+	cfg.PIIRules = []config.PIIRule{{Name: "personal"}}
 	cfg.Decisions = []config.Decision{{Name: "route", Rules: config.RuleCombination{Operator: "AND", Conditions: []config.RuleNode{{Type: "pii", Name: "personal"}}}}}
 	card := ModelCard{ID: "org/pii-specialist", Surfaces: []string{"classify"}, Heads: []HeadCard{{Kind: "token", Labels: []string{"O", "PERSON"}}}}
 	response := ProjectTaskCatalog(&cfg, []DeploymentStatus{{Name: "specialist", Model: card.ID, Ready: true, Card: &card}})
@@ -87,7 +87,7 @@ func TestTaskCatalogDisplaysArtifactWithoutChangingDeploymentIdentity(t *testing
 			cfg := config.DefaultGlobalConfig()
 			cfg.ModelDeployments["primary"] = config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: tc.declaredArtifact}
 			cfg.GlobalModelBindings = map[string]config.ModelBinding{"pii_classifier": {Deployment: "primary", Contract: config.DecisionTaskContract}}
-			cfg.PIIRules = []config.PIIRule{{Name: "personal", Threshold: .7}}
+			cfg.PIIRules = []config.PIIRule{{Name: "personal"}}
 			cfg.Decisions = []config.Decision{{Name: "route", Rules: config.RuleCombination{Operator: "AND", Conditions: []config.RuleNode{{Type: "pii", Name: "personal"}}}}}
 			card := ModelCard{ID: "primary", Repo: tc.observedRepo, Surfaces: []string{"decisions"}, QuestionTypes: []string{"choice", "noul", "score"}}
 			status := DeploymentStatus{Name: "primary", Model: "served-alias", Artifact: tc.observedArtifact, Ready: true, Card: &card}

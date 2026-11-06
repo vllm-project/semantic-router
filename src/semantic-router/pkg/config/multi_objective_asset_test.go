@@ -26,30 +26,6 @@ func assertMultiObjectiveDecisionModel(t *testing.T, cfg *RouterConfig) {
 	}
 }
 
-// assertMultiObjectiveQuestions checks that a profile routes on exactly these
-// named decision-model questions, with no keyword, embedding, classifier or
-// projection signals left beside them.
-func assertMultiObjectiveQuestions(t *testing.T, recipe *RoutingRecipe, want map[string]float64) {
-	t.Helper()
-	signals := recipe.Profile.Signals
-	got := map[string]float64{}
-	for _, rule := range signals.SystemOneRules {
-		if rule.Predicate == nil || rule.Predicate.GTE == nil {
-			t.Fatalf("recipe %q question %q has no threshold", recipe.Name, rule.Name)
-		}
-		got[rule.Name] = *rule.Predicate.GTE
-	}
-	if !maps.Equal(got, want) {
-		t.Fatalf("recipe %q decision questions = %v, want %v", recipe.Name, got, want)
-	}
-	legacy := len(signals.KeywordRules) + len(signals.EmbeddingRules) + len(signals.ComplexityRules) +
-		len(signals.StructureRules) + len(signals.LanguageRules) + len(signals.KBRules) + len(signals.FactCheckRules) +
-		len(signals.UserFeedbackRules) + len(signals.JailbreakRules) + len(signals.PIIRules)
-	if legacy != 0 || len(recipe.Profile.Projections.Scores) != 0 || len(recipe.Profile.Projections.Mappings) != 0 {
-		t.Fatalf("recipe %q still routes on keyword, embedding, classifier or projection signals: %+v", recipe.Name, signals)
-	}
-}
-
 func assertMultiObjectiveMappings(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
 	expectedEntrypoints := map[string]string{
@@ -121,19 +97,6 @@ func assertMultiObjectiveRecipes(t *testing.T, cfg *RouterConfig) {
 	assertMultiObjectiveEfficiencyRecipes(t, cfg)
 	assertMultiObjectiveAccuracyRecipe(t, cfg)
 	assertMultiObjectivePrivacyRecipe(t, cfg)
-}
-
-func assertMultiObjectiveBalancedRecipe(t *testing.T, cfg *RouterConfig) {
-	t.Helper()
-	balanced, _ := cfg.RecipeByName("balanced")
-	assertMultiObjectiveQuestions(t, balanced, map[string]float64{"correction": 0.6, "deliberate": 0.3, "verification": 0.7})
-	recovery := multiObjectiveDecision(t, balanced, "unified_balance_recovery")
-	if recovery.HasPlugin(DecisionPluginSystemPrompt) {
-		t.Fatal("balanced recovery route must not mutate the user-visible system prompt")
-	}
-	if rules := balanced.Profile.Signals.ReaskRules; len(rules) != 1 || rules[0].Name != "unified_balance_reask" {
-		t.Fatalf("balanced recovery must keep the re-ask judgment, which compares the last two user turns: %+v", rules)
-	}
 }
 
 func assertMultiObjectiveEfficiencyRecipes(t *testing.T, cfg *RouterConfig) {
@@ -289,4 +252,41 @@ func multiObjectiveDecision(t *testing.T, recipe *RoutingRecipe, name string) *D
 	}
 	t.Fatalf("decision %q not found in recipe %q", name, recipe.Name)
 	return nil
+}
+
+func assertMultiObjectiveBalancedRecipe(t *testing.T, cfg *RouterConfig) {
+	t.Helper()
+	balanced, _ := cfg.RecipeByName("balanced")
+	assertMultiObjectiveQuestions(t, balanced, map[string]float64{"correction": 0.6, "deliberate": 0.3, "verification": 0.7})
+	recovery := multiObjectiveDecision(t, balanced, "unified_balance_recovery")
+	if recovery.HasPlugin(DecisionPluginSystemPrompt) {
+		t.Fatal("balanced recovery route must not mutate the user-visible system prompt")
+	}
+	if rules := balanced.Profile.Signals.TurnRelationRules; len(rules) != 1 || rules[0].Name != "unified_balance_reask" {
+		t.Fatalf("balanced recovery must keep the re-ask judgment, which compares the last two user turns: %+v", rules)
+	}
+}
+
+// assertMultiObjectiveQuestions checks that a profile routes on exactly these
+// named decision-model questions, with no keyword, application or projection
+// signals left beside them.
+func assertMultiObjectiveQuestions(t *testing.T, recipe *RoutingRecipe, want map[string]float64) {
+	t.Helper()
+	signals := recipe.Profile.Signals
+	got := map[string]float64{}
+	for _, rule := range signals.SystemOneRules {
+		if rule.Predicate == nil || rule.Predicate.GTE == nil {
+			t.Fatalf("recipe %q question %q has no threshold", recipe.Name, rule.Name)
+		}
+		got[rule.Name] = *rule.Predicate.GTE
+	}
+	if !maps.Equal(got, want) {
+		t.Fatalf("recipe %q decision questions = %v, want %v", recipe.Name, got, want)
+	}
+	legacy := len(signals.KeywordRules) + len(signals.ComplexityRules) + len(signals.StructureRules) +
+		len(signals.LanguageRules) + len(signals.FactCheckRules) + len(signals.UserFeedbackRules) +
+		len(signals.JailbreakRules) + len(signals.PIIRules)
+	if legacy != 0 || len(recipe.Profile.Projections.Scores) != 0 || len(recipe.Profile.Projections.Mappings) != 0 {
+		t.Fatalf("recipe %q still routes on keyword, application or projection signals: %+v", recipe.Name, signals)
+	}
 }

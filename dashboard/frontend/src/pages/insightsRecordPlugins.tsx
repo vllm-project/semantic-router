@@ -14,7 +14,7 @@ function responseOutcomes(record: InsightsRecord, signal: string) {
   return (record.outcomes ?? []).filter(
     (outcome) =>
       outcome.source === 'router' &&
-      outcome.metadata?.direction === 'response' &&
+      outcome.metadata?.stage === 'response' &&
       outcome.metadata?.signal === signal,
   )
 }

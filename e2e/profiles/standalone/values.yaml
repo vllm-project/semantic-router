@@ -76,7 +76,6 @@ configOverride:
         decisions: []
   global:
     model_catalog:
-      kbs: []
       deployments:
         primary:
           provider: model_runtime

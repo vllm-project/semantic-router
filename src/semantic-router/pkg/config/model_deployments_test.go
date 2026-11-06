@@ -17,11 +17,11 @@ func testDeploymentConfig() *RouterConfig {
 	cfg.ModelAdmission = map[string]AdmissionConfig{"shared-encoder": {MaxConcurrency: 2, MaxQueue: 3, OnOverflow: "shed"}}
 	cfg.Recipes = []RoutingRecipe{
 		{Name: "support", Profile: RoutingProfile{ModelBindings: map[string]ModelBinding{
-			"domain_classifier": {Deployment: "shared-encoder", Contract: RemoteClassifierContractLabelDistribution, Adapter: "modernbert", Head: "domain-head", MappingPath: "domain-labels.json"},
-			"pii_classifier":    {Deployment: "shared-encoder", Contract: RemoteClassifierContractTokenSpans, Adapter: "modernbert", Head: "pii-head", MappingPath: "pii-labels.json"},
+			"prompt_guard":   {Deployment: "shared-encoder"},
+			"pii_classifier": {Deployment: "shared-encoder"},
 		}}},
 		{Name: "coding", Profile: RoutingProfile{ModelBindings: map[string]ModelBinding{
-			"domain_classifier": {Deployment: "other-encoder", Contract: RemoteClassifierContractLabelDistribution, Adapter: "mmbert32k"},
+			"prompt_guard": {Deployment: "other-encoder"},
 		}}},
 	}
 	return cfg
@@ -33,23 +33,23 @@ func TestCompileModelBindingsPreservesResourceAndTaskIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	domain, ok := plan.Lookup("support", "domain_classifier")
-	if !ok || domain.Binding.Head != "domain-head" || domain.Admission.MaxConcurrency != 2 {
-		t.Fatalf("domain=%+v", domain)
+	guard, ok := plan.Lookup("support", "prompt_guard")
+	if !ok || guard.Name != "prompt_guard" || guard.Binding.Contract != DecisionTaskContract || !guard.Binding.ContractImplied() || guard.Admission.MaxConcurrency != 2 {
+		t.Fatalf("guard=%+v", guard)
 	}
 	pii, ok := plan.Lookup("support", "pii_classifier")
-	if !ok || !reflect.DeepEqual(pii.Deployment, domain.Deployment) || pii.Binding.Head == domain.Binding.Head {
-		t.Fatalf("head/resource identities conflated: %+v", pii)
+	if !ok || !reflect.DeepEqual(pii.Deployment, guard.Deployment) || pii.Name != "pii_classifier" || pii.Admission != guard.Admission {
+		t.Fatalf("task/resource identities conflated: %+v", pii)
 	}
 	if _, ok := plan.Lookup("coding", "pii_classifier"); ok {
 		t.Fatal("foreign recipe lookup succeeded")
 	}
-	coding, _ := plan.Lookup("coding", "domain_classifier")
+	coding, _ := plan.Lookup("coding", "prompt_guard")
 	if coding.Deployment.Device != "rocm:1" {
 		t.Fatal("wrong recipe deployment")
 	}
 	cfg.ModelDeployments["shared-encoder"] = ModelDeployment{}
-	retained, _ := plan.Lookup("support", "domain_classifier")
+	retained, _ := plan.Lookup("support", "prompt_guard")
 	if retained.Deployment.Artifact == "" {
 		t.Fatal("compiled plan aliases mutable configuration")
 	}
@@ -103,9 +103,9 @@ func TestCompileModelBindingsRejectsInvalidPreparation(t *testing.T) {
 			cfg.ModelDeployments["shared-encoder"] = d
 		}, "must not be negative"},
 		{"wrong contract", func(cfg *RouterConfig) {
-			b := cfg.Recipes[0].Profile.ModelBindings["domain_classifier"]
+			b := cfg.Recipes[0].Profile.ModelBindings["prompt_guard"]
 			b.Contract = RemoteClassifierContractScore
-			cfg.Recipes[0].Profile.ModelBindings["domain_classifier"] = b
+			cfg.Recipes[0].Profile.ModelBindings["prompt_guard"] = b
 		}, "contract must"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -168,11 +168,11 @@ func TestNamedDeploymentAdmissionAndCanonicalRoundTrip(t *testing.T) {
 		t.Fatal("deployment lost during canonical round trip")
 	}
 	recipes := canonicalRecipesFromRouterConfig(cfg)
-	if len(recipes) != 2 || recipes[0].Routing.ModelBindings[BindingKey("pii_classifier")].Head != "pii-head" {
+	if len(recipes) != 2 || recipes[0].Routing.ModelBindings[BindingKey("pii_classifier")] != (ModelBinding{Deployment: "shared-encoder"}) {
 		t.Fatal("recipe binding lost during export")
 	}
 	scoped := cfg.ConfigForRecipe(&cfg.Recipes[0])
-	if scoped.ModelBindings["domain_classifier"].Deployment != "shared-encoder" {
+	if scoped.ModelBindings["prompt_guard"].Deployment != "shared-encoder" {
 		t.Fatal("recipe view lost bindings")
 	}
 }
@@ -197,11 +197,11 @@ global:
 	}
 }
 
-func TestDormantComplexityRejectsUnsupportedLocalProvider(t *testing.T) {
+func TestComplexityBindingRejectsARemoteScoreContract(t *testing.T) {
 	cfg := &RouterConfig{}
 	cfg.ModelDeployments = map[string]ModelDeployment{"local": {Provider: ModelRuntimeProvider, Artifact: "/mounted/local"}}
 	cfg.Recipes = []RoutingRecipe{{Name: "dormant", Profile: RoutingProfile{ModelBindings: map[string]ModelBinding{"complexity": {Deployment: "local", Contract: "score.v1", Adapter: "mmbert"}}}}}
 	if _, err := CompileModelBindings(cfg); err == nil {
-		t.Fatal("dormant recipe accepted unsupported local complexity")
+		t.Fatal("a complexity binding accepted the score contract of a removed remote scorer")
 	}
 }

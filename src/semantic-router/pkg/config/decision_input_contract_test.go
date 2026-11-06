@@ -129,7 +129,7 @@ providers:
 routing:
   modelCards: [{name: m}]
   signals:
-    domains: [{name: math, description: Math requests., mmlu_categories: [math]}]
+    domains: [{name: math, description: Math requests., labels: [math]}]
   decisions:
     - name: d
       priority: 1
@@ -140,11 +140,11 @@ global:
     deployments:
       encoder:
         provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Embedding
         device: cpu
         public_name: encoder-public
         ` + input + `
     bindings:
-      domain_classifier: {deployment: encoder, contract: label_distribution.v1}
+      embedding: {deployment: encoder, contract: embedding.v1}
 `
 }

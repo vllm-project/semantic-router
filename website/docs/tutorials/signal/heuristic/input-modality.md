@@ -103,9 +103,7 @@ records, and the standard per-signal Prometheus metrics
 ## Related Signals
 
 - [`modality`](../learned/modality.md) — the intended output modality
-  (`AR`, `DIFFUSION`, `BOTH`).
-- [`embedding`](../learned/embedding.md) with `query_modality: image` —
-  semantic classification of image content.
+  (`text`, `image`, `text_image`).
 - [`conversation`](conversation.md) — request-shape facts; its
   `image_content` source remains supported and shares the same underlying
   image count.

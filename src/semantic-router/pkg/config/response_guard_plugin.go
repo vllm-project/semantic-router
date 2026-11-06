@@ -22,10 +22,10 @@ var responseGuardActions = []string{ResponseGuardBlock, ResponseGuardAnnotate, R
 
 // ResponseGuardPluginConfig acts on the answers of a decision. A rule's when
 // is a rule tree like a decision's rules: it reads request-stage signals as
-// routing evaluated them, and response-stage ones (jailbreak rules with
-// direction: response, hallucination rules, systemone rules with stage:
-// response), each evaluated the first time a rule reads it. Rules run in
-// order, and the first that blocks ends the guard.
+// routing evaluated them, and response-stage ones (jailbreak, safety and
+// systemone rules with stage: response, and every hallucination and refusal
+// rule), each evaluated the first time a rule reads it. Rules run in order,
+// and the first that blocks ends the guard.
 type ResponseGuardPluginConfig struct {
 	Rules []ResponseGuardRule `json:"rules" yaml:"rules"`
 	// OnUnknown is what a rule does when its condition cannot be decided: a

@@ -1,0 +1,13 @@
+routing:
+  signals:
+    turn_relation:
+      - name: likely_dissatisfied
+        description: Current user turn closely repeats the immediately previous user turn.
+        labels: [reask]
+        input:
+          previous_turns: 1
+      - name: persistently_dissatisfied
+        description: Current user turn repeats the last two user turns in a row.
+        labels: [reask]
+        input:
+          previous_turns: 2

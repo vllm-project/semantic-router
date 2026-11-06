@@ -142,7 +142,7 @@ func SetupValidateHandler(configPath string, setupResolver *setupmode.Resolver) 
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		candidate, err = realizeSetupCandidateConfig(configPath, candidate, true)
+		candidate, err = realizeSetupCandidateConfig(configPath, candidate)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Setup runtime realization failed: %v", err), http.StatusBadRequest)
 			return
@@ -202,7 +202,7 @@ func SetupActivateHandler(
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		candidate, err = realizeSetupCandidateConfig(configPath, candidate, false)
+		candidate, err = realizeSetupCandidateConfig(configPath, candidate)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Setup runtime realization failed: %v", err), http.StatusBadRequest)
 			return

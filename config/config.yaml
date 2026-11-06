@@ -312,132 +312,71 @@ routing:
         keywords: ["local model only", "do not upload to cloud"]
         case_sensitive: false
         include_history: true
-
-    embeddings:
-      - name: technical_support
-        threshold: 0.75
-        aggregation_method: max
-        # A complete rule override; omission inherits the family configuration.
-        prototype_scoring:
-          enabled: true
-          cluster_similarity_threshold: 0.9
-          max_prototypes: 8
-          best_weight: 0.75
-          top_m: 2
-          margin_threshold: 0.0
-        candidates:
-          - how to configure the system
-          - installation guide
-          - troubleshooting steps
-          - error message explanation
-      - name: account_management
-        threshold: 0.72
-        aggregation_method: any
-        candidates:
-          - password reset
-          - account settings
-          - billing information
-          - subscription management
-      # query_modality declares which modality of incoming request payload the
-      # embedding rule's query is computed from. Defaults to "text" when
-      # omitted. Setting it to "image" or "audio" requires
-      # global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal
-      # so the query and candidate embeddings land in the same shared space;
-      # see website/docs/tutorials/signal/learned/embedding.md for the worked
-      # multimodal example.
-      - name: clinical_query_intent
-        query_modality: text
-        # Positive image references can complement or replace text candidates.
-        # Negative candidates subtract their aggregated cosine score.
-        image_candidates: []
-        negative_candidates: []
-        negative_image_candidates: []
-        threshold: 0.72
-        aggregation_method: max
-        candidates:
-          - patient symptoms or clinical question
-          - medication interaction or dosage question
-          - test result interpretation request
-
     domains:
       - name: business
         description: Business and management related queries.
-        mmlu_categories: [business]
+        labels: [business]
         model_scores:
           - model: qwen3-32b
             score: 0.96
             use_reasoning: true
       - name: law
         description: Legal questions and policy topics.
-        mmlu_categories: [law]
+        labels: [law]
       - name: psychology
         description: Psychology and mental-health oriented prompts.
-        mmlu_categories: [psychology]
+        labels: [psychology]
       - name: health
         description: Health and medical information requests.
-        mmlu_categories: [health]
+        labels: [health]
+        predicate:
+          gte: 0.6
+        deployment: primary
+        timeout_ms: 300
       - name: "computer science"
         description: Computer science and engineering prompts.
-        mmlu_categories: ["computer science"]
+        labels: ["computer science"]
       - name: other
         description: General fallback traffic.
-        mmlu_categories: [other]
-
-    # A safety rule asks its own question: deployment names the deployment
-    # that answers it, else the decision model does. A hazard part scores the
-    # hazard categories with its own deployment, else with the pre-declared
-    # hazard deployment (Vela 1.0 Hazard).
+        labels: [other]
+    # A safety rule asks the harm preset: without labels it matches unsafe
+    # content; with labels it matches content harmful in one of those harm
+    # categories. stage: response asks about the model's answer instead.
     safety:
       - name: unsafe-content
         description: Content risk, independent of prompt attacks.
-        labels: [safe, unsafe]
-        unsafe_labels: [unsafe]
-        threshold: 0.52
+        predicate:
+          gte: 0.52
       - name: unsafe-privacy
-        description: Unsafe content whose hazard is privacy.
-        deployment: vela-safety
-        labels: [safe, unsafe]
-        unsafe_labels: [unsafe]
-        threshold: 0.52
-        hazard:
-          deployment: content-risk
-          labels: [violence, criminal_activity, sexual_content, child_exploitation,
-                   hate, harassment_abuse, regulated_substances, weapons,
-                   self_harm, privacy, specialized_advice, misinformation]
-          categories: [privacy]
-          threshold: 0.6
+        description: Requests that seek or expose private information.
+        labels: ["PII/Privacy"]
+        deployment: primary
+        timeout_ms: 300
+      - name: unsafe-answer
+        description: Harmful content in the model's answer.
+        stage: response
 
     fact_check:
       - name: needs_fact_check
         description: Prompts with factual claims that should be verified.
+        deployment: primary
+        timeout_ms: 300
       - name: no_fact_check_needed
         description: Creative prompts that do not need factual verification.
-
+        labels: [NO_FACT_CHECK_NEEDED]
+        predicate:
+          gt: 0.3
     user_feedbacks:
       - name: wrong_answer
         description: The user indicates the previous answer was incorrect.
+        labels: [WRONG_ANSWER]
       - name: need_clarification
         description: The user asks for a clearer or more detailed answer.
-
-    reasks:
-      - name: likely_dissatisfied
-        description: The current user turn closely repeats the immediately previous user turn.
-        threshold: 0.8
-        lookback_turns: 1
-      - name: persistently_dissatisfied
-        description: The current user turn repeats the last two user turns in a row.
-        threshold: 0.8
-        lookback_turns: 2
-
-    preferences:
-      - name: terse_answers
-        description: Users who prefer short, direct responses.
-        examples:
-          - keep it concise
-          - bullet points only
-          - answer in one paragraph
-        threshold: 0.7
-
+        labels: [NEED_CLARIFICATION]
+        predicate:
+          gte: 0.55
+        deployment: primary
+        timeout_ms: 300
     language:
       - name: zh
         description: Chinese-language requests.
@@ -537,61 +476,26 @@ routing:
 
     complexity:
       - name: needs_reasoning
-        threshold: 0.10
         description: Escalate multi-step reasoning or synthesis-heavy prompts.
-        prototype_scoring:
-          enabled: true
-          cluster_similarity_threshold: 0.9
-          max_prototypes: 6
-          best_weight: 0.75
-          top_m: 2
-          margin_threshold: 0.0
-        hard:
-          candidates:
-            - solve this step by step
-            - compare multiple tradeoffs
-            - analyze the root cause
-          image_candidates:
-            - generate a detailed architecture diagram
-        easy:
-          candidates:
-            - answer briefly
-            - quick summary
-            - simple rewrite
-          image_candidates:
-            - make a simple icon
-        composer:
-          operator: OR
-          conditions:
-            - type: context
-              name: long_context
-            - type: domain
-              name: "computer science"
       - name: deep_synthesis
-        # The explicit boundary pair, the asymmetric form of `threshold`: the
-        # two verdicts do not have to sit the same distance from the middle.
-        # hard_above with easy_below reads in the direction the local margin
-        # runs, where a higher score is harder.
-        hard_above: 0.25
-        easy_below: -0.05
-        description: Escalate synthesis-heavy prompts, with a wider medium band than needs_reasoning.
-        hard:
-          candidates:
-            - synthesise these sources into one argument
-            - reconcile the conflicting requirements
-        easy:
-          candidates:
-            - list the headings
-            - restate this sentence
-
+        description: Escalate prompts of medium or hard difficulty.
+        labels: [medium, hard]
+        deployment: primary
+        timeout_ms: 300
     modality:
       - name: AR
         description: Text-only autoregressive requests.
+        labels: [text]
       - name: DIFFUSION
         description: Image-generation requests.
+        labels: [image]
+        predicate:
+          gte: 0.63
+        deployment: primary
+        timeout_ms: 300
       - name: BOTH
         description: Requests that need both text and image generation.
-
+        labels: [text_image]
     role_bindings:
       - name: admin
         description: Requests from platform administrators.
@@ -608,25 +512,24 @@ routing:
 
     jailbreak:
       - name: prompt_injection
-        method: contrastive
-        threshold: 0.8
-        include_history: true
         description: Detect common prompt-injection or jailbreak attempts.
-        jailbreak_patterns:
-          - ignore previous instructions
-          - reveal the hidden prompt
-          - jailbreak mode
-        benign_patterns:
-          - explain the policy
-          - summarize the safety rules
-      # direction: response scores the model's output instead of the prompt, so
+        predicate:
+          gte: 0.8
+        input:
+          history: true
+        deployment: primary
+        timeout_ms: 300
+        # A request whose deployment gives no answer matches (fail closed);
+        # the default, no_match, passes it.
+        on_unknown: match
+      # stage: response asks about the model's output instead of the prompt, so
       # this rule only exists once the model has answered; the selected
       # decision's response_guard acts on it.
       - name: unsafe_completion
-        direction: response
-        threshold: 0.90
         description: Detect jailbreak content in the model's own output.
-
+        predicate:
+          gte: 0.90
+        stage: response
     # Hallucination rules check the model's answer against the grounding
     # context the request carried (tool results or retrieved context), so they
     # only exist once the model has answered; the selected decision's
@@ -634,46 +537,38 @@ routing:
     hallucination:
       - name: ungrounded_claims
         description: Detect claims the grounding context does not support.
+        predicate:
+          gte: 0.5
+        deployment: primary
+        timeout_ms: 500
+    # A refusal rule asks whether the model's answer declines the request, so
+    # it only exists once the model has answered.
+    refusal:
+      - name: declined
+        description: The answer declines the request or refuses to help.
+        predicate:
+          gte: 0.5
+        deployment: primary
+        timeout_ms: 500
 
     pii:
       - name: restricted_pii
-        source: ""
-        threshold: 0.18
-        include_history: true
-        pii_types_allowed:
-          - EMAIL_ADDRESS
         description: Sensitive prompts where only low-risk identifiers may pass through.
+        predicate:
+          gte: 0.18
+        ignore_labels: [EMAIL_ADDRESS]
+        input:
+          history: true
+          tool_results: true
+        deployment: primary
+        timeout_ms: 300
+        on_unknown: match
       # The masking plugin of static_business_route masks what this rule
       # detects in the request as it is sent.
       - name: business_contact_pii
-        threshold: 0.85
         description: Contact details masked before business requests leave the Router.
-
-    kb:
-      - name: privacy_policy
-        kb: privacy_kb
-        target:
-          kind: group
-          value: privacy_policy
-        match: best
-      - name: security_containment
-        kb: privacy_kb
-        target:
-          kind: group
-          value: security_containment
-        match: best
-      - name: frontier_reasoning
-        kb: privacy_kb
-        target:
-          kind: group
-          value: frontier_reasoning
-        match: best
-      - name: local_standard
-        kb: privacy_kb
-        target:
-          kind: group
-          value: local_standard
-        match: best
+        predicate:
+          gte: 0.85
 
     conversation:
       - name: multi_turn_user
@@ -774,23 +669,6 @@ routing:
         description: Describe code or answer a question without editing anything.
       - name: fix
         description: Repair a bug or a failing behavior.
-
-    # Context-policy evidence: whether the live turn still depends on
-    # retained history. Not decision-referenceable; every declared rule runs
-    # before the context transformation stage and context policies read the
-    # typed result. Every field except name is optional (defaults shown).
-    topic_continuity:
-      - name: topic_boundary
-        description: Whether the live turn still depends on retained history.
-        include_assistant: true
-        thresholds:
-          continuation: 0.35
-          change: 0.08
-        limits:
-          max_prior_turns: 8
-          max_turn_bytes: 16384
-          max_input_bytes: 147456
-
     # Typed questions. deployment names the deployment that answers each one:
     # the built-in model runtime (provider model_runtime) or a remote System
     # One API (provider systemone). A question without one asks the decision
@@ -892,61 +770,109 @@ routing:
         input:
           answer: true
           context: true
-
-    # A classifier rule asks its own question: deployment names the deployment
-    # that answers it, and the deployment's provider decides how it is asked.
-    # A rule without one is asked of the decision model.
-    classifiers:
       - name: content-risk
-        description: Independent content hazards with model-specific operating points.
-        # content-risk pins the Hazard head's packaged operating point, so each
-        # label is scored independently against its own threshold.
-        deployment: content-risk
-        labels: [violence, criminal_activity, sexual_content, child_exploitation,
-                 hate, harassment_abuse, regulated_substances, weapons,
-                 self_harm, privacy, specialized_advice, misinformation]
+        description: Which content hazard a request carries.
+        question:
+          type: choice
+          instructions: Which of these labels applies to the request?
+          choices:
+            - key: violence
+            - key: criminal_activity
+            - key: sexual_content
+            - key: child_exploitation
+            - key: hate
+            - key: harassment_abuse
+            - key: regulated_substances
+            - key: weapons
+            - key: self_harm
+            - key: privacy
+            - key: specialized_advice
+            - key: misinformation
       - name: generic-safety-score
-        description: Generic binary safety classification head.
-        deployment: vela-safety
-        labels: [safe, unsafe]
+        description: Whether a request is safe.
+        question:
+          type: choice
+          instructions: Which of these labels applies to the request?
+          choices:
+            - key: safe
+            - key: unsafe
       - name: tool-risk
-        description: Prompted tool execution risk labeler.
-        deployment: openai-classifier
-        labels: [SAFE, RISKY]
-        instructions: >-
-          Choose RISKY only for destructive, privileged, or irreversible tool
-          operations.
-        # false (default) asks the chat model for a short rationale with the
-        # label scores; true asks for the scores only.
-        disable_rationale: false
-      - name: remote-safety-score
-        description: Remote binary safety classification head.
-        deployment: sequence-classifier
-        labels: [SAFE, RISKY]
+        description: Whether a tool call is destructive, privileged or irreversible.
+        question:
+          type: choice
+          instructions: Choose RISKY only for destructive, privileged, or irreversible tool operations.
+          choices:
+            - key: SAFE
+            - key: RISKY
       - name: support-intent
         description: Whether a support request is about billing or a technical problem.
-        labels: [billing, technical]
-
+        question:
+          type: choice
+          instructions: Which of these labels applies to the request?
+          choices:
+            - key: billing
+            - key: technical
+      - name: preference
+        question:
+          type: choice
+          instructions: Which response preference does the request express?
+          choices:
+            - key: terse_answers
+              description: 'Users who prefer short, direct responses. Examples: keep it concise; bullet points only; answer in one paragraph'
+            - key: none
+              description: The request expresses none of these preferences.
+      - name: technical_support
+        question:
+          type: noul
+          instructions: 'Is the request about any of these: how to configure the system; installation guide; troubleshooting steps; error message explanation?'
+      - name: account_management
+        question:
+          type: noul
+          instructions: 'Is the request about any of these: password reset; account settings; billing information; subscription management?'
+      - name: clinical_query_intent
+        question:
+          type: noul
+          instructions: 'Is the request about any of these: patient symptoms or clinical question; medication interaction or dosage question; test result interpretation request?'
+    turn_relation:
+      - name: likely_dissatisfied
+        description: The current user turn closely repeats the immediately previous user turn.
+        labels: [reask]
+        input:
+          previous_turns: 1
+      - name: persistently_dissatisfied
+        description: The current user turn repeats the last two user turns in a row.
+        labels: [reask]
+        input:
+          previous_turns: 2
+      - name: topic_boundary
+        description: Whether the live turn still depends on retained history.
+        labels: [continue, shift]
+        input:
+          previous_turns: 8
+        deployment: primary
+        timeout_ms: 300
   projections:
+    # A partition keeps the highest-scoring member of a group of domain rules.
     partitions:
-      - name: support_intents
+      - name: practice_areas
         semantics: exclusive
         temperature: 0.3
         members:
-          - technical_support
-          - account_management
-        default: technical_support
+          - business
+          - law
+          - health
+        default: business
     scores:
       - name: request_difficulty
         method: weighted_sum
         inputs:
-          - type: embedding
+          - type: systemone
             name: technical_support
             weight: 0.18
             value_source: confidence
             match: 1.0
             miss: 0.0
-          - type: embedding
+          - type: systemone
             name: account_management
             weight: -0.08
             value_source: confidence
@@ -962,14 +888,6 @@ routing:
           - type: structure
             name: first_then_flow
             weight: 0.12
-      - name: privacy_kb_bias
-        method: weighted_sum
-        inputs:
-          - type: kb_metric
-            kb: privacy_kb
-            metric: private_vs_public
-            weight: 1.0
-            value_source: score
     mappings:
       - name: request_band
         source: request_difficulty
@@ -1299,7 +1217,8 @@ routing:
           - type: domain
             name: "computer science"
           - type: complexity
-            name: needs_reasoning:hard
+            name: needs_reasoning
+            label: hard
       modelRefs:
         - model: qwen3-32b
           use_reasoning: true
@@ -1362,7 +1281,8 @@ routing:
           - type: domain
             name: business
           - type: complexity
-            name: needs_reasoning:hard
+            name: needs_reasoning
+            label: hard
       modelRefs:
         - model: qwen3-8b
           use_reasoning: true
@@ -1434,7 +1354,8 @@ routing:
           - type: domain
             name: business
           - type: complexity
-            name: needs_reasoning:hard
+            name: needs_reasoning
+            label: hard
       modelRefs:
         - model: qwen3-8b
           use_reasoning: true
@@ -1466,8 +1387,9 @@ routing:
       rules:
         operator: AND
         conditions:
-          - type: preference
-            name: terse_answers
+          - type: systemone
+            name: preference
+            label: terse_answers
       modelRefs:
         - model: qwen3-8b
           use_reasoning: false
@@ -1496,7 +1418,7 @@ routing:
       rules:
         operator: AND
         conditions:
-          - type: embedding
+          - type: systemone
             name: technical_support
           - type: projection
             name: support_escalated
@@ -1582,7 +1504,8 @@ routing:
               - type: keyword
                 name: urgent_keywords
               - type: complexity
-                name: needs_reasoning:hard
+                name: needs_reasoning
+                label: hard
           - operator: NOT
             conditions:
               - type: jailbreak
@@ -1783,13 +1706,13 @@ routing:
           timeout_ms: 1000
 
     - name: content_privacy_route
-      description: Route requests that cross the Hazard privacy operating point.
+      description: Route requests the content-risk question marks as a privacy risk.
       priority: 126
       rules:
         operator: AND
         on_unknown: fail_request
         conditions:
-          - type: classifier
+          - type: systemone
             name: content-risk
             label: privacy
       modelRefs:
@@ -1803,7 +1726,7 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: classifier
+          - type: systemone
             name: generic-safety-score
             label: unsafe
             predicate:
@@ -1947,7 +1870,7 @@ routing:
       rules:
         operator: AND
         conditions:
-          - type: reask
+          - type: turn_relation
             name: likely_dissatisfied
       modelRefs:
         - model: qwen3-32b
@@ -2093,13 +2016,6 @@ recipes:
           - name: private_escalation
             description: Hard requests among the privacy-sensitive ones, judged by the local Decision model.
             deployment: decision-kai
-            threshold: 0.1
-            hard:
-              candidates:
-                - review this contract for exposure of personal data
-            easy:
-              candidates:
-                - mask this phone number
       decisions:
         - name: privacy_recipe_route
           plugins:
@@ -2335,7 +2251,6 @@ global:
         enabled: false
       batch_classification:
         max_batch_size: 100
-        max_concurrency: 8
         metrics:
           sample_rate: 1.0
           batch_size_ranges:
@@ -2809,8 +2724,8 @@ global:
     # Every model the Router asks is a deployment, declared once by name;
     # provider names the API the Router speaks to it. Declaring a deployment
     # does not start it: only deployments a signal, selector, embedding or
-    # reranker resolves to load. primary, hazard, vela-embedding and omni-nano
-    # are always declared; a deployment of the same name replaces one.
+    # reranker resolves to load. primary, vela-embedding and omni-nano are
+    # always declared; a deployment of the same name replaces one.
     deployments:
       primary:
         provider: model_runtime
@@ -2824,10 +2739,19 @@ global:
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
         revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
         device: auto
-      # operating_point pins the operating point the Hazard head's package
-      # serves: a classifier rule this deployment answers reads independent
-      # label scores at its thresholds.
-      content-risk:
+      document-ranker:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Reranker
+        revision: a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf
+        device: cpu
+        input:
+          max_tokens: 4096
+          overflow: reject
+      # Unbound examples below: nothing resolves to them, so they do not load.
+      # operating_point pins the operating point a scores head's package
+      # serves: the runtime refuses a package whose policy file has another
+      # digest.
+      scores-head:
         provider: model_runtime
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Hazard
         revision: 5dd25f2cc3c98f338e6a79b667662d60f936a28d
@@ -2838,24 +2762,6 @@ global:
         operating_point:
           path: operating_point.json
           sha256: e79a78f48bf45eb38e3f5402de3b3b18eeaa822e00b42b3640bf471276290de5
-      # Vela 1.0 Safety for the generic-safety-score classifier; inputs over
-      # the model's limit are truncated rather than refused.
-      vela-safety:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Safety
-        revision: 6e70e725a5f4d86da10f5be5e4dfd1da0358bb85
-        device: cpu
-        input:
-          overflow: truncate
-      document-ranker:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Reranker
-        revision: a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf
-        device: cpu
-        input:
-          max_tokens: 4096
-          overflow: reject
-      # Unbound examples below: nothing resolves to them, so they do not load.
       # Replicas of one logical deployment: a local worker, and a worker
       # started elsewhere, named by endpoint and its served model.
       decision-replicas:
@@ -2932,9 +2838,8 @@ global:
           question_types: [choice, noul, score]
           presets: [pii, halu]
           modalities: [text, image, video]
-      # A chat model used as the tool-risk classifier: POST
-      # <endpoint>/chat/completions. generation sets max_tokens and
-      # temperature of its completions.
+      # A chat model: POST <endpoint>/chat/completions. generation sets
+      # max_tokens and temperature of its completions.
       openai-classifier:
         provider: openai_chat
         endpoint: https://openai-proxy:443/v1
@@ -3026,16 +2931,15 @@ global:
     system:
       decision_model:
         deployment: primary
-    # Bindings choose the deployment of a signal type whose rules share one
-    # answer (domain, jailbreak, pii, fact_check, user_feedback, modality,
-    # hallucination, preference, reask), in every recipe. A recipe's
-    # routing.model_bindings wins over them for that recipe.
+    # Bindings choose the deployment that answers the rules of an application
+    # signal type (domain, fact_check, user_feedback, jailbreak, safety, pii,
+    # hallucination, refusal, turn_relation, complexity, modality) that name
+    # none, in every recipe. A recipe's routing.model_bindings wins over them
+    # for that recipe.
     bindings:
       pii: primary
-    # admission bounds concurrent calls. A key is a deployment name, for a gate
-    # the deployment's users share, or a signal type (jailbreak, domain, pii,
-    # fact_check, hallucination, user_feedback, safety, hazard), for that
-    # signal's own gate.
+    # admission bounds concurrent calls. A key is a deployment name; the
+    # deployment's users share its gate.
     # max_concurrency: inference slots running at once (>= 1).
     # max_queue: bounded wait queue beyond the slots (0 = no queue).
     # queue_timeout_ms: longest a request may wait for a slot; on expiry the
@@ -3043,119 +2947,23 @@ global:
     # on_overflow selects what happens when every slot is busy and the queue
     # is full: shed (default) rejects the request, wait blocks for a queue
     # slot and requires max_queue >= 1, fail_open admits without a slot.
-    # A shed inference surfaces as a classify error and follows the same
-    # on_error / on_unknown policy as any other inference failure.
+    # A shed inference fails as any other inference failure does: the rules
+    # that asked it are unknown.
     # Omitting admission means no gate and preserves current behavior.
     admission:
-      jailbreak:
+      primary:
         max_concurrency: 4
         max_queue: 64
         queue_timeout_ms: 250
         on_overflow: shed
     # Deadline of a request's model-runtime signals. 0 (default) derives it
     # from the request's deadline, less a tenth of the time left (at least a
-    # second), or 45 s for a served request. A signal still running resolves
-    # through its policy: a routing signal through on_error, a safety signal
-    # (prompt guard, PII) as unscanned.
+    # second), or 45 s for a served request. A rule still waiting for its
+    # answer is unknown.
     signal_timeout_ms: 0
-    kbs:
-      - name: privacy_kb
-        source:
-          path: knowledge_bases/privacy/
-          manifest: labels.json
-        threshold: 0.55
-        prototype_scoring:
-          enabled: true
-          cluster_similarity_threshold: 0.9
-          max_prototypes: 8
-          best_weight: 0.75
-          top_m: 2
-          margin_threshold: 0.0
-        label_thresholds:
-          prompt_injection: 0.7
-        groups:
-          security_containment:
-            - prompt_injection
-            - credential_exfiltration
-            - jailbreak_role
-            - system_prompt_extraction
-          privacy_policy:
-            - proprietary_code
-            - internal_document
-            - pii
-            - business_strategy
-            - trade_secret_ip
-            - operational_infrastructure
-            - locality_directive
-            - customer_data
-          frontier_reasoning:
-            - architecture_analysis
-            - root_cause_analysis
-            - multi_step_tradeoffs
-          local_standard:
-            - generic_coding
-            - simple_task
-            - general_knowledge
-          private:
-            - prompt_injection
-            - credential_exfiltration
-            - jailbreak_role
-            - system_prompt_extraction
-            - proprietary_code
-            - internal_document
-            - pii
-            - business_strategy
-            - trade_secret_ip
-            - operational_infrastructure
-            - locality_directive
-            - customer_data
-          public:
-            - architecture_analysis
-            - root_cause_analysis
-            - multi_step_tradeoffs
-            - generic_coding
-            - simple_task
-            - general_knowledge
-        metrics:
-          - name: private_vs_public
-            type: group_margin
-            positive_group: private
-            negative_group: public
-      - name: mmlu_kb
-        source:
-          path: knowledge_bases/mmlu/
-          manifest: labels.json
-        threshold: 0.25
-        groups:
-          escalate:
-            - biology
-            - business
-            - computer science
-            - economics
-            - history
-            - math
-            - other
-            - philosophy
-            - psychology
-          keep:
-            - chemistry
-            - engineering
-            - health
-            - law
-            - physics
-        metrics:
-          - name: escalate_vs_keep
-            type: group_margin
-            positive_group: escalate
-            negative_group: keep
-    # Modules tune each built-in signal; the deployment that answers a signal
-    # is chosen by a rule's deployment, a binding or the decision model, not
-    # here.
+    # Modules tune the Router's own request processing; a signal is answered
+    # by its rule's deployment, a binding or the decision model.
     modules:
-      safety:
-        safety:
-          use_cpu: true
-          max_sequence_length: 0
       prompt_compression:
         enabled: true
         # Built-in profile for scoring/preserve defaults: default, coding, medical,
@@ -3172,126 +2980,3 @@ global:
         position_depth: 0.1
         preserve_first_n: 3
         preserve_last_n: 2
-      prompt_guard:
-        enabled: true
-        # The jailbreak signal asks the deployment bindings.jailbreak names,
-        # else the decision model. Without a threshold here the guard uses the
-        # calibrated threshold of the model that answers.
-        use_cpu: true
-        # vela3-fast reads the whole text up to its scan budget (four inputs on a
-        # CPU, or the deployment's input {overflow: window, max_tokens}) and
-        # names its own labels, so it sets no window. A sequence classifier such
-        # as Vela 1.0 Guard takes a document budget, token windows
-        # (window: {size: 512, overlap: 255}) and a label mapping
-        # (jailbreak_type_mapping.json in its directory).
-        max_sequence_length: 0
-        jailbreak_mapping_path: ""
-        positive_labels: [jailbreak]
-        # allow (default) tolerates a classifier-backend failure and treats the
-        # affected content as not matching; block treats it as a match instead,
-        # since an inference failure means the content could not be verified safe.
-        on_error: allow
-        # block (default) matches content the guard did not read in full (over
-        # its input or cap, truncated, or not scanned by the signal deadline) as
-        # unscanned, so padding cannot carry an attack past it; allow leaves
-        # such content to on_error.
-        on_unscanned: block
-      classifier:
-        domain:
-          # Omit to run the classifier whenever a deployment answers the
-          # signal; false disables the classifier outright.
-          enabled: true
-          max_sequence_length: 0
-          use_cpu: true
-          # vela3-fast names its 14 domains itself; a classifier head takes its
-          # category_mapping.json.
-          category_mapping_path: ""
-          fallback_category: other
-        mcp:
-          enabled: true
-          transport_type: stdio
-          command: python
-          args: [-m, mcp_classifier]
-          env:
-            MCP_MODE: local
-          url: http://localhost:9010
-          tool_name: classify
-          threshold: 0.6
-          timeout_seconds: 15
-          max_response_bytes: 16777216
-        pii:
-          # Omit to run the classifier whenever a deployment answers the
-          # signal; false disables the classifier outright.
-          enabled: true
-          # vela3-fast finds spans with its span-set adapter and reads the
-          # whole text up to its scan budget, so it sets no window; a token
-          # classifier such as Vela 1.0 PII takes a document budget (32768),
-          # token windows (window: {size: 512, overlap: 255}) and its
-          # pii_mapping.json.
-          max_sequence_length: 0
-          use_cpu: true
-          pii_mapping_path: ""
-          # allow (default) keeps a classify error as a non-match for that
-          # content; block treats it as a match on classification_error, so
-          # unverified text cannot pass as clean.
-          on_error: allow
-          # block (default) matches content the model did not read in full
-          # (over its input or cap, a provider-declared truncation, or not
-          # scanned by the signal deadline) as unscanned, so a long request
-          # routes as private; allow leaves such content to on_error.
-          on_unscanned: block
-        preference:
-          use_contrastive: true
-          embedding_model: models/preference-encoder
-          prototype_scoring:
-            enabled: true
-            cluster_similarity_threshold: 0.9
-            max_prototypes: 8
-            best_weight: 0.75
-            top_m: 2
-            margin_threshold: 0.0
-      complexity:
-        prototype_scoring:
-          enabled: true
-          cluster_similarity_threshold: 0.9
-          max_prototypes: 6
-          best_weight: 0.75
-          top_m: 2
-          margin_threshold: 0.0
-      hallucination_mitigation:
-        enabled: true
-        fact_check:
-          # enabled: false runs no fact-check classifier.
-          enabled: true
-          max_sequence_length: 0
-          use_cpu: true
-        detector:
-          backend: model_runtime
-          include_explanation: false
-          threshold: 0.5
-          use_cpu: true
-          min_span_length: 1
-          min_span_confidence: 0.0
-          context_window_size: 50
-      feedback_detector:
-        enabled: true
-        max_sequence_length: 0
-        use_cpu: true
-        feedback_mapping_path: ''
-      modality_detector:
-        enabled: true
-        method: hybrid
-        # The modality signal asks the deployment bindings.modality names, else
-        # the decision model.
-        classifier:
-          max_sequence_length: 0
-          use_cpu: true
-        keywords:
-          - image
-          - picture
-          - illustration
-        both_keywords:
-          - explain and illustrate
-          - describe with an image
-        confidence_threshold: 0.63
-        lower_threshold_ratio: 0.7

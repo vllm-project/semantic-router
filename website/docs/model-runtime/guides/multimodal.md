@@ -1,28 +1,27 @@
 ---
 title: Images and audio
-description: Route requests on the images and audio they carry with the Vela Omni embedding models.
+description: Embed the images and audio requests carry with the Vela Omni embedding models.
 ---
 
 # Images and audio
 
 Vela 1.0 Omni embeds text, images and audio into one vector space, so an
 image can be compared with a text description ("a photograph of a passport
-page") or with example images. The router uses it for
-[embedding signals](tutorials/signal/learned/embedding.md) whose
-`query_modality` is `image` or `audio`.
+page") or with example images. The router uses it for multimodal
+embeddings (`global.model_catalog.embeddings.multimodal`).
 
 | Model | Size | Vector | Text limit | Use when |
 | --- | --- | --- | --- | --- |
-| `vllm-sr/Vela-1.0-Omni-Nano` | 164M | 384 | 512 tokens | Fast routing on CPU |
+| `vllm-sr/Vela-1.0-Omni-Nano` | 164M | 384 | 512 tokens | Fast embeddings on CPU |
 | `vllm-sr/Vela-1.0-Omni-Mini` | 1.36B | 768 | 32,768 tokens | Higher accuracy, longer text |
 
 Audio of up to 30 seconds is accepted at its original sampling rate.
 
 ## Turn it on
 
-Select the multimodal embedding model and add a signal that reads images.
-`embeddings.multimodal` names its deployment, the pre-declared `omni-nano`
-(Vela 1.0 Omni Nano) unless you change it:
+Select the multimodal embedding model. `embeddings.multimodal` names its
+deployment, the pre-declared `omni-nano` (Vela 1.0 Omni Nano) unless you
+change it:
 
 ```yaml
 global:
@@ -32,34 +31,13 @@ global:
       semantic:
         embedding_config:
           model_type: multimodal
-routing:
-  signals:
-    embeddings:
-      - name: identity_documents
-        threshold: 0.29
-        aggregation_method: max
-        query_modality: image
-        candidates:
-          - photograph of a passport page
-          - photograph of a driver's license or national ID card
-  decisions:
-    - name: private-images
-      priority: 200
-      rules:
-        operator: AND
-        conditions:
-          - type: embedding
-            name: identity_documents
-      modelRefs:
-        - model: private-vision-model
 ```
 
 The router runs Omni on the CPU in the runtime. To use Mini, declare a
 `model_runtime` deployment of `vllm-sr/Vela-1.0-Omni-Mini` and name it in
-`embeddings.multimodal`. The thresholds of the
-[image routing pack](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/embedding/image-routing.yaml)
-are calibrated for Omni Nano; check them again on your own images when you
-switch to Mini.
+`embeddings.multimodal`. To route on what a request's image shows, ask a
+[systemone](tutorials/signal/learned/systemone.md) question that reads it
+(`input.image`) of a deployment that accepts images.
 
 ## Check it
 

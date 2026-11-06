@@ -221,97 +221,6 @@ func TestLogFieldsIncludesOptionalReplayMetadata(t *testing.T) {
 	assertSignalLogFields(t, fields)
 }
 
-func richReplayRoutingRecord(
-	timestamp time.Time,
-	promptTokens *int,
-	cachedPromptTokens *int,
-	completionTokens *int,
-	totalTokens *int,
-	actualCost *float64,
-	baselineCost *float64,
-	costSavings *float64,
-	currency *string,
-	baselineModel *string,
-) RoutingRecord {
-	return RoutingRecord{
-		ID:                       "replay-1",
-		Decision:                 "decision-a",
-		DecisionTier:             2,
-		DecisionPriority:         100,
-		Category:                 "math",
-		OriginalModel:            "model-a",
-		SelectedModel:            "model-b",
-		ReasoningMode:            "cot",
-		ConfidenceScore:          0.91,
-		ConfidenceScoreAvailable: true,
-		SelectionMethod:          "router_dc",
-		SessionPolicy:            map[string]interface{}{"decision_reason": "stay_has_best_adjusted_score"},
-		RequestID:                "req-1",
-		SessionID:                "sess-log-test",
-		TurnIndex:                5,
-		Timestamp:                timestamp,
-		FromCache:                true,
-		Streaming:                true,
-		ResponseStatus:           200,
-		Projections:              []string{"balance_reasoning"},
-		ProjectionScores:         map[string]float64{"reasoning_pressure": 0.73},
-		SignalConfidences:        map[string]float64{"projection:balance_reasoning": 0.73},
-		SignalValues:             map[string]float64{"reask:likely_dissatisfied": 2},
-		ToolTrace: &ToolTrace{
-			Flow:      "User Query -> LLM Tool Call -> Client Tool Result -> LLM Final Response",
-			Stage:     "LLM Final Response",
-			ToolNames: []string{"get_weather"},
-			Steps: []ToolTraceStep{
-				{Type: "user_input", Text: "Find the weather."},
-				{Type: "assistant_tool_call", ToolName: "get_weather"},
-				{Type: "client_tool_result", ToolName: "get_weather"},
-				{Type: "assistant_final_response", Text: "It is sunny."},
-			},
-		},
-		Signals: Signal{
-			Keyword:    []string{"math_keywords"},
-			Reask:      []string{"likely_dissatisfied"},
-			Complexity: []string{"complex"},
-			Modality:   []string{"AR"},
-			Authz:      []string{"premium_tier"},
-			Jailbreak:  []string{"prompt_attack"},
-			PII:        []string{"email"},
-			KB:         []string{"policy_kb"},
-		},
-		GuardrailsEnabled:               true,
-		JailbreakEnabled:                true,
-		PIIEnabled:                      true,
-		JailbreakDetected:               true,
-		JailbreakType:                   "prompt_injection",
-		JailbreakConfidence:             0.9,
-		JailbreakScoreAvailable:         true,
-		ResponseJailbreakDetected:       true,
-		ResponseJailbreakType:           "response_attack",
-		ResponseJailbreakConfidence:     0.8,
-		ResponseJailbreakScoreAvailable: true,
-		PIIDetected:                     true,
-		PIIEntities:                     []string{"email"},
-		PIIBlocked:                      true,
-		RAGEnabled:                      true,
-		RAGBackend:                      "milvus",
-		RAGContextLength:                2048,
-		RAGSimilarityScore:              0.76,
-		HallucinationEnabled:            true,
-		HallucinationDetected:           true,
-		HallucinationConfidence:         0.66,
-		HallucinationSpans:              []string{"span-a"},
-		PromptTokens:                    promptTokens,
-		CachedPromptTokens:              cachedPromptTokens,
-		CompletionTokens:                completionTokens,
-		TotalTokens:                     totalTokens,
-		ActualCost:                      actualCost,
-		BaselineCost:                    baselineCost,
-		CostSavings:                     costSavings,
-		Currency:                        currency,
-		BaselineModel:                   baselineModel,
-	}
-}
-
 func assertSignalLogFields(t *testing.T, fields map[string]interface{}) {
 	t.Helper()
 	signals, ok := fields["signals"].(map[string]interface{})
@@ -319,13 +228,12 @@ func assertSignalLogFields(t *testing.T, fields map[string]interface{}) {
 		t.Fatalf("expected signals to be a map, got %T", fields["signals"])
 	}
 	assertFieldValue(t, signals, "keyword", []string{"math_keywords"})
-	assertFieldValue(t, signals, "reask", []string{"likely_dissatisfied"})
+	assertFieldValue(t, signals, "turn_relation", []string{"likely_dissatisfied"})
 	assertFieldValue(t, signals, "complexity", []string{"complex"})
 	assertFieldValue(t, signals, "modality", []string{"AR"})
 	assertFieldValue(t, signals, "authz", []string{"premium_tier"})
 	assertFieldValue(t, signals, "jailbreak", []string{"prompt_attack"})
 	assertFieldValue(t, signals, "pii", []string{"email"})
-	assertFieldValue(t, signals, "kb", []string{"policy_kb"})
 }
 
 func assertIntPtr(t *testing.T, value *int, expected int, label string) {
@@ -727,5 +635,95 @@ func TestLogFieldsOmitsUnavailableConfidence(t *testing.T) {
 	}
 	if fields["confidence_score_available"] != false || fields["jailbreak_score_available"] != false || fields["signal_error_matches"] == nil {
 		t.Fatal("score availability or policy origin missing")
+	}
+}
+
+func richReplayRoutingRecord(
+	timestamp time.Time,
+	promptTokens *int,
+	cachedPromptTokens *int,
+	completionTokens *int,
+	totalTokens *int,
+	actualCost *float64,
+	baselineCost *float64,
+	costSavings *float64,
+	currency *string,
+	baselineModel *string,
+) RoutingRecord {
+	return RoutingRecord{
+		ID:                       "replay-1",
+		Decision:                 "decision-a",
+		DecisionTier:             2,
+		DecisionPriority:         100,
+		Category:                 "math",
+		OriginalModel:            "model-a",
+		SelectedModel:            "model-b",
+		ReasoningMode:            "cot",
+		ConfidenceScore:          0.91,
+		ConfidenceScoreAvailable: true,
+		SelectionMethod:          "router_dc",
+		SessionPolicy:            map[string]interface{}{"decision_reason": "stay_has_best_adjusted_score"},
+		RequestID:                "req-1",
+		SessionID:                "sess-log-test",
+		TurnIndex:                5,
+		Timestamp:                timestamp,
+		FromCache:                true,
+		Streaming:                true,
+		ResponseStatus:           200,
+		Projections:              []string{"balance_reasoning"},
+		ProjectionScores:         map[string]float64{"reasoning_pressure": 0.73},
+		SignalConfidences:        map[string]float64{"projection:balance_reasoning": 0.73},
+		SignalValues:             map[string]float64{"turn_relation:likely_dissatisfied": 0.9},
+		ToolTrace: &ToolTrace{
+			Flow:      "User Query -> LLM Tool Call -> Client Tool Result -> LLM Final Response",
+			Stage:     "LLM Final Response",
+			ToolNames: []string{"get_weather"},
+			Steps: []ToolTraceStep{
+				{Type: "user_input", Text: "Find the weather."},
+				{Type: "assistant_tool_call", ToolName: "get_weather"},
+				{Type: "client_tool_result", ToolName: "get_weather"},
+				{Type: "assistant_final_response", Text: "It is sunny."},
+			},
+		},
+		Signals: Signal{
+			Keyword:      []string{"math_keywords"},
+			TurnRelation: []string{"likely_dissatisfied"},
+			Complexity:   []string{"complex"},
+			Modality:     []string{"AR"},
+			Authz:        []string{"premium_tier"},
+			Jailbreak:    []string{"prompt_attack"},
+			PII:          []string{"email"},
+		},
+		GuardrailsEnabled:               true,
+		JailbreakEnabled:                true,
+		PIIEnabled:                      true,
+		JailbreakDetected:               true,
+		JailbreakType:                   "prompt_injection",
+		JailbreakConfidence:             0.9,
+		JailbreakScoreAvailable:         true,
+		ResponseJailbreakDetected:       true,
+		ResponseJailbreakType:           "response_attack",
+		ResponseJailbreakConfidence:     0.8,
+		ResponseJailbreakScoreAvailable: true,
+		PIIDetected:                     true,
+		PIIEntities:                     []string{"email"},
+		PIIBlocked:                      true,
+		RAGEnabled:                      true,
+		RAGBackend:                      "milvus",
+		RAGContextLength:                2048,
+		RAGSimilarityScore:              0.76,
+		HallucinationEnabled:            true,
+		HallucinationDetected:           true,
+		HallucinationConfidence:         0.66,
+		HallucinationSpans:              []string{"span-a"},
+		PromptTokens:                    promptTokens,
+		CachedPromptTokens:              cachedPromptTokens,
+		CompletionTokens:                completionTokens,
+		TotalTokens:                     totalTokens,
+		ActualCost:                      actualCost,
+		BaselineCost:                    baselineCost,
+		CostSavings:                     costSavings,
+		Currency:                        currency,
+		BaselineModel:                   baselineModel,
 	}
 }

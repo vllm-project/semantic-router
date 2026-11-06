@@ -124,9 +124,8 @@ func TestSchemaPublishesEveryRoutingSurface(t *testing.T) {
 		"router",
 		"services.management_api",
 		"services.startup_status",
-		"model_catalog.kbs",
 		"model_catalog.admission",
-		"model_catalog.modules.complexity",
+		"model_catalog.modules.prompt_compression",
 	} {
 		if !globalPaths[path] {
 			t.Errorf("global section catalog is missing %q", path)

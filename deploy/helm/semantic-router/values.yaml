@@ -336,7 +336,7 @@ config:
       domains:
         - name: "general"
           description: "Catch-all domain"
-          mmlu_categories: ["other"]
+          labels: ["other"]
     decisions:
       - name: "default-route"
         description: "Default route for every request while you wire real backends."
@@ -357,7 +357,6 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
-          max_concurrency: 8
           metrics:
             enabled: true
             detailed_goroutine_tracking: true

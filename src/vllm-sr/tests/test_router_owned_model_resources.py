@@ -18,7 +18,7 @@ from cli.commands.runtime_paths import STATE_ROOT_DIR_ENV
 from cli.commands.validate import collect_config_errors
 from cli.main import main
 from cli.models import UserConfig
-from cli.parser import parse_user_config_data
+from cli.parser import ConfigParseError, parse_user_config_data
 from cli.router_validation import ROUTER_BINARY_ENV, RouterVerdict
 from click.testing import CliRunner
 
@@ -84,8 +84,9 @@ DEPRECATED = {
 }
 UNCALIBRATED = {
     "code": "uncalibrated_preset",
-    "field": "global.model_catalog.modules.prompt_guard.threshold",
-    "message": "jailbreak asks d3-remote, which has no calibrated threshold",
+    "field": "routing.signals.jailbreak[attack]",
+    "message": 'resolves to deployment "d3-remote", whose model has no calibrated '
+    "threshold for the jailbreak preset",
 }
 
 
@@ -120,7 +121,7 @@ def _signal_bindings(document):
         "pii": {"deployment": "local-vela", "head": "pii"},
         "domain": {"deployment": "d3-remote"},
         "fact_check": {"deployment": "local-vela"},
-        "feedback_detector": {"deployment": "local-vela"},
+        "user_feedback": {"deployment": "local-vela"},
     }
 
 
@@ -165,10 +166,10 @@ def _string_bindings(document):
             "name": "private",
             "routing": {
                 "model_bindings": {
-                    "preference": "chat-judge",
-                    "reask": "local-vela",
+                    "turn_relation": "chat-judge",
+                    "complexity": "local-vela",
                     "user_feedback": "local-vela",
-                    "modality_detector": "local-vela",
+                    "modality": "local-vela",
                 }
             },
         }
@@ -216,25 +217,13 @@ def _deployment_settings(document):
 
 def _rule_deployments(document):
     document["routing"]["signals"] = {
-        "classifiers": [
-            {
-                "name": "risk",
-                "deployment": "chat-judge",
-                "labels": ["safe", "unsafe"],
-                "instructions": "Is the request risky?",
-            }
-        ],
+        "jailbreak": [{"name": "attack", "deployment": "d3-remote"}],
         "safety": [
             {
                 "name": "harm",
-                "deployment": "classifier",
-                "threshold": 0.5,
-                "hazard": {
-                    "deployment": "local-vela",
-                    "labels": ["violence", "privacy"],
-                    "categories": ["privacy"],
-                    "threshold": 0.5,
-                },
+                "deployment": "local-vela",
+                "labels": ["Harassment"],
+                "predicate": {"gte": 0.5},
             }
         ],
         "complexity": [{"name": "hard", "deployment": "local-vela"}],
@@ -277,31 +266,9 @@ def _embedding_defaults(document):
         "artifact": "vllm-sr/Vela-1.0-Omni-Nano",
         "device": "cpu",
     }
-    document["routing"]["signals"] = {
-        "embeddings": [
-            {
-                "name": "photos",
-                "threshold": 0.5,
-                "image_candidates": ["./cat.png"],
-                "query_modality": "image",
-            }
-        ]
-    }
 
 
-@pytest.mark.parametrize("scope", ["global", "recipe"])
-@pytest.mark.parametrize(
-    "key",
-    [
-        "pii_classifier",
-        "pii",
-        "hallucination_detector",
-        "hallucination",
-        "preference",
-        "reask",
-    ],
-)
-def test_decision_task_bindings_are_the_routers_to_judge(scope, key):
+def _bind(scope: str, key: str):
     binding = {"deployment": "local-vela", "contract": "decision.v1"}
 
     def bind(document):
@@ -312,7 +279,37 @@ def test_decision_task_bindings_are_the_routers_to_judge(scope, key):
                 {"name": "private", "routing": {"model_bindings": {key: binding}}}
             ]
 
-    assert _cli_errors(_document(bind)) == []
+    return bind
+
+
+@pytest.mark.parametrize("scope", ["global", "recipe"])
+@pytest.mark.parametrize("key", ["pii", "hallucination"])
+def test_decision_task_bindings_are_the_routers_to_judge(scope, key):
+    assert _cli_errors(_document(_bind(scope, key))) == []
+
+
+@pytest.mark.parametrize("scope", ["global", "recipe"])
+@pytest.mark.parametrize(
+    "key, becomes",
+    [
+        ("pii_classifier", "(pii)"),
+        ("hallucination_detector", "(hallucination)"),
+        ("preference", "(drop it; the decision model answers the signal)"),
+        ("reask", "(drop it; the decision model answers the signal)"),
+    ],
+)
+def test_bindings_of_removed_modules_and_signals_are_refused(scope, key, becomes):
+    with pytest.raises(ConfigParseError) as refused:
+        _cli_errors(_document(_bind(scope, key)))
+    prefix = (
+        "global.model_catalog.bindings"
+        if scope == "global"
+        else "recipes[private].routing.model_bindings"
+    )
+    assert str(refused.value).startswith(
+        f"{prefix}.{key}: removed_field: binding {key} "
+    )
+    assert str(refused.value).endswith(becomes)
 
 
 def test_the_cli_admits_new_providers_and_signal_keyed_bindings():
@@ -341,7 +338,7 @@ def test_the_generated_schema_admits_the_shapes_the_router_reads(mutate):
 
 def test_a_string_binding_names_its_deployment():
     config = UserConfig.model_validate(_document(_string_bindings))
-    binding = config.recipes[0].routing.model_bindings["preference"]
+    binding = config.recipes[0].routing.model_bindings["turn_relation"]
 
     assert binding.deployment == "chat-judge" and binding.contract is None
     assert binding.model_dump() == "chat-judge"

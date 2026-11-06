@@ -21,19 +21,18 @@ translation:
 | --- | --- | --- |
 | `model_runtime` | 内置模型运行时：托管（由 Router 启动）或挂接（设置了 `endpoint`） | 其模型卡提供的任何内容 |
 | `systemone` | System One API 的 `POST <endpoint>` 和 `GET <endpoint>/models` | 每个问题类信号和选择器 |
-| `classify` | `POST <endpoint>/classify` | `domain`、`jailbreak`、`pii`、`hallucination`、分类器规则、安全规则及其 hazard 部分、complexity 规则 |
-| `openai_chat` | `POST <endpoint>/chat/completions` | `jailbreak`、`hallucination`、`preference`、分类器规则 |
+| `classify` | `POST <endpoint>/classify` | masking、响应 jailbreak 和幻觉检测插件的模型（`pii`、`jailbreak` 和 `hallucination` 绑定） |
+| `openai_chat` | `POST <endpoint>/chat/completions` | 响应 jailbreak 插件的防护模型和幻觉检测插件的检测模型 |
 | `openai_embeddings` | `POST <endpoint>/embeddings` | Embedding |
 | `rerank` | `POST <endpoint>/rerank` | RAG 重排序 |
 
 部署被分配了它无法回答的信号时，Router 在加载时拒绝该部署。
 
-有四个部署始终已声明，只有当某处解析到它们时才会启动：
+有三个部署始终已声明，只有当某处解析到它们时才会启动：
 
 | 名称 | 模型 | 默认用于 |
 | --- | --- | --- |
 | `primary` | CPU 上的 `vllm-sr/vela3-fast` | `system.decision_model` |
-| `hazard` | Vela 1.0 Hazard | 安全规则的 hazard 部分 |
 | `vela-embedding` | Vela 1.0 Embedding | `embeddings.default` |
 | `omni-nano` | Vela 1.0 Omni Nano | `embeddings.multimodal` |
 
@@ -123,19 +122,19 @@ routing:
     domain: d3-remote
 ```
 
-绑定键是规则共享同一个回答的信号类型：`domain`、`jailbreak`、`pii`、`fact_check`、`user_feedback`、`modality`、`hallucination`、`preference` 和 `reask`。自己提问的规则在规则上写 `deployment:`：`routing.signals.systemone[]`、`classifiers[]`、`safety[]` 和 `safety[].hazard`、`complexity[]`，以及决策的 `algorithm.systemone`。所有 complexity 规则由同一个远程分数驱动，因此由 `classify` 部署回答的 complexity 规则都指向同一个部署。
+绑定键是应用信号类型：`domain`、`fact_check`、`user_feedback`、`jailbreak`、`safety`、`pii`、`hallucination`、`refusal`、`turn_relation`、`complexity` 和 `modality`。绑定回答该类型中未指定部署的规则；规则写 `deployment:` 可改用其他部署。`routing.signals.systemone[]` 规则和决策的 `algorithm.systemone` 也写 `deployment:`。`jailbreak`、`pii` 和 `hallucination` 绑定同时指定该类型插件模块的模型。
 
 绑定也可以写成对象，用于选择多头 `model_runtime` 部署的某个头：`pii: {deployment: local-vela, head: pii}`。工作点通过 `operating_point` 固定在部署上。
 
-每个信号的解析顺序：规则的 `deployment`，然后是配方的绑定，然后是全局绑定，问题类信号最后使用 `system.decision_model`。Embedding 通过 `embeddings.default` 解析，用自己模型做 embedding 的路由配置则通过它的 `model_bindings.embedding` 解析；重排序通过 `rag` 插件的 `rerank.deployment` 解析，hazard 部分通过它自己的 `deployment` 解析，未写时使用 `hazard`。
+每个信号的解析顺序：规则的 `deployment`，然后是配方的绑定，然后是全局绑定，问题类信号最后使用 `system.decision_model`。Embedding 通过 `embeddings.default` 解析，用自己模型做 embedding 的路由配置则通过它的 `model_bindings.embedding` 解析；重排序通过 `rag` 插件的 `rerank.deployment` 解析。
 
 ## 阈值 {#thresholds}
 
-未写出的模块阈值来自回答的模型：`vela3-fast`、Vela 2.0 各尺寸或 Vela 1.0 专用模型的校准值；其他模型（本地或 `systemone`）没有校准值，使用 0.5（加载时警告 `uncalibrated_preset`）。远程分类器沿用 Vela 1.0 的默认值。你写出的 `threshold` 按原值使用。
+规则未写出的 predicate 来自回答的模型：`vela3-fast` 或 Vela 2.0 各尺寸校准的阈值；其他模型（本地或 `systemone`）没有校准值，使用 0.5（加载时警告指明该规则的 `uncalibrated_preset`）。你写出的 `predicate` 按原值使用。插件模块以同样方式保留各自的模块阈值，远程分类器沿用 Vela 1.0 的默认值。
 
 ## 准入 {#admission}
 
-`global.model_catalog.admission` 限制并发调用数。键可以是部署名称，表示该部署的所有使用者共享的闸门；也可以是信号类型（`jailbreak`、`domain`、`pii`、`fact_check`、`hallucination`、`user_feedback`、`safety`、`hazard`），表示该信号自己的闸门。
+`global.model_catalog.admission` 限制并发调用数。键可以是部署名称，表示该部署的所有使用者共享的闸门；也可以是保留自有模型的插件模块的信号类型（`jailbreak`、`pii`、`hallucination`），表示该模块的闸门。
 
 ```yaml
 global:
@@ -193,36 +192,25 @@ routing:
 
 `layer` 和 `dimension` 选择模型运行时重排序模型的提前退出层。远程重排序 API 是 `rerank` 部署，按自己的深度作答，所以它的 `rerank` 块只写 `deployment` 和 `top_k`。
 
-### R3. 远程分类器作为 jailbreak 防护，chat 模型作为评判 {#r3-remote-classifier-as-the-jailbreak-guard-and-a-chat-model-as-a-judge}
+### R3. 越狱与幻觉规则使用远程决策模型 {#r3-remote-decision-model-for-jailbreak-and-hallucination}
 
-```yaml title="r3-classify-and-chat"
+```yaml title="r3-remote-judge"
 global:
   model_catalog:
     deployments:
-      guard:
-        provider: classify               # POST <endpoint>/classify
-        endpoint: https://guard.example.com
-        auth: {api_key_env: GUARD_KEY}
-        timeout_ms: 5000
-        limits: {max_response_bytes: 1048576}
-      chat-judge:
-        provider: openai_chat            # chat completions used as a classifier or judge
-        endpoint: https://llm.example.com/v1
-        model: gpt-4.1-mini
+      d3-judge:
+        provider: systemone
+        endpoint: https://judge.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
         auth: {api_key_env: JUDGE_KEY}
-        generation: {max_tokens: 256, temperature: 0}
+        timeout_ms: 5000
 routing:
   model_bindings:
-    jailbreak: guard
-  signals:
-    classifiers:
-      - name: tool-risk
-        deployment: chat-judge
-        labels: [SAFE, RISKY]
-        instructions: Choose RISKY only for destructive or irreversible tool operations.
+    jailbreak: d3-judge                  # request- and response-stage rules
+    hallucination: d3-judge
 ```
 
-provider 决定 Router 如何与模型通信；不需要写角色、适配器或契约。
+该作用域中的每条 `jailbreak` 和 `hallucination` 规则都向 `d3-judge` 提问；其他信号仍由 `primary` 回答。绑定只写部署名：信号决定问题，provider 决定 Router 如何提问。幻觉规则提出 span 问题，因此其部署必须能回答 span；列出 `capabilities.question_types` 的 `systemone` 部署必须包含 `span`。
 
 ### R4. 网关后的 System One，使用网关自己的认证请求头 {#r4-system-one-behind-a-gateway-with-its-own-auth-header}
 

@@ -27,27 +27,26 @@ routing:
     domains:
       - name: "computer science"
         description: Computer science and engineering prompts.
-        mmlu_categories: ["computer science"]
+        labels: ["computer science"]
       - name: other
         description: General fallback traffic.
-        mmlu_categories: [other]
+        labels: [other]
     jailbreak:
       - name: prompt_injection
-        threshold: 0.8
         description: Prompt-injection or jailbreak attempts.
+        predicate:
+          gte: 0.8
     pii:
       - name: restricted_pii
-        threshold: 0.85
-        pii_types_allowed: [EMAIL_ADDRESS]
         description: Sensitive prompts.
-    embeddings:
+        predicate:
+          gte: 0.85
+        ignore_labels: [EMAIL_ADDRESS]
+    systemone:
       - name: technical_support
-        threshold: 0.75
-        aggregation_method: max
-        candidates:
-          - how to configure the system
-          - installation guide
-          - troubleshooting steps
+        question:
+          type: noul
+          instructions: 'Is the request about any of these: how to configure the system; installation guide; troubleshooting steps?'
   decisions:
     - name: "guarded-cs"
       description: Computer-science traffic without prompt attacks or PII.
@@ -57,7 +56,7 @@ routing:
         conditions:
           - type: domain
             name: "computer science"
-          - type: embedding
+          - type: systemone
             name: technical_support
       modelRefs:
         - model: "footprint-model"

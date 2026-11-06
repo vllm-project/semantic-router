@@ -138,7 +138,7 @@ def test_rules_reject_on_unknown_with_condition_on_error():
         "on_unknown": "no_match",
         "conditions": [
             {
-                "type": "classifier",
+                "type": "systemone",
                 "name": "risk",
                 "label": "RISKY",
                 "predicate": {"gte": 0.5},

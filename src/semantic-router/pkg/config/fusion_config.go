@@ -158,6 +158,23 @@ func (c *RouterConfig) HasFusionDecision() bool {
 	return false
 }
 
+// GroundingFusionDecision is the first of the scope's decisions whose fusion
+// grounds its panel. Grounding asks the hallucination preset of the
+// deployment the scope's hallucination rules that name none resolve to.
+func (c *RouterConfig) GroundingFusionDecision() (string, bool) {
+	if c == nil {
+		return "", false
+	}
+	for _, decision := range c.Decisions {
+		algorithm := decision.Algorithm
+		if algorithm != nil && algorithm.Type == DecisionAlgorithmFusion &&
+			algorithm.Fusion != nil && algorithm.Fusion.Grounding != nil && algorithm.Fusion.Grounding.Enabled {
+			return decision.Name, true
+		}
+	}
+	return "", false
+}
+
 func ValidateFusionAlgorithmConfig(cfg *FusionAlgorithmConfig) error {
 	if cfg == nil {
 		return nil

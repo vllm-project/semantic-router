@@ -6,9 +6,9 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/masking"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
@@ -29,7 +29,7 @@ func (e *maskingDispatchError) Unwrap() error { return e.cause }
 // piiRuleSpans is the one signal method masking needs: the personal data a
 // pii rule finds in a text.
 type piiRuleSpans interface {
-	PIIRuleSpans(ctx context.Context, rule, text string) ([]classification.PIIDetection, error)
+	PIIRuleSpans(ctx context.Context, rule, text string) ([]modelservice.Span, error)
 }
 
 // maskingSpansFor resolves the signal layer of the request's recipe. It is a
@@ -62,7 +62,7 @@ func (r *OpenAIRouter) applyMaskingBeforeDispatch(ctx *RequestContext) error {
 		// index sequence instead of reusing _0 for a different value (D5).
 		ctx.Masking = masking.NewAllocator(cfg)
 	}
-	scan := spanScannerFor(classification.WithPIIScans(ctx.embeddingContext(), ctx.PIIScans), finder, cfg.Signal)
+	scan := spanScannerFor(ctx.embeddingContext(), finder, cfg.Signal)
 	result, err := masking.Apply(ctx.SemanticRequest, ctx.Masking, scan)
 	if err != nil {
 		return &maskingDispatchError{cause: err}
@@ -97,8 +97,8 @@ func recordMaskingObservability(ctx *RequestContext, result masking.Result) {
 	ctx.TraceContext = spanCtx
 }
 
-// spanScannerFor adapts the pii rule to masking.ScanFunc. Detection offsets
-// are bytes, which is what masking.Span expects (D2).
+// spanScannerFor adapts the pii rule to masking.ScanFunc. The rule's spans
+// are code points into text; masking.Span offsets are bytes (D2).
 func spanScannerFor(requestCtx context.Context, finder piiRuleSpans, rule string) masking.ScanFunc {
 	return func(text string) ([]masking.Span, error) {
 		detections, err := finder.PIIRuleSpans(requestCtx, rule, text)
@@ -108,14 +108,15 @@ func spanScannerFor(requestCtx context.Context, finder piiRuleSpans, rule string
 			// (D4).
 			return nil, err
 		}
+		offsets := modelservice.ByteOffsets(text)
 		spans := make([]masking.Span, len(detections))
 		for i, detection := range detections {
 			spans[i] = masking.Span{
-				EntityType: detection.EntityType,
-				Start:      detection.Start,
-				End:        detection.End,
+				EntityType: detection.Label,
+				Start:      offsets(detection.Start),
+				End:        offsets(detection.End),
 				Text:       detection.Text,
-				Confidence: detection.Confidence,
+				Confidence: float32(detection.Probability),
 			}
 		}
 		return spans, nil

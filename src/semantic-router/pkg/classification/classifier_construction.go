@@ -42,7 +42,7 @@ func (b *classifierOptionBuilder) runtime() *classifierModelRuntime {
 	return standalone
 }
 
-func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]option, error) {
+func (b *classifierOptionBuilder) build() ([]option, error) {
 	if err := b.prepareEmbeddingSet(); err != nil {
 		return nil, err
 	}
@@ -51,29 +51,14 @@ func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]opt
 	}
 	steps := []func() (option, error){
 		b.buildKeywordClassifierOption,
-		b.buildEmbeddingClassifierOption,
 		b.buildContextClassifierOption,
 		b.buildStructureClassifierOption,
-		b.buildReaskClassifierOption,
-		b.buildComplexityClassifierOption,
-		b.buildContrastiveJailbreakClassifiersOption,
 		b.buildAuthzClassifierOption,
-		b.buildKBClassifiersOption,
 		b.buildEventClassifierOption,
-		b.buildGenericClassifiersOption,
-		b.buildModalityClassifierOption,
-		b.buildSafetyClassifiersOption,
 	}
 	parallelOptions, err := b.buildParallelOptions(steps)
 	b.options = append(b.options, parallelOptions...)
 	if err != nil {
-		return nil, err
-	}
-	if err := b.addCategoryClassifier(categoryMapping); err != nil {
-		return nil, err
-	}
-	b.addMCPCategoryClassifier()
-	if err := b.addComplexityBackend(); err != nil {
 		return nil, err
 	}
 	return b.options, nil

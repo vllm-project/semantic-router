@@ -117,11 +117,8 @@ func TestSampleCRValidation(t *testing.T) {
 					if rule.Name == "" {
 						t.Error("complexity rule should have a name")
 					}
-					if len(rule.Hard.Candidates) == 0 {
-						t.Errorf("complexity rule %s should have hard candidates", rule.Name)
-					}
-					if len(rule.Easy.Candidates) == 0 {
-						t.Errorf("complexity rule %s should have easy candidates", rule.Name)
+					if rule.Hard != nil || rule.Easy != nil || rule.Composer != nil {
+						t.Errorf("complexity rule %s writes example banks, which the decision model does not read", rule.Name)
 					}
 				}
 			}

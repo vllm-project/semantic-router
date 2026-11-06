@@ -283,7 +283,7 @@ export const X_VSR_MATCHED_ACTION = 'x-vsr-matched-action'
 /** Matched `authz` rules. Surface: debug. */
 export const X_VSR_MATCHED_AUTHZ = 'x-vsr-matched-authz'
 
-/** Matched `complexity` rules with their levels, such as `code_complexity:hard`. Surface: debug. */
+/** Matched `complexity` rules, and `rule:option` for a rule without labels, such as `task_difficulty:hard`. Surface: debug. */
 export const X_VSR_MATCHED_COMPLEXITY = 'x-vsr-matched-complexity'
 
 /** Matched `context` rules. Surface: debug. */
@@ -292,14 +292,11 @@ export const X_VSR_MATCHED_CONTEXT = 'x-vsr-matched-context'
 /** Matched `conversation` rules. Surface: debug. */
 export const X_VSR_MATCHED_CONVERSATION = 'x-vsr-matched-conversation'
 
-/** Matched `systemone` rules: rule names, `rule:choice` for choices and `rule:label` for labels. Surface: debug. */
+/** Matched `systemone` rules, and `rule:option` for a choice rule without labels. Surface: debug. */
 export const X_VSR_MATCHED_DECISION_MODEL = 'x-vsr-matched-decision-model'
 
 /** Matched `domain` rules. Surface: debug. */
 export const X_VSR_MATCHED_DOMAINS = 'x-vsr-matched-domains'
-
-/** Matched `embedding` rules. Surface: debug. */
-export const X_VSR_MATCHED_EMBEDDINGS = 'x-vsr-matched-embeddings'
 
 /** Matched `event` rules. Surface: debug. */
 export const X_VSR_MATCHED_EVENT = 'x-vsr-matched-event'
@@ -316,29 +313,20 @@ export const X_VSR_MATCHED_INPUT_MODALITY = 'x-vsr-matched-input-modality'
 /** Matched `jailbreak` rules, of the request and of the response. Surface: debug. */
 export const X_VSR_MATCHED_JAILBREAK = 'x-vsr-matched-jailbreak'
 
-/** Matched `kb` rules. Surface: debug. */
-export const X_VSR_MATCHED_KB = 'x-vsr-matched-kb'
-
 /** Matched `keyword` rules, comma-separated. Surface: debug. */
 export const X_VSR_MATCHED_KEYWORDS = 'x-vsr-matched-keywords'
 
 /** Matched `language` rules. Surface: debug. */
 export const X_VSR_MATCHED_LANGUAGE = 'x-vsr-matched-language'
 
-/** Matched `modality` rules. Surface: debug. */
+/** Matched `modality` rules, and `rule:option` for a rule without labels. Surface: debug. */
 export const X_VSR_MATCHED_MODALITY = 'x-vsr-matched-modality'
 
 /** Matched `pii` rules. Surface: debug. */
 export const X_VSR_MATCHED_PII = 'x-vsr-matched-pii'
 
-/** Matched `preference` rules. Surface: debug. */
-export const X_VSR_MATCHED_PREFERENCE = 'x-vsr-matched-preference'
-
 /** Matched projection outputs. Surface: debug. */
 export const X_VSR_MATCHED_PROJECTIONS = 'x-vsr-matched-projections'
-
-/** Matched `reask` rules. Surface: debug. */
-export const X_VSR_MATCHED_REASK = 'x-vsr-matched-reask'
 
 /** Matched content `safety` rules. Surface: debug. */
 export const X_VSR_MATCHED_SAFETY = 'x-vsr-matched-safety'
@@ -346,7 +334,10 @@ export const X_VSR_MATCHED_SAFETY = 'x-vsr-matched-safety'
 /** Matched `structure` rules. Surface: debug. */
 export const X_VSR_MATCHED_STRUCTURE = 'x-vsr-matched-structure'
 
-/** Matched `user_feedback` rules. Surface: debug. */
+/** Matched `turn_relation` rules, and `rule:option` for a rule without labels. Surface: debug. */
+export const X_VSR_MATCHED_TURN_RELATION = 'x-vsr-matched-turn-relation'
+
+/** Matched `user_feedback` rules, and `rule:option` for a rule without labels. Surface: debug. */
 export const X_VSR_MATCHED_USER_FEEDBACK = 'x-vsr-matched-user-feedback'
 
 /** Per-model usage receipt of a config-bound evaluation request. Surface: public. */

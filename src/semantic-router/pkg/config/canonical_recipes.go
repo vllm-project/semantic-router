@@ -41,7 +41,7 @@ func applyCanonicalRecipeState(cfg *RouterConfig, canonical *CanonicalConfig) er
 			Profile: RoutingProfile{
 				ModelBindings:         cloneModelMap(recipe.Routing.ModelBindings),
 				CandidateRequirements: recipe.Routing.CandidateRequirements.Clone(),
-				Signals:               normalizeSignals(recipe.Routing.Signals, decisions),
+				Signals:               normalizeSignals(recipe.Routing.Signals),
 				Projections:           normalizeProjections(recipe.Routing.Projections),
 				Decisions:             decisions,
 				Strategy:              cfg.RoutingDefaults.resolveStrategy(recipe.Routing.Strategy),

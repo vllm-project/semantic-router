@@ -12,7 +12,19 @@ from typing import Annotated, Any, Dict, List, Literal, Optional
 from .models_systemone import SystemOneRule
 from .models_native import CalibrationArtifact
 from .models_predicates import NumericPredicate
-from .models_safety import SafetyRule
+from .models_application import (
+    ComplexityRule,
+    Domain,
+    FactCheck,
+    HallucinationRule,
+    JailbreakRule,
+    ModalityRule,
+    PIIRule,
+    RefusalRule,
+    SafetyRule,
+    TurnRelationRule,
+    UserFeedback,
+)
 
 from pydantic import (
     BaseModel,
@@ -26,11 +38,8 @@ from pydantic import (
 )
 
 from .algorithms import AlgorithmConfig, ModelRef
-from .config_contract import (
-    ClassifierSignalType,
-    UnknownPolicy,
-)
-from .config_schema import surface_types
+from .config_contract import UnknownPolicy
+from .config_schema import routing_surface_catalog, surface_types
 from .context_bands import normalize_token_count, validate_context_band
 from .durations import parse_duration
 
@@ -38,7 +47,12 @@ RoutingStrategy = Literal["priority", "confidence"]
 PROMPT_MIN_CANDIDATES = 2
 MAX_DECISION_ANNOTATIONS = 32
 MAX_DECISION_ANNOTATION_BYTES = 4096
-LABELED_CONDITION_TYPES = frozenset({"classifier", "systemone"})
+# Condition types whose conditions may name one of the rule's options.
+LABELED_CONDITION_TYPES = frozenset(
+    surface["type"]
+    for surface in routing_surface_catalog()["signals"]
+    if surface.get("reference_qualifier") == "label"
+)
 
 
 class ListenerTLS(BaseModel):
@@ -145,49 +159,6 @@ class KeywordSignal(BaseModel):
     include_history: bool = False
 
 
-class EmbeddingSignal(BaseModel):
-    """Embedding-based signal configuration.
-
-    The ``query_modality`` field declares which modality of incoming request
-    payload the embedding rule's query is computed from. It defaults to
-    ``"text"`` when omitted, preserving existing behavior. ``"image"`` and
-    ``"audio"`` require ``global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal``
-    or an explicit embedding binding with those capabilities. Positive and negative
-    text/image candidates are encoded in that same prepared model space.
-    """
-
-    name: str
-    threshold: float
-    candidates: List[StrictStr] = Field(default_factory=list)
-    image_candidates: List[StrictStr] = Field(default_factory=list)
-    negative_candidates: List[StrictStr] = Field(default_factory=list)
-    negative_image_candidates: List[StrictStr] = Field(default_factory=list)
-    aggregation_method: Literal["max", "mean", "any"] = "max"
-    query_modality: Optional[Literal["text", "image", "audio"]] = None
-    prototype_scoring: Optional["PrototypeScoringConfig"] = None
-
-    @model_validator(mode="after")
-    def validate_candidate_banks(self):
-        if not self.candidates and not self.image_candidates:
-            raise ValueError(
-                "embedding requires positive candidates or image_candidates"
-            )
-        for values in (
-            self.candidates,
-            self.image_candidates,
-            self.negative_candidates,
-            self.negative_image_candidates,
-        ):
-            if any(not value.strip() for value in values):
-                raise ValueError("embedding candidates must be non-empty strings")
-        bound = 2 if self.negative_candidates or self.negative_image_candidates else 1
-        if not math.isfinite(self.threshold) or not -bound <= self.threshold <= bound:
-            raise ValueError(
-                f"embedding threshold must be finite and within [-{bound}, {bound}]"
-            )
-        return self
-
-
 class ProjectionPartition(BaseModel):
     """Partition metadata coordinating mutually exclusive routing signals."""
 
@@ -205,13 +176,11 @@ class ProjectionScoreInput(BaseModel):
       - "binary" (default): contributes match/miss fixed values.
       - "confidence": contributes the signal confidence when matched.
       - "raw": contributes the raw numeric value from SignalValues.
-      - "score": contributes the numeric score exposed by a knowledge-base metric.
+      - "score": contributes the score of the projection score it names.
     """
 
     type: str
     name: Optional[str] = None
-    kb: Optional[str] = None
-    metric: Optional[str] = None
     weight: float
     value_source: Optional[Literal["binary", "confidence", "raw", "score"]] = None
     match: Optional[float] = None
@@ -259,37 +228,6 @@ class Projections(BaseModel):
     partitions: Optional[List[ProjectionPartition]] = []
     scores: Optional[List[ProjectionScore]] = []
     mappings: Optional[List[ProjectionMapping]] = []
-
-
-class Domain(BaseModel):
-    """Domain category configuration."""
-
-    name: str
-    description: str
-    mmlu_categories: Optional[List[str]] = None
-
-
-class FactCheck(BaseModel):
-    """Fact-checking signal configuration."""
-
-    name: str
-    description: str
-
-
-class UserFeedback(BaseModel):
-    """User feedback signal configuration."""
-
-    name: str
-    description: str
-
-
-class Preference(BaseModel):
-    """Route preference signal configuration."""
-
-    name: str
-    description: str
-    threshold: Optional[float] = None
-    examples: Optional[List[str]] = None
 
 
 class Language(BaseModel):
@@ -399,13 +337,6 @@ class EventRule(BaseModel):
     description: Optional[str] = None
 
 
-class ComplexityCandidates(BaseModel):
-    """Complexity candidates configuration."""
-
-    candidates: List[str]
-    image_candidates: Optional[List[str]] = None
-
-
 class PrototypeScoringConfig(BaseModel):
     """Prototype-bank construction and scoring controls for embedding-backed signals."""
 
@@ -445,93 +376,6 @@ class EmbeddingEndpointConfig(BaseModel):
     dimensions: Optional[int] = Field(default=None, ge=1)
 
 
-class ComplexityRule(BaseModel):
-    """Complexity-based signal configuration using embedding similarity.
-
-    The composer field allows filtering based on other signals (e.g., only apply
-    code_complexity when domain is "computer science"). This is evaluated after
-    all signals are computed in parallel, enabling signal dependencies.
-    """
-
-    name: str
-    # A deployment scores the rule's difficulty question in place of the
-    # hard and easy example banks.
-    deployment: Optional[str] = None
-    threshold: float = 0.1
-    hard: Optional[ComplexityCandidates] = None
-    easy: Optional[ComplexityCandidates] = None
-    description: Optional[str] = None
-    composer: Optional["Rules"] = None  # Forward reference, defined below
-    prototype_scoring: Optional[PrototypeScoringConfig] = None
-
-
-class JailbreakRule(BaseModel):
-    """Jailbreak detection signal configuration.
-
-    Supports two methods:
-    - "classifier" (default): BERT/LoRA-based jailbreak classifier
-    - "contrastive": Embedding-based contrastive scoring against jailbreak/benign KBs
-    """
-
-    name: str
-    threshold: float
-    method: Optional[str] = None  # "classifier" (default) or "contrastive"
-    include_history: bool = False
-    # "request" (default) scores the prompt; "response" scores the model's
-    # output once it has answered, for the selected decision's
-    # response_guard to act on.
-    direction: Optional[Literal["request", "response"]] = None
-    jailbreak_patterns: Optional[list[str]] = (
-        None  # Known jailbreak prompts (contrastive KB)
-    )
-    benign_patterns: Optional[list[str]] = None  # Known benign prompts (contrastive KB)
-    description: Optional[str] = None
-
-
-class HallucinationRule(BaseModel):
-    """Hallucination signal configuration.
-
-    Checks the model's answer against the grounding context the request
-    carried, so it is observed at the response stage and read by the
-    selected decision's response_guard; decision rules cannot read it.
-    """
-
-    name: str
-    # Ask the detector for span-level NLI explanations. A detection setting,
-    # so it lives on the rule.
-    use_nli: bool = False
-    description: Optional[str] = None
-
-
-class PIIRule(BaseModel):
-    """PII detection signal configuration."""
-
-    name: str
-    source: Optional[Literal["tool_result"]] = None
-    # Omitted, the rule takes every span the PII model reports; a Vela 2.0
-    # model reports only spans above its size's calibrated threshold.
-    threshold: Optional[float] = None
-    pii_types_allowed: Optional[List[str]] = None
-    include_history: bool = False
-    description: Optional[str] = None
-
-    @field_validator("source", mode="before")
-    @classmethod
-    def normalize_source(cls, value: object) -> object:
-        return None if value == "" else value
-
-
-class ModalityRule(BaseModel):
-    """Modality detection signal configuration.
-
-    Classifies whether a prompt requires text (AR), image (DIFFUSION), or both (BOTH).
-    Detection configuration is read from modality_detector (InlineModels).
-    """
-
-    name: str
-    description: Optional[str] = None
-
-
 class Subject(BaseModel):
     """RBAC subject (user or group) for role binding."""
 
@@ -551,31 +395,6 @@ class RoleBindingRule(BaseModel):
     role: str
     subjects: List[Subject]
     description: Optional[str] = None
-
-
-class KBSignalTarget(BaseModel):
-    """Binding target for a named knowledge base."""
-
-    kind: Literal["label", "group"]
-    value: str
-
-
-class KBSignal(BaseModel):
-    """Knowledge-base signal bound to a named global KB instance."""
-
-    name: str
-    kb: str
-    target: KBSignalTarget
-    match: Optional[Literal["best", "threshold"]] = None
-
-
-class Reask(BaseModel):
-    """History-aware repeated-question dissatisfaction signal."""
-
-    name: str
-    description: Optional[str] = None
-    threshold: Optional[float] = None
-    lookback_turns: Optional[int] = None
 
 
 class MetadataPredicate(BaseModel):
@@ -645,153 +464,13 @@ class ActionRule(BaseModel):
     description: Optional[str] = None
 
 
-class TopicContinuityThresholds(BaseModel):
-    """Continuation and change score bounds; the gap is the unknown band."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    continuation: Optional[float] = None
-    change: Optional[float] = None
-
-
-class TopicContinuityLimits(BaseModel):
-    """Bounds on the history one topic-continuity rule reads."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    max_prior_turns: Optional[int] = None
-    max_turn_bytes: Optional[int] = None
-    max_input_bytes: Optional[int] = None
-
-
-TOPIC_CONTINUITY_DEFAULT_PRIOR_TURNS = 8
-TOPIC_CONTINUITY_DEFAULT_TURN_BYTES = 16384
-TOPIC_CONTINUITY_MIN_PRIOR_TURNS = 1
-TOPIC_CONTINUITY_MAX_PRIOR_TURNS = 32
-TOPIC_CONTINUITY_MIN_TURN_BYTES = 256
-TOPIC_CONTINUITY_MAX_TURN_BYTES = 65536
-TOPIC_CONTINUITY_MIN_INPUT_BYTES = 1024
-TOPIC_CONTINUITY_MAX_INPUT_BYTES = 1 << 20
-TOPIC_CONTINUITY_MAX_RULES = 8
-
-
-class TopicContinuityRule(BaseModel):
-    """Context-policy evidence: does the live turn depend on retained history.
-
-    Not decision-referenceable. Validation mirrors the Router: defaults are
-    applied first and the effective values are checked.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    name: str
-    description: Optional[str] = None
-    include_assistant: Optional[bool] = None
-    thresholds: Optional[TopicContinuityThresholds] = None
-    limits: Optional[TopicContinuityLimits] = None
-
-    @model_validator(mode="after")
-    def validate_effective_values(self):
-        if not self.name.strip() or self.name != self.name.strip():
-            raise ValueError(
-                "topic_continuity signal name must be nonempty and trimmed"
-            )
-        thresholds = self.thresholds or TopicContinuityThresholds()
-        continuation = (
-            0.35 if thresholds.continuation is None else thresholds.continuation
-        )
-        change = 0.08 if thresholds.change is None else thresholds.change
-        if not (0 <= change < continuation < 1):
-            raise ValueError(
-                "topic_continuity thresholds must satisfy 0 <= change < continuation < 1"
-            )
-        limits = self.limits or TopicContinuityLimits()
-        turns = limits.max_prior_turns or TOPIC_CONTINUITY_DEFAULT_PRIOR_TURNS
-        turn_bytes = limits.max_turn_bytes or TOPIC_CONTINUITY_DEFAULT_TURN_BYTES
-        if (
-            not TOPIC_CONTINUITY_MIN_PRIOR_TURNS
-            <= turns
-            <= TOPIC_CONTINUITY_MAX_PRIOR_TURNS
-        ):
-            raise ValueError(
-                "topic_continuity limits.max_prior_turns must be in [1, 32]"
-            )
-        if (
-            not TOPIC_CONTINUITY_MIN_TURN_BYTES
-            <= turn_bytes
-            <= TOPIC_CONTINUITY_MAX_TURN_BYTES
-        ):
-            raise ValueError(
-                "topic_continuity limits.max_turn_bytes must be in [256, 65536]"
-            )
-        input_bytes = limits.max_input_bytes
-        if not input_bytes:
-            input_bytes = (turns + 1) * turn_bytes
-            if input_bytes > TOPIC_CONTINUITY_MAX_INPUT_BYTES:
-                raise ValueError(
-                    "topic_continuity derived limits.max_input_bytes exceeds 1048576; "
-                    "set an explicit limits.max_input_bytes"
-                )
-        if (
-            not TOPIC_CONTINUITY_MIN_INPUT_BYTES
-            <= input_bytes
-            <= TOPIC_CONTINUITY_MAX_INPUT_BYTES
-        ):
-            raise ValueError(
-                "topic_continuity limits.max_input_bytes must be in [1024, 1048576]"
-            )
-        if input_bytes < turn_bytes:
-            raise ValueError(
-                "topic_continuity limits.max_input_bytes must be at least limits.max_turn_bytes"
-            )
-        return self
-
-
-class ClassifierSignal(BaseModel):
-    """Generic label-score classifier signal.
-
-    The Router validates the model that answers the rule: its deployment, or
-    the deprecated type, model, model_path and use_cpu it reads as one.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    name: str
-    description: Optional[str] = None
-    deployment: Optional[str] = None
-    type: Optional[ClassifierSignalType] = None
-    model: Optional[str] = None
-    model_path: Optional[str] = None
-    labels: List[str]
-    instructions: Optional[str] = None
-    disable_rationale: StrictBool = False
-    use_cpu: bool = False
-
-    @model_validator(mode="after")
-    def validate_classifier(self):
-        if not self.name.strip() or self.name != self.name.strip():
-            raise ValueError("classifier signal name must be nonempty and trimmed")
-        if ":" in self.name:
-            raise ValueError("classifier signal name cannot contain ':'")
-        if not self.labels or any(not label.strip() for label in self.labels):
-            raise ValueError("labels cannot be empty")
-        if any(label != label.strip() or ":" in label for label in self.labels):
-            raise ValueError("labels must be trimmed and cannot contain ':'")
-        if len(set(self.labels)) != len(self.labels):
-            raise ValueError("labels cannot contain duplicates")
-        return self
-
-
 class Signals(BaseModel):
     """All signal configurations."""
 
     keywords: Optional[List[KeywordSignal]] = []
-    embeddings: Optional[List[EmbeddingSignal]] = []
     domains: Optional[List[Domain]] = []
     fact_check: Optional[List[FactCheck]] = []
     user_feedbacks: Optional[List[UserFeedback]] = []
-    reasks: Optional[List[Reask]] = []
-    preferences: Optional[List[Preference]] = []
     language: Optional[List[Language]] = []
     context: Optional[List[ContextRule]] = []
     structure: Optional[List[StructureRule]] = []
@@ -801,27 +480,24 @@ class Signals(BaseModel):
     jailbreak: Optional[List[JailbreakRule]] = []
     safety: list[SafetyRule] = Field(default_factory=list)
     hallucination: Optional[List[HallucinationRule]] = []
+    refusal: Optional[List[RefusalRule]] = []
+    turn_relation: Optional[List[TurnRelationRule]] = []
     pii: Optional[List[PIIRule]] = []
-    kb: Optional[List[KBSignal]] = []
     conversation: Optional[List[ConversationRule]] = []
     events: Optional[List[EventRule]] = []
     metadata: Optional[List[MetadataRule]] = []
-    classifiers: Optional[List[ClassifierSignal]] = []
     input_modality: Optional[List[InputModalityRule]] = []
     actions: Optional[List[ActionRule]] = []
     systemone: Optional[List[SystemOneRule]] = []
-    topic_continuity: Optional[List[TopicContinuityRule]] = []
 
     @model_validator(mode="after")
     def validate_rule_names(self):
-        if len(self.topic_continuity or []) > TOPIC_CONTINUITY_MAX_RULES:
-            raise ValueError("topic_continuity allows at most 8 rules per recipe")
         for family in type(self).model_fields:
             seen: set[str] = set()
             for signal in getattr(self, family) or []:
                 name = (
                     signal.name.lower()
-                    if family in {"metadata", "classifiers", "input_modality", "safety"}
+                    if family in {"metadata", "input_modality"}
                     else signal.name
                 )
                 if name in seen:
@@ -887,14 +563,10 @@ class Condition(BaseModel):
             raise ValueError("leaf condition node cannot define child conditions")
         if self.label is not None and self.type not in LABELED_CONDITION_TYPES:
             raise ValueError(
-                "label is only valid for classifier and systemone conditions"
+                "label is only valid for systemone and application signal conditions"
             )
-        if self.type == "classifier" and self.label is None:
-            raise ValueError("classifier conditions require a label")
-        if self.on_error is not None and self.type not in LABELED_CONDITION_TYPES:
-            raise ValueError(
-                "on_error is only valid for classifier and systemone conditions"
-            )
+        if self.on_error is not None and self.type != "systemone":
+            raise ValueError("on_error is only valid for systemone conditions")
         if self.on_unknown is not None:
             raise ValueError("on_unknown is only valid on the root rules node")
         return self

@@ -96,8 +96,10 @@ routing:
     domains:
       - name: code
         description: Programming, debugging, and software engineering tasks
+        labels: ["computer science"]
       - name: general
         description: General knowledge, conversation, and miscellaneous topics
+        labels: [other]
   modelCards:
     - name: qwen14b-dev
       param_size: 14b

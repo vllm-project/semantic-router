@@ -672,6 +672,7 @@ routing:
     domains:
       - name: imported
         description: Imported domain
+        labels: [business]
   decisions:
     - name: imported-route
       priority: 10
@@ -692,8 +693,10 @@ global:
     domains:
       - name: imported
         description: Imported domain
+        labels: [business]
       - name: deployed
         description: Deployed domain
+        labels: [law]
   decisions:
     - name: deployed-route
       priority: 20
@@ -760,6 +763,7 @@ routing:
     domains:
       - name: imported
         description: Imported domain
+        labels: [business]
   decisions:
     - name: imported-route
       priority: 10
@@ -777,6 +781,7 @@ routing:
     domains:
       - name: previewed
         description: Preview domain
+        labels: [history]
 `
 
 	bodyBytes, _ := json.Marshal(DeployRequest{

@@ -127,6 +127,17 @@ func ModelRuntimeDeploymentsInUse(cfg *RouterConfig) map[string]ModelDeployment 
 	for _, recipe := range cfg.Recipes {
 		scan(recipe.Profile.Signals, recipe.Profile.Decisions)
 	}
+	for _, scoped := range cfg.consumerScopes() {
+		for _, rule := range scoped.ApplicationRules() {
+			if scoped.AsksApplicationRule(rule) {
+				mark(rule.Rule.Deployment)
+			}
+		}
+		if _, grounds := scoped.GroundingFusionDecision(); grounds {
+			deployment, _ := scoped.ApplicationTypeDeployment(SignalTypeHallucination)
+			mark(deployment)
+		}
+	}
 	for name, deployment := range modelRuntimeTaskDeploymentsInUse(cfg) {
 		used[name] = deployment
 	}
@@ -207,67 +218,11 @@ func TaskConsumerInUse(scoped *RouterConfig, scope RecipeName, name string) bool
 		return EmbeddingModelsNeeded(services, primary, true)[primary]
 	}
 	switch name {
-	// A module switched off (enabled: false) runs no model, as its
-	// classifier does not.
-	case "domain_classifier":
-		return scoped.CategoryModel.Active() && scoped.UsesSignalTypeInReachableRouting(SignalTypeDomain)
-	case "prompt_guard":
-		return scoped.PromptGuard.Enabled && scoped.UsesJailbreakClassifierInReachableRouting()
-	case "pii_classifier":
-		return scoped.PIIModel.Active() && scoped.UsesSignalTypeInReachableRouting(SignalTypePII)
-	case "fact_check_classifier":
-		return scoped.HallucinationMitigation.FactCheckModel.Active() &&
-			(scoped.UsesSignalTypeInReachableRouting(SignalTypeFactCheck) ||
-				(scoped.ownsDefaultAPIConsumer() && (scoped.HallucinationMitigation.Enabled || len(scoped.RoutingProfileSignals().FactCheckRules) > 0)))
-	case "feedback_detector":
-		return scoped.UsesSignalTypeInReachableRouting(SignalTypeUserFeedback) ||
-			(scoped.ownsDefaultAPIConsumer() && len(scoped.RoutingProfileSignals().UserFeedbackRules) > 0)
-	case "modality_detector":
-		return scoped.ModalityDetector.Enabled && scoped.UsesSignalTypeInReachableRouting(SignalTypeModality)
-	case "preference":
-		return scoped.UsesSignalTypeInReachableRouting(SignalTypePreference) && scoped.PreferenceUsesDecisionTask()
-	case "reask":
-		return scoped.UsesSignalTypeInReachableRouting(SignalTypeReask) && scoped.ReaskUsesDecisionTask()
-	case "complexity":
-		_, bound := scoped.EffectiveModelBindings(scoped.Signals, scoped.ModelBindings)["complexity"]
-		if !scoped.UsesSignalTypeInReachableRouting(SignalTypeComplexity) {
-			return false
-		}
-		if bound {
-			return true
-		}
-		if scoped.ComplexityModel.Backend == nil {
-			for _, rule := range scoped.ComplexityRules {
-				if !scoped.ComplexityRuleUsesPrototypes(rule) {
-					return true
-				}
-			}
-		}
-		return false
-	case "hallucination_detector":
-		return scoped.NeedsHallucinationDetectorForRouting() ||
-			(scoped.ownsDefaultAPIConsumer() && scoped.HallucinationMitigation.Enabled)
 	case "embedding":
 		primary := scoped.primaryEmbeddingModel()
 		return EmbeddingModelsNeeded(scoped, primary, false)[primary]
 	case RAGRerankerConsumer:
 		return scoped.NeedsRAGReranker()
-	}
-	switch {
-	case strings.HasPrefix(name, "classifier."):
-		return scoped.UsesSignalTypeInReachableRouting(SignalTypeClassifier)
-	case strings.HasPrefix(name, "safety."):
-		return scoped.UsesSignalTypeInReachableRouting(SignalTypeSafety)
-	case strings.HasPrefix(name, "complexity."):
-		// A complexity rule asks its model unless it scores its examples.
-		if !scoped.UsesSignalTypeInReachableRouting(SignalTypeComplexity) {
-			return false
-		}
-		for _, rule := range scoped.ComplexityRules {
-			if name == "complexity."+rule.Name {
-				return !scoped.ComplexityRuleUsesPrototypes(rule)
-			}
-		}
 	}
 	return false
 }

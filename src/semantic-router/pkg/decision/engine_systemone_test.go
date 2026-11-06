@@ -16,7 +16,7 @@ func TestSystemOneLeaves(t *testing.T) {
 		SignalConfidences: map[string]float64{"systemone:hard": 0.81, "systemone:kind": 0.7},
 		SignalErrors:      map[string]string{"systemone:late": "systemone_timeout"},
 	}
-	engine := NewDecisionEngine(nil, nil, nil, nil, config.RoutingStrategyPriority)
+	engine := NewDecisionEngine(nil, config.RoutingStrategyPriority)
 	tests := []struct {
 		name string
 		node config.RuleNode

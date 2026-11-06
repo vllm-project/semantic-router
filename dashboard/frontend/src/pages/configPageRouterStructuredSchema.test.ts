@@ -366,7 +366,6 @@ describe('router defaults structured schemas', () => {
       routerConfig: {
         management_api: { bind_address: '127.0.0.1', port: 8080 },
         startup_status: { store_backend: 'redis' },
-        complexity: { backend: { base_url: 'http://classifier' } },
         admission: { default: { max_concurrency: 8 } },
       },
       routerDefaults: null,
@@ -376,16 +375,13 @@ describe('router defaults structured schemas', () => {
     })
 
     expect(cards.map((card) => card.key)).toEqual(
-      expect.arrayContaining(['management_api', 'startup_status', 'complexity', 'admission']),
+      expect.arrayContaining(['management_api', 'startup_status', 'admission']),
     )
+    // The decision model answers complexity rules; no module card configures it.
+    expect(cards.map((card) => card.key)).not.toContain('complexity')
     expect(
       cards.find((card) => card.key === 'management_api')?.editFields.map((field) => field.name),
     ).toEqual(expect.arrayContaining(['bind_address', 'port', 'remote_exposure', 'auth']))
-    const complexityFields =
-      cards.find((card) => card.key === 'complexity')?.editFields.map((field) => field.name) ?? []
-    expect(complexityFields).toContain('prototype_scoring')
-    // A remote complexity model is a deployment its binding names.
-    expect(complexityFields).not.toContain('backend')
 
     const admission = cards.find((card) => card.key === 'admission')
     expect(admission?.save({ value: { default: { max_concurrency: 16 } } })).toEqual({

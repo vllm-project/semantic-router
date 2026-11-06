@@ -30,8 +30,8 @@ classification API; bind them to a `model_runtime` or `systemone` deployment.
 ## Connect a guard service
 
 The service must accept `POST /classify` with `{"inputs":"text"}` and return
-scores for every configured label. Follow the
-[classifier response contract](../../tutorials/signal/learned/classifier.md).
+scores for every configured label. The
+[model catalog](../model-catalog.md) lists what a `classify` deployment answers.
 
 Merge this fragment into your existing `config.yaml`. Replace the hostname and
 `INJECTION` with your service's endpoint and positive label:

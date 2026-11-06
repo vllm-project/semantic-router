@@ -55,8 +55,7 @@ def _condition_reference_error(condition, signal_names, projection_names):
             return None
         return f"references unknown projection '{condition.name}'"
     if condition_type == CONDITION_TYPE_DOMAIN:
-        # Domains support auto-generated declarations and have a dedicated
-        # validator that owns their reference contract.
+        # A dedicated validator owns the domain reference contract.
         return None
     if not is_signal_condition_type(condition.type):
         return f"uses unsupported signal type '{condition.type}'"

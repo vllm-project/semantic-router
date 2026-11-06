@@ -13,10 +13,6 @@ metadata:
           },
           "spec": {
             "config": {
-              "prompt_guard": {
-                "enabled": true,
-                "threshold": "0.88"
-              },
               "response_cache": {
                 "enabled": true,
                 "max_entries": 1000,

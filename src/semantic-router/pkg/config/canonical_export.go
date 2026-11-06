@@ -73,12 +73,9 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 	return CanonicalSignals{
 		Keywords:      append([]KeywordRule(nil), signals.KeywordRules...),
-		Embeddings:    append([]EmbeddingRule(nil), signals.EmbeddingRules...),
 		Domains:       append([]Category(nil), signals.Categories...),
 		FactCheck:     append([]FactCheckRule(nil), signals.FactCheckRules...),
 		UserFeedbacks: append([]UserFeedbackRule(nil), signals.UserFeedbackRules...),
-		Reasks:        append([]ReaskRule(nil), signals.ReaskRules...),
-		Preferences:   append([]PreferenceRule(nil), signals.PreferenceRules...),
 		Language:      append([]LanguageRule(nil), signals.LanguageRules...),
 		Context:       append([]ContextRule(nil), signals.ContextRules...),
 		Structure:     append([]StructureRule(nil), signals.StructureRules...),
@@ -88,17 +85,15 @@ func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 		Jailbreak:     append([]JailbreakRule(nil), signals.JailbreakRules...),
 		Safety:        append([]SafetyRule(nil), signals.SafetyRules...),
 		Hallucination: append([]HallucinationRule(nil), signals.HallucinationRules...),
+		Refusal:       append([]RefusalRule(nil), signals.RefusalRules...),
+		TurnRelation:  append([]TurnRelationRule(nil), signals.TurnRelationRules...),
 		PII:           append([]PIIRule(nil), signals.PIIRules...),
-		KB:            append([]KBSignalRule(nil), signals.KBRules...),
 		Conversation:  append([]ConversationRule(nil), signals.ConversationRules...),
 		EventRules:    append([]EventRule(nil), signals.EventRules...),
 		Metadata:      append([]MetadataRule(nil), signals.MetadataRules...),
-		Classifiers:   append([]ClassifierSignalRule(nil), signals.ClassifierRules...),
 		InputModality: append([]InputModalityRule(nil), signals.InputModalityRules...),
 		Actions:       append([]ActionRule(nil), signals.ActionRules...),
 		SystemOne:     append([]SystemOneRule(nil), signals.SystemOneRules...),
-
-		TopicContinuity: append([]TopicContinuityRule(nil), signals.TopicContinuityRules...),
 	}
 }
 
@@ -366,28 +361,9 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 		},
 		System:          canonicalSystemModelsFromRouterConfig(cfg),
 		External:        append([]ExternalModelConfig(nil), cfg.ExternalModels...),
-		KBs:             append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
-		Admission:       publicAdmission(cfg.ModelAdmission),
+		Admission:       cloneAdmissionMap(cfg.ModelAdmission),
 		SignalTimeoutMs: cfg.ModelSignalTimeoutMs,
-		Modules: CanonicalModelModules{
-			Safety:            cfg.SafetyModels,
-			PromptCompression: cfg.PromptCompression,
-			PromptGuard:       CanonicalPromptGuardModule{PromptGuardConfig: cfg.PromptGuard},
-			Classifier: CanonicalClassifierModule{
-				Domain:     CanonicalCategoryModule{CategoryModel: cfg.CategoryModel},
-				MCP:        cfg.MCPCategoryModel,
-				PII:        CanonicalPIIModule{PIIModel: cfg.PIIModel},
-				Preference: cfg.PreferenceModel.WithDefaults(),
-			},
-			Complexity: cfg.ComplexityModel.WithDefaults(),
-			HallucinationMitigation: CanonicalHallucinationModule{
-				Enabled:   cfg.HallucinationMitigation.Enabled,
-				FactCheck: CanonicalFactCheckModule{FactCheckModelConfig: cfg.HallucinationMitigation.FactCheckModel},
-				Detector:  CanonicalHallucinationDetector{HallucinationModelConfig: cfg.HallucinationMitigation.HallucinationModel},
-			},
-			FeedbackDetector: CanonicalFeedbackDetectorModule{FeedbackDetectorConfig: cfg.FeedbackDetector},
-			ModalityDetector: cfg.ModalityDetector,
-		},
+		Modules:         CanonicalModelModules{PromptCompression: cfg.PromptCompression},
 	}
 }
 

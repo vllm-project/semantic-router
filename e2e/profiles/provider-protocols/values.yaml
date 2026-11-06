@@ -143,7 +143,6 @@ config:
           - chat
   global:
     model_catalog:
-      kbs: []
       modules:
         # Keep existing protocol probes below min_length. The dedicated JSON
         # compression case supplies a larger request and verifies routing.
@@ -171,8 +170,6 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
-          concurrency_threshold: 5
-          max_concurrency: 8
     stores:
       response_cache:
         enabled: false

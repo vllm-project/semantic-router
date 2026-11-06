@@ -265,8 +265,7 @@ func assertReferenceConfigModelCatalogCoverage(t testingT, modelCatalog map[stri
 	// decision_model is the only system line; the others are the deprecated
 	// way to choose a signal's model, which a binding now names.
 	assertMapCoversStructFields(t, mustMapAt(t, modelCatalog, "system"), reflect.TypeOf(CanonicalSystemModels{}), "global.model_catalog.system",
-		"safety", "hazard", "prompt_guard", "domain_classifier", "pii_classifier", "fact_check_classifier", "hallucination_detector", "feedback_detector")
-	assertReferenceConfigKnowledgeBaseCoverage(t, mustSliceAt(t, modelCatalog, "kbs"))
+		"prompt_guard", "pii_classifier", "hallucination_detector")
 	assertReferenceConfigModelModuleCoverage(t, mustMapAt(t, modelCatalog, "modules"))
 }
 
@@ -362,67 +361,7 @@ func assertReferenceConfigEmbeddingCatalogCoverage(t testingT, embeddings map[st
 	)
 }
 
-func assertReferenceConfigKnowledgeBaseCoverage(t testingT, kbs []interface{}) {
-	assertSliceUnionCoversStructFields(t, kbs, reflect.TypeOf(KnowledgeBaseConfig{}), "global.model_catalog.kbs")
-	assertSliceUnionCoversStructFields(
-		t,
-		collectChildMapsFromSlice(t, kbs, "source", "global.model_catalog.kbs"),
-		reflect.TypeOf(KnowledgeBaseSource{}),
-		"global.model_catalog.kbs[].source",
-	)
-	assertSliceUnionCoversStructFields(
-		t,
-		collectChildMapsFromSlice(t, kbs, "prototype_scoring", "global.model_catalog.kbs"),
-		reflect.TypeOf(PrototypeScoringConfig{}),
-		"global.model_catalog.kbs[].prototype_scoring",
-	)
-}
-
 func assertReferenceConfigModelModuleCoverage(t testingT, modules map[string]interface{}) {
 	assertMapCoversStructFields(t, modules, reflect.TypeOf(CanonicalModelModules{}), "global.model_catalog.modules")
 	assertMapCoversStructFields(t, mustMapAt(t, modules, "prompt_compression"), reflect.TypeOf(PromptCompressionConfig{}), "global.model_catalog.modules.prompt_compression")
-	// A module's model_id, model_ref and backend are the deprecated way to
-	// choose its model: a binding names the deployment that answers the
-	// signal. A module the reference does not tune (threshold, and the window
-	// a sequence classifier scans) uses the thresholds of the model that
-	// answers it, so naming them would pin the module.
-	assertMapCoversStructFields(t, mustMapAt(t, modules, "prompt_guard"), reflect.TypeOf(CanonicalPromptGuardModule{}), "global.model_catalog.modules.prompt_guard", "backend", "model_id", "model_ref", "threshold", "window")
-	assertReferenceConfigClassifierModuleCoverage(t, mustMapAt(t, modules, "classifier"))
-	assertReferenceConfigComplexityModuleCoverage(t, mustMapAt(t, modules, "complexity"))
-	assertReferenceConfigHallucinationModuleCoverage(t, mustMapAt(t, modules, "hallucination_mitigation"))
-	assertMapCoversStructFields(t, mustMapAt(t, modules, "feedback_detector"), reflect.TypeOf(CanonicalFeedbackDetectorModule{}), "global.model_catalog.modules.feedback_detector", "model_id", "model_ref", "threshold")
-	assertMapCoversStructFields(t, mustMapAt(t, modules, "modality_detector"), reflect.TypeOf(ModalityDetectorConfig{}), "global.model_catalog.modules.modality_detector")
-}
-
-func assertReferenceConfigClassifierModuleCoverage(t testingT, classifier map[string]interface{}) {
-	assertMapCoversStructFields(t, classifier, reflect.TypeOf(CanonicalClassifierModule{}), "global.model_catalog.modules.classifier")
-	assertMapCoversStructFields(t, mustMapAt(t, classifier, "domain"), reflect.TypeOf(CanonicalCategoryModule{}), "global.model_catalog.modules.classifier.domain", "backend", "model_id", "model_ref", "threshold")
-	assertMapCoversStructFields(t, mustMapAt(t, classifier, "mcp"), reflect.TypeOf(MCPCategoryModel{}), "global.model_catalog.modules.classifier.mcp")
-	assertMapCoversStructFields(t, mustMapAt(t, classifier, "pii"), reflect.TypeOf(CanonicalPIIModule{}), "global.model_catalog.modules.classifier.pii", "backend", "model_id", "model_ref", "threshold", "window")
-	assertMapCoversStructFields(t, mustMapAt(t, classifier, "preference"), reflect.TypeOf(PreferenceModelConfig{}), "global.model_catalog.modules.classifier.preference")
-	assertMapCoversStructFields(
-		t,
-		mustMapAt(t, classifier, "preference", "prototype_scoring"),
-		reflect.TypeOf(PrototypeScoringConfig{}),
-		"global.model_catalog.modules.classifier.preference.prototype_scoring",
-	)
-}
-
-func assertReferenceConfigComplexityModuleCoverage(t testingT, complexity map[string]interface{}) {
-	// backend is the deprecated way to name a remote scorer: a complexity
-	// rule's deployment replaces it. Remote parsing and validation are
-	// covered by classifier_backend_complexity_test.go.
-	assertMapCoversStructFields(t, complexity, reflect.TypeOf(ComplexityModelConfig{}), "global.model_catalog.modules.complexity", "backend")
-	assertMapCoversStructFields(
-		t,
-		mustMapAt(t, complexity, "prototype_scoring"),
-		reflect.TypeOf(PrototypeScoringConfig{}),
-		"global.model_catalog.modules.complexity.prototype_scoring",
-	)
-}
-
-func assertReferenceConfigHallucinationModuleCoverage(t testingT, hallucination map[string]interface{}) {
-	assertMapCoversStructFields(t, hallucination, reflect.TypeOf(CanonicalHallucinationModule{}), "global.model_catalog.modules.hallucination_mitigation")
-	assertMapCoversStructFields(t, mustMapAt(t, hallucination, "fact_check"), reflect.TypeOf(CanonicalFactCheckModule{}), "global.model_catalog.modules.hallucination_mitigation.fact_check", "model_id", "model_ref", "threshold")
-	assertMapCoversStructFields(t, mustMapAt(t, hallucination, "detector"), reflect.TypeOf(CanonicalHallucinationDetector{}), "global.model_catalog.modules.hallucination_mitigation.detector", "model_id", "model_ref")
 }

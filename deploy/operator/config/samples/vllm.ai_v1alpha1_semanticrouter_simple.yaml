@@ -47,11 +47,6 @@ spec:
       max_entries: 1000
       ttl_seconds: 3600
 
-    # Prompt guard (jailbreak detection)
-    prompt_guard:
-      enabled: true
-      threshold: "0.88"
-
     # Tools auto-selection
     tools:
       enabled: true

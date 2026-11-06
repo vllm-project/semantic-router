@@ -110,8 +110,8 @@ special tokens; overlap counts content only. These token counts need not match
 the downstream generative model's tokenizer.
 
 A text beyond the document limit or a failed window produces a classifier error,
-not a successful partial scan. Existing `on_error` and decision `rules.on_unknown`
-policies determine its routing effect. Remote deployments and explicitly
+not a successful partial scan: the rule matches only with `on_unknown: match`,
+and a decision's `rules.on_unknown` still decides it. Remote deployments and explicitly
 selected truncation retain the partial-result behavior described below.
 
 ## Vela 2.0
@@ -175,14 +175,14 @@ The router rejects the whole response, rather than part of it, when a span is
 outside the text, overlaps itself, carries an unknown or outside label, has a
 score out of range, has conflicting alias values, or when the body is not a span
 list. A declared `truncated_at` keeps the spans before the cut and marks the
-rest of the content as unscored. What a rejected or partial response does to a
-PII rule is `on_error`: `allow` (default) treats the unread content as not
-matching, `block` matches it as `classification_error`, so unverified text
-cannot pass as clean. Content the model did not read at all (an input over the
-model's input or [scan cap](../../../model-runtime/reference.md#long-inputs),
-a truncated one, or one not scanned by the signals' deadline) matches as
-`unscanned` whatever `on_error` says, so a long request routes as private;
-set `classifier.pii.on_unscanned: allow` to leave it to `on_error`.
+rest of the content as unscored. A rejected response leaves the rule without
+an answer, which does not match by default; with `on_unknown: match` it does,
+so unverified text cannot pass as clean, and a decision's `rules.on_unknown`
+still decides it. Content the model did not read at all (an
+input over the model's input or
+[scan cap](../../../model-runtime/reference.md#long-inputs), a truncated one,
+or one not scanned by the signals' deadline) matches as `unscanned`, so a long
+request routes as private.
 
 The PII mapping cannot declare `classification_error` as an entity label.
 Aliases with `B-`, `I-`, or `E-` prefixes, including stacked prefixes, are also

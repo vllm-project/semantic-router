@@ -48,28 +48,19 @@ data:
         domains:
           - name: business
             description: Business and management related queries
-            mmlu_categories:
+            labels:
               - business
           - name: math
             description: Mathematics and quantitative reasoning
-            mmlu_categories:
+            labels:
               - math
           - name: other
             description: General knowledge and miscellaneous topics
-            mmlu_categories:
+            labels:
               - other
         complexity:
           - name: needs_reasoning
-            threshold: 0.10
             description: Escalate difficult or multi-step prompts.
-            hard:
-              candidates:
-                - solve this step by step
-                - analyze the tradeoffs
-            easy:
-              candidates:
-                - quick summary
-                - answer briefly
       decisions:
         - name: business_default
           description: Business traffic stays on the fast Granite tier.
@@ -91,7 +82,8 @@ data:
               - type: domain
                 name: math
               - type: complexity
-                name: needs_reasoning:hard
+                name: needs_reasoning
+                label: hard
           modelRefs:
             - model: granite32-78b
               use_reasoning: true

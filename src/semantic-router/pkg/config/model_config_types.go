@@ -4,65 +4,6 @@ import (
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 )
 
-// Classifier represents the configuration for text classification.
-type Classifier struct {
-	CategoryModel    `yaml:"category_model"`
-	MCPCategoryModel `yaml:"mcp_category_model,omitempty"`
-	PIIModel         `yaml:"pii_model"`
-	PreferenceModel  PreferenceModelConfig `yaml:"preference_model,omitempty"`
-}
-
-type BertModel struct {
-	ModelID   string  `yaml:"model_id,omitempty"`
-	Threshold float32 `yaml:"threshold,omitempty"`
-	UseCPU    bool    `yaml:"use_cpu"`
-}
-
-type CategoryModel struct {
-	// MaxSequenceLength bounds a complete text with Window, otherwise one
-	// inference. Implicit local Vela zero/nil resolves to a 32K document scan
-	// with 512-token forwards during owned preparation.
-	MaxSequenceLength int `yaml:"max_sequence_length,omitempty"`
-	// Enabled turns category classification on or off explicitly. Nil keeps the
-	// historical behaviour of running whenever a model is configured.
-	Enabled   *bool   `yaml:"enabled,omitempty"`
-	ModelID   string  `yaml:"model_id,omitempty"`
-	Threshold float32 `yaml:"threshold,omitempty"`
-	UseCPU    bool    `yaml:"use_cpu"`
-	// Backend attaches a named remote classifier. Its absence preserves local
-	// category inference exactly as before.
-	Backend             *RemoteClassifierBackend `yaml:"backend,omitempty"`
-	CategoryMappingPath string                   `yaml:"category_mapping_path"`
-	FallbackCategory    string                   `yaml:"fallback_category,omitempty"`
-}
-
-type PIIModel struct {
-	Window *SequenceHeadWindowConfig `yaml:"window,omitempty"`
-	// MaxSequenceLength bounds a complete text with Window, otherwise one
-	// inference. Implicit local Vela zero/nil resolves to a 32K document scan
-	// with 512-token forwards during owned preparation.
-	MaxSequenceLength int `yaml:"max_sequence_length,omitempty"`
-	// Enabled turns PII classification on or off explicitly. Nil keeps the
-	// historical behaviour of running whenever a model is configured.
-	Enabled        *bool   `yaml:"enabled,omitempty"`
-	ModelID        string  `yaml:"model_id,omitempty"`
-	Threshold      float32 `yaml:"threshold,omitempty"`
-	UseCPU         bool    `yaml:"use_cpu"`
-	PIIMappingPath string  `yaml:"pii_mapping_path"`
-	// Backend attaches a named remote token classifier speaking token_spans.v1.
-	// Its absence preserves local PII inference exactly as before.
-	Backend *RemoteClassifierBackend `yaml:"backend,omitempty"`
-
-	// ClassifierOnErrorConfig contributes OnError (allow|block). With block, a
-	// PII rule whose content could not be fully classified (backend error, or a
-	// provider that declared truncated_at) matches as classification_error
-	// instead of reading as clean.
-	ClassifierOnErrorConfig `yaml:",inline"`
-	// UnscannedConfig contributes OnUnscanned (block|allow): content the model
-	// did not read in full matches as unscanned unless it is allow.
-	UnscannedConfig `yaml:",inline"`
-}
-
 type EmbeddingModels struct {
 	Qwen3ModelPath      string                  `yaml:"qwen3_model_path"`
 	MmBertModelPath     string                  `yaml:"mmbert_model_path"`
@@ -126,19 +67,6 @@ func (c HNSWConfig) WithDefaults() HNSWConfig {
 	return result
 }
 
-type MCPCategoryModel struct {
-	Enabled          bool              `yaml:"enabled"`
-	TransportType    string            `yaml:"transport_type"`
-	Command          string            `yaml:"command,omitempty"`
-	Args             []string          `yaml:"args,omitempty"`
-	Env              map[string]string `yaml:"env,omitempty"`
-	URL              string            `yaml:"url,omitempty"`
-	ToolName         string            `yaml:"tool_name,omitempty"`
-	Threshold        float32           `yaml:"threshold,omitempty"`
-	TimeoutSeconds   int               `yaml:"timeout_seconds,omitempty"`
-	MaxResponseBytes int64             `yaml:"max_response_bytes,omitempty"`
-}
-
 // PromptCompressionConfig controls NLP-based prompt compression before signal extraction.
 type PromptCompressionConfig struct {
 	Enabled        bool     `yaml:"enabled"`
@@ -167,73 +95,6 @@ func (pc PromptCompressionConfig) SkipSignalsSet() map[string]bool {
 	return m
 }
 
-type PromptGuardConfig struct {
-	// MaxSequenceLength bounds a complete text with Window, otherwise one
-	// inference. Implicit local Vela zero/nil resolves to a 32K document scan
-	// with 512-token forwards during owned preparation.
-	MaxSequenceLength    int                       `yaml:"max_sequence_length,omitempty"`
-	Backend              *RemoteClassifierBackend  `yaml:"backend,omitempty"`
-	Window               *SequenceHeadWindowConfig `yaml:"window,omitempty"`
-	Enabled              bool                      `yaml:"enabled"`
-	ModelID              string                    `yaml:"model_id,omitempty"`
-	Threshold            float32                   `yaml:"threshold,omitempty"`
-	UseCPU               bool                      `yaml:"use_cpu"`
-	JailbreakMappingPath string                    `yaml:"jailbreak_mapping_path"`
-	PositiveLabels       []string                  `yaml:"positive_labels,omitempty"`
-
-	// ClassifierOnErrorConfig contributes OnError (allow|block), shared with
-	// every other pluggable classifier backend instead of being redeclared
-	// per struct.
-	ClassifierOnErrorConfig `yaml:",inline"`
-	// UnscannedConfig contributes OnUnscanned (block|allow): content the guard
-	// did not read in full matches as unscanned unless it is allow.
-	UnscannedConfig `yaml:",inline"`
-}
-
-type FeedbackDetectorConfig struct {
-	// MaxSequenceLength bounds a complete text with Window, otherwise one
-	// inference. Implicit local Vela zero/nil resolves to a 32K document scan
-	// with 512-token forwards during owned preparation.
-	MaxSequenceLength   int     `yaml:"max_sequence_length,omitempty"`
-	Enabled             bool    `yaml:"enabled"`
-	ModelID             string  `yaml:"model_id,omitempty"`
-	Threshold           float32 `yaml:"threshold,omitempty"`
-	UseCPU              bool    `yaml:"use_cpu"`
-	FeedbackMappingPath string  `yaml:"feedback_mapping_path"`
-}
-
-type PreferenceModelConfig struct {
-	UseContrastive   *bool                  `yaml:"use_contrastive,omitempty"`
-	EmbeddingModel   string                 `yaml:"embedding_model,omitempty"`
-	PrototypeScoring PrototypeScoringConfig `yaml:"prototype_scoring,omitempty"`
-}
-
-func (c PreferenceModelConfig) WithDefaults() PreferenceModelConfig {
-	result := c
-	result.PrototypeScoring = result.PrototypeScoring.WithDefaults()
-	return result
-}
-
-func (c PreferenceModelConfig) ContrastiveEnabled() bool {
-	return c.UseContrastive != nil && *c.UseContrastive
-}
-
-type ComplexityModelConfig struct {
-	PrototypeScoring PrototypeScoringConfig `yaml:"prototype_scoring,omitempty"`
-	// Backend attaches a named remote scorer. Its absence preserves local
-	// prototype scoring exactly as before. It sits here, beside
-	// prototype_scoring, rather than on a rule: routing.signals is replaced
-	// wholesale per recipe, so a backend declared there would disappear under
-	// any recipe that did not repeat it.
-	Backend *RemoteClassifierBackend `yaml:"backend,omitempty"`
-}
-
-func (c ComplexityModelConfig) WithDefaults() ComplexityModelConfig {
-	result := c
-	result.PrototypeScoring = result.PrototypeScoring.WithDefaults()
-	return result
-}
-
 type ExternalModelConfig struct {
 	Name             string                        `yaml:"name,omitempty"`
 	Provider         string                        `yaml:"llm_provider"`
@@ -241,8 +102,6 @@ type ExternalModelConfig struct {
 	ModelEndpoint    ClassifierVLLMEndpoint        `yaml:"llm_endpoint,omitempty"`
 	ModelName        string                        `yaml:"llm_model_name,omitempty"`
 	TimeoutSeconds   float64                       `yaml:"llm_timeout_seconds,omitempty"`
-	ParserType       string                        `yaml:"parser_type,omitempty"`
-	Threshold        float32                       `yaml:"threshold,omitempty"`
 	AccessKey        string                        `yaml:"access_key,omitempty" json:"-"`
 	MaxTokens        int                           `yaml:"max_tokens,omitempty"`
 	Temperature      float64                       `yaml:"temperature,omitempty"`
@@ -310,39 +169,6 @@ type ToolsConfig struct {
 	ToolsDBPath         string                       `yaml:"tools_db_path"`
 	FallbackToEmpty     bool                         `yaml:"fallback_to_empty"`
 	AdvancedFiltering   *AdvancedToolFilteringConfig `yaml:"advanced_filtering,omitempty"`
-}
-
-type HallucinationMitigationConfig struct {
-	Enabled            bool                     `yaml:"enabled"`
-	FactCheckModel     FactCheckModelConfig     `yaml:"fact_check_model"`
-	HallucinationModel HallucinationModelConfig `yaml:"hallucination_model"`
-}
-
-type FactCheckModelConfig struct {
-	// Enabled turns the fact-check classifier on or off explicitly. Nil keeps
-	// it on wherever a signal or hallucination mitigation reads it.
-	Enabled *bool `yaml:"enabled,omitempty"`
-	// MaxSequenceLength bounds a complete text with Window, otherwise one
-	// inference. Implicit local Vela zero/nil resolves to a 32K document scan
-	// with 512-token forwards during owned preparation.
-	MaxSequenceLength int     `yaml:"max_sequence_length,omitempty"`
-	ModelID           string  `yaml:"model_id,omitempty"`
-	Threshold         float32 `yaml:"threshold,omitempty"`
-	UseCPU            bool    `yaml:"use_cpu"`
-}
-
-type HallucinationModelConfig struct {
-	Backend string `yaml:"backend,omitempty"`
-	// Endpoint is the remote detector's base URL, which the endpoint detector
-	// derives from its binding's external model; it is not configurable.
-	Endpoint           string  `yaml:"-"`
-	IncludeExplanation bool    `yaml:"include_explanation,omitempty"`
-	ModelID            string  `yaml:"model_id,omitempty"`
-	Threshold          float32 `yaml:"threshold,omitempty"`
-	UseCPU             bool    `yaml:"use_cpu"`
-	MinSpanLength      int     `yaml:"min_span_length,omitempty"`
-	MinSpanConfidence  float32 `yaml:"min_span_confidence,omitempty"`
-	ContextWindowSize  int     `yaml:"context_window_size,omitempty"`
 }
 
 type ClassifierVLLMEndpoint struct {
@@ -497,11 +323,6 @@ type ReasoningFamilyConfig struct {
 	Disabled            string            `yaml:"disabled,omitempty"`
 }
 
-type PIIPolicy struct {
-	AllowByDefault bool     `yaml:"allow_by_default"`
-	PIITypes       []string `yaml:"pii_types_allowed,omitempty"`
-}
-
 const (
 	PIITypeAge             = "AGE"
 	PIITypeCreditCard      = "CREDIT_CARD"
@@ -540,16 +361,3 @@ func (cfg *RouterConfig) FindExternalModelByName(name string) *ExternalModelConf
 	}
 	return nil
 }
-
-// moduleActive resolves an explicit enabled flag. Nil means the module was not
-// configured either way, so the caller's configuration checks decide.
-func moduleActive(enabled *bool) bool { return enabled == nil || *enabled }
-
-// Active reports whether category classification was explicitly disabled.
-func (m CategoryModel) Active() bool { return moduleActive(m.Enabled) }
-
-// Active reports whether PII classification was explicitly disabled.
-func (m PIIModel) Active() bool { return moduleActive(m.Enabled) }
-
-// Active reports whether the fact-check classifier was explicitly disabled.
-func (m FactCheckModelConfig) Active() bool { return moduleActive(m.Enabled) }

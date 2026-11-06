@@ -29,35 +29,6 @@ config:
               weight: 1
               value_source: binary
     decisions:
-      - name: llm_classifier_toxic
-        description: Route on the complete score distribution returned by the LLM classifier
-        priority: 2100
-        rules:
-          operator: AND
-          conditions:
-            - type: classifier
-              name: llm_toxicity
-              label: toxic
-              predicate:
-                gte: 0.8
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-      - name: sequence_classifier_toxic
-        description: Route on a score returned by the remote sequence-classifier E2E provider
-        priority: 2000
-        rules:
-          operator: AND
-          conditions:
-            - type: classifier
-              name: remote_toxicity
-              label: toxic
-              predicate:
-                gte: 0.8
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
       - name: block_jailbreak
         description: Block jailbreak attempts
         priority: 1000
@@ -763,7 +734,7 @@ config:
         rules:
           operator: AND
           conditions:
-            - type: reask
+            - type: turn_relation
               name: repeated_billing_question
         modelRefs:
           - model: base-model
@@ -931,11 +902,6 @@ config:
           description: Change existing code without changing what it does.
         - name: test
           description: Write or extend tests.
-      reasks:
-        - name: repeated_billing_question
-          description: Current user turn closely repeats the last two billing complaints.
-          threshold: 0.8
-          lookback_turns: 2
       context:
         - name: long_context
           description: Requests estimated at 500 tokens or more.
@@ -971,26 +937,21 @@ config:
           description: General knowledge and miscellaneous topics
       jailbreak:
         - name: jailbreak_standard
-          # Match the published Guard operating point in canonical defaults.
-          threshold: 0.88
-          include_history: false
           description: Standard jailbreak detection
+          predicate:
+            gte: 0.88
       pii:
         - &pii_deny_all
           name: pii_deny_all
-          threshold: 0.18
-          include_history: false
           description: Block all PII
-      classifiers:
-        - name: llm_toxicity
-          description: Deterministic outbound LLM classifier E2E signal
-          deployment: e2e-llm-classifier
-          labels: [benign, toxic]
-          instructions: Score whether the input contains toxic content.
-        - name: remote_toxicity
-          description: Deterministic outbound classify E2E signal
-          deployment: e2e-sequence-classifier
-          labels: [benign, toxic]
+          predicate:
+            gte: 0.18
+      turn_relation:
+        - name: repeated_billing_question
+          description: Current user turn closely repeats the last two billing complaints.
+          labels: [reask]
+          input:
+            previous_turns: 2
     modelCards:
       - name: base-model
         loras:
@@ -1226,26 +1187,24 @@ config:
                 lora_name: general-expert
                 use_reasoning: false
   global:
+    model_catalog:
+      deployments:
+        # provider-mocker's System One fixture answers the jailbreak, PII and
+        # turn_relation rules, so the shared cases are pinned by their markers
+        # (tools/test/services/provider-mocker/README.md).
+        fake-systemone:
+          provider: systemone
+          endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/systemone
+          model: e2e/fake-systemone
+          timeout_ms: 5000
+          capabilities:
+            question_types: [choice, noul, span]
+      bindings:
+        jailbreak: fake-systemone
+        pii: fake-systemone
+        turn_relation: fake-systemone
     router:
       strategy: priority
-    model_catalog:
-      kbs: []
-      deployments:
-        # The same mock answers both: chat completions for the llm_toxicity
-        # rule and the classification API for remote_toxicity.
-        e2e-llm-classifier:
-          provider: openai_chat
-          endpoint: http://mock-sequence-classifier.default.svc.cluster.local:8000/v1
-          model: e2e-llm-classifier
-          auth:
-            api_key_env: E2E_CLASSIFIER_KEY
-          timeout_ms: 5000
-        e2e-sequence-classifier:
-          provider: classify
-          endpoint: http://mock-sequence-classifier.default.svc.cluster.local:8000
-          auth:
-            api_key_env: E2E_CLASSIFIER_KEY
-          timeout_ms: 5000
     services:
       response_api:
         enabled: true
@@ -1255,8 +1214,6 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
-          concurrency_threshold: 5
-          max_concurrency: 8
           metrics:
             enabled: true
             detailed_goroutine_tracking: true
@@ -1379,12 +1336,6 @@ toolsDb:
       - search
       - web
       - internet
-# The mock classifier checks this test credential; the Router reads it from
-# the environment, never from its configuration.
-extraEnv:
-  - name: E2E_CLASSIFIER_KEY
-    value: e2e-classifier-key
-
 resources:
   limits:
     cpu: "2"

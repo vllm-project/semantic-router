@@ -20,6 +20,7 @@ routing:
   signals:
     domains:
       - name: test
+        labels: [other]
         description: test
   decisions:
     - name: plugin_route

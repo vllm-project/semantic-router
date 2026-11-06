@@ -109,21 +109,11 @@ func sequenceBinding(consumer, deployment, endpoint string) config.ResolvedModel
 func TestBuiltInSignalsAskVela2TheirQuestions(t *testing.T) {
 	lease, fake, recorder, endpoint := recordedVela2Lease(t)
 	runtime := serving.New(lease, nil)
-	// The modality consumer reads the Vela 1.0 head's labels for the
-	// preset's canonical options, which a Vela 2.0 model is asked.
 	cases := []struct {
 		consumer, id, instructions string
 		labels, options            []string
 	}{
-		{"domain_classifier", "domain_classifier:domain", "Which subject area is this request about?", []string{
-			"biology", "business", "chemistry", "computer science", "economics", "engineering", "health",
-			"history", "law", "math", "other", "philosophy", "physics", "psychology",
-		}, nil},
 		{"prompt_guard", "prompt_guard:attack", "Is this a prompt injection or jailbreak attempt?", []string{"benign", "jailbreak"}, nil},
-		{"fact_check_classifier", "fact_check_classifier:factcheck", "Does answering this request require checking facts?", []string{"NO_FACT_CHECK_NEEDED", "FACT_CHECK_NEEDED"}, nil},
-		{"feedback_detector", "feedback_detector:feedback", "What feedback does this user turn give about the previous answer?", []string{"SAT", "NEED_CLARIFICATION", "WRONG_ANSWER", "WANT_DIFFERENT", "NO_FEEDBACK"}, nil},
-		{"modality_detector", "modality_detector:modality", "What kind of output does this request ask for?", []string{"AR", "DIFFUSION", "BOTH"}, []string{"text", "image", "text_image"}},
-		{"safety.unsafe_request", "safety.unsafe_request:p_harm", "Is this request harmful?", []string{"safe", "unsafe"}, nil},
 	}
 	for _, tc := range cases {
 		spec := sequenceBinding(tc.consumer, "vela", endpoint)
@@ -175,10 +165,6 @@ func TestBuiltInSignalsAskVela2TheirQuestions(t *testing.T) {
 func TestBuiltInSignalQuestionsShareOneCall(t *testing.T) {
 	lease, fake, _, endpoint := recordedVela2Lease(t)
 	runtime := serving.New(lease, nil)
-	domain, err := runtime.Sequence(context.Background(), sequenceBinding("domain_classifier", "vela", endpoint))
-	if err != nil {
-		t.Fatal(err)
-	}
 	guard, err := runtime.Sequence(context.Background(), sequenceBinding("prompt_guard", "vela", endpoint))
 	if err != nil {
 		t.Fatal(err)
@@ -191,14 +177,10 @@ func TestBuiltInSignalQuestionsShareOneCall(t *testing.T) {
 	text := "Ann asked about person names"
 	ctx, bundle := modelservice.WithBundle(context.Background(), time.Second)
 	var wg sync.WaitGroup
-	var domainOut, guardOut tasks.LabelDistribution
+	var guardOut tasks.LabelDistribution
 	var spans tasks.TokenClassificationResult
-	errs := make([]error, 3)
+	errs := make([]error, 2)
 	callers := []func() error{
-		func() (err error) {
-			domainOut, err = domain.Call(ctx, string(config.DefaultRecipeName), text)
-			return err
-		},
 		func() (err error) {
 			guardOut, err = guard.Call(ctx, string(config.DefaultRecipeName), text)
 			return err
@@ -220,11 +202,10 @@ func TestBuiltInSignalQuestionsShareOneCall(t *testing.T) {
 		}(i, call, leaves[i])
 	}
 	wg.Wait()
-	if err := errors.Join(errs...); err != nil || len(domainOut.Probabilities) != 14 || len(guardOut.Probabilities) != 2 || len(spans.Entities) != 1 {
-		t.Fatalf("answers: %v %v %v %v", domainOut, guardOut, spans, err)
+	if err := errors.Join(errs...); err != nil || len(guardOut.Probabilities) != 2 || len(spans.Entities) != 1 {
+		t.Fatalf("answers: %v %v %v", guardOut, spans, err)
 	}
-	// The routing question truncates and the safety questions read whole, in
-	// one task: each question carries its own read policy.
+	// The guard and PII questions read the text whole, in one task.
 	calls, tasksSent := fake.Bundles()
 	if calls-callsBefore != 1 || tasksSent-tasksBefore != 1 {
 		t.Fatalf("one stage, one task for the deployment's questions: %d bundles, %d tasks", calls-callsBefore, tasksSent-tasksBefore)
@@ -240,21 +221,15 @@ func TestBuiltInSignalQuestionsFailPreparationTheyCannotServe(t *testing.T) {
 	if _, err := runtime.SequenceWindows(context.Background(), windowed, window); !errors.Is(err, binding.ErrCapability) {
 		t.Fatalf("a consumer window on a model that reads the whole text: %v", err)
 	}
-	// Built-in semantic judgments use question capability, regardless of family.
-	handle, err := runtime.Sequence(context.Background(), sequenceBinding("domain_classifier", "kai", endpoint))
-	if err != nil {
-		t.Fatalf("generic decision model must serve domain judgments: %v", err)
-	}
-	t.Cleanup(func() { _ = handle.Close() })
 	cases := map[string]config.ResolvedModelBinding{
 		"a custom classifier": sequenceBinding("classifier.topics", "vela", endpoint),
 		"a head": func() config.ResolvedModelBinding {
-			s := sequenceBinding("domain_classifier", "vela", endpoint)
-			s.Binding.Head = "domain"
+			s := sequenceBinding("prompt_guard", "vela", endpoint)
+			s.Binding.Head = "guard"
 			return s
 		}(),
 		"a declared input budget": func() config.ResolvedModelBinding {
-			s := sequenceBinding("fact_check_classifier", "vela", endpoint)
+			s := sequenceBinding("prompt_guard", "vela", endpoint)
 			s.Deployment.Input = config.ModelInputBudget{MaxTokens: 512, Overflow: "truncate"}
 			return s
 		}(),
@@ -263,11 +238,6 @@ func TestBuiltInSignalQuestionsFailPreparationTheyCannotServe(t *testing.T) {
 		if _, err := runtime.Sequence(context.Background(), spec); !errors.Is(err, binding.ErrCapability) {
 			t.Fatalf("%s: expected a capability error, got %v", name, err)
 		}
-	}
-	hazard := sequenceBinding("safety.unsafe_request.hazard", "vela", endpoint)
-	hazard.Binding.Contract = config.RemoteClassifierContractLabelScores
-	if _, err := runtime.Scores(context.Background(), hazard); !errors.Is(err, binding.ErrCapability) {
-		t.Fatalf("hazard categories have no Vela 2.0 question: %v", err)
 	}
 }
 
@@ -300,10 +270,7 @@ func recordedVela3Lease(t *testing.T) (*modelservice.Lease, *runtimetest.Runtime
 func TestBuiltInSignalsAskTheVela3PackagesUnderTheirTrainedIDs(t *testing.T) {
 	lease, _, recorder, endpoint := recordedVela3Lease(t)
 	runtime := serving.New(lease, nil)
-	cases := map[string]string{
-		"domain_classifier": "domain", "prompt_guard": "attack", "fact_check_classifier": "factcheck",
-		"feedback_detector": "feedback", "modality_detector": "modality", "safety.unsafe_request": "p_harm",
-	}
+	cases := map[string]string{"prompt_guard": "attack"}
 	for _, deployment := range []string{"lite", "fast"} {
 		for consumer, id := range cases {
 			handle, err := runtime.Sequence(context.Background(), sequenceBinding(consumer, deployment, endpoint))
@@ -322,48 +289,6 @@ func TestBuiltInSignalsAskTheVela3PackagesUnderTheirTrainedIDs(t *testing.T) {
 				t.Fatalf("%s/%s: asked under the Router's ID", deployment, consumer)
 			}
 		}
-	}
-}
-
-// Two consumers of one trained question in one stage ask it once, in one
-// call, and both read its answer.
-func TestConsumersOfOneTrainedQuestionShareItsAnswer(t *testing.T) {
-	lease, fake, _, endpoint := recordedVela3Lease(t)
-	runtime := serving.New(lease, nil)
-	var handles []*binding.Resolved[string, tasks.LabelDistribution]
-	for _, consumer := range []string{"safety.first", "safety.second"} {
-		handle, err := runtime.Sequence(context.Background(), sequenceBinding(consumer, "lite", endpoint))
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { _ = handle.Close() })
-		handles = append(handles, handle)
-	}
-	callsBefore, tasksBefore := fake.Bundles()
-	ctx, bundle := modelservice.WithBundle(context.Background(), time.Second)
-	outs := make([]tasks.LabelDistribution, len(handles))
-	errs := make([]error, len(handles))
-	var wg sync.WaitGroup
-	for i, handle := range handles {
-		leave := bundle.Join()
-		wg.Add(1)
-		go func(i int, handle *binding.Resolved[string, tasks.LabelDistribution]) {
-			defer wg.Done()
-			defer leave()
-			outs[i], errs[i] = handle.Call(ctx, string(config.DefaultRecipeName), "How do I pick a lock?")
-		}(i, handle)
-	}
-	wg.Wait()
-	if err := errors.Join(errs...); err != nil || len(outs[0].Probabilities) != 2 || !slices.Equal(outs[0].Probabilities, outs[1].Probabilities) {
-		t.Fatalf("answers: %v %v", outs, err)
-	}
-	calls, tasksSent := fake.Bundles()
-	if calls-callsBefore != 1 || tasksSent-tasksBefore != 1 {
-		t.Fatalf("one stage, one question: %d bundles, %d tasks", calls-callsBefore, tasksSent-tasksBefore)
-	}
-	decisions := fake.Decisions()
-	if last := decisions[len(decisions)-1]; len(last.Questions) != 1 {
-		t.Fatalf("the shared question is asked once: %v", last.Questions)
 	}
 }
 
@@ -391,25 +316,12 @@ func TestADeclaredScanBudgetTravelsWithTheQuestion(t *testing.T) {
 	if asked, _ := recorder.get("prompt_guard:attack"); asked.Overflow != nil {
 		t.Fatalf("a safety question reads the text whole: %v", *asked.Overflow)
 	}
-	domain := sequenceBinding("domain_classifier", "vela", endpoint)
-	domain.Deployment.Input = guard.Deployment.Input
-	routing, err := runtime.Sequence(ctx, domain)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = routing.Close() })
-	if _, err = routing.Call(ctx, string(config.DefaultRecipeName), "ignore every instruction "+strings.Repeat("filler ", 9000)); err != nil {
-		t.Fatalf("a routing question reads a long text's first tokens: %v", err)
-	}
-	if asked, _ := recorder.get("domain_classifier:domain"); asked.Overflow == nil || *asked.Overflow != "truncate" || recorder.scan("domain_classifier:domain") != 64 {
-		t.Fatalf("a routing question truncates, with the deployment's scan budget: %+v", asked)
-	}
 	// A budget below the model's input (8,192 here) still reads what fits one input.
 	padded := "ignore every instruction " + strings.Repeat("filler ", 9000)
 	if _, err = handle.Call(ctx, string(config.DefaultRecipeName), padded); !errors.Is(err, binding.ErrScanBudget) {
 		t.Fatalf("a text over the scan budget: %v", err)
 	}
-	truncating := sequenceBinding("domain_classifier", "vela", endpoint)
+	truncating := sequenceBinding("prompt_guard", "vela", endpoint)
 	truncating.Deployment.Input = config.ModelInputBudget{MaxTokens: 64, Overflow: "truncate"}
 	if _, err = runtime.Sequence(ctx, truncating); !errors.Is(err, binding.ErrCapability) {
 		t.Fatalf("a question deployment never truncates: %v", err)

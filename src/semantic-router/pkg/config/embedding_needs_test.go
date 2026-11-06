@@ -5,24 +5,6 @@ import (
 	"testing"
 )
 
-func TestEmbeddingModelsNeededJudgmentConsumersDoNotLoadEmbedding(t *testing.T) {
-	cfg := &RouterConfig{}
-	cfg.DecisionModel = "primary"
-	cfg.PreferenceRules = []PreferenceRule{{Name: "brief"}}
-	cfg.ReaskRules = []ReaskRule{{Name: "repeat"}}
-	cfg.ModelBindings = map[string]ModelBinding{"reask": {Deployment: "primary", Contract: DecisionTaskContract}}
-	cfg.ComplexityRules = []ComplexityRule{{Name: "difficulty"}}
-	cfg.Decisions = []Decision{{Rules: RuleCombination{Operator: "OR", Conditions: []RuleNode{{Type: SignalTypePreference, Name: "brief"}, {Type: SignalTypeReask, Name: "repeat"}, {Type: SignalTypeComplexity, Name: "difficulty:hard"}}}}}
-	if got := EmbeddingModelsNeeded(cfg, "mmbert", false); len(got) != 0 {
-		t.Fatalf("judgment-only consumers load embedding: %v", got)
-	}
-	enabled := true
-	cfg.PreferenceModel.UseContrastive = &enabled
-	if got := EmbeddingModelsNeeded(cfg, "mmbert", false); !got["mmbert"] {
-		t.Fatal("explicit contrastive policy lost its embedding")
-	}
-}
-
 func TestEmbeddingModelsNeededUsesMLRequest(t *testing.T) {
 	for _, algorithm := range []string{"knn", "kmeans", "svm", "mlp"} {
 		t.Run(algorithm, func(t *testing.T) {

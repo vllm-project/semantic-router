@@ -142,7 +142,7 @@ func buildRecipeClassifiers(
 	cfg *config.RouterConfig,
 	runtimeOptions classification.RecipeRuntimeOptions,
 ) (*classification.RecipeClassifiers, *classification.Classifier, error) {
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil, runtimeOptions)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg, runtimeOptions)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to build recipe classifiers: %w", err)
 	}

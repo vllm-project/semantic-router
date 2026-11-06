@@ -74,27 +74,18 @@ MMBERT_32K_LORA_ADAPTERS := \
 download-eval-models: ## Download Vela native eval models, including attack-only Guard (legacy is explicit)
 	@python3 -m src.training.model_eval.download_models --output $(MODELS_DIR)
 
-# The published-model contract and image calibration serve the runtime's pinned
-# releases; the pinned Omni Nano snapshot is downloaded once into the models directory.
+# The published-model contract serves the runtime's pinned releases; the pinned
+# Omni Nano snapshot is downloaded once into the models directory.
 MODEL_TEST_MODELS_DIR ?= $(CURDIR)/$(MODELS_DIR)
-MODEL_TEST_REPORT_DIR ?= $(CURDIR)/.agent-harness/model-tests/image-calibration
-MODEL_TEST_MANIFEST ?= $(MODEL_TEST_REPORT_DIR)/models.json
+MODEL_TEST_REPORT_DIR ?= $(CURDIR)/.agent-harness/model-tests
 
-download-models-image-calibration: ## Download the pinned Omni Nano release and attest its files
+download-models-omni: ## Download the pinned Omni Nano release and attest its files
 	@"$(AGENT_PYTHON)" tools/ci/prepare_model_test_assets.py \
 		--variants nano --output "$(MODEL_TEST_MODELS_DIR)/vela-omni-artifacts"
-	@"$(AGENT_PYTHON)" tools/ci/image_calibration.py --prepare-manifest \
-		--artifact "$(MODEL_TEST_MODELS_DIR)/vela-omni-artifacts/vela-1.0-omni-nano" \
-		--manifest "$(MODEL_TEST_MANIFEST)"
 
-verify-image-routing-calibration: download-models-image-calibration ## Verify shipped image thresholds and the multimodal profile against source-bound fixtures
-	@VLLM_SRUN_COMMAND="$${VLLM_SRUN_COMMAND:-$(AGENT_VENV)/bin/vllm-srun}" \
-		"$(AGENT_PYTHON)" tools/ci/image_calibration.py \
-		--manifest "$(MODEL_TEST_MANIFEST)" --output "$(MODEL_TEST_REPORT_DIR)"
+.PHONY: download-models-omni
 
-.PHONY: download-models-image-calibration verify-image-routing-calibration
-
-test-models: download-models-image-calibration ## Run the published-model contract through the model runtime
+test-models: download-models-omni ## Run the published-model contract through the model runtime
 	@VLLM_SRUN_COMMAND="$${VLLM_SRUN_COMMAND:-$(AGENT_VENV)/bin/vllm-srun}" \
 		"$(AGENT_PYTHON)" tools/ci/run_model_tests.py \
 		--models-dir "$(MODEL_TEST_MODELS_DIR)" \

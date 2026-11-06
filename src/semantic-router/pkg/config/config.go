@@ -20,28 +20,16 @@ const (
 
 // Model role constants for external models.
 const (
-	ModelRoleGuardrail        = "guardrail"
-	ModelRoleClassification   = "classification"
-	ModelRoleScoring          = "scoring"
-	ModelRolePreference       = "preference"
 	ModelRoleMemoryRewrite    = "memory_rewrite"
 	ModelRoleMemoryExtraction = "memory_extraction"
 )
 
-// PromptGuardConfig.OnError values live in classifier_on_error.go as
-// OnErrorAllow/OnErrorBlock - shared with every other pluggable classifier
-// backend (CategoryModel, PIIModel, ClassifierSignalRule), not just prompt
-// guard.
-
 // Signal type constants for rule conditions.
 const (
 	SignalTypeKeyword       = "keyword"
-	SignalTypeEmbedding     = "embedding"
 	SignalTypeDomain        = "domain"
 	SignalTypeFactCheck     = "fact_check"
 	SignalTypeUserFeedback  = "user_feedback"
-	SignalTypeReask         = "reask"
-	SignalTypePreference    = "preference"
 	SignalTypeLanguage      = "language"
 	SignalTypeContext       = "context"
 	SignalTypeStructure     = "structure"
@@ -51,7 +39,6 @@ const (
 	SignalTypeJailbreak     = "jailbreak"
 	SignalTypeHallucination = "hallucination"
 	SignalTypePII           = "pii"
-	SignalTypeKB            = "kb"
 	SignalTypeConversation  = "conversation"
 	SignalTypeEvent         = "event"
 	SignalTypeProjection    = "projection"
@@ -123,9 +110,7 @@ type RouterConfig struct {
 	RateLimit     RateLimitConfig     `yaml:"ratelimit,omitempty"`
 	ManagementAPI ManagementAPIConfig `yaml:"management_api,omitempty"`
 
-	// Runtime-only knowledge bases loaded from global.model_catalog.
-	KnowledgeBases []KnowledgeBaseConfig `yaml:"knowledge_bases,omitempty"`
-	ConfigBaseDir  string                `yaml:"-"`
+	ConfigBaseDir string `yaml:"-"`
 	// DocumentHash identifies the exact YAML document from which this immutable
 	// runtime snapshot was parsed. Management APIs use it to distinguish a
 	// persisted config from the config that has completed hot reload.
@@ -319,19 +304,12 @@ func (s SkipProcessingConfig) IsEnabled() bool {
 
 // InlineModels captures built-in model families and prompt-processing settings.
 type InlineModels struct {
-	EmbeddingModels         `yaml:"embedding_models"`
-	Classifier              `yaml:"classifier"`
-	ComplexityModel         ComplexityModelConfig         `yaml:"complexity_model,omitempty"`
-	PromptCompression       PromptCompressionConfig       `yaml:"prompt_compression"`
-	PromptGuard             PromptGuardConfig             `yaml:"prompt_guard"`
-	HallucinationMitigation HallucinationMitigationConfig `yaml:"hallucination_mitigation"`
-	SafetyModels            SafetyModelsConfig            `yaml:"safety_models"`
-	FeedbackDetector        FeedbackDetectorConfig        `yaml:"feedback_detector"`
-	ModalityDetector        ModalityDetectorConfig        `yaml:"modality_detector"`
-	ModelAdmission          map[string]AdmissionConfig    `yaml:"model_admission,omitempty"`
-	ModelSignalTimeoutMs    int                           `yaml:"model_signal_timeout_ms,omitempty"`
-	GlobalModelBindings     map[string]ModelBinding       `yaml:"global_model_bindings,omitempty"`
-	ModelDeployments        map[string]ModelDeployment    `yaml:"model_deployments,omitempty"`
+	EmbeddingModels      `yaml:"embedding_models"`
+	PromptCompression    PromptCompressionConfig    `yaml:"prompt_compression"`
+	ModelAdmission       map[string]AdmissionConfig `yaml:"model_admission,omitempty"`
+	ModelSignalTimeoutMs int                        `yaml:"model_signal_timeout_ms,omitempty"`
+	GlobalModelBindings  map[string]ModelBinding    `yaml:"global_model_bindings,omitempty"`
+	ModelDeployments     map[string]ModelDeployment `yaml:"model_deployments,omitempty"`
 	// DecisionModel is global.model_catalog.system.decision_model, resolved
 	// to its canonical name.
 	DecisionModel string `yaml:"decision_model,omitempty"`
@@ -345,9 +323,6 @@ type InlineModels struct {
 	// FormWarnings are the renamed forms the document was written in, which
 	// it was read as their canonical forms (config_forms.go).
 	FormWarnings []ConfigWarning `yaml:"-" json:"-"`
-	// AuthoredThresholds are the module thresholds the configuration sets;
-	// the others follow the model that answers (model_thresholds.go).
-	AuthoredThresholds map[string]bool `yaml:"-" json:"-"`
 
 	// modelResourcesTranslated is set once deprecated model fields were
 	// read as deployments and bindings (model_resource_translation.go).
@@ -355,12 +330,6 @@ type InlineModels struct {
 	// modelResourceErrors fail the consumers whose deprecated model names
 	// no model when they run.
 	modelResourceErrors map[string]error
-	// legacyModelSources names the deprecated field a module's model came
-	// from, for its warning.
-	legacyModelSources map[string]string
-	// noModel are the modules model_ref: "" turned off: no decision model
-	// answers them.
-	noModel map[string]bool
 	// scopedBindings are a recipe scope's own bindings, before the global
 	// ones (ConfigForRecipe); nil outside a recipe scope.
 	scopedBindings map[string]ModelBinding

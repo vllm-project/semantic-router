@@ -4,7 +4,7 @@ description: 按请求的领域、是否需要事实核查、用户反馈和请�
 translation:
   source_commit: "439c22531380dfd51abf2ce33ce6dc4db87b1fb7"
   source_file: "docs/model-runtime/guides/classify.md"
-  outdated: false
+  outdated: true
 is_mtpe: true
 ---
 
@@ -18,7 +18,7 @@ is_mtpe: true
 | [`fact_check`](../../tutorials/signal/learned/fact-check.md) | Vela 1.0 FactCheck | `FACT_CHECK_NEEDED`、`NO_FACT_CHECK_NEEDED` |
 | [`user_feedback`](../../tutorials/signal/learned/user-feedback.md) | Vela 1.0 Feedback | satisfied、need clarification、wrong answer、want different、no feedback |
 | [`modality`](../../tutorials/signal/learned/modality.md) | Vela 1.0 Modality | `AR`（文本）、`DIFFUSION`（图像）、`BOTH` |
-| [`classifier`](../../tutorials/signal/learned/classifier.md) | 你自己的模型 | 你的标签 |
+| [`classifier`](../../tutorials/signal/learned/systemone.md) | 你自己的模型 | 你的标签 |
 
 表里列的是专用模型。没有绑定时，内置的 domain、fact-check、feedback 和 modality 信号使用决策模型，默认是 vela3-fast。下面的绑定显式选用 Vela 1.0。见[选择模型](../choose-a-model#by-task)和[为信号选择模型](../../installation/choose-a-model-for-a-signal.md)。
 
@@ -120,4 +120,4 @@ global:
           overflow: reject
 ```
 
-`labels` 要按模型自己的标签顺序列（它的 `id2label`）。router 从 runtime 读模型的标签，和规则对不上就拒绝启动。互相独立的标签、又有公开工作点的模型，用部署的 `operating_point` 固定工作点；见[分类器信号](../../tutorials/signal/learned/classifier.md#independent-labels-with-a-frozen-operating-point)。
+`labels` 要按模型自己的标签顺序列（它的 `id2label`）。router 从 runtime 读模型的标签，和规则对不上就拒绝启动。互相独立的标签、又有公开工作点的模型，用部署的 `operating_point` 固定工作点；见[分类器信号](../../tutorials/signal/learned/systemone.md)。

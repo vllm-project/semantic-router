@@ -20,8 +20,8 @@ routing:
   signals:
     pii:
       - name: personal_data
-        include_history: false
-        pii_types_allowed: [GPE, ORGANIZATION, DATE_TIME, NRP, TITLE, DOMAIN_NAME]
+        input: {history: false}
+        ignore_labels: [DATE_TIME]
   decisions:
     - name: fast
       priority: 100
@@ -48,7 +48,7 @@ global:
 		t.Fatal(err)
 	}
 	policy := cfg.EffectiveRouterReplayConfig(nil)
-	if policy == nil || policy.CapturesPersonalData() || !cfg.ReplayNeedsPIIEvidence() || !cfg.NeedsPIIMappingForRouting() {
+	if policy == nil || policy.CapturesPersonalData() || !cfg.ReplayNeedsPIIEvidence() {
 		t.Fatal("a PII rule must be prepared to suppress personal replay content")
 	}
 }

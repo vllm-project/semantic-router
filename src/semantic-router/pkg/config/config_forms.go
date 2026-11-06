@@ -32,6 +32,9 @@ const (
 	CodeOutputNotExecutable      = "output_not_executable"
 	CodeToolCatalogTooLarge      = "tool_catalog_too_large"
 	CodeDuplicateToolName        = "duplicate_tool_name"
+	// CodeUncalibratedPreset warns of a preset asked with the neutral
+	// threshold, because the answering model has no calibrated one.
+	CodeUncalibratedPreset = "uncalibrated_preset"
 )
 
 // LocatedError is a one-line load error that names its own place in the
@@ -103,7 +106,7 @@ type FormMatch struct {
 
 // configForms lists every removed and renamed form, in the order migrate
 // rewrites them, as the concatenation of the per-feature lists.
-var configForms = slices.Concat(systemOneForms, pluginForms)
+var configForms = slices.Concat(systemOneForms, pluginForms, applicationForms)
 
 // RoutingScopes returns the patterns of suffix in every routing scope of a
 // document: the top-level routing block and each recipe's.
@@ -247,7 +250,7 @@ func applyConfigForms(data []byte, forms []ConfigForm) ([]byte, []ConfigWarning,
 	}
 	var failures []error
 	var warnings []ConfigWarning
-	m := &Migration{}
+	m := &Migration{root: root}
 	renamed := false
 	for _, form := range forms {
 		for _, at := range form.matches(root) {

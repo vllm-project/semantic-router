@@ -10,15 +10,6 @@ from cli.config_schema import routing_surface_catalog, schema_document
 
 CANONICAL_VERSION = str(routing_surface_catalog()["config_version"])
 
-CLASSIFIER_TYPE_LOCAL = "local"
-CLASSIFIER_TYPE_LLM = "llm"
-CLASSIFIER_TYPE_SEQUENCE = "sequence_classifier"
-ClassifierSignalType = Literal[
-    "local",
-    "llm",
-    "sequence_classifier",
-]
-
 UNKNOWN_POLICY_VALUES = ("no_match", "match", "fail_request")
 UnknownPolicy = Literal["no_match", "match", "fail_request"]
 
@@ -72,7 +63,6 @@ class SignalFamilySpec:
     condition_type: str
     display_name: str
     legacy_key: str | None = None
-    reference_suffixes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -86,12 +76,9 @@ class ProjectionFamilySpec:
 
 _LEGACY_SIGNAL_KEYS = {
     "keywords": "keyword_rules",
-    "embeddings": "embedding_rules",
     "domains": "categories",
     "fact_check": "fact_check_rules",
     "user_feedbacks": "user_feedback_rules",
-    "reasks": "reask_rules",
-    "preferences": "preference_rules",
     "language": "language_rules",
     "context": "context_rules",
     "structure": "structure_rules",
@@ -101,11 +88,9 @@ _LEGACY_SIGNAL_KEYS = {
     "jailbreak": "jailbreak",
     "hallucination": "hallucination",
     "pii": "pii",
-    "kb": "kb",
     "conversation": "conversation",
     "events": "events",
     "metadata": "metadata",
-    "classifiers": "classifiers",
     "input_modality": "input_modality",
 }
 
@@ -116,7 +101,6 @@ SIGNAL_FAMILY_SPECS = tuple(
         condition_type=surface["type"],
         display_name=surface["display_name"],
         legacy_key=_LEGACY_SIGNAL_KEYS.get(surface["collection"]),
-        reference_suffixes=tuple(surface.get("reference_suffixes", ())),
     )
     for surface in routing_surface_catalog()["signals"]
 )
@@ -178,13 +162,8 @@ def build_signal_reference_index(signals: Any) -> dict[str, set[str]]:
         field = _SIGNAL_REFERENCE_FIELDS.get(spec.signal_attr, "name")
         for signal in getattr(signals, spec.signal_attr, None) or []:
             name = getattr(signal, field, None)
-            if not name:
-                continue
-            if spec.reference_suffixes:
-                for suffix in spec.reference_suffixes:
-                    family_names.add(f"{name}:{suffix}")
-                continue
-            family_names.add(name)
+            if name:
+                family_names.add(name)
 
     return names
 

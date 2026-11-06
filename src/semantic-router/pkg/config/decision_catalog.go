@@ -92,12 +92,25 @@ func validateSystemOneAnswerer(cfg *RouterConfig, path string, rule SystemOneRul
 // not read. A nil list is unknown and passes; the generation checks it
 // against the model's card when it prepares.
 func CheckSystemOneAnswerer(path, deployment string, rule SystemOneRule, questionTypes, modalities []string) error {
+	return checkAnswerer(path, deployment, rule, questionTypes, modalities, "it", "rule deployment")
+}
+
+// CheckApplicationAnswerer refuses an application rule its deployment cannot
+// answer, as CheckSystemOneAnswerer does a systemone rule; the hint names the
+// bindings of the rule's type. scope is the rule's routing scope path
+// (RouterConfig.ScopePath of "").
+func CheckApplicationAnswerer(path, scope, deployment string, rule ApplicationRule, questionTypes, modalities []string) error {
+	bindings := fmt.Sprintf("rule deployment, %smodel_bindings.%s or global.model_catalog.bindings.%s", scope, rule.Type, rule.Type)
+	return checkAnswerer(path, deployment, rule.Rule, questionTypes, modalities, rule.Type, bindings)
+}
+
+func checkAnswerer(path, deployment string, rule SystemOneRule, questionTypes, modalities []string, subject, bindings string) error {
 	if rule.Question.Type == SystemOneQuestionSpan && questionTypes != nil && !slices.Contains(questionTypes, SystemOneQuestionSpan) {
-		return CheckError(path, CodeSpanRequired, fmt.Sprintf("resolves to deployment %q, which cannot answer span questions; bind it to a span-capable deployment (rule deployment)", deployment))
+		return CheckError(path, CodeSpanRequired, fmt.Sprintf("resolves to deployment %q, which cannot answer span questions; bind %s to a span-capable deployment (%s)", deployment, subject, bindings))
 	}
 	for _, medium := range rule.Input.Media() {
 		if modalities != nil && !slices.Contains(modalities, medium) {
-			return CheckError(path, CodeInputModalityUnsupported, fmt.Sprintf("input.%s resolves to deployment %q, which does not read %s input; bind it to a deployment that does (rule deployment)", medium, deployment, medium))
+			return CheckError(path, CodeInputModalityUnsupported, fmt.Sprintf("input.%s resolves to deployment %q, which does not read %s input; bind %s to a deployment that does (%s)", medium, deployment, medium, subject, bindings))
 		}
 	}
 	return nil

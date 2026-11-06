@@ -15,11 +15,10 @@ router-managed model runtime, so the flow can be exercised locally with
 `./bin/router -config=e2e/config/config.hallucination.yaml` once the runtime is
 installed (`make model-runtime-install`).
 
-The endpoint-backed detector (a `hallucination_detector` binding to an
-`http_chat` deployment in `global.model_catalog.bindings`) is exercised by the
-Kubernetes E2E `hallucination` profile (`e2e/profiles/hallucination/values.yaml`). That profile deploys an
-OpenAI-compatible mock detector (`deploy/kubernetes/hallucination/mock-hallucination-detector.yaml`,
-served by the shared `tools/test/services/provider-mocker` image) and asserts the
+A remote hallucination check (a `hallucination` binding to a `systemone`
+deployment in `global.model_catalog.bindings`) is exercised by the
+Kubernetes E2E `hallucination` profile (`e2e/profiles/hallucination/values.yaml`). That profile asks the
+System One fixture of the shared `tools/test/services/provider-mocker` image and asserts the
 `x-vsr-response-warnings: hallucination` header. Run it with
 `make e2e-test E2E_PROFILE=hallucination`.
 `config.remote-embedding-smoke.yaml` is a manual local smoke config for validating

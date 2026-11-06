@@ -108,48 +108,6 @@ func TestNormalizeRuleOperator_NestedInvalidOperatorNamesItsPath(t *testing.T) {
 	}
 }
 
-func TestValidateRuleOperatorContracts_NormalizesDecisionsAndComposers(t *testing.T) {
-	cfg := &RouterConfig{
-		IntelligentRouting: IntelligentRouting{
-			Signals: Signals{
-				ComplexityRules: []ComplexityRule{
-					{
-						Name: "needs_reasoning",
-						Composer: &RuleNode{
-							Operator: "or",
-							Conditions: []RuleNode{
-								{Type: SignalTypeKeyword, Name: "kw"},
-								{Type: SignalTypeDomain, Name: "dom"},
-							},
-						},
-					},
-				},
-			},
-			Decisions: []Decision{
-				{
-					Name: "route",
-					Rules: RuleNode{
-						Conditions: []RuleNode{
-							{Type: SignalTypeKeyword, Name: "kw"},
-							{Type: SignalTypeDomain, Name: "dom"},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	if err := validateRuleOperatorContracts(cfg); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.Decisions[0].Rules.Operator != "AND" {
-		t.Fatalf("expected decision rule operator to default to AND, got %q", cfg.Decisions[0].Rules.Operator)
-	}
-	if cfg.ComplexityRules[0].Composer.Operator != "OR" {
-		t.Fatalf("expected composer operator to normalize to OR, got %q", cfg.ComplexityRules[0].Composer.Operator)
-	}
-}
-
 func TestValidateRuleOperatorContracts_RejectsInvalidDecisionOperator(t *testing.T) {
 	cfg := &RouterConfig{
 		IntelligentRouting: IntelligentRouting{
@@ -344,34 +302,6 @@ func TestValidateRuleOperatorContracts_ShapeCorpusNamesDecisionAndPath(t *testin
 				t.Fatalf("expected error containing %q, got: %v", want, err)
 			}
 		})
-	}
-}
-
-func TestValidateRuleOperatorContracts_ComposerRejectsNotArity(t *testing.T) {
-	cfg := &RouterConfig{
-		IntelligentRouting: IntelligentRouting{
-			Signals: Signals{
-				ComplexityRules: []ComplexityRule{{
-					Name: "needs_reasoning",
-					Composer: &RuleNode{
-						Operator: "NOT",
-						Conditions: []RuleNode{
-							{Type: SignalTypeKeyword, Name: "kw"},
-							{Type: SignalTypeDomain, Name: "dom"},
-						},
-					},
-				}},
-			},
-		},
-	}
-
-	err := validateRuleOperatorContracts(cfg)
-	if err == nil {
-		t.Fatal("expected an error for a multi-child composer NOT")
-	}
-	want := `complexity rule "needs_reasoning": composer: NOT requires exactly one child condition, got 2`
-	if !strings.Contains(err.Error(), want) {
-		t.Fatalf("expected error containing %q, got: %v", want, err)
 	}
 }
 

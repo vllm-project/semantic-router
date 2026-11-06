@@ -50,5 +50,4 @@ global:
   integrations:
     tools:
       enabled: false
-  model_catalog:
-    kbs: []
+  model_catalog: {}

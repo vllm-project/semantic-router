@@ -53,7 +53,7 @@ describe('recorded plugin evidence', () => {
           reason: 'classifier_failed',
           metadata: {
             signal: 'jailbreak',
-            direction: 'response',
+            stage: 'response',
             score_available: 'false',
             enforcement: 'not_enforced_streaming',
           },
@@ -62,13 +62,13 @@ describe('recorded plugin evidence', () => {
           source: 'router',
           target: 'jailbreak:guard_b',
           verdict: 'not_detected',
-          metadata: { signal: 'jailbreak', direction: 'response', score_available: 'true' },
+          metadata: { signal: 'jailbreak', stage: 'response', score_available: 'true' },
         },
         {
           source: 'user',
           target: 'ignored-feedback',
           verdict: 'detected',
-          metadata: { signal: 'jailbreak', direction: 'response' },
+          metadata: { signal: 'jailbreak', stage: 'response' },
         },
       ],
     })
@@ -90,7 +90,7 @@ describe('recorded plugin evidence', () => {
             target: 'hallucination:grounding',
             verdict: 'not_applicable',
             reason: 'fact_check_not_needed',
-            metadata: { direction: 'response', signal: 'hallucination' },
+            metadata: { stage: 'response', signal: 'hallucination' },
           },
         ],
       },
@@ -136,7 +136,7 @@ describe('recorded plugin evidence', () => {
                   source: 'router',
                   target: 'hallucination:grounding',
                   verdict: 'detected',
-                  metadata: { direction: 'response', signal: 'hallucination' },
+                  metadata: { stage: 'response', signal: 'hallucination' },
                 },
               ]
             : undefined,

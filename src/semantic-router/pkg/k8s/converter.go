@@ -168,7 +168,6 @@ func convertRoutingModelCards(models []v1alpha1.ModelConfig) []config.RoutingMod
 func convertSignals(signals v1alpha1.Signals) config.CanonicalSignals {
 	converted := config.CanonicalSignals{
 		Keywords:     make([]config.KeywordRule, 0, len(signals.Keywords)),
-		Embeddings:   make([]config.EmbeddingRule, 0, len(signals.Embeddings)),
 		Domains:      make([]config.Category, 0, len(signals.Domains)),
 		Context:      make([]config.ContextRule, 0, len(signals.ContextRules)),
 		Structure:    make([]config.StructureRule, 0, len(signals.Structure)),
@@ -186,28 +185,8 @@ func convertSignals(signals v1alpha1.Signals) config.CanonicalSignals {
 		})
 	}
 
-	for _, signal := range signals.Embeddings {
-		converted.Embeddings = append(converted.Embeddings, config.EmbeddingRule{
-			Name:                      signal.Name,
-			SimilarityThreshold:       signal.Threshold,
-			Candidates:                signal.Candidates,
-			ImageCandidates:           signal.ImageCandidates,
-			NegativeCandidates:        signal.NegativeCandidates,
-			NegativeImageCandidates:   signal.NegativeImageCandidates,
-			AggregationMethodConfiged: config.AggregationMethod(signal.AggregationMethod),
-			QueryModality:             config.QueryModality(signal.QueryModality),
-			PrototypeScoring:          convertPrototypeScoring(signal.PrototypeScoring),
-		})
-	}
-
 	for _, domain := range signals.Domains {
-		converted.Domains = append(converted.Domains, config.Category{
-			CategoryMetadata: config.CategoryMetadata{
-				Name:           domain.Name,
-				Description:    domain.Description,
-				MMLUCategories: []string{domain.Name},
-			},
-		})
+		converted.Domains = append(converted.Domains, config.Category{Name: domain.Name, Description: domain.Description})
 	}
 
 	for _, rule := range signals.ContextRules {

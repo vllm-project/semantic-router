@@ -4,13 +4,13 @@ description: 用 Vela Omni 嵌入模型按请求带的图像和音频路由。
 translation:
   source_commit: "439c22531380dfd51abf2ce33ce6dc4db87b1fb7"
   source_file: "docs/model-runtime/guides/multimodal.md"
-  outdated: false
+  outdated: true
 is_mtpe: true
 ---
 
 # 图像和音频 {#images-and-audio}
 
-Vela 1.0 Omni 把文本、图像和音频嵌进同一个向量空间，所以图像既能和文字描述（一张护照页的照片）比，也能和示例图像比。router 把它用在 `query_modality` 是 `image` 或 `audio` 的[嵌入信号](../../tutorials/signal/learned/embedding.md)上。
+Vela 1.0 Omni 把文本、图像和音频嵌进同一个向量空间，所以图像既能和文字描述（一张护照页的照片）比，也能和示例图像比。router 用它做多模态嵌入（`global.model_catalog.embeddings.multimodal`）。
 
 | 模型 | 大小 | 向量 | 文本上限 | 什么时候用 |
 | --- | --- | --- | --- | --- |

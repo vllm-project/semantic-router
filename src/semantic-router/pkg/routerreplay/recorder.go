@@ -56,7 +56,6 @@ type (
 	LooperAttempt                 = store.LooperAttempt
 	LooperDiagnostics             = store.LooperDiagnostics
 	RouteDiagnostics              = store.RouteDiagnostics
-	TopicContinuityRecord         = store.TopicContinuityRecord
 	DecisionRanking               = store.DecisionRanking
 	RoutingRecord                 = store.Record
 	ToolTrace                     = store.ToolTrace
@@ -501,12 +500,10 @@ func truncateString(s string, maxBytes int) (string, bool) {
 func logSignalFields(signals Signal) map[string]interface{} {
 	return map[string]interface{}{
 		"keyword":       signals.Keyword,
-		"embedding":     signals.Embedding,
 		"domain":        signals.Domain,
 		"fact_check":    signals.FactCheck,
 		"user_feedback": signals.UserFeedback,
-		"reask":         signals.Reask,
-		"preference":    signals.Preference,
+		"turn_relation": signals.TurnRelation,
 		"language":      signals.Language,
 		"context":       signals.Context,
 		"structure":     signals.Structure,
@@ -515,7 +512,6 @@ func logSignalFields(signals Signal) map[string]interface{} {
 		"authz":         signals.Authz,
 		"jailbreak":     signals.Jailbreak,
 		"pii":           signals.PII,
-		"kb":            signals.KB,
 		"conversation":  signals.Conversation,
 	}
 }

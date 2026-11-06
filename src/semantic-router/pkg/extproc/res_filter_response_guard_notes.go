@@ -5,57 +5,61 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+// hallucinationFinding is what the hallucination rules a guard read made of
+// an answer: whether one was asked, answered or matched, the highest
+// probability of an unsupported claim among those that answered, and the
+// texts of the spans the matched rules found.
+type hallucinationFinding struct {
+	asked       bool
+	answered    bool
+	detected    bool
+	probability float64
+	spans       []string
+}
+
+func findHallucination(observed *classification.ResponseSignal) hallucinationFinding {
+	var finding hallucinationFinding
+	if observed == nil {
+		return finding
+	}
+	prefix := config.SignalTypeHallucination + ":"
+	for key, value := range observed.Values {
+		if rule, ok := strings.CutPrefix(key, prefix); ok && !strings.Contains(rule, ":") {
+			finding.asked, finding.answered = true, true
+			finding.probability = max(finding.probability, value)
+		}
+	}
+	for key := range observed.Errors {
+		if strings.HasPrefix(key, prefix) {
+			finding.asked = true
+		}
+	}
+	for _, reference := range observed.Matched[config.SignalTypeHallucination] {
+		if strings.Contains(reference, ":") {
+			continue
+		}
+		finding.detected = true
+		for _, span := range observed.Spans[signalKey(config.SignalTypeHallucination, reference)] {
+			finding.spans = append(finding.spans, span.Text)
+		}
+	}
+	return finding
+}
+
 // hallucinationWarningText is the note on an answer a hallucination rule
-// matched: the detector's score and the unsupported spans, with a severity
-// and an explanation each when the detector explains its spans.
-func hallucinationWarningText(observation *classification.ResponseHallucinationObservation) string {
-	if observation == nil || observation.Evidence == nil {
+// matched: the highest probability of an unsupported claim and the spans the
+// matched rules found.
+func hallucinationWarningText(observed *classification.ResponseSignal) string {
+	finding := findHallucination(observed)
+	if !finding.detected {
 		return "[Hallucination Warning] This response may contain unsupported claims. Please verify the information independently."
 	}
-	evidence := observation.Evidence
-	warning := hallucinationWarningPrefix(evidence.Score.Available, evidence.Score.Kind, evidence.Confidence)
-	switch {
-	case len(evidence.Explained) > 0:
-		warning += " Detailed analysis:"
-		for i, span := range evidence.Explained {
-			warning += fmt.Sprintf(" [%d] \"%s\" (severity: %s)", i+1, span.Text, severityToString(span.Severity))
-			if span.Explanation != "" {
-				warning += " - " + span.Explanation
-			}
-		}
-	case len(evidence.Spans) > 0:
-		warning += fmt.Sprintf(" Unsupported spans: \"%s\".", strings.Join(evidence.Spans, "\", \""))
+	warning := fmt.Sprintf("[Hallucination Warning] This response may contain unsupported claims (confidence: %.0f%%).", finding.probability*100)
+	if len(finding.spans) > 0 {
+		warning += fmt.Sprintf(" Unsupported spans: \"%s\".", strings.Join(finding.spans, "\", \""))
 	}
 	return warning + " Please verify the information independently."
-}
-
-func hallucinationWarningPrefix(available bool, kind string, score float32) string {
-	prefix := "[Hallucination Warning] This response may contain unsupported claims"
-	if !available {
-		return prefix + "."
-	}
-	if kind == "probability" {
-		return fmt.Sprintf("%s (confidence: %.0f%%).", prefix, score*100)
-	}
-	return fmt.Sprintf("%s (score: %.3f, kind: %s).", prefix, score, kind)
-}
-
-// severityToString converts severity level (0-4) to human-readable string
-func severityToString(severity int) string {
-	switch severity {
-	case 0:
-		return "low"
-	case 1:
-		return "low-medium"
-	case 2:
-		return "medium"
-	case 3:
-		return "high"
-	case 4:
-		return "critical"
-	default:
-		return "unknown"
-	}
 }

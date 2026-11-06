@@ -221,9 +221,7 @@ def validate_command(
         for line in signal_lines:
             echo(line)
     else:
-        echo(
-            "  Signals: None (catch-all routing is supported; domain categories will auto-generate when needed)"
-        )
+        echo("  Signals: None (catch-all routing is supported)")
 
     for line in _aggregate_projection_summary_lines(routing_profiles):
         echo(line)

@@ -56,7 +56,7 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 	}
 	cfg.Decisions = copyDecisions(doc.Routing.Decisions)
 	ensureModelRefDefaults(cfg.Decisions)
-	cfg.Signals = normalizeSignals(doc.Routing.Signals, cfg.Decisions)
+	cfg.Signals = normalizeSignals(doc.Routing.Signals)
 	cfg.Projections = normalizeProjections(doc.Routing.Projections)
 	cfg.ModelConfig = make(map[string]ModelParams)
 
@@ -86,7 +86,10 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 	if err := validateDecisionContracts(&cfg); err != nil {
 		return nil, err
 	}
-	if err := validateModalityContracts(&cfg); err != nil {
+	if err := validateApplicationSignalContracts(&cfg); err != nil {
+		return nil, err
+	}
+	if err := validateRoutingModalityContracts(&cfg); err != nil {
 		return nil, err
 	}
 

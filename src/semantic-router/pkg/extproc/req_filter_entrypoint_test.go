@@ -221,7 +221,7 @@ func newEntrypointFlowRouter(t *testing.T) *OpenAIRouter {
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg)
 	if err != nil {
 		t.Fatalf("failed to build recipe classifiers: %v", err)
 	}
@@ -452,7 +452,7 @@ func TestPerformDecisionEvaluationRecipesOnlyConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg)
 	if err != nil {
 		t.Fatalf("failed to build recipe classifiers: %v", err)
 	}
@@ -556,7 +556,7 @@ func TestDecisionlessRecipeStaysIsolatedFromDefaultDecisions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg)
 	if err != nil {
 		t.Fatalf("failed to build recipe classifiers: %v", err)
 	}

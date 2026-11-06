@@ -54,29 +54,16 @@ func (r TaskResolution) Explicit() bool {
 // that names no deployment.
 func questionConsumer(consumer string) bool {
 	switch consumer {
-	case "domain_classifier", "prompt_guard", "pii_classifier", "fact_check_classifier", "feedback_detector",
-		"modality_detector", "hallucination_detector", "preference", "complexity":
+	case "prompt_guard", "pii_classifier", "hallucination_detector":
 		return true
-	case "embedding", RAGRerankerConsumer, "reask":
-		return false
 	}
-	return strings.HasPrefix(consumer, "classifier.") || strings.HasPrefix(consumer, "safety.") ||
-		strings.HasPrefix(consumer, "complexity.") || strings.HasPrefix(consumer, "systemone.")
+	return strings.HasPrefix(consumer, "systemone.")
 }
 
 // bindingKeysOf lists the binding keys a consumer reads, most specific
 // first: its rule key, then its signal type's.
 func bindingKeysOf(consumer string) []string {
-	switch {
-	case strings.HasPrefix(consumer, "safety.") && strings.HasSuffix(consumer, ".hazard"):
-		return []string{consumer, bindingKeyHazard}
-	case strings.HasPrefix(consumer, "safety."):
-		return []string{consumer, bindingKeySafety}
-	case strings.HasPrefix(consumer, "classifier."):
-		return []string{consumer, bindingKeyClassifier}
-	case strings.HasPrefix(consumer, "complexity."):
-		return []string{consumer, "complexity"}
-	case strings.HasPrefix(consumer, "systemone."):
+	if strings.HasPrefix(consumer, "systemone.") {
 		return []string{consumer, bindingKeySystemOne}
 	}
 	return []string{consumer}
@@ -108,27 +95,7 @@ func (c *RouterConfig) globalBindings() map[string]ModelBinding {
 // ruleDeployment is the deployment a consumer's rule names, empty when it
 // names none.
 func (c *RouterConfig) ruleDeployment(consumer string) string {
-	switch {
-	case strings.HasPrefix(consumer, "classifier."):
-		if rule := classifierSignalRuleByName(c.ClassifierRules, strings.TrimPrefix(consumer, "classifier.")); rule != nil {
-			return rule.Deployment
-		}
-	case strings.HasPrefix(consumer, "safety."):
-		for _, rule := range c.SafetyRules {
-			if consumer == "safety."+rule.Name {
-				return rule.Deployment
-			}
-			if rule.Hazard != nil && consumer == "safety."+rule.Name+".hazard" {
-				return rule.Hazard.Deployment
-			}
-		}
-	case strings.HasPrefix(consumer, "complexity."):
-		for _, rule := range c.ComplexityRules {
-			if consumer == "complexity."+rule.Name {
-				return rule.Deployment
-			}
-		}
-	case strings.HasPrefix(consumer, "systemone."):
+	if strings.HasPrefix(consumer, "systemone.") {
 		for _, rule := range c.SystemOneRules {
 			if consumer == "systemone."+rule.Name {
 				return rule.Deployment
@@ -214,14 +181,10 @@ func (c *RouterConfig) resolveTask(consumer string) (TaskResolution, bool, error
 	}{{c.recipeBindings(), ResolvedByRecipeBinding}, {c.globalBindings(), ResolvedByGlobalBinding}} {
 		for _, key := range bindingKeysOf(consumer) {
 			// A deprecated module or rule model is read as a global binding,
-			// so the error of one that cannot be translated takes its place,
-			// as does a module model_ref: "" turned off.
+			// so the error of one that cannot be translated takes its place.
 			if scope.source == ResolvedByGlobalBinding {
 				if err := c.modelResourceErrors[key]; err != nil {
 					return TaskResolution{}, false, err
-				}
-				if _, bound := scope.bindings[key]; !bound && c.noModel[key] {
-					return TaskResolution{}, false, nil
 				}
 			}
 			if binding, ok := scope.bindings[key]; ok {
@@ -232,22 +195,8 @@ func (c *RouterConfig) resolveTask(consumer string) (TaskResolution, bool, error
 			}
 		}
 	}
-	// The hazard head asks no question: a hazard part that names no
-	// deployment uses the pre-declared hazard deployment.
-	if strings.HasPrefix(consumer, "safety.") && strings.HasSuffix(consumer, ".hazard") {
-		if _, declared := c.ModelDeployments[HazardDeployment]; declared {
-			return pick(HazardDeployment, ModelBinding{Deployment: HazardDeployment}, ResolvedByDefault)
-		}
-		return TaskResolution{}, false, nil
-	}
 	if !questionConsumer(consumer) {
 		return TaskResolution{}, false, nil
-	}
-	// The modality detector asks a model only when its method classifies.
-	if consumer == "modality_detector" {
-		if _, _, classifies := c.ModalityClassifierModel(); !classifies {
-			return TaskResolution{}, false, nil
-		}
 	}
 	name := c.decisionModelName()
 	if name == "" {
@@ -328,18 +277,17 @@ func providerAnswers(consumer string, deployment ModelDeployment, binding ModelB
 		return nil
 	case ClassifyProvider:
 		switch {
-		case consumer == "fact_check_classifier" || consumer == "feedback_detector" || consumer == "modality_detector" ||
-			consumer == "preference" || consumer == "reask" || consumer == "embedding" || consumer == RAGRerankerConsumer:
+		case isApplicationConsumer(consumer) || consumer == "embedding" || consumer == RAGRerankerConsumer:
 			return fmt.Errorf("%s: the classify API has no %s task; bind it to a model_runtime or systemone deployment", name, name)
 		case binding.Head != "":
 			return fmt.Errorf("%s: a remote classify deployment cannot select a local head", name)
 		}
 		return nil
 	case OpenAIChatProvider:
-		if consumer == "prompt_guard" || consumer == "hallucination_detector" || consumer == "preference" || strings.HasPrefix(consumer, "classifier.") {
+		if consumer == "prompt_guard" || consumer == "hallucination_detector" {
 			return nil
 		}
-		return fmt.Errorf("%s: an openai_chat deployment answers jailbreak, hallucination, preference and classifier rules only", name)
+		return fmt.Errorf("%s: an openai_chat deployment answers the jailbreak guard and the hallucination detector only", name)
 	case OpenAIEmbeddingsProvider:
 		if consumer == "embedding" {
 			return nil
@@ -387,16 +335,7 @@ func builtInPurposeAnswers(name, consumer string, deployment ModelDeployment) er
 
 // scopeConsumers lists the consumers a scope's modules and rules may run.
 func (c *RouterConfig) scopeConsumers() []string {
-	consumers := c.implicitConsumers()
-	if len(c.ComplexityRules) > 0 {
-		// Each complexity rule resolves its own deployment, so the signal
-		// type itself names none.
-		consumers = slices.DeleteFunc(consumers, func(name string) bool { return name == SignalTypeComplexity })
-	}
-	for _, rule := range c.ComplexityRules {
-		consumers = append(consumers, "complexity."+rule.Name)
-	}
-	consumers = append(consumers, "embedding", RAGRerankerConsumer)
+	consumers := append(c.implicitConsumers(), "embedding", RAGRerankerConsumer)
 	sort.Strings(consumers)
 	return consumers
 }
@@ -443,9 +382,6 @@ func validateModelResolutionContracts(cfg *RouterConfig) error {
 		}
 		if err := validateTaskCapabilities(scope, scoped); err != nil {
 			return err
-		}
-		if _, _, err := scoped.ComplexityRemoteTask(); err != nil {
-			return fmt.Errorf("recipe %q: %w", scope, err)
 		}
 		if err := validateNonQuestionResources(scoped); err != nil {
 			return fmt.Errorf("recipe %q: %w", scope, err)
@@ -512,24 +448,6 @@ func validateMaskingSpans(scoped *RouterConfig) error {
 	return errors.Join(failures...)
 }
 
-// spanFallbackWarnings name the span signals a systemone deployment answers
-// as yes/no verdicts because it declares no spans for them.
-func spanFallbackWarnings(scope RecipeName, scoped *RouterConfig) []ConfigWarning {
-	var warnings []ConfigWarning
-	for _, consumer := range []string{"pii_classifier", "hallucination_detector"} {
-		if !TaskConsumerInUse(scoped, scope, consumer) {
-			continue
-		}
-		if name, noSpans := scoped.declaresNoSpans(consumer); noSpans {
-			warnings = append(warnings, ConfigWarning{
-				Code: "span_fallback", Field: "global.model_catalog.deployments." + name + ".capabilities",
-				Message: fmt.Sprintf("%s is answered by %s, which declares neither the %s preset nor span questions: it answers yes/no without spans (metric vsr_signal_span_verdict_fallbacks_total)", BindingKey(consumer), name, spanPresets[consumer]),
-			})
-		}
-	}
-	return warnings
-}
-
 // validateNonQuestionResources checks that the deployments named where
 // embeddings, reranking and the multimodal embedding are used serve them.
 func validateNonQuestionResources(scoped *RouterConfig) error {
@@ -565,7 +483,7 @@ func modelResolutionWarnings(cfg *RouterConfig) []ConfigWarning {
 	sort.Strings(names)
 	for _, name := range names {
 		scoped := scopes[RecipeName(name)]
-		for _, warning := range append(scoped.uncalibratedThresholdWarnings(RecipeName(name)), spanFallbackWarnings(RecipeName(name), scoped)...) {
+		for _, warning := range scoped.uncalibratedPresetWarnings() {
 			if !seen[warning.Field+warning.Message] {
 				seen[warning.Field+warning.Message] = true
 				warnings = append(warnings, warning)

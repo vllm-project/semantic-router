@@ -166,50 +166,6 @@ func TestEnsureClassificationServiceWaitsForRuntimeRegistry(t *testing.T) {
 	}
 }
 
-func TestBuildConfigUpdaterPreservesLegacyGlobalFallback(t *testing.T) {
-	globalCfg := &config.RouterConfig{ConfigSource: config.ConfigSourceFile}
-	nextCfg := &config.RouterConfig{ConfigSource: config.ConfigSourceKubernetes}
-	classificationSvc := &fakeResolvedClassificationService{}
-
-	restoreGlobalConfig := replaceGlobalConfigForTest(globalCfg)
-	t.Cleanup(restoreGlobalConfig)
-
-	updater := buildConfigUpdater(nil, classificationSvc)
-	updater(nextCfg)
-
-	if classificationSvc.updatedConfig != nextCfg {
-		t.Fatalf("classification service updated config = %p, want %p", classificationSvc.updatedConfig, nextCfg)
-	}
-	if got := config.Get(); got != nextCfg {
-		t.Fatalf("config.Get() = %p, want legacy global config update %p", got, nextCfg)
-	}
-}
-
-func TestBuildConfigUpdaterLeavesBorrowedGenerationPending(t *testing.T) {
-	globalCfg := &config.RouterConfig{ConfigSource: config.ConfigSourceFile}
-	initialRuntimeCfg := &config.RouterConfig{ConfigSource: config.ConfigSourceFile}
-	nextCfg := &config.RouterConfig{ConfigSource: config.ConfigSourceKubernetes}
-	classificationSvc := services.NewClassificationService(nil, initialRuntimeCfg)
-	registry := routerruntime.NewRegistry(initialRuntimeCfg)
-	registry.SetClassificationService(classificationSvc)
-
-	restoreGlobalConfig := replaceGlobalConfigForTest(globalCfg)
-	t.Cleanup(restoreGlobalConfig)
-
-	updater := buildConfigUpdater(registry, nil)
-	updater(nextCfg)
-
-	if got := registry.CurrentConfig(); got != initialRuntimeCfg {
-		t.Fatalf("registry.CurrentConfig() = %p, want live generation %p", got, initialRuntimeCfg)
-	}
-	if got := classificationSvc.GetConfig(); got != initialRuntimeCfg {
-		t.Fatalf("classificationSvc.GetConfig() = %p, want live generation %p", got, initialRuntimeCfg)
-	}
-	if got := config.Get(); got != globalCfg {
-		t.Fatalf("config.Get() = %p, want unchanged global config %p", got, globalCfg)
-	}
-}
-
 func TestResolveMemoryStorePreservesLegacyGlobalFallback(t *testing.T) {
 	cfg := &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true}}
 	globalStore := newMockMemoryStore()

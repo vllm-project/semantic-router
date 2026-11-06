@@ -622,7 +622,7 @@ Inspect routing replays, metrics, and management audit; submit outcome evidence.
 
 ### storage
 
-Manage Router-owned knowledge bases, memories, files, vector stores, cache partitions, and context recovery.
+Manage Router-owned memories, files, vector stores, cache partitions, and context recovery.
 
 | Method | Path | Description |
 | --- | --- | --- |
@@ -633,13 +633,6 @@ Manage Router-owned knowledge bases, memories, files, vector stores, cache parti
 | `POST` | `/api/v1/storage/response-cache/invalidate` | Dry-run or invalidate a scoped response-cache partition |
 | `POST` | `/api/v1/storage/response-cache/flush` | Advance a scoped or global response-cache epoch |
 | `POST` | `/api/v1/storage/context-recovery/invalidate` | Invalidate a trusted context-recovery request scope |
-| `GET` | `/api/v1/storage/knowledge-bases` | List configured knowledge bases |
-| `POST` | `/api/v1/storage/knowledge-bases` | Create a managed knowledge base |
-| `GET` | `/api/v1/storage/knowledge-bases/{name}` | Read a knowledge base |
-| `GET` | `/api/v1/storage/knowledge-bases/{name}/map/metadata` | Read generated knowledge-base map metadata |
-| `GET` | `/api/v1/storage/knowledge-bases/{name}/map/data.ndjson` | Stream generated knowledge-base map data as NDJSON |
-| `PUT` | `/api/v1/storage/knowledge-bases/{name}` | Update a managed knowledge base |
-| `DELETE` | `/api/v1/storage/knowledge-bases/{name}` | Delete a managed knowledge base |
 | `GET` | `/api/v1/storage/memories` | List long-term memories |
 | `DELETE` | `/api/v1/storage/memories` | Delete memories by scope |
 | `GET` | `/api/v1/storage/memories/{id}` | Read one long-term memory |

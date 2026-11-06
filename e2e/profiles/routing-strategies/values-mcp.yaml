@@ -98,25 +98,25 @@ config:
       domains:
         - name: math
           description: Mathematics and quantitative reasoning
-          mmlu_categories:
+          labels:
             - math
         - name: science
           description: Science and natural sciences
-          mmlu_categories:
+          labels:
             - physics
             - chemistry
             - biology
         - name: technology
           description: Technology and computer science
-          mmlu_categories:
+          labels:
             - "computer science"
         - name: history
           description: History and cultural topics
-          mmlu_categories:
+          labels:
             - history
         - name: general
           description: General knowledge and miscellaneous topics
-          mmlu_categories:
+          labels:
             - other
     modelCards:
       - name: openai/gpt-oss-20b
@@ -127,8 +127,6 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
-          concurrency_threshold: 5
-          max_concurrency: 8
           metrics:
             enabled: true
             detailed_goroutine_tracking: true

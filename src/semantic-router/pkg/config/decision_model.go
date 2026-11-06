@@ -20,17 +20,13 @@ const (
 	DecisionModelVela2_4B     = "Vela-2.0-4B"
 	DecisionModelVela2_9B     = "Vela-2.0-9B"
 	DecisionModelVela1        = "Vela-1.0"
-	vela1HazardModel          = "models/Vela-1.0-Encoder-307M-Hazard"
-	vela1ModalityModel        = "models/Vela-1.0-Encoder-307M-Modality"
 )
 
-// DecisionModelSpec is a projection of the selected deployment for existing
-// module consumers. It is not a catalog of allowed model families.
+// DecisionModelSpec is a projection of the selected deployment: its name and
+// the model it serves. It is not a catalog of allowed model families.
 type DecisionModelSpec struct {
-	Name     string
-	Model    string
-	System   CanonicalSystemModels
-	Modality string
+	Name  string
+	Model string
 }
 
 func decisionModelSpec(name string, deployment ModelDeployment) DecisionModelSpec {
@@ -45,29 +41,7 @@ func decisionModelSpec(name string, deployment ModelDeployment) DecisionModelSpe
 			}
 		}
 	}
-	return DecisionModelSpec{Name: name, Model: model, Modality: model, System: CanonicalSystemModels{
-		Safety: model, Hazard: vela1HazardModel, PromptGuard: model, DomainClassifier: model,
-		PIIClassifier: model, FactCheckClassifier: model, HallucinationDetector: model, FeedbackDetector: model,
-	}}
-}
-
-// systemLine is one built-in module's line under global.model_catalog.system:
-// key, the consumer it bound, and its value.
-type systemLine struct {
-	key      string
-	consumer string
-	value    func(*CanonicalSystemModels) *string
-}
-
-var systemLines = []systemLine{
-	{"safety", bindingKeySafety, func(s *CanonicalSystemModels) *string { return &s.Safety }},
-	{"hazard", bindingKeyHazard, func(s *CanonicalSystemModels) *string { return &s.Hazard }},
-	{"prompt_guard", "prompt_guard", func(s *CanonicalSystemModels) *string { return &s.PromptGuard }},
-	{"domain_classifier", "domain_classifier", func(s *CanonicalSystemModels) *string { return &s.DomainClassifier }},
-	{"pii_classifier", "pii_classifier", func(s *CanonicalSystemModels) *string { return &s.PIIClassifier }},
-	{"fact_check_classifier", "fact_check_classifier", func(s *CanonicalSystemModels) *string { return &s.FactCheckClassifier }},
-	{"hallucination_detector", "hallucination_detector", func(s *CanonicalSystemModels) *string { return &s.HallucinationDetector }},
-	{"feedback_detector", "feedback_detector", func(s *CanonicalSystemModels) *string { return &s.FeedbackDetector }},
+	return DecisionModelSpec{Name: name, Model: model}
 }
 
 // validateDecisionModel checks system.decision_model: it names a declared

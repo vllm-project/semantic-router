@@ -258,17 +258,15 @@ def diagnose_probe(probe_result: dict, dsl: DSLConfig) -> dict:
 
 
 def _find_probe_best_category(probe: dict, decision_name: str) -> str | None:
-    """Find the best-matching KB category leaf for a probe in a given decision."""
+    """Find the domain leaf through which a probe matched a given decision."""
     for t in probe.get("eval_trace", []):
         if t.get("decision_name") != decision_name or not t.get("matched"):
             continue
         for child in t.get("root_trace", {}).get("children", []):
             if not child.get("matched") or child.get("node_type") != "leaf":
                 continue
-            sname = child.get("signal_name", "")
-            stype = child.get("signal_type", "")
-            if stype in ("category_kb", "kb") or sname.startswith("__best__:"):
-                return sname
+            if child.get("signal_type", "") == "domain":
+                return child.get("signal_name", "")
     return None
 
 
@@ -305,6 +303,8 @@ def _batch_structural_fix(
 
     net_positive = []
     for (_dec, sig_type, sig_name), _ in removal_candidates.items():
+        if sig_type != "domain":
+            continue
         gain, loss, fixes, regressions = 0, 0, [], []
         for probe in probe_cache:
             pid = probe.get("id", "?")

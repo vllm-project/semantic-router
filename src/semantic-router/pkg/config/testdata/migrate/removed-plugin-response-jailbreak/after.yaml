@@ -10,8 +10,9 @@ routing:
   signals:
     jailbreak:
       - name: guarded_response
-        direction: response
-        threshold: 0.8
+        stage: response
+        predicate:
+          gte: 0.8
         description: Answers that carry jailbreak content.
   decisions:
     - name: guarded

@@ -134,61 +134,6 @@ global:
 	}
 }
 
-func TestSyncRuntimeConfigLocallySeedsKnowledgeBaseAssetsIntoRuntimeStore(t *testing.T) {
-	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "config.yaml")
-	kbDir := filepath.Join(tempDir, "knowledge_bases", "privacy")
-	if err := os.MkdirAll(kbDir, 0o755); err != nil {
-		t.Fatalf("mkdir kb dir: %v", err)
-	}
-	if err := os.WriteFile(
-		filepath.Join(kbDir, "labels.json"),
-		[]byte(`{"labels":{"safe":{"exemplars":["hello"]}}}`),
-		0o644,
-	); err != nil {
-		t.Fatalf("write labels manifest: %v", err)
-	}
-
-	configYAML := `version: v0.3
-global:
-  model_catalog:
-    kbs:
-      - name: privacy_kb
-        source:
-          path: knowledge_bases/privacy/
-          manifest: labels.json
-`
-	if err := os.WriteFile(configPath, []byte(configYAML), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-
-	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", "/app/.vllm-sr/runtime-config.yaml")
-	t.Setenv("VLLM_SR_PYTHON_BIN", testRuntimeSyncPythonBinary(t))
-	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
-	if err != nil {
-		t.Fatalf("resolve repo root: %v", err)
-	}
-	t.Setenv("VLLM_SR_CLI_PATH", filepath.Join(repoRoot, "src", "vllm-sr"))
-
-	runtimePath, err := syncRuntimeConfigLocally(configPath)
-	if err != nil {
-		t.Fatalf("syncRuntimeConfigLocally returned error: %v", err)
-	}
-
-	runtimeData, err := os.ReadFile(runtimePath)
-	if err != nil {
-		t.Fatalf("read runtime config: %v", err)
-	}
-	if !contains(string(runtimeData), "path: knowledge_bases/privacy/") {
-		t.Fatalf("expected runtime KB path to stay aligned with source dir, got:\n%s", string(runtimeData))
-	}
-
-	stagedManifest := filepath.Join(tempDir, ".vllm-sr", "knowledge_bases", "privacy", "labels.json")
-	if _, err := os.Stat(stagedManifest); err != nil {
-		t.Fatalf("expected seeded knowledge base manifest, got %v", err)
-	}
-}
-
 func TestHostDashboardSavesWithoutReachingIntoContainers(t *testing.T) {
 	invocations := trapContainerCLIs(t)
 	configPath := filepath.Join(t.TempDir(), "config.yaml")

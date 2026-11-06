@@ -64,25 +64,6 @@ func TestGlobalModelBindingsKeepServiceAndRecipeOverridesIsolated(t *testing.T) 
 	}
 }
 
-func TestGlobalRuleBindingsAreVisibleOnlyToDeclaringRecipes(t *testing.T) {
-	cfg := testDeploymentConfig()
-	cfg.GlobalModelBindings = map[string]ModelBinding{
-		"classifier.risk": {Deployment: "shared-encoder", Contract: "label_distribution.v1", Adapter: "modernbert"},
-		"safety.policy":   {Deployment: "shared-encoder", Contract: "label_distribution.v1", Adapter: "modernbert"},
-	}
-	if got := cfg.EffectiveModelBindings(Signals{}, nil); len(got) != 0 {
-		t.Fatalf("foreign symbols inherited: %+v", got)
-	}
-	rules := Signals{ClassifierRules: []ClassifierSignalRule{{Name: "risk"}}, SafetyRules: []SafetyRule{{Name: "policy"}}}
-	if got := cfg.EffectiveModelBindings(rules, nil); len(got) != 2 {
-		t.Fatalf("declared rules lost global serving: %+v", got)
-	}
-	local := map[string]ModelBinding{"classifier.missing": cfg.GlobalModelBindings["classifier.risk"]}
-	if _, ok := cfg.EffectiveModelBindings(Signals{}, local)["classifier.missing"]; !ok {
-		t.Fatal("invalid explicit binding was silently discarded instead of validated")
-	}
-}
-
 func TestGlobalModelBindingDeclarationsValidateBeforeProvisioning(t *testing.T) {
 	cfg := testDeploymentConfig()
 	cfg.GlobalModelBindings = map[string]ModelBinding{"embedding": {Deployment: "missing", Contract: "embedding.v1", Adapter: "mmbert"}}

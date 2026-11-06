@@ -66,24 +66,8 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 	return createTestRouterWithToolsProvider(cfg, nil)
 }
 
-// The provider is borrowed; its fixture owner must keep it alive until router cleanup.
 func createTestRouterWithToolsProvider(cfg *config.RouterConfig, provider embedding.Provider) (*OpenAIRouter, error) {
 	classifierCfg := cloneRouterConfigForTest(cfg)
-	categoryMapping, err := loadTestCategoryMapping(classifierCfg)
-	if err != nil {
-		return nil, err
-	}
-	if !extprocTestModelArtifactsAvailable(classifierCfg.CategoryModel.ModelID) {
-		classifierCfg.CategoryModel.ModelID = ""
-		classifierCfg.CategoryMappingPath = ""
-		categoryMapping = nil
-	}
-
-	piiMapping, err := loadTestPIIMapping(classifierCfg)
-	if err != nil {
-		return nil, err
-	}
-
 	semanticCache, err := newTestSemanticCache(classifierCfg)
 	if err != nil {
 		return nil, err
@@ -95,7 +79,7 @@ func createTestRouterWithToolsProvider(cfg *config.RouterConfig, provider embedd
 		return nil, err
 	}
 
-	classifier, err := classification.NewClassifier(classifierCfg, categoryMapping, piiMapping, nil)
+	classifier, err := classification.NewClassifier(classifierCfg)
 	if err != nil {
 		_ = semanticCache.Close()
 		return nil, err
@@ -123,26 +107,6 @@ func cloneRouterConfigForTest(cfg *config.RouterConfig) *config.RouterConfig {
 	}
 	clone := *cfg
 	return &clone
-}
-
-func loadTestCategoryMapping(cfg *config.RouterConfig) (*classification.CategoryMapping, error) {
-	if cfg == nil || cfg.CategoryMappingPath == "" {
-		return nil, nil
-	}
-	if _, err := os.Stat(cfg.CategoryMappingPath); err != nil {
-		return nil, nil
-	}
-	return classification.LoadCategoryMapping(cfg.CategoryMappingPath)
-}
-
-func loadTestPIIMapping(cfg *config.RouterConfig) (*classification.PIIMapping, error) {
-	if cfg.PIIMappingPath == "" {
-		return nil, nil
-	}
-	if _, err := os.Stat(cfg.PIIMappingPath); err != nil {
-		return nil, nil
-	}
-	return classification.LoadPIIMapping(cfg.PIIMappingPath)
 }
 
 func newTestSemanticCache(cfg *config.RouterConfig) (cache.CacheBackend, error) {

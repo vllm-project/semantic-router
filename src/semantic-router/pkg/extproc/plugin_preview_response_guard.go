@@ -85,20 +85,19 @@ func (r *OpenAIRouter) PreviewResponseGuard(ctx context.Context, input pluginrun
 		}
 		result.Rules = append(result.Rules, outcome)
 	}
-	for _, outcome := range run.replayOutcomes(request, classifierConfig(classifier), time.Now().UTC()) {
+	for _, outcome := range run.replayOutcomes(request, time.Now().UTC()) {
 		if outcome.Target == config.DecisionPluginResponseGuard {
 			continue
 		}
-		signal := pluginruntime.ResponseGuardSignalOutcome{
-			Signal: outcome.Target, Verdict: outcome.Verdict, Reason: outcome.Reason,
-			ScoreKind: outcome.Metadata["score_kind"], Label: outcome.Metadata["type"],
-		}
+		signal := pluginruntime.ResponseGuardSignalOutcome{Signal: outcome.Target, Verdict: outcome.Verdict, Reason: outcome.Reason}
 		if outcome.Metadata["score_available"] == "true" {
 			score := outcome.Score
 			signal.Score = &score
 		}
-		if observation := run.hallucination(); observation != nil && observation.Evidence != nil && strings.HasPrefix(outcome.Target, config.SignalTypeHallucination+":") {
-			signal.UnsupportedSpans = append([]string(nil), observation.Evidence.Spans...)
+		if strings.HasPrefix(outcome.Target, config.SignalTypeHallucination+":") {
+			for _, span := range run.observed().Spans[outcome.Target] {
+				signal.UnsupportedSpans = append(signal.UnsupportedSpans, span.Text)
+			}
 		}
 		result.Signals = append(result.Signals, signal)
 	}

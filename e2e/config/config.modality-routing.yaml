@@ -26,14 +26,17 @@ routing:
     domains:
       - name: text_generation
         description: Text generation and general queries.
-        mmlu_categories: [other]
+        labels: [other]
     modality:
       - name: AR
         description: Text-only response via autoregressive LLM.
+        labels: [text]
       - name: DIFFUSION
         description: Image generation via diffusion model.
+        labels: [image]
       - name: BOTH
         description: Hybrid response requiring both text and image.
+        labels: [text_image]
   decisions:
     - name: image_generation
       description: Route image generation requests to the diffusion model.
@@ -90,7 +93,6 @@ global:
     api:
       batch_classification:
         max_batch_size: 10
-        max_concurrency: 4
     observability:
       metrics:
         enabled: true

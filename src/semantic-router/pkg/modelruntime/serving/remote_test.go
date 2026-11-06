@@ -140,16 +140,12 @@ func remoteBinding(consumer, contract string, deployment config.ModelDeployment)
 
 func TestBuiltInSignalsAskASystemOneDeploymentInOneCall(t *testing.T) {
 	runtime, api, deployment := remoteRuntime(t, `{"data":[{"id":"vllm-sr/d3-ultra","question_types":["choice","noul","span"],"presets":["pii"]}]}`)
-	domain, err := runtime.Sequence(context.Background(), remoteBinding("domain_classifier", config.RemoteClassifierContractLabelDistribution, deployment))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if capability := domain.Capability(); capability.Provider != config.SystemOneProvider || capability.Device != modelservice.RemoteDevice || capability.Deployment != "hosted" {
-		t.Fatalf("capability %+v", capability)
-	}
 	guard, err := runtime.Sequence(context.Background(), remoteBinding("prompt_guard", config.RemoteClassifierContractLabelDistribution, deployment))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if capability := guard.Capability(); capability.Provider != config.SystemOneProvider || capability.Device != modelservice.RemoteDevice || capability.Deployment != "hosted" {
+		t.Fatalf("capability %+v", capability)
 	}
 	pii, err := runtime.Tokens(context.Background(), remoteBinding("pii_classifier", config.RemoteClassifierContractTokenSpans, deployment))
 	if err != nil {
@@ -158,15 +154,11 @@ func TestBuiltInSignalsAskASystemOneDeploymentInOneCall(t *testing.T) {
 	prepared := len(api.calls())
 	text := "Ann asked about person names"
 	ctx, bundle := modelservice.WithBundle(context.Background(), time.Second)
-	var domainOut, guardOut tasks.LabelDistribution
+	var guardOut tasks.LabelDistribution
 	var spans tasks.TokenClassificationResult
-	errs := make([]error, 3)
+	errs := make([]error, 2)
 	var wg sync.WaitGroup
 	callers := []func() error{
-		func() (err error) {
-			domainOut, err = domain.Call(ctx, string(config.DefaultRecipeName), text)
-			return err
-		},
 		func() (err error) {
 			guardOut, err = guard.Call(ctx, string(config.DefaultRecipeName), text)
 			return err
@@ -189,13 +181,13 @@ func TestBuiltInSignalsAskASystemOneDeploymentInOneCall(t *testing.T) {
 	}
 	wg.Wait()
 	calls := api.calls()[prepared:]
-	if err := errors.Join(errs...); err != nil || len(domainOut.Probabilities) != 14 || len(guardOut.Probabilities) != 2 || len(spans.Entities) != 1 {
-		t.Fatalf("domain %v (%v), guard %v (%v), pii %v (%v); calls %v", domainOut, errs[0], guardOut, errs[1], spans, errs[2], calls)
+	if err := errors.Join(errs...); err != nil || len(guardOut.Probabilities) != 2 || len(spans.Entities) != 1 {
+		t.Fatalf("guard %v (%v), pii %v (%v); calls %v", guardOut, errs[0], spans, errs[1], calls)
 	}
 	if len(calls) != 1 {
-		t.Fatalf("calls %d, want the stage's three questions in one call", len(calls))
+		t.Fatalf("calls %d, want the stage's two questions in one call", len(calls))
 	}
-	for _, want := range []string{`"domain_classifier:domain"`, `"prompt_guard:attack"`, `"pii_classifier:pii"`, `"criteria":{"benign":`} {
+	for _, want := range []string{`"prompt_guard:attack"`, `"pii_classifier:pii"`, `"criteria":{"benign":`} {
 		if !strings.Contains(calls[0], want) {
 			t.Fatalf("the call %s does not carry %s", calls[0], want)
 		}

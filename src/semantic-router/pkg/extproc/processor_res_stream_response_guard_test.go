@@ -52,7 +52,7 @@ func streamAnswer(t *testing.T, router *OpenAIRouter, ctx *RequestContext, answe
 func assertNotEnforced(t *testing.T, outcomes []routerreplay.Outcome) {
 	t.Helper()
 	for _, outcome := range outcomes {
-		if outcome.Target == config.DecisionPluginResponseGuard || outcome.Metadata["direction"] == config.SignalDirectionResponse {
+		if outcome.Target == config.DecisionPluginResponseGuard || outcome.Metadata["stage"] == config.SystemOneStageResponse {
 			if outcome.Metadata["enforcement"] != responseGuardStreamingNotEnforced {
 				t.Fatalf("outcome = %+v, want enforcement %q", outcome, responseGuardStreamingNotEnforced)
 			}
@@ -67,7 +67,7 @@ func assertNotEnforced(t *testing.T, outcomes []routerreplay.Outcome) {
 // is. Nothing is applied: its bytes are with the client before the answer
 // exists as a whole.
 func TestStreamedAnswerIsReadByTheGuardAndNotEnforced(t *testing.T) {
-	router, ctx := newResponseStageRouter(t, newJailbreakScoreServer(t, 0.95, 0.05), "", config.ResponseGuardBlock)
+	router, ctx := newResponseStageRouter(t, newJailbreakDecider(0.95), "", config.ResponseGuardBlock)
 	recorder := startResponseStageReplay(t, router, ctx)
 
 	streamAnswer(t, router, ctx, unsafeAnswer)
@@ -93,7 +93,7 @@ func TestStreamedAnswerIsReadByTheGuardAndNotEnforced(t *testing.T) {
 }
 
 func TestStreamedAnswerIsCheckedForHallucinationAndNotEnforced(t *testing.T) {
-	server, calls := newHallucinationEndpointServer(t, []string{"450 meters"}, false)
+	server, calls := newHallucinationDecider([]string{"450 meters"}, false)
 	router, ctx := newHallucinationSignalRouter(t, server, groundedGuard(config.ResponseGuardAnnotate, true, ""))
 	recorder := startResponseStageReplay(t, router, ctx)
 
@@ -112,7 +112,7 @@ func TestStreamedAnswerIsCheckedForHallucinationAndNotEnforced(t *testing.T) {
 // A stream that never reaches a terminal answer has nothing to check. The
 // detector must not be asked for a partial one.
 func TestAbortedStreamIsNotReadByTheGuard(t *testing.T) {
-	server, calls := newHallucinationEndpointServer(t, []string{"450 meters"}, false)
+	server, calls := newHallucinationDecider([]string{"450 meters"}, false)
 	router, ctx := newHallucinationSignalRouter(t, server, groundedGuard(config.ResponseGuardAnnotate, false, ""))
 	startResponseStageReplay(t, router, ctx)
 

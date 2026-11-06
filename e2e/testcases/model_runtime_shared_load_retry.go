@@ -22,8 +22,8 @@ func init() {
 	})
 }
 
-// mrModalityPackage is the modality fixture's directory in the Router pod.
-const mrModalityPackage = "/tmp/vsr-fixtures/modality"
+// mrRerankerPackage is the reranker fixture's directory in the Router pod.
+const mrRerankerPackage = "/tmp/vsr-fixtures/reranker"
 
 // lockFixtureWeights makes a package's weights unreadable. The load then fails
 // with an error the runtime retries; a missing file instead fails the package
@@ -53,9 +53,9 @@ func testModelRuntimeLoadRetryIsolation(ctx context.Context, client *kubernetes.
 	if err != nil {
 		return err
 	}
-	output, err := session.pod.Exec(ctx, []string{"python3", "-c", lockFixtureWeights, mrModalityPackage}, nil)
+	output, err := session.pod.Exec(ctx, []string{"python3", "-c", lockFixtureWeights, mrRerankerPackage}, nil)
 	if err != nil {
-		return fmt.Errorf("lock the modality fixture's weights: %w", err)
+		return fmt.Errorf("lock the reranker fixture's weights: %w", err)
 	}
 	locked := strings.TrimSpace(string(output))
 	unlocked := false
@@ -63,14 +63,14 @@ func testModelRuntimeLoadRetryIsolation(ctx context.Context, client *kubernetes.
 		if unlocked {
 			return nil
 		}
-		if _, unlockErr := session.pod.Exec(ctx, []string{"python3", "-c", unlockFixtureWeights, mrModalityPackage, locked}, nil); unlockErr != nil {
-			return fmt.Errorf("unlock the modality fixture's weights: %w", unlockErr)
+		if _, unlockErr := session.pod.Exec(ctx, []string{"python3", "-c", unlockFixtureWeights, mrRerankerPackage, locked}, nil); unlockErr != nil {
+			return fmt.Errorf("unlock the reranker fixture's weights: %w", unlockErr)
 		}
 		unlocked = true
 		return nil
 	}
 	defer func() { _ = unlock() }()
-	_, socket, err := session.managed(ctx, mrModalityDeployment)
+	_, socket, err := session.managed(ctx, mrRerankerDeployment)
 	if err != nil {
 		return err
 	}
@@ -82,7 +82,7 @@ func testModelRuntimeLoadRetryIsolation(ctx context.Context, client *kubernetes.
 	// while that worker retries loading its temporarily unreadable weights.
 	var siblings []string
 	for _, name := range mrDeviceGroup {
-		if name != mrModalityDeployment {
+		if name != mrRerankerDeployment {
 			siblings = append(siblings, name)
 		}
 	}
@@ -105,19 +105,19 @@ func testModelRuntimeLoadRetryIsolation(ctx context.Context, client *kubernetes.
 				return modelruntime.Stop(fmt.Errorf("unrelated worker %s restarted", name))
 			}
 		}
-		if metrics.DeploymentReady(mrModalityDeployment) {
-			return modelruntime.Stop(fmt.Errorf("%s became ready with unreadable weights", mrModalityDeployment))
+		if metrics.DeploymentReady(mrRerankerDeployment) {
+			return modelruntime.Stop(fmt.Errorf("%s became ready with unreadable weights", mrRerankerDeployment))
 		}
-		runtime, _, clientErr := session.managed(ctx, mrModalityDeployment)
+		runtime, _, clientErr := session.managed(ctx, mrRerankerDeployment)
 		if clientErr != nil {
 			return clientErr
 		}
-		card, cardErr := runtime.Model(ctx, mrModalityDeployment)
+		card, cardErr := runtime.Model(ctx, mrRerankerDeployment)
 		if cardErr != nil {
 			return cardErr
 		}
 		if (card.Status != "loading" && card.Status != "failed") || card.Reason == "" {
-			return fmt.Errorf("%s reports %s (%s), waiting for a retry", mrModalityDeployment, card.Status, card.Reason)
+			return fmt.Errorf("%s reports %s (%s), waiting for a retry", mrRerankerDeployment, card.Status, card.Reason)
 		}
 		retrying = card
 		return nil
@@ -129,7 +129,7 @@ func testModelRuntimeLoadRetryIsolation(ctx context.Context, client *kubernetes.
 		return err
 	}
 	started := time.Now()
-	if err = session.waitReady(ctx, mrModalityDeployment); err != nil {
+	if err = session.waitReady(ctx, mrRerankerDeployment); err != nil {
 		return fmt.Errorf("the model did not recover once its weights are readable: %w", err)
 	}
 	recovered := time.Since(started)
@@ -137,20 +137,20 @@ func testModelRuntimeLoadRetryIsolation(ctx context.Context, client *kubernetes.
 	if err != nil {
 		return err
 	}
-	if restarts := after.DeploymentRestarts(mrModalityDeployment) - before.DeploymentRestarts(mrModalityDeployment); restarts < 1 {
-		return fmt.Errorf("the Router restarted %s's process %v times, want at least the deliberately killed worker to restart", mrModalityDeployment, restarts)
+	if restarts := after.DeploymentRestarts(mrRerankerDeployment) - before.DeploymentRestarts(mrRerankerDeployment); restarts < 1 {
+		return fmt.Errorf("the Router restarted %s's process %v times, want at least the deliberately killed worker to restart", mrRerankerDeployment, restarts)
 	}
 	for _, name := range siblings {
 		if after.DeploymentRestarts(name) != before.DeploymentRestarts(name) || !after.DeploymentReady(name) {
 			return fmt.Errorf("unrelated worker %s did not remain ready without restart", name)
 		}
 	}
-	response, err := session.chat(ctx, freshPrompt("Suggest a name for a friendly golden retriever."))
+	reranker, _, err := session.managed(ctx, mrRerankerDeployment)
 	if err != nil {
 		return err
 	}
-	if matched := headerItems(response.Headers, "x-vsr-matched-modality"); len(matched) != 1 {
-		return fmt.Errorf("after the recovery x-vsr-matched-modality is %v, want the modality model's one choice", matched)
+	if _, err = checkRouterRerank(ctx, session, reranker); err != nil {
+		return fmt.Errorf("after the recovery: %w", err)
 	}
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{

@@ -41,19 +41,15 @@ type Signals struct {
 	// +kubebuilder:validation:MaxItems=100
 	Keywords []KeywordSignal `json:"keywords,omitempty" yaml:"keywords,omitempty"`
 
-	// Embeddings defines embedding-based signal extraction rules
-	// +optional
-	// +kubebuilder:validation:MaxItems=100
-	Embeddings []EmbeddingSignal `json:"embeddings,omitempty" yaml:"embeddings,omitempty"`
-
-	// Domains defines MMLU domain categories for classification
+	// Domains match the request's subject area. A domain's name is one of
+	// the domain labels (biology, business, chemistry, computer science,
+	// economics, engineering, health, history, law, math, other, philosophy,
+	// physics, psychology).
 	// +optional
 	// +kubebuilder:validation:MaxItems=14
 	Domains []DomainSignal `json:"domains,omitempty" yaml:"domains,omitempty"`
 
-	// FactCheckRules defines fact-check rules for signal classification
-	// Similar to KeywordRules and EmbeddingRules, but based on ML model classification
-	// Each rule has a name that can be referenced in decision conditions
+	// ContextRules match the request's token count.
 	// +optional
 	ContextRules []ContextRule `json:"contextRules,omitempty" yaml:"context_rules,omitempty"`
 
@@ -62,6 +58,7 @@ type Signals struct {
 	// +kubebuilder:validation:MaxItems=100
 	Structure []StructureSignal `json:"structure,omitempty" yaml:"structure,omitempty"`
 
+	// FactCheckRules match a request whose answer needs fact checking.
 	// +optional
 	FactCheckRules []FactCheckRule `json:"factCheckRules,omitempty" yaml:"fact_check_rules,omitempty"`
 
@@ -216,71 +213,6 @@ type KeywordSignal struct {
 	// +optional
 	// +kubebuilder:default=false
 	CaseSensitive bool `json:"caseSensitive" yaml:"caseSensitive"`
-}
-
-// EmbeddingSignal defines an embedding-based signal extraction rule
-type EmbeddingSignal struct {
-	// Name is the unique identifier for this signal
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:MaxLength=100
-	Name string `json:"name" yaml:"name"`
-
-	// Threshold accepts a cosine score, or positive-minus-negative margin when negatives are configured.
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Minimum=-2
-	// +kubebuilder:validation:Maximum=2
-	Threshold float32 `json:"threshold" yaml:"threshold"`
-
-	// Candidates is the list of candidate phrases for semantic matching
-	// +optional
-	// +kubebuilder:validation:MaxItems=1000
-	Candidates []string `json:"candidates,omitempty" yaml:"candidates,omitempty"`
-
-	// ImageCandidates contains local image paths or inline base64 images in the positive bank.
-	// +optional
-	// +kubebuilder:validation:MaxItems=1000
-	ImageCandidates []string `json:"imageCandidates,omitempty" yaml:"imageCandidates,omitempty"`
-
-	// NegativeCandidates contains text anchors subtracted from the positive score.
-	// +optional
-	// +kubebuilder:validation:MaxItems=1000
-	NegativeCandidates []string `json:"negativeCandidates,omitempty" yaml:"negativeCandidates,omitempty"`
-
-	// NegativeImageCandidates contains image anchors subtracted from the positive score.
-	// +optional
-	// +kubebuilder:validation:MaxItems=1000
-	NegativeImageCandidates []string `json:"negativeImageCandidates,omitempty" yaml:"negativeImageCandidates,omitempty"`
-
-	// AggregationMethod defines how to aggregate multiple candidate similarities
-	// +optional
-	// +kubebuilder:validation:Enum=mean;max;any
-	// +kubebuilder:default=max
-	AggregationMethod string `json:"aggregationMethod,omitempty" yaml:"aggregationMethod,omitempty"`
-
-	// PrototypeScoring overrides the family's prototype construction and scoring.
-	// An omitted object inherits the family; an empty object uses core defaults.
-	// +optional
-	PrototypeScoring *PrototypeScoringConfig `json:"prototypeScoring,omitempty" yaml:"prototypeScoring,omitempty"`
-
-	// QueryModality declares which modality of the incoming request payload
-	// the query embedding is computed from. Candidates are encoded according to their declared text or image field;
-	// the rule cosine-matches the text-anchor set against a query embedding
-	// produced from the declared modality, all in the shared multimodal
-	// embedding space.
-	//
-	// "text"  (default, backward-compatible): query embedded from request text.
-	// "image": query embedded from an image attachment (base64 data URI or
-	//          path). Requires the multi-modal embedding model to be loaded
-	//          via global.model_catalog.embeddings.semantic with
-	//          embedding_config.model_type=multimodal.
-	// "audio": query embedded from an audio attachment. Same requirement.
-	//
-	// Omitting this field is equivalent to "text" so existing rules behave
-	// identically.
-	// +optional
-	// +kubebuilder:validation:Enum=text;image;audio
-	QueryModality string `json:"queryModality,omitempty" yaml:"queryModality,omitempty"`
 }
 
 // Decision defines a routing decision based on rule combinations
@@ -443,9 +375,9 @@ type SignalCombination struct {
 
 // SignalCondition defines a single signal condition
 type SignalCondition struct {
-	// Type defines the type of signal (keyword/embedding/domain/fact_check/context/structure/conversation/event)
+	// Type defines the type of signal (keyword/domain/fact_check/context/structure/conversation/event)
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=keyword;embedding;domain;fact_check;context;structure;conversation;event
+	// +kubebuilder:validation:Enum=keyword;domain;fact_check;context;structure;conversation;event
 	Type string `json:"type" yaml:"type"`
 
 	// Name is the name of the signal to reference
@@ -566,9 +498,6 @@ type RouteStatistics struct {
 
 	// Keywords indicates the number of keyword signals
 	Keywords int32 `json:"keywords" yaml:"keywords"`
-
-	// Embeddings indicates the number of embedding signals
-	Embeddings int32 `json:"embeddings" yaml:"embeddings"`
 
 	// Domains indicates the number of domain signals
 	Domains int32 `json:"domains" yaml:"domains"`

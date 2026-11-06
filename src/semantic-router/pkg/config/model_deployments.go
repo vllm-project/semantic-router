@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -301,17 +302,6 @@ func compileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 			if err := validateTaskModelBinding(consumer, decl, deployment); err != nil {
 				return nil, fmt.Errorf("%s: %w", path, err)
 			}
-			if strings.HasPrefix(consumer, "classifier.") {
-				rule := classifierSignalRuleByName(scoped.ClassifierRules, strings.TrimPrefix(consumer, "classifier."))
-				if err := validateGenericModelBinding(cfg, rule, decl, deployment); err != nil {
-					return nil, fmt.Errorf("%s: %w", path, err)
-				}
-			}
-			if strings.HasPrefix(consumer, "safety.") {
-				if err := validateSafetyModelBinding(scoped.SafetyRules, consumer, decl, deployment); err != nil {
-					return nil, fmt.Errorf("%s: %w", path, err)
-				}
-			}
 			bindings[consumer] = ResolvedModelBinding{Recipe: recipe, Name: consumer, Binding: decl, Deployment: deployment, Admission: cfg.ModelAdmission[decl.Deployment]}
 		}
 		plan.recipes[recipe] = bindings
@@ -336,18 +326,21 @@ func validateDeclaredBindingKeys(recipe RecipeName, scoped *RouterConfig) error 
 		if !knownBindingKey(key) {
 			return fmt.Errorf("recipes[%s].routing.model_bindings.%s: unknown task consumer %q", recipe, BindingKey(key), key)
 		}
-		if _, exists := scoped.ModelDeployments[binding.Deployment]; !exists {
+		deployment, exists := scoped.ModelDeployments[binding.Deployment]
+		if !exists {
 			return fmt.Errorf("recipes[%s].routing.model_bindings.%s: unknown deployment %q; %s", recipe, BindingKey(key), binding.Deployment, declaredDeployments(scoped.ModelDeployments))
 		}
-		switch {
-		case strings.HasPrefix(key, "classifier."):
-			if classifierSignalRuleByName(scoped.ClassifierRules, strings.TrimPrefix(key, "classifier.")) == nil {
-				return fmt.Errorf("recipes[%s].routing.model_bindings.%s: generic classifier binding requires an existing rule in the same recipe", recipe, key)
+		if isApplicationConsumer(key) {
+			deployment = deployment.WithDefaults()
+			if err := validateTaskModelBinding(key, withImpliedContract(key, binding, deployment), deployment); err != nil {
+				return fmt.Errorf("recipes[%s].routing.model_bindings.%s: %w", recipe, BindingKey(key), err)
 			}
-		case strings.HasPrefix(key, "safety."):
-			if rule, _ := safetyRuleForBinding(scoped.SafetyRules, key); rule == nil {
-				return fmt.Errorf("recipes[%s].routing.model_bindings.%s: safety binding must identify exactly one recipe signal head", recipe, key)
-			}
+		}
+		if rule, isRuleKey := strings.CutPrefix(key, "safety."); isRuleKey && !slices.ContainsFunc(scoped.SafetyRules, func(safety SafetyRule) bool { return safety.Name == rule }) {
+			return fmt.Errorf("recipes[%s].routing.model_bindings.%s: names no safety rule of the recipe", recipe, key)
+		}
+		if rule, isRuleKey := strings.CutPrefix(key, "complexity."); isRuleKey && !slices.ContainsFunc(scoped.ComplexityRules, func(complexity ComplexityRule) bool { return complexity.Name == rule }) {
+			return fmt.Errorf("recipes[%s].routing.model_bindings.%s: names no complexity rule of the recipe", recipe, key)
 		}
 	}
 	return nil
@@ -362,12 +355,8 @@ func ImpliedBinding(consumer string, decl ModelBinding, deployment ModelDeployme
 }
 
 func withImpliedContract(consumer string, decl ModelBinding, deployment ModelDeployment) ModelBinding {
-	if decl.OperatingPoint == nil && deployment.OperatingPoint != nil && strings.HasPrefix(ruleConsumer(consumer), "classifier.") {
-		pinned := *deployment.OperatingPoint
-		decl.OperatingPoint = &pinned
-	}
 	if decl.Contract == "" {
-		decl.Contract, decl.contractImplied = impliedContract(consumer, decl, deployment), true
+		decl.Contract, decl.contractImplied = impliedContract(consumer), true
 	}
 	if decl.Adapter == "" {
 		switch deployment.Provider {
@@ -388,32 +377,15 @@ func withImpliedContract(consumer string, decl ModelBinding, deployment ModelDep
 	return decl
 }
 
-func impliedContract(consumer string, decl ModelBinding, deployment ModelDeployment) string {
+func impliedContract(consumer string) string {
 	consumer = ruleConsumer(consumer)
-	remote := deployment.Provider == ClassifyProvider || deployment.Provider == OpenAIChatProvider
 	switch {
-	case consumer == "pii_classifier" || consumer == "hallucination_detector":
-		return RemoteClassifierContractTokenSpans
 	case consumer == "embedding":
 		return "embedding.v1"
 	case consumer == RAGRerankerConsumer:
 		return RelevanceScoresContract
-	case consumer == "preference" && deployment.Provider == OpenAIChatProvider:
-		// The chat model picks a route by name; no task contract applies.
-		return ""
-	case consumer == "preference" || consumer == "reask" || strings.HasPrefix(consumer, "systemone."):
+	case isApplicationConsumer(BindingKey(consumer)) || strings.HasPrefix(consumer, "systemone."):
 		return DecisionTaskContract
-	case consumer == "prompt_guard" && deployment.Provider == OpenAIChatProvider:
-		return RemoteClassifierContractLabelDecision
-	case consumer == "complexity" || strings.HasPrefix(consumer, "complexity."):
-		if remote {
-			return RemoteClassifierContractScore
-		}
-		return DecisionTaskContract
-	case strings.HasPrefix(consumer, "safety.") && strings.HasSuffix(consumer, ".hazard"):
-		return RemoteClassifierContractLabelScores
-	case strings.HasPrefix(consumer, "classifier.") && decl.OperatingPoint != nil:
-		return RemoteClassifierContractLabelScores
 	}
 	return RemoteClassifierContractLabelDistribution
 }
@@ -433,7 +405,7 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 		return err
 	}
 	name = ruleConsumer(name)
-	if deployment.IsSystemOne() || (name == "preference" && deployment.Provider == OpenAIChatProvider) {
+	if deployment.IsSystemOne() {
 		return nil
 	}
 	if deployment.Provider == RerankProvider {
@@ -443,7 +415,7 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 		return nil
 	}
 	if decl.Contract == DecisionTaskContract {
-		allowed := name == "pii_classifier" || name == "hallucination_detector" || name == "preference" || name == "reask" || name == "complexity" || strings.HasPrefix(name, "complexity.") || strings.HasPrefix(name, "classifier.") || strings.HasPrefix(name, "safety.") || strings.HasPrefix(name, "systemone.")
+		allowed := isApplicationConsumer(BindingKey(name)) || strings.HasPrefix(name, "systemone.")
 		if !allowed || !deployment.IsModelRuntime() || decl.Head != "" || decl.MappingPath != "" || decl.OperatingPoint != nil || decl.PairScorer != nil {
 			return fmt.Errorf("decision.v1 requires a supported judgment consumer and model_runtime deployment, without head, mapping_path or a classifier operating point")
 		}
@@ -451,61 +423,23 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 	}
 	want := ""
 	if decl.OperatingPoint != nil {
-		if !strings.HasPrefix(name, "classifier.") {
-			return fmt.Errorf("operating_point is only supported by generic classifier bindings")
-		}
-		if err := decl.OperatingPoint.Validate(); err != nil {
-			return err
-		}
+		return fmt.Errorf("operating_point calibrated a generic classifier binding; classifier rules are systemone questions now")
 	}
 	if decl.PairScorer != nil && name != RAGRerankerConsumer {
 		return fmt.Errorf("pair_scorer selection is only supported by rag.reranker")
 	}
-	kind := name
-	if strings.HasPrefix(name, "complexity.") {
-		kind = "complexity"
-	}
-	switch kind {
-	case "prompt_guard":
-		want = RemoteClassifierContractLabelDistribution
-		if remoteTaskProvider(deployment) && decl.Adapter == RemoteClassifierProtocolHTTPChat {
-			want = "label_decision.v1"
-		}
-	case "domain_classifier", "fact_check_classifier", "feedback_detector", "modality_detector":
-		want = RemoteClassifierContractLabelDistribution
-	case "pii_classifier":
-		want = RemoteClassifierContractTokenSpans
-	case "hallucination_detector":
-		want = RemoteClassifierContractTokenSpans
-	case "embedding":
+	switch {
+	case name == "embedding":
 		want = "embedding.v1"
-	case RAGRerankerConsumer:
+	case name == RAGRerankerConsumer:
 		want = RelevanceScoresContract
 		if err := validateRerankerBinding(decl, deployment); err != nil {
 			return err
 		}
-	case "complexity":
-		if decl.Contract == RemoteClassifierContractLabelDistribution {
-			want = RemoteClassifierContractLabelDistribution
-			break
-		}
-		want = RemoteClassifierContractScore
+	case isApplicationConsumer(BindingKey(name)):
+		want = DecisionTaskContract
 	default:
-		if strings.HasPrefix(name, "safety.") {
-			// The matching rule disambiguates names containing ".hazard".
-			want = decl.Contract
-			if want != RemoteClassifierContractLabelDistribution && want != RemoteClassifierContractLabelScores {
-				return fmt.Errorf("safety binding requires a categorical or independent label contract")
-			}
-			break
-		}
-		if !strings.HasPrefix(name, "classifier.") {
-			return fmt.Errorf("unknown task consumer %q", name)
-		}
-		want = RemoteClassifierContractLabelDistribution
-		if decl.Contract == RemoteClassifierContractLabelScores {
-			want = RemoteClassifierContractLabelScores
-		}
+		return fmt.Errorf("unknown task consumer %q", name)
 	}
 	if decl.Contract != want {
 		return fmt.Errorf("contract must be %q for %s", want, name)
@@ -513,30 +447,11 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 	if strings.TrimSpace(decl.Adapter) == "" && !deployment.IsModelRuntime() {
 		return fmt.Errorf("adapter is required")
 	}
-	if kind == "complexity" && !remoteTaskProvider(deployment) {
-		return fmt.Errorf("complexity requires an HTTP score or distribution adapter")
-	}
 	if remoteTaskProvider(deployment) && decl.Head != "" {
 		return fmt.Errorf("remote task cannot bind a local head")
 	}
-	if remoteTaskProvider(deployment) {
-		if name == "fact_check_classifier" || name == "feedback_detector" || name == "modality_detector" {
-			return fmt.Errorf("%s has no HTTP task adapter", name)
-		}
-		if name != "embedding" && (deployment.Input.MaxTokens != 0 || deployment.Input.Overflow != "reject") {
-			return fmt.Errorf("HTTP classifier adapters cannot enforce local tokenizer input budgets")
-		}
-		if name == "hallucination_detector" && decl.Adapter != RemoteClassifierProtocolHTTPChat && decl.Adapter != RemoteClassifierProtocolHTTPClassify {
-			return fmt.Errorf("hallucination detector requires http_chat or http_classify adapter")
-		}
-	}
-	if decl.Adapter == "vela_halu" {
-		if name != "hallucination_detector" || !deployment.IsModelRuntime() {
-			return fmt.Errorf("vela_halu requires a local hallucination_detector binding")
-		}
-		if deployment.Input.MaxTokens > 8192 {
-			return fmt.Errorf("vela_halu task input budget cannot exceed 8192 tokens")
-		}
+	if remoteTaskProvider(deployment) && name != "embedding" && (deployment.Input.MaxTokens != 0 || deployment.Input.Overflow != "reject") {
+		return fmt.Errorf("HTTP classifier adapters cannot enforce local tokenizer input budgets")
 	}
 	// Artifact-specific capacity is checked by the loaded provider. Config
 	// cannot infer a checkpoint limit from its adapter name or a fixed 512 cap.

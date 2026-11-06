@@ -16,16 +16,20 @@ func TestUpdateConfigHandlerPreservesModelRuntimeDeclarations(t *testing.T) {
 	configPath := createValidTestConfig(t, t.TempDir())
 	body := canonicalConfigBody("127.0.0.1:8000")
 	body["global"] = map[string]interface{}{"model_catalog": map[string]interface{}{
-		"deployments": map[string]interface{}{"local-pii": map[string]interface{}{
-			"artifact": "vllm-sr/checkpoint", "revision": pinned, "provider": "model_runtime", "device": "cpu",
-			"input": map[string]interface{}{"max_tokens": 512, "overflow": "reject"},
-		}},
-		"admission": map[string]interface{}{"local-pii": map[string]interface{}{"max_concurrency": 2, "max_queue": 3, "queue_timeout_ms": 500, "on_overflow": "shed"}},
+		"deployments": map[string]interface{}{
+			"local-decision": map[string]interface{}{
+				"artifact": "vllm-sr/checkpoint", "revision": pinned, "provider": "model_runtime", "device": "cpu",
+				"input": map[string]interface{}{"max_tokens": 512, "overflow": "window"},
+			},
+			"local-embedding": map[string]interface{}{"artifact": "vllm-sr/embedding-checkpoint", "provider": "model_runtime", "device": "cpu"},
+		},
+		"admission": map[string]interface{}{"local-decision": map[string]interface{}{"max_concurrency": 2, "max_queue": 3, "queue_timeout_ms": 500, "on_overflow": "shed"}},
 	}}
 	body["recipes"] = []map[string]interface{}{{"name": "private", "routing": map[string]interface{}{
 		"model_bindings": map[string]interface{}{
-			"pii":        map[string]interface{}{"deployment": "local-pii", "head": "pii"},
-			"preference": "local-pii",
+			"pii":       "local-decision",
+			"jailbreak": "local-decision",
+			"embedding": map[string]interface{}{"deployment": "local-embedding", "head": "onnx/model.onnx"},
 		},
 	}}}
 	payload, err := json.Marshal(body)
@@ -43,16 +47,16 @@ func TestUpdateConfigHandlerPreservesModelRuntimeDeclarations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	deployment := saved.Global.ModelCatalog.Deployments["local-pii"]
-	if deployment.Revision != pinned || !deployment.IsModelRuntime() || deployment.Input.MaxTokens != 512 {
+	deployment := saved.Global.ModelCatalog.Deployments["local-decision"]
+	if deployment.Revision != pinned || !deployment.IsModelRuntime() || deployment.Input.MaxTokens != 512 || deployment.Input.Overflow != "window" {
 		t.Fatalf("deployment changed: %#v", deployment)
 	}
-	budget := saved.Global.ModelCatalog.Admission["local-pii"]
+	budget := saved.Global.ModelCatalog.Admission["local-decision"]
 	if budget.MaxConcurrency != 2 || budget.MaxQueue != 3 || budget.QueueTimeoutMs != 500 || budget.OnOverflow != "shed" {
 		t.Fatalf("admission changed: %#v", budget)
 	}
-	binding := saved.Recipes[0].Routing.ModelBindings["pii"]
-	if binding.Deployment != "local-pii" || binding.Head != "pii" || binding.Contract != "" || binding.Adapter != "" {
+	binding := saved.Recipes[0].Routing.ModelBindings["embedding"]
+	if binding.Deployment != "local-embedding" || binding.Head != "onnx/model.onnx" || binding.Contract != "" || binding.Adapter != "" {
 		t.Fatalf("binding changed: %#v", binding)
 	}
 	if len(saved.Routing.ModelBindings) != 0 {
@@ -76,10 +80,10 @@ func TestUpdateConfigHandlerPreservesModelRuntimeDeclarations(t *testing.T) {
 		t.Fatalf("recipe = %#v", recipes[0])
 	}
 	recipeBindings := requireMapValue(t, requireMapValue(t, recipe, "routing"), "model_bindings")
-	if recipeBindings["preference"] != "local-pii" {
+	if recipeBindings["jailbreak"] != "local-decision" || recipeBindings["pii"] != "local-decision" {
 		t.Fatalf("recipe binding is not written as its deployment name: %#v", recipeBindings)
 	}
-	if object := requireMapValue(t, recipeBindings, "pii"); len(object) != 2 {
+	if object := requireMapValue(t, recipeBindings, "embedding"); len(object) != 2 {
 		t.Fatalf("a binding with a head writes only its deployment and head: %#v", object)
 	}
 }

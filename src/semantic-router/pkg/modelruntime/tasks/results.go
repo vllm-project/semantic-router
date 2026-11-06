@@ -3,24 +3,6 @@
 // recipe bindings supply label mappings and task-specific interpretation.
 package tasks
 
-// ClassResult is the historical top-1 classification result. A model reporting
-// only this result does not imply a complete label distribution.
-type ClassResult struct {
-	Class      int
-	Confidence float32
-	Categories []string
-}
-
-// ClassResultWithProbs preserves top-1 information and any model-reported full
-// distribution. A nil Probabilities slice means no distribution was supplied;
-// consumers must not fill missing probabilities from Class or Confidence.
-type ClassResultWithProbs struct {
-	Class         int
-	Confidence    float32
-	Probabilities []float32
-	NumClasses    int
-}
-
 // LabelDistribution contains a complete distribution in the label order of
 // the prepared binding. It deliberately has no independently supplied argmax.
 type LabelDistribution struct {
@@ -87,14 +69,6 @@ type GroundedTextRequest struct {
 type TextPairRequest struct {
 	Premise    string
 	Hypothesis string
-}
-
-// TokenLabelSet declares entity and outside labels for a task. Unlike PII's
-// historical mapping, a general spans task need not reserve label index zero.
-// A prepared adapter copies and validates these labels before serving calls.
-type TokenLabelSet struct {
-	Labels  []string
-	Outside []string
 }
 
 // EmbeddingResult preserves the vector and execution metadata supplied by the

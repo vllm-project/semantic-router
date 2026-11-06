@@ -45,22 +45,16 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		return nil, nil, fmt.Errorf("no decisions configured")
 	}
 
-	logging.Debugf("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, reask=%v, preference=%v, language=%v, context=%v, structure=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v, kb=%v, conversation=%v, event=%v, input_modality=%v, action=%v",
-		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
-		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedReaskRules, signals.MatchedPreferenceRules,
+	logging.Debugf("Signal evaluation results: keyword=%v, domain=%v, fact_check=%v, user_feedback=%v, turn_relation=%v, language=%v, context=%v, structure=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, safety=%v, pii=%v, conversation=%v, event=%v, input_modality=%v, action=%v, systemone=%v",
+		signals.MatchedKeywordRules, signals.MatchedDomainRules,
+		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedTurnRelationRules,
 		signals.MatchedLanguageRules, signals.MatchedContextRules, signals.MatchedStructureRules,
 		signals.MatchedComplexityRules, signals.MatchedModalityRules, signals.MatchedAuthzRules,
-		signals.MatchedJailbreakRules, signals.MatchedPIIRules, signals.MatchedKBRules,
+		signals.MatchedJailbreakRules, signals.MatchedSafetyRules, signals.MatchedPIIRules,
 		signals.MatchedConversationRules, signals.MatchedEventRules, signals.MatchedInputModalityRules,
-		signals.MatchedActionRules)
+		signals.MatchedActionRules, signals.MatchedSystemOneRules)
 
-	engine := decision.NewDecisionEngine(
-		c.Config.KeywordRules,
-		c.Config.EmbeddingRules,
-		c.Config.Categories,
-		decisions,
-		c.Config.Strategy,
-	).WithRoutingScope(c.Config.RoutingScope)
+	engine := decision.NewDecisionEngine(decisions, c.Config.Strategy).WithRoutingScope(c.Config.RoutingScope)
 
 	sm := signals.Matches()
 

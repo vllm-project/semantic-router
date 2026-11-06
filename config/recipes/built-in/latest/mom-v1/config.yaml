@@ -99,6 +99,8 @@ recipes:
       - name: wrong_answer
         description: The user says an earlier answer was wrong; recovery also needs
           the correction question.
+        labels:
+        - WRONG_ANSWER
       systemone:
       - name: task
         description: What kind of work the request asks for.
@@ -1224,18 +1226,18 @@ recipes:
     signals:
       jailbreak:
       - name: prompt_attack
-        threshold: 0.75
-        include_history: true
+        predicate:
+          gte: 0.75
+        input:
+          history: true
       pii:
       - name: personal_data
         description: Personal identifiers trigger sensitive handling independently
           of context.
-        include_history: true
-        threshold: 0.01
-        pii_types_allowed:
-        - NRP
-        - ZIP_CODE
-        - AGE
+        predicate:
+          gte: 0.01
+        input:
+          history: true
       systemone:
       - name: attack
         description: Whether the message itself tries to make the assistant ignore

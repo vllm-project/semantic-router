@@ -152,14 +152,12 @@ func vela3Matches(signals map[string]mrVela3Signal, answered modelruntime.Decisi
 	var want []string
 	for name, signal := range signals {
 		if signal.question.Type == "span" {
+			// A span rule is listed by name when a label it counts has a span
+			// above its threshold; its label references are not.
 			found := false
 			for _, label := range signal.question.Labels {
 				for _, span := range answered.Spans[name] {
-					if span.Label == label.Key && span.Probability >= signal.gte {
-						want = append(want, name+":"+label.Key)
-						found = true
-						break
-					}
+					found = found || (span.Label == label.Key && span.Probability >= signal.gte)
 				}
 			}
 			if found {

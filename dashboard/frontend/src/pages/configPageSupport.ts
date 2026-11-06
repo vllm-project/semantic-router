@@ -1051,6 +1051,8 @@ export interface ConfigSignals {
   jailbreak?: JailbreakSignal[]
   safety?: SafetySignal[]
   hallucination?: HallucinationSignal[]
+  refusal?: RefusalSignal[]
+  turn_relation?: TurnRelationSignal[]
   pii?: PIISignal[]
   kb?: KBSignal[]
   metadata?: MetadataSignal[]
@@ -1267,6 +1269,9 @@ export interface DomainSignal {
   description: string
   mmlu_categories?: string[]
   model_scores?: ModelScore[]
+  predicate?: NumericPredicate
+  deployment?: string
+  timeout_ms?: number
 }
 
 export interface EventSignal {
@@ -1295,8 +1300,6 @@ export interface ProjectionPartition {
 export interface ProjectionScoreInput {
   type: string
   name?: string
-  kb?: string
-  metric?: string
   weight: number
   value_source?: string
   match?: number
@@ -1333,6 +1336,10 @@ export interface ProjectionMapping {
 export interface ModalitySignal {
   name: string
   description?: string
+  labels?: string[]
+  predicate?: NumericPredicate
+  deployment?: string
+  timeout_ms?: number
 }
 
 export interface Subject {
@@ -1360,16 +1367,46 @@ export interface KBSignal {
 export interface FactCheckSignal {
   name: string
   description: string
+  labels?: string[]
+  predicate?: NumericPredicate
+  deployment?: string
+  timeout_ms?: number
 }
 
 export interface HallucinationSignal {
   name: string
   description?: string
+  predicate?: NumericPredicate
+  deployment?: string
+  timeout_ms?: number
+}
+
+export interface RefusalSignal {
+  name: string
+  description?: string
+  predicate?: NumericPredicate
+  deployment?: string
+  timeout_ms?: number
 }
 
 export interface UserFeedbackSignal {
   name: string
   description: string
+  labels?: string[]
+  predicate?: NumericPredicate
+  deployment?: string
+  timeout_ms?: number
+}
+
+export interface TurnRelationSignal {
+  name: string
+  description?: string
+  /** continue, reask, shift or return; a rule without labels matches nothing itself. */
+  labels?: string[]
+  /** How many turns before the current one the rule reads (default 4). */
+  input?: { previous_turns?: number }
+  deployment?: string
+  timeout_ms?: number
 }
 
 export interface ReaskSignal {
@@ -1465,21 +1502,23 @@ export interface ComplexitySignal {
 
 export interface JailbreakSignal {
   name: string
-  threshold?: number
-  method?: string
-  include_history?: boolean
-  direction?: 'request' | 'response'
-  jailbreak_patterns?: string[]
-  benign_patterns?: string[]
+  predicate?: NumericPredicate
+  stage?: 'request' | 'response'
+  input?: { history?: boolean }
+  deployment?: string
+  timeout_ms?: number
+  on_unknown?: 'match' | 'no_match'
   description?: string
 }
 
 export interface PIISignal {
   name: string
-  threshold?: number
-  source?: 'tool_result'
-  pii_types_allowed?: string[]
-  include_history?: boolean
+  predicate?: NumericPredicate
+  ignore_labels?: string[]
+  input?: { history?: boolean; tool_results?: boolean }
+  deployment?: string
+  timeout_ms?: number
+  on_unknown?: 'match' | 'no_match'
   description?: string
 }
 

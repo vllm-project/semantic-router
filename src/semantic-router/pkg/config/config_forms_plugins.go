@@ -12,7 +12,7 @@ import (
 // RemovedPluginTypes says what replaced each plugin type the Router no longer
 // reads; the load error and the DSL compiler both name it.
 var RemovedPluginTypes = map[string]string{
-	"response_jailbreak": "a response_guard rule over a jailbreak signal with direction: response",
+	"response_jailbreak": "a response_guard rule over a jailbreak signal with stage: response",
 	"hallucination":      "a response_guard rule over the fact_check and hallucination signals",
 }
 
@@ -62,12 +62,12 @@ var pluginForms = []ConfigForm{
 }
 
 // migrateResponseJailbreakPlugin writes an enabled response_jailbreak plugin
-// as a response_guard rule. The plugin acted on the scope's response-direction
+// as a response_guard rule. The plugin acted on the scope's response-stage
 // jailbreak rules when it had any, and otherwise scanned answers itself at its
-// threshold (else prompt_guard's, else 0.5), which a new response-direction
-// rule now does. Its action header annotates; an answer the scan could not
-// read counted as detected unless prompt_guard allowed both failures and
-// unscanned content, which is the guard's on_unknown.
+// threshold (else prompt_guard's, which that module's form writes), which a
+// new response-stage rule now does. Its action header annotates; an answer
+// the scan could not read counted as detected unless prompt_guard allowed both
+// failures and unscanned content, which is the guard's on_unknown.
 func migrateResponseJailbreakPlugin(m *Migration, at FormMatch) error {
 	scope, decision, err := pluginSite(at)
 	if err != nil {
@@ -83,30 +83,24 @@ func migrateResponseJailbreakPlugin(m *Migration, at FormMatch) error {
 	rules := signalRules(scope, SignalTypeJailbreak)
 	var reads []*yaml.Node
 	for _, rule := range rules.Content {
-		if scalarAt(rule, "direction") == SignalDirectionResponse {
+		if scalarAt(rule, "stage") == SystemOneStageResponse || scalarAt(rule, "direction") == SystemOneStageResponse {
 			reads = append(reads, conditionNode(SignalTypeJailbreak, scalarAt(rule, "name")))
 		}
 	}
 	threshold := positiveScalar(mappingValue(configuration, "threshold"))
 	switch {
 	case len(reads) > 0 && threshold != nil:
-		m.Changed(at.Path, "the plugin's threshold was not read beside the response-direction jailbreak rules; their thresholds apply")
+		m.Changed(at.Path, "the plugin's threshold was not read beside the response-stage jailbreak rules; their predicates apply")
 	case len(reads) == 0:
-		if threshold == nil {
-			threshold = positiveScalar(mappingValue(promptGuard, "threshold"))
-		}
-		if threshold == nil {
-			threshold = &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!float", Value: "0.5"}
-		}
 		name := freeRuleName(rules, scalarAt(decision, "name")+"_response")
-		rules.Content = append(rules.Content, mappingOf(
-			"name", Scalar(name),
-			"direction", Scalar(SignalDirectionResponse),
-			"threshold", threshold,
-			"description", Scalar("Answers that carry jailbreak content."),
-		))
+		rule := mappingOf("name", Scalar(name), "stage", Scalar(SystemOneStageResponse))
+		if threshold != nil {
+			setNode(rule, "predicate", newMapping("gte", threshold))
+		}
+		setNode(rule, "description", Scalar("Answers that carry jailbreak content."))
+		rules.Content = append(rules.Content, rule)
 		reads = append(reads, conditionNode(SignalTypeJailbreak, name))
-		m.Changed(scopePrefix(at.Path)+"signals.jailbreak["+name+"]", "the response-direction jailbreak rule scans answers at the plugin's threshold")
+		m.Changed(scopePrefix(at.Path)+"signals.jailbreak["+name+"]", "the response-stage jailbreak rule checks answers at the plugin's threshold")
 	}
 	action := ResponseGuardAnnotate
 	switch scalarAt(configuration, "action") {
@@ -208,15 +202,16 @@ func isThresholdMasking(node *yaml.Node, _ string) bool {
 
 func describeThresholdMasking(at FormMatch) (string, string) {
 	if mappingValue(mappingValue(at.Node, "configuration"), "threshold") != nil {
-		return "masking.threshold was removed", "masking.signal naming a pii rule, whose threshold applies"
+		return "masking.threshold was removed", "masking.signal naming a pii rule, whose predicate applies"
 	}
 	return "masking without a signal was removed", "masking.signal naming the pii rule whose detections it masks"
 }
 
 // migrateThresholdMasking names a pii rule for masking. The plugin masked
 // every type the PII classifier detected at its threshold (else the
-// classifier's), which a new pii rule with no allowed types reproduces; a
-// plugin that names its rule moves its threshold onto the rule.
+// classifier's, which that module's form writes), which a new pii rule with
+// no ignored labels reproduces; a plugin that names its rule moves its
+// threshold onto the rule's predicate.
 func migrateThresholdMasking(m *Migration, at FormMatch) error {
 	scope, decision, err := pluginSite(at)
 	if err != nil {
@@ -231,10 +226,10 @@ func migrateThresholdMasking(m *Migration, at FormMatch) error {
 		rule := ruleNamed(rules, signal)
 		switch {
 		case threshold == nil:
-		case rule != nil && positiveScalar(mappingValue(rule, "threshold")) == nil:
-			setNode(rule, "threshold", threshold)
+		case rule != nil && mappingValue(rule, "threshold") == nil && mappingValue(rule, "predicate") == nil:
+			setNode(rule, "predicate", newMapping("gte", threshold))
 		default:
-			m.Note(prefix+"signals.pii["+signal+"]", "masking.threshold is dropped: masking masks what pii rule "+signal+" detects, at the rule's threshold")
+			m.Note(prefix+"signals.pii["+signal+"]", "masking.threshold is dropped: masking masks what pii rule "+signal+" detects, at the rule's predicate")
 		}
 		return nil
 	}
@@ -244,14 +239,9 @@ func migrateThresholdMasking(m *Migration, at FormMatch) error {
 		return nil
 	}
 	name := freeRuleName(rules, scalarAt(decision, "name")+"_masking")
-	if threshold == nil {
-		threshold = positiveScalar(mappingValue(mappingAt(at.Root, "global", "model_catalog", "modules", "classifier", "pii"), "threshold"))
-	}
 	rule := mappingOf("name", Scalar(name))
 	if threshold != nil {
-		setNode(rule, "threshold", threshold)
-	} else {
-		m.Note(prefix+"signals.pii["+name+"]", "masking masked at the PII classifier's operating point; set this rule's threshold to keep that cut, or it masks every detection")
+		setNode(rule, "predicate", newMapping("gte", threshold))
 	}
 	setNode(rule, "description", Scalar("Personal data masked before the request leaves the Router."))
 	rules.Content = append(rules.Content, rule)

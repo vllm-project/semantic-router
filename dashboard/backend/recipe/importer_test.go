@@ -419,42 +419,6 @@ escaped: $$NOT_A_REFERENCE
 	}
 }
 
-func TestPackageRuntimeValidationRejectsUnsafeKnowledgeBasePaths(t *testing.T) {
-	tests := []struct {
-		path string
-		ok   bool
-	}{
-		{path: "knowledge_bases/privacy/", ok: true},
-		{path: "knowledge_bases/team/privacy/", ok: true},
-		{path: "../dashboard-data"},
-		{path: "knowledge_bases/../.vllm-sr"},
-		{path: "knowledge_bases//privacy"},
-		{path: "knowledge_bases\\privacy"},
-		{path: "/app/.vllm-sr"},
-	}
-	for _, test := range tests {
-		t.Run(strings.ReplaceAll(test.path, "/", "_"), func(t *testing.T) {
-			config := []byte(fmt.Sprintf(`
-version: v0.3
-global:
-  model_catalog:
-    kbs:
-      - name: privacy_kb
-        source:
-          path: %q
-        threshold: 0.5
-`, test.path))
-			err := validateRuntimeConfig(config)
-			if test.ok && err != nil {
-				t.Fatalf("validateRuntimeConfig() = %v", err)
-			}
-			if !test.ok && err == nil {
-				t.Fatal("unsafe knowledge-base path was accepted")
-			}
-		})
-	}
-}
-
 func TestPackageRuntimeValidationRejectsYAMLIndirection(t *testing.T) {
 	for name, config := range map[string]string{
 		"alias": `version: v0.3
@@ -568,43 +532,6 @@ func TestCredentialDetectorRejectsEmbeddedURLCredentialsWithoutExposingThem(t *t
 		if strings.Contains(warnings[0].Message, secret) {
 			t.Fatal("credential warning exposed an embedded URL credential")
 		}
-	}
-}
-
-func TestPackageRuntimeValidationRejectsLocalProcessMCP(t *testing.T) {
-	base := `
-version: v0.3
-global:
-  model_catalog:
-    modules:
-      classifier:
-        mcp:
-          enabled: true
-%s
-          tool_name: classify
-`
-	tests := []struct {
-		name  string
-		body  string
-		valid bool
-	}{
-		{name: "explicit stdio", body: "          transport_type: stdio\n          command: canary-do-not-run\n          args: [--canary]\n"},
-		{name: "implicit stdio command", body: "          command: canary-do-not-run\n"},
-		{name: "stdio env", body: "          transport_type: stdio\n          command: canary-do-not-run\n          env: {INHERITED: value}\n"},
-		{name: "http", body: "          transport_type: http\n          url: https://example.com/mcp\n", valid: true},
-		{name: "streamable http", body: "          transport_type: streamable-http\n          url: https://example.com/mcp\n", valid: true},
-		{name: "implicit http", body: "          url: https://example.com/mcp\n", valid: true},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			err := validateRuntimeConfig([]byte(fmt.Sprintf(base, test.body)))
-			if test.valid && err != nil {
-				t.Fatalf("HTTP MCP rejected: %v", err)
-			}
-			if !test.valid && (err == nil || strings.Contains(err.Error(), "canary-do-not-run")) {
-				t.Fatalf("local MCP validation error = %v", err)
-			}
-		})
 	}
 }
 

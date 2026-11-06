@@ -138,15 +138,5 @@ func (c *RouterConfig) RuntimeServedModelPaths() map[string]bool {
 
 // implicitConsumers lists the task consumers a scope's modules and rules may run.
 func (c *RouterConfig) implicitConsumers() []string {
-	consumers := []string{"domain_classifier", "prompt_guard", "pii_classifier", "fact_check_classifier", "feedback_detector", "modality_detector", "hallucination_detector", "preference", "reask", "complexity"}
-	for _, rule := range c.ClassifierRules {
-		consumers = append(consumers, "classifier."+rule.Name)
-	}
-	for _, rule := range c.SafetyRules {
-		consumers = append(consumers, "safety."+rule.Name)
-		if rule.Hazard != nil {
-			consumers = append(consumers, "safety."+rule.Name+".hazard")
-		}
-	}
-	return consumers
+	return []string{"prompt_guard", "pii_classifier", "hallucination_detector"}
 }

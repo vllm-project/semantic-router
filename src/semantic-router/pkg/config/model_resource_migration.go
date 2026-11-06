@@ -68,40 +68,6 @@ func MigrateModelResources(data []byte) ([]byte, []ConfigWarning, error) {
 	return out.Bytes(), notes, nil
 }
 
-// answersJailbreak reports whether a binding of the document asks the
-// deployment the jailbreak signal.
-func (m *modelResourceMigration) answersJailbreak(name string) bool {
-	key := BindingKey("prompt_guard")
-	if m.exported.Global != nil && m.exported.Global.ModelCatalog.Bindings[key].Deployment == name {
-		return true
-	}
-	if m.exported.Routing.ModelBindings[key].Deployment == name {
-		return true
-	}
-	for _, recipe := range m.exported.Recipes {
-		if recipe.Routing.ModelBindings[key].Deployment == name {
-			return true
-		}
-	}
-	return false
-}
-
-// unexpressedChatSettings are the settings of a deprecated external[] model
-// that no deployment field expresses; the chat jailbreak guard reads them.
-func unexpressedChatSettings(legacy *ExternalModelConfig) []string {
-	var settings []string
-	if legacy.ParserType != "" {
-		settings = append(settings, "parser_type")
-	}
-	if legacy.Threshold > 0 {
-		settings = append(settings, "threshold")
-	}
-	if legacy.ModelEndpoint.UseChatTemplate || legacy.ModelEndpoint.PromptTemplate != "" {
-		settings = append(settings, "a prompt template")
-	}
-	return settings
-}
-
 // legacyGeneration is the generation block of a deprecated external[] chat
 // model's max_tokens, temperature and reasoning.
 func legacyGeneration(legacy *ExternalModelConfig) *DeploymentGeneration {
@@ -243,13 +209,8 @@ func (m *modelResourceMigration) migrateCatalog(catalog *yaml.Node, exported Can
 		if _, declared := predeclared[name]; declared && !authored[name] {
 			continue
 		}
-		if legacy := deployment.LegacyExternal(); legacy != nil {
-			if settings := unexpressedChatSettings(legacy); len(settings) > 0 && m.answersJailbreak(name) {
-				return fmt.Errorf("deployments.%s: the external[] model %q sets %s, which no deployment field expresses; keep the earlier form", name, legacy.Name, strings.Join(settings, ", "))
-			}
-			if deployment.Provider == OpenAIChatProvider && deployment.Generation == nil {
-				deployment.Generation = legacyGeneration(legacy)
-			}
+		if legacy := deployment.LegacyExternal(); legacy != nil && deployment.Provider == OpenAIChatProvider && deployment.Generation == nil {
+			deployment.Generation = legacyGeneration(legacy)
 		}
 		if deployment.Auth.HasInlineKey() {
 			// A key is never written in the configuration: it moves to an
@@ -419,38 +380,11 @@ func (m *modelResourceMigration) migrateRouting(path string, routing *yaml.Node,
 		}
 	}
 	signals := mappingAt(routing, "signals")
-	for _, rule := range sequenceAt(signals, "classifiers") {
-		name := scalarAt(rule, "name")
-		if !m.warned(fmt.Sprintf("%s.signals.classifiers[%q]", path, name)) && !m.bindingMoved(path, "classifier."+name) {
-			continue
-		}
-		for _, key := range []string{"type", "model", "model_path", "use_cpu"} {
-			deleteKey(rule, key)
-		}
-		for _, exportedRule := range exported.Signals.Classifiers {
-			if exportedRule.Name == name && exportedRule.Deployment != "" {
-				_ = setValue(rule, "deployment", exportedRule.Deployment, false)
-			}
-		}
-	}
 	for _, rule := range sequenceAt(signals, "safety") {
 		name := scalarAt(rule, "name")
 		for _, exportedRule := range exported.Signals.Safety {
-			if exportedRule.Name != name {
-				continue
-			}
-			if m.warned(fmt.Sprintf("%s.signals.safety[%q].model", path, name)) || m.bindingMoved(path, "safety."+name) {
-				deleteKey(rule, "model")
-				if exportedRule.Deployment != "" {
-					_ = setValue(rule, "deployment", exportedRule.Deployment, false)
-				}
-			}
-			hazard := mappingAt(rule, "hazard")
-			if hazard != nil && exportedRule.Hazard != nil && (m.warned(fmt.Sprintf("%s.signals.safety[%q].hazard.model", path, name)) || m.bindingMoved(path, "safety."+name+".hazard")) {
-				deleteKey(hazard, "model")
-				if exportedRule.Hazard.Deployment != "" {
-					_ = setValue(hazard, "deployment", exportedRule.Hazard.Deployment, false)
-				}
+			if exportedRule.Name == name && m.bindingMoved(path, "safety."+name) && exportedRule.Deployment != "" {
+				_ = setValue(rule, "deployment", exportedRule.Deployment, false)
 			}
 		}
 	}

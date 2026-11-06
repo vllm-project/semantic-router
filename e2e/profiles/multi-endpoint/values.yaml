@@ -208,33 +208,31 @@ config:
       domains:
         - name: code
           description: Programming, debugging, and software engineering tasks
+          labels: ["computer science"]
         - name: general
           description: General knowledge, conversation, and miscellaneous topics
+          labels: [other]
         - name: other
           description: Catch-all for unclassified queries
       jailbreak:
         - name: jailbreak_dev
-          threshold: 0.88
-          include_history: false
           description: Relaxed jailbreak detection for dev environment
+          predicate:
+            gte: 0.88
         - name: jailbreak_prod
-          threshold: 0.91
-          include_history: false
           description: Strict jailbreak detection for prod environment
+          predicate:
+            gte: 0.91
       pii:
         - name: pii_dev
-          threshold: 0.18
-          pii_types_allowed:
-            - GPE
-            - ORGANIZATION
-            - DATE_TIME
-          include_history: false
           description: Relaxed PII policy for dev (allow GPE/ORG/DATE)
+          predicate:
+            gte: 0.18
+          ignore_labels: [DATE_TIME]
         - name: pii_prod
-          threshold: 0.18
-          pii_types_allowed: []
-          include_history: false
           description: Strict PII policy for prod (block all)
+          predicate:
+            gte: 0.18
     modelCards:
       - name: qwen14b-dev
         param_size: 14b
@@ -254,7 +252,20 @@ config:
           - math
   global:
     model_catalog:
-      kbs: []
+      deployments:
+        # provider-mocker's System One fixture answers the jailbreak and PII
+        # rules, so the shared detection cases are pinned by their markers
+        # (tools/test/services/provider-mocker/README.md).
+        fake-systemone:
+          provider: systemone
+          endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/systemone
+          model: e2e/fake-systemone
+          timeout_ms: 5000
+          capabilities:
+            question_types: [choice, noul, span]
+      bindings:
+        jailbreak: fake-systemone
+        pii: fake-systemone
     router:
       clear_route_cache: true
       strategy: priority
@@ -267,8 +278,6 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
-          concurrency_threshold: 5
-          max_concurrency: 8
           metrics:
             enabled: true
             detailed_goroutine_tracking: true

@@ -22,18 +22,20 @@ config:
       - name: general-expert
     signals:
       # One rule that allows no PII type at all, so any span the remote
-      # backend returns is a denied entity. No local PII model is configured
-      # below, which is what makes a match attributable: local token
-      # classification cannot run, so a verdict here can only have come from
-      # the remote token_spans.v1 call.
+      # deployment returns is a denied entity. No local PII model is
+      # configured below, which is what makes a match attributable: no local
+      # model can run, so a verdict here can only have come from the remote
+      # System One call.
       pii:
         - name: pii_deny_all
-          threshold: 0.5
-          include_history: false
           description: Deny every PII type, so any remote span blocks the request
+          predicate:
+            gte: 0.5
+          # A deployment that gives no answer counts as PII found.
+          on_unknown: match
     decisions:
       - name: block_detected_pii_remote
-        description: Genuine PII stays a match even when the scan is incomplete
+        description: Detected PII, or an input the deployment could not read in full
         priority: 1100
         rules:
           operator: OR
@@ -46,11 +48,10 @@ config:
             configuration:
               message: Your request contains personal information. Please remove any sensitive data and try again.
       - name: block_pii_remote
-        description: Blocks when the remote token_spans.v1 backend returns a span, or fails while on_error is block
+        description: Blocks when the remote deployment finds a span, or its call fails (a pii rule without an answer matches)
         priority: 1000
         rules:
           operator: OR
-          on_unknown: match
           conditions:
             - type: pii
               name: pii_deny_all
@@ -59,7 +60,7 @@ config:
             configuration:
               message: Your request contains personal information. Please remove any sensitive data and try again.
       - name: default-route
-        description: Fallback route, reached when the remote backend returned no spans
+        description: Fallback route, reached when the remote deployment returned no spans
         priority: 10
         rules:
           operator: AND
@@ -71,56 +72,24 @@ config:
     router:
       strategy: priority
     model_catalog:
-      kbs: []
       deployments:
-        # A classify deployment answers the PII signal with token_spans.v1:
-        # the signal decides the contract, the provider how it is asked.
-        e2e-pii-spans:
-          provider: classify
-          endpoint: http://mock-pii-spans.default.svc.cluster.local:8000
-          model: pii-spans-service
+        # provider-mocker's System One fixture (see its README): the signal
+        # decides the question, the provider how it is asked.
+        fake-systemone:
+          provider: systemone
+          endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/systemone
+          model: e2e/fake-systemone
           timeout_ms: 5000
+          capabilities:
+            question_types: [choice, noul, span]
       # The model runtime serves no PII model: every span comes from the
       # remote deployment.
       bindings:
-        pii: e2e-pii-spans
-      modules:
-        classifier:
-          domain:
-            enabled: false
-            category_mapping_path: ""
-          pii:
-            # The mapping is still required: it is what the token_spans
-            # decoder resolves provider labels against, and a label outside
-            # it is a rejected response rather than a silent pass.
-            pii_mapping_path: /app/models/pii-remote-backend/pii_type_mapping.json
-            # A rejected response, or a declared truncation, is not a clean
-            # "no PII" result: block matches the rule as classification_error
-            # so the request fails closed.
-            on_error: block
-        hallucination_mitigation:
-          enabled: false
-
-# The router requires a pii_type_mapping.json on disk even for a remote
-# deployment (IsPIIEnabled/LoadPIIMapping do not special-case it), and the
-# token_spans decoder needs it to resolve labels. This profile never runs
-# local inference, so a minimal stand-in mapping from the ConfigMap in
-# pii-mapping-configmap.yaml, applied as a prerequisite, is enough; no need
-# to bake or download the real model.
-extraVolumes:
-  - name: pii-mapping
-    configMap:
-      name: pii-remote-backend-mapping
-extraVolumeMounts:
-  - name: pii-mapping
-    mountPath: /app/models/pii-remote-backend/pii_type_mapping.json
-    subPath: pii_type_mapping.json
-    readOnly: true
+        pii: fake-systemone
 
 resources:
-  # Same headroom as the complexity backend profile: taking the classifier
-  # off-box does not avoid the startup embedding-model load, which is gated
-  # separately from the classifier backend.
+  # Same headroom as the other remote-deployment profiles: taking the PII
+  # model off-box does not avoid the startup embedding-model load.
   limits:
     memory: 6Gi
     cpu: "2"

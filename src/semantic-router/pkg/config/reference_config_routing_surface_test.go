@@ -1,9 +1,6 @@
 package config
 
-import (
-	"path/filepath"
-	"reflect"
-)
+import "reflect"
 
 func assertSupportedSignalTypesInReferenceConfig(t testingT, root map[string]interface{}) {
 	signals := mustMapAt(t, root, "routing", "signals")
@@ -14,37 +11,6 @@ func assertSupportedSignalTypesInReferenceConfig(t testingT, root map[string]int
 		}
 		if len(mustSliceAt(t, signals, entry.Collection)) == 0 {
 			t.Fatalf("config/config.yaml must include at least one %s signal under routing.signals.%s", signalType, entry.Collection)
-		}
-	}
-
-	assertReferenceClassifierRulesAnsweredByEachKind(t, signals)
-}
-
-// assertReferenceClassifierRulesAnsweredByEachKind requires classifier rules
-// answered by a model_runtime deployment, a chat model, a classify service
-// and, for a rule that names no deployment, the decision model.
-func assertReferenceClassifierRulesAnsweredByEachKind(t testingT, signals map[string]interface{}) {
-	cfg, err := Parse(filepath.Join(referenceConfigRepoRoot(t), "config", "config.yaml"))
-	if err != nil {
-		t.Fatalf("reference config parse failed: %v", err)
-	}
-	const decisionModel = "the decision model"
-	answered := make(map[string]bool)
-	for _, rawClassifier := range mustSliceAt(t, signals, "classifiers") {
-		name := mustStringAt(t, mustMapValue(t, rawClassifier, "routing.signals.classifiers"), "name")
-		resolved, ok, err := cfg.ResolveTask("classifier." + name)
-		if err != nil || !ok {
-			t.Fatalf("classifier %q resolves to no deployment: %v", name, err)
-		}
-		if resolved.Source == ResolvedByDecisionModel {
-			answered[decisionModel] = true
-			continue
-		}
-		answered[resolved.Deployment.Provider] = true
-	}
-	for _, kind := range []string{ModelRuntimeProvider, OpenAIChatProvider, ClassifyProvider, decisionModel} {
-		if !answered[kind] {
-			t.Fatalf("config/config.yaml must include a classifier rule answered by %s", kind)
 		}
 	}
 }

@@ -100,40 +100,7 @@ SEMANTIC_EMBEDDING_USE_CPU_PATH = (
     "semantic",
     "use_cpu",
 )
-GPU_USE_CPU_PATHS: tuple[tuple[str, ...], ...] = (
-    SEMANTIC_EMBEDDING_USE_CPU_PATH,
-    ("global", "model_catalog", "modules", "prompt_guard", "use_cpu"),
-    ("global", "model_catalog", "modules", "classifier", "domain", "use_cpu"),
-    ("global", "model_catalog", "modules", "classifier", "pii", "use_cpu"),
-    (
-        "global",
-        "model_catalog",
-        "modules",
-        "hallucination_mitigation",
-        "fact_check",
-        "use_cpu",
-    ),
-    (
-        "global",
-        "model_catalog",
-        "modules",
-        "hallucination_mitigation",
-        "detector",
-        "use_cpu",
-    ),
-    ("global", "model_catalog", "modules", "feedback_detector", "use_cpu"),
-    (
-        "global",
-        "model_catalog",
-        "modules",
-        "modality_detector",
-        "classifier",
-        "use_cpu",
-    ),
-    # Safety runs the decision model too: on a GPU it shares the other
-    # signals' deployment instead of loading a CPU copy.
-    ("global", "model_catalog", "modules", "safety", "safety", "use_cpu"),
-)
+GPU_USE_CPU_PATHS: tuple[tuple[str, ...], ...] = (SEMANTIC_EMBEDDING_USE_CPU_PATH,)
 
 
 def _normalize_platform(value: str | None) -> str:

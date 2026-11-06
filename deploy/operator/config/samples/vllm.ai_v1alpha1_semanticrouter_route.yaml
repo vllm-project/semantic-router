@@ -98,20 +98,6 @@ spec:
       top_k: 3
       similarity_threshold: "0.2"
 
-    # Prompt guard (jailbreak detection)
-    prompt_guard:
-      enabled: true
-      threshold: "0.88"
-
-    # Classifiers
-    classifier:
-      category_model:
-        threshold: "0.5"
-        use_cpu: true
-      pii_model:
-        threshold: "0.7"
-        use_cpu: true
-
     # Reasoning configuration
     reasoning_effort: medium
 

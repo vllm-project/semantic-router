@@ -85,59 +85,59 @@ data:
         domains:
           - name: business
             description: Business and management related queries
-            mmlu_categories:
+            labels:
               - business
           - name: law
             description: Legal questions and law-related topics
-            mmlu_categories:
+            labels:
               - law
           - name: psychology
             description: Psychology and mental health topics
-            mmlu_categories:
+            labels:
               - psychology
           - name: biology
             description: Biology and life sciences questions
-            mmlu_categories:
+            labels:
               - biology
           - name: chemistry
             description: Chemistry and chemical sciences questions
-            mmlu_categories:
+            labels:
               - chemistry
           - name: history
             description: Historical questions and cultural topics
-            mmlu_categories:
+            labels:
               - history
           - name: other
             description: General knowledge and miscellaneous topics
-            mmlu_categories:
+            labels:
               - other
           - name: health
             description: Health and medical information queries
-            mmlu_categories:
+            labels:
               - health
           - name: economics
             description: Economics and financial topics
-            mmlu_categories:
+            labels:
               - economics
           - name: math
             description: Mathematics and quantitative reasoning
-            mmlu_categories:
+            labels:
               - math
           - name: physics
             description: Physics and physical sciences
-            mmlu_categories:
+            labels:
               - physics
           - name: computer science
             description: Computer science and programming
-            mmlu_categories:
+            labels:
               - computer science
           - name: philosophy
             description: Philosophy and ethical questions
-            mmlu_categories:
+            labels:
               - philosophy
           - name: engineering
             description: Engineering and technical problem-solving
-            mmlu_categories:
+            labels:
               - engineering
       modelCards:
         - name: '{{MODEL_NAME_A}}'
@@ -149,7 +149,6 @@ data:
         api:
           batch_classification:
             max_batch_size: 100
-            max_concurrency: 8
             metrics:
               enabled: true
               detailed_goroutine_tracking: true

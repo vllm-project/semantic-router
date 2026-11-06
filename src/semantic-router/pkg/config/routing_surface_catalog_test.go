@@ -135,31 +135,6 @@ func TestSignalCatalogSeparatesResponseOnlyObservationsFromDecisionInputs(t *tes
 	}
 }
 
-func TestSignalCatalogOwnsRuntimeObservationAndQualification(t *testing.T) {
-	for _, entry := range SignalCatalog() {
-		if entry.DecisionReferenceable && entry.ObservationKey == "" {
-			t.Errorf("decision-referenceable signal %q has no observation key", entry.Type)
-		}
-		lookup, present := LookupSignalCatalog(entry.Type)
-		if !present || !reflect.DeepEqual(lookup, entry) {
-			t.Errorf("LookupSignalCatalog(%q) = %#v, want %#v", entry.Type, lookup, entry)
-		}
-	}
-
-	inputModality, _ := LookupSignalCatalog(SignalTypeInputModality)
-	if inputModality.ObservationKey != "input_modality" {
-		t.Fatalf("input_modality observation key = %q", inputModality.ObservationKey)
-	}
-	complexity, _ := LookupSignalCatalog(SignalTypeComplexity)
-	if complexity.ReferenceQualifier != SignalReferenceQualifierFixedSuffix {
-		t.Fatalf("complexity reference qualifier = %q", complexity.ReferenceQualifier)
-	}
-	classifier, _ := LookupSignalCatalog(SignalTypeClassifier)
-	if classifier.ReferenceQualifier != SignalReferenceQualifierLabel {
-		t.Fatalf("classifier reference qualifier = %q", classifier.ReferenceQualifier)
-	}
-}
-
 func TestGetAlgorithmTier(t *testing.T) {
 	tests := []struct {
 		algType      string
@@ -184,5 +159,30 @@ func TestGetAlgorithmTier(t *testing.T) {
 				t.Errorf("GetAlgorithmTier(%q) = %q, want %q", tt.algType, tier, tt.expectedTier)
 			}
 		})
+	}
+}
+
+func TestSignalCatalogOwnsRuntimeObservationAndQualification(t *testing.T) {
+	for _, entry := range SignalCatalog() {
+		if entry.DecisionReferenceable && entry.ObservationKey == "" {
+			t.Errorf("decision-referenceable signal %q has no observation key", entry.Type)
+		}
+		lookup, present := LookupSignalCatalog(entry.Type)
+		if !present || !reflect.DeepEqual(lookup, entry) {
+			t.Errorf("LookupSignalCatalog(%q) = %#v, want %#v", entry.Type, lookup, entry)
+		}
+	}
+
+	inputModality, _ := LookupSignalCatalog(SignalTypeInputModality)
+	if inputModality.ObservationKey != "input_modality" {
+		t.Fatalf("input_modality observation key = %q", inputModality.ObservationKey)
+	}
+	for _, signalType := range []string{SignalTypeComplexity, SignalTypeTurnRelation, SignalTypeSafety, SignalTypeSystemOne} {
+		if entry, _ := LookupSignalCatalog(signalType); entry.ReferenceQualifier != SignalReferenceQualifierLabel {
+			t.Fatalf("%s reference qualifier = %q", signalType, entry.ReferenceQualifier)
+		}
+	}
+	if turnRelation, _ := LookupSignalCatalog(SignalTypeTurnRelation); turnRelation.ObservationKey != "turn_relation" {
+		t.Fatalf("turn_relation observation key = %q", turnRelation.ObservationKey)
 	}
 }

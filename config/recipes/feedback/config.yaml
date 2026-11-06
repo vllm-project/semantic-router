@@ -138,11 +138,6 @@ routing:
           type: exists
           source:
             type: image_content
-    reasks:
-      - name: persistently_dissatisfied
-        description: Current user turn repeats the last two user turns in a row.
-        threshold: 0.8
-        lookback_turns: 2
     systemone:
       - name: wrong
         description: The latest message says an earlier answer or fix was wrong.
@@ -175,6 +170,12 @@ routing:
           instructions: Does the user ask for sources, citations or a fact check of the answer?
         predicate:
           gte: 0.6
+    turn_relation:
+      - name: persistently_dissatisfied
+        description: Current user turn repeats the last two user turns in a row.
+        labels: [reask]
+        input:
+          previous_turns: 2
   decisions:
     - name: omni
       description: Image-bearing follow-ups go to the visual-language model.
@@ -201,7 +202,7 @@ routing:
             conditions:
               - type: systemone
                 name: wrong
-              - type: reask
+              - type: turn_relation
                 name: persistently_dissatisfied
           - type: systemone
             name: sources
@@ -232,7 +233,7 @@ routing:
         conditions:
           - type: systemone
             name: code
-          - type: reask
+          - type: turn_relation
             name: persistently_dissatisfied
       modelRefs:
         - model: openai/gpt5.4
@@ -260,7 +261,7 @@ routing:
             name: wrong
           - operator: NOT
             conditions:
-              - type: reask
+              - type: turn_relation
                 name: persistently_dissatisfied
       modelRefs:
         - model: google/gemini-3.1-pro
@@ -283,7 +284,7 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: reask
+          - type: turn_relation
             name: persistently_dissatisfied
           - operator: NOT
             conditions:
@@ -325,7 +326,7 @@ routing:
                 name: sources
           - operator: NOT
             conditions:
-              - type: reask
+              - type: turn_relation
                 name: persistently_dissatisfied
       modelRefs:
         - model: google/gemini-3.1-pro
@@ -356,7 +357,7 @@ routing:
                 name: wrong
           - operator: NOT
             conditions:
-              - type: reask
+              - type: turn_relation
                 name: persistently_dissatisfied
       modelRefs:
         - model: qwen/qwen3.5-rocm

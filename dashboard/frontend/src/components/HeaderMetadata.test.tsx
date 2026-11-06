@@ -57,7 +57,7 @@ describe('chat routing metadata', () => {
     const headers = {
       ...routingHeaders,
       'x-vsr-selected-decision': 'unified_frontier_verified_answer',
-      'x-vsr-matched-embeddings': 'unified_frontier_workflow_intent',
+      'x-vsr-matched-domains': 'unified_frontier_workflow_intent',
       'x-vsr-matched-fact-check': 'needs_fact_check',
       'x-vsr-matched-complexity': 'unified_frontier_complexity:medium',
     }

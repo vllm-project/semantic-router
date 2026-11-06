@@ -2,13 +2,13 @@ package config
 
 import (
 	"sort"
-	"strings"
 	"testing"
 )
 
-// builtInSignalsYAML reads every built-in signal Vela 2.0 answers, each from a decision.
-func builtInSignalsYAML(global string) string {
-	return `version: v0.3
+// builtInSignalsYAML reads every built-in signal Vela 2.0 answers without
+// spans, each from a decision; catalog is the body of global.model_catalog.
+func builtInSignalsYAML(catalog string) string {
+	doc := `version: v0.3
 providers:
   defaults: {model: general}
   models:
@@ -17,13 +17,12 @@ providers:
 routing:
   modelCards: [{name: general, modality: omni}]
   signals:
-    domains: [{name: math, description: Math requests., mmlu_categories: [math]}]
-    jailbreak: [{name: attack, threshold: 0.75}]
-    pii: [{name: personal, threshold: 0.01}]
+    domains: [{name: math, description: Math requests., labels: [math]}]
+    jailbreak: [{name: attack, predicate: {gte: 0.75}}]
     fact_check: [{name: needs_fact_check, description: Needs checking.}]
-    user_feedbacks: [{name: wrong_answer, description: Wrong.}]
-    modality: [{name: DIFFUSION, description: Images.}]
-    safety: [{name: harmful, labels: [safe, unsafe], unsafe_labels: [unsafe], threshold: 0.46}]
+    user_feedbacks: [{name: wrong_answer, labels: [WRONG_ANSWER], description: Wrong.}]
+    modality: [{name: DIFFUSION, labels: [image], description: Images., predicate: {gte: 0.51}}]
+    safety: [{name: harmful, predicate: {gte: 0.46}}]
   decisions:
     - name: reads-all
       priority: 100
@@ -32,17 +31,16 @@ routing:
         conditions:
           - {type: domain, name: math}
           - {type: jailbreak, name: attack}
-          - {type: pii, name: personal}
           - {type: fact_check, name: needs_fact_check}
           - {type: user_feedback, name: wrong_answer}
           - {type: modality, name: DIFFUSION}
           - {type: safety, name: harmful}
       modelRefs: [{model: general}]
-global:
-  model_catalog:
-    modules:
-      modality_detector: {enabled: true, method: classifier, confidence_threshold: 0.51}
-` + global
+`
+	if catalog == "" {
+		return doc
+	}
+	return doc + "global:\n  model_catalog:\n" + catalog
 }
 
 func deploymentsByArtifact(t *testing.T, raw string) map[string][]string {
@@ -72,42 +70,10 @@ func TestBuiltInSignalsShareOneDefaultDeploymentOnCPU(t *testing.T) {
 }
 
 func TestBuiltInSignalsOnAnAcceleratorShareOneDeployment(t *testing.T) {
-	global := `      prompt_guard: {use_cpu: false}
-      classifier:
-        domain: {use_cpu: false}
-        pii: {use_cpu: false}
-      hallucination_mitigation:
-        fact_check: {use_cpu: false}
-      feedback_detector: {use_cpu: false}
-      safety:
-        safety: {use_cpu: false}
-`
-	raw := strings.Replace(builtInSignalsYAML(global+`    deployments:
+	got := deploymentsByArtifact(t, builtInSignalsYAML(`    deployments:
       primary: {provider: model_runtime, artifact: vllm-sr/Vela-2.0-0.3B, device: auto}
-`), "      modality_detector: {enabled: true, method: classifier, confidence_threshold: 0.51}\n",
-		"      modality_detector: {enabled: true, method: classifier, confidence_threshold: 0.51, classifier: {use_cpu: false}}\n", 1)
-	got := deploymentsByArtifact(t, raw)
+`))
 	if len(got) != 1 || len(got["vllm-sr/Vela-2.0-0.3B auto"]) != 1 || got["vllm-sr/Vela-2.0-0.3B auto"][0] != DefaultDecisionDeployment {
 		t.Fatalf("an accelerator default runs one Vela 2.0 deployment, got %v", got)
-	}
-}
-
-func TestVela1SystemModelsRestoreOneDeploymentPerSpecialist(t *testing.T) {
-	vela1 := Vela1SystemModels()
-	got := deploymentsByArtifact(t, strings.Replace(builtInSignalsYAML(`    system:
-      safety: `+vela1.Safety+`
-      prompt_guard: `+vela1.PromptGuard+`
-      domain_classifier: `+vela1.DomainClassifier+`
-      pii_classifier: `+vela1.PIIClassifier+`
-      fact_check_classifier: `+vela1.FactCheckClassifier+`
-      feedback_detector: `+vela1.FeedbackDetector+`
-`), "method: classifier, confidence_threshold: 0.51}", "method: classifier, confidence_threshold: 0.51, classifier: {model_path: models/Vela-1.0-Encoder-307M-Modality, use_cpu: true}}", 1))
-	for artifact := range got {
-		if !strings.HasPrefix(artifact, "vllm-sr/Vela-1.0-") || !strings.HasSuffix(artifact, " cpu") {
-			t.Fatalf("the restored defaults run only Vela 1.0 specialists on CPU deployments, got %v", got)
-		}
-	}
-	if len(got) != 7 {
-		t.Fatalf("seven specialists (Domain, Guard, PII, FactCheck, Feedback, Modality, Safety), got %v", got)
 	}
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving/servingtest"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/runtimetest"
 )
 
@@ -34,9 +35,7 @@ global:
         provider: model_runtime
         endpoint: http://kai.invalid:8100
     bindings:
-      pii_classifier:
-        deployment: vela2
-        contract: token_spans.v1
+      pii: vela2
 routing:
   signals:
     systemone:
@@ -65,7 +64,7 @@ routing:
           instructions: Is this request urgent?
     pii:
       - name: personal_data
-        threshold: 0.5
+        predicate: {gte: 0.5}
   decisions:
     - name: private-billing
       priority: 100
@@ -94,12 +93,29 @@ func vela2Classifier(t *testing.T, yaml string) (*Classifier, *runtimetest.Runti
 		"vela2": {Labelled: &runtimetest.Labelled{PIILabels: []string{"PERSON", "EMAIL_ADDRESS"}}},
 		"kai":   {},
 	})
-	classifier, err := buildClassifierWithAdmission(cfg, nil, nil, nil, nil, RecipeRuntimeOptions{Runtime: runtime})
+	classifier, err := buildClassifier(cfg, RecipeRuntimeOptions{Runtime: runtime})
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
 	t.Cleanup(func() { _ = classifier.Close() })
+	primeAttachedDeploymentCards(t, runtime, cfg)
 	return classifier, fake
+}
+
+// primeAttachedDeploymentCards waits for the card of every attached
+// deployment, which its watcher would otherwise discover after startup.
+func primeAttachedDeploymentCards(t *testing.T, runtime interface {
+	DeploymentCard(context.Context, string, config.ModelDeployment) (modelservice.ModelCard, error)
+}, cfg *config.RouterConfig,
+) {
+	t.Helper()
+	for name, deployment := range cfg.ModelDeployments {
+		if deployment.IsModelRuntime() && !deployment.Managed() {
+			if _, err := runtime.DeploymentCard(context.Background(), name, deployment); err != nil {
+				t.Fatalf("%s card: %v", name, err)
+			}
+		}
+	}
 }
 
 func TestVela2SetSpanAndPIIAnswersRouteFromOneCall(t *testing.T) {
@@ -138,38 +154,6 @@ func TestVela2SetSpanAndPIIAnswersRouteFromOneCall(t *testing.T) {
 	decision, err := classifier.EvaluateDecisionWithEngine(results)
 	if err != nil || decision == nil || decision.Decision.Name != "private-billing" {
 		t.Fatalf("decision = %+v, %v", decision, err)
-	}
-}
-
-func TestHallucinationDetectorOnVela2ReadsTheWholeAnswerInOneQuestion(t *testing.T) {
-	cfg, err := config.ParseYAMLBytes([]byte(strings.Replace(vela2RoutingConfig, "      pii_classifier:\n        deployment: vela2", "      hallucination_detector:\n        deployment: vela2", 1)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	runtime, fake := servingtest.Runtime(t, map[string]runtimetest.Model{"vela2": {Labelled: &runtimetest.Labelled{}}})
-	models, err := newClassifierModelRuntime(cfg, RecipeRuntimeOptions{Runtime: runtime})
-	if err != nil {
-		t.Fatal(err)
-	}
-	detector, err := NewHallucinationDetector(&models.cfg.HallucinationMitigation.HallucinationModel, models)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = detector.Initialize(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = detector.Close() })
-	warmups := fake.Calls("decisions")
-	answer := strings.Repeat("the tower stands in paris ", 400) + "and is 450 metres tall"
-	result, err := detector.Detect(context.Background(), "the tower stands in paris and is 330 metres tall", "How tall is it?", answer)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if calls := fake.Calls("decisions") - warmups; calls != 1 {
-		t.Fatalf("the ready-made halu question reads the whole answer in one call, made %d", calls)
-	}
-	if !result.HallucinationDetected || len(result.Spans) != 1 || result.Spans[0].Text != "450" || answer[result.Spans[0].Start:result.Spans[0].End] != "450" {
-		t.Fatalf("result = %+v", result)
 	}
 }
 

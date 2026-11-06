@@ -55,47 +55,20 @@ routing:
                 action: annotate
                 details: true
             on_unknown: annotate
-global:
-  model_catalog:
-    modules:
-      hallucination_mitigation:
-        enabled: true
 ```
 
 Without a binding, these judgments use the decision model, vela3-fast by
-default. The Vela 1.0 Halu binding below selects the specialist instead. That
-specialist reads up to 8,192 tokens of context, question, and answer together;
-its context preparation prioritizes retaining the answer. Input limits and
-complete-coverage requirements still apply; see
+default. Input limits and complete-coverage requirements apply; see
 [Long inputs](../reference.md#long-inputs).
 
 ## Choose where it runs
 
 The binding key is `hallucination`, and the signal reads text spans of the
-answer:
+answer, so its deployment must answer span questions; one that cannot is
+refused when the configuration loads. Vela 2.0 marks unsupported claims with
+its router span head, as a ready-made question about the answer:
 
 ```yaml
-global:
-  model_catalog:
-    deployments:
-      vela-halu:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Halu
-        device: cpu
-        input:
-          max_tokens: 8192
-          overflow: reject
-    bindings:
-      hallucination: vela-halu
-```
-
-### On Vela 2.0
-
-Vela 2.0 marks unsupported claims with its router span head, as a ready-made
-question about the answer. Bind `hallucination` to a Vela 2.0 deployment
-instead:
-
-```yaml alternative
 global:
   model_catalog:
     deployments:
@@ -107,10 +80,10 @@ global:
       hallucination: vela2
 ```
 
-The model reads the whole answer and applies its own calibrated threshold, so
-the detector's `threshold` applies to Vela 1.0 Halu only. The same
-deployment can answer the request's [System One questions](model-runtime/guides/decisions.md) and
-its [PII question](model-runtime/guides/pii.md#on-vela-20).
+The model reads the whole answer and applies its own calibrated threshold
+unless the rule sets a `predicate`. The same deployment can answer the
+request's [System One questions](model-runtime/guides/decisions.md) and its
+[PII question](model-runtime/guides/pii.md#choose-where-it-runs).
 
 ## Check it
 
@@ -128,8 +101,9 @@ curl -s localhost:8100/v1/classify -H 'content-type: application/json' -d '{
 ```
 
 The result lists the unsupported `spans` of the answer, here the height, with
-their character offsets in the answer. Through the router, the response
-carries the hallucination warning headers and `x-vsr-matched-hallucination`.
+their character offsets in the answer. Through the router, a matched
+hallucination rule adds the hallucination warning headers and
+`x-vsr-matched-hallucination`.
 
 Earlier releases could add an NLI explanation per span. That explainer is
 retired; see [Migrate](model-runtime/migrate.md#features-that-were-retired).

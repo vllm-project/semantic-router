@@ -1,0 +1,1 @@
+routing.signals.kb: removed_signal_type: the kb signal is removed; run `vllm-sr config migrate` (write a systemone set or choice question over the knowledge base's labels)

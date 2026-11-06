@@ -240,10 +240,8 @@ class DomainRegistryTests(unittest.TestCase):
         for path in (
             "src/semantic-router/pkg/config/registry.go",
             "src/semantic-router/pkg/config/canonical_defaults.go",
-            "src/semantic-router/pkg/config/canonical_operating_points.go",
+            "src/semantic-router/pkg/presets/calibration.go",
             "src/semantic-router/pkg/config/decision_model.go",
-            "src/semantic-router/pkg/classification/classifier_jailbreak_window_default.go",
-            "src/semantic-router/pkg/classification/classifier_pii_window_default.go",
         ):
             with self.subTest(path=path):
                 result = classify([path])
@@ -253,7 +251,7 @@ class DomainRegistryTests(unittest.TestCase):
     def test_default_signal_model_changes_select_recipes_and_signal_e2e(self) -> None:
         for path in (
             "src/semantic-router/pkg/config/canonical_defaults.go",
-            "src/semantic-router/pkg/config/canonical_operating_points.go",
+            "src/semantic-router/pkg/presets/calibration.go",
             "src/semantic-router/pkg/config/model_runtime_implicit.go",
             "src/semantic-router/pkg/config/registry.go",
             "src/model-runtime/vllm_srun/registry/releases.generated.json",
@@ -264,7 +262,6 @@ class DomainRegistryTests(unittest.TestCase):
                 for job in (
                     "recipe-conformance",
                     "e2e.envoy-ai-gateway",
-                    "e2e.vela-halu",
                 ):
                     self.assertIn(job, selected)
         self.assertNotIn(
@@ -308,7 +305,6 @@ class DomainRegistryTests(unittest.TestCase):
         cases = {
             "tools/dev/dsl/main.go": "make go-tools-test",
             "tools/models/classifier-operating-point/main.go": "make go-tools-test",
-            "tools/calibration/image-routing/main.go": "make go-tools-test",
             "bench/grounded_fusion/fusioneval/main.go": "make go-tools-test",
             "tools/calibration/tuning/engine.py": "make test-calibration",
             "tools/test/services/provider-mocker/provider_mocker/app.py": "make test-provider-mocker",

@@ -278,8 +278,8 @@ decisions:
           - role: user
             content: Explain vector clocks with an example.
         expected_signals:
-          reask: [unified_balance_reask]
-        tags: [recipe:balanced, language:en, signal:reask, shape:multi-turn]
+          turn_relation: [unified_balance_reask]
+        tags: [recipe:balanced, language:en, signal:turn_relation, shape:multi-turn]
       - id: feedback_classifier
         messages:
           - role: user

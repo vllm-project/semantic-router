@@ -26,18 +26,21 @@ routing:
     domains:
       - name: general
         description: General questions.
-        mmlu_categories: [other]
+        labels: [other]
       - name: math
         description: Mathematics and quantitative reasoning.
-        mmlu_categories: [math]
+        labels: [math]
       - name: science
         description: Science questions.
-        mmlu_categories: [physics, chemistry, biology]
+        labels: [physics, chemistry, biology]
     fact_check:
       - name: needs_fact_check
         description: Query contains factual claims that should be verified against context.
       - name: no_fact_check_needed
         description: Query is creative, code-related, or opinion-based and does not need factual verification.
+        labels: [NO_FACT_CHECK_NEEDED]
+        predicate:
+          gt: 0.3
     hallucination:
       - name: ungrounded_claims
         description: Answers with claims their grounding context does not support.

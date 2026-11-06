@@ -529,7 +529,7 @@ decisions:
                     ],
                     "decision_result": {
                         "plugins": [],
-                        "matched_signals": {"kb": ["privacy_policy"]},
+                        "matched_signals": {"keywords": ["privacy_policy"]},
                     },
                 },
             ),
@@ -559,7 +559,7 @@ decisions:
                 {
                     "recipe": "default",
                     "routing_decision": "direct",
-                    "signal_errors": {"embedding": "backend unavailable"},
+                    "signal_errors": {"domain:direct": "systemone_unavailable"},
                     "eval_trace": [
                         {"decision_name": "direct", "matched": True},
                     ],
@@ -573,7 +573,9 @@ decisions:
 
         self.assertFalse(result["matched"])
         self.assertFalse(result["signal_errors_matched"])
-        self.assertEqual(result["signal_errors"], {"embedding": "backend unavailable"})
+        self.assertEqual(
+            result["signal_errors"], {"domain:direct": "systemone_unavailable"}
+        )
 
     def test_eval_selection_contract_rejects_fabricated_or_missing_final_model(
         self,
@@ -953,20 +955,20 @@ class FailedProbeDiagnosticsTest(unittest.TestCase):
             "selection_method": "static",
             "selection_reason": "Selection completed before a later failure",
             "recommended_models": ["backend-example"],
-            "signal_errors": {"classifier:example": "classifier_evaluation_failed"},
-            "signal_error_matches": {"classifier:example": True},
+            "signal_errors": {"safety:example": "systemone_unavailable"},
+            "signal_error_matches": {"safety:example": True},
             "signal_confidences": {"keyword:example": 1.0},
             "signal_values": {"structure:items": 2},
             "applied_unknown_policies": {"sample": "fail_closed"},
             "decision_error": "classification was unavailable",
-            "metrics": {"classifier": {"execution_time_ms": 12.5}},
+            "metrics": {"safety": {"execution_time_ms": 12.5}},
             "decision_result": {
                 "decision_name": "sample",
                 "algorithm": "static",
                 "plugins": ["header_mutation"],
-                "used_signals": {"classifier": ["example"]},
+                "used_signals": {"safety": ["example"]},
                 "matched_signals": {"keyword": ["example"]},
-                "unmatched_signals": {"classifier": ["example"]},
+                "unmatched_signals": {"safety": ["example"]},
             },
             "eval_trace": [{"decision_name": "sample", "matched": False}],
             # A failed response cannot override report status or expectations.

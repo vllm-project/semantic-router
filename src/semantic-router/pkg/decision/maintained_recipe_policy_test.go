@@ -19,7 +19,7 @@ func maintainedRecipeEngine(t *testing.T, name string) *DecisionEngine {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return NewDecisionEngine(cfg.KeywordRules, cfg.EmbeddingRules, cfg.Categories, cfg.Decisions, config.RoutingStrategyPriority)
+	return NewDecisionEngine(cfg.Decisions, config.RoutingStrategyPriority)
 }
 
 func TestBalanceQuestionPolicy(t *testing.T) {
@@ -177,5 +177,24 @@ func TestAgentQuestionsKeepPrivacyPriority(t *testing.T) {
 			result, err := engine.EvaluateDecisionsWithSignals(tt.signals)
 			assertDecisionResult(t, result, err, tt.expectedDecision)
 		})
+	}
+}
+
+func assertDecisionResult(t *testing.T, result *DecisionResult, err error, expected string) {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("EvaluateDecisionsWithSignals: %v", err)
+	}
+	if expected == "" {
+		if result != nil {
+			t.Errorf("expected no match, got %q", result.Decision.Name)
+		}
+		return
+	}
+	if result == nil {
+		t.Fatalf("expected match %q, got nil", expected)
+	}
+	if result.Decision.Name != expected {
+		t.Errorf("expected %q, got %q", expected, result.Decision.Name)
 	}
 }

@@ -11,16 +11,15 @@ import (
 )
 
 type runtimeMaterialization struct {
-	packageActivation bool
-	managedListener   bool
-	skipKBBootstrap   bool
+	managedListener bool
 }
 
 func realizeRecipeRuntimeConfigWithCLI(raw []byte, targetPath string) ([]byte, error) {
-	return realizeRuntimeConfigWithCLI(raw, targetPath, runtimeMaterialization{packageActivation: true})
+	return realizeRuntimeConfigWithCLI(raw, targetPath, runtimeMaterialization{})
 }
 
-// Config output stays in private staged files; CLI options control KB bootstrap.
+// Config output stays in private staged files; CLI options control the
+// managed listener check.
 // The caller publishes the returned bytes through its config transaction.
 func realizeRuntimeConfigWithCLI(raw []byte, targetPath string, options runtimeMaterialization) ([]byte, error) {
 	parent := filepath.Dir(targetPath)
@@ -94,14 +93,8 @@ func runtimeMaterializeArgs(sourcePath, targetPath string, options runtimeMateri
 		"--target",
 		targetPath,
 	}
-	if options.packageActivation {
-		args = append(args, "--package-activation")
-	}
 	if options.managedListener {
 		args = append(args, "--managed-listener")
-	}
-	if options.skipKBBootstrap {
-		args = append(args, "--skip-kb-bootstrap")
 	}
 	return args
 }

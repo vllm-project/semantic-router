@@ -142,15 +142,14 @@ func StartWithOptions(opts InitOptions) (*Server, error) {
 
 	// Create server instance
 	apiServer := &ClassificationAPIServer{
-		classificationSvc:     liveClassificationSvc,
-		config:                cfg,
-		runtimeConfig:         newLiveRuntimeConfig(cfg, buildConfigResolver(opts.RuntimeRegistry), buildConfigUpdater(opts.RuntimeRegistry, liveClassificationSvc)),
-		runtimeRegistry:       opts.RuntimeRegistry,
-		configPath:            opts.ConfigPath,
-		gatewayMode:           opts.GatewayMode,
-		memoryStore:           memoryStore,
-		knowledgeBaseMapCache: newKnowledgeBaseMapCache(),
-		startupStatusConfig:   &cfg.StartupStatus,
+		classificationSvc:   liveClassificationSvc,
+		config:              cfg,
+		runtimeConfig:       newLiveRuntimeConfig(cfg, buildConfigResolver(opts.RuntimeRegistry)),
+		runtimeRegistry:     opts.RuntimeRegistry,
+		configPath:          opts.ConfigPath,
+		gatewayMode:         opts.GatewayMode,
+		memoryStore:         memoryStore,
+		startupStatusConfig: &cfg.StartupStatus,
 	}
 
 	opts.RuntimeRegistry.OnConfigAttempt(apiServer.recordConfigAudit)
@@ -324,24 +323,6 @@ func buildConfigResolver(runtimeRegistry *routerruntime.Registry) func() *config
 		return config.Get
 	}
 	return runtimeRegistry.CurrentConfig
-}
-
-func buildConfigUpdater(
-	runtimeRegistry *routerruntime.Registry,
-	liveClassificationSvc classificationService,
-) func(*config.RouterConfig) {
-	if runtimeRegistry == nil {
-		return func(newCfg *config.RouterConfig) {
-			if liveClassificationSvc != nil {
-				liveClassificationSvc.RefreshRuntimeConfig(newCfg)
-			}
-			config.Replace(newCfg)
-		}
-	}
-	// The persisted document is a candidate. The router watcher publishes the
-	// complete generation after preparation; mutating its borrowed service here
-	// would expose a new API classifier beside the old extproc/cache snapshot.
-	return func(*config.RouterConfig) {}
 }
 
 func classificationServiceForStartup(cfg *config.RouterConfig, registry *routerruntime.Registry) (*services.ClassificationService, io.Closer, error) {

@@ -84,8 +84,8 @@ func servedCard(t *testing.T, endpoint string) vela2Card {
 }
 
 // requireVela2Runtime returns the endpoint and card of the runtime that serves
-// a pinned Vela 2.0 size. Like requireRealModel it needs an explicit endpoint,
-// whose absence fails a run that requires the model, and it fails when the
+// a pinned Vela 2.0 size. It needs an explicit endpoint, whose absence fails
+// a run that requires the model, and it fails when the
 // runtime serves another revision than the Router's registry pins, or not on
 // CPU at the profile an implicit CPU deployment of the model runs.
 func requireVela2Runtime(t *testing.T, env, model string) (string, vela2Card) {

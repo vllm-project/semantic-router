@@ -25,7 +25,7 @@ translation:
 
 ## 连接防护服务 {#connect-a-guard-service}
 
-服务必须接受带 `{"inputs":"text"}` 的 `POST /classify`，并为每个已配置标签返回分数。遵循[分类器响应契约](../../tutorials/signal/learned/classifier.md)。
+服务必须接受带 `{"inputs":"text"}` 的 `POST /classify`，并为每个已配置标签返回分数。[模型目录](../model-catalog.md)列出了 `classify` 部署能回答的内容。
 
 把以下片段合并到现有的 `config.yaml` 中。把主机名和 `INJECTION` 替换为你的服务端点和正类标签：
 

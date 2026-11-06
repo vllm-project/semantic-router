@@ -13,11 +13,13 @@ import (
 const valuesFile = "e2e/profiles/ai-gateway/values.yaml"
 
 var resourceManifests = []string{
-	"e2e/profiles/ai-gateway/manifests/mock-sequence-classifier.yaml",
 	"e2e/profiles/ai-gateway/gateway-resources/backend.yaml",
 	"deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml",
 	"e2e/profiles/ai-gateway/gateway-resources/base-model-route.yaml",
 	"e2e/profiles/ai-gateway/gateway-resources/responses-route.yaml",
+	// Serves the System One fixture the jailbreak, PII and turn_relation
+	// rules ask.
+	"deploy/kubernetes/hallucination/provider-mocker.yaml",
 }
 
 // Profile implements the Envoy AI Gateway baseline test profile.
@@ -32,9 +34,7 @@ func NewProfile() *Profile {
 			Name:                     "ai-gateway",
 			SemanticRouterValuesFile: valuesFile,
 			ResourceManifests:        resourceManifests,
-			WaitDeployments: []helpers.DeploymentRef{
-				{Namespace: "default", Name: "mock-sequence-classifier"},
-			},
+			WaitDeployments:          []helpers.DeploymentRef{{Namespace: "default", Name: "provider-mocker"}},
 		}),
 	}
 }

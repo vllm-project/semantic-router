@@ -113,6 +113,5 @@ evaluation script are available.
 - [Signals, decisions, and model selection](../overview/signal-driven-decisions)
 - [Signal overview](../tutorials/signal/overview)
 - [Keyword signal](../tutorials/signal/heuristic/keyword)
-- [Embedding signal](../tutorials/signal/learned/embedding)
-- [Classifier signal](../tutorials/signal/learned/classifier)
+- [Systemone signal](../tutorials/signal/learned/systemone.md)
 - [Related issue #313](https://github.com/vllm-project/semantic-router/issues/313)

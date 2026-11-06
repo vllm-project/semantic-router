@@ -3,7 +3,6 @@ package modelruntime
 import (
 	"context"
 	"net/http/httptest"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -12,80 +11,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/runtimetest"
 )
-
-func TestEmbeddingDemandAvoidsStartingUnusedManagedModels(t *testing.T) {
-	for _, consumer := range []string{"unused KB catalog", "unused ML artifacts", "KB signal", "KB projection"} {
-		t.Run(consumer, func(t *testing.T) {
-			// If demand planning tries to start the unused global model, Acquire
-			// fails instead of downloading a real model or starting a subprocess.
-			t.Setenv(modelservice.RuntimeCommandEnv, filepath.Join(t.TempDir(), "must-not-start"))
-			t.Setenv(modelservice.RuntimeDirEnv, t.TempDir())
-			fake := runtimetest.New(runtimetest.Model{ID: "local", Embedding: &runtimetest.Embedder{Dimensions: []int{8}, Layers: []int{6}}})
-			server := httptest.NewServer(fake.Handler())
-			defer server.Close()
-			cfg := &config.RouterConfig{KnowledgeBases: []config.KnowledgeBaseConfig{{Name: "catalog-kb"}}}
-			cfg.EmbeddingConfig.ModelType = "mmbert"
-			cfg.MmBertModelPath = "/does-not-exist/unused-embedding"
-			cfg.ModelDeployments = map[string]config.ModelDeployment{
-				"global": {Provider: config.ModelRuntimeProvider, Artifact: "test/must-not-download", Device: "cpu"},
-				"local":  {Provider: config.ModelRuntimeProvider, Endpoint: server.URL},
-			}
-			cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "global", Contract: "embedding.v1"}}
-			cfg.ModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "local", Contract: "embedding.v1"}}
-			active := false
-			switch consumer {
-			case "unused ML artifacts":
-				cfg.ModelSelection.Enabled = true
-				cfg.ModelSelection.ML.ModelsPath = "unused-selectors"
-			case "KB signal":
-				cfg.KBRules = []config.KBSignalRule{{KB: "catalog-kb"}}
-				active = true
-			case "KB projection":
-				cfg.Projections.Scores = []config.ProjectionScore{{Name: "quality", Inputs: []config.ProjectionScoreInput{{Type: config.ProjectionInputKBMetric, KB: "catalog-kb"}}}}
-				active = true
-			}
-			manager := modelservice.NewManager()
-			defer func() { _ = manager.Shutdown(context.Background()) }()
-			lease, err := manager.Acquire(cfg)
-			if err != nil {
-				t.Fatalf("unused managed model was started: %v", err)
-			}
-			defer lease.Close()
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			if waitErr := lease.WaitManaged(ctx); waitErr != nil {
-				t.Fatal(waitErr)
-			}
-			runtime := serving.New(lease, nil)
-			prepared, err := PrepareOwnedEmbeddings(ctx, cfg, runtime)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer prepared.Close()
-			if prepared.Ready() != active {
-				t.Fatalf("embedding ready = %v, want %v", prepared.Ready(), active)
-			}
-			if !active {
-				if len(lease.Statuses()) != 0 || len(runtime.PreparedBindings()) != 0 || fake.Calls("embeddings") != 0 {
-					t.Fatal("unused catalog caused model initialization or embedding requests")
-				}
-				return
-			}
-			provider, err := prepared.Default()
-			if err != nil {
-				t.Fatal(err)
-			}
-			vector, err := provider.Embed(ctx, "knowledge base query")
-			if err != nil || len(vector) != 8 {
-				t.Fatalf("active KB embedding = %v, %v", vector, err)
-			}
-			entries := runtime.PreparedBindings()
-			if len(entries) != 1 || entries[0].Identity.Deployment != "local" {
-				t.Fatalf("active KB borrowed an unused global model: %+v", entries)
-			}
-		})
-	}
-}
 
 func TestOwnedMLPreparesSelectedEmbeddingWithoutUnusedPrimary(t *testing.T) {
 	cfg := &config.RouterConfig{}

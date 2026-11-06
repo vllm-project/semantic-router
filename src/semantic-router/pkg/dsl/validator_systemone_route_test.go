@@ -49,11 +49,11 @@ ROUTE tools { PRIORITY 100 WHEN systemone("task", label: "agentic") MODEL "m2" }
 func TestAFastResponseRouteNeedsNoModel(t *testing.T) {
 	for name, input := range map[string]string{
 		"inline": `
-SIGNAL jailbreak attack { threshold: 0.9 }
+SIGNAL jailbreak attack { predicate: { gte: 0.9 } }
 ROUTE guard { PRIORITY 100 WHEN jailbreak("attack") PLUGIN fast_response { message: "Declined." } }
 `,
 		"template": `
-SIGNAL jailbreak attack { threshold: 0.9 }
+SIGNAL jailbreak attack { predicate: { gte: 0.9 } }
 PLUGIN decline fast_response { message: "Declined." }
 ROUTE guard { PRIORITY 100 WHEN jailbreak("attack") PLUGIN decline }
 `,

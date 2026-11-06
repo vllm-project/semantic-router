@@ -3,7 +3,10 @@ routing:
     modality:
       - name: AR
         description: Text-only autoregressive requests.
+        labels: [text]
       - name: DIFFUSION
         description: Requests that should route into image generation flows.
+        labels: [image]
       - name: BOTH
         description: Requests that need both text and image generation behavior.
+        labels: [text_image]

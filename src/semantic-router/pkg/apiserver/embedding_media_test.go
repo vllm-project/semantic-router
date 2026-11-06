@@ -153,7 +153,7 @@ func TestEmbeddingAPIAutoMediaExplicitRecipeHTTP(t *testing.T) {
 	cfg.ModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "vision", Contract: "embedding.v1", Adapter: "vela_omni"}}
 	// The generation owns an already prepared encoder; the API must select its
 	// actual capabilities without interpreting the legacy catalog alias.
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil, classification.RecipeRuntimeOptions{Embeddings: prepared})
+	classifiers, err := classification.BuildRecipeClassifiers(cfg, classification.RecipeRuntimeOptions{Embeddings: prepared})
 	if err != nil {
 		t.Fatal(err)
 	}

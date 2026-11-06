@@ -21,17 +21,19 @@ providers:
 const velaShieldGlobalYAML = velaShieldBaseYAML + `routing:
   signals:
     safety:
-      - {name: unsafe-content, threshold: 0.5}
+      - {name: unsafe-content, deployment: shield, predicate: {gte: 0.5}}
   decisions:
     - name: unsafe
       rules: {operator: AND, conditions: [{type: safety, name: unsafe-content}]}
       modelRefs: [{model: backend}]
 global:
   model_catalog:
-    modules:
-      safety:
-        safety:
-          model_id: models/Vela-1.0-Encoder-307M-Shield
+    deployments:
+      shield:
+        artifact: models/Vela-1.0-Encoder-307M-Shield
+        revision: a981a99eeb05a2859b88b5cee9af4352897ec4ec
+        provider: model_runtime
+        input: {overflow: window, max_tokens: 32768}
 `
 
 const velaShieldRecipeYAML = velaShieldBaseYAML + `entrypoints:
@@ -41,10 +43,10 @@ recipes:
   - name: care
     routing:
       model_bindings:
-        safety.unsafe-content: {deployment: shield, adapter: modernbert, contract: label_distribution.v1}
+        safety: shield
       signals:
         safety:
-          - {name: unsafe-content, threshold: 0.5}
+          - {name: unsafe-content, predicate: {gte: 0.5}}
       decisions:
         - name: unsafe
           rules: {operator: AND, conditions: [{type: safety, name: unsafe-content}]}
@@ -56,6 +58,7 @@ global:
         artifact: models/Vela-1.0-Encoder-307M-Shield
         revision: a981a99eeb05a2859b88b5cee9af4352897ec4ec
         provider: model_runtime
+        input: {overflow: window, max_tokens: 32768}
 `
 
 func TestVelaShieldSelectionIsServedByTheRuntime(t *testing.T) {

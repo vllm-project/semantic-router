@@ -5,7 +5,7 @@ description: 装一个小 Python 插件就能服务一种新模型，附完整�
 translation:
   source_commit: "abae8ff99df2fdab372f0fb6d032b305907b9f44"
   source_file: "docs/model-runtime/plugins.md"
-  outdated: false
+  outdated: true
 is_mtpe: true
 ---
 

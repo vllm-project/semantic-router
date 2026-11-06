@@ -5,13 +5,13 @@ description: Find personal information in requests with exact character spans, a
 
 # Detect PII
 
-Vela 1.0 PII finds personal information in a request and returns where it is:
-the type, the exact characters and a probability for every span. A
-[`pii` signal](tutorials/signal/learned/pii.md) matches when it finds a
-type you do not allow, and a route can then keep the request on a private
-model or refuse it.
+The pii preset finds personal information in a request and returns where it
+is: the type, the exact characters and a probability for every span. A
+[`pii` signal](tutorials/signal/learned/pii.md) matches when it finds a type
+it counts, and a route can then keep the request on a private model or refuse
+it.
 
-The model knows 17 types: `AGE`, `CREDIT_CARD`, `DATE_TIME`, `DOMAIN_NAME`,
+The preset knows 17 types: `AGE`, `CREDIT_CARD`, `DATE_TIME`, `DOMAIN_NAME`,
 `EMAIL_ADDRESS`, `GPE` (places), `IBAN_CODE`, `IP_ADDRESS`, `NRP`
 (nationality, religion or political group), `ORGANIZATION`, `PERSON`,
 `PHONE_NUMBER`, `STREET_ADDRESS`, `TITLE`, `US_DRIVER_LICENSE`, `US_SSN` and
@@ -24,8 +24,8 @@ routing:
   signals:
     pii:
       - name: personal_data
-        threshold: 0.85
-        pii_types_allowed: [EMAIL_ADDRESS]
+        predicate: {gte: 0.85}
+        ignore_labels: [EMAIL_ADDRESS]
   decisions:
     - name: keep-private
       priority: 200
@@ -39,52 +39,22 @@ routing:
 ```
 
 Without a binding, the Router asks the decision model, vela3-fast by default,
-for PII.
-Its input limits and coverage differ from the Vela 1.0 specialist below; see
-[Choose a model](../choose-a-model#built-in-signals). Rule thresholds are explicit
-policy: calibrate this example's value for the model you select.
-
-The Vela 1.0 binding below scans up to 32,768 tokens in overlapping 512-token
-windows. Coverage includes the end of the document, but detection accuracy
-still depends on the text and model.
+for PII; see [Choose a model](../choose-a-model#built-in-signals). A rule's
+`predicate` is explicit policy: calibrate this example's value for the model
+you select, or omit it to use the model's calibrated threshold. The
+`ignore_labels` are the types the rule does not count.
 
 ## Choose where it runs
 
-The binding key is `pii`, and the signal reads text spans:
+The binding key is `pii`, and the signal reads text spans, so its deployment
+must answer span questions; one that cannot is refused when the configuration
+loads. Vela 2.0 finds the same 17 types with its router span head, as a
+ready-made question. Bind `pii` to a Vela 2.0 deployment and the PII question
+travels in the same call as the
+[System One questions](model-runtime/guides/decisions.md) the request asks that
+deployment about the same text:
 
 ```yaml
-global:
-  model_catalog:
-    deployments:
-      vela-pii:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-PII
-        device: cpu
-        input:
-          max_tokens: 32768
-          overflow: window
-    bindings:
-      pii: vela-pii
-    modules:
-      classifier:
-        pii:
-          window:
-            size: 512
-            overlap: 255
-```
-
-Keep `overflow: window` for PII: the model reads the whole request in
-512-token windows that overlap by 255 tokens. `truncate` would scan only the
-beginning, and `reject` makes the signal unknown for longer requests.
-
-### On Vela 2.0
-
-Vela 2.0 finds the same 17 types with its router span head, as a ready-made
-question. Bind `pii` to a Vela 2.0 deployment and the PII question travels in
-the same call as the [System One questions](model-runtime/guides/decisions.md)
-the request asks that deployment about the same text:
-
-```yaml alternative
 global:
   model_catalog:
     deployments:
@@ -96,31 +66,34 @@ global:
       pii: vela2
 ```
 
-Vela 2.0 uses its own full-input checks and supported scan budget; it does not
-use the specialist's 512-token PII window settings. An `input` override can
-set the deployment's scan budget. Incomplete coverage remains unresolved;
-see [Long inputs](../reference.md#long-inputs) and the
-[`pii` signal](tutorials/signal/learned/pii.md#vela-20) for how rule
-thresholds apply to its spans.
+Vela 2.0 uses its own full-input checks and supported scan budget. An `input`
+override can set the deployment's scan budget; see
+[Long inputs](../reference.md#long-inputs).
 
 ## When the scan cannot finish
 
-If the model is not ready or a scan fails, the signal is unknown. Content the
-model did not read (over its input or
+Text the model did not read (over its input or
 [scan cap](model-runtime/reference.md#long-inputs), truncated, or not scanned
-by the signals' deadline) matches as `unscanned` unless the module sets
-`on_unscanned: allow`. The PII module's `on_error` decides what an unknown
-signal means: `allow` (default) treats the
-unread text as clean, and `block` matches it as `classification_error`, so
-text that could not be checked cannot pass as clean.
+by the signals' deadline) counts as personal data, so text that could not be
+checked cannot pass as clean. If the model is not ready or a scan fails, the
+signal is unknown; decide what that means per route with `rules.on_unknown`:
 
 ```yaml
-global:
-  model_catalog:
-    modules:
-      classifier:
-        pii:
-          on_error: block
+routing:
+  signals:
+    pii:
+      - name: personal_data
+  decisions:
+    - name: keep-private
+      priority: 200
+      rules:
+        operator: AND
+        on_unknown: fail_request
+        conditions:
+          - type: pii
+            name: personal_data
+      modelRefs:
+        - model: private-model
 ```
 
 ## Check it

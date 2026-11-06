@@ -1,64 +1,23 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
-func validateModalityContracts(cfg *RouterConfig) error {
-	if err := validateGlobalModalityContracts(cfg); err != nil {
-		return err
-	}
-	return validateRoutingModalityContracts(cfg)
-}
-
-func validateGlobalModalityContracts(cfg *RouterConfig) error {
-	if cfg == nil {
-		return nil
-	}
-	if !cfg.ModalityDetector.Enabled {
-		return nil
-	}
-	validate := cfg.ModalityDetector.Validate
-	if cfg.ModelBindings["modality_detector"].Deployment != "" || cfg.GlobalModelBindings["modality_detector"].Deployment != "" {
-		validate = cfg.ModalityDetector.ValidateBound
-	}
-	if err := validate(); err != nil {
-		return fmt.Errorf("modality_detector: %w", err)
-	}
-	return nil
-}
-
+// validateRoutingModalityContracts checks the decisions a modality rule
+// routes a request that asks for a generated image and text to: they
+// reference an AR and a diffusion model, or an omni model.
 func validateRoutingModalityContracts(cfg *RouterConfig) error {
 	if cfg == nil {
 		return nil
 	}
-	if err := validateModalityDecisions(cfg); err != nil {
-		return err
-	}
-	return validateModalityRules(cfg.ModalityRules)
-}
-
-// validateModalityRules validates modality rule configurations.
-func validateModalityRules(rules []ModalityRule) error {
-	validNames := map[string]bool{"AR": true, "DIFFUSION": true, "BOTH": true}
-	for i, rule := range rules {
-		if rule.Name == "" {
-			return fmt.Errorf("modality_rules[%d]: name cannot be empty", i)
-		}
-		if !validNames[rule.Name] {
-			return fmt.Errorf("modality_rules[%d] (%s): name must be one of \"AR\", \"DIFFUSION\", or \"BOTH\"", i, rule.Name)
-		}
-	}
-	return nil
-}
-
-// validateModalityDecisions validates that decisions using modality signals have correct modelRefs.
-// Specifically, a BOTH decision must reference both an AR and a diffusion model, OR a single omni model.
-func validateModalityDecisions(cfg *RouterConfig) error {
 	for _, decision := range cfg.AllRoutingDecisions() {
 		for _, cond := range decision.Rules.Conditions {
-			if cond.Type != SignalTypeModality || cond.Name != "BOTH" {
+			if cond.Type != SignalTypeModality || !cfg.modalityConditionMatches(cond, "text_image") {
 				continue
 			}
-			if err := validateBothModalityDecision(cfg, decision); err != nil {
+			if err := validateTextImageModalityDecision(cfg, decision); err != nil {
 				return err
 			}
 		}
@@ -66,7 +25,21 @@ func validateModalityDecisions(cfg *RouterConfig) error {
 	return nil
 }
 
-func validateBothModalityDecision(cfg *RouterConfig, decision Decision) error {
+// modalityConditionMatches reports whether a modality condition matches
+// label: it names the label, or a rule whose labels include it.
+func (c *RouterConfig) modalityConditionMatches(cond RuleNode, label string) bool {
+	if cond.Label != "" {
+		return cond.Label == label
+	}
+	for _, rule := range c.ModalityRules {
+		if rule.Name == cond.Name {
+			return slices.Contains(rule.Labels, label)
+		}
+	}
+	return false
+}
+
+func validateTextImageModalityDecision(cfg *RouterConfig, decision Decision) error {
 	hasAR := false
 	hasDiffusion := false
 	hasOmni := false
@@ -87,7 +60,7 @@ func validateBothModalityDecision(cfg *RouterConfig, decision Decision) error {
 		return nil
 	}
 	if !hasAR || !hasDiffusion {
-		return fmt.Errorf("decision %q uses modality condition \"BOTH\" but modelRefs must include both an AR model (modality: \"ar\") and a diffusion model (modality: \"diffusion\"), or an omni model (modality: \"omni\")", decision.Name)
+		return fmt.Errorf("decision %q routes on the modality label text_image, so its modelRefs must include both an AR model (modality: \"ar\") and a diffusion model (modality: \"diffusion\"), or an omni model (modality: \"omni\")", decision.Name)
 	}
 	return nil
 }

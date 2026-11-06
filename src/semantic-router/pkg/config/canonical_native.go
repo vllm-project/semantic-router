@@ -96,9 +96,6 @@ func validateNativeRecipe(cfg *RouterConfig, recipe RoutingRecipe, native, chat 
 		if err := validateNativeProfileSurfaces(recipe.Profile); err != nil {
 			return err
 		}
-		if err := validateNativeSignalBackends(cfg.ConfigForRecipe(&recipe), recipe.Profile); err != nil {
-			return err
-		}
 	}
 	if native && chat {
 		return fmt.Errorf("a native recipe cannot also be a Chat entrypoint; use isolated recipes")

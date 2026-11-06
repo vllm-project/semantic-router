@@ -1,0 +1,64 @@
+# The learned signal types the Router no longer has become turn_relation rules
+# and systemone questions, and their conditions follow them.
+version: v0.3
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+routing:
+  signals:
+    turn_relation:
+      - name: asked_again
+        description: The user repeats the question
+        labels: [reask]
+        input:
+          previous_turns: 2
+      - name: thread
+        labels: [continue, shift]
+        input:
+          previous_turns: 3
+    systemone:
+      - name: risk
+        question:
+          type: choice
+          instructions: Is the request risky?
+          choices:
+            - key: SAFE
+            - key: RISKY
+      - name: preference
+        question:
+          type: choice
+          instructions: Which response preference does the request express?
+          choices:
+            - key: concise
+              description: 'Short answers. Examples: keep it short'
+            - key: detailed
+              description: Thorough answers
+            - key: none
+              description: The request expresses none of these preferences.
+      - name: billing
+        question:
+          type: noul
+          instructions: 'Is the request about any of these: refund my order; update my card?'
+      - name: shipping
+        question:
+          type: noul
+          instructions: 'Is the request about any of these: where is my parcel?'
+  decisions:
+    - name: escalate
+      priority: 300
+      rules:
+        operator: OR
+        conditions:
+          - {type: turn_relation, name: asked_again}
+          - {type: systemone, name: risk, label: RISKY}
+      modelRefs: [{model: general}]
+    - name: brief
+      priority: 200
+      rules: {type: systemone, name: preference, label: concise}
+      modelRefs: [{model: general}]
+    - name: billing
+      priority: 100
+      rules: {type: systemone, name: billing}
+      modelRefs: [{model: general}]

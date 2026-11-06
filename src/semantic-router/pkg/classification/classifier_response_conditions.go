@@ -2,63 +2,45 @@ package classification
 
 import (
 	"context"
-	"fmt"
 	"maps"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // ResponseConditions reads rule trees over one answer: the request-stage
 // signals routing published for its request, and the response-stage rules
-// (jailbreak rules with direction: response, hallucination rules, systemone
-// rules with stage: response), each evaluated the first time a tree reads
-// it. One detector call serves every rule of a type that reads the same
-// answer, as it does at the request stage.
+// (systemone rules and application rules with stage: response, such as the
+// jailbreak, hallucination and refusal rules), each asked the first time a
+// tree reads it. The first read of an application type asks every
+// response-stage rule of the type in one call, so its rules of one preset
+// share the preset's question, as they do at the request stage.
 type ResponseConditions struct {
 	classifier *Classifier
 	ctx        context.Context
 	input      ResponseInput
 	engine     *decision.DecisionEngine
 	signals    *decision.SignalMatches
-
-	jailbreak      *ResponseJailbreakObservation
-	hallucination  *ResponseHallucinationObservation
-	systemOne      *ResponseSystemOneSignal
-	askedSystemOne map[string]bool
+	observed   *ResponseSignal
+	asked      map[string]bool
 }
 
-// ResponseJailbreakObservation is how the response-direction jailbreak rules
-// read one answer: the scan, when the detector produced one, and each rule's
-// match, score or failure.
-type ResponseJailbreakObservation struct {
-	Scan   *JailbreakScan
-	Signal *ResponseJailbreakSignal
-}
-
-// ResponseHallucinationObservation is how the hallucination rules read one
-// answer: the detector's evidence, or why the answer could not be checked,
-// and each rule's match, score or failure.
-type ResponseHallucinationObservation struct {
-	Evidence    *HallucinationEvidence
-	FailureCode string
-	Signal      *ResponseHallucinationSignal
-}
-
-// HallucinationEvidence is the hallucination detector's verdict on one answer
-// and the unsupported spans it rests on; Explained carries their offsets,
-// severity and explanation when the detector explains its spans.
-type HallucinationEvidence struct {
-	Detected   bool
-	Confidence float32
-	Score      HallucinationScore
-	Spans      []string
-	Explained  []EnhancedHallucinationSpan
+// ResponseSignal is what the response-stage rules made of one answer, keyed
+// as the request stage keys its signals ("<type>:<rule>"): the matched
+// references of each type and those its matched-rule header lists
+// (SignalResults.ReportedMatches), each rule's value, confidence or failure,
+// and the spans of the span rules that matched.
+type ResponseSignal struct {
+	Matched     map[string][]string
+	Reported    map[string][]string
+	Confidences map[string]float64
+	Values      map[string]float64
+	Errors      map[string]string
+	Spans       map[string][]modelservice.Span
 }
 
 // NewResponseConditions starts reading conditions over one answer. routed are
@@ -72,192 +54,94 @@ func (c *Classifier) NewResponseConditions(ctx context.Context, routed *decision
 		classifier: c,
 		ctx:        ctx,
 		input:      input,
-		engine:     decision.NewDecisionEngine(c.Config.KeywordRules, c.Config.EmbeddingRules, c.Config.Categories, nil, c.Config.Strategy).WithRoutingScope(c.Config.RoutingScope),
+		engine:     decision.NewDecisionEngine(nil, c.Config.Strategy).WithRoutingScope(c.Config.RoutingScope),
 		signals:    cloneSignalMatches(routed),
+		observed:   newResponseSignal(),
+		asked:      map[string]bool{},
 	}
 }
 
-// ResponseSignalReady reports whether the detector behind the response-stage
-// rules of signalType can answer: the jailbreak model for response-direction
-// jailbreak rules, the hallucination detector for hallucination rules.
-// Systemone rules are answered by their deployments.
-func (c *Classifier) ResponseSignalReady(signalType string) bool {
-	switch signalType {
-	case config.SignalTypeJailbreak:
-		return c.IsJailbreakEnabled()
-	case config.SignalTypeHallucination:
-		return c.IsHallucinationDetectorReady()
-	}
-	return true
-}
-
-// Evaluate reads one rule tree, evaluating each response-stage rule it reaches
+// Evaluate reads one rule tree, asking each response-stage rule it reaches
 // that no tree has read yet; an AND stops at its first false condition.
 func (r *ResponseConditions) Evaluate(tree config.RuleNode) decision.RuleOutcome {
 	return r.engine.EvaluateRule(tree, r.signals, r.observe)
 }
 
-// Jailbreak is the response-direction jailbreak observation, or nil when no
-// tree read a response-direction rule.
-func (r *ResponseConditions) Jailbreak() *ResponseJailbreakObservation { return r.jailbreak }
-
-// Hallucination is the hallucination observation, or nil when no tree read a
-// hallucination rule.
-func (r *ResponseConditions) Hallucination() *ResponseHallucinationObservation {
-	return r.hallucination
-}
-
-// SystemOne is the response-stage systemone observation, or nil when no tree
-// read a response-stage systemone rule.
-func (r *ResponseConditions) SystemOne() *ResponseSystemOneSignal { return r.systemOne }
+// Observed is what the response-stage rules the trees read made of the
+// answer.
+func (r *ResponseConditions) Observed() *ResponseSignal { return r.observed }
 
 func (r *ResponseConditions) observe(leaf config.RuleNode) {
-	cfg := r.classifier.Config
 	signalType := strings.ToLower(strings.TrimSpace(leaf.Type))
-	if cfg.SignalStageOf(signalType, leaf.Name) != config.SignalStageResponse {
+	if r.classifier.Config.SignalStageOf(signalType, leaf.Name) != config.SignalStageResponse {
 		return
 	}
-	switch signalType {
-	case config.SignalTypeJailbreak:
-		if r.jailbreak == nil {
-			r.observeJailbreak()
-		}
-	case config.SignalTypeHallucination:
-		if r.hallucination == nil {
-			r.observeHallucination()
-		}
-	case config.SignalTypeSystemOne:
-		if !r.askedSystemOne[leaf.Name] {
-			r.askSystemOne(leaf.Name)
-		}
+	scope := signalType
+	if signalType == config.SignalTypeSystemOne {
+		ruleName, _, _ := strings.Cut(leaf.Name, ":")
+		scope = signalConfidenceKey(signalType, ruleName)
 	}
-}
-
-// observeJailbreak scans the answer once for every response-direction rule:
-// they ask the same model the same question about the same text and differ
-// only in where they draw the line. An answer without text, such as one made
-// of tool calls, has nothing to scan, which leaves the rules unknown rather
-// than clean.
-func (r *ResponseConditions) observeJailbreak() {
-	c := r.classifier
-	rules := c.Config.ResponseJailbreakRules()
-	observation := &ResponseJailbreakObservation{}
-	r.jailbreak = observation
-	if c.IsJailbreakEnabled() && r.input.Answer != "" {
-		start := time.Now()
-		scan, err := c.ScanJailbreak(r.ctx, r.input.Answer)
-		latency := time.Since(start).Seconds()
-		if err != nil {
-			logging.Errorf("Response jailbreak signal evaluation failed: %v", err)
-		} else {
-			observation.Scan = &scan
-			for _, rule := range rules {
-				c.recordSignalExtraction(config.SignalTypeJailbreak, rule.Name, latency)
-			}
-		}
-	}
-	observation.Signal = EvaluateResponseJailbreakSignal(rules, observation.Scan)
-	if observation.Signal == nil {
+	if r.asked[scope] {
 		return
 	}
-	r.signals.JailbreakRules = append(r.signals.JailbreakRules, observation.Signal.MatchedRules...)
-	maps.Copy(r.signals.SignalConfidences, observation.Signal.Confidences)
-	maps.Copy(r.signals.SignalErrors, observation.Signal.Errors)
-}
-
-// observeHallucination checks the answer against its grounding context once
-// for every hallucination rule. An answer with no context to check it
-// against leaves the rules unknown (HallucinationSignalContextUnavailable).
-func (r *ResponseConditions) observeHallucination() {
-	c := r.classifier
-	observation := &ResponseHallucinationObservation{}
-	r.hallucination = observation
-	switch {
-	case !c.IsHallucinationDetectionEnabled() || r.input.Answer == "":
-		observation.FailureCode = HallucinationSignalFailedCode
-	case strings.TrimSpace(r.input.Context) == "":
-		observation.FailureCode = HallucinationSignalContextUnavailable
+	r.asked[scope] = true
+	signal := r.classifier.EvaluateResponseSignals(r.ctx, r.input, func(ruleType, ruleName string) bool {
+		if signalType == config.SignalTypeSystemOne {
+			return ruleType == signalType && signalConfidenceKey(ruleType, ruleName) == scope
+		}
+		return ruleType == signalType
+	})
+	if signalType == config.SignalTypeHallucination && strings.TrimSpace(r.input.Context) == "" {
 		metrics.RecordUnverifiedFactualResponse()
-	default:
-		start := time.Now()
-		evidence, err := c.hallucinationEvidence(r.ctx, r.input)
-		latency := time.Since(start).Seconds()
-		metrics.RecordHallucinationDetectionLatency(latency)
-		if err != nil {
-			logging.Errorf("Hallucination signal evaluation failed: %v", err)
-			observation.FailureCode = HallucinationSignalFailedCode
-			break
-		}
-		observation.Evidence = evidence
-		for _, rule := range c.Config.HallucinationRules {
-			c.recordSignalExtraction(config.SignalTypeHallucination, rule.Name, latency)
-		}
 	}
-	detected, confidence, score := false, float32(0), HallucinationScore{}
-	if evidence := observation.Evidence; evidence != nil {
-		detected, confidence, score = evidence.Detected, evidence.Confidence, evidence.Score
+	r.observed.merge(signal)
+	for ruleType, matched := range signal.Matched {
+		appendSignalMatches(r.signals, ruleType, matched)
 	}
-	observation.Signal = EvaluateResponseHallucinationSignal(c.Config.HallucinationRules, detected, confidence, observation.FailureCode, score)
-	if observation.Signal == nil {
-		return
-	}
-	r.signals.HallucinationRules = append(r.signals.HallucinationRules, observation.Signal.MatchedRules...)
-	maps.Copy(r.signals.SignalConfidences, observation.Signal.Confidences)
-	maps.Copy(r.signals.SignalValues, observation.Signal.Values)
-	maps.Copy(r.signals.SignalErrors, observation.Signal.Errors)
-}
-
-// hallucinationEvidence runs the detector on the answer, with span details
-// when the detector explains its spans.
-func (c *Classifier) hallucinationEvidence(ctx context.Context, input ResponseInput) (*HallucinationEvidence, error) {
-	if !c.Config.HallucinationMitigation.HallucinationModel.IncludeExplanation {
-		result, err := c.DetectHallucination(ctx, input.Context, input.Request, input.Answer)
-		if err != nil {
-			return nil, err
-		}
-		if result == nil {
-			return nil, fmt.Errorf("hallucination detector returned no result")
-		}
-		return &HallucinationEvidence{
-			Detected: result.HallucinationDetected, Confidence: result.Confidence,
-			Score: HallucinationScore{Available: result.ScoreAvailable, Kind: result.ScoreKind}, Spans: result.UnsupportedSpans,
-		}, nil
-	}
-	result, err := c.DetectHallucinationWithExplanations(ctx, input.Context, input.Request, input.Answer)
-	if err != nil {
-		return nil, err
-	}
-	if result == nil {
-		return nil, fmt.Errorf("hallucination detector returned no result")
-	}
-	evidence := &HallucinationEvidence{
-		Detected: result.HallucinationDetected, Confidence: result.Confidence,
-		Score: HallucinationScore{Available: result.ScoreAvailable, Kind: result.ScoreKind}, Explained: result.Spans,
-	}
-	for _, span := range result.Spans {
-		evidence.Spans = append(evidence.Spans, span.Text)
-	}
-	return evidence, nil
-}
-
-// askSystemOne asks one response-stage systemone rule about the answer.
-func (r *ResponseConditions) askSystemOne(rule string) {
-	if r.askedSystemOne == nil {
-		r.askedSystemOne = map[string]bool{}
-	}
-	r.askedSystemOne[rule] = true
-	signal := r.classifier.EvaluateResponseSystemOne(r.ctx, r.input, []string{rule})
-	if r.systemOne == nil {
-		r.systemOne = &ResponseSystemOneSignal{Confidences: map[string]float64{}, Values: map[string]float64{}, Errors: map[string]string{}}
-	}
-	r.systemOne.MatchedRules = append(r.systemOne.MatchedRules, signal.MatchedRules...)
-	maps.Copy(r.systemOne.Confidences, signal.Confidences)
-	maps.Copy(r.systemOne.Values, signal.Values)
-	maps.Copy(r.systemOne.Errors, signal.Errors)
-	r.signals.SystemOneRules = append(r.signals.SystemOneRules, signal.MatchedRules...)
 	maps.Copy(r.signals.SignalConfidences, signal.Confidences)
 	maps.Copy(r.signals.SignalValues, signal.Values)
 	maps.Copy(r.signals.SignalErrors, signal.Errors)
+}
+
+func newResponseSignal() *ResponseSignal {
+	return &ResponseSignal{
+		Matched:     map[string][]string{},
+		Reported:    map[string][]string{},
+		Confidences: map[string]float64{},
+		Values:      map[string]float64{},
+		Errors:      map[string]string{},
+		Spans:       map[string][]modelservice.Span{},
+	}
+}
+
+func (s *ResponseSignal) merge(other *ResponseSignal) {
+	for signalType, matched := range other.Matched {
+		s.Matched[signalType] = append(s.Matched[signalType], matched...)
+	}
+	for signalType, reported := range other.Reported {
+		s.Reported[signalType] = append(s.Reported[signalType], reported...)
+	}
+	maps.Copy(s.Confidences, other.Confidences)
+	maps.Copy(s.Values, other.Values)
+	maps.Copy(s.Errors, other.Errors)
+	maps.Copy(s.Spans, other.Spans)
+}
+
+// appendSignalMatches adds the matched references of a response-stage type
+// to what the decision engine reads.
+func appendSignalMatches(signals *decision.SignalMatches, signalType string, matched []string) {
+	switch signalType {
+	case config.SignalTypeSystemOne:
+		signals.SystemOneRules = append(signals.SystemOneRules, matched...)
+	case config.SignalTypeJailbreak:
+		signals.JailbreakRules = append(signals.JailbreakRules, matched...)
+	case config.SignalTypeSafety:
+		signals.SafetyRules = append(signals.SafetyRules, matched...)
+	case config.SignalTypeHallucination:
+		signals.HallucinationRules = append(signals.HallucinationRules, matched...)
+	case config.SignalTypeRefusal:
+		signals.RefusalRules = append(signals.RefusalRules, matched...)
+	}
 }
 
 // cloneSignalMatches copies what the response stage adds to, so the routed
@@ -267,9 +151,11 @@ func cloneSignalMatches(routed *decision.SignalMatches) *decision.SignalMatches 
 	if routed != nil {
 		*signals = *routed
 	}
-	signals.JailbreakRules = slices.Clone(signals.JailbreakRules)
-	signals.HallucinationRules = slices.Clone(signals.HallucinationRules)
 	signals.SystemOneRules = slices.Clone(signals.SystemOneRules)
+	signals.JailbreakRules = slices.Clone(signals.JailbreakRules)
+	signals.SafetyRules = slices.Clone(signals.SafetyRules)
+	signals.HallucinationRules = slices.Clone(signals.HallucinationRules)
+	signals.RefusalRules = slices.Clone(signals.RefusalRules)
 	signals.SignalConfidences = cloneOrEmpty(signals.SignalConfidences)
 	signals.SignalValues = cloneOrEmpty(signals.SignalValues)
 	signals.SignalErrors = cloneOrEmpty(signals.SignalErrors)

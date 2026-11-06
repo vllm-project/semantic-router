@@ -24,7 +24,8 @@ working directory, add this directory to `PYTHONPATH`, or install this package.
 | `POST /v1/images/generations` | Buffered Images with deterministic valid 1×1 PNGs |
 | `GET /health` | Readiness |
 | `GET /v1/models` | Configured model metadata |
-| `POST /classify` | Remote classifier and response guard fixture |
+| `POST /v1/systemone` | System One decisions for the Router's `systemone` deployments |
+| `GET /v1/systemone/models` | The one System One model it lists, `e2e/fake-systemone` |
 | `GET /debug/last-request` | Last native request per test session |
 
 Images accept `response_format: b64_json` and `n` from 1 to 4. Images streaming,
@@ -73,6 +74,30 @@ SSE (`__mock_incomplete_stream__`) and partial-output errors
 (`__mock_midstream_error__`). Messages also recognizes `__mock_protocol_matrix__`
 and `__mock_gateway_fields__`, which adds fields no Messages schema declares: a
 `usage.total_cost` in exponent form and a top-level `gateway_trace_id`.
+
+## System One
+
+`/v1/systemone` answers the questions the Router compiles its application
+signals into, for a `systemone` deployment with
+`endpoint: http://<service>:8000/v1/systemone` and `model: e2e/fake-systemone`.
+It runs no model and reads all of every text; markers in the text a question
+reads pin its answer:
+
+| Input | Answer |
+| --- | --- |
+| `__PII_SPAN__ <LABEL> <word>` | A span question offering `LABEL` (pii) finds it over the first copy of `<word>` |
+| `__SYSTEMONE_CHOICE__ <key>` | A choice question offering `key` (a turn_relation label, say) chooses it |
+| `Ignore all previous instructions` | A choice question offering `jailbreak` chooses it |
+| `__SYSTEMONE_YES__` | A noul question answers true |
+| An answer sentence its context lacks | A span question offering `unsupported` (hallucination) finds the first one |
+| `__SYSTEMONE_UNREAD__` | A `require_full_input` question fails with `max_length_exceeded` |
+| `__SYSTEMONE_UNAVAILABLE__` | The call fails with 503 |
+
+Otherwise a choice question answers its first option, a noul false and a span
+question nothing. Choice, noul and span are the question types it lists; any
+other fails with `invalid_question`. A failed question carries its error in
+its answer, as a model runtime answers it, and the call's other questions are
+answered.
 
 ## Image inputs
 

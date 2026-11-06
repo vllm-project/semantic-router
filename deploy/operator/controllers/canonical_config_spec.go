@@ -54,19 +54,13 @@ func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerco
 	}
 
 	if spec.PromptGuard != nil {
-		promptGuard, err := convertToTypedConfig[routerconfig.CanonicalPromptGuardModule](r, spec.PromptGuard)
-		if err != nil {
-			return fmt.Errorf("config.prompt_guard: %w", err)
-		}
-		canonical.Global.ModelCatalog.Modules.PromptGuard = promptGuard
+		return fmt.Errorf("config.prompt_guard is removed: the decision model answers jailbreak rules (a threshold is a jailbreak rule's predicate)")
 	}
-
 	if spec.Classifier != nil {
-		classifier, err := r.convertClassifierModule(spec.Classifier)
-		if err != nil {
-			return fmt.Errorf("config.classifier: %w", err)
-		}
-		canonical.Global.ModelCatalog.Modules.Classifier = classifier
+		return fmt.Errorf("config.classifier is removed: the decision model answers domain and pii rules (a threshold is the rule's predicate)")
+	}
+	if spec.ComplexityModel != nil {
+		return fmt.Errorf("config.complexity_model is removed: the decision model answers complexity rules")
 	}
 	if len(spec.ExternalModels) > 0 {
 		// The CRD block mirrors the router's external catalog entry field for
@@ -78,7 +72,7 @@ func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerco
 		}
 		canonical.Global.ModelCatalog.External = external
 	}
-	return r.applyOperatorComplexityModel(canonical, spec)
+	return nil
 }
 
 func (r *SemanticRouterReconciler) applyOperatorStoresAndIntegrations(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {
@@ -165,59 +159,20 @@ func (r *SemanticRouterReconciler) applyOperatorRouting(canonical *routerconfig.
 	return nil
 }
 
-func (r *SemanticRouterReconciler) convertClassifierModule(spec *vllmv1alpha1.ClassifierConfig) (routerconfig.CanonicalClassifierModule, error) {
-	if spec == nil {
-		return routerconfig.CanonicalClassifierModule{}, nil
-	}
-
-	classifier := operatorModelModules().Classifier
-
-	if spec.CategoryModel != nil {
-		domain, err := convertToTypedConfig[routerconfig.CanonicalCategoryModule](r, spec.CategoryModel)
-		if err != nil {
-			return routerconfig.CanonicalClassifierModule{}, fmt.Errorf("domain: %w", err)
-		}
-		classifier.Domain = domain
-	}
-
-	if spec.PIIModel != nil {
-		pii, err := convertToTypedConfig[routerconfig.CanonicalPIIModule](r, spec.PIIModel)
-		if err != nil {
-			return routerconfig.CanonicalClassifierModule{}, fmt.Errorf("pii: %w", err)
-		}
-		classifier.PII = pii
-	}
-
-	return classifier, nil
-}
-
 func (r *SemanticRouterReconciler) convertComplexityRules(spec []vllmv1alpha1.ComplexityRulesConfig) ([]routerconfig.ComplexityRule, error) {
 	rules := make([]routerconfig.ComplexityRule, 0, len(spec))
 	for _, entry := range spec {
+		if entry.Hard != nil || entry.Easy != nil || entry.Composer != nil || entry.PrototypeScoring != nil ||
+			entry.Threshold != "" || entry.HardAbove != "" || entry.EasyBelow != "" || entry.HardBelow != "" || entry.EasyAbove != "" {
+			return nil, fmt.Errorf("%s: a complexity rule no longer scores example banks; the decision model answers it (write labels)", entry.Name)
+		}
 		rule, err := convertToTypedConfig[routerconfig.ComplexityRule](r, entry)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", entry.Name, err)
 		}
-		if entry.Composer != nil {
-			rule.Composer = &routerconfig.RuleCombination{
-				Operator:   entry.Composer.Operator,
-				Conditions: convertCompositionConditions(entry.Composer.Conditions),
-			}
-		}
 		rules = append(rules, rule)
 	}
 	return rules, nil
-}
-
-func convertCompositionConditions(conditions []vllmv1alpha1.CompositionCondition) []routerconfig.RuleNode {
-	result := make([]routerconfig.RuleNode, 0, len(conditions))
-	for _, condition := range conditions {
-		result = append(result, routerconfig.RuleNode{
-			Type: condition.Type,
-			Name: condition.Name,
-		})
-	}
-	return result
 }
 
 func convertToTypedConfig[T any](r *SemanticRouterReconciler, value interface{}) (T, error) {

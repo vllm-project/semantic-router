@@ -81,8 +81,6 @@ export interface ProjectionTraceMapping {
 export interface ProjectionTraceScoreInput {
   type: string
   name?: string
-  kb?: string
-  metric?: string
   weight: number
   value: number
   contribution: number

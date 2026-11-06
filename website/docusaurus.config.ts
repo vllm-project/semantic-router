@@ -166,6 +166,22 @@ const config: Config = {
             from: '/blog/introduce-vela',
             to: '/blog/vela-models',
           },
+          {
+            from: [
+              '/docs/next/tutorials/signal/learned/classifier',
+              '/docs/next/tutorials/signal/learned/preference',
+              '/docs/next/tutorials/signal/learned/kb',
+              '/docs/next/tutorials/signal/learned/embedding',
+            ],
+            to: '/docs/next/tutorials/signal/learned/systemone',
+          },
+          {
+            from: [
+              '/docs/next/tutorials/signal/learned/reask',
+              '/docs/next/tutorials/signal/heuristic/topic-continuity',
+            ],
+            to: '/docs/next/tutorials/signal/learned/turn-relation',
+          },
           // The model-runtime section exists only in the unreleased (next)
           // docs, and several of these source paths are live v0.4 pages at
           // the root, so these redirects are scoped to /docs/next instead of

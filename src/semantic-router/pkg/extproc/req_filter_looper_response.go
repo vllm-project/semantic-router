@@ -218,12 +218,10 @@ func appendLooperSignalHeaders(
 		return
 	}
 	appendJoinedHeader(setHeaders, headers.VSRMatchedKeywords, reqCtx.VSRMatchedKeywords)
-	appendJoinedHeader(setHeaders, headers.VSRMatchedEmbeddings, reqCtx.VSRMatchedEmbeddings)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedDomains, reqCtx.VSRMatchedDomains)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedFactCheck, reqCtx.VSRMatchedFactCheck)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedUserFeedback, reqCtx.VSRMatchedUserFeedback)
-	appendJoinedHeader(setHeaders, headers.VSRMatchedReask, reqCtx.VSRMatchedReask)
-	appendJoinedHeader(setHeaders, headers.VSRMatchedPreference, reqCtx.VSRMatchedPreference)
+	appendJoinedHeader(setHeaders, headers.VSRMatchedTurnRelation, reqCtx.VSRMatchedTurnRelation)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedLanguage, reqCtx.VSRMatchedLanguage)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedContext, reqCtx.VSRMatchedContext)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedStructure, reqCtx.VSRMatchedStructure)
@@ -233,7 +231,6 @@ func appendLooperSignalHeaders(
 	appendJoinedHeader(setHeaders, headers.VSRMatchedJailbreak, reqCtx.VSRMatchedJailbreak)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedSafety, reqCtx.VSRMatchedSafety)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedPII, reqCtx.VSRMatchedPII)
-	appendJoinedHeader(setHeaders, headers.VSRMatchedKB, reqCtx.VSRMatchedKB)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedConversation, reqCtx.VSRMatchedConversation)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedEvent, reqCtx.VSRMatchedEvent)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedInputModality, reqCtx.VSRMatchedInputModality)

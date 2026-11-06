@@ -20,9 +20,7 @@ import (
 // each deprecated way to choose a model; its golden is what the same
 // fixture resolved to before the fields were deprecated, except where the
 // release notes say otherwise: a systemone decision model now answers the
-// built-in signals (07), and a hazard part without a hazard deployment uses
-// the pre-declared hazard deployment instead of failing to load under a
-// systemone decision model (08). The maintained golden
+// built-in signals (07). The maintained golden
 // pins the shipped configurations. UPDATE_MODEL_RESOLUTION=1 rewrites both.
 
 const (
@@ -103,6 +101,10 @@ func summarizeResolution(cfg *RouterConfig) resolutionSummary {
 		for _, rule := range scoped.SystemOneRules {
 			name := scoped.SystemOneRuleDeployment(rule)
 			summary.Signals[string(recipe)+"/systemone."+rule.Name] = resolvedIdentity(name, cfg.ModelDeployments[name])
+		}
+		for _, rule := range scoped.ApplicationRules() {
+			name := scoped.SystemOneRuleDeployment(rule.Rule)
+			summary.Signals[string(recipe)+"/"+rule.Type+"."+rule.Rule.Name] = resolvedIdentity(name, cfg.ModelDeployments[name])
 		}
 	}
 	for name, deployment := range ModelRuntimeDeploymentsInUse(cfg) {

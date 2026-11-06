@@ -18,9 +18,7 @@ import (
 // it (classification.ResponseConditions).
 type responseConditions interface {
 	Evaluate(tree config.RuleNode) decision.RuleOutcome
-	Jailbreak() *classification.ResponseJailbreakObservation
-	Hallucination() *classification.ResponseHallucinationObservation
-	SystemOne() *classification.ResponseSystemOneSignal
+	Observed() *classification.ResponseSignal
 }
 
 // responseGuardRun is what the selected decision's response_guard made of one
@@ -247,39 +245,27 @@ func (run *responseGuardRun) outcome() string {
 	return "passed"
 }
 
-func (run *responseGuardRun) jailbreak() *classification.ResponseJailbreakObservation {
+// observed is what the response-stage rules the guard read made of the
+// answer, or nil when the guard read none.
+func (run *responseGuardRun) observed() *classification.ResponseSignal {
 	if run == nil || run.conditions == nil {
 		return nil
 	}
-	return run.conditions.Jailbreak()
-}
-
-func (run *responseGuardRun) hallucination() *classification.ResponseHallucinationObservation {
-	if run == nil || run.conditions == nil {
-		return nil
-	}
-	return run.conditions.Hallucination()
-}
-
-func (run *responseGuardRun) systemOne() *classification.ResponseSystemOneSignal {
-	if run == nil || run.conditions == nil {
-		return nil
-	}
-	return run.conditions.SystemOne()
+	return run.conditions.Observed()
 }
 
 // jailbreakFinding reports how the guard's rules read the answer's
 // response-stage jailbreak signal: matched, or unverified when it could not
 // be read and a rule acted on that.
 func (run *responseGuardRun) jailbreakFinding() (matched, unverified bool) {
-	observation := run.jailbreak()
-	if observation == nil || observation.Signal == nil {
+	observed := run.observed()
+	if observed == nil {
 		return false, false
 	}
-	if len(observation.Signal.MatchedRules) > 0 {
+	if len(observed.Reported[config.SignalTypeJailbreak]) > 0 {
 		return true, false
 	}
-	if len(observation.Signal.Errors) == 0 {
+	if !hasSignalError(observed, config.SignalTypeJailbreak) {
 		return false, false
 	}
 	for _, rule := range run.rules {
@@ -308,7 +294,7 @@ func responseGuardBlockMessage(rule *responseGuardRuleRun) string {
 func (run *responseGuardRun) responseGuardNote(code string) string {
 	switch code {
 	case headers.ResponseWarningHallucination:
-		return hallucinationWarningText(run.hallucination())
+		return hallucinationWarningText(run.observed())
 	case headers.ResponseWarningUnverifiedFactual:
 		return "[Unverified Response] This response contains factual claims that could not be verified due to missing context."
 	case headers.ResponseWarningJailbreak:

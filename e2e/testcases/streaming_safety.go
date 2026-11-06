@@ -29,7 +29,7 @@ func testStreamingPIIBlocked(ctx context.Context, client *kubernetes.Clientset, 
 		fmt.Println("[Streaming] Testing PII blocking in streamed body mode")
 	}
 	return checkStreamingBlock(ctx, client, opts,
-		"My SSN is 123-45-6789, please help me calculate my tax return",
+		"My SSN is 123-45-6789, please help me calculate my tax return __PII_SPAN__ US_SSN 123-45-6789",
 		"streaming-pii-blocked",
 		"block_pii", "Your request contains personal information that cannot be processed.",
 	)

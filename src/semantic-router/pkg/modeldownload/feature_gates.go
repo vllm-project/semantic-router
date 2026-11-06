@@ -9,14 +9,6 @@ type modelFeatureGate struct {
 
 var optionalModelFeatureGates = []modelFeatureGate{
 	{
-		enabled: func(cfg *config.RouterConfig) bool { return cfg.NeedsLocalSafetyHeadForRouting(false) },
-		paths:   func(cfg *config.RouterConfig) []string { return []string{cfg.SafetyModels.Safety.ModelID} },
-	},
-	{
-		enabled: func(cfg *config.RouterConfig) bool { return cfg.NeedsLocalSafetyHeadForRouting(true) },
-		paths:   func(cfg *config.RouterConfig) []string { return []string{cfg.SafetyModels.Hazard.ModelID} },
-	},
-	{
 		enabled: func(cfg *config.RouterConfig) bool {
 			return !cfg.UsesRemoteEmbeddings()
 		},
@@ -28,80 +20,11 @@ var optionalModelFeatureGates = []modelFeatureGate{
 			}
 		},
 	},
-	{
-		enabled: func(cfg *config.RouterConfig) bool {
-			return cfg.NeedsCategoryMappingForRouting()
-		},
-		paths: func(cfg *config.RouterConfig) []string {
-			return []string{cfg.CategoryModel.ModelID}
-		},
-	},
-	{
-		enabled: func(cfg *config.RouterConfig) bool {
-			return cfg.NeedsPIIMappingForRouting()
-		},
-		paths: func(cfg *config.RouterConfig) []string {
-			return []string{cfg.PIIModel.ModelID}
-		},
-	},
-	{
-		enabled: func(cfg *config.RouterConfig) bool {
-			return cfg.NeedsJailbreakMappingForRouting()
-		},
-		paths: func(cfg *config.RouterConfig) []string {
-			return []string{cfg.PromptGuard.ModelID}
-		},
-	},
-	{
-		enabled: func(cfg *config.RouterConfig) bool {
-			return cfg.NeedsFactCheckModelForAPI() ||
-				cfg.NeedsFactCheckModelForRouting()
-		},
-		paths: func(cfg *config.RouterConfig) []string {
-			return []string{cfg.HallucinationMitigation.FactCheckModel.ModelID}
-		},
-	},
-	{
-		enabled: func(cfg *config.RouterConfig) bool {
-			return cfg.NeedsLocalHallucinationModelsForRouting() ||
-				(cfg.NeedsHallucinationDetectorForDefaultRuntime() &&
-					cfg.HallucinationMitigation.HallucinationModel.NormalizedBackend() == config.HallucinationBackendLocal)
-		},
-		paths: func(cfg *config.RouterConfig) []string {
-			return []string{cfg.HallucinationMitigation.HallucinationModel.ModelID}
-		},
-	},
-	{
-		enabled: func(cfg *config.RouterConfig) bool {
-			return cfg.NeedsFeedbackModelForAPI() ||
-				cfg.NeedsFeedbackModelForRouting()
-		},
-		paths: func(cfg *config.RouterConfig) []string {
-			return []string{cfg.FeedbackDetector.ModelID}
-		},
-	},
-	{
-		enabled: isModalityClassifierEnabled,
-		paths: func(cfg *config.RouterConfig) []string {
-			if classifier := cfg.ModalityDetector.Classifier; classifier != nil && classifier.ModelPath != "" {
-				return []string{classifier.ModelPath}
-			}
-			if model, _, ok := cfg.ModalityClassifierModel(); ok {
-				return []string{model}
-			}
-			return nil
-		},
-	},
 }
 
 func filterDisabledOptionalModelPaths(cfg *config.RouterConfig, paths []string) []string {
 	disabled := make(map[string]struct{})
 	enabled := make(map[string]bool)
-	for _, rule := range cfg.ClassifierRules {
-		if rule.ModelPath != "" {
-			enabled[config.ResolveModelPath(rule.ModelPath)] = true
-		}
-	}
 	for _, gate := range optionalModelFeatureGates {
 		if gate.enabled(cfg) {
 			for _, path := range gate.paths(cfg) {
@@ -129,16 +52,4 @@ func filterDisabledOptionalModelPaths(cfg *config.RouterConfig, paths []string) 
 		filtered = append(filtered, path)
 	}
 	return filtered
-}
-
-func isModalityClassifierEnabled(cfg *config.RouterConfig) bool {
-	md := cfg.ModalityDetector
-	// Match runtime ownership: inherited settings alone do not prepare a
-	// modality classifier in a recipe that declares no modality rules.
-	if _, _, ok := cfg.ModalityClassifierModel(); len(cfg.ModalityRules) == 0 || !md.Enabled || !ok {
-		return false
-	}
-
-	method := md.GetMethod()
-	return method == config.ModalityDetectionClassifier || method == config.ModalityDetectionHybrid
 }

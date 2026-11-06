@@ -380,13 +380,10 @@ global:
         use_cpu: true
         embedding_config:
           min_score_threshold: 0.6
-    system:
-      prompt_guard: models/custom-jailbreak
     modules:
-      prompt_guard:
+      prompt_compression:
         enabled: true
-        model_ref: prompt_guard
-        threshold: 0.8
+        max_tokens: 2048
 `)
 
 	cfg, err := ParseYAMLBytes(canonicalYAML)
@@ -409,8 +406,8 @@ global:
 	if cfg.Enabled {
 		t.Fatal("expected semantic cache enabled override to be false")
 	}
-	if got := effectiveModel(t, cfg, "prompt_guard"); got != "models/custom-jailbreak" {
-		t.Fatalf("expected prompt guard model to follow system override, got %q", got)
+	if !cfg.PromptCompression.Enabled || cfg.PromptCompression.MaxTokens != 2048 {
+		t.Fatalf("expected the nested prompt_compression module, got %+v", cfg.PromptCompression)
 	}
 	if cfg.Qwen3ModelPath != "models/mom-embedding-pro" {
 		t.Fatalf("expected semantic embedding model override, got %q", cfg.Qwen3ModelPath)
@@ -440,6 +437,8 @@ providers:
         - endpoint: 127.0.0.1:8000
           provider: vllm
 routing:
+  signals:
+    domains: [{name: general, labels: [other]}]
   modelCards:
     - name: qwen3
       modality: text
@@ -496,78 +495,6 @@ global:
 	}
 }
 
-func TestParseYAMLBytesPreservesDefaultSystemModelsForSparseModuleOverrides(t *testing.T) {
-	canonicalYAML := []byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8888
-providers:
-  defaults:
-    model: qwen3
-  models:
-    - name: qwen3
-      provider_model_id: qwen3
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-          provider: vllm
-routing:
-  signals:
-    domains:
-      - name: general
-        description: General requests
-        mmlu_categories: [other]
-  modelCards:
-    - name: qwen3
-  decisions:
-    - name: default_route
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: general
-      modelRefs:
-        - model: qwen3
-global:
-  model_catalog:
-    modules:
-      classifier:
-        domain:
-          threshold: 0.6
-          use_cpu: true
-          model_ref: domain_classifier
-        pii:
-          threshold: 0.7
-          use_cpu: true
-          model_ref: pii_classifier
-      prompt_guard:
-        enabled: true
-        threshold: 0.7
-        use_cpu: true
-        model_ref: prompt_guard
-`)
-
-	cfg, err := ParseYAMLBytes(canonicalYAML)
-	if err != nil {
-		t.Fatalf("ParseYAMLBytes returned error: %v", err)
-	}
-
-	for consumer, want := range map[string]string{
-		"domain_classifier": DefaultSystemModels().DomainClassifier,
-		"pii_classifier":    DefaultSystemModels().PIIClassifier,
-		"prompt_guard":      DefaultSystemModels().PromptGuard,
-	} {
-		if got := effectiveModel(t, cfg, consumer); !sameModel(got, want) {
-			t.Fatalf("expected sparse %s override to keep default system model, got %q", consumer, got)
-		}
-	}
-	if cfg.Classifier.PreferenceModel.ContrastiveEnabled() {
-		t.Fatal("expected sparse classifier override to preserve default preference judgment mode")
-	}
-}
-
 func TestParseYAMLBytesPreservesProviderModelPricing(t *testing.T) {
 	canonicalYAML := []byte(`
 version: v0.3
@@ -591,6 +518,8 @@ providers:
         - endpoint: 127.0.0.1:8000
           provider: vllm
 routing:
+  signals:
+    domains: [{name: general, labels: [other]}]
   modelCards:
     - name: qwen3
       modality: text
@@ -645,6 +574,8 @@ providers:
         prompt_per_1m: 1.00
         completion_per_1m: 5.00
 routing:
+  signals:
+    domains: [{name: general, labels: [other]}]
   modelCards:
     - name: claude-haiku
       modality: ar
@@ -816,79 +747,6 @@ global:
 	}
 	if cfg.ConfigSource != ConfigSourceKubernetes {
 		t.Fatalf("expected ConfigSourceKubernetes, got %q", cfg.ConfigSource)
-	}
-}
-
-func TestParseYAMLBytesAllowsClearingRouterOwnedClassifierDefaults(t *testing.T) {
-	canonicalYAML := []byte(`
-version: v0.3
-listeners: []
-providers:
-  defaults:
-    model: openai/gpt-oss-20b
-  models:
-    - name: openai/gpt-oss-20b
-      backend_refs:
-        - name: primary
-          provider: vllm
-          endpoint: localhost:8000
-          protocol: http
-          weight: 1
-routing:
-  decisions:
-    - name: default-route
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: openai/gpt-oss-20b
-  modelCards:
-    - name: openai/gpt-oss-20b
-global:
-  model_catalog:
-    modules:
-      prompt_guard:
-        enabled: false
-        model_ref: ""
-        model_id: ""
-        jailbreak_mapping_path: ""
-      classifier:
-        domain:
-          model_ref: ""
-          model_id: ""
-          category_mapping_path: ""
-        pii:
-          model_ref: ""
-          model_id: ""
-          pii_mapping_path: ""
-`)
-
-	cfg, err := ParseYAMLBytes(canonicalYAML)
-	if err != nil {
-		t.Fatalf("ParseYAMLBytes returned error: %v", err)
-	}
-
-	if cfg.CategoryModel.ModelID != "" {
-		t.Fatalf("expected domain classifier model to be cleared, got %q", cfg.CategoryModel.ModelID)
-	}
-	if cfg.CategoryMappingPath != "" {
-		t.Fatalf("expected category mapping path to be cleared, got %q", cfg.CategoryMappingPath)
-	}
-	if cfg.PIIModel.ModelID != "" {
-		t.Fatalf("expected PII classifier model to be cleared, got %q", cfg.PIIModel.ModelID)
-	}
-	if cfg.PIIMappingPath != "" {
-		t.Fatalf("expected PII mapping path to be cleared, got %q", cfg.PIIMappingPath)
-	}
-	if cfg.PromptGuard.Enabled {
-		t.Fatal("expected prompt guard to be disabled")
-	}
-	if cfg.PromptGuard.ModelID != "" {
-		t.Fatalf("expected prompt guard model to be cleared, got %q", cfg.PromptGuard.ModelID)
-	}
-	if cfg.PromptGuard.JailbreakMappingPath != "" {
-		t.Fatalf("expected prompt guard mapping path to be cleared, got %q", cfg.PromptGuard.JailbreakMappingPath)
 	}
 }
 

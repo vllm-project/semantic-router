@@ -138,7 +138,7 @@ routing:
     assert "Configuration is valid" in result.output
 
 
-def test_validate_command_accepts_pii_rule_without_threshold(tmp_path):
+def test_validate_command_accepts_pii_rule_without_predicate(tmp_path):
     config_path = _write_config(
         tmp_path,
         """
@@ -152,7 +152,7 @@ routing:
   signals:
     pii:
       - name: contact_details
-        pii_types_allowed: [EMAIL_ADDRESS]
+        ignore_labels: [EMAIL_ADDRESS]
 """,
     )
 
@@ -162,7 +162,7 @@ routing:
 
     assert result.exit_code == 0, result.output
     rule = parse_user_config(str(config_path)).routing.signals.pii[0]
-    assert rule.threshold is None
+    assert rule.predicate is None
 
 
 def test_validate_command_rejects_empty_external_gateway_provider_model(tmp_path):

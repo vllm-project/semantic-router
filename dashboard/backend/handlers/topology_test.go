@@ -26,14 +26,6 @@ backend_models:
     gpt-4:
       reasoning_family: "openai"
 
-prompt_guard:
-  enabled: true
-  model_id: "models/jailbreak-classifier"
-
-classifier:
-  pii_model:
-    model_id: "models/pii-detector"
-
 semantic_cache:
   enabled: true
   backend_type: "memory"

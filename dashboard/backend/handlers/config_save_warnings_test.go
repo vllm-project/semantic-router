@@ -132,26 +132,12 @@ func withRoutingBindings(bindings map[string]any) map[string]any {
 func TestConfigSavesReturnTheRouterWarningForADeprecatedBindingField(t *testing.T) {
 	applyWithoutRuntime(t)
 	config := withRoutingBindings(map[string]any{
-		"pii": map[string]any{"deployment": "primary", "contract": "token_spans.v1"},
+		"pii": map[string]any{"deployment": "primary", "contract": "decision.v1"},
 	})
 	forEverySave(t, config, func(t *testing.T, response *httptest.ResponseRecorder) {
 		body := decodeSavedConfig(t, response)
 		if !hasConfigWarning(body.Warnings, "deprecated_model_field", "routing.model_bindings.pii") {
 			t.Fatalf("warnings = %+v, want the Router's deprecation of the binding contract", body.Warnings)
-		}
-	})
-}
-
-func TestConfigSavesReturnTheRouterWarningForADeprecatedSystemLine(t *testing.T) {
-	applyWithoutRuntime(t)
-	config := canonicalConfigBody("127.0.0.1:8000")
-	config["global"] = map[string]any{"model_catalog": map[string]any{"system": map[string]any{
-		"pii_classifier": "models/Vela-1.0-Encoder-307M-PII",
-	}}}
-	forEverySave(t, config, func(t *testing.T, response *httptest.ResponseRecorder) {
-		body := decodeSavedConfig(t, response)
-		if !hasConfigWarning(body.Warnings, "deprecated_model_field", "global.model_catalog.system.pii_classifier") {
-			t.Fatalf("warnings = %+v, want the Router's deprecation of the system line", body.Warnings)
 		}
 	})
 }

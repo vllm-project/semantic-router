@@ -16,6 +16,13 @@ const migrationChangeCode = "migration_change"
 // must review (a threshold to re-fit, dropped data).
 type Migration struct {
 	notes []ConfigWarning
+	root  *yaml.Node
+}
+
+// Root is the document's root mapping, for a rewrite that reads or writes
+// outside its match: a scope's other signals, or a module a rule inherits.
+func (m *Migration) Root() *yaml.Node {
+	return m.root
 }
 
 // Rename renames a key of a mapping in place, keeping its value. When the
@@ -116,7 +123,7 @@ func migrateConfigForms(data []byte, forms []ConfigForm) ([]byte, []ConfigWarnin
 	if root == nil {
 		return data, nil, nil
 	}
-	m := &Migration{}
+	m := &Migration{root: root}
 	changed := false
 	for _, form := range forms {
 		matches := form.matches(root)

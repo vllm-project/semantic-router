@@ -94,8 +94,6 @@ func (c *Compiler) compileProjectionScores() {
 			score.Inputs = append(score.Inputs, config.ProjectionScoreInput{
 				Type:        inputDecl.SignalType,
 				Name:        inputDecl.SignalName,
-				KB:          inputDecl.KB,
-				Metric:      inputDecl.Metric,
 				Weight:      inputDecl.Weight,
 				ValueSource: inputDecl.ValueSource,
 				Match:       inputDecl.Match,

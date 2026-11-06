@@ -214,48 +214,6 @@ func TestClassificationService_BasicFunctionality(t *testing.T) {
 	})
 }
 
-func TestBuildIntentResponseFromSignals_IncludesExtendedMatchedSignals(t *testing.T) {
-	service := &ClassificationService{}
-	req := IntentRequest{}
-	signals := &classification.SignalResults{
-		MatchedModalityRules:   []string{"AR"},
-		MatchedAuthzRules:      []string{"premium_tier"},
-		MatchedJailbreakRules:  []string{"jailbreak:block"},
-		MatchedPIIRules:        []string{"pii:email"},
-		MatchedReaskRules:      []string{"likely_dissatisfied"},
-		MatchedEventRules:      []string{"critical_payment_event"},
-		MatchedProjectionRules: []string{"balance_reasoning"},
-	}
-	decisionResult := &decision.DecisionResult{
-		Decision: &config.Decision{
-			Name: "projection_route",
-			ModelRefs: []config.ModelRef{{
-				Model: "qwen3-8b",
-			}},
-		},
-		Confidence: 0.91,
-	}
-
-	response := service.buildIntentResponseFromSignals(
-		signals,
-		decisionResult,
-		Classification{Category: "projection_route", Confidence: 0.91, ConfidenceAvailable: confidenceAvailability(true), ProcessingTimeMs: 12},
-		req,
-		service.classifier,
-		service.config,
-	)
-	require.NotNil(t, response)
-	require.NotNil(t, response.MatchedSignals)
-
-	assert.Equal(t, []string{"AR"}, response.MatchedSignals.Modality)
-	assert.Equal(t, []string{"premium_tier"}, response.MatchedSignals.Authz)
-	assert.Equal(t, []string{"jailbreak:block"}, response.MatchedSignals.Jailbreak)
-	assert.Equal(t, []string{"pii:email"}, response.MatchedSignals.PII)
-	assert.Equal(t, []string{"likely_dissatisfied"}, response.MatchedSignals.Reask)
-	assert.Equal(t, []string{"critical_payment_event"}, response.MatchedSignals.Event)
-	assert.Equal(t, []string{"balance_reasoning"}, response.MatchedSignals.Projection)
-}
-
 func TestBuildEvalResponse_ProjectionSignalsIncludedInUsedMatchedAndUnmatched(t *testing.T) {
 	routerConfig := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
@@ -577,7 +535,7 @@ func TestDetectPII_EdgeCases(t *testing.T) {
 }
 
 func TestBuildPIIResponse_NoDetections(t *testing.T) {
-	resp := newPIIResponseTestService().buildPIIResponse("hello world", []classification.PIIDetection{}, nil)
+	resp := newPIIResponseTestService().buildPIIResponse("hello world", []piiDetection{}, nil)
 
 	assert.False(t, resp.HasPII)
 	assert.Empty(t, resp.Entities)
@@ -677,7 +635,7 @@ func TestBuildPIIResponse_MaskEntities(t *testing.T) {
 	t.Run("basic", func(t *testing.T) {
 		resp := service.buildPIIResponse(
 			"Contact alice@test.com please",
-			[]classification.PIIDetection{
+			[]piiDetection{
 				{EntityType: "EMAIL", Start: 8, End: 22, Text: "alice@test.com", Confidence: 0.95},
 			},
 			&PIIOptions{MaskEntities: true},
@@ -689,7 +647,7 @@ func TestBuildPIIResponse_MaskEntities(t *testing.T) {
 	t.Run("same_entity_twice", func(t *testing.T) {
 		resp := service.buildPIIResponse(
 			"Email alice@test.com and again alice@test.com",
-			[]classification.PIIDetection{
+			[]piiDetection{
 				{EntityType: "EMAIL", Start: 6, End: 20, Text: "alice@test.com", Confidence: 0.95},
 				{EntityType: "EMAIL", Start: 31, End: 45, Text: "alice@test.com", Confidence: 0.93},
 			},
@@ -703,7 +661,7 @@ func TestBuildPIIResponse_MaskEntities(t *testing.T) {
 	t.Run("different_texts_same_type", func(t *testing.T) {
 		resp := service.buildPIIResponse(
 			"Email alice@test.com and bob@test.com",
-			[]classification.PIIDetection{
+			[]piiDetection{
 				{EntityType: "EMAIL", Start: 6, End: 20, Text: "alice@test.com", Confidence: 0.95},
 				{EntityType: "EMAIL", Start: 25, End: 37, Text: "bob@test.com", Confidence: 0.92},
 			},
@@ -718,7 +676,7 @@ func TestBuildPIIResponse_MaskEntities(t *testing.T) {
 func TestBuildPIIResponse_CombinedOptions(t *testing.T) {
 	resp := newPIIResponseTestService().buildPIIResponse(
 		"Alice alice@test.com",
-		[]classification.PIIDetection{
+		[]piiDetection{
 			{EntityType: "PERSON", Start: 0, End: 5, Text: "Alice", Confidence: 0.88},
 			{EntityType: "EMAIL", Start: 6, End: 20, Text: "alice@test.com", Confidence: 0.95},
 		},
@@ -745,8 +703,8 @@ func newPIIResponseTestService() *ClassificationService {
 	return &ClassificationService{}
 }
 
-func samplePIIResponseDetections() []classification.PIIDetection {
-	return []classification.PIIDetection{
+func samplePIIResponseDetections() []piiDetection {
+	return []piiDetection{
 		{EntityType: "EMAIL", Start: 13, End: 29, Text: "alice@test.com", Confidence: 0.95},
 		{EntityType: "PERSON", Start: 0, End: 5, Text: "Alice", Confidence: 0.88},
 		{EntityType: "PHONE", Start: 37, End: 49, Text: "555-123-4567", Confidence: 0.75},

@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -34,13 +33,10 @@ func TestDefaultOperatorSamplesSelectTheDefaultModel(t *testing.T) {
 			if cfg.MmBertModelPath != "models/Vela-1.0-Encoder-307M-Embedding" {
 				t.Fatalf("embedding artifact = %q", cfg.MmBertModelPath)
 			}
-			for _, consumer := range []string{"prompt_guard", "domain_classifier", "pii_classifier"} {
-				if deployment := resolvedDeployment(t, cfg, consumer); deployment.Artifact != vela3Fast.RepoID {
-					t.Fatalf("%s runs %+v, want vela3-fast", consumer, deployment)
+			for _, signalType := range []string{routerconfig.SignalTypeJailbreak, routerconfig.SignalTypePII} {
+				if deployment := applicationDeployment(t, cfg, signalType); deployment.Artifact != vela3Fast.RepoID {
+					t.Fatalf("%s rules ask %+v, want vela3-fast", signalType, deployment)
 				}
-			}
-			if cfg.PromptGuard.Threshold != .88 || cfg.PIIMappingPath != "" {
-				t.Fatalf("guard threshold = %v, PII mapping = %q", cfg.PromptGuard.Threshold, cfg.PIIMappingPath)
 			}
 		})
 	}
@@ -48,25 +44,26 @@ func TestDefaultOperatorSamplesSelectTheDefaultModel(t *testing.T) {
 
 var vela3Fast = routerconfig.GetModelByPath(routerconfig.Vela3SignalModel)
 
-func resolvedDeployment(t *testing.T, cfg *routerconfig.RouterConfig, consumer string) routerconfig.ModelDeployment {
+func applicationDeployment(t *testing.T, cfg *routerconfig.RouterConfig, signalType string) routerconfig.ModelDeployment {
 	t.Helper()
-	resolved, ok, err := cfg.ResolveTask(consumer)
-	if err != nil || !ok {
-		t.Fatalf("%s resolves to no deployment: %v", consumer, err)
+	name, _ := cfg.ApplicationTypeDeployment(signalType)
+	deployment, ok := cfg.ModelDeployments[name]
+	if !ok {
+		t.Fatalf("%s rules resolve to no deployment: %q", signalType, name)
 	}
-	return resolved.Deployment
+	return deployment
 }
 
 // vela3FastMemoryLimit is the least Router memory limit that holds vela3-fast
 // while it loads; 8Gi is OOM-killed.
 var vela3FastMemoryLimit = resource.MustParse("12Gi")
 
-func TestOperatorSamplesRunTheGuardAtItsModelsOperatingPoint(t *testing.T) {
+// A sample that asks vela3-fast must give the Router room to load it.
+func TestOperatorSamplesHoldTheirDecisionModel(t *testing.T) {
 	names, err := filepath.Glob(filepath.Join("..", "config", "samples", "*.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	guarded := 0
 	for _, path := range names {
 		name := filepath.Base(path)
 		data, err := os.ReadFile(path)
@@ -90,20 +87,11 @@ func TestOperatorSamplesRunTheGuardAtItsModelsOperatingPoint(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !cfg.PromptGuard.Enabled {
-				return
+			asked := false
+			for _, deployment := range routerconfig.ModelRuntimeDeploymentsInUse(cfg) {
+				asked = asked || deployment.Artifact == vela3Fast.RepoID
 			}
-			guarded++
-			guard, ok, err := cfg.ResolveTask("prompt_guard")
-			if err != nil || !ok {
-				t.Fatalf("the guard resolves to no deployment: %v", err)
-			}
-			want, _ := routerconfig.ThresholdsOfDeployment(guard.Name, guard.Deployment)
-			if cfg.PromptGuard.Threshold != want.PromptGuard {
-				t.Fatalf("guard threshold %v on %s, want its operating point %v",
-					cfg.PromptGuard.Threshold, guard.Name, want.PromptGuard)
-			}
-			if guard.Deployment.Artifact != vela3Fast.RepoID {
+			if !asked {
 				return
 			}
 			// No limit leaves the Router uncapped, which also holds the model.
@@ -114,24 +102,25 @@ func TestOperatorSamplesRunTheGuardAtItsModelsOperatingPoint(t *testing.T) {
 			}
 		})
 	}
-	if guarded == 0 {
-		t.Fatal("no sample runs the prompt guard")
-	}
 }
 
-func TestTypedOperatorSampleServesThePinnedVelaPII(t *testing.T) {
+func TestTypedOperatorSampleServesThePinnedVela2(t *testing.T) {
 	canonical := sampleModelConfig(t, "vllm.ai_v1alpha1_semanticrouter_model_runtime.yaml")
 	binding, bound := canonical.Routing.ModelBindings["pii"]
 	if !bound {
 		t.Fatalf("the sample binds no pii deployment: %+v", canonical.Routing.ModelBindings)
 	}
-	if binding.MappingPath != "" {
-		t.Fatalf("PII binding names a mapping file instead of the served labels: %q", binding.MappingPath)
-	}
-	release := routerconfig.GetModelByPath("models/Vela-1.0-Encoder-307M-PII")
+	release := routerconfig.GetModelByPath(routerconfig.Vela2Model08B)
 	deployment := canonical.Global.ModelCatalog.Deployments[binding.Deployment]
 	if !deployment.IsModelRuntime() || deployment.Artifact != release.RepoID || deployment.Revision != release.Revision {
-		t.Fatalf("PII deployment is not the pinned Vela release on the model runtime: %+v", deployment)
+		t.Fatalf("the pii deployment is not the pinned Vela 2.0 release on the model runtime: %+v", deployment)
+	}
+	data, err := yaml.Marshal(canonical)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := routerconfig.ParseYAMLBytes(data); err != nil {
+		t.Fatalf("the router rejects the sample: %v", err)
 	}
 }
 
@@ -165,37 +154,9 @@ func TestOperatorCIUsesCanonicalVelaModels(t *testing.T) {
 	if cfg.MmBertModelPath != defaults.MmBertModelPath || cfg.EmbeddingConfig.ModelType != "mmbert" || !cfg.UseCPU {
 		t.Fatalf("CI embedding must use the canonical CPU model: %+v", cfg.EmbeddingModels)
 	}
-	for _, consumer := range []string{"domain_classifier", "pii_classifier"} {
-		resolved, _, err := cfg.ResolveTask(consumer)
-		if err != nil || resolved.Name != routerconfig.DefaultDecisionDeployment || resolved.Deployment.Device != "cpu" {
-			t.Fatalf("CI %s must run the default CPU decision model: %+v (%v)", consumer, resolved, err)
-		}
-	}
-	if !cfg.CategoryModel.UseCPU || !cfg.PIIModel.UseCPU {
-		t.Fatalf("CI classifiers must inherit canonical CPU defaults: %+v, %+v", cfg.CategoryModel, cfg.PIIModel)
-	}
-}
-
-func TestOperatorClassifierOverrideKeepsUnspecifiedModels(t *testing.T) {
-	reconciler := &SemanticRouterReconciler{}
-	defaults := operatorModelModules().Classifier
-	withDomain, err := reconciler.convertClassifierModule(&vllmv1alpha1.ClassifierConfig{
-		CategoryModel: &vllmv1alpha1.CategoryModelConfig{ModelID: "custom-domain"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if withDomain.Domain.ModelID != "custom-domain" || !reflect.DeepEqual(withDomain.PII, defaults.PII) {
-		t.Fatalf("domain override replaced default PII: %+v", withDomain)
-	}
-	withPII, err := reconciler.convertClassifierModule(&vllmv1alpha1.ClassifierConfig{
-		PIIModel: &vllmv1alpha1.PIIModelConfig{ModelID: "custom-pii"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if withPII.PII.ModelID != "custom-pii" || !reflect.DeepEqual(withPII.Domain, defaults.Domain) {
-		t.Fatalf("PII override replaced default domain: %+v", withPII)
+	name, deployment, ok, err := cfg.DecisionModelDeployment()
+	if err != nil || !ok || name != routerconfig.DefaultDecisionDeployment || deployment.Device != "cpu" {
+		t.Fatalf("CI must run the default CPU decision model: %s %+v (%v)", name, deployment, err)
 	}
 }
 

@@ -315,55 +315,6 @@ func requireFirstDecisionName(t *testing.T, routing map[string]any, want string)
 	}
 }
 
-func minimalDeployTestConfig(decisionName string) *config.RouterConfig {
-	return &config.RouterConfig{
-		APIServer: config.APIServer{
-			Listeners: []config.Listener{{
-				Name:    "http-8899",
-				Address: "0.0.0.0",
-				Port:    8899,
-				Timeout: "120s",
-			}},
-		},
-		BackendModels: config.BackendModels{
-			DefaultModel: "qwen-test",
-			ModelConfig: map[string]config.ModelParams{
-				"qwen-test": {},
-			},
-			VLLMEndpoints: []config.VLLMEndpoint{{
-				Name:     "primary",
-				Address:  "vllm",
-				Port:     8000,
-				Protocol: "http",
-				Model:    "qwen-test",
-				Weight:   1,
-			}},
-		},
-		IntelligentRouting: config.IntelligentRouting{
-			Signals: config.Signals{
-				Categories: []config.Category{{
-					CategoryMetadata: config.CategoryMetadata{Name: "math"},
-				}},
-			},
-			Decisions: []config.Decision{{
-				Name:     decisionName,
-				Priority: 100,
-				Tier:     1,
-				Rules: config.RuleCombination{
-					Operator: "AND",
-					Conditions: []config.RuleNode{{
-						Type: "domain",
-						Name: "math",
-					}},
-				},
-				ModelRefs: []config.ModelRef{{
-					Model: "qwen-test",
-				}},
-			}},
-		},
-	}
-}
-
 func mustMarshalCanonicalConfigYAML(t *testing.T, cfg *config.RouterConfig) []byte {
 	t.Helper()
 	canonical := config.CanonicalConfigFromRouterConfig(cfg)
@@ -515,60 +466,6 @@ func TestNextConfigVersionAvoidsSameSecondBackupCollisions(t *testing.T) {
 	}
 	if third := nextConfigVersion(backupDir, now); third != "20260802-101112-002" {
 		t.Fatalf("third version = %q", third)
-	}
-}
-
-func TestHandleConfigRollbackValidatesOwnedLocalClassifierCandidate(t *testing.T) {
-	for _, invalid := range []bool{false, true} {
-		t.Run(fmt.Sprintf("invalid_%t", invalid), func(t *testing.T) {
-			configDir := t.TempDir()
-			configPath := filepath.Join(configDir, "config.yaml")
-			current := []byte(localClassifierReloadConfig("models/risk-v1"))
-			if err := os.WriteFile(configPath, current, 0o600); err != nil {
-				t.Fatal(err)
-			}
-			backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
-			if err := os.MkdirAll(backupDir, 0o700); err != nil {
-				t.Fatal(err)
-			}
-			version := "20240101-000000"
-			candidate := localClassifierReloadConfig("models/risk-v2")
-			if invalid {
-				candidate = strings.ReplaceAll(candidate, "labels: [SAFE, RISKY]", "labels: [SAFE, SAFE]")
-			}
-			if err := os.WriteFile(filepath.Join(backupDir, "config."+version+".yaml"), []byte(candidate), 0o600); err != nil {
-				t.Fatal(err)
-			}
-			response := postRollback(t, configPath, version)
-			after, err := os.ReadFile(configPath)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if invalid {
-				if response.Code != http.StatusBadRequest || rollbackErrorCode(t, response.Body.Bytes()) != "BACKUP_INVALID" {
-					t.Fatalf("invalid candidate status=%d body=%s", response.Code, response.Body.String())
-				}
-				if !bytes.Equal(after, current) {
-					t.Fatal("invalid rollback mutated source config")
-				}
-				return
-			}
-			if response.Code != http.StatusOK {
-				t.Fatalf("valid candidate status=%d body=%s", response.Code, response.Body.String())
-			}
-			if !bytes.Equal(after, []byte(candidate)) {
-				t.Fatal("valid model change was not persisted for candidate preparation")
-			}
-			var result RouterConfigUpdateResponse
-			if decodeErr := json.Unmarshal(response.Body.Bytes(), &result); decodeErr != nil {
-				t.Fatal(decodeErr)
-			}
-			// This fixture has no runtime registry. Persisting a candidate must
-			// not claim that real native preparation/activation has completed.
-			if result.ActivationStatus != "unknown" {
-				t.Fatalf("unexpected activation claim: %+v", result)
-			}
-		})
 	}
 }
 
@@ -742,5 +639,54 @@ func TestConfigCleanupBackupsRemovesSourceSidecar(t *testing.T) {
 	oldest := "20260802-120000"
 	if _, err := os.Stat(configVersionSourcePath(backupDir, oldest)); !os.IsNotExist(err) {
 		t.Fatalf("oldest source sidecar should be removed, stat err=%v", err)
+	}
+}
+
+func minimalDeployTestConfig(decisionName string) *config.RouterConfig {
+	return &config.RouterConfig{
+		APIServer: config.APIServer{
+			Listeners: []config.Listener{{
+				Name:    "http-8899",
+				Address: "0.0.0.0",
+				Port:    8899,
+				Timeout: "120s",
+			}},
+		},
+		BackendModels: config.BackendModels{
+			DefaultModel: "qwen-test",
+			ModelConfig: map[string]config.ModelParams{
+				"qwen-test": {},
+			},
+			VLLMEndpoints: []config.VLLMEndpoint{{
+				Name:     "primary",
+				Address:  "vllm",
+				Port:     8000,
+				Protocol: "http",
+				Model:    "qwen-test",
+				Weight:   1,
+			}},
+		},
+		IntelligentRouting: config.IntelligentRouting{
+			Signals: config.Signals{
+				Categories: []config.Category{{
+					Name: "math",
+				}},
+			},
+			Decisions: []config.Decision{{
+				Name:     decisionName,
+				Priority: 100,
+				Tier:     1,
+				Rules: config.RuleCombination{
+					Operator: "AND",
+					Conditions: []config.RuleNode{{
+						Type: "domain",
+						Name: "math",
+					}},
+				},
+				ModelRefs: []config.ModelRef{{
+					Model: "qwen-test",
+				}},
+			}},
+		},
 	}
 }

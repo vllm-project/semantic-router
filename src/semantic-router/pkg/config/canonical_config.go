@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
@@ -89,34 +88,28 @@ type CanonicalRouting struct {
 
 // CanonicalSignals groups routing signals under routing.signals.
 type CanonicalSignals struct {
-	Keywords      []KeywordRule          `yaml:"keywords,omitempty"`
-	Embeddings    []EmbeddingRule        `yaml:"embeddings,omitempty"`
-	Domains       []Category             `yaml:"domains,omitempty"`
-	FactCheck     []FactCheckRule        `yaml:"fact_check,omitempty"`
-	UserFeedbacks []UserFeedbackRule     `yaml:"user_feedbacks,omitempty"`
-	Reasks        []ReaskRule            `yaml:"reasks,omitempty"`
-	Preferences   []PreferenceRule       `yaml:"preferences,omitempty"`
-	Language      []LanguageRule         `yaml:"language,omitempty"`
-	Context       []ContextRule          `yaml:"context,omitempty"`
-	Structure     []StructureRule        `yaml:"structure,omitempty"`
-	Complexity    []ComplexityRule       `yaml:"complexity,omitempty"`
-	Modality      []ModalityRule         `yaml:"modality,omitempty"`
-	RoleBindings  []RoleBinding          `yaml:"role_bindings,omitempty"`
-	Jailbreak     []JailbreakRule        `yaml:"jailbreak,omitempty"`
-	Safety        []SafetyRule           `yaml:"safety,omitempty"`
-	Hallucination []HallucinationRule    `yaml:"hallucination,omitempty"`
-	PII           []PIIRule              `yaml:"pii,omitempty"`
-	KB            []KBSignalRule         `yaml:"kb,omitempty"`
-	Conversation  []ConversationRule     `yaml:"conversation,omitempty"`
-	EventRules    []EventRule            `yaml:"events,omitempty"`
-	Metadata      []MetadataRule         `yaml:"metadata,omitempty"`
-	Classifiers   []ClassifierSignalRule `yaml:"classifiers,omitempty"`
-	InputModality []InputModalityRule    `yaml:"input_modality,omitempty"`
-	Actions       []ActionRule           `yaml:"actions,omitempty"`
-	SystemOne     []SystemOneRule        `yaml:"systemone,omitempty"`
-
-	// TopicContinuity declares context-policy evidence sources.
-	TopicContinuity []TopicContinuityRule `yaml:"topic_continuity,omitempty"`
+	Keywords      []KeywordRule       `yaml:"keywords,omitempty"`
+	Domains       []Category          `yaml:"domains,omitempty"`
+	FactCheck     []FactCheckRule     `yaml:"fact_check,omitempty"`
+	UserFeedbacks []UserFeedbackRule  `yaml:"user_feedbacks,omitempty"`
+	Language      []LanguageRule      `yaml:"language,omitempty"`
+	Context       []ContextRule       `yaml:"context,omitempty"`
+	Structure     []StructureRule     `yaml:"structure,omitempty"`
+	Complexity    []ComplexityRule    `yaml:"complexity,omitempty"`
+	Modality      []ModalityRule      `yaml:"modality,omitempty"`
+	RoleBindings  []RoleBinding       `yaml:"role_bindings,omitempty"`
+	Jailbreak     []JailbreakRule     `yaml:"jailbreak,omitempty"`
+	Safety        []SafetyRule        `yaml:"safety,omitempty"`
+	Hallucination []HallucinationRule `yaml:"hallucination,omitempty"`
+	Refusal       []RefusalRule       `yaml:"refusal,omitempty"`
+	TurnRelation  []TurnRelationRule  `yaml:"turn_relation,omitempty"`
+	PII           []PIIRule           `yaml:"pii,omitempty"`
+	Conversation  []ConversationRule  `yaml:"conversation,omitempty"`
+	EventRules    []EventRule         `yaml:"events,omitempty"`
+	Metadata      []MetadataRule      `yaml:"metadata,omitempty"`
+	InputModality []InputModalityRule `yaml:"input_modality,omitempty"`
+	Actions       []ActionRule        `yaml:"actions,omitempty"`
+	SystemOne     []SystemOneRule     `yaml:"systemone,omitempty"`
 }
 
 // CanonicalProjections groups derived routing outputs under routing.projections.
@@ -205,7 +198,6 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 		return nil, err
 	}
 	cfg.ModelResourceWarnings = append(cfg.ModelResourceWarnings, backendWarnings...)
-	cfg.applyModuleThresholds()
 	cfg.EffectiveModelRegistry = effective
 	cfg.Evaluation = cloneCanonicalEvaluation(canonical.Evaluation)
 	if err := validateNativeRoutingConfig(&cfg); err != nil {
@@ -225,7 +217,7 @@ func applyCanonicalRoutingState(cfg *RouterConfig, canonical *CanonicalConfig) {
 	cfg.Listeners = append([]Listener(nil), canonical.Listeners...)
 	cfg.Decisions = copyDecisions(canonical.Routing.Decisions)
 	ensureModelRefDefaults(cfg.Decisions)
-	cfg.Signals = normalizeSignals(canonical.Routing.Signals, cfg.Decisions)
+	cfg.Signals = normalizeSignals(canonical.Routing.Signals)
 	cfg.Projections = normalizeProjections(canonical.Routing.Projections)
 	cfg.Strategy = cfg.RoutingDefaults.resolveStrategy(canonical.Routing.Strategy)
 	cfg.Fallback = cfg.RoutingDefaults.resolveFallback(canonical.Routing.Fallback)
@@ -617,15 +609,12 @@ func aliasLoRAExists(name string, aliases map[string]CanonicalProviderModel, car
 	return false
 }
 
-func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
-	result := Signals{
+func normalizeSignals(signals CanonicalSignals) Signals {
+	return Signals{
 		KeywordRules:       append([]KeywordRule(nil), signals.Keywords...),
-		EmbeddingRules:     append([]EmbeddingRule(nil), signals.Embeddings...),
 		Categories:         append([]Category(nil), signals.Domains...),
 		FactCheckRules:     append([]FactCheckRule(nil), signals.FactCheck...),
 		UserFeedbackRules:  append([]UserFeedbackRule(nil), signals.UserFeedbacks...),
-		ReaskRules:         append([]ReaskRule(nil), signals.Reasks...),
-		PreferenceRules:    append([]PreferenceRule(nil), signals.Preferences...),
 		LanguageRules:      append([]LanguageRule(nil), signals.Language...),
 		ContextRules:       append([]ContextRule(nil), signals.Context...),
 		StructureRules:     append([]StructureRule(nil), signals.Structure...),
@@ -635,24 +624,16 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 		JailbreakRules:     append([]JailbreakRule(nil), signals.Jailbreak...),
 		SafetyRules:        append([]SafetyRule(nil), signals.Safety...),
 		HallucinationRules: append([]HallucinationRule(nil), signals.Hallucination...),
+		RefusalRules:       append([]RefusalRule(nil), signals.Refusal...),
+		TurnRelationRules:  append([]TurnRelationRule(nil), signals.TurnRelation...),
 		PIIRules:           append([]PIIRule(nil), signals.PII...),
-		KBRules:            append([]KBSignalRule(nil), signals.KB...),
 		ConversationRules:  append([]ConversationRule(nil), signals.Conversation...),
 		EventRules:         append([]EventRule(nil), signals.EventRules...),
 		MetadataRules:      append([]MetadataRule(nil), signals.Metadata...),
-		ClassifierRules:    append([]ClassifierSignalRule(nil), signals.Classifiers...),
 		InputModalityRules: append([]InputModalityRule(nil), signals.InputModality...),
 		ActionRules:        append([]ActionRule(nil), signals.Actions...),
 		SystemOneRules:     append([]SystemOneRule(nil), signals.SystemOne...),
-
-		TopicContinuityRules: append([]TopicContinuityRule(nil), signals.TopicContinuity...),
 	}
-
-	if len(result.Categories) == 0 {
-		result.Categories = autoGenerateCategoriesFromDecisions(decisions)
-	}
-
-	return result
 }
 
 func normalizeProjections(projections CanonicalProjections) Projections {
@@ -691,39 +672,6 @@ func defaultProtocol(protocol string) string {
 		return "http"
 	}
 	return strings.ToLower(protocol)
-}
-
-func autoGenerateCategoriesFromDecisions(decisions []Decision) []Category {
-	names := map[string]bool{}
-	for _, decision := range decisions {
-		collectRuleNames(decision.Rules, SignalTypeDomain, names)
-	}
-	if len(names) == 0 {
-		return nil
-	}
-
-	categories := make([]Category, 0, len(names))
-	keys := make([]string, 0, len(names))
-	for name := range names {
-		keys = append(keys, name)
-	}
-	sort.Strings(keys)
-	for _, name := range keys {
-		// A referenced classifier label declares itself; any other name can
-		// only be the fallback for labels no rule lists.
-		label := "other"
-		if IsSupportedRoutingDomainName(name) {
-			label = name
-		}
-		categories = append(categories, Category{
-			CategoryMetadata: CategoryMetadata{
-				Name:           name,
-				Description:    name,
-				MMLUCategories: []string{label},
-			},
-		})
-	}
-	return categories
 }
 
 func collectRuleNames(node RuleCombination, signalType string, out map[string]bool) {

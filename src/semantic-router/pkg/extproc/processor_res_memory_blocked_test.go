@@ -28,9 +28,9 @@ func TestBlockedResponseRecordsMemoryPersistenceReceipt(t *testing.T) {
 		{name: "no_extractor", status: "disabled", reason: "no_extractor", noExtractor: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			server := newJailbreakScoreServer(t, 0.95, 0.05)
+			server := newJailbreakDecider(0.95)
 			if tc.classifyFailure {
-				server = newJailbreakFailingServer(t)
+				server = newFailingDecider()
 			}
 			router, ctx := newResponseStageRouter(t, server, config.ResponseGuardBlock, config.ResponseGuardBlock)
 			router.Config.Memory.Enabled = true

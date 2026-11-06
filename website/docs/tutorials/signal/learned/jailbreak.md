@@ -156,12 +156,15 @@ unscanned input, as is an input over the guard's input under `reject` or over
 its [scan budget](../../../model-runtime/reference.md#long-inputs). Request
 rules, the text detection APIs, and response scans cannot use its
 probabilities to report a clean complete input: a rule matches it with the
-type `unscanned`, whatever `on_error` says, so padding a prompt cannot carry an
-attack past the guard. So does a scan that misses the signals' deadline
-(`global.model_catalog.signal_timeout_ms`). Set `prompt_guard.on_unscanned:
-allow` to let such content follow `on_error` instead. A detection on another
-completely scored piece still counts as a detection; backend failures remain
-subject to the configured `on_error` and response-rule policies.
+type `unscanned`, so padding a prompt cannot carry an attack past the guard.
+So does a scan that misses the signals' deadline
+(`global.model_catalog.signal_timeout_ms`). A request whose question gets no
+answer (the deployment fails, is overloaded or returns an error) does not
+match by default; a request-stage rule with `on_unknown: match` matches it,
+with the type `unavailable`, and a decision's `rules.on_unknown` still decides
+such a rule. A detection on another completely scored piece still counts as a
+detection. A response-stage rule follows the `response_guard` plugin's
+`on_unknown`.
 
 ### Direction
 

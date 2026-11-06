@@ -38,8 +38,8 @@ providers:
       backend_refs: [{name: deep, endpoint: "BACKEND", protocol: http, weight: 1}]
 routing:
   signals:
-    domains: [{name: math, description: Math requests., mmlu_categories: [math]}]
-    jailbreak: [{name: attack, threshold: 0.75}]
+    domains: [{name: math, description: Math requests., labels: [math]}]
+    jailbreak: [{name: attack, predicate: {gte: 0.75}}]
     systemone:
       - name: needs_tools
         question: {type: noul, instructions: "Does the request need a tool?"}
@@ -195,33 +195,12 @@ func TestBuiltInSignalsAskASystemOneDecisionModelInOneCallPerStage(t *testing.T)
 		t.Fatalf("math that needs a tool routes to deep, got %+v", plan.Call)
 	}
 	calls := api.answered()[prepared:]
-	want := []string{"domain_classifier:domain", "prompt_guard:attack", "systemone:needs_tools"}
+	want := []string{"preset:domain", "preset:jailbreak", "systemone:needs_tools"}
 	if len(calls) != 1 || !slices.Equal(calls[0], want) {
 		t.Fatalf("the request stage asked hosted-d3 %v, want one call with %v", calls, want)
 	}
 	if got := counterValue(t, "vsr_model_runtime_stage_decision_calls_total", map[string]string{"deployment": "hosted-d3", "round": "later"}) - later; got != 0 {
 		t.Fatalf("a stage made %v further calls to hosted-d3", got)
-	}
-}
-
-func TestPIIAnswersAsAVerdictWhenTheSystemOneDecisionModelHasNoSpans(t *testing.T) {
-	withPII := strings.Replace(moduleSystemOneConfig, "    jailbreak: [{name: attack, threshold: 0.75}]\n",
-		"    jailbreak: [{name: attack, threshold: 0.75}]\n    pii: [{name: personal, threshold: 0.5}]\n", 1)
-	withPII = strings.Replace(withPII, "conditions: [{type: jailbreak, name: attack}]", "conditions: [{type: jailbreak, name: attack}, {type: pii, name: personal}]", 1)
-	withPII = strings.Replace(withPII, "rules: {operator: AND, conditions: [{type: jailbreak", "rules: {operator: OR, conditions: [{type: jailbreak", 1)
-	cfg, _ := moduleSystemOneRouterConfig(t, withPII)
-	fallback := map[string]string{"signal": "pii_classifier", "deployment": "hosted-d3"}
-	fallbacks := counterValue(t, "vsr_signal_span_verdict_fallbacks_total", fallback)
-	newLooperRouter(t, cfg)
-	if got := counterValue(t, "vsr_signal_span_verdict_fallbacks_total", fallback) - fallbacks; got != 1 {
-		t.Fatalf("span verdict fallbacks %v, want the PII fallback reported once", got)
-	}
-
-	masked := strings.Replace(withPII, "      modelRefs: [{model: deep}]\n",
-		"      modelRefs: [{model: deep}]\n      plugins:\n        - type: masking\n          configuration: {enabled: true, signal: personal}\n", 1)
-	cfg, _ = moduleSystemOneRouterConfig(t, masked)
-	if _, err := buildOpenAIRouterFromConfig(cfg); err == nil || !strings.Contains(err.Error(), "masking replaces PII at the positions") {
-		t.Fatalf("masking with a PII verdict: %v, want the configuration refused at load", err)
 	}
 }
 

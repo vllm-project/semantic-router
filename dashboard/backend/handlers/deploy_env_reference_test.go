@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -131,57 +130,6 @@ const envReferenceMixedRouting = `routing:
               api_key: ${DEPLOY_TEST_OPENAI_API_KEY}
 `
 
-const envReferenceKBRouting = `routing:
-  modelCards:
-    - name: test-model
-  signals:
-    kb:
-      - name: private-signal
-        kb: private
-        target:
-          kind: label
-          value: private
-  decisions:
-    - name: private-route
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: kb
-            name: private-signal
-      modelRefs:
-        - model: test-model
-          use_reasoning: false
-`
-
-func absoluteKBConfig(kbDir string) string {
-	return `version: v0.3
-listeners:
-  - name: public
-    address: 0.0.0.0
-    port: 8801
-providers:
-  defaults:
-    model: test-model
-  models:
-    - name: test-model
-      provider_model_id: test-model
-      backend_refs:
-        - name: endpoint1
-          provider: vllm
-          endpoint: 127.0.0.1:8000
-          protocol: http
-` + envReferenceKBRouting + `global:
-  model_catalog:
-    kbs:
-      - name: private
-        source:
-          path: ` + kbDir + `
-          manifest: labels.json
-        threshold: 0.5
-`
-}
-
 // The Router resolves these references with its own environment, which the
 // Dashboard does not have, so Deploy must accept them and write them as is.
 func TestDeployHandler_LeavesEnvironmentReferencesToRouter(t *testing.T) {
@@ -194,12 +142,6 @@ func TestDeployHandler_LeavesEnvironmentReferencesToRouter(t *testing.T) {
 	} {
 		t.Setenv(name, "")
 	}
-	kbDir := t.TempDir()
-	manifest := []byte(`{"labels":{"private":{"exemplars":["my account number is"]}}}`)
-	if err := os.WriteFile(filepath.Join(kbDir, "labels.json"), manifest, 0o600); err != nil {
-		t.Fatalf("write labels manifest: %v", err)
-	}
-
 	tests := []struct {
 		name    string
 		config  string
@@ -237,12 +179,6 @@ func TestDeployHandler_LeavesEnvironmentReferencesToRouter(t *testing.T) {
 				"max_tokens: ${DEPLOY_TEST_CONTEXT_MAX}",
 				"base_ejection_time: ${DEPLOY_TEST_EJECTION_TIME}",
 			},
-		},
-		{
-			name:    "absolute knowledge base source",
-			config:  absoluteKBConfig(kbDir),
-			deploy:  envReferenceKBRouting,
-			written: []string{"path: " + kbDir},
 		},
 	}
 	for _, tt := range tests {

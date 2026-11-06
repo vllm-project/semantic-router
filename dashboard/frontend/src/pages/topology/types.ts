@@ -1,7 +1,7 @@
 // topology/types.ts - Topology Page Type Definitions
 
 import { ReactNode } from 'react'
-import type { SafetySignal } from '../../types/config'
+import type { NumericPredicate, SafetySignal } from '../../types/config'
 import type {
   AlgorithmType as CanonicalAlgorithmType,
   PluginType as CanonicalPluginType,
@@ -645,9 +645,12 @@ export interface ConfigData {
     safety?: SafetySignal[]
     jailbreak?: Array<{
       name: string
-      threshold?: number
-      include_history?: boolean
-      direction?: 'request' | 'response'
+      predicate?: NumericPredicate
+      stage?: 'request' | 'response'
+      input?: { history?: boolean }
+      deployment?: string
+      timeout_ms?: number
+      on_unknown?: 'match' | 'no_match'
       description?: string
     }>
     hallucination?: Array<{
@@ -656,10 +659,12 @@ export interface ConfigData {
     }>
     pii?: Array<{
       name: string
-      threshold?: number
-      source?: 'tool_result'
-      pii_types_allowed?: string[]
-      include_history?: boolean
+      predicate?: NumericPredicate
+      ignore_labels?: string[]
+      input?: { history?: boolean; tool_results?: boolean }
+      deployment?: string
+      timeout_ms?: number
+      on_unknown?: 'match' | 'no_match'
       description?: string
     }>
     kb?: Array<{

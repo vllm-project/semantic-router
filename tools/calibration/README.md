@@ -6,8 +6,7 @@ contracts:
 - `recipe/`: maintained recipe probes, conformance checks, deployment validation,
   and evidence reports;
 - `tuning/`: trace analysis and bounded configuration changes, plus offline
-  confidence analysis;
-- `image-routing/`: image-routing classifier calibration.
+  confidence analysis.
 
 `recipe/signal_labeled_set.py` scores a labeled prompt set, such as
 `bench/data/action_test_data.json`, through the routing preview API and reports
@@ -34,7 +33,7 @@ that deliberately exceeds complete-input evaluation limits can require:
 
 ```yaml
 expected_signal_errors:
-  reask:repeat: reask_evaluation_failed
+  turn_relation:repeat: systemone_scan_budget_exceeded
   projection:recovery: projection_input_failed
   projection:retry: projection_input_failed
 ```

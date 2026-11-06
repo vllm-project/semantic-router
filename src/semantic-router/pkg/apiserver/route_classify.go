@@ -347,7 +347,6 @@ func newBatchSecurityResult(r classification.SecurityResult) *BatchSecurityResul
 		ThreatType:      r.ThreatType,
 		Confidence:      batchConfidence(r.ScoresAvailable, r.Confidence),
 		ScoresAvailable: r.ScoresAvailable,
-		Decision:        r.Decision,
 	}
 }
 

@@ -27,7 +27,7 @@ routing:
     domains:
       - name: other
         description: General knowledge and miscellaneous topics
-        mmlu_categories:
+        labels:
           - other
   modelCards:
     - name: openai/gpt-oss-120b

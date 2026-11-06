@@ -189,10 +189,10 @@ global:
         model: keywords
 ```
 
-A custom classifier signal can then name `ticket-topics` as its `deployment`
-and read its labels; see
-[Classify requests](./guides/classify.md#use-your-own-classifier). The router
-checks the rule against the labels your model reports in `/v1/models`. A
+What reads your model's task can then name `ticket-topics` as its
+`deployment`: a systemone rule for a model that answers decision questions
+(see [Use your own labels](./guides/classify.md#use-your-own-labels)), or a
+RAG rerank for a reranker. A
 deployment names your accelerator in `device` the same way; the router
 checks only its form, and the runtime refuses a name it has no plugin for and
 lists the names it has.

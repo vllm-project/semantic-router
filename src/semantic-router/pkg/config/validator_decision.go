@@ -13,13 +13,7 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 	if err := validateClassifierContextLimits(cfg); err != nil {
 		return err
 	}
-	if err := validateSafetySignalContracts(cfg); err != nil {
-		return err
-	}
 	if err := validateMetadataContracts(cfg); err != nil {
-		return err
-	}
-	if err := validateClassifierSignalContracts(cfg); err != nil {
 		return err
 	}
 	if err := validateInputModalityContracts(cfg); err != nil {
@@ -86,17 +80,18 @@ func validateDecisionLeafNode(
 	decisionName string,
 	node *RuleNode,
 ) error {
-	labelled := strings.EqualFold(node.Type, SignalTypeClassifier) || strings.EqualFold(node.Type, SignalTypeSystemOne)
-	if node.Label != "" && !labelled {
-		return fmt.Errorf("decision '%s': label is only supported on classifier and systemone conditions", decisionName)
+	systemOne := strings.EqualFold(node.Type, SignalTypeSystemOne)
+	application := IsApplicationSignalType(strings.ToLower(strings.TrimSpace(node.Type)))
+	if node.Label != "" && !systemOne && !application {
+		return fmt.Errorf("decision '%s': label is only supported on systemone and application signal conditions", decisionName)
 	}
-	if strings.EqualFold(node.Type, SignalTypeClassifier) {
-		if err := validateClassifierDecisionLeaf(cfg, decisionName, node); err != nil {
+	if systemOne {
+		if err := validateSystemOneLeaf(cfg, decisionName, node); err != nil {
 			return err
 		}
 	}
-	if strings.EqualFold(node.Type, SignalTypeSystemOne) {
-		if err := validateSystemOneLeaf(cfg, decisionName, node); err != nil {
+	if application {
+		if err := validateApplicationLeaf(cfg, decisionName, node); err != nil {
 			return err
 		}
 	}
@@ -116,9 +111,9 @@ func validateDecisionLeafNode(
 			node.Name,
 		)
 	}
-	if node.OnError != "" && !labelled {
+	if node.OnError != "" && !systemOne {
 		return fmt.Errorf(
-			"decision '%s': condition %s(%q) on_error is only supported for classifier and systemone conditions",
+			"decision '%s': condition %s(%q) on_error is only supported for systemone conditions",
 			decisionName,
 			node.Type,
 			node.Name,
@@ -136,62 +131,6 @@ func metadataRuleByName(rules []MetadataRule, name string) *MetadataRule {
 	return nil
 }
 
-func validateClassifierDecisionLeaf(
-	cfg *RouterConfig,
-	decisionName string,
-	node *RuleNode,
-) error {
-	rule := classifierSignalRuleByName(cfg.ClassifierRules, node.Name)
-	if rule == nil {
-		return fmt.Errorf(
-			"decision '%s': classifier condition references unknown signal %q",
-			decisionName,
-			node.Name,
-		)
-	}
-	if node.Label == "" || !stringSliceContains(rule.Labels, node.Label) {
-		return fmt.Errorf(
-			"decision '%s': classifier condition %q requires a declared label",
-			decisionName,
-			node.Name,
-		)
-	}
-	if task, ok, err := cfg.ResolveTask("classifier." + node.Name); ok && err == nil {
-		if bound := ImpliedBinding(task.Consumer, task.Binding, task.Deployment); bound.OperatingPoint != nil && bound.Contract == RemoteClassifierContractLabelScores {
-			// A prepared operating point supplies the default label threshold. An
-			// explicit predicate remains a query of the raw independent score.
-			return nil
-		}
-	}
-	if node.Predicate == nil {
-		return fmt.Errorf(
-			"decision '%s': classifier condition %q requires a score predicate",
-			decisionName,
-			node.Name,
-		)
-	}
-	if rule.Type == ClassifierSignalTypeLocal {
-		return validateLocalClassifierDecisionPredicate(decisionName, node)
-	}
-	return nil
-}
-
-func validateLocalClassifierDecisionPredicate(
-	decisionName string,
-	node *RuleNode,
-) error {
-	predicate := node.Predicate
-	if predicate.GTE == nil || *predicate.GTE < 0.5 ||
-		predicate.GT != nil || predicate.LT != nil || predicate.LTE != nil {
-		return fmt.Errorf(
-			"decision '%s': local classifier condition %q supports only predicate.gte >= 0.5",
-			decisionName,
-			node.Name,
-		)
-	}
-	return nil
-}
-
 func validateDecisionLeafPredicate(decisionName string, node *RuleNode) error {
 	if node.Predicate == nil {
 		return nil
@@ -204,18 +143,6 @@ func validateDecisionLeafPredicate(decisionName string, node *RuleNode) error {
 			node.Name,
 			err,
 		)
-	}
-	return nil
-}
-
-func classifierSignalRuleByName(
-	rules []ClassifierSignalRule,
-	name string,
-) *ClassifierSignalRule {
-	for i := range rules {
-		if rules[i].Name == name {
-			return &rules[i]
-		}
 	}
 	return nil
 }

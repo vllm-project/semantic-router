@@ -15,16 +15,10 @@ import { parseConfigToTopology } from './topology/utils/topologyParser'
 
 const signal: SafetySignal = {
   name: 'unsafe_content',
-  model: 'content_safety',
-  labels: ['safe', 'unsafe'],
-  unsafe_labels: ['unsafe'],
-  threshold: 0.8,
-  hazard: {
-    model: 'content_hazard',
-    labels: ['violence', 'fraud', 'other'],
-    categories: ['violence'],
-    threshold: 0.7,
-  },
+  deployment: 'content_safety',
+  labels: ['violence', 'fraud'],
+  predicate: { gte: 0.7 },
+  stage: 'response',
 }
 
 describe('content safety signal Dashboard contract', () => {
@@ -43,14 +37,10 @@ describe('content safety signal Dashboard contract', () => {
     expect((typePattern as RegExp).test('safety')).toBe(true)
   })
 
-  it('renders the generated nested hazard form and preserves it in canonical topology', () => {
-    const fields = getSignalFieldSchema('safety')
-    expect(fields.find((field) => field.key === 'model')?.required).not.toBe(true)
-    const hazard = fields.find((field) => field.key === 'hazard')
-    expect(hazard?.fields?.find((field) => field.key === 'model')?.required).not.toBe(true)
-    expect(hazard?.fields?.map((field) => field.key)).toEqual(
-      expect.arrayContaining(['model', 'labels', 'categories', 'threshold']),
-    )
+  it('renders the generated rule form and preserves it in canonical topology', () => {
+    const fields = getSignalFieldSchema('safety').map((field) => field.key)
+    expect(fields).toEqual(expect.arrayContaining(['labels', 'predicate', 'stage', 'deployment']))
+    expect(fields).not.toContain('hazard')
     const topology = parseConfigToTopology({
       routing: {
         signals: { safety: [signal] },
@@ -75,8 +65,7 @@ describe('content safety signal Dashboard contract', () => {
   it('preserves built-in model defaults without adding external model names', () => {
     const builtIn: SafetySignal = {
       name: 'built_in_safety',
-      threshold: 0.8,
-      hazard: { labels: ['violence', 'fraud'], categories: ['fraud'], threshold: 0.7 },
+      predicate: { gte: 0.8 },
     }
     const topology = parseConfigToTopology({
       routing: { signals: { safety: [builtIn] }, decisions: [] },

@@ -41,13 +41,6 @@ describe('topology v0.3 surface alignment', () => {
               predicate: { equals: 'research' },
             },
           ],
-          classifiers: [
-            {
-              name: 'risk',
-              type: 'local',
-              labels: ['SAFE', 'RISKY'],
-            },
-          ],
           input_modality: [{ name: 'vision', modality: 'image' }],
         },
         decisions: [
@@ -74,7 +67,7 @@ describe('topology v0.3 surface alignment', () => {
     const topology = parseConfigToTopology(config)
 
     expect(topology.signals.map((signal) => signal.type)).toEqual(
-      expect.arrayContaining(['conversation', 'event', 'metadata', 'classifier', 'input_modality']),
+      expect.arrayContaining(['conversation', 'event', 'metadata', 'input_modality']),
     )
     expect(topology.decisions[0].algorithm?.type).toBe('multi_factor')
     expect(topology.decisions[0].algorithm?.multi_factor).toEqual({ latency_percentile: 95 })
@@ -105,10 +98,10 @@ describe('topology v0.3 surface alignment', () => {
     SIGNAL_TYPES.forEach((signalType) => expect(groups[signalType]).toEqual([]))
   })
 
-  it('preserves the PII source in topology signal config', () => {
+  it('preserves the PII input in topology signal config', () => {
     const topology = parseConfigToTopology({
       signals: {
-        pii: [{ name: 'tool-data', threshold: 0.8, source: 'tool_result' }],
+        pii: [{ name: 'tool-data', predicate: { gte: 0.8 }, input: { tool_results: true } }],
       },
     })
 
@@ -116,7 +109,7 @@ describe('topology v0.3 surface alignment', () => {
       expect.objectContaining({
         type: 'pii',
         name: 'tool-data',
-        config: expect.objectContaining({ source: 'tool_result' }),
+        config: expect.objectContaining({ input: { tool_results: true } }),
       }),
     )
   })

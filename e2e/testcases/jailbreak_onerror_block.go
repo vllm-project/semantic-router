@@ -12,20 +12,21 @@ import (
 
 func init() {
 	pkgtestcases.Register("jailbreak-onerror-block", pkgtestcases.TestCase{
-		Description: "Test explicit unknown no-match and PromptGuard fail-closed behavior against an unreachable classifier",
+		Description: "Test explicit unknown no-match and the fail-closed jailbreak signal against an unreachable deployment",
 		Tags:        []string{"kubernetes", "security", "jailbreak", "prompt-guard"},
 		Fn:          testJailbreakOnErrorBlock,
 	})
 }
 
 // testJailbreakOnErrorBlock sends an ordinary, non-adversarial prompt against
-// the jailbreak-onerror profile (prompt_guard.backend points at an endpoint
-// nothing listens on, with on_error: block). It must be blocked: with the
-// classifier unreachable, on_error: block treats the classify failure as a
-// positive detection rather than letting a request through unchecked.
+// the jailbreak-onerror profile (its jailbreak rule's systemone deployment
+// points at an endpoint nothing listens on). It must be blocked: with the
+// deployment unreachable, the rule's on_unknown: match counts the unknown
+// jailbreak signal as a detection rather than letting a request through
+// unchecked.
 func testJailbreakOnErrorBlock(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
-		fmt.Println("[Test] Testing PromptGuardConfig.OnError: block against an unreachable classifier")
+		fmt.Println("[Test] Testing the fail-closed jailbreak signal against an unreachable deployment")
 	}
 
 	localPort, stopPortForward, err := setupServiceConnection(ctx, client, opts)
@@ -40,7 +41,7 @@ func testJailbreakOnErrorBlock(ctx context.Context, client *kubernetes.Clientset
 	// like "openai/mock-model" directly: concrete model IDs are passthrough
 	// requests that bypass every recipe-local signal, decision, and plugin
 	// (see performDecisionEvaluation), so they'd never reach the jailbreak
-	// signal or on_error: block being tested here.
+	// signal being tested here.
 	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", benignPrompt, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("chat completion request failed: %w", err)
@@ -65,7 +66,7 @@ func testJailbreakOnErrorBlock(ctx context.Context, client *kubernetes.Clientset
 
 	if !blocked {
 		return fmt.Errorf(
-			"expected the request to be blocked (on_error: block against an unreachable classifier), "+
+			"expected the request to be blocked (fail-closed jailbreak signal against an unreachable deployment), "+
 				"but x-vsr-fast-response=%q selected_decision=%q status=%d",
 			fastResponse, selectedDecision, response.StatusCode,
 		)

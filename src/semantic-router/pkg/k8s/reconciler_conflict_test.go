@@ -95,43 +95,6 @@ func buildConflictPool(namespace, name string) *v1alpha1.IntelligentPool {
 	}
 }
 
-func buildConflictRoute(namespace, name string) *v1alpha1.IntelligentRoute {
-	return &v1alpha1.IntelligentRoute{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Spec: v1alpha1.IntelligentRouteSpec{
-			Signals: v1alpha1.Signals{
-				Embeddings: []v1alpha1.EmbeddingSignal{
-					{
-						Name:              "rule_" + name,
-						Threshold:         0.7,
-						Candidates:        []string{"anchor phrase"},
-						AggregationMethod: "max",
-						QueryModality:     "text",
-					},
-				},
-			},
-			Decisions: []v1alpha1.Decision{
-				{
-					Name:     "decision_" + name,
-					Priority: 100,
-					Signals: v1alpha1.SignalCombination{
-						Operator: "AND",
-						Conditions: []v1alpha1.SignalCondition{
-							{Type: "embedding", Name: "rule_" + name},
-						},
-					},
-					ModelRefs: []v1alpha1.ModelRef{
-						{Model: "deepseek-v3"},
-					},
-				},
-			},
-		},
-	}
-}
-
 func buildConflictReconciler(t *testing.T, namespace string, objs ...client.Object) *Reconciler {
 	t.Helper()
 
@@ -206,4 +169,61 @@ func assertReadyConditionByName(
 	}
 
 	assertReadyCondition(t, kind+"/"+name, conditions, wantStatus, wantReason)
+}
+
+func buildConflictRoute(namespace, name string) *v1alpha1.IntelligentRoute {
+	return &v1alpha1.IntelligentRoute{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: v1alpha1.IntelligentRouteSpec{
+			Signals: v1alpha1.Signals{
+				Keywords: []v1alpha1.KeywordSignal{
+					{Name: "rule_" + name, Operator: "OR", Keywords: []string{"anchor phrase"}},
+				},
+			},
+			Decisions: []v1alpha1.Decision{
+				{
+					Name:     "decision_" + name,
+					Priority: 100,
+					Signals: v1alpha1.SignalCombination{
+						Operator: "AND",
+						Conditions: []v1alpha1.SignalCondition{
+							{Type: "keyword", Name: "rule_" + name},
+						},
+					},
+					ModelRefs: []v1alpha1.ModelRef{
+						{Model: "deepseek-v3"},
+					},
+				},
+			},
+		},
+	}
+}
+
+// assertReadyCondition fails the test if the named CR's Ready condition
+// does not match the expected status and reason.
+func assertReadyCondition(
+	t *testing.T,
+	subject string,
+	conditions []metav1.Condition,
+	wantStatus metav1.ConditionStatus,
+	wantReason string,
+) {
+	t.Helper()
+
+	for _, c := range conditions {
+		if c.Type != "Ready" {
+			continue
+		}
+		if c.Status != wantStatus {
+			t.Errorf("%s Ready condition status = %s, want %s", subject, c.Status, wantStatus)
+		}
+		if c.Reason != wantReason {
+			t.Errorf("%s Ready condition reason = %q, want %q", subject, c.Reason, wantReason)
+		}
+		return
+	}
+	t.Errorf("%s has no Ready condition; want status=%s reason=%q", subject, wantStatus, wantReason)
 }

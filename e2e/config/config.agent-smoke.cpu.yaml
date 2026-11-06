@@ -44,20 +44,6 @@ global:
         mmbert_model_path: ""
         qwen3_model_path: ""
         multimodal_model_path: ""
-    modules:
-      prompt_guard:
-        enabled: false
-        jailbreak_mapping_path: ""
-      classifier:
-        domain:
-          enabled: false
-          category_mapping_path: ""
-        pii:
-          enabled: false
-          pii_mapping_path: ""
-      feedback_detector:
-        enabled: false
-
 entrypoints:
   - model_names: ["vllm-sr/auto"]
     recipe: default

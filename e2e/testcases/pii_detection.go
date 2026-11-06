@@ -101,9 +101,10 @@ func testPIIDetection(ctx context.Context, client *kubernetes.Clientset, opts pk
 			correctTests, totalTests, detectionRate)
 	}
 
-	// Return error if detection rate is 0%
-	if correctTests == 0 {
-		return fmt.Errorf("PII detection test failed: 0%% accuracy (0/%d correct)", totalTests)
+	// The profiles answer the PII rule with the System One fixture, whose
+	// spans the cases pin with __PII_SPAN__ markers, so every case must hold.
+	if correctTests != totalTests {
+		return fmt.Errorf("PII detection test failed: %d/%d correct", correctTests, totalTests)
 	}
 
 	return nil

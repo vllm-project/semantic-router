@@ -101,20 +101,17 @@ each page's data-handling notes before choosing a remote provider.
 
 | Signal | Use it to |
 | ------ | --------- |
-| [Classifier](./learned/classifier) | expose labels from a custom local classifier or external LLM |
 | [Complexity](./learned/complexity) | estimate easy, medium, or hard reasoning traffic |
 | [System One](./learned/systemone) | ask typed questions with the selected decision model |
 | [Domain](./learned/domain) | classify the request topic |
-| [Embedding](./learned/embedding) | match semantic intent from representative examples |
 | [Modality](./learned/modality) | classify text, image-generation, or mixed output intent |
 | [Fact Check](./learned/fact-check) | detect prompts that may need evidence verification |
 | [Hallucination](./learned/hallucination) | check the model's answer against the grounding context it was given |
 | [Jailbreak](./learned/jailbreak) | detect prompt-injection or jailbreak attempts |
 | [Safety](./learned/safety) | detect unsafe content and optional risk categories |
 | [PII](./learned/pii) | detect sensitive personal data |
-| [Preference](./learned/preference) | infer response-style preferences |
-| [Reask](./learned/reask) | detect a repeated question in recent conversation history |
-| [Knowledge Base](./learned/kb) | match labels or groups from a reusable exemplar set |
+| [Refusal](./learned/refusal) | detect answers that decline the request |
+| [Turn Relation](./learned/turn-relation) | detect a repeated question or a topic change in the conversation |
 | [User Feedback](./learned/user-feedback) | detect correction, dissatisfaction, or escalation feedback |
 
 Keep these rules in mind:

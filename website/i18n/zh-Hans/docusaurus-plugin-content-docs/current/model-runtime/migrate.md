@@ -130,7 +130,7 @@ Dashboard 修改合并到 `legacy.migrated.yaml`，再加上 `--replace-active-c
 ## 完整示例 {#a-complete-example}
 
 下面的配置在 AMD GPU 上用 ONNX Runtime 运行 embedding，在 NVIDIA GPU 上用 candle 运行领域分类器，
-并使用一个旧的 jailbreak 模型和 NLI 解释器：
+并使用响应缓存的 NLI polarity guard：
 
 ```yaml title="legacy.yaml"
 version: v0.3
@@ -165,19 +165,6 @@ global:
         provider: candle
         device: cuda:0
         precision: fp16
-    modules:
-      prompt_guard:
-        enabled: true
-        model_id: models/mom-jailbreak-classifier
-        variant: candle
-      hallucination_mitigation:
-        enabled: true
-        detector:
-          backend: candle
-          model_id: models/Vela-1.0-Encoder-307M-Halu
-          enable_nli_filtering: true
-        explainer:
-          model_id: models/mom-halugate-explainer
   stores:
     response_cache:
       enabled: true
@@ -206,16 +193,6 @@ routing:
 global:
   model_catalog:
     deployments:
-      Vela-1.0-Encoder-307M-Guard:
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Guard
-        revision: 087f9e401012df839c83717b746967ac7aebfa3e
-        provider: model_runtime
-        device: cpu
-      Vela-1.0-Encoder-307M-Halu:
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Halu
-        revision: ca87531211e414ac21c641b2faa8b8e21619de8f
-        provider: model_runtime
-        device: cpu
       vela-domain:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain
         provider: model_runtime
@@ -224,14 +201,6 @@ global:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Embedding
         provider: model_runtime
         device: rocm:0
-    modules:
-      prompt_guard:
-        enabled: true
-      hallucination_mitigation:
-        enabled: true
-    bindings:
-      hallucination: Vela-1.0-Encoder-307M-Halu
-      jailbreak: Vela-1.0-Encoder-307M-Guard
   stores:
     response_cache:
       enabled: true

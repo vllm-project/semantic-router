@@ -21,19 +21,6 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Validate the split stack management listener before publishing.",
     )
-    parser.add_argument(
-        "--skip-kb-bootstrap",
-        action="store_true",
-        help="Validate KB paths without copying files or changing references.",
-    )
-    parser.add_argument(
-        "--package-activation",
-        action="store_true",
-        help=(
-            "Realize an untrusted Recipe package without bootstrapping local "
-            "knowledge-base files."
-        ),
-    )
     return parser
 
 
@@ -44,9 +31,7 @@ def main(argv: list[str] | None = None) -> int:
         args.target,
         algorithm=(args.algorithm or "").strip() or None,
         platform=(args.platform or "").strip() or None,
-        package_activation=args.package_activation,
         managed_listener=args.managed_listener,
-        skip_kb_bootstrap=args.skip_kb_bootstrap,
     )
     print(result)
     return 0

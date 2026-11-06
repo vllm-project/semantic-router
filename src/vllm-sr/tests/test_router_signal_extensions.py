@@ -16,7 +16,6 @@ from cli.algorithms import (  # noqa: E402
     PromptSelectionConfig,
 )
 from cli.models import (  # noqa: E402
-    ClassifierSignal,
     Condition,
     Decision,
     MetadataPredicate,
@@ -50,130 +49,9 @@ def test_numeric_predicate_rejects_nan():
         )
 
 
-def test_classifier_signal_llm_shape():
-    signal = ClassifierSignal(
-        name="risk",
-        type="llm",
-        model="risk-judge",
-        labels=["SAFE", "RISKY"],
-        instructions="Choose a label.",
-    )
-    assert signal.labels == ["SAFE", "RISKY"]
-
-
-def test_classifier_signal_local_shape():
-    signal = ClassifierSignal(
-        name="risk",
-        type="local",
-        model_path="models/risk",
-        labels=["SAFE", "RISKY"],
-    )
-    assert signal.model_path == "models/risk"
-
-
-def test_classifier_signal_sequence_shape():
-    signal = ClassifierSignal(
-        name="risk",
-        type="sequence_classifier",
-        model="risk-classifier",
-        labels=["SAFE", "RISKY"],
-    )
-    assert signal.model == "risk-classifier"
-
-
-@pytest.mark.parametrize(
-    "fields",
-    [
-        {"type": "sequence_classifier", "model": "risk", "labels": ["RISKY"]},
-        {"type": "sequence_classifier", "model": "risk", "use_cpu": True},
-        {"type": "local", "model": "risk-judge", "model_path": "models/risk"},
-    ],
-)
-def test_the_router_judges_a_classifiers_deprecated_model_selection(fields):
-    signal = ClassifierSignal(**{"name": "risk", "labels": ["SAFE", "RISKY"], **fields})
-    assert signal.type == fields["type"]
-
-
-def test_classifier_signal_rejects_whitespace_name():
-    with pytest.raises(ValidationError):
-        ClassifierSignal(
-            name=" risk ",
-            type="local",
-            model_path="models/risk",
-            labels=["SAFE", "RISKY"],
-        )
-
-
-def test_user_config_allows_recipe_local_classifier_names():
-    config = UserConfig.model_validate(
-        {
-            "version": "v0.3",
-            "routing": {
-                "signals": {
-                    "classifiers": [
-                        {
-                            "name": "Risk",
-                            "type": "local",
-                            "model_path": "models/risk",
-                            "labels": ["SAFE", "RISKY"],
-                        }
-                    ]
-                }
-            },
-            "recipes": [
-                {
-                    "name": "other",
-                    "routing": {
-                        "signals": {
-                            "classifiers": [
-                                {
-                                    "name": "risk",
-                                    "type": "llm",
-                                    "model": "judge",
-                                    "labels": ["SAFE", "RISKY"],
-                                    "instructions": "Classify.",
-                                }
-                            ]
-                        }
-                    },
-                }
-            ],
-        }
-    )
-    assert config.recipes[0].routing.signals.classifiers[0].name == "risk"
-
-
-def test_user_config_rejects_case_colliding_classifier_names_within_recipe():
-    with pytest.raises(ValidationError):
-        UserConfig.model_validate(
-            {
-                "version": "v0.3",
-                "routing": {
-                    "signals": {
-                        "classifiers": [
-                            {
-                                "name": "Risk",
-                                "type": "local",
-                                "model_path": "models/risk",
-                                "labels": ["SAFE", "RISKY"],
-                            },
-                            {
-                                "name": "risk",
-                                "type": "llm",
-                                "model": "judge",
-                                "labels": ["SAFE", "RISKY"],
-                                "instructions": "Classify.",
-                            },
-                        ]
-                    }
-                },
-            }
-        )
-
-
-def test_classifier_condition_score_shape():
+def test_systemone_condition_score_shape():
     condition = Condition(
-        type="classifier",
+        type="systemone",
         name="risk",
         label="RISKY",
         predicate={"gte": 0.5},
@@ -182,17 +60,12 @@ def test_classifier_condition_score_shape():
     assert condition.predicate.gte == 0.5
 
 
-def test_classifier_condition_requires_label_and_predicate():
+def test_unlabeled_condition_type_rejects_label():
     with pytest.raises(ValidationError):
-        Condition(type="classifier", name="risk")
+        Condition(type="structure", name="bytes", label="RISKY")
 
 
-def test_non_classifier_condition_rejects_label():
-    with pytest.raises(ValidationError):
-        Condition(type="embedding", name="risk", label="RISKY")
-
-
-def test_non_classifier_condition_rejects_on_error():
+def test_non_systemone_condition_rejects_on_error():
     with pytest.raises(ValidationError):
         Condition(
             type="structure",
@@ -202,10 +75,10 @@ def test_non_classifier_condition_rejects_on_error():
         )
 
 
-def test_bare_classifier_leaf_preserves_predicate_fields():
+def test_bare_systemone_leaf_preserves_predicate_fields():
     rules = Rules.model_validate(
         {
-            "type": "classifier",
+            "type": "systemone",
             "name": "risk",
             "label": "RISKY",
             "predicate": {"gte": 0.8},
@@ -221,7 +94,7 @@ def test_bare_classifier_leaf_preserves_predicate_fields():
 def test_rules_accept_terminal_on_unknown():
     rules = Rules.model_validate(
         {
-            "type": "classifier",
+            "type": "systemone",
             "name": "risk",
             "label": "RISKY",
             "predicate": {"gte": 0.8},
@@ -238,7 +111,7 @@ def test_nested_condition_rejects_on_unknown():
                 "operator": "AND",
                 "conditions": [
                     {
-                        "type": "classifier",
+                        "type": "systemone",
                         "name": "risk",
                         "label": "RISKY",
                         "predicate": {"gte": 0.8},
@@ -663,14 +536,3 @@ def test_user_config_rejects_empty_entrypoint_names():
                 "entrypoints": [{"model_names": [], "recipe": "default"}],
             }
         )
-
-
-def test_local_classifier_can_use_default_decision_deployment():
-    signal = ClassifierSignal(
-        name="task",
-        type="local",
-        labels=["coding", "other"],
-        instructions="Choose the request category.",
-    )
-    assert signal.model_path is None
-    assert signal.instructions == "Choose the request category."

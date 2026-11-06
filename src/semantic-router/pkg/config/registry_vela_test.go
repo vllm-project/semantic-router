@@ -55,30 +55,6 @@ func TestVelaReleaseRegistryContracts(t *testing.T) {
 	}
 }
 
-func TestVelaShieldIsSelectableWithoutChangingTheSafetyDefault(t *testing.T) {
-	if got := DefaultSystemModels().Safety; got != Vela3SignalModel {
-		t.Fatalf("default safety model changed to %q", got)
-	}
-	defaults := DefaultGlobalConfig()
-	if got := effectiveModel(t, &defaults, "safety.unsafe"); !sameModel(got, Vela3SignalModel) {
-		t.Fatalf("default safety module resolves to %q", got)
-	}
-	shield := GetModelByPath("models/Vela-1.0-Encoder-307M-Shield")
-	if shield == nil || shield.Purpose != PurposeSafety {
-		t.Fatalf("Shield is not registered as a safety model: %+v", shield)
-	}
-	for _, pattern := range velaTrainingArtifactPatterns {
-		if !slices.Contains(shield.DownloadExcludePatterns, pattern) {
-			t.Fatalf("Shield dropped the Vela training-artifact exclusion %q", pattern)
-		}
-	}
-	for _, pattern := range []string{"lc/*", "heads/*", "demo.py", "DEMO_OUTPUT.txt"} {
-		if !slices.Contains(shield.DownloadExcludePatterns, pattern) {
-			t.Fatalf("Shield does not exclude %q", pattern)
-		}
-	}
-}
-
 func TestVela2SignalModelIsAPinnedRuntimeServedRelease(t *testing.T) {
 	for _, alias := range []string{Vela2SignalModel, "Vela-2.0-0.3B"} {
 		model := GetModelByPath(alias)

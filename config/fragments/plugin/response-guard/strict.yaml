@@ -1,6 +1,6 @@
 # Refuses an answer that carries jailbreak content, and one the check could
 # not read. Reads the jailbreak rule unsafe_completion, declared with
-# direction: response.
+# stage: response and a predicate such as {gte: 0.9}.
 plugin:
   type: response_guard
   configuration:

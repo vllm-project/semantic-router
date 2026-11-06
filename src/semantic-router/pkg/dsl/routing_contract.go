@@ -129,8 +129,6 @@ func (d *decompiler) appendProjectionScores(prog *Program) {
 			decl.Inputs = append(decl.Inputs, &ProjectionScoreInputDecl{
 				SignalType:  input.Type,
 				SignalName:  input.Name,
-				KB:          input.KB,
-				Metric:      input.Metric,
 				Weight:      input.Weight,
 				ValueSource: input.ValueSource,
 				Match:       input.Match,
@@ -168,27 +166,13 @@ func (d *decompiler) appendProjectionMappings(prog *Program) {
 }
 
 func (d *decompiler) appendCoreSignals(prog *Program) {
-	for _, cat := range d.cfg.Categories {
-		prog.Signals = append(prog.Signals, d.categoryToSignal(&cat))
-	}
+	d.appendApplicationSignals(prog, config.SignalTypeDomain)
 	for _, kw := range d.cfg.KeywordRules {
 		prog.Signals = append(prog.Signals, d.keywordToSignal(&kw))
 	}
-	for _, emb := range d.cfg.EmbeddingRules {
-		prog.Signals = append(prog.Signals, d.embeddingToSignal(&emb))
-	}
-	for _, fc := range d.cfg.FactCheckRules {
-		prog.Signals = append(prog.Signals, d.factCheckToSignal(&fc))
-	}
-	for _, uf := range d.cfg.UserFeedbackRules {
-		prog.Signals = append(prog.Signals, d.userFeedbackToSignal(&uf))
-	}
-	for _, rule := range d.cfg.ReaskRules {
-		prog.Signals = append(prog.Signals, d.reaskToSignal(&rule))
-	}
-	for _, pref := range d.cfg.PreferenceRules {
-		prog.Signals = append(prog.Signals, d.preferenceToSignal(&pref))
-	}
+	d.appendApplicationSignals(prog, config.SignalTypeFactCheck)
+	d.appendApplicationSignals(prog, config.SignalTypeUserFeedback)
+	d.appendApplicationSignals(prog, config.SignalTypeTurnRelation)
 }
 
 func (d *decompiler) appendOperationalSignals(prog *Program) {
@@ -201,12 +185,8 @@ func (d *decompiler) appendOperationalSignals(prog *Program) {
 	for _, structure := range d.cfg.StructureRules {
 		prog.Signals = append(prog.Signals, d.structureToSignal(&structure))
 	}
-	for _, comp := range d.cfg.ComplexityRules {
-		prog.Signals = append(prog.Signals, d.complexityToSignal(&comp))
-	}
-	for _, mod := range d.cfg.ModalityRules {
-		prog.Signals = append(prog.Signals, d.modalityToSignal(&mod))
-	}
+	d.appendApplicationSignals(prog, config.SignalTypeComplexity)
+	d.appendApplicationSignals(prog, config.SignalTypeModality)
 	for _, rb := range d.cfg.RoleBindings {
 		prog.Signals = append(prog.Signals, d.roleBindingToSignal(&rb))
 	}
@@ -219,20 +199,11 @@ func (d *decompiler) appendOperationalSignals(prog *Program) {
 }
 
 func (d *decompiler) appendSafetySignals(prog *Program) {
-	for i := range d.cfg.SafetyRules {
-		prog.Signals = append(prog.Signals, d.safetyToSignal(&d.cfg.SafetyRules[i]))
-	}
-	for _, jb := range d.cfg.JailbreakRules {
-		prog.Signals = append(prog.Signals, d.jailbreakToSignal(&jb))
-	}
-	for i := range d.cfg.HallucinationRules {
-		prog.Signals = append(prog.Signals, d.hallucinationToSignal(&d.cfg.HallucinationRules[i]))
-	}
-	for _, pii := range d.cfg.PIIRules {
-		prog.Signals = append(prog.Signals, d.piiToSignal(&pii))
-	}
-	for _, kb := range d.cfg.KBRules {
-		prog.Signals = append(prog.Signals, d.kbSignalToDecl(&kb))
+	for _, signalType := range []string{
+		config.SignalTypeSafety, config.SignalTypeJailbreak, config.SignalTypeHallucination,
+		config.SignalTypeRefusal, config.SignalTypePII,
+	} {
+		d.appendApplicationSignals(prog, signalType)
 	}
 }
 

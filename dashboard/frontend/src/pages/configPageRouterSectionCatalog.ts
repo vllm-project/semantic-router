@@ -32,10 +32,6 @@ export const CURATED_ROUTER_SECTIONS = {
     path: ['model_catalog', 'modules', 'feedback_detector'],
     layer: 'model_catalog',
   },
-  complexity: {
-    path: ['model_catalog', 'modules', 'complexity'],
-    layer: 'model_catalog',
-  },
   external_models: { path: ['model_catalog', 'external'], layer: 'model_catalog' },
   admission: { path: ['model_catalog', 'admission'], layer: 'model_catalog' },
   system_models: { path: ['model_catalog', 'system'], layer: 'model_catalog' },

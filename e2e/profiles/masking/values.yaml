@@ -34,7 +34,8 @@ config:
             # dispatch boundary (applyMaskingBeforeDispatch), over the
             # request as it is sent.
             - name: personal_data
-              threshold: 0.5
+              predicate:
+                gte: 0.5
               description: Personal data masked before dispatch.
         decisions:
           - name: mask_pii
@@ -80,44 +81,21 @@ config:
         ttl_seconds: 86400
         max_responses: 1000
     model_catalog:
-      kbs: []
       deployments:
-        # The same remote token_spans.v1 stub the pii-remote-backend profile
-        # uses. No PII model is hosted here either; every span this profile
-        # sees came from this HTTP call.
-        e2e-pii-spans:
-          provider: classify
-          endpoint: http://mock-pii-spans.default.svc.cluster.local:8000
-          model: pii-spans-service
+        # provider-mocker's System One fixture (see its README), the same one
+        # the pii-remote-backend profile uses. No PII model is hosted here
+        # either; every span this profile sees came from this HTTP call.
+        fake-systemone:
+          provider: systemone
+          endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/systemone
+          model: e2e/fake-systemone
           timeout_ms: 5000
-      # The PII signal asks only the remote stub, so a detection here is
+          capabilities:
+            question_types: [choice, noul, span]
+      # The PII signal asks only the fixture, so a detection here is
       # attributable to it.
       bindings:
-        pii: e2e-pii-spans
-      modules:
-        classifier:
-          domain:
-            enabled: false
-            category_mapping_path: ""
-          pii:
-            pii_mapping_path: /app/models/pii-remote-backend/pii_type_mapping.json
-            on_error: block
-        hallucination_mitigation:
-          enabled: false
-
-# The router requires a pii_type_mapping.json on disk even for a remote
-# deployment, and the token_spans decoder needs it to resolve labels. Reuses the
-# same stand-in ConfigMap the pii-remote-backend profile applies as a
-# prerequisite -- no need for a second copy or the real model.
-extraVolumes:
-  - name: pii-mapping
-    configMap:
-      name: pii-remote-backend-mapping
-extraVolumeMounts:
-  - name: pii-mapping
-    mountPath: /app/models/pii-remote-backend/pii_type_mapping.json
-    subPath: pii_type_mapping.json
-    readOnly: true
+        pii: fake-systemone
 
 resources:
   # Same headroom as the other remote-backend profiles: taking the classifier

@@ -170,25 +170,25 @@ func TestSetAndSpanAnswersMatchCountedLabelsAndPublishEveryProbability(t *testin
 		t.Run(test.name, func(t *testing.T) {
 			test.rule.Predicate, test.rule.Labels, test.rule.IgnoreLabels = test.predicate, test.labels, test.ignore
 			results := newSignalResults()
-			if got := applySystemOneAnswer(results, test.rule, test.answer); !sameMembers(got, test.want) {
+			if got := applySystemOneAnswer(results, config.SignalTypeSystemOne, test.rule, test.answer); !sameMembers(got, test.want) {
 				t.Fatalf("matched %v, want %v", got, test.want)
 			}
 		})
 	}
 	results := newSignalResults()
-	applySystemOneAnswer(results, set, setAnswer)
+	applySystemOneAnswer(results, config.SignalTypeSystemOne, set, setAnswer)
 	if results.SignalValues["systemone:topics:shipping"] != 0.2 || results.SignalValues["systemone:topics"] != 0.9 {
 		t.Fatalf("set values = %v", results.SignalValues)
 	}
 	counted := set
 	counted.IgnoreLabels = []string{"billing"}
 	results = newSignalResults()
-	applySystemOneAnswer(results, counted, setAnswer)
+	applySystemOneAnswer(results, config.SignalTypeSystemOne, counted, setAnswer)
 	if results.SignalValues["systemone:topics"] != 0.6 || results.SignalValues["systemone:topics:billing"] != 0.9 {
 		t.Fatalf("the rule's value is the highest counted label, and every label is published: %v", results.SignalValues)
 	}
 	results = newSignalResults()
-	applySystemOneAnswer(results, span, spanAnswer)
+	applySystemOneAnswer(results, config.SignalTypeSystemOne, span, spanAnswer)
 	if results.SignalValues["systemone:places:city"] != 0.97 || results.SignalValues["systemone:places:country"] != 0 || results.SignalValues["systemone:places"] != 0.97 {
 		t.Fatalf("span values = %v", results.SignalValues)
 	}
@@ -345,9 +345,9 @@ func TestResponseStageRulesAreAskedAboutTheAnswer(t *testing.T) {
 			t.Fatal("the request stage does not ask a response-stage rule")
 		}
 	}
-	signal := classifier.EvaluateResponseSystemOne(context.Background(), ResponseInput{
+	signal := classifier.EvaluateResponseSignals(context.Background(), ResponseInput{
 		Request: "When is it open?", Answer: "On Sundays.", Context: "Open Monday to Friday.",
-	}, []string{"grounded", "routing"})
+	}, func(signalType, _ string) bool { return signalType == config.SignalTypeSystemOne })
 	asked := decider.requests["kai"]
 	if len(asked.Questions) != 1 || asked.Questions[0].ID != "systemone:grounded" || asked.Questions[0].Stage != config.SystemOneStageResponse {
 		t.Fatalf("only the response-stage rule is asked: %+v", asked.Questions)
@@ -355,7 +355,7 @@ func TestResponseStageRulesAreAskedAboutTheAnswer(t *testing.T) {
 	if asked.Parts["request"] != "When is it open?" || asked.Parts["answer"] != "On Sundays." || asked.Parts["context"] != "Open Monday to Friday." {
 		t.Fatalf("parts = %v", asked.Parts)
 	}
-	if signal.Values["systemone:grounded"] != 0.2 || len(signal.MatchedRules) != 0 || len(signal.Errors) != 0 {
+	if signal.Values["systemone:grounded"] != 0.2 || len(signal.Matched) != 0 || len(signal.Errors) != 0 {
 		t.Fatalf("response signal = %+v", signal)
 	}
 }

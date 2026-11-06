@@ -25,19 +25,19 @@ const record = {
   baseline_cost: 0.004,
   cost_savings: 0.003,
   baseline_model: 'baseline-model',
-  signals: { domain: ['technical'], embedding: ['code'] },
+  signals: { domain: ['technical', 'code'] },
   route_diagnostics: { selection_reasoning: 'Selected the highest ranked eligible model.' },
   projections: ['specialist'],
   projection_scores: { complexity: 0.72, action_margin: -0.125 },
-  signal_values: { 'embedding:code': 0.9, 'classifier:zero': 0 },
-  signal_confidences: { 'classifier:zero': 0, 'domain:technical': 0.82 },
-  signal_error_matches: { 'classifier:zero': false },
+  signal_values: { 'domain:code': 0.9, 'systemone:zero': 0 },
+  signal_confidences: { 'systemone:zero': 0, 'domain:technical': 0.82 },
+  signal_error_matches: { 'systemone:zero': false },
   projection_trace: {
     schema_version: '1',
     partitions: [
       {
         group_name: 'intent',
-        signal_type: 'embedding',
+        signal_type: 'domain',
         semantics: 'softmax',
         temperature: 0.7,
         winner: 'code',
@@ -51,7 +51,7 @@ const record = {
       },
       {
         group_name: 'fallback_group',
-        signal_type: 'classifier',
+        signal_type: 'domain',
         winner: 'general',
         default_used: true,
         winner_score: 0,
@@ -63,8 +63,8 @@ const record = {
         name: 'complexity',
         total: 0.72,
         inputs: [
-          { type: 'signal', name: 'embedding:code', value: 0.9, weight: 0.8, contribution: 0.72 },
-          { type: 'signal', name: 'classifier:zero', value: 0, weight: 0.2, contribution: 0 },
+          { type: 'signal', name: 'domain:code', value: 0.9, weight: 0.8, contribution: 0.72 },
+          { type: 'signal', name: 'systemone:zero', value: 0, weight: 0.2, contribution: 0 },
         ],
       },
     ],
@@ -128,7 +128,7 @@ test('insight detail leads with routing outcomes and progressively reveals proje
   await expect(
     trace
       .getByRole('table', { name: 'complexity calculation', exact: true })
-      .getByRole('row', { name: /classifier:zero/ }),
+      .getByRole('row', { name: /systemone:zero/ }),
   ).toContainText('0.0000')
   await trace.getByText('Inspect capability thresholds', { exact: true }).click()
   const source = trace.getByRole('link', { name: 'complexity', exact: true })
@@ -152,8 +152,8 @@ test('insight detail leads with routing outcomes and progressively reveals proje
     name: 'Recorded signal values and confidence',
     exact: true,
   })
-  await expect(signals.getByRole('row', { name: /classifier:zero/ })).toHaveText(
-    'classifier:zero0.00000.0000No',
+  await expect(signals.getByRole('row', { name: /systemone:zero/ })).toHaveText(
+    'systemone:zero0.00000.0000No',
   )
   await expect(signals.getByRole('row', { name: /domain:technical/ })).toContainText('Not recorded')
   await metadata.screenshot({ path: info.outputPath('insight-metadata-expanded.png') })
@@ -200,7 +200,7 @@ test('legacy and partial records do not manufacture a projection result', async 
     },
     projections: undefined,
     projection_scores: undefined,
-    signal_values: { 'classifier:zero': 0 },
+    signal_values: { 'systemone:zero': 0 },
     signal_confidences: undefined,
   })
   await page.goto('/insights/insight-ui-example')
@@ -216,7 +216,7 @@ test('legacy and partial records do not manufacture a projection result', async 
   await expect(
     page
       .getByRole('table', { name: 'Recorded signal values and confidence', exact: true })
-      .getByRole('row', { name: /classifier:zero/ }),
+      .getByRole('row', { name: /systemone:zero/ }),
   ).toContainText('Not recorded')
 })
 
@@ -237,14 +237,14 @@ test('usage leads with compact metrics while scores and independent status cards
         target: 'response-check-unavailable',
         verdict: 'unavailable',
         reason: 'Detector unavailable',
-        metadata: { direction: 'response', signal: 'hallucination', score_available: 'false' },
+        metadata: { stage: 'response', signal: 'hallucination', score_available: 'false' },
       },
       {
         source: 'router',
         target: 'response-check-not-applicable',
         verdict: 'not_applicable',
         reason: 'No applicable context',
-        metadata: { direction: 'response', signal: 'hallucination', score_available: 'false' },
+        metadata: { stage: 'response', signal: 'hallucination', score_available: 'false' },
       },
     ],
   })

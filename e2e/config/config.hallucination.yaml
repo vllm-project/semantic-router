@@ -44,13 +44,16 @@ routing:
     domains:
       - name: general
         description: General questions
-        mmlu_categories:
+        labels:
           - other
     fact_check:
       - name: needs_fact_check
         description: Query contains factual claims that should be verified against context
       - name: no_fact_check_needed
         description: Query is creative, code-related, or opinion-based - no fact verification needed
+        labels: [NO_FACT_CHECK_NEEDED]
+        predicate:
+          gt: 0.3
     hallucination:
       - name: ungrounded_claims
         description: Answers with claims their grounding context does not support.

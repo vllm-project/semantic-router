@@ -228,7 +228,7 @@ func TestStartupRejectsInvalidKubernetesGlobals(t *testing.T) {
 	}{
 		{"cache", "  stores: {response_cache: {enabled: true, similarity_threshold: 1.5}}", "similarity_threshold"},
 		{"memory", "  stores: {memory: {default_similarity_threshold: 1.5}}", "default_similarity_threshold"},
-		{"admission", "  model_catalog: {admission: {prompt_guard: {max_concurrency: 1, max_queue: -1}}}", "max_queue"},
+		{"admission", "  model_catalog: {admission: {primary: {max_concurrency: 1, max_queue: -1}}}", "max_queue"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

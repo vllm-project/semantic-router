@@ -16,8 +16,6 @@ var BaselineRouterContract = []string{
 	"anthropic-messages-streaming",
 	"apiserver-runtime-config-endpoints",
 	"apiserver-classification-endpoints",
-	"llm-classifier-distribution-routing",
-	"sequence-classifier-routing",
 	"chat-completions-stress-request",
 	"domain-classify",
 	"semantic-cache",
@@ -31,8 +29,6 @@ var BaselineRouterContract = []string{
 	"pii-long-text",
 	// A jailbreak past the classifier's sequence limit is still detected (issue #3204)
 	"security-long-text",
-	// A scanned score names the window it came from (issue #3939)
-	"security-window-provenance",
 	"jailbreak-detection",
 	"decision-priority-selection",
 	// Provider-bound request effects for system_prompt, request_params, and header_mutation (issue #3180)

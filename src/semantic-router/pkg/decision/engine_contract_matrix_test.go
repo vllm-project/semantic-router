@@ -26,12 +26,10 @@ func TestDecisionEngineContractMatrix(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			engine := decision.NewDecisionEngine(
-				nil,
-				nil,
-				nil,
+
 				testCase.decisions,
-				testCase.strategy,
-			)
+				testCase.strategy)
+
 			result, err := engine.EvaluateDecisionsWithSignals(testCase.signals)
 			if err != nil {
 				t.Fatalf("normal evaluation: %v", err)
@@ -65,18 +63,18 @@ func logicalContractCases() []engineContractCase {
 		{
 			name:      "and/all-match",
 			strategy:  config.RoutingStrategyPriority,
-			decisions: []config.Decision{route("and", 0, 0, all(keywordA, leaf("embedding", "b")))},
+			decisions: []config.Decision{route("and", 0, 0, all(keywordA, leaf("systemone", "b")))},
 			signals: matches(
 				[]string{"a"},
 				[]string{"b"},
 				nil,
 				nil,
-				map[string]float64{"keyword:a": 0.8, "embedding:b": 0.6},
+				map[string]float64{"keyword:a": 0.8, "systemone:b": 0.6},
 			),
 			wantDecision: "and",
-			// The keyword leaf is policy, so only the embedding score ranks.
+			// The keyword leaf is policy, so only the systemone score ranks.
 			wantConfidence: 0.6,
-			wantRules:      []string{"keyword:a", "embedding:b"},
+			wantRules:      []string{"keyword:a", "systemone:b"},
 		},
 		{
 			name:      "and/missing-child",
@@ -87,17 +85,17 @@ func logicalContractCases() []engineContractCase {
 		{
 			name:      "or/best-confidence",
 			strategy:  config.RoutingStrategyPriority,
-			decisions: []config.Decision{route("or", 0, 0, any(keywordA, leaf("embedding", "b")))},
+			decisions: []config.Decision{route("or", 0, 0, any(keywordA, leaf("systemone", "b")))},
 			signals: matches(
 				[]string{"a"},
 				[]string{"b"},
 				nil,
 				nil,
-				map[string]float64{"keyword:a": 0.4, "embedding:b": 0.9},
+				map[string]float64{"keyword:a": 0.4, "systemone:b": 0.9},
 			),
 			wantDecision:   "or",
 			wantConfidence: 0.9,
-			wantRules:      []string{"embedding:b"},
+			wantRules:      []string{"systemone:b"},
 		},
 		{
 			name:           "not/absent-matches",
@@ -336,12 +334,12 @@ func route(name string, priority, tier int, rules config.RuleNode) config.Decisi
 }
 
 func matches(
-	keywords, embeddings, structures, projections []string,
+	keywords, systemOne, structures, projections []string,
 	confidences map[string]float64,
 ) *decision.SignalMatches {
 	return &decision.SignalMatches{
 		KeywordRules:      keywords,
-		EmbeddingRules:    embeddings,
+		SystemOneRules:    systemOne,
 		StructureRules:    structures,
 		ProjectionRules:   projections,
 		SignalConfidences: confidences,

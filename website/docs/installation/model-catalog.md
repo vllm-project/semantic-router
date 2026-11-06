@@ -22,20 +22,19 @@ API the Router speaks to it.
 | --- | --- | --- |
 | `model_runtime` | The built-in model runtime: managed (the Router starts it) or attached (`endpoint` set) | Anything its model card serves |
 | `systemone` | `POST <endpoint>` and `GET <endpoint>/models` of a System One API | Every question-style signal and selector |
-| `classify` | `POST <endpoint>/classify` | `domain`, `jailbreak`, `pii`, `hallucination`, classifier rules, safety rules and hazard parts, complexity rules |
-| `openai_chat` | `POST <endpoint>/chat/completions` | `jailbreak`, `hallucination`, `preference`, classifier rules |
+| `classify` | `POST <endpoint>/classify` | The models of the masking, response-jailbreak and hallucination plugins (`pii`, `jailbreak` and `hallucination` bindings) |
+| `openai_chat` | `POST <endpoint>/chat/completions` | The response-jailbreak plugin's guard and the hallucination plugin's detector |
 | `openai_embeddings` | `POST <endpoint>/embeddings` | Embeddings |
 | `rerank` | `POST <endpoint>/rerank` | RAG reranking |
 
 The Router refuses at load a deployment given a signal it cannot answer.
 
-Four deployments are always declared and start only when something resolves
+Three deployments are always declared and start only when something resolves
 to them:
 
 | Name | Model | Used by default for |
 | --- | --- | --- |
 | `primary` | `vllm-sr/vela3-fast` on CPU | `system.decision_model` |
-| `hazard` | Vela 1.0 Hazard | A safety rule's hazard part |
 | `vela-embedding` | Vela 1.0 Embedding | `embeddings.default` |
 | `omni-nano` | Vela 1.0 Omni Nano | `embeddings.multimodal` |
 
@@ -89,7 +88,7 @@ global:
 | `input` | The deployment's input budget: `max_tokens`, and `overflow` (`reject`, `truncate` or `window`) |
 | `replicas` | Workers of one logical deployment: each a `device`, or an `endpoint` and `model` of a worker started elsewhere |
 | `public_name` | The deployment's name on the inference API |
-| `operating_point` | `path` and `sha256` of the operating point the head's package serves. A classifier rule answered by this deployment reads independent label scores at its thresholds |
+| `operating_point` | `path` and `sha256` of the operating point a scores head's package serves; the runtime refuses a package whose policy file has another digest |
 | `max_num_seqs`, `max_num_batched_tokens`, `batch_window_ms`, `dtype`, `enable_shared_context`, `max_model_len` | Engine arguments; see [engine arguments](../model-runtime/engine-args.md) |
 
 ### Connection block
@@ -127,14 +126,13 @@ routing:
     domain: d3-remote
 ```
 
-Binding keys are the signal types whose rules share one answer: `domain`,
-`jailbreak`, `pii`, `fact_check`, `user_feedback`, `modality`,
-`hallucination`, `preference` and `reask`. Rules that ask their own question
-write `deployment:` on the rule: `routing.signals.systemone[]`,
-`classifiers[]`, `safety[]` and `safety[].hazard`, `complexity[]`, and
-`algorithm.systemone` of a decision. One remote score drives every complexity
-rule, so complexity rules answered by a `classify` deployment name the same
-one.
+Binding keys are the application signal types: `domain`, `fact_check`,
+`user_feedback`, `jailbreak`, `safety`, `pii`, `hallucination`, `refusal`,
+`turn_relation`, `complexity` and `modality`. A binding answers the rules of
+its type that name no deployment; a rule writes `deployment:` to ask another.
+`routing.signals.systemone[]` rules and `algorithm.systemone` of a decision
+write `deployment:` too. The `jailbreak`, `pii` and `hallucination` bindings
+also name the model of the plugin module of that type.
 
 A binding can also be an object, to select a head of a multi-head
 `model_runtime` deployment: `pii: {deployment: local-vela, head: pii}`. An
@@ -144,24 +142,24 @@ Resolution, for every signal: the rule's `deployment`, then the recipe's
 binding, then the global binding, then `system.decision_model` for a
 question-style signal. Embeddings resolve through `embeddings.default`, or,
 in a routing profile that embeds with its own model, through its
-`model_bindings.embedding`; reranking through the `rag` plugin's
-`rerank.deployment`; and a hazard part through its own `deployment`, else
-`hazard`.
+`model_bindings.embedding`; and reranking through the `rag` plugin's
+`rerank.deployment`.
 
 ## Thresholds
 
-A module threshold you do not write comes from the model that answers: the
-calibrated value of `vela3-fast`, a Vela 2.0 size or a Vela 1.0 specialist;
-0.5 for any other model, local or `systemone`, which has none (the load warns
-`uncalibrated_preset`). A remote classifier keeps the Vela 1.0 defaults. A
-`threshold` you write is used as written.
+A rule's predicate you do not write comes from the model that answers: the
+threshold calibrated for `vela3-fast` or a Vela 2.0 size; 0.5 for any other
+model, local or `systemone`, which has none (the load warns
+`uncalibrated_preset`, naming the rule). A `predicate` you write is used as
+written. The plugin modules keep their module thresholds the same way, and a
+remote classifier keeps the Vela 1.0 defaults.
 
 ## Admission
 
 `global.model_catalog.admission` bounds concurrent calls. A key is a
-deployment name, for a gate the deployment's users share, or a signal type
-(`jailbreak`, `domain`, `pii`, `fact_check`, `hallucination`,
-`user_feedback`, `safety`, `hazard`), for that signal's own gate.
+deployment name, for a gate the deployment's users share, or the signal type
+of a plugin module that keeps its own model (`jailbreak`, `pii`,
+`hallucination`), for that module's gate.
 
 ```yaml
 global:
@@ -223,37 +221,30 @@ routing:
 remote reranking API is a `rerank` deployment, which answers at its own depth,
 so its `rerank` block writes only `deployment` and `top_k`.
 
-### R3. Remote classifier as the jailbreak guard, and a chat model as a judge
+### R3. Remote decision model for jailbreak and hallucination
 
-```yaml title="r3-classify-and-chat"
+```yaml title="r3-remote-judge"
 global:
   model_catalog:
     deployments:
-      guard:
-        provider: classify               # POST <endpoint>/classify
-        endpoint: https://guard.example.com
-        auth: {api_key_env: GUARD_KEY}
-        timeout_ms: 5000
-        limits: {max_response_bytes: 1048576}
-      chat-judge:
-        provider: openai_chat            # chat completions used as a classifier or judge
-        endpoint: https://llm.example.com/v1
-        model: gpt-4.1-mini
+      d3-judge:
+        provider: systemone
+        endpoint: https://judge.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
         auth: {api_key_env: JUDGE_KEY}
-        generation: {max_tokens: 256, temperature: 0}
+        timeout_ms: 5000
 routing:
   model_bindings:
-    jailbreak: guard
-  signals:
-    classifiers:
-      - name: tool-risk
-        deployment: chat-judge
-        labels: [SAFE, RISKY]
-        instructions: Choose RISKY only for destructive or irreversible tool operations.
+    jailbreak: d3-judge                  # request- and response-stage rules
+    hallucination: d3-judge
 ```
 
-The provider decides how the Router talks to the model; no role, adapter or
-contract is written.
+Every `jailbreak` and `hallucination` rule of this scope asks `d3-judge`; the
+other signals stay on `primary`. A binding names only the deployment: the
+signal decides the question, the provider how the Router asks it. A
+hallucination rule asks a span question, so its deployment must answer spans;
+a `systemone` deployment that lists `capabilities.question_types` must include
+`span`.
 
 ### R4. System One behind a gateway with its own auth header
 

@@ -21,16 +21,6 @@ function flattenSchema(schema: FieldSchema[]): FieldSchema[] {
 }
 
 describe('DSL structured field schemas', () => {
-  it.each(['embedding', 'complexity'])('offers typed prototype controls for %s rules', (signal) => {
-    const prototype = requireField(getSignalFieldSchema(signal), 'prototype_scoring')
-    expect(prototype.type).toBe('object')
-    expect(prototype.required).toBeFalsy()
-    expect(requireField(prototype.fields || [], 'enabled').type).toBe('boolean')
-    for (const key of ['max_prototypes', 'best_weight', 'top_m']) {
-      expect(requireField(prototype.fields || [], key).type, key).toBe('number')
-    }
-  })
-
   it('uses JSON controls only for recursive or deliberately open payloads', () => {
     const schemas = [
       ...ALGORITHM_TYPES.flatMap((type) => getAlgorithmFieldSchema(type)),
@@ -38,13 +28,13 @@ describe('DSL structured field schemas', () => {
       ...PLUGIN_TYPES.flatMap((type) => getPluginFieldSchema(type)),
     ]
 
-    // The recursive rule trees: the complexity composer and response_guard's
-    // rules[].when. The open payload: rag's backend_config.
+    // The recursive rule tree: response_guard's rules[].when. The open
+    // payload: rag's backend_config.
     expect(
       flattenSchema(schemas)
         .filter((field) => field.type === 'json')
         .map((field) => field.key),
-    ).toEqual(['conditions', 'conditions', 'backend_config'])
+    ).toEqual(['conditions', 'backend_config'])
   })
 
   it('describes workflow and multi-factor structures with typed nested schemas', () => {
@@ -92,10 +82,11 @@ describe('DSL structured field schemas', () => {
   })
 
   it('maps stable signal and header contracts to object and object-list editors', () => {
-    expect(requireField(getSignalFieldSchema('pii'), 'source')).toMatchObject({
-      type: 'select',
-      options: ['tool_result'],
-    })
+    const piiInput = requireField(getSignalFieldSchema('pii'), 'input')
+    expect(piiInput.type).toBe('object')
+    expect(piiInput.fields?.map((field) => field.key)).toEqual(
+      expect.arrayContaining(['history', 'tool_results']),
+    )
 
     const domainScores = requireField(getSignalFieldSchema('domain'), 'model_scores')
     expect(domainScores.type).toBe('object[]')
@@ -109,19 +100,10 @@ describe('DSL structured field schemas', () => {
     const source = requireField(structureFeature.fields || [], 'source')
     expect(source.type).toBe('object')
     expect(requireField(source.fields || [], 'sequences').type).toBe('string[][]')
-    expect(requireField(getSignalFieldSchema('complexity'), 'composer').type).toBe('rule')
     expect(requireField(getSignalFieldSchema('authz'), 'subjects').type).toBe('object[]')
-    expect(requireField(getSignalFieldSchema('kb'), 'target').type).toBe('object')
 
     const metadataPredicate = requireField(getSignalFieldSchema('metadata'), 'predicate')
     expect(metadataPredicate.fields?.map((field) => field.key)).toEqual(['equals', 'in', 'exists'])
-    expect(requireField(getSignalFieldSchema('classifier'), 'type').options).toEqual([
-      'local',
-      'llm',
-      'sequence_classifier',
-    ])
-    expect(requireField(getSignalFieldSchema('classifier'), 'labels').type).toBe('string[]')
-    expect(requireField(getSignalFieldSchema('classifier'), 'disable_rationale').type).toBe('boolean')
 
     const conversationFeature = requireField(getSignalFieldSchema('conversation'), 'feature')
     const conversationSource = requireField(conversationFeature.fields || [], 'source')

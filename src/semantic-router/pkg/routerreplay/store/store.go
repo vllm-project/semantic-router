@@ -15,12 +15,10 @@ import (
 // Signal represents various routing signals captured during a request.
 type Signal struct {
 	Keyword       []string `json:"keyword,omitempty"`
-	Embedding     []string `json:"embedding,omitempty"`
 	Domain        []string `json:"domain,omitempty"`
 	FactCheck     []string `json:"fact_check,omitempty"`
 	UserFeedback  []string `json:"user_feedback,omitempty"`
-	Reask         []string `json:"reask,omitempty"`
-	Preference    []string `json:"preference,omitempty"`
+	TurnRelation  []string `json:"turn_relation,omitempty"`
 	Language      []string `json:"language,omitempty"`
 	Context       []string `json:"context,omitempty"`
 	Structure     []string `json:"structure,omitempty"`
@@ -30,11 +28,9 @@ type Signal struct {
 	Jailbreak     []string `json:"jailbreak,omitempty"`
 	Safety        []string `json:"safety,omitempty"`
 	PII           []string `json:"pii,omitempty"`
-	KB            []string `json:"kb,omitempty"`
 	Conversation  []string `json:"conversation,omitempty"`
 	Event         []string `json:"event,omitempty"`
 	Metadata      []string `json:"metadata,omitempty"`
-	Classifier    []string `json:"classifier,omitempty"`
 	InputModality []string `json:"input_modality,omitempty"`
 	Decision      []string `json:"decision,omitempty"`
 }
@@ -210,7 +206,6 @@ type RouteDiagnostics struct {
 	SelectionReasoning             string                               `json:"selection_reasoning,omitempty"`
 	SelectionTrace                 *selectiontrace.MultiFactorObjective `json:"selection_trace,omitempty"`
 	FusionQuorum                   *FusionQuorumDiagnostics             `json:"fusion_quorum,omitempty"`
-	TopicContinuity                []TopicContinuityRecord              `json:"topic_continuity,omitempty"`
 	Looper                         *LooperDiagnostics                   `json:"looper,omitempty"`
 	PreparedDispatch               *PreparedDispatchReceipt             `json:"prepared_dispatch,omitempty"`
 	PromptHelperModel              string                               `json:"prompt_helper_model,omitempty"`
@@ -567,12 +562,10 @@ func cloneToolTrace(trace *ToolTrace) *ToolTrace {
 func cloneSignal(signal Signal) Signal {
 	return Signal{
 		Keyword:       cloneStringSlice(signal.Keyword),
-		Embedding:     cloneStringSlice(signal.Embedding),
 		Domain:        cloneStringSlice(signal.Domain),
 		FactCheck:     cloneStringSlice(signal.FactCheck),
 		UserFeedback:  cloneStringSlice(signal.UserFeedback),
-		Reask:         cloneStringSlice(signal.Reask),
-		Preference:    cloneStringSlice(signal.Preference),
+		TurnRelation:  cloneStringSlice(signal.TurnRelation),
 		Language:      cloneStringSlice(signal.Language),
 		Context:       cloneStringSlice(signal.Context),
 		Structure:     cloneStringSlice(signal.Structure),
@@ -582,11 +575,9 @@ func cloneSignal(signal Signal) Signal {
 		Jailbreak:     cloneStringSlice(signal.Jailbreak),
 		Safety:        cloneStringSlice(signal.Safety),
 		PII:           cloneStringSlice(signal.PII),
-		KB:            cloneStringSlice(signal.KB),
 		Conversation:  cloneStringSlice(signal.Conversation),
 		Event:         cloneStringSlice(signal.Event),
 		Metadata:      cloneStringSlice(signal.Metadata),
-		Classifier:    cloneStringSlice(signal.Classifier),
 		InputModality: cloneStringSlice(signal.InputModality),
 		Decision:      cloneStringSlice(signal.Decision),
 	}
@@ -665,7 +656,6 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 	}
 	cloned := *value
 	cloned.FusionQuorum = cloneFusionQuorumDiagnostics(value.FusionQuorum)
-	cloned.TopicContinuity = append([]TopicContinuityRecord(nil), value.TopicContinuity...)
 	cloned.SelectionTrace = value.SelectionTrace.Clone()
 	cloned.Looper = cloneLooperDiagnostics(value.Looper)
 	if value.PreparedDispatch != nil {

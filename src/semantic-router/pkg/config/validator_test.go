@@ -1009,32 +1009,3 @@ var _ = Describe("validateConfigStructure", func() {
 	registerValidateConfigStructureLoRASpecs()
 	registerValidateConfigStructureAlgorithmSpecs()
 })
-
-var _ = Describe("validatePromptGuardBackendConfig", func() {
-	It("accepts the local model (no backend)", func() {
-		cfg := &PromptGuardConfig{}
-		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
-	})
-
-	It("accepts backend http_chat", func() {
-		cfg := &PromptGuardConfig{
-			Backend: &RemoteClassifierBackend{
-				Protocol: RemoteClassifierProtocolHTTPChat,
-				Contract: RemoteClassifierContractLabelDecision,
-				Model:    "guard",
-			},
-		}
-		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
-	})
-
-	It("accepts backend http_classify", func() {
-		cfg := &PromptGuardConfig{
-			Backend: &RemoteClassifierBackend{
-				Protocol: RemoteClassifierProtocolHTTPClassify,
-				Contract: RemoteClassifierContractLabelDistribution,
-				Model:    "guard",
-			},
-		}
-		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
-	})
-})

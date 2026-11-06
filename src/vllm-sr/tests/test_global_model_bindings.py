@@ -23,11 +23,7 @@ def document():
                     }
                 },
                 "bindings": {
-                    "pii": {
-                        "deployment": "shared",
-                        "contract": "token_spans.v1",
-                        "adapter": "mmbert",
-                    },
+                    "pii": {"deployment": "shared"},
                     "domain": {"deployment": "shared"},
                     "jailbreak": {"deployment": "shared", "head": "guard"},
                 },
@@ -38,14 +34,17 @@ def document():
                 "name": "active",
                 "routing": {
                     "signals": {
-                        "classifiers": [
+                        "systemone": [
                             {
                                 "name": "risk",
-                                "type": "local",
-                                "labels": ["safe", "unsafe"],
+                                "question": {
+                                    "type": "choice",
+                                    "instructions": "Is the request risky?",
+                                    "choices": [{"key": "safe"}, {"key": "unsafe"}],
+                                },
                             }
                         ],
-                        "safety": [{"name": "policy", "threshold": 0.8}],
+                        "safety": [{"name": "policy", "predicate": {"gte": 0.8}}],
                     }
                 },
             },

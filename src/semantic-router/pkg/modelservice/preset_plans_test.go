@@ -33,7 +33,7 @@ var presetFamilyCards = map[string]ModelCard{
 func TestPresetTasksGoOutInTheTrainedFormPerFamily(t *testing.T) {
 	trainedIDs := map[string]string{
 		"domain": "domain", "fact_check": "factcheck", "user_feedback": "feedback",
-		"modality": "modality", "jailbreak": "attack", "safety": "p_harm",
+		"jailbreak": "attack", "safety": "p_harm",
 	}
 	vela2Trained := map[string]bool{"domain": true, "fact_check": true, "user_feedback": true, "jailbreak": true, "safety": true}
 	for family, card := range presetFamilyCards {
@@ -81,16 +81,18 @@ func answerFor(question Question) Answer {
 	return Answer{Type: question.Type, Choice: question.Choices[0].Key, Probabilities: probabilities, InputCoverage: "complete"}
 }
 
-// The modality question asks the preset's text, image and text_image; the
-// Vela 3.0 families were trained on it with the AR, DIFFUSION and BOTH
-// options, and their answer reads as the canonical options.
+// The modality task asks the preset's eight outputs. A question that reads
+// only text, image and text_image goes to the Vela 3.0 families in the form
+// they were trained on, with the AR, DIFFUSION and BOTH options, and their
+// answer reads as the canonical options.
 func TestTrainedModalityAnswersTheCanonicalOptions(t *testing.T) {
 	definition, _ := BuiltinTask("modality")
 	question := definition.Question
 	question.ID = "modality_detector:modality"
-	if keys := optionKeys(question.Choices); !slices.Equal(keys, []string{"text", "image", "text_image"}) {
+	if keys := optionKeys(question.Choices); len(keys) != 8 || !slices.Equal(keys[:3], []string{"text", "image", "text_image"}) {
 		t.Fatalf("the modality task asks %v", keys)
 	}
+	question.Choices = question.Choices[:3]
 	for _, family := range []string{"vela3", "vela3_d3"} {
 		plan, err := CompileTask(definition, question, presetFamilyCards[family])
 		if err != nil {

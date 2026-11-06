@@ -5,7 +5,7 @@ description: 用 Vela Guard 检测越狱和提示词注入，用 Vela Safety、S
 translation:
   source_commit: "fddd53d7c446c30ae183d16b6d63ec54f7a00a3e"
   source_file: "docs/model-runtime/guides/safety.md"
-  outdated: false
+  outdated: true
 is_mtpe: true
 ---
 
@@ -97,7 +97,7 @@ global:
       jailbreak: vela-guard
 ```
 
-规则的 hazard 部分在其 `categories` 中的最高分达到该规则的 `hazard.threshold` 时匹配：所选的每个类别共用这一个阈值。要让每个类别按 Vela 1.0 Hazard 为它发布的阈值判断，请改在 classifier 规则上指定 hazard 部署，见[分类器信号](../../tutorials/signal/learned/classifier.md#independent-labels-with-a-frozen-operating-point)。
+规则的 hazard 部分在其 `categories` 中的最高分达到该规则的 `hazard.threshold` 时匹配：所选的每个类别共用这一个阈值。要让每个类别按 Vela 1.0 Hazard 为它发布的阈值判断，请改在 classifier 规则上指定 hazard 部署，见[分类器信号](../../tutorials/signal/learned/systemone.md)。
 
 ## 检查做不完的时候 {#when-a-check-cannot-finish}
 

@@ -1,1 +1,1 @@
-routing.decisions[guarded].plugins[0]: removed_plugin_type: plugin response_jailbreak was removed; run `vllm-sr config migrate` (a response_guard rule over a jailbreak signal with direction: response)
+routing.decisions[guarded].plugins[0]: removed_plugin_type: plugin response_jailbreak was removed; run `vllm-sr config migrate` (a response_guard rule over a jailbreak signal with stage: response)

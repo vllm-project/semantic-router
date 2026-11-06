@@ -127,7 +127,7 @@ routing:
 		t.Fatal(err)
 	}
 	cfg := string(migrated)
-	if !strings.Contains(cfg, "pii: [{name: personal, threshold: 0.7}]") || strings.Contains(cfg, "signal: personal, threshold") {
-		t.Fatalf("migrated:\n%s\nwant the threshold on pii rule personal", cfg)
+	if !strings.Contains(cfg, "pii: [{name: personal, predicate: {gte: 0.7}}]") || strings.Contains(cfg, "signal: personal, threshold") {
+		t.Fatalf("migrated:\n%s\nwant the threshold as pii rule personal's predicate", cfg)
 	}
 }

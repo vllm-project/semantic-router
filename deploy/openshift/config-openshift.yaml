@@ -293,6 +293,7 @@ routing:
       - name: philosophy
       - name: engineering
       - name: general
+        labels: [other]
   modelCards:
     - name: Model-A
     - name: Model-B
@@ -313,7 +314,6 @@ global:
     api:
       batch_classification:
         max_batch_size: 32
-        max_concurrency: 4
   stores:
     response_cache:
       enabled: true

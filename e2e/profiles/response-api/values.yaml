@@ -231,8 +231,6 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
-          concurrency_threshold: 5
-          max_concurrency: 8
           metrics:
             enabled: true
             detailed_goroutine_tracking: false
@@ -251,19 +249,6 @@ config:
         backend_type: memory
         embedding_model: mmbert
     integrations: {}
-    model_catalog:
-      kbs: []
-      modules:
-        prompt_guard:
-          enabled: false
-          jailbreak_mapping_path: ""
-        classifier:
-          domain:
-            enabled: false
-            category_mapping_path: ""
-          pii:
-            enabled: false
-            pii_mapping_path: ""
 resources:
   limits:
     cpu: '2'

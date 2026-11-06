@@ -149,15 +149,6 @@ spec:
       tools_db_path: "config/tools_db.json"
       fallback_to_empty: true
 
-    # Prompt guard / jailbreak detection, answered by the decision model
-    # (vela3-fast by default).
-    prompt_guard:
-      enabled: true
-      threshold: "0.88"
-      use_cpu: true
-
-    # Domain and PII classifiers follow the decision model too.
-
     # Reasoning mode configuration per model family
     # Default reasoning effort level
     reasoning_effort: high
@@ -166,8 +157,6 @@ spec:
     api:
       batch_classification:
         max_batch_size: 100
-        concurrency_threshold: 5
-        max_concurrency: 8
         metrics:
           enabled: true
           detailed_goroutine_tracking: true

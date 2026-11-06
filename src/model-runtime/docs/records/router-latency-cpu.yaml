@@ -65,39 +65,61 @@ routing:
     domains:
       - name: business
         description: Business and management related queries.
-        mmlu_categories: [business]
+        labels: [business]
+        predicate:
+          gte: 0.5
       - name: law
         description: Legal questions and policy topics.
-        mmlu_categories: [law]
+        labels: [law]
+        predicate:
+          gte: 0.5
       - name: health
         description: Health and medical information requests.
-        mmlu_categories: [health]
+        labels: [health]
+        predicate:
+          gte: 0.5
       - name: "computer science"
         description: Computer science and engineering prompts.
-        mmlu_categories: ["computer science"]
+        labels: ["computer science"]
+        predicate:
+          gte: 0.5
       - name: other
         description: General fallback traffic.
-        mmlu_categories: [other]
+        labels: [other]
+        predicate:
+          gte: 0.5
     fact_check:
       - name: needs_fact_check
         description: Prompts with factual claims that should be verified.
+        predicate:
+          gte: 0.95
       - name: no_fact_check_needed
         description: Creative prompts that do not need factual verification.
+        labels: [NO_FACT_CHECK_NEEDED]
+        predicate:
+          gt: 0.05
     user_feedbacks:
       - name: wrong_answer
         description: The user indicates the previous answer was incorrect.
+        labels: [WRONG_ANSWER]
+        predicate:
+          gte: 0.7
       - name: need_clarification
         description: The user asks for a clearer or more detailed answer.
+        labels: [NEED_CLARIFICATION]
+        predicate:
+          gte: 0.7
     jailbreak:
       - name: jailbreak_detected
-        threshold: 0.5
         description: Prompt attacks.
+        predicate:
+          gte: 0.5
     pii:
       - name: restricted_pii
-        threshold: 0.85
-        pii_types_allowed: [EMAIL_ADDRESS]
         description: Sensitive identifiers.
-
+        predicate:
+          gte: 0.85
+        ignore_labels: [EMAIL_ADDRESS]
   decisions:
     - name: guard_jailbreak
       description: Prompt attacks go to the guarded model.
@@ -178,10 +200,7 @@ global:
   model_catalog:
     system:
       prompt_guard: models/Vela-1.0-Encoder-307M-Guard
-      domain_classifier: models/Vela-1.0-Encoder-307M-Domain
       pii_classifier: models/Vela-1.0-Encoder-307M-PII
-      fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck
-      feedback_detector: models/Vela-1.0-Encoder-307M-Feedback
     modules:
       prompt_guard:
         enabled: true
@@ -193,15 +212,6 @@ global:
         jailbreak_mapping_path: models/Vela-1.0-Encoder-307M-Guard/jailbreak_type_mapping.json
         positive_labels: [jailbreak]
       classifier:
-        domain:
-          enabled: true
-          model_ref: domain_classifier
-          max_sequence_length: 0
-          model_id: models/Vela-1.0-Encoder-307M-Domain
-          threshold: 0.5
-          use_cpu: true
-          category_mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json
-          fallback_category: other
         pii:
           enabled: true
           model_ref: pii_classifier
@@ -212,16 +222,3 @@ global:
           pii_mapping_path: models/Vela-1.0-Encoder-307M-PII/pii_mapping.json
       hallucination_mitigation:
         enabled: false
-        fact_check:
-          model_ref: fact_check_classifier
-          max_sequence_length: 0
-          model_id: models/Vela-1.0-Encoder-307M-FactCheck
-          threshold: 0.95
-          use_cpu: true
-      feedback_detector:
-        enabled: true
-        model_ref: feedback_detector
-        max_sequence_length: 0
-        model_id: models/Vela-1.0-Encoder-307M-Feedback
-        threshold: 0.7
-        use_cpu: true

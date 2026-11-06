@@ -7,11 +7,11 @@ import (
 )
 
 func decisionModelYAML(system, modules string) string {
-	global := ""
+	catalog := modules
 	if system != "" {
-		global = "    system:\n" + system
+		catalog += "    system:\n" + system
 	}
-	return builtInSignalsYAML(modules) + global
+	return builtInSignalsYAML(catalog)
 }
 
 func mustParseDecisionModel(t *testing.T, raw string) *RouterConfig {
@@ -55,7 +55,7 @@ func TestDecisionModelDefaultUsesDeclaredResource(t *testing.T) {
 	if err != nil || !ok || name != "primary" || resource.Artifact != "vllm-sr/vela3-fast" {
 		t.Fatalf("default %s %+v %v", name, resource, err)
 	}
-	for _, consumer := range []string{"domain_classifier", "prompt_guard", "pii_classifier", "fact_check_classifier", "feedback_detector", "hallucination_detector"} {
+	for _, consumer := range []string{"prompt_guard", "pii_classifier", "hallucination_detector"} {
 		got, deployment, found, err := cfg.ImplicitTaskDeployment(consumer)
 		if err != nil || !found || got != name || !reflect.DeepEqual(deployment, resource) {
 			t.Fatalf("%s duplicated resource: %s %+v %v", consumer, got, deployment, err)
@@ -63,6 +63,11 @@ func TestDecisionModelDefaultUsesDeclaredResource(t *testing.T) {
 	}
 	if cfg.SystemOneRuleDeployment(cfg.SystemOneRules[0]) != name {
 		t.Fatal("question did not inherit default deployment")
+	}
+	for _, rule := range cfg.ApplicationRules() {
+		if rule.Rule.Deployment != "" && rule.Rule.Deployment != name {
+			t.Fatalf("%s:%s did not inherit the default deployment: %q", rule.Type, rule.Rule.Name, rule.Rule.Deployment)
+		}
 	}
 }
 
@@ -91,13 +96,14 @@ func TestDecisionModelAcceptsGenericDeclaredFamilies(t *testing.T) {
 }
 
 func TestDecisionModelPreservesExplicitSpecialist(t *testing.T) {
-	cfg := mustParseDecisionModel(t, selectedDecisionYAML("vllm-sr/Decision-2.0-Kai-0.6B", "      prompt_guard: models/Vela-1.0-Encoder-307M-Guard\n"))
-	name, resource, _, err := cfg.ImplicitTaskDeployment("prompt_guard")
-	if err != nil || name == "selected" || resource.Artifact != "vllm-sr/Vela-1.0-Encoder-307M-Guard" {
-		t.Fatalf("specialist lost: %s %+v %v", name, resource, err)
+	cfg := mustParseDecisionModel(t, selectedDecisionYAML("vllm-sr/Decision-2.0-Kai-0.6B", "")+
+		"      guard: {provider: model_runtime, artifact: vllm-sr/vela3-fast, device: cpu}\n"+
+		"    bindings:\n      jailbreak: {deployment: guard}\n")
+	if deployment, source := cfg.ApplicationTypeDeployment(SignalTypeJailbreak); deployment != "guard" || source != "global" {
+		t.Fatalf("specialist lost: %s (%s)", deployment, source)
 	}
-	if got, _, _, _ := cfg.ImplicitTaskDeployment("domain_classifier"); got != "selected" {
-		t.Fatalf("domain %s", got)
+	if deployment, _ := cfg.ApplicationTypeDeployment(SignalTypePII); deployment != "selected" {
+		t.Fatalf("pii %s", deployment)
 	}
 }
 
@@ -110,33 +116,22 @@ func TestDecisionModelReferenceIsExactObject(t *testing.T) {
 }
 
 func TestDecisionModelCanonicalExport(t *testing.T) {
-	cfg := mustParseDecisionModel(t, selectedDecisionYAML("vllm-sr/Vela-2.0-4B", "      feedback_detector: models/Vela-1.0-Encoder-307M-Feedback\n"))
+	cfg := mustParseDecisionModel(t, selectedDecisionYAML("vllm-sr/Vela-2.0-4B", "")+
+		"      pii-specialist: {provider: model_runtime, artifact: vllm-sr/Vela-2.0-0.8B, device: cpu}\n"+
+		"    bindings:\n      pii: {deployment: pii-specialist}\n")
 	document := CanonicalConfigFromRouterConfig(cfg)
 	catalog := document.Global.ModelCatalog
 	if catalog.System != (CanonicalSystemModels{DecisionModel: DecisionModelBinding{Deployment: "selected"}}) {
 		t.Fatalf("the export writes only the decision model under system: %+v", catalog.System)
 	}
-	feedback, ok := catalog.Bindings[BindingKey("feedback_detector")]
-	if !ok || catalog.Deployments[feedback.Deployment].Artifact != "vllm-sr/Vela-1.0-Encoder-307M-Feedback" {
-		t.Fatalf("the feedback line is exported as a binding: %+v", catalog.Bindings)
+	pii, ok := catalog.Bindings[SignalTypePII]
+	if !ok || catalog.Deployments[pii.Deployment].Artifact != "vllm-sr/Vela-2.0-0.8B" {
+		t.Fatalf("the pii binding is exported: %+v", catalog.Bindings)
 	}
-	if _, bound := catalog.Bindings[BindingKey("domain_classifier")]; bound {
-		t.Fatal("a module that follows the decision model is not bound")
+	if _, bound := catalog.Bindings[SignalTypeJailbreak]; bound {
+		t.Fatal("a type that follows the decision model is not bound")
 	}
 	if document.Global.ModelCatalog.Deployments["selected"].Artifact != "vllm-sr/Vela-2.0-4B" {
 		t.Fatal("lost selected resource")
-	}
-}
-
-// The pre-declared hazard deployment never follows the decision model: it
-// stays the Vela 1.0 Hazard encoder, as does a deprecated model_ref: hazard.
-func TestDecisionModelPinsHazardToTheVela1Encoder(t *testing.T) {
-	cfg := mustParseDecisionModel(t, selectedDecisionYAML("vllm-sr/Vela-2.0-0.3B", ""))
-	if got := cfg.ModelDeployments[HazardDeployment].Artifact; got != "vllm-sr/Vela-1.0-Encoder-307M-Hazard" {
-		t.Fatalf("hazard = %q, want the Vela 1.0 Hazard encoder", got)
-	}
-	canonical := CanonicalConfigFromRouterConfig(cfg)
-	if got := canonical.Global.ModelCatalog.Deployments[HazardDeployment].Artifact; got != "vllm-sr/Vela-1.0-Encoder-307M-Hazard" {
-		t.Fatalf("exported hazard = %q, want the Vela 1.0 Hazard encoder", got)
 	}
 }

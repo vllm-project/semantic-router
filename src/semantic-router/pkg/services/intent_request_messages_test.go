@@ -557,7 +557,7 @@ func TestIntentRequestResolveSignalInput_RejectsOversizedMetadata(t *testing.T) 
 
 func TestClassificationServiceClassifyIntentForEval_AcceptsMessagesWithoutText(t *testing.T) {
 	cfg := &config.RouterConfig{}
-	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
+	classifier, err := classification.NewClassifier(cfg)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, classifier.Close()) })
 	service := NewClassificationService(classifier, cfg)

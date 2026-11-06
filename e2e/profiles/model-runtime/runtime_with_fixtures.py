@@ -25,14 +25,9 @@ RUNTIME_COMMANDS = ("vllm-srun", "/opt/vllm-srun/bin/vllm-srun")
 # these directories.
 PACKAGES = {
     "decision": ("decision2", "qwen3", 0),
-    "domain": ("task_heads", "sequence", 1),
-    "pii": ("task_heads", "token", 2),
-    "guard": ("task_heads", "guard", 3),
-    "feedback": ("task_heads", "feedback", 4),
     "decision-attached": ("decision2", "qwen3", 5),
     "embedding": ("task_heads", "embedding", 6),
     "reranker": ("task_heads", "reranker", 7),
-    "modality": ("task_heads", "modality", 8),
     "vela2-attached": ("vela2", "encoder", 9),
 }
 

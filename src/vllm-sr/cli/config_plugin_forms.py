@@ -14,7 +14,7 @@ from typing import Any
 MIGRATE = "run `vllm-sr config migrate`"
 
 REMOVED_PLUGIN_TYPES = {
-    "response_jailbreak": "a response_guard rule over a jailbreak signal with direction: response",
+    "response_jailbreak": "a response_guard rule over a jailbreak signal with stage: response",
     "hallucination": "a response_guard rule over the fact_check and hallucination signals",
 }
 
@@ -62,7 +62,7 @@ def _plugin_form(plugin: dict[str, Any]) -> tuple[str, str, str] | None:
             return (
                 "removed_field",
                 "masking.threshold was removed",
-                "masking.signal naming a pii rule, whose threshold applies",
+                "masking.signal naming a pii rule, whose predicate applies",
             )
         if not configuration.get("signal"):
             return (

@@ -28,7 +28,6 @@ const (
 	apiClassificationMetricsPath = apiObservabilityPath + "/classification-metrics"
 	apiDiagnosticsPath           = apiRootPath + "/diagnostics"
 	apiStoragePath               = apiRootPath + "/storage"
-	apiStorageKnowledgeBasesPath = apiStoragePath + "/knowledge-bases"
 	apiStorageMemoriesPath       = apiStoragePath + "/memories"
 	apiStorageVectorStoresPath   = apiStoragePath + "/vector-stores"
 	apiStorageFilesPath          = apiStoragePath + "/files"

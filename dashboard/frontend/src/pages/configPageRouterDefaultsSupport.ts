@@ -383,14 +383,6 @@ function summaryForKey(
     }
     case 'admission':
       return [{ label: 'Policies', value: `${section ? Object.keys(section).length : 0}` }]
-    case 'complexity':
-      return [
-        {
-          label: 'Prototype scoring',
-          value: asObject(section?.prototype_scoring) ? 'Configured' : 'Not configured',
-        },
-        { label: 'Model', value: "Each rule's deployment, else the decision model" },
-      ]
     case 'embedding_models':
       return embeddingModelsSummary(data)
     case 'prompt_compression':
@@ -896,7 +888,6 @@ const MODEL_MODULE_KEYS = new Set<RouterSystemKey>([
   'classifier',
   'hallucination_mitigation',
   'feedback_detector',
-  'complexity',
 ])
 
 function withoutModelFields(module: unknown): Record<string, unknown> {
@@ -1075,12 +1066,6 @@ function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<Config
     }
     delete hallucination.explainer
     return buildNestedPatch(CURATED_ROUTER_SECTIONS[key].path, hallucination) as Partial<ConfigData>
-  }
-  if (key === 'complexity') {
-    return buildNestedPatch(
-      CURATED_ROUTER_SECTIONS[key].path,
-      withoutModelFields(data),
-    ) as Partial<ConfigData>
   }
   if (key === 'model_selection') {
     const { default_algorithm, models_path, knn, kmeans, svm, ml, ...selectionFields } = data

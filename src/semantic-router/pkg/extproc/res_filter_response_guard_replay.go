@@ -3,6 +3,7 @@ package extproc
 import (
 	"fmt"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -38,9 +39,7 @@ func (r *OpenAIRouter) recordRouterReplayResponseGuard(ctx *RequestContext) {
 	if recorder == nil {
 		return
 	}
-	run := ctx.ResponseGuard
-	cfg := classifierConfig(r.classifierForRequest(ctx))
-	for _, outcome := range run.replayOutcomes(ctx, cfg, time.Now().UTC()) {
+	for _, outcome := range ctx.ResponseGuard.replayOutcomes(ctx, time.Now().UTC()) {
 		if err := recorder.AppendOutcome(ctx.RouterReplayID, outcome); err != nil {
 			logging.ComponentErrorEvent("extproc", "router_replay_response_guard_outcome_failed", map[string]interface{}{
 				"request_id": ctx.RequestID,
@@ -53,52 +52,32 @@ func (r *OpenAIRouter) recordRouterReplayResponseGuard(ctx *RequestContext) {
 	r.updateRouterReplayHallucinationStatus(ctx, recorder)
 }
 
-func (run *responseGuardRun) replayOutcomes(ctx *RequestContext, cfg *config.RouterConfig, now time.Time) []routerreplay.Outcome {
+func (run *responseGuardRun) replayOutcomes(ctx *RequestContext, now time.Time) []routerreplay.Outcome {
 	var outcomes []routerreplay.Outcome
-	signalOutcome := func(signalType, rule string) routerreplay.Outcome {
-		outcome := run.replayOutcome(ctx, signalKey(signalType, rule), now)
+	observed := run.observed()
+	for _, key := range observedRuleKeys(observed) {
+		signalType, rule, _ := strings.Cut(key, ":")
+		outcome := run.replayOutcome(ctx, key, now)
 		outcome.Verdict = "not_detected"
 		outcome.Metadata["signal"] = signalType
-		outcome.Metadata["direction"] = config.SignalDirectionResponse
+		outcome.Metadata["stage"] = config.SystemOneStageResponse
 		if action := run.signalAction(signalType); action != "" && !run.streamed {
 			outcome.Metadata["action"] = action
 		}
-		return outcome
-	}
-	if jailbreak := run.jailbreak(); jailbreak != nil && cfg != nil {
-		for _, rule := range cfg.ResponseJailbreakRules() {
-			outcome := signalOutcome(config.SignalTypeJailbreak, rule.Name)
-			outcome.Metadata["threshold"] = strconv.FormatFloat(float64(rule.Threshold), 'f', -1, 32)
-			jailbreakReplayVerdict(&outcome, jailbreak, rule.Name)
-			outcomes = append(outcomes, outcome)
+		code, failed := observed.Errors[key]
+		score, answered := observed.Confidences[key]
+		switch {
+		case failed:
+			outcome.Verdict, outcome.Reason = "unavailable", code
+		case slices.Contains(observed.Matched[signalType], rule):
+			outcome.Verdict = "detected"
 		}
-	}
-	if hallucination := run.hallucination(); hallucination != nil && cfg != nil {
-		for _, rule := range cfg.HallucinationRules {
-			outcome := signalOutcome(config.SignalTypeHallucination, rule.Name)
-			hallucinationReplayVerdict(&outcome, hallucination, rule.Name)
-			outcomes = append(outcomes, outcome)
+		outcome.Score = score
+		outcome.Metadata["score_available"] = strconv.FormatBool(answered && !failed)
+		if spans, ok := observed.Spans[key]; ok {
+			outcome.Metadata["spans"] = strconv.Itoa(len(spans))
 		}
-	}
-	if systemOne := run.systemOne(); systemOne != nil && cfg != nil {
-		for _, rule := range cfg.SystemOneRules {
-			key := signalKey(config.SignalTypeSystemOne, rule.Name)
-			_, answered := systemOne.Confidences[key]
-			code, failed := systemOne.Errors[key]
-			if !answered && !failed {
-				continue
-			}
-			outcome := signalOutcome(config.SignalTypeSystemOne, rule.Name)
-			switch {
-			case failed:
-				outcome.Verdict, outcome.Reason = "unavailable", code
-			case slices.Contains(systemOne.MatchedRules, rule.Name):
-				outcome.Verdict = "detected"
-			}
-			outcome.Score = systemOne.Confidences[key]
-			outcome.Metadata["score_available"] = strconv.FormatBool(answered)
-			outcomes = append(outcomes, outcome)
-		}
+		outcomes = append(outcomes, outcome)
 	}
 	for i, rule := range run.rules {
 		outcome := run.replayOutcome(ctx, config.DecisionPluginResponseGuard, now)
@@ -113,6 +92,28 @@ func (run *responseGuardRun) replayOutcomes(ctx *RequestContext, cfg *config.Rou
 	return outcomes
 }
 
+// observedRuleKeys are the "<type>:<rule>" keys of the response-stage rules
+// that answered or failed, in key order; an option's key ("<type>:<rule>:
+// <label>") is not a rule's.
+func observedRuleKeys(observed *classification.ResponseSignal) []string {
+	if observed == nil {
+		return nil
+	}
+	var keys []string
+	for key := range observed.Confidences {
+		if strings.Count(key, ":") == 1 {
+			keys = append(keys, key)
+		}
+	}
+	for key := range observed.Errors {
+		if strings.Count(key, ":") == 1 && !slices.Contains(keys, key) {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 func (run *responseGuardRun) replayOutcome(ctx *RequestContext, target string, now time.Time) routerreplay.Outcome {
 	outcome := routerreplay.Outcome{Timestamp: now, Source: "router", Target: target, Metadata: map[string]string{}}
 	if ctx.VSRSelectedDecisionName != "" {
@@ -124,89 +125,57 @@ func (run *responseGuardRun) replayOutcome(ctx *RequestContext, target string, n
 	return outcome
 }
 
-// signalCodes are the warning codes of a rule that reads a signal type.
+// signalCodes are the warning codes of a rule that reads a signal type; a
+// rule that reads any other response-stage type writes the guard's code.
 var signalCodes = map[string][]string{
 	config.SignalTypeJailbreak:     {headers.ResponseWarningJailbreak},
 	config.SignalTypeHallucination: {headers.ResponseWarningHallucination, headers.ResponseWarningUnverifiedFactual},
-	config.SignalTypeSystemOne:     {headers.ResponseWarningGuard},
 }
 
 // signalAction is the action of the first guard rule that read a signal of
 // signalType and applied one.
 func (run *responseGuardRun) signalAction(signalType string) string {
+	codes, ok := signalCodes[signalType]
+	if !ok {
+		codes = []string{headers.ResponseWarningGuard}
+	}
 	for _, rule := range run.rules {
-		if rule.action != "" && slices.ContainsFunc(rule.codes, func(code string) bool { return slices.Contains(signalCodes[signalType], code) }) {
+		if rule.action != "" && slices.ContainsFunc(rule.codes, func(code string) bool { return slices.Contains(codes, code) }) {
 			return rule.action
 		}
 	}
 	return ""
 }
 
-func jailbreakReplayVerdict(outcome *routerreplay.Outcome, observation *classification.ResponseJailbreakObservation, rule string) {
-	key := outcome.Target
-	if code, failed := observation.Signal.Errors[key]; failed {
-		outcome.Verdict, outcome.Reason = "unavailable", code
-		outcome.Metadata["score_available"] = "false"
-		return
-	}
-	if value, available := observation.Signal.Confidences[key]; available {
-		outcome.Score = value
-		outcome.Metadata["score_available"] = "true"
-	} else {
-		outcome.Metadata["score_available"] = "false"
-	}
-	scan := observation.Scan
-	if scan != nil && scan.Decision != nil {
-		outcome.Metadata["source_label"] = scan.Decision.SourceLabel
-		outcome.Metadata["label"] = scan.Decision.Label
-	}
-	if slices.Contains(observation.Signal.MatchedRules, rule) {
-		outcome.Verdict = "detected"
-		if scan != nil && scan.Type != "" {
-			outcome.Metadata["type"] = scan.Type
+// hasSignalError reports whether a response-stage rule of signalType failed.
+func hasSignalError(observed *classification.ResponseSignal, signalType string) bool {
+	for key := range observed.Errors {
+		if strings.HasPrefix(key, signalType+":") {
+			return true
 		}
 	}
+	return false
 }
 
-func hallucinationReplayVerdict(outcome *routerreplay.Outcome, observation *classification.ResponseHallucinationObservation, rule string) {
-	if code, failed := observation.Signal.Errors[outcome.Target]; failed {
-		outcome.Verdict, outcome.Reason = "unavailable", code
-		return
-	}
-	if evidence := observation.Evidence; evidence != nil {
-		outcome.Metadata["spans"] = strconv.Itoa(len(evidence.Spans))
-		outcome.Metadata["score_available"] = strconv.FormatBool(evidence.Score.Available)
-		if evidence.Score.Available {
-			outcome.Score = float64(evidence.Confidence)
-			outcome.Metadata["score_kind"] = evidence.Score.Kind
-		}
-	}
-	if slices.Contains(observation.Signal.MatchedRules, rule) {
-		outcome.Verdict = "detected"
-	}
-}
-
-// updateRouterReplayHallucinationStatus writes the hallucination detector's
-// verdict on the answer into the replay record, when the guard read it.
+// updateRouterReplayHallucinationStatus writes the hallucination rules'
+// verdict on the answer into the replay record, when the guard read them.
 func (r *OpenAIRouter) updateRouterReplayHallucinationStatus(ctx *RequestContext, recorder *routerreplay.Recorder) {
-	observation := ctx.ResponseGuard.hallucination()
-	if observation == nil || observation.Evidence == nil {
+	finding := findHallucination(ctx.ResponseGuard.observed())
+	if !finding.asked {
 		return
 	}
-	evidence := observation.Evidence
-	spans := evidence.Spans
-	details := hallucinationSpanDetailsForReplay(evidence.Explained)
+	spans := finding.spans
 	if !replayResponseContentAllowed(ctx) {
-		// Detector excerpts and explanations are response content too.
-		spans, details = nil, nil
+		// Span excerpts are response content too.
+		spans = nil
 	}
 	err := recorder.UpdateHallucinationStatus(
 		ctx.RouterReplayID,
-		len(observation.Signal.MatchedRules) > 0,
-		evidence.Confidence,
+		finding.detected,
+		float32(finding.probability),
 		spans,
-		details,
-		routerreplay.HallucinationScore{Available: evidence.Score.Available, Kind: evidence.Score.Kind},
+		nil,
+		routerreplay.HallucinationScore{Available: finding.answered, Kind: "probability"},
 	)
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "router_replay_hallucination_update_failed", map[string]interface{}{
@@ -215,25 +184,4 @@ func (r *OpenAIRouter) updateRouterReplayHallucinationStatus(ctx *RequestContext
 			"error":      err.Error(),
 		})
 	}
-}
-
-// hallucinationSpanDetailsForReplay converts span details into the replay
-// store's shape. Returns nil when the detector returned plain spans only.
-func hallucinationSpanDetailsForReplay(spans []classification.EnhancedHallucinationSpan) []routerreplay.HallucinationSpan {
-	if len(spans) == 0 {
-		return nil
-	}
-	details := make([]routerreplay.HallucinationSpan, len(spans))
-	for i, span := range spans {
-		details[i] = routerreplay.HallucinationSpan{
-			Text:                    span.Text,
-			Start:                   span.Start,
-			End:                     span.End,
-			HallucinationConfidence: span.HallucinationConfidence,
-			ScoreAvailable:          span.ScoreAvailable,
-			Severity:                span.Severity,
-			Explanation:             span.Explanation,
-		}
-	}
-	return details
 }

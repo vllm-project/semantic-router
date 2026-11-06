@@ -9,7 +9,7 @@ routing:
   signals:
     domains: [{name: math, description: Mathematics}]
     safety:
-      - {name: unsafe, threshold: 0.5}
+      - {name: unsafe, predicate: {gte: 0.5}}
     systemone:
       - name: needs_tools
         question: {type: noul, instructions: "Does the request need a tool?"}

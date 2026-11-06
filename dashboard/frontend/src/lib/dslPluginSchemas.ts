@@ -103,7 +103,7 @@ function getResponseGuardPluginFieldSchema(): FieldSchema[] {
           required: true,
           options: [...SIGNAL_TYPES],
           description:
-            'Signals by name: jailbreak rules with direction: response, hallucination and response-stage systemone rules read the answer; any other reads the request.',
+            'Signals by name: jailbreak, safety and systemone rules with stage: response, and every hallucination and refusal rule, read the answer; any other reads the request.',
         },
         {
           key: 'action',

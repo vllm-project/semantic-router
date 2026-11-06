@@ -21,25 +21,11 @@ config:
     modelCards:
       - name: general-expert
     signals:
-      # No backend: the verdict must come from local prototype scoring of the
-      # hard/easy candidate banks, the path complexity-remote-backend cannot
-      # reach. Embeddings use the canonical default (Vela-1.0-Encoder-307M).
+      # The System One fixture answers the complexity preset; each decision
+      # reads the label it chose.
       complexity:
         - name: task_difficulty
           description: Separates demanding reasoning requests from simple lookup or copy requests.
-          threshold: 0.05
-          hard:
-            candidates:
-              - Prove that this recursive algorithm always terminates and derive its worst-case time complexity.
-              - Two conflicting research studies disagree, so reconcile their evidence and defend a conclusion despite the uncertainty.
-              - Design a schedule that satisfies many interacting constraints and justify why every alternative fails.
-              - Analyze the trade-offs of several competing architectures and argue rigorously for the best one.
-          easy:
-            candidates:
-              - What day is the meeting mentioned in the text above?
-              - Copy the following items into a comma-separated list.
-              - Fix the typo in this one sentence and leave everything else unchanged.
-              - Repeat the phone number that appears in the message.
     decisions:
       - name: complexity_hard_routing
         description: Route requests the complexity signal rates hard.
@@ -48,7 +34,8 @@ config:
           operator: AND
           conditions:
             - type: complexity
-              name: task_difficulty:hard
+              name: task_difficulty
+              label: hard
         modelRefs:
           - model: general-expert
             use_reasoning: false
@@ -59,7 +46,8 @@ config:
           operator: AND
           conditions:
             - type: complexity
-              name: task_difficulty:easy
+              name: task_difficulty
+              label: easy
         modelRefs:
           - model: general-expert
             use_reasoning: false
@@ -76,7 +64,19 @@ config:
     router:
       strategy: priority
     model_catalog:
-      kbs: []
+      deployments:
+        # provider-mocker's System One fixture answers the complexity rule,
+        # so each case's label is pinned by its __SYSTEMONE_CHOICE__ marker
+        # (tools/test/services/provider-mocker/README.md).
+        fake-systemone:
+          provider: systemone
+          endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/systemone
+          model: e2e/fake-systemone
+          timeout_ms: 5000
+          capabilities:
+            question_types: [choice, noul, span]
+      bindings:
+        complexity: fake-systemone
     services:
       response_api:
         enabled: true

@@ -3,7 +3,7 @@ is_mtpe: false
 translation:
   source_commit: "085b44d375765d4935a1e152a2d14d59c1e64b75"
   source_file: "docs/tutorials/signal/learned/systemone.md"
-  outdated: false
+  outdated: true
 ---
 
 # System One 信号

@@ -20,15 +20,11 @@ var (
 		validateRoutingPreviewConfig,
 		validateModelPricingContracts,
 		validateReasoningFamilyContracts,
-		validateExternalModelReasoningContracts,
+		validateExternalModelContracts,
 		validateGlobalSemanticCacheContracts,
 		validateGlobalMemoryContracts,
 		validateEmbeddingModelContracts,
-		validateGlobalModalityContracts,
 		validateModelSelectionConfig,
-		validateCategoryModelBackendContracts,
-		validateComplexityModelBackendContracts,
-		validatePIIModelBackendContracts,
 		validateGlobalRouterLearningConfig,
 		validateLossyTranslationContracts,
 		validateRoutingInputContracts,
@@ -36,7 +32,6 @@ var (
 		validateFlowContracts,
 		validateAdvancedToolFilteringConfig,
 		validatePromptCompressionContracts,
-		validateHallucinationContracts,
 		validateModelAdmissionContracts,
 		validateModelSignalTimeoutContracts,
 		validateModelDeploymentContracts,
@@ -50,15 +45,10 @@ var (
 		validateKVTransferConfig,
 		validateModelBindingContracts,
 		validateModelResolutionContracts,
-		validateGlobalClassifierRuntimeContracts,
-		validateComplexityRoutingContracts,
 		logConfigWarnings,
 	}
 
 	routingProfileContractValidators = []configContractValidator{
-		validatePromptGuardBackend,
-		validatePIIContracts,
-		ValidatePIIWindow,
 		validateRuleOperatorContracts,
 		validateRoutingLocalNames,
 		validateLanguageContracts,
@@ -68,24 +58,18 @@ var (
 		validateRoutingStrategy,
 		validateDecisionSignalReferences,
 		validateDomainContracts,
+		validateApplicationSignalContracts,
 		validateStructureContracts,
-		validateReaskContracts,
 		validateProjectionContracts,
-		validateKnowledgeBaseContracts,
 		validateConversationContracts,
 		validateDecisionContracts,
 		validateDecisionSemanticCacheContracts,
 		validateDecisionMemoryContracts,
-		validateEmbeddingSignalContracts,
 		validateRoutingModalityContracts,
-		validateComplexityContracts,
-		validateJailbreakContracts,
 		validateSignalStageContracts,
-		validateHallucinationSignalContracts,
 		validateResponseGuardReferences,
 		validateMaskingSignals,
 		validateHeaderMutationContracts,
-		validateTopicContinuityContracts,
 		validateDecisionRouterLearningConfig,
 		validateDecisionRouterReplayCaptureContracts,
 	}
@@ -108,7 +92,6 @@ func ValidateKubernetesConfigContracts(cfg *RouterConfig) error {
 		if err := cfg.translateModelResources(); err != nil {
 			return err
 		}
-		cfg.applyModuleThresholds()
 	}
 	return validateConfigContracts(cfg)
 }

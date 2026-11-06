@@ -95,7 +95,7 @@ recipes:
 	if err != nil {
 		t.Fatal(err)
 	}
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,7 +265,7 @@ recipes:
 	if err != nil {
 		t.Fatal(err)
 	}
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -377,7 +377,7 @@ recipes:
 	if err != nil {
 		t.Fatal(err)
 	}
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

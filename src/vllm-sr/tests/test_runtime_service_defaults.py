@@ -164,9 +164,7 @@ def test_resolve_effective_config_path_preserves_setup_mode_bootstrap_config(
     assert effective_path == config_path
 
 
-def test_target_neutral_config_skips_all_local_runtime_materialization(
-    tmp_path: Path, monkeypatch
-):
+def test_target_neutral_config_skips_all_local_runtime_materialization(tmp_path: Path):
     source = {
         "version": "v0.3",
         "listeners": [{"name": "http", "port": 8899}],
@@ -178,14 +176,6 @@ def test_target_neutral_config_skips_all_local_runtime_materialization(
     }
     config_path = tmp_path / "config.yaml"
     config_path.write_text(yaml.safe_dump(source), encoding="utf-8")
-
-    def _unexpected_kb_materialization(*_args, **_kwargs):
-        raise AssertionError("Kubernetes config must not materialize local KB state")
-
-    monkeypatch.setattr(
-        "cli.commands.runtime_support._sync_runtime_kb_store",
-        _unexpected_kb_materialization,
-    )
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,

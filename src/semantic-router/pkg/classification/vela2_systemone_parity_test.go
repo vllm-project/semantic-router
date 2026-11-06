@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"os"
 	"slices"
@@ -89,7 +88,7 @@ routing:
           instructions: Does the request need an urgent answer?
     pii:
       - name: any_pii
-        threshold: 0.0001
+        predicate: {gte: 0.0001}
   decisions:
     - name: every-signal
       priority: 10
@@ -249,7 +248,7 @@ func TestVela2RouterMatchesSystemOne(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	classifier, err := buildClassifierWithAdmission(cfg, nil, nil, nil, nil, RecipeRuntimeOptions{Runtime: serving.New(lease, nil)})
+	classifier, err := buildClassifier(cfg, RecipeRuntimeOptions{Runtime: serving.New(lease, nil)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -335,17 +334,10 @@ func TestVela2RouterMatchesSystemOne(t *testing.T) {
 
 func checkVela2Hallucination(t *testing.T, endpoint string, classifier *Classifier) []map[string]interface{} {
 	t.Helper()
-	detector, err := NewHallucinationDetector(&classifier.models.cfg.HallucinationMitigation.HallucinationModel, classifier.models)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := detector.Initialize(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = detector.Close() })
+	detect := classifier.GroundingBackends().Detect
 	var rows []map[string]interface{}
 	for _, item := range vela2ParityHallucinations {
-		got, err := detector.Detect(context.Background(), item.Context, item.Question, item.Answer)
+		got, err := detect(context.Background(), item.Context, item.Question, item.Answer)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -357,12 +349,12 @@ func checkVela2Hallucination(t *testing.T, endpoint string, classifier *Classifi
 		}
 		var texts []string
 		for index, span := range spans {
-			if got.Spans[index].Text != span.Text || math.Abs(float64(got.Spans[index].Confidence)-span.Probability) > 1e-6 {
+			if got.Spans[index] != span.Text {
 				t.Fatalf("%q: span %d = %+v, /v1/systemone %+v", item.Answer, index, got.Spans[index], span)
 			}
 			texts = append(texts, span.Text)
 		}
-		rows = append(rows, map[string]interface{}{"answer": item.Answer, "unsupported": texts, "detected": got.HallucinationDetected})
+		rows = append(rows, map[string]interface{}{"answer": item.Answer, "unsupported": texts, "detected": got.Unsupported})
 	}
 	return rows
 }

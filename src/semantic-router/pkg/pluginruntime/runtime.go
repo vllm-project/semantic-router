@@ -86,8 +86,6 @@ type ResponseGuardSignalOutcome struct {
 	Verdict          string   `json:"verdict"`
 	Reason           string   `json:"reason,omitempty"`
 	Score            *float64 `json:"score,omitempty"`
-	ScoreKind        string   `json:"score_kind,omitempty"`
-	Label            string   `json:"label,omitempty"`
 	UnsupportedSpans []string `json:"unsupported_spans,omitempty"`
 }
 

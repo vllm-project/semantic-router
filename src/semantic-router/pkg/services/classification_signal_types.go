@@ -72,12 +72,10 @@ type IntentOptions struct {
 // MatchedSignals represents all matched signals from signal evaluation.
 type MatchedSignals struct {
 	Keywords      []string `json:"keywords,omitempty"`
-	Embeddings    []string `json:"embeddings,omitempty"`
 	Domains       []string `json:"domains,omitempty"`
 	FactCheck     []string `json:"fact_check,omitempty"`
 	UserFeedback  []string `json:"user_feedback,omitempty"`
-	Reask         []string `json:"reask,omitempty"`
-	Preferences   []string `json:"preferences,omitempty"`
+	TurnRelation  []string `json:"turn_relation,omitempty"`
 	Language      []string `json:"language,omitempty"`
 	Context       []string `json:"context,omitempty"`
 	Structure     []string `json:"structure,omitempty"`
@@ -87,11 +85,9 @@ type MatchedSignals struct {
 	Jailbreak     []string `json:"jailbreak,omitempty"`
 	Safety        []string `json:"safety,omitempty"`
 	PII           []string `json:"pii,omitempty"`
-	KB            []string `json:"kb,omitempty"`
 	Conversation  []string `json:"conversation,omitempty"`
 	Event         []string `json:"event,omitempty"`
 	Metadata      []string `json:"metadata,omitempty"`
-	Classifier    []string `json:"classifier,omitempty"`
 	InputModality []string `json:"input_modality,omitempty"`
 	Action        []string `json:"action,omitempty"`
 	SystemOne     []string `json:"systemone,omitempty"`

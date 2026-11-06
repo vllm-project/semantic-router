@@ -24,7 +24,7 @@ describe('formatRoutingMetadataValue', () => {
     ['unified_privacy_pii_strict', 'Privacy PII Strict'],
     ['needs_fact_check', 'Needs Fact Check'],
   ])('humanizes signal %s', (identifier, expected) => {
-    expect(formatRoutingMetadataValue('x-vsr-matched-embeddings', identifier)).toBe(expected)
+    expect(formatRoutingMetadataValue('x-vsr-matched-domains', identifier)).toBe(expected)
   })
 
   it('expands language codes and preserves model identifiers', () => {

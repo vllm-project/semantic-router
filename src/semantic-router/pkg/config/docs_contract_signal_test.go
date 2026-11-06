@@ -15,7 +15,6 @@ var signalTutorialBuckets = map[string]string{
 	"context":        "heuristic",
 	"conversation":   "heuristic",
 	"domain":         "learned",
-	"embedding":      "learned",
 	"fact-check":     "learned",
 	"hallucination":  "learned",
 	"jailbreak":      "learned",
@@ -24,24 +23,26 @@ var signalTutorialBuckets = map[string]string{
 	"modality":       "learned",
 	"structure":      "heuristic",
 	"pii":            "learned",
-	"preference":     "learned",
-	"reask":          "learned",
-	"kb":             "learned",
 	"user-feedback":  "learned",
 	"event":          "heuristic",
 	"metadata":       "heuristic",
-	"classifier":     "learned",
 	"input-modality": "heuristic",
 	"action":         "heuristic",
 	"systemone":      "learned",
-
-	"topic-continuity": "heuristic",
+	"refusal":        "learned",
+	"turn-relation":  "learned",
 }
 
 var retiredSignalTutorialDocs = []string{
 	repoRel("website", "docs", "tutorials", "signal", "routing.md"),
 	repoRel("website", "docs", "tutorials", "signal", "safety.md"),
 	repoRel("website", "docs", "tutorials", "signal", "operational.md"),
+	repoRel("website", "docs", "tutorials", "signal", "learned", "classifier.md"),
+	repoRel("website", "docs", "tutorials", "signal", "learned", "embedding.md"),
+	repoRel("website", "docs", "tutorials", "signal", "learned", "kb.md"),
+	repoRel("website", "docs", "tutorials", "signal", "learned", "preference.md"),
+	repoRel("website", "docs", "tutorials", "signal", "learned", "reask.md"),
+	repoRel("website", "docs", "tutorials", "signal", "heuristic", "topic-continuity.md"),
 }
 
 func assertSignalTutorialDocsMatchConfigHierarchy(t *testing.T, root string) {

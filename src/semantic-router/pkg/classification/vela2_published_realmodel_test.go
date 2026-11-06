@@ -15,6 +15,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/presets"
 )
 
 // vela2PublishedConfig binds every built-in signal a Vela 2.0 model answers to
@@ -62,21 +63,21 @@ global:
 routing:
   signals:
     domains:
-      - {name: health, mmlu_categories: [health]}
-      - {name: math, mmlu_categories: [math]}
-      - {name: computer science, mmlu_categories: [computer science]}
+      - {name: health, labels: [health]}
+      - {name: math, labels: [math]}
+      - {name: computer science, labels: [computer science]}
     jailbreak:
-      - {name: attack, threshold: 0.75, include_history: true}
+      - {name: attack, predicate: {gte: 0.75}, input: {history: true}}
     safety:
-      - {name: unsafe, labels: [safe, unsafe], unsafe_labels: [unsafe], threshold: 0.46}
+      - {name: unsafe, predicate: {gte: 0.46}}
     pii:
-      - {name: personal_data, threshold: 0.01, include_history: true}
+      - {name: personal_data, predicate: {gte: 0.01}, input: {history: true}}
     fact_check:
       - {name: needs_fact_check}
     user_feedbacks:
-      - {name: wrong_answer}
+      - {name: wrong_answer, labels: [WRONG_ANSWER]}
     modality:
-      - {name: DIFFUSION}
+      - {name: DIFFUSION, labels: [image]}
     systemone:
       - name: tone
         deployment: vela2
@@ -252,7 +253,7 @@ func testVela2PublishedAnswers(t *testing.T, endpointEnv, model string, items []
 	if err != nil {
 		t.Fatal(err)
 	}
-	classifier, err := buildClassifierWithAdmission(cfg, nil, nil, nil, nil, RecipeRuntimeOptions{Runtime: serving.New(lease, nil)})
+	classifier, err := buildClassifier(cfg, RecipeRuntimeOptions{Runtime: serving.New(lease, nil)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,18 +279,11 @@ func testVela2PublishedAnswers(t *testing.T, endpointEnv, model string, items []
 	}
 	if hallucination {
 		got.Hallucination = map[string]vela2StateAnswer{}
-		detector, err := NewHallucinationDetector(&classifier.models.cfg.HallucinationMitigation.HallucinationModel, classifier.models)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := detector.Initialize(); err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { _ = detector.Close() })
+		detect := classifier.GroundingBackends().Detect
 		recorder.take()
 		for _, item := range vela2PublishedHallucinations {
 			t.Run("hallucination-"+item.name, func(t *testing.T) {
-				result, err := detector.Detect(context.Background(), item.context, item.question, item.answer)
+				result, err := detect(context.Background(), item.context, item.question, item.answer)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -299,14 +293,10 @@ func testVela2PublishedAnswers(t *testing.T, endpointEnv, model string, items []
 				}
 				answer := calls[0].stateAnswer(t, "")
 				var spans []string
-				for _, span := range spanList(answer, "hallucination_detector:halu") {
+				for _, span := range spanList(answer, presetQuestionID(presets.Hallucination)) {
 					spans = append(spans, fmt.Sprint(span["text"]))
 				}
-				var detected []string
-				for _, span := range result.Spans {
-					detected = append(detected, span.Text)
-				}
-				if !slices.Equal(detected, spans) {
+				if detected := result.Spans; !slices.Equal(detected, spans) {
 					t.Fatalf("the detector reports spans %q, the model answered %q", detected, spans)
 				}
 				state := checkVela2Record(t, calls[0].Questions, answer, record)

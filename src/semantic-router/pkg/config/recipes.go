@@ -276,7 +276,6 @@ func (c *RouterConfig) ConfigForRecipe(recipe *RoutingRecipe) *RouterConfig {
 		ModelSelection:        c.ModelSelection,
 		ReasoningConfig:       c.ReasoningConfig,
 	}
-	scoped.KnowledgeBases = knowledgeBasesForRoutingProfile(c.KnowledgeBases, recipe.Profile)
 	scoped.scopedBindings = cloneModelMap(recipe.Profile.ModelBindings)
 	if scoped.scopedBindings == nil {
 		scoped.scopedBindings = map[string]ModelBinding{}
@@ -285,35 +284,7 @@ func (c *RouterConfig) ConfigForRecipe(recipe *RoutingRecipe) *RouterConfig {
 	// recipe list here would make helpers such as AllRoutingDecisions escape the
 	// selected recipe again.
 	scoped.Recipes = nil
-	scoped.applyModuleThresholds()
 	return &scoped
-}
-
-func knowledgeBasesForRoutingProfile(catalog []KnowledgeBaseConfig, profile RoutingProfile) []KnowledgeBaseConfig {
-	referenced := make(map[string]struct{}, len(profile.Signals.KBRules))
-	for _, rule := range profile.Signals.KBRules {
-		if rule.KB != "" {
-			referenced[rule.KB] = struct{}{}
-		}
-	}
-	for _, score := range profile.Projections.Scores {
-		for _, input := range score.Inputs {
-			if strings.EqualFold(input.Type, ProjectionInputKBMetric) && input.KB != "" {
-				referenced[input.KB] = struct{}{}
-			}
-		}
-	}
-	if len(referenced) == 0 {
-		return nil
-	}
-
-	filtered := make([]KnowledgeBaseConfig, 0, len(referenced))
-	for _, kb := range catalog {
-		if _, ok := referenced[kb.Name]; ok {
-			filtered = append(filtered, kb)
-		}
-	}
-	return filtered
 }
 
 // IsEntrypointModelName reports whether the name is a request-facing virtual

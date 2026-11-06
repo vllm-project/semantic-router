@@ -1,0 +1,46 @@
+# The modules, system lines and bindings only removed signals used: a module's
+# threshold becomes the predicate of the rules that inherited it, and a
+# decision-task binding is named for its signal type.
+version: v0.3
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+routing:
+  model_bindings:
+    domain: primary
+  signals:
+    domains:
+      - {name: math, predicate: {gte: 0.6}}
+    fact_check:
+      - {name: needs_fact_check, predicate: {gte: 0.75}}
+    user_feedbacks:
+      - {name: unhappy, labels: [WRONG_ANSWER], predicate: {gte: 0.5}}
+    complexity:
+      - {name: difficulty, labels: [hard]}
+    modality:
+      - {name: image_request, labels: [image], predicate: {gte: 0.63}}
+  decisions:
+    - name: hard_math
+      priority: 300
+      rules:
+        operator: AND
+        conditions:
+          - {type: domain, name: math}
+          - {type: complexity, name: difficulty}
+      modelRefs: [{model: general}]
+    - name: verify
+      priority: 200
+      rules: {type: fact_check, name: needs_fact_check}
+      modelRefs: [{model: general}]
+    - name: retry
+      priority: 100
+      rules: {type: user_feedback, name: unhappy}
+      modelRefs: [{model: general}]
+    - name: imagine
+      priority: 50
+      rules: {type: modality, name: image_request}
+      modelRefs: [{model: general}]
+global:
+  model_catalog: {}

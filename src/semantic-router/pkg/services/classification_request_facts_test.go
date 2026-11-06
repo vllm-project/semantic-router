@@ -10,7 +10,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 )
 
 func TestClassificationServiceEvaluatesRequestEnvelopeFacts(t *testing.T) {
@@ -49,7 +48,7 @@ func TestClassificationServiceEvaluatesRequestEnvelopeFacts(t *testing.T) {
 			},
 		},
 	}
-	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
+	classifier, err := classification.NewClassifier(cfg)
 	require.NoError(t, err)
 	service := NewClassificationService(classifier, cfg)
 
@@ -129,7 +128,7 @@ func TestClassificationServiceContextSignalUsesFullRequestTokenFloor(t *testing.
 			},
 		},
 	}
-	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
+	classifier, err := classification.NewClassifier(cfg)
 	require.NoError(t, err)
 	service := NewClassificationService(classifier, cfg)
 
@@ -188,112 +187,4 @@ func requestFactDecision(
 			Name: signalName,
 		},
 	}
-}
-
-func TestClassifyIntentForEvalReturnsDiagnosticsWhenFailRequest(t *testing.T) {
-	threshold := 0.5
-	cfg := &config.RouterConfig{
-		ExternalModels: []config.ExternalModelConfig{{
-			Name:           "risk-judge",
-			ModelRole:      config.ModelRoleClassification,
-			ModelName:      "risk-judge",
-			TimeoutSeconds: 1,
-			ModelEndpoint: config.ClassifierVLLMEndpoint{
-				Address:  "127.0.0.1",
-				Port:     1,
-				Protocol: "http",
-			},
-		}},
-		IntelligentRouting: config.IntelligentRouting{
-			Signals: config.Signals{
-				ClassifierRules: []config.ClassifierSignalRule{{
-					Name:         "risk",
-					Type:         "llm",
-					Model:        "risk-judge",
-					Labels:       []string{"SAFE", "RISKY"},
-					Instructions: "Classify.",
-				}},
-			},
-			Decisions: []config.Decision{{
-				Name: "guarded",
-				Rules: config.RuleNode{
-					Type:      config.SignalTypeClassifier,
-					Name:      "risk",
-					Label:     "RISKY",
-					Predicate: &config.NumericPredicate{GTE: &threshold},
-					OnUnknown: config.RuleOnUnknownFailRequest,
-				},
-			}},
-		},
-	}
-	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
-	require.NoError(t, err)
-	service := NewClassificationService(classifier, cfg)
-
-	for name, trace := range map[string]bool{"without trace": false, "with trace": true} {
-		t.Run(name, func(t *testing.T) {
-			response, evalErr := service.ClassifyIntentForEval(context.Background(), IntentRequest{
-				Text:    "hello",
-				Options: &IntentOptions{Trace: trace},
-			})
-			require.ErrorIs(t, evalErr, decision.ErrDecisionUnresolved)
-			require.NotNil(t, response)
-			require.NotEmpty(t, response.DecisionError)
-			require.Equal(t, trace, len(response.EvalTrace) > 0)
-		})
-	}
-}
-
-func TestClassifyIntentScopesSignalsToDefaultRecipeDecisions(t *testing.T) {
-	equalsCanary := "canary"
-	cfg := &config.RouterConfig{
-		ExternalModels: []config.ExternalModelConfig{{
-			Name:           "unrelated-judge",
-			ModelRole:      config.ModelRoleClassification,
-			ModelName:      "unrelated-judge",
-			TimeoutSeconds: 1,
-			ModelEndpoint: config.ClassifierVLLMEndpoint{
-				Address:  "127.0.0.1",
-				Port:     1,
-				Protocol: "http",
-			},
-		}},
-		IntelligentRouting: config.IntelligentRouting{
-			Signals: config.Signals{
-				MetadataRules: []config.MetadataRule{{
-					Name: "canary",
-					Key:  "cohort",
-					Predicate: config.MetadataPredicate{
-						Equals: &equalsCanary,
-					},
-				}},
-				ClassifierRules: []config.ClassifierSignalRule{{
-					Name:         "other-recipe-risk",
-					Type:         "llm",
-					Model:        "unrelated-judge",
-					Labels:       []string{"SAFE", "RISKY"},
-					Instructions: "Classify.",
-				}},
-			},
-			Decisions: []config.Decision{
-				requestFactDecision(
-					"metadata-route",
-					config.SignalTypeMetadata,
-					"canary",
-					10,
-				),
-			},
-		},
-	}
-	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
-	require.NoError(t, err)
-	service := NewClassificationService(classifier, cfg)
-
-	response, err := service.ClassifyIntent(context.Background(), IntentRequest{
-		Metadata: map[string]string{"cohort": "canary"},
-	})
-	require.NoError(t, err)
-	require.NotNil(t, response.DecisionResult)
-	require.Equal(t, "metadata-route", response.DecisionResult.DecisionName)
-	require.NotContains(t, response.SignalErrors, "classifier:other-recipe-risk")
 }

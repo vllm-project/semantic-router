@@ -211,7 +211,7 @@ func TestMemorySchedulingOversizedResponseDoesNotReserveCapacity(t *testing.T) {
 }
 
 func TestOversizedMemoryResponseStillReachesClient(t *testing.T) {
-	server := newJailbreakScoreServer(t, 0.01, 0.99)
+	server := newJailbreakDecider(0.01)
 	router, ctx := newResponseStageRouter(t, server, "", config.ResponseGuardBlock)
 	router.Config.Memory.Enabled = true
 	router.Config.Memory.AutoStore = true

@@ -25,10 +25,6 @@ spec:
       jsonPath: .status.statistics.keywords
       name: Keywords
       type: integer
-    - description: Number of embedding signals
-      jsonPath: .status.statistics.embeddings
-      name: Embeddings
-      type: integer
     - description: Number of domain signals
       jsonPath: .status.statistics.domains
       name: Domains
@@ -287,10 +283,9 @@ spec:
                                 minLength: 1
                                 type: string
                               type:
-                                description: Type defines the type of signal (keyword/embedding/domain/fact_check/context/structure/conversation/event)
+                                description: Type defines the type of signal (keyword/domain/fact_check/context/structure/conversation/event)
                                 enum:
                                 - keyword
-                                - embedding
                                 - domain
                                 - fact_check
                                 - context
@@ -339,10 +334,7 @@ spec:
                 description: Signals defines signal extraction rules for routing decisions
                 properties:
                   contextRules:
-                    description: |-
-                      FactCheckRules defines fact-check rules for signal classification
-                      Similar to KeywordRules and EmbeddingRules, but based on ML model classification
-                      Each rule has a name that can be referenced in decision conditions
+                    description: ContextRules match the request's token count.
                     items:
                       description: ContextRule defines a rule for context-based (token
                         count) classification
@@ -425,7 +417,11 @@ spec:
                     maxItems: 100
                     type: array
                   domains:
-                    description: Domains defines MMLU domain categories for classification
+                    description: |-
+                      Domains match the request's subject area. A domain's name is one of
+                      the domain labels (biology, business, chemistry, computer science,
+                      economics, engineering, health, history, law, math, other, philosophy,
+                      physics, psychology).
                     items:
                       description: DomainSignal defines a domain category for classification
                       properties:
@@ -443,119 +439,6 @@ spec:
                       - name
                       type: object
                     maxItems: 14
-                    type: array
-                  embeddings:
-                    description: Embeddings defines embedding-based signal extraction
-                      rules
-                    items:
-                      description: EmbeddingSignal defines an embedding-based signal
-                        extraction rule
-                      properties:
-                        aggregationMethod:
-                          default: max
-                          description: AggregationMethod defines how to aggregate
-                            multiple candidate similarities
-                          enum:
-                          - mean
-                          - max
-                          - any
-                          type: string
-                        candidates:
-                          description: Candidates is the list of candidate phrases
-                            for semantic matching
-                          items:
-                            type: string
-                          maxItems: 1000
-                          type: array
-                        imageCandidates:
-                          description: ImageCandidates contains local image paths
-                            or inline base64 images in the positive bank.
-                          items:
-                            type: string
-                          maxItems: 1000
-                          type: array
-                        name:
-                          description: Name is the unique identifier for this signal
-                          maxLength: 100
-                          minLength: 1
-                          type: string
-                        negativeCandidates:
-                          description: NegativeCandidates contains text anchors subtracted
-                            from the positive score.
-                          items:
-                            type: string
-                          maxItems: 1000
-                          type: array
-                        negativeImageCandidates:
-                          description: NegativeImageCandidates contains image anchors
-                            subtracted from the positive score.
-                          items:
-                            type: string
-                          maxItems: 1000
-                          type: array
-                        prototypeScoring:
-                          description: |-
-                            PrototypeScoring overrides the family's prototype construction and scoring.
-                            An omitted object inherits the family; an empty object uses core defaults.
-                          properties:
-                            bestWeight:
-                              description: BestWeight weights the best similarity
-                                against top-M support.
-                              type: number
-                            clusterSimilarityThreshold:
-                              description: ClusterSimilarityThreshold controls membership
-                                in prototype clusters.
-                              type: number
-                            enabled:
-                              description: Enabled controls clustering and the representative
-                                cap, not aggregation.
-                              type: boolean
-                            marginThreshold:
-                              description: MarginThreshold controls the winner-versus-runner-up
-                                score margin.
-                              type: number
-                            maxPrototypes:
-                              description: MaxPrototypes caps representatives when
-                                clustering is enabled.
-                              type: integer
-                            topM:
-                              description: TopM is the number of top similarities
-                                used for support.
-                              type: integer
-                          type: object
-                        queryModality:
-                          description: |-
-                            QueryModality declares which modality of the incoming request payload
-                            the query embedding is computed from. Candidates are encoded according to their declared text or image field;
-                            the rule cosine-matches the text-anchor set against a query embedding
-                            produced from the declared modality, all in the shared multimodal
-                            embedding space.
-
-                            "text"  (default, backward-compatible): query embedded from request text.
-                            "image": query embedded from an image attachment (base64 data URI or
-                                     path). Requires the multi-modal embedding model to be loaded
-                                     via global.model_catalog.embeddings.semantic with
-                                     embedding_config.model_type=multimodal.
-                            "audio": query embedded from an audio attachment. Same requirement.
-
-                            Omitting this field is equivalent to "text" so existing rules behave
-                            identically.
-                          enum:
-                          - text
-                          - image
-                          - audio
-                          type: string
-                        threshold:
-                          description: Threshold accepts a cosine score, or positive-minus-negative
-                            margin when negatives are configured.
-                          maximum: 2
-                          minimum: -2
-                          type: number
-                      required:
-                      - name
-                      - threshold
-                      type: object
-                    maxItems: 100
                     type: array
                   events:
                     description: Events defines structured event metadata routing
@@ -590,6 +473,8 @@ spec:
                     maxItems: 100
                     type: array
                   factCheckRules:
+                    description: FactCheckRules match a request whose answer needs
+                      fact checking.
                     items:
                       description: |-
                         FactCheckRule defines a rule for fact-check signal classification
@@ -785,10 +670,6 @@ spec:
                     description: Domains indicates the number of domain signals
                     format: int32
                     type: integer
-                  embeddings:
-                    description: Embeddings indicates the number of embedding signals
-                    format: int32
-                    type: integer
                   keywords:
                     description: Keywords indicates the number of keyword signals
                     format: int32
@@ -796,7 +677,6 @@ spec:
                 required:
                 - decisions
                 - domains
-                - embeddings
                 - keywords
                 type: object
             type: object

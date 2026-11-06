@@ -42,53 +42,55 @@ func BuiltinTasks() []TaskDefinition {
 		preset("domain", "Subject area", presets.Domain, "request", "text"),
 		preset("fact_check", "Need for fact checking", presets.FactCheck, "request", "text"),
 		preset("user_feedback", "Feedback on the previous answer", presets.Feedback, "request", "text"),
-		// The modality signal reads the three outputs of the Vela 1.0 head it
-		// replaced: text, image and text_image.
-		preset("modality", "Requested output", presets.Modality, "request", "text", "text", "image", "text_image"),
+		preset("modality", "Requested output", presets.Modality, "request", "text"),
 		preset("jailbreak", "Instruction attack", presets.Jailbreak, "request", "text"),
 		preset("safety", "Harmful request", presets.Harm, "request", "text"),
-		choice("preference", "Preferred response style", "Which response style does the user prefer?", false,
-			Choice{"concise", "a short direct answer"}, Choice{"detailed", "a detailed explanation with examples"}),
-		choice("classifier", "Custom classification", "Which category best describes the request?", false,
-			Choice{"coding", "writing, reviewing or explaining code"}, Choice{"other", "another kind of request"}),
-		{
-			ID: "complexity", Title: "Task difficulty", Description: "How difficult is this request to solve correctly?", Stage: "request", Input: "text", Output: "score",
-			Question: Question{ID: "complexity", Type: "score", Instructions: "How difficult is this request to solve correctly?", Levels: []string{"straightforward retrieval or formatting", "several steps of reasoning", "advanced reasoning or specialized expertise"}, Truncate: true},
-		},
+		preset("complexity", "Task difficulty", presets.Complexity, "request", "text"),
+		preset("turn_relation", "Relation to the conversation", presets.TurnRelation, "request", "conversation"),
+		preset("refusal", "Refused answer", presets.Refusal, "response", "answer"),
 		preset("safety_categories", "Harm categories", presets.HarmCategories, "request", "text"),
 		noul("pii_presence", "Personal data present", "Does any part of the input contain personal or sensitive identifying information?", "request", "text"),
 		labels("pii_categories", "Personal data categories", "Which personal-data categories occur in the input?", "set", "request", "text", PIICategoryLabels()),
 		preset("pii_spans", "Personal data locations", presets.PII, "request", "text"),
 		noul("hallucination", "Grounded answer", "Does the answer contain any factual claim that is unsupported by or contradicts the supplied grounding context? Judge the answer against context, not outside knowledge.", "response", "grounded"),
 		preset("hallucination_spans", "Unsupported answer locations", presets.Hallucination, "response", "grounded"),
-		noul("reask", "Repeated user intent", "Does the current user request seek the same information or action as the prior user request, including paraphrases and retries that add feedback? A different topic, objective or requested operation is not a repeat.", "request", "pair"),
 		choice("model_selection", "Choose a candidate model", "Which candidate model is best suited to answer this request? Choose only a listed candidate.", false,
 			Choice{"fast", "fast model for straightforward requests"}, Choice{"reasoning", "model for complex reasoning"}),
 	}
 	tasks[len(tasks)-1].Stage = "selection"
 	for i := range tasks {
-		kind, consumer, optional := "signal", tasks[i].ID, false
+		kind, consumer, binding, optional := "signal", tasks[i].ID, tasks[i].ID, false
 		switch tasks[i].ID {
 		case "pii_presence", "pii_categories":
-			consumer = "pii"
+			kind, consumer, binding = "plugin", "masking", "pii"
 		case "pii_spans":
-			consumer, optional = "pii", true
+			consumer, binding = "pii", "pii"
 		case "safety_categories":
-			consumer, optional = "safety", true
+			consumer, binding = "safety", "safety"
 		case "hallucination":
-			kind = "plugin"
+			kind, binding = "plugin", "hallucination"
 		case "hallucination_spans":
-			kind, consumer, optional = "plugin", "hallucination", true
+			binding = "hallucination"
+			consumer = "hallucination"
 		case "model_selection":
-			kind, consumer = "algorithm", "decision"
+			kind, consumer, binding = "algorithm", "systemone", ""
 		}
-		binding := map[string]string{"domain": "domain_classifier", "fact_check": "fact_check_classifier", "user_feedback": "feedback_detector", "modality": "modality_detector", "jailbreak": "prompt_guard", "safety": "safety.{name}", "safety_categories": "safety.{name}.hazard", "pii_presence": "pii_classifier", "pii_categories": "pii_classifier", "pii_spans": "pii_classifier", "hallucination": "hallucination_detector", "hallucination_spans": "hallucination_detector", "preference": "preference", "reask": "reask", "complexity": "complexity", "classifier": "classifier.{name}"}[tasks[i].ID]
 		tasks[i].Consumers = []TaskConsumerReference{{Kind: kind, Type: consumer, Optional: optional, Binding: binding}}
-		if tasks[i].ID == "hallucination" {
-			tasks[i].Consumers = append(tasks[i].Consumers, TaskConsumerReference{Kind: "signal", Type: "hallucination", Binding: "hallucination_detector"})
-		}
 	}
 	return tasks
+}
+
+// presetTasks are the built-in tasks that ask each preset an application
+// signal asks.
+var presetTasks = map[string]string{
+	presets.Domain: "domain", presets.FactCheck: "fact_check", presets.Feedback: "user_feedback", presets.Modality: "modality",
+	presets.Jailbreak: "jailbreak", presets.Harm: "safety", presets.HarmCategories: "safety_categories", presets.Complexity: "complexity",
+	presets.TurnRelation: "turn_relation", presets.Refusal: "refusal", presets.PII: "pii_spans", presets.Hallucination: "hallucination_spans",
+}
+
+// PresetTask is the built-in task that asks a preset.
+func PresetTask(preset string) string {
+	return presetTasks[preset]
 }
 
 // builtinTaskPresets are the presets the built-in tasks ask, by task ID.

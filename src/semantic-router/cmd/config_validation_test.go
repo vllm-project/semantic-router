@@ -34,8 +34,10 @@ routing:
     modality:
       - name: AR
         description: Text-only requests.
+        labels: [text]
       - name: BOTH
         description: Text and image requests.
+        labels: [text_image]
   decisions:
     - name: image-gen
       rules:
@@ -69,19 +71,21 @@ func TestValidateConfigRefusesWhatTheRouterRefuses(t *testing.T) {
 	if status != 1 || report.Valid {
 		t.Fatalf("status %d, report %+v: a BOTH decision without a diffusion or omni model must not validate", status, report)
 	}
-	if !strings.Contains(report.Error, `uses modality condition "BOTH"`) {
+	if !strings.Contains(report.Error, `routes on the modality label text_image`) {
 		t.Fatalf("error %q is not the Router's", report.Error)
 	}
 }
 
 // A document that loads exits 0 and carries the warnings the Router logs.
 func TestValidateConfigReportsTheRoutersWarnings(t *testing.T) {
-	status, report := runValidation(t, strings.Replace(modalityValidationConfig, "CONDITION", "AR", 1))
+	document := strings.Replace(modalityValidationConfig, "CONDITION", "AR", 1) +
+		"global:\n  model_catalog:\n    bindings:\n      jailbreak: {deployment: primary, contract: decision.v1}\n"
+	status, report := runValidation(t, document)
 	if status != 0 || !report.Valid || report.Error != "" {
 		t.Fatalf("status %d, report %+v: the document loads", status, report)
 	}
-	if len(report.Warnings) != 1 || report.Warnings[0].Code != "modality_detector_disabled" {
-		t.Fatalf("warnings = %+v, want modality_detector_disabled", report.Warnings)
+	if len(report.Warnings) != 1 || report.Warnings[0].Code != "deprecated_model_field" {
+		t.Fatalf("warnings = %+v, want deprecated_model_field", report.Warnings)
 	}
 }
 
@@ -107,7 +111,7 @@ providers:
       backend_refs: [{name: local, base_url: "http://127.0.0.1:8000/v1", provider: vllm, weight: 1}]
 routing:
   signals:
-    pii: [{name: personal, threshold: 0.5}]
+    pii: [{name: personal, predicate: {gte: 0.5}}]
   decisions:
     - name: route
       priority: 100
@@ -115,9 +119,8 @@ routing:
       modelRefs: [{model: general}]
 global:
   model_catalog:
-    modules:
-      classifier:
-        pii: {model_id: models/Vela-1.0-Encoder-307M-PII, use_cpu: true}
+    bindings:
+      pii: {deployment: primary, contract: decision.v1}
 `
 	if err := os.WriteFile(path, []byte(document), 0o600); err != nil {
 		t.Fatal(err)
@@ -147,7 +150,7 @@ global:
 			t.Fatalf("the migrated file keeps a deprecated field: %+v\n%s", warning, report.Migrated)
 		}
 	}
-	if !strings.Contains(report.Migrated, "pii: ") || strings.Contains(report.Migrated, "model_id") || strings.Contains(report.Migrated, "base_url") {
+	if !strings.Contains(report.Migrated, "pii: primary") || strings.Contains(report.Migrated, "contract") || strings.Contains(report.Migrated, "base_url") {
 		t.Fatalf("the migrated file is not in the canonical form:\n%s", report.Migrated)
 	}
 }

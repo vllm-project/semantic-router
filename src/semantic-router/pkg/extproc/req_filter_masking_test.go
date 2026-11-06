@@ -6,12 +6,13 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
 
@@ -35,13 +36,13 @@ type stubPIIDetector struct {
 	rules   []string
 }
 
-func (s *stubPIIDetector) PIIRuleSpans(_ context.Context, rule, text string) ([]classification.PIIDetection, error) {
+func (s *stubPIIDetector) PIIRuleSpans(_ context.Context, rule, text string) ([]modelservice.Span, error) {
 	s.calls++
 	s.rules = append(s.rules, rule)
 	if s.err != nil {
 		return nil, s.err
 	}
-	var detections []classification.PIIDetection
+	var detections []modelservice.Span
 	for _, value := range s.values {
 		for offset := 0; ; {
 			index := strings.Index(text[offset:], value)
@@ -49,16 +50,17 @@ func (s *stubPIIDetector) PIIRuleSpans(_ context.Context, rule, text string) ([]
 				break
 			}
 			start := offset + index
-			detections = append(detections, classification.PIIDetection{
-				EntityType: "EMAIL_ADDRESS", Start: start, End: start + len(value), Text: value, Confidence: 1,
+			point := utf8.RuneCountInString(text[:start])
+			detections = append(detections, modelservice.Span{
+				Label: "EMAIL_ADDRESS", Start: point, End: point + utf8.RuneCountInString(value), Text: value, Probability: 1,
 			})
 			offset = start + len(value)
 		}
 	}
 	if s.partial {
-		// The signal reports a scan that read only part of the text as an
-		// error, which is what the provider truncating its input produces.
-		return nil, classification.ErrTokenSpansTruncated
+		// The signal reports an answer that read only part of the text as
+		// an error.
+		return nil, errors.New("pii rule read only part of the text")
 	}
 	return detections, nil
 }

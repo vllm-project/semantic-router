@@ -89,21 +89,7 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 	}
 	// A remote default does not suppress an explicit local primary deployment.
 	active := map[string]bool{
-		"domain_classifier": cfg.NeedsCategoryMappingForRouting(), "pii_classifier": cfg.NeedsPIIMappingForRouting(),
-		"prompt_guard": cfg.NeedsJailbreakMappingForRouting(), "fact_check_classifier": cfg.NeedsFactCheckModelForAPI() || cfg.NeedsFactCheckModelForRouting(),
-		"feedback_detector":      cfg.NeedsFeedbackModelForAPI() || cfg.NeedsFeedbackModelForRouting(),
-		"hallucination_detector": cfg.NeedsLocalHallucinationModelsForRouting() || cfg.NeedsHallucinationDetectorForDefaultRuntime(),
-		"modality_detector":      isModalityClassifierEnabled(cfg), "embedding": needed[primary],
-		config.RAGRerankerConsumer: cfg.NeedsRAGReranker(),
-	}
-	for _, rule := range cfg.ClassifierRules {
-		active["classifier."+rule.Name] = true
-	}
-	for _, rule := range cfg.SafetyRules {
-		active["safety."+rule.Name] = true
-		if rule.Hazard != nil {
-			active["safety."+rule.Name+".hazard"] = true
-		}
+		"embedding": needed[primary], config.RAGRerankerConsumer: cfg.NeedsRAGReranker(),
 	}
 	required := ExtractRequiredFilesByModel(&scoped)
 	for path, files := range embeddingModelRequiredFiles(&scoped) {
@@ -179,29 +165,6 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 			return err
 		}
 	}
-	mappings := []struct{ consumer, path string }{
-		{"domain_classifier", cfg.CategoryMappingPath},
-		{"pii_classifier", cfg.PIIMappingPath},
-		{"prompt_guard", cfg.PromptGuard.JailbreakMappingPath},
-		{"feedback_detector", cfg.FeedbackDetector.FeedbackMappingPath},
-	}
-	for _, mapping := range mappings {
-		if !active[mapping.consumer] || mapping.path == "" {
-			continue
-		}
-		resolved, ok, err := cfg.ResolveTask(mapping.consumer)
-		if err != nil || !ok {
-			continue
-		}
-		if spec := config.GetModelByPath(resolved.Deployment.Artifact); resolved.Deployment.Translated() && spec != nil {
-			err = i.addDefaultFile(mapping.path, spec.LocalPath)
-		} else {
-			err = i.addFile(mapping.path, resolved.Deployment.Artifact, resolved.Deployment.Revision)
-		}
-		if err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -224,17 +187,6 @@ func (i *modelInventory) addFile(path, artifact, revision string) error {
 		revision = ""
 	}
 	return i.add(ModelSpec{LocalPath: root, Revision: revision, RequiredFiles: []string{file}, FilesOnly: true, CheckONNX: filepath.Ext(file) == ".onnx", Strict: true})
-}
-
-// addDefaultFile adds a companion file of a module's default model at the
-// model's registered release, the revision the model runtime serves.
-func (i *modelInventory) addDefaultFile(path, model string) error {
-	model = config.ResolveModelPath(model)
-	repo, err := i.registeredRepo(model)
-	if err != nil {
-		return err
-	}
-	return i.addFile(path, model, modelRevision(model, repo))
 }
 
 func (i *modelInventory) addDefault(spec ModelSpec) error {

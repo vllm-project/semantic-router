@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"slices"
 	"testing"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -28,12 +27,13 @@ func TestModelRuntimeCRDAndSample(t *testing.T) {
 				t.Fatalf("%s prunes router-owned %s", path, name)
 			}
 		}
-		backend := config.Properties["prompt_guard"].Properties["backend"]
-		if !slices.ContainsFunc(backend.Properties["protocol"].Enum, func(value apiextensionsv1.JSON) bool { return string(value.Raw) == `"http_chat"` }) {
-			t.Fatalf("%s rejects chat guard protocol", path)
-		}
-		if !slices.ContainsFunc(backend.Properties["contract"].Enum, func(value apiextensionsv1.JSON) bool { return string(value.Raw) == `"label_decision.v1"` }) {
-			t.Fatalf("%s rejects unscored guard verdicts", path)
+		// A removed block is kept whole, so reconciliation refuses it by name
+		// instead of the API server pruning it.
+		for _, name := range []string{"prompt_guard", "classifier", "complexity_model"} {
+			field := config.Properties[name]
+			if field.Type != "object" || field.XPreserveUnknownFields == nil || !*field.XPreserveUnknownFields {
+				t.Fatalf("%s prunes the removed %s", path, name)
+			}
 		}
 	}
 	data, err := os.ReadFile("../../config/samples/vllm.ai_v1alpha1_semanticrouter_model_runtime.yaml")

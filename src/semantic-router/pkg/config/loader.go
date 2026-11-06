@@ -323,19 +323,19 @@ func rejectRemovedTaxonomyLegacyFields(raw map[string]interface{}) error {
 	signals := nestedStringMap(routing["signals"])
 	if _, ok := signals["category_kb"]; ok {
 		return fmt.Errorf(
-			"routing.signals.category_kb is no longer supported; migrate to global.model_catalog.kbs[] plus routing.signals.kb[]",
+			"routing.signals.category_kb is no longer supported; write a systemone set or choice question instead",
 		)
 	}
 	if _, ok := signals["taxonomy"]; ok {
 		return fmt.Errorf(
-			"routing.signals.taxonomy is no longer supported; migrate to routing.signals.kb[]",
+			"routing.signals.taxonomy is no longer supported; write a systemone set or choice question instead",
 		)
 	}
 	global := nestedStringMap(raw["global"])
 	modelCatalog := nestedStringMap(global["model_catalog"])
 	if _, ok := modelCatalog["classifiers"]; ok {
 		return fmt.Errorf(
-			"global.model_catalog.classifiers is no longer supported; migrate to global.model_catalog.kbs[]",
+			"global.model_catalog.classifiers is no longer supported; write a systemone set or choice question instead",
 		)
 	}
 	return nil
@@ -697,7 +697,6 @@ func applyParsedConfigDefaults(cfg *RouterConfig) {
 	if cfg.VectorStore != nil {
 		cfg.VectorStore.ApplyDefaults()
 	}
-	applyBatchConcurrencyMigration(cfg)
 }
 
 func logParsedDecisions(cfg *RouterConfig) {

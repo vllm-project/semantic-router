@@ -36,19 +36,6 @@ configOverride:
   global:
     router:
       strategy: priority
-    model_catalog:
-      kbs: []
-      modules:
-        prompt_guard:
-          enabled: false
-          jailbreak_mapping_path: ""
-        classifier:
-          domain:
-            enabled: false
-            category_mapping_path: ""
-          pii:
-            enabled: false
-            pii_mapping_path: ""
     stores:
       response_cache:
         enabled: false

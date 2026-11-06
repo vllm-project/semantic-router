@@ -30,19 +30,6 @@ func TestValidateDecisionOnUnknown(t *testing.T) {
 	}
 }
 
-func TestUnguardedClassifierConditions(t *testing.T) {
-	rules := RuleNode{Operator: "AND", Conditions: []RuleNode{
-		{Type: SignalTypeClassifier, Name: "risk", Label: "RISKY"},
-		{Type: SignalTypeClassifier, Name: "safe", Label: "SAFE", OnError: "match"},
-		{Operator: "OR", Conditions: []RuleNode{{Type: SignalTypeClassifier, Name: "nested"}}},
-		{Type: SignalTypeKeyword, Name: "kw"},
-	}}
-	got := unguardedClassifierConditions(&rules)
-	if len(got) != 2 || got[0] != "risk" || got[1] != "nested" {
-		t.Fatalf("unguarded = %v", got)
-	}
-}
-
 func TestParseYAMLBytesRejectsOnUnknownOnErrorConflict(t *testing.T) {
 	yaml := buildDecisionRefConfig(`    - name: guarded
       priority: 1
@@ -50,15 +37,29 @@ func TestParseYAMLBytesRejectsOnUnknownOnErrorConflict(t *testing.T) {
         operator: AND
         on_unknown: no_match
         conditions:
-          - {type: classifier, name: risk, label: RISKY, on_error: no_match}
+          - {type: systemone, name: risk, label: RISKY, on_error: no_match}
       modelRefs:
         - model: m1
   signals:
-    classifiers:
-      - {name: risk, type: local, model_path: models/risk, labels: [SAFE, RISKY], use_cpu: true}
+    systemone:
+      - name: risk
+        question: {type: choice, instructions: "Is the request risky?", choices: [{key: SAFE}, {key: RISKY}]}
 `)
 	_, err := ParseYAMLBytes(yaml)
 	if err == nil || !strings.Contains(err.Error(), OnUnknownOnErrorConflictMessage) {
 		t.Fatalf("error = %v, want the on_unknown + on_error conflict rejection", err)
+	}
+}
+
+func TestUnguardedSystemOneConditions(t *testing.T) {
+	rules := RuleNode{Operator: "AND", Conditions: []RuleNode{
+		{Type: SignalTypeSystemOne, Name: "risk", Label: "RISKY"},
+		{Type: SignalTypeSystemOne, Name: "safe", Label: "SAFE", OnError: "match"},
+		{Operator: "OR", Conditions: []RuleNode{{Type: SignalTypeSystemOne, Name: "nested"}}},
+		{Type: SignalTypeKeyword, Name: "kw"},
+	}}
+	got := unguardedSystemOneConditions(&rules)
+	if len(got) != 2 || got[0] != "risk" || got[1] != "nested" {
+		t.Fatalf("unguarded = %v", got)
 	}
 }

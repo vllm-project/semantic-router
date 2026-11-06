@@ -30,7 +30,9 @@ func assertRuntimeServed(t *testing.T, cfg *config.RouterConfig, specs []ModelSp
 	t.Fatalf("no model_runtime deployment in use serves %s: %+v", path, config.ModelRuntimeDeploymentsInUse(cfg))
 }
 
-func TestDefaultPIIIsServedWithItsOwnLabels(t *testing.T) {
+// Application rules are systemone questions to the decision model, so a pii
+// rule and a hallucination rule download no classifier of their own.
+func TestApplicationRulesAreServedByTheDecisionModel(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
 version: v0.3
 providers:
@@ -47,8 +49,9 @@ routing:
   signals:
     pii:
       - name: sensitive-contact
-        threshold: 0.9
-        pii_types_allowed: []
+        predicate: {gte: 0.9}
+    hallucination:
+      - name: ungrounded
   decisions:
     - name: protect-contact
       priority: 100
@@ -59,6 +62,10 @@ routing:
             name: sensitive-contact
       modelRefs:
         - model: demo
+      plugins:
+        - type: response_guard
+          configuration:
+            rules: [{when: {type: hallucination, name: ungrounded}, action: annotate}]
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -67,8 +74,8 @@ routing:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(specs) != 0 || cfg.PIIModel.PIIMappingPath != "" {
-		t.Fatalf("default PII needs no mapping file, its card carries the labels: mapping %q, downloads %+v", cfg.PIIModel.PIIMappingPath, specs)
+	if len(specs) != 0 {
+		t.Fatalf("router downloads models for rules the decision model answers: %+v", specs)
 	}
-	assertRuntimeServed(t, cfg, specs, config.DefaultSystemModels().PIIClassifier)
+	assertRuntimeServed(t, cfg, specs, config.Vela3SignalModel)
 }

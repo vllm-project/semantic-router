@@ -40,14 +40,14 @@ config:
     signals:
       pii:
         - name: personal_data
-          # vela3-fast's calibrated PII threshold (docs/records/vela3-router-signals.md).
-          threshold: 0.18
           description: Any personal information.
+          predicate:
+            gte: 0.18
       jailbreak:
         - name: prompt_attack
-          # vela3-fast's calibrated prompt guard threshold.
-          threshold: 0.88
           description: Prompt injection or jailbreak.
+          predicate:
+            gte: 0.88
       systemone:
         - name: account_access
           description: The request needs access to the customer's account.
@@ -125,7 +125,6 @@ config:
     router:
       strategy: priority
     model_catalog:
-      kbs: []
       deployments:
         primary:
           provider: model_runtime
@@ -135,16 +134,6 @@ config:
       system:
         decision_model:
           deployment: primary
-      modules:
-        classifier:
-          pii:
-            use_cpu: true
-        prompt_guard:
-          enabled: true
-          use_cpu: true
-        hallucination_mitigation:
-          enabled: false
-
 extraEnv:
   # Where the managed runtimes' sockets live, so the cases can ask vela3-fast directly.
   - name: VLLM_SRUN_DIR

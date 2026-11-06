@@ -1,11 +1,9 @@
 package aigateway
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -142,7 +140,7 @@ func TestFeatureEntrypointsPreserveDefaultSecurityPrecedence(t *testing.T) {
 	} {
 		decision := profileNamed(t, routing["decisions"], test.name)
 		signal := profileNamed(t, profileMap(t, routing, "signals")[test.signalType], test.signalName)
-		if decision["priority"] != test.priority || signal["threshold"] != test.threshold {
+		if predicate, _ := signal["predicate"].(map[string]any); decision["priority"] != test.priority || predicate["gte"] != test.threshold {
 			t.Fatalf("default security policy changed: %s", test.name)
 		}
 		plugins := decision["plugins"].([]any)
@@ -198,63 +196,6 @@ func TestFallbackRecipeRetainsARealUnmatchedPath(t *testing.T) {
 	if defaults["model"] != "general-expert" {
 		t.Fatal("unmatched fallback must retain the declared default provider")
 	}
-}
-
-func TestGuardProfileMatchesCanonicalPublishedOperatingPoint(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "config", "config.yaml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var canonical map[string]any
-	if err := yaml.Unmarshal(raw, &canonical); err != nil {
-		t.Fatal(err)
-	}
-	catalog := profileMap(t, profileMap(t, canonical, "global"), "model_catalog")
-	guard := profileMap(t, profileMap(t, catalog, "modules"), "prompt_guard")
-	want, ok := guard["threshold"]
-	if !ok {
-		want = decisionModelGuardThreshold(t, catalog)
-	}
-	profile := profileMap(t, profileMap(t, profileConfig(t), "routing"), "signals")
-	signal := profileNamed(t, profile["jailbreak"], "jailbreak_standard")
-	if signal["threshold"] != want {
-		t.Fatalf("Guard operating point differs from canonical published configuration: profile=%v canonical=%v", signal["threshold"], want)
-	}
-}
-
-// decisionModelGuardThreshold is the prompt guard threshold published for a
-// Vela 2.0 decision model, which a guard that sets no threshold runs at.
-func decisionModelGuardThreshold(t *testing.T, catalog map[string]any) any {
-	t.Helper()
-	binding := profileMap(t, profileMap(t, catalog, "system"), "decision_model")
-	deployment, _ := binding["deployment"].(string)
-	model := profileMap(t, profileMap(t, catalog, "deployments"), deployment)
-	name, _ := model["artifact"].(string)
-	// vela3-fast's thresholds are in its router signal record; each Vela 2.0
-	// size's in the sizes record.
-	recordFile, size := "vela3-router-signals.json", strings.TrimPrefix(name, "vllm-sr/")
-	if name != "vllm-sr/vela3-fast" {
-		var ok bool
-		recordFile = "vela2-decision-model-sizes.json"
-		if size, ok = strings.CutPrefix(name, "vllm-sr/Vela-2.0-"); !ok {
-			t.Fatalf("canonical decision_model %v is neither vela3-fast nor a Vela 2.0 size", model)
-		}
-	}
-	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "src", "model-runtime", "docs", "records", recordFile))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var record struct {
-		ModuleThresholds map[string]map[string]float64 `json:"module_thresholds"`
-	}
-	if err := json.Unmarshal(raw, &record); err != nil {
-		t.Fatal(err)
-	}
-	threshold, ok := record.ModuleThresholds[size]["jailbreak"]
-	if !ok {
-		t.Fatalf("no published prompt guard threshold for %s", name)
-	}
-	return threshold
 }
 
 func profileConfig(t *testing.T) map[string]any {

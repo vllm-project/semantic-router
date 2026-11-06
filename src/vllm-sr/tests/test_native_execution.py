@@ -172,7 +172,7 @@ def test_multiple_decisions_keep_independent_algorithm_limits(native_document):
     assert actual[1].algorithm.budget == {"deadline": "9s", "max_calls": 1}
 
 
-@pytest.mark.parametrize("signal", ["authz", "metadata", "conversation", "reask", "kb"])
+@pytest.mark.parametrize("signal", ["authz", "metadata", "conversation", "reask"])
 def test_native_rejects_unavailable_request_context(native_document, signal):
     decision = native_document["recipes"][0]["routing"]["decisions"][0]
     decision["rules"] = {"type": signal, "name": "private"}

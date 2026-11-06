@@ -1,5 +1,5 @@
-# The built-in model runtime downloads the pinned Vela PII release and serves it;
-# the binding takes its labels from the served model.
+# The built-in model runtime downloads the pinned Vela 2.0 0.8B release and
+# serves it on CPU; pii rules ask it instead of the default decision model.
 apiVersion: vllm.ai/v1alpha1
 kind: SemanticRouter
 metadata:
@@ -8,20 +8,17 @@ spec:
   replicas: 1
   config:
     model_deployments:
-      local-pii:
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-PII
-        revision: 6d3300c4bd7975f30a664503f6c725cf1fbbad48
+      local-vela:
+        artifact: vllm-sr/Vela-2.0-0.8B
+        revision: a778eb2ae2304cfa72fca7e53a19136dea5be012
         provider: model_runtime
         device: cpu
-        input:
-          max_tokens: 512
-          overflow: reject
     model_admission:
-      local-pii:
+      local-vela:
         max_concurrency: 2
         max_queue: 8
         queue_timeout_ms: 1000
         on_overflow: shed
     routing:
       model_bindings:
-        pii: local-pii
+        pii: local-vela

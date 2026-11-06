@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -36,16 +37,11 @@ func (c *RouterConfig) EffectiveModelBindings(signals Signals, local map[string]
 }
 
 func globalBindingApplies(name string, signals Signals) bool {
-	if strings.HasPrefix(name, "classifier.") {
-		return classifierSignalRuleByName(signals.ClassifierRules, strings.TrimPrefix(name, "classifier.")) != nil
+	if rule, isRuleKey := strings.CutPrefix(name, "safety."); isRuleKey {
+		return slices.ContainsFunc(signals.SafetyRules, func(safety SafetyRule) bool { return safety.Name == rule })
 	}
-	if strings.HasPrefix(name, "safety.") {
-		for _, rule := range signals.SafetyRules {
-			if name == "safety."+rule.Name || (rule.Hazard != nil && name == "safety."+rule.Name+".hazard") {
-				return true
-			}
-		}
-		return false
+	if rule, isRuleKey := strings.CutPrefix(name, "complexity."); isRuleKey {
+		return slices.ContainsFunc(signals.ComplexityRules, func(complexity ComplexityRule) bool { return complexity.Name == rule })
 	}
 	return true
 }

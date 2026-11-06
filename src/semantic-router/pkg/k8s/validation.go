@@ -26,7 +26,6 @@ import (
 type crdValidationContext struct {
 	models       map[string]*v1alpha1.ModelConfig
 	keywords     map[string]struct{}
-	embeddings   map[string]struct{}
 	domains      map[string]struct{}
 	structure    map[string]struct{}
 	conversation map[string]struct{}
@@ -53,12 +52,6 @@ func buildCRDValidationContext(
 	route *v1alpha1.IntelligentRoute,
 ) (*crdValidationContext, error) {
 	keywords, err := collectUniqueNames(route.Spec.Signals.Keywords, "keyword signal", func(signal v1alpha1.KeywordSignal) string {
-		return signal.Name
-	})
-	if err != nil {
-		return nil, err
-	}
-	embeddings, err := collectUniqueNames(route.Spec.Signals.Embeddings, "embedding signal", func(signal v1alpha1.EmbeddingSignal) string {
 		return signal.Name
 	})
 	if err != nil {
@@ -92,7 +85,6 @@ func buildCRDValidationContext(
 	return &crdValidationContext{
 		models:       buildValidationModelMap(pool.Spec.Models),
 		keywords:     keywords,
-		embeddings:   embeddings,
 		domains:      domains,
 		structure:    structures,
 		conversation: conversations,
@@ -155,8 +147,6 @@ func validateSignalReference(
 	switch condition.Type {
 	case "keyword":
 		known = ctx.keywords
-	case "embedding":
-		known = ctx.embeddings
 	case "domain":
 		known = ctx.domains
 	case "structure":

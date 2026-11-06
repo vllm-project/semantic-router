@@ -94,8 +94,10 @@ routing:
     domains:
       - name: code
         description: Programming and software engineering
+        labels: ["computer science"]
       - name: general
         description: General knowledge and conversation
+        labels: [other]
   modelCards:
     - name: gpt-4o
       description: GPT-4o — OpenAI

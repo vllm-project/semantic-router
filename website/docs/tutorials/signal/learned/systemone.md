@@ -484,7 +484,10 @@ request for it.
 
 While the model is loading, overloaded or slower than `timeout_ms`, the signal
 is unknown. `rules.on_unknown` on the decision, or `on_error: match | no_match`
-on a condition, decides what an unknown answer means. Compatible questions
+on a condition, decides what an unknown answer means. A request-stage
+`jailbreak` or `pii` rule with `on_unknown: match` matches when it gets no
+answer, so a guard whose model is down does not pass the request; a
+decision's `rules.on_unknown` still decides it. Compatible questions
 share a batch; distinct input states and later selection or response stages
 can require additional calls and forwards. A shared call can remain active
 while another caller still needs it. A deadline ends the caller's wait but

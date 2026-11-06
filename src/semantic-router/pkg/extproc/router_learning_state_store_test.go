@@ -64,7 +64,7 @@ func TestBuildRouterComponentsReplayFailurePreservesPublishedSessionStore(t *tes
 		newRouterSessionStateStore = originalStoreBuilder
 	})
 
-	cfg := newCoreSignalMappingGateConfig(t)
+	cfg := newDefaultRouteConfig()
 	cfg.RouterLearning.StateStore = config.RouterLearningStateStoreConfig{
 		Backend: "redis",
 		Redis: config.RouterLearningRedisStateStoreConfig{

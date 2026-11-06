@@ -12,7 +12,6 @@ is_mtpe: true
 
 嵌入把文本变成向量，router 就能比语义。一个嵌入模型供所有需要它的功能用：
 
-- [嵌入信号](../../tutorials/signal/learned/embedding.md)和[知识库](../../tutorials/signal/learned/kb.md)：按和示例文本的相似度路由；
 - [语义缓存](../../tutorials/plugin/response-cache.md)：重复的问题从缓存里答；
 - [记忆](../../tutorials/plugin/memory.md)和 [RAG](../../tutorials/plugin/rag.md)：找存着的事实和文档；
 - [工具选择](../../tutorials/plugin/tool-selection.md)：给出贴合请求的那些工具。

@@ -20,6 +20,12 @@ func SystemOneQuestionID(rule string) string {
 	return config.SignalTypeSystemOne + ":" + rule
 }
 
+// presetQuestionID is the Router's own ID of a preset's question, which every
+// application rule of the preset asked in one call shares.
+func presetQuestionID(preset string) string {
+	return "preset:" + preset
+}
+
 // SetDecisionDecider replaces the model runtime used by systemone signals (tests and embedders).
 func (c *Classifier) SetDecisionDecider(decider modelservice.Decider) {
 	c.decisionDecider = decider
@@ -58,10 +64,10 @@ type ConversationTurn struct {
 	Text string
 }
 
-// systemOneReading is what a stage gives its systemone rules to read: the
-// current user turn as it came, the conversation before it, the request's
-// tool results and the current turn's images and videos, and at the response
-// stage the model's answer and its grounding context.
+// systemOneReading is what a stage gives its rules to read: the current user
+// turn as it came, the conversation before it, the request's tool results and
+// the current turn's images and videos, and at the response stage the
+// model's answer and its grounding context.
 type systemOneReading struct {
 	request     string
 	history     []string
@@ -71,6 +77,17 @@ type systemOneReading struct {
 	context     string
 	images      []string
 	videos      []string
+}
+
+// previousAnswer is the last assistant turn before the current user turn,
+// the answer that turn replies to.
+func (r systemOneReading) previousAnswer() string {
+	for index := len(r.turns) - 1; index >= 0; index-- {
+		if r.turns[index].Role == "assistant" {
+			return r.turns[index].Text
+		}
+	}
+	return ""
 }
 
 // state is the request a rule's question is asked about. A rule that reads
@@ -96,6 +113,9 @@ func (r systemOneReading) state(rule config.SystemOneRule) modelservice.Request 
 		}
 		add("previous_turns", strings.Join(lines, "\n"))
 	}
+	if input.PreviousAnswer {
+		add("previous_answer", r.previousAnswer())
+	}
 	if input.ToolResults {
 		add("tool_results", strings.Join(r.toolResults, "\n\n"))
 	}
@@ -119,21 +139,50 @@ func (r systemOneReading) state(rule config.SystemOneRule) modelservice.Request 
 	return request
 }
 
+// askedRule is one rule a stage asks: a systemone rule, or an application
+// rule compiled into one, which publishes its matches and values under its
+// application type and shares its preset's question with the stage's other
+// rules of the preset. path is where the configuration asks it when that is
+// not a rule (fusion grounding).
+type askedRule struct {
+	signalType string
+	rule       config.SystemOneRule
+	preset     string
+	failClosed bool
+	path       string
+}
+
+func systemOneAsked(rule config.SystemOneRule) askedRule {
+	return askedRule{signalType: config.SignalTypeSystemOne, rule: rule}
+}
+
+func applicationAsked(rule config.ApplicationRule) askedRule {
+	return askedRule{signalType: rule.Type, rule: rule.Rule, preset: rule.Preset, failClosed: rule.FailClosed}
+}
+
+// questionID is the ID of the question whose answer the rule reads.
+func (a askedRule) questionID() string {
+	if a.preset != "" {
+		return presetQuestionID(a.preset)
+	}
+	return SystemOneQuestionID(a.rule.Name)
+}
+
 // systemOneCall is the rules a stage asks one deployment about one state.
 type systemOneCall struct {
 	deployment string
 	request    modelservice.Request
-	rules      []config.SystemOneRule
+	rules      []askedRule
 }
 
 // systemOneCalls groups rules by the deployment that answers them and the
 // state they read, in rule order: every rule of a stage goes to its
 // deployment in one call, its other states as further states of it.
-func (c *Classifier) systemOneCalls(rules []config.SystemOneRule, reading systemOneReading) []*systemOneCall {
+func (c *Classifier) systemOneCalls(rules []askedRule, reading systemOneReading) []*systemOneCall {
 	var calls []*systemOneCall
-	for _, rule := range rules {
-		deployment := c.Config.SystemOneRuleDeployment(rule)
-		state := reading.state(rule)
+	for _, asked := range rules {
+		deployment := c.Config.SystemOneRuleDeployment(asked.rule)
+		state := reading.state(asked.rule)
 		index := slices.IndexFunc(calls, func(call *systemOneCall) bool {
 			return call.deployment == deployment && sameState(call.request, state)
 		})
@@ -141,7 +190,7 @@ func (c *Classifier) systemOneCalls(rules []config.SystemOneRule, reading system
 			calls = append(calls, &systemOneCall{deployment: deployment, request: state})
 			index = len(calls) - 1
 		}
-		calls[index].rules = append(calls[index].rules, rule)
+		calls[index].rules = append(calls[index].rules, asked)
 	}
 	return calls
 }
@@ -161,8 +210,9 @@ func sameState(a, b modelservice.Request) bool {
 // evaluateSystemOneSignals asks every used request-stage rule, one call per
 // deployment, with the request as it came as the current turn. Calls to
 // different deployments run in parallel. A rule that names no deployment
-// asks the decision model, like the built-in signals whose call it joins. A
-// failed or late call leaves its signals unknown; it never fails the request.
+// asks the decision model, like the application signals whose call it joins.
+// A failed or late call leaves its signals unknown; it never fails the
+// request.
 func (c *Classifier) evaluateSystemOneSignals(
 	ctx context.Context,
 	results *SignalResults,
@@ -174,10 +224,10 @@ func (c *Classifier) evaluateSystemOneSignals(
 		ctx = context.Background()
 	}
 	start := time.Now()
-	var rules []config.SystemOneRule
+	var rules []askedRule
 	for _, rule := range c.Config.SystemOneRules {
 		if rule.EffectiveStage() == config.SystemOneStageRequest && signalRuleUsed(usedSignals, config.SignalTypeSystemOne, rule.Name) {
-			rules = append(rules, rule)
+			rules = append(rules, systemOneAsked(rule))
 		}
 	}
 	c.askSystemOneRules(ctx, results, mu, rules, reading)
@@ -200,41 +250,21 @@ type ResponseInput struct {
 	Videos            []string
 }
 
-// ResponseSystemOneSignal is the response-stage systemone observation for one
-// response, in the shape the decision engine consumes request-stage signals in.
-type ResponseSystemOneSignal struct {
-	MatchedRules []string
-	Confidences  map[string]float64
-	Values       map[string]float64
-	Errors       map[string]string
-}
-
-// EvaluateResponseSystemOne asks the named response-stage rules about one
-// answer, one call per deployment, as the request stage asks its rules. A
-// name that is no response-stage rule is skipped.
-func (c *Classifier) EvaluateResponseSystemOne(ctx context.Context, input ResponseInput, names []string) *ResponseSystemOneSignal {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	var rules []config.SystemOneRule
-	for _, rule := range c.Config.SystemOneRules {
-		if rule.EffectiveStage() == config.SystemOneStageResponse && slices.Contains(names, rule.Name) {
-			rules = append(rules, rule)
-		}
-	}
-	results := &SignalResults{SignalConfidences: map[string]float64{}, SignalValues: map[string]float64{}, SignalErrors: map[string]string{}}
-	var mu sync.Mutex
-	c.askSystemOneRules(ctx, results, &mu, rules, systemOneReading{
+func (input ResponseInput) reading() systemOneReading {
+	return systemOneReading{
 		request: input.Request, history: input.PriorUserMessages, turns: input.Turns, toolResults: input.ToolResultTexts,
 		answer: input.Answer, context: input.Context, images: input.Images, videos: input.Videos,
-	})
-	return &ResponseSystemOneSignal{
-		MatchedRules: results.MatchedSystemOneRules, Confidences: results.SignalConfidences,
-		Values: results.SignalValues, Errors: results.SignalErrors,
 	}
 }
 
-func (c *Classifier) askSystemOneRules(ctx context.Context, results *SignalResults, mu *sync.Mutex, rules []config.SystemOneRule, reading systemOneReading) {
+func newResponseSignalResults() *SignalResults {
+	return &SignalResults{
+		SignalConfidences: map[string]float64{}, SignalValues: map[string]float64{}, SignalErrors: map[string]string{},
+		SignalSpans: map[string][]modelservice.Span{},
+	}
+}
+
+func (c *Classifier) askSystemOneRules(ctx context.Context, results *SignalResults, mu *sync.Mutex, rules []askedRule, reading systemOneReading) {
 	calls := c.systemOneCalls(rules, reading)
 	modelservice.Fan(ctx, len(calls), func(i int) {
 		c.evaluateSystemOneDeployment(ctx, results, mu, calls[i])
@@ -247,15 +277,25 @@ func (c *Classifier) evaluateSystemOneDeployment(
 	mu *sync.Mutex,
 	call *systemOneCall,
 ) {
+	c.askCall(ctx, results, mu, call, nil)
+}
+
+// askCall sends one call, hands its response to observe (when set), and
+// applies each rule's answer to results.
+func (c *Classifier) askCall(
+	ctx context.Context,
+	results *SignalResults,
+	mu *sync.Mutex,
+	call *systemOneCall,
+	observe func(modelservice.Response, error),
+) {
 	deployment, rules := call.deployment, call.rules
 	// The deployment's scan budget keeps a stage's questions to it in one
 	// call: a full-coverage rule reads its input whole, up to the budget, and
 	// any other only its first tokens.
 	request := call.request
 	request.MaxTokens = c.Config.ModelDeployments[deployment].ScanBudget()
-	for _, rule := range rules {
-		request.Questions = append(request.Questions, systemOneRuleQuestion(rule))
-	}
+	request.Questions = callQuestions(rules)
 	remote := c.Config.IsSystemOneDeployment(deployment)
 	callCtx, cancel := systemOneCallContext(ctx, rules, remote, c.Config.ModelDeployments[deployment].CallTimeout())
 	defer cancel()
@@ -277,42 +317,99 @@ func (c *Classifier) evaluateSystemOneDeployment(
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	for _, rule := range rules {
-		key := signalConfidenceKey(config.SignalTypeSystemOne, rule.Name)
-		c.recordSignalExtraction(config.SignalTypeSystemOne, rule.Name, latency)
+	if observe != nil {
+		observe(response, err)
+	}
+	recordPrivacyEvidence(results, call, response, err)
+	for _, asked := range rules {
+		rule := asked.rule
+		key := signalConfidenceKey(asked.signalType, rule.Name)
+		c.recordSignalExtraction(asked.signalType, rule.Name, latency)
 		if err != nil {
 			results.SignalErrors[key] = systemOneSignalErrorPrefix + modelservice.ErrorReason(err)
+			c.applyFailClosed(results, asked)
 			continue
 		}
-		answer, ok := response.Answers[SystemOneQuestionID(rule.Name)]
+		answer, ok := response.Answers[asked.questionID()]
 		if !ok || answer.Error != "" {
 			reason := answer.Error
 			if !ok {
 				reason = "missing_answer"
 			}
 			if ok && rule.FullCoverage() && unscanned(reason) && rule.EffectiveOnUnscanned() != config.SystemOneUnscannedUnknown {
-				c.applyUnscanned(results, rule)
+				c.applyUnscanned(results, asked)
 				continue
 			}
 			results.SignalErrors[key] = systemOneSignalErrorPrefix + reason
 			modelservice.RecordUnknown(deployment, reason, 1)
+			c.applyFailClosed(results, asked)
 			continue
 		}
-		for _, matched := range applySystemOneAnswer(results, rule, answer) {
-			results.MatchedSystemOneRules = append(results.MatchedSystemOneRules, matched)
-			c.recordSignalMatch(config.SignalTypeSystemOne, matched)
+		for _, matched := range applySystemOneAnswer(results, asked.signalType, rule, answer) {
+			results.appendMatched(asked.signalType, rule, matched)
+			c.recordSignalMatch(asked.signalType, matched)
+		}
+		if rule.Question.Type == config.SystemOneQuestionSpan && results.SignalSpans != nil {
+			if spans := matchedSpans(rule, answer); len(spans) > 0 {
+				results.SignalSpans[key] = spans
+			}
 		}
 	}
 }
 
-// systemOneRuleQuestion is the question a rule asks: a full-coverage rule
-// reads its whole input, which ExecuteQuestions requires proof of, and any
-// other only its first tokens.
-func systemOneRuleQuestion(rule config.SystemOneRule) modelservice.Question {
-	question := SystemOneQuestion(SystemOneQuestionID(rule.Name), rule.Question)
+// callQuestions are the questions a call asks: each systemone rule's own and
+// each preset's once, which reads the options every rule asking it reads (a
+// family's trained form answers it when it covers them).
+func callQuestions(rules []askedRule) []modelservice.Question {
+	var questions []modelservice.Question
+	for _, asked := range rules {
+		id := asked.questionID()
+		index := slices.IndexFunc(questions, func(question modelservice.Question) bool { return question.ID == id })
+		if index < 0 {
+			questions = append(questions, askedQuestion(asked))
+			continue
+		}
+		questions[index].Reads = mergeReads(questions[index].Reads, ruleReads(asked.rule))
+	}
+	return questions
+}
+
+// askedQuestion is the question a rule asks: a full-coverage rule reads its
+// whole input, which ExecuteQuestions requires proof of, and any other only
+// its first tokens.
+func askedQuestion(asked askedRule) modelservice.Question {
+	rule := asked.rule
+	question := SystemOneQuestion(asked.questionID(), rule.Question)
 	question.TaskID, question.Stage = config.SignalTypeSystemOne, rule.EffectiveStage()
+	if asked.preset != "" {
+		question.TaskID = modelservice.PresetTask(asked.preset)
+		question.Reads = ruleReads(rule)
+	}
 	question.Truncate = !rule.FullCoverage()
 	return question
+}
+
+// ruleReads are the options a rule reads: its labels, or nil, every option,
+// for a rule without labels, whose conditions may name any.
+func ruleReads(rule config.SystemOneRule) []string {
+	if len(rule.Labels) == 0 {
+		return nil
+	}
+	return slices.Clone(rule.Labels)
+}
+
+// mergeReads joins the options two askers read; nil is every option.
+func mergeReads(reads, more []string) []string {
+	if reads == nil || more == nil {
+		return nil
+	}
+	merged := slices.Clone(reads)
+	for _, label := range more {
+		if !slices.Contains(merged, label) {
+			merged = append(merged, label)
+		}
+	}
+	return merged
 }
 
 // unscanned reports whether an answer failed because the model could not
@@ -329,10 +426,32 @@ func unscanned(reason string) bool {
 // the whole input as its on_unscanned says, when that is not unknown: the
 // rule and its counted labels match, or nothing does. An unscanned answer
 // has no values, so a condition's own predicate does not match it.
-func (c *Classifier) applyUnscanned(results *SignalResults, rule config.SystemOneRule) {
-	if rule.EffectiveOnUnscanned() != config.SystemOneUnscannedMatch {
+func (c *Classifier) applyUnscanned(results *SignalResults, asked askedRule) {
+	if asked.rule.EffectiveOnUnscanned() != config.SystemOneUnscannedMatch {
 		return
 	}
+	c.appendPolicyMatches(results, asked)
+}
+
+// applyFailClosed resolves a fail-closed rule whose deployment gave no answer
+// as a match: a guard whose model is down does not pass the request. The
+// signal error stays, and SignalErrorMatches marks the match as policy rather
+// than evidence, so a decision's rules.on_unknown still decides it.
+func (c *Classifier) applyFailClosed(results *SignalResults, asked askedRule) {
+	if !asked.failClosed {
+		return
+	}
+	if results.SignalErrorMatches == nil {
+		results.SignalErrorMatches = make(map[string]bool)
+	}
+	results.SignalErrorMatches[signalConfidenceKey(asked.signalType, asked.rule.Name)] = true
+	c.appendPolicyMatches(results, asked)
+}
+
+// appendPolicyMatches matches a rule and its counted labels without an
+// answer to read them from.
+func (c *Classifier) appendPolicyMatches(results *SignalResults, asked askedRule) {
+	rule := asked.rule
 	var matched []string
 	if rule.MatchesItself() {
 		matched = append(matched, rule.Name)
@@ -341,8 +460,8 @@ func (c *Classifier) applyUnscanned(results *SignalResults, rule config.SystemOn
 		matched = append(matched, rule.Name+":"+label)
 	}
 	for _, reference := range matched {
-		results.MatchedSystemOneRules = append(results.MatchedSystemOneRules, reference)
-		c.recordSignalMatch(config.SignalTypeSystemOne, reference)
+		results.appendMatched(asked.signalType, rule, reference)
+		c.recordSignalMatch(asked.signalType, reference)
 	}
 }
 
@@ -361,16 +480,17 @@ func askSystemOneDeployment(ctx context.Context, remote modelservice.Remote, dep
 
 // systemOneCallContext bounds a deployment's call by the shortest timeout its
 // rules set. Questions to a model_runtime decision model that set none join
-// the built-in signals' call, so they take its deadline rather than the
-// default timeout. Questions to a systemone deployment travel with the
-// built-in signals that ask it too, but a rule without a timeout takes the
+// the stage's other questions to it, so they take its deadline rather than
+// the default timeout. Questions to a systemone deployment travel with the
+// stage's other questions too, but a rule without a timeout takes the
 // deployment's own, else the default: the remote API's latency is its own.
 // Once the stage sends a call, its questions wait for it as long as its
 // latest caller does: a timeout bounds the wait for the other askers, never
 // an answer of a call the stage waits for anyway (modelservice.Bundle).
-func systemOneCallContext(ctx context.Context, rules []config.SystemOneRule, remote bool, deploymentTimeout time.Duration) (context.Context, context.CancelFunc) {
+func systemOneCallContext(ctx context.Context, rules []askedRule, remote bool, deploymentTimeout time.Duration) (context.Context, context.CancelFunc) {
 	var timeout time.Duration
-	for _, rule := range rules {
+	for _, asked := range rules {
+		rule := asked.rule
 		if rule.Deployment == "" && rule.TimeoutMs == 0 && !remote {
 			continue
 		}
@@ -403,12 +523,12 @@ func SystemOneQuestion(id string, question config.SystemOneQuestion) modelservic
 
 // applySystemOneAnswer publishes an answer's values and returns the matched
 // references: the rule name when the rule matches itself, and "rule:label"
-// for the chosen option (choice) or every matching label (set, span). A
-// value is published under "systemone:<rule>" (P(yes), the expected level,
-// the chosen option's probability, or the highest probability of a counted
-// label) and under "systemone:<rule>:<label>" for every option or label.
-func applySystemOneAnswer(results *SignalResults, rule config.SystemOneRule, answer modelservice.Answer) []string {
-	key := signalConfidenceKey(config.SignalTypeSystemOne, rule.Name)
+// for each matching option (choice) or label (set, span). A value is
+// published under "<type>:<rule>" (P(yes), the expected level, the chosen
+// option's probability, or the highest probability of a counted label) and
+// under "<type>:<rule>:<label>" for every option or label.
+func applySystemOneAnswer(results *SignalResults, signalType string, rule config.SystemOneRule, answer modelservice.Answer) []string {
+	key := signalConfidenceKey(signalType, rule.Name)
 	predicate := rule.EffectivePredicate()
 	publish := func(name string, value float64) {
 		results.SignalValues[name] = value
@@ -429,21 +549,53 @@ func applySystemOneAnswer(results *SignalResults, rule config.SystemOneRule, ans
 	case config.SystemOneQuestionSet, config.SystemOneQuestionSpan:
 		return applyLabelledAnswer(rule, answer, predicate, key, publish)
 	default:
-		for option, probability := range answer.Probabilities {
-			publish(key+":"+option, probability)
+		return applyChoiceAnswer(rule, answer, predicate, key, publish)
+	}
+	return nil
+}
+
+// applyChoiceAnswer publishes each option's probability, and under the rule
+// itself the chosen option's (or, for an operating point, the highest of its
+// labels'), and returns the matching options. With two options and a
+// predicate, the predicate is an operating point: an option matches when its
+// own probability satisfies it, whichever option the model chose. Otherwise
+// the chosen option matches, when the predicate (a confidence floor) holds
+// for its probability. The rule matches when a matching option is one of its
+// labels.
+func applyChoiceAnswer(rule config.SystemOneRule, answer modelservice.Answer, predicate *config.NumericPredicate, key string, publish func(string, float64)) []string {
+	for option, probability := range answer.Probabilities {
+		publish(key+":"+option, probability)
+	}
+	var matched []string
+	if predicate != nil && len(rule.Question.Choices) == 2 {
+		best := 0.0
+		for _, option := range rule.Question.OptionKeys() {
+			probability := answer.Probabilities[option]
+			if slices.Contains(rule.Labels, option) {
+				best = max(best, probability)
+			}
+			if predicateMatches(probability, predicate) {
+				matched = append(matched, rule.Name+":"+option)
+			}
 		}
+		if len(rule.Labels) == 0 {
+			best = answer.Probabilities[answer.Choice]
+		}
+		publish(key, best)
+	} else {
 		chosen := answer.Probabilities[answer.Choice]
 		publish(key, chosen)
 		if answer.Choice == "" || (predicate != nil && !predicateMatches(chosen, predicate)) {
 			return nil
 		}
-		matched := []string{rule.Name + ":" + answer.Choice}
-		if slices.Contains(rule.Labels, answer.Choice) {
-			matched = append(matched, rule.Name)
-		}
-		return matched
+		matched = []string{rule.Name + ":" + answer.Choice}
 	}
-	return nil
+	for _, reference := range matched {
+		if slices.Contains(rule.Labels, strings.TrimPrefix(reference, rule.Name+":")) {
+			return append(matched, rule.Name)
+		}
+	}
+	return matched
 }
 
 // applyLabelledAnswer publishes each Set label's probability, or each Span
@@ -494,6 +646,20 @@ func labelEvidence(questionType string, answer modelservice.Answer, label string
 		found = found || predicate == nil || predicateMatches(span.Probability, predicate)
 	}
 	return best, found
+}
+
+// matchedSpans are the spans of an answer a span rule matches: those of its
+// counted labels that satisfy its predicate, or all of them without one.
+func matchedSpans(rule config.SystemOneRule, answer modelservice.Answer) []modelservice.Span {
+	counted := rule.CountedLabels()
+	predicate := rule.EffectivePredicate()
+	var spans []modelservice.Span
+	for _, span := range answer.Spans {
+		if slices.Contains(counted, span.Label) && (predicate == nil || predicateMatches(span.Probability, predicate)) {
+			spans = append(spans, span)
+		}
+	}
+	return spans
 }
 
 func maxProbability(probabilities map[string]float64) float64 {

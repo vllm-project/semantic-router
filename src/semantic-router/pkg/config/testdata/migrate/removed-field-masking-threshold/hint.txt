@@ -1,1 +1,1 @@
-routing.decisions[support].plugins[0]: removed_field: masking.threshold was removed; run `vllm-sr config migrate` (masking.signal naming a pii rule, whose threshold applies)
+routing.decisions[support].plugins[0]: removed_field: masking.threshold was removed; run `vllm-sr config migrate` (masking.signal naming a pii rule, whose predicate applies)

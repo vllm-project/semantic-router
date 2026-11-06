@@ -349,12 +349,10 @@ func replaySelectedModel(selectedModel string) string {
 func replaySignalState(ctx *RequestContext) routerreplay.Signal {
 	return routerreplay.Signal{
 		Keyword:       ctx.VSRMatchedKeywords,
-		Embedding:     ctx.VSRMatchedEmbeddings,
 		Domain:        ctx.VSRMatchedDomains,
 		FactCheck:     ctx.VSRMatchedFactCheck,
 		UserFeedback:  ctx.VSRMatchedUserFeedback,
-		Reask:         ctx.VSRMatchedReask,
-		Preference:    ctx.VSRMatchedPreference,
+		TurnRelation:  ctx.VSRMatchedTurnRelation,
 		Language:      ctx.VSRMatchedLanguage,
 		Context:       ctx.VSRMatchedContext,
 		Structure:     ctx.VSRMatchedStructure,
@@ -364,11 +362,9 @@ func replaySignalState(ctx *RequestContext) routerreplay.Signal {
 		Jailbreak:     ctx.VSRMatchedJailbreak,
 		Safety:        ctx.VSRMatchedSafety,
 		PII:           ctx.VSRMatchedPII,
-		KB:            ctx.VSRMatchedKB,
 		Conversation:  ctx.VSRMatchedConversation,
 		Event:         ctx.VSRMatchedEvent,
 		Metadata:      ctx.VSRMatchedMetadata,
-		Classifier:    ctx.VSRMatchedClassifier,
 		InputModality: ctx.VSRMatchedInputModality,
 		Decision:      ctx.VSRMatchedDecisionModel,
 	}

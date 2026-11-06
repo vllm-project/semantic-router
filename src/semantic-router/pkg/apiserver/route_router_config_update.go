@@ -223,9 +223,6 @@ func validateParsedHotReloadCompatibilityInMode(
 		if err := config.ValidateRoutingPreviewReload(currentCfg, nextCfg); err != nil {
 			return err
 		}
-		if err := config.ValidateLocalClassifierReload(currentCfg, nextCfg); err != nil {
-			return err
-		}
 	}
 	if currentCfg != nil && nextCfg != nil &&
 		currentCfg.Observability.Tracing != nextCfg.Observability.Tracing {

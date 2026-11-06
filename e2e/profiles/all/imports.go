@@ -4,8 +4,6 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	aigateway "github.com/vllm-project/semantic-router/e2e/profiles/ai-gateway"
 	authzrbac "github.com/vllm-project/semantic-router/e2e/profiles/authz-rbac"
-	categoryremotebackend "github.com/vllm-project/semantic-router/e2e/profiles/category-remote-backend"
-	complexityremotebackend "github.com/vllm-project/semantic-router/e2e/profiles/complexity-remote-backend"
 	complexityrouting "github.com/vllm-project/semantic-router/e2e/profiles/complexity-routing"
 	conversationrouting "github.com/vllm-project/semantic-router/e2e/profiles/conversation-routing"
 	dashboard "github.com/vllm-project/semantic-router/e2e/profiles/dashboard"
@@ -13,7 +11,6 @@ import (
 	externalgatewayresponses "github.com/vllm-project/semantic-router/e2e/profiles/external-gateway-responses"
 	hallucination "github.com/vllm-project/semantic-router/e2e/profiles/hallucination"
 	jailbreakonerror "github.com/vllm-project/semantic-router/e2e/profiles/jailbreak-onerror"
-	localclassifierbackend "github.com/vllm-project/semantic-router/e2e/profiles/local-classifier-backend"
 	longcontextrouting "github.com/vllm-project/semantic-router/e2e/profiles/long-context-routing"
 	looper "github.com/vllm-project/semantic-router/e2e/profiles/looper"
 	masking "github.com/vllm-project/semantic-router/e2e/profiles/masking"
@@ -22,9 +19,7 @@ import (
 	modelruntimereal "github.com/vllm-project/semantic-router/e2e/profiles/model-runtime-real"
 	modelruntimevela3 "github.com/vllm-project/semantic-router/e2e/profiles/model-runtime-vela3"
 	multiendpoint "github.com/vllm-project/semantic-router/e2e/profiles/multi-endpoint"
-	multimodalrouting "github.com/vllm-project/semantic-router/e2e/profiles/multimodal-routing"
 	piiremotebackend "github.com/vllm-project/semantic-router/e2e/profiles/pii-remote-backend"
-	preferenceexternalrouting "github.com/vllm-project/semantic-router/e2e/profiles/preference-external-routing"
 	preferencerouting "github.com/vllm-project/semantic-router/e2e/profiles/preference-routing"
 	productionstack "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
 	progressgate "github.com/vllm-project/semantic-router/e2e/profiles/progress-gate"
@@ -44,9 +39,6 @@ import (
 	structurerouting "github.com/vllm-project/semantic-router/e2e/profiles/structure-routing"
 	trustedgateway "github.com/vllm-project/semantic-router/e2e/profiles/trusted-gateway"
 	vectorstoreregistry "github.com/vllm-project/semantic-router/e2e/profiles/vectorstore-registry"
-	velahalu "github.com/vllm-project/semantic-router/e2e/profiles/vela-halu"
-	velaomni "github.com/vllm-project/semantic-router/e2e/profiles/vela-omni"
-	velashield "github.com/vllm-project/semantic-router/e2e/profiles/vela-shield"
 )
 
 var providerMockerLocalImages = []framework.LocalImageBuild{
@@ -88,8 +80,6 @@ var dashboardLocalImages = []framework.LocalImageBuild{
 }
 
 func init() {
-	register("vela-halu", func() framework.Profile { return velahalu.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
-	register("vela-shield", func() framework.Profile { return velashield.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register(
 		"envoy-ai-gateway",
 		func() framework.Profile { return aigateway.NewProfile() },
@@ -106,20 +96,16 @@ func init() {
 		func() framework.Profile { return trustedgateway.NewProfile() },
 		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
 	)
-	register("category-remote-backend", func() framework.Profile { return categoryremotebackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
-	register("complexity-remote-backend", func() framework.Profile { return complexityremotebackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("pii-remote-backend", func() framework.Profile { return piiremotebackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("model-runtime", func() framework.Profile { return modelruntime.NewProfile() }, framework.ProfileCapabilities{LocalImages: modelRuntimeLocalImages})
 	register("model-runtime-real", func() framework.Profile { return modelruntimereal.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("model-runtime-vela3", func() framework.Profile { return modelruntimevela3.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
-	register("local-classifier-backend", func() framework.Profile { return localclassifierbackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("structure-routing", func() framework.Profile { return structurerouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("conversation-routing", func() framework.Profile { return conversationrouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("complexity-routing", func() framework.Profile { return complexityrouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("routing-errors", func() framework.Profile { return routingerrors.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("long-context-routing", func() framework.Profile { return longcontextrouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("preference-routing", func() framework.Profile { return preferencerouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
-	register("preference-external-routing", func() framework.Profile { return preferenceexternalrouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register(
 		"dashboard",
 		func() framework.Profile { return dashboard.NewProfile() },
@@ -153,12 +139,8 @@ func init() {
 		func() framework.Profile { return mlmodelselection.NewProfile() },
 		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
 	)
-	register("multi-endpoint", func() framework.Profile { return multiendpoint.NewProfile() }, framework.ProfileCapabilities{})
-	register("vela-omni", func() framework.Profile { return velaomni.NewProfile() }, framework.ProfileCapabilities{
-		LocalImages: providerMockerLocalImages,
-	})
-	register("multimodal-routing", func() framework.Profile { return multimodalrouting.NewProfile() }, framework.ProfileCapabilities{})
-	register("production-stack", func() framework.Profile { return productionstack.NewProfile() }, framework.ProfileCapabilities{})
+	register("multi-endpoint", func() framework.Profile { return multiendpoint.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
+	register("production-stack", func() framework.Profile { return productionstack.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("rag-hybrid-search", func() framework.Profile { return raghybridsearch.NewProfile() }, framework.ProfileCapabilities{})
 	register(
 		"response-api",
@@ -185,13 +167,13 @@ func init() {
 		func() framework.Profile { return progressgate.NewProfile() },
 		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
 	)
-	register("remote-embedding", func() framework.Profile { return remoteembedding.NewProfile() }, framework.ProfileCapabilities{})
+	register("remote-embedding", func() framework.Profile { return remoteembedding.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register(
 		"router-replay",
 		func() framework.Profile { return routerreplay.NewProfile() },
 		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
 	)
-	register("routing-strategies", func() framework.Profile { return routingstrategies.NewProfile() }, framework.ProfileCapabilities{})
+	register("routing-strategies", func() framework.Profile { return routingstrategies.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("standalone", func() framework.Profile { return standalone.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("streaming", func() framework.Profile { return streaming.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register(

@@ -38,9 +38,12 @@ func ReadyTimeout() time.Duration {
 // DecisionAdapter asks a vela3_d3 package with an opt-in decision adapter to
 // answer with it; only that family takes the field.
 type Question struct {
-	// TaskID and Stage describe the internal consumer; they are not wire fields.
+	// TaskID and Stage describe the internal consumer, and Reads the
+	// options its askers read (nil: every option), which a family's trained
+	// form must cover to answer it; they are not wire fields.
 	TaskID           string
 	Stage            string
+	Reads            []string
 	ID               string
 	Type             string
 	Instructions     string

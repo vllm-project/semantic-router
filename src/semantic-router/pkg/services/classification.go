@@ -123,7 +123,7 @@ func NewClassificationServiceFromConfig(cfg *config.RouterConfig) (*Classificati
 	if err != nil {
 		return nil, err
 	}
-	if err := service.refreshRecipeClassifiers(cfg, nil, options, lease); err != nil {
+	if err := service.refreshRecipeClassifiers(cfg, options, lease); err != nil {
 		return nil, err
 	}
 	return service, nil

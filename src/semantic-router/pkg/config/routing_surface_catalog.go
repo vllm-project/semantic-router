@@ -48,53 +48,45 @@ const (
 // to its runtime reference identity.
 type SignalReferenceQualifier string
 
-const (
-	SignalReferenceQualifierFixedSuffix SignalReferenceQualifier = "fixed_suffix"
-	SignalReferenceQualifierLabel       SignalReferenceQualifier = "label"
-)
+// SignalReferenceQualifierLabel adds one of the rule's options:
+// <type>:<rule>:<label>; the options come from the configured rule.
+const SignalReferenceQualifierLabel SignalReferenceQualifier = "label"
 
 // SignalCatalogEntry is the canonical public identity for one signal family.
 // Collection is the YAML key under routing.signals. ObservationKey is the JSON
 // field under decision_result matched/used/unmatched signal collections.
-// ReferenceSuffixes names fixed derived decision references; label-qualified
-// signals discover their suffixes from the configured signal payload.
 type SignalCatalogEntry struct {
 	Type                  string                   `json:"type"`
 	DisplayName           string                   `json:"display_name"`
 	Collection            string                   `json:"collection"`
 	ObservationKey        string                   `json:"observation_key,omitempty"`
 	DecisionReferenceable bool                     `json:"decision_referenceable"`
-	ReferenceSuffixes     []string                 `json:"reference_suffixes,omitempty"`
 	ReferenceQualifier    SignalReferenceQualifier `json:"reference_qualifier,omitempty"`
 }
 
 var builtinSignalCatalog = []SignalCatalogEntry{
 	{Type: SignalTypeKeyword, DisplayName: "Keywords", Collection: "keywords", ObservationKey: "keywords", DecisionReferenceable: true},
-	{Type: SignalTypeEmbedding, DisplayName: "Embeddings", Collection: "embeddings", ObservationKey: "embeddings", DecisionReferenceable: true},
-	{Type: SignalTypeDomain, DisplayName: "Domain", Collection: "domains", ObservationKey: "domains", DecisionReferenceable: true},
-	{Type: SignalTypeFactCheck, DisplayName: "Fact Check", Collection: "fact_check", ObservationKey: "fact_check", DecisionReferenceable: true},
-	{Type: SignalTypeUserFeedback, DisplayName: "User Feedback", Collection: "user_feedbacks", ObservationKey: "user_feedback", DecisionReferenceable: true},
-	{Type: SignalTypeReask, DisplayName: "Reask", Collection: "reasks", ObservationKey: "reask", DecisionReferenceable: true},
-	{Type: SignalTypePreference, DisplayName: "Preference", Collection: "preferences", ObservationKey: "preferences", DecisionReferenceable: true},
+	{Type: SignalTypeDomain, DisplayName: "Domain", Collection: "domains", ObservationKey: "domains", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
+	{Type: SignalTypeFactCheck, DisplayName: "Fact Check", Collection: "fact_check", ObservationKey: "fact_check", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
+	{Type: SignalTypeUserFeedback, DisplayName: "User Feedback", Collection: "user_feedbacks", ObservationKey: "user_feedback", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
 	{Type: SignalTypeLanguage, DisplayName: "Language", Collection: "language", ObservationKey: "language", DecisionReferenceable: true},
 	{Type: SignalTypeContext, DisplayName: "Context", Collection: "context", ObservationKey: "context", DecisionReferenceable: true},
 	{Type: SignalTypeStructure, DisplayName: "Structure", Collection: "structure", ObservationKey: "structure", DecisionReferenceable: true},
-	{Type: SignalTypeComplexity, DisplayName: "Complexity", Collection: "complexity", ObservationKey: "complexity", DecisionReferenceable: true, ReferenceSuffixes: []string{"easy", "medium", "hard"}, ReferenceQualifier: SignalReferenceQualifierFixedSuffix},
-	{Type: SignalTypeModality, DisplayName: "Modality", Collection: "modality", ObservationKey: "modality", DecisionReferenceable: true},
+	{Type: SignalTypeComplexity, DisplayName: "Complexity", Collection: "complexity", ObservationKey: "complexity", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
+	{Type: SignalTypeModality, DisplayName: "Modality", Collection: "modality", ObservationKey: "modality", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
 	{Type: SignalTypeAuthz, DisplayName: "Authz", Collection: "role_bindings", ObservationKey: "authz", DecisionReferenceable: true},
-	{Type: SignalTypeJailbreak, DisplayName: "Jailbreak", Collection: "jailbreak", ObservationKey: "jailbreak", DecisionReferenceable: true},
-	{Type: SignalTypeSafety, DisplayName: "Safety", Collection: "safety", ObservationKey: "safety", DecisionReferenceable: true},
+	{Type: SignalTypeJailbreak, DisplayName: "Jailbreak", Collection: "jailbreak", ObservationKey: "jailbreak", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
+	{Type: SignalTypeSafety, DisplayName: "Safety", Collection: "safety", ObservationKey: "safety", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
 	{Type: SignalTypeHallucination, DisplayName: "Hallucination", Collection: "hallucination", DecisionReferenceable: false},
-	{Type: SignalTypePII, DisplayName: "PII", Collection: "pii", ObservationKey: "pii", DecisionReferenceable: true},
-	{Type: SignalTypeKB, DisplayName: "KB", Collection: "kb", ObservationKey: "kb", DecisionReferenceable: true},
+	{Type: SignalTypeRefusal, DisplayName: "Refusal", Collection: "refusal", DecisionReferenceable: false},
+	{Type: SignalTypeTurnRelation, DisplayName: "Turn Relation", Collection: "turn_relation", ObservationKey: "turn_relation", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
+	{Type: SignalTypePII, DisplayName: "PII", Collection: "pii", ObservationKey: "pii", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
 	{Type: SignalTypeConversation, DisplayName: "Conversation", Collection: "conversation", ObservationKey: "conversation", DecisionReferenceable: true},
 	{Type: SignalTypeEvent, DisplayName: "Event", Collection: "events", ObservationKey: "event", DecisionReferenceable: true},
 	{Type: SignalTypeMetadata, DisplayName: "Metadata", Collection: "metadata", ObservationKey: "metadata", DecisionReferenceable: true},
-	{Type: SignalTypeClassifier, DisplayName: "Classifier", Collection: "classifiers", ObservationKey: "classifier", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
 	{Type: SignalTypeInputModality, DisplayName: "Input Modality", Collection: "input_modality", ObservationKey: "input_modality", DecisionReferenceable: true},
 	{Type: SignalTypeAction, DisplayName: "Action", Collection: "actions", ObservationKey: "action", DecisionReferenceable: true},
 	{Type: SignalTypeSystemOne, DisplayName: "System One", Collection: "systemone", ObservationKey: "systemone", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
-	{Type: SignalTypeTopicContinuity, DisplayName: "Topic Continuity", Collection: "topic_continuity", DecisionReferenceable: false},
 }
 
 // DecisionPluginCatalogEntry describes one route-local plugin family. Its
@@ -213,12 +205,7 @@ func IsSupportedSignalType(signalType string) bool {
 
 // LookupSignalCatalog returns the canonical metadata for one signal type.
 func LookupSignalCatalog(signalType string) (SignalCatalogEntry, bool) {
-	entry, ok := signalTypes.Lookup(signalType)
-	if !ok {
-		return SignalCatalogEntry{}, false
-	}
-	entry.ReferenceSuffixes = append([]string(nil), entry.ReferenceSuffixes...)
-	return entry, true
+	return signalTypes.Lookup(signalType)
 }
 
 // SupportedDecisionSignalTypes returns signals that can participate in the
@@ -237,12 +224,7 @@ func SupportedDecisionSignalTypes() []string {
 // SignalCatalog returns the configuration and decision-reference identity for
 // every supported signal family.
 func SignalCatalog() []SignalCatalogEntry {
-	result := make([]SignalCatalogEntry, len(signalTypes.Entries()))
-	for index, entry := range registeredSpecs(signalTypes) {
-		result[index] = entry
-		result[index].ReferenceSuffixes = append([]string(nil), entry.ReferenceSuffixes...)
-	}
-	return result
+	return registeredSpecs(signalTypes)
 }
 
 func SupportedDecisionPluginTypes() []string {

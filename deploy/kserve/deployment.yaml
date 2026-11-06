@@ -211,12 +211,13 @@ spec:
           periodSeconds: 30
           timeoutSeconds: 10
           failureThreshold: 3
+        # Sized as in the Helm chart: the Router and the model runtime it starts for the decision model.
         resources:
           requests:
-            memory: "4Gi"
+            memory: "3Gi"
             cpu: "1500m"
           limits:
-            memory: "8Gi"
+            memory: "12Gi"
             cpu: "3"
 
       # Envoy proxy container - routes to KServe endpoints

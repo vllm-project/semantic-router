@@ -44,50 +44,15 @@ def test_reference_vela_policy_survives_runtime_materialization(
     assert catalog["system"]["decision_model"] == {"deployment": "primary"}
     assert catalog["deployments"] == authored["deployments"]
     assert catalog["deployments"]["primary"]["artifact"] == "vllm-sr/vela3-fast"
-    modules = catalog["modules"]
-    for module in (
-        modules["safety"]["safety"],
-        modules["prompt_guard"],
-        modules["classifier"]["domain"],
-        modules["classifier"]["pii"],
-        modules["hallucination_mitigation"]["fact_check"],
-        modules["hallucination_mitigation"]["detector"],
-        modules["feedback_detector"],
-    ):
-        assert "model_id" not in module
-    for module in (
-        modules["prompt_guard"],
-        modules["classifier"]["domain"],
-        modules["classifier"]["pii"],
-        modules["hallucination_mitigation"]["fact_check"],
-        modules["feedback_detector"],
-    ):
-        # The decision model's calibrated threshold applies.
-        assert "threshold" not in module
-    # The modality classifier asks the decision model; it names no model.
-    assert "model_path" not in modules["modality_detector"]["classifier"]
-    for module in (modules["prompt_guard"], modules["classifier"]["pii"]):
-        assert "window" not in module
-    for module in (
-        modules["prompt_guard"],
-        modules["classifier"]["domain"],
-        modules["classifier"]["pii"],
-        modules["hallucination_mitigation"]["fact_check"],
-        modules["feedback_detector"],
-        modules["modality_detector"]["classifier"],
-    ):
-        assert module["max_sequence_length"] == 0
-        assert module["use_cpu"] is (platform == "cpu")
 
 
-@pytest.mark.parametrize("budget,full_context", [(0, False), (32768, True)])
-def test_explicit_old_models_and_long_policy_are_not_rewritten(
-    tmp_path: Path, monkeypatch, budget: int, full_context: bool
+@pytest.mark.parametrize("full_context", [False, True])
+def test_an_explicit_embedding_model_and_long_policy_are_not_rewritten(
+    tmp_path: Path, monkeypatch, full_context: bool
 ):
     monkeypatch.delenv("VLLM_SR_ROCM_FORCE_GPU", raising=False)
     monkeypatch.delenv("VLLM_SR_ROCM_PRESERVE_CPU", raising=False)
     catalog = {
-        "system": {"domain_classifier": "models/mmbert32k-intent-classifier-merged"},
         "embeddings": {
             "semantic": {
                 "mmbert_model_path": "models/mmbert-embed-32k-2d-matryoshka",
@@ -97,7 +62,6 @@ def test_explicit_old_models_and_long_policy_are_not_rewritten(
                 },
             }
         },
-        "modules": {"classifier": {"domain": {"max_sequence_length": budget}}},
     }
     source = tmp_path / "source.yaml"
     source.write_text(
@@ -106,8 +70,7 @@ def test_explicit_old_models_and_long_policy_are_not_rewritten(
     target = tmp_path / "runtime.yaml"
     realize_runtime_config(source, target, algorithm=None, platform="rocm")
     actual = yaml.safe_load(target.read_text())["global"]["model_catalog"]
-    assert actual["system"] == catalog["system"]
-    assert actual["modules"]["classifier"]["domain"]["max_sequence_length"] == budget
+    assert "modules" not in actual
     semantic = actual["embeddings"]["semantic"]
     assert (
         semantic["mmbert_model_path"]

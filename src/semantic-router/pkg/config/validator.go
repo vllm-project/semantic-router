@@ -12,12 +12,7 @@ func validateRoutingStrategy(cfg *RouterConfig) error {
 	return cfg.Strategy.Validate()
 }
 
-// prompt_guard backend validation lives in validator_prompt_guard.go.
-
 func validateModelSelectionConfig(cfg *RouterConfig) error {
-	if err := validatePromptGuardStaticContracts(cfg); err != nil {
-		return err
-	}
 	if isLookupTableConfigConfigured(cfg.ModelSelection.LookupTables) {
 		return fmt.Errorf("global.router.model_selection.lookup_tables has moved to future Router Learning experience; remove lookup_tables from public config")
 	}

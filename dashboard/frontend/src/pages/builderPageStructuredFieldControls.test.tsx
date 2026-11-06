@@ -147,16 +147,16 @@ describe('Builder structured field controls', () => {
     expect(markup).toContain('min="1"')
   })
 
-  it('renders recursive composer rules without falling back to JSON', () => {
-    const composer = requireField(getSignalFieldSchema('complexity'), 'composer')
+  it('renders recursive rules without falling back to JSON', () => {
+    const rules: FieldSchema = { key: 'rules', label: 'Rules', type: 'rule' }
     const markup = renderToStaticMarkup(
       createElement(FieldEditor, {
-        schema: composer,
+        schema: rules,
         value: {
           operator: 'OR',
           conditions: [
             { type: 'domain', name: 'math' },
-            { type: 'preference', name: 'deep_reasoning' },
+            { type: 'keyword', name: 'deep_reasoning' },
           ],
         },
         onChange: vi.fn(),

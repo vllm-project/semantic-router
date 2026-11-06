@@ -133,10 +133,10 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
   # SIGNALS
   # =============================================================================
 
-  SIGNAL reask unified_balance_reask {
+  SIGNAL turn_relation unified_balance_reask {
     description: "Detect an immediate semantic repeat after an unsatisfactory answer."
-    threshold: 0.8
-    lookback_turns: 1
+    labels: ["reask"]
+    input: { previous_turns: 1 }
   }
 
   SIGNAL context unified_balance_long_context {
@@ -182,7 +182,7 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
   ROUTE unified_balance_recovery (description = "Recover from explicit dissatisfaction with a stronger reasoning pool and corrective prompt.", on_unknown = "no_match") {
     PRIORITY 300
     TIER 1
-    WHEN (systemone("correction") OR reask("unified_balance_reask"))
+    WHEN (systemone("correction") OR turn_relation("unified_balance_reask"))
     MODEL "local/qwen3.6-27b-coder" (reasoning = false),
           "local/qwen3.6-35b-flash" (reasoning = false),
           "local/gemma4-26b-balanced" (reasoning = false),

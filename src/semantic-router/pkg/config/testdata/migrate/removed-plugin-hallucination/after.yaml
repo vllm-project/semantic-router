@@ -24,8 +24,9 @@ recipes:
             description: Prompts whose answers are worth checking.
         jailbreak:
           - name: unsafe_answer
-            direction: response
-            threshold: 0.7
+            predicate:
+              gte: 0.7
+            stage: response
         hallucination:
           - name: ungrounded_claims
             description: Answers with claims their grounding context does not support.

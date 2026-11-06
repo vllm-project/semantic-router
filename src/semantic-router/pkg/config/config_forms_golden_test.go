@@ -16,8 +16,8 @@ var updateMigrateGoldens = flag.Bool("update-migrate", false, "rewrite testdata/
 // Every removed and renamed form has a golden case under testdata/migrate:
 // before.yaml loaded directly fails (removed) or warns (renamed) with the
 // line in hint.txt; `vllm-sr config migrate` writes after.yaml, which loads
-// with no form warning; and a renamed form's effective configuration does
-// not change.
+// with no form warning, or refuses with the line in refused.txt; and a
+// renamed form's effective configuration does not change.
 func TestMigrateGoldenCases(t *testing.T) {
 	cases, err := filepath.Glob(filepath.Join("testdata", "migrate", "*", "before.yaml"))
 	if err != nil {
@@ -33,6 +33,15 @@ func TestMigrateGoldenCases(t *testing.T) {
 			original, loadErr := ParseYAMLBytesWithoutEnvExpansion(before)
 			if lines := formLines(original, loadErr); !containsLine(lines, hint) {
 				t.Fatalf("loading before.yaml reports\n%s\nwant the line\n%s", strings.Join(lines, "\n"), hint)
+			}
+			// A form with no mechanical rewrite has refused.txt instead of
+			// after.yaml: the line migrate refuses with.
+			if refusal, err := os.ReadFile(filepath.Join(dir, "refused.txt")); err == nil {
+				_, _, migrateErr := MigrateConfig(before)
+				if migrateErr == nil || !containsLine(strings.Split(migrateErr.Error(), "\n"), strings.TrimSpace(string(refusal))) {
+					t.Fatalf("migrate refused with\n%v\nwant the line\n%s", migrateErr, refusal)
+				}
+				return
 			}
 			migrated, _, err := MigrateConfig(before)
 			if err != nil {

@@ -45,7 +45,7 @@ func TestDiagnosticInputLimitResponses(t *testing.T) {
 			}
 			cfg := &config.RouterConfig{}
 			prepared := embedding.NewSet(map[string]embedding.Provider{"mmbert": provider}, "mmbert")
-			classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil, classification.RecipeRuntimeOptions{Embeddings: prepared})
+			classifiers, err := classification.BuildRecipeClassifiers(cfg, classification.RecipeRuntimeOptions{Embeddings: prepared})
 			if err != nil {
 				t.Fatal(err)
 			}

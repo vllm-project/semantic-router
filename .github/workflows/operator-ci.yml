@@ -311,9 +311,6 @@ jobs:
                 max_entries: 100
               tools:
                 enabled: false
-              prompt_guard:
-                enabled: false
-              # Domain and PII inherit the operator's canonical Vela CPU defaults.
               api:
                 batch_classification:
                   max_batch_size: 50

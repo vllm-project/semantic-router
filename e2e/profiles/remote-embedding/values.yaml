@@ -16,26 +16,26 @@ config:
     modelCards:
       - name: base-model
     signals:
-      embeddings:
+      systemone:
         - name: billing_support
-          threshold: 0.9
-          aggregation_method: max
-          candidates:
-            - billing invoice payment subscription refund pricing credit card account balance
+          deployment: fake-systemone
+          question:
+            type: noul
+            instructions: 'Is the request about any of these: billing invoice payment subscription refund pricing credit card account balance?'
     decisions:
       - name: billing-route
-        description: Route billing requests using the remote embedding signal
+        description: Route billing requests the billing_support rule matches
         priority: 200
         rules:
           operator: AND
           conditions:
-            - type: embedding
+            - type: systemone
               name: billing_support
         modelRefs:
           - model: base-model
             use_reasoning: false
       - name: default-route
-        description: Fallback when the remote embedding signal does not match
+        description: Fallback when billing_support does not match
         priority: 10
         rules:
           operator: AND
@@ -55,8 +55,17 @@ config:
       response_cache:
         enabled: false
     model_catalog:
-      kbs: []
       deployments:
+        # provider-mocker's System One fixture answers billing_support, so the
+        # routing cases are pinned by their markers
+        # (tools/test/services/provider-mocker/README.md).
+        fake-systemone:
+          provider: systemone
+          endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/systemone
+          model: e2e/fake-systemone
+          timeout_ms: 5000
+          capabilities:
+            question_types: [choice, noul, span]
         remote-embedding:
           provider: openai_embeddings
           endpoint: http://mock-embedding.default.svc.cluster.local:8000/v1
@@ -79,20 +88,6 @@ config:
             target_dimension: 4
             top_k: 1
             min_score_threshold: 0.9
-      modules:
-        prompt_guard:
-          enabled: false
-          jailbreak_mapping_path: ""
-        classifier:
-          domain:
-            enabled: false
-            category_mapping_path: ""
-          pii:
-            enabled: false
-            pii_mapping_path: ""
-        feedback_detector:
-          enabled: false
-
 extraEnv:
   - name: REMOTE_EMBEDDING_E2E_KEY
     value: e2e-embedding-key

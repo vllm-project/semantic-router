@@ -13,19 +13,19 @@ providers:
       backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
 routing:
   signals:
-    embeddings: [{name: greeting, threshold: 0.7, candidates: [hello]}]
+    keywords: [{name: greeting, operator: OR, keywords: [hello]}]
   decisions:
     - name: route
       priority: 100
-      rules: {operator: OR, conditions: [{type: embedding, name: greeting}]}
+      rules: {operator: OR, conditions: [{type: keyword, name: greeting}]}
       modelRefs: [{model: general}]
 global:
   model_catalog:
 %s
 `
 
-// Every consumer that names an embedding keyword (the embedding signals, the
-// response cache, memory, the vector store and RAG queries) embeds with the
+// Every consumer that names an embedding keyword (the response cache, memory,
+// the vector store and RAG queries) embeds with the
 // deployment the catalog names: the pre-declared default, the same name
 // declared again, or the deployment embeddings.default names.
 func TestEmbeddingConsumersFollowTheNamedDeployment(t *testing.T) {
@@ -52,7 +52,6 @@ func TestEmbeddingConsumersFollowTheNamedDeployment(t *testing.T) {
 				t.Fatal(err)
 			}
 			for consumer, keyword := range map[string]string{
-				"embedding signals":            cfg.primaryEmbeddingModel(),
 				"response cache":               SemanticCacheEmbeddingModel(cfg),
 				"memory":                       MemoryEmbeddingModel(cfg),
 				"vector store and RAG queries": RAGQueryEmbeddingModel,

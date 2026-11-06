@@ -148,17 +148,40 @@ func TestMigrationKeepsACanonicalDocumentAsWritten(t *testing.T) {
 	}
 }
 
+// memoryRewriteDocument declares the memory rewrite model as an external[]
+// chat model with the given extra settings.
+func memoryRewriteDocument(settings string) []byte {
+	return []byte(`version: v0.3
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+routing:
+  signals:
+    keywords: [{name: greeting, operator: OR, keywords: [hello]}]
+  decisions:
+    - name: route
+      priority: 100
+      rules: {operator: OR, conditions: [{type: keyword, name: greeting}]}
+      modelRefs: [{model: general}]
+global:
+  model_catalog:
+    external:
+      - name: rewriter
+        llm_provider: vllm
+        model_role: memory_rewrite
+        llm_endpoint: {address: llm.example.com, port: 8000, protocol: http}
+        llm_model_name: qwen3
+` + settings)
+}
+
 func TestMigrationMovesAKeyWrittenInTheConfigurationToTheEnvironment(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join(deprecatedFixtures, "03-module-backends.yaml"))
+	migrated, notes, err := MigrateModelResources(memoryRewriteDocument("        access_key: sk-test-written-inline\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	data = []byte(strings.Replace(string(data), "        llm_timeout_seconds: 5\n", "        llm_timeout_seconds: 5\n        access_key: sk-test-written-inline\n", 1))
-	migrated, notes, err := MigrateModelResources(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(migrated), "sk-test-written-inline") || !strings.Contains(string(migrated), "api_key_env: VLLM_SR_DOMAIN_SERVICE_API_KEY") {
+	if strings.Contains(string(migrated), "sk-test-written-inline") || !strings.Contains(string(migrated), "api_key_env: VLLM_SR_REWRITER_API_KEY") {
 		t.Fatalf("the key was not moved to an environment variable:\n%s", migrated)
 	}
 	moved := false
@@ -170,46 +193,12 @@ func TestMigrationMovesAKeyWrittenInTheConfigurationToTheEnvironment(t *testing.
 	}
 }
 
-func TestMigrationCarriesAChatModelsGenerationAndRefusesWhatHasNoField(t *testing.T) {
-	document := func(setting string) []byte {
-		return []byte(`version: v0.3
-providers:
-  defaults: {model: general}
-  models:
-    - name: general
-      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
-routing:
-  signals:
-    jailbreak: [{name: injection, threshold: 0.6}]
-  decisions:
-    - name: route
-      priority: 100
-      rules: {operator: OR, conditions: [{type: jailbreak, name: injection}]}
-      modelRefs: [{model: general}]
-global:
-  model_catalog:
-    external:
-      - name: judge
-        model_role: guardrail
-        llm_endpoint: {address: llm.example.com, port: 8000, protocol: http}
-        llm_model_name: judge-model
-        max_tokens: 64
-        temperature: 0.2
-` + setting + `    modules:
-      prompt_guard:
-        enabled: true
-        jailbreak_mapping_path: models/guard/jailbreak_type_mapping.json
-        backend: {protocol: http_chat, model: judge, contract: label_decision.v1}
-`)
-	}
-	migrated, _, err := MigrateModelResources(document(""))
+func TestMigrationCarriesAChatModelsGeneration(t *testing.T) {
+	migrated, _, err := MigrateModelResources(memoryRewriteDocument("        max_tokens: 64\n        temperature: 0.2\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(migrated), "max_tokens: 64") || !strings.Contains(string(migrated), "temperature: 0.2") || strings.Contains(string(migrated), "external:") {
 		t.Fatalf("the chat model's generation was not carried:\n%s", migrated)
-	}
-	if _, _, err := MigrateModelResources(document("        parser_type: json\n")); err == nil || !strings.Contains(err.Error(), "parser_type") {
-		t.Fatalf("a setting no deployment field expresses was not refused: %v", err)
 	}
 }

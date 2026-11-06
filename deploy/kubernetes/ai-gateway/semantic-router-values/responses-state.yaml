@@ -52,29 +52,9 @@ configOverride:
           embedding_config:
             preload_embeddings: false
             enable_soft_matching: false
-      kbs: []
       modules:
         prompt_compression:
           enabled: false
-        prompt_guard:
-          enabled: false
-        classifier:
-          domain:
-            enabled: false
-          mcp:
-            enabled: false
-          pii:
-            enabled: false
-          preference:
-            use_contrastive: false
-            embedding_model: ""
-        hallucination_mitigation:
-          enabled: false
-        feedback_detector:
-          enabled: false
-        modality_detector:
-          enabled: false
-
 service:
   type: ClusterIP
 

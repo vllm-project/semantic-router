@@ -11,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
@@ -205,26 +206,23 @@ func TestReplayOmittedContentDropsResponseDetectorExcerpts(t *testing.T) {
 			ctx := replayPolicyRequest(t)
 			ctx.VSRSelectedDecision = &config.Decision{Name: "ordinary"}
 			router.startRouterReplay(ctx, "public-entry", "model", "ordinary")
-			evidence := &classification.HallucinationEvidence{
-				Detected: true, Confidence: 0.9, Score: classification.HallucinationScore{Available: true, Kind: "probability"},
-				Spans: []string{"private@example.invalid"},
-				Explained: []classification.EnhancedHallucinationSpan{{
-					Text: "private@example.invalid", Explanation: "The private@example.invalid address is unsupported.",
-				}},
+			key := signalKey(config.SignalTypeHallucination, "ungrounded")
+			observed := &classification.ResponseSignal{
+				Matched: map[string][]string{config.SignalTypeHallucination: {"ungrounded"}},
+				Values:  map[string]float64{key: 0.9},
+				Spans:   map[string][]modelservice.Span{key: {{Label: "unsupported", Text: "private@example.invalid", Probability: 0.9}}},
 			}
-			ctx.ResponseGuard = &responseGuardRun{conditions: observedConditions{hallucination: &classification.ResponseHallucinationObservation{
-				Evidence: evidence, Signal: &classification.ResponseHallucinationSignal{MatchedRules: []string{"ungrounded"}},
-			}}}
+			ctx.ResponseGuard = &responseGuardRun{conditions: observedConditions{observed: observed}}
 			router.updateRouterReplayHallucinationStatus(ctx, router.ReplayRecorder)
 			record, found := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
 			if !found || !record.HallucinationDetected || !record.HallucinationScoreAvailable || record.HallucinationConfidence != 0.9 {
-				t.Fatal("detector verdict or score metadata was lost")
+				t.Fatal("the hallucination verdict or score metadata was lost")
 			}
-			if (len(record.HallucinationSpans) > 0) != capture || (len(record.HallucinationSpanDetails) > 0) != capture {
-				t.Fatalf("detector response excerpts did not follow capture policy: capture=%t", capture)
+			if (len(record.HallucinationSpans) > 0) != capture {
+				t.Fatalf("response excerpts did not follow capture policy: capture=%t", capture)
 			}
-			if len(evidence.Spans) != 1 || len(evidence.Explained) != 1 {
-				t.Fatal("Replay changed the response detector result")
+			if len(observed.Spans[key]) != 1 {
+				t.Fatal("Replay changed the response-stage observation")
 			}
 		})
 	}

@@ -90,7 +90,7 @@ decisions:
           - role: user
             content: 'Verify this with sources: when did Apollo 11 land on the Moon?'
         expected_signals:
-          reask:
+          turn_relation:
             - persistently_dissatisfied
           systemone:
             - sources
@@ -160,7 +160,7 @@ decisions:
           - role: user
             content: "Still wrong. Fix this same Python function. It crashes with TypeError: list indices must be integers, not str."
         expected_signals:
-          reask: [persistently_dissatisfied]
+          turn_relation: [persistently_dissatisfied]
         tags: [feedback, code, persistent, messages]
       - id: repeated_javascript_type_error
         messages:
@@ -175,7 +175,7 @@ decisions:
           - role: user
             content: "Still wrong. Fix this same JavaScript function. It throws TypeError: cannot read properties of undefined."
         expected_signals:
-          reask: [persistently_dissatisfied]
+          turn_relation: [persistently_dissatisfied]
         tags: [feedback, code, persistent, messages, javascript]
       - id: repeated_code_with_sources
         messages:
@@ -190,7 +190,7 @@ decisions:
           - role: user
             content: Fix this Python function. It raises ValueError when parsing a date. Verify this with sources.
         expected_signals:
-          reask:
+          turn_relation:
             - persistently_dissatisfied
           systemone:
             - code
@@ -257,7 +257,7 @@ decisions:
           - role: user
             content: "Still wrong. Explain inflation vs recession in plain English."
         expected_signals:
-          reask: [persistently_dissatisfied]
+          turn_relation: [persistently_dissatisfied]
         tags: [feedback, general, persistent, messages]
       - id: repeated_pythagorean_retry
         messages:
@@ -272,7 +272,7 @@ decisions:
           - role: user
             content: "请问如何证明勾股定理？"
         expected_signals:
-          reask: [persistently_dissatisfied]
+          turn_relation: [persistently_dissatisfied]
         tags: [feedback, general, persistent, messages, zh, math]
       - id: repeated_integer_sum_proof
         messages:
@@ -287,7 +287,7 @@ decisions:
           - role: user
             content: Prove that the sum of the first n positive integers is n(n+1)/2.
         expected_signals:
-          reask:
+          turn_relation:
             - persistently_dissatisfied
         tags:
           - language:en
@@ -308,7 +308,7 @@ decisions:
           - role: user
             content: 为朋友写四句毕业祝福。
         expected_signals:
-          reask:
+          turn_relation:
             - persistently_dissatisfied
         tags:
           - language:zh

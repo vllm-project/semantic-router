@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 
 	"k8s.io/client-go/kubernetes"
@@ -108,10 +109,29 @@ func checkDecisionRuntimeSetSpan(ctx context.Context, session *modelRuntimeSessi
 	if err != nil {
 		return "", err
 	}
-	matched := headerItems(response.Headers, "x-vsr-matched-decision-model")
+	// The preview lists the label references label conditions read; the
+	// header lists a set or span rule by name.
+	var previewMatches []string
+	if preview.DecisionResult != nil {
+		previewMatches = preview.DecisionResult.MatchedSignals.SystemOne
+	}
+	ruleMatched := map[string]bool{}
 	for _, label := range []string{"topics:billing", "topics:shipping", "names:city", "names:person"} {
-		if matched[label] != expected[label] {
-			return "", fmt.Errorf("x-vsr-matched-decision-model %v: %s matched=%v, the runtime's answer says %v", matched, label, matched[label], expected[label])
+		if got := slices.Contains(previewMatches, label); got != expected[label] {
+			return "", fmt.Errorf("routing preview systemone matches %v: %s matched=%v, the runtime's answer says %v", previewMatches, label, got, expected[label])
+		}
+		rule, _, _ := strings.Cut(label, ":")
+		ruleMatched[rule] = ruleMatched[rule] || expected[label]
+	}
+	matched := headerItems(response.Headers, "x-vsr-matched-decision-model")
+	for rule, want := range ruleMatched {
+		if matched[rule] != want {
+			return "", fmt.Errorf("x-vsr-matched-decision-model %v: %s matched=%v, the runtime's answer says %v", matched, rule, matched[rule], want)
+		}
+	}
+	for item := range matched {
+		if strings.HasPrefix(item, "topics:") || strings.HasPrefix(item, "names:") {
+			return "", fmt.Errorf("x-vsr-matched-decision-model lists the label reference %s of a rule it names", item)
 		}
 	}
 	var labels []string

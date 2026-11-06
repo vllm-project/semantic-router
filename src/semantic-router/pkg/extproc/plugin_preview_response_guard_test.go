@@ -11,7 +11,7 @@ import (
 )
 
 func TestResponseGuardPreviewIsOfflineUntilExplicitProbe(t *testing.T) {
-	server, calls := newCountingJailbreakServer(t, 0.95, 0.05)
+	server, calls := newCountingJailbreakDecider(0.95)
 	router, _ := newResponseStageRouter(t, server, "", config.ResponseGuardBlock)
 	input := pluginruntime.ResponseGuardPreviewRequest{Binding: pluginruntime.Binding{Recipe: config.DefaultRecipeName, Decision: responseStageRouteName}, Response: unsafeAnswer}
 
@@ -47,7 +47,7 @@ func TestResponseGuardPreviewIsOfflineUntilExplicitProbe(t *testing.T) {
 // The probe reads the guard's request-stage conditions on the question and
 // its response-stage signals on the answer and the context it is given.
 func TestResponseGuardPreviewChecksTheAnswerAgainstTheContext(t *testing.T) {
-	server, calls := newHallucinationEndpointServer(t, []string{"450 meters"}, false)
+	server, calls := newHallucinationDecider([]string{"450 meters"}, false)
 	guard := config.ResponseGuardPluginConfig{Rules: []config.ResponseGuardRule{{
 		When: config.RuleNode{Type: config.SignalTypeHallucination, Name: hallucinationRuleName}, Action: config.ResponseGuardAnnotate,
 	}}}
@@ -79,7 +79,7 @@ func TestResponseGuardPreviewChecksTheAnswerAgainstTheContext(t *testing.T) {
 }
 
 func TestResponseGuardBindingReadinessNeverFallsBackAcrossRecipes(t *testing.T) {
-	router, _ := newResponseStageRouter(t, newJailbreakScoreServer(t, 0.95, 0.05), "", config.ResponseGuardBlock)
+	router, _ := newResponseStageRouter(t, newJailbreakDecider(0.95), "", config.ResponseGuardBlock)
 	decisions := router.Config.Decisions
 	router.Config.Recipes = []config.RoutingRecipe{
 		{Name: config.DefaultRecipeName, Profile: config.RoutingProfile{Decisions: decisions}},
@@ -93,7 +93,7 @@ func TestResponseGuardBindingReadinessNeverFallsBackAcrossRecipes(t *testing.T) 
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(dependencies) != 1 || dependencies[0].Name != "jailbreak_signal" || dependencies[0].Availability != tc.availability {
+		if len(dependencies) != 1 || dependencies[0].Name != "response_signals" || dependencies[0].Availability != tc.availability {
 			t.Fatalf("recipe %s readiness = %+v", tc.recipe, dependencies)
 		}
 	}

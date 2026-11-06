@@ -112,6 +112,9 @@ type SystemOneInput struct {
 	Image bool `yaml:"image,omitempty"`
 	Audio bool `yaml:"audio,omitempty"`
 	Video bool `yaml:"video,omitempty"`
+	// PreviousAnswer adds the assistant answer the current turn replies to.
+	// Only a preset declares it, for the application rules that ask it.
+	PreviousAnswer bool `yaml:"-" json:"-"`
 }
 
 // Input modalities a rule reads besides text.

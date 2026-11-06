@@ -63,20 +63,21 @@ func recordResponseHeaderFacts(ctx *RequestContext) {
 	ctx.PromptCacheInserted, ctx.PromptCachePreserved = 1, 1
 	ctx.VSRCacheSimilarity = 0.97
 	for _, matched := range []*[]string{
-		&ctx.VSRMatchedKeywords, &ctx.VSRMatchedEmbeddings, &ctx.VSRMatchedDomains, &ctx.VSRMatchedFactCheck,
-		&ctx.VSRMatchedUserFeedback, &ctx.VSRMatchedReask, &ctx.VSRMatchedPreference, &ctx.VSRMatchedLanguage,
+		&ctx.VSRMatchedKeywords, &ctx.VSRMatchedDomains, &ctx.VSRMatchedFactCheck,
+		&ctx.VSRMatchedUserFeedback, &ctx.VSRMatchedTurnRelation, &ctx.VSRMatchedLanguage,
 		&ctx.VSRMatchedAction, &ctx.VSRMatchedContext, &ctx.VSRMatchedStructure, &ctx.VSRMatchedComplexity,
 		&ctx.VSRMatchedModality, &ctx.VSRMatchedAuthz, &ctx.VSRMatchedJailbreak, &ctx.VSRMatchedSafety,
-		&ctx.VSRMatchedPII, &ctx.VSRMatchedKB, &ctx.VSRMatchedConversation, &ctx.VSRMatchedEvent,
+		&ctx.VSRMatchedPII, &ctx.VSRMatchedConversation, &ctx.VSRMatchedEvent,
 		&ctx.VSRMatchedInputModality, &ctx.VSRMatchedDecisionModel, &ctx.VSRMatchedProjection,
 	} {
 		*matched = []string{"matched-rule"}
 	}
-	ctx.ResponseGuard = &responseGuardRun{conditions: observedConditions{
-		jailbreak:     &classification.ResponseJailbreakObservation{Signal: &classification.ResponseJailbreakSignal{MatchedRules: []string{"matched-rule"}}},
-		hallucination: &classification.ResponseHallucinationObservation{Signal: &classification.ResponseHallucinationSignal{MatchedRules: []string{"matched-rule"}}},
-		systemOne:     &classification.ResponseSystemOneSignal{MatchedRules: []string{"matched-rule"}},
-	}}
+	responseMatches := map[string][]string{
+		config.SignalTypeJailbreak:     {"matched-rule"},
+		config.SignalTypeHallucination: {"matched-rule"},
+		config.SignalTypeSystemOne:     {"matched-rule"},
+	}
+	ctx.ResponseGuard = &responseGuardRun{conditions: observedConditions{observed: &classification.ResponseSignal{Matched: responseMatches, Reported: responseMatches}}}
 	ctx.VSRContextTokenCount = 1500
 }
 

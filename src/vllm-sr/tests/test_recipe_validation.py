@@ -859,22 +859,18 @@ def test_projection_outputs_can_repeat_across_recipes():
     assert not any("duplicate projection output" in error.message for error in errors)
 
 
-def test_domain_auto_generation_is_scoped_per_recipe():
+def test_a_recipe_names_only_the_domains_it_declares():
     config = recipe_config()
     config.routing.signals.domains = [
-        Domain(
-            name="top-level-domain",
-            description="Top-level only",
-            mmlu_categories=["math"],
-        )
+        Domain(name="top-level-domain", description="Top-level only", labels=["math"])
     ]
     config.recipes[0].routing.decisions[0].rules.conditions = [
-        Condition(type="domain", name="recipe-generated-domain")
+        Condition(type="domain", name="undeclared-domain")
     ]
 
     errors = validate_user_config(config)
 
-    assert not any("recipe-generated-domain" in error.message for error in errors)
+    assert any("undeclared-domain" in error.message for error in errors)
 
 
 def test_domain_references_cannot_cross_recipe_boundaries():

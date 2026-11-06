@@ -100,11 +100,9 @@ routing:
   modelCards: []
   signals:
     keywords: []
-    embeddings: []
     domains: []
     fact_check: []
     user_feedbacks: []
-    preferences: []
     language: []
     context: []
     structure:

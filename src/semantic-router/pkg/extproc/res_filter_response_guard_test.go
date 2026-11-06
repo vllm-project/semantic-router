@@ -63,7 +63,7 @@ func TestResponseGuardActionsOnAResponseJailbreak(t *testing.T) {
 		{config.ResponseGuardNone, false, ""},
 	} {
 		t.Run(tc.action, func(t *testing.T) {
-			router, ctx := newResponseStageRouter(t, newJailbreakScoreServer(t, 0.95, 0.05), "", tc.action)
+			router, ctx := newResponseStageRouter(t, newJailbreakDecider(0.95), "", tc.action)
 
 			plan := guardAnswer(t, router, ctx, unsafeAnswer)
 
@@ -80,18 +80,22 @@ func TestResponseGuardActionsOnAResponseJailbreak(t *testing.T) {
 }
 
 func TestResponseGuardCleanAnswerPasses(t *testing.T) {
-	router, ctx := newResponseStageRouter(t, newJailbreakScoreServer(t, 0.01, 0.99), "", config.ResponseGuardBlock)
+	router, ctx := newResponseStageRouter(t, newJailbreakDecider(0.01), "", config.ResponseGuardBlock)
 
 	assertDelivered(t, guardAnswer(t, router, ctx, "The speed of light is about 299,792 km/s."), "")
 	if rule := ctx.ResponseGuard.rules[0]; rule.state.String() != "false" || rule.action != "" {
 		t.Fatalf("rule = %+v, want not matched with no action", rule)
+	}
+	// The rule's benign option matched as a label reference; that is no finding.
+	if matched, unverified := ctx.ResponseGuard.jailbreakFinding(); matched || unverified {
+		t.Fatalf("jailbreakFinding() = %v, %v for a clean answer", matched, unverified)
 	}
 }
 
 // P1: hallucination_action: block passed validation but never blocked. A
 // response_guard rule with action: block blocks.
 func TestResponseGuardBlocksAnUngroundedAnswer(t *testing.T) {
-	server, calls := newHallucinationEndpointServer(t, []string{"450 meters"}, false)
+	server, calls := newHallucinationDecider([]string{"450 meters"}, false)
 	router, ctx := newHallucinationSignalRouter(t, server, groundedGuard(config.ResponseGuardBlock, false, ""))
 
 	plan := guardAnswer(t, router, ctx, hallucinationAnswer)
@@ -103,7 +107,7 @@ func TestResponseGuardBlocksAnUngroundedAnswer(t *testing.T) {
 }
 
 func TestResponseGuardAnnotatesAnUngroundedAnswerWithDetails(t *testing.T) {
-	server, _ := newHallucinationEndpointServer(t, []string{"450 meters"}, false)
+	server, _ := newHallucinationDecider([]string{"450 meters"}, false)
 	router, ctx := newHallucinationSignalRouter(t, server, groundedGuard(config.ResponseGuardAnnotate, true, ""))
 	response := hallucinationAssistantResponse(hallucinationAnswer)
 
@@ -114,7 +118,7 @@ func TestResponseGuardAnnotatesAnUngroundedAnswerWithDetails(t *testing.T) {
 }
 
 func TestResponseGuardAnnotationWithoutDetailsKeepsTheBody(t *testing.T) {
-	server, _ := newHallucinationEndpointServer(t, []string{"450 meters"}, false)
+	server, _ := newHallucinationDecider([]string{"450 meters"}, false)
 	router, ctx := newHallucinationSignalRouter(t, server, groundedGuard(config.ResponseGuardAnnotate, false, ""))
 	response := hallucinationAssistantResponse(hallucinationAnswer)
 
@@ -127,7 +131,7 @@ func TestResponseGuardAnnotationWithoutDetailsKeepsTheBody(t *testing.T) {
 // AND stops at its first false condition: a request that needs no fact
 // checking never reaches the detector.
 func TestResponseGuardEvaluatesResponseSignalsOnlyWhenARuleNeedsThem(t *testing.T) {
-	server, calls := newHallucinationEndpointServer(t, []string{"450 meters"}, false)
+	server, calls := newHallucinationDecider([]string{"450 meters"}, false)
 	router, ctx := newHallucinationSignalRouter(t, server, groundedGuard(config.ResponseGuardBlock, false, config.ResponseGuardBlock))
 	router.applySignalResultsToContext(ctx, &classification.SignalResults{MatchedKeywordRules: []string{responseStageProbeKeyword}})
 
@@ -135,7 +139,7 @@ func TestResponseGuardEvaluatesResponseSignalsOnlyWhenARuleNeedsThem(t *testing.
 	if calls.Load() != 0 {
 		t.Fatalf("the detector ran %d times for a request that needs no fact checking", calls.Load())
 	}
-	if ctx.ResponseGuard.hallucination() != nil {
+	if observed := ctx.ResponseGuard.observed(); len(observed.Values)+len(observed.Errors) != 0 {
 		t.Fatal("the guard recorded a hallucination check it never needed")
 	}
 }
@@ -157,7 +161,7 @@ func TestResponseGuardOnUnknown(t *testing.T) {
 		{"missing context annotates", false, false, config.ResponseGuardAnnotate, false, headers.ResponseWarningUnverifiedFactual},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			server, calls := newHallucinationEndpointServer(t, []string{"450 meters"}, tc.fail)
+			server, calls := newHallucinationDecider([]string{"450 meters"}, tc.fail)
 			router, ctx := newHallucinationSignalRouter(t, server, groundedGuard(config.ResponseGuardAnnotate, false, tc.onUnknown))
 			if !tc.context {
 				ctx.SemanticRequest.Messages = ctx.SemanticRequest.Messages[:1]
@@ -183,11 +187,8 @@ func TestResponseGuardOnUnknown(t *testing.T) {
 // Rules run in order and the first that blocks ends the guard: a later rule
 // is never read.
 func TestResponseGuardFirstBlockWins(t *testing.T) {
-	jailbreak, _ := newCountingJailbreakServer(t, 0.95, 0.05)
-	detector, detections := newHallucinationEndpointServer(t, []string{"450 meters"}, false)
-	cfg := hallucinationSignalConfig(detector)
-	guard := responseStageGuardConfig(t, jailbreak)
-	cfg.PromptGuard, cfg.ExternalModels = guard.PromptGuard, append(cfg.ExternalModels, guard.ExternalModels...)
+	decider := &responseStageDecider{jailbreak: 0.95, spans: []string{"450 meters"}}
+	cfg := &config.RouterConfig{}
 	cfg.KeywordRules = []config.KeywordRule{responseStageKeyword()}
 	cfg.JailbreakRules = []config.JailbreakRule{responseStageRule()}
 	cfg.FactCheckRules = []config.FactCheckRule{{Name: "needs_fact_check"}}
@@ -198,21 +199,14 @@ func TestResponseGuardFirstBlockWins(t *testing.T) {
 		groundedGuard(config.ResponseGuardAnnotate, false, "").Rules,
 	)
 	cfg.Decisions = []config.Decision{keywordDecision(responseStageRouteName, guardPlugin(config.ResponseGuardPluginConfig{Rules: rules}))}
-	classifier, err := classification.NewClassifier(cfg, nil, nil, responseStageJailbreakMapping())
-	if err != nil {
-		t.Fatalf("NewClassifier() error = %v", err)
-	}
-	if err := classifier.InitializeRuntime(); err != nil {
-		t.Fatalf("InitializeRuntime() error = %v", err)
-	}
-	router, ctx := routerWithSelectedDecision(cfg, classifier, responseStageRouteName)
+	router, ctx := routerWithSelectedDecision(cfg, responseStageClassifier(t, cfg, decider), responseStageRouteName)
 
 	assertBlockedWith(t, guardAnswer(t, router, ctx, unsafeAnswer), "jailbreak content detected")
 	if got := len(ctx.ResponseGuard.rules); got != 2 {
 		t.Fatalf("the guard read %d rules, want it to stop at the block", got)
 	}
-	if detections.Load() != 0 {
-		t.Fatal("a rule after the block reached the hallucination detector")
+	if calls := decider.calls.Load(); calls != 1 {
+		t.Fatalf("the decision model was asked %d times, want once: a rule after the block asked it", calls)
 	}
 }
 
@@ -228,13 +222,13 @@ func TestResponseGuardWithoutTheRecipeClassifierIsUnknown(t *testing.T) {
 // A guard that reads only request-stage signals still annotates, under its
 // own code.
 func TestResponseGuardOverARequestStageSignal(t *testing.T) {
-	router, ctx := newResponseStageRouter(t, newJailbreakScoreServer(t, 0.01, 0.99), "", config.ResponseGuardAnnotate)
+	router, ctx := newResponseStageRouter(t, newJailbreakDecider(0.01), "", config.ResponseGuardAnnotate)
 	ctx.VSRSelectedDecision.Plugins = []config.DecisionPlugin{guardPlugin(config.ResponseGuardPluginConfig{Rules: []config.ResponseGuardRule{{
 		When: config.RuleNode{Type: config.SignalTypeKeyword, Name: responseStageProbeKeyword}, Action: config.ResponseGuardAnnotate,
 	}}})}
 
 	assertDelivered(t, guardAnswer(t, router, ctx, unsafeAnswer), headers.ResponseWarningGuard)
-	if ctx.ResponseGuard.jailbreak() != nil {
+	if observed := ctx.ResponseGuard.observed(); len(observed.Values)+len(observed.Errors) != 0 {
 		t.Fatal("a guard that reads no response-stage rule scanned the answer")
 	}
 }
@@ -243,7 +237,7 @@ func TestResponseGuardOverARequestStageSignal(t *testing.T) {
 // read and did reaches it as outcomes: one per response-stage rule and one
 // per guard rule.
 func TestResponseGuardRecordsReplayOutcomes(t *testing.T) {
-	router, ctx := newResponseStageRouter(t, newJailbreakScoreServer(t, 0.95, 0.05), "", config.ResponseGuardBlock)
+	router, ctx := newResponseStageRouter(t, newJailbreakDecider(0.95), "", config.ResponseGuardBlock)
 	recorder := startResponseStageReplay(t, router, ctx)
 
 	guardAnswer(t, router, ctx, unsafeAnswer)
@@ -252,7 +246,7 @@ func TestResponseGuardRecordsReplayOutcomes(t *testing.T) {
 	outcomes := replayOutcomes(t, recorder, ctx.RouterReplayID)
 	signal := outcomeFor(t, outcomes, responseStageSignalKey, "")
 	if signal.Verdict != "detected" || signal.Score < 0.9 || signal.Metadata["action"] != config.ResponseGuardBlock ||
-		signal.Metadata["direction"] != config.SignalDirectionResponse || signal.Metadata["decision"] != responseStageRouteName {
+		signal.Metadata["stage"] != config.SystemOneStageResponse || signal.Metadata["decision"] != responseStageRouteName {
 		t.Fatalf("signal outcome = %+v, want detected with its score, the action and the decision", signal)
 	}
 	rule := outcomeFor(t, outcomes, config.DecisionPluginResponseGuard, "rules[0]")
@@ -262,7 +256,7 @@ func TestResponseGuardRecordsReplayOutcomes(t *testing.T) {
 }
 
 func TestResponseGuardRecordsAFailedScanAsUnavailable(t *testing.T) {
-	router, ctx := newResponseStageRouter(t, newJailbreakFailingServer(t), config.ResponseGuardNone, config.ResponseGuardBlock)
+	router, ctx := newResponseStageRouter(t, newFailingDecider(), config.ResponseGuardNone, config.ResponseGuardBlock)
 	recorder := startResponseStageReplay(t, router, ctx)
 
 	assertDelivered(t, guardAnswer(t, router, ctx, unsafeAnswer), "")
@@ -278,7 +272,7 @@ func TestResponseGuardRecordsAFailedScanAsUnavailable(t *testing.T) {
 // is checked, so the body phase rewrites it with the response-stage matches
 // after the request-stage ones, under the same debug gate.
 func TestResponseGuardMatchedHeaderIncludesResponseRules(t *testing.T) {
-	router, ctx := newResponseStageRouter(t, newJailbreakScoreServer(t, 0.95, 0.05), "", config.ResponseGuardAnnotate)
+	router, ctx := newResponseStageRouter(t, newJailbreakDecider(0.95), "", config.ResponseGuardAnnotate)
 	ctx.Headers[headers.VSRDebug] = "true"
 	ctx.VSRMatchedJailbreak = []string{"prompt_injection"}
 

@@ -29,7 +29,7 @@ func preparedInventoryServiceWith(t *testing.T, options classification.RecipeRun
 	if len(configs) > 0 {
 		cfg = configs[0]
 	}
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil, options)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg, options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,25 +99,6 @@ func TestModelsUseGPUReadsTheRuntimeDeviceNames(t *testing.T) {
 		if got := modelsUseGPU(models); got != want {
 			t.Fatalf("device %q: modelsUseGPU = %v, want %v", device, got, want)
 		}
-	}
-}
-
-func TestPreparedInventoryDoesNotInferReadinessFromConstructedClassifier(t *testing.T) {
-	cfg := &config.RouterConfig{}
-	cfg.CategoryModel = config.CategoryModel{ModelID: "models/custom-domain", CategoryMappingPath: "unused-domain-mapping.json"}
-	cfg.PIIModel = config.PIIModel{ModelID: "models/custom-pii", PIIMappingPath: "unused-pii-mapping.json"}
-	cfg.PromptGuard = config.PromptGuardConfig{Enabled: true, ModelID: "models/custom-guard", JailbreakMappingPath: "unused-guard-mapping.json"}
-	cfg, service := preparedInventoryService(t, serving.New(nil, nil), cfg)
-	if !service.HasClassifier() {
-		t.Fatal("fixture must contain a constructed classifier")
-	}
-	if previous := appendConfiguredModels(nil, cfg, classifierModelAvailability{core: true}); len(previous) != 3 {
-		t.Fatalf("fixture must reproduce the three configured, unused core models: %+v", previous)
-	}
-	api := &ClassificationAPIServer{config: cfg, classificationSvc: service}
-	response := api.buildModelsInfoResponse()
-	if len(response.Models) != 0 || response.Summary.LoadedModels != 0 || response.System.GPUAvailable {
-		t.Fatalf("unused models were reported ready: %+v", response)
 	}
 }
 

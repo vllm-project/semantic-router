@@ -62,18 +62,12 @@ func (s *ClassificationService) TryRefreshRuntimeConfig(
 	}
 	s.configMutex.RLock()
 	currentRecipes := s.recipeClassifiers
-	currentClassifier := s.classifier
 	s.configMutex.RUnlock()
 	if currentRecipes != nil {
-		return s.refreshRecipeClassifiers(
-			newConfig,
-			currentClassifier,
-			options,
-			lease,
-		)
+		return s.refreshRecipeClassifiers(newConfig, options, lease)
 	}
 
-	rebuiltClassifier, err := classification.NewLegacyClassifierFromConfig(newConfig, options)
+	rebuiltClassifier, err := classification.NewClassifier(newConfig, options)
 	if err != nil {
 		_ = lease.Close()
 		return fmt.Errorf("rebuild classifier: %w", err)
@@ -83,27 +77,10 @@ func (s *ClassificationService) TryRefreshRuntimeConfig(
 
 func (s *ClassificationService) refreshRecipeClassifiers(
 	newConfig *config.RouterConfig,
-	current *classification.Classifier,
 	options classification.RecipeRuntimeOptions,
 	lease io.Closer,
 ) error {
-	var (
-		categoryMapping  *classification.CategoryMapping
-		piiMapping       *classification.PIIMapping
-		jailbreakMapping *classification.JailbreakMapping
-	)
-	if current != nil {
-		categoryMapping = current.CategoryMapping
-		piiMapping = current.PIIMapping
-		jailbreakMapping = current.JailbreakMapping
-	}
-	rebuilt, err := classification.BuildRecipeClassifiers(
-		newConfig,
-		categoryMapping,
-		piiMapping,
-		jailbreakMapping,
-		options,
-	)
+	rebuilt, err := classification.BuildRecipeClassifiers(newConfig, options)
 	if err != nil {
 		_ = lease.Close()
 		return fmt.Errorf("rebuild recipe classifiers: %w", err)

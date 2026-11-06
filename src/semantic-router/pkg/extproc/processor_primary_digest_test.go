@@ -19,7 +19,7 @@ import (
 // model, and a shadow arm, which no response-stage plugin touches, then reports
 // a different digest for the same answer.
 func TestPrimaryOutputDigestIsTakenBeforeABodyWarning(t *testing.T) {
-	server, _ := newHallucinationEndpointServer(t, []string{"450 meters"}, false)
+	server, _ := newHallucinationDecider([]string{"450 meters"}, false)
 	router, ctx := newHallucinationSignalRouter(t, server, groundedGuard(config.ResponseGuardAnnotate, true, ""))
 	recorder := startResponseStageReplay(t, router, ctx)
 	ctx.TargetFormat = llmprotocol.OpenAIChatV1

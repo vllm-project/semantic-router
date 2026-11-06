@@ -9,7 +9,6 @@ import pytest
 import yaml
 from cli import builtin_recipes, builtin_recipes_json, storage_backends
 from cli.builtin_recipes import list_builtin_recipes
-from cli.commands.runtime_kb import _resolve_kb_source_root
 from cli.commands.runtime_support import resolve_effective_config_path
 from cli.config_translator import translate_config_to_helm_values
 from cli.decision_model import decision_model_deployment
@@ -403,49 +402,6 @@ def test_unknown_exclusion_is_an_error(tmp_path):
     assert not output.exists()
 
 
-def test_init_preserves_config_relative_kb_assets(tmp_path):
-    source, bindings, _ = _inputs(tmp_path)
-    kb_root = tmp_path / "private-kb"
-    kb_root.mkdir()
-    manifest = kb_root / "labels.json"
-    manifest.write_text('{"labels":{"safe":{"exemplars":["hello"]}}}')
-    original_manifest = manifest.read_bytes()
-    document = yaml.safe_load(source.read_text())
-    document["global"] = {
-        "model_catalog": {
-            "kbs": [
-                {
-                    "name": "private-kb",
-                    "source": {"path": "private-kb", "manifest": "labels.json"},
-                }
-            ]
-        }
-    }
-    source.write_text(yaml.safe_dump(document))
-    original_source = source.read_bytes()
-
-    relocated = tmp_path / "derived" / "config.yaml"
-    result = _init(source, bindings, relocated)
-    assert result.exit_code != 0
-    assert "--output must be in the same directory as --config" in result.output
-    assert not relocated.parent.exists()
-
-    sibling = tmp_path / "balance.yaml"
-    result = _init(source, bindings, sibling)
-    assert result.exit_code == 0, result.output
-    assert _resolve_kb_source_root(sibling, "private-kb") == kb_root.resolve()
-    resolved_global = yaml.safe_load(sibling.read_text())["global"]
-    assert resolved_global["model_catalog"] == {
-        **document["global"]["model_catalog"],
-        **_bundle_decision_model_block(),
-    }
-    assert set(resolved_global) == {"model_catalog", "router", "services"}
-    assert resolved_global["services"]["router_replay"]["store_backend"] == "postgres"
-    assert resolved_global["router"]["learning"]["protection"]["enabled"] is True
-    assert source.read_bytes() == original_source
-    assert manifest.read_bytes() == original_manifest
-
-
 def test_vault_init_needs_no_backend_assignment_for_immediate_guard(tmp_path):
     source, bindings, _ = _inputs(tmp_path)
     refs = {"sensitive": [{"model": "model-a"}], "private": [{"model": "model-b"}]}
@@ -499,42 +455,21 @@ def test_immediate_guard_rejects_unused_backend_assignments(tmp_path):
     assert not output.exists()
 
 
-def test_init_preserves_rule_prototype_overrides_and_operator_global(
-    tmp_path, monkeypatch
-):
+def test_init_preserves_authored_rules_and_operator_global(tmp_path, monkeypatch):
     source, _, _ = _inputs(tmp_path)
     operator = yaml.safe_load(source.read_text())
-    operator["global"] = {
-        "model_catalog": {
-            "modules": {"complexity": {"prototype_scoring": {"max_prototypes": 1}}}
-        }
-    }
+    operator["global"] = {"router": {"learning": {"protection": {"enabled": True}}}}
     source.write_text(yaml.safe_dump(operator))
     original = source.read_bytes()
-    override = {"enabled": False, "best_weight": 0.75, "top_m": 2}
+    reask = {"name": "reask", "labels": ["reask"], "input": {"previous_turns": 2}}
     document = {
         "recipes": [
             {
                 "name": "authored",
                 "routing": {
                     "signals": {
-                        "embeddings": [
-                            {
-                                "name": "intent",
-                                "threshold": 0.8,
-                                "candidates": ["a", "b"],
-                                "prototype_scoring": override,
-                            }
-                        ],
-                        "complexity": [
-                            {
-                                "name": "difficulty",
-                                "threshold": 0.1,
-                                "hard": {"candidates": ["hard"]},
-                                "easy": {"candidates": ["easy"]},
-                                "prototype_scoring": {},
-                            }
-                        ],
+                        "complexity": [{"name": "difficulty", "labels": ["hard"]}],
+                        "turn_relation": [reask],
                     },
                     "decisions": [
                         {
@@ -562,11 +497,11 @@ def test_init_preserves_rule_prototype_overrides_and_operator_global(
     )
     parsed = parse_user_config(str(output), log_summary=False)
     signals = parsed.recipes[0].routing.signals
-    assert (
-        signals.embeddings[0].prototype_scoring.model_dump(exclude_none=True)
-        == override
-    )
-    assert signals.complexity[0].prototype_scoring.model_dump(exclude_none=True) == {}
+    assert signals.complexity[0].labels == ["hard"]
+    assert signals.turn_relation[0].model_dump(exclude_none=True) == {
+        **reask,
+        "input": {"previous_turns": 2},
+    }
     assert yaml.safe_load(output.read_text())["global"] == operator["global"]
     assert source.read_bytes() == original
     assert document["recipes"][0]["routing"]["decisions"][0]["modelRefs"] == []

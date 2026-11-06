@@ -4,64 +4,6 @@ import (
 	"testing"
 )
 
-func TestHeaderConstants(t *testing.T) {
-	tests := []struct {
-		name     string
-		header   string
-		expected string
-	}{
-		// Request headers
-		{"RequestID", RequestID, "x-request-id"},
-		{"SelectedModel", SelectedModel, "x-selected-model"},
-		{"VSRSkipProcessing", VSRSkipProcessing, "x-vsr-skip-processing"},
-		{"VSRInternalAuth", VSRInternalAuth, "x-vsr-internal-auth"},
-		{"VSROutcomeSource", VSROutcomeSource, "x-vsr-outcome-source"},
-		{"VSROutcomePrincipal", VSROutcomePrincipal, "x-vsr-outcome-principal"},
-		// VSR headers
-		{"VSRSelectedCategory", VSRSelectedCategory, "x-vsr-selected-category"},
-		{"VSRSelectedReasoning", VSRSelectedReasoning, "x-vsr-selected-reasoning"},
-		{"VSRSelectedModel", VSRSelectedModel, "x-vsr-selected-model"},
-		{"VSREffectiveInputTokens", VSREffectiveInputTokens, "x-vsr-effective-input-tokens"},
-		{"VSREffectiveMaxOutputTokens", VSREffectiveMaxOutputTokens, "x-vsr-effective-max-output-tokens"},
-		{"VSRSelectedAlgorithm", VSRSelectedAlgorithm, "x-vsr-selected-algorithm"},
-		{"VSRRoutingLatencyMs", VSRRoutingLatencyMs, "x-vsr-routing-latency-ms"},
-		{"VSRCost", VSRCost, "x-vsr-cost"},
-		{"VSRCostCurrency", VSRCostCurrency, "x-vsr-cost-currency"},
-		{"VSRSessionPhase", VSRSessionPhase, "x-vsr-session-phase"},
-		{"VSRLearningMethods", VSRLearningMethods, "x-vsr-learning-methods"},
-		{"VSRLearningActions", VSRLearningActions, "x-vsr-learning-actions"},
-		{"VSRLearningScopes", VSRLearningScopes, "x-vsr-learning-scopes"},
-		{"VSRLearningReasons", VSRLearningReasons, "x-vsr-learning-reasons"},
-		{"VSRInjectedSystemPrompt", VSRInjectedSystemPrompt, "x-vsr-injected-system-prompt"},
-		{"VSRPromptCacheAction", VSRPromptCacheAction, "x-vsr-prompt-cache-action"},
-		{"VSRPromptCacheReason", VSRPromptCacheReason, "x-vsr-prompt-cache-reason"},
-		{"VSRPromptCacheInserted", VSRPromptCacheInserted, "x-vsr-prompt-cache-inserted"},
-		{"VSRPromptCachePreserved", VSRPromptCachePreserved, "x-vsr-prompt-cache-preserved"},
-		{"VSRCacheHit", VSRCacheHit, "x-vsr-cache-hit"},
-		{"VSRKVTransferStatus", VSRKVTransferStatus, "x-vsr-kv-transfer-status"},
-		{"VSRKVSourcePod", VSRKVSourcePod, "x-vsr-kv-source-pod"},
-		{"VSRKVCacheID", VSRKVCacheID, "x-vsr-kv-cache-id"},
-		{"VSRKVMapperID", VSRKVMapperID, "x-vsr-kv-mapper-id"},
-		{"VSRMatchedModality", VSRMatchedModality, "x-vsr-matched-modality"},
-		{"VSRMatchedAuthz", VSRMatchedAuthz, "x-vsr-matched-authz"},
-		{"VSRMatchedJailbreak", VSRMatchedJailbreak, "x-vsr-matched-jailbreak"},
-		{"VSRMatchedPII", VSRMatchedPII, "x-vsr-matched-pii"},
-		{"VSRMatchedReask", VSRMatchedReask, "x-vsr-matched-reask"},
-		{"VSRMatchedEvent", VSRMatchedEvent, "x-vsr-matched-event"},
-		{"VSRMatchedProjection", VSRMatchedProjection, "x-vsr-matched-projections"},
-		// Consolidated response-warnings header (v0.4)
-		{"VSRResponseWarnings", VSRResponseWarnings, "x-vsr-response-warnings"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.header != tt.expected {
-				t.Errorf("Expected %s to be %q, got %q", tt.name, tt.expected, tt.header)
-			}
-		})
-	}
-}
-
 func TestKVTransferStatusValues(t *testing.T) {
 	if KVTransferStatusApplied != "applied" {
 		t.Errorf("KVTransferStatusApplied = %q, want %q", KVTransferStatusApplied, "applied")

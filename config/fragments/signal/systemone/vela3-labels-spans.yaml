@@ -50,5 +50,6 @@ routing:
         timeout_ms: 1000
     pii:
       - name: personal_data
-        threshold: 0.5
-        pii_types_allowed: [EMAIL_ADDRESS]
+        predicate:
+          gte: 0.5
+        ignore_labels: [EMAIL_ADDRESS]

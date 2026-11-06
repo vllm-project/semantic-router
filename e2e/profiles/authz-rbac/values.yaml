@@ -154,8 +154,10 @@ config:
       domains:
         - name: code
           description: Programming, debugging, and software engineering tasks
+          labels: ["computer science"]
         - name: general
           description: General knowledge, conversation, and miscellaneous topics
+          labels: [other]
       role_bindings:
         - name: admin-binding
           description: Platform admins — full model access
@@ -191,8 +193,7 @@ config:
           - chat
           - code
   global:
-    model_catalog:
-      kbs: []
+    model_catalog: {}
     router:
       clear_route_cache: true
       strategy: priority
@@ -227,8 +228,6 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
-          concurrency_threshold: 5
-          max_concurrency: 8
           metrics:
             enabled: true
             detailed_goroutine_tracking: true

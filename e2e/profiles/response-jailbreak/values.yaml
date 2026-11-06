@@ -23,11 +23,10 @@ config:
     # a passthrough to a concrete backend model, which skips plugins
     # entirely (see performDecisionEvaluation).
     #
-    # There is deliberately no request-direction jailbreak rule here:
-    # prompt_guard is enabled for the response filter, but nothing on the
-    # request path thresholds it, so the probe prompt reaches the backend and
-    # comes back as LLM output - which is the surface under test. The one
-    # jailbreak rule below has direction: response, so it is scored from that
+    # There is deliberately no request-stage jailbreak rule here: nothing on
+    # the request path asks about the probe prompt, so it reaches the backend
+    # and comes back as LLM output - which is the surface under test. The one
+    # jailbreak rule below has stage: response, so it is asked about that
     # output only.
     decisions:
       - name: response_jailbreak_block
@@ -94,9 +93,10 @@ config:
       # response_guard rules; the threshold that decides lives here.
       jailbreak:
         - name: unsafe_completion
-          direction: response
-          threshold: 0.5
           description: Detect jailbreak content in the model's own output.
+          predicate:
+            gte: 0.5
+          stage: response
     modelCards:
       - name: openai/mock-model
   global:
@@ -106,8 +106,6 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
-          concurrency_threshold: 5
-          max_concurrency: 8
           metrics:
             enabled: true
             detailed_goroutine_tracking: false
@@ -126,49 +124,20 @@ config:
         embedding_model: mmbert
     integrations: {}
     model_catalog:
-      kbs: []
       deployments:
-        # The same provider-mocker that serves the chat backend also serves the
-        # classification API on /classify. It scores only the first
-        # CLASSIFY_WINDOW_CHARS of whatever it is sent, the way a real
-        # sequence classifier only ever sees its own sequence window - which
-        # is what lets this profile tell a whole-response scan apart from a
-        # first-chunk-only one.
-        mock-guardrail:
-          provider: classify
-          endpoint: http://provider-mocker.default.svc.cluster.local:8000
-          model: mock-guardrail
+        # The same provider-mocker that serves the chat backend also serves
+        # the System One fixture on /v1/systemone (see its README). It reads
+        # all of every answer, so a phrase at the end of a long answer is
+        # found only when the Router sends the whole answer.
+        fake-systemone:
+          provider: systemone
+          endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/systemone
+          model: e2e/fake-systemone
           timeout_ms: 5000
+          capabilities:
+            question_types: [choice, noul, span]
       bindings:
-        jailbreak: mock-guardrail
-      modules:
-        prompt_guard:
-          enabled: true
-          threshold: 0.5
-          positive_labels: [jailbreak]
-          jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
-        classifier:
-          domain:
-            enabled: false
-            category_mapping_path: ""
-          pii:
-            enabled: false
-            pii_mapping_path: ""
-        hallucination_mitigation:
-          enabled: false
-# The router requires a jailbreak_type_mapping.json on disk even when a
-# classify deployment answers the jailbreak signal, so a minimal stand-in
-# mapping is mounted from the
-# ConfigMap applied as a prerequisite - no need to bake the real model.
-extraVolumes:
-  - name: jailbreak-mapping
-    configMap:
-      name: response-jailbreak-mapping
-extraVolumeMounts:
-  - name: jailbreak-mapping
-    mountPath: /app/models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
-    subPath: jailbreak_type_mapping.json
-    readOnly: true
+        jailbreak: fake-systemone
 
 resources:
   # Same headroom as the jailbreak-onerror profile: the startup embedding

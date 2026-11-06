@@ -121,7 +121,6 @@ _RECIPE_MODEL_REF_OBJECT_LIST_PATHS = frozenset(
 )
 _RECIPE_MODEL_REF_SCALAR_PATHS = frozenset(
     {
-        ("routing", "signals", "classifiers", "model"),
         ("routing", "decisions", "algorithm", "prompt", "model"),
         ("routing", "decisions", "algorithm", "remom", "synthesis_model"),
         ("routing", "decisions", "algorithm", "fusion", "model"),

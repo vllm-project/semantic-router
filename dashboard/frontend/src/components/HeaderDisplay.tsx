@@ -22,20 +22,17 @@ import {
   X_VSR_MATCHED_CONVERSATION,
   X_VSR_MATCHED_DECISION_MODEL,
   X_VSR_MATCHED_DOMAINS,
-  X_VSR_MATCHED_EMBEDDINGS,
   X_VSR_MATCHED_EVENT,
   X_VSR_MATCHED_FACT_CHECK,
   X_VSR_MATCHED_HALLUCINATION,
   X_VSR_MATCHED_INPUT_MODALITY,
   X_VSR_MATCHED_JAILBREAK,
-  X_VSR_MATCHED_KB,
   X_VSR_MATCHED_KEYWORDS,
   X_VSR_MATCHED_LANGUAGE,
   X_VSR_MATCHED_MODALITY,
   X_VSR_MATCHED_PII,
-  X_VSR_MATCHED_PREFERENCE,
   X_VSR_MATCHED_PROJECTIONS,
-  X_VSR_MATCHED_REASK,
+  X_VSR_MATCHED_TURN_RELATION,
   X_VSR_MATCHED_SAFETY,
   X_VSR_MATCHED_STRUCTURE,
   X_VSR_MATCHED_USER_FEEDBACK,
@@ -142,10 +139,6 @@ const HEADER_INFO: Record<
     label: 'Keywords',
     type: 'info',
   },
-  [X_VSR_MATCHED_EMBEDDINGS]: {
-    label: 'Embeddings',
-    type: 'info',
-  },
   [X_VSR_MATCHED_DOMAINS]: {
     label: 'Domain',
     type: 'info',
@@ -158,12 +151,8 @@ const HEADER_INFO: Record<
     label: 'User Feedback',
     type: 'info',
   },
-  [X_VSR_MATCHED_REASK]: {
-    label: 'Reask',
-    type: 'info',
-  },
-  [X_VSR_MATCHED_PREFERENCE]: {
-    label: 'Preference',
+  [X_VSR_MATCHED_TURN_RELATION]: {
+    label: 'Turn Relation',
     type: 'info',
   },
   [X_VSR_MATCHED_LANGUAGE]: {
@@ -209,10 +198,6 @@ const HEADER_INFO: Record<
   [X_VSR_MATCHED_PII]: {
     label: 'PII Signal',
     type: 'warning',
-  },
-  [X_VSR_MATCHED_KB]: {
-    label: 'Knowledge Base',
-    type: 'info',
   },
   [X_VSR_MATCHED_CONVERSATION]: {
     label: 'Conversation Signal',

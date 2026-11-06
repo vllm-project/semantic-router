@@ -147,8 +147,6 @@ var _ = Describe("Tool Selection Request Filter", Label("model-artifacts"), func
 
 		// Create base config
 		cfg = CreateTestConfig()
-		// Disable PII detection for tool selection tests (not needed and avoids model loading issues)
-		cfg.PIIModel.ModelID = ""
 		cfg.EmbeddingConfig.ModelType = model
 
 		// Tools borrow a real generation-owned provider, just as router assembly does.

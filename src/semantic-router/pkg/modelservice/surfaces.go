@@ -40,6 +40,19 @@ type ClassifyRequest struct {
 // text the head read (End exclusive); callers convert them once.
 type Span = api.Span
 
+// ByteOffsets maps a code-point offset into text, such as a Span's, to its
+// byte offset; an offset past the end maps to the end of text.
+func ByteOffsets(text string) func(int) int {
+	offsets := make([]int, 0, len(text)+1)
+	for index := range text {
+		offsets = append(offsets, index)
+	}
+	offsets = append(offsets, len(text))
+	return func(point int) int {
+		return offsets[min(max(point, 0), len(offsets)-1)]
+	}
+}
+
 // InputUsage holds one input's tokenizer facts, including special tokens;
 // Windows is set only for an input read in windows.
 type InputUsage = api.InputUsage

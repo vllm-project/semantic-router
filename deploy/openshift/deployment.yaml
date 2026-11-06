@@ -319,12 +319,13 @@ spec:
           periodSeconds: 30
           timeoutSeconds: 10
           failureThreshold: 3
+        # Sized as in the Helm chart: the Router and the model runtime it starts for the decision model.
         resources:
           requests:
             memory: "3Gi"
             cpu: "1"
           limits:
-            memory: "6Gi"
+            memory: "12Gi"
             cpu: "2"
       - name: envoy-proxy
         image: envoyproxy/envoy:v1.35.3

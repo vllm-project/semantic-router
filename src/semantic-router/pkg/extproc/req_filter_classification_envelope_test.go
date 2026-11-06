@@ -41,7 +41,7 @@ routing:
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes() error = %v", err)
 	}
-	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
+	classifier, err := classification.NewClassifier(cfg)
 	if err != nil {
 		t.Fatalf("NewClassifier() error = %v", err)
 	}

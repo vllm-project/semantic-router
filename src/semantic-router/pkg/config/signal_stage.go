@@ -15,22 +15,6 @@ const (
 	SignalStageResponse SignalStage = "response"
 )
 
-// Recognised values for JailbreakRule.Direction. They name the stage the rule
-// observes: "request" scores the prompt, "response" scores the model's output.
-const (
-	SignalDirectionRequest  = string(SignalStageRequest)
-	SignalDirectionResponse = string(SignalStageResponse)
-)
-
-// Stage reports the stage a jailbreak rule is observed at. An empty direction
-// is the request stage, which is what every rule was before direction existed.
-func (r JailbreakRule) Stage() SignalStage {
-	if r.Direction == SignalDirectionResponse {
-		return SignalStageResponse
-	}
-	return SignalStageRequest
-}
-
 // RequestJailbreakRules returns the jailbreak rules scored from the request.
 func (c *RouterConfig) RequestJailbreakRules() []JailbreakRule {
 	return c.jailbreakRulesAt(SignalStageRequest)
@@ -48,7 +32,7 @@ func (c *RouterConfig) jailbreakRulesAt(stage SignalStage) []JailbreakRule {
 	}
 	var rules []JailbreakRule
 	for _, rule := range c.JailbreakRules {
-		if rule.Stage() == stage {
+		if SignalStage(rule.EffectiveStage()) == stage {
 			rules = append(rules, rule)
 		}
 	}
@@ -59,8 +43,8 @@ func (c *RouterConfig) jailbreakRulesAt(stage SignalStage) []JailbreakRule {
 //
 // The stage sits on the rule rather than on the type, so the "type:name" key,
 // and with it SignalConfidences, SignalErrors and the condition shape, are
-// exactly what they are for a request-stage rule. Jailbreak rules carry a
-// direction and systemone rules a stage; hallucination rules check the
+// exactly what they are for a request-stage rule. Systemone, jailbreak and
+// safety rules carry a stage; hallucination and refusal rules read the
 // model's answer and so are always response-stage; every other type is
 // request-stage. A systemone name may name one of the rule's options
 // ("<rule>:<label>").
@@ -68,28 +52,32 @@ func (c *RouterConfig) SignalStageOf(signalType, name string) SignalStage {
 	if c == nil {
 		return SignalStageRequest
 	}
-	if strings.EqualFold(signalType, SignalTypeHallucination) {
+	signalType = strings.ToLower(strings.TrimSpace(signalType))
+	switch signalType {
+	case SignalTypeHallucination, SignalTypeRefusal:
 		return SignalStageResponse
-	}
-	if strings.EqualFold(signalType, SignalTypeSystemOne) {
+	case SignalTypeSystemOne:
 		ruleName, _, _ := strings.Cut(name, ":")
 		if rule := systemOneRuleByName(c.SystemOneRules, ruleName); rule != nil && rule.EffectiveStage() == SystemOneStageResponse {
 			return SignalStageResponse
 		}
-		return SignalStageRequest
-	}
-	if !strings.EqualFold(signalType, SignalTypeJailbreak) {
-		return SignalStageRequest
-	}
-	for _, rule := range c.JailbreakRules {
-		if rule.Name == name {
-			return rule.Stage()
+	case SignalTypeJailbreak:
+		for _, rule := range c.JailbreakRules {
+			if rule.Name == name {
+				return SignalStage(rule.EffectiveStage())
+			}
+		}
+	case SignalTypeSafety:
+		for _, rule := range c.SafetyRules {
+			if rule.Name == name {
+				return SignalStage(rule.EffectiveStage())
+			}
 		}
 	}
 	return SignalStageRequest
 }
 
-// decisionReadsResponseSignal reports the first response-direction rule a
+// decisionReadsResponseSignal reports the first response-stage rule a
 // decision's rule tree reads, wherever it sits in the tree, and the projection
 // output it is read through when the reference is indirect. Decisions are
 // selected while the request is being routed, before the model has answered,
@@ -135,11 +123,11 @@ func (c *RouterConfig) leafReadsResponseSignal(node *RuleNode) (ref responseSign
 	return ref, true
 }
 
-// projectionReadsResponseSignal reports the first response-direction rule that
+// projectionReadsResponseSignal reports the first response-stage rule that
 // feeds the projection output a decision reads, through any depth of
 // projection scores. A projection is evaluated with the decisions, before the
 // model has answered; an input with no result yet takes its configured miss
-// value, so a response-direction rule behind a projection would shape the
+// value, so a response-stage rule behind a projection would shape the
 // decision as a silent miss on every request.
 func (c *RouterConfig) projectionReadsResponseSignal(outputName string) (responseSignalRef, bool) {
 	sourceByOutput := projectionSourcesByOutput(c.Projections.Mappings)
@@ -169,8 +157,6 @@ func (c *RouterConfig) projectionScoreReadsResponseSignal(
 	for _, input := range score.Inputs {
 		inputType := strings.ToLower(strings.TrimSpace(input.Type))
 		switch inputType {
-		case ProjectionInputKBMetric:
-			continue
 		case SignalTypeProjection:
 			dependency := strings.ToLower(strings.TrimSpace(input.Name))
 			if strings.EqualFold(strings.TrimSpace(input.ValueSource), ProjectionValueSourceConfidence) {

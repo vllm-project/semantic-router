@@ -2,12 +2,12 @@ package config
 
 import "testing"
 
-// Masking consumes the PII classifier through a pii rule no decision reads,
-// so the signal-type walk alone reported the classifier unused: the mapping
-// stayed unloaded, IsPIIEnabled stayed false, and because masking fails
-// closed every request on a masking-only recipe answered 503. Found by the
-// first cluster run of the masking e2e profile (#3806 review).
-func TestMaskingPluginAloneRequiresPIIClassifier(t *testing.T) {
+// Masking asks the pii rule it names although no decision reads the rule, so
+// the signal-type walk alone left the rule's deployment unprepared, and
+// because masking fails closed every request on a masking-only recipe
+// answered 503. Found by the first cluster run of the masking e2e profile
+// (#3806 review).
+func TestMaskingPluginAloneAsksItsPIIRule(t *testing.T) {
 	masking := func(enabled bool) Decision {
 		return Decision{
 			Name:      "mask",
@@ -40,8 +40,12 @@ func TestMaskingPluginAloneRequiresPIIClassifier(t *testing.T) {
 			if !cfg.IsRecipeReachableForRouting(DefaultRecipeName) {
 				t.Fatal("default recipe is unreachable; the walk would be vacuous")
 			}
-			if got := cfg.UsesPIIClassifierInReachableRouting(); got != tc.want {
-				t.Fatalf("UsesPIIClassifierInReachableRouting() = %v, want %v", got, tc.want)
+			rules := cfg.ApplicationRules()
+			if len(rules) != 1 {
+				t.Fatalf("ApplicationRules() = %+v, want the pii rule", rules)
+			}
+			if got := cfg.AsksApplicationRule(rules[0]); got != tc.want {
+				t.Fatalf("AsksApplicationRule(personal) = %v, want %v", got, tc.want)
 			}
 		})
 	}

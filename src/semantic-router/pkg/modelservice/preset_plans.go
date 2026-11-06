@@ -82,7 +82,11 @@ func presetPlan(definition TaskDefinition, question Question, card ModelCard) (t
 	case binding.NativeSet:
 		return trainedSet(question, preset, binding)
 	}
-	if !asksPreset(question, preset) || !binding.CoversOptions(optionKeys(question.Choices)) || !card.Answers(question.Type) {
+	reads := question.Reads
+	if reads == nil {
+		reads = optionKeys(question.Choices)
+	}
+	if !asksPreset(question, preset) || !binding.CoversOptions(reads) || !card.Answers(question.Type) {
 		return trainedForm{}, false
 	}
 	trained := question

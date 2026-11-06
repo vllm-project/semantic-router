@@ -13,22 +13,19 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
-// A decision model deployment answers the Router's built-in classifier
-// signals as their presets' Choice questions, with the options in the label
-// order of the Vela 1.0 head each signal ran on, so a consumer's label
-// mapping, thresholds and policies read the answer as they read the head's.
-// In a request stage the
-// questions travel in one /v1/decisions call with the stage's other
+// A decision model deployment answers the prompt guard module as the
+// jailbreak preset's Choice question, with the options in the label order of
+// the Vela 1.0 head it ran on, so the guard's label mapping, thresholds and
+// policies read the answer as they read the head's. In a request stage the
+// question travels in one /v1/decisions call with the stage's other
 // questions to the deployment (see modelservice.Bundle).
 //
-// A routing question (domain, fact check, feedback, modality) reads only the
-// first tokens of a long text (overflow: truncate; one forward on a CPU). A
-// safety question (prompt guard, safety) reads it whole, up to the model's
-// scan budget (four inputs on a CPU) or the deployment's declared one; a text
-// past it fails the question with binding.ErrScanBudget, which the guard
-// treats as content it did not read. Every question to a deployment carries
-// the same budget, so a stage's questions about one text still travel in one
-// call and read the model input they would read alone.
+// The guard question reads a long text whole, up to the model's scan budget
+// (four inputs on a CPU) or the deployment's declared one; a text past it
+// fails the question with binding.ErrScanBudget, which the guard treats as
+// content it did not read. Every question to a deployment carries the same
+// budget, so a stage's questions about one text still travel in one call and
+// read the model input they would read alone.
 
 // signalQuestion is the question one built-in signal consumer asks: a
 // preset-backed task's canonical question (modelservice.BuiltinTasks), which
@@ -56,41 +53,19 @@ func signalTask(id, key string, consumer ...string) signalQuestion {
 	return question
 }
 
-var (
-	domainQuestion    = signalTask("domain", "domain")
-	attackQuestion    = signalTask("jailbreak", "attack")
-	harmQuestion      = signalTask("safety", "p_harm")
-	factCheckQuestion = signalTask("fact_check", "factcheck")
-	feedbackQuestion  = signalTask("user_feedback", "feedback")
-	// The modality consumer reads the labels of the Vela 1.0 head it
-	// replaced, AR, DIFFUSION and BOTH, for the modality preset's text, image
-	// and text_image, until the modality signal reads the canonical labels.
-	modalityQuestion = signalTask("modality", "modality", "AR", "DIFFUSION", "BOTH")
-)
-
 // signalQuestions maps each built-in label-distribution consumer to its question.
 var signalQuestions = map[string]signalQuestion{
-	"domain_classifier":     domainQuestion,
-	"prompt_guard":          attackQuestion,
-	"fact_check_classifier": factCheckQuestion,
-	"feedback_detector":     feedbackQuestion,
-	"modality_detector":     modalityQuestion,
+	"prompt_guard": signalTask("jailbreak", "attack"),
 }
 
 // questionFor returns the question a binding asks when its deployment serves
-// a Vela 2.0 model: the consumer's own, or the harm question for a safety
-// rule's binary head.
+// a Vela 2.0 model.
 func questionFor(spec config.ResolvedModelBinding, card modelservice.ModelCard) (signalQuestion, bool) {
 	if !card.Answers("choice") || spec.Binding.Head != "" {
 		return signalQuestion{}, false
 	}
-	if question, ok := signalQuestions[spec.Name]; ok {
-		return question, true
-	}
-	if strings.HasPrefix(spec.Name, "safety.") && spec.Binding.Contract == config.RemoteClassifierContractLabelDistribution {
-		return harmQuestion, true
-	}
-	return signalQuestion{}, false
+	question, ok := signalQuestions[spec.Name]
+	return question, ok
 }
 
 func (q signalQuestion) labels() []string {

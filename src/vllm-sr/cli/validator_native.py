@@ -18,8 +18,6 @@ _UNAVAILABLE_NATIVE_CONTEXT = {
     "reask",
     "user_feedback",
     "input_modality",
-    "kb",
-    "kb_metric",
 }
 
 

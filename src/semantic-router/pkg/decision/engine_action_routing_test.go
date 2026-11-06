@@ -65,7 +65,7 @@ func TestDecisionEngineKeepsDomainRoutesAheadOfBroadExplainAction(t *testing.T) 
 		},
 	}
 
-	engine := NewDecisionEngine(nil, nil, nil, decisions, config.RoutingStrategyPriority)
+	engine := NewDecisionEngine(decisions, config.RoutingStrategyPriority)
 	tests := []struct {
 		name    string
 		signals *SignalMatches

@@ -75,8 +75,7 @@ config:
   global:
     router:
       strategy: priority
-    model_catalog:
-      kbs: []
+    model_catalog: {}
     services:
       response_api:
         enabled: true
@@ -87,8 +86,8 @@ config:
 resources:
   # 2Gi OOMKills the router on a CI runner: it restarts, never becomes ready,
   # and the helm wait burns its full 60m timeout. Mirrors the same limits
-  # category-remote-backend/local-classifier-backend/long-context-routing
-  # settled on for the same reason.
+  # long-context-routing and conversation-routing settled on for the same
+  # reason.
   limits:
     memory: 6Gi
     cpu: "2"

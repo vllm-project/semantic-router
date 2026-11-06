@@ -256,10 +256,6 @@ const (
 	// Example: "code_keywords,urgent_keywords"
 	VSRMatchedKeywords = "x-vsr-matched-keywords"
 
-	// VSRMatchedEmbeddings contains comma-separated list of matched embedding rule names.
-	// Example: "code_debug,technical_help"
-	VSRMatchedEmbeddings = "x-vsr-matched-embeddings"
-
 	// VSRMatchedDomains contains comma-separated list of matched domain rule names.
 	// Example: "computer science,mathematics"
 	VSRMatchedDomains = "x-vsr-matched-domains"
@@ -272,13 +268,9 @@ const (
 	// Example: "need_clarification,wrong_answer"
 	VSRMatchedUserFeedback = "x-vsr-matched-user-feedback"
 
-	// VSRMatchedReask contains comma-separated list of matched repeated-question dissatisfaction signals.
-	// Example: "likely_dissatisfied,persistently_dissatisfied"
-	VSRMatchedReask = "x-vsr-matched-reask"
-
-	// VSRMatchedPreference contains comma-separated list of matched preference signals.
-	// Example: "creative_writing,technical_analysis"
-	VSRMatchedPreference = "x-vsr-matched-preference"
+	// VSRMatchedTurnRelation contains comma-separated list of matched
+	// turn_relation rules and their rule:label references.
+	VSRMatchedTurnRelation = "x-vsr-matched-turn-relation"
 
 	// VSRMatchedLanguage contains comma-separated list of matched language signals.
 	// Example: "en,zh,es"
@@ -305,8 +297,9 @@ const (
 	// Example: "code_complexity:hard,math_complexity:easy"
 	VSRMatchedComplexity = "x-vsr-matched-complexity"
 
-	// VSRMatchedModality contains comma-separated list of matched modality signals.
-	// Example: "AR,DIFFUSION"
+	// VSRMatchedModality contains comma-separated list of matched modality
+	// rules and their rule:label references.
+	// Example: "wants_image,output:text_image"
 	VSRMatchedModality = "x-vsr-matched-modality"
 
 	// VSRMatchedAuthz contains comma-separated list of matched authz rule names.
@@ -328,10 +321,6 @@ const (
 	// VSRMatchedPII contains comma-separated list of matched PII rule names.
 	// Example: "pii_strict,pii_moderate"
 	VSRMatchedPII = "x-vsr-matched-pii"
-
-	// VSRMatchedKB contains comma-separated list of matched knowledge-base signal names.
-	// Example: "privacy_policy,security_containment"
-	VSRMatchedKB = "x-vsr-matched-kb"
 
 	// VSRMatchedConversation contains comma-separated list of matched conversation-shape signal names.
 	VSRMatchedConversation = "x-vsr-matched-conversation"

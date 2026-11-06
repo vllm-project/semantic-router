@@ -11,6 +11,7 @@ import (
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -250,16 +251,18 @@ func addResponseStageSignalHeaders(ctx *RequestContext, response *ext_proc.Proce
 	if ctx == nil || !debugHeadersRequested(ctx) {
 		return
 	}
-	if jailbreak := ctx.ResponseGuard.jailbreak(); jailbreak != nil && jailbreak.Signal != nil && len(jailbreak.Signal.MatchedRules) > 0 {
-		matched := append(slices.Clone(ctx.VSRMatchedJailbreak), jailbreak.Signal.MatchedRules...)
-		setResponseBodyHeader(response, headers.VSRMatchedJailbreak, strings.Join(matched, ","))
+	observed := ctx.ResponseGuard.observed()
+	if observed == nil {
+		return
 	}
-	if hallucination := ctx.ResponseGuard.hallucination(); hallucination != nil && hallucination.Signal != nil && len(hallucination.Signal.MatchedRules) > 0 {
-		setResponseBodyHeader(response, headers.VSRMatchedHallucination, strings.Join(hallucination.Signal.MatchedRules, ","))
+	if matched := observed.Reported[config.SignalTypeJailbreak]; len(matched) > 0 {
+		setResponseBodyHeader(response, headers.VSRMatchedJailbreak, strings.Join(append(slices.Clone(ctx.VSRMatchedJailbreak), matched...), ","))
 	}
-	if systemOne := ctx.ResponseGuard.systemOne(); systemOne != nil && len(systemOne.MatchedRules) > 0 {
-		matched := append(slices.Clone(ctx.VSRMatchedDecisionModel), systemOne.MatchedRules...)
-		setResponseBodyHeader(response, headers.VSRMatchedDecisionModel, strings.Join(matched, ","))
+	if matched := observed.Reported[config.SignalTypeHallucination]; len(matched) > 0 {
+		setResponseBodyHeader(response, headers.VSRMatchedHallucination, strings.Join(matched, ","))
+	}
+	if matched := observed.Reported[config.SignalTypeSystemOne]; len(matched) > 0 {
+		setResponseBodyHeader(response, headers.VSRMatchedDecisionModel, strings.Join(append(slices.Clone(ctx.VSRMatchedDecisionModel), matched...), ","))
 	}
 }
 

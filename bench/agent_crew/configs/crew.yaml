@@ -131,23 +131,6 @@ global:
         mmbert_model_path: ""
         qwen3_model_path: ""
         multimodal_model_path: ""
-    modules:
-      prompt_guard:
-        enabled: false
-        jailbreak_mapping_path: ""
-      classifier:
-        domain:
-          enabled: false
-          category_mapping_path: ""
-          use_mmbert_32k: false
-        pii:
-          enabled: false
-          pii_mapping_path: ""
-          use_mmbert_32k: false
-      feedback_detector:
-        enabled: false
-        use_mmbert_32k: false
-
 entrypoints:
   - model_names: ["MoM"]
     recipe: default

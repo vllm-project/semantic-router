@@ -4,47 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
-
-func TestMaintainedKnowledgeRecipeParsesAndDecompilesWithoutError(t *testing.T) {
-	assetPath := filepath.Join("..", "..", "..", "..", "config", "recipes", "knowledge", "config.yaml")
-	cfg, err := config.Parse(assetPath)
-	if err != nil {
-		t.Fatalf("Parse error: %v", err)
-	}
-
-	dslText, err := DecompileRouting(cfg)
-	if err != nil {
-		t.Fatalf("DecompileRouting error: %v", err)
-	}
-	if dslText == "" {
-		t.Fatal("decompiled DSL should not be empty")
-	}
-
-	if len(cfg.KnowledgeBases) == 0 {
-		t.Fatal("expected built-in knowledge bases after parsing mmlu recipe")
-	}
-
-	found := false
-	for _, kb := range cfg.KnowledgeBases {
-		if kb.Name == "mmlu_kb" {
-			found = true
-			if kb.Source.Path != "knowledge_bases/mmlu/" {
-				t.Fatalf("mmlu_kb source path = %q", kb.Source.Path)
-			}
-			break
-		}
-	}
-	if !found {
-		t.Fatal("expected mmlu recipe to resolve built-in mmlu_kb default")
-	}
-
-	if len(cfg.SystemOneRules) == 0 {
-		t.Fatal("expected the knowledge recipe to define its subject question")
-	}
-}
 
 func TestMaintainedKnowledgeRecipeDSLRoundTrip(t *testing.T) {
 	assetPath := filepath.Join("..", "..", "..", "..", "config", "recipes", "knowledge", "recipe.dsl")

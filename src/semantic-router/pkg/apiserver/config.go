@@ -11,7 +11,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelinventory"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/publicmodels"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
@@ -19,18 +18,17 @@ import (
 
 // ClassificationAPIServer holds the server state and dependencies
 type ClassificationAPIServer struct {
-	classificationSvc     classificationService
-	previewAdmissionOnce  sync.Once
-	previewAdmission      admission.Admissioner
-	configMu              sync.RWMutex
-	config                *config.RouterConfig
-	runtimeConfig         *liveRuntimeConfig
-	runtimeRegistry       *routerruntime.Registry
-	configPath            string // path to the router config file (for read/update/rollback)
-	gatewayMode           config.GatewayMode
-	memoryStore           memory.Store
-	knowledgeBaseMapCache *knowledgeBaseMapCache
-	startupStateLoader    func() *startupstatus.State
+	classificationSvc    classificationService
+	previewAdmissionOnce sync.Once
+	previewAdmission     admission.Admissioner
+	configMu             sync.RWMutex
+	config               *config.RouterConfig
+	runtimeConfig        *liveRuntimeConfig
+	runtimeRegistry      *routerruntime.Registry
+	configPath           string // path to the router config file (for read/update/rollback)
+	gatewayMode          config.GatewayMode
+	memoryStore          memory.Store
+	startupStateLoader   func() *startupstatus.State
 	// The startup-status writer is created once during process bootstrap. Keep
 	// its storage contract stable across live config swaps so /ready does not
 	// start reading from a different backend after a successful reload.
@@ -128,9 +126,6 @@ type BatchSecurityResult struct {
 	ThreatType      string   `json:"threat_type"`
 	Confidence      *float32 `json:"confidence"`
 	ScoresAvailable *bool    `json:"scores_available,omitempty"`
-	// Decision carries the categorical guard detail (source label, categories,
-	// optional score) when the backend produced one.
-	Decision *tasks.LabelDecision `json:"decision,omitempty"`
 }
 
 // BatchClassificationResponse represents the response from batch classification

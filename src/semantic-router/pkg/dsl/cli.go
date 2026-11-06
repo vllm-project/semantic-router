@@ -155,7 +155,7 @@ func appendRuntimeValidationDiagnostics(input string, diags []Diagnostic, factor
 	}
 
 	prog, parseErrs := Parse(input)
-	if len(parseErrs) != 0 || prog == nil || !programNeedsRuntimeValidation(prog) {
+	if len(parseErrs) != 0 || prog == nil || len(prog.TestBlocks) == 0 {
 		return diags
 	}
 
@@ -164,36 +164,10 @@ func appendRuntimeValidationDiagnostics(input string, diags []Diagnostic, factor
 		return append(diags, Diagnostic{
 			Level:   DiagError,
 			Message: fmt.Sprintf("native runtime validation initialization failed: %v", err),
-			Pos:     runtimeValidationPos(prog),
+			Pos:     prog.TestBlocks[0].Pos,
 		})
 	}
-	return append(diags, collectRuntimeValidationDiagnostics(prog, runner)...)
-}
-
-func collectRuntimeValidationDiagnostics(prog *Program, runner TestBlockRunner) []Diagnostic {
-	diags := make([]Diagnostic, 0)
-	if len(prog.TestBlocks) > 0 {
-		diags = append(diags, ValidateTestBlocks(prog, runner)...)
-	}
-	if validator, ok := runner.(ProjectionPartitionRuntimeValidator); ok {
-		diags = append(diags, validator.ValidateProjectionPartitions(prog)...)
-	}
-	return diags
-}
-
-func runtimeValidationPos(prog *Program) Position {
-	if prog == nil {
-		return Position{}
-	}
-	if len(prog.TestBlocks) > 0 {
-		return prog.TestBlocks[0].Pos
-	}
-	for _, partition := range prog.ProjectionPartitions {
-		if programNeedsRuntimeValidation(&Program{ProjectionPartitions: []*ProjectionPartitionDecl{partition}}) {
-			return partition.Pos
-		}
-	}
-	return Position{}
+	return append(diags, ValidateTestBlocks(prog, runner)...)
 }
 
 // writeValidationDiagnostics prints diagnostics with a summary and returns the blocking (error + constraint) count.

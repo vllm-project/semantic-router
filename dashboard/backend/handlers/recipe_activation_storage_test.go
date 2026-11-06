@@ -28,6 +28,7 @@ routing:
     domains:
       - name: general
         description: General requests
+        labels: [other]
   decisions:
     - name: default
       priority: 1

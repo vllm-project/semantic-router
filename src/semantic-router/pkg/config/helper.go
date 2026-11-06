@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"os"
-	"slices"
 	"sort"
 	"strings"
 
@@ -229,102 +228,6 @@ func (c *RouterConfig) GetModelIndexResult(modelName, index string) (modelcatalo
 	}
 	result, ok := params.IndexResults[index]
 	return cloneCatalogIndexResult(result), ok
-}
-
-// GetDecisionPIIPolicy returns the PII policy for a given decision by looking at
-// the PIIRule signals referenced in the decision's rules tree.
-// If the decision doesn't reference any PII signals, returns a default policy that allows all PII.
-func (d *Decision) GetDecisionPIIPolicy(piiRules []PIIRule) PIIPolicy {
-	// Collect PII signal names referenced in the decision's rules
-	piiSignalNames := collectSignalNames(&d.Rules, "pii")
-	if len(piiSignalNames) == 0 {
-		// No PII signals → allow all PII
-		return PIIPolicy{
-			AllowByDefault: true,
-			PIITypes:       []string{},
-		}
-	}
-
-	// Build a lookup for PIIRules by name
-	rulesByName := make(map[string]*PIIRule, len(piiRules))
-	for i := range piiRules {
-		rulesByName[piiRules[i].Name] = &piiRules[i]
-	}
-
-	// Aggregate PIITypesAllowed from all referenced PIIRules
-	var allAllowed []string
-	for _, name := range piiSignalNames {
-		if rule, ok := rulesByName[name]; ok {
-			allAllowed = append(allAllowed, rule.PIITypesAllowed...)
-		}
-	}
-
-	return PIIPolicy{
-		AllowByDefault: false,
-		PIITypes:       allAllowed,
-	}
-}
-
-// IsDecisionAllowedForPIIType checks if a decision is allowed to process a specific PII type
-func (d *Decision) IsDecisionAllowedForPIIType(piiType string, piiRules []PIIRule) bool {
-	policy := d.GetDecisionPIIPolicy(piiRules)
-
-	// If allow_by_default is true, all PII types are allowed unless explicitly denied
-	if policy.AllowByDefault {
-		return true
-	}
-
-	// If allow_by_default is false, only explicitly allowed PII types are permitted
-	return slices.Contains(policy.PIITypes, piiType)
-}
-
-// IsDecisionAllowedForPIITypes checks if a decision is allowed to process any of the given PII types
-func (d *Decision) IsDecisionAllowedForPIITypes(piiTypes []string, piiRules []PIIRule) bool {
-	for _, piiType := range piiTypes {
-		if !d.IsDecisionAllowedForPIIType(piiType, piiRules) {
-			return false
-		}
-	}
-	return true
-}
-
-// IsPIIClassifierEnabled checks if PII classification is enabled. A local
-// model serves its own labels; a remote backend needs a mapping file.
-func (c *RouterConfig) IsPIIClassifierEnabled() bool {
-	if c.remoteTaskModule("pii_classifier") {
-		return c.PIIModel.Active() && c.PIIMappingPath != ""
-	}
-	return c.PIIModel.Active() && c.ModuleModelConfigured("pii_classifier")
-}
-
-// IsCategoryClassifierEnabled checks if category classification is enabled. A
-// local model serves its own labels; a remote backend needs a mapping file.
-func (c *RouterConfig) IsCategoryClassifierEnabled() bool {
-	return c.CategoryModel.Active() && c.ModuleModelConfigured("domain_classifier") && (!c.remoteTaskModule("domain_classifier") || c.CategoryMappingPath != "")
-}
-
-// IsMCPCategoryClassifierEnabled checks if MCP-based category classification is enabled
-func (c *RouterConfig) IsMCPCategoryClassifierEnabled() bool {
-	return c.Enabled && c.ToolName != ""
-}
-
-// GetPromptGuardConfig returns the prompt guard configuration
-func (c *RouterConfig) GetPromptGuardConfig() PromptGuardConfig {
-	return c.PromptGuard
-}
-
-// IsPromptGuardEnabled checks if prompt guard jailbreak detection is enabled.
-// A local model serves its own labels; a remote backend needs a mapping file.
-func (c *RouterConfig) IsPromptGuardEnabled() bool {
-	if !c.PromptGuard.Enabled {
-		return false
-	}
-
-	if c.remoteTaskModule("prompt_guard") {
-		return c.PromptGuard.JailbreakMappingPath != ""
-	}
-
-	return c.ModuleModelConfigured("prompt_guard")
 }
 
 // GetEndpointsForModel returns all endpoints that can serve the specified model

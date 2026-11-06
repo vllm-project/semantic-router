@@ -7,14 +7,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func categoryWithScores(category string, scores map[string]float64) config.Category {
-	c := config.Category{CategoryMetadata: config.CategoryMetadata{Name: category}}
-	for model, score := range scores {
-		c.ModelScores = append(c.ModelScores, config.ModelScore{Model: model, Score: score})
-	}
-	return c
-}
-
 func selectorWithPreloadedStorage(t *testing.T, ratings map[string]map[string]*ModelRating, storagePath string) *EloSelector {
 	t.Helper()
 	storage, err := NewFileEloStorage(storagePath)
@@ -146,4 +138,12 @@ func TestStorageRoundTripKeepsLearnedRatingThroughInit(t *testing.T) {
 	if rating := second.categoryRatings["dev"]["model-a"]; rating.Rating != 1740 {
 		t.Fatalf("rating after reload and init = %.1f, want the learned 1740", rating.Rating)
 	}
+}
+
+func categoryWithScores(category string, scores map[string]float64) config.Category {
+	c := config.Category{Name: category}
+	for model, score := range scores {
+		c.ModelScores = append(c.ModelScores, config.ModelScore{Model: model, Score: score})
+	}
+	return c
 }

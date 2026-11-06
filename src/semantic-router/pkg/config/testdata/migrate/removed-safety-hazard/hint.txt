@@ -1,0 +1,1 @@
+routing.signals.safety[harmful].hazard: removed_field: a safety rule's hazard part is removed; run `vllm-sr config migrate` (name the harm categories the rule matches in its labels (map the hazard labels to them by hand))

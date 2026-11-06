@@ -232,7 +232,7 @@ ROUTE math_decision (description = "Math route") {
 func TestParseBoolExprComplex(t *testing.T) {
 	input := `ROUTE test {
   PRIORITY 1
-  WHEN keyword("urgent") AND (domain("math") OR embedding("ai")) AND NOT domain("other")
+  WHEN keyword("urgent") AND (domain("math") OR jailbreak("ai")) AND NOT domain("other")
   MODEL "test:1b"
 }`
 	prog, errs := Parse(input)
@@ -358,7 +358,7 @@ func TestCompileMinimal(t *testing.T) {
 
 SIGNAL domain math {
   description: "Mathematics"
-  mmlu_categories: ["math"]
+  labels: ["math"]
 }
 
 ROUTE math_route {
@@ -381,8 +381,8 @@ ROUTE math_route {
 	if cfg.Categories[0].Name != "math" {
 		t.Errorf("expected category name 'math', got %q", cfg.Categories[0].Name)
 	}
-	if len(cfg.Categories[0].MMLUCategories) != 1 || cfg.Categories[0].MMLUCategories[0] != "math" {
-		t.Errorf("unexpected mmlu_categories: %v", cfg.Categories[0].MMLUCategories)
+	if len(cfg.Categories[0].Labels) != 1 || cfg.Categories[0].Labels[0] != "math" {
+		t.Errorf("unexpected labels: %v", cfg.Categories[0].Labels)
 	}
 
 	// Check decision
@@ -491,12 +491,12 @@ ROUTE test {
 func TestCompileBoolExprToRuleNode(t *testing.T) {
 	input := `SIGNAL keyword urgent { operator: "any" keywords: ["urgent"] }
 SIGNAL domain math { description: "math" }
-SIGNAL embedding ai { threshold: 0.7 candidates: ["AI"] }
+SIGNAL jailbreak ai { predicate: { gte: 0.75 } }
 SIGNAL domain other { description: "other" }
 
 ROUTE test {
   PRIORITY 1
-  WHEN keyword("urgent") AND (domain("math") OR embedding("ai")) AND NOT domain("other")
+  WHEN keyword("urgent") AND (domain("math") OR jailbreak("ai")) AND NOT domain("other")
   MODEL "m:1b"
 }`
 
@@ -509,7 +509,7 @@ ROUTE test {
 		t.Fatalf("expected top-level AND, got %s", rules.Operator)
 	}
 	// After N-ary flattening, the AND has 3 direct children:
-	// keyword("urgent"), (domain("math") OR embedding("ai")), NOT domain("other")
+	// keyword("urgent"), (domain("math") OR jailbreak("ai")), NOT domain("other")
 	if len(rules.Conditions) != 3 {
 		t.Fatalf("expected 3 top conditions (N-ary flattened), got %d", len(rules.Conditions))
 	}
@@ -588,16 +588,15 @@ ROUTE test {
 func TestCompileAllSignalTypes(t *testing.T) {
 	input := `
 SIGNAL keyword kw { operator: "any" keywords: ["test"] }
-SIGNAL embedding emb { threshold: 0.75 candidates: ["test"] }
-SIGNAL domain dom { description: "test" mmlu_categories: ["math"] }
+SIGNAL jailbreak emb { predicate: { gte: 0.75 } }
+SIGNAL domain dom { description: "test" labels: ["math"] }
 SIGNAL fact_check fc { description: "fact check" }
 SIGNAL user_feedback uf { description: "feedback" }
-SIGNAL reask ra { description: "repeat question" threshold: 0.8 lookback_turns: 2 }
-SIGNAL preference pref { description: "preference" threshold: 0.7 examples: ["keep it concise", "bullet points only"] }
+SIGNAL turn_relation ra { description: "repeat question" labels: ["reask"] }
 SIGNAL language lang { description: "English" threshold: 0.6 }
 SIGNAL context ctx { min_tokens: "1K" max_tokens: "32K" }
-SIGNAL complexity comp { threshold: 0.1 hard: { candidates: ["hard task"] } easy: { candidates: ["easy task"] } }
-SIGNAL modality BOTH { description: "image" }
+SIGNAL complexity comp { labels: ["hard"] }
+SIGNAL modality BOTH { description: "image" labels: ["text_image"] }
 SIGNAL authz auth { role: "admin" subjects: [{ kind: "User", name: "admin" }] }
 `
 	cfg, errs := Compile(input)
@@ -608,8 +607,8 @@ SIGNAL authz auth { role: "admin" subjects: [{ kind: "User", name: "admin" }] }
 	if len(cfg.KeywordRules) != 1 {
 		t.Errorf("expected 1 keyword rule, got %d", len(cfg.KeywordRules))
 	}
-	if len(cfg.EmbeddingRules) != 1 {
-		t.Errorf("expected 1 embedding rule, got %d", len(cfg.EmbeddingRules))
+	if len(cfg.JailbreakRules) != 1 {
+		t.Errorf("expected 1 jailbreak rules, got %d", len(cfg.JailbreakRules))
 	}
 	if len(cfg.Categories) != 1 {
 		t.Errorf("expected 1 category, got %d", len(cfg.Categories))
@@ -620,20 +619,8 @@ SIGNAL authz auth { role: "admin" subjects: [{ kind: "User", name: "admin" }] }
 	if len(cfg.UserFeedbackRules) != 1 {
 		t.Errorf("expected 1 user_feedback rule, got %d", len(cfg.UserFeedbackRules))
 	}
-	if len(cfg.ReaskRules) != 1 {
-		t.Errorf("expected 1 reask rule, got %d", len(cfg.ReaskRules))
-	}
-	if cfg.ReaskRules[0].Threshold != 0.8 || cfg.ReaskRules[0].LookbackTurns != 2 {
-		t.Errorf("unexpected reask config: %+v", cfg.ReaskRules[0])
-	}
-	if len(cfg.PreferenceRules) != 1 {
-		t.Errorf("expected 1 preference rule, got %d", len(cfg.PreferenceRules))
-	}
-	if cfg.PreferenceRules[0].Threshold != 0.7 {
-		t.Errorf("unexpected preference threshold: %v", cfg.PreferenceRules[0].Threshold)
-	}
-	if !reflect.DeepEqual(cfg.PreferenceRules[0].Examples, []string{"keep it concise", "bullet points only"}) {
-		t.Errorf("unexpected preference examples: %v", cfg.PreferenceRules[0].Examples)
+	if len(cfg.TurnRelationRules) != 1 || !reflect.DeepEqual(cfg.TurnRelationRules[0].Labels, []string{"reask"}) {
+		t.Errorf("unexpected turn_relation rules: %+v", cfg.TurnRelationRules)
 	}
 	if len(cfg.LanguageRules) != 1 {
 		t.Errorf("expected 1 language rule, got %d", len(cfg.LanguageRules))
@@ -672,7 +659,7 @@ func TestCompileEmitYAML(t *testing.T) {
 
 SIGNAL domain math {
   description: "Mathematics"
-  mmlu_categories: ["math"]
+  labels: ["math"]
 }
 
 ROUTE math_route {
@@ -722,24 +709,20 @@ MODEL "qwen3:70b" {
 # Signals
 SIGNAL domain math {
   description: "Mathematics and quantitative reasoning"
-  mmlu_categories: ["math"]
+  labels: ["math"]
 }
 
 SIGNAL domain physics {
   description: "Physics and physical sciences"
-  mmlu_categories: ["physics"]
+  labels: ["physics"]
 }
 
 SIGNAL domain other {
   description: "General knowledge"
-  mmlu_categories: ["other"]
+  labels: ["other"]
 }
 
-SIGNAL embedding ai_topics {
-  threshold: 0.75
-  candidates: ["machine learning", "neural network", "deep learning"]
-  aggregation_method: "max"
-}
+SIGNAL jailbreak ai_topics { predicate: { gte: 0.75 } }
 
 SIGNAL keyword urgent_request {
   operator: "any"
@@ -753,11 +736,7 @@ SIGNAL context long_context {
   max_tokens: "32K"
 }
 
-SIGNAL complexity code_complexity {
-  threshold: 0.1
-  hard: { candidates: ["implement distributed system"] }
-  easy: { candidates: ["print hello world"] }
-}
+SIGNAL complexity code_complexity { labels: ["hard"] }
 
 # Plugins
 PLUGIN default_cache semantic_cache {
@@ -783,7 +762,7 @@ ROUTE physics_decision {
 
 ROUTE urgent_ai_route {
   PRIORITY 200
-  WHEN keyword("urgent_request") AND embedding("ai_topics") AND NOT domain("other")
+  WHEN keyword("urgent_request") AND jailbreak("ai_topics") AND NOT domain("other")
   MODEL "qwen3:70b" (reasoning = true, effort = "high"),
         "qwen2.5:3b" (reasoning = false)
   ALGORITHM confidence {
@@ -813,8 +792,8 @@ func TestCompileFullExample(t *testing.T) {
 	if len(cfg.Categories) != 3 {
 		t.Errorf("expected 3 categories, got %d", len(cfg.Categories))
 	}
-	if len(cfg.EmbeddingRules) != 1 {
-		t.Errorf("expected 1 embedding rule, got %d", len(cfg.EmbeddingRules))
+	if len(cfg.JailbreakRules) != 1 {
+		t.Errorf("expected 1 jailbreak rules, got %d", len(cfg.JailbreakRules))
 	}
 	if len(cfg.KeywordRules) != 1 {
 		t.Errorf("expected 1 keyword rule, got %d", len(cfg.KeywordRules))
@@ -895,7 +874,7 @@ MODEL "qwen3:70b" {
 
 SIGNAL domain math {
   description: "Mathematics"
-  mmlu_categories: ["math"]
+  labels: ["math"]
 }
 
 SIGNAL keyword urgent {
@@ -904,11 +883,7 @@ SIGNAL keyword urgent {
   case_sensitive: false
 }
 
-SIGNAL embedding ai_topics {
-  threshold: 0.75
-  candidates: ["machine learning", "deep learning"]
-  aggregation_method: "max"
-}
+SIGNAL jailbreak ai_topics { predicate: { gte: 0.75 } }
 
 ROUTE math_route {
   PRIORITY 100
@@ -921,7 +896,7 @@ ROUTE math_route {
 
 ROUTE urgent_ai_route {
   PRIORITY 200
-  WHEN keyword("urgent") AND embedding("ai_topics")
+  WHEN keyword("urgent") AND jailbreak("ai_topics")
   MODEL "qwen3:70b" (reasoning = true, effort = "high"),
         "qwen2.5:3b" (reasoning = false)
   ALGORITHM confidence {
@@ -958,8 +933,8 @@ ROUTE urgent_ai_route {
 	if roundTripped.Categories[0].Name != "math" {
 		t.Errorf("round-trip: category name = %q, want %q", roundTripped.Categories[0].Name, "math")
 	}
-	if len(roundTripped.Categories[0].MMLUCategories) != 1 || roundTripped.Categories[0].MMLUCategories[0] != "math" {
-		t.Errorf("round-trip: mmlu_categories = %v, want [math]", roundTripped.Categories[0].MMLUCategories)
+	if len(roundTripped.Categories[0].Labels) != 1 || roundTripped.Categories[0].Labels[0] != "math" {
+		t.Errorf("round-trip: labels = %v, want [math]", roundTripped.Categories[0].Labels)
 	}
 
 	// -- Keyword rules
@@ -977,16 +952,16 @@ ROUTE urgent_ai_route {
 		t.Errorf("round-trip: keyword count = %d, want 2", len(kw.Keywords))
 	}
 
-	// -- Embedding rules
-	if len(roundTripped.EmbeddingRules) != 1 {
-		t.Fatalf("round-trip: expected 1 embedding rule, got %d", len(roundTripped.EmbeddingRules))
+	// -- Jailbreak rules
+	if len(roundTripped.JailbreakRules) != 1 {
+		t.Fatalf("round-trip: expected 1 jailbreak rules, got %d", len(roundTripped.JailbreakRules))
 	}
-	emb := roundTripped.EmbeddingRules[0]
-	if emb.Name != "ai_topics" {
-		t.Errorf("round-trip: embedding rule name = %q, want %q", emb.Name, "ai_topics")
+	jailbreak := roundTripped.JailbreakRules[0]
+	if jailbreak.Name != "ai_topics" {
+		t.Errorf("round-trip: jailbreak rule name = %q, want %q", jailbreak.Name, "ai_topics")
 	}
-	if emb.SimilarityThreshold != 0.75 {
-		t.Errorf("round-trip: embedding threshold = %v, want 0.75", emb.SimilarityThreshold)
+	if jailbreak.Predicate == nil || jailbreak.Predicate.GTE == nil || *jailbreak.Predicate.GTE != 0.75 {
+		t.Errorf("round-trip: jailbreak predicate = %+v, want gte 0.75", jailbreak.Predicate)
 	}
 
 	// -- Decisions
@@ -1802,7 +1777,7 @@ ROUTE test {
 func TestEmitCRD(t *testing.T) {
 	input := `
 MODEL "qwen2.5:3b" { param_size: "3b" modality: "text" }
-SIGNAL domain math { description: "Math" mmlu_categories: ["math"] }
+SIGNAL domain math { description: "Math" labels: ["math"] }
 ROUTE math_route {
   PRIORITY 100
   WHEN domain("math")
@@ -2080,12 +2055,12 @@ func TestParseKeywordsAsIdentifiers(t *testing.T) {
 }
 
 func TestParseEmptyArray(t *testing.T) {
-	input := `SIGNAL domain test { mmlu_categories: [] }`
+	input := `SIGNAL domain test { labels: [] }`
 	prog, errs := Parse(input)
 	if len(errs) > 0 {
 		t.Fatalf("parse errors: %v", errs)
 	}
-	av, ok := prog.Signals[0].Fields["mmlu_categories"].(ArrayValue)
+	av, ok := prog.Signals[0].Fields["labels"].(ArrayValue)
 	if !ok {
 		t.Fatal("expected ArrayValue")
 	}
@@ -2180,8 +2155,8 @@ func TestCompileASTDirect(t *testing.T) {
 				SignalType: "domain",
 				Name:       "math",
 				Fields: map[string]Value{
-					"description":     StringValue{V: "Math"},
-					"mmlu_categories": ArrayValue{Items: []Value{StringValue{V: "math"}}},
+					"description": StringValue{V: "Math"},
+					"labels":      ArrayValue{Items: []Value{StringValue{V: "math"}}},
 				},
 			},
 		},
@@ -2490,7 +2465,7 @@ func TestLargeScaleInput(t *testing.T) {
 
 	for i := 0; i < numSignals; i++ {
 		domainValues := config.SupportedRoutingDomainNames()
-		fmt.Fprintf(&sb, "SIGNAL domain domain_%d { description: \"Domain %d\" mmlu_categories: [\"%s\"] }\n", i, i, domainValues[i%len(domainValues)])
+		fmt.Fprintf(&sb, "SIGNAL domain domain_%d { description: \"Domain %d\" labels: [\"%s\"] }\n", i, i, domainValues[i%len(domainValues)])
 	}
 	for i := 0; i < numRoutes; i++ {
 		fmt.Fprintf(&sb, `ROUTE route_%d {
@@ -2527,16 +2502,15 @@ func TestLargeScaleInput(t *testing.T) {
 func TestAllSignalTypesRoundTrip(t *testing.T) {
 	input := `
 SIGNAL keyword kw { operator: "any" keywords: ["test"] case_sensitive: true method: "exact" }
-SIGNAL embedding emb { threshold: 0.75 candidates: ["test"] aggregation_method: "max" }
-SIGNAL domain dom { description: "test" mmlu_categories: ["math"] }
+SIGNAL jailbreak emb { predicate: { gte: 0.75 } }
+SIGNAL domain dom { description: "test" labels: ["math"] }
 SIGNAL fact_check fc { description: "fact check" }
 SIGNAL user_feedback uf { description: "feedback" }
-SIGNAL reask ra { description: "repeat question" threshold: 0.8 lookback_turns: 2 }
-SIGNAL preference pref { description: "preference" threshold: 0.7 examples: ["keep it concise", "bullet points only"] }
+SIGNAL turn_relation ra { description: "repeat question" labels: ["reask"] }
 SIGNAL language lang { description: "English" threshold: 0.6 }
 SIGNAL context ctx { min_tokens: "1K" max_tokens: "32K" }
-SIGNAL complexity comp { threshold: 0.1 hard: { candidates: ["hard"] } easy: { candidates: ["easy"] } }
-SIGNAL modality BOTH { description: "image" }
+SIGNAL complexity comp { labels: ["hard"] }
+SIGNAL modality BOTH { description: "image" labels: ["text_image"] }
 SIGNAL authz auth { role: "admin" subjects: [{ kind: "User", name: "admin" }] }
 
 ROUTE test_route {
@@ -2563,8 +2537,8 @@ ROUTE test_route {
 	if len(rt.KeywordRules) != 1 {
 		t.Errorf("keyword rules: %d", len(rt.KeywordRules))
 	}
-	if len(rt.EmbeddingRules) != 1 {
-		t.Errorf("embedding rules: %d", len(rt.EmbeddingRules))
+	if len(rt.JailbreakRules) != 1 {
+		t.Errorf("jailbreak rules: %d", len(rt.JailbreakRules))
 	}
 	if len(rt.Categories) != 1 {
 		t.Errorf("categories: %d", len(rt.Categories))
@@ -2575,14 +2549,8 @@ ROUTE test_route {
 	if len(rt.UserFeedbackRules) != 1 {
 		t.Errorf("user_feedback rules: %d", len(rt.UserFeedbackRules))
 	}
-	if len(rt.ReaskRules) != 1 {
-		t.Errorf("reask rules: %d", len(rt.ReaskRules))
-	}
-	if rt.ReaskRules[0].Threshold != 0.8 || rt.ReaskRules[0].LookbackTurns != 2 {
-		t.Errorf("unexpected reask round-trip: %+v", rt.ReaskRules[0])
-	}
-	if len(rt.PreferenceRules) != 1 {
-		t.Errorf("preference rules: %d", len(rt.PreferenceRules))
+	if len(rt.TurnRelationRules) != 1 || !reflect.DeepEqual(rt.TurnRelationRules[0].Labels, []string{"reask"}) {
+		t.Errorf("unexpected turn_relation round-trip: %+v", rt.TurnRelationRules)
 	}
 	if len(rt.LanguageRules) != 1 {
 		t.Errorf("language rules: %d", len(rt.LanguageRules))
@@ -2742,8 +2710,8 @@ func TestFullExampleYAMLRoundTrip(t *testing.T) {
 	if len(rt.Categories) != 3 {
 		t.Errorf("categories = %d, want 3", len(rt.Categories))
 	}
-	if len(rt.EmbeddingRules) != 1 {
-		t.Errorf("embedding_rules = %d", len(rt.EmbeddingRules))
+	if len(rt.JailbreakRules) != 1 {
+		t.Errorf("jailbreak rules = %d", len(rt.JailbreakRules))
 	}
 	if len(rt.KeywordRules) != 1 {
 		t.Errorf("keyword_rules = %d", len(rt.KeywordRules))
@@ -2783,7 +2751,7 @@ func TestFullExampleYAMLRoundTrip(t *testing.T) {
 func TestTokenPositionMultiLine(t *testing.T) {
 	input := `SIGNAL domain math {
   description: "Math"
-  mmlu_categories: ["math"]
+  labels: ["math"]
 }
 ROUTE math_route {
   PRIORITY 100
@@ -2896,7 +2864,7 @@ func TestFuzzLikeInputsDoNotPanic(t *testing.T) {
 
 func TestRouteDescriptionPreserved(t *testing.T) {
 	input := `
-SIGNAL domain test { description: "test" }
+SIGNAL domain test { description: "test" labels: ["other"] }
 ROUTE my_route (description = "This is a detailed description") {
   PRIORITY 42
   WHEN domain("test")
@@ -2933,7 +2901,7 @@ MODEL "qwen2.5:3b" {
   loras: [{ name: "math-lora-v2" }]
 }
 
-SIGNAL domain test { description: "test" }
+SIGNAL domain test { description: "test" labels: ["other"] }
 ROUTE test {
   PRIORITY 1
   WHEN domain("test")
@@ -3116,7 +3084,7 @@ ROUTE test {
 
 func TestValidateThresholdOutOfRange(t *testing.T) {
 	input := `
-SIGNAL embedding test { threshold: 1.5 candidates: ["test"] }
+SIGNAL keyword test { operator: "OR" method: "bm25" keywords: ["test"] bm25_threshold: 1.5 }
 `
 	diags, _ := Validate(input)
 	found := false
@@ -3490,16 +3458,14 @@ func TestDecompileToAST(t *testing.T) {
 func TestDecompileAllSignalTypes(t *testing.T) {
 	input := `
 SIGNAL keyword kw { operator: "any" keywords: ["test"] }
-SIGNAL embedding emb { threshold: 0.75 candidates: ["test"] query_modality: "image" }
 SIGNAL domain dom {
   description: "test"
-  mmlu_categories: ["math"]
+  labels: ["math"]
   model_scores: [{ model: "m:1b", score: 0.8, use_reasoning: false }]
 }
 SIGNAL fact_check fc { description: "fact check" }
-SIGNAL user_feedback uf { description: "feedback" }
-SIGNAL reask ra { description: "repeat question" threshold: 0.8 lookback_turns: 2 }
-SIGNAL preference pref { description: "preference" threshold: 0.7 examples: ["keep it concise", "bullet points only"] }
+SIGNAL user_feedback uf { description: "feedback" labels: ["WRONG_ANSWER"] }
+SIGNAL turn_relation ra { description: "repeat question" labels: ["reask"] input: { previous_turns: 2 } }
 SIGNAL language lang { description: "English" threshold: 0.6 }
 SIGNAL context ctx { min_tokens: "1K" max_tokens: "32K" }
 SIGNAL structure struct { feature: { type: "count", source: { type: "regex", pattern: "[?]" } } predicate: { gte: 1 } }
@@ -3507,17 +3473,14 @@ SIGNAL conversation conv {
   feature: { type: "count", source: { type: "message", role: "user" } }
   predicate: { gte: 2 }
 }
-SIGNAL complexity comp {
-  threshold: 0.1
-  hard: { candidates: ["hard"], image_candidates: ["diagram"] }
-  easy: { candidates: ["easy"] }
-  composer: { operator: "OR", conditions: [{ type: "domain", name: "dom" }, { type: "keyword", name: "kw" }] }
-}
-SIGNAL modality mod { description: "image" }
+SIGNAL complexity comp { labels: ["hard"] }
+SIGNAL modality mod { description: "image" labels: ["image"] }
 SIGNAL authz auth { role: "admin" subjects: [{ kind: "User", name: "admin" }] }
-SIGNAL jailbreak jb { method: "classifier" threshold: 0.9 include_history: true }
-SIGNAL pii pii_rule { threshold: 0.8 pii_types_allowed: ["EMAIL_ADDRESS"] include_history: true }
-SIGNAL kb kb_rule { kb: "privacy_kb" target: { kind: "group", value: "privacy_policy" } match: "best" }
+SIGNAL jailbreak jb { predicate: { gte: 0.9 } input: { history: true } }
+SIGNAL safety unsafe { labels: ["Violence"] }
+SIGNAL pii pii_rule { predicate: { gte: 0.8 } ignore_labels: ["EMAIL_ADDRESS"] input: { history: true } }
+SIGNAL hallucination halu { predicate: { gte: 0.5 } }
+SIGNAL refusal declined { predicate: { gte: 0.5 } }
 SIGNAL event critical_event {
   event_types: ["payment_failed"]
   severities: ["critical", "high"]
@@ -3536,39 +3499,13 @@ ROUTE test_route { PRIORITY 1 WHEN domain("dom") MODEL "m:1b" }
 		t.Fatalf("decompile error: %v", err)
 	}
 
-	expectedSignals := []string{
-		"SIGNAL domain dom", "SIGNAL keyword kw", "SIGNAL embedding emb",
-		"SIGNAL fact_check fc", "SIGNAL user_feedback uf", "SIGNAL reask ra",
-		"SIGNAL preference pref", "SIGNAL language lang",
-		"SIGNAL context ctx", "SIGNAL structure struct", "SIGNAL conversation conv",
-		"SIGNAL complexity comp", "SIGNAL modality mod", "SIGNAL authz auth",
-		"SIGNAL jailbreak jb", "SIGNAL pii pii_rule", "SIGNAL kb kb_rule",
-		"SIGNAL event critical_event",
-	}
-	for _, sig := range expectedSignals {
-		if !strings.Contains(dslText, sig) {
-			t.Errorf("missing %q in decompiled output", sig)
-		}
-	}
-	if !strings.Contains(dslText, `threshold: 0.7`) {
-		t.Error("decompiled DSL missing preference threshold")
-	}
-	if !strings.Contains(dslText, `examples: ["keep it concise", "bullet points only"]`) {
-		t.Error("decompiled DSL missing preference examples")
-	}
-	if !strings.Contains(dslText, `lookback_turns: 2`) {
-		t.Error("decompiled DSL missing reask lookback_turns")
-	}
-	if !strings.Contains(dslText, `threshold: 0.6`) {
-		t.Error("decompiled DSL missing language threshold")
-	}
 	for _, want := range []string{
-		`query_modality: "image"`,
-		`model_scores:`,
-		`image_candidates`,
-		`composer:`,
-		`event_types: ["payment_failed"]`,
-		`temporal: true`,
+		"SIGNAL domain dom", "SIGNAL keyword kw", "SIGNAL fact_check fc", "SIGNAL user_feedback uf",
+		"SIGNAL turn_relation ra", "SIGNAL language lang", "SIGNAL context ctx", "SIGNAL structure struct",
+		"SIGNAL conversation conv", "SIGNAL complexity comp", "SIGNAL modality mod", "SIGNAL authz auth",
+		"SIGNAL jailbreak jb", "SIGNAL safety unsafe", "SIGNAL pii pii_rule", "SIGNAL hallucination halu",
+		"SIGNAL refusal declined", "SIGNAL event critical_event",
+		`threshold: 0.6`, `previous_turns: 2`, `model_scores:`, `event_types: ["payment_failed"]`, `temporal: true`,
 	} {
 		if !strings.Contains(dslText, want) {
 			t.Errorf("decompiled DSL missing %q:\n%s", want, dslText)
@@ -3637,7 +3574,7 @@ ROUTE my_route (description = "A detailed description") {
 func TestFormatProducesValidDSL(t *testing.T) {
 	// Messy input with inconsistent formatting
 	input := `MODEL "m:1b"{modality:"text"}
-SIGNAL domain math{description:"Math" mmlu_categories:["math"]}
+SIGNAL domain math{description:"Math" labels:["math"]}
 ROUTE r{PRIORITY 100 WHEN domain("math") MODEL "m:1b"(reasoning=true)}`
 
 	formatted, err := Format(input)
@@ -3866,7 +3803,7 @@ TEST routing_intent {
 	}
 }
 
-func TestCLIValidateRunsRuntimeProjectionPartitionDiagnostics(t *testing.T) {
+func TestCLIValidateBuildsNoRuntimeForProjectionPartitions(t *testing.T) {
 	tmpFile, err := os.CreateTemp("", "projection_partition_runtime*.dsl")
 	if err != nil {
 		t.Fatal(err)
@@ -3874,8 +3811,8 @@ func TestCLIValidateRunsRuntimeProjectionPartitionDiagnostics(t *testing.T) {
 	defer os.Remove(tmpFile.Name())
 
 	_, _ = tmpFile.WriteString(`
-SIGNAL domain math { mmlu_categories: ["math"] }
-SIGNAL domain general { mmlu_categories: ["other"] }
+SIGNAL domain math { labels: ["math"] }
+SIGNAL domain general { labels: ["other"] }
 
 PROJECTION partition domain_taxonomy {
   semantics: "softmax_exclusive"
@@ -3890,20 +3827,11 @@ ROUTE general_route { PRIORITY 100 WHEN domain("general") MODEL "m:1b" }
 
 	var buf bytes.Buffer
 	errCount := CLIValidateWithRunner(tmpFile.Name(), &buf, func(_ *Program) (TestBlockRunner, error) {
-		return stubRuntimeValidationRunner{
-			diags: []Diagnostic{
-				{
-					Level:   DiagWarning,
-					Message: `PROJECTION partition domain_taxonomy: members "math" and "general" candidate centroids have cosine similarity 0.81 (threshold: 0.7) — softmax scores may be near-uniform on ambiguous queries`,
-				},
-			},
-		}, nil
+		t.Fatal("a program without TEST blocks needs no native runtime")
+		return nil, nil
 	})
 	if errCount != 0 {
-		t.Fatalf("expected runtime projection partition validation warning only, got %d errors\n%s", errCount, buf.String())
-	}
-	if !strings.Contains(buf.String(), "candidate centroids have cosine similarity 0.81") {
-		t.Fatalf("expected runtime projection partition diagnostic, got:\n%s", buf.String())
+		t.Fatalf("expected the partition to validate statically, got %d errors\n%s", errCount, buf.String())
 	}
 }
 
@@ -4108,7 +4036,7 @@ func TestEmitUserYAML(t *testing.T) {
 	if strings.Contains(yamlStr, "embedding_rules:") {
 		t.Error("should not have flat 'embedding_rules:' key")
 	}
-	// Check that top-level "categories:" is gone (note: mmlu_categories is fine as a nested field)
+	// Check that top-level "categories:" is gone
 	if strings.Contains(yamlStr, "\ncategories:") || strings.HasPrefix(yamlStr, "categories:") {
 		t.Error("should not have top-level 'categories:' key (should be signals.domains)")
 	}
@@ -4319,7 +4247,7 @@ ROUTE rag_route (description = "RAG route") {
 
 func TestDecompileKnownPluginConfigDoesNotDuplicateTypedFields(t *testing.T) {
 	input := `
-SIGNAL domain test { mmlu_categories: ["other"] }
+SIGNAL domain test { labels: ["other"] }
 ROUTE replay_route (description = "Replay route") {
   PRIORITY 100
   WHEN domain("test")
@@ -4358,15 +4286,15 @@ ROUTE replay_route (description = "Replay route") {
 
 // ==================== Conflict Detection Tests ====================
 
-// ---------- M1: MMLU Category Overlap ----------
+// ---------- M1: Domain Label Overlap ----------
 
 func TestValidateDomainCategoryOverlap(t *testing.T) {
 	input := `
 SIGNAL domain math {
-  mmlu_categories: ["math", "physics"]
+  labels: ["math", "physics"]
 }
 SIGNAL domain science {
-  mmlu_categories: ["physics", "chemistry"]
+  labels: ["physics", "chemistry"]
 }
 ROUTE r1 { PRIORITY 200 WHEN domain("math") MODEL "m1" }
 ROUTE r2 { PRIORITY 100 WHEN domain("science") AND NOT domain("math") MODEL "m2" }
@@ -4375,29 +4303,29 @@ ROUTE r2 { PRIORITY 100 WHEN domain("science") AND NOT domain("math") MODEL "m2"
 	found := false
 	for _, d := range diags {
 		if d.Level == DiagWarning && strings.Contains(d.Message, "physics") &&
-			strings.Contains(d.Message, "share MMLU category") {
+			strings.Contains(d.Message, "both match domain") {
 			found = true
 		}
 	}
 	if !found {
-		t.Error("expected warning about shared MMLU category 'physics'")
+		t.Error("expected warning about the domain 'physics' both signals match")
 	}
 }
 
 func TestValidateDomainCategoryNoOverlap(t *testing.T) {
 	input := `
 SIGNAL domain math {
-  mmlu_categories: ["math", "business"]
+  labels: ["math", "business"]
 }
 SIGNAL domain science {
-  mmlu_categories: ["physics", "chemistry"]
+  labels: ["physics", "chemistry"]
 }
 ROUTE r1 { PRIORITY 200 WHEN domain("math") MODEL "m1" }
 ROUTE r2 { PRIORITY 100 WHEN domain("science") AND NOT domain("math") MODEL "m2" }
 `
 	diags, _ := Validate(input)
 	for _, d := range diags {
-		if strings.Contains(d.Message, "share MMLU category") {
+		if strings.Contains(d.Message, "both match domain") {
 			t.Errorf("unexpected category overlap warning: %s", d.Message)
 		}
 	}
@@ -4407,7 +4335,7 @@ ROUTE r2 { PRIORITY 100 WHEN domain("science") AND NOT domain("math") MODEL "m2"
 
 func TestValidateSameSignalTypeNoGuard(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["math"] }
+SIGNAL domain math { labels: ["math"] }
 ROUTE math_route { PRIORITY 200 WHEN domain("math") MODEL "m1" }
 ROUTE science_route { PRIORITY 100 WHEN domain("math") MODEL "m2" }
 `
@@ -4431,8 +4359,8 @@ ROUTE science_route { PRIORITY 100 WHEN domain("math") MODEL "m2" }
 
 func TestValidateDifferentSignalNamesSameTypeDoNotWarn(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["math"] }
-SIGNAL domain science { mmlu_categories: ["physics"] }
+SIGNAL domain math { labels: ["math"] }
+SIGNAL domain science { labels: ["physics"] }
 ROUTE math_route { PRIORITY 200 WHEN domain("math") MODEL "m1" }
 ROUTE science_route { PRIORITY 100 WHEN domain("science") MODEL "m2" }
 `
@@ -4447,7 +4375,7 @@ ROUTE science_route { PRIORITY 100 WHEN domain("science") MODEL "m2" }
 
 func TestValidateDifferentSignalTypesNoWarning(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["math"] }
+SIGNAL domain math { labels: ["math"] }
 SIGNAL keyword urgent { keywords: ["urgent"] }
 ROUTE r1 { PRIORITY 200 WHEN domain("math") MODEL "m1" }
 ROUTE r2 { PRIORITY 100 WHEN keyword("urgent") MODEL "m2" }
@@ -4462,8 +4390,8 @@ ROUTE r2 { PRIORITY 100 WHEN keyword("urgent") MODEL "m2" }
 
 func TestValidateSameSignalTypeAggregatesMultipleOverlaps(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["math"] }
-SIGNAL domain science { mmlu_categories: ["physics"] }
+SIGNAL domain math { labels: ["math"] }
+SIGNAL domain science { labels: ["physics"] }
 SIGNAL keyword urgent { keywords: ["urgent"] }
 SIGNAL keyword asap { keywords: ["asap"] }
 SIGNAL keyword help { keywords: ["help"] }
@@ -4510,11 +4438,7 @@ ROUTE fallback_route {
 
 func TestValidateProjectionScoreAcceptsComplexitySublevels(t *testing.T) {
 	input := `
-SIGNAL complexity reasoning_complexity {
-  threshold: 0.1
-  hard: { candidates: ["hard task"] }
-  easy: { candidates: ["easy task"] }
-}
+SIGNAL complexity reasoning_complexity { labels: ["hard"] }
 
 PROJECTION score difficulty_score {
   method: "weighted_sum"
@@ -4646,8 +4570,8 @@ ROUTE verified_route {
 
 func TestValidateProjectionPartitionSuppressesCrossRouteDomainWarnings(t *testing.T) {
 	input := `
-SIGNAL domain business { mmlu_categories: ["business"] }
-SIGNAL domain economics { mmlu_categories: ["economics"] }
+SIGNAL domain business { labels: ["business"] }
+SIGNAL domain economics { labels: ["economics"] }
 
 PROJECTION partition balance_domain_partition {
   semantics: "softmax_exclusive"
@@ -4926,10 +4850,10 @@ ROUTE code_route {
 
 func TestParseProjectionPartition(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["math"] }
-SIGNAL domain science { mmlu_categories: ["physics"] }
-SIGNAL domain coding { mmlu_categories: ["computer science"] }
-SIGNAL domain general { mmlu_categories: ["other"] }
+SIGNAL domain math { labels: ["math"] }
+SIGNAL domain science { labels: ["physics"] }
+SIGNAL domain coding { labels: ["computer science"] }
+SIGNAL domain general { labels: ["other"] }
 
 PROJECTION partition domain_taxonomy {
   semantics: "softmax_exclusive"
@@ -4967,8 +4891,8 @@ ROUTE r1 { PRIORITY 100 WHEN domain("math") MODEL "m1" }
 
 func TestCompileProjectionPartition(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["math"] }
-SIGNAL domain general { mmlu_categories: ["other"] }
+SIGNAL domain math { labels: ["math"] }
+SIGNAL domain general { labels: ["other"] }
 
 PROJECTION partition domain_taxonomy {
   semantics: "softmax_exclusive"
@@ -4997,7 +4921,7 @@ ROUTE r1 { PRIORITY 100 WHEN domain("math") MODEL "m1" }
 
 func TestValidateProjectionPartitionMissingMember(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["math"] }
+SIGNAL domain math { labels: ["math"] }
 
 PROJECTION partition test_group {
   semantics: "exclusive"
@@ -5019,8 +4943,8 @@ PROJECTION partition test_group {
 
 func TestValidateProjectionPartitionMissingDefault(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["math"] }
-SIGNAL domain science { mmlu_categories: ["physics"] }
+SIGNAL domain math { labels: ["math"] }
+SIGNAL domain science { labels: ["physics"] }
 
 PROJECTION partition test_group {
   semantics: "exclusive"
@@ -5041,8 +4965,8 @@ PROJECTION partition test_group {
 
 func TestValidateProjectionPartitionCategoryOverlap(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["physics", "math"] }
-SIGNAL domain science { mmlu_categories: ["physics", "chemistry"] }
+SIGNAL domain math { labels: ["physics", "math"] }
+SIGNAL domain science { labels: ["physics", "chemistry"] }
 
 PROJECTION partition test_group {
   semantics: "exclusive"
@@ -5065,8 +4989,8 @@ PROJECTION partition test_group {
 
 func TestValidateProjectionPartitionSoftmaxNoTemp(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["math"] }
-SIGNAL domain general { mmlu_categories: ["other"] }
+SIGNAL domain math { labels: ["math"] }
+SIGNAL domain general { labels: ["other"] }
 
 PROJECTION partition test_group {
   semantics: "softmax_exclusive"
@@ -5369,7 +5293,7 @@ ROUTE heavy_route {
 
 func TestParseTestBlock(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["math"] }
+SIGNAL domain math { labels: ["math"] }
 ROUTE math_route { PRIORITY 100 WHEN domain("math") MODEL "m1" }
 
 TEST routing_intent {
@@ -5435,18 +5359,9 @@ func (s stubTestBlockRunner) EvaluateTestBlockQuery(query string) (*TestBlockRes
 	return nil, nil
 }
 
-type stubRuntimeValidationRunner struct {
-	stubTestBlockRunner
-	diags []Diagnostic
-}
-
-func (s stubRuntimeValidationRunner) ValidateProjectionPartitions(_ *Program) []Diagnostic {
-	return append([]Diagnostic(nil), s.diags...)
-}
-
 func TestValidateTestBlockUndefinedRoute(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["math"] }
+SIGNAL domain math { labels: ["math"] }
 ROUTE math_route { PRIORITY 100 WHEN domain("math") MODEL "m1" }
 
 TEST routing_intent {
@@ -5467,7 +5382,7 @@ TEST routing_intent {
 
 func TestValidateTestBlockValidRoutes(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["math"] }
+SIGNAL domain math { labels: ["math"] }
 ROUTE math_route { PRIORITY 100 WHEN domain("math") MODEL "m1" }
 
 TEST routing_intent {
@@ -5520,8 +5435,8 @@ TEST routing_intent {
 
 func TestParseTier(t *testing.T) {
 	input := `
-SIGNAL jailbreak detector { method: "embedding" }
-SIGNAL domain math { mmlu_categories: ["math"] }
+SIGNAL jailbreak detector {}
+SIGNAL domain math { labels: ["math"] }
 
 ROUTE safety_block {
   TIER 1
@@ -5554,8 +5469,8 @@ ROUTE math_route {
 
 func TestCompileTier(t *testing.T) {
 	input := `
-SIGNAL jailbreak detector { method: "embedding" }
-SIGNAL domain math { mmlu_categories: ["math"] }
+SIGNAL jailbreak detector {}
+SIGNAL domain math { labels: ["math"] }
 
 ROUTE safety_block {
   TIER 1
@@ -5607,8 +5522,8 @@ ROUTE test {
 
 func TestParseDecisionTreeLowersToRoutes(t *testing.T) {
 	input := `
-SIGNAL jailbreak detector { method: "embedding" threshold: 0.8 }
-SIGNAL domain math { mmlu_categories: ["math"] }
+SIGNAL jailbreak detector { predicate: { gte: 0.8 } }
+SIGNAL domain math { labels: ["math"] }
 
 DECISION_TREE routing_policy {
   IF jailbreak("detector") {
@@ -5665,7 +5580,7 @@ DECISION_TREE routing_policy {
 
 func TestParseDecisionTreeRequiresElse(t *testing.T) {
 	_, errs := Parse(`
-SIGNAL domain math { mmlu_categories: ["math"] }
+SIGNAL domain math { labels: ["math"] }
 
 DECISION_TREE routing_policy {
   IF domain("math") {
@@ -5680,7 +5595,7 @@ DECISION_TREE routing_policy {
 
 func TestParseDecisionTreeRejectsMixedRoutes(t *testing.T) {
 	_, errs := Parse(`
-SIGNAL domain math { mmlu_categories: ["math"] }
+SIGNAL domain math { labels: ["math"] }
 
 ROUTE legacy_route {
   PRIORITY 100
@@ -5713,7 +5628,7 @@ DECISION_TREE routing_policy {
 
 func TestParseDecisionTreeGeneratesBranchNames(t *testing.T) {
 	prog, errs := Parse(`
-SIGNAL domain math { mmlu_categories: ["math"] }
+SIGNAL domain math { labels: ["math"] }
 
 DECISION_TREE routing_policy {
   IF domain("math") {
@@ -5737,8 +5652,8 @@ DECISION_TREE routing_policy {
 
 func TestDecisionTreeDecompileContractUsesFlatRoutes(t *testing.T) {
 	input := `
-SIGNAL jailbreak detector { method: "embedding" threshold: 0.8 }
-SIGNAL domain math { mmlu_categories: ["math"] }
+SIGNAL jailbreak detector { predicate: { gte: 0.8 } }
+SIGNAL domain math { labels: ["math"] }
 
 DECISION_TREE routing_policy {
   IF jailbreak("detector") {
@@ -5794,8 +5709,8 @@ DECISION_TREE routing_policy {
 
 func TestDecompileProjectionPartitionRoundTrip(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["math"] }
-SIGNAL domain general { mmlu_categories: ["other"] }
+SIGNAL domain math { labels: ["math"] }
+SIGNAL domain general { labels: ["other"] }
 
 PROJECTION partition domain_taxonomy {
   semantics: "softmax_exclusive"
@@ -5913,15 +5828,15 @@ func TestProgramToJSONWithTier(t *testing.T) {
 func TestConflictFreeConfigWithProjectionPartition(t *testing.T) {
 	input := `
 SIGNAL domain math {
-  mmlu_categories: ["math", "physics"]
+  labels: ["math", "physics"]
 }
 SIGNAL domain science {
-  mmlu_categories: ["physics", "chemistry", "biology"]
+  labels: ["physics", "chemistry", "biology"]
 }
 SIGNAL domain coding {
-  mmlu_categories: ["computer science"]
+  labels: ["computer science"]
 }
-SIGNAL domain general { mmlu_categories: ["other"] }
+SIGNAL domain general { labels: ["other"] }
 
 PROJECTION partition domain_taxonomy {
   semantics: "softmax_exclusive"
@@ -5930,10 +5845,7 @@ PROJECTION partition domain_taxonomy {
   default: "general"
 }
 
-SIGNAL jailbreak detector {
-  method: "embedding"
-  threshold: 0.8
-}
+SIGNAL jailbreak detector { predicate: { gte: 0.8 } }
 
 ROUTE jailbreak_block {
   TIER 1

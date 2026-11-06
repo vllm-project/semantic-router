@@ -57,10 +57,10 @@ func TestHandleConfigValidateReturnsLoadWarnings(t *testing.T) {
 		"routing:",
 		"  modelCards:",
 		"    - name: m",
-		"  signals:",
-		"    modality:",
-		"      - name: DIFFUSION",
-		"        description: Image generation requests.",
+		"global:",
+		"  model_catalog:",
+		"    bindings:",
+		"      jailbreak: {deployment: primary, contract: decision.v1}",
 		"",
 	}, "\n")
 	body, err := json.Marshal(RouterConfigUpdateRequest{YAML: document})
@@ -78,7 +78,7 @@ func TestHandleConfigValidateReturnsLoadWarnings(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if !got.Valid || len(got.Warnings) != 1 || got.Warnings[0].Code != "modality_detector_disabled" {
-		t.Fatalf("response = %+v, want one modality_detector_disabled warning", got)
+	if !got.Valid || len(got.Warnings) != 1 || got.Warnings[0].Code != "deprecated_model_field" {
+		t.Fatalf("response = %+v, want one deprecated_model_field warning", got)
 	}
 }

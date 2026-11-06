@@ -1,0 +1,47 @@
+# The prompt guard, PII and hallucination detector modules, the chat guard's
+# external model fields and the batch concurrency of the removed modules: a
+# module's threshold becomes the predicate of the rules that inherited it, and
+# a decision-task binding is named for its signal type.
+version: v0.3
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+routing:
+  model_bindings:
+    pii: primary
+  signals:
+    jailbreak:
+      - {name: attack, predicate: {gte: 0.7}}
+    pii:
+      - {name: contact, predicate: {gte: 0.4}}
+    hallucination:
+      - {name: ungrounded, predicate: {gte: 0.6}}
+  decisions:
+    - name: blocked
+      priority: 200
+      rules:
+        operator: OR
+        conditions:
+          - {type: jailbreak, name: attack}
+          - {type: pii, name: contact}
+      modelRefs: [{model: general}]
+    - name: answer
+      priority: 100
+      rules: {operator: AND, conditions: []}
+      modelRefs: [{model: general}]
+      plugins:
+        - type: response_guard
+          configuration:
+            rules: [{when: {type: hallucination, name: ungrounded}, action: annotate}]
+global:
+  services:
+    api:
+      batch_classification: {max_batch_size: 50}
+  model_catalog:
+    external:
+      - name: guard
+        model_role: guardrail
+        llm_model_name: guard-v1
+        llm_endpoint: {address: 127.0.0.1, port: 8001}

@@ -703,18 +703,7 @@ func validateSignalCatalog(entries []routerconfig.SignalCatalogEntry) error {
 		}
 
 		switch entry.ReferenceQualifier {
-		case "":
-			if len(entry.ReferenceSuffixes) != 0 {
-				return fmt.Errorf("signal %q declares suffixes without a reference qualifier", entry.Type)
-			}
-		case routerconfig.SignalReferenceQualifierFixedSuffix:
-			if len(entry.ReferenceSuffixes) == 0 {
-				return fmt.Errorf("signal %q has a fixed-suffix qualifier without suffixes", entry.Type)
-			}
-		case routerconfig.SignalReferenceQualifierLabel:
-			if len(entry.ReferenceSuffixes) != 0 {
-				return fmt.Errorf("label-qualified signal %q must discover labels from its payload", entry.Type)
-			}
+		case "", routerconfig.SignalReferenceQualifierLabel:
 		default:
 			return fmt.Errorf("signal %q has unknown reference qualifier %q", entry.Type, entry.ReferenceQualifier)
 		}

@@ -31,6 +31,7 @@ RECIPE balance (description = "Spends reasoning only where a request needs it. O
 
   SIGNAL user_feedback wrong_answer {
     description: "The user says an earlier answer was wrong; recovery also needs the correction question."
+    labels: ["WRONG_ANSWER"]
   }
 
   SIGNAL context long_input {
@@ -635,15 +636,14 @@ RECIPE vault (description = "Keep private traffic inside the assigned deployment
   # =============================================================================
 
   SIGNAL jailbreak prompt_attack {
-    threshold: 0.75
-    include_history: true
+    predicate: { gte: 0.75 }
+    input: { history: true }
   }
 
   SIGNAL pii personal_data {
-    threshold: 0.01
-    pii_types_allowed: ["NRP", "ZIP_CODE", "AGE"]
-    include_history: true
     description: "Personal identifiers trigger sensitive handling independently of context."
+    predicate: { gte: 0.01 }
+    input: { history: true }
   }
 
   SIGNAL systemone attack {

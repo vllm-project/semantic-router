@@ -52,9 +52,9 @@ This is a composition example, not a `content_safety` plugin type. The
 `system_prompt` adds request-side guidance, `header_mutation` adds a policy
 label, and the [`response_guard`](./response-guard) annotates a generated
 response that the jailbreak rule `unsafe_completion`, declared with
-`direction: response`, flags. The bundle does not run a request-side content
+`stage: response`, flags. The bundle does not run a request-side content
 classifier, and the header is not proof that content is safe. Calibrate the
-rule's threshold and decide whether annotating is sufficient or the rule
+rule's `predicate` and decide whether annotating is sufficient or the rule
 should block.
 
 See the complete bundle:

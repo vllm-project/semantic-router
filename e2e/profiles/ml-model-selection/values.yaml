@@ -282,7 +282,6 @@ config:
       - name: mistral-7b
   global:
     model_catalog:
-      kbs: []
       embeddings:
         semantic:
           qwen3_model_path: models/mom-embedding-pro

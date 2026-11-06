@@ -13,11 +13,15 @@ routing:
       adapter: vela_reranker
       pair_scorer: {layer: 22, dimension: 768}
   signals:
-    embeddings: [{name: billing, threshold: 0.7, candidates: [refund my order]}]
+    systemone:
+      - name: billing
+        question:
+          type: noul
+          instructions: 'Is the request about any of these: refund my order?'
   decisions:
     - name: route
       priority: 100
-      rules: {operator: OR, conditions: [{type: embedding, name: billing}]}
+      rules: {operator: OR, conditions: [{type: systemone, name: billing}]}
       modelRefs: [{model: general}]
       plugins:
         - type: rag

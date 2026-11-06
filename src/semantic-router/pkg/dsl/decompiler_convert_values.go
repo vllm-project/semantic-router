@@ -239,12 +239,6 @@ func formatProjectionScoreInputs(inputs []config.ProjectionScoreInput) string {
 		if input.Name != "" {
 			fields = append(fields, fmt.Sprintf("name: %q", input.Name))
 		}
-		if input.KB != "" {
-			fields = append(fields, fmt.Sprintf("kb: %q", input.KB))
-		}
-		if input.Metric != "" {
-			fields = append(fields, fmt.Sprintf("metric: %q", input.Metric))
-		}
 		if input.ValueSource != "" {
 			fields = append(fields, fmt.Sprintf("value_source: %q", input.ValueSource))
 		}

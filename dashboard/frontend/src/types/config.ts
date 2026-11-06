@@ -349,20 +349,11 @@ export interface SafetySignal {
   description?: string
   /** The deployment that answers this rule; without one, its binding or the decision model does. */
   deployment?: string
-  /** @deprecated Name a deployment instead. */
-  model?: string
+  /** Harm categories the rule matches; without labels it asks whether the content is harmful. */
   labels?: string[]
-  unsafe_labels?: string[]
-  threshold: number
-  hazard?: {
-    /** The deployment that scores the hazard categories. */
-    deployment?: string
-    /** @deprecated Name a deployment instead. */
-    model?: string
-    labels: string[]
-    categories: string[]
-    threshold: number
-  }
+  predicate?: NumericPredicate
+  stage?: 'request' | 'response'
+  timeout_ms?: number
 }
 
 export interface PIISignal {

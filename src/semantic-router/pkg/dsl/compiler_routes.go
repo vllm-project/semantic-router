@@ -251,26 +251,3 @@ func (c *Compiler) flattenBoolExpr(
 	}
 	return []config.RuleNode{c.compileBoolExpr(expr)}
 }
-
-func compileComposerObj(ov ObjectValue) config.RuleCombination {
-	rc := config.RuleCombination{}
-	if t, ok := getStringField(ov.Fields, "type"); ok {
-		rc.Type = t
-	}
-	if n, ok := getStringField(ov.Fields, "name"); ok {
-		rc.Name = n
-	}
-	if op, ok := getStringField(ov.Fields, "operator"); ok {
-		rc.Operator = op
-	}
-	if arr, ok := ov.Fields["conditions"]; ok {
-		if av, ok := arr.(ArrayValue); ok {
-			for _, item := range av.Items {
-				if obj, ok := item.(ObjectValue); ok {
-					rc.Conditions = append(rc.Conditions, compileComposerObj(obj))
-				}
-			}
-		}
-	}
-	return rc
-}

@@ -47,7 +47,7 @@ entrypoints:
 		ctx := &RequestContext{}
 		router.resolveEntrypointForRequest(example.model, ctx)
 		profile := cfg.ConfigForRecipe(ctx.Routing.SelectedRecipe())
-		engine := decision.NewDecisionEngine(nil, nil, nil, profile.Decisions, profile.Strategy)
+		engine := decision.NewDecisionEngine(profile.Decisions, profile.Strategy)
 		result, err := engine.EvaluateDecisionsWithSignals(&decision.SignalMatches{
 			DomainRules:       []string{"law", "health"},
 			SignalConfidences: map[string]float64{"domain:law": 0.60, "domain:health": 0.95},

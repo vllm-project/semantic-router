@@ -164,7 +164,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     enabled: true,
     use_cpu: true,
   } satisfies FeedbackDetectorConfig,
-  complexity: {},
   external_models: [],
   admission: {},
   system_models: {
@@ -324,11 +323,6 @@ export const SECTION_META: Record<
     title: 'Feedback Detector',
     eyebrow: 'Model Catalog',
     description: 'Feedback classification defaults for routing-aware user correction flows.',
-  },
-  complexity: {
-    title: 'Complexity Model',
-    eyebrow: 'Model Catalog',
-    description: 'Model-backed request-complexity classification used by routing signals.',
   },
   external_models: {
     title: 'External Models',

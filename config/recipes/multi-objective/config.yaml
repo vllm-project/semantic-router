@@ -334,11 +334,6 @@ recipes:
         min_tokens: 12K
         max_tokens: 262K
         description: Long inputs that justify stronger synthesis.
-      reasks:
-      - name: unified_balance_reask
-        description: Detect an immediate semantic repeat after an unsatisfactory answer.
-        threshold: 0.8
-        lookback_turns: 1
       systemone:
       - name: correction
         description: Whether the user reports a wrong answer and asks for a corrected one.
@@ -382,6 +377,13 @@ recipes:
             description: 'Yes: the user asks for a fact check, verification, sources or evidence'
         predicate:
           gte: 0.7
+      turn_relation:
+      - name: unified_balance_reask
+        description: Detect an immediate semantic repeat after an unsatisfactory answer.
+        labels:
+        - reask
+        input:
+          previous_turns: 1
     decisions:
     - algorithm:
         type: static
@@ -405,7 +407,7 @@ recipes:
         conditions:
         - type: systemone
           name: correction
-        - type: reask
+        - type: turn_relation
           name: unified_balance_reask
         on_unknown: no_match
       modelRefs:

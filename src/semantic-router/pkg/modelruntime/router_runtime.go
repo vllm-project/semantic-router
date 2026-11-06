@@ -12,11 +12,10 @@ import (
 )
 
 type EmbeddingRuntimeState struct {
-	Embeddings          *embedding.Set
-	AnyReady            bool
-	ToolsReady          bool
-	KnowledgeBasesReady bool
-	EmbeddingProvider   *EmbeddingProviderRuntimeState
+	Embeddings        *embedding.Set
+	AnyReady          bool
+	ToolsReady        bool
+	EmbeddingProvider *EmbeddingProviderRuntimeState
 }
 
 type EmbeddingProviderRuntimeState struct {

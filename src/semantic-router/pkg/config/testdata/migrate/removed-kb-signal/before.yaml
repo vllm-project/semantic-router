@@ -1,0 +1,30 @@
+# The kb signal, its conditions, kb_metric inputs and the knowledge bases they
+# read are removed; migrate cannot write the question that replaces a rule.
+version: v0.3
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+routing:
+  signals:
+    kb:
+      - name: privacy
+        kb: policies
+        target: {kind: label, value: private}
+  projections:
+    scores:
+      - name: policy_pressure
+        method: weighted_sum
+        inputs:
+          - {type: kb_metric, kb: policies, metric: private_vs_public, weight: 1}
+  decisions:
+    - name: private
+      priority: 100
+      rules: {type: kb, name: privacy}
+      modelRefs: [{model: general}]
+global:
+  model_catalog:
+    kbs:
+      - name: policies
+        source: {path: kb/policies}

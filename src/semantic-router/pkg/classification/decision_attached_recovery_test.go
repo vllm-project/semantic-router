@@ -66,7 +66,11 @@ func TestAttachedDecisionQuestionsRecoverWithoutDiscovery(t *testing.T) {
 	}
 	evaluate := func() *SignalResults {
 		r := &SignalResults{SignalErrors: map[string]string{}, SignalValues: map[string]float64{}, SignalConfidences: map[string]float64{}}
-		c.evaluateSystemOneDeployment(t.Context(), r, &sync.Mutex{}, &systemOneCall{deployment: "primary", request: modelservice.Request{State: "needs tools"}, rules: models.cfg.SystemOneRules})
+		var rules []askedRule
+		for _, rule := range models.cfg.SystemOneRules {
+			rules = append(rules, systemOneAsked(rule))
+		}
+		c.evaluateSystemOneDeployment(t.Context(), r, &sync.Mutex{}, &systemOneCall{deployment: "primary", request: modelservice.Request{State: "needs tools"}, rules: rules})
 		return r
 	}
 	if result := evaluate(); result.SignalErrors["systemone:needs"] == "" || len(services.requests) != 0 {
@@ -105,69 +109,5 @@ func TestAttachedDecisionSpanIsNeverComposedOrSilentlyAccepted(t *testing.T) {
 	services.card = decisionObservation("span")
 	if err := c.prepareSystemOneSignals(); err != nil {
 		t.Fatalf("native Span capability was lost: %v", err)
-	}
-}
-
-func TestAttachedGenericTaskBindingRetainsPrivacyCompositionAfterRecovery(t *testing.T) {
-	models, services := attachedDecisionModels(t, true)
-	backend, err := prepareDecisionPII(models)
-	if err != nil || backend == nil {
-		t.Fatalf("offline generic binding must prepare its task: %v", err)
-	}
-	if result := backend.judge(t.Context(), "private input"); !errors.Is(result.err, modelservice.ErrUnavailable) || len(services.requests) != 0 {
-		t.Fatalf("offline judgment was not unknown: %+v", result)
-	}
-	services.card, services.ready = decisionObservation("noul"), true
-	result := backend.judge(t.Context(), "private input")
-	if result.err != nil || result.presence != .9 || len(result.categories) == 0 || len(services.requests) != 1 {
-		t.Fatalf("recovered judgment lost presence/categories: %+v requests=%+v", result, services.requests)
-	}
-	for _, q := range services.requests[0].Questions {
-		if q.Type != "noul" || !q.RequireFullInput || q.Truncate {
-			t.Fatalf("recovery changed strict privacy task input or bypassed Set composition: %+v", q)
-		}
-	}
-	services.card = decisionObservation("choice")
-	if result := backend.judge(t.Context(), "private input"); !errors.Is(result.err, modelservice.ErrRejected) || len(services.requests) != 1 {
-		t.Fatalf("changed capabilities must fail before inference: %+v", result)
-	}
-	services.ready = false
-	if result := backend.judge(t.Context(), "private input"); !errors.Is(result.err, modelservice.ErrUnavailable) {
-		t.Fatal("lost readiness reused an old card")
-	}
-	definition, _ := modelservice.BuiltinTask("pii_presence")
-	question := definition.Question
-	question.Truncate = true
-	if _, err := backend.judgment.preparePlan(definition, question); !errors.Is(err, modelservice.ErrRejected) {
-		t.Fatalf("offline preparation weakened structural input validation: %v", err)
-	}
-}
-
-func TestAttachedGenericBindingRejectsKnownNonDecisionService(t *testing.T) {
-	models, services := attachedDecisionModels(t, true)
-	services.card = modelservice.ModelCard{ID: "classifier", Surfaces: []string{"classify"}}
-	services.ready = true
-	if backend, err := prepareDecisionPII(models); !errors.Is(err, modelservice.ErrRejected) || backend != nil {
-		t.Fatalf("explicit generic binding silently fell back to a different adapter: %+v %v", backend, err)
-	}
-}
-
-func TestImplicitAttachedPIIStillUsesMetadataToSelectPreciseAdapter(t *testing.T) {
-	models, services := preparedJudgmentModels(t)
-	models.cfg.ModelDeployments["primary"] = config.ModelDeployment{Provider: config.ModelRuntimeProvider, Endpoint: "http://attached.invalid"}
-	services.card = decisionObservation("span", "noul", "set")
-	backend, err := prepareDecisionPII(models)
-	if err != nil || backend != nil || len(services.asked) != 1 {
-		t.Fatalf("implicit adapter selection changed to deferred generic tasks: %+v %v discovery=%v", backend, err, services.asked)
-	}
-}
-
-func TestPIIPresetKeepsThePreciseAdapter(t *testing.T) {
-	models, services := preparedJudgmentModels(t)
-	services.card = decisionObservation("choice", "noul", "score")
-	services.card.Presets = []string{"pii"}
-	backend, err := prepareDecisionPII(models)
-	if err != nil || backend != nil {
-		t.Fatalf("a decision model that defines the pii preset fell back to the yes/no verdict: %+v %v", backend, err)
 	}
 }

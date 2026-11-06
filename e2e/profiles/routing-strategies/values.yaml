@@ -339,93 +339,100 @@ config:
       domains:
         - name: code_keywords
           description: Programming and software development queries
-          mmlu_categories:
+          labels:
             - "computer science"
-        - name: urgent_request
-          description: Urgent and time-sensitive requests
-        - name: sensitive_data
-          description: Requests involving sensitive personal data
         - name: business
           description: Business and management related queries
-          mmlu_categories:
+          labels:
             - business
         - name: law
           description: Legal questions and law-related topics
-          mmlu_categories:
+          labels:
             - law
         - name: psychology
           description: Psychology and mental health topics
-          mmlu_categories:
+          labels:
             - psychology
         - name: biology
           description: Biology and life sciences questions
-          mmlu_categories:
+          labels:
             - biology
         - name: chemistry
           description: Chemistry and chemical sciences questions
-          mmlu_categories:
+          labels:
             - chemistry
         - name: history
           description: Historical questions and cultural topics
-          mmlu_categories:
+          labels:
             - history
         - name: other
           description: General knowledge and miscellaneous topics
-          mmlu_categories:
+          labels:
             - other
         - name: health
           description: Health and medical information queries
-          mmlu_categories:
+          labels:
             - health
         - name: economics
           description: Economics and financial topics
-          mmlu_categories:
+          labels:
             - economics
         - name: math
           description: Mathematics and quantitative reasoning
-          mmlu_categories:
+          labels:
             - math
         - name: physics
           description: Physics and physical sciences
-          mmlu_categories:
+          labels:
             - physics
         - name: "computer science"
           description: Computer science and programming
-          mmlu_categories:
+          labels:
             - "computer science"
         - name: philosophy
           description: Philosophy and ethical questions
-          mmlu_categories:
+          labels:
             - philosophy
         - name: engineering
           description: Engineering and technical problem-solving
-          mmlu_categories:
+          labels:
             - engineering
       jailbreak:
         - name: jailbreak_standard
-          threshold: 0.88
-          include_history: false
           description: Standard jailbreak detection for routing-strategies tests
+          predicate:
+            gte: 0.88
       pii:
         - name: pii_deny_all
-          threshold: 0.18
-          include_history: false
           description: Block all PII
+          predicate:
+            gte: 0.18
     modelCards:
       - name: base-model
       - name: premium-model
       - name: economy-model
   global:
     model_catalog:
-      kbs: []
+      deployments:
+        # provider-mocker's System One fixture answers the jailbreak and PII
+        # rules, so the shared detection cases are pinned by their markers
+        # (tools/test/services/provider-mocker/README.md).
+        fake-systemone:
+          provider: systemone
+          endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/systemone
+          model: e2e/fake-systemone
+          timeout_ms: 5000
+          capabilities:
+            question_types: [choice, noul, span]
+      bindings:
+        jailbreak: fake-systemone
+        pii: fake-systemone
     router:
       strategy: priority
     services:
       api:
         batch_classification:
           max_batch_size: 100
-          concurrency_threshold: 5
-          max_concurrency: 8
           metrics:
             enabled: true
             detailed_goroutine_tracking: true

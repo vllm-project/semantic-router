@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -15,17 +16,13 @@ import (
 // provider the adapter, and the RAG plugin's rerank block a reranker's
 // layer and dimension.
 
-// bindingConsumers maps a binding's signal-type key to the consumer that
-// reads it. A key that is not listed names its consumer itself: preference,
-// reask, complexity, embedding, safety, hazard, classifier, decision and the
-// rule keys safety.<rule>, safety.<rule>.hazard and classifier.<rule>.
+// bindingConsumers maps a binding's signal-type key to the plugin module
+// that reads it besides the signal's rules. A key that is not listed names
+// its consumer itself: the other application signals, embedding and the
+// rule keys safety.<rule> and complexity.<rule>.
 var bindingConsumers = map[string]string{
-	SignalTypeDomain:        "domain_classifier",
 	SignalTypeJailbreak:     "prompt_guard",
 	SignalTypePII:           "pii_classifier",
-	SignalTypeFactCheck:     "fact_check_classifier",
-	SignalTypeUserFeedback:  "feedback_detector",
-	SignalTypeModality:      "modality_detector",
 	SignalTypeHallucination: "hallucination_detector",
 }
 
@@ -38,14 +35,9 @@ var bindingKeyOfConsumer = func() map[string]string {
 	return keys
 }()
 
-// Type-level binding keys of the signals whose rules each ask a question of
-// their own: a rule's deployment, then its rule key, then these.
-const (
-	bindingKeySafety     = SignalTypeSafety
-	bindingKeyHazard     = "hazard"
-	bindingKeyClassifier = SignalTypeClassifier
-	bindingKeySystemOne  = SignalTypeSystemOne
-)
+// bindingKeySystemOne keys the rule consumers of systemone rules, which ask
+// a question of their own.
+const bindingKeySystemOne = SignalTypeSystemOne
 
 // BindingConsumer is the consumer a binding key names: the signal type's
 // consumer, or the key itself for a consumer name or rule key.
@@ -67,14 +59,30 @@ func BindingKey(consumer string) string {
 // knownBindingKey reports whether a consumer key names a signal a binding
 // can serve.
 func knownBindingKey(key string) bool {
-	switch key {
-	case "domain_classifier", "prompt_guard", "pii_classifier", "fact_check_classifier", "feedback_detector",
-		"modality_detector", "hallucination_detector", "preference", "reask", "complexity", "embedding",
-		RAGRerankerConsumer, bindingKeySafety, bindingKeyHazard, bindingKeyClassifier, bindingKeySystemOne:
+	if slices.Contains(SharedAnswerSignalTypes, key) {
 		return true
 	}
-	for _, prefix := range []string{"safety.", "classifier.", "complexity.", "systemone."} {
+	switch key {
+	case "prompt_guard", "pii_classifier", "hallucination_detector", "embedding", RAGRerankerConsumer, bindingKeySystemOne:
+		return true
+	}
+	for _, prefix := range []string{"safety.", "complexity.", "systemone."} {
 		if strings.HasPrefix(key, prefix) && len(key) > len(prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// isApplicationConsumer reports whether a consumer is the rules of an
+// application signal type, or one rule of it by a safety.<rule> or
+// complexity.<rule> key: the decision model answers them.
+func isApplicationConsumer(consumer string) bool {
+	if slices.Contains(SharedAnswerSignalTypes, consumer) {
+		return true
+	}
+	for _, prefix := range []string{SignalTypeSafety + ".", SignalTypeComplexity + "."} {
+		if strings.HasPrefix(consumer, prefix) && len(consumer) > len(prefix) {
 			return true
 		}
 	}
@@ -84,14 +92,7 @@ func knownBindingKey(key string) bool {
 // ruleConsumer is the consumer a binding key is checked as: a type-level
 // key binds every rule of its type, so it is checked as one such rule.
 func ruleConsumer(key string) string {
-	switch key {
-	case bindingKeySafety:
-		return "safety._"
-	case bindingKeyHazard:
-		return "safety._.hazard"
-	case bindingKeyClassifier:
-		return "classifier._"
-	case bindingKeySystemOne:
+	if key == bindingKeySystemOne {
 		return "systemone._"
 	}
 	return key

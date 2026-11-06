@@ -12,7 +12,7 @@ import (
 
 func rankedWinner(t *testing.T, decisions []config.Decision, strategy config.RoutingStrategy, signals *SignalMatches) *DecisionResult {
 	t.Helper()
-	result, err := NewDecisionEngine(nil, nil, nil, decisions, strategy).EvaluateDecisionsWithSignals(signals)
+	result, err := NewDecisionEngine(decisions, strategy).EvaluateDecisionsWithSignals(signals)
 	if err != nil {
 		t.Fatalf("EvaluateDecisionsWithSignals() error = %v", err)
 	}
@@ -91,23 +91,23 @@ func TestExtraKeywordMatchKeepsReportedEvidence(t *testing.T) {
 	mixed := config.Decision{Name: "mixed_or", Priority: 10, Tier: 1, Rules: config.RuleNode{
 		Operator: "OR",
 		Conditions: []config.RuleNode{
-			{Type: "embedding", Name: "semantic"},
+			{Type: "systemone", Name: "semantic"},
 			{Type: "keyword", Name: "marker"},
 		},
 	}}
-	scored := config.Decision{Name: "scored_route", Priority: 20, Tier: 1, Rules: config.RuleNode{Type: "embedding", Name: "support"}}
+	scored := config.Decision{Name: "scored_route", Priority: 20, Tier: 1, Rules: config.RuleNode{Type: "systemone", Name: "support"}}
 	decisions := []config.Decision{mixed, scored}
-	confidences := map[string]float64{"embedding:semantic": 0.95, "embedding:support": 0.80}
+	confidences := map[string]float64{"systemone:semantic": 0.95, "systemone:support": 0.80}
 
 	withoutKeyword := rankedWinner(t, decisions, config.RoutingStrategyConfidence, &SignalMatches{
-		EmbeddingRules: []string{"semantic", "support"}, SignalConfidences: confidences,
+		SystemOneRules: []string{"semantic", "support"}, SignalConfidences: confidences,
 	})
 	if withoutKeyword.Decision.Name != "mixed_or" {
 		t.Fatalf("winner = %s, want mixed_or (both members reported scores)", withoutKeyword.Decision.Name)
 	}
 
 	withKeyword := rankedWinner(t, decisions, config.RoutingStrategyConfidence, &SignalMatches{
-		EmbeddingRules: []string{"semantic", "support"}, KeywordRules: []string{"marker"}, SignalConfidences: confidences,
+		SystemOneRules: []string{"semantic", "support"}, KeywordRules: []string{"marker"}, SignalConfidences: confidences,
 	})
 	if withKeyword.Decision.Name != "mixed_or" {
 		t.Fatalf("winner = %s, want mixed_or (the extra keyword match is support, not a demotion)", withKeyword.Decision.Name)
@@ -119,19 +119,19 @@ func TestExtraKeywordMatchKeepsReportedEvidence(t *testing.T) {
 
 func TestNOTGuardDoesNotDisqualifyReportedScore(t *testing.T) {
 	guarded := config.Decision{Name: "guarded", Priority: 100, Rules: config.RuleNode{Operator: "AND", Conditions: []config.RuleNode{
-		{Type: "embedding", Name: "strong"},
+		{Type: "systemone", Name: "strong"},
 		{Operator: "NOT", Conditions: []config.RuleNode{{Type: "domain", Name: "legal"}}},
 	}}}
-	plain := config.Decision{Name: "plain", Priority: 200, Rules: config.RuleNode{Type: "embedding", Name: "weak"}}
+	plain := config.Decision{Name: "plain", Priority: 200, Rules: config.RuleNode{Type: "systemone", Name: "weak"}}
 	trace := rankingTraceFor(t, []config.Decision{guarded, plain}, config.RoutingStrategyConfidence, &SignalMatches{
-		EmbeddingRules:    []string{"strong", "weak"},
-		SignalConfidences: map[string]float64{"embedding:strong": 0.95, "embedding:weak": 0.80},
+		SystemOneRules:    []string{"strong", "weak"},
+		SignalConfidences: map[string]float64{"systemone:strong": 0.95, "systemone:weak": 0.80},
 	})
 	if trace.Winner != "guarded" || trace.DecidedBy != "confidence" || trace.Fallback != "" {
 		t.Fatalf("NOT guard changed score ranking: %+v", trace)
 	}
-	if kinds := config.DeclaredScoreKinds(&guarded.Rules); len(kinds) != 1 || kinds[0] != config.ScoreKindSimilarity {
-		t.Fatalf("declared score kinds = %v, want similarity only", kinds)
+	if kinds := config.DeclaredScoreKinds(&guarded.Rules); len(kinds) != 1 || kinds[0] != config.ScoreKindProbability {
+		t.Fatalf("declared score kinds = %v, want probability only", kinds)
 	}
 }
 
@@ -140,18 +140,18 @@ func TestNOTGuardDoesNotDisqualifyReportedScore(t *testing.T) {
 func TestMultiEvidenceDecisionRanksByPriority(t *testing.T) {
 	twoLeaf := config.Decision{Name: "two_leaf", Priority: 100, Tier: 1, Rules: config.RuleNode{
 		Operator:   "AND",
-		Conditions: []config.RuleNode{{Type: "embedding", Name: "a"}, {Type: "embedding", Name: "b"}},
+		Conditions: []config.RuleNode{{Type: "systemone", Name: "a"}, {Type: "systemone", Name: "b"}},
 	}}
 	threeLeaf := config.Decision{Name: "three_leaf", Priority: 200, Tier: 1, Rules: config.RuleNode{
 		Operator:   "AND",
-		Conditions: []config.RuleNode{{Type: "embedding", Name: "a"}, {Type: "embedding", Name: "b"}, {Type: "domain", Name: "law"}},
+		Conditions: []config.RuleNode{{Type: "systemone", Name: "a"}, {Type: "systemone", Name: "b"}, {Type: "domain", Name: "law"}},
 	}}
 
 	winner := rankedWinner(t, []config.Decision{twoLeaf, threeLeaf}, config.RoutingStrategyPriority, &SignalMatches{
-		EmbeddingRules: []string{"a", "b"},
+		SystemOneRules: []string{"a", "b"},
 		DomainRules:    []string{"law"},
 		SignalConfidences: map[string]float64{
-			"embedding:a": 0.90, "embedding:b": 0.90, "domain:law": 0.88,
+			"systemone:a": 0.90, "systemone:b": 0.90, "domain:law": 0.88,
 		},
 	})
 	if winner.Decision.Name != "three_leaf" {
@@ -188,22 +188,6 @@ func TestPolicyLeavesLeavePriorityInCharge(t *testing.T) {
 	}
 }
 
-// A KB rule reports the similarity of the matched label, so it cannot be
-// ranked against a classifier probability and priority decides.
-func TestKnowledgeBaseSimilarityDoesNotOutrankProbability(t *testing.T) {
-	kb := config.Decision{Name: "kb_route", Priority: 10, Tier: 1, Rules: config.RuleNode{Type: "kb", Name: "handbook"}}
-	domain := config.Decision{Name: "domain_route", Priority: 100, Tier: 1, Rules: config.RuleNode{Type: "domain", Name: "law"}}
-
-	winner := rankedWinner(t, []config.Decision{kb, domain}, config.RoutingStrategyPriority, &SignalMatches{
-		KBRules:           []string{"handbook"},
-		DomainRules:       []string{"law"},
-		SignalConfidences: map[string]float64{"kb:handbook": 0.95, "domain:law": 0.80},
-	})
-	if winner.Decision.Name != "domain_route" {
-		t.Fatalf("winner = %s, want domain_route (a similarity does not rank against a probability)", winner.Decision.Name)
-	}
-}
-
 // A complexity rule reports a calibrated probability on one backend and the
 // magnitude of a prototype margin on another, so its score is not comparable.
 func TestComplexityScoreIsNotComparable(t *testing.T) {
@@ -217,30 +201,6 @@ func TestComplexityScoreIsNotComparable(t *testing.T) {
 	})
 	if winner.Decision.Name != "domain_route" {
 		t.Fatalf("winner = %s, want domain_route (the complexity quantity depends on its backend)", winner.Decision.Name)
-	}
-}
-
-// An OR that can report either kind must not become comparable through the
-// branch that happened to match.
-func TestMixedKindORIsNotComparable(t *testing.T) {
-	mixed := config.Decision{Name: "mixed_or", Priority: 10, Tier: 1, Rules: config.RuleNode{
-		Operator: "OR",
-		Conditions: []config.RuleNode{
-			{Type: "domain", Name: "law"},
-			{Type: "embedding", Name: "legal_analysis"},
-		},
-	}}
-	embedding := config.Decision{Name: "embedding_route", Priority: 100, Tier: 1, Rules: config.RuleNode{Type: "embedding", Name: "support"}}
-
-	winner := rankedWinner(t, []config.Decision{mixed, embedding}, config.RoutingStrategyPriority, &SignalMatches{
-		DomainRules:    []string{"law"},
-		EmbeddingRules: []string{"legal_analysis", "support"},
-		SignalConfidences: map[string]float64{
-			"domain:law": 0.80, "embedding:legal_analysis": 0.95, "embedding:support": 0.90,
-		},
-	})
-	if winner.Decision.Name != "embedding_route" {
-		t.Fatalf("winner = %s, want embedding_route (the OR reports either kind, so priority decides)", winner.Decision.Name)
 	}
 }
 

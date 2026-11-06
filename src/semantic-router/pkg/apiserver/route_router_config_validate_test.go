@@ -152,19 +152,6 @@ routing:
 	}
 }
 
-func TestValidateHotReloadCompatibilityAllowsOwnedLocalClassifierChange(t *testing.T) {
-	current := []byte(localClassifierReloadConfig("models/risk-v1"))
-	next := []byte(localClassifierReloadConfig("models/risk-v2"))
-
-	if err := validateHotReloadCompatibility(current, next); err != nil {
-		t.Fatalf("owned local classifier changes should prepare a candidate: %v", err)
-	}
-	invalid := []byte(strings.ReplaceAll(string(next), "labels: [SAFE, RISKY]", "labels: [SAFE, SAFE]"))
-	if err := validateHotReloadCompatibility(current, invalid); err == nil {
-		t.Fatal("invalid candidate labels should still fail validation")
-	}
-}
-
 func TestValidateHotReloadCompatibilityRejectsEnvoyTopologyChange(t *testing.T) {
 	current := minimalDeployTestConfig("route")
 	next := minimalDeployTestConfig("route")
@@ -206,28 +193,4 @@ func TestPreviewTimeoutReloadKeepsListenerAdmissionBound(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "deployment workflow") {
 		t.Fatalf("listener admission change was not rejected: %v", err)
 	}
-}
-
-func localClassifierReloadConfig(modelPath string) string {
-	return `
-version: v0.3
-providers:
-  defaults:
-    model: m1
-  models:
-    - name: m1
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-          provider: vllm
-routing:
-  modelCards:
-    - name: m1
-  signals:
-    classifiers:
-      - name: risk
-        type: local
-        model_path: ` + modelPath + `
-        labels: [SAFE, RISKY]
-  decisions: []
-`
 }
