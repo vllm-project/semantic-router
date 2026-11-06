@@ -20,28 +20,28 @@ func applyOperatorDecisionModel(canonical *routerconfig.CanonicalConfig, spec vl
 		return fmt.Errorf("config.decision_model.deployment must name a declared deployment")
 	}
 	deployment, ok := catalog.Deployments[selected.Deployment]
-	if !ok || deployment.Provider != routerconfig.ModelRuntimeProvider {
-		return fmt.Errorf("config.decision_model.deployment %q must name a declared model_runtime deployment", selected.Deployment)
+	if !ok {
+		return fmt.Errorf("config.decision_model.deployment %q must name a declared deployment", selected.Deployment)
 	}
-	catalog.System = routerconfig.CanonicalSystemModels{DecisionModel: selected}
-	cfg := &routerconfig.RouterConfig{}
-	cfg.DecisionModel, cfg.ModelDeployments = selected.Deployment, catalog.Deployments
-	decision := cfg.DecisionModelSpec()
-	modules := &catalog.Modules
-	if spec.PromptGuard == nil || strings.TrimSpace(spec.PromptGuard.Threshold) == "" {
-		model := modules.PromptGuard.ModelID
-		if model == "" {
-			model = decision.System.PromptGuard
-		}
-		if modules.PromptGuard.Backend == nil {
-			modules.PromptGuard.Threshold = routerconfig.ModuleThresholdsOf(model).PromptGuard
-		}
+	if !deployment.IsModelRuntime() && !deployment.IsSystemOne() {
+		return fmt.Errorf("config.decision_model.deployment %q must use provider %s or %s, not %q",
+			selected.Deployment, routerconfig.ModelRuntimeProvider, routerconfig.SystemOneProvider, deployment.Provider)
 	}
-	if spec.Classifier == nil {
-		modules.Classifier.Domain.Threshold = routerconfig.ModuleThresholdsOf(decision.System.DomainClassifier).Domain
-		modules.Classifier.PII.Threshold = routerconfig.ModuleThresholdsOf(decision.System.PIIClassifier).PII
-	}
-	modules.HallucinationMitigation.FactCheck.Threshold = routerconfig.ModuleThresholdsOf(decision.System.FactCheckClassifier).FactCheck
-	modules.FeedbackDetector.Threshold = routerconfig.ModuleThresholdsOf(decision.System.FeedbackDetector).Feedback
+	catalog.System.DecisionModel = selected
 	return nil
+}
+
+// operatorModelModules are the Router's default modules without their
+// thresholds. The Router reads a threshold the ConfigMap writes as set, which
+// would hold a module to the default model's calibration whatever deployment
+// answers it, so the operator writes only the thresholds the resource sets.
+func operatorModelModules() routerconfig.CanonicalModelModules {
+	modules := routerconfig.DefaultCanonicalGlobal().ModelCatalog.Modules
+	modules.PromptGuard.Threshold = 0
+	modules.Classifier.Domain.Threshold = 0
+	modules.Classifier.PII.Threshold = 0
+	modules.HallucinationMitigation.FactCheck.Threshold = 0
+	modules.HallucinationMitigation.Detector.Threshold = 0
+	modules.FeedbackDetector.Threshold = 0
+	return modules
 }

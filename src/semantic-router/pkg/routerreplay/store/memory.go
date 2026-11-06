@@ -172,6 +172,22 @@ func (m *MemoryStore) AttachResponse(ctx context.Context, id string, body string
 	return nil
 }
 
+// AttachPrompt stores the prompt of a record written without it.
+func (m *MemoryStore) AttachPrompt(ctx context.Context, id string, prompt string, truncated bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	rec, ok := m.byID[id]
+	if !ok {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+
+	rec.Prompt = prompt
+	rec.PromptTruncated = truncated
+
+	return nil
+}
+
 // AppendOutcome links post-route feedback to a record.
 func (m *MemoryStore) AppendOutcome(ctx context.Context, id string, outcome Outcome) error {
 	m.mu.Lock()
@@ -215,6 +231,7 @@ func (m *MemoryStore) UpdateUsageCost(ctx context.Context, id string, usage Usag
 		return fmt.Errorf("record with ID %s not found", id)
 	}
 
+	rec.ProviderCache = cloneProviderCacheAccounting(usage.ProviderCache)
 	rec.PromptTokens = cloneIntPtr(usage.PromptTokens)
 	rec.CachedPromptTokens = cloneIntPtr(usage.CachedPromptTokens)
 	rec.CacheWriteTokens = cloneIntPtr(usage.CacheWriteTokens)

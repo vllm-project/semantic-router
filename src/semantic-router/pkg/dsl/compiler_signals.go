@@ -320,6 +320,9 @@ func (c *Compiler) compileComplexitySignal(s *SignalDecl) {
 	if v, ok := getStringField(s.Fields, "description"); ok {
 		rule.Description = v
 	}
+	if v, ok := getStringField(s.Fields, "deployment"); ok {
+		rule.Deployment = v
+	}
 	if obj, ok := s.Fields["composer"]; ok {
 		if ov, ok := obj.(ObjectValue); ok {
 			rc := compileComposerObj(ov)

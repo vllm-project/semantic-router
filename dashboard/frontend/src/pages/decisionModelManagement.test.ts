@@ -26,9 +26,27 @@ describe('decision model deployment management', () => {
           { status: 202 },
         ),
       )
-      expect(result).toEqual({ status, message: 'Activation requires an operator action.' })
+      expect(result).toEqual({
+        status,
+        message: 'Activation requires an operator action.',
+        warnings: [],
+      })
     },
   )
+
+  it('keeps the Router warnings a save reports', async () => {
+    const warning = {
+      code: 'deprecated_model_field',
+      field: 'global.model_catalog.system.pii_classifier',
+      message: 'model paths are deprecated; read as bindings.pii: vela-pii',
+    }
+    const result = await readDecisionModelApplyResult(
+      new Response(JSON.stringify({ status: 'success', warnings: [warning, { code: 'empty' }] }), {
+        status: 200,
+      }),
+    )
+    expect(result.warnings).toEqual([warning])
+  })
 
   it('does not claim model readiness from a successful config write', async () => {
     const result = await readDecisionModelApplyResult(

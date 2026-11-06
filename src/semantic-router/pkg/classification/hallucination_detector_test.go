@@ -16,7 +16,11 @@ func newTestHallucinationDetector(t *testing.T) *HallucinationDetector {
 	cfg := &config.HallucinationModelConfig{ModelID: "models/Vela-1.0-Encoder-307M-Halu", Threshold: 0.5, UseCPU: true}
 	routerCfg := &config.RouterConfig{}
 	routerCfg.HallucinationMitigation.HallucinationModel = *cfg
-	models := testModelRuntime(t, routerCfg, map[string]runtimetest.Model{"@hallucination_detector": servingtest.Grounded()})
+	resolved, ok, err := routerCfg.ResolveTask("hallucination_detector")
+	if err != nil || !ok {
+		t.Fatalf("hallucination model: %v", err)
+	}
+	models := testModelRuntime(t, routerCfg, map[string]runtimetest.Model{resolved.Name: servingtest.Grounded()})
 	detector, err := NewHallucinationDetector(cfg, models)
 	if err != nil {
 		t.Fatal(err)

@@ -3,6 +3,7 @@
 import argparse
 import importlib.util
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -109,3 +110,34 @@ def test_generic_only_record_keeps_existing_baseline(tmp_path):
     assert json.loads(path.read_text())["fixture/model"]["answers"] == {
         "cpu": values(0.5)
     }
+
+
+def test_family_sweep_skips_the_unserved_image_package(monkeypatch):
+    served = argparse.Namespace(repo_id="vllm-sr/vela3-fast", revision="r1")
+    unserved = argparse.Namespace(repo_id="vllm-sr/vela3-fast-vision", revision="r2")
+    monkeypatch.setattr(
+        recorder.builtin, "all_models", lambda family: (served, unserved)
+    )
+    seen: list[tuple[str, str | None]] = []
+
+    def fake_answers(args, model, revision):
+        seen.append((model, revision))
+        return {"model": model}
+
+    monkeypatch.setattr(recorder, "answers", fake_answers)
+    monkeypatch.setattr(sys, "argv", ["golden_answers.py", "--family", "vela3"])
+    recorder.main()
+    assert seen == [("vllm-sr/vela3-fast", "r1")]
+
+
+def test_explicit_model_still_attempts_the_unserved_package(monkeypatch):
+    seen: list[tuple[str, str | None]] = []
+
+    def fake_answers(args, model, revision):
+        seen.append((model, revision))
+        return {"model": model}
+
+    monkeypatch.setattr(recorder, "answers", fake_answers)
+    monkeypatch.setattr(sys, "argv", ["golden_answers.py", "vllm-sr/vela3-fast-vision"])
+    recorder.main()
+    assert seen == [("vllm-sr/vela3-fast-vision", None)]
