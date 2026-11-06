@@ -3,7 +3,7 @@
 # =============================================================================
 
 ROUTING {
-  model_bindings: { classifier.content-risk: { adapter: "modernbert", contract: "label_scores.v1", deployment: "hazard-amd", operating_point: { path: "operating_point.json", sha256: "e79a78f48bf45eb38e3f5402de3b3b18eeaa822e00b42b3640bf471276290de5" } }, domain_classifier: { adapter: "modernbert", contract: "label_distribution.v1", deployment: "domain-amd", mapping_path: "models/Vela-1.0-Encoder-307M-Domain/category_mapping.json" }, embedding: { adapter: "mmbert", contract: "embedding.v1", deployment: "embedding-amd" }, fact_check_classifier: { adapter: "modernbert", contract: "label_distribution.v1", deployment: "factcheck-amd" }, feedback_detector: { adapter: "modernbert", contract: "label_distribution.v1", deployment: "feedback-amd" }, modality_detector: { adapter: "modernbert", contract: "label_distribution.v1", deployment: "modality-amd" }, pii_classifier: { adapter: "modernbert", contract: "token_spans.v1", deployment: "pii-amd", mapping_path: "models/Vela-1.0-Encoder-307M-PII/pii_mapping.json" }, prompt_guard: { adapter: "modernbert", contract: "label_distribution.v1", deployment: "guard-amd", mapping_path: "models/Vela-1.0-Encoder-307M-Guard/jailbreak_type_mapping.json" }, rag.reranker: { adapter: "vela_reranker", contract: "relevance_scores.v1", deployment: "reranker-amd", pair_scorer: { dimension: 768, layer: 22 } }, safety.unsafe-content: { adapter: "modernbert", contract: "label_distribution.v1", deployment: "safety-amd" } }
+  model_bindings: { domain: "domain-amd", embedding: "embedding-amd", fact_check: "factcheck-amd", jailbreak: "guard-amd", modality: "modality-amd", pii: "pii-amd", user_feedback: "feedback-amd" }
 }
 
 # =============================================================================
@@ -129,7 +129,7 @@ SIGNAL jailbreak prompt-attack {
 }
 
 SIGNAL safety unsafe-content {
-  model: ""
+  deployment: "safety-amd"
   labels: ["safe", "unsafe"]
   unsafe_labels: ["unsafe"]
   threshold: 0.5
@@ -141,7 +141,7 @@ SIGNAL pii sensitive {
 }
 
 SIGNAL classifier content-risk {
-  type: "local"
+  deployment: "hazard-amd"
   labels: ["violence", "criminal_activity", "sexual_content", "child_exploitation", "hate", "harassment_abuse", "regulated_substances", "weapons", "self_harm", "privacy", "specialized_advice", "misinformation"]
 }
 
@@ -170,7 +170,7 @@ ROUTE knowledge (description = "Retrieve indexed documents and rerank the candid
     top_k: 3
     max_context_length: 4096
     injection_mode: "tool_role"
-    rerank: { top_k: 2 }
+    rerank: { deployment: "reranker-amd", top_k: 2, layer: 22, dimension: 768 }
     backend_config: { vector_store_id: "vs_your_documents" }
     on_failure: "block"
   }

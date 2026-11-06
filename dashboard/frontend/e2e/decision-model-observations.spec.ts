@@ -11,7 +11,6 @@ const config = {
         primary: {
           provider: 'model_runtime',
           artifact,
-          profile: 'exact',
           replicas: [{ device: 'cpu' }, { device: 'cpu' }],
         },
       },
@@ -56,15 +55,15 @@ const tasks = {
   bindings: [
     {
       task_id: 'domain',
-      consumer: 'category',
+      consumer: 'domain_classifier',
       recipe: '',
       deployment: 'primary',
       model: artifact,
       source: 'default',
       ready: true,
       editable: true,
-      path: ['routing', 'model_bindings', 'domain'],
-      binding: { deployment: 'primary', contract: 'decision.v1' },
+      path: ['routing', 'model_bindings', 'domain_classifier'],
+      binding: 'primary',
     },
   ],
 }

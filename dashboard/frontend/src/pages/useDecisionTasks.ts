@@ -1,4 +1,5 @@
 import { useDashboardObservation } from '../utils/useDashboardObservation'
+import type { ModelBindingValue } from './modelBindings'
 import type { SystemOneQuestion } from './systemOnePlayground'
 
 export interface DecisionTask {
@@ -22,6 +23,7 @@ export interface DecisionTask {
 }
 export interface DecisionTaskBinding {
   task_id: string
+  /** The Router's consumer name: a signal type's (see bindingKey) or a rule's (see ruleTarget). */
   consumer: string
   recipe: string
   deployment: string
@@ -30,18 +32,12 @@ export interface DecisionTaskBinding {
   ready: boolean
   editable: boolean
   path: string[]
-  binding: {
-    deployment: string
-    contract: string
-    adapter?: string
-    head?: string
-    mapping_path?: string
-  }
+  binding: ModelBindingValue
 }
 export interface DecisionTasks {
   default_deployment: string
-  global_bindings?: Record<string, { deployment: string; contract: string }>
-  default_bindings?: Record<string, { deployment: string; contract: string }>
+  global_bindings?: Record<string, ModelBindingValue>
+  default_bindings?: Record<string, ModelBindingValue>
   tasks: DecisionTask[]
   deployments: Array<{
     deployment: string
