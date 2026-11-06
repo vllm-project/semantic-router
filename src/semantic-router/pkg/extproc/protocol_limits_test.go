@@ -61,7 +61,7 @@ func TestProtocolLimitsReachEveryRouterEngine(t *testing.T) {
 	engines := map[string]func() (*protocolcodec.Engine, error){
 		"ingress": router.protocolEngine,
 		"backend": func() (*protocolcodec.Engine, error) {
-			return router.protocolEngineForVendor(llmprotocol.ResponseVendorAzure)
+			return router.protocolEngineForVendor(llmprotocol.ResponseVendorCloudflare)
 		},
 		"detached": func() (*protocolcodec.Engine, error) {
 			return protocolEngineFor(nil, router.Config.ProtocolPolicy())
