@@ -1,3 +1,48 @@
+- id: minimax/minimax-m3.1-flash
+  display_name: MiniMax M3.1 Flash
+  description: Open-weight multimodal MiniMax model for coding and agentic workloads with tunable reasoning depth.
+  kind: physical
+  publisher: MiniMax
+  presentation:
+    logo: package:minimax
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash
+    license: MiniMax-Community-License
+  family: minimax-m3.1
+  reasoning_family: minimax-m3.1-flash
+  parameter_size: 428B (23B active)
+  revision: 262ae6830934f3512211081b8a3f16425b93a239
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: MiniMax
+    status: claimed
+    verified_at: 2026-10-27
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md
+  tags:
+  - open_weights
+  - multimodal
+  - moe
+  - agentic
+  released_at: '2026-10-19'
 - id: minimax/minimax-m3
   display_name: MiniMax M3
   description: Native multimodal open-weight MiniMax model with million-token context.

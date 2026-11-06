@@ -9,9 +9,11 @@ A decision model answers questions you write in plain language about a
 request, without training a classifier for each one. The Router can use it for
 registered judgment tasks, custom questions, and backend selection:
 
-- task bindings connect domain, complexity, preference, classification, safety,
-  PII judgments, hallucination judgments, and other supported consumers to a
-  deployment; capability checks use the model's actual question types;
+- as the decision model, or through a binding or a rule's `deployment`, it
+  answers built-in signals such as domain, complexity, preference,
+  classification, safety, PII and hallucination; capability checks use the
+  model's actual question types (see
+  [Choose a model for a signal](../../installation/choose-a-model-for-a-signal.md));
 - a [`decision` signal](tutorials/signal/learned/decision.md) asks a
   question and routes on the answer;
 - the [`decision` selection algorithm](tutorials/algorithm/selection/decision.md)
@@ -198,12 +200,13 @@ questions to it.
 
 ## Which decision model
 
-The Router defaults to Vela 2.0 0.3B. For custom questions, Decision 2.0
+The Router defaults to Vela 3.0 vela3-fast. For custom questions, Decision 2.0
 Kai-0.6B also runs on a CPU; its larger sizes target more demanding questions
 on a GPU. Decision 1.0 models answer the same
-questions. Vela 2.0 also answers `set` and `span` questions, has ready-made
-questions for PII and unsupported claims, and its 0.3B answers the router's
-[built-in signals](model-runtime/choose-a-model.md#vela-20) by default, batching
+questions. Vela 2.0 also answers `set` and `span` questions; vela3-fast answers
+`span` questions and `set` questions on its trained router texts. Both have
+ready-made questions for PII and unsupported claims, and vela3-fast answers the router's
+[built-in signals](model-runtime/choose-a-model.md#built-in-signals) by default, batching
 compatible questions within a routing stage. See
 [Choose a model](model-runtime/choose-a-model.md#decision-models).
 

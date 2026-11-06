@@ -423,8 +423,8 @@ providers:
           provider: vllm
 ```
 
-Use `base_url` when the provider requires a complete API root such as
-`https://provider.example/v1`. Use a hostname reachable from the Router
+Write a full URL in `endpoint` when the provider requires a complete API root
+such as `https://provider.example/v1`. Use a hostname reachable from the Router
 network; `localhost` refers to the Router container itself.
 
 The version segment in that API root is accepted for every Provider ID.

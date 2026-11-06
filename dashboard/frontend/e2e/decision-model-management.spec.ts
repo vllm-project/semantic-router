@@ -45,7 +45,7 @@ async function mockDecisionModelManager(
           }) as Record<string, { provider: string; artifact: string; device?: string }>,
     },
   }
-  let observed = options.defaultModel ? 'Vela-2.0-0.3B' : 'Vela-2.0-4B'
+  let observed = options.defaultModel ? 'vela3-fast' : 'Vela-2.0-4B'
   let observedDeployment = 'primary'
   const config = {
     version: 'v0.3',
@@ -148,7 +148,7 @@ async function mockDecisionModelManager(
                 ready: true,
                 editable: false,
                 path: [],
-                binding: { deployment: 'pii-specialist', contract: 'token_spans.v1' },
+                binding: 'pii-specialist',
               },
             ],
       }),
@@ -283,7 +283,7 @@ async function mockDecisionModelManager(
       observedDeployment = global.model_catalog.system.decision_model?.deployment ?? 'primary'
       observed =
         global.model_catalog.deployments[observedDeployment]?.artifact.split('/').at(-1) ??
-        'Vela-2.0-0.3B'
+        'vela3-fast'
       pending = false
     },
   }
@@ -317,12 +317,12 @@ test.describe('System One model management and monitoring', () => {
     )
   })
 
-  test('keeps the default 0.3B model and shows absent samples as unknown without empty configuration clutter', async ({
+  test('keeps the default vela3-fast model and shows absent samples as unknown without empty configuration clutter', async ({
     page,
   }) => {
     await mockDecisionModelManager(page, { defaultModel: true, metrics: 'empty' })
     await page.goto('/decision-model')
-    await expect(page.getByRole('radio', { name: /Vela 2.0 0.3B/ })).toBeChecked()
+    await expect(page.getByRole('radio', { name: /Vela 3.0 fast/ })).toBeChecked()
     await expect(page.getByRole('region', { name: 'Task bindings' })).toContainText(
       'No active task bindings in this configuration.',
     )
@@ -775,9 +775,9 @@ async function mockDecisionRuntimeCatalog(
         name: 'research',
         routing: {
           model_bindings: {
-            complexity: { deployment: 'existing', contract: 'decision.v1' },
-            model_selection: { deployment: 'existing', contract: 'decision.v1' },
-          } as Record<string, { deployment: string; contract: string }>,
+            complexity: 'existing',
+            model_selection: 'existing',
+          } as Record<string, string>,
           signals: {
             complexity: options.noConsumers ? [] : [{ name: 'difficulty', threshold: 0.5 }],
           },
@@ -841,21 +841,23 @@ async function mockDecisionRuntimeCatalog(
     const bindings = options.noConsumers
       ? []
       : ['complexity', 'model_selection'].map((task_id) => {
-          const binding = config.recipes[0]?.routing.model_bindings[task_id] ?? {
-            deployment: 'primary',
-            contract: 'decision.v1',
-          }
+          const routing = config.recipes[0]?.routing
+          const rule = routing?.signals.complexity[0] as { deployment?: string } | undefined
+          const deployment =
+            (task_id === 'complexity' ? rule?.deployment : undefined) ??
+            routing?.model_bindings[task_id] ??
+            'primary'
           return {
             task_id,
             consumer: task_id === 'complexity' ? 'difficulty' : 'pick',
             recipe: 'research',
-            deployment: binding.deployment,
-            model: config.global.model_catalog.deployments[binding.deployment]?.artifact,
+            deployment,
+            model: config.global.model_catalog.deployments[deployment]?.artifact,
             source: 'recipe',
-            ready: binding.deployment === 'primary' || ready,
+            ready: deployment === 'primary' || ready,
             editable: true,
             path: ['recipes', '0', 'routing', 'model_bindings', task_id],
-            binding,
+            binding: deployment,
           }
         })
     return route.fulfill({
@@ -1032,14 +1034,14 @@ test.describe('Decision model catalog and deployment bindings', () => {
     ).toHaveAttribute('href', '/decision-model/playground')
   })
 
-  test('binds a decision selector task while preserving the default and exposes deferred activation honestly', async ({
+  test('binds a rule task on the rule while preserving the default and exposes deferred activation honestly', async ({
     page,
   }) => {
     const fixture = await mockDecisionRuntimeCatalog(page, { applyStatus: 'restart_required' })
     await page.goto('/decision-model')
-    const row = page.getByRole('row').filter({ hasText: 'Choose a candidate model' })
+    const row = page.getByRole('row').filter({ hasText: 'Task difficulty' })
     await row.getByRole('button', { name: 'Change' }).click()
-    await row.getByRole('combobox', { name: 'Model for Choose a candidate model' }).click()
+    await row.getByRole('combobox', { name: 'Model for Task difficulty' }).click()
     await page.getByRole('option', { name: /Decision-1.0-Lex-0.6B/ }).click()
     const previous = structuredClone(fixture.config)
     await row.getByRole('button', { name: 'Apply', exact: true }).click()
@@ -1047,10 +1049,9 @@ test.describe('Decision model catalog and deployment bindings', () => {
       page.getByRole('status').filter({ hasText: 'Configuration saved. Restart' }),
     ).toBeVisible()
     expect(fixture.runtimeRequests).toHaveLength(1)
-    previous.recipes[0].routing.model_bindings.model_selection = {
-      deployment: 'lex',
-      contract: 'decision.v1',
-    }
+    // A complexity rule names its own deployment; the old type-level key goes.
+    Object.assign(previous.recipes[0].routing.signals.complexity[0], { deployment: 'lex' })
+    delete (previous.recipes[0].routing.model_bindings as Record<string, string>).complexity
     expect(fixture.runtimeRequests[0]).toEqual(previous)
     await page.getByRole('button', { name: 'Refresh', exact: true }).click()
     await expect(row).toContainText('vllm-sr/Decision-1.0-Lex-0.6B')

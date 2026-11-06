@@ -1,0 +1,745 @@
+{
+  "config/config.yaml": {
+    "signals": {
+      "default/classifier.content-risk": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Hazard@5dd25f2cc3c98f338e6a79b667662d60f936a28d cpu replicas=0",
+      "default/classifier.generic-safety-score": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Safety@6e70e725a5f4d86da10f5be5e4dfd1da0358bb85 cpu replicas=0",
+      "default/classifier.remote-safety-score": "remote http://sequence-classifier:8080",
+      "default/classifier.support-intent": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/classifier.tool-risk": "remote https://openai-proxy:443 gpt-4.1-mini",
+      "default/decision.difficulty": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
+      "default/decision.needs_reasoning": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
+      "default/decision.request_kind": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
+      "default/decision.support_team": "systemone https://systemone.example.com/v1/systemone vllm-sr/d3-ultra",
+      "default/domain": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/embedding": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0",
+      "default/fact_check": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/hallucination": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/jailbreak": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/modality": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/pii": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/rag.reranker": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Reranker@a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf cpu replicas=0",
+      "default/user_feedback": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0",
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Hazard@5dd25f2cc3c98f338e6a79b667662d60f936a28d cpu replicas=0",
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Reranker@a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf cpu replicas=0",
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Safety@6e70e725a5f4d86da10f5be5e4dfd1da0358bb85 cpu replicas=0",
+      "model_runtime vllm-sr/vela3-fast@ cpu replicas=0"
+    ]
+  },
+  "config/fragments/algorithm/native/cascade.yaml": {
+    "error": "recipes[native-cascade]: decision \"kai-to-vega\": stage \"fast\": model \"kai\" must name a provider alias"
+  },
+  "config/fragments/algorithm/selection/decision.yaml": {
+    "started": [
+      "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0"
+    ]
+  },
+  "config/fragments/algorithm/selection/prompt.yaml": {
+    "error": "routing recipe \"default\": decision 'prompt-selected-route', algorithm.prompt.model \"qwen3-8b\" is not declared in routing.modelCards"
+  },
+  "config/fragments/decision/and/urgent-business.yaml": {
+    "error": "routing recipe \"default\": routing.decisions[\"urgent_business_route\"]: signal keyword(\"urgent_keywords\") is not declared in this recipe"
+  },
+  "config/fragments/decision/composite/priority-safe-escalation.yaml": {
+    "error": "routing recipe \"default\": routing.decisions[\"priority_safe_escalation_route\"]: signal keyword(\"urgent_keywords\") is not declared in this recipe"
+  },
+  "config/fragments/decision/not/exclude-jailbreak.yaml": {
+    "error": "routing recipe \"default\": routing.decisions[\"safe_only_route\"]: signal jailbreak(\"prompt_injection\") is not declared in this recipe"
+  },
+  "config/fragments/decision/or/business-or-law.yaml": {
+    "signals": {
+      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "config/fragments/decision/single/domain-business.yaml": {
+    "signals": {
+      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "config/fragments/decision/single/domain-computer-science.yaml": {
+    "error": "routing recipe \"default\": decision 'computer-science-route', model 'qwen3-32b': lora_name \"computer-science-expert\" specified but model \"qwen3-32b\" is not declared in routing.modelCards"
+  },
+  "config/fragments/signal/action/coding-actions.yaml": {},
+  "config/fragments/signal/authz/rbac.yaml": {},
+  "config/fragments/signal/classifier/label-score.yaml": {},
+  "config/fragments/signal/classifier/sequence-label-score.yaml": {},
+  "config/fragments/signal/complexity/escalation.yaml": {
+    "signals": {
+      "default/embedding": "none"
+    }
+  },
+  "config/fragments/signal/context/long-context.yaml": {},
+  "config/fragments/signal/conversation/agentic-shape.yaml": {},
+  "config/fragments/signal/decision/decision-model.yaml": {
+    "signals": {
+      "default/decision.difficulty": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
+      "default/decision.needs_reasoning": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
+      "default/decision.request_kind": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0"
+    ]
+  },
+  "config/fragments/signal/decision/vela2-labels-spans.yaml": {
+    "signals": {
+      "default/decision.order_numbers": "model_runtime vllm-sr/Vela-2.0-0.3B@ cpu replicas=0",
+      "default/decision.support_topics": "model_runtime vllm-sr/Vela-2.0-0.3B@ cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/Vela-2.0-0.3B@ cpu replicas=0"
+    ]
+  },
+  "config/fragments/signal/decision/vela3-labels-spans.yaml": {
+    "signals": {
+      "default/decision.instruction_attack": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/decision.needs_account_access": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/decision.order_numbers": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@ cpu replicas=0"
+    ]
+  },
+  "config/fragments/signal/domain/mmlu.yaml": {},
+  "config/fragments/signal/embedding/image-routing.yaml": {
+    "error": "routing recipe \"default\": invalid embedding rule configuration:\n  - embedding rule \"identifier_document_imagery\" declares query_modality=image, which requires global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal or an explicit embedding binding with that capability. Remove the rule, set query_modality to text, or change model_type to multimodal (current model_type=\"mmbert\")\n  - embedding rule \"code_or_terminal_imagery\" image candidates require model_type=multimodal or an explicit embedding binding with image capability\n  - embedding rule \"code_or_terminal_imagery\" declares query_modality=image, which requires global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal or an explicit embedding binding with that capability. Remove the rule, set query_modality to text, or change model_type to multimodal (current model_type=\"mmbert\")\n  - embedding rule \"ambient_office_imagery\" declares query_modality=image, which requires global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal or an explicit embedding binding with that capability. Remove the rule, set query_modality to text, or change model_type to multimodal (current model_type=\"mmbert\")"
+  },
+  "config/fragments/signal/embedding/support.yaml": {
+    "signals": {
+      "default/embedding": "none"
+    }
+  },
+  "config/fragments/signal/event/payment-critical.yaml": {},
+  "config/fragments/signal/fact-check/needs-verification.yaml": {
+    "signals": {
+      "default/fact_check": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "config/fragments/signal/hallucination/grounded-answer.yaml": {
+    "signals": {
+      "default/hallucination": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "config/fragments/signal/input-modality/vision-routing.yaml": {},
+  "config/fragments/signal/jailbreak/patterns.yaml": {
+    "signals": {
+      "default/embedding": "none"
+    }
+  },
+  "config/fragments/signal/jailbreak/response.yaml": {
+    "signals": {
+      "default/jailbreak": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "config/fragments/signal/kb/privacy.yaml": {
+    "signals": {
+      "default/embedding": "none"
+    }
+  },
+  "config/fragments/signal/keyword/nlp.yaml": {},
+  "config/fragments/signal/keyword/regex.yaml": {},
+  "config/fragments/signal/language/multilingual.yaml": {},
+  "config/fragments/signal/metadata/routing-hints.yaml": {},
+  "config/fragments/signal/modality/multimodal.yaml": {},
+  "config/fragments/signal/pii/strict.yaml": {},
+  "config/fragments/signal/preference/power-user.yaml": {
+    "signals": {
+      "default/embedding": "none"
+    }
+  },
+  "config/fragments/signal/reask/dissatisfaction.yaml": {
+    "signals": {
+      "default/embedding": "none"
+    }
+  },
+  "config/fragments/signal/safety/content-safety.yaml": {
+    "signals": {
+      "default/safety.unsafe-content": "remote http://safety-binary:8080",
+      "default/safety.unsafe-privacy": "remote http://safety-binary:8080",
+      "default/safety.unsafe-privacy.hazard": "remote http://safety-hazard:8080"
+    }
+  },
+  "config/fragments/signal/structure/request-shape.yaml": {},
+  "config/fragments/signal/topic-continuity/topic-boundary.yaml": {},
+  "config/fragments/signal/user-feedback/escalation.yaml": {
+    "signals": {
+      "default/user_feedback": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "config/recipes/accuracy/config.yaml": {
+    "signals": {
+      "default/decision.accuracy_difficulty": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/decision.accuracy_mode": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+    ]
+  },
+  "config/recipes/accuracy/metadata.yaml": {
+    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+  },
+  "config/recipes/agent/config.yaml": {
+    "signals": {
+      "default/decision.attack": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/decision.confidential": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/decision.difficulty": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/decision.domain": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/decision.personal_data": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+    ]
+  },
+  "config/recipes/agent/metadata.yaml": {
+    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+  },
+  "config/recipes/balance/config.yaml": {
+    "signals": {
+      "default/decision.clarify": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/decision.correction": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/decision.task": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/decision.verification": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+    ]
+  },
+  "config/recipes/balance/metadata.yaml": {
+    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+  },
+  "config/recipes/built-in/latest/catalog.yaml": {
+    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: assets, benchmarks, catalog_version, channel, compatibility, defaults, evaluations, index_results, indices, models, protocols, reasoning_families, release, schema_version; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+  },
+  "config/recipes/built-in/latest/mom-v1/config.yaml": {
+    "started": [
+      "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+    ]
+  },
+  "config/recipes/built-in/latest/mom-v1/metadata.yaml": {
+    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+  },
+  "config/recipes/built-in/v0.4/catalog.yaml": {
+    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: assets, benchmarks, catalog_version, channel, compatibility, defaults, evaluations, index_results, indices, models, protocols, reasoning_families, release, schema_version; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+  },
+  "config/recipes/built-in/v0.4/mom-v1/config.yaml": {
+    "error": "config contains unknown fields: unknown field \"data_policy\" in recipes[4].routing"
+  },
+  "config/recipes/built-in/v0.4/mom-v1/metadata.yaml": {
+    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+  },
+  "config/recipes/feedback/config.yaml": {
+    "signals": {
+      "default/decision.clarify": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/decision.code": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/decision.sources": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/decision.wrong": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/embedding": "none"
+    },
+    "started": [
+      "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+    ]
+  },
+  "config/recipes/feedback/metadata.yaml": {
+    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+  },
+  "config/recipes/knowledge/config.yaml": {
+    "signals": {
+      "default/decision.knowledge_subject": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+    ]
+  },
+  "config/recipes/knowledge/metadata.yaml": {
+    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+  },
+  "config/recipes/multi-objective/config.yaml": {
+    "signals": {
+      "accuracy-first/decision.depth": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "accuracy-first/decision.mode": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "accuracy-first/decision.quoted": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "accuracy-first/decision.verification": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "accuracy-first/decision.workflow": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "balanced/decision.correction": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "balanced/decision.deliberate": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "balanced/decision.verification": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "balanced/embedding": "none",
+      "cost-first/decision.depth": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "privacy-first/decision.attack": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "privacy-first/decision.confidential": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "privacy-first/decision.personal_data": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "speed-first/decision.heavy": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+    ]
+  },
+  "config/recipes/multi-objective/metadata.yaml": {
+    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+  },
+  "config/recipes/privacy/config.yaml": {
+    "signals": {
+      "default/decision.attack": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/decision.confidential": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/decision.depth": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/decision.personal_data": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+    ]
+  },
+  "config/recipes/privacy/metadata.yaml": {
+    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+  },
+  "config/recipes/vela-amd/config.yaml": {
+    "signals": {
+      "default/classifier.content-risk": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Hazard@5dd25f2cc3c98f338e6a79b667662d60f936a28d rocm:0 replicas=0",
+      "default/domain": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Domain@f6354f54adcf38770f635ad903be2b00577f6c11 rocm:0 replicas=0",
+      "default/embedding": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 rocm:0 replicas=0",
+      "default/fact_check": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-FactCheck@99ede1aba1563e59e416f744d25b3f6b7e9d8274 rocm:0 replicas=0",
+      "default/jailbreak": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Guard@087f9e401012df839c83717b746967ac7aebfa3e rocm:0 replicas=0",
+      "default/modality": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Modality@5384b8997e3cbb79ca3a670e869577f4e4f4997e rocm:0 replicas=0",
+      "default/pii": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-PII@6d3300c4bd7975f30a664503f6c725cf1fbbad48 rocm:0 replicas=0",
+      "default/rag.reranker": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Reranker@a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf rocm:0 replicas=0",
+      "default/safety.unsafe-content": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Safety@6e70e725a5f4d86da10f5be5e4dfd1da0358bb85 rocm:0 replicas=0",
+      "default/user_feedback": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Feedback@47434a7fd7c245c0c7c17564a000b3c56ccfec41 rocm:0 replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Domain@f6354f54adcf38770f635ad903be2b00577f6c11 rocm:0 replicas=0",
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 rocm:0 replicas=0",
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-FactCheck@99ede1aba1563e59e416f744d25b3f6b7e9d8274 rocm:0 replicas=0",
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Feedback@47434a7fd7c245c0c7c17564a000b3c56ccfec41 rocm:0 replicas=0",
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Guard@087f9e401012df839c83717b746967ac7aebfa3e rocm:0 replicas=0",
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Hazard@5dd25f2cc3c98f338e6a79b667662d60f936a28d rocm:0 replicas=0",
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Modality@5384b8997e3cbb79ca3a670e869577f4e4f4997e rocm:0 replicas=0",
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-PII@6d3300c4bd7975f30a664503f6c725cf1fbbad48 rocm:0 replicas=0",
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Reranker@a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf rocm:0 replicas=0",
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Safety@6e70e725a5f4d86da10f5be5e4dfd1da0358bb85 rocm:0 replicas=0"
+    ]
+  },
+  "config/recipes/vela-amd/metadata.yaml": {
+    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+  },
+  "config/runtime/vector-store/valkey.yaml": {},
+  "deploy/helm/semantic-router/Chart.yaml": {
+    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: apiVersion, appVersion, dependencies, description, home, icon, keywords, maintainers, name, sources, type; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+  },
+  "deploy/helm/semantic-router/values.yaml": {},
+  "deploy/kubernetes/agentgateway/semantic-router-values/values.yaml": {
+    "signals": {
+      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "deploy/kubernetes/ai-gateway/semantic-router-values/values.yaml": {
+    "signals": {
+      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "deploy/kubernetes/aibrix/semantic-router-values/values.yaml": {
+    "signals": {
+      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "deploy/kubernetes/dynamo/helm-chart/Chart.yaml": {
+    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: annotations, apiVersion, appVersion, dependencies, description, home, keywords, maintainers, name, sources, type; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+  },
+  "deploy/kubernetes/dynamo/helm-chart/examples/values-multi-model.yaml": {
+    "error": "config contains unknown fields: unknown field \"backendFramework\" in global; unknown field \"frontend\" in top level; unknown field \"logLevel\" in global; unknown field \"namespace\" in global; unknown field \"workers\" in top level"
+  },
+  "deploy/kubernetes/dynamo/helm-chart/examples/values-multi-node.yaml": {
+    "error": "config contains unknown fields: unknown field \"backendFramework\" in global; unknown field \"frontend\" in top level; unknown field \"logLevel\" in global; unknown field \"namespace\" in global; unknown field \"workers\" in top level; unknown field \"x-gpu-tolerations\" in top level"
+  },
+  "deploy/kubernetes/dynamo/helm-chart/values.yaml": {
+    "error": "config contains unknown fields: unknown field \"backendFramework\" in global; unknown field \"dynamoConfig\" in top level; unknown field \"frontend\" in top level; unknown field \"huggingface\" in top level; unknown field \"image\" in top level; unknown field \"imagePullSecrets\" in top level; unknown field \"logLevel\" in global; unknown field \"namespace\" in global; unknown field \"platform\" in top level; unknown field \"security\" in top level; unknown field \"service\" in top level; unknown field \"volumes\" in top level; unknown field \"workers\" in top level"
+  },
+  "deploy/kubernetes/dynamo/semantic-router-values/values.yaml": {
+    "signals": {
+      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "deploy/kubernetes/istio/config.yaml": {
+    "signals": {
+      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "deploy/kubernetes/istio/semantic-router-values/values.yaml": {
+    "signals": {
+      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "deploy/kubernetes/llm-d/semantic-router-values/values.yaml": {
+    "signals": {
+      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "deploy/kubernetes/observability/dashboard/config.yaml": {},
+  "e2e/config/authz-profile-c-static-only.yaml": {
+    "error": "compile effective model registry: providers[0] requires base_url or endpoints because provider \"vllm\" has no default"
+  },
+  "e2e/config/authz-profile-d-multi-provider-gemini.yaml": {
+    "error": "compile effective model registry: providers[0] requires base_url or endpoints because provider \"vllm\" has no default"
+  },
+  "e2e/config/authz-profile-e-local-vllm.yaml": {
+    "error": "compile effective model registry: providers[0] requires base_url or endpoints because provider \"vllm\" has no default"
+  },
+  "e2e/config/config.agent-smoke.amd.yaml": {},
+  "e2e/config/config.agent-smoke.cpu.yaml": {},
+  "e2e/config/config.authz-rbac-demo.yaml": {},
+  "e2e/config/config.authz-rbac.yaml": {},
+  "e2e/config/config.e2e.yaml": {
+    "signals": {
+      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "e2e/config/config.hallucination.yaml": {
+    "signals": {
+      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/fact_check": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/hallucination": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "e2e/config/config.memory-user-redis-enabled.yaml": {
+    "signals": {
+      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "e2e/config/config.memory-user-valkey.yaml": {},
+  "e2e/config/config.memory-user.yaml": {},
+  "e2e/config/config.modality-routing.yaml": {
+    "signals": {
+      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "e2e/config/config.multi-endpoint.yaml": {},
+  "e2e/config/config.multi-provider.yaml": {},
+  "e2e/config/config.remote-embedding-smoke.yaml": {
+    "signals": {
+      "default/embedding": "openai_embeddings https://api.openai.com/v1 text-embedding-3-small"
+    }
+  },
+  "e2e/config/config.response-api-redis.yaml": {
+    "signals": {
+      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "e2e/config/config.response-api.yaml": {
+    "signals": {
+      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "e2e/config/config.testing.yaml": {
+    "signals": {
+      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "e2e/profiles/ai-gateway/values.yaml": {
+    "signals": {
+      "default/classifier.llm_toxicity": "remote http://mock-sequence-classifier.default.svc.cluster.local:8000 e2e-llm-classifier",
+      "default/classifier.remote_toxicity": "remote http://mock-sequence-classifier.default.svc.cluster.local:8000",
+      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/embedding": "none",
+      "default/jailbreak": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/pii": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "e2e-domain/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "e2e-pii-precedence/pii": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "e2e/profiles/authz-rbac/values.yaml": {},
+  "e2e/profiles/category-remote-backend/values.yaml": {
+    "signals": {
+      "default/domain": "remote http://mock-category-classifier.default.svc.cluster.local:8000 category-service"
+    }
+  },
+  "e2e/profiles/complexity-remote-backend/values.yaml": {
+    "signals": {
+      "default/complexity.extreme": "remote http://mock-difficulty-scorer.default.svc.cluster.local:8000 difficulty-service",
+      "default/complexity.needs_reasoning": "remote http://mock-difficulty-scorer.default.svc.cluster.local:8000 difficulty-service"
+    }
+  },
+  "e2e/profiles/complexity-routing/values.yaml": {
+    "signals": {
+      "default/embedding": "none"
+    }
+  },
+  "e2e/profiles/conversation-routing/values.yaml": {},
+  "e2e/profiles/dynamic-config/values.yaml": {},
+  "e2e/profiles/hallucination/values.yaml": {
+    "signals": {
+      "default/fact_check": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/hallucination": "remote http://mock-hallucination-detector.default.svc.cluster.local:8000 KRLabsOrg/lettucedect-v2-qwen-2b"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "e2e/profiles/jailbreak-onerror/values.yaml": {
+    "signals": {
+      "default/jailbreak": "remote http://127.0.0.1:1 unreachable-guardrail"
+    }
+  },
+  "e2e/profiles/local-classifier-backend/values.yaml": {
+    "signals": {
+      "default/classifier.local_jailbreak_score": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Guard@087f9e401012df839c83717b746967ac7aebfa3e cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Guard@087f9e401012df839c83717b746967ac7aebfa3e cpu replicas=0"
+    ]
+  },
+  "e2e/profiles/long-context-routing/values.yaml": {},
+  "e2e/profiles/looper/values.yaml": {},
+  "e2e/profiles/masking/values.yaml": {},
+  "e2e/profiles/ml-model-selection/values.yaml": {
+    "signals": {
+      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "e2e/profiles/model-runtime-real/values.yaml": {
+    "signals": {
+      "default/decision.request_kind": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 cpu replicas=0",
+      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/jailbreak": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/pii": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 cpu replicas=0",
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "e2e/profiles/model-runtime-vela3/values.yaml": {
+    "signals": {
+      "default/decision.account_access": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/decision.order_numbers": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/jailbreak": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/pii": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "e2e/profiles/model-runtime/values.yaml": {
+    "signals": {
+      "default/classifier.user_reaction": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 feedback-a",
+      "default/decision.answered": "model_runtime /tmp/vsr-fixtures/decision@ cpu replicas=0",
+      "default/decision.attached_answered": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 decision-a",
+      "default/decision.names": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 vela2-a",
+      "default/decision.offline": "model_runtime http://model-runtime-offline.vllm-semantic-router-system.svc.cluster.local:8100 decision-offline",
+      "default/decision.request_kind": "model_runtime /tmp/vsr-fixtures/decision@ cpu replicas=0",
+      "default/decision.topics": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 vela2-a",
+      "default/domain": "model_runtime /tmp/vsr-fixtures/domain@ cpu replicas=0",
+      "default/jailbreak": "model_runtime /tmp/vsr-fixtures/guard@ cpu replicas=0",
+      "default/modality": "model_runtime /tmp/vsr-fixtures/modality@ cpu replicas=0",
+      "default/pii": "model_runtime /tmp/vsr-fixtures/pii@ cpu replicas=0",
+      "default/rag.reranker": "model_runtime /tmp/vsr-fixtures/reranker@ cpu replicas=0"
+    },
+    "started": [
+      "model_runtime /tmp/vsr-fixtures/decision@ cpu replicas=0",
+      "model_runtime /tmp/vsr-fixtures/domain@ cpu replicas=0",
+      "model_runtime /tmp/vsr-fixtures/embedding@ auto replicas=0",
+      "model_runtime /tmp/vsr-fixtures/guard@ cpu replicas=0",
+      "model_runtime /tmp/vsr-fixtures/modality@ cpu replicas=0",
+      "model_runtime /tmp/vsr-fixtures/pii@ cpu replicas=0",
+      "model_runtime /tmp/vsr-fixtures/reranker@ cpu replicas=0",
+      "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 decision-a",
+      "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 feedback-a",
+      "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 vela2-a",
+      "model_runtime http://model-runtime-offline.vllm-semantic-router-system.svc.cluster.local:8100 decision-offline"
+    ]
+  },
+  "e2e/profiles/multi-endpoint/values.yaml": {
+    "signals": {
+      "default/jailbreak": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/pii": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "e2e/profiles/multimodal-routing/values.yaml": {},
+  "e2e/profiles/pii-remote-backend/values.yaml": {
+    "signals": {
+      "default/pii": "remote http://mock-pii-spans.default.svc.cluster.local:8000 pii-spans-service"
+    }
+  },
+  "e2e/profiles/preference-external-routing/values.yaml": {},
+  "e2e/profiles/preference-routing/values.yaml": {
+    "signals": {
+      "default/embedding": "none"
+    }
+  },
+  "e2e/profiles/production-stack/prometheus-config.yaml": {
+    "error": "config contains unknown fields: unknown field \"evaluation_interval\" in global; unknown field \"scrape_configs\" in top level; unknown field \"scrape_interval\" in global"
+  },
+  "e2e/profiles/production-stack/values.yaml": {
+    "signals": {
+      "default/domain": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
+      "default/jailbreak": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
+      "default/pii": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0"
+    ]
+  },
+  "e2e/profiles/progress-gate/values.yaml": {},
+  "e2e/profiles/provider-protocols/values.yaml": {},
+  "e2e/profiles/rag-hybrid-search/values.yaml": {
+    "signals": {
+      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "e2e/profiles/remote-embedding/values.yaml": {
+    "signals": {
+      "default/embedding": "openai_embeddings http://mock-embedding.default.svc.cluster.local:8000/v1 e2e-remote-embedding"
+    }
+  },
+  "e2e/profiles/response-api-redis-cluster/values.yaml": {},
+  "e2e/profiles/response-api-redis/values.yaml": {},
+  "e2e/profiles/response-api/values.yaml": {
+    "signals": {
+      "default/embedding": "none"
+    }
+  },
+  "e2e/profiles/response-jailbreak/values.yaml": {
+    "signals": {
+      "default/jailbreak": "remote http://provider-mocker.default.svc.cluster.local:8000 mock-guardrail"
+    }
+  },
+  "e2e/profiles/route-action/values.yaml": {
+    "signals": {
+      "default/jailbreak": "remote http://127.0.0.1:1 unreachable-guardrail"
+    }
+  },
+  "e2e/profiles/router-replay/values.yaml": {},
+  "e2e/profiles/routing-strategies/config-with-embedding.yaml": {
+    "signals": {
+      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/embedding": "none"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "e2e/profiles/routing-strategies/values-mcp.yaml": {
+    "signals": {
+      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "e2e/profiles/routing-strategies/values.yaml": {
+    "signals": {
+      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "e2e/profiles/streaming/values.yaml": {
+    "signals": {
+      "default/jailbreak": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/pii": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "e2e/profiles/structure-routing/values.yaml": {},
+  "e2e/profiles/vectorstore-registry/values.yaml": {},
+  "e2e/profiles/vela-halu/values.yaml": {
+    "signals": {
+      "default/hallucination": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Halu@ca87531211e414ac21c641b2faa8b8e21619de8f cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Halu@ca87531211e414ac21c641b2faa8b8e21619de8f cpu replicas=0"
+    ]
+  },
+  "e2e/profiles/vela-omni/values.yaml": {
+    "signals": {
+      "mini/embedding": "model_runtime vllm-sr/Vela-1.0-Omni-Mini@801bae3ad28df6891408f0e0441c676b30e132e3 cpu replicas=0",
+      "nano/embedding": "model_runtime vllm-sr/Vela-1.0-Omni-Nano@2ff2d66385dbdd661a560ec3e8bcb45a0527d92e cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/Vela-1.0-Omni-Mini@801bae3ad28df6891408f0e0441c676b30e132e3 cpu replicas=0",
+      "model_runtime vllm-sr/Vela-1.0-Omni-Nano@2ff2d66385dbdd661a560ec3e8bcb45a0527d92e cpu replicas=0"
+    ]
+  },
+  "e2e/profiles/vela-shield/values.yaml": {
+    "signals": {
+      "default/safety.unsafe-content": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Shield@a981a99eeb05a2859b88b5cee9af4352897ec4ec cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Shield@a981a99eeb05a2859b88b5cee9af4352897ec4ec cpu replicas=0"
+    ]
+  }
+}

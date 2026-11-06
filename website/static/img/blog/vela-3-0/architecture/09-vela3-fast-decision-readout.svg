@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1380" viewBox="0 0 1600 1380" role="img"><title>vela3-fast: the decision readout and its distillation target</title><desc>Decision readout of the frozen backbone (vela3_encoder.DecisionEncoder) and the soft target it was trained on. Read bottom to top.</desc>
+<defs><marker id="arrow" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L12 5 L0 10 L3 5 Z" fill="#111"/></marker></defs>
+        <style>text{font-family:Arial,Helvetica,sans-serif;fill:#111;font-weight:400}.math{font-family:Georgia,'Times New Roman',serif;font-style:italic}.serif{font-family:Georgia,'Times New Roman',serif}</style>
+<g data-box="50.0 1240 1300 70">
+<rect x="50.0" y="1240" width="1300" height="70" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="700" y="1283.84" font-size="26" text-anchor="middle" class="">Final-normalized encoder states H ∈ ℝ^(L×1,024)</text>
+</g>
+<g data-box="85.0 1110 270 76">
+<rect x="85.0" y="1110" width="270" height="76" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="220" y="1142.1200000000001" font-size="24" text-anchor="middle" class="">Option marker hₒ</text>
+<text x="220" y="1170.2" font-size="24" text-anchor="middle" class="">[O]</text>
+</g>
+<path d="M220,1240 L220,1186" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="125.0 995 190 55">
+<rect x="125.0" y="995" width="190" height="55" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="220" y="1030.66" font-size="24" text-anchor="middle" class="">LayerNorm*</text>
+</g>
+<path d="M220,1110 L220,1050" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="105.0 885 230 76">
+<rect x="105.0" y="885" width="230" height="76" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="220" y="916.875" font-size="25" text-anchor="middle" class="">Wₒ</text>
+<text x="220" y="946.125" font-size="25" text-anchor="middle" class="">1,024 → 256</text>
+</g>
+<path d="M220,995 L220,961" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="385.0 1110 270 76">
+<rect x="385.0" y="1110" width="270" height="76" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="520" y="1142.1200000000001" font-size="24" text-anchor="middle" class="">Question marker hq</text>
+<text x="520" y="1170.2" font-size="24" text-anchor="middle" class="">[Q]</text>
+</g>
+<path d="M520,1240 L520,1186" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="425.0 995 190 55">
+<rect x="425.0" y="995" width="190" height="55" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="520" y="1030.66" font-size="24" text-anchor="middle" class="">LayerNorm*</text>
+</g>
+<path d="M520,1110 L520,1050" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="405.0 885 230 76">
+<rect x="405.0" y="885" width="230" height="76" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="520" y="916.875" font-size="25" text-anchor="middle" class="">Wq</text>
+<text x="520" y="946.125" font-size="25" text-anchor="middle" class="">1,024 → 256</text>
+</g>
+<path d="M520,995 L520,961" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="725.0 1110 270 76">
+<rect x="725.0" y="1110" width="270" height="76" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="860" y="1142.1200000000001" font-size="24" text-anchor="middle" class="">State mean p</text>
+<text x="860" y="1170.2" font-size="24" text-anchor="middle" class="">[SEG_user] … state</text>
+</g>
+<path d="M860,1240 L860,1186" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="765.0 995 190 55">
+<rect x="765.0" y="995" width="190" height="55" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="860" y="1030.66" font-size="24" text-anchor="middle" class="">LayerNorm*</text>
+</g>
+<path d="M860,1110 L860,1050" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="745.0 885 230 76">
+<rect x="745.0" y="885" width="230" height="76" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="860" y="916.875" font-size="25" text-anchor="middle" class="">Wp</text>
+<text x="860" y="946.125" font-size="25" text-anchor="middle" class="">1,024 → 256</text>
+</g>
+<path d="M860,995 L860,961" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="370" cy="785" r="23" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
+<text x="370" y="793.99" font-size="29" text-anchor="middle" class="">+</text>
+<path d="M220,885 L220,785 L347,785" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M520,885 L520,785 L393,785" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="250.0 690 240 60">
+<rect x="250.0" y="690" width="240" height="60" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="370" y="728.16" font-size="24" text-anchor="middle" class="">L2 normalize u</text>
+</g>
+<path d="M370,762 L370,750" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="740.0 765 240 60">
+<rect x="740.0" y="765" width="240" height="60" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="860" y="803.16" font-size="24" text-anchor="middle" class="">L2 normalize v</text>
+</g>
+<path d="M860,885 L860,825" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="455.0 570 290 74">
+<rect x="455.0" y="570" width="290" height="74" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="600" y="616.18" font-size="27" text-anchor="middle" class="">dot(u, v) / τ</text>
+</g>
+<path d="M370,690 L370,668 L530,668 L530,644" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M860,765 L860,668 L670,668 L670,644" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="30.0 520 280 92">
+<rect x="30.0" y="520" width="280" height="92" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
+<text x="170" y="560.365" font-size="23" text-anchor="middle" class="">MLP: 1,024 → 2,048 → 1</text>
+<text x="170" y="587.275" font-size="23" text-anchor="middle" class="">ReLU · Dropout(0.1)</text>
+</g>
+<path d="M220,1090 L60,1090 L60,613" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="220" cy="1090" r="3.5" fill="#111"/>
+<text x="70" y="1075.0" font-size="20" text-anchor="start" class="">raw hₒ</text>
+<circle cx="420" cy="420" r="23" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
+<text x="420" y="428.99" font-size="29" text-anchor="middle" class="">+</text>
+<path d="M170,520 L170,420 L397,420" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M600,570 L600,420 L443,420" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="140.0 290 560 82">
+<rect x="140.0" y="290" width="560" height="82" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="420" y="325.12" font-size="24" text-anchor="middle" class="">z: one logit per option</text>
+<text x="420" y="353.2" font-size="24" text-anchor="middle" class="">softmax over the question&#x27;s options</text>
+</g>
+<path d="M420,397 L420,372" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="140.0 150 560 84">
+<rect x="140.0" y="150" width="560" height="84" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="420" y="186.12" font-size="24" text-anchor="middle" class="">Choice: argmax + probabilities</text>
+<text x="420" y="214.2" font-size="24" text-anchor="middle" class="">Noul: 2 options {no, yes}, p(yes)</text>
+</g>
+<path d="M420,290 L420,234" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="1080" y="200" width="470" height="640" rx="23" fill="#F4F4F4" stroke="#111" stroke-width="2.2" stroke-dasharray="9 7"/>
+<text x="1315.0" y="236.0" font-size="25" text-anchor="middle" class="serif">Training target (not at inference)</text>
+<g data-box="1115.0 300 400 84">
+<rect x="1115.0" y="300" width="400" height="84" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="1315" y="336.61" font-size="22" text-anchor="middle" class="">Soft-target cross-entropy</text>
+<text x="1315" y="362.35" font-size="22" text-anchor="middle" class="">on the softmax over options</text>
+</g>
+<g data-box="1115.0 450 400 84">
+<rect x="1115.0" y="450" width="400" height="84" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="1315" y="486.61" font-size="22" text-anchor="middle" class="">Target: d3&#x27;s answer</text>
+<text x="1315" y="512.35" font-size="22" text-anchor="middle" class="">distribution over the options</text>
+</g>
+<g data-box="1115.0 600 400 84">
+<rect x="1115.0" y="600" width="400" height="84" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="1315" y="636.61" font-size="22" text-anchor="middle" class="">With a gold label:</text>
+<text x="1315" y="662.35" font-size="22" text-anchor="middle" class="">½ gold + ½ d3</text>
+</g>
+<text x="1315" y="760.0" font-size="22" text-anchor="middle" class="">rows written in the same</text>
+<text x="1315" y="785.74" font-size="22" text-anchor="middle" class="">format as inference</text>
+<path d="M1315,449 L1315,385" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1315,599 L1315,535" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M700,331 L1112,331" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 6"/>
+<text x="800" y="1340.0" font-size="22" text-anchor="middle" class="">* one shared LayerNorm; τ learned (exp of log τ). Dropout is inactive at inference.</text>
+</svg>

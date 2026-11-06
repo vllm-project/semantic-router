@@ -131,9 +131,11 @@ func TestSetupSparseDomainRoundTripUsesCanonicalBackendResolution(t *testing.T) 
 	}}
 	returned := validateSetupRoundTrip(t, configPath, patch)
 	active := activateSetupRoundTrip(t, configPath, root, returned)
-	category := active.CategoryModel
-	if category.Backend == nil || category.Backend.Model != "named-category" {
-		t.Fatalf("sparse remote backend did not resolve: %+v", category)
+	// The Router reads the deprecated backend as a classify deployment the
+	// domain signal is bound to.
+	resolved, ok, err := active.ResolveTask("domain_classifier")
+	if err != nil || !ok || resolved.Name != "named-category" || resolved.Deployment.Provider != routerconfig.ClassifyProvider {
+		t.Fatalf("sparse remote backend did not resolve: %+v (resolved %v, %v)", resolved, ok, err)
 	}
 }
 

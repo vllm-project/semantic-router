@@ -25,7 +25,8 @@ global:
 recipes:
 - name: balance
   description: Spends reasoning only where a request needs it. One decision-model
-    call answers every routing question, and an effort score selects the pool.
+    call answers every routing question, and ten lanes set the model and its reasoning
+    effort.
   routing:
     strategy: priority
     candidate_requirements:
@@ -51,6 +52,12 @@ recipes:
         - 只要答案
         - 直接给答案
       conversation:
+      - name: has_image
+        description: The request carries at least one image.
+        feature:
+          type: exists
+          source:
+            type: image_content
       - name: has_tools
         description: The request declares at least one tool.
         feature:
@@ -83,6 +90,11 @@ recipes:
           type: exists
           source:
             type: tool_choice_required
+      context:
+      - name: long_input
+        min_tokens: 200K
+        description: Inputs of 200K tokens or more, which leave a 256K-token model
+          too little room to answer.
       user_feedbacks:
       - name: wrong_answer
         description: The user says an earlier answer was wrong; recovery also needs
@@ -223,26 +235,79 @@ recipes:
         - name: effort_max
           gte: 1.15
     decisions:
-    - name: reasoning
-      description: 'Deep reasoning: research-level and hard problems, tool work, and
-        answers the user says were wrong.'
-      priority: 300
+    - name: long_context
+      description: Inputs of 200K tokens or more, for a model with a long context
+        window.
+      priority: 900
+      rules:
+        operator: AND
+        conditions:
+        - type: context
+          name: long_input
+      algorithm:
+        type: static
+        minimum_candidates: 1
+      adaptations:
+        adaptation:
+          candidate_set: decision
+      plugins:
+      - type: request_params
+        configuration:
+          default_max_tokens: 8192
+    - name: vision
+      description: Requests that carry an image, for a model that reads images.
+      priority: 850
+      rules:
+        operator: AND
+        conditions:
+        - type: conversation
+          name: has_image
+      algorithm:
+        type: static
+        minimum_candidates: 1
+      adaptations:
+        adaptation:
+          candidate_set: decision
+      plugins:
+      - type: request_params
+        configuration:
+          default_max_tokens: 4096
+    - name: recovery
+      description: An earlier answer the user says was wrong, for a stronger model
+        at maximum effort.
+      priority: 800
+      rules:
+        operator: AND
+        on_unknown: no_match
+        conditions:
+        - type: conversation
+          name: has_prior_answer
+        - operator: NOT
+          conditions:
+          - type: conversation
+            name: tool_loop
+        - type: decision
+          name: correction
+        - type: user_feedback
+          name: wrong_answer
+      algorithm:
+        type: static
+        minimum_candidates: 1
+      adaptations:
+        adaptation:
+          candidate_set: decision
+      plugins:
+      - type: request_params
+        configuration:
+          default_max_tokens: 8192
+    - name: agentic
+      description: An active tool loop, or declared tools the request needs, for a
+        strong agent at high effort.
+      priority: 700
       rules:
         operator: OR
         on_unknown: no_match
         conditions:
-        - operator: AND
-          conditions:
-          - type: conversation
-            name: has_prior_answer
-          - operator: NOT
-            conditions:
-            - type: conversation
-              name: tool_loop
-          - type: decision
-            name: correction
-          - type: user_feedback
-            name: wrong_answer
         - type: conversation
           name: tool_loop
         - operator: AND
@@ -267,34 +332,110 @@ recipes:
               name: tool_use
             - type: conversation
               name: tool_required
-        - type: projection
-          name: effort_max
-        - operator: AND
+      algorithm:
+        type: static
+        minimum_candidates: 1
+      adaptations:
+        adaptation:
+          candidate_set: decision
+      plugins:
+      - type: request_params
+        configuration:
+          default_max_tokens: 8192
+    - name: facts
+      description: Answers that depend on facts most people would look up, below maximum
+        effort, for the model that hallucinates least, at low effort.
+      priority: 600
+      rules:
+        operator: AND
+        on_unknown: no_match
+        conditions:
+        - type: decision
+          name: precise_facts
+        - operator: OR
+          conditions:
+          - type: decision
+            name: task
+            label: facts
+          - type: decision
+            name: task
+            label: analysis
+          - type: decision
+            name: task
+            label: writing
+        - operator: NOT
           conditions:
           - type: projection
+            name: effort_max
+      algorithm:
+        type: static
+        minimum_candidates: 1
+      adaptations:
+        adaptation:
+          candidate_set: decision
+      plugins:
+      - type: request_params
+        configuration:
+          default_max_tokens: 4096
+    - name: frontier
+      description: Maximum effort; the decision model chooses one of the assigned
+        models by its description.
+      priority: 500
+      rules:
+        operator: AND
+        conditions:
+        - type: projection
+          name: effort_max
+      algorithm:
+        type: decision
+        minimum_candidates: 2
+        decision:
+          instructions: Which model should answer this research-level request?
+          timeout_ms: 15000
+      adaptations:
+        adaptation:
+          candidate_set: decision
+      plugins:
+      - type: request_params
+        configuration:
+          default_max_tokens: 8192
+    - name: code
+      description: Code at medium or high effort, for the strongest coder at medium
+        effort.
+      priority: 450
+      rules:
+        operator: AND
+        on_unknown: no_match
+        conditions:
+        - type: decision
+          name: task
+          label: code
+        - operator: OR
+          conditions:
+          - type: projection
+            name: effort_medium
+          - type: projection
             name: effort_high
-          - operator: NOT
-            conditions:
-            - type: decision
-              name: task
-              label: code
-          - operator: NOT
-            conditions:
-            - operator: AND
-              conditions:
-              - type: decision
-                name: precise_facts
-              - operator: OR
-                conditions:
-                - type: decision
-                  name: task
-                  label: facts
-                - type: decision
-                  name: task
-                  label: analysis
-                - type: decision
-                  name: task
-                  label: writing
+      algorithm:
+        type: static
+        minimum_candidates: 1
+      adaptations:
+        adaptation:
+          candidate_set: decision
+      plugins:
+      - type: request_params
+        configuration:
+          default_max_tokens: 4096
+    - name: hard
+      description: High effort, or a STEM problem rated multi-step, at extra-high
+        effort; multi_factor balances quality, cost, latency and load.
+      priority: 400
+      rules:
+        operator: OR
+        on_unknown: no_match
+        conditions:
+        - type: projection
+          name: effort_high
         - operator: AND
           conditions:
           - type: decision
@@ -309,18 +450,13 @@ recipes:
           quality:
             index: vllm-sr/reasoning@1.0.0
             on_missing: exclude
-          objective:
-            strategy: lexicographic
-            priorities:
-            - factor: quality
-              tolerance: 0.03
-            - factor: latency
-              tolerance: 0.1
-            - factor: cost
-            - factor: load
+          weights:
+            quality: 0.25
+            latency: 0.1
+            cost: 0.4
+            load: 0.25
           latency_metric: tpot
-          latency_percentile: 95
-          on_no_candidates: fail
+          on_no_candidates: cheapest
       adaptations:
         adaptation:
           candidate_set: decision
@@ -328,53 +464,30 @@ recipes:
       - type: request_params
         configuration:
           default_max_tokens: 8192
-    - name: simple
-      description: Requests that need no reasoning, positively identified by the decision
-        model.
-      priority: 100
+    - name: standard
+      description: Medium effort, and requests whose routing answers are unknown;
+        multi_factor balances quality, cost, latency and load.
+      priority: 300
       rules:
         operator: AND
-        on_unknown: no_match
+        on_unknown: match
         conditions:
         - type: projection
-          name: effort_off
-        - operator: NOT
-          conditions:
-          - operator: AND
-            conditions:
-            - type: decision
-              name: precise_facts
-            - operator: OR
-              conditions:
-              - type: decision
-                name: task
-                label: facts
-              - type: decision
-                name: task
-                label: analysis
-              - type: decision
-                name: task
-                label: writing
+          name: effort_medium
       algorithm:
         type: multi_factor
         minimum_candidates: 1
         multi_factor:
           quality:
-            index: vllm-sr/general@1.0.0
+            index: vllm-sr/reasoning@1.0.0
             on_missing: exclude
-          objective:
-            strategy: lexicographic
-            priorities:
-            - factor: quality
-              tolerance: 0.12
-            - factor: cost
-              tolerance: 0.05
-            - factor: latency
-              tolerance: 0.1
-            - factor: load
-          latency_metric: ttft
-          latency_percentile: 95
-          on_no_candidates: fail
+          weights:
+            quality: 0.25
+            latency: 0.1
+            cost: 0.4
+            load: 0.25
+          latency_metric: tpot
+          on_no_candidates: cheapest
       adaptations:
         adaptation:
           candidate_set: decision
@@ -382,30 +495,15 @@ recipes:
       - type: request_params
         configuration:
           default_max_tokens: 4096
-    - name: medium
-      description: Code, exact facts and requests that need some reasoning; also the
-        fallback when a routing answer is unknown.
-      priority: 10
+    - name: fast
+      description: Everything else, with thinking off.
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
       algorithm:
-        type: multi_factor
+        type: static
         minimum_candidates: 1
-        multi_factor:
-          quality:
-            index: vllm-sr/general@1.0.0
-            on_missing: exclude
-          objective:
-            strategy: lexicographic
-            priorities:
-            - factor: quality
-              tolerance: 0.07
-            - factor: latency
-              tolerance: 0.1
-            - factor: cost
-              tolerance: 0.05
-            - factor: load
-          latency_metric: ttft
-          latency_percentile: 95
-          on_no_candidates: fail
       adaptations:
         adaptation:
           candidate_set: decision

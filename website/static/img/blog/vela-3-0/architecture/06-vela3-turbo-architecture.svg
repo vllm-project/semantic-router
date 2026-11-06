@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1560" height="1700" viewBox="0 0 1560 1700" role="img"><title>vela3-turbo: model architecture</title><desc>The frozen d3-turbo decoder (Qwen3.5 hybrid layers) with row-gated LoRA adapters and Vela span heads. Read bottom to top.</desc>
+<defs><marker id="arrow" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L12 5 L0 10 L3 5 Z" fill="#111"/></marker></defs>
+        <style>text{font-family:Arial,Helvetica,sans-serif;fill:#111;font-weight:400}.math{font-family:Georgia,'Times New Roman',serif;font-style:italic}.serif{font-family:Georgia,'Times New Roman',serif}</style>
+<text x="330" y="58.0" font-size="28" text-anchor="middle" class="">Decisions</text>
+<text x="860" y="58.0" font-size="28" text-anchor="middle" class="">Labeled text spans</text>
+<g data-box="110.0 100 440 88">
+<rect x="110.0" y="100" width="440" height="88" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="330" y="138.12" font-size="24" text-anchor="middle" class="">Softmax over option codes</text>
+<text x="330" y="166.2" font-size="24" text-anchor="middle" class="">Choice · Noul · Score</text>
+</g>
+<g data-box="610.0 100 500 88">
+<rect x="610.0" y="100" width="500" height="88" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="860" y="138.12" font-size="24" text-anchor="middle" class="">Sigmoid + threshold + merge</text>
+<text x="860" y="166.2" font-size="24" text-anchor="middle" class="">character-offset spans</text>
+</g>
+<path d="M330,99 L330,72" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M860,99 L860,72" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="110.0 235 440 86">
+<rect x="110.0" y="235" width="440" height="86" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="330" y="272.365" font-size="23" text-anchor="middle" class="">d3 code readout (unchanged)</text>
+<text x="330" y="299.275" font-size="23" text-anchor="middle" class="">option-code logits, last position</text>
+</g>
+<g data-box="610.0 235 500 86">
+<rect x="610.0" y="235" width="500" height="86" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="860" y="272.365" font-size="23" text-anchor="middle" class="">SpanHeadV2 (Vela 2.0 topology)</text>
+<text x="860" y="299.275" font-size="23" text-anchor="middle" class="">span · NER · relation · image halu</text>
+</g>
+<g data-box="110.0 370 440 86">
+<rect x="110.0" y="370" width="440" height="86" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="330" y="407.365" font-size="23" text-anchor="middle" class="">d3 prompt: State · Question</text>
+<text x="330" y="434.275" font-size="23" text-anchor="middle" class="">· Options under answer codes</text>
+</g>
+<g data-box="610.0 370 500 86">
+<rect x="610.0" y="370" width="500" height="86" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="860" y="407.365" font-size="23" text-anchor="middle" class="">First sub-token of each word</text>
+<text x="860" y="434.275" font-size="23" text-anchor="middle" class="">+ mean of each option line</text>
+</g>
+<path d="M330,234 L330,189" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M330,369 L330,322" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M860,234 L860,189" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M860,369 L860,322" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="425.0 530 350 54">
+<rect x="425.0" y="530" width="350" height="54" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="600" y="565.84" font-size="26" text-anchor="middle" class="">Final RMSNorm</text>
+</g>
+<path d="M600,529 L600,492 L330,492 L330,457" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M600,492 L860,492 L860,457" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="600" cy="492" r="3.5" fill="#111"/>
+<text x="600" y="480.0" font-size="22" text-anchor="middle" class="math">H: sequence length × 5,120</text>
+<rect x="318" y="625" width="568" height="595" rx="23" fill="#F4F4F4" stroke="#111" stroke-width="2.2"/>
+<text x="294" y="931.5" font-size="30" text-anchor="end" class="math">64×</text>
+<circle cx="600" cy="675" r="18" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
+<text x="600" y="683.99" font-size="29" text-anchor="middle" class="">+</text>
+<g data-box="425.0 723 350 80">
+<rect x="425.0" y="723" width="350" height="80" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
+<text x="600" y="756.875" font-size="25" text-anchor="middle" class="">SwiGLU feed forward</text>
+<text x="600" y="786.125" font-size="25" text-anchor="middle" class="">5,120 → 17,408 → 5,120</text>
+</g>
+<g data-box="425.0 841 350 50">
+<rect x="425.0" y="841" width="350" height="50" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="600" y="874.5" font-size="25" text-anchor="middle" class="">RMSNorm</text>
+</g>
+<circle cx="600" cy="935" r="18" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
+<text x="600" y="943.99" font-size="29" text-anchor="middle" class="">+</text>
+<g data-box="425.0 983 350 85">
+<rect x="425.0" y="983" width="350" height="85" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="600" y="1019.6200000000001" font-size="24" text-anchor="middle" class="">Gated-DeltaNet (L)</text>
+<text x="600" y="1047.7" font-size="24" text-anchor="middle" class="">or gated GQA (F)</text>
+</g>
+<g data-box="425.0 1106 350 50">
+<rect x="425.0" y="1106" width="350" height="50" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="600" y="1139.5" font-size="25" text-anchor="middle" class="">RMSNorm</text>
+</g>
+<path d="M600,656 L600,585" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M600,722 L600,694" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M600,840 L600,804" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M600,916 L600,892" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M600,982 L600,954" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M600,1105 L600,1069" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M600,1188 L839,1188 L839,935 L619,935" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M600,907 L839,907 L839,675 L619,675" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="600" cy="1188" r="3.5" fill="#111"/>
+<circle cx="600" cy="907" r="3.5" fill="#111"/>
+<g data-box="425.0 1290 350 74">
+<rect x="425.0" y="1290" width="350" height="74" rx="7" fill="#F7DCDF" stroke="#111" stroke-width="2.2"/>
+<text x="600" y="1320.875" font-size="25" text-anchor="middle" class="">Token embedding</text>
+<text x="600" y="1350.125" font-size="25" text-anchor="middle" class="">248,320 × 5,120</text>
+</g>
+<path d="M600,1289 L600,1157" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="35.0 1290 330 74">
+<rect x="35.0" y="1290" width="330" height="74" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
+<text x="200" y="1321.855" font-size="21" text-anchor="middle" class="">Vision tower (images)</text>
+<text x="200" y="1346.425" font-size="21" text-anchor="middle" class="">27 layers · 1,152 → 5,120</text>
+</g>
+<path d="M200,1289 L200,1240 L598,1240" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="200" y="1410.0" font-size="21" text-anchor="middle" class="">image tokens</text>
+<text x="200" y="1434.57" font-size="21" text-anchor="middle" class="">join the sequence</text>
+<text x="600" y="1525.0" font-size="25" text-anchor="middle" class="">d3 prompt; the state is read once, every question branches from it</text>
+<path d="M600,1500 L600,1366" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="130" y="760.0" font-size="22" text-anchor="middle" class="">Layer schedule</text>
+<text x="130" y="785.74" font-size="22" text-anchor="middle" class="">L → L → L → F</text>
+<text x="130" y="811.48" font-size="22" text-anchor="middle" class="">16 cycles</text>
+<text x="130" y="870.0" font-size="22" text-anchor="middle" class="">GQA: 24 Q / 4 KV</text>
+<text x="130" y="895.74" font-size="22" text-anchor="middle" class="">head width 256</text>
+<text x="130" y="960.0" font-size="22" text-anchor="middle" class="">Linear heads:</text>
+<text x="130" y="985.74" font-size="22" text-anchor="middle" class="">16 Q,K / 48 V</text>
+<text x="130" y="1011.48" font-size="22" text-anchor="middle" class="">width 128</text>
+<rect x="1100" y="625" width="440" height="760" rx="23" fill="#F4F4F4" stroke="#111" stroke-width="2.2" stroke-dasharray="9 7"/>
+<text x="1320.0" y="661.0" font-size="25" text-anchor="middle" class="serif">Row-gated LoRA adapters</text>
+<g data-box="1125.0 690 390 70">
+<rect x="1125.0" y="690" width="390" height="70" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="1320" y="719.855" font-size="21" text-anchor="middle" class="">Decision LoRA (router ids)</text>
+<text x="1320" y="744.4250000000001" font-size="21" text-anchor="middle" class="">r 32 · layers 0–63</text>
+</g>
+<g data-box="1125.0 772 390 70">
+<rect x="1125.0" y="772" width="390" height="70" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="1320" y="801.855" font-size="21" text-anchor="middle" class="">Domain / feedback LoRA</text>
+<text x="1320" y="826.4250000000001" font-size="21" text-anchor="middle" class="">r 32 · layers 0–63</text>
+</g>
+<g data-box="1125.0 854 390 70">
+<rect x="1125.0" y="854" width="390" height="70" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="1320" y="883.855" font-size="21" text-anchor="middle" class="">Span LoRA</text>
+<text x="1320" y="908.4250000000001" font-size="21" text-anchor="middle" class="">r 64 · layers 32–63</text>
+</g>
+<g data-box="1125.0 936 390 70">
+<rect x="1125.0" y="936" width="390" height="70" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="1320" y="965.855" font-size="21" text-anchor="middle" class="">NER LoRA</text>
+<text x="1320" y="990.4250000000001" font-size="21" text-anchor="middle" class="">r 128 · layers 16–63</text>
+</g>
+<g data-box="1125.0 1018 390 70">
+<rect x="1125.0" y="1018" width="390" height="70" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="1320" y="1047.855" font-size="21" text-anchor="middle" class="">Relation LoRA</text>
+<text x="1320" y="1072.425" font-size="21" text-anchor="middle" class="">r 64 · layers 32–63</text>
+</g>
+<path d="M1100,920 L840,920" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 6" marker-end="url(#arrow)"/>
+<text x="1320" y="1130.0" font-size="21" text-anchor="middle" class="">At most one adapter per pass;</text>
+<text x="1320" y="1154.57" font-size="21" text-anchor="middle" class="">off rows keep base(x) bit for bit</text>
+<text x="600" y="1600.0" font-size="31" text-anchor="middle" class="serif">vela3-turbo (27B)</text>
+<text x="600" y="1640.0" font-size="21" text-anchor="middle" class="">Base d3-turbo at da17b5d0, frozen. Ordinary questions run with every adapter off; spans add one pass per question.</text>
+</svg>

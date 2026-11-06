@@ -455,6 +455,14 @@ func (m *MilvusStore) AttachResponse(ctx context.Context, id string, body string
 	})
 }
 
+// AttachPrompt stores the prompt of a record written without it.
+func (m *MilvusStore) AttachPrompt(ctx context.Context, id string, prompt string, truncated bool) error {
+	return m.updateRecord(ctx, id, func(record *Record) {
+		record.Prompt = prompt
+		record.PromptTruncated = truncated
+	})
+}
+
 // AppendOutcome links post-route feedback to a record.
 func (m *MilvusStore) AppendOutcome(ctx context.Context, id string, outcome Outcome) error {
 	return m.updateRecord(ctx, id, func(record *Record) {
@@ -476,6 +484,7 @@ func (m *MilvusStore) UpdateHallucinationStatus(ctx context.Context, id string, 
 // UpdateUsageCost updates token usage and pricing-derived cost fields for a record.
 func (m *MilvusStore) UpdateUsageCost(ctx context.Context, id string, usage UsageCost) error {
 	return m.updateRecord(ctx, id, func(record *Record) {
+		record.ProviderCache = cloneProviderCacheAccounting(usage.ProviderCache)
 		record.PromptTokens = cloneIntPtr(usage.PromptTokens)
 		record.CachedPromptTokens = cloneIntPtr(usage.CachedPromptTokens)
 		record.CacheWriteTokens = cloneIntPtr(usage.CacheWriteTokens)
