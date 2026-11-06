@@ -104576,7 +104576,7 @@ const builtInCatalogJSON = `{
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b",
+        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -104666,7 +104666,7 @@ const builtInCatalogJSON = `{
         "tools"
       ],
       "verification": {
-        "asset_sha256": "sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b",
+        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -104759,7 +104759,7 @@ const builtInCatalogJSON = `{
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b",
+        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -104871,7 +104871,7 @@ const builtInCatalogJSON = `{
         "orchestration"
       ],
       "verification": {
-        "asset_sha256": "sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b",
+        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -104941,7 +104941,7 @@ const builtInCatalogJSON = `{
         "private_deployment"
       ],
       "verification": {
-        "asset_sha256": "sha256:ed545ed957037a6d8459c12f538bd83d40b224e8134bd8c8cdb85481e211e13b",
+        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -106432,13 +106432,73 @@ const builtInCatalogJSON = `{
       },
       "category": "model_api",
       "conformance": {
-        "status": "unverified"
+        "status": "live_verified",
+        "verified_at": "2026-09-22"
       },
       "default_base_url": "https://api.groq.com/openai/v1",
       "default_protocol": "openai/chat-completions@1",
       "description": "Low-latency hosted inference.",
       "display_name": "Groq",
       "id": "groq",
+      "models": [
+        {
+          "catalog": "openai/gpt-oss-120b",
+          "id": "openai/gpt-oss-120b",
+          "lifecycle": "active",
+          "pricing": {
+            "completion_per_1m": 0.6,
+            "currency": "USD",
+            "prompt_per_1m": 0.15
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "verification": {
+            "source": "https://console.groq.com/docs/models",
+            "status": "reproduced",
+            "verified_at": "2026-09-22"
+          }
+        },
+        {
+          "catalog": "openai/gpt-oss-20b",
+          "id": "openai/gpt-oss-20b",
+          "lifecycle": "active",
+          "pricing": {
+            "completion_per_1m": 0.3,
+            "currency": "USD",
+            "prompt_per_1m": 0.075
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "verification": {
+            "source": "https://console.groq.com/docs/models",
+            "status": "reproduced",
+            "verified_at": "2026-09-22"
+          }
+        },
+        {
+          "catalog": "qwen/qwen3.8-27b",
+          "id": "qwen/qwen3.8-27b",
+          "lifecycle": "experimental",
+          "pricing": {
+            "completion_per_1m": 4.0,
+            "currency": "USD",
+            "prompt_per_1m": 0.8
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "verification": {
+            "source": "https://console.groq.com/docs/models",
+            "status": "reproduced",
+            "verified_at": "2026-09-22"
+          }
+        }
+      ],
       "presentation": {
         "logo": "package:groq",
         "monochrome": true,

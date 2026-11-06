@@ -47,13 +47,17 @@ Multi-profile recipes expose named virtual model IDs through top-level
 
 ## Use a built-in Recipe
 
-Start `vllm-sr serve`, then open **Build → Mixture-of-Models → Recipes** in
-Dashboard. Choose a built-in Recipe, assign connected Models to its decisions,
-and publish the resulting Mixture-of-Model. The Recipe contains routing policy;
-it does not start physical model engines or embed their credentials.
+Start `vllm-sr serve`, connect your Models, then open **Build →
+Mixture-of-Models → Recipes** in Dashboard. Under **Built-in recipes**, choose
+**Create model** on a Recipe, enter its public model name and optional aliases,
+and assign connected Models to each decision that calls one. Creating the model
+adds the Recipe and its entrypoint to the active configuration. The Recipe
+contains routing policy; it does not start physical model engines or embed
+their credentials.
 
-For a reviewed YAML deployment, copy the built-in source into a user-owned
-configuration, validate it, and serve that complete file with
+Without Dashboard, `vllm-sr recipe builtin init` writes the same composition to
+a new config file. For a reviewed YAML deployment, copy the built-in source into
+a user-owned configuration, validate it, and serve that complete file with
 `vllm-sr serve --config mom-custom.yaml`.
 
 See the [built-in catalog guide](built-in/README.md) for the packaged inventory

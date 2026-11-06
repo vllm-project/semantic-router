@@ -1,6 +1,9 @@
 package classification
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/url"
@@ -12,30 +15,21 @@ import (
 
 // remoteOperationIdentity follows the connector's actual request target and
 // model selector. Catalog aliases and unused model names cannot bypass capacity.
-func remoteOperationIdentity(adapter string, external *config.ExternalModelConfig) (string, string, error) {
-	address := strings.TrimSpace(external.ModelEndpoint.Address)
-	scheme := strings.ToLower(strings.TrimSpace(external.ModelEndpoint.Protocol))
-	if scheme == "" {
-		scheme = "http"
-	}
-	absolute := strings.Contains(address, "://")
-	base := address
-	if !absolute {
-		base = fmt.Sprintf("%s://%s:%d", scheme, address, external.ModelEndpoint.Port)
+func remoteOperationIdentity(adapter string, deployment config.ModelDeployment) (string, string, error) {
+	base, _, err := config.SplitEndpoint(deployment.Endpoint)
+	if err != nil {
+		return "", "", fmt.Errorf("remote operation endpoint is invalid")
 	}
 	endpoint, err := url.Parse(base)
-	if err != nil || endpoint.Hostname() == "" || (endpoint.Scheme != "http" && endpoint.Scheme != "https") || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" {
+	if err != nil || endpoint.Hostname() == "" || endpoint.User != nil || endpoint.Fragment != "" {
 		return "", "", fmt.Errorf("remote operation endpoint is invalid")
 	}
 	var operation, model string
 	switch adapter {
 	case config.RemoteClassifierProtocolHTTPClassify:
-		operation = "/classify" // The body has inputs only; ModelName is never sent.
+		operation = "/classify" // The body has inputs only; the model is never sent.
 	case config.RemoteClassifierProtocolHTTPChat:
-		operation, model = "/v1/chat/completions", external.ModelName
-		if absolute {
-			operation = "/chat/completions"
-		} // Explicit endpoint adapters supply their API base path.
+		operation, model = "/chat/completions", deployment.Model
 	default:
 		return "", "", fmt.Errorf("remote operation adapter %q is unsupported", adapter)
 	}
@@ -51,6 +45,23 @@ func remoteOperationIdentity(adapter string, external *config.ExternalModelConfi
 	endpoint.Host = net.JoinHostPort(strings.ToLower(endpoint.Hostname()), port)
 	endpoint.Path = path.Join(endpoint.Path, operation)
 	endpoint.RawPath = ""
-	endpoint.RawQuery = ""
 	return endpoint.String(), model, nil
+}
+
+// credentialFingerprint identifies a deployment's credential without
+// holding it: where the key is read from, and how it is sent.
+func credentialFingerprint(deployment config.ModelDeployment) string {
+	auth := deployment.Auth
+	if auth == nil {
+		return ""
+	}
+	key := ""
+	if auth.HasInlineKey() {
+		key, _ = auth.Key()
+	}
+	description, _ := json.Marshal(struct {
+		Header, Prefix, Env, File, Key string
+	}{auth.HeaderName(), auth.HeaderValue(""), auth.APIKeyEnv, auth.APIKeyFile, key})
+	sum := sha256.Sum256(description)
+	return hex.EncodeToString(sum[:])
 }

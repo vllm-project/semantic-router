@@ -53,8 +53,8 @@ global:
         enabled: true
 ```
 
-Without task overrides, these judgments use the default vela3-fast deployment.
-The explicit Vela 1.0 Halu binding below selects the specialist instead. That
+Without a binding, these judgments use the decision model, vela3-fast by
+default. The Vela 1.0 Halu binding below selects the specialist instead. That
 specialist reads up to 8,192 tokens of context, question, and answer together;
 its context preparation prioritizes retaining the answer. Input limits and
 complete-coverage requirements still apply; see
@@ -62,8 +62,8 @@ complete-coverage requirements still apply; see
 
 ## Choose where it runs
 
-The binding is `hallucination_detector` and reads text spans of the answer
-(`token_spans.v1`):
+The binding key is `hallucination`, and the signal reads text spans of the
+answer:
 
 ```yaml
 global:
@@ -77,16 +77,14 @@ global:
           max_tokens: 8192
           overflow: reject
     bindings:
-      hallucination_detector:
-        deployment: vela-halu
-        contract: token_spans.v1
+      hallucination: vela-halu
 ```
 
 ### On Vela 2.0
 
 Vela 2.0 marks unsupported claims with its router span head, as a ready-made
-question about the answer. Bind `hallucination_detector` to a Vela 2.0
-deployment instead:
+question about the answer. Bind `hallucination` to a Vela 2.0 deployment
+instead:
 
 ```yaml alternative
 global:
@@ -97,9 +95,7 @@ global:
         artifact: vllm-sr/Vela-2.0-0.3B
         device: cpu
     bindings:
-      hallucination_detector:
-        deployment: vela2
-        contract: token_spans.v1
+      hallucination: vela2
 ```
 
 The model reads the whole answer and applies its own calibrated threshold, so
