@@ -170,7 +170,7 @@ func (r *SemanticRouterReconciler) convertClassifierModule(spec *vllmv1alpha1.Cl
 		return routerconfig.CanonicalClassifierModule{}, nil
 	}
 
-	classifier := routerconfig.DefaultCanonicalGlobal().ModelCatalog.Modules.Classifier
+	classifier := operatorModelModules().Classifier
 
 	if spec.CategoryModel != nil {
 		domain, err := convertToTypedConfig[routerconfig.CanonicalCategoryModule](r, spec.CategoryModel)

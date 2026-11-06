@@ -19,6 +19,7 @@ class SafetyHazardRule(BaseModel):
     """Optional multi-label hazard filter evaluated only after an unsafe verdict."""
 
     model_config = ConfigDict(extra="forbid")
+    deployment: str | None = None
     model: str = ""
     labels: list[str] = Field(min_length=2)
     categories: list[str] = Field(min_length=1)
@@ -43,6 +44,7 @@ class SafetyRule(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1)
     description: str | None = None
+    deployment: str | None = None
     model: str = ""
     labels: list[str] = Field(default_factory=lambda: ["safe", "unsafe"])
     unsafe_labels: list[str] = Field(default_factory=lambda: ["unsafe"])

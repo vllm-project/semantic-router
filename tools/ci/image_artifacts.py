@@ -17,6 +17,7 @@ import provider_mocker_image as mocker
 
 DUAL = ["linux/amd64", "linux/arm64"]
 ROUTER_DOCKERFILE = "tools/docker/Dockerfile.extproc"
+ATTACHED_DOCKERFILE = "tools/docker/Dockerfile.attached"
 DEFINITIONS = {
     "dashboard": (".", "dashboard/backend/Dockerfile", DUAL),
     mocker.IMAGE: (mocker.CONTEXT, mocker.CONTEXT + "/Dockerfile", DUAL),
@@ -24,12 +25,14 @@ DEFINITIONS = {
     "operator": (".", "deploy/operator/Dockerfile", DUAL),
     "operator-bundle": ("deploy/operator", "deploy/operator/bundle/Dockerfile", DUAL),
     "vllm-sr": (".", ROUTER_DOCKERFILE, DUAL),
+    "vllm-sr-riscv64": (".", ATTACHED_DOCKERFILE, ["linux/riscv64"]),
     "vllm-sr-cuda": (".", ROUTER_DOCKERFILE, ["linux/amd64"]),
     "vllm-sr-rocm": (".", ROUTER_DOCKERFILE, ["linux/amd64"]),
 }
 # Router images are one Dockerfile target per accelerator: (target, accelerator).
 ROUTER_BUILDS = {
     "vllm-sr": ("vllm-sr", "cpu"),
+    "vllm-sr-riscv64": ("vllm-sr-attached", "cpu"),
     "vllm-sr-cuda": ("vllm-sr", "cuda"),
     "vllm-sr-rocm": ("vllm-sr", "rocm"),
 }
@@ -64,6 +67,16 @@ def file_digest(stream, digest="sha256"):
 def sha256(path: Path) -> str:
     with path.open("rb") as stream:
         return file_digest(stream, "sha256").hexdigest()
+
+
+def run_date() -> str:
+    """The run's publication date: CI_RUN_DATE when the caller set one, else today (UTC)."""
+    date = os.environ.get("CI_RUN_DATE", "")
+    if not date:
+        return datetime.now(timezone.utc).strftime("%Y%m%d")
+    if not re.fullmatch(r"\d{8}", date):
+        raise ValueError("CI_RUN_DATE must be YYYYMMDD")
+    return date
 
 
 def source_sha() -> str:
@@ -285,7 +298,7 @@ def main() -> None:
         parser.error("--image is required")
     context, dockerfile, supported = DEFINITIONS[args.image]
     target, accelerator = ROUTER_BUILDS.get(args.image, ("", ""))
-    platforms = supported if args.multiarch else ["linux/amd64"]
+    platforms = supported if args.multiarch else supported[:1]
     if args.command == "definition":
         values = {
             "context": context,
@@ -293,7 +306,7 @@ def main() -> None:
             "target": target,
             "accelerator": accelerator,
             "platforms": ",".join(platforms),
-            "date": datetime.now(timezone.utc).strftime("%Y%m%d"),
+            "date": run_date(),
         }
         with Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
             for key, value in values.items():

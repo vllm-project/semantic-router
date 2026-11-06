@@ -46,7 +46,7 @@ func (r *OpenAIRouter) handleRouterReplayAggregateAPI(
 	if err != nil {
 		return r.createErrorResponse(500, "router replay storage query failed")
 	}
-	return r.createRouterReplayJSONResponse(200, payload)
+	return r.createJSONResponse(200, payload)
 }
 
 func buildRouterReplayAggregatePayload(
@@ -58,6 +58,7 @@ func buildRouterReplayAggregatePayload(
 		RecordCount:          len(filteredRecords),
 		Lifecycle:            buildRouterReplayLifecycleSummary(filteredRecords),
 		Summary:              buildRouterReplayAggregateCostSummary(filteredRecords),
+		ProviderCache:        buildRouterReplayProviderCacheSummary(filteredRecords),
 		ModelSelection:       buildRouterReplayModelSelection(filteredRecords),
 		DecisionDistribution: buildRouterReplayDecisionDistribution(filteredRecords),
 		SignalDistribution:   buildRouterReplaySignalDistribution(filteredRecords),
