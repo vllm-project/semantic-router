@@ -13,6 +13,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 )
 
@@ -44,7 +45,7 @@ func NewBackend(cases []Case) *Backend {
 
 // ServeHTTP answers with the fixture of the case named by x-request-id, or 404.
 func (b *Backend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	id := r.Header.Get("x-request-id")
+	id := r.Header.Get(headers.RequestID)
 	body, _ := io.ReadAll(r.Body)
 	message := &Message{Header: wireRequestHeader(r), Body: body}
 	b.mu.Lock()
@@ -127,7 +128,7 @@ func Send(ctx context.Context, client *http.Client, baseURL string, c Case) (*Me
 		// a gateway would forward like any client header.
 		req.Header.Set("User-Agent", "")
 	}
-	req.Header.Set("x-request-id", RequestIDPrefix+c.Name)
+	req.Header.Set(headers.RequestID, RequestIDPrefix+c.Name)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err

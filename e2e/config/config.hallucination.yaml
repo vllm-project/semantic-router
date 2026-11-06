@@ -28,12 +28,18 @@ routing:
         - model: qwen3
           use_reasoning: false
       plugins:
-        - type: hallucination
+        - type: response_guard
           configuration:
-            enabled: true
-            hallucination_action: header
-            unverified_factual_action: header
-            include_hallucination_details: true
+            rules:
+              - when:
+                  operator: AND
+                  conditions:
+                    - type: fact_check
+                      name: needs_fact_check
+                    - type: hallucination
+                      name: ungrounded_claims
+                action: annotate
+            on_unknown: annotate
   signals:
     domains:
       - name: general
@@ -45,6 +51,9 @@ routing:
         description: Query contains factual claims that should be verified against context
       - name: no_fact_check_needed
         description: Query is creative, code-related, or opinion-based - no fact verification needed
+    hallucination:
+      - name: ungrounded_claims
+        description: Answers with claims their grounding context does not support.
   modelCards:
     - name: qwen3
 global:

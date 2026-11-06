@@ -6,6 +6,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
@@ -15,12 +16,11 @@ import (
 func TestReviewBufferedPolicyBodyRewriteReportsCacheWarningOnce(t *testing.T) {
 	router := &OpenAIRouter{}
 	ctx := &RequestContext{
-		SourceFormat:          llmprotocol.AnthropicMessagesV1,
-		TargetFormat:          llmprotocol.OpenAIChatV1,
-		RequestModel:          "public-model",
-		TraceContext:          t.Context(),
-		HallucinationDetected: true,
-		VSRSelectedDecision:   decisionWithHallucinationActions("body", "header"),
+		SourceFormat:        llmprotocol.AnthropicMessagesV1,
+		TargetFormat:        llmprotocol.OpenAIChatV1,
+		RequestModel:        "public-model",
+		TraceContext:        t.Context(),
+		VSRSelectedDecision: responseGuardDecision(groundedGuard(config.ResponseGuardAnnotate, true, "")),
 	}
 	const reason = "Messages requires numeric cache buckets; the unreported bucket is zero-filled for representation, while settlement retains unknown usage"
 	counter := metrics.TranslationLossyTotal.WithLabelValues("anthropic", "openai", "dropped", reason)
@@ -32,7 +32,7 @@ func TestReviewBufferedPolicyBodyRewriteReportsCacheWarningOnce(t *testing.T) {
 	if common == nil {
 		t.Fatalf("buffered response failed: %+v", response)
 	}
-	if got := string(common.GetBodyMutation().GetBody()); !strings.Contains(got, "[Hallucination Warning]") {
+	if got := string(common.GetBodyMutation().GetBody()); !strings.Contains(got, "[Unverified Response]") {
 		t.Fatalf("response-policy body rewrite did not run: %q", got)
 	}
 	warning := protocolDiagnosticsHeader(common.GetHeaderMutation())

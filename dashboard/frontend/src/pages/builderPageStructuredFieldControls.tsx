@@ -310,14 +310,21 @@ function StringMatrixField({
   )
 }
 
+// Classifier and System One conditions name a label and set their own on_error.
+function labelledCondition(type: unknown): boolean {
+  return type === 'classifier' || type === 'systemone'
+}
+
 function RuleNodeEditor({
   value,
   onChange,
   depth = 0,
+  signalTypes = DECISION_SIGNAL_TYPES,
 }: {
   value: unknown
   onChange: (value: DSLFieldObject) => void
   depth?: number
+  signalTypes?: readonly string[]
 }) {
   const node = normalizeStructuredObject(value)
   const operator = typeof node.operator === 'string' ? node.operator.toUpperCase() : ''
@@ -377,7 +384,7 @@ function RuleNodeEditor({
                 }
               >
                 <option value="">Select signal type</option>
-                {DECISION_SIGNAL_TYPES.map((type) => (
+                {signalTypes.map((type) => (
                   <option key={type} value={type}>
                     {type}
                   </option>
@@ -397,9 +404,9 @@ function RuleNodeEditor({
                 placeholder="technical"
               />
             </label>
-            {node.type === 'classifier' || node.label !== undefined ? (
+            {labelledCondition(node.type) || node.label !== undefined ? (
               <label className={styles.structuredMiniLabel}>
-                Classifier Label
+                {node.type === 'systemone' ? 'Option or Label' : 'Classifier Label'}
                 <input
                   className={styles.fieldInput}
                   value={typeof node.label === 'string' ? node.label : ''}
@@ -408,11 +415,11 @@ function RuleNodeEditor({
                       updateStructuredObjectField(node, 'label', event.target.value || undefined),
                     )
                   }
-                  placeholder="SAFE"
+                  placeholder={node.type === 'systemone' ? 'billing' : 'SAFE'}
                 />
               </label>
             ) : null}
-            {node.type === 'classifier' || node.on_error !== undefined ? (
+            {labelledCondition(node.type) || node.on_error !== undefined ? (
               <label className={styles.structuredMiniLabel}>
                 On Error
                 <select
@@ -477,6 +484,7 @@ function RuleNodeEditor({
               <RuleNodeEditor
                 value={condition}
                 depth={depth + 1}
+                signalTypes={signalTypes}
                 onChange={(nextCondition) =>
                   onChange({
                     ...node,
@@ -508,7 +516,7 @@ function RuleField({ schema, value, onChange }: Omit<StructuredFieldEditorProps,
       schema={schema}
       onClear={value === undefined ? undefined : () => onChange(undefined)}
     >
-      <RuleNodeEditor value={value} onChange={onChange} />
+      <RuleNodeEditor value={value} onChange={onChange} signalTypes={schema.options} />
     </FieldShell>
   )
 }

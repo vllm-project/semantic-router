@@ -74,6 +74,9 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 			ContextEquivalentBytes: history.contextEquivalentBytes,
 			ContextHasNonText:      history.contextHasNonText,
 			InputModality:          history.inputModality,
+			Turns:                  append([]classification.ConversationTurn(nil), history.turns...),
+			Images:                 append([]string(nil), history.userImages...),
+			Videos:                 append([]string(nil), history.userVideos...),
 		},
 	}
 
@@ -150,7 +153,7 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRMatchedMetadata = signals.MatchedMetadataRules
 	ctx.VSRMatchedClassifier = signals.MatchedClassifierRules
 	ctx.VSRMatchedInputModality = signals.MatchedInputModalityRules
-	ctx.VSRMatchedDecisionModel = signals.MatchedDecisionRules
+	ctx.VSRMatchedDecisionModel = signals.MatchedSystemOneRules
 	ctx.VSRMatchedProjection = signals.MatchedProjectionRules
 	ctx.VSRProjectionScores = cloneReplayFloat64Map(signals.ProjectionScores)
 	ctx.VSRSignalConfidences = cloneReplayFloat64Map(signals.SignalConfidences)
@@ -158,6 +161,7 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRSignalErrors = cloneReplayStringMap(signals.SignalErrors)
 	ctx.VSRSignalErrorMatches = cloneReplayBoolMap(signals.SignalErrorMatches)
 	ctx.VSRProjectionTrace = cloneProjectionTraceForReplay(signals.ProjectionTrace)
+	ctx.RoutedSignals = signals.Matches()
 
 	if signals.JailbreakDetected || signals.JailbreakScoreAvailable {
 		ctx.JailbreakDetected = signals.JailbreakDetected
@@ -251,7 +255,7 @@ func collectMatchedSignalRules(signals *classification.SignalResults) []string {
 	allMatchedRules = append(allMatchedRules, signals.MatchedMetadataRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedClassifierRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedInputModalityRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedDecisionRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedSystemOneRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedProjectionRules...)
 	return allMatchedRules
 }

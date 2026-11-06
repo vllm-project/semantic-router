@@ -1,4 +1,4 @@
-import { formatRoutingMetadataValue } from '../components/routingMetadataDisplay'
+import { formatRoutingMetadataValue, matchedSignalHeader } from '../components/routingMetadataDisplay'
 import type { ViewField } from '../components/ViewPanel'
 import { ROUTER_CONFIG_EXTENSION } from '../generated/routerConfigContract'
 import type { Signal } from './insightsPageTypes'
@@ -27,7 +27,7 @@ function recordedSignalGroups(signals: Signal) {
 }
 
 function formatSignalMatch(type: string, value: string): string {
-  return formatRoutingMetadataValue(`x-vsr-matched-${type.replace(/_/g, '-')}`, value)
+  return formatRoutingMetadataValue(matchedSignalHeader(type.replace(/_/g, '-')), value)
 }
 
 export function collectSignals(signals: Signal): string[] {

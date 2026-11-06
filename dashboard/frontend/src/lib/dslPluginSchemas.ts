@@ -1,3 +1,4 @@
+import { SIGNAL_TYPES } from '../generated/routerConfigContract'
 import { resolveCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas'
 import type { FieldSchema } from './dslSchemaTypes'
 
@@ -16,8 +17,8 @@ export function getCuratedPluginFieldSchema(pluginType: string): FieldSchema[] {
       return getMemoryPluginFieldSchema()
     case 'system_prompt':
       return getSystemPromptPluginFieldSchema()
-    case 'hallucination':
-      return getHallucinationPluginFieldSchema()
+    case 'response_guard':
+      return getResponseGuardPluginFieldSchema()
     case 'router_replay':
       return getRouterReplayPluginFieldSchema()
     case 'rag':
@@ -32,8 +33,6 @@ export function getCuratedPluginFieldSchema(pluginType: string): FieldSchema[] {
       return getToolSelectionPluginFieldSchema()
     case 'request_params':
       return getRequestParamsPluginFieldSchema()
-    case 'response_jailbreak':
-      return getResponseJailbreakPluginFieldSchema()
     default:
       return [{ key: 'enabled', label: 'Enabled', type: 'boolean' }]
   }
@@ -79,20 +78,56 @@ function getSystemPromptPluginFieldSchema(): FieldSchema[] {
       label: 'Mode',
       type: 'select',
       options: ['', 'replace', 'insert'],
-      description: 'Replace or insert before existing prompt',
+      description: "Replace the caller's system prompt (default) or insert before it",
     },
   ]
 }
 
-function getHallucinationPluginFieldSchema(): FieldSchema[] {
+function getResponseGuardPluginFieldSchema(): FieldSchema[] {
   return [
-    { key: 'enabled', label: 'Enabled', type: 'boolean' },
     {
-      key: 'hallucination_action',
-      label: 'Action',
+      key: 'rules',
+      label: 'Rules',
+      type: 'object[]',
+      required: true,
+      description: 'Read in order over each answer; the first rule that blocks ends the read.',
+      addLabel: 'Add rule',
+      emptyLabel: 'No rules.',
+      itemLabel: 'Rule',
+      itemLabelKey: 'action',
+      fields: [
+        {
+          key: 'when',
+          label: 'When',
+          type: 'rule',
+          required: true,
+          options: [...SIGNAL_TYPES],
+          description:
+            'Signals by name: jailbreak rules with direction: response, hallucination and response-stage systemone rules read the answer; any other reads the request.',
+        },
+        {
+          key: 'action',
+          label: 'Action',
+          type: 'select',
+          required: true,
+          options: ['block', 'annotate', 'none'],
+          description: 'Refuse the answer with 403, deliver it with x-vsr-response-warnings, or only record it',
+        },
+        {
+          key: 'details',
+          label: 'Details',
+          type: 'boolean',
+          description: 'With annotate, also write a note at the head of the answer',
+        },
+      ],
+    },
+    {
+      key: 'on_unknown',
+      label: 'On Unknown',
       type: 'select',
-      options: ['', 'header', 'body', 'none'],
-      description: 'What to do when hallucination is detected',
+      options: ['', 'block', 'annotate', 'none'],
+      description:
+        'What a rule does when a response-stage signal it reads could not be read (default annotate)',
     },
   ]
 }
@@ -367,26 +402,6 @@ function getRequestParamsPluginFieldSchema(): FieldSchema[] {
       label: 'Strip Unknown',
       type: 'boolean',
       description: 'Remove fields not in the OpenAI spec',
-    },
-  ]
-}
-
-function getResponseJailbreakPluginFieldSchema(): FieldSchema[] {
-  return [
-    { key: 'enabled', label: 'Enabled', type: 'boolean' },
-    {
-      key: 'threshold',
-      label: 'Threshold',
-      type: 'number',
-      placeholder: '0.8',
-      description: 'Minimum classifier score required to flag the response',
-    },
-    {
-      key: 'action',
-      label: 'Action',
-      type: 'select',
-      options: ['', 'block', 'header', 'none'],
-      description: 'Block the response, emit warning headers, or do nothing',
     },
   ]
 }

@@ -16,9 +16,11 @@ import (
 // its own questions. Calls about one state share it, and the model reads
 // their questions together, as one request with all of them. Calls about
 // other states go in the same call as further states (DecisionRequest.states),
-// each read exactly as a request of its own. Calls about one state whose
-// question IDs could share an answer key (an equal ID, or an ID under a Set
-// question's "<id>." labels) stay apart.
+// each read exactly as a request of its own. Calls about one state that ask
+// the same question under one ID (consumers of a family's trained question)
+// share its answer; calls about one state whose question IDs could otherwise
+// share an answer key (an equal ID, or an ID under a Set question's "<id>."
+// labels) stay apart.
 //
 // The result cache applies to the call the runtime answers: a fused call is
 // looked up and stored under the key of all its states and questions, so an
@@ -34,13 +36,14 @@ type fusedDecision struct {
 }
 
 // fusedState is one state of a fused decisions task: the calls about it, its
-// request (the state and every question about it, in ID order), its name in
-// the request's states ("" for the request's own state) and its fusion key.
+// request (the state and every question about it once, in ID order), its
+// name in the request's states ("" for the request's own state), its fusion
+// key and the questions it asks by ID.
 type fusedState struct {
 	name    string
 	text    string
 	calls   []*bundleCall
-	taken   map[string]struct{}
+	taken   map[string]Question
 	request Request
 }
 
@@ -64,23 +67,36 @@ func decisionGroup(call *bundleCall) string {
 	return fmt.Sprintf("%s|%p", key, call.decision.cache)
 }
 
-// stateText is the fusion key of a call's state: its text, or its named parts.
+// stateText is the fusion key of a call's state: its text, or its named
+// parts, and the images and videos every question of it sees.
 func stateText(request Request) string {
-	if request.Parts == nil {
-		return "s" + request.State
-	}
-	names := make([]string, 0, len(request.Parts))
-	for name := range request.Parts {
-		names = append(names, name)
-	}
-	sort.Strings(names)
 	var key strings.Builder
-	key.WriteByte('p')
-	for _, name := range names {
-		for _, field := range []string{name, request.Parts[name]} {
-			key.WriteString(strconv.Itoa(len(field)))
-			key.WriteByte(':')
-			key.WriteString(field)
+	field := func(value string) {
+		key.WriteString(strconv.Itoa(len(value)))
+		key.WriteByte(':')
+		key.WriteString(value)
+	}
+	if request.Parts == nil {
+		key.WriteByte('s')
+		field(request.State)
+	} else {
+		names := make([]string, 0, len(request.Parts))
+		for name := range request.Parts {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		key.WriteByte('p')
+		key.WriteString(strconv.Itoa(len(names)))
+		for _, name := range names {
+			field(name)
+			field(request.Parts[name])
+		}
+	}
+	for _, media := range [][]string{request.Images, request.Videos} {
+		key.WriteByte('m')
+		key.WriteString(strconv.Itoa(len(media)))
+		for _, item := range media {
+			field(item)
 		}
 	}
 	return key.String()
@@ -95,15 +111,20 @@ func questionIDs(call *bundleCall) []string {
 	return ids
 }
 
-// disjointAnswers reports whether no question ID of one set equals one of the
-// other or names a label answer ("<id>.<label>") of it.
-func disjointAnswers(ids []string, taken map[string]struct{}) bool {
-	for _, id := range ids {
-		if _, exists := taken[id]; exists {
-			return false
+// compatibleAnswers reports whether a call's questions can join a state's:
+// each either is a question the state already asks under its ID, or has an
+// ID no question of the state has that names no label answer ("<id>.<label>")
+// of one.
+func compatibleAnswers(questions []Question, taken map[string]Question) bool {
+	for _, question := range questions {
+		if asked, exists := taken[question.ID]; exists {
+			if !sameWireQuestion(asked, question) {
+				return false
+			}
+			continue
 		}
 		for other := range taken {
-			if strings.HasPrefix(id, other+".") || strings.HasPrefix(other, id+".") {
+			if strings.HasPrefix(question.ID, other+".") || strings.HasPrefix(other, question.ID+".") {
 				return false
 			}
 		}
@@ -172,13 +193,13 @@ func fuseDecisions(limit int, calls []*bundleCall) []*bundleTask {
 }
 
 // fits reports whether a call can join the task: about one of its states
-// with answer keys none of that state's questions has, or about another
-// state while the task has fewer than limit of them: as many states as the
-// runtime takes tasks in one bundle, each of which it runs as a job of its own.
+// with questions compatible with that state's, or about another state while
+// the task has fewer than limit of them: as many states as the runtime takes
+// tasks in one bundle, each of which it runs as a job of its own.
 func (d *fusedDecision) fits(call *bundleCall, text string, limit int) bool {
 	for _, state := range d.states {
 		if state.text == text {
-			return disjointAnswers(questionIDs(call), state.taken)
+			return compatibleAnswers(call.decision.request.Questions, state.taken)
 		}
 	}
 	return len(d.states) < limit
@@ -192,13 +213,16 @@ func (d *fusedDecision) add(call *bundleCall, text string) {
 		}
 	}
 	if state == nil {
-		state = &fusedState{text: text, taken: make(map[string]struct{}), request: call.decision.request}
+		state = &fusedState{text: text, taken: make(map[string]Question), request: call.decision.request}
 		state.request.Questions = nil
 		d.states = append(d.states, state)
 	}
 	state.calls = append(state.calls, call)
 	for _, question := range call.decision.request.Questions {
-		state.taken[question.ID] = struct{}{}
+		if _, asked := state.taken[question.ID]; asked {
+			continue
+		}
+		state.taken[question.ID] = question
 		state.request.Questions = append(state.request.Questions, question)
 	}
 }
@@ -224,7 +248,8 @@ func (t *bundleTask) prepareDecision() {
 		states := make(map[string]api.DecisionState, len(d.states)-1)
 		for index, state := range d.states[1:] {
 			state.name = strconv.Itoa(index + 1)
-			states[state.name] = api.DecisionState{State: state.calls[0].task.Decisions.State, Questions: state.questions()}
+			own := state.calls[0].task.Decisions
+			states[state.name] = api.DecisionState{State: own.State, Images: own.Images, Videos: own.Videos, Questions: state.questions()}
 		}
 		body.States = &states
 	}

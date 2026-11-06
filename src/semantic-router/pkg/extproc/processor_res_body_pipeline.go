@@ -103,9 +103,8 @@ func deduplicateReencodedResponseDiagnostics(
 }
 
 // finalizeResponsePolicy runs the shared response-stage processing across normal and fallback paths:
-// scoring response signals, evaluating guardrail plugins (jailbreak, hallucination) for blocking or warning,
-// executing memory suppression decisions, applying warnings and cost headers,
-// persisting Responses objects, and updating replay audit records.
+// the selected decision's response_guard, which blocks or annotates the answer, memory suppression,
+// warnings and cost headers, persisting Responses objects, and updating replay audit records.
 func (r *OpenAIRouter) finalizeResponsePolicy(
 	ctx *RequestContext,
 	semanticResponse *llmprotocol.Response,
@@ -155,39 +154,22 @@ func (r *OpenAIRouter) prepareResponsePolicy(
 		return &responsePolicyPlan{finalBody: clientBody}
 	}
 
-	// The response-stage signal is scored from the declared rules before any
-	// plugin runs, so the observation exists whether or not the selected
-	// decision carries a plugin; the plugins below then consume it. Recorded
-	// before a block returns, so a blocked response leaves the same evidence in
-	// Router Replay as a delivered one.
+	// The guard reads the answer before anything rewrites it, and what it read
+	// is recorded before a block returns, so a blocked response leaves the same
+	// evidence in Router Replay as a delivered one.
 	recordPrimaryOutputDigest(ctx, semanticResponse)
-	assistantContent := semanticAssistantContent(semanticResponse)
-	r.scoreResponseStageSignals(ctx, assistantContent)
-	commitSignalOutcomes := func() {
-		r.recordRouterReplayResponseJailbreak(ctx)
-		r.recordRouterReplayHallucination(ctx)
-	}
-
-	if jailbreakResponse := r.performSemanticResponseJailbreakDetection(ctx, semanticResponse); jailbreakResponse != nil {
+	ctx.ResponseGuard = r.runResponseGuard(ctx, semanticAssistantContent(semanticResponse), false)
+	logResponseGuard(ctx, ctx.ResponseGuard)
+	if rule := ctx.ResponseGuard.blocking(); rule != nil {
 		return &responsePolicyPlan{
-			blocked: jailbreakResponse,
+			blocked: r.createErrorResponse(403, responseGuardBlockMessage(rule)),
 			commitFunc: func() {
-				commitSignalOutcomes()
-				r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
-			},
-		}
-	}
-	if hallucinationResponse := r.performSemanticHallucinationDetection(ctx, semanticResponse); hallucinationResponse != nil {
-		return &responsePolicyPlan{
-			blocked: hallucinationResponse,
-			commitFunc: func() {
-				commitSignalOutcomes()
-				r.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", "hallucination_blocked", false)
+				r.recordRouterReplayResponseGuard(ctx)
+				r.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", "response_blocked", false)
 			},
 		}
 	}
 
-	r.markUnverifiedFactualResponse(ctx)
 	memoryResponse := semanticResponse
 	if _, _, suppressed := r.suppressedResponseMemoryStore(ctx); !suppressed {
 		if cloned, err := cloneSemanticResponseForCommit(semanticResponse); err == nil {
@@ -205,28 +187,23 @@ func (r *OpenAIRouter) prepareResponsePolicy(
 		finalBody: finalBody,
 		response:  response,
 		commitFunc: func() {
-			commitSignalOutcomes()
+			r.recordRouterReplayResponseGuard(ctx)
 			r.scheduleSemanticResponseMemoryStore(ctx, memoryResponse)
 			addResponseCostHeaders(ctx, response)
 			r.persistResponseObject(ctx)
-			r.updateRouterReplayHallucinationStatus(ctx)
 			r.attachRouterReplayResponse(ctx, finalBody, true)
 		},
 	}
 }
 
-// observeResponseStageSignals scores the response-stage rules against the
-// answer and records the observation in Router Replay. Both response paths
-// share it, so a streamed response leaves the evidence a buffered one leaves.
-//
-// Only the buffered path goes on to enforce. A streamed answer exists as a
-// whole for the first time when its bytes are already with the client, so no
-// plugin can block or rewrite it and none runs; the observation is all that is
-// still possible, and the record says so.
-func (r *OpenAIRouter) observeResponseStageSignals(ctx *RequestContext, assistantContent string) {
-	r.scoreResponseStageSignals(ctx, assistantContent)
-	r.recordRouterReplayResponseJailbreak(ctx)
-	r.recordRouterReplayHallucination(ctx)
+// observeResponseGuard reads the selected decision's response_guard over a
+// streamed answer and records what it read in Router Replay, as the buffered
+// path does. A streamed answer exists as a whole for the first time when its
+// bytes are already with the client, so nothing the guard decides is
+// applied, and the record says so.
+func (r *OpenAIRouter) observeResponseGuard(ctx *RequestContext, assistantContent string) {
+	ctx.ResponseGuard = r.runResponseGuard(ctx, assistantContent, true)
+	r.recordRouterReplayResponseGuard(ctx)
 }
 
 func (r *OpenAIRouter) applySemanticResponseWarnings(
@@ -235,19 +212,8 @@ func (r *OpenAIRouter) applySemanticResponseWarnings(
 	originalBody []byte,
 ) (*ext_proc.ProcessingResponse, []byte) {
 	response := buildResponseBodyContinueResponse(nil, nil)
-	changed := false
-	var codes []string
-	var bodyChanged bool
-
-	bodyChanged, code := r.applySemanticHallucinationWarning(ctx, semanticResponse)
-	changed = changed || bodyChanged
-	codes = appendNonEmpty(codes, code)
-	bodyChanged, code = r.applySemanticUnverifiedFactualWarning(ctx, semanticResponse)
-	changed = changed || bodyChanged
-	codes = appendNonEmpty(codes, code)
-	codes = appendNonEmpty(codes, r.responseJailbreakWarningCode(ctx))
-
-	if len(codes) > 0 {
+	changed := r.applyResponseGuardNotes(ctx.ResponseGuard, semanticResponse)
+	if codes := ctx.ResponseGuard.warnings(); len(codes) > 0 {
 		setResponseWarningsHeader(response, codes)
 	}
 	addResponseStageSignalHeaders(ctx, response)
@@ -272,43 +238,28 @@ func (r *OpenAIRouter) applySemanticResponseWarnings(
 	return response, encoded
 }
 
-func (r *OpenAIRouter) markUnverifiedFactualResponse(ctx *RequestContext) {
-	if ctx.VSRSelectedDecision == nil {
-		return
-	}
-
-	hallucinationConfig := ctx.VSRSelectedDecision.GetHallucinationConfig()
-	if hallucinationConfig != nil && hallucinationConfig.Enabled {
-		r.checkUnverifiedFactualResponse(ctx)
-	}
-}
-
-func appendNonEmpty(codes []string, code string) []string {
-	if code == "" {
-		return codes
-	}
-	return append(codes, code)
-}
-
-// addResponseStageSignalHeaders writes the response-stage matches in the body
-// phase: x-vsr-matched-jailbreak is rewritten once the response-direction
-// rules have been scored, and x-vsr-matched-hallucination is written once the
-// answer has been checked. The response headers phase wrote the request-stage
-// matches before the body existed, so the debug headers would otherwise never
-// show a response-stage match. Same gate as the request-stage signal headers:
-// only when debug is requested.
+// addResponseStageSignalHeaders writes the response-stage matches the guard
+// read in the body phase: x-vsr-matched-jailbreak and
+// x-vsr-matched-systemone are rewritten with them after the request-stage
+// ones, and x-vsr-matched-hallucination is written once the answer has been
+// checked. The response headers phase wrote the request-stage matches before
+// the body existed, so the debug headers would otherwise never show a
+// response-stage match. Same gate as the request-stage signal headers: only
+// when debug is requested.
 func addResponseStageSignalHeaders(ctx *RequestContext, response *ext_proc.ProcessingResponse) {
 	if ctx == nil || !debugHeadersRequested(ctx) {
 		return
 	}
-	if len(ctx.VSRMatchedResponseJailbreak) > 0 {
-		matched := make([]string, 0, len(ctx.VSRMatchedJailbreak)+len(ctx.VSRMatchedResponseJailbreak))
-		matched = append(matched, ctx.VSRMatchedJailbreak...)
-		matched = append(matched, ctx.VSRMatchedResponseJailbreak...)
+	if jailbreak := ctx.ResponseGuard.jailbreak(); jailbreak != nil && jailbreak.Signal != nil && len(jailbreak.Signal.MatchedRules) > 0 {
+		matched := append(slices.Clone(ctx.VSRMatchedJailbreak), jailbreak.Signal.MatchedRules...)
 		setResponseBodyHeader(response, headers.VSRMatchedJailbreak, strings.Join(matched, ","))
 	}
-	if len(ctx.VSRMatchedHallucination) > 0 {
-		setResponseBodyHeader(response, headers.VSRMatchedHallucination, strings.Join(ctx.VSRMatchedHallucination, ","))
+	if hallucination := ctx.ResponseGuard.hallucination(); hallucination != nil && hallucination.Signal != nil && len(hallucination.Signal.MatchedRules) > 0 {
+		setResponseBodyHeader(response, headers.VSRMatchedHallucination, strings.Join(hallucination.Signal.MatchedRules, ","))
+	}
+	if systemOne := ctx.ResponseGuard.systemOne(); systemOne != nil && len(systemOne.MatchedRules) > 0 {
+		matched := append(slices.Clone(ctx.VSRMatchedDecisionModel), systemOne.MatchedRules...)
+		setResponseBodyHeader(response, headers.VSRMatchedDecisionModel, strings.Join(matched, ","))
 	}
 }
 

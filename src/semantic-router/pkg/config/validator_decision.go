@@ -25,7 +25,7 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 	if err := validateInputModalityContracts(cfg); err != nil {
 		return err
 	}
-	if err := validateDecisionSignalContracts(cfg); err != nil {
+	if err := validateSystemOneContracts(cfg); err != nil {
 		return err
 	}
 	if err := validateDecisionModelContracts(cfg); err != nil {
@@ -86,17 +86,17 @@ func validateDecisionLeafNode(
 	decisionName string,
 	node *RuleNode,
 ) error {
-	labelled := strings.EqualFold(node.Type, SignalTypeClassifier) || strings.EqualFold(node.Type, SignalTypeDecision)
+	labelled := strings.EqualFold(node.Type, SignalTypeClassifier) || strings.EqualFold(node.Type, SignalTypeSystemOne)
 	if node.Label != "" && !labelled {
-		return fmt.Errorf("decision '%s': label is only supported on classifier and decision conditions", decisionName)
+		return fmt.Errorf("decision '%s': label is only supported on classifier and systemone conditions", decisionName)
 	}
 	if strings.EqualFold(node.Type, SignalTypeClassifier) {
 		if err := validateClassifierDecisionLeaf(cfg, decisionName, node); err != nil {
 			return err
 		}
 	}
-	if strings.EqualFold(node.Type, SignalTypeDecision) {
-		if err := validateDecisionModelLeaf(cfg, decisionName, node); err != nil {
+	if strings.EqualFold(node.Type, SignalTypeSystemOne) {
+		if err := validateSystemOneLeaf(cfg, decisionName, node); err != nil {
 			return err
 		}
 	}
@@ -118,7 +118,7 @@ func validateDecisionLeafNode(
 	}
 	if node.OnError != "" && !labelled {
 		return fmt.Errorf(
-			"decision '%s': condition %s(%q) on_error is only supported for classifier and decision conditions",
+			"decision '%s': condition %s(%q) on_error is only supported for classifier and systemone conditions",
 			decisionName,
 			node.Type,
 			node.Name,
@@ -530,7 +530,7 @@ func validateDecisionAlgorithmConfig(decisionName string, modelRefs []ModelRef, 
 		return minimumErr
 	}
 
-	configuredBlocks := configuredAlgorithmBlocks(algorithm)
+	configuredBlocks := configuredDecisionAlgorithmBlocks(algorithm)
 	terminal, err := validateAlgorithmBlockContract(
 		decisionName,
 		normalizedType,
@@ -578,17 +578,13 @@ func normalizeDecisionAlgorithmType(
 	if displayType == "" {
 		displayType = "<empty>"
 	}
-	if normalizedType == "session_aware" || algorithm.SessionAware != nil {
+	if normalizedType == "session_aware" {
 		return "", "", fmt.Errorf(
 			"decision '%s': algorithm.type=session_aware is no longer supported; remove algorithm.type=session_aware and enable global.router.learning.protection. If this decision needs an explicit base selector, configure a normal algorithm.type; otherwise omit algorithm",
 			decisionName,
 		)
 	}
-	if err := validateMigratedLearningAlgorithm(
-		decisionName,
-		normalizedType,
-		algorithm,
-	); err != nil {
+	if err := validateMigratedLearningAlgorithm(decisionName, normalizedType); err != nil {
 		return "", "", err
 	}
 	return normalizedType, displayType, nil
@@ -634,7 +630,7 @@ func blocklessAlgorithmTypeSupported(normalizedType string) bool {
 	return supported && configField == ""
 }
 
-func validateMigratedLearningAlgorithm(decisionName string, normalizedType string, algorithm *AlgorithmConfig) error {
+func validateMigratedLearningAlgorithm(decisionName string, normalizedType string) error {
 	migrations := map[string]string{
 		"elo":             "global.router.learning.adaptation",
 		"rl_driven":       "global.router.learning.adaptation",
@@ -650,31 +646,7 @@ func validateMigratedLearningAlgorithm(decisionName string, normalizedType strin
 			target,
 		)
 	}
-	if algorithm.Elo != nil {
-		return fmt.Errorf("decision '%s': algorithm.elo is no longer supported; use global.router.learning.adaptation", decisionName)
-	}
-	if algorithm.RLDriven != nil {
-		return fmt.Errorf("decision '%s': algorithm.rl_driven is no longer supported; use global.router.learning.adaptation", decisionName)
-	}
-	if algorithm.GMTRouter != nil {
-		return fmt.Errorf("decision '%s': algorithm.gmtrouter is no longer supported; use global.router.learning.adaptation", decisionName)
-	}
 	return nil
-}
-
-func configuredAlgorithmBlocks(algorithm *AlgorithmConfig) []string {
-	configuredBlocks := configuredDecisionAlgorithmBlocks(algorithm)
-	addBlock := func(name string, configured bool) {
-		if configured {
-			configuredBlocks = append(configuredBlocks, name)
-		}
-	}
-
-	addBlock("elo", algorithm.Elo != nil)
-	addBlock("rl_driven", algorithm.RLDriven != nil)
-	addBlock("gmtrouter", algorithm.GMTRouter != nil)
-	addBlock("session_aware", algorithm.SessionAware != nil)
-	return configuredBlocks
 }
 
 func expectedAlgorithmBlock(normalizedType string) (string, bool) {
@@ -696,8 +668,8 @@ func validateSpecializedAlgorithmConfig(decisionName string, modelRefs []ModelRe
 		return validateDecisionWorkflowsAlgorithm(decisionName, modelRefs, algorithm.Workflows)
 	case "prompt":
 		return validatePromptAlgorithmConfig(decisionName, modelRefs, algorithm)
-	case DecisionAlgorithmDecision:
-		return validateDecisionSelectorConfig(decisionName, modelRefs, algorithm)
+	case DecisionAlgorithmSystemOne:
+		return validateSystemOneSelectorConfig(decisionName, modelRefs, algorithm)
 	case "multi_factor":
 		return validateDecisionMultiFactorAlgorithm(decisionName, algorithm.MultiFactor)
 	}

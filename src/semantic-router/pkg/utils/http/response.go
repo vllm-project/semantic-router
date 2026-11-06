@@ -548,7 +548,7 @@ func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category st
 	if len(similarity) > 0 && similarity[0] > 0 {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{
-				Key:      "x-vsr-cache-similarity",
+				Key:      headers.VSRCacheSimilarity,
 				RawValue: []byte(fmt.Sprintf("%.4f", similarity[0])),
 			},
 		})
@@ -767,7 +767,7 @@ func CreateCacheHitResponseWithBody(
 	}
 	if len(similarity) > 0 && similarity[0] > 0 {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
-			Header: &core.HeaderValue{Key: "x-vsr-cache-similarity", RawValue: []byte(fmt.Sprintf("%.4f", similarity[0]))},
+			Header: &core.HeaderValue{Key: headers.VSRCacheSimilarity, RawValue: []byte(fmt.Sprintf("%.4f", similarity[0]))},
 		})
 	}
 	if len(matchedKeywords) > 0 {

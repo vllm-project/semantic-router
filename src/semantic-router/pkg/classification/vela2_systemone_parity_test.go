@@ -60,7 +60,7 @@ global:
           min_span_confidence: 0
 routing:
   signals:
-    decision:
+    systemone:
       - name: topics
         deployment: vela2
         timeout_ms: 60000
@@ -96,13 +96,13 @@ routing:
       rules:
         operator: OR
         conditions:
-          - {type: decision, name: topics, label: billing}
-          - {type: decision, name: topics, label: shipping}
-          - {type: decision, name: topics, label: account}
-          - {type: decision, name: topics, label: medication}
-          - {type: decision, name: entities, label: location}
-          - {type: decision, name: entities, label: organization}
-          - {type: decision, name: urgent}
+          - {type: systemone, name: topics, label: billing}
+          - {type: systemone, name: topics, label: shipping}
+          - {type: systemone, name: topics, label: account}
+          - {type: systemone, name: topics, label: medication}
+          - {type: systemone, name: entities, label: location}
+          - {type: systemone, name: entities, label: organization}
+          - {type: systemone, name: urgent}
           - {type: pii, name: any_pii}
       modelRefs:
         - model: m
@@ -274,11 +274,11 @@ func TestVela2RouterMatchesSystemOne(t *testing.T) {
 		row := map[string]interface{}{"text": text}
 		var selected []string
 		for label, probability := range want.Sets["topics"].Probabilities {
-			if got := results.SignalValues["decision:topics:"+label]; got != probability {
+			if got := results.SignalValues["systemone:topics:"+label]; got != probability {
 				t.Fatalf("%q: set label %s = %v, /v1/systemone %v", text, label, got, probability)
 			}
 		}
-		for _, name := range results.MatchedDecisionRules {
+		for _, name := range results.MatchedSystemOneRules {
 			if label, ok := strings.CutPrefix(name, "topics:"); ok {
 				selected = append(selected, label)
 			}
@@ -290,7 +290,7 @@ func TestVela2RouterMatchesSystemOne(t *testing.T) {
 			t.Fatalf("%q: set labels matched %v, /v1/systemone selected %v", text, selected, wantSelected)
 		}
 		var spanned []string
-		for _, name := range results.MatchedDecisionRules {
+		for _, name := range results.MatchedSystemOneRules {
 			if label, ok := strings.CutPrefix(name, "entities:"); ok {
 				spanned = append(spanned, label)
 			}
@@ -299,15 +299,19 @@ func TestVela2RouterMatchesSystemOne(t *testing.T) {
 		if wantSpans := spanLabels(want.Spans["entities"]); !slices.Equal(spanned, wantSpans) {
 			t.Fatalf("%q: span labels matched %v, /v1/systemone found %v", text, spanned, wantSpans)
 		}
+		highest := 0.0
 		for _, span := range want.Spans["entities"] {
-			if got := results.SignalValues["decision:entities:"+span.Label]; got < span.Probability {
+			if got := results.SignalValues["systemone:entities:"+span.Label]; got < span.Probability {
 				t.Fatalf("%q: span label %s = %v, below a /v1/systemone span at %v", text, span.Label, got, span.Probability)
 			}
+			if span.Label == "location" || span.Label == "organization" {
+				highest = max(highest, span.Probability)
+			}
 		}
-		if got, noul := results.SignalValues["decision:entities"], want.Answers["entities"].Noul; noul == nil || got != *noul {
-			t.Fatalf("%q: span question value %v, /v1/systemone %v", text, got, noul)
+		if got := results.SignalValues["systemone:entities"]; got != highest {
+			t.Fatalf("%q: span rule value %v, the most probable /v1/systemone span of a label %v", text, got, highest)
 		}
-		if got, noul := results.SignalValues["decision:urgent"], want.Answers["urgent"].Noul; noul == nil || got != *noul {
+		if got, noul := results.SignalValues["systemone:urgent"], want.Answers["urgent"].Noul; noul == nil || got != *noul {
 			t.Fatalf("%q: noul %v, /v1/systemone %v", text, got, noul)
 		}
 		entities := slices.Clone(results.PIIEntities)
@@ -316,7 +320,7 @@ func TestVela2RouterMatchesSystemOne(t *testing.T) {
 			t.Fatalf("%q: PII entities %v, /v1/systemone %v", text, entities, wantPII)
 		}
 		row["set_selected"], row["span_labels"], row["pii_entities"] = selected, spanned, entities
-		row["set_probabilities"], row["span_question_noul"] = want.Sets["topics"].Probabilities, results.SignalValues["decision:entities"]
+		row["set_probabilities"], row["span_rule_value"] = want.Sets["topics"].Probabilities, results.SignalValues["systemone:entities"]
 		rows = append(rows, row)
 	}
 	report["requests"] = rows

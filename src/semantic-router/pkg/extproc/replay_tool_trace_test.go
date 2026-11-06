@@ -201,7 +201,7 @@ func TestBuildReplayRoutingRecordSuppressesRequestTraceWhenMasking(t *testing.T)
 
 	maskingDecision := &config.Decision{Plugins: []config.DecisionPlugin{{
 		Type:          config.DecisionPluginMasking,
-		Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true}),
+		Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true, "signal": "personal"}),
 	}}}
 
 	// Both paths write through this one builder: the ordinary request path and

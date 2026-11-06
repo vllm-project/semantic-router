@@ -227,7 +227,7 @@ async def test_debug_endpoint_preserves_the_native_provider_request() -> None:
     headers = {
         "authorization": "Bearer must-not-be-recorded",
         "x-unrelated-header": "must-not-be-recorded",
-        "x-vsr-e2e-added": "observable",
+        "x-e2e-added": "observable",
         "x-vsr-test-session-id": session_id,
     }
     raw_body = json.dumps(body, separators=(",", ":"), sort_keys=True).encode()
@@ -246,7 +246,7 @@ async def test_debug_endpoint_preserves_the_native_provider_request() -> None:
     assert observed.json()["body_sha256"] == hashlib.sha256(raw_body).hexdigest()
     assert observed.json()["body_bytes"] == len(raw_body)
     assert observed.json()["headers"] == {
-        "x-vsr-e2e-added": "observable",
+        "x-e2e-added": "observable",
         "x-vsr-test-session-id": session_id,
     }
 
@@ -305,7 +305,7 @@ async def test_provider_observation_preserves_every_header_value(
 ) -> None:
     session_id = "header-cardinality-" + str(len(values))
     headers = [("x-vsr-test-session-id", session_id)] + [
-        ("x-vsr-e2e-updated", value) for value in values
+        ("x-e2e-updated", value) for value in values
     ]
     body = {
         "model": "provider-model",
@@ -318,4 +318,4 @@ async def test_provider_observation_preserves_every_header_value(
         assert response.status_code == HTTPStatus.OK
         observed = await client.get("/debug/last-request", headers=headers)
     assert observed.status_code == HTTPStatus.OK
-    assert observed.json()["header_values"]["x-vsr-e2e-updated"] == values
+    assert observed.json()["header_values"]["x-e2e-updated"] == values

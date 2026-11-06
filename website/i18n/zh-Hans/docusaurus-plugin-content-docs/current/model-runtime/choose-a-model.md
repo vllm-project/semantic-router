@@ -177,7 +177,7 @@ global:
 
 ## 选择规模 {#choose-a-size}
 
-决策模型是回答 Router 判断任务、以及没有被绑定或规则指定其他部署的 [`decision` 问题](../tutorials/signal/learned/decision.md)的部署。模型、设备和引擎参数仅在该部署中声明；
+决策模型是回答 Router 判断任务、以及没有被绑定或规则指定其他部署的 [`systemone` 问题](../tutorials/signal/learned/systemone.md)的部署。模型、设备和引擎参数仅在该部署中声明；
 没有覆盖配置时，内置默认模型为 Vela 2.0 0.3B。传入模型 artifact 可更新当前默认 deployment；
 `--platform` 选择运行平台，deployment 中显式设置的设备位置仍优先。例如：
 

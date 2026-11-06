@@ -140,9 +140,13 @@ func builtinDecisionPlugins() []DecisionPluginType {
 			},
 		}),
 		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginMemory, DisplayName: "Memory", Description: "Retrieve and store persistent conversation memory."}, PluginOptions[MemoryPluginConfig]{}),
-		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginSystemPrompt, DisplayName: "System Prompt", Description: "Insert or replace the system prompt."}, PluginOptions[SystemPromptPluginConfig]{}),
-		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginHeaderMutation, DisplayName: "Header Mutation", Description: "Add, update, or remove provider-bound headers."}, PluginOptions[HeaderMutationPluginConfig]{}),
-		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginHallucination, DisplayName: "Hallucination", Description: "Apply response hallucination handling."}, PluginOptions[HallucinationPluginConfig]{}),
+		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginSystemPrompt, DisplayName: "System Prompt", Description: "Insert or replace the system prompt."}, PluginOptions[SystemPromptPluginConfig]{
+			Validate: validateSystemPromptPlugin,
+		}),
+		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginHeaderMutation, DisplayName: "Header Mutation", Description: "Add, update, or remove provider-bound headers the Router does not own."}, PluginOptions[HeaderMutationPluginConfig]{}),
+		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginResponseGuard, DisplayName: "Response Guard", Description: "Block or annotate answers on the signals they are checked with."}, PluginOptions[ResponseGuardPluginConfig]{
+			Strict: true, Validate: validateResponseGuardPlugin,
+		}),
 		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginRouterReplay, DisplayName: "Router Replay", Description: "Capture bounded request and response replay evidence."}, PluginOptions[RouterReplayPluginConfig]{}),
 		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginRAG, DisplayName: "RAG", Description: "Retrieve external context and inject it into the request."}, PluginOptions[RAGPluginConfig]{}),
 		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginFastResponse, DisplayName: "Fast Response", Description: "Return a fixed response without calling an upstream model."}, PluginOptions[FastResponsePluginConfig]{
@@ -159,12 +163,6 @@ func builtinDecisionPlugins() []DecisionPluginType {
 					return at.Errorf("%w", err)
 				}
 				return nil
-			},
-		}),
-		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginResponseJailbreak, DisplayName: "Response Jailbreak", Description: "Screen generated responses for jailbreak-like output."}, PluginOptions[ResponseJailbreakPluginConfig]{
-			Strict: true,
-			Validate: func(at PluginAt, p *ResponseJailbreakPluginConfig) error {
-				return validateResponseJailbreakPlugin(at.Decision, at.Index, at.Type, p)
 			},
 		}),
 		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginContextCompression, DisplayName: "Context Compression", Description: "Compress selected context before provider dispatch."}, PluginOptions[ContextCompressionPluginConfig]{
@@ -185,11 +183,8 @@ func builtinDecisionPlugins() []DecisionPluginType {
 				return validateShadowDispatchPlugin(at.Decision, at.Index, at.Type, p)
 			},
 		}),
-		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginMasking, DisplayName: "Masking", Description: "Replace detected PII in the provider-bound request with placeholders."}, PluginOptions[MaskingPluginConfig]{
-			Strict: true,
-			Validate: func(at PluginAt, p *MaskingPluginConfig) error {
-				return validateMaskingPlugin(at.Decision, at.Index, at.Type, p)
-			},
+		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginMasking, DisplayName: "Masking", Description: "Replace the personal data a pii rule finds in the provider-bound request with placeholders."}, PluginOptions[MaskingPluginConfig]{
+			Strict: true, Validate: validateMaskingPlugin,
 		}),
 	}
 }

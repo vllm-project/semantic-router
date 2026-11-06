@@ -1,7 +1,64 @@
+import {
+  X_VSR_CACHE_HIT,
+  X_VSR_CONTEXT_TOKEN_COUNT,
+  X_VSR_EFFECTIVE_INPUT_TOKENS,
+  X_VSR_EFFECTIVE_MAX_OUTPUT_TOKENS,
+  X_VSR_FAST_RESPONSE,
+  X_VSR_LEARNING_ACTIONS,
+  X_VSR_LEARNING_METHODS,
+  X_VSR_LEARNING_REASONS,
+  X_VSR_LEARNING_SCOPES,
+  X_VSR_LOOPER_ALGORITHM,
+  X_VSR_LOOPER_COMPLETION_TOKENS,
+  X_VSR_LOOPER_ITERATIONS,
+  X_VSR_LOOPER_LATENCY_MS,
+  X_VSR_LOOPER_MODEL,
+  X_VSR_LOOPER_MODELS_USED,
+  X_VSR_LOOPER_PROMPT_TOKENS,
+  X_VSR_LOOPER_TOTAL_TOKENS,
+  X_VSR_MATCHED_AUTHZ,
+  X_VSR_MATCHED_COMPLEXITY,
+  X_VSR_MATCHED_CONTEXT,
+  X_VSR_MATCHED_CONVERSATION,
+  X_VSR_MATCHED_DECISION_MODEL,
+  X_VSR_MATCHED_DOMAINS,
+  X_VSR_MATCHED_EMBEDDINGS,
+  X_VSR_MATCHED_EVENT,
+  X_VSR_MATCHED_FACT_CHECK,
+  X_VSR_MATCHED_HALLUCINATION,
+  X_VSR_MATCHED_INPUT_MODALITY,
+  X_VSR_MATCHED_JAILBREAK,
+  X_VSR_MATCHED_KB,
+  X_VSR_MATCHED_KEYWORDS,
+  X_VSR_MATCHED_LANGUAGE,
+  X_VSR_MATCHED_MODALITY,
+  X_VSR_MATCHED_PII,
+  X_VSR_MATCHED_PREFERENCE,
+  X_VSR_MATCHED_PROJECTIONS,
+  X_VSR_MATCHED_REASK,
+  X_VSR_MATCHED_SAFETY,
+  X_VSR_MATCHED_STRUCTURE,
+  X_VSR_MATCHED_USER_FEEDBACK,
+  X_VSR_RESPONSE_PATH,
+  X_VSR_RESPONSE_WARNINGS,
+  X_VSR_RETENTION_DROP,
+  X_VSR_RETENTION_KEEP_CURRENT_MODEL,
+  X_VSR_RETENTION_PREFER_PREFIX,
+  X_VSR_RETENTION_TTL_TURNS,
+  X_VSR_ROUTING_LATENCY_MS,
+  X_VSR_SELECTED_ALGORITHM,
+  X_VSR_SELECTED_CONFIDENCE,
+  X_VSR_SELECTED_DECISION,
+  X_VSR_SELECTED_MODALITY,
+  X_VSR_SELECTED_MODEL,
+  X_VSR_SELECTED_REASONING,
+  X_VSR_SELECTED_RECIPE,
+} from '../generated/vsrHeaders'
 import styles from './HeaderDisplay.module.css'
 import ProductIcon from './ProductIcon'
 import { formatLearningHeaderValue, isLearningHeader } from './headerLearningDisplay'
-import { formatRoutingMetadataValue } from './routingMetadataDisplay'
+import { PLAYGROUND_LATENCY_MS, PLAYGROUND_TTFT_MS } from './playgroundTimingHeaders'
+import { formatRoutingMetadataValue, MATCHED_SIGNAL_HEADER_PREFIX } from './routingMetadataDisplay'
 
 interface HeaderDisplayProps {
   headers: Record<string, string>
@@ -13,233 +70,229 @@ const HEADER_INFO: Record<
   { label: string; type: 'info' | 'success' | 'warning' | 'danger' }
 > = {
   // Response outcome. The schema version is intentionally not user-facing.
-  'x-vsr-response-path': {
+  [X_VSR_RESPONSE_PATH]: {
     label: 'Response Path',
     type: 'info',
   },
-  'x-vsr-selected-model': {
+  [X_VSR_SELECTED_MODEL]: {
     label: 'Model',
     type: 'info',
   },
-  'x-vsr-effective-input-tokens': {
+  [X_VSR_EFFECTIVE_INPUT_TOKENS]: {
     label: 'Rendered input tokens',
     type: 'info',
   },
-  'x-vsr-effective-max-output-tokens': {
+  [X_VSR_EFFECTIVE_MAX_OUTPUT_TOKENS]: {
     label: 'Output token limit',
     type: 'info',
   },
-  'x-vsr-selected-algorithm': {
+  [X_VSR_SELECTED_ALGORITHM]: {
     label: 'Algorithm',
     type: 'info',
   },
-  'x-vsr-selected-decision': {
+  [X_VSR_SELECTED_DECISION]: {
     label: 'Decision',
     type: 'info',
   },
-  'x-vsr-selected-recipe': {
+  [X_VSR_SELECTED_RECIPE]: {
     label: 'Recipe',
     type: 'info',
   },
-  'x-vsr-selected-confidence': {
+  [X_VSR_SELECTED_CONFIDENCE]: {
     label: 'Decision Confidence',
     type: 'info',
   },
-  'x-vsr-selected-modality': {
+  [X_VSR_SELECTED_MODALITY]: {
     label: 'Modality',
     type: 'info',
   },
-  'x-vsr-cache-hit': {
+  [X_VSR_CACHE_HIT]: {
     label: 'Cache',
     type: 'success',
   },
-  'x-vsr-selected-reasoning': {
+  [X_VSR_SELECTED_REASONING]: {
     label: 'Reasoning',
     type: 'info',
   },
-  'x-vsr-learning-methods': {
+  [X_VSR_LEARNING_METHODS]: {
     label: 'Learning',
     type: 'info',
   },
-  'x-vsr-learning-actions': {
+  [X_VSR_LEARNING_ACTIONS]: {
     label: 'Learning Action',
     type: 'info',
   },
-  'x-vsr-learning-scopes': {
+  [X_VSR_LEARNING_SCOPES]: {
     label: 'Learning Scope',
     type: 'info',
   },
-  'x-vsr-learning-reasons': {
+  [X_VSR_LEARNING_REASONS]: {
     label: 'Learning Reason',
     type: 'info',
   },
-  'x-vsr-fast-response': {
+  [X_VSR_FAST_RESPONSE]: {
     label: 'Fast Response',
     type: 'success',
   },
-  'x-vsr-response-warnings': {
+  [X_VSR_RESPONSE_WARNINGS]: {
     label: 'Response Warnings',
     type: 'warning',
   },
-  'x-vsr-matched-keywords': {
+  [X_VSR_MATCHED_KEYWORDS]: {
     label: 'Keywords',
     type: 'info',
   },
-  'x-vsr-matched-embeddings': {
+  [X_VSR_MATCHED_EMBEDDINGS]: {
     label: 'Embeddings',
     type: 'info',
   },
-  'x-vsr-matched-domains': {
+  [X_VSR_MATCHED_DOMAINS]: {
     label: 'Domain',
     type: 'info',
   },
-  'x-vsr-matched-fact-check': {
+  [X_VSR_MATCHED_FACT_CHECK]: {
     label: 'Fact Check Signal',
     type: 'info',
   },
-  'x-vsr-matched-user-feedback': {
+  [X_VSR_MATCHED_USER_FEEDBACK]: {
     label: 'User Feedback',
     type: 'info',
   },
-  'x-vsr-matched-reask': {
+  [X_VSR_MATCHED_REASK]: {
     label: 'Reask',
     type: 'info',
   },
-  'x-vsr-matched-preference': {
+  [X_VSR_MATCHED_PREFERENCE]: {
     label: 'Preference',
     type: 'info',
   },
-  'x-vsr-matched-language': {
+  [X_VSR_MATCHED_LANGUAGE]: {
     label: 'Language',
     type: 'info',
   },
-  'x-vsr-matched-context': {
+  [X_VSR_MATCHED_CONTEXT]: {
     label: 'Context',
     type: 'info',
   },
-  'x-vsr-matched-structure': {
+  [X_VSR_MATCHED_STRUCTURE]: {
     label: 'Structure',
     type: 'info',
   },
-  'x-vsr-context-token-count': {
+  [X_VSR_CONTEXT_TOKEN_COUNT]: {
     label: 'Context Count',
     type: 'info',
   },
-  'x-vsr-matched-complexity': {
+  [X_VSR_MATCHED_COMPLEXITY]: {
     label: 'Complexity',
     type: 'info',
   },
-  'x-vsr-matched-modality': {
+  [X_VSR_MATCHED_MODALITY]: {
     label: 'Modality',
     type: 'info',
   },
-  'x-vsr-matched-authz': {
+  [X_VSR_MATCHED_AUTHZ]: {
     label: 'Authz',
     type: 'info',
   },
-  'x-vsr-matched-jailbreak': {
+  [X_VSR_MATCHED_JAILBREAK]: {
     label: 'Jailbreak Signal',
     type: 'danger',
   },
-  'x-vsr-matched-safety': {
+  [X_VSR_MATCHED_SAFETY]: {
     label: 'Safety Signal',
     type: 'warning',
   },
-  'x-vsr-matched-hallucination': {
+  [X_VSR_MATCHED_HALLUCINATION]: {
     label: 'Hallucination Signal',
     type: 'warning',
   },
-  'x-vsr-matched-pii': {
+  [X_VSR_MATCHED_PII]: {
     label: 'PII Signal',
     type: 'warning',
   },
-  'x-vsr-matched-kb': {
+  [X_VSR_MATCHED_KB]: {
     label: 'Knowledge Base',
     type: 'info',
   },
-  'x-vsr-matched-conversation': {
+  [X_VSR_MATCHED_CONVERSATION]: {
     label: 'Conversation Signal',
     type: 'info',
   },
-  'x-vsr-matched-event': {
+  [X_VSR_MATCHED_EVENT]: {
     label: 'Event Signal',
     type: 'info',
   },
-  'x-vsr-matched-input-modality': {
+  [X_VSR_MATCHED_INPUT_MODALITY]: {
     label: 'Input Modality Signal',
     type: 'info',
   },
-  'x-vsr-matched-decision-model': {
+  [X_VSR_MATCHED_DECISION_MODEL]: {
     label: 'System One Answers',
     type: 'info',
   },
-  'x-vsr-matched-projections': {
+  [X_VSR_MATCHED_PROJECTIONS]: {
     label: 'Projection',
     type: 'info',
   },
   // Looper headers
-  'x-vsr-looper-model': {
+  [X_VSR_LOOPER_MODEL]: {
     label: 'Final Model',
     type: 'info',
   },
-  'x-vsr-looper-models-used': {
+  [X_VSR_LOOPER_MODELS_USED]: {
     label: 'Collaborative Models',
     type: 'success',
   },
-  'x-vsr-looper-iterations': {
+  [X_VSR_LOOPER_ITERATIONS]: {
     label: 'Iterations',
     type: 'info',
   },
-  'x-vsr-looper-algorithm': {
+  [X_VSR_LOOPER_ALGORITHM]: {
     label: 'Algorithm',
     type: 'info',
   },
-  'x-vsr-looper-latency-ms': {
+  [X_VSR_LOOPER_LATENCY_MS]: {
     label: 'Looper latency',
     type: 'info',
   },
-  'x-vsr-looper-prompt-tokens': {
+  [X_VSR_LOOPER_PROMPT_TOKENS]: {
     label: 'Looper Prompt Tokens',
     type: 'info',
   },
-  'x-vsr-looper-completion-tokens': {
+  [X_VSR_LOOPER_COMPLETION_TOKENS]: {
     label: 'Looper Completion Tokens',
     type: 'info',
   },
-  'x-vsr-looper-total-tokens': {
+  [X_VSR_LOOPER_TOTAL_TOKENS]: {
     label: 'Looper Total Tokens',
     type: 'info',
   },
-  'x-vsr-routing-latency-ms': {
+  [X_VSR_ROUTING_LATENCY_MS]: {
     label: 'Routing Latency',
     type: 'info',
   },
-  'x-vsr-latency-ms': {
+  [PLAYGROUND_LATENCY_MS]: {
     label: 'Latency',
     type: 'info',
   },
-  'x-vsr-ttft-ms': {
+  [PLAYGROUND_TTFT_MS]: {
     label: 'TTFT',
     type: 'info',
   },
-  'x-vsr-tpot-ms': {
-    label: 'TPOT',
-    type: 'info',
-  },
   // Retention directive headers (issue #2009)
-  'x-vsr-retention-drop': {
+  [X_VSR_RETENTION_DROP]: {
     label: 'Retention: Drop',
     type: 'warning',
   },
-  'x-vsr-retention-ttl-turns': {
+  [X_VSR_RETENTION_TTL_TURNS]: {
     label: 'Retention TTL (turns)',
     type: 'info',
   },
-  'x-vsr-retention-keep-current-model': {
+  [X_VSR_RETENTION_KEEP_CURRENT_MODEL]: {
     label: 'Keep Current Model',
     type: 'info',
   },
-  'x-vsr-retention-prefer-prefix': {
+  [X_VSR_RETENTION_PREFER_PREFIX]: {
     label: 'Prefer Prefix',
     type: 'info',
   },
@@ -247,7 +300,8 @@ const HEADER_INFO: Record<
 
 function shouldSummarizeHeaderValue(key: string, values: string[]): boolean {
   return (
-    values.length > 1 && (key.startsWith('x-vsr-matched-') || key === 'x-vsr-looper-models-used')
+    values.length > 1 &&
+    (key.startsWith(MATCHED_SIGNAL_HEADER_PREFIX) || key === X_VSR_LOOPER_MODELS_USED)
   )
 }
 
@@ -270,25 +324,25 @@ function summarizeHeaderValue(key: string, rawValue: string): string {
 }
 
 function routingHeaderPriority(key: string): number {
-  if (key.startsWith('x-vsr-matched-')) return 0
-  if (key === 'x-vsr-selected-decision') return 1
-  if (key === 'x-vsr-selected-algorithm' || key === 'x-vsr-looper-algorithm') return 2
+  if (key.startsWith(MATCHED_SIGNAL_HEADER_PREFIX)) return 0
+  if (key === X_VSR_SELECTED_DECISION) return 1
+  if (key === X_VSR_SELECTED_ALGORITHM || key === X_VSR_LOOPER_ALGORITHM) return 2
   if (
-    key === 'x-vsr-selected-model' ||
-    key === 'x-vsr-looper-model' ||
-    key === 'x-vsr-looper-models-used'
+    key === X_VSR_SELECTED_MODEL ||
+    key === X_VSR_LOOPER_MODEL ||
+    key === X_VSR_LOOPER_MODELS_USED
   )
     return 3
-  if (key === 'x-vsr-response-path') return 4
+  if (key === X_VSR_RESPONSE_PATH) return 4
   return 5
 }
 
 const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
   // Filter to only show headers that exist
-  const hasSelectedAlgorithm = Boolean(headers['x-vsr-selected-algorithm'])
+  const hasSelectedAlgorithm = Boolean(headers[X_VSR_SELECTED_ALGORITHM])
   const displayHeaders = Object.entries(headers)
     .filter(
-      ([key]) => key in HEADER_INFO && !(hasSelectedAlgorithm && key === 'x-vsr-looper-algorithm'),
+      ([key]) => key in HEADER_INFO && !(hasSelectedAlgorithm && key === X_VSR_LOOPER_ALGORITHM),
     )
     .sort(
       ([leftKey], [rightKey]) => routingHeaderPriority(leftKey) - routingHeaderPriority(rightKey),
@@ -299,18 +353,17 @@ const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
   }
 
   const primaryKeys = [
-    'x-vsr-selected-decision',
-    'x-vsr-selected-algorithm',
-    'x-vsr-looper-algorithm',
-    'x-vsr-selected-model',
-    'x-vsr-looper-model',
+    X_VSR_SELECTED_DECISION,
+    X_VSR_SELECTED_ALGORITHM,
+    X_VSR_LOOPER_ALGORITHM,
+    X_VSR_SELECTED_MODEL,
+    X_VSR_LOOPER_MODEL,
   ]
   const performanceKeys = [
-    'x-vsr-routing-latency-ms',
-    'x-vsr-latency-ms',
-    'x-vsr-ttft-ms',
-    'x-vsr-tpot-ms',
-    'x-vsr-looper-latency-ms',
+    X_VSR_ROUTING_LATENCY_MS,
+    PLAYGROUND_LATENCY_MS,
+    PLAYGROUND_TTFT_MS,
+    X_VSR_LOOPER_LATENCY_MS,
   ]
   const primaryHeaders = displayHeaders.filter(([key]) => primaryKeys.includes(key))
   const performanceHeaders = displayHeaders.filter(([key]) => performanceKeys.includes(key))

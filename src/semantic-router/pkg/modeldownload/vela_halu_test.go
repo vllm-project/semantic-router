@@ -15,13 +15,16 @@ providers:
     - name: backend
       backend_refs: [{name: local, provider: vllm, endpoint: "127.0.0.1:8000"}]
 routing:
+  signals:
+    hallucination: [{name: ungrounded}]
   decisions:
     - name: grounded
       rules: {operator: AND, conditions: []}
       modelRefs: [{model: backend}]
       plugins:
-        - type: hallucination
-          configuration: {enabled: true}
+        - type: response_guard
+          configuration:
+            rules: [{when: {type: hallucination, name: ungrounded}, action: annotate}]
 global:
   model_catalog:
     modules:

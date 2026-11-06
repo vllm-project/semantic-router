@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"golang.org/x/net/http/httpguts"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 // The providers a deployment names: the API the Router speaks to it.
@@ -76,11 +78,13 @@ type DeploymentLimits struct {
 }
 
 // DeploymentCapabilities declares what a remote model answers when its API
-// does not list it: question types and presets (systemone), and the vector
-// dimensions of an embedding model.
+// does not list it: question types, presets and the input modalities a
+// decisions request may carry (systemone), and the vector dimensions of an
+// embedding model.
 type DeploymentCapabilities struct {
 	QuestionTypes []string `yaml:"question_types,omitempty" json:"question_types,omitempty"`
 	Presets       []string `yaml:"presets,omitempty" json:"presets,omitempty"`
+	Modalities    []string `yaml:"modalities,omitempty" json:"modalities,omitempty"`
 	Dimensions    int      `yaml:"dimensions,omitempty" json:"dimensions,omitempty"`
 }
 
@@ -99,6 +103,14 @@ func (d ModelDeployment) DeclaredPresets() []string {
 		return nil
 	}
 	return slices.Clone(d.Capabilities.Presets)
+}
+
+// DeclaredModalities are the input modalities a deployment declares.
+func (d ModelDeployment) DeclaredModalities() []string {
+	if d.Capabilities == nil {
+		return nil
+	}
+	return slices.Clone(d.Capabilities.Modalities)
 }
 
 // DeclaredDimensions is the embedding dimension a deployment declares, zero
@@ -225,7 +237,9 @@ func (t *DeploymentTLS) validate(endpoint *url.URL) error {
 
 // credentialHeaders cannot be set in headers: a credential goes in auth,
 // read from an environment variable or a file.
-var credentialHeaders = []string{"authorization", "proxy-authorization", "x-api-key", "api-key", "ocp-apim-subscription-key", "cookie"}
+var credentialHeaders = []string{
+	headers.Authorization, "proxy-authorization", headers.XAPIKey, headers.APIKey, headers.OcpApimSubscriptionKey, "cookie",
+}
 
 func validateConnectionHeaders(headers map[string]string, auth *DeploymentAuth) error {
 	for name, value := range headers {
@@ -324,8 +338,8 @@ func (d ModelDeployment) validateRemote() error {
 			return err
 		}
 	}
-	if len(d.QuestionTypes) > 0 || (d.Capabilities != nil && (len(d.Capabilities.QuestionTypes) > 0 || len(d.Capabilities.Presets) > 0)) {
-		return fmt.Errorf("question types and presets apply to systemone deployments")
+	if len(d.QuestionTypes) > 0 || (d.Capabilities != nil && (len(d.Capabilities.QuestionTypes) > 0 || len(d.Capabilities.Presets) > 0 || len(d.Capabilities.Modalities) > 0)) {
+		return fmt.Errorf("question types, presets and modalities apply to systemone deployments")
 	}
 	if d.Capabilities != nil && d.Capabilities.Dimensions != 0 && d.Provider != OpenAIEmbeddingsProvider {
 		return fmt.Errorf("capabilities.dimensions applies to openai_embeddings deployments")

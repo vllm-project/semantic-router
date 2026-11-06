@@ -294,7 +294,7 @@ func TestRoutingTraceLocalResponseErrorKeepsProviderStatus(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			recorder := routingTraceRecorder(t)
 			server := newJailbreakScoreServer(t, 0.95, 0.05)
-			router, ctx := newResponseStageRouter(t, server, "", "block")
+			router, ctx := newResponseStageRouter(t, server, "", config.ResponseGuardBlock)
 			ctx.SourceFormat, ctx.TargetFormat = llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1
 			ctx.StartTime = time.Now()
 			ctx.VSRSelectedModel = "provider-model"

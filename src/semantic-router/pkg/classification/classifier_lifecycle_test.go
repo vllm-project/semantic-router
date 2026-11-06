@@ -192,11 +192,15 @@ func TestInitializeRuntimeInitializesJailbreakClassifierForResponseStageConsumer
 			decisions: keywordDecisions(),
 		},
 		{
-			name: "response_jailbreak plugin owns detection",
+			name:  "response_guard reading a response-direction rule",
+			rules: []config.JailbreakRule{{Name: "unsafe_completion", Direction: config.SignalDirectionResponse}},
 			decisions: keywordDecisions(config.DecisionPlugin{
-				Type: "response_jailbreak",
+				Type: config.DecisionPluginResponseGuard,
 				Configuration: config.MustStructuredPayload(map[string]interface{}{
-					"enabled": true,
+					"rules": []interface{}{map[string]interface{}{
+						"when":   map[string]interface{}{"type": config.SignalTypeJailbreak, "name": "unsafe_completion"},
+						"action": config.ResponseGuardBlock,
+					}},
 				}),
 			}),
 		},
@@ -412,15 +416,7 @@ func newHallucinationLifecycleConfig(backend string) *config.RouterConfig {
 			},
 		},
 		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{
-				Name: "response-verification-route",
-				Plugins: []config.DecisionPlugin{{
-					Type: config.DecisionPluginHallucination,
-					Configuration: config.MustStructuredPayload(map[string]interface{}{
-						"enabled": true,
-					}),
-				}},
-			}},
+			Signals: config.Signals{HallucinationRules: []config.HallucinationRule{{Name: "ungrounded"}}},
 		},
 	}
 }

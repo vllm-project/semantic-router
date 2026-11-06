@@ -1,7 +1,7 @@
 // Package modelruntimereal provides the opt-in E2E profile that runs real
 // models on CPU through the Router's managed model runtime: Decision 2.0
-// Kai-0.6B and the Vela Domain, PII and Guard defaults, downloaded from the
-// Hugging Face Hub at start-up.
+// Kai-0.6B and the vela3-fast decision model that answers the built-in signals,
+// downloaded from the Hugging Face Hub at start-up.
 package modelruntimereal
 
 import (
@@ -45,7 +45,7 @@ func (p *Profile) Name() string { return "model-runtime-real" }
 
 // Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests real Decision 2.0 Kai-0.6B and Vela Domain, PII and Guard on CPU in the Router's managed model runtime"
+	return "Tests real Decision 2.0 Kai-0.6B and the vela3-fast decision model on CPU in the Router's managed model runtime"
 }
 
 // Setup deploys the gateway stack.

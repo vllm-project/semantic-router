@@ -19,8 +19,11 @@ func (c *Classifier) getUsedSignals() map[string]bool {
 func (c *Classifier) getUsedSignalsForDecisions(decisions []config.Decision) map[string]bool {
 	usedSignals := make(map[string]bool)
 
-	for _, decision := range decisions {
-		c.analyzeRuleCombination(decision.Rules, usedSignals)
+	for i := range decisions {
+		c.analyzeRuleCombination(decisions[i].Rules, usedSignals)
+		for _, condition := range c.Config.ResponseGuardRequestConditions(&decisions[i]) {
+			c.analyzeRuleCombination(condition, usedSignals)
+		}
 	}
 	// Replay's privacy check reads the PII rules after routing (ReplayPromptEvidence), never here.
 	c.expandTransitiveSignalDependencies(usedSignals)
@@ -63,7 +66,7 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 	collectSignalKeys(allSignals, config.SignalTypeClassifier, c.Config.ClassifierRules, func(r config.ClassifierSignalRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeInputModality, c.Config.InputModalityRules, func(r config.InputModalityRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeAction, c.Config.ActionRules, func(r config.ActionRule) string { return r.Name })
-	collectSignalKeys(allSignals, config.SignalTypeDecision, c.Config.DecisionRules, func(r config.DecisionSignalRule) string { return r.Name })
+	collectSignalKeys(allSignals, config.SignalTypeSystemOne, c.Config.SystemOneRules, func(r config.SystemOneRule) string { return r.Name })
 	for _, mapping := range c.Config.Projections.Mappings {
 		for _, output := range mapping.Outputs {
 			allSignals[strings.ToLower(config.SignalTypeProjection+":"+output.Name)] = true
@@ -183,11 +186,11 @@ func (c *Classifier) expandScoreInputs(
 			continue
 		}
 		usedSignals[strings.ToLower(input.Type+":"+input.Name)] = true
-		if strings.EqualFold(input.Type, config.SignalTypeDecision) {
+		if strings.EqualFold(input.Type, config.SignalTypeSystemOne) {
 			// "<question>:<option>" reads one option's probability; the
 			// question itself must still be asked.
 			question, _, _ := strings.Cut(input.Name, ":")
-			usedSignals[strings.ToLower(config.SignalTypeDecision+":"+question)] = true
+			usedSignals[strings.ToLower(config.SignalTypeSystemOne+":"+question)] = true
 		}
 	}
 }

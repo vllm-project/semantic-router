@@ -29,7 +29,7 @@ var selectionMethodByAlgorithmType = map[string]selection.SelectionMethod{
 	"random":        selection.MethodRandom,
 	"mlp":           selection.MethodMLP,
 	"prompt":        selection.MethodPrompt,
-	"decision":      selection.MethodDecision,
+	"systemone":     selection.MethodSystemOne,
 }
 
 func (r *OpenAIRouter) evaluateSignalsForDecision(
@@ -79,6 +79,11 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 
 	signalLatency := time.Since(signalStart).Milliseconds()
 	r.applySignalResultsToContext(ctx, signals)
+	ctx.ResponseStage = classification.ResponseInput{
+		Request: signalInput.currentUserText, PriorUserMessages: signalInput.priorUserMessages,
+		Turns: signalInput.requestFacts.Turns, ToolResultTexts: signalInput.toolResultTexts,
+		Images: signalInput.requestFacts.Images, Videos: signalInput.requestFacts.Videos,
+	}
 	ensureContextTokenCount(ctx, signalInput)
 	logSignalEvaluationResults(ctx, signalLatency, signals)
 	logSignalPhaseTiming(ctx, signalLatency, signals)
@@ -161,7 +166,7 @@ func logSignalEvaluationResults(ctx *RequestContext, signalLatencyMs int64, sign
 		"classifier":     signals.MatchedClassifierRules,
 		"input_modality": signals.MatchedInputModalityRules,
 		"action":         signals.MatchedActionRules,
-		"decision":       signals.MatchedDecisionRules,
+		"decision":       signals.MatchedSystemOneRules,
 		"projection":     signals.MatchedProjectionRules,
 		"context_tokens": signals.TokenCount,
 	})
@@ -208,7 +213,7 @@ func logSignalPhaseTiming(ctx *RequestContext, signalLatencyMs int64, signals *c
 			{"classifier", signals.Metrics.Classifier.ExecutionTimeMs},
 			{"input_modality", signals.Metrics.InputModality.ExecutionTimeMs},
 			{"action", signals.Metrics.Action.ExecutionTimeMs},
-			{"decision", signals.Metrics.Decision.ExecutionTimeMs},
+			{"systemone", signals.Metrics.SystemOne.ExecutionTimeMs},
 		}
 		for _, timing := range timings {
 			if timing.ms > 0 {

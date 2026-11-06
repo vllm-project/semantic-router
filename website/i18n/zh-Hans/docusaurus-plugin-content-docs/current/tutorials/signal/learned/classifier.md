@@ -100,7 +100,7 @@ routing:
         instructions: Choose RISKY only for destructive or irreversible tool operations.
 ```
 
-在这样的规则上设置 `disable_rationale: true`，只请求 `{"scores": {...}}`。响应可以省略 `rationale` 或给出空字符串；如果出现，它仍必须是字符串。其他响应字段会被拒绝。省略该标志或设为 `false` 时，提示词同时请求 `scores` 和 `rationale`，响应必须包含非空的 rationale。该标志只适用于由 `openai_chat` 部署回答的规则。模型必须为每个已声明标签报告分数；每个分数必须在 `0` 与 `1` 之间，完整分布必须大约合计为 `1.0`。这些是模型报告的置信度分数，不是校准过的分类器概率。`classifier` 和 `decision` 叶均接受条件级 `on_error`；分类器失败会在 eval/回放诊断中暴露有界的 `classifier_evaluation_failed` 代码。
+在这样的规则上设置 `disable_rationale: true`，只请求 `{"scores": {...}}`。响应可以省略 `rationale` 或给出空字符串；如果出现，它仍必须是字符串。其他响应字段会被拒绝。省略该标志或设为 `false` 时，提示词同时请求 `scores` 和 `rationale`，响应必须包含非空的 rationale。该标志只适用于由 `openai_chat` 部署回答的规则。模型必须为每个已声明标签报告分数；每个分数必须在 `0` 与 `1` 之间，完整分布必须大约合计为 `1.0`。这些是模型报告的置信度分数，不是校准过的分类器概率。`classifier` 和 `systemone` 叶均接受条件级 `on_error`；分类器失败会在 eval/回放诊断中暴露有界的 `classifier_evaluation_failed` 代码。
 
 失败时，决策树将该叶评估为 `Unknown`，直到完整 AND/OR/NOT 表达式已知。根级 `rules.on_unknown` 再选择 `no_match`、`match` 或 `fail_request`。`no_match` 与 `match` 只解析自身决策；`fail_request` 是全局失败即拒绝：即使另一条决策干净匹配，也会以 503 拒绝整个请求，与优先级无关。省略 `rules.on_unknown` 时，条件级 `on_error`（`no_match` 或 `match`）保留先前通用分类器结果。设置 `rules.on_unknown` 会禁用该树中所有条件级 `on_error`，因此 Router 会拒绝同时设置两者的配置。`prompt_guard.on_error`（`allow` 或 `block`）仍是 jailbreak 规则的兼容默认。诊断同时包含信号错误与已应用的任何终端策略。见[安全模型](../../../model-runtime/guides/safety.md)。
 

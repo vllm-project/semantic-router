@@ -30,7 +30,7 @@ var projectionMatchAccessors = map[string]projectionMatchAccessor{
 	config.SignalTypeConversation:  func(results *SignalResults) []string { return results.MatchedConversationRules },
 	config.SignalTypeEvent:         func(results *SignalResults) []string { return results.MatchedEventRules },
 	config.SignalTypeInputModality: func(results *SignalResults) []string { return results.MatchedInputModalityRules },
-	config.SignalTypeDecision:      func(results *SignalResults) []string { return results.MatchedDecisionRules },
+	config.SignalTypeSystemOne:     func(results *SignalResults) []string { return results.MatchedSystemOneRules },
 	config.SignalTypeProjection:    func(results *SignalResults) []string { return results.MatchedProjectionRules },
 }
 

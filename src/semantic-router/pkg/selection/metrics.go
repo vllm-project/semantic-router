@@ -30,7 +30,7 @@ import (
 // See: https://github.com/vllm-project/semantic-router/issues/1093
 var (
 	// ModelSelectionTotal tracks the total number of model selections
-	// Labels: method (elo/router_dc/automix/hybrid/static/knn/kmeans/svm/mlp/rl_driven/gmtrouter/latency_aware/multi_factor/session_aware), model, decision
+	// Labels: method (router_dc/automix/hybrid/static/knn/kmeans/svm/mlp/latency_aware/multi_factor), model, decision
 	ModelSelectionTotal *prometheus.CounterVec
 
 	// ModelSelectionDuration tracks the duration of model selection operations
@@ -101,34 +101,6 @@ var (
 	// RouterDCAffinity tracks learned affinity updates from feedback
 	// Labels: model
 	RouterDCAffinity *prometheus.GaugeVec
-
-	// --- RL-Driven-specific metrics (arXiv:2506.09033, arXiv:2511.08590) ---
-
-	// RLDrivenBetaAlpha tracks the Alpha parameter of Beta distribution per model
-	// Higher Alpha = more observed successes
-	// Labels: model, category
-	RLDrivenBetaAlpha *prometheus.GaugeVec
-
-	// RLDrivenBetaBeta tracks the Beta parameter of Beta distribution per model
-	// Higher Beta = more observed failures
-	// Labels: model, category
-	RLDrivenBetaBeta *prometheus.GaugeVec
-
-	// RLDrivenWinProb tracks the estimated win probability (Beta distribution mean) per model
-	// Labels: model, category
-	RLDrivenWinProb *prometheus.GaugeVec
-
-	// RLDrivenExploration tracks exploration vs exploitation selections
-	// Labels: decision_type (explore/exploit)
-	RLDrivenExploration *prometheus.CounterVec
-
-	// RLDrivenPersonalizedSelections tracks personalized selections per user
-	// Labels: model, category
-	RLDrivenPersonalizedSelections *prometheus.CounterVec
-
-	// RLDrivenImplicitFeedback tracks implicit feedback signals
-	// Labels: feedback_type (satisfied/need_clarification/wrong_answer/want_different)
-	RLDrivenImplicitFeedback *prometheus.CounterVec
 
 	// ModelSelectionDependencyHealth tracks external dependency reachability
 	// Labels: method, dependency, type
@@ -315,55 +287,6 @@ func registerAlgorithmMetrics() {
 		},
 		[]string{"model"},
 	)
-
-	// RL-Driven-specific metrics
-	RLDrivenBetaAlpha = promauto.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "llm_model_rl_beta_alpha",
-			Help: "Beta distribution Alpha parameter (success count + prior)",
-		},
-		[]string{"model", "category"},
-	)
-
-	RLDrivenBetaBeta = promauto.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "llm_model_rl_beta_beta",
-			Help: "Beta distribution Beta parameter (failure count + prior)",
-		},
-		[]string{"model", "category"},
-	)
-
-	RLDrivenWinProb = promauto.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "llm_model_rl_win_probability",
-			Help: "Estimated win probability from Beta distribution mean",
-		},
-		[]string{"model", "category"},
-	)
-
-	RLDrivenExploration = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "llm_model_rl_exploration_total",
-			Help: "Count of exploration vs exploitation selections",
-		},
-		[]string{"decision_type"},
-	)
-
-	RLDrivenPersonalizedSelections = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "llm_model_rl_personalized_selections_total",
-			Help: "Count of personalized selections per model and category",
-		},
-		[]string{"model", "category"},
-	)
-
-	RLDrivenImplicitFeedback = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "llm_model_rl_implicit_feedback_total",
-			Help: "Count of implicit feedback signals by type",
-		},
-		[]string{"feedback_type"},
-	)
 }
 
 // preInitializeMetrics initializes metrics with placeholder values so they appear in /metrics
@@ -371,7 +294,6 @@ func registerAlgorithmMetrics() {
 func preInitializeMetrics() {
 	// All selection methods - pre-initialize so they appear in Grafana dropdowns immediately
 	methods := []string{
-		"elo",
 		"router_dc",
 		"automix",
 		"hybrid",
@@ -380,11 +302,8 @@ func preInitializeMetrics() {
 		"kmeans",
 		"svm",
 		"mlp",
-		"rl_driven",
-		"gmtrouter",
 		"latency_aware",
 		"multi_factor",
-		"session_aware",
 		"prompt",
 		"decision",
 	}
@@ -417,18 +336,6 @@ func preInitializeMetrics() {
 	// Initialize RouterDC metrics
 	RouterDCSimilarity.WithLabelValues("_init")
 	RouterDCAffinity.WithLabelValues("_init").Set(0)
-
-	// Initialize RL-Driven metrics
-	RLDrivenBetaAlpha.WithLabelValues("_init", "_init").Set(0)
-	RLDrivenBetaBeta.WithLabelValues("_init", "_init").Set(0)
-	RLDrivenWinProb.WithLabelValues("_init", "_init").Set(0)
-	RLDrivenExploration.WithLabelValues("explore")
-	RLDrivenExploration.WithLabelValues("exploit")
-	RLDrivenPersonalizedSelections.WithLabelValues("_init", "_init")
-	RLDrivenImplicitFeedback.WithLabelValues("satisfied")
-	RLDrivenImplicitFeedback.WithLabelValues("need_clarification")
-	RLDrivenImplicitFeedback.WithLabelValues("wrong_answer")
-	RLDrivenImplicitFeedback.WithLabelValues("want_different")
 
 	// Initialize dependency health metric
 	ModelSelectionDependencyHealth.WithLabelValues("_init", "_init", "_init").Set(0)
@@ -683,91 +590,6 @@ func RecordRouterDCAffinity(model string, affinity float64) {
 		return
 	}
 	RouterDCAffinity.WithLabelValues(model).Set(affinity)
-}
-
-// --- RL-Driven metrics recording functions ---
-
-// RecordRLSelection records a RL-driven model selection event
-func RecordRLSelection(model, category, userID string, tier AlgorithmTier, score float64) {
-	if !metricsEnabled {
-		return
-	}
-
-	if category == "" {
-		category = "_global"
-	}
-
-	tierStr := string(tier)
-	ModelSelectionTotal.WithLabelValues("rl_driven", model, category, tierStr).Inc()
-	ModelSelectionScore.WithLabelValues("rl_driven", model).Observe(score)
-	ModelSelectionHistory.WithLabelValues("rl_driven", category).Inc()
-
-	if userID != "" {
-		RLDrivenPersonalizedSelections.WithLabelValues(model, category).Inc()
-	}
-}
-
-// RecordRLBetaDistribution records the Beta distribution parameters for a model
-func RecordRLBetaDistribution(model, category string, alpha, beta float64) {
-	if !metricsEnabled {
-		return
-	}
-
-	if category == "" {
-		category = "_global"
-	}
-
-	RLDrivenBetaAlpha.WithLabelValues(model, category).Set(alpha)
-	RLDrivenBetaBeta.WithLabelValues(model, category).Set(beta)
-
-	// Calculate and record win probability (mean of Beta distribution)
-	if alpha+beta > 0 {
-		winProb := alpha / (alpha + beta)
-		RLDrivenWinProb.WithLabelValues(model, category).Set(winProb)
-	}
-}
-
-// RecordRLExploration records an exploration/exploitation decision
-func RecordRLExploration(isExploration bool) {
-	if !metricsEnabled {
-		return
-	}
-
-	if isExploration {
-		RLDrivenExploration.WithLabelValues("explore").Inc()
-	} else {
-		RLDrivenExploration.WithLabelValues("exploit").Inc()
-	}
-}
-
-// RecordRLFeedback records a feedback event for RL-driven selection
-func RecordRLFeedback(winner, loser, category, userID string) {
-	if !metricsEnabled {
-		return
-	}
-
-	if category == "" {
-		category = "_global"
-	}
-
-	if loser == "" {
-		loser = "none"
-	}
-
-	ModelFeedbackTotal.WithLabelValues(winner, loser, "false", category).Inc()
-}
-
-// RecordRLImplicitFeedback records an implicit feedback signal
-func RecordRLImplicitFeedback(feedbackType string) {
-	if !metricsEnabled {
-		return
-	}
-
-	if feedbackType == "" {
-		feedbackType = "satisfied"
-	}
-
-	RLDrivenImplicitFeedback.WithLabelValues(feedbackType).Inc()
 }
 
 // RecordSelectionWithTier records a model selection event with tier label

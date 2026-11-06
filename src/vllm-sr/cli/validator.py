@@ -8,12 +8,11 @@ from cli.models import (
     ResponseCachePluginConfig,
     FastResponsePluginConfig,
     RequestParamsPluginConfig,
-    ResponseJailbreakPluginConfig,
+    ResponseGuardPluginConfig,
     ToolsPluginConfig,
     ToolSelectionPluginConfig,
     SystemPromptPluginConfig,
     HeaderMutationPluginConfig,
-    HallucinationPluginConfig,
     RouterReplayPluginConfig,
     ShadowDispatchPluginConfig,
     MemoryPluginConfig,
@@ -29,7 +28,7 @@ from pydantic import ValidationError as PydanticValidationError
 from cli.utils import get_logger
 from cli.validation_error import ValidationError
 from cli.validator_classifier import validate_classifier_contracts
-from cli.validator_decision_model import validate_decision_signals
+from cli.validator_decision_model import validate_systemone_signals
 from cli.validator_latency import (
     validate_latency_aware_algorithm_config,
 )
@@ -280,10 +279,9 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
         PluginType.RESPONSE_CACHE.value: ResponseCachePluginConfig,
         PluginType.FAST_RESPONSE.value: FastResponsePluginConfig,
         PluginType.REQUEST_PARAMS.value: RequestParamsPluginConfig,
-        PluginType.RESPONSE_JAILBREAK.value: ResponseJailbreakPluginConfig,
+        PluginType.RESPONSE_GUARD.value: ResponseGuardPluginConfig,
         PluginType.SYSTEM_PROMPT.value: SystemPromptPluginConfig,
         PluginType.HEADER_MUTATION.value: HeaderMutationPluginConfig,
-        PluginType.HALLUCINATION.value: HallucinationPluginConfig,
         PluginType.ROUTER_REPLAY.value: RouterReplayPluginConfig,
         PluginType.SHADOW_DISPATCH.value: ShadowDispatchPluginConfig,
         PluginType.MEMORY.value: MemoryPluginConfig,
@@ -572,7 +570,7 @@ def validate_user_config(
     # Validate model references
     errors.extend(validate_model_references(config))
     errors.extend(validate_reasoning_controls(config))
-    errors.extend(validate_decision_signals(config))
+    errors.extend(validate_systemone_signals(config))
     errors.extend(validate_classifier_contracts(config))
 
     # Validate plugin configurations

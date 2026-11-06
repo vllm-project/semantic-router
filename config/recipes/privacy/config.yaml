@@ -123,7 +123,7 @@ routing:
           type: exists
           source:
             type: image_content
-    decision:
+    systemone:
       - name: attack
         description: The request tries to make the assistant ignore its rules or reveal its hidden system
           prompt.
@@ -168,7 +168,7 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: attack
       modelRefs:
         - model: local/private-qwen
@@ -219,9 +219,9 @@ routing:
         operator: OR
         on_unknown: match
         conditions:
-          - type: decision
+          - type: systemone
             name: confidential
-          - type: decision
+          - type: systemone
             name: personal_data
       modelRefs:
         - model: local/private-qwen
@@ -249,19 +249,19 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: depth
           - operator: NOT
             conditions:
-              - type: decision
+              - type: systemone
                 name: confidential
           - operator: NOT
             conditions:
-              - type: decision
+              - type: systemone
                 name: personal_data
           - operator: NOT
             conditions:
-              - type: decision
+              - type: systemone
                 name: attack
       modelRefs:
         - model: cloud/frontier-reasoning

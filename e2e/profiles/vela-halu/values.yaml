@@ -20,6 +20,10 @@ config:
   routing:
     modelCards:
       - name: general-expert
+    signals:
+      hallucination:
+        - name: ungrounded_claims
+          description: Answers with claims their grounding context does not support.
     decisions:
       - name: grounded-answer
         priority: 100
@@ -29,11 +33,14 @@ config:
         modelRefs:
           - model: general-expert
         plugins:
-          - type: hallucination
+          - type: response_guard
             configuration:
-              enabled: true
-              hallucination_action: header
-              include_hallucination_details: true
+              rules:
+                - when:
+                    type: hallucination
+                    name: ungrounded_claims
+                  action: annotate
+              on_unknown: annotate
   global:
     model_catalog:
       deployments:
@@ -47,8 +54,8 @@ config:
       modules:
         hallucination_mitigation:
           enabled: true
-          # The probe supplies whether fact checking is needed. It exercises
-          # the actual detector without adding another classifier's verdict.
+          # The guard's one rule reads the detector alone, so the probe
+          # exercises it without another classifier's verdict.
           fact_check:
             enabled: false
 resources:

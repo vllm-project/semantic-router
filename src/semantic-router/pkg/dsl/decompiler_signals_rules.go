@@ -289,18 +289,38 @@ func topicContinuityLimitsValue(limits *config.TopicContinuityEvidenceLimits) ma
 	return value
 }
 
-func (d *decompiler) decompileDecisionModelSignals() {
-	for _, rule := range d.cfg.DecisionRules {
-		d.write("SIGNAL decision %s {\n", quoteName(rule.Name))
+func (d *decompiler) decompileSystemOneSignals() {
+	for _, rule := range d.cfg.SystemOneRules {
+		d.write("SIGNAL systemone %s {\n", quoteName(rule.Name))
 		if rule.Description != "" {
 			d.write("  description: %q\n", rule.Description)
 		}
 		if rule.Deployment != "" {
 			d.write("  deployment: %q\n", rule.Deployment)
 		}
-		d.write("  question: %s\n", formatPluginConfigValue(decisionQuestionValue(rule.Question)))
+		d.write("  question: %s\n", formatPluginConfigValue(systemOneQuestionValue(rule.Question)))
+		for _, labels := range []struct {
+			field string
+			keys  []string
+		}{{"labels", rule.Labels}, {"ignore_labels", rule.IgnoreLabels}} {
+			if len(labels.keys) > 0 {
+				d.write("  %s: %s\n", labels.field, formatPluginConfigValue(stringListValue(labels.keys)))
+			}
+		}
 		if predicate := numericPredicateValue(rule.Predicate); predicate != nil {
 			d.write("  predicate: %s\n", formatPluginConfigValue(predicate))
+		}
+		if rule.Stage != "" {
+			d.write("  stage: %q\n", rule.Stage)
+		}
+		if input := systemOneInputValue(rule.Input); len(input) > 0 {
+			d.write("  input: %s\n", formatPluginConfigValue(input))
+		}
+		if rule.Coverage != "" {
+			d.write("  coverage: %q\n", rule.Coverage)
+		}
+		if rule.OnUnscanned != "" {
+			d.write("  on_unscanned: %q\n", rule.OnUnscanned)
 		}
 		if rule.TimeoutMs > 0 {
 			d.write("  timeout_ms: %d\n", rule.TimeoutMs)
@@ -309,7 +329,32 @@ func (d *decompiler) decompileDecisionModelSignals() {
 	}
 }
 
-func decisionQuestionValue(question config.DecisionQuestion) map[string]interface{} {
+func stringListValue(values []string) []interface{} {
+	list := make([]interface{}, len(values))
+	for index, value := range values {
+		list[index] = value
+	}
+	return list
+}
+
+// systemOneInputValue holds the input fields a rule sets.
+func systemOneInputValue(input config.SystemOneInput) map[string]interface{} {
+	value := map[string]interface{}{}
+	for key, set := range map[string]bool{
+		"history": input.History, "answer": input.Answer, "context": input.Context, "tool_results": input.ToolResults,
+		"image": input.Image, "audio": input.Audio, "video": input.Video,
+	} {
+		if set {
+			value[key] = true
+		}
+	}
+	if input.PreviousTurns > 0 {
+		value["previous_turns"] = input.PreviousTurns
+	}
+	return value
+}
+
+func systemOneQuestionValue(question config.SystemOneQuestion) map[string]interface{} {
 	value := map[string]interface{}{"type": question.Type, "instructions": question.Instructions}
 	if len(question.Choices) > 0 {
 		value["choices"] = decisionChoicesValue(question.Choices)
@@ -333,7 +378,7 @@ func decisionQuestionValue(question config.DecisionQuestion) map[string]interfac
 	return value
 }
 
-func decisionChoicesValue(choices []config.DecisionChoice) []interface{} {
+func decisionChoicesValue(choices []config.SystemOneOption) []interface{} {
 	entries := make([]interface{}, 0, len(choices))
 	for _, choice := range choices {
 		entry := map[string]interface{}{"key": choice.Key}

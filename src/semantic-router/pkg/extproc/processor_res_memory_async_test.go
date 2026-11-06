@@ -91,7 +91,7 @@ func TestMemoryReceipts_SlowRecorderDoesNotBlockResponseScheduling(t *testing.T)
 			case "auto_store_off":
 				router.Config.Memory.AutoStore = false
 			case "policy_blocked":
-				req.ResponseJailbreakDetected = true
+				req.ResponseGuard = matchedJailbreakGuardRun(t)
 			case "shutting_down":
 				require.NoError(t, runner.RetireAndWait(time.Second))
 			case "queue_full":

@@ -119,7 +119,7 @@ selected truncation retain the partial-result behavior described below.
 Bind `pii` to a Vela 2.0 deployment and the signal asks the model's ready-made
 PII question, answered by its router span head, instead of a separate PII
 model. The PII question then travels in the same call as the deployment's
-[`decision`](decision.md) questions about the same text:
+[`systemone`](systemone.md) questions about the same text:
 
 ```yaml
 global:

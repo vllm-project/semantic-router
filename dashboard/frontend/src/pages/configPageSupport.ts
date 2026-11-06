@@ -2,9 +2,9 @@ import type { Endpoint } from '../components/EndpointsEditor'
 import bundledCatalog from '../modelCatalogMetadata'
 import type {
   DecisionConditionType,
-  DecisionModelSignal,
   Listener,
   SafetySignal,
+  SystemOneSignal,
   TopicContinuitySignal,
 } from '../types/config'
 import type { BuiltInModelCatalog, CatalogBenchmark, CatalogIndex } from '../types/modelCatalog'
@@ -1050,7 +1050,7 @@ export interface ConfigSignals {
   conversation?: ConversationSignal[]
   events?: EventSignal[]
   input_modality?: InputModalitySignal[]
-  decision?: DecisionModelSignal[]
+  systemone?: SystemOneSignal[]
   topic_continuity?: TopicContinuitySignal[]
 }
 

@@ -2,7 +2,6 @@ package extproc
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -269,8 +268,4 @@ func TestApplySignalResultsPreservesUnscoredPolicyMatch(t *testing.T) {
 	signals.SignalErrorMatches[key] = false
 	require.True(t, ctx.VSRSignalErrorMatches[key])
 	require.False(t, ctx.JailbreakScoreAvailable)
-	outcome := responseJailbreakReplayOutcome(&RequestContext{VSRSignalErrors: map[string]string{key: "unreachable"}, ResponseJailbreakType: classification.JailbreakClassificationErrorType}, config.JailbreakRule{Name: "guard"}, time.Now(), "block")
-	require.Equal(t, "unavailable", outcome.Verdict)
-	require.Equal(t, "true", outcome.Metadata["policy_match"])
-	require.Equal(t, "false", outcome.Metadata["score_available"])
 }

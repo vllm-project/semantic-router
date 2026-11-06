@@ -172,7 +172,6 @@
             "automix",
             "cascade",
             "confidence",
-            "decision",
             "fusion",
             "hybrid",
             "kmeans",
@@ -187,6 +186,7 @@
             "router_dc",
             "static",
             "svm",
+            "systemone",
             "workflows"
           ]
         },
@@ -238,8 +238,8 @@
         "prompt": {
           "$ref": "#/$defs/PromptSelectionConfig"
         },
-        "decision": {
-          "$ref": "#/$defs/DecisionSelectionConfig"
+        "systemone": {
+          "$ref": "#/$defs/SystemOneSelectionConfig"
         },
         "on_error": {
           "type": "string"
@@ -1744,9 +1744,9 @@
           },
           "type": "array"
         },
-        "decision": {
+        "systemone": {
           "items": {
-            "$ref": "#/$defs/DecisionSignalRule"
+            "$ref": "#/$defs/SystemOneRule"
           },
           "type": "array"
         },
@@ -2443,18 +2443,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "DecisionChoice": {
-      "properties": {
-        "key": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "DecisionLearningAdaptationConfig": {
       "properties": {
         "mode": {
@@ -2597,7 +2585,7 @@
           "if": {
             "properties": {
               "type": {
-                "const": "hallucination"
+                "const": "response_guard"
               }
             },
             "required": [
@@ -2607,7 +2595,7 @@
           "then": {
             "properties": {
               "configuration": {
-                "$ref": "#/$defs/HallucinationPluginConfig"
+                "$ref": "#/$defs/ResponseGuardPluginConfig"
               }
             }
           }
@@ -2730,25 +2718,6 @@
           "if": {
             "properties": {
               "type": {
-                "const": "response_jailbreak"
-              }
-            },
-            "required": [
-              "type"
-            ]
-          },
-          "then": {
-            "properties": {
-              "configuration": {
-                "$ref": "#/$defs/ResponseJailbreakPluginConfig"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "type": {
                 "const": "context_compression"
               }
             },
@@ -2828,7 +2797,6 @@
           "enum": [
             "context_compression",
             "fast_response",
-            "hallucination",
             "header_mutation",
             "masking",
             "memory",
@@ -2836,7 +2804,7 @@
             "rag",
             "request_params",
             "response_cache",
-            "response_jailbreak",
+            "response_guard",
             "router_replay",
             "shadow_dispatch",
             "system_prompt",
@@ -2855,42 +2823,6 @@
         "type",
         "configuration"
       ]
-    },
-    "DecisionQuestion": {
-      "properties": {
-        "type": {
-          "type": "string"
-        },
-        "instructions": {
-          "type": "string"
-        },
-        "choices": {
-          "items": {
-            "$ref": "#/$defs/DecisionChoice"
-          },
-          "type": "array"
-        },
-        "levels": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "labels": {
-          "items": {
-            "$ref": "#/$defs/DecisionChoice"
-          },
-          "type": "array"
-        },
-        "threshold": {
-          "type": "number"
-        },
-        "head": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
     },
     "DecisionReliability": {
       "properties": {
@@ -2931,51 +2863,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "DecisionSelectionConfig": {
-      "properties": {
-        "deployment": {
-          "type": "string"
-        },
-        "instructions": {
-          "type": "string"
-        },
-        "candidates": {
-          "additionalProperties": {
-            "type": "string"
-          },
-          "type": "object"
-        },
-        "timeout_ms": {
-          "type": "integer"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "DecisionSignalRule": {
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "deployment": {
-          "type": "string"
-        },
-        "question": {
-          "$ref": "#/$defs/DecisionQuestion"
-        },
-        "predicate": {
-          "$ref": "#/$defs/NumericPredicate"
-        },
-        "timeout_ms": {
-          "type": "integer"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "DeploymentAuth": {
       "properties": {
         "header": {
@@ -3003,6 +2890,12 @@
           "type": "array"
         },
         "presets": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "modalities": {
           "items": {
             "type": "string"
           },
@@ -3573,24 +3466,6 @@
         },
         "prototype_scoring": {
           "$ref": "#/$defs/PrototypeScoringConfig"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "HallucinationPluginConfig": {
-      "properties": {
-        "enabled": {
-          "type": "boolean"
-        },
-        "hallucination_action": {
-          "type": "string"
-        },
-        "unverified_factual_action": {
-          "type": "string"
-        },
-        "include_hallucination_details": {
-          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -4443,8 +4318,8 @@
         "enabled": {
           "type": "boolean"
         },
-        "threshold": {
-          "type": "number"
+        "signal": {
+          "type": "string"
         },
         "entity_types": {
           "items": {
@@ -5895,7 +5770,7 @@
             "conversation",
             "event",
             "input_modality",
-            "decision",
+            "systemone",
             "kb_metric",
             "projection"
           ]
@@ -6784,16 +6659,98 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "ResponseJailbreakPluginConfig": {
+    "ResponseGuardCondition": {
       "properties": {
-        "enabled": {
-          "type": "boolean"
+        "type": {
+          "type": "string",
+          "enum": [
+            "action",
+            "authz",
+            "classifier",
+            "complexity",
+            "context",
+            "conversation",
+            "domain",
+            "embedding",
+            "event",
+            "fact_check",
+            "hallucination",
+            "input_modality",
+            "jailbreak",
+            "kb",
+            "keyword",
+            "language",
+            "metadata",
+            "modality",
+            "pii",
+            "preference",
+            "reask",
+            "safety",
+            "structure",
+            "systemone",
+            "topic_continuity",
+            "user_feedback",
+            "projection"
+          ]
         },
-        "threshold": {
-          "type": "number"
+        "name": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "predicate": {
+          "$ref": "#/$defs/NumericPredicate"
+        },
+        "operator": {
+          "type": "string"
+        },
+        "conditions": {
+          "items": {
+            "$ref": "#/$defs/ResponseGuardCondition"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "A response_guard condition: a leaf naming any signal, or AND, OR or NOT over conditions."
+    },
+    "ResponseGuardPluginConfig": {
+      "properties": {
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/ResponseGuardRule"
+          },
+          "type": "array"
+        },
+        "on_unknown": {
+          "type": "string",
+          "enum": [
+            "block",
+            "annotate",
+            "none"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ResponseGuardRule": {
+      "properties": {
+        "when": {
+          "$ref": "#/$defs/ResponseGuardCondition"
         },
         "action": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "block",
+            "annotate",
+            "none"
+          ]
+        },
+        "details": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -7405,7 +7362,6 @@
             "complexity",
             "context",
             "conversation",
-            "decision",
             "domain",
             "embedding",
             "event",
@@ -7422,6 +7378,7 @@
             "reask",
             "safety",
             "structure",
+            "systemone",
             "user_feedback",
             "projection"
           ]
@@ -7738,6 +7695,166 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "SystemOneInput": {
+      "properties": {
+        "history": {
+          "type": "boolean"
+        },
+        "previous_turns": {
+          "type": "integer"
+        },
+        "answer": {
+          "type": "boolean"
+        },
+        "context": {
+          "type": "boolean"
+        },
+        "tool_results": {
+          "type": "boolean"
+        },
+        "image": {
+          "type": "boolean"
+        },
+        "audio": {
+          "type": "boolean"
+        },
+        "video": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SystemOneOption": {
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SystemOneQuestion": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "choices": {
+          "items": {
+            "$ref": "#/$defs/SystemOneOption"
+          },
+          "type": "array"
+        },
+        "levels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "labels": {
+          "items": {
+            "$ref": "#/$defs/SystemOneOption"
+          },
+          "type": "array"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "head": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SystemOneRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "question": {
+          "$ref": "#/$defs/SystemOneQuestion"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ignore_labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "predicate": {
+          "$ref": "#/$defs/NumericPredicate"
+        },
+        "deployment": {
+          "type": "string"
+        },
+        "stage": {
+          "type": "string",
+          "enum": [
+            "request",
+            "response"
+          ]
+        },
+        "input": {
+          "$ref": "#/$defs/SystemOneInput"
+        },
+        "coverage": {
+          "type": "string",
+          "enum": [
+            "truncate",
+            "full"
+          ]
+        },
+        "on_unscanned": {
+          "type": "string",
+          "enum": [
+            "match",
+            "no_match",
+            "unknown"
+          ]
+        },
+        "timeout_ms": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SystemOneSelectionConfig": {
+      "properties": {
+        "deployment": {
+          "type": "string"
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "candidates": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "timeout_ms": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "SystemPromptPluginConfig": {
       "properties": {
         "enabled": {
@@ -7747,7 +7864,11 @@
           "type": "string"
         },
         "mode": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "insert",
+            "replace"
+          ]
         }
       },
       "additionalProperties": false,
@@ -8747,13 +8868,13 @@
         "schema_ref": "#/$defs/ActionRule"
       },
       {
-        "type": "decision",
-        "display_name": "Decision Model",
-        "collection": "decision",
-        "observation_key": "decision",
+        "type": "systemone",
+        "display_name": "System One",
+        "collection": "systemone",
+        "observation_key": "systemone",
         "decision_referenceable": true,
         "reference_qualifier": "label",
-        "schema_ref": "#/$defs/DecisionSignalRule"
+        "schema_ref": "#/$defs/SystemOneRule"
       },
       {
         "type": "topic_continuity",
@@ -8914,14 +9035,14 @@
         "schema_ref": "#/$defs/PromptSelectionConfig"
       },
       {
-        "type": "decision",
-        "display_name": "Decision Model",
-        "description": "Ask a decision model which declared candidate should answer.",
+        "type": "systemone",
+        "display_name": "System One",
+        "description": "Ask a System One model which declared candidate should answer.",
         "tier": "supported",
         "execution": "selector",
-        "config_field": "decision",
+        "config_field": "systemone",
         "payload_shape": "nested",
-        "schema_ref": "#/$defs/DecisionSelectionConfig"
+        "schema_ref": "#/$defs/SystemOneSelectionConfig"
       }
     ],
     "plugins": [
@@ -8946,14 +9067,14 @@
       {
         "type": "header_mutation",
         "display_name": "Header Mutation",
-        "description": "Add, update, or remove provider-bound headers.",
+        "description": "Add, update, or remove provider-bound headers the Router does not own.",
         "schema_ref": "#/$defs/HeaderMutationPluginConfig"
       },
       {
-        "type": "hallucination",
-        "display_name": "Hallucination",
-        "description": "Apply response hallucination handling.",
-        "schema_ref": "#/$defs/HallucinationPluginConfig"
+        "type": "response_guard",
+        "display_name": "Response Guard",
+        "description": "Block or annotate answers on the signals they are checked with.",
+        "schema_ref": "#/$defs/ResponseGuardPluginConfig"
       },
       {
         "type": "router_replay",
@@ -8992,12 +9113,6 @@
         "schema_ref": "#/$defs/RequestParamsPluginConfig"
       },
       {
-        "type": "response_jailbreak",
-        "display_name": "Response Jailbreak",
-        "description": "Screen generated responses for jailbreak-like output.",
-        "schema_ref": "#/$defs/ResponseJailbreakPluginConfig"
-      },
-      {
         "type": "context_compression",
         "display_name": "Context Compression",
         "description": "Compress selected context before provider dispatch.",
@@ -9018,7 +9133,7 @@
       {
         "type": "masking",
         "display_name": "Masking",
-        "description": "Replace detected PII in the provider-bound request with placeholders.",
+        "description": "Replace the personal data a pii rule finds in the provider-bound request with placeholders.",
         "schema_ref": "#/$defs/MaskingPluginConfig"
       }
     ],
@@ -9060,7 +9175,7 @@
       "conversation",
       "event",
       "input_modality",
-      "decision",
+      "systemone",
       "kb_metric",
       "projection"
     ],

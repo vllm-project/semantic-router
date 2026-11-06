@@ -82,7 +82,7 @@ func checkDecisionRuntimeSetSpan(ctx context.Context, session *modelRuntimeSessi
 	}
 	expected := map[string]bool{}
 	for label, probability := range set.Probabilities {
-		if got := preview.SignalValues["decision:topics:"+label]; math.Abs(got-probability) > 1e-9 {
+		if got := preview.SignalValues["systemone:topics:"+label]; math.Abs(got-probability) > 1e-9 {
 			return "", fmt.Errorf("set label %s is %v, the runtime answered %v", label, got, probability)
 		}
 	}
@@ -94,13 +94,15 @@ func checkDecisionRuntimeSetSpan(ctx context.Context, session *modelRuntimeSessi
 		best[span.Label] = math.Max(best[span.Label], span.Probability)
 		expected["names:"+span.Label] = true
 	}
+	highest := 0.0
 	for _, label := range []string{"city", "person"} {
-		if got := preview.SignalValues["decision:names:"+label]; math.Abs(got-best[label]) > 1e-9 {
+		if got := preview.SignalValues["systemone:names:"+label]; math.Abs(got-best[label]) > 1e-9 {
 			return "", fmt.Errorf("span label %s is %v, the runtime's most probable span %v", label, got, best[label])
 		}
+		highest = math.Max(highest, best[label])
 	}
-	if noul := want.Answers["names"].Noul; noul == nil || math.Abs(preview.SignalValues["decision:names"]-*noul) > 1e-9 {
-		return "", fmt.Errorf("span question value %v, the runtime answered %v", preview.SignalValues["decision:names"], noul)
+	if got := preview.SignalValues["systemone:names"]; math.Abs(got-highest) > 1e-9 {
+		return "", fmt.Errorf("span rule value %v, the runtime's most probable span of a label %v", got, highest)
 	}
 	response, err := session.chat(ctx, prompt)
 	if err != nil {

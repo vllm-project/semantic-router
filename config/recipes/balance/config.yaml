@@ -276,7 +276,7 @@ routing:
           source:
             type: message
             role: assistant
-    decision:
+    systemone:
       - name: task
         description: The kind of work the request asks for; its most likely answer picks the work lane.
         question:
@@ -376,7 +376,7 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: task
             label: legal
       modelRefs:
@@ -402,7 +402,7 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: task
             label: proof
       modelRefs:
@@ -429,7 +429,7 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: task
             label: argument
       modelRefs:
@@ -456,10 +456,10 @@ routing:
         operator: OR
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: task
             label: systems
-          - type: decision
+          - type: systemone
             name: task
             label: science
       modelRefs:
@@ -488,7 +488,7 @@ routing:
         conditions:
           - type: conversation
             name: has_prior_answer
-          - type: decision
+          - type: systemone
             name: correction
       modelRefs:
         - model: google/gemini-2.5-flash-lite
@@ -512,7 +512,7 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: task
             label: code
       modelRefs:
@@ -537,7 +537,7 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: task
             label: health
       modelRefs:
@@ -564,10 +564,10 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: task
             label: explain
-          - type: decision
+          - type: systemone
             name: verification
       modelRefs:
         - model: google/gemini-2.5-flash-lite
@@ -594,11 +594,11 @@ routing:
         conditions:
           - type: conversation
             name: has_prior_answer
-          - type: decision
+          - type: systemone
             name: clarify
           - operator: NOT
             conditions:
-              - type: decision
+              - type: systemone
                 name: correction
       modelRefs:
         - model: qwen/qwen3.5-rocm
@@ -621,12 +621,12 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: task
             label: explain
           - operator: NOT
             conditions:
-              - type: decision
+              - type: systemone
                 name: verification
       modelRefs:
         - model: qwen/qwen3.5-rocm
@@ -650,7 +650,7 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: task
             label: creative
       modelRefs:
@@ -674,7 +674,7 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: task
             label: facts
       modelRefs:
@@ -698,7 +698,7 @@ routing:
         operator: AND
         on_unknown: no_match
         conditions:
-          - type: decision
+          - type: systemone
             name: task
             label: chat
       modelRefs:

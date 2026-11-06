@@ -3,6 +3,7 @@ package config
 import (
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 // ConfigSource defines where to load dynamic configuration from.
@@ -151,14 +152,14 @@ type IdentityConfig struct {
 
 func (ic IdentityConfig) GetUserIDHeader() string {
 	if ic.UserIDHeader == "" {
-		return "x-authz-user-id"
+		return headers.AuthzUserID
 	}
 	return ic.UserIDHeader
 }
 
 func (ic IdentityConfig) GetUserGroupsHeader() string {
 	if ic.UserGroupsHeader == "" {
-		return "x-authz-user-groups"
+		return headers.AuthzUserGroups
 	}
 	return ic.UserGroupsHeader
 }
@@ -314,6 +315,9 @@ type InlineModels struct {
 	// ModelResourceWarnings are the deprecated model fields the
 	// configuration was read with, and what they were read as.
 	ModelResourceWarnings []ConfigWarning `yaml:"-" json:"-"`
+	// FormWarnings are the renamed forms the document was written in, which
+	// it was read as their canonical forms (config_forms.go).
+	FormWarnings []ConfigWarning `yaml:"-" json:"-"`
 	// AuthoredThresholds are the module thresholds the configuration sets;
 	// the others follow the model that answers (model_thresholds.go).
 	AuthoredThresholds map[string]bool `yaml:"-" json:"-"`

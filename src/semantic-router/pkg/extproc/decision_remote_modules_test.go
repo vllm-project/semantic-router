@@ -40,7 +40,7 @@ routing:
   signals:
     domains: [{name: math, description: Math requests., mmlu_categories: [math]}]
     jailbreak: [{name: attack, threshold: 0.75}]
-    decision:
+    systemone:
       - name: needs_tools
         question: {type: noul, instructions: "Does the request need a tool?"}
   decisions:
@@ -50,7 +50,7 @@ routing:
       modelRefs: [{model: fast}]
     - name: math
       priority: 200
-      rules: {operator: AND, conditions: [{type: domain, name: math}, {type: decision, name: needs_tools}]}
+      rules: {operator: AND, conditions: [{type: domain, name: math}, {type: systemone, name: needs_tools}]}
       modelRefs: [{model: deep}]
     - name: everything-else
       priority: 10
@@ -195,7 +195,7 @@ func TestBuiltInSignalsAskASystemOneDecisionModelInOneCallPerStage(t *testing.T)
 		t.Fatalf("math that needs a tool routes to deep, got %+v", plan.Call)
 	}
 	calls := api.answered()[prepared:]
-	want := []string{"domain_classifier:domain", "needs_tools", "prompt_guard:attack"}
+	want := []string{"domain_classifier:domain", "prompt_guard:attack", "systemone:needs_tools"}
 	if len(calls) != 1 || !slices.Equal(calls[0], want) {
 		t.Fatalf("the request stage asked hosted-d3 %v, want one call with %v", calls, want)
 	}
@@ -218,7 +218,7 @@ func TestPIIAnswersAsAVerdictWhenTheSystemOneDecisionModelHasNoSpans(t *testing.
 	}
 
 	masked := strings.Replace(withPII, "      modelRefs: [{model: deep}]\n",
-		"      modelRefs: [{model: deep}]\n      plugins:\n        - type: masking\n          configuration: {enabled: true, threshold: 0.5}\n", 1)
+		"      modelRefs: [{model: deep}]\n      plugins:\n        - type: masking\n          configuration: {enabled: true, signal: personal}\n", 1)
 	cfg, _ = moduleSystemOneRouterConfig(t, masked)
 	if _, err := buildOpenAIRouterFromConfig(cfg); err == nil || !strings.Contains(err.Error(), "masking replaces PII at the positions") {
 		t.Fatalf("masking with a PII verdict: %v, want the configuration refused at load", err)

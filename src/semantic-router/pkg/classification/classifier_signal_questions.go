@@ -70,19 +70,19 @@ func (c *ownedLabelTask[I, O]) questionDeployment() string {
 }
 
 // signalQuestionDeployments lists the deployments a signal asks questions of
-// in a request stage: its prepared bindings' and, for decision signals, those
-// of the used rules.
+// in a request stage: its prepared bindings' and, for systemone signals,
+// those of the used request-stage rules.
 func (c *Classifier) signalQuestionDeployments(signalType string, usedSignals map[string]bool) []string {
 	if c == nil {
 		return nil
 	}
 	var consumers []interface{}
 	switch signalType {
-	case config.SignalTypeDecision:
+	case config.SignalTypeSystemOne:
 		var deployments []string
-		for _, rule := range c.Config.DecisionRules {
-			if signalRuleUsed(usedSignals, config.SignalTypeDecision, rule.Name) {
-				if deployment := c.Config.DecisionQuestionDeployment(rule); deployment != "" {
+		for _, rule := range c.Config.SystemOneRules {
+			if rule.EffectiveStage() == config.SystemOneStageRequest && signalRuleUsed(usedSignals, config.SignalTypeSystemOne, rule.Name) {
+				if deployment := c.Config.SystemOneRuleDeployment(rule); deployment != "" {
 					deployments = append(deployments, deployment)
 				}
 			}

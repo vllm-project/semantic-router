@@ -18,7 +18,7 @@ translation:
 | Chat API（`POST <endpoint>/chat/completions`） | `openai_chat` | 提示词攻击、幻觉检测、preference、LLM 分类 |
 | OpenAI 兼容的 embedding API（`POST <endpoint>/embeddings`） | `openai_embeddings` | [远程 embedding](../../model-runtime/guides/embeddings.md#use-an-external-embedding-service) |
 | Rerank API（`POST <endpoint>/rerank`） | `rerank` | [RAG 重排序](../../tutorials/plugin/rag.md#neural-reranking) |
-| System One API | `systemone` | [decision 问题](../../tutorials/signal/learned/decision.md#ask-a-remote-system-one-model)以及每个内置问题类信号 |
+| System One API | `systemone` | [System One 问题](../../tutorials/signal/learned/systemone.md#ask-a-remote-system-one-model)以及每个内置问题类信号 |
 | MCP 工具 | `modules.classifier.mcp` | 通过 MCP 服务器分类 |
 
 事实核查、用户反馈和输出模态分类没有分类 API；把它们绑定到 `model_runtime` 或 `systemone` 部署。

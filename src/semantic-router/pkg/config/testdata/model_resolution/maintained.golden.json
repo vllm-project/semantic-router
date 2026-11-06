@@ -6,10 +6,6 @@
       "default/classifier.remote-safety-score": "remote http://sequence-classifier:8080",
       "default/classifier.support-intent": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
       "default/classifier.tool-risk": "remote https://openai-proxy:443 gpt-4.1-mini",
-      "default/decision.difficulty": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
-      "default/decision.needs_reasoning": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
-      "default/decision.request_kind": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
-      "default/decision.support_team": "systemone https://systemone.example.com/v1/systemone vllm-sr/d3-ultra",
       "default/domain": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
       "default/embedding": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0",
       "default/fact_check": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
@@ -18,6 +14,13 @@
       "default/modality": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
       "default/pii": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
       "default/rag.reranker": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Reranker@a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf cpu replicas=0",
+      "default/systemone.chart_request": "systemone https://gateway.example.com/Unified/v1/systemone vllm-sr/d3-ultra",
+      "default/systemone.difficulty": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
+      "default/systemone.needs_reasoning": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
+      "default/systemone.request_kind": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
+      "default/systemone.support_team": "systemone https://systemone.example.com/v1/systemone vllm-sr/d3-ultra",
+      "default/systemone.support_topics": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
+      "default/systemone.unsupported_claims": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
       "default/user_feedback": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0"
     },
     "started": [
@@ -32,13 +35,13 @@
   "config/fragments/algorithm/native/cascade.yaml": {
     "error": "recipes[native-cascade]: decision \"kai-to-vega\": stage \"fast\": model \"kai\" must name a provider alias"
   },
-  "config/fragments/algorithm/selection/decision.yaml": {
+  "config/fragments/algorithm/selection/prompt.yaml": {
+    "error": "routing recipe \"default\": decision 'prompt-selected-route', algorithm.prompt.model \"qwen3-8b\" is not declared in routing.modelCards"
+  },
+  "config/fragments/algorithm/selection/systemone.yaml": {
     "started": [
       "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0"
     ]
-  },
-  "config/fragments/algorithm/selection/prompt.yaml": {
-    "error": "routing recipe \"default\": decision 'prompt-selected-route', algorithm.prompt.model \"qwen3-8b\" is not declared in routing.modelCards"
   },
   "config/fragments/decision/and/urgent-business.yaml": {
     "error": "routing recipe \"default\": routing.decisions[\"urgent_business_route\"]: signal keyword(\"urgent_keywords\") is not declared in this recipe"
@@ -79,35 +82,6 @@
   },
   "config/fragments/signal/context/long-context.yaml": {},
   "config/fragments/signal/conversation/agentic-shape.yaml": {},
-  "config/fragments/signal/decision/decision-model.yaml": {
-    "signals": {
-      "default/decision.difficulty": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
-      "default/decision.needs_reasoning": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
-      "default/decision.request_kind": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0"
-    },
-    "started": [
-      "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0"
-    ]
-  },
-  "config/fragments/signal/decision/vela2-labels-spans.yaml": {
-    "signals": {
-      "default/decision.order_numbers": "model_runtime vllm-sr/Vela-2.0-0.3B@ cpu replicas=0",
-      "default/decision.support_topics": "model_runtime vllm-sr/Vela-2.0-0.3B@ cpu replicas=0"
-    },
-    "started": [
-      "model_runtime vllm-sr/Vela-2.0-0.3B@ cpu replicas=0"
-    ]
-  },
-  "config/fragments/signal/decision/vela3-labels-spans.yaml": {
-    "signals": {
-      "default/decision.instruction_attack": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
-      "default/decision.needs_account_access": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
-      "default/decision.order_numbers": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0"
-    },
-    "started": [
-      "model_runtime vllm-sr/vela3-fast@ cpu replicas=0"
-    ]
-  },
   "config/fragments/signal/domain/mmlu.yaml": {},
   "config/fragments/signal/embedding/image-routing.yaml": {
     "error": "routing recipe \"default\": invalid embedding rule configuration:\n  - embedding rule \"identifier_document_imagery\" declares query_modality=image, which requires global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal or an explicit embedding binding with that capability. Remove the rule, set query_modality to text, or change model_type to multimodal (current model_type=\"mmbert\")\n  - embedding rule \"code_or_terminal_imagery\" image candidates require model_type=multimodal or an explicit embedding binding with image capability\n  - embedding rule \"code_or_terminal_imagery\" declares query_modality=image, which requires global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal or an explicit embedding binding with that capability. Remove the rule, set query_modality to text, or change model_type to multimodal (current model_type=\"mmbert\")\n  - embedding rule \"ambient_office_imagery\" declares query_modality=image, which requires global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal or an explicit embedding binding with that capability. Remove the rule, set query_modality to text, or change model_type to multimodal (current model_type=\"mmbert\")"
@@ -177,6 +151,35 @@
     }
   },
   "config/fragments/signal/structure/request-shape.yaml": {},
+  "config/fragments/signal/systemone/decision-model.yaml": {
+    "signals": {
+      "default/systemone.difficulty": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
+      "default/systemone.needs_reasoning": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
+      "default/systemone.request_kind": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0"
+    ]
+  },
+  "config/fragments/signal/systemone/vela2-labels-spans.yaml": {
+    "signals": {
+      "default/systemone.order_numbers": "model_runtime vllm-sr/Vela-2.0-0.3B@ cpu replicas=0",
+      "default/systemone.support_topics": "model_runtime vllm-sr/Vela-2.0-0.3B@ cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/Vela-2.0-0.3B@ cpu replicas=0"
+    ]
+  },
+  "config/fragments/signal/systemone/vela3-labels-spans.yaml": {
+    "signals": {
+      "default/systemone.instruction_attack": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/systemone.needs_account_access": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/systemone.order_numbers": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@ cpu replicas=0"
+    ]
+  },
   "config/fragments/signal/topic-continuity/topic-boundary.yaml": {},
   "config/fragments/signal/user-feedback/escalation.yaml": {
     "signals": {
@@ -188,8 +191,8 @@
   },
   "config/recipes/accuracy/config.yaml": {
     "signals": {
-      "default/decision.accuracy_difficulty": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.accuracy_mode": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+      "default/systemone.accuracy_difficulty": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.accuracy_mode": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
@@ -200,11 +203,11 @@
   },
   "config/recipes/agent/config.yaml": {
     "signals": {
-      "default/decision.attack": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.confidential": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.difficulty": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.domain": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.personal_data": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+      "default/systemone.attack": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.confidential": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.difficulty": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.domain": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.personal_data": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
@@ -215,10 +218,10 @@
   },
   "config/recipes/balance/config.yaml": {
     "signals": {
-      "default/decision.clarify": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.correction": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.task": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.verification": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+      "default/systemone.clarify": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.correction": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.task": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.verification": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
@@ -249,11 +252,11 @@
   },
   "config/recipes/feedback/config.yaml": {
     "signals": {
-      "default/decision.clarify": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.code": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.sources": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.wrong": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/embedding": "none"
+      "default/embedding": "none",
+      "default/systemone.clarify": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.code": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.sources": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.wrong": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
@@ -264,7 +267,7 @@
   },
   "config/recipes/knowledge/config.yaml": {
     "signals": {
-      "default/decision.knowledge_subject": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+      "default/systemone.knowledge_subject": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
@@ -275,20 +278,20 @@
   },
   "config/recipes/multi-objective/config.yaml": {
     "signals": {
-      "accuracy-first/decision.depth": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "accuracy-first/decision.mode": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "accuracy-first/decision.quoted": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "accuracy-first/decision.verification": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "accuracy-first/decision.workflow": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "balanced/decision.correction": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "balanced/decision.deliberate": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "balanced/decision.verification": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "accuracy-first/systemone.depth": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "accuracy-first/systemone.mode": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "accuracy-first/systemone.quoted": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "accuracy-first/systemone.verification": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "accuracy-first/systemone.workflow": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
       "balanced/embedding": "none",
-      "cost-first/decision.depth": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "privacy-first/decision.attack": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "privacy-first/decision.confidential": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "privacy-first/decision.personal_data": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "speed-first/decision.heavy": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+      "balanced/systemone.correction": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "balanced/systemone.deliberate": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "balanced/systemone.verification": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "cost-first/systemone.depth": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "privacy-first/systemone.attack": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "privacy-first/systemone.confidential": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "privacy-first/systemone.personal_data": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "speed-first/systemone.heavy": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
@@ -299,10 +302,10 @@
   },
   "config/recipes/privacy/config.yaml": {
     "signals": {
-      "default/decision.attack": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.confidential": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.depth": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.personal_data": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+      "default/systemone.attack": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.confidential": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.depth": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.personal_data": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
@@ -563,10 +566,10 @@
   },
   "e2e/profiles/model-runtime-real/values.yaml": {
     "signals": {
-      "default/decision.request_kind": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 cpu replicas=0",
       "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
       "default/jailbreak": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/pii": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/pii": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/systemone.request_kind": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 cpu replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 cpu replicas=0",
@@ -575,10 +578,10 @@
   },
   "e2e/profiles/model-runtime-vela3/values.yaml": {
     "signals": {
-      "default/decision.account_access": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/decision.order_numbers": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
       "default/jailbreak": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/pii": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/pii": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/systemone.account_access": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/systemone.order_numbers": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
@@ -587,17 +590,17 @@
   "e2e/profiles/model-runtime/values.yaml": {
     "signals": {
       "default/classifier.user_reaction": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 feedback-a",
-      "default/decision.answered": "model_runtime /tmp/vsr-fixtures/decision@ cpu replicas=0",
-      "default/decision.attached_answered": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 decision-a",
-      "default/decision.names": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 vela2-a",
-      "default/decision.offline": "model_runtime http://model-runtime-offline.vllm-semantic-router-system.svc.cluster.local:8100 decision-offline",
-      "default/decision.request_kind": "model_runtime /tmp/vsr-fixtures/decision@ cpu replicas=0",
-      "default/decision.topics": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 vela2-a",
       "default/domain": "model_runtime /tmp/vsr-fixtures/domain@ cpu replicas=0",
       "default/jailbreak": "model_runtime /tmp/vsr-fixtures/guard@ cpu replicas=0",
       "default/modality": "model_runtime /tmp/vsr-fixtures/modality@ cpu replicas=0",
       "default/pii": "model_runtime /tmp/vsr-fixtures/pii@ cpu replicas=0",
-      "default/rag.reranker": "model_runtime /tmp/vsr-fixtures/reranker@ cpu replicas=0"
+      "default/rag.reranker": "model_runtime /tmp/vsr-fixtures/reranker@ cpu replicas=0",
+      "default/systemone.answered": "model_runtime /tmp/vsr-fixtures/decision@ cpu replicas=0",
+      "default/systemone.attached_answered": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 decision-a",
+      "default/systemone.names": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 vela2-a",
+      "default/systemone.offline": "model_runtime http://model-runtime-offline.vllm-semantic-router-system.svc.cluster.local:8100 decision-offline",
+      "default/systemone.request_kind": "model_runtime /tmp/vsr-fixtures/decision@ cpu replicas=0",
+      "default/systemone.topics": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 vela2-a"
     },
     "started": [
       "model_runtime /tmp/vsr-fixtures/decision@ cpu replicas=0",

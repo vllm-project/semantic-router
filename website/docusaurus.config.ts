@@ -211,6 +211,14 @@ const config: Config = {
             to: '/docs/next/model-runtime/engine-args',
           },
           {
+            from: '/docs/next/tutorials/signal/learned/decision',
+            to: '/docs/next/tutorials/signal/learned/systemone',
+          },
+          {
+            from: '/docs/next/tutorials/algorithm/selection/decision',
+            to: '/docs/next/tutorials/algorithm/selection/systemone',
+          },
+          {
             from: '/docs/installation/kubernetes',
             to: '/docs/installation/k8s/ai-gateway',
           },

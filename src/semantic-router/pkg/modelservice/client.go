@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"slices"
 	"sync/atomic"
 	"time"
 
@@ -211,6 +212,14 @@ func encodeDecisionRequest(ctx context.Context, request Request) (api.DecisionRe
 		Questions: make(map[string]api.Question, len(request.Questions)),
 		Options:   &api.RequestOptions{DeadlineMs: deadline},
 	}
+	if len(request.Images) > 0 {
+		images := slices.Clone(request.Images)
+		body.Images = &images
+	}
+	if len(request.Videos) > 0 {
+		videos := slices.Clone(request.Videos)
+		body.Videos = &videos
+	}
 	if request.MaxTokens > 0 {
 		body.Options.MaxTokens = &request.MaxTokens
 	}
@@ -271,6 +280,10 @@ func encodeQuestion(question Question) api.Question {
 	if question.RequireFullInput {
 		required := true
 		encoded.RequireFullInput = &required
+	}
+	if question.DecisionAdapter {
+		adapter := true
+		encoded.DecisionAdapter = &adapter
 	}
 	if len(question.Labels) > 0 {
 		var criteria interface{} = labelCriteria(question.Labels)

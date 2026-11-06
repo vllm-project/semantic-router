@@ -176,7 +176,6 @@ spec:
                             enum:
                             - context_compression
                             - fast_response
-                            - hallucination
                             - header_mutation
                             - masking
                             - memory
@@ -185,7 +184,7 @@ spec:
                             - request_params
                             - response-cache
                             - response_cache
-                            - response_jailbreak
+                            - response_guard
                             - router_replay
                             - semantic-cache
                             - semantic_cache

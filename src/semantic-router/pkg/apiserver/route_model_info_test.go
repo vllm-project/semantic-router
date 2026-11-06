@@ -103,18 +103,15 @@ func buildAuxiliaryModelsConfig() *config.RouterConfig {
 				UserFeedbackRules: []config.UserFeedbackRule{
 					{Name: "satisfied"},
 				},
+				HallucinationRules: []config.HallucinationRule{
+					{Name: "ungrounded"},
+				},
 			},
 			Decisions: []config.Decision{{
 				Name: "model-backed-route",
 				Rules: config.RuleNode{Operator: "OR", Conditions: []config.RuleNode{
 					{Type: config.SignalTypeFactCheck, Name: "verification-needed"},
 					{Type: config.SignalTypeUserFeedback, Name: "satisfied"},
-				}},
-				Plugins: []config.DecisionPlugin{{
-					Type: config.DecisionPluginHallucination,
-					Configuration: config.MustStructuredPayload(map[string]interface{}{
-						"enabled": true,
-					}),
 				}},
 			}},
 		},

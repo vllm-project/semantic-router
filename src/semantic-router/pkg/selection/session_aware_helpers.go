@@ -65,3 +65,29 @@ func candidateScoreConfidence(selected int, scores CandidateScores) float64 {
 	}
 	return clamp01(0.5 + math.Min(0.5, math.Max(0, scores[selected].Score-second)))
 }
+
+func candidateSetContains(candidates []config.ModelRef, model string) bool {
+	for _, candidate := range candidates {
+		if candidate.Model == model || candidate.LoRAName == model {
+			return true
+		}
+	}
+	return false
+}
+
+func clamp01(v float64) float64 {
+	if !isFinite(v) {
+		return 0
+	}
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
+}
+
+func isFinite(v float64) bool {
+	return !math.IsNaN(v) && !math.IsInf(v, 0)
+}

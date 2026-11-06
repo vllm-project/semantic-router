@@ -50,7 +50,7 @@ BASE = {
     "routing": {
         "modelCards": [{"name": "small"}, {"name": "large"}],
         "signals": {
-            "decision": [
+            "systemone": [
                 {
                     "name": "support_team",
                     "deployment": "gateway-d3",
@@ -74,13 +74,13 @@ BASE = {
                     "operator": "AND",
                     "conditions": [
                         {
-                            "type": "decision",
+                            "type": "systemone",
                             "name": "support_team",
                             "label": "engineering",
                             "on_error": "no_match",
                         },
                         {
-                            "type": "decision",
+                            "type": "systemone",
                             "name": "needs_reasoning",
                             "on_error": "no_match",
                         },
@@ -88,8 +88,8 @@ BASE = {
                 },
                 "modelRefs": [{"model": "small"}, {"model": "large"}],
                 "algorithm": {
-                    "type": "decision",
-                    "decision": {"instructions": "Which model should answer?"},
+                    "type": "systemone",
+                    "systemone": {"instructions": "Which model should answer?"},
                 },
             }
         ],
@@ -117,7 +117,7 @@ def test_systemone_deployments_answer_questions_selectors_and_the_default():
     assert _errors(_config()) == []
 
     def named_selector(document):
-        selector = document["routing"]["decisions"][0]["algorithm"]["decision"]
+        selector = document["routing"]["decisions"][0]["algorithm"]["systemone"]
         selector["deployment"] = "gateway-d3"
 
     assert _errors(_config(named_selector)) == []

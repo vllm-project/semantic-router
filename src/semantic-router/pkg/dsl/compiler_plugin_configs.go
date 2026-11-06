@@ -52,8 +52,9 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 		cfg := &config.MaskingPluginConfig{}
 		return compilePluginFields(c, fields, cfg)
 	},
-	"hallucination": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		return c.compileHallucinationPluginConfig(fields), true
+	"response_guard": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
+		cfg := &config.ResponseGuardPluginConfig{}
+		return compilePluginFields(c, fields, cfg)
 	},
 	"memory": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.withObjectFields(c.compileMemoryPluginConfig(fields), fields, "reflection")
@@ -63,10 +64,6 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 	},
 	"header_mutation": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileHeaderMutationPluginConfig(fields), true
-	},
-	"response_jailbreak": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		cfg := &config.ResponseJailbreakPluginConfig{}
-		return compilePluginFields(c, fields, cfg)
 	},
 	"router_replay": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileRouterReplayPluginConfig(fields)
@@ -207,6 +204,10 @@ func (c *Compiler) buildPluginConfigValue(pluginType string, fields map[string]V
 	if fn, ok := pluginConfigCompilers[pluginType]; ok {
 		return fn(c, fields)
 	}
+	if replacement, retired := config.RemovedPluginTypes[pluginType]; retired {
+		c.addError(Position{}, "plugin %q was removed; write %s", pluginType, replacement)
+		return nil, false
+	}
 	c.addError(Position{}, "unknown plugin type %q", pluginType)
 	return nil, false
 }
@@ -221,26 +222,6 @@ func (c *Compiler) compileSystemPromptPluginConfig(fields map[string]Value) conf
 	}
 	if v, ok := getStringField(fields, "mode"); ok {
 		cfg.Mode = v
-	}
-	return cfg
-}
-
-func (c *Compiler) compileHallucinationPluginConfig(fields map[string]Value) config.HallucinationPluginConfig {
-	cfg := config.HallucinationPluginConfig{}
-	if v, ok := getBoolField(fields, "enabled"); ok {
-		cfg.Enabled = v
-	}
-	if _, ok := fields["use_nli"]; ok {
-		c.addError(Position{}, "hallucination plugin: use_nli is retired with the NLI explainer; remove it")
-	}
-	if v, ok := getStringField(fields, "hallucination_action"); ok {
-		cfg.HallucinationAction = v
-	}
-	if v, ok := getStringField(fields, "unverified_factual_action"); ok {
-		cfg.UnverifiedFactualAction = v
-	}
-	if v, ok := getBoolField(fields, "include_hallucination_details"); ok {
-		cfg.IncludeHallucinationDetails = v
 	}
 	return cfg
 }

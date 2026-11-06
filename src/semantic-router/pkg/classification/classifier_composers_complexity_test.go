@@ -102,3 +102,16 @@ func TestComposerFilterLeavesOtherSignalErrorsAlone(t *testing.T) {
 		}
 	}
 }
+
+// A composer condition on a systemone rule reads the systemone matches, as a
+// decision's condition does.
+func TestComposerReadsSystemOneMatches(t *testing.T) {
+	classifier := &Classifier{Config: &config.RouterConfig{}}
+	composer := &config.RuleNode{Type: config.SignalTypeSystemOne, Name: "needs_tools"}
+	if !classifier.evaluateComposer(composer, &SignalResults{MatchedSystemOneRules: []string{"needs_tools"}}) {
+		t.Fatal("a matched systemone rule did not satisfy the composer")
+	}
+	if classifier.evaluateComposer(composer, &SignalResults{MatchedSystemOneRules: []string{"other"}}) {
+		t.Fatal("an unmatched systemone rule satisfied the composer")
+	}
+}

@@ -425,7 +425,7 @@ it does not duplicate their state under a plugin-specific resource tree.
 | Plugin behavior | Operation |
 | --- | --- |
 | `system_prompt`, `request_params`, `header_mutation`, `fast_response` | `POST /api/v1/plugins/{type}/preview` using a typed candidate `configuration` or an active `binding` |
-| `hallucination`, `response_jailbreak` | Preview an active policy and its supplied conditions; `mode: probe` invokes its configured detectors |
+| `response_guard` | Read an active guard's rules over a supplied question, context and answer; `mode: probe` invokes the configured models |
 | `rag` | Preview context injection with `supplied_context`; `mode: probe` performs configured retrieval without the RAG result cache |
 | `tools`, `tool_selection` | Preview static tool policy; semantic selection requires explicit `mode: probe` |
 | `context_compression` | Preview retained targets and budgets using the existing compression contract |
@@ -675,8 +675,7 @@ Discover recipe-scoped plugin bindings, dependencies, and typed behavior preview
 | `POST` | `/api/v1/plugins/request_params/preview` | Preview the dispatch parameter policy, including blocked fields, defaults, and caps; no persistence or backend calls |
 | `POST` | `/api/v1/plugins/header_mutation/preview` | Preview ordered Envoy header operations; values require secret_view; no persistence or backend calls |
 | `POST` | `/api/v1/plugins/fast_response/preview` | Preview fixed assistant text before transport encoding; no persistence or backend calls |
-| `POST` | `/api/v1/plugins/response_jailbreak/preview` | Preview an active binding's response-jailbreak policy; mode=probe explicitly invokes its configured classifier without generation or persistence |
-| `POST` | `/api/v1/plugins/hallucination/preview` | Preview an active binding's hallucination policy and supplied fact-check/context conditions; mode=probe explicitly invokes configured detectors without generation or persistence |
+| `POST` | `/api/v1/plugins/response_guard/preview` | Preview what an active binding's response_guard does with an answer; mode=probe reads the guard's request-stage conditions on the question and its response-stage signals on the answer and context, without generation or persistence |
 | `POST` | `/api/v1/plugins/rag/preview` | Preview configured RAG context injection using supplied_context; mode=probe retrieves from the configured backend without the RAG result cache or generation |
 | `POST` | `/api/v1/plugins/tools/preview` | Preview the configured tools policy; mode=probe permits semantic tool retrieval but never executes tools |
 | `POST` | `/api/v1/plugins/tool_selection/preview` | Preview the configured tool_selection policy; mode=probe permits configured retrieval and embedding calls but never executes tools |

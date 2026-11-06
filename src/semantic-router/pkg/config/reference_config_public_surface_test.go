@@ -205,7 +205,17 @@ func assertReferenceConfigModelRuleCoverage(t testingT, signals map[string]inter
 		"routing.signals.safety[].hazard",
 		"model",
 	)
-	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "decision"), reflect.TypeOf(DecisionSignalRule{}), "routing.signals.decision")
+	systemOne := mustSliceAt(t, signals, "systemone")
+	assertSliceUnionCoversStructFields(t, systemOne, reflect.TypeOf(SystemOneRule{}), "routing.signals.systemone")
+	// No deployment reads audio yet, so the reference configuration cannot
+	// show input.audio.
+	assertSliceUnionCoversStructFields(
+		t,
+		collectChildMapsFromSlice(t, systemOne, "input", "routing.signals.systemone"),
+		reflect.TypeOf(SystemOneInput{}),
+		"routing.signals.systemone[].input",
+		"audio",
+	)
 }
 
 func assertReferenceConfigStructureCoverage(t testingT, structure []interface{}) {

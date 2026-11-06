@@ -15,11 +15,6 @@ type ModelSelectionConfig struct {
 	Hybrid   HybridSelectionConfig   `yaml:"hybrid,omitempty"`
 	ML       MLSelectionConfig       `yaml:"ml,omitempty"`
 
-	SessionAware SessionAwareSelectionConfig `yaml:"-"`
-
-	// ModelSwitchGate configures session-aware stay-vs-switch evaluation.
-	ModelSwitchGate ModelSwitchGateConfig `yaml:"-"`
-
 	// LookupTables configures persisted lookup tables for session-aware routing.
 	LookupTables LookupTableConfig `yaml:"-"`
 }
@@ -77,37 +72,6 @@ type HandoffPenaltyOverride struct {
 type RemainingTurnPriorOverride struct {
 	IntentOrDomain string  `yaml:"intent_or_domain"`
 	Value          float64 `yaml:"value"`
-}
-
-// ModelSwitchGateConfig configures auditable session-aware model switching.
-//
-// Note: enforce mode requires per-turn model history (the previous model the
-// session used). Response API requests carry that signal via the conversation
-// chain; Chat Completions carry it from the first follow-up turn via an
-// in-memory, session-keyed last-model store (per-replica, lost on restart).
-// When enforce is configured but the signal is still missing — the first turn of
-// a session, an unresolvable session, or after a restart — the router emits a
-// model_switch_gate_enforce_unavailable log event so operators can spot
-// misconfiguration without an incident.
-type ModelSwitchGateConfig struct {
-	// Enabled activates stay-vs-switch evaluation after the configured selector runs.
-	Enabled bool `yaml:"enabled,omitempty"`
-
-	// Mode controls whether the gate only audits decisions ("shadow") or applies
-	// them to keep the current model ("enforce"). Empty defaults to shadow.
-	// Enforce only takes effect when previous-model history is available
-	// (Response API via the conversation chain; Chat Completions from the first
-	// follow-up turn via the in-memory last-model store).
-	Mode string `yaml:"mode,omitempty"`
-
-	// MinSwitchAdvantage is the minimum net advantage required to allow switching.
-	MinSwitchAdvantage float64 `yaml:"min_switch_advantage,omitempty"`
-
-	// DefaultHandoffPenalty is used when lookup_tables has no handoff_penalty entry.
-	DefaultHandoffPenalty float64 `yaml:"default_handoff_penalty,omitempty"`
-
-	// CacheWarmthWeight turns cache warmth into a switch penalty.
-	CacheWarmthWeight float64 `yaml:"cache_warmth_weight,omitempty"`
 }
 
 // MLSelectionConfig holds configuration for the shared ML-based selectors.
@@ -180,29 +144,6 @@ type HybridSelectionConfig struct {
 	CostWeight          float64 `yaml:"cost_weight,omitempty"`
 	QualityGapThreshold float64 `yaml:"quality_gap_threshold,omitempty"`
 	NormalizeScores     bool    `yaml:"normalize_scores"`
-}
-
-// SessionAwareSelectionConfig configures the session_aware selector. It wraps
-// a base selector and adds agentic session stay-vs-switch policy.
-type SessionAwareSelectionConfig struct {
-	BaseMethod                   string   `yaml:"base_method,omitempty"`
-	IdleTimeoutSeconds           *int     `yaml:"idle_timeout_seconds,omitempty"`
-	MinTurnsBeforeSwitch         *int     `yaml:"min_turns_before_switch,omitempty"`
-	SwitchMargin                 *float64 `yaml:"switch_margin,omitempty"`
-	StayBias                     *float64 `yaml:"stay_bias,omitempty"`
-	ToolLoopHardLock             *bool    `yaml:"tool_loop_hard_lock,omitempty"`
-	ContextPortabilityHardLock   *bool    `yaml:"context_portability_hard_lock,omitempty"`
-	DecisionDriftReset           *bool    `yaml:"decision_drift_reset,omitempty"`
-	ToolLoopStayBias             *float64 `yaml:"tool_loop_stay_bias,omitempty"`
-	PrefixCacheWeight            *float64 `yaml:"prefix_cache_weight,omitempty"`
-	HandoffPenaltyWeight         *float64 `yaml:"handoff_penalty_weight,omitempty"`
-	DefaultHandoffPenalty        *float64 `yaml:"default_handoff_penalty,omitempty"`
-	QualityGapMultiplier         *float64 `yaml:"quality_gap_multiplier,omitempty"`
-	MaxCacheCostMultiplier       *float64 `yaml:"max_cache_cost_multiplier,omitempty"`
-	SwitchHistoryWeight          *float64 `yaml:"switch_history_weight,omitempty"`
-	RemainingTurnPriorWeight     *float64 `yaml:"remaining_turn_prior_weight,omitempty"`
-	RemainingTurnPriorHorizon    *int     `yaml:"remaining_turn_prior_horizon,omitempty"`
-	MinRemainingTurnPriorSamples *int     `yaml:"min_remaining_turn_prior_samples,omitempty"`
 }
 
 // MultiFactorSelectionConfig configures the multi_factor selector, which
@@ -285,44 +226,6 @@ type MultiFactorSLOConfig struct {
 	MaxTTFTMs    float64 `yaml:"max_ttft_ms,omitempty"`
 	MaxCostPer1M float64 `yaml:"max_cost_per_1m,omitempty"`
 	MaxInflight  int     `yaml:"max_inflight,omitempty"`
-}
-
-// RLDrivenSelectionConfig configures Router-R1 style reinforcement-learning-based routing.
-type RLDrivenSelectionConfig struct {
-	ExplorationRate             float64 `yaml:"exploration_rate,omitempty"`
-	ExplorationDecay            float64 `yaml:"exploration_decay,omitempty"`
-	MinExploration              float64 `yaml:"min_exploration,omitempty"`
-	UseThompsonSampling         bool    `yaml:"use_thompson_sampling,omitempty"`
-	EnablePersonalization       bool    `yaml:"enable_personalization,omitempty"`
-	PersonalizationBlend        float64 `yaml:"personalization_blend,omitempty"`
-	SessionContextWeight        float64 `yaml:"session_context_weight,omitempty"`
-	ImplicitFeedbackWeight      float64 `yaml:"implicit_feedback_weight,omitempty"`
-	CostAwareness               bool    `yaml:"cost_awareness,omitempty"`
-	CostWeight                  float64 `yaml:"cost_weight,omitempty"`
-	StoragePath                 string  `yaml:"storage_path,omitempty"`
-	AutoSaveInterval            string  `yaml:"auto_save_interval,omitempty"`
-	UseRouterR1Rewards          bool    `yaml:"use_router_r1_rewards,omitempty"`
-	CostRewardAlpha             float64 `yaml:"cost_reward_alpha,omitempty"`
-	FormatRewardPenalty         float64 `yaml:"format_reward_penalty,omitempty"`
-	EnableLLMRouting            bool    `yaml:"enable_llm_routing,omitempty"`
-	RouterR1ServerURL           string  `yaml:"router_r1_server_url,omitempty"`
-	LLMRoutingFallback          string  `yaml:"llm_routing_fallback,omitempty"`
-	EnableMultiRoundAggregation bool    `yaml:"enable_multi_round_aggregation,omitempty"`
-	MaxAggregationRounds        int     `yaml:"max_aggregation_rounds,omitempty"`
-}
-
-// GMTRouterSelectionConfig configures graph-based personalized routing.
-type GMTRouterSelectionConfig struct {
-	EnablePersonalization             bool     `yaml:"enable_personalization,omitempty"`
-	HistorySampleSize                 int      `yaml:"history_sample_size,omitempty"`
-	EmbeddingDimension                int      `yaml:"embedding_dimension,omitempty"`
-	NumGNNLayers                      int      `yaml:"num_gnn_layers,omitempty"`
-	AttentionHeads                    int      `yaml:"attention_heads,omitempty"`
-	MinInteractionsForPersonalization int      `yaml:"min_interactions_for_personalization,omitempty"`
-	MaxInteractionsPerUser            int      `yaml:"max_interactions_per_user,omitempty"`
-	FeedbackTypes                     []string `yaml:"feedback_types,omitempty"`
-	ModelPath                         string   `yaml:"model_path,omitempty"`
-	StoragePath                       string   `yaml:"storage_path,omitempty"`
 }
 
 // LatencyAwareAlgorithmConfig configures TPOT/TTFT percentile routing policies.

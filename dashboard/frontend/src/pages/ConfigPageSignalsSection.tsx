@@ -11,7 +11,7 @@ import React from 'react'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { DataTable, type Column } from '../components/DataTable'
 import type { FieldConfig } from '../components/EditModal'
-import { formatRoutingMetadataValue } from '../components/routingMetadataDisplay'
+import { formatRoutingMetadataValue, matchedSignalHeader } from '../components/routingMetadataDisplay'
 import RoutingScopeSelector from '../components/RoutingScopeSelector'
 import TableHeader from '../components/TableHeader'
 import type { ViewSection } from '../components/ViewModal'
@@ -145,7 +145,7 @@ function SignalDefinitionEditor({
   capabilityRef.current = data
   const availability = signalAvailability(data, scope, value.type, name, value.fields)
   const schema =
-    value.type === 'decision'
+    value.type === 'systemone'
       ? signalCapabilitySchema(
           getSignalFieldSchema(value.type),
           decisionQuestionTypes(data, scope, value.fields),
@@ -259,7 +259,7 @@ export default function ConfigPageSignalsSection({
       sortable: true,
       render: (signal) => (
         <span style={{ fontWeight: 600 }}>
-          {formatRoutingMetadataValue(`x-vsr-matched-${signal.canonicalType}`, signal.name)}
+          {formatRoutingMetadataValue(matchedSignalHeader(signal.canonicalType), signal.name)}
         </span>
       ),
     },

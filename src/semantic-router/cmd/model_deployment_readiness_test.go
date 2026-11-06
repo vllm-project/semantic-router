@@ -151,7 +151,7 @@ func readinessDocument(ports readinessPorts, backend string, deployments ...stri
       rules:
         operator: AND
         on_unknown: no_match
-        conditions: [{type: decision, name: hard_0}]
+        conditions: [{type: systemone, name: hard_0}]
       modelRefs: [{model: a}]
 `)
 	}
@@ -171,7 +171,7 @@ routing:
     - name: a
 `, ports.listener, strings.TrimPrefix(backend, "http://"))
 	if signals.Len() > 0 {
-		document += "  signals:\n    decision:\n" + signals.String()
+		document += "  signals:\n    systemone:\n" + signals.String()
 	}
 	document += "  decisions:\n" + decision.String() + `    - name: default-route
       priority: 100

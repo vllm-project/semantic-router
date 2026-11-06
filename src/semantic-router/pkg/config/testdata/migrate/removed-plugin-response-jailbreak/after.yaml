@@ -1,0 +1,29 @@
+# A response_jailbreak plugin is a response_guard rule over a jailbreak rule
+# with direction: response, which scans answers at the plugin's threshold.
+version: v0.3
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+routing:
+  signals:
+    jailbreak:
+      - name: guarded_response
+        direction: response
+        threshold: 0.8
+        description: Answers that carry jailbreak content.
+  decisions:
+    - name: guarded
+      priority: 100
+      rules: {operator: AND, conditions: []}
+      modelRefs: [{model: general}]
+      plugins:
+        - type: response_guard
+          configuration:
+            rules:
+              - when:
+                  type: jailbreak
+                  name: guarded_response
+                action: block
+            on_unknown: block

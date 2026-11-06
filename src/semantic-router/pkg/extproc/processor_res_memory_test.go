@@ -112,8 +112,8 @@ func TestScheduleResponseMemoryStore_SkippedWhenJailbreakDetected(t *testing.T) 
 	}
 
 	reqCtx := &RequestContext{
-		RequestID:                 "req-jailbreak",
-		ResponseJailbreakDetected: true,
+		RequestID:     "req-jailbreak",
+		ResponseGuard: matchedJailbreakGuardRun(t),
 	}
 
 	// Should return early at the jailbreak check — no goroutine launched.

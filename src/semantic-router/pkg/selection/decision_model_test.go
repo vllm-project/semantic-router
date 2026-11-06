@@ -20,7 +20,7 @@ func TestDecisionModelSelectorChoosesTheAnswer(t *testing.T) {
 	var asked []DecisionModelChoice
 	var state, instructions string
 	selector := NewDecisionModelSelector(
-		config.DecisionSelectionConfig{Deployment: "kai", Instructions: "Which model?", Candidates: map[string]string{"large": "Best for proofs"}},
+		config.SystemOneSelectionConfig{Deployment: "kai", Instructions: "Which model?", Candidates: map[string]string{"large": "Best for proofs"}},
 		func(_ context.Context, gotInstructions, gotState string, choices []DecisionModelChoice) (DecisionModelAnswer, error) {
 			asked, state, instructions = choices, gotState, gotInstructions
 			return DecisionModelAnswer{Choice: "small", Probabilities: map[string]float64{"large": 0.3, "small": 0.7}, Confidence: 0.12}, nil
@@ -31,7 +31,7 @@ func TestDecisionModelSelectorChoosesTheAnswer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.SelectedModel != "small" || result.LoRAName != "fast" || result.Method != MethodDecision {
+	if result.SelectedModel != "small" || result.LoRAName != "fast" || result.Method != MethodSystemOne {
 		t.Fatalf("result = %+v", result)
 	}
 	if result.Score != 0.7 || result.AllScores["large"] != 0.3 || len(result.CandidateScores) != 2 {
@@ -46,14 +46,14 @@ func TestDecisionModelSelectorChoosesTheAnswer(t *testing.T) {
 }
 
 func TestDecisionModelSelectorErrorsFallBack(t *testing.T) {
-	failing := NewDecisionModelSelector(config.DecisionSelectionConfig{Deployment: "kai", Instructions: "?"},
+	failing := NewDecisionModelSelector(config.SystemOneSelectionConfig{Deployment: "kai", Instructions: "?"},
 		func(context.Context, string, string, []DecisionModelChoice) (DecisionModelAnswer, error) {
 			return DecisionModelAnswer{}, errors.New("runtime is not ready")
 		}, nil)
 	if _, err := failing.Select(context.Background(), decisionSelectionContext()); !errors.Is(err, ErrDecisionModelInvocation) {
 		t.Fatalf("invocation error = %v", err)
 	}
-	undeclared := NewDecisionModelSelector(config.DecisionSelectionConfig{Deployment: "kai", Instructions: "?"},
+	undeclared := NewDecisionModelSelector(config.SystemOneSelectionConfig{Deployment: "kai", Instructions: "?"},
 		func(context.Context, string, string, []DecisionModelChoice) (DecisionModelAnswer, error) {
 			return DecisionModelAnswer{Choice: "other", Probabilities: map[string]float64{"other": 1}}, nil
 		}, nil)

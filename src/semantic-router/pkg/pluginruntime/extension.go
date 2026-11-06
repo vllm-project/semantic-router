@@ -110,7 +110,7 @@ var routerHeaders = []string{
 
 // routerNamespaces hold the Router's own facts and controls and Envoy's,
 // such as the reliability headers.
-var routerNamespaces = []string{"x-vsr-", "x-envoy-"}
+var routerNamespaces = []string{headers.VSRPrefix, headers.EnvoyPrefix}
 
 // writableHeader refuses names that are not valid header names, which
 // include pseudo-headers, and the headers the Router owns.

@@ -15,6 +15,11 @@ import type { Message } from './ChatComponentTypes'
 import { formatPlaygroundFileSize } from './playgroundFileAttachments'
 import { getTranslateAttr } from '../hooks/useNoTranslate'
 import { useAuth } from '../contexts/AuthContext'
+import {
+  X_VSR_REPLAY_ID,
+  X_VSR_SELECTED_DECISION,
+  X_VSR_SELECTED_MODEL,
+} from '../generated/vsrHeaders'
 import { buildFeedbackInsightsHref } from './chatComponentSupport'
 
 interface ChatComponentMessagesProps {
@@ -149,17 +154,17 @@ function AssistantRatingsMessage({
             !message.isStreaming &&
             !message.incomplete &&
             choice.model &&
-            choice.model === message.headers?.['x-vsr-selected-model'] &&
-            message.headers?.['x-vsr-replay-id'] ? (
+            choice.model === message.headers?.[X_VSR_SELECTED_MODEL] &&
+            message.headers?.[X_VSR_REPLAY_ID] ? (
               <div className={styles.choiceActions}>
                 <FeedbackButtons
                   modelId={choice.model}
-                  replayId={message.headers['x-vsr-replay-id']}
+                  replayId={message.headers[X_VSR_REPLAY_ID]}
                   insightsHref={buildFeedbackInsightsHref(
                     feedbackInsightsBasePath,
-                    message.headers['x-vsr-replay-id'],
+                    message.headers[X_VSR_REPLAY_ID],
                   )}
-                  category={message.headers?.['x-vsr-selected-decision']}
+                  category={message.headers?.[X_VSR_SELECTED_DECISION]}
                   query={prevUserQuery}
                 />
               </div>
@@ -346,16 +351,16 @@ const MessageCard = memo(
               {canSubmitFeedback &&
               message.role === 'assistant' &&
               !message.incomplete &&
-              message.headers?.['x-vsr-selected-model'] &&
-              message.headers?.['x-vsr-replay-id'] ? (
+              message.headers?.[X_VSR_SELECTED_MODEL] &&
+              message.headers?.[X_VSR_REPLAY_ID] ? (
                 <FeedbackButtons
-                  modelId={message.headers['x-vsr-selected-model']}
-                  replayId={message.headers['x-vsr-replay-id']}
+                  modelId={message.headers[X_VSR_SELECTED_MODEL]}
+                  replayId={message.headers[X_VSR_REPLAY_ID]}
                   insightsHref={buildFeedbackInsightsHref(
                     feedbackInsightsBasePath,
-                    message.headers['x-vsr-replay-id'],
+                    message.headers[X_VSR_REPLAY_ID],
                   )}
-                  category={message.headers['x-vsr-selected-decision']}
+                  category={message.headers[X_VSR_SELECTED_DECISION]}
                   query={prevUserQuery}
                 />
               ) : null}

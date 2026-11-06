@@ -18,18 +18,18 @@ type values struct {
 				Classifiers []struct {
 					Deployment string `yaml:"deployment"`
 				} `yaml:"classifiers"`
-				Decision []struct {
+				SystemOne []struct {
 					Name       string `yaml:"name"`
 					Deployment string `yaml:"deployment"`
-				} `yaml:"decision"`
+				} `yaml:"systemone"`
 			} `yaml:"signals"`
 			ModelBindings map[string]string `yaml:"model_bindings"`
 			Decisions     []struct {
 				Name      string `yaml:"name"`
 				Algorithm *struct {
-					Decision *struct {
+					SystemOne *struct {
 						Deployment string `yaml:"deployment"`
-					} `yaml:"decision"`
+					} `yaml:"systemone"`
 				} `yaml:"algorithm"`
 				Plugins []struct {
 					Configuration struct {
@@ -160,12 +160,12 @@ func TestProfileRunsManagedAndAttachedRuntimesOnItsOwnFixtures(t *testing.T) {
 	for _, rule := range profile.Config.Routing.Signals.Classifiers {
 		used[rule.Deployment] = true
 	}
-	for _, rule := range profile.Config.Routing.Signals.Decision {
+	for _, rule := range profile.Config.Routing.Signals.SystemOne {
 		used[rule.Deployment] = true
 	}
 	for _, decision := range profile.Config.Routing.Decisions {
-		if decision.Algorithm != nil && decision.Algorithm.Decision != nil {
-			used[decision.Algorithm.Decision.Deployment] = true
+		if decision.Algorithm != nil && decision.Algorithm.SystemOne != nil {
+			used[decision.Algorithm.SystemOne.Deployment] = true
 		}
 		for _, plugin := range decision.Plugins {
 			if plugin.Configuration.Rerank != nil {

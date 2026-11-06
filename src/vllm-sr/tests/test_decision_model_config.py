@@ -1,4 +1,4 @@
-"""Decision signals, the decision selector and model_runtime deployments in the CLI contract.
+"""Systemone signals, the systemone selector and model_runtime deployments in the CLI contract.
 
 The Router validates the deployments that answer them.
 """
@@ -7,6 +7,7 @@ import copy
 
 import pytest
 from cli.models import UserConfig
+from cli.parser import parse_user_config_data
 from cli.validator import collect_validation_warnings, validate_user_config
 from pydantic import ValidationError
 
@@ -36,7 +37,7 @@ BASE = {
     "routing": {
         "modelCards": [{"name": "small"}, {"name": "large"}],
         "signals": {
-            "decision": [
+            "systemone": [
                 {
                     "name": "request_kind",
                     "deployment": "decision-kai",
@@ -61,9 +62,9 @@ BASE = {
                 "rules": {
                     "operator": "AND",
                     "conditions": [
-                        {"type": "decision", "name": "request_kind", "label": "code"},
+                        {"type": "systemone", "name": "request_kind", "label": "code"},
                         {
-                            "type": "decision",
+                            "type": "systemone",
                             "name": "needs_reasoning",
                             "on_error": "no_match",
                         },
@@ -71,8 +72,8 @@ BASE = {
                 },
                 "modelRefs": [{"model": "small"}, {"model": "large"}],
                 "algorithm": {
-                    "type": "decision",
-                    "decision": {
+                    "type": "systemone",
+                    "systemone": {
                         "deployment": "decision-kai",
                         "instructions": "Which model should answer?",
                         "candidates": {"large": "Strong reasoning"},
@@ -96,7 +97,15 @@ def _errors(document: dict) -> list[str]:
     return [error.message for error in validate_user_config(config, log_summary=False)]
 
 
-def test_valid_decision_model_config_passes():
+def _rules(document: dict) -> list[dict]:
+    return document["routing"]["signals"]["systemone"]
+
+
+def _conditions(document: dict) -> list[dict]:
+    return document["routing"]["decisions"][0]["rules"]["conditions"]
+
+
+def test_valid_systemone_config_passes():
     assert _errors(_config()) == []
 
 
@@ -113,9 +122,9 @@ def test_valid_decision_model_config_passes():
         ({"type": "vote", "instructions": "x"}, "choice"),
     ],
 )
-def test_decision_questions_are_validated(question, message):
+def test_systemone_questions_are_validated(question, message):
     def mutate(document):
-        document["routing"]["signals"]["decision"][1]["question"] = question
+        _rules(document)[1]["question"] = question
 
     with pytest.raises(ValidationError, match=message):
         UserConfig.model_validate(_config(mutate))
@@ -140,14 +149,18 @@ def _with_vela2(document):
         "provider": "model_runtime",
         "artifact": "vllm-sr/Vela-2.0-0.3B",
     }
-    document["routing"]["signals"]["decision"] += [
-        {"name": "topics", "deployment": "vela2", "question": SET_QUESTION},
-        {"name": "places", "deployment": "vela2", "question": SPAN_QUESTION},
-    ]
-    document["routing"]["decisions"][0]["rules"]["conditions"] += [
-        {"type": "decision", "name": "topics", "label": "billing"},
-        {"type": "decision", "name": "places", "label": "city"},
-    ]
+    _rules(document).extend(
+        [
+            {"name": "topics", "deployment": "vela2", "question": SET_QUESTION},
+            {"name": "places", "deployment": "vela2", "question": SPAN_QUESTION},
+        ]
+    )
+    _conditions(document).extend(
+        [
+            {"type": "systemone", "name": "topics", "label": "billing"},
+            {"type": "systemone", "name": "places", "label": "city"},
+        ]
+    )
 
 
 def test_set_and_span_questions_route_on_a_declared_label():
@@ -173,28 +186,88 @@ def test_set_and_span_questions_route_on_a_declared_label():
 )
 def test_set_and_span_questions_are_validated(question, message):
     def mutate(document):
-        document["routing"]["signals"]["decision"][1]["question"] = question
+        _rules(document)[1]["question"] = question
 
     with pytest.raises(ValidationError, match=message):
         UserConfig.model_validate(_config(mutate))
 
 
-def test_set_and_span_conditions_name_a_declared_label():
-    def undeclared(document):
-        _with_vela2(document)
-        document["routing"]["decisions"][0]["rules"]["conditions"][2]["label"] = "x"
-
+def test_set_and_span_rules_match_themselves_and_name_counted_labels():
     def unlabelled(document):
         _with_vela2(document)
-        del document["routing"]["decisions"][0]["rules"]["conditions"][3]["label"]
+        del _conditions(document)[3]["label"]
 
-    assert any("declared label" in error for error in _errors(_config(undeclared)))
-    assert any("declared label" in error for error in _errors(_config(unlabelled)))
+    assert _errors(_config(unlabelled)) == []
+
+    def undeclared(document):
+        _with_vela2(document)
+        _conditions(document)[2]["label"] = "x"
+
+    def ignored(document):
+        _with_vela2(document)
+        _rules(document)[2]["ignore_labels"] = ["billing"]
+
+    assert any("not an option" in error for error in _errors(_config(undeclared)))
+    assert any("never count" in error for error in _errors(_config(ignored)))
+
+
+@pytest.mark.parametrize(
+    "rule, message",
+    [
+        ({"labels": ["true"]}, "a noul rule takes none"),
+        ({"ignore_labels": ["x"]}, "only to set and span rules"),
+        ({"input": {"previous_turns": 33}}, "less than or equal to 32"),
+        ({"input": {"answer": True}}, "request-stage rule does not have"),
+        ({"input": {"context": True}, "stage": "request"}, "request-stage rule"),
+        ({"on_unscanned": "match"}, "only to a rule with coverage: full"),
+        ({"stage": "routing"}, "request"),
+        ({"coverage": "whole"}, "truncate"),
+    ],
+)
+def test_systemone_rule_fields_are_validated(rule, message):
+    def mutate(document):
+        _rules(document)[1].update(rule)
+
+    with pytest.raises(ValidationError, match=message):
+        UserConfig.model_validate(_config(mutate))
+
+
+def test_systemone_rule_fields_within_their_limits_pass():
+    def mutate(document):
+        _with_vela2(document)
+        _rules(document)[1].update(
+            {
+                "stage": "response",
+                "input": {"answer": True, "context": True, "previous_turns": 32},
+                "coverage": "full",
+                "on_unscanned": "no_match",
+            }
+        )
+        _rules(document)[0]["labels"] = ["code"]
+        _rules(document)[2]["ignore_labels"] = ["shipping"]
+        del _conditions(document)[1]
+
+    assert _errors(_config(mutate)) == []
+
+
+@pytest.mark.parametrize(
+    "labels, message",
+    [
+        (["chat", "chat"], "twice"),
+        (["math"], "not an option"),
+    ],
+)
+def test_rule_labels_name_options(labels, message):
+    def mutate(document):
+        _rules(document)[0]["labels"] = labels
+
+    with pytest.raises(ValidationError, match=message):
+        UserConfig.model_validate(_config(mutate))
 
 
 def test_score_question_requires_a_predicate():
     def mutate(document):
-        document["routing"]["signals"]["decision"][1] = {
+        _rules(document)[1] = {
             "name": "difficulty",
             "deployment": "decision-kai",
             "question": {"type": "score", "instructions": "x", "levels": ["a", "b"]},
@@ -206,22 +279,32 @@ def test_score_question_requires_a_predicate():
 
 def test_condition_labels_follow_the_question_type():
     def undeclared_choice(document):
-        conditions = document["routing"]["decisions"][0]["rules"]["conditions"]
-        conditions[0]["label"] = "math"
+        _conditions(document)[0]["label"] = "math"
 
     def labeled_noul(document):
-        conditions = document["routing"]["decisions"][0]["rules"]["conditions"]
-        conditions[1]["label"] = "true"
+        _conditions(document)[1]["label"] = "true"
+
+    def unlabelled_choice(document):
+        del _conditions(document)[0]["label"]
+
+    def unlabelled_choice_with_labels(document):
+        unlabelled_choice(document)
+        _rules(document)[0]["labels"] = ["code"]
 
     assert any(
-        "declared choice key" in error for error in _errors(_config(undeclared_choice))
+        "not an option" in error for error in _errors(_config(undeclared_choice))
     )
     assert any("takes no label" in error for error in _errors(_config(labeled_noul)))
+    assert any(
+        "choice rule without labels" in error
+        for error in _errors(_config(unlabelled_choice))
+    )
+    assert _errors(_config(unlabelled_choice_with_labels)) == []
 
 
 def test_selector_candidates_must_be_model_refs():
     def mutate(document):
-        selector = document["routing"]["decisions"][0]["algorithm"]["decision"]
+        selector = document["routing"]["decisions"][0]["algorithm"]["systemone"]
         selector["candidates"] = {"other": "x"}
 
     assert any(
@@ -233,7 +316,7 @@ def test_selector_candidate_count_applies_once_models_are_assigned():
     def model_free(document):
         decision = document["routing"]["decisions"][0]
         del decision["modelRefs"]
-        del decision["algorithm"]["decision"]["candidates"]
+        del decision["algorithm"]["systemone"]["candidates"]
 
     def one_model(document):
         document["routing"]["decisions"][0]["modelRefs"] = [{"model": "small"}]
@@ -244,7 +327,7 @@ def test_selector_candidate_count_applies_once_models_are_assigned():
 
 def test_selector_without_deployment_asks_the_decision_model():
     def omit(document):
-        del document["routing"]["decisions"][0]["algorithm"]["decision"]["deployment"]
+        del document["routing"]["decisions"][0]["algorithm"]["systemone"]["deployment"]
 
     assert _errors(_config(omit)) == []
 
@@ -257,17 +340,19 @@ def test_selector_without_deployment_asks_the_decision_model():
     assert _errors(_config(alternate)) == []
 
     def blank(document):
-        document["routing"]["decisions"][0]["algorithm"]["decision"]["deployment"] = " "
+        document["routing"]["decisions"][0]["algorithm"]["systemone"][
+            "deployment"
+        ] = " "
 
     with pytest.raises(ValidationError, match="omit it to ask the decision model"):
         UserConfig.model_validate(_config(blank))
 
 
-def test_decision_type_requires_its_configuration():
+def test_systemone_type_requires_its_configuration():
     def mutate(document):
-        document["routing"]["decisions"][0]["algorithm"] = {"type": "decision"}
+        document["routing"]["decisions"][0]["algorithm"] = {"type": "systemone"}
 
-    with pytest.raises(ValidationError, match="requires decision configuration"):
+    with pytest.raises(ValidationError, match="requires systemone configuration"):
         UserConfig.model_validate(_config(mutate))
 
 
@@ -342,9 +427,9 @@ def test_decision_window_input_is_a_supported_scan_budget():
 
 
 def _ask_the_default_decision_model(document):
-    for rule in document["routing"]["signals"]["decision"]:
+    for rule in _rules(document):
         del rule["deployment"]
-    del document["routing"]["decisions"][0]["algorithm"]["decision"]["deployment"]
+    del document["routing"]["decisions"][0]["algorithm"]["systemone"]["deployment"]
     document["global"]["model_catalog"]["system"] = {
         "decision_model": {"deployment": "decision-kai"}
     }
@@ -372,3 +457,28 @@ def test_systemone_publication_accepts_a_scan_budget():
         }
 
     assert _errors(_config(mutate)) == []
+
+
+def test_the_decision_forms_are_read_as_systemone(tmp_path):
+    """The CLI reads the decision signal, conditions and selector as the
+    Router does: as systemone."""
+
+    def written_as_decision(document):
+        routing = document["routing"]
+        routing["signals"]["decision"] = routing["signals"].pop("systemone")
+        for condition in _conditions(document):
+            condition["type"] = "decision"
+        selector = routing["decisions"][0]["algorithm"]
+        routing["decisions"][0]["algorithm"] = {
+            "type": "decision",
+            "decision": selector["systemone"],
+        }
+
+    written = _config(written_as_decision)
+    before = copy.deepcopy(written)
+    config = parse_user_config_data(written, str(tmp_path / "config.yaml"))
+    canonical = parse_user_config_data(_config(), str(tmp_path / "canonical.yaml"))
+
+    assert written == before
+    assert validate_user_config(config, log_summary=False) == []
+    assert config.model_dump() == canonical.model_dump()

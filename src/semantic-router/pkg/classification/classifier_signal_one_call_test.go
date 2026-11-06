@@ -50,7 +50,7 @@ routing:
       - name: personal_data
         threshold: 0.5
         include_history: true
-    decision:
+    systemone:
       - name: tone
         deployment: vela2
         timeout_ms: TIMEOUT
@@ -76,8 +76,8 @@ routing:
         conditions:
           - {type: jailbreak, name: attack}
           - {type: pii, name: personal_data}
-          - {type: decision, name: tone, label: urgent}
-          - {type: decision, name: topics, label: billing}
+          - {type: systemone, name: tone, label: urgent}
+          - {type: systemone, name: topics, label: billing}
       modelRefs:
         - model: general-model
 `
@@ -140,7 +140,7 @@ func answers(results *SignalResults) map[string]interface{} {
 	return map[string]interface{}{
 		"values": results.SignalValues, "confidences": results.SignalConfidences, "errors": results.SignalErrors,
 		"jailbreak": results.MatchedJailbreakRules, "pii": results.MatchedPIIRules, "entities": results.PIIEntities,
-		"decision": results.MatchedDecisionRules,
+		"systemone": results.MatchedSystemOneRules,
 	}
 }
 
@@ -152,8 +152,8 @@ func TestAStageAsksVela2OneCallWhateverItsSignalsTiming(t *testing.T) {
 	pii, decider := classifier.piiInference.(*ownedTokenBackend), classifier.decider()
 	for _, delay := range []time.Duration{50 * time.Millisecond, 200 * time.Millisecond, 500 * time.Millisecond} {
 		for signal, slow := range map[string]func(){
-			"pii":      func() { classifier.piiInference = slowTokens{pii, delay} },
-			"decision": func() { classifier.SetDecisionDecider(slowDecider{decider, delay}) },
+			"pii":       func() { classifier.piiInference = slowTokens{pii, delay} },
+			"systemone": func() { classifier.SetDecisionDecider(slowDecider{decider, delay}) },
 		} {
 			classifier.piiInference, classifier.decisionDecider = pii, nil
 			slow()
@@ -228,7 +228,7 @@ func TestRoutingAndSafetyQuestionsKeepTheirReadBudgetsInTheSharedCall(t *testing
 		return question.Overflow != nil && *question.Overflow == api.QuestionOverflowTruncate
 	}
 	for id, question := range asked[0].Questions {
-		routing := id == "tone" || id == "topics"
+		routing := id == "systemone:tone" || id == "systemone:topics"
 		if truncates(question) != routing {
 			t.Fatalf("question %s: routing questions read the first tokens, safety ones the whole text: %+v", id, question)
 		}
@@ -239,16 +239,16 @@ func TestADecisionTimeoutDoesNotDropAnAnswerOfTheSharedCall(t *testing.T) {
 	classifier, fake := oneCallClassifier(t, "100")
 	fake.SetDelay(300 * time.Millisecond)
 	results := evaluateOneCall(t, classifier, "please refund the billing for my order", nil)
-	if code, failed := results.SignalErrors["decision:tone"]; failed {
+	if code, failed := results.SignalErrors["systemone:tone"]; failed {
 		t.Fatalf("the tone question shares the call with the guard and the PII question, which the stage waits for anyway; it timed out: %s", code)
 	}
-	if _, answered := results.SignalValues["decision:tone"]; !answered {
+	if _, answered := results.SignalValues["systemone:tone"]; !answered {
 		t.Fatalf("tone has no answer: %v", results.SignalValues)
 	}
 	// Asked alone, the question still stops at its own timeout.
 	classifier.Config.JailbreakRules, classifier.Config.PIIRules = nil, nil
 	results = evaluateOneCall(t, classifier, "please refund the billing for my order once more", nil)
-	if code := results.SignalErrors["decision:tone"]; code != decisionSignalErrorPrefix+"timeout" {
+	if code := results.SignalErrors["systemone:tone"]; code != systemOneSignalErrorPrefix+"timeout" {
 		t.Fatalf("alone, the tone question times out at 100 ms: %q", code)
 	}
 }

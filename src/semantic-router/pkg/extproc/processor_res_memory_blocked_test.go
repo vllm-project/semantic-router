@@ -32,7 +32,7 @@ func TestBlockedResponseRecordsMemoryPersistenceReceipt(t *testing.T) {
 			if tc.classifyFailure {
 				server = newJailbreakFailingServer(t)
 			}
-			router, ctx := newResponseStageRouter(t, server, config.OnErrorBlock, "block")
+			router, ctx := newResponseStageRouter(t, server, config.ResponseGuardBlock, config.ResponseGuardBlock)
 			router.Config.Memory.Enabled = true
 			router.Config.Memory.AutoStore = true
 			if !tc.noExtractor {
@@ -83,7 +83,7 @@ func TestUnscheduledResponseMemoryStoreRecordsTerminalReceipt(t *testing.T) {
 		autoStoreOff         bool
 		noExtractor          bool
 	}{
-		{name: "blocked", status: "policy_blocked", reason: "hallucination_blocked"},
+		{name: "blocked", status: "policy_blocked", reason: "response_blocked"},
 		{name: "opt_out", status: "disabled", reason: "auto_store_off", autoStoreOff: true},
 		{name: "no_extractor", status: "disabled", reason: "no_extractor", noExtractor: true},
 	} {
@@ -106,7 +106,7 @@ func TestUnscheduledResponseMemoryStoreRecordsTerminalReceipt(t *testing.T) {
 			_, err := recorder.AddRecord(routerreplay.RoutingRecord{ID: tc.name})
 			require.NoError(t, err)
 
-			router.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", "hallucination_blocked", false)
+			router.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", "response_blocked", false)
 			require.NoError(t, recorder.DrainOutcomes())
 			record, found := recorder.GetRecord(tc.name)
 			require.True(t, found)

@@ -57,8 +57,8 @@ func TestDecisionPluginActivationMatchesEveryRuntimeGetter(t *testing.T) {
 					want = decision.IsSystemPromptEnabled()
 				case *HeaderMutationPluginConfig:
 					want = decision.GetHeaderMutationConfig() != nil
-				case *HallucinationPluginConfig:
-					want = decision.GetHallucinationConfig().Enabled
+				case *ResponseGuardPluginConfig:
+					want = decision.GetResponseGuardConfig() != nil
 				case *RouterReplayPluginConfig:
 					want = decision.GetRouterReplayConfig().Enabled
 				case *RAGPluginConfig:
@@ -71,8 +71,6 @@ func TestDecisionPluginActivationMatchesEveryRuntimeGetter(t *testing.T) {
 					want = decision.GetToolSelectionConfig().Enabled
 				case *RequestParamsPluginConfig:
 					want = decision.GetRequestParamsConfig() != nil
-				case *ResponseJailbreakPluginConfig:
-					want = decision.GetResponseJailbreakConfig().Enabled
 				case *ContextCompressionPluginConfig:
 					want = decision.GetContextCompressionConfig().Enabled
 				case *PromptCachePluginConfig:

@@ -120,7 +120,7 @@ func (r *OpenAIRouter) buildLooperBackendDispatchResponse(
 	}
 	common.HeaderMutation.RemoveHeaders = append(
 		common.HeaderMutation.RemoveHeaders,
-		looperInternalHeadersForRemoval()...,
+		providerBoundRemovals()...,
 	)
 	setHeaderValue(common.HeaderMutation, headers.VSRSelectedModel, modelName)
 	return r.finalizeProviderDispatchResponse(dispatch, response, ctx)

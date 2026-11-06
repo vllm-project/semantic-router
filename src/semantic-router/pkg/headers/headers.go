@@ -22,6 +22,10 @@ const (
 	// when router-derived session IDs are insufficient.
 	XSessionID = "x-session-id"
 
+	// XConversationID is the default header Router Learning protection reads a
+	// stable conversation identifier from.
+	XConversationID = "x-conversation-id"
+
 	// XClaudeCodeSessionID is the per-conversation UUID the Claude Code CLI
 	// emits on every /v1/messages request belonging to the same chat thread.
 	// The router mirrors this into RequestContext.SessionID with priority
@@ -51,6 +55,14 @@ const (
 	// omits or demotes to replay are emitted inline for that request — the
 	// debug/replay-mode trigger for the v0.4 header surface. See issue #2216.
 	VSRDebug = "x-vsr-debug"
+
+	// VSRCacheControl is the default header of the response_cache plugin's
+	// request controls; request_controls.header names another.
+	VSRCacheControl = "x-vsr-cache-control"
+
+	// VSRCompressionControl is the default header of the context_compression
+	// plugin's request controls; request_controls.header names another.
+	VSRCompressionControl = "x-vsr-compression-control"
 )
 
 // VSR Decision Tracking Headers
@@ -187,6 +199,9 @@ const (
 	// VSRCacheHit indicates that the response was served from cache.
 	// Value: "true"
 	VSRCacheHit = "x-vsr-cache-hit"
+
+	// VSRCacheSimilarity is the similarity score of the response-cache lookup.
+	VSRCacheSimilarity = "x-vsr-cache-similarity"
 
 	// Retention directive headers expose the matched decision's EMIT retention
 	// block to the inference pool / operators (issue #2009). They are emitted
@@ -325,9 +340,9 @@ const (
 	// Example: "image_input,audio_input"
 	VSRMatchedInputModality = "x-vsr-matched-input-modality"
 
-	// VSRMatchedDecisionModel contains comma-separated list of matched decision
-	// signals answered by a decision model: noul and score rule names, and
-	// "rule:choice" for choice questions.
+	// VSRMatchedDecisionModel contains comma-separated list of matched systemone
+	// rules: rule names, "rule:choice" for choice questions and "rule:label"
+	// for set and span labels.
 	// Example: "needs_reasoning,request_kind:code"
 	VSRMatchedDecisionModel = "x-vsr-matched-decision-model"
 
@@ -364,18 +379,22 @@ const (
 )
 
 // Response Warnings Header (v0.4)
-// VSRResponseWarnings consolidates the response-quality warnings into a single
-// comma-separated header on the default response surface (#2204, #2200). The
-// per-warning detail (hallucination spans, jailbreak type/confidence,
-// fact-check verification context) stays in the replay record, recoverable via
-// x-vsr-replay-id. Absent when no warnings were produced.
+// VSRResponseWarnings carries, comma-separated, the codes of the selected
+// decision's response_guard rules that annotated the answer (#2204, #2200).
+// The per-warning detail (hallucination spans, jailbreak type/confidence)
+// stays in the replay record, recoverable via x-vsr-replay-id. Absent when no
+// rule annotated.
 const (
 	VSRResponseWarnings = "x-vsr-response-warnings"
 
-	// Warning codes carried, in order, in the VSRResponseWarnings value.
+	// Warning codes carried, in rule order, in the VSRResponseWarnings value:
+	// a rule over a hallucination signal (unverified_factual when the answer
+	// could not be checked), over a response-stage jailbreak signal, or over
+	// any other signal.
 	ResponseWarningHallucination     = "hallucination"
 	ResponseWarningUnverifiedFactual = "unverified_factual"
 	ResponseWarningJailbreak         = "response_jailbreak"
+	ResponseWarningGuard             = "response_guard"
 )
 
 // Auth Backend Injected Headers
@@ -451,6 +470,12 @@ const (
 	// VSROutcomePrincipal carries an opaque, server-attested identity used to
 	// isolate outcome-ingest rate limits. It is not persisted with the outcome.
 	VSROutcomePrincipal = "x-vsr-outcome-principal"
+
+	// VSRSystemOneBackend marks a System One request one Router forwards to
+	// another, so the receiving Router refuses to forward it again. It only
+	// restricts the receiving request; it never grants authorization or
+	// trusts a caller's identity.
+	VSRSystemOneBackend = "x-vsr-systemone-backend"
 )
 
 // Retired Looper hop headers. Looper hops run in process with their context
@@ -461,6 +486,7 @@ const (
 	VSRLooperIteration = "x-vsr-looper-iteration"
 	VSRLooperDecision  = "x-vsr-looper-decision"
 	VSRFusionDepth     = "x-vsr-fusion-depth"
+	VSRLooperSecret    = "x-vsr-looper-secret" // #nosec G101 -- header name, not a credential
 )
 
 // VSR Cross-Model KV Transfer Request Headers (issue #2976)

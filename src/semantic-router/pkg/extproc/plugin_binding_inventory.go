@@ -42,10 +42,12 @@ func (r *OpenAIRouter) InspectPluginBinding(binding pluginruntime.Binding, plugi
 		add("memory_store", r.MemoryStore != nil)
 	case *config.RouterReplayPluginConfig:
 		add("replay_store", r.ReplayRecorder != nil || r.ReplayRecorders[config.RoutingDecisionKey(binding.Recipe, binding.Decision)] != nil)
-	case *config.HallucinationPluginConfig:
-		add("hallucination_detector", classifier != nil && classifier.IsHallucinationDetectorReady())
-	case *config.ResponseJailbreakPluginConfig:
-		add("response_jailbreak_classifier", classifier != nil && classifier.IsJailbreakEnabled())
+	case *config.ResponseGuardPluginConfig:
+		for _, signalType := range []string{config.SignalTypeJailbreak, config.SignalTypeHallucination} {
+			if policy.Reads(signalType) {
+				add(signalType+"_signal", classifier != nil && classifier.ResponseSignalReady(signalType))
+			}
+		}
 	case *config.ToolsPluginConfig:
 		if policy.SelectionEnabled() {
 			add("tool_retriever", r.ToolsDatabase != nil && r.ToolsDatabase.IsEnabled())

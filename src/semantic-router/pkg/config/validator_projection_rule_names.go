@@ -168,7 +168,7 @@ func collectActionRuleNames(rules []ActionRule) map[string]struct{} {
 	return names
 }
 
-func collectDecisionSignalRuleNames(rules []DecisionSignalRule) map[string]struct{} {
+func collectSystemOneRuleNames(rules []SystemOneRule) map[string]struct{} {
 	names := make(map[string]struct{}, len(rules))
 	for _, rule := range rules {
 		names[rule.Name] = struct{}{}

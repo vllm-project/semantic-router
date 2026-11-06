@@ -161,11 +161,9 @@ ROUTE factual_route {
   WHEN keyword("factual")
   MODEL model
   PLUGIN semantic_cache { enabled: true, similarity_threshold: 0.9, ttl_seconds: 900 }
-  PLUGIN hallucination {
-    enabled: true
-    hallucination_action: "header"
-    unverified_factual_action: "header"
-    include_hallucination_details: true
+  PLUGIN response_guard {
+    rules: [{ when: { type: "keyword", name: "factual" }, action: "annotate", details: true }]
+    on_unknown: "none"
   }
 }`
 	cfg, errs := Compile(input)
@@ -176,7 +174,7 @@ ROUTE factual_route {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"ttl_seconds: 900", `unverified_factual_action: "header"`, "include_hallucination_details: true"} {
+	for _, expected := range []string{"ttl_seconds: 900", `on_unknown: "none"`, "details: true"} {
 		if !strings.Contains(text, expected) {
 			t.Fatalf("decompiled DSL is missing %q:\n%s", expected, text)
 		}
