@@ -7,9 +7,11 @@ This GB10 experiment compares the proposals in
   registration requirement.
 - **B:** leave it uninstalled and register `gdn_prep` when FLA is available.
 
-Both already classify optional causal-conv1d as approximate, so non-consenting
-models compare reference against reference. Classification evidence and the
-selection change for installed hosts are in the
+These are historical experimental variants: both classify optional causal-conv1d
+as approximate, so non-consenting models compare reference against reference.
+The final PR retains the existing installed-package preference instead; these
+results do not qualify that final policy on installed hosts. Numerical
+implementation differences are in the
 [direct convolution record](cuda-causal-conv1d-exactness.md).
 
 ## Environment and method
@@ -18,11 +20,44 @@ selection change for installed hosts are in the
   PyTorch 2.10.0+cu128, Triton 3.6.0, FLA 0.5.2.
 - **Source:** A at `7f3b80438235e9dd8e2c91ccec7b51cfa720cea1`; B removes the
   causal-conv1d registration requirement and uninstalls the package. A's wheel
-  capability filter has no effect on sm_121; final B ships no wheel/filter.
+  capability filter has no effect on sm_121; the final PR ships no wheel/filter.
 - **Both variants:** cuBLAS 12.9.1.4 for
   [#5640](https://github.com/vllm-project/semantic-router/issues/5640), and the
   same test-only MemAvailable placement workaround for GB10 unified memory
   ([#5298](https://github.com/vllm-project/semantic-router/issues/5298)).
+
+The original A commit is retained as provenance, not relabeled as the PR head.
+Its runtime source is recoverable from ancestor
+`df9e9373a3a3f9fad0f58b0e07026494e3c508fb`, which is reachable from this PR,
+plus [A's runtime patch](cuda-gdn-prep-variant-a.patch). The recovered
+`vllm_srun` files match the archived A snapshot byte for byte. B starts from
+that same source and applies [B's gate patch](cuda-gdn-prep-variant-b.patch);
+it was an uncommitted experiment, not a separate commit. The JSON records both
+CUDA source hashes. The image identifier above the results in the JSON is a
+local Docker image ID, not a registry manifest digest:
+`sha256:a852d0e2d1119bbf17ae8d17e11e16d3951849cabcb20b656b6ad4170e7a0d66`.
+
+To reconstruct the experimental runtime source from the repository root
+(use a fresh destination):
+
+```bash
+mkdir /tmp/gdn-a
+git archive df9e9373a3a3f9fad0f58b0e07026494e3c508fb src/model-runtime | tar -x -C /tmp/gdn-a
+git -C /tmp/gdn-a apply --unidiff-zero "$PWD/src/model-runtime/docs/records/cuda-gdn-prep-variant-a.patch"
+cp -a /tmp/gdn-a /tmp/gdn-b
+git -C /tmp/gdn-b apply --unidiff-zero "$PWD/src/model-runtime/docs/records/cuda-gdn-prep-variant-b.patch"
+```
+
+Run each reconstructed source in a separate container based on the recorded image, with that runtime mounted on
+`PYTHONPATH`. Install causal-conv1d 1.7.0 in A and remove it in B; apply the
+shared cuBLAS adjustment above in both. The [archived probe](cuda-gdn-prep-ab-probe.txt)
+contains the exact placement workaround, golden requests and timing loop.
+Mount verified model snapshots at `/cache/srun`, a writable output directory
+at `/evidence`, and invoke `python probe.py A Decision-2.0-Eos-0.8B --bench`
+(or B in its container). Copy the archived probe to `probe.py` first.
+Use the model revisions in the JSON and the corresponding source's `tools/`
+directory. These instructions reconstruct the historical experiment; they do
+not claim a new run on the final PR revision.
 
 Each variant runs in a separate process in the same local CUDA image, using
 verified, pinned downloads without executing model-package code.

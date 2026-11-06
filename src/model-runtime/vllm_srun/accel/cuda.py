@@ -1,8 +1,8 @@
 """CUDA accelerator (hardware records: ``docs/records/cuda-*.md``).
 
 Fused Triton kernels require Ampere and family consent; gated-delta prep also
-needs FLA, but not causal-conv1d. Optional causal-conv1d is non-bit-exact on CUDA,
-so exact/non-consenting models select the reference convolution.
+needs FLA, but not causal-conv1d. Convolution selection retains the shared GPU
+policy: use causal-conv1d when installed, otherwise the torch reference.
 
 Evidence under ``docs/records/``: ``cuda-fused-approximate.md``,
 ``cuda-causal-conv1d-exactness.md`` and ``cuda-gdn-prep-without-causal-conv1d.md``.
@@ -10,7 +10,6 @@ Evidence under ``docs/records/``: ``cuda-fused-approximate.md``,
 
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import Any
 
 import torch
@@ -39,10 +38,6 @@ class CUDAAccelerator(GPUAccelerator):
 
     def kernels(self, device: DeviceInfo) -> KernelSet:
         kernels = super().kernels(device)
-        kernels.available["causal_conv1d"] = [
-            replace(kernel, exact=False) if kernel.source == "causal-conv1d" else kernel
-            for kernel in kernels.available.get("causal_conv1d", [])
-        ]
         capability = (device.arch or "").removeprefix("sm_")
         if (
             not capability.isdigit()

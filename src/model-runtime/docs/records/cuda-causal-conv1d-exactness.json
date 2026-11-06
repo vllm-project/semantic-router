@@ -1,6 +1,6 @@
 {
   "schema": "cuda-causal-conv1d-exactness/1",
-  "recorded_at": "2026-11-02T07:39:11.466316+00:00",
+  "recorded_at": "2026-11-06T06:32:52.187274+00:00",
   "device": "NVIDIA GB10",
   "arch": "sm_121",
   "torch": "2.10.0+cu128",
@@ -9453,5 +9453,8 @@
         }
       }
     }
-  ]
+  ],
+  "source_commit": "25b423e60f3ea0de2c1f26dd3bf13f367e02205a",
+  "image_id": "sha256:a852d0e2d1119bbf17ae8d17e11e16d3951849cabcb20b656b6ad4170e7a0d66",
+  "source_note": "Fresh run from git archive of source_commit, mounted read-only; local image ID, not registry manifest digest. Reproduces all cases in the 2026-11-02 record."
 }

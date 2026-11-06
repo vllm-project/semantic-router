@@ -1917,5 +1917,26 @@
         "B": {}
       }
     }
-  ]
+  ],
+  "provenance": {
+    "original_source_commit": "7f3b80438235e9dd8e2c91ccec7b51cfa720cea1",
+    "reconstruction_base_commit": "df9e9373a3a3f9fad0f58b0e07026494e3c508fb",
+    "runtime_scope": "src/model-runtime/vllm_srun; archived runtime A matches original source byte for byte",
+    "variant_A": {
+      "patch": "cuda-gdn-prep-variant-a.patch",
+      "causal_conv1d": "1.7.0",
+      "cuda_py_sha256": "56cbc9692f77a95eb9a43747ff2abf8f1d4b0211079fddab92b0c3f7783cebf5"
+    },
+    "variant_B": {
+      "source_commit": "7f3b80438235e9dd8e2c91ccec7b51cfa720cea1",
+      "additional_patch": "cuda-gdn-prep-variant-b.patch",
+      "causal_conv1d": null,
+      "cuda_py_sha256": "584ab0821152bd55678f192e8da581e524dc92e51c1f8b8c0ca15eb78298b07c"
+    },
+    "probe": "cuda-gdn-prep-ab-probe.txt",
+    "probe_sha256": "280d7d3f820514f60918c0337c422e3e1171d3a3c59701e26c2f4ffa5a4f46d5",
+    "image_id": "sha256:a852d0e2d1119bbf17ae8d17e11e16d3951849cabcb20b656b6ad4170e7a0d66",
+    "image_note": "Local Docker image ID, not a registry manifest digest; source mounted separately.",
+    "final_policy_coverage": "Historical variants both classify causal-conv1d approximate. No rerun of final installed-host selection policy is claimed."
+  }
 }

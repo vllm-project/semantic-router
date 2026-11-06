@@ -1,12 +1,18 @@
 # CUDA causal-conv1d exactness
 
 Directly comparing `_wrap_conv(causal_conv1d_fn)` with `causal_conv1d_ref`
-produces deterministic bit differences, supporting `exact=False` on CUDA.
+produces deterministic bit differences. This is evidence about numerical
+implementations, not a change to the released-runtime selection policy.
 The [A/B model experiment](cuda-gdn-prep-without-causal-conv1d.md) tests a
-separate question: both variants already apply this classification.
+separate question: both historical variants classified causal-conv1d as approximate.
 
 ## Reproduce
 
+Check out source commit `25b423e60f3ea0de2c1f26dd3bf13f367e02205a`.
+The fresh run used an immutable `git archive` of that commit mounted read-only
+in local CUDA image
+`sha256:a852d0e2d1119bbf17ae8d17e11e16d3951849cabcb20b656b6ad4170e7a0d66`
+(a local Docker image ID, not a registry manifest digest).
 From `src/model-runtime`, with the runtime and a matching causal-conv1d 1.7.0
 wheel installed:
 
@@ -27,7 +33,7 @@ row-major order; SHA256 uses the byte order recorded in the JSON.
 
 ## Environment and cases
 
-- **2026-11-02:** GB10, sm_121, aarch64, driver 580.173.02; PyTorch 2.10.0+cu128,
+- **2026-11-06 rerun:** GB10, sm_121, aarch64, driver 580.173.02; PyTorch 2.10.0+cu128,
   CUDA 12.8, cuDNN 91002, causal-conv1d 1.7.0 (CUDA 12 / torch 2.10 / cp312 wheel).
 - **cuDNN:** TF32 allowed; benchmark and deterministic flags off. No flags overridden.
 - **Inputs:** CPU float32 normal samples, seed 17, then dtype cast/device copy.
@@ -42,6 +48,11 @@ row-major order; SHA256 uses the byte order recorded in the JSON.
   (the native GDN activation) and without activation (diagnostic).
 
 ## Results
+
+The 2026-11-06 rerun reproduces all 48 case records from 2026-11-02 exactly,
+including tensor hashes, bits and comparisons. The JSON now records this
+fresh run with its actual commit and image; the original run did not record
+that provenance. No model A/B results were rerun or relabeled.
 
 All 48 cases are finite and deterministic. Each row aggregates four shapes
 and two layouts:
@@ -80,17 +91,21 @@ The JSON includes all input, weight and output bits for this case.
 
 ## Selection impact
 
-A deterministic counterexample rejects an unconditional `exact=True` for the
-slot, even though some tested modes are exact. Approximate classification
-keeps the optional kernel behind consent. For hosts with causal-conv1d installed:
+The probe disproves unconditional bit equality between these two implementations
+on the recorded stack. It does not establish which implementation each released
+model runtime uses. Decision 1.0 Qwen and BF16 Decision 3.0 use causal-conv1d on
+CUDA hosts where it is installed; changing them to torch reference would move
+away from that runtime. This PR therefore retains the existing `exact=True`
+registration and installed-package preference; changing that classification is
+outside its scope.
 
 | Selection | Before PR | After PR |
 | --- | --- | --- |
-| approximate allowed | causal-conv1d | causal-conv1d |
-| exact-only or family does not consent | causal-conv1d | torch reference |
+| causal-conv1d installed, with or without approximate consent | causal-conv1d | causal-conv1d |
+| causal-conv1d absent | torch reference | torch reference |
 
-The standard CUDA image has no causal-conv1d and already uses reference for
-exact/non-consenting models. The A/B record compares reference against reference
-there; it does not establish unchanged pre-PR outputs on installed hosts.
-These results cover the recorded GB10 stack, not every GPU/version or a full
-model-accuracy evaluation.
+The standard CUDA image has no causal-conv1d. The historical A/B record applied
+an approximate classification in both variants, so its non-consenting models
+compared reference against reference. It does not validate the final policy on
+installed hosts. These results cover the recorded GB10 stack, not every
+GPU/version or a full model-accuracy evaluation.

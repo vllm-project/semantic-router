@@ -72,11 +72,21 @@ def test_the_receipt_lists_only_the_kernels_the_model_may_select(fused_module):
     assert kernels.describe()["add_rmsnorm"] == "triton-gfx942"
 
 
+@pytest.fixture(params=[False, True], ids=["without-FLA", "with-FLA"])
+def fla_installed(request):
+    return request.param
+
+
 @pytest.fixture(
     params=[False, True], ids=["without-causal-conv1d", "with-causal-conv1d"]
 )
-def fla_kernels(request, monkeypatch, fused_module):
-    """FLA is installed; causal-conv1d is optional, as on CUDA hosts."""
+def causal_conv1d_installed(request):
+    return request.param
+
+
+@pytest.fixture
+def optional_kernels(monkeypatch, fused_module, fla_installed, causal_conv1d_installed):
+    """Exercise all four FLA/causal-conv1d installation combinations."""
     from vllm_srun.accel import gpu
 
     def conv(x, weight, bias=None, activation=None):
@@ -94,36 +104,33 @@ def fla_kernels(request, monkeypatch, fused_module):
     ):
         return v, None
 
-    found = {"fla.ops.gated_delta_rule": delta}
-    if request.param:
+    found = {}
+    if fla_installed:
+        found["fla.ops.gated_delta_rule"] = delta
+    if causal_conv1d_installed:
         found["causal_conv1d"] = conv
     monkeypatch.setattr(gpu, "_optional", lambda module, attribute: found.get(module))
-    return request.param
 
 
 @pytest.mark.parametrize("arch", ["sm_70", "sm_75", "sm_89", "sm_121"])
-def test_exact_kernels_keep_the_reference_convolution(fla_kernels, arch):
-    # Numerical evidence: docs/records/cuda-causal-conv1d-exactness.md.
-    # This test enforces selection policy; its stubs do not prove exactness.
-    kernels = cuda.CUDAAccelerator().kernels(device(arch))
-    assert kernels.select("causal_conv1d").source == "torch-reference"
-    assert not kernels.has("gdn_prep")
-    assert kernels.select("chunk_gated_delta_rule").source == "fla"
-
-
-def test_consenting_families_get_fused_prep_without_requiring_causal_conv1d(
-    fla_kernels,
+@pytest.mark.parametrize("allow_approximate", [False, True])
+def test_optional_kernels_preserve_convolution_selection_and_gate_fused_prep(
+    optional_kernels, fla_installed, causal_conv1d_installed, arch, allow_approximate
 ):
-    kernels = cuda.CUDAAccelerator().kernels(device("sm_121"))
-    kernels.allow_approximate = True
+    kernels = cuda.CUDAAccelerator().kernels(device(arch))
+    kernels.allow_approximate = allow_approximate
+    # Keep the released runtime's installed-package preference in both modes.
+    # These stubs check selection policy, not numerical exactness.
     assert kernels.select("causal_conv1d").source == (
-        "causal-conv1d" if fla_kernels else "torch-reference"
+        "causal-conv1d" if causal_conv1d_installed else "torch-reference"
     )
-    assert kernels.select("gdn_prep").source == "triton-gfx942"
-    # Fused kernels still require Ampere, independently of causal-conv1d.
-    turing = cuda.CUDAAccelerator().kernels(device("sm_75"))
-    turing.allow_approximate = True
-    assert not turing.has("gdn_prep")
+    assert kernels.select("chunk_gated_delta_rule").source == (
+        "fla" if fla_installed else "torch-reference"
+    )
+    expected_prep = fla_installed and allow_approximate and int(arch[3:]) >= 80
+    assert kernels.has("gdn_prep") is expected_prep
+    if expected_prep:
+        assert kernels.select("gdn_prep").source == "triton-gfx942"
 
 
 @pytest.mark.parametrize("consents", [False, True])
