@@ -33,7 +33,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import replace
-from typing import Any, ClassVar, cast
+from typing import Any, ClassVar, Hashable, cast
 
 import torch
 
@@ -87,6 +87,9 @@ class StateOnceModel(Decision3Model):
 
     shared_context_default: ClassVar[bool] = True
     merges_shared_batches: ClassVar[bool] = True
+    # A branched run holds rows of any size: ``_forwards`` splits it by the
+    # backbone's own forward budget, encoding each distinct state once.
+    splits_forwards: ClassVar[bool] = True
 
     # ------------------------------------------------------------------ planning
 
@@ -918,15 +921,16 @@ class StateOnceModel(Decision3Model):
         return self._readout(items, ids, mask, last, None, states)
 
     def _branch_forwards(self, items: list[Item]) -> list[list[float] | None]:
-        order: dict[int, int] = {}
+        order: dict[Hashable, int] = {}
         states: list[RequestState] = []
         members: list[list[int]] = []
         for index, item in enumerate(items):
             state = item.state
             assert state is not None, "a state-once question names its state"
-            slot = order.get(id(state))
+            key = self._state_key(state)
+            slot = order.get(key)
             if slot is None:
-                slot = order[id(state)] = len(states)
+                slot = order[key] = len(states)
                 states.append(state)
                 members.append([])
             members[slot].append(index)
@@ -976,6 +980,20 @@ class StateOnceModel(Decision3Model):
             for index, value in zip(picked, values, strict=True):
                 out[index] = value
         return out
+
+    @staticmethod
+    def _state_key(state: RequestState) -> Hashable:
+        """What groups a state's rows into one encode, across requests and questions.
+
+        Text states key by content (their token ids and question-block
+        openings), so the equal states of concurrent requests that arrive as
+        separate calls encode once. A media state keys per object: its
+        processed media is per-request, and the media caches already dedupe
+        the costly part (``cache.py``).
+        """
+        if state.media is not None:
+            return id(state)
+        return (state.ids, state.opening)
 
     def _forwards(
         self, states: list[RequestState], members: list[list[int]], items: list[Item]

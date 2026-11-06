@@ -905,6 +905,10 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
     says each item names its own shared context (a state-once model's state),
     so one shared-context batch may hold several requests: the batcher then
     packs whole requests into shared forwards.
+    ``splits_forwards`` says ``run`` splits a batch over the forward token
+    budget itself (a state-once family's branched forwards), so the batcher
+    may pack rows costlier than the budget into one batch instead of running
+    each alone.
 
     ``device_thread`` False says ``run`` never starts a parallel torch op (an
     ONNX Runtime engine with NumPy readouts): the scheduler then calls it on
@@ -919,6 +923,7 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
     device_thread: ClassVar[bool] = True
     shared_context_default: ClassVar[bool] = False
     merges_shared_batches: ClassVar[bool] = False
+    splits_forwards: ClassVar[bool] = False
     batch_invariant: bool = False
     packs_rows: bool = False
     packs_merged_rows: bool = False

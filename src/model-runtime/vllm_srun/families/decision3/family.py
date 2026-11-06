@@ -568,17 +568,25 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         return cap if limit is None else min(cap, limit)
 
     def calibration_items(self, rows: int, row_tokens: int) -> list[Item] | None:
-        """Text rows of ``row_tokens`` tokens of a two-option question, for the startup calibration."""
+        """Text rows of ``row_tokens`` tokens of a two-option question, for the startup calibration.
+
+        Each row's tokens rotate by its index: the rows stay uniform in shape
+        but content-distinct, because the burst calibration times the
+        no-sharing case (``_branch_forwards`` encodes equal states once).
+        """
         filler = self.tokenizer.encode(
             "Decide whether this request needs a careful answer. ",
             add_special_tokens=False,
         ).ids
-        ids = list(itertools.islice(itertools.cycle(filler), row_tokens))
+        base = list(itertools.islice(itertools.cycle(filler), row_tokens))
         return [
             Item(
                 question_id=f"calibration{row}",
                 task_type="noul",
-                ids=ids,
+                # Rotation by row % len: rows 0..len-1 differ, and any further
+                # rows wrap without repeating an earlier rotation's content
+                # before len(base) rotations.
+                ids=base[row % len(base):] + base[: row % len(base)],
                 keys=["false", "true"],
                 descriptions=[None, None],
             )
