@@ -26,6 +26,10 @@ def fused_module(monkeypatch):
         "_optional",
         lambda module, attribute: "3.6.0" if module == "triton" else None,
     )
+    # Neither causal-conv1d nor FLA, whatever the test environment installs.
+    from vllm_srun.accel import gpu
+
+    monkeypatch.setattr(gpu, "_optional", lambda module, attribute: None)
     return module
 
 
@@ -51,7 +55,7 @@ def test_allowed_approximate_kernels_select_the_fused_kernels(fused_module):
     kernels = cuda.CUDAAccelerator().kernels(device("sm_100"))
     kernels.allow_approximate = True
     assert fused_sources(kernels) == set(FUSED)
-    # gated-delta prep reproduces causal-conv1d, so it needs causal-conv1d and FLA
+    # Without FLA, the fused gated-delta layers cannot run.
     assert not kernels.has("gdn_prep")
 
 
@@ -66,6 +70,69 @@ def test_the_receipt_lists_only_the_kernels_the_model_may_select(fused_module):
     assert "add_rmsnorm" not in kernels.describe()
     kernels.allow_approximate = True
     assert kernels.describe()["add_rmsnorm"] == "triton-gfx942"
+
+
+@pytest.fixture(params=[False, True], ids=["without-FLA", "with-FLA"])
+def fla_installed(request):
+    return request.param
+
+
+@pytest.fixture(
+    params=[False, True], ids=["without-causal-conv1d", "with-causal-conv1d"]
+)
+def causal_conv1d_installed(request):
+    return request.param
+
+
+@pytest.fixture
+def optional_kernels(monkeypatch, fused_module, fla_installed, causal_conv1d_installed):
+    """Exercise all four FLA/causal-conv1d installation combinations."""
+    from vllm_srun.accel import gpu
+
+    def conv(x, weight, bias=None, activation=None):
+        return x
+
+    def delta(
+        q,
+        k,
+        v,
+        g=None,
+        beta=None,
+        initial_state=None,
+        output_final_state=False,
+        use_qk_l2norm_in_kernel=False,
+    ):
+        return v, None
+
+    found = {}
+    if fla_installed:
+        found["fla.ops.gated_delta_rule"] = delta
+    if causal_conv1d_installed:
+        found["causal_conv1d"] = conv
+    monkeypatch.setattr(gpu, "_optional", lambda module, attribute: found.get(module))
+
+
+@pytest.mark.parametrize("arch", ["sm_70", "sm_75", "sm_89", "sm_121"])
+@pytest.mark.parametrize("allow_approximate", [False, True])
+def test_optional_kernels_require_consent_for_cuda_conv_and_fused_prep(
+    optional_kernels, fla_installed, causal_conv1d_installed, arch, allow_approximate
+):
+    kernels = cuda.CUDAAccelerator().kernels(device(arch))
+    kernels.allow_approximate = allow_approximate
+    # Optional CUDA convolution needs consent, independently of FLA and arch.
+    # These stubs check selection policy, not numerical exactness.
+    assert kernels.select("causal_conv1d").source == (
+        "causal-conv1d"
+        if causal_conv1d_installed and allow_approximate
+        else "torch-reference"
+    )
+    assert kernels.select("chunk_gated_delta_rule").source == (
+        "fla" if fla_installed else "torch-reference"
+    )
+    expected_prep = fla_installed and allow_approximate and int(arch[3:]) >= 80
+    assert kernels.has("gdn_prep") is expected_prep
+    if expected_prep:
+        assert kernels.select("gdn_prep").source == "triton-gfx942"
 
 
 @pytest.mark.parametrize("consents", [False, True])
