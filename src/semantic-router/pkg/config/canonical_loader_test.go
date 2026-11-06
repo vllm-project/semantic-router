@@ -409,8 +409,8 @@ global:
 	if cfg.Enabled {
 		t.Fatal("expected semantic cache enabled override to be false")
 	}
-	if cfg.PromptGuard.ModelID != "models/custom-jailbreak" {
-		t.Fatalf("expected prompt guard model to follow system override, got %q", cfg.PromptGuard.ModelID)
+	if got := effectiveModel(t, cfg, "prompt_guard"); got != "models/custom-jailbreak" {
+		t.Fatalf("expected prompt guard model to follow system override, got %q", got)
 	}
 	if cfg.Qwen3ModelPath != "models/mom-embedding-pro" {
 		t.Fatalf("expected semantic embedding model override, got %q", cfg.Qwen3ModelPath)
@@ -554,14 +554,14 @@ global:
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
 	}
 
-	if cfg.CategoryModel.ModelID != DefaultSystemModels().DomainClassifier {
-		t.Fatalf("expected sparse category override to keep default system model, got %q", cfg.CategoryModel.ModelID)
-	}
-	if cfg.PIIModel.ModelID != DefaultSystemModels().PIIClassifier {
-		t.Fatalf("expected sparse PII override to keep default system model, got %q", cfg.PIIModel.ModelID)
-	}
-	if cfg.PromptGuard.ModelID != DefaultSystemModels().PromptGuard {
-		t.Fatalf("expected sparse prompt-guard override to keep default system model, got %q", cfg.PromptGuard.ModelID)
+	for consumer, want := range map[string]string{
+		"domain_classifier": DefaultSystemModels().DomainClassifier,
+		"pii_classifier":    DefaultSystemModels().PIIClassifier,
+		"prompt_guard":      DefaultSystemModels().PromptGuard,
+	} {
+		if got := effectiveModel(t, cfg, consumer); !sameModel(got, want) {
+			t.Fatalf("expected sparse %s override to keep default system model, got %q", consumer, got)
+		}
 	}
 	if cfg.Classifier.PreferenceModel.ContrastiveEnabled() {
 		t.Fatal("expected sparse classifier override to preserve default preference judgment mode")

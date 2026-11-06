@@ -16,7 +16,6 @@ providers:
           base_url: http://inference.example:8000/v1
           provider: vllm
           api_key_env: VSR_BACKEND_API_KEY
-          compat_gateway: true
           weight: 100
 routing:
   modelCards:

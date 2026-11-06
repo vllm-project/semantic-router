@@ -151,11 +151,6 @@ func appendEffectiveProviderBinding(
 	if err := applyBindingAPIFormat(model.Alias, bindingIndex, binding.Protocol, params); err != nil {
 		return err
 	}
-	if provider.Instance.CompatGateway {
-		if err := ValidateCompatGateway(provider.Definition.ID, binding.Protocol); err != nil {
-			return fmt.Errorf("providers.models[%s].backend_refs[%d]: %w", model.Alias, bindingIndex, err)
-		}
-	}
 	credential, err := applyBindingMetadata(model.Alias, effective, params)
 	if err != nil {
 		return err
@@ -284,8 +279,7 @@ func materializedProviderProfile(
 		ExtraHeaders:       mergeProviderHeaders(provider.Definition.DefaultHeaders, provider.Instance.Headers),
 		APIVersion:         provider.Instance.APIVersion, AuthHeader: provider.Instance.AuthHeader,
 		AuthPrefix: provider.Instance.AuthPrefix, AuthPrefixSet: provider.Instance.AuthPrefixSet,
-		ChatPath:      provider.Instance.ChatPath,
-		CompatGateway: provider.Instance.CompatGateway,
+		ChatPath: provider.Instance.ChatPath,
 	}
 }
 

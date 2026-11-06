@@ -20,14 +20,16 @@ Audio of up to 30 seconds is accepted at its original sampling rate.
 
 ## Turn it on
 
-Select the multimodal embedding model and add a signal that reads images:
+Select the multimodal embedding model and add a signal that reads images.
+`embeddings.multimodal` names its deployment, the pre-declared `omni-nano`
+(Vela 1.0 Omni Nano) unless you change it:
 
 ```yaml
 global:
   model_catalog:
     embeddings:
+      multimodal: omni-nano
       semantic:
-        multimodal_model_path: models/vela-1.0-omni-nano
         embedding_config:
           model_type: multimodal
 routing:
@@ -52,7 +54,9 @@ routing:
         - model: private-vision-model
 ```
 
-The router runs Omni on the CPU in the runtime. The thresholds of the
+The router runs Omni on the CPU in the runtime. To use Mini, declare a
+`model_runtime` deployment of `vllm-sr/Vela-1.0-Omni-Mini` and name it in
+`embeddings.multimodal`. The thresholds of the
 [image routing pack](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/embedding/image-routing.yaml)
 are calibrated for Omni Nano; check them again on your own images when you
 switch to Mini.

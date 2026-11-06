@@ -1,41 +1,132 @@
 import { useState } from 'react'
+import ConfigSaveWarnings from '../components/ConfigSaveWarnings'
+import { configSaveWarnings, type RouterConfigWarning } from '../utils/configSaveWarnings'
 import type { RouterConfig } from './dashboardPageTypes'
+import {
+  bindingKey,
+  bindingSpellings,
+  isSignalBindingKey,
+  isUnsafeBindingKey,
+  ruleTarget,
+  type RuleTarget,
+} from './modelBindings'
 import type { DecisionTaskBinding, DecisionTasks } from './useDecisionTasks'
 import type { Observation } from '../utils/dashboardObservation'
 import DecisionObservationStatus from './DecisionObservationStatus'
 import SystemOneSelect from './SystemOneSelect'
 import styles from './DecisionModelPage.module.css'
 
+const GLOBAL_BINDINGS_PATH = ['global', 'model_catalog', 'bindings']
+
+// The rule key a binding named a rule's model with before rules named it.
+const RULE_KEY_TYPES: Record<RuleTarget['collection'], string> = {
+  classifiers: 'classifier',
+  safety: 'safety',
+  complexity: 'complexity',
+  decision: 'decision',
+}
+
+// The legacy fields a rule named its model with; its deployment replaces them.
+const RULE_MODEL_FIELDS: Record<RuleTarget['collection'], string[]> = {
+  classifiers: ['type', 'model', 'model_path', 'use_cpu'],
+  safety: ['model'],
+  complexity: [],
+  decision: [],
+}
+
+function taskConsumer(binding: DecisionTaskBinding): string {
+  return binding.path[binding.path.length - 1] || binding.consumer
+}
+
+/** Where a task's model is configured: its rule's deployment or its signal type's binding. */
+function taskBindingLabel(binding: DecisionTaskBinding): string {
+  const rule = ruleTarget(taskConsumer(binding))
+  if (!rule) return bindingKey(taskConsumer(binding))
+  return `signals.${rule.collection}[${rule.rule ?? '*'}]${rule.hazard ? '.hazard' : ''}.deployment`
+}
+
+// The task catalog reports recipe-scoped paths; an explicit default recipe
+// holds the default routing of a recipes-only configuration.
+function routingPath(config: RouterConfig, binding: DecisionTaskBinding): string[] {
+  const path = binding.path.slice(0, -1)
+  if (
+    !['routing', 'recipes'].includes(path[0]) ||
+    path[path.length - 1] !== 'model_bindings' ||
+    binding.path.some(isUnsafeBindingKey)
+  )
+    throw new Error('This task does not expose an editable binding.')
+  const index = config.recipes?.findIndex((recipe) => recipe.name === binding.recipe) ?? -1
+  if (path[0] === 'routing' && index < 0) return ['routing']
+  if (index < 0) throw new Error('This recipe was removed. Refresh the task list.')
+  return ['recipes', String(index), 'routing']
+}
+
+function objectAt(root: unknown, path: readonly string[]): Record<string, unknown> {
+  let target = root as Record<string, unknown>
+  for (const part of path) {
+    if (target[part] === undefined) target[part] = {}
+    if (!target[part] || typeof target[part] !== 'object')
+      throw new Error('The binding configuration changed. Refresh before editing.')
+    target = target[part] as Record<string, unknown>
+  }
+  return target
+}
+
+function withRuleDeployment(
+  config: RouterConfig,
+  binding: DecisionTaskBinding,
+  rule: RuleTarget,
+  deployment: string | null,
+): RouterConfig {
+  const routing = objectAt(config, routingPath(config, binding))
+  const rules = (routing.signals as Record<string, unknown> | undefined)?.[rule.collection]
+  const matches = (Array.isArray(rules) ? rules : []).filter(
+    (item): item is Record<string, unknown> =>
+      Boolean(item) && typeof item === 'object' && (!rule.rule || item.name === rule.rule),
+  )
+  if (!matches.length) throw new Error('This rule was removed. Refresh the task list.')
+  const bindings = routing.model_bindings as Record<string, unknown> | undefined
+  if (bindings && typeof bindings === 'object') delete bindings[taskConsumer(binding)]
+  for (const item of matches) {
+    const owner = rule.hazard ? item.hazard : item
+    if (!owner || typeof owner !== 'object')
+      throw new Error('The binding configuration changed. Refresh before editing.')
+    const target = owner as Record<string, unknown>
+    for (const field of rule.hazard ? ['model'] : RULE_MODEL_FIELDS[rule.collection])
+      delete target[field]
+    if (deployment === null) delete target.deployment
+    else target.deployment = deployment
+    if (bindings && typeof bindings === 'object')
+      delete bindings[
+        `${RULE_KEY_TYPES[rule.collection]}.${item.name}${rule.hazard ? '.hazard' : ''}`
+      ]
+  }
+  return config
+}
+
+/**
+ * Names the deployment that answers a task, or removes it (null) so the task
+ * inherits: on the rule for a rule that asks its own question, else as the
+ * binding of its signal type.
+ */
 export function withDecisionTaskBinding(
   config: RouterConfig,
   binding: DecisionTaskBinding,
   deployment: string | null,
 ): RouterConfig {
   const next = structuredClone(config)
-  const path = [...binding.path]
-  if (path[0] === 'recipes') {
-    const index = next.recipes?.findIndex((recipe) => recipe.name === binding.recipe) ?? -1
-    if (index < 0) throw new Error('This recipe was removed. Refresh the task list.')
-    path[1] = String(index)
-  }
-  if (
-    !['routing', 'recipes', 'global'].includes(path[0]) ||
-    !path.includes('model_bindings') ||
-    path.some((part) => ['__proto__', 'constructor', 'prototype'].includes(part))
+  const rule = ruleTarget(taskConsumer(binding))
+  if (rule) return withRuleDeployment(next, binding, rule, deployment)
+  const key = bindingKey(taskConsumer(binding))
+  if (!isSignalBindingKey(key)) throw new Error('This task does not expose an editable binding.')
+  const target = objectAt(
+    next,
+    binding.source === 'global'
+      ? GLOBAL_BINDINGS_PATH
+      : [...routingPath(next, binding), 'model_bindings'],
   )
-    throw new Error('This task does not expose an editable binding.')
-  let target: Record<string, unknown> = next as unknown as Record<string, unknown>
-  for (const part of path.slice(0, -1)) {
-    if (target[part] === undefined) target[part] = {}
-    if (!target[part] || typeof target[part] !== 'object')
-      throw new Error('The binding configuration changed. Refresh before editing.')
-    target = target[part] as Record<string, unknown>
-  }
-  const name = path[path.length - 1]
-  if (deployment === null) delete target[name]
-  // The chooser offers deployments that implement this task through the
-  // decision contract. Specialist heads/adapters belong to the old binding.
-  else target[name] = { deployment, contract: 'decision.v1' }
+  for (const spelling of bindingSpellings(key)) delete target[spelling]
+  if (deployment !== null) target[key] = deployment
   return next
 }
 
@@ -55,6 +146,16 @@ function BindingRow({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const task = data.tasks.find((item) => item.id === binding.task_id)
+  const ruleRow = Boolean(ruleTarget(taskConsumer(binding)))
+  const inheritLabel = ruleRow
+    ? binding.source !== 'default'
+      ? 'Use default model'
+      : undefined
+    : binding.source === 'recipe'
+      ? 'Use inherited binding'
+      : binding.source === 'global'
+        ? 'Remove global binding'
+        : undefined
   const apply = async (deployment: string | null) => {
     setBusy(true)
     setError(null)
@@ -88,18 +189,31 @@ function BindingRow({
       <td>
         <strong>{task?.title ?? binding.task_id}</strong>
         <small className={styles.bindingMeta}>
-          {binding.recipe || 'default'} · {binding.consumer}
+          {binding.recipe || 'default'} · {taskBindingLabel(binding)}
         </small>
       </td>
       <td>
         {editing ? (
-          <SystemOneSelect
-            label={`Model for ${task?.title ?? binding.task_id}`}
-            value={selected}
-            onChange={setSelected}
-            options={options}
-            disabled={busy}
-          />
+          <>
+            <SystemOneSelect
+              label={`Model for ${task?.title ?? binding.task_id}`}
+              value={selected}
+              onChange={setSelected}
+              options={options}
+              disabled={busy}
+            />
+            {ruleRow ? (
+              <small className={styles.bindingMeta}>
+                Sets the rule&apos;s own deployment in this recipe.
+              </small>
+            ) : (
+              binding.source === 'global' && (
+                <small className={styles.bindingMeta}>
+                  Changes the global binding, which every recipe without its own binding uses.
+                </small>
+              )
+            )}
+          </>
         ) : (
           <>
             <span>{binding.model || binding.deployment || 'Unbound'}</span>
@@ -139,9 +253,9 @@ function BindingRow({
                 >
                   Apply
                 </button>
-                {binding.source === 'recipe' && (
+                {inheritLabel && (
                   <button type="button" onClick={() => void apply(null)} disabled={busy}>
-                    Use inherited binding
+                    {inheritLabel}
                   </button>
                 )}
                 <button type="button" onClick={() => setEditing(false)} disabled={busy}>
@@ -183,6 +297,13 @@ export default function DecisionTaskBindings({
   writable: boolean
   save: (binding: DecisionTaskBinding, deployment: string | null) => Promise<unknown>
 }) {
+  const [warnings, setWarnings] = useState<RouterConfigWarning[]>([])
+  const saveBinding = async (binding: DecisionTaskBinding, deployment: string | null) => {
+    setWarnings([])
+    const result = await save(binding, deployment)
+    setWarnings(configSaveWarnings(result))
+    return result
+  }
   return (
     <section className={styles.panel} aria-labelledby="task-bindings-title">
       <h2 id="task-bindings-title">Task bindings</h2>
@@ -190,6 +311,7 @@ export default function DecisionTaskBindings({
         See which model each task uses. Override a task here, or restore its default binding.
       </p>
       <DecisionObservationStatus label="Task bindings" observation={observation} />
+      <ConfigSaveWarnings warnings={warnings} />
       {data?.bindings.length ? (
         <div className={styles.tableScroll}>
           <table>
@@ -209,7 +331,7 @@ export default function DecisionTaskBindings({
                   binding={binding}
                   data={data}
                   writable={writable}
-                  save={save}
+                  save={saveBinding}
                 />
               ))}
             </tbody>

@@ -13,7 +13,7 @@ func (c *Classifier) IsPreferenceClassifierEnabled() bool {
 	if len(c.Config.PreferenceRules) == 0 {
 		return false
 	}
-	if c.Config.PreferenceUsesDecisionTask() && c.models != nil && c.Config.DecisionModel != "" {
+	if c.Config.PreferenceUsesDecisionTask() && c.models != nil && moduleConfigured(c.Config, "preference") {
 		return true
 	}
 
@@ -21,10 +21,8 @@ func (c *Classifier) IsPreferenceClassifierEnabled() bool {
 		return true
 	}
 
-	externalCfg := c.Config.FindExternalModelByRole(config.ModelRolePreference)
-	return externalCfg != nil &&
-		externalCfg.ModelEndpoint.Address != "" &&
-		externalCfg.ModelName != ""
+	deployment, external := c.Config.PreferenceExternalDeployment()
+	return external && deployment.Endpoint != "" && deployment.Model != ""
 }
 
 // initializePreferenceClassifier prepares the selected preference execution contract.
@@ -43,7 +41,10 @@ func (c *Classifier) initializePreferenceClassifier() error {
 		}
 	}
 
-	externalCfg := c.Config.FindExternalModelByRole(config.ModelRolePreference)
+	var external *config.ModelDeployment
+	if deployment, ok := c.Config.PreferenceExternalDeployment(); ok {
+		external = &deployment
+	}
 	preferenceCfg := c.Config.PreferenceModel.WithDefaults()
 	usePrototypes := c.Config.PreferenceUsesPrototypes()
 	preferenceCfg.UseContrastive = &usePrototypes
@@ -51,13 +52,13 @@ func (c *Classifier) initializePreferenceClassifier() error {
 	if err != nil {
 		return err
 	}
-	classifier, err := NewPreferenceClassifierWithProvider(externalCfg, c.Config.PreferenceRules, &preferenceCfg, provider)
+	classifier, err := NewPreferenceClassifierWithProvider(external, c.Config.PreferenceRules, &preferenceCfg, provider)
 	if err != nil {
 		return fmt.Errorf("failed to create preference classifier: %w", err)
 	}
 
 	c.preferenceClassifier = classifier
-	logPreferenceClassifierInitialized(preferenceCfg, externalCfg, len(c.Config.PreferenceRules))
+	logPreferenceClassifierInitialized(preferenceCfg, external, len(c.Config.PreferenceRules))
 	return nil
 }
 
@@ -69,7 +70,7 @@ func (c *Classifier) preferenceEmbeddingProvider() (embedding.Provider, error) {
 	if model == "" {
 		model = "mmbert"
 	}
-	if c.Config.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+	if c.Config.UsesRemoteEmbeddings() {
 		model = ""
 	}
 	return c.EmbeddingForModel(model, 0, 0)
@@ -77,7 +78,7 @@ func (c *Classifier) preferenceEmbeddingProvider() (embedding.Provider, error) {
 
 func logPreferenceClassifierInitialized(
 	preferenceCfg config.PreferenceModelConfig,
-	externalCfg *config.ExternalModelConfig,
+	external *config.ModelDeployment,
 	routeCount int,
 ) {
 	mode := "external_llm"
@@ -85,8 +86,8 @@ func logPreferenceClassifierInitialized(
 	if preferenceCfg.ContrastiveEnabled() {
 		mode = "contrastive"
 		modelRef = preferenceCfg.EmbeddingModel
-	} else if externalCfg != nil {
-		modelRef = externalCfg.ModelName
+	} else if external != nil {
+		modelRef = external.Model
 	}
 	logging.ComponentEvent("classifier", "preference_classifier_initialized", map[string]interface{}{
 		"mode":      mode,

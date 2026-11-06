@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"net"
+	"net/url"
 	"strings"
 
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -83,6 +84,9 @@ func validateEndpointAddress(address string) error {
 	return nil
 }
 
+// validateCanonicalEndpointRefs checks each backend endpoint's shape: host:port
+// with the backend's protocol, or a full http(s) URL, path included, as a
+// deployment's endpoint is written. A key never travels in the URL.
 func validateCanonicalEndpointRefs(configData routerconfig.CanonicalConfig) error {
 	for modelIndex, model := range configData.Providers.Models {
 		for backendIndex, backend := range model.BackendRefs {
@@ -90,11 +94,19 @@ func validateCanonicalEndpointRefs(configData routerconfig.CanonicalConfig) erro
 			if endpoint == "" {
 				continue
 			}
-			if strings.Contains(endpoint, "://") {
-				return fmt.Errorf("providers.models[%d].backend_refs[%d].endpoint %q must not include a protocol prefix", modelIndex, backendIndex, endpoint)
+			field := fmt.Sprintf("providers.models[%d].backend_refs[%d].endpoint %q", modelIndex, backendIndex, endpoint)
+			if !strings.Contains(endpoint, "://") {
+				if strings.Contains(endpoint, "/") {
+					return fmt.Errorf("%s has a path; write a full URL such as http://host:port/v1", field)
+				}
+				continue
 			}
-			if strings.Contains(endpoint, "/") {
-				return fmt.Errorf("providers.models[%d].backend_refs[%d].endpoint %q must not include a path", modelIndex, backendIndex, endpoint)
+			parsed, err := url.Parse(endpoint)
+			if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+				return fmt.Errorf("%s must be an http or https URL", field)
+			}
+			if parsed.User != nil {
+				return fmt.Errorf("%s must not carry credentials; the key comes from auth.api_key_env", field)
 			}
 		}
 	}

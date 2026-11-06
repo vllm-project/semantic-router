@@ -40,6 +40,27 @@ type streamState struct {
 	imageProgressRank     map[int]int
 	imageProgressSeen     map[int]map[llmprotocol.ImageGenerationStatus]bool
 	nextPartialImageIndex map[int]int64
+	reportedUnknownFields map[string]bool
+}
+
+// appendStreamUnknownFields reports each unknown upstream member once per
+// stream. A gateway field that rides every frame would otherwise add one
+// diagnostic per frame and crowd later losses out of the bounded list.
+func (state *streamState) appendStreamUnknownFields(
+	diagnostics *llmprotocol.Diagnostics,
+	format llmprotocol.WireFormat,
+	paths []string,
+) {
+	for _, path := range paths {
+		if state.reportedUnknownFields[path] {
+			continue
+		}
+		if state.reportedUnknownFields == nil {
+			state.reportedUnknownFields = make(map[string]bool, 4)
+		}
+		state.reportedUnknownFields[path] = true
+		appendProviderFieldOmission(diagnostics, state.policy, format, path, unknownUpstreamFieldReason)
+	}
 }
 
 func (state *streamState) observeProviderStreamBytes(chunk []byte) error {
