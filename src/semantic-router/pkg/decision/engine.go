@@ -36,6 +36,9 @@ type DecisionEngine struct {
 	decisions      []config.Decision
 	strategy       config.RoutingStrategy
 	routingScope   config.RecipeName
+	// observe, set only on EvaluateRule's copy, sees each leaf before it is
+	// read.
+	observe func(config.RuleNode)
 }
 
 // WithRoutingScope namespaces observability state for recipe-local decision
@@ -83,6 +86,7 @@ type SignalMatches struct {
 	ModalityRules      []string // Modality classification: "AR", "DIFFUSION", or "BOTH"
 	AuthzRules         []string // Authz rule names matched for user-level routing (e.g. "premium_tier")
 	JailbreakRules     []string // Jailbreak rule names matched (confidence >= threshold)
+	HallucinationRules []string // Hallucination rule names matched once the answer is checked
 	SafetyRules        []string // Safety rule names matched (confidence >= threshold)
 	PIIRules           []string // PII rule names matched (denied PII types detected)
 	KBRules            []string // KB signal names matched from global.model_catalog.kbs bindings
@@ -409,6 +413,9 @@ func (e *DecisionEngine) evalLeaf(
 	signals *SignalMatches,
 	policy config.UnknownPolicy,
 ) nodeEvaluation {
+	if e.observe != nil {
+		e.observe(node)
+	}
 	normalizedType := strings.ToLower(strings.TrimSpace(node.Type))
 	matched, supported := e.matchesSignalType(normalizedType, node.Name, signals)
 	if !supported {
@@ -654,6 +661,8 @@ func resolvePolicySignalRules(
 		return signals.AuthzRules, true
 	case config.SignalTypeJailbreak:
 		return signals.JailbreakRules, true
+	case config.SignalTypeHallucination:
+		return signals.HallucinationRules, true
 	case config.SignalTypeSafety:
 		return signals.SafetyRules, true
 	case config.SignalTypePII:

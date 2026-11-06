@@ -133,15 +133,20 @@ routing:
     fact_check:
       - name: verification-needed
         description: Requests that require verification.
+    hallucination:
+      - name: ungrounded
+        description: Answers with claims their context does not support.
   decisions:
     - name: default-route
       rules:
         type: fact_check
         name: verification-needed
       plugins:
-        - type: hallucination
+        - type: response_guard
           configuration:
-            enabled: true
+            rules:
+              - when: {type: hallucination, name: ungrounded}
+                action: annotate
 
 global:
   model_catalog:

@@ -52,8 +52,8 @@ routing:
 | Type | Goal | Shared dependency | Guide |
 |---|---|---|---|
 | `fast_response` | Return a configured response without calling a model | None | [Fast Response](./fast-response) |
-| `system_prompt` | Insert, replace, or append route-specific instructions | None | [System Prompt](./system-prompt) |
-| `header_mutation` | Add, update, or delete downstream headers | None | [Header Mutation](./header-mutation) |
+| `system_prompt` | Insert or replace route-specific instructions | None | [System Prompt](./system-prompt) |
+| `header_mutation` | Add, update, or delete provider-bound headers the Router does not own | None | [Header Mutation](./header-mutation) |
 | `request_params` | Enforce request parameter limits | None | [Request Parameters](./request-params) |
 | `tools` | Allow, block, filter, or remove tools and tool history | Optional global tool catalog | [Tools](./tools) |
 | `tool_selection` | Add tools from a catalog or filter caller tools semantically | Embedding runtime; tool database for `add` mode | [Tool Selection](./tool-selection) |
@@ -64,8 +64,7 @@ routing:
 | `rag` | Retrieve documents before generation | Configured RAG/vector backend | [RAG](./rag) |
 | `router_replay` | Override replay capture for one route | `global.services.router_replay` | [Router Replay](./router-replay) |
 | `shadow_dispatch` | Observe a secondary model on sampled traffic without touching the live response | Replay record for outcome capture (`router_replay`) | [Shadow Dispatch](./shadow-dispatch) |
-| `hallucination` | Inspect factual support in a response | The hallucination detector module | [Hallucination](./hallucination) |
-| `response_jailbreak` | Screen a generated response for jailbreak content | Prompt-guard runtime | [Response Jailbreak](./response-jailbreak) |
+| `response_guard` | Block or annotate an answer on the signals it is checked with | The response-stage signals its rules read | [Response Guard](./response-guard) |
 
 [Content Safety](./content-safety) bundles three supported
 plugins, not an additional plugin type.

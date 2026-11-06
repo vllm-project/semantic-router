@@ -319,10 +319,12 @@ function RuleNodeEditor({
   value,
   onChange,
   depth = 0,
+  signalTypes = DECISION_SIGNAL_TYPES,
 }: {
   value: unknown
   onChange: (value: DSLFieldObject) => void
   depth?: number
+  signalTypes?: readonly string[]
 }) {
   const node = normalizeStructuredObject(value)
   const operator = typeof node.operator === 'string' ? node.operator.toUpperCase() : ''
@@ -382,7 +384,7 @@ function RuleNodeEditor({
                 }
               >
                 <option value="">Select signal type</option>
-                {DECISION_SIGNAL_TYPES.map((type) => (
+                {signalTypes.map((type) => (
                   <option key={type} value={type}>
                     {type}
                   </option>
@@ -482,6 +484,7 @@ function RuleNodeEditor({
               <RuleNodeEditor
                 value={condition}
                 depth={depth + 1}
+                signalTypes={signalTypes}
                 onChange={(nextCondition) =>
                   onChange({
                     ...node,
@@ -513,7 +516,7 @@ function RuleField({ schema, value, onChange }: Omit<StructuredFieldEditorProps,
       schema={schema}
       onClear={value === undefined ? undefined : () => onChange(undefined)}
     >
-      <RuleNodeEditor value={value} onChange={onChange} />
+      <RuleNodeEditor value={value} onChange={onChange} signalTypes={schema.options} />
     </FieldShell>
   )
 }

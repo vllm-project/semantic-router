@@ -345,7 +345,7 @@ func TestResponseStageRulesAreAskedAboutTheAnswer(t *testing.T) {
 			t.Fatal("the request stage does not ask a response-stage rule")
 		}
 	}
-	signal := classifier.EvaluateResponseSystemOne(context.Background(), ResponseSystemOneInput{
+	signal := classifier.EvaluateResponseSystemOne(context.Background(), ResponseInput{
 		Request: "When is it open?", Answer: "On Sundays.", Context: "Open Monday to Friday.",
 	}, []string{"grounded", "routing"})
 	asked := decider.requests["kai"]

@@ -89,18 +89,21 @@ type ConfigForm struct {
 }
 
 // FormMatch is one place a form occurs: the node at Path, held by Parent
-// under Key (a mapping) or at Index (a sequence).
+// under Key (a mapping) or at Index (a sequence). Root is the document's
+// top-level mapping, for a rewrite that reaches past the match (the signals
+// a rewritten plugin reads).
 type FormMatch struct {
 	Path   string
 	Parent *yaml.Node
 	Key    string
 	Index  int
 	Node   *yaml.Node
+	Root   *yaml.Node
 }
 
 // configForms lists every removed and renamed form, in the order migrate
 // rewrites them, as the concatenation of the per-feature lists.
-var configForms = slices.Concat(systemOneForms)
+var configForms = slices.Concat(systemOneForms, pluginForms)
 
 // RoutingScopes returns the patterns of suffix in every routing scope of a
 // document: the top-level routing block and each recipe's.
@@ -157,7 +160,7 @@ func matchPattern(root *yaml.Node, segments []string) []FormMatch {
 		if node == nil {
 			return
 		}
-		at.Node = node
+		at.Node, at.Root = node, root
 		if len(rest) == 0 {
 			found = append(found, at)
 			return

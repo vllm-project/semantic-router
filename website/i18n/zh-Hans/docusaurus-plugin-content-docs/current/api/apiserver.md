@@ -236,7 +236,7 @@ Router 管理的存储和记忆：
 | 插件 | 管理方式 |
 | --- | --- |
 | `system_prompt`、`request_params`、`header_mutation`、`fast_response` | `POST /api/v1/plugins/{type}/preview`，使用 typed `configuration` 或活动 `binding` |
-| `hallucination`、`response_jailbreak` | 预览策略和输入条件；`mode: probe` 调用已配置检测器 |
+| `response_guard` | 在给定的问题、上下文和回答上读取活动守卫的规则；`mode: probe` 调用已配置的模型 |
 | `rag` | 用 `supplied_context` 预览注入；`mode: probe` 执行检索并绕过 RAG 结果缓存 |
 | `tools`、`tool_selection` | 预览静态工具策略；语义选择必须显式使用 `mode: probe` |
 | `context_compression` | 保留已有压缩预览契约 |

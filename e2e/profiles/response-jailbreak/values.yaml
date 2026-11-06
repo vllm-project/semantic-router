@@ -17,7 +17,7 @@ config:
             endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
   routing:
-    # Both response_jailbreak decisions are selected by a deterministic
+    # Both response_guard decisions are selected by a deterministic
     # keyword signal, so the E2E exercises the same harness path a real
     # request takes (auto model -> signal -> decision -> plugin) rather than
     # a passthrough to a concrete backend model, which skips plugins
@@ -42,11 +42,14 @@ config:
           - model: openai/mock-model
             use_reasoning: false
         plugins:
-          - type: response_jailbreak
+          - type: response_guard
             configuration:
-              enabled: true
-              threshold: 0.5
-              action: block
+              rules:
+                - when:
+                    type: jailbreak
+                    name: unsafe_completion
+                  action: block
+              on_unknown: block
       - name: response_jailbreak_warn
         description: Warns via x-vsr-response-warnings when the guardrail flags LLM output
         priority: 200
@@ -59,11 +62,14 @@ config:
           - model: openai/mock-model
             use_reasoning: false
         plugins:
-          - type: response_jailbreak
+          - type: response_guard
             configuration:
-              enabled: true
-              threshold: 0.5
-              action: header
+              rules:
+                - when:
+                    type: jailbreak
+                    name: unsafe_completion
+                  action: annotate
+              on_unknown: annotate
       - name: default_decision
         description: Catch-all decision with response jailbreak detection disabled
         priority: 1
@@ -84,9 +90,8 @@ config:
           keywords:
             - __response_warn_probe__
       # Scored from the model's output, not the request. The block and warn
-      # decisions above enforce on this observation through their
-      # response_jailbreak plugins; their plugin thresholds are ignored once
-      # this rule exists, so the threshold that decides lives here.
+      # decisions above act on this observation through their
+      # response_guard rules; the threshold that decides lives here.
       jailbreak:
         - name: unsafe_completion
           direction: response

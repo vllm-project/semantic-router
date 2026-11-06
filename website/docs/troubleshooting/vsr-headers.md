@@ -272,7 +272,7 @@ generates this table; run `make headers-generate` after changing it.
 | `x-vsr-protocol-warnings` | response | public | none | protocol | v0.4 | Protocol translation warnings, as comma-separated `severity;reason;field` entries. |
 | `x-vsr-replay-id` | response | public | none | router_replay | v0.2 | Router Replay record id, when the record was persisted. |
 | `x-vsr-response-path` | response | public | none | response_contract | v0.4 | How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `image_generation`, `blocked`, `rate_limited`, `error` or `fallback`. |
-| `x-vsr-response-warnings` | response | public | none | response_warnings | v0.4 | Response warning codes, in order: `hallucination`, `unverified_factual`, `response_jailbreak`. |
+| `x-vsr-response-warnings` | response | public | none | response_guard | v0.4 | Codes of the `response_guard` rules that annotated the answer, in rule order: `hallucination`, `unverified_factual`, `response_jailbreak` or `response_guard`. |
 | `x-vsr-routing-latency-ms` | response | public | none | routing | v0.4 | Time spent choosing the model, in milliseconds, such as `0.412`. |
 | `x-vsr-schema-version` | response | public | none | response_contract | v0.4 | Response-header contract revision; currently `2`. |
 | `x-vsr-selected-algorithm` | response | public | none | routing | v0.4 | Model-selection algorithm used after the decision matched, such as `static`. |

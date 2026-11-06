@@ -201,9 +201,9 @@ func assertMultiObjectiveAccuracyRecipe(t *testing.T, cfg *RouterConfig) {
 		requireMultiObjectiveAlgorithmType(t, algorithm, algorithmType, "accuracy-first decision "+decisionName)
 	}
 	for _, decision := range accuracy.Profile.Decisions {
-		if decision.HasPlugin(DecisionPluginHallucination) {
+		if guard := decision.GetResponseGuardConfig(); guard != nil && guard.Reads(SignalTypeHallucination) {
 			t.Fatalf(
-				"accuracy-first decision %q must not advertise an unavailable hallucination plugin",
+				"accuracy-first decision %q must not advertise an unavailable hallucination check",
 				decision.Name,
 			)
 		}

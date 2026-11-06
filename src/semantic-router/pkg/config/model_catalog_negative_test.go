@@ -114,8 +114,8 @@ func TestModelCatalogRefusesWhatCannotWork(t *testing.T) {
 			"one remote score drives every complexity rule",
 		},
 		"a masking plugin on PII without spans": {
-			"global: {model_catalog: {deployments: {d3-remote: {capabilities: {presets: [halu]}}}, system: {decision_model: {deployment: d3-remote}}}}\nrouting: {signals: {pii: [{name: personal, threshold: 0.5}]}, decisions: [{name: mask, rules: {type: pii, name: personal}, modelRefs: [{model: general}], plugins: [{type: masking, configuration: {enabled: true}}]}]}",
-			"the masking plugin replaces PII spans",
+			"global: {model_catalog: {deployments: {d3-remote: {capabilities: {presets: [halu]}}}, system: {decision_model: {deployment: d3-remote}}}}\nrouting: {signals: {pii: [{name: personal, threshold: 0.5}]}, decisions: [{name: mask, rules: {type: pii, name: personal}, modelRefs: [{model: general}], plugins: [{type: masking, configuration: {enabled: true, signal: personal}}]}]}",
+			`routing.signals.pii[personal]: span_required: resolves to deployment "d3-remote", which cannot answer span questions`,
 		},
 		"operating_point on a remote deployment": {
 			"global: {model_catalog: {deployments: {content-risk: {operating_point: {path: operating_point.json, sha256: e79a78f48bf45eb38e3f5402de3b3b18eeaa822e00b42b3640bf471276290de5}}}}}",

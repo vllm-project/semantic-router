@@ -38,11 +38,13 @@ describe('DSL structured field schemas', () => {
       ...PLUGIN_TYPES.flatMap((type) => getPluginFieldSchema(type)),
     ]
 
+    // The recursive rule trees: the complexity composer and response_guard's
+    // rules[].when. The open payload: rag's backend_config.
     expect(
       flattenSchema(schemas)
         .filter((field) => field.type === 'json')
         .map((field) => field.key),
-    ).toEqual(['conditions', 'backend_config'])
+    ).toEqual(['conditions', 'conditions', 'backend_config'])
   })
 
   it('describes workflow and multi-factor structures with typed nested schemas', () => {

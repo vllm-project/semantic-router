@@ -56,7 +56,7 @@ func buildManagementPolicies() []ManagementPolicy {
 		"/api/v1/plugins/system_prompt/preview", "/api/v1/plugins/request_params/preview", "/api/v1/plugins/header_mutation/preview", "/api/v1/plugins/fast_response/preview")
 	add(http.MethodPost, evaluationRun, false,
 		"/api/v1/routing/preview", "/api/v1/plugins/context_compression/preview",
-		"/api/v1/plugins/response_jailbreak/preview", "/api/v1/plugins/hallucination/preview",
+		"/api/v1/plugins/response_guard/preview",
 		"/api/v1/storage/response-cache/test",
 		"/api/v1/diagnostics/models/systemone", "/api/v1/diagnostics/models/labels", "/api/v1/diagnostics/models/label-scores", "/api/v1/diagnostics/models/tokens", "/api/v1/diagnostics/models/embeddings", "/api/v1/diagnostics/models/rerank",
 		"/api/v1/diagnostics/classify/intent", "/api/v1/diagnostics/classify/pii", "/api/v1/diagnostics/classify/security", "/api/v1/diagnostics/classify/fact-check", "/api/v1/diagnostics/classify/user-feedback", "/api/v1/diagnostics/classify/combined", "/api/v1/diagnostics/classify/batch",

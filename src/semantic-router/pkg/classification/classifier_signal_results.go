@@ -102,6 +102,43 @@ type SignalResults struct {
 	Metrics *SignalMetricsCollection
 }
 
+// Matches is the decision engine's view of the results: the matches, values
+// and failures a rule tree reads.
+func (r *SignalResults) Matches() *decision.SignalMatches {
+	return &decision.SignalMatches{
+		KeywordRules:       r.MatchedKeywordRules,
+		EmbeddingRules:     r.MatchedEmbeddingRules,
+		DomainRules:        r.MatchedDomainRules,
+		FactCheckRules:     r.MatchedFactCheckRules,
+		UserFeedbackRules:  r.MatchedUserFeedbackRules,
+		ReaskRules:         r.MatchedReaskRules,
+		PreferenceRules:    r.MatchedPreferenceRules,
+		LanguageRules:      r.MatchedLanguageRules,
+		ContextRules:       r.MatchedContextRules,
+		StructureRules:     r.MatchedStructureRules,
+		ComplexityRules:    r.MatchedComplexityRules,
+		ModalityRules:      r.MatchedModalityRules,
+		SignalConfidences:  r.SignalConfidences,
+		AuthzRules:         r.MatchedAuthzRules,
+		JailbreakRules:     r.MatchedJailbreakRules,
+		SafetyRules:        r.MatchedSafetyRules,
+		PIIRules:           r.MatchedPIIRules,
+		KBRules:            r.MatchedKBRules,
+		ConversationRules:  r.MatchedConversationRules,
+		EventRules:         r.MatchedEventRules,
+		MetadataRules:      r.MatchedMetadataRules,
+		ClassifierRules:    r.MatchedClassifierRules,
+		InputModalityRules: r.MatchedInputModalityRules,
+		ActionRules:        r.MatchedActionRules,
+		SystemOneRules:     r.MatchedSystemOneRules,
+		ProjectionRules:    r.MatchedProjectionRules,
+		Observations:       r.Observations,
+		SignalValues:       r.SignalValues,
+		SignalErrors:       r.SignalErrors,
+		SignalErrorMatches: r.SignalErrorMatches,
+	}
+}
+
 // SignalMetricsCollection contains metrics for all signal types.
 type SignalMetricsCollection struct {
 	Keyword       SignalMetrics `json:"keyword"`

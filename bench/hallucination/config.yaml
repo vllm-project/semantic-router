@@ -38,6 +38,9 @@ routing:
         description: Query contains factual claims that should be verified against context.
       - name: no_fact_check_needed
         description: Query is creative, code-related, or opinion-based and does not need factual verification.
+    hallucination:
+      - name: ungrounded_claims
+        description: Answers with claims their grounding context does not support.
   decisions:
     - name: math_decision
       description: Mathematics and quantitative reasoning.
@@ -51,12 +54,18 @@ routing:
         - model: Qwen/Qwen2.5-14B-Instruct-AWQ
           use_reasoning: true
       plugins:
-        - type: hallucination
+        - type: response_guard
           configuration:
-            enabled: true
-            hallucination_action: header
-            unverified_factual_action: header
-            include_hallucination_details: false
+            rules:
+              - when:
+                  operator: AND
+                  conditions:
+                    - type: fact_check
+                      name: needs_fact_check
+                    - type: hallucination
+                      name: ungrounded_claims
+                action: annotate
+            on_unknown: annotate
     - name: science_decision
       description: Science questions.
       priority: 100
@@ -69,12 +78,18 @@ routing:
         - model: Qwen/Qwen2.5-14B-Instruct-AWQ
           use_reasoning: true
       plugins:
-        - type: hallucination
+        - type: response_guard
           configuration:
-            enabled: true
-            hallucination_action: header
-            unverified_factual_action: header
-            include_hallucination_details: false
+            rules:
+              - when:
+                  operator: AND
+                  conditions:
+                    - type: fact_check
+                      name: needs_fact_check
+                    - type: hallucination
+                      name: ungrounded_claims
+                action: annotate
+            on_unknown: annotate
     - name: general_decision
       description: General questions.
       priority: 50
@@ -87,12 +102,18 @@ routing:
         - model: Qwen/Qwen2.5-14B-Instruct-AWQ
           use_reasoning: false
       plugins:
-        - type: hallucination
+        - type: response_guard
           configuration:
-            enabled: true
-            hallucination_action: header
-            unverified_factual_action: header
-            include_hallucination_details: false
+            rules:
+              - when:
+                  operator: AND
+                  conditions:
+                    - type: fact_check
+                      name: needs_fact_check
+                    - type: hallucination
+                      name: ungrounded_claims
+                action: annotate
+            on_unknown: annotate
 global:
   router:
     strategy: priority

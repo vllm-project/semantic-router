@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -63,20 +64,23 @@ func TestDecompileRoutingRoundTripsHeaderAndResponsePlugins(t *testing.T) {
 			Delete: []string{"x-remove"},
 		},
 	)
-	responsePayload := config.MustStructuredPayload(
-		config.ResponseJailbreakPluginConfig{
-			Enabled:   true,
-			Threshold: 0.7,
-			Action:    "block",
+	guard := config.ResponseGuardPluginConfig{
+		Rules: []config.ResponseGuardRule{
+			{When: config.RuleNode{Type: config.SignalTypeJailbreak, Name: "unsafe_completion"}, Action: config.ResponseGuardBlock},
+			{When: config.RuleNode{Operator: config.RuleOperatorAnd, Conditions: []config.RuleNode{
+				{Type: config.SignalTypeFactCheck, Name: "needs_fact_check"},
+				{Type: config.SignalTypeHallucination, Name: "ungrounded"},
+			}}, Action: config.ResponseGuardAnnotate, Details: true},
 		},
-	)
+		OnUnknown: config.ResponseGuardNone,
+	}
 	cfg := &config.RouterConfig{IntelligentRouting: config.IntelligentRouting{
 		Decisions: []config.Decision{{
 			Name:      "plugins",
 			ModelRefs: []config.ModelRef{{Model: "model-a"}},
 			Plugins: []config.DecisionPlugin{
 				{Type: config.DecisionPluginHeaderMutation, Configuration: headerPayload},
-				{Type: config.DecisionPluginResponseJailbreak, Configuration: responsePayload},
+				{Type: config.DecisionPluginResponseGuard, Configuration: config.MustStructuredPayload(guard)},
 			},
 		}},
 	}}
@@ -90,11 +94,8 @@ func TestDecompileRoutingRoundTripsHeaderAndResponsePlugins(t *testing.T) {
 		len(header.Delete) != 1 {
 		t.Fatalf("header mutation round trip = %#v", header)
 	}
-	response := decision.GetResponseJailbreakConfig()
-	if response == nil || !response.Enabled ||
-		response.Threshold != 0.7 ||
-		response.Action != "block" {
-		t.Fatalf("response jailbreak round trip = %#v", response)
+	if got := decision.GetResponseGuardConfig(); got == nil || !reflect.DeepEqual(*got, guard) {
+		t.Fatalf("response guard round trip = %#v, want %#v", got, guard)
 	}
 }
 

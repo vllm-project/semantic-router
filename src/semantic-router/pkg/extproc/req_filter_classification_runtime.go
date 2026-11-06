@@ -79,6 +79,11 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 
 	signalLatency := time.Since(signalStart).Milliseconds()
 	r.applySignalResultsToContext(ctx, signals)
+	ctx.ResponseStage = classification.ResponseInput{
+		Request: signalInput.currentUserText, PriorUserMessages: signalInput.priorUserMessages,
+		Turns: signalInput.requestFacts.Turns, ToolResultTexts: signalInput.toolResultTexts,
+		Images: signalInput.requestFacts.Images, Videos: signalInput.requestFacts.Videos,
+	}
 	ensureContextTokenCount(ctx, signalInput)
 	logSignalEvaluationResults(ctx, signalLatency, signals)
 	logSignalPhaseTiming(ctx, signalLatency, signals)

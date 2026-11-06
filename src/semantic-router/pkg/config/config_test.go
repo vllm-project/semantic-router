@@ -2888,23 +2888,15 @@ default_model: "test-model"
 	})
 
 	Describe("IsHallucinationModelEnabled", func() {
-		It("should return true when a decision enables the plugin", func() {
+		It("should return true when a reachable recipe declares a hallucination rule", func() {
 			cfg := &RouterConfig{}
 			cfg.HallucinationMitigation.HallucinationModel.ModelID = "models/hallucination"
-			cfg.Decisions = []Decision{{
-				Name: "verified-route",
-				Plugins: []DecisionPlugin{{
-					Type: DecisionPluginHallucination,
-					Configuration: MustStructuredPayload(map[string]interface{}{
-						"enabled": true,
-					}),
-				}},
-			}}
+			cfg.HallucinationRules = []HallucinationRule{{Name: "ungrounded"}}
 
 			Expect(cfg.IsHallucinationModelEnabled()).To(BeTrue())
 		})
 
-		It("should return false when no decision enables the plugin", func() {
+		It("should return false when no hallucination rule is declared", func() {
 			cfg := &RouterConfig{}
 			cfg.HallucinationMitigation.HallucinationModel.ModelID = "models/hallucination"
 
@@ -2913,15 +2905,7 @@ default_model: "test-model"
 
 		It("should return false when model_id is missing", func() {
 			cfg := &RouterConfig{}
-			cfg.Decisions = []Decision{{
-				Name: "verified-route",
-				Plugins: []DecisionPlugin{{
-					Type: DecisionPluginHallucination,
-					Configuration: MustStructuredPayload(map[string]interface{}{
-						"enabled": true,
-					}),
-				}},
-			}}
+			cfg.HallucinationRules = []HallucinationRule{{Name: "ungrounded"}}
 
 			Expect(cfg.IsHallucinationModelEnabled()).To(BeFalse())
 		})

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -23,17 +24,27 @@ func init() {
 	})
 }
 
-type haluProbeResponse struct {
-	Mode             string   `json:"mode"`
-	Persisted        bool     `json:"persisted"`
-	BackendCalls     bool     `json:"backend_calls"`
-	Enabled          bool     `json:"enabled"`
-	Eligible         bool     `json:"eligible"`
-	Resolved         bool     `json:"resolved"`
-	Detected         bool     `json:"detected"`
-	Action           string   `json:"action"`
+// velaHaluSignal is the hallucination rule the grounded-answer decision's
+// response_guard reads.
+const velaHaluSignal = "hallucination:ungrounded_claims"
+
+type guardProbeResponse struct {
+	Mode         string   `json:"mode"`
+	Persisted    bool     `json:"persisted"`
+	BackendCalls bool     `json:"backend_calls"`
+	Action       string   `json:"action"`
+	Warnings     []string `json:"warnings"`
+	Rules        []struct {
+		State string `json:"state"`
+	} `json:"rules"`
+	Signals []guardProbeSignal `json:"signals"`
+}
+
+type guardProbeSignal struct {
+	Signal           string   `json:"signal"`
+	Verdict          string   `json:"verdict"`
 	Reason           string   `json:"reason"`
-	Score            *float32 `json:"score"`
+	Score            *float64 `json:"score"`
 	UnsupportedSpans []string `json:"unsupported_spans"`
 }
 
@@ -47,7 +58,9 @@ func testVelaHaluGrounding(ctx context.Context, client *kubernetes.Clientset, op
 }
 
 // RunVelaHaluContract shares real-detector acceptance between local CLI stacks
-// and the Kubernetes profile, including the published task input budget.
+// and the Kubernetes profile, including the published task input budget. It
+// probes the response_guard of the grounded-answer decision, whose one rule
+// reads the hallucination rule over each answer and its context.
 func RunVelaHaluContract(ctx context.Context, apiURL string, setDetails func(map[string]interface{})) error {
 	httpClient := &http.Client{Timeout: 120 * time.Second}
 	probes := []struct {
@@ -62,12 +75,12 @@ func RunVelaHaluContract(ctx context.Context, apiURL string, setDetails func(map
 	for _, probe := range probes {
 		body, err := json.Marshal(map[string]interface{}{
 			"binding": map[string]string{"recipe": "default", "decision": "grounded-answer"},
-			"mode":    "probe", "fact_check_needed": true, "context": probe.context, "question": probe.question, "response": probe.answer,
+			"mode":    "probe", "context": probe.context, "question": probe.question, "response": probe.answer,
 		})
 		if err != nil {
 			return err
 		}
-		request, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL+"/api/v1/plugins/hallucination/preview", bytes.NewReader(body))
+		request, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL+"/api/v1/plugins/response_guard/preview", bytes.NewReader(body))
 		if err != nil {
 			return err
 		}
@@ -84,33 +97,38 @@ func RunVelaHaluContract(ctx context.Context, apiURL string, setDetails func(map
 		if response.StatusCode != http.StatusOK {
 			return fmt.Errorf("%s: status %d: %s", probe.name, response.StatusCode, data)
 		}
-		var result haluProbeResponse
+		var result guardProbeResponse
 		if err := json.Unmarshal(data, &result); err != nil {
 			return err
 		}
-		if result.Mode != "probe" || result.Persisted || !result.BackendCalls || !result.Enabled || !result.Eligible {
-			return fmt.Errorf("%s: detector was not invoked: %s", probe.name, data)
+		if result.Mode != "probe" || result.Persisted || !result.BackendCalls || len(result.Rules) != 1 {
+			return fmt.Errorf("%s: the guard did not read the answer: %s", probe.name, data)
 		}
+		index := slices.IndexFunc(result.Signals, func(signal guardProbeSignal) bool { return signal.Signal == velaHaluSignal })
+		if index < 0 {
+			return fmt.Errorf("%s: the detector was not invoked: %s", probe.name, data)
+		}
+		signal := result.Signals[index]
 		if probe.rejected {
-			if result.Resolved || result.Detected || result.Reason != "detection_failed" {
+			if signal.Verdict != "unavailable" || signal.Reason != "hallucination_evaluation_failed" || result.Rules[0].State != "unknown" {
 				return fmt.Errorf("over-budget Halu pair was silently truncated or accepted: %s", data)
 			}
 			continue
 		}
-		if !result.Resolved || result.Detected != probe.detected {
+		if detected := signal.Verdict == "detected"; detected != probe.detected {
 			return fmt.Errorf("%s: incorrect grounded verdict: %s", probe.name, data)
 		}
 		if probe.detected {
-			if result.Action != "header" || result.Score == nil || *result.Score <= .5 || len(result.UnsupportedSpans) == 0 {
+			if result.Action != "annotate" || !slices.Contains(result.Warnings, "hallucination") || signal.Score == nil || *signal.Score <= .5 || len(signal.UnsupportedSpans) == 0 {
 				return fmt.Errorf("%s: missing published operating-point evidence: %s", probe.name, data)
 			}
-			for _, span := range result.UnsupportedSpans {
+			for _, span := range signal.UnsupportedSpans {
 				if span == "" || !utf8.ValidString(span) || !strings.Contains(probe.answer, span) {
 					return fmt.Errorf("%s: invalid UTF-8 answer span %q", probe.name, span)
 				}
 			}
-		} else if len(result.UnsupportedSpans) != 0 {
-			return fmt.Errorf("supported answer returned unsupported spans: %s", data)
+		} else if len(signal.UnsupportedSpans) != 0 || result.Action != "none" {
+			return fmt.Errorf("supported answer was flagged: %s", data)
 		}
 	}
 	if setDetails != nil {

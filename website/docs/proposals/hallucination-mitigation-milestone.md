@@ -104,8 +104,9 @@ routing:
 ```
 
 The proposal does not require one detector architecture or one model vendor. The
-current hallucination plugin documentation remains the source of truth for behavior
-that is actually implemented.
+current [`response_guard`](../tutorials/plugin/response-guard) and
+[hallucination signal](../tutorials/signal/learned/hallucination) documentation
+remains the source of truth for behavior that is actually implemented.
 
 ## Evaluation
 
@@ -132,7 +133,7 @@ model versions, prompt templates, and raw evaluation artifacts.
 
 ## References
 
-- [Current hallucination plugin guide](../tutorials/plugin/hallucination)
+- [Current response guard guide](../tutorials/plugin/response-guard)
 - [LettuceDetect](https://arxiv.org/abs/2502.17125)
 - [SelfCheckGPT](https://arxiv.org/abs/2303.08896)
 - [Self-Refine](https://arxiv.org/abs/2303.17651)

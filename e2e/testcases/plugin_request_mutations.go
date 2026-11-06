@@ -65,8 +65,8 @@ func testPluginRequestMutations(
 		false,
 		map[string]string{
 			"x-vsr-debug":           "true",
-			"x-vsr-e2e-deleted":     "remove-me",
-			"x-vsr-e2e-updated":     "client-value",
+			"x-e2e-deleted":         "remove-me",
+			"x-e2e-updated":         "client-value",
 			"x-vsr-test-session-id": sessionID,
 		},
 	)
@@ -155,15 +155,15 @@ func validatePluginMutationProviderRequest(observed []byte) error {
 		}
 	}
 	for name, expected := range map[string]string{
-		"x-vsr-e2e-added":   "added-by-router",
-		"x-vsr-e2e-updated": "updated-by-router",
+		"x-e2e-added":   "added-by-router",
+		"x-e2e-updated": "updated-by-router",
 	} {
 		values := request.HeaderValues[name]
 		if len(values) != 1 || values[0] != expected {
 			return fmt.Errorf("header_mutation expected exactly one %s=%q, observed %#v", name, expected, values)
 		}
 	}
-	if _, exists := request.HeaderValues["x-vsr-e2e-deleted"]; exists {
+	if _, exists := request.HeaderValues["x-e2e-deleted"]; exists {
 		return fmt.Errorf("header_mutation delete was not observed: %#v", request.HeaderValues)
 	}
 

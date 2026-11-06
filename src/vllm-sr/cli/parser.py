@@ -13,6 +13,7 @@ from cli.config_contract import (
     iter_routing_profiles,
 )
 from cli.config_migration_looper import LOOPER_ENDPOINT_PATH
+from cli.config_plugin_forms import removed_plugin_forms
 from cli.config_renamed_forms import read_renamed_forms
 from cli.config_schema.validation import validate_config_structure
 from cli.config_yaml import safe_load_router_config
@@ -224,6 +225,10 @@ def _reject_invalid_config_surfaces(data: Dict[str, Any], config_path: str) -> N
             "format and owns numerics, and the NLI explainer is retired. Use "
             f"`vllm-sr config migrate --config {config_path}`."
         )
+
+    plugin_forms = removed_plugin_forms(data)
+    if plugin_forms:
+        raise ConfigParseError("\n".join(plugin_forms))
 
 
 def _deferred_context_limits(config: UserConfig) -> list[tuple[str, str]]:

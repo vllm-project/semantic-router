@@ -39,14 +39,13 @@ var pluginTutorialBuckets = map[string]string{
 	"content-safety":      "safety-and-generation",
 	"context-compression": "response-and-mutation",
 	"fast-response":       "response-and-mutation",
-	"hallucination":       "safety-and-generation",
 	"header-mutation":     "response-and-mutation",
 	"masking":             "response-and-mutation",
 	"memory":              "retrieval-and-memory",
 	"prompt-cache":        "retrieval-and-memory",
 	"rag":                 "retrieval-and-memory",
 	"request-params":      "response-and-mutation",
-	"response-jailbreak":  "safety-and-generation",
+	"response-guard":      "safety-and-generation",
 	"router-replay":       "retrieval-and-memory",
 	"shadow-dispatch":     "retrieval-and-memory",
 	"response-cache":      "retrieval-and-memory",
@@ -59,6 +58,8 @@ var retiredPluginTutorialDocs = []string{
 	repoRel("website", "docs", "tutorials", "plugin", "response-and-mutation.md"),
 	repoRel("website", "docs", "tutorials", "plugin", "retrieval-and-memory.md"),
 	repoRel("website", "docs", "tutorials", "plugin", "safety-and-generation.md"),
+	repoRel("website", "docs", "tutorials", "plugin", "hallucination.md"),
+	repoRel("website", "docs", "tutorials", "plugin", "response-jailbreak.md"),
 }
 
 func assertAlgorithmTutorialDocsMatchConfigHierarchy(t *testing.T, root string) {

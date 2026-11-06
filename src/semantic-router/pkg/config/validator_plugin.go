@@ -27,21 +27,6 @@ func validateDecisionPluginPayload(
 	return err
 }
 
-func validateMaskingPlugin(decisionName string, index int, pluginType string, typed *MaskingPluginConfig) error {
-	scope := fmt.Sprintf("decision %q plugins[%d] (%s)", decisionName, index, pluginType)
-	if typed.Threshold < 0 || typed.Threshold > 1 {
-		return fmt.Errorf("%s: threshold must be between 0 and 1", scope)
-	}
-	for entityType, template := range typed.Placeholders {
-		// Without {index} two distinct values collapse onto one placeholder,
-		// which the issue's determinism criterion forbids (#3566).
-		if !strings.Contains(template, MaskingPlaceholderIndexToken) {
-			return fmt.Errorf("%s: placeholder for %q must contain %s", scope, entityType, MaskingPlaceholderIndexToken)
-		}
-	}
-	return nil
-}
-
 func validateResponseCachePlugin(
 	decisionName string,
 	index int,
@@ -140,33 +125,6 @@ func validateFastResponsePlugin(
 		index,
 		pluginType,
 	)
-}
-
-func validateResponseJailbreakPlugin(
-	decisionName string,
-	index int,
-	pluginType string,
-	typed *ResponseJailbreakPluginConfig,
-) error {
-	if typed.Threshold < 0 || typed.Threshold > 1 {
-		return fmt.Errorf(
-			"decision %q plugins[%d] (%s): threshold must be between 0 and 1",
-			decisionName,
-			index,
-			pluginType,
-		)
-	}
-	switch typed.Action {
-	case "", "header", "block", "none":
-		return nil
-	default:
-		return fmt.Errorf(
-			"decision %q plugins[%d] (%s): action must be header, block, or none",
-			decisionName,
-			index,
-			pluginType,
-		)
-	}
 }
 
 func validateContextCompressionPlugin(

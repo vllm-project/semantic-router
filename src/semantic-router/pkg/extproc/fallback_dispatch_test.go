@@ -2405,7 +2405,7 @@ func TestFallbackResponsesAPIStreamingWithPersistence(t *testing.T) {
 
 func TestFallbackResponsePolicyJailbreakBlock(t *testing.T) {
 	server := newJailbreakScoreServer(t, 0.95, 0.05)
-	router, ctx := newResponseStageRouter(t, server, "", "block")
+	router, ctx := newResponseStageRouter(t, server, "", config.ResponseGuardBlock)
 
 	policy := fallback.DefaultEnabledPolicy()
 	circuitBreaker := fallback.NewBackendCircuitBreaker(policy.CircuitBreaker)
@@ -2489,8 +2489,8 @@ func TestFallbackResponsePolicyJailbreakBlock(t *testing.T) {
 	if imm.GetStatus().GetCode() != typev3.StatusCode_Forbidden {
 		t.Fatalf("expected HTTP 403 Forbidden due to response jailbreak block, got: %v", imm.GetStatus().GetCode())
 	}
-	if !ctx.ResponseJailbreakDetected {
-		t.Fatal("expected ctx.ResponseJailbreakDetected to be true")
+	if matched, _ := ctx.ResponseGuard.jailbreakFinding(); !matched {
+		t.Fatal("expected the guard to record the response jailbreak it blocked")
 	}
 	bodyStr := string(imm.GetBody())
 	if !strings.Contains(bodyStr, "Response blocked: jailbreak content detected in LLM output") {
@@ -2500,7 +2500,7 @@ func TestFallbackResponsePolicyJailbreakBlock(t *testing.T) {
 
 func TestFallbackResponsePolicyJailbreakWarningAndMemorySuppression(t *testing.T) {
 	server := newJailbreakScoreServer(t, 0.95, 0.05)
-	router, ctx := newResponseStageRouter(t, server, "", "warn")
+	router, ctx := newResponseStageRouter(t, server, "", config.ResponseGuardAnnotate)
 
 	policy := fallback.DefaultEnabledPolicy()
 	circuitBreaker := fallback.NewBackendCircuitBreaker(policy.CircuitBreaker)
@@ -2592,10 +2592,10 @@ func TestFallbackResponsePolicyJailbreakWarningAndMemorySuppression(t *testing.T
 
 	imm := procResp.GetImmediateResponse()
 	if imm.GetStatus().GetCode() != typev3.StatusCode_OK {
-		t.Fatalf("expected HTTP 200 OK because action is warn, got: %v", imm.GetStatus().GetCode())
+		t.Fatalf("expected HTTP 200 OK because action is annotate, got: %v", imm.GetStatus().GetCode())
 	}
-	if !ctx.ResponseJailbreakDetected {
-		t.Fatal("expected ctx.ResponseJailbreakDetected to be true")
+	if matched, _ := ctx.ResponseGuard.jailbreakFinding(); !matched {
+		t.Fatal("expected the guard to record the response jailbreak it annotated")
 	}
 
 	// Verify warning header emitted
@@ -2640,8 +2640,9 @@ func TestFallbackResponsePolicyHallucinationWarning(t *testing.T) {
 
 	ctx := testFallbackRequestContext("model-primary", []string{"model-primary", "model-fallback-1"})
 	ctx.UpstreamStatusCode = 503
-	ctx.HallucinationDetected = true
-	ctx.VSRSelectedDecision = decisionWithHallucinationActions("header", "header")
+	// No classifier serves the request's recipe, so the guard cannot check
+	// the answer and annotates it as unverified.
+	ctx.VSRSelectedDecision = responseGuardDecision(groundedGuard(config.ResponseGuardAnnotate, false, ""))
 
 	candidateRespJSON := []byte(`{
 		"id": "chatcmpl-hal-1",
@@ -2693,8 +2694,8 @@ func TestFallbackResponsePolicyHallucinationWarning(t *testing.T) {
 		headersMap[opt.GetHeader().GetKey()] = string(opt.GetHeader().GetRawValue())
 	}
 	warningsHeader := headersMap[headers.VSRResponseWarnings]
-	if !strings.Contains(warningsHeader, headers.ResponseWarningHallucination) {
-		t.Errorf("expected warning header %s to contain %s, got: %s", headers.VSRResponseWarnings, headers.ResponseWarningHallucination, warningsHeader)
+	if !strings.Contains(warningsHeader, headers.ResponseWarningUnverifiedFactual) {
+		t.Errorf("expected warning header %s to contain %s, got: %s", headers.VSRResponseWarnings, headers.ResponseWarningUnverifiedFactual, warningsHeader)
 	}
 }
 
@@ -2837,8 +2838,7 @@ func TestFallbackCandidateStreamPreservesHallucinationBodyWarning(t *testing.T) 
 	ctx.UpstreamStatusCode = 503
 	ctx.ExpectStreamingResponse = true
 	ctx.SemanticRequest.Stream = true
-	ctx.HallucinationDetected = true
-	ctx.VSRSelectedDecision = decisionWithHallucinationActions("body", "header")
+	ctx.VSRSelectedDecision = responseGuardDecision(groundedGuard(config.ResponseGuardAnnotate, true, ""))
 
 	// Candidate returns a valid buffered response.
 	// Initial text length is chosen so that:
@@ -2883,9 +2883,9 @@ func TestFallbackCandidateStreamPreservesHallucinationBodyWarning(t *testing.T) 
 	}
 
 	deliveredBody := string(imm.GetBody())
-	// Assert the delivered stream preserved the hallucination body warning
-	if !strings.Contains(deliveredBody, "[Hallucination Warning]") {
-		t.Errorf("expected delivered stream to contain [Hallucination Warning], got body prefix: %s", deliveredBody[:min(200, len(deliveredBody))])
+	// Assert the delivered stream preserved the guard's body note
+	if !strings.Contains(deliveredBody, "[Unverified Response]") {
+		t.Errorf("expected delivered stream to contain [Unverified Response], got body prefix: %s", deliveredBody[:min(200, len(deliveredBody))])
 	}
 
 	// Assert the stream is valid SSE and each frame satisfies limits
@@ -3261,7 +3261,7 @@ func TestFallbackWritesClientResponseToCache(t *testing.T) {
 
 func TestFallbackBlockedResponseNotCached(t *testing.T) {
 	server := newJailbreakScoreServer(t, 0.95, 0.05)
-	router, ctx := newResponseStageRouter(t, server, "", "block")
+	router, ctx := newResponseStageRouter(t, server, "", config.ResponseGuardBlock)
 
 	policy := fallback.DefaultEnabledPolicy()
 	circuitBreaker := fallback.NewBackendCircuitBreaker(policy.CircuitBreaker)

@@ -33,8 +33,6 @@ const (
 	DecisionPluginSemanticCache      = "semantic-cache"
 	DecisionPluginSystemPrompt       = "system_prompt"
 	DecisionPluginHeaderMutation     = "header_mutation"
-	DecisionPluginHallucination      = "hallucination"
-	DecisionPluginResponseJailbreak  = "response_jailbreak"
 	DecisionPluginRouterReplay       = "router_replay"
 	DecisionPluginMemory             = "memory"
 	DecisionPluginRAG                = "rag"

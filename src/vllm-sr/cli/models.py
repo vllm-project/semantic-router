@@ -479,7 +479,7 @@ class JailbreakRule(BaseModel):
     include_history: bool = False
     # "request" (default) scores the prompt; "response" scores the model's
     # output once it has answered, for the selected decision's
-    # response_jailbreak plugin to enforce on.
+    # response_guard to act on.
     direction: Optional[Literal["request", "response"]] = None
     jailbreak_patterns: Optional[list[str]] = (
         None  # Known jailbreak prompts (contrastive KB)
@@ -492,14 +492,13 @@ class HallucinationRule(BaseModel):
     """Hallucination signal configuration.
 
     Checks the model's answer against the grounding context the request
-    carried, so it is observed at the response stage and consumed by the
-    selected decision's hallucination plugin; decision rules cannot read it.
+    carried, so it is observed at the response stage and read by the
+    selected decision's response_guard; decision rules cannot read it.
     """
 
     name: str
     # Ask the detector for span-level NLI explanations. A detection setting,
-    # so it lives on the rule; the plugin's use_nli is ignored once a rule
-    # is declared.
+    # so it lives on the rule.
     use_nli: bool = False
     description: Optional[str] = None
 
@@ -1184,12 +1183,36 @@ class RequestParamsPluginConfig(BaseModel):
     strip_unknown: Optional[bool] = None
 
 
-class ResponseJailbreakPluginConfig(BaseModel):
-    """Configuration for response_jailbreak plugin."""
+ResponseGuardAction = Literal["block", "annotate", "none"]
 
-    enabled: bool
-    threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    action: Optional[Literal["block", "header", "none"]] = None
+
+class ResponseGuardRule(BaseModel):
+    """One response_guard rule: what it does when its condition tree holds."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    when: Condition
+    action: ResponseGuardAction
+    details: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def details_annotate(self):
+        if self.details and self.action != "annotate":
+            raise ValueError("details applies only to action annotate")
+        return self
+
+
+class ResponseGuardPluginConfig(BaseModel):
+    """Configuration for the response_guard plugin.
+
+    Each rule reads named signals over the answer (and the request); a rule
+    whose response-stage signal could not be read takes on_unknown.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    rules: List[ResponseGuardRule] = Field(min_length=1)
+    on_unknown: Optional[ResponseGuardAction] = None
 
 
 class ToolsDynamicRetrievalWeights(BaseModel):
@@ -1374,16 +1397,6 @@ class HeaderMutationPluginConfig(BaseModel):
     add: Optional[List[HeaderPair]] = None
     update: Optional[List[HeaderPair]] = None
     delete: Optional[List[str]] = None
-
-
-class HallucinationPluginConfig(BaseModel):
-    """Configuration for hallucination plugin."""
-
-    enabled: bool
-    use_nli: Optional[bool] = None
-    hallucination_action: Optional[Literal["header", "body", "none"]] = None
-    unverified_factual_action: Optional[Literal["header", "body", "none"]] = None
-    include_hallucination_details: Optional[bool] = None
 
 
 class RouterReplayPluginConfig(BaseModel):

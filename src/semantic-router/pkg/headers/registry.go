@@ -113,6 +113,19 @@ func KeptFromProviders() []string {
 	return names
 }
 
+// RouterOwned reports whether the Router or Envoy owns a header, which a
+// decision's header_mutation therefore may not write: every header in the
+// x-vsr- and x-envoy- namespaces, and every internal or secret header the
+// registry records, the route key and the provider credentials among them.
+func RouterOwned(name string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(name))
+	if strings.HasPrefix(normalized, VSRPrefix) || strings.HasPrefix(normalized, EnvoyPrefix) {
+		return true
+	}
+	header, ok := registryByName[normalized]
+	return ok && (header.Surface == SurfaceInternal || header.Sensitivity != SensitivityNone)
+}
+
 var registryByName = func() map[string]Header {
 	byName := make(map[string]Header, len(registry))
 	for _, header := range registry {
@@ -147,7 +160,7 @@ var registry = []Header{
 	{VSRClientProtocol, ToClient, SurfacePublic, SensitivityNone, "protocol", "v0.4", "Client wire protocol, such as `anthropic`; on cross-protocol responses and with the debug headers."},
 	{VSRUpstreamProtocol, ToClient, SurfacePublic, SensitivityNone, "protocol", "v0.4", "Provider wire protocol; on cross-protocol responses and with the debug headers."},
 	{VSRProtocolWarnings, ToClient, SurfacePublic, SensitivityNone, "protocol", "v0.4", "Protocol translation warnings, as comma-separated `severity;reason;field` entries."},
-	{VSRResponseWarnings, ToClient, SurfacePublic, SensitivityNone, "response_warnings", "v0.4", "Response warning codes, in order: `hallucination`, `unverified_factual`, `response_jailbreak`."},
+	{VSRResponseWarnings, ToClient, SurfacePublic, SensitivityNone, "response_guard", "v0.4", "Codes of the `response_guard` rules that annotated the answer, in rule order: `hallucination`, `unverified_factual`, `response_jailbreak` or `response_guard`."},
 	{VSRModelUsage, ToClient, SurfacePublic, SensitivityNone, "benchmark", "v0.4", "Per-model usage receipt of a config-bound evaluation request."},
 	{VSRInferenceCallCount, ToClient, SurfacePublic, SensitivityNone, "benchmark", "v0.4", "Provider calls a config-bound evaluation request made."},
 	{RateLimitLimit, ToClient, SurfacePublic, SensitivityNone, "rate_limit", "v0.2", "Limit of the rate-limit window that rejected the request."},

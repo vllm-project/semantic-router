@@ -218,7 +218,7 @@ func TestPIIAnswersAsAVerdictWhenTheSystemOneDecisionModelHasNoSpans(t *testing.
 	}
 
 	masked := strings.Replace(withPII, "      modelRefs: [{model: deep}]\n",
-		"      modelRefs: [{model: deep}]\n      plugins:\n        - type: masking\n          configuration: {enabled: true, threshold: 0.5}\n", 1)
+		"      modelRefs: [{model: deep}]\n      plugins:\n        - type: masking\n          configuration: {enabled: true, signal: personal}\n", 1)
 	cfg, _ = moduleSystemOneRouterConfig(t, masked)
 	if _, err := buildOpenAIRouterFromConfig(cfg); err == nil || !strings.Contains(err.Error(), "masking replaces PII at the positions") {
 		t.Fatalf("masking with a PII verdict: %v, want the configuration refused at load", err)

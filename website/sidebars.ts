@@ -235,8 +235,7 @@ const sidebars: SidebarsConfig = {
               label: 'Safety and Generation',
               items: [
                 'tutorials/plugin/content-safety',
-                'tutorials/plugin/hallucination',
-                'tutorials/plugin/response-jailbreak',
+                'tutorials/plugin/response-guard',
               ],
             },
           ],

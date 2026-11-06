@@ -37,12 +37,12 @@ const (
 
 func init() {
 	pkgtestcases.Register("response-jailbreak-window-block", pkgtestcases.TestCase{
-		Description: "Verify response_jailbreak blocks a buffered response carrying jailbreak content past the classifier's window",
+		Description: "Verify a response_guard block rule blocks a buffered response carrying jailbreak content past the classifier's window",
 		Tags:        []string{"kubernetes", "security", "jailbreak", "response-jailbreak"},
 		Fn:          testResponseJailbreakWindowBlock,
 	})
 	pkgtestcases.Register("response-jailbreak-window-warning", pkgtestcases.TestCase{
-		Description: "Verify response_jailbreak warns via x-vsr-response-warnings on the same response when the action is header",
+		Description: "Verify a response_guard annotate rule warns via x-vsr-response-warnings on the same response",
 		Tags:        []string{"kubernetes", "security", "jailbreak", "response-jailbreak"},
 		Fn:          testResponseJailbreakWindowWarning,
 	})
@@ -63,7 +63,7 @@ func responseJailbreakPrompt(probe, trailing string) string {
 // content, and the decision's action: block then turns that into a 403.
 func testResponseJailbreakWindowBlock(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
-		fmt.Println("[Test] Testing response_jailbreak block on content past the classifier window")
+		fmt.Println("[Test] Testing the response_guard block on content past the classifier window")
 	}
 
 	localPort, stopPortForward, err := setupServiceConnection(ctx, client, opts)
@@ -104,7 +104,7 @@ func testResponseJailbreakWindowBlock(ctx context.Context, client *kubernetes.Cl
 }
 
 // testResponseJailbreakWindowWarning is the same response against a decision
-// configured with action: header, so the response is delivered and carries the
+// whose rule has action: annotate, so the response is delivered and carries the
 // response_jailbreak code in x-vsr-response-warnings. The benign control runs
 // the same length of response through the same decision, so the warning has to
 // come from the trailing content rather than from every long response.
@@ -151,7 +151,7 @@ func testResponseJailbreakWindowWarning(ctx context.Context, client *kubernetes.
 	}
 
 	if response.StatusCode != 200 {
-		return fmt.Errorf("expected action 'header' to deliver the response, got %d\n%s",
+		return fmt.Errorf("expected action annotate to deliver the response, got %d\n%s",
 			response.StatusCode, formatUnexpectedChatCompletionStatus(response))
 	}
 	if decision != "response_jailbreak_warn" {

@@ -10,13 +10,13 @@ is_mtpe: true
 
 # 幻觉检查 {#hallucination-checks}
 
-Vela 1.0 Halu 把请求带的上下文（工具结果、检索来的文档）、用户的问题和模型的答案一起读，标出答案里没有上下文支撑的片段。[`hallucination` 插件](../../tutorials/plugin/hallucination.md) 随后加一个警告头、在响应体里加一条说明，或者只把结果记下来。
+Vela 1.0 Halu 把请求带的上下文（工具结果、检索来的文档）、用户的问题和模型的答案一起读，标出答案里没有上下文支撑的片段。随后由 [`response_guard`](../../tutorials/plugin/response-guard.md) 规则拦截答案、加一个警告头并可选地在响应体里加一条说明，或者只把结果记下来。
 
 它查的是有没有人撑腰，不是查真相：答案可以被错误的上下文撑住，而没有上下文可查的答案，报的是未验证。
 
 ## 打开它 {#turn-it-on}
 
-把这次观察声明成信号，再在要检查的路由上用插件执行。一个请求提的主张值不值得查，先由 Vela FactCheck 决定。
+把这次观察声明成信号，再在要检查的路由上用 `response_guard` 规则引用它。一个请求提的主张值不值得查，先由 Vela FactCheck 决定：只有值得查时，规则的 `AND` 才会走到检测器。
 
 ```yaml
 routing:
@@ -38,12 +38,19 @@ routing:
       modelRefs:
         - model: answer-model
       plugins:
-        - type: hallucination
+        - type: response_guard
           configuration:
-            enabled: true
-            hallucination_action: header
-            unverified_factual_action: header
-            include_hallucination_details: true
+            rules:
+              - when:
+                  operator: AND
+                  conditions:
+                    - type: fact_check
+                      name: needs_fact_check
+                    - type: hallucination
+                      name: ungrounded_claims
+                action: annotate
+                details: true
+            on_unknown: annotate
 global:
   model_catalog:
     modules:

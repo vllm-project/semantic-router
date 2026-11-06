@@ -451,7 +451,7 @@ func validateModelResolutionContracts(cfg *RouterConfig) error {
 			return fmt.Errorf("recipe %q: %w", scope, err)
 		}
 		if err := validateMaskingSpans(scoped); err != nil {
-			return fmt.Errorf("recipe %q: %w", scope, err)
+			return err
 		}
 	}
 	return nil
@@ -474,16 +474,42 @@ func (c *RouterConfig) declaresNoSpans(consumer string) (string, bool) {
 	return resolved.Name, true
 }
 
-// validateMaskingSpans refuses a masking plugin whose PII answers cannot
-// carry the spans it replaces.
+// spanlessDeployment names the deployment a consumer resolves to when the
+// configuration shows it cannot answer span questions: a systemone deployment
+// whose capabilities declare neither the consumer's preset nor span, or a
+// built-in decision model the catalog lists without span.
+func (c *RouterConfig) spanlessDeployment(consumer string) (string, bool) {
+	if name, noSpans := c.declaresNoSpans(consumer); noSpans {
+		return name, true
+	}
+	resolved, ok, err := c.ResolveTask(consumer)
+	if !ok || err != nil || !resolved.Deployment.IsModelRuntime() {
+		return "", false
+	}
+	if questionTypes, _ := c.deploymentAnswers(resolved.Name); questionTypes == nil || slices.Contains(questionTypes, SystemOneQuestionSpan) {
+		return "", false
+	}
+	return resolved.Name, true
+}
+
+// validateMaskingSpans refuses a masking plugin whose pii rule resolves to a
+// deployment that cannot answer span questions: masking replaces personal
+// data at the positions the rule's spans give.
 func validateMaskingSpans(scoped *RouterConfig) error {
-	if !scoped.UsesMaskingInReachableRouting() {
+	signals := scoped.MaskingSignals()
+	if len(signals) == 0 {
 		return nil
 	}
-	if name, noSpans := scoped.declaresNoSpans("pii_classifier"); noSpans {
-		return fmt.Errorf("the masking plugin replaces PII spans, but pii is answered by systemone deployment %q, whose capabilities declare neither the pii preset nor span questions; bind pii to a deployment that returns spans", name)
+	name, spanless := scoped.spanlessDeployment("pii_classifier")
+	if !spanless {
+		return nil
 	}
-	return nil
+	failures := make([]error, 0, len(signals))
+	for _, signal := range signals {
+		failures = append(failures, CheckError(scoped.ScopePath("signals.pii["+signal+"]"), CodeSpanRequired,
+			fmt.Sprintf("resolves to deployment %q, which cannot answer span questions; bind pii to a span-capable deployment (recipes[].model_bindings.pii or global.model_catalog.bindings.pii)", name)))
+	}
+	return errors.Join(failures...)
 }
 
 // spanFallbackWarnings name the span signals a systemone deployment answers
