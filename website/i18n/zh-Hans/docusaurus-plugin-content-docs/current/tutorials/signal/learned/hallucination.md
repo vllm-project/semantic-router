@@ -12,7 +12,7 @@ translation:
 
 `hallucination` 对照请求携带的依据上下文（例如工具结果或检索文档）检查模型回答，并报告上下文不支持的主张。在 `routing.signals.hallucination` 下定义其规则。
 
-该族为学习型：依赖 `global.model_catalog.modules.hallucination_mitigation.hallucination_model` 下的幻觉检测器（默认是 vela3-fast 的 span-set 适配器，也可以是 Vela Halu），并在[模型运行时](../../../model-runtime/guides/hallucination)中执行。NLI 解释器已退役。
+该族为学习型：除非 `hallucination` 绑定指定了其他部署（例如[模型运行时](../../../model-runtime/guides/hallucination.md)中的 Vela Halu），否则由决策模型回答它（默认是 vela3-fast 的 span-set 适配器）；见[为信号选择模型](../../../installation/choose-a-model-for-a-signal.md)。`global.model_catalog.modules.hallucination_mitigation.detector` 保存检测器的设置。NLI 解释器已退役。
 
 ## 主要优势 {#key-advantages}
 
@@ -46,7 +46,7 @@ routing:
         description: Detect claims the grounding context does not support.
 ```
 
-规则自身没有阈值：检测器在 `hallucination_model` 上的 `threshold`、`min_span_length` 与 `min_span_confidence` 决定什么算不受支持的片段，检测器找到一个时规则匹配。早期版本可以用 `use_nli` 请求片段级 NLI 解释；该解释器已退役，`vllm-sr config migrate` 会移除这一设置。
+规则自身没有阈值：检测器在 `modules.hallucination_mitigation.detector` 下的 `threshold`、`min_span_length` 与 `min_span_confidence` 决定什么算不受支持的片段，检测器找到一个时规则匹配。早期版本可以用 `use_nli` 请求片段级 NLI 解释；该解释器已退役，`vllm-sr config migrate` 会移除这一设置。
 
 ### 阶段 {#stage}
 
@@ -67,8 +67,7 @@ routing:
 
 ## Vela 2.0 {#vela-20}
 
-把 `hallucination_detector` 绑定到 Vela 2.0 部署后，检测器会就回答向模型提出它内置的幻觉问题（由其路由片段头回答），
-请求与依据上下文作为该问题状态中的其他部分：
+把 `hallucination` 绑定到 Vela 2.0 部署后，检测器会就回答向模型提出它内置的幻觉问题（由其路由片段头回答），请求与依据上下文作为该问题状态中的其他部分：
 
 ```yaml
 global:
@@ -79,22 +78,18 @@ global:
         artifact: vllm-sr/Vela-2.0-0.3B
         device: cpu
     bindings:
-      hallucination_detector:
-        deployment: vela2
-        contract: token_spans.v1
+      hallucination: vela2
 ```
 
-模型读取完整回答并使用自身校准后的阈值，因此检测器的 `threshold` 只作用于 Vela 1.0 Halu；
-`min_span_length` 与 `min_span_confidence` 对两者的片段都生效。检查在响应阶段进行，使用该阶段对该部署的调用。
-同一个部署还可以回答请求的 [`decision`](decision.md) 与 [`pii`](pii.md#vela-20) 问题。
+模型读取完整回答并使用自身校准后的阈值，因此检测器的 `threshold` 只作用于 Vela 1.0 Halu；`min_span_length` 与 `min_span_confidence` 对两者的片段都生效。检查在响应阶段进行，使用该阶段对该部署的调用。同一个部署还可以回答请求的 [`decision`](decision.md) 与 [`pii`](pii.md#vela-20) 问题。
 
-## 仅提供整体判断的模型 {#verdict-only-decision-models}
+## 不含片段的判断 {#verdicts-without-spans}
 
-若使用通用判断模型进行整体检查，将 `routing.model_bindings.hallucination_detector` 绑定到该部署，并设置 `contract: decision.v1`。`hallucination` 任务使用 `noul` 问题，将请求、依据上下文和回答作为独立状态部分。结果供响应观察与插件使用，不会虚构主张位置。`threshold` 作用于该概率；片段过滤参数只作用于实际返回的片段。
+如果 `systemone` 部署的能力既未列出 `halu` 预设、也不支持 `span` 问题，它只能以是/否回答整体检查：它提出一个 `noul` 问题，把请求、依据上下文和回答作为独立的状态部分，为响应观察与插件给出“是否有据”的判断，而不会虚构主张位置。`threshold` 作用于该概率；片段过滤参数只在模型实际返回片段时生效。加载时报告 `span_fallback` 警告，Router 在 `vsr_signal_span_verdict_fallbacks_total` 中记录每次这样的回答。
 
-`token_spans.v1` 绑定要求原生片段能力。两条路径都要求完整的准入输入和依据上下文；失败或未完成的检查是 unavailable，不能证明回答有据可依。
+以片段回答的部署需要原生片段能力。两条路径都要求完整的准入输入和依据上下文；失败或未完成的检查是 unavailable，不能证明回答有据可依。
 
 ## 依赖与限制 {#dependencies-and-limitations}
 
-检测器通过 `global.model_catalog.modules.hallucination_mitigation.hallucination_model` 处理回答与提供的依据上下文。它可以识别上下文不支持的文本；没有权威证据时无法确立真相，没有可对照上下文的回答报告为 unavailable，而不是干净。完整示例见：
+检测器在回答 `hallucination` 信号的部署上处理回答与提供的依据上下文。它可以识别上下文不支持的文本；没有权威证据时无法确立真相，没有可对照上下文的回答报告为 unavailable，而不是干净。完整示例见：
 [`config/fragments/signal/hallucination/grounded-answer.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/hallucination/grounded-answer.yaml)。
