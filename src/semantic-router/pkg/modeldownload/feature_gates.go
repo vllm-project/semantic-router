@@ -18,7 +18,7 @@ var optionalModelFeatureGates = []modelFeatureGate{
 	},
 	{
 		enabled: func(cfg *config.RouterConfig) bool {
-			return !cfg.EmbeddingModels.UsesRemoteEmbeddingBackend()
+			return !cfg.UsesRemoteEmbeddings()
 		},
 		paths: func(cfg *config.RouterConfig) []string {
 			return []string{

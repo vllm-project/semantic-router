@@ -189,7 +189,7 @@ so the runtime has one discovery path.
 
 | Entry-point group | Base class | Built-in |
 | --- | --- | --- |
-| `vllm_srun.families` | `ModelFamily` | `decision3`, `decision2`, `decision1`, `task_heads`, `vela2`, `multimodal_embedding` |
+| `vllm_srun.families` | `ModelFamily` | `decision3`, `decision2`, `decision1`, `task_heads`, `vela2`, `vela3`, `vela3_d3`, `multimodal_embedding` |
 | `vllm_srun.engines` | `Engine` | `native`, `onnxruntime` |
 | `vllm_srun.accelerators` | `Accelerator` | `cpu`, `cuda`, `rocm`, `xpu`, `mps` |
 
@@ -1006,11 +1006,73 @@ parameter the file does not hold, are the backbone's own objects, so an
 adapter adds only its own tensors. A request's inputs carry the call they
 belong to (all decisions; one router group on one adapter; one span
 question), and `run` batches each call as the released runtime does, by
-length under its token budget; calls never share a forward. The padded
+length under its token budget; calls never share a forward. On a GPU a batch
+that merges concurrent requests (`run_approximate`) batches equal calls of
+different requests together instead, rows of one length class per forward,
+while a request's own calls stay apart, so a request alone still runs the
+released forwards. A CPU keeps the calls apart here too: it gains no
+throughput, and two long rows in one forward need their dense masks together
+in host memory. The padded
 layout passes the modeling code's additive float masks, so the forwards are
 bit-identical to the package's on a CPU ([record](records/vela3-parity.md)).
+The CPU never holds those masks at `[rows, 1, width, width]`: global layers
+read the `[rows, 1, 1, width]` key mask and local layers attend 1,024 queries
+per SDPA call over every key with their rows of the dense mask. A tail under
+768 queries joins the call before it, because the CPU kernel blocks shorter
+calls differently, so each query's reduction, and every answer, stays
+unchanged.
 The span and router layout, word units and span decoder are the Vela 2.0
 family's, which the package copies verbatim.
+
+### 8.8 Vela 3.0 d3 sizes (`vela3_d3`)
+
+vela3-lite, -mini, -flash and -turbo (`vela3_config.json` format `vela3/3`)
+hold no backbone. Each pins a Decision 3.0 package (`base`: repository and
+40-hex revision), which the family fetches like decision2's base (or takes
+from `--base-path`), verifies with the `decision3` family and runs
+unchanged; the identity covers the package's weight files and the base's
+identity. Over the base's text model sit gated LoRA adapters
+(`BackboneSpec.gated`): FP32 factors on the base's own Linears, at most one
+on per forward, on the rows `ForwardBatch.adapter` names. A gated Linear
+returns `base(x) + ((x.float() @ A.T) @ B.T * alpha / r).to(dtype)` on its
+rows and `base(x)` itself on the others, so a forward with every adapter off
+is the base's. Fused layers and graphs would bypass the gate, so a model with
+gated adapters runs eager on GPUs.
+
+| Questions | Adapter | Forward |
+| --- | --- | --- |
+| Router question IDs (by ID, or ID and trained wording) | `decision` | The base's batch, one pass per adapter, each row keeping its own adapter's pass |
+| `decision_task_adapters` IDs and `prefix:` keys | Their own (`decision_df`, `decision_hz`, ...) | As above |
+| `"decision_adapter": true` with `decision_opt_in` | `decision_optin` (or `decision`) | As above |
+| Every other Choice, Noul and Score question | None | The base's own |
+| Span questions | `span`, `ner` or `relation`, by label set and wording | One noncausal pass per window over d3's prompt; the head reads word first tokens against option-line means |
+
+vela3-turbo (`decisions.attention` `noncausal`) answers every question on
+d3-turbo's state-once path first, then each gated question again as a
+replay row (its full prompt, noncausal, adapter on for the pass, eight rows
+per pass); the replay's answer replaces the base's and its tokens count in
+the usage. Span passes add nothing to `usage.input_tokens` on any size, on
+purpose: the packages' runtime does not count them either, and every
+parity request's input tokens agree with it (the vela3 family counts its
+span windows). Requests with images, videos or assets and Box / track
+questions take the base alone; those with media refuse span questions. On
+every path a blank state is refused and span questions are planned before
+the base sees the rest.
+A span question reads its whole target in windows, so `overflow` takes only
+`window`. The target holds at most 32,768 tokens on every size (the vela3
+family's default scan budget on a CPU; it does not follow the base's question
+cap, which is 262,144 tokens on vela3-lite, -mini and -flash): a longer one
+fails alone with `scan_budget_exceeded` before any window runs. The card reports no scan
+budget, so the Router asks these models without `overflow`. Each window goes
+through the base's length check (`max_length_exceeded`).
+`"decision_adapter"` is part of the API contract (`Question`). `{"preset": "pii"}` and `"halu"` ask the package's
+trained question and label set, as on the vela3 family; the card lists the
+presets the package's span schemas hold. Span answers follow the contract (`spans`, `thresholds`, a Noul of
+the most probable word); the decoder is the package's (its unit class starts
+its compatibility block at U+F900, unlike the word splitter's). Open labels
+without a description run by name: the packages' label-definition writers
+(vela3-mini's base, vela3-flash's grafted head) are not run
+([record](records/vela3-d3-parity.md)).
 
 ## 9. Scheduler and planner
 

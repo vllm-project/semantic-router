@@ -24,6 +24,4 @@ spec:
         on_overflow: shed
     routing:
       model_bindings:
-        pii_classifier:
-          deployment: local-pii
-          contract: token_spans.v1
+        pii: local-pii

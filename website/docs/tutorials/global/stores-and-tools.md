@@ -128,9 +128,23 @@ For full deployment instructions, see:
 - [Qdrant](../../installation/qdrant) — Docker, Kubernetes, config reference, tuning, and troubleshooting
 - `config/runtime/memory/` for backend-specific configuration references
 
-When an external model with `model_role: memory_rewrite` is configured, its
-`max_response_bytes` limits each query-rewrite response. An omitted or
-non-positive value uses the 1 MiB default.
+`query_rewrite.deployment` names the `openai_chat` deployment that rewrites a
+query with its conversation before memory search; without it the query is
+searched as written. The deployment's `limits.max_response_bytes` bounds each
+rewrite response (1 MiB by default):
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      rewriter:
+        provider: openai_chat
+        endpoint: http://llm.example.com:8000/v1
+        model: qwen3
+  stores:
+    memory:
+      query_rewrite: {deployment: rewriter}
+```
 
 #### Hybrid search and reflection
 
@@ -217,6 +231,12 @@ global:
 ```
 
 Supported backends: `memory`, `milvus`, `llama_stack`, `valkey`, `qdrant`.
+
+The uploaded files themselves stay on the Router's disk, in `file_storage_dir`
+(`/var/lib/vsr/data` by default).
+[Files on the Router's disk](../../installation/storage-overview#router-local-files)
+explains how each deployment keeps that directory writable and how to make it
+persistent.
 
 `metadata_store` controls the registry for vector-store and uploaded-file
 metadata. Use `postgres` for restart-safe local or production-like stacks; the

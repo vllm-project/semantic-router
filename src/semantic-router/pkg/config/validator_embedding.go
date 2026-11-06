@@ -25,7 +25,7 @@ func validateEmbeddingModelContracts(cfg *RouterConfig) error {
 	if err := validateMmBertModelPath(cfg.EmbeddingModels.MmBertModelPath); err != nil {
 		return err
 	}
-	if err := validateRemoteEmbeddingProviderConfig(cfg.EmbeddingModels); err != nil {
+	if err := validateRemoteEmbeddingProviderConfig(cfg); err != nil {
 		return err
 	}
 	return nil
@@ -39,9 +39,13 @@ func validateEmbeddingSignalContracts(cfg *RouterConfig) error {
 	return validateEmbeddingRuleModalities(cfg.EmbeddingRules, cfg.EmbeddingModels.EmbeddingConfig.ModelType, bound)
 }
 
-func validateRemoteEmbeddingProviderConfig(models EmbeddingModels) error {
+func validateRemoteEmbeddingProviderConfig(cfg *RouterConfig) error {
+	models := cfg.EmbeddingModels
 	if !models.UsesRemoteEmbeddingBackend() {
 		return nil
+	}
+	if strings.TrimSpace(models.Endpoint.BaseURL) == "" && cfg.EmbeddingDeployment != "" {
+		return fmt.Errorf("global.model_catalog.embeddings.semantic.embedding_config: backend %s and model_type %s describe the deprecated embeddings.semantic.endpoint; embeddings.default names the remote embedding deployment, so remove them", EmbeddingBackendOpenAICompatible, EmbeddingModelTypeRemote)
 	}
 
 	var problems []string

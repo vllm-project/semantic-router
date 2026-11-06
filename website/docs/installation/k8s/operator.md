@@ -14,7 +14,7 @@ backends are already exposed as Kubernetes services, KServe
 `InferenceService`s, or Llama Stack services.
 
 The Operator does not deploy model servers. It discovers or references them and
-generates the provider bindings used by the Router.
+generates the request backends (`providers.models`) the Router uses.
 
 ## What the Operator manages
 
