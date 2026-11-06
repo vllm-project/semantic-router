@@ -101,8 +101,14 @@ func (c *Classifier) ReplayPromptEvidence(ctx context.Context, prompt string) Pr
 }
 
 func (c *Classifier) evaluatePIISignalWithToolResults(ctx context.Context, results *SignalResults, mu *sync.Mutex, piiText string, nonUserMessages []string, toolResultTexts []string, toolResultScanIncomplete bool) {
+	c.evaluatePIISignalPieces(ctx, results, mu, []string{piiText}, nonUserMessages, toolResultTexts, toolResultScanIncomplete)
+}
+
+// evaluatePIISignalPieces scans each current piece as its own content item, so
+// evidence about one piece, such as the routing text, stays exact.
+func (c *Classifier) evaluatePIISignalPieces(ctx context.Context, results *SignalResults, mu *sync.Mutex, current []string, nonUserMessages []string, toolResultTexts []string, toolResultScanIncomplete bool) {
 	if backend := decisionPIIInference(c.piiInference); backend != nil {
-		c.evaluateDecisionPIISignalWithToolResults(ctx, results, mu, piiText, nonUserMessages, toolResultTexts, toolResultScanIncomplete, backend)
+		c.evaluateDecisionPIISignalWithToolResults(ctx, results, mu, current, nonUserMessages, toolResultTexts, toolResultScanIncomplete, backend)
 		return
 	}
 	start := time.Now()
@@ -113,7 +119,7 @@ func (c *Classifier) evaluatePIISignalWithToolResults(ctx context.Context, resul
 	contentSeen := make(map[piiCacheKey]struct{})
 	var uniqueContents []piiCacheKey
 	for _, rule := range c.Config.PIIRules {
-		for _, content := range collectPIIRuleContentsForSource(rule, piiText, nonUserMessages, toolResultTexts) {
+		for _, content := range collectPIIRuleContentsForSource(rule, current, nonUserMessages, toolResultTexts) {
 			key := piiCacheKey{source: piiCacheSource(rule.Source), content: content}
 			if _, ok := contentSeen[key]; ok {
 				continue
@@ -164,12 +170,12 @@ func (c *Classifier) evaluatePIISignalWithToolResults(ctx context.Context, resul
 	}
 	rules := c.Config.PIIRules
 	modelservice.Fan(ctx, len(rules), func(i int) {
-		c.evaluatePIIRule(rules[i], piiText, nonUserMessages, toolResultTexts, toolResultScanIncomplete, piiCache, start, results, mu)
+		c.evaluatePIIRule(rules[i], current, nonUserMessages, toolResultTexts, toolResultScanIncomplete, piiCache, start, results, mu)
 	})
 
 	// Replay evidence must cover complete, clean content regardless of routing allow-lists.
 	verified := len(rules) > 0 && len(pieces) > 0 && !toolResultScanIncomplete
-	for _, content := range append(append([]string{piiText}, nonUserMessages...), toolResultTexts...) {
+	for _, content := range slices.Concat(current, nonUserMessages, toolResultTexts) {
 		if content != "" {
 			_, legacy := contentSeen[piiCacheKey{source: "legacy", content: content}]
 			_, tool := contentSeen[piiCacheKey{source: config.PIISourceToolResult, content: content}]
@@ -212,8 +218,8 @@ func (c *Classifier) evaluatePIISignalWithToolResults(ctx context.Context, resul
 	logging.Debugf("[Signal Computation] PII signal evaluation completed in %v", elapsed)
 }
 
-func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUserMessages []string, toolResultTexts []string, toolResultScanIncomplete bool, piiCache map[piiCacheKey]cachedPIIContent, start time.Time, results *SignalResults, mu *sync.Mutex) {
-	ruleContents := collectPIIRuleContentsForSource(rule, piiText, nonUserMessages, toolResultTexts)
+func (c *Classifier) evaluatePIIRule(rule config.PIIRule, current []string, nonUserMessages []string, toolResultTexts []string, toolResultScanIncomplete bool, piiCache map[piiCacheKey]cachedPIIContent, start time.Time, results *SignalResults, mu *sync.Mutex) {
+	ruleContents := collectPIIRuleContentsForSource(rule, current, nonUserMessages, toolResultTexts)
 	if len(ruleContents) == 0 {
 		if rule.Source == config.PIISourceToolResult && toolResultScanIncomplete {
 			c.recordPIIRuleError(rule, piiScanIncomplete, results, mu)

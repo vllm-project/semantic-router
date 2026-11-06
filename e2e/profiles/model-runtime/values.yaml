@@ -6,7 +6,7 @@
 #   auto and a reranker), each in its own worker, plus a Decision 2.0
 #   model), through VLLM_SRUN_COMMAND;
 # - attached: model-runtime-attached serves a decision model and a feedback
-#   classifier in one process, selected by served_name;
+#   classifier in one process, each selected by its model;
 # - fail-open: decision-offline points at a Service with no pods.
 #
 # testcases/model_runtime_*.go compare the Router's signals and routes with
@@ -69,7 +69,7 @@ config:
           description: Prompt injection or jailbreak.
       classifiers:
         - name: user_reaction
-          type: local
+          deployment: attached-feedback
           labels: [SAT, NEED_CLARIFICATION, WRONG_ANSWER, WANT_DIFFERENT, NO_FEEDBACK]
       # The modality fixture's labels, the only names the Router accepts.
       modality:
@@ -156,13 +156,6 @@ config:
                 description: A person's name
             threshold: 0
           timeout_ms: 10000
-    model_bindings:
-      classifier.user_reaction:
-        deployment: attached-feedback
-        contract: label_distribution.v1
-      rag.reranker:
-        deployment: vela-reranker
-        contract: relevance_scores.v1
     decisions:
       # A marker keeps this acceptance route isolated from the rest of the
       # profile while the classifier predicate proves the portable observation
@@ -201,6 +194,7 @@ config:
                 vector_store_id: vs-model-runtime-e2e
               top_k: 4
               rerank:
+                deployment: vela-reranker
                 top_k: 2
               on_failure: skip
       # An unknown answer never matches: the offline deployment never answers.
@@ -300,6 +294,7 @@ config:
     model_catalog:
       kbs: []
       embeddings:
+        default: vela-embedding
         semantic:
           embedding_config:
             # The fixture embedder is 4 layers deep; zero selects its full
@@ -361,37 +356,26 @@ config:
         attached-decisions:
           provider: model_runtime
           endpoint: http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100
-          served_name: decision-a
+          model: decision-a
         attached-feedback:
           provider: model_runtime
           endpoint: http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100
-          served_name: feedback-a
+          model: feedback-a
           input:
             max_tokens: 512
             overflow: truncate
         attached-vela2:
           provider: model_runtime
           endpoint: http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100
-          served_name: vela2-a
+          model: vela2-a
         decision-offline:
           provider: model_runtime
           endpoint: http://model-runtime-offline.vllm-semantic-router-system.svc.cluster.local:8100
       bindings:
-        domain_classifier:
-          deployment: vela-domain
-          contract: label_distribution.v1
-        pii_classifier:
-          deployment: vela-pii
-          contract: token_spans.v1
-        prompt_guard:
-          deployment: vela-guard
-          contract: label_distribution.v1
-        embedding:
-          deployment: vela-embedding
-          contract: embedding.v1
-        modality_detector:
-          deployment: vela-modality
-          contract: label_distribution.v1
+        domain: vela-domain
+        pii: vela-pii
+        jailbreak: vela-guard
+        modality: vela-modality
       # No mapping files: the modules take their labels from the cards the
       # runtimes serve for the fixtures.
       modules:
@@ -411,18 +395,15 @@ config:
             overlap: 16
         hallucination_mitigation:
           enabled: false
-        # The binding above serves the model; the validator still asks for a
-        # model_path and a threshold, which method classifier does not apply.
+        # The modality binding above names the model; method classifier still
+        # takes a confidence_threshold.
         modality_detector:
           enabled: true
           method: classifier
           confidence_threshold: 0.5
-          classifier:
-            model_path: /tmp/vsr-fixtures/modality
-            use_cpu: true
     services:
       api:
-        # Makes the global embedding binding a prepared service.
+        # Makes the global embedding deployment a prepared service.
         embeddings: {enabled: true}
 
 extraEnv:

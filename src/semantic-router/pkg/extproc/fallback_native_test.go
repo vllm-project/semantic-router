@@ -117,6 +117,44 @@ func TestNativeFallbackEndsWithThePrimaryContext(t *testing.T) {
 	require.Equal(t, "model-primary", ctx.VSRSelectedModel, "no candidate is in flight once the chain ended")
 }
 
+// pkg/upstream hands the fallback a failed reply's bytes as the provider sent
+// them. A gzip reply is recorded decoded, as the response-phase fallback
+// records it, even when the excerpt was cut short; one that does not decode is
+// recorded without a body, as the response phase continues an undecodable
+// error reply with none.
+func TestNativeFallbackRecordsAGzipFailureDecoded(t *testing.T) {
+	gzipFailure := func(status int, body []byte) routing.Outcome {
+		outcome := failedWith(status, "")
+		outcome.Header = routing.Header{{Name: "content-encoding", Value: "gzip"}}
+		outcome.Body = body
+		return outcome
+	}
+	whole := gzipBytes(t, []byte("unavailable"))
+	for _, tc := range []struct {
+		name, want string
+		body       []byte
+	}{
+		{name: "whole", body: whole, want: "upstream returned status 503: unavailable"},
+		{name: "cut_short", body: whole[:len(whole)-8], want: "upstream returned status 503: unavailable"},
+		{name: "undecodable", body: []byte("not gzip"), want: "upstream returned status 503"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			session := nativeFallbackSession(t, fallback.DefaultEnabledPolicy(), "model-primary", "model-fallback-1")
+			chain := session.Fallback()
+			step, err := chain.Next(context.Background(), gzipFailure(http.StatusServiceUnavailable, tc.body))
+			require.NoError(t, err)
+			require.NotNil(t, step.Call)
+			_, err = chain.Next(context.Background(), gzipFailure(http.StatusBadGateway, gzipBytes(t, []byte("bad gateway"))))
+			require.NoError(t, err)
+
+			attempts := session.ctx.FallbackRecord.Attempts
+			require.Len(t, attempts, 2)
+			require.Equal(t, tc.want, attempts[0].ErrorMessage)
+			require.Equal(t, "bad gateway", attempts[1].ErrorMessage)
+		})
+	}
+}
+
 func TestNativeFallbackBoundsACandidateLikeTheResponsePhase(t *testing.T) {
 	candidatePerTry := func(t *testing.T, session *routingSession) *time.Duration {
 		t.Helper()

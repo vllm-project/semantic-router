@@ -187,7 +187,7 @@ curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \
 如果运行时之后重启，在模型恢复之前该信号为未知，`on_unknown: no_match` 会在此期间把请求送到 `default-route`。
 
 Engine 与 Router 共享同一个受管理实例。若要接入独立运营的 worker，明确配置
-`endpoint` 和 `served_name`；[部署指南](model-runtime/deploy.md) 说明其独立 API 和生命周期。
+`endpoint` 和 `model`；[部署指南](model-runtime/deploy.md) 说明其独立 API 和生命周期。
 
 ## 下一步 {#next-steps}
 

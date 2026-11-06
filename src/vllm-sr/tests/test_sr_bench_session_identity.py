@@ -16,7 +16,7 @@ from cli.sr_bench.engine import Engine
 from cli.sr_bench.report import make_report
 from cli.sr_bench.service import PREFIX, Server
 from cli.sr_bench.store import TERMINAL, Store
-from cli.sr_bench.transport import SESSION_ID_HEADER
+from cli.sr_bench.transport import CONVERSATION_ID_HEADER, SESSION_ID_HEADER
 
 
 class _Endpoint(BaseHTTPRequestHandler):
@@ -25,7 +25,13 @@ class _Endpoint(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         body = json.loads(self.rfile.read(int(self.headers["content-length"])))
-        self.server.seen.append((body["model"], self.headers.get(SESSION_ID_HEADER)))
+        self.server.seen.append(
+            (
+                body["model"],
+                self.headers.get(SESSION_ID_HEADER),
+                self.headers.get(CONVERSATION_ID_HEADER),
+            )
+        )
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.end_headers()
@@ -128,17 +134,17 @@ def test_subject_calls_share_one_identity_per_task_and_run(
         run_id = _completed_run(engine, document)
         calls = engine.store.calls(run_id, summary=True)
         sent = endpoint.seen[sent_before:]
-        assert [model for model, _ in sent] == [
+        assert [model for model, _, _ in sent] == [
             "subject",
             "judge",
             "simulator",
             "subject",
         ] * 2
-        assert [header for _, header in sent] == [
-            call.get("session_id") for call in calls
+        assert [(session, conversation) for _, session, conversation in sent] == [
+            (call.get("session_id"), call.get("conversation_id")) for call in calls
         ]
         assert all(
-            call.get("session_id") is None
+            call.get("session_id") is None and call.get("conversation_id") is None
             for call in calls
             if call["role"] != "subject"
         )
@@ -151,6 +157,13 @@ def test_subject_calls_share_one_identity_per_task_and_run(
         assert len(identities) == len(by_task) == 2
         identities_by_run.append(identities)
     assert identities_by_run[0].isdisjoint(identities_by_run[1])
+    # W1: conversation-scoped Router protection needs both identity headers;
+    # session-aware calls send one stable pair per task.
+    assert all(
+        call.get("conversation_id") == call.get("session_id")
+        for call in calls
+        if call["role"] == "subject"
+    )
 
 
 def test_report_labels_each_target_continuity_by_session_mode(
