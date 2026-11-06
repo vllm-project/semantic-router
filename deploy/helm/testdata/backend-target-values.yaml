@@ -12,14 +12,15 @@ configOverride:
         provider_model_id: provider/model-id
         backend_refs:
           - name: hosted-primary
-            base_url: https://provider.example/v1
+            endpoint: https://provider.example/v1
             protocol: https
             weight: 75
             provider: openai
-            auth_header: Authorization
-            auth_prefix: Bearer
-            api_key_env: PROVIDER_API_KEY
-            extra_headers:
+            auth:
+              header: Authorization
+              prefix: Bearer
+              api_key_env: PROVIDER_API_KEY
+            headers:
               X-Tenant: production
             api_version: "2026-09-01"
             chat_path: /chat/completions

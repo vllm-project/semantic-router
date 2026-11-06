@@ -46,9 +46,10 @@ describe('default decision deployment', () => {
       version: 'v0.3',
       global: {
         model_catalog: {
+          // A deprecated system line is kept as written; the default selection never writes one.
           system: { decision_model: { deployment: 'judge' }, hazard: 'models/custom-hazard' },
           deployments: { judge: { artifact: 'vllm-sr/Vela-2.0-4B', device: 'cuda:1' } },
-          modules: { prompt_guard: { model_binding: { deployment: 'judge' } } },
+          bindings: { jailbreak: 'judge' },
         },
       },
     }
@@ -57,8 +58,11 @@ describe('default decision deployment', () => {
     expect(chosen.global.model_catalog.deployments.judge).toEqual(
       config.global.model_catalog.deployments.judge,
     )
-    expect(chosen.global.model_catalog.modules).toEqual(config.global.model_catalog.modules)
-    expect(chosen.global.model_catalog.system.hazard).toBe('models/custom-hazard')
+    expect(chosen.global.model_catalog.bindings).toEqual({ jailbreak: 'judge' })
+    expect(chosen.global.model_catalog.system).toEqual({
+      decision_model: { deployment: 'vela-2-0-0-8b' },
+      hazard: 'models/custom-hazard',
+    })
     expect(config.global.model_catalog.system.decision_model).toEqual({ deployment: 'judge' })
   })
 

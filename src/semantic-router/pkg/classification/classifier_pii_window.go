@@ -22,13 +22,15 @@ type windowedPIIBackend struct {
 }
 
 func newWindowedPIIBackend(cfg config.PIIModel, mapping *PIIMapping, models ...*classifierModelRuntime) (*windowedPIIBackend, error) {
-	runtime := consumerModelRuntime(models)
-	spec, specErr := runtime.localSpec("pii_classifier", cfg.ModelID, "mmbert32k", config.RemoteClassifierContractTokenSpans, cfg.UseCPU, cfg.MaxSequenceLength)
+	runtime := consumerModelRuntime(models).withModule(cfg.ModelID, func(scoped *config.RouterConfig) {
+		scoped.PIIModel = cfg
+	})
+	spec, specErr := runtime.localSpec("pii_classifier", "mmbert32k", config.RemoteClassifierContractTokenSpans, cfg.MaxSequenceLength)
 	if cfg.Window == nil {
 		return nil, fmt.Errorf("PII token windows require geometry")
 	}
 	var err error
-	if _, bound := runtime.plan.Lookup(runtime.recipe, "pii_classifier"); bound {
+	if planned, bound := runtime.plan.Lookup(runtime.recipe, "pii_classifier"); bound && !planned.Deployment.Translated() {
 		err = cfg.ValidateBoundWindow(spec.Deployment)
 	} else {
 		err = cfg.ValidateWindow()

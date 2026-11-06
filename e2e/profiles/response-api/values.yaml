@@ -79,16 +79,18 @@ config:
         backend_refs:
           - name: mock-openai
             provider: openai
-            base_url: http://provider-mocker.default.svc.cluster.local:8000/v1
-            api_key_env: VSR_E2E_OPENAI_API_KEY
+            endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1
+            auth:
+              api_key_env: VSR_E2E_OPENAI_API_KEY
       - name: astra-responses
         catalog: openai/gpt-6-astra
         api_format: responses
         backend_refs:
           - name: mock-openai
             provider: openai
-            base_url: http://provider-mocker.default.svc.cluster.local:8000/v1
-            api_key_env: VSR_E2E_OPENAI_API_KEY
+            endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1
+            auth:
+              api_key_env: VSR_E2E_OPENAI_API_KEY
       # This catalog binding uses Responses with a chat_template_kwargs
       # reasoning transport. Route a dedicated probe through a decision so
       # provider adaptation runs before dispatch to the simulator.
@@ -98,8 +100,9 @@ config:
         backend_refs:
           - name: mock-compactifai
             provider: compactifai
-            base_url: http://provider-mocker.default.svc.cluster.local:8000/v1
-            api_key_env: VSR_E2E_OPENAI_API_KEY
+            endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1
+            auth:
+              api_key_env: VSR_E2E_OPENAI_API_KEY
   routing:
     decisions:
       - name: reasoning_summary_template_decision
@@ -247,24 +250,19 @@ config:
         enabled: true
         backend_type: memory
         embedding_model: mmbert
-        file_storage_dir: /tmp/vsr-data
     integrations: {}
     model_catalog:
       kbs: []
       modules:
         prompt_guard:
           enabled: false
-          model_ref: ""
-          model_id: ""
           jailbreak_mapping_path: ""
         classifier:
           domain:
-            model_ref: ""
-            model_id: ""
+            enabled: false
             category_mapping_path: ""
           pii:
-            model_ref: ""
-            model_id: ""
+            enabled: false
             pii_mapping_path: ""
 resources:
   limits:

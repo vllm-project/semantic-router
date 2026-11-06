@@ -77,6 +77,11 @@ func TestOpenAIResponseCacheUsageRejectsInvalidEvidence(t *testing.T) {
 			for _, streaming := range []bool{false, true} {
 				t.Run(fmt.Sprintf("%s/%s/stream=%t", format, name, streaming), func(t *testing.T) {
 					engine := NewBuiltinEngine()
+					if name == "unknown field" {
+						// An undeclared usage member never takes part in
+						// accounting; only the conformance contract rejects it.
+						engine = conformanceEngine()
+					}
 					body := cacheUsageFixture(t, format, streaming, details)
 					var err error
 					if streaming {

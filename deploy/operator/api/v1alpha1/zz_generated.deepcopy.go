@@ -280,6 +280,11 @@ func (in *ConfigSpec) DeepCopyInto(out *ConfigSpec) {
 		*out = new(apiextensionsv1.JSON)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.ModelBindings != nil {
+		in, out := &in.ModelBindings, &out.ModelBindings
+		*out = new(apiextensionsv1.JSON)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.ModelAdmission != nil {
 		in, out := &in.ModelAdmission, &out.ModelAdmission
 		*out = new(apiextensionsv1.JSON)

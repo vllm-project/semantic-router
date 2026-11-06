@@ -24,17 +24,20 @@ config:
       - name: general-expert
     signals:
       # Two rules over one remote score, differing only in where they draw
-      # their boundaries. No hard/easy candidates: with a backend the local
-      # prototype path is unreachable, so a verdict here can only have come
-      # from the remote scorer. That is what makes the assertion attributable
-      # rather than merely consistent.
+      # their boundaries. No hard/easy candidates: a rule a remote deployment
+      # answers has no local prototype path, so a verdict here can only have
+      # come from the remote scorer. That is what makes the assertion
+      # attributable rather than merely consistent. One remote score drives
+      # every complexity rule, so both rules name the same deployment.
       complexity:
         - name: needs_reasoning
           description: Escalate when the remote scorer puts the request past 0.80
+          deployment: e2e-difficulty-scorer
           hard_above: 0.80
           easy_below: 0.30
         - name: extreme
           description: A stricter reading of the same score
+          deployment: e2e-difficulty-scorer
           hard_above: 0.95
           easy_below: 0.10
     decisions:
@@ -78,26 +81,14 @@ config:
       strategy: priority
     model_catalog:
       kbs: []
-      external:
-        - name: e2e-difficulty-scorer
-          model_role: classification
-          llm_endpoint:
-            address: mock-difficulty-scorer.default.svc.cluster.local
-            port: 8000
-            protocol: http
-          llm_model_name: difficulty-service
-          llm_timeout_seconds: 5
-      modules:
-        complexity:
-          # score.v1 rather than label_distribution.v1: the scorer returns a
-          # number and the rules above convert it. contract is required
-          # because complexity reads both, so omitting it would leave the
-          # runtime guessing which response shape to expect.
-          backend:
-            protocol: http_classify
-            contract: score.v1
-            model: e2e-difficulty-scorer
-            deadline_ms: 5000
+      deployments:
+        # A classify deployment answers complexity rules with score.v1: the
+        # scorer returns a number and the rules above convert it.
+        e2e-difficulty-scorer:
+          provider: classify
+          endpoint: http://mock-difficulty-scorer.default.svc.cluster.local:8000
+          model: difficulty-service
+          timeout_ms: 5000
     services:
       response_api:
         enabled: true
