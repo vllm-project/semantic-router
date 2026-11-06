@@ -24423,6 +24423,30 @@
                                   "reason": {
                                     "type": "string"
                                   },
+                                  "release": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "header": {
+                                        "type": "string"
+                                      },
+                                      "honored": {
+                                        "type": "boolean"
+                                      },
+                                      "previous_model": {
+                                        "type": "string"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      },
+                                      "selected_model": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "honored"
+                                    ]
+                                  },
                                   "remaining_turn_prior": {
                                     "type": "number"
                                   },
@@ -24714,6 +24738,30 @@
                                   },
                                   "reason": {
                                     "type": "string"
+                                  },
+                                  "release": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "header": {
+                                        "type": "string"
+                                      },
+                                      "honored": {
+                                        "type": "boolean"
+                                      },
+                                      "previous_model": {
+                                        "type": "string"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      },
+                                      "selected_model": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "honored"
+                                    ]
                                   },
                                   "remaining_turn_prior": {
                                     "type": "number"
@@ -29457,6 +29505,30 @@
                             "reason": {
                               "type": "string"
                             },
+                            "release": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "header": {
+                                  "type": "string"
+                                },
+                                "honored": {
+                                  "type": "boolean"
+                                },
+                                "previous_model": {
+                                  "type": "string"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                },
+                                "selected_model": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "honored"
+                              ]
+                            },
                             "remaining_turn_prior": {
                               "type": "number"
                             },
@@ -29748,6 +29820,30 @@
                             },
                             "reason": {
                               "type": "string"
+                            },
+                            "release": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "header": {
+                                  "type": "string"
+                                },
+                                "honored": {
+                                  "type": "boolean"
+                                },
+                                "previous_model": {
+                                  "type": "string"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                },
+                                "selected_model": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "honored"
+                              ]
                             },
                             "remaining_turn_prior": {
                               "type": "number"
