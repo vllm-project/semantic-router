@@ -25,18 +25,19 @@ func TestProfileCarriesNoRetiredClassifierFields(t *testing.T) {
 	if err := yaml.Unmarshal(raw, &values); err != nil {
 		t.Fatal(err)
 	}
-	classifier := profileSection(t, values, "config", "global", "model_catalog", "modules", "classifier")
-	pii := profileSection(t, classifier, "pii")
-	// The remote backend is what makes a detection attributable to the stub, so
-	// no local selector may creep back in.
-	for _, selector := range []string{"model_ref", "model_id"} {
+	catalog := profileSection(t, values, "config", "global", "model_catalog")
+	pii := profileSection(t, catalog, "modules", "classifier", "pii")
+	// The remote stub is what makes a detection attributable to it, so no
+	// local selector may creep back in.
+	for _, selector := range []string{"model_ref", "model_id", "backend"} {
 		if value, set := pii[selector]; set && value != "" {
-			t.Fatalf("pii.%s must stay empty so spans come only from the remote backend, got %v", selector, value)
+			t.Fatalf("pii.%s must stay unset so spans come only from the remote stub, got %v", selector, value)
 		}
 	}
-	backend := profileSection(t, pii, "backend")
-	if backend["contract"] != "token_spans.v1" {
-		t.Fatalf("the PII backend must stay a token_spans.v1 binding: %#v", backend)
+	// A classify deployment answers the PII signal with token_spans.v1.
+	name, _ := profileSection(t, catalog, "bindings")["pii"].(string)
+	if deployment := profileSection(t, catalog, "deployments", name); deployment["provider"] != "classify" {
+		t.Fatalf("the PII binding must name the remote classify stub: %#v", deployment)
 	}
 }
 

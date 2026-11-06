@@ -24,7 +24,7 @@ providers:
       provider_model_id: test-model
       backend_refs:
         - name: primary
-          base_url: http://vllm-sr-recipe-fixture-upstream:18080/v1
+          endpoint: http://vllm-sr-recipe-fixture-upstream:18080/v1
           provider: openai
           weight: 100
 

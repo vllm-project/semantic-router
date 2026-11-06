@@ -22,7 +22,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("streaming-keyword-routing", pkgtestcases.TestCase{
-		Description: "Verify keyword routing works identically with streamed request body mode",
+		Description: "Verify every keyword routing case selects its decision when the request body arrives in several streamed chunks",
 		Tags:        []string{"streaming", "routing", "keyword"},
 		Fn:          testStreamingKeywordRouting,
 	})
@@ -85,12 +85,17 @@ func checkStreamingKeywordRouting(ctx context.Context, localPort string, opts pk
 
 	passed := 0
 	for _, tc := range cases {
-		resp, err := sendNonStreamingRequest(ctx, tc.query, "vllm-sr/auto", localPort)
+		resp, err := sendChunkedChatRequest(ctx, localPort, chatRequestBody(tc.query, "vllm-sr/auto", false), streamedBodyWrites)
 		if err != nil {
 			fmt.Printf("[Streaming] FAIL %s: %v\n", tc.name, err)
 			continue
 		}
+		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			fmt.Printf("[Streaming] FAIL %s: status %d: %s\n", tc.name, resp.StatusCode, truncateString(string(body), 200))
+			continue
+		}
 
 		decision := resp.Header.Get("x-vsr-selected-decision")
 		actualDec := strings.TrimSuffix(decision, "_decision")
@@ -224,8 +229,11 @@ func testStreamingLargeBody(ctx context.Context, client *kubernetes.Clientset, o
 	}
 	defer backend.Close()
 
-	// Exercise a payload above 64 KiB. The provider observation verifies the
-	// complete messages without assuming a particular Envoy chunk count.
+	// Exercise a payload above 64 KiB. Size alone does not guarantee several
+	// ext_proc chunks: a body written at once can reach the Router as one
+	// chunk, so the body is written in several pieces. The provider
+	// observation verifies the complete messages without assuming a
+	// particular Envoy chunk count.
 	longContext := strings.Repeat("This is padding context to make the body large enough for multi-chunk delivery. ", 1000)
 	// The urgency decision has no system-prompt rewrite or response cache.
 	userMsg := "This is an urgent emergency, I need help immediately!"
@@ -249,8 +257,10 @@ func testStreamingLargeBody(ctx context.Context, client *kubernetes.Clientset, o
 	}
 
 	url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonData))
+	body := chunkedBody(ctx, jsonData, streamedBodyWrites)
+	req, err := http.NewRequestWithContext(ctx, "POST", url, body)
 	if err != nil {
+		body.Close()
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -448,18 +458,88 @@ func validateStreamingCacheStream(headers http.Header, body []byte, wantText str
 // HTTP helpers
 // ---------------------------------------------------------------------------
 
-func sendNonStreamingRequest(ctx context.Context, question, model, localPort string) (*http.Response, error) {
+// streamedBodyWrites and streamedWritePause make the client write a request
+// body in several pieces, so Envoy hands it to the Router in STREAMED mode as
+// more than one ext_proc chunk. Unit tests without Envoy drop the pause.
+const streamedBodyWrites = 3
+
+var streamedWritePause = 500 * time.Millisecond
+
+// chatRequestBody returns a one-message Chat Completions request.
+func chatRequestBody(question, model string, stream bool) []byte {
 	body := map[string]interface{}{
 		"model": model,
 		"messages": []map[string]string{
 			{"role": "user", "content": question},
 		},
 	}
-
-	jsonData, err := json.Marshal(body)
-	if err != nil {
-		return nil, fmt.Errorf("marshal: %w", err)
+	if stream {
+		body["stream"] = true
 	}
+	data, _ := json.Marshal(body)
+	return data
+}
+
+// splitBody cuts body into n contiguous pieces of near-equal size.
+func splitBody(body []byte, n int) []string {
+	if n < 1 {
+		n = 1
+	}
+	if n > len(body) {
+		n = len(body)
+	}
+	pieces := make([]string, 0, n)
+	for i := 0; i < n; i++ {
+		pieces = append(pieces, string(body[i*len(body)/n:(i+1)*len(body)/n]))
+	}
+	return pieces
+}
+
+// chunkedBody returns a request body that writes body in the given number of
+// pieces with streamedWritePause between them. Its length is unknown, so the
+// client sends it as a chunked upload.
+func chunkedBody(ctx context.Context, body []byte, writes int) io.ReadCloser {
+	reader, writer := io.Pipe()
+	go func() {
+		for i, piece := range splitBody(body, writes) {
+			if i > 0 {
+				select {
+				case <-time.After(streamedWritePause):
+				case <-ctx.Done():
+					writer.CloseWithError(ctx.Err())
+					return
+				}
+			}
+			if _, err := io.WriteString(writer, piece); err != nil {
+				return
+			}
+		}
+		writer.Close()
+	}()
+	return reader
+}
+
+// sendChunkedChatRequest posts body as a chunked upload written in the given
+// number of pieces. The caller owns the response and checks its status.
+func sendChunkedChatRequest(ctx context.Context, localPort string, body []byte, writes int) (*http.Response, error) {
+	reader := chunkedBody(ctx, body, writes)
+	url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, reader)
+	if err != nil {
+		reader.Close()
+		return nil, fmt.Errorf("new request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := (&http.Client{Timeout: 60 * time.Second}).Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("do: %w", err)
+	}
+	return resp, nil
+}
+
+func sendNonStreamingRequest(ctx context.Context, question, model, localPort string) (*http.Response, error) {
+	jsonData := chatRequestBody(question, model, false)
 
 	url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
@@ -484,18 +564,7 @@ func sendNonStreamingRequest(ctx context.Context, question, model, localPort str
 }
 
 func sendStreamingRequest(ctx context.Context, question, model, localPort string) (*http.Response, error) {
-	body := map[string]interface{}{
-		"model":  model,
-		"stream": true,
-		"messages": []map[string]string{
-			{"role": "user", "content": question},
-		},
-	}
-
-	jsonData, err := json.Marshal(body)
-	if err != nil {
-		return nil, fmt.Errorf("marshal: %w", err)
-	}
+	jsonData := chatRequestBody(question, model, true)
 
 	url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))

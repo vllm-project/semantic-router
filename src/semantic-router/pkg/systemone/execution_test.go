@@ -36,11 +36,11 @@ func TestCascadeFastExitEscalationAndSharedBudget(t *testing.T) {
 		name, fast string
 		limit      int
 		want       []string
-		unresolved bool
+		wantErr    error
 	}{
-		{"fast", certainResponse, 2, []string{"kai"}, false},
-		{"escalate", uncertainResponse, 2, []string{"kai", "nox"}, false},
-		{"budget", uncertainResponse, 1, []string{"kai"}, true},
+		{"fast", certainResponse, 2, []string{"kai"}, nil},
+		{"escalate", uncertainResponse, 2, []string{"kai", "nox"}, nil},
+		{"budget", uncertainResponse, 1, []string{"kai"}, budget.ErrExhausted},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			executor, err := NewExecutor(cascadePlan(), nil)
@@ -63,7 +63,7 @@ func TestCascadeFastExitEscalationAndSharedBudget(t *testing.T) {
 				return 200, []byte(certainResponse), nil
 			}
 			result, err := executor.Execute(ctx, request, invoke)
-			if tc.unresolved != errors.Is(err, ErrUnresolved) || (!tc.unresolved && err != nil) {
+			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("result=%v error=%v", result, err)
 			}
 			if !reflect.DeepEqual(calls, tc.want) || ledger.Used() != len(tc.want) {

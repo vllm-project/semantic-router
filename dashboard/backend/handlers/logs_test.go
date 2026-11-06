@@ -92,7 +92,7 @@ func TestLogsHandlerRejectsNonGETRequests(t *testing.T) {
 	response := httptest.NewRecorder()
 	newLogsHandler(t.TempDir()).ServeHTTP(response, request)
 
-	if response.Code != http.StatusMethodNotAllowed || response.Header().Get("Allow") != http.MethodGet {
+	if response.Code != http.StatusMethodNotAllowed || response.Header().Get("Allow") != "GET, HEAD" {
 		t.Fatalf("status = %d, Allow = %q, body = %s", response.Code, response.Header().Get("Allow"), response.Body.String())
 	}
 }

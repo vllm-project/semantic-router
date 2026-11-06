@@ -217,6 +217,9 @@ func validateAnthropicStreamError(wire anthropicEventWire) error {
 }
 
 func validateResponsesEventFieldPresence(eventType string, body []byte) error {
+	if eventType == "response.content_part.added" || eventType == "response.content_part.done" {
+		return validateResponsesContentPartFields(body)
+	}
 	if eventType == "error" {
 		fields, err := providerEventFields(body)
 		if err != nil {
@@ -255,6 +258,28 @@ func validateResponsesEventFieldPresence(eventType string, body []byte) error {
 		return err
 	}
 	return requireProviderNonNullFields(fields, required...)
+}
+
+func validateResponsesContentPartFields(body []byte) error {
+	fields, err := providerEventFields(body)
+	if err != nil {
+		return err
+	}
+	part, err := providerNestedEventFields(fields, "part")
+	if err != nil {
+		return err
+	}
+	var kind string
+	if err := json.Unmarshal(part["type"], &kind); err != nil {
+		return invalidProviderResponse("invalid_upstream_json", "Responses content part type is invalid")
+	}
+	if kind != "reasoning_text" {
+		return nil
+	}
+	if err := requireProviderNonNullFields(part, "text"); err != nil {
+		return err
+	}
+	return validateResponsesContentVariant(fields["part"], kind, responsesProviderReasoningContent)
 }
 
 func validateAnthropicEventFieldPresence(eventType string, body []byte) error {

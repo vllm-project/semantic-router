@@ -126,7 +126,7 @@ not become optional merely because their filenames contain `test`.
 | PR with `/ci run full` | The complete versioned CPU inventory, including baseline stress cases. |
 | Main push | Automatic affected source, deterministic router and product checks. No image or CLI publication. Reviewed PRs and the merge queue own affected live qualification. |
 | Main dispatch with `publish=true` | Full CPU qualification and a complete commit-addressed development image/CLI set; the CLI publishes only after its images succeed. |
-| Weekly Qualification | Monday full CPU qualification and nightly-channel image/Helm publication. The historical `nightly-build.yml` filename and channel remain compatible. |
+| Nightly Qualification | Daily full CPU qualification of the newest main commit and nightly-channel image/Helm publication. Images and chart share the run's date, and a published date never moves: a later run on the same date publishes nothing. A scheduled run skips a commit that another run already passed or is still qualifying; a dispatch cancels the qualification it supersedes and a scheduled run waits for one, never cancelling a publication; a failed first attempt re-runs its failed jobs once while it is still main's newest commit, so don't re-run it by hand first. |
 | Release tag | Artifact/version pipeline: build and publish images, Helm, and Python with aligned versions. It does not invoke another full CPU suite; the catalog retains a release qualification profile for explicit use. |
 
 The trusted publisher updates one bot comment per PR with the deferred
@@ -362,7 +362,7 @@ the affected verification; do not remove a required case to make the Gate green.
 
 For Preview failures, inspect the per-probe signals, decisions, and latency in
 the conformance report. The built-in MoM inventory includes all five entrypoints
-and 347 probes. Performance CI reports numerical regressions as warnings;
+and 366 probes. Performance CI reports numerical regressions as warnings;
 benchmark execution, complete inventory, and matching model identities remain
 required. The explicit local `make perf-check` still fails on allocation
 regressions. Go allocation metrics do not measure native memory or GPU memory;

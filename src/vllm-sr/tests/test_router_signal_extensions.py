@@ -82,35 +82,16 @@ def test_classifier_signal_sequence_shape():
 
 
 @pytest.mark.parametrize(
-    "invalid_fields",
+    "fields",
     [
-        {"labels": ["RISKY"]},
-        {"instructions": "Choose a label."},
-        {"model_path": "models/risk"},
-        {"use_cpu": True},
+        {"type": "sequence_classifier", "model": "risk", "labels": ["RISKY"]},
+        {"type": "sequence_classifier", "model": "risk", "use_cpu": True},
+        {"type": "local", "model": "risk-judge", "model_path": "models/risk"},
     ],
 )
-def test_classifier_signal_sequence_rejects_invalid_shape(invalid_fields):
-    values = {
-        "name": "risk",
-        "type": "sequence_classifier",
-        "model": "risk-classifier",
-        "labels": ["SAFE", "RISKY"],
-        **invalid_fields,
-    }
-    with pytest.raises(ValidationError):
-        ClassifierSignal(**values)
-
-
-def test_classifier_signal_rejects_backend_mixed_fields():
-    with pytest.raises(ValidationError):
-        ClassifierSignal(
-            name="risk",
-            type="local",
-            model="risk-judge",
-            model_path="models/risk",
-            labels=["SAFE", "RISKY"],
-        )
+def test_the_router_judges_a_classifiers_deprecated_model_selection(fields):
+    signal = ClassifierSignal(**{"name": "risk", "labels": ["SAFE", "RISKY"], **fields})
+    assert signal.type == fields["type"]
 
 
 def test_classifier_signal_rejects_whitespace_name():
@@ -693,14 +674,3 @@ def test_local_classifier_can_use_default_decision_deployment():
     )
     assert signal.model_path is None
     assert signal.instructions == "Choose the request category."
-
-
-def test_specialist_classifier_keeps_its_native_contract():
-    with pytest.raises(ValueError, match="specialist local classifiers"):
-        ClassifierSignal(
-            name="task",
-            type="local",
-            model_path="models/specialist",
-            labels=["coding", "other"],
-            instructions="Choose a category.",
-        )
