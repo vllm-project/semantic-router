@@ -266,7 +266,7 @@ func responseBody(call *routing.Call, resp *upstream.Response) io.Reader {
 }
 
 // localReply stands in for a failure the upstream layer reports as an error
-// rather than as Envoy's local reply, so the response phases still see it.
+// rather than as Envoy's local reply, and reaches the client as one does.
 func localReply(err error) *upstream.Response {
 	status := http.StatusServiceUnavailable
 	var upstreamErr *upstream.Error
