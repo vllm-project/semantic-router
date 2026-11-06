@@ -129,8 +129,8 @@ func TestAzureProviderDispatchAcceptsDecoratedResponse(t *testing.T) {
 	if _, err := router.prepareProviderDispatch(request, logicalModel, "", false, ctx); err != nil {
 		t.Fatal(err)
 	}
-	if ctx.ResponseVendor != llmprotocol.ResponseVendorAzure {
-		t.Fatalf("response vendor = %q, want Azure", ctx.ResponseVendor)
+	if ctx.ResponseVendor != "" {
+		t.Fatalf("response vendor = %q, want none: Azure decorations need no vendor", ctx.ResponseVendor)
 	}
 
 	body := []byte(`{"id":"response_1","model":"provider-model","choices":[{"index":0,"message":{"role":"assistant","content":"hello"},"finish_reason":"stop","content_filter_results":{}}]}`)

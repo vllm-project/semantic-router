@@ -44,10 +44,10 @@ deployment in `model_deployments` with its state:
 curl -s localhost:8080/startup-status
 ```
 
-An offline attached runtime does not block custom `decision` questions or
-explicit `decision.v1` task bindings from being prepared. Those tasks remain
-unavailable until current capability metadata is ready and compatible.
-Implicit and native-head bindings may still need metadata at startup. See
+An offline attached runtime does not block custom `decision` questions from
+being prepared. Those questions remain unavailable until current capability
+metadata is ready and compatible. Signals it answers as the decision model, or
+through a binding that selects a head, may still need metadata at startup. See
 [deployment readiness](./deploy.md#when-a-model-is-not-ready).
 
 A first start downloads the models, so it takes longer than the next ones. The
@@ -119,7 +119,8 @@ The model is probably not ready yet, or its answers arrive too late.
 
 `GET /v1/models` shows the reason for each model. When the router runs the
 model, its log carries the same reason, for example
-`model runtime is not ready: model @domain_classifier failed to load: ...`.
+`model runtime is not ready: model vela-domain failed to load: ...`, naming the
+deployment.
 When every model of a runtime process the router runs has failed, the router
 restarts that process (1 second at first, up to 60 seconds apart), so a passing
 cause such as a busy GPU or a full disk clears on its own. A model that fails
