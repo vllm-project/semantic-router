@@ -50,6 +50,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		detectStreamingExpectation(ctx)
 		mutation := buildLooperInternalHeaderRemovalMutation()
 		mutation.RemoveHeaders = append(mutation.RemoveHeaders, headers.SelectedModel)
+		mutation.RemoveHeaders = append(mutation.RemoveHeaders, r.protectionReleaseHeaderForRemoval()...)
 		if isAzureOpenAIPath(path) {
 			mutation.RemoveHeaders = append(mutation.RemoveHeaders, azureAPIKeyHeader)
 		}
@@ -80,6 +81,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		return r.rejectBodylessInferenceRequest(ctx), nil
 	}
 	mutation := buildIdentityEncodingRequestMutation()
+	mutation.RemoveHeaders = append(mutation.RemoveHeaders, r.protectionReleaseHeaderForRemoval()...)
 	if isAzureOpenAIPath(path) {
 		// The Azure client key authenticates to the Router, never to a provider.
 		mutation.RemoveHeaders = append(mutation.RemoveHeaders, azureAPIKeyHeader)

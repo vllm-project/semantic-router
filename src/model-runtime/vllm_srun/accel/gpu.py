@@ -1,8 +1,12 @@
 """Shared logic for CUDA and ROCm accelerators (both use the torch.cuda device API).
 
-The released runtime runs the backbone under BF16 autocast and takes the
-gated-delta and causal-convolution kernels from FLA and causal-conv1d when
-they are installed, else the torch references. The same order applies here.
+The released GPU runtimes run the backbone under BF16 autocast and prefer
+installed FLA and causal-conv1d kernels over torch references. This base class
+registers that order; each accelerator can restrict selection by exactness.
+CUDA marks causal-conv1d approximate, so exact-only/non-consenting models use
+torch reference even when the package is installed. Decision 1.0 Qwen and BF16
+Decision 3.0 then differ from their released CUDA convolution path; see
+``docs/records/cuda-causal-conv1d-exactness.md`` for scope and evidence.
 """
 
 from __future__ import annotations
