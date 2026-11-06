@@ -13,12 +13,16 @@ import sys
 from pathlib import Path
 from typing import Any
 
+if __package__:
+    from .jailbreak_training_assets import DATASET_CONFIGS
+else:
+    from jailbreak_training_assets import DATASET_CONFIGS
+
 REPO_ROOT = Path(__file__).resolve().parents[4]
 _MODEL_EVAL = REPO_ROOT / "src" / "training" / "model_eval"
 if str(_MODEL_EVAL) not in sys.path:
     sys.path.insert(0, str(_MODEL_EVAL))
 
-from jailbreak_training_assets import DATASET_CONFIGS  # noqa: E402
 from provenance.emit import (  # noqa: E402
     ProvenanceError,
     build_artifact_manifest,
