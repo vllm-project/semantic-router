@@ -11,16 +11,30 @@ probability is the mean of its words' probabilities for its label.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
 import torch
 
 from ...plugins.base import AdapterGate, ForwardBatch
+from ..decision3.family import Item
 from .decode import decode, evidence_spans
-from .span_policy import Route
+from .package import Route
 from .span_render import Window
-from .spans import SpanItem
+
+
+@dataclass(frozen=True)
+class SpanItem(Item):
+    """A span question: its route, labels, threshold and the windows it reads."""
+
+    route: Route = "span"
+    names: tuple[str, ...] = ()
+    label_set: str | None = None
+    threshold: float = 0.5
+    evidence: dict[str, Any] | None = None
+    text: str = ""
+    windows: tuple[Window, ...] = field(default=())
 
 
 class SpanReader:

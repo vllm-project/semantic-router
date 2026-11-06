@@ -108,8 +108,10 @@ func TestSystemOneDeploymentsAnswerDecisionQuestions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if roundTrip.DecisionModel != "hosted-d3" || !reflect.DeepEqual(roundTrip.ModelDeployments["gateway-d3"], gateway) {
-		t.Fatalf("round trip changed the deployment:\n%+v\n%+v", roundTrip.ModelDeployments["gateway-d3"], gateway)
+	canonical := gateway
+	canonical.Capabilities, canonical.QuestionTypes = &DeploymentCapabilities{QuestionTypes: gateway.QuestionTypes}, nil
+	if roundTrip.DecisionModel != "hosted-d3" || !reflect.DeepEqual(roundTrip.ModelDeployments["gateway-d3"], canonical) {
+		t.Fatalf("round trip changed the deployment:\n%+v\n%+v", roundTrip.ModelDeployments["gateway-d3"], canonical)
 	}
 }
 
@@ -117,15 +119,15 @@ func TestSystemOneDeploymentsTakeOnlyTheirOwnFields(t *testing.T) {
 	for name, tc := range map[string]struct{ old, replacement, want string }{
 		"an engine argument": {
 			"        timeout_ms: 3000\n", "        timeout_ms: 3000\n        max_num_seqs: 4\n",
-			"a systemone deployment takes endpoint, model, auth, timeout_ms and question_types",
+			"a systemone deployment takes a connection block",
 		},
 		"a device": {
 			"        timeout_ms: 3000\n", "        timeout_ms: 3000\n        device: cpu\n",
-			"a systemone deployment takes endpoint",
+			"a systemone deployment takes a connection block",
 		},
 		"replicas": {
 			"        timeout_ms: 3000\n", "        timeout_ms: 3000\n        replicas: [{device: cpu}]\n",
-			"a systemone deployment takes endpoint",
+			"a systemone deployment takes a connection block",
 		},
 		"an input budget": {
 			"        timeout_ms: 3000\n", "        timeout_ms: 3000\n        input: {max_tokens: 512, overflow: window}\n",
@@ -169,11 +171,11 @@ func TestSystemOneDeploymentsTakeOnlyTheirOwnFields(t *testing.T) {
 		},
 		"systemone fields on a model_runtime deployment": {
 			"    system:\n", "      local-d3: {provider: model_runtime, artifact: vllm-sr/vela3-fast, device: cpu, timeout_ms: 100}\n    system:\n",
-			"model, auth, timeout_ms and question_types apply only to systemone deployments",
+			"apply to an attached endpoint, not to a worker the Router starts",
 		},
-		"a task binding": {
-			"    system:\n", "    bindings:\n      domain_classifier: {deployment: hosted-d3, contract: label_distribution.v1, adapter: vela}\n    system:\n",
-			"a systemone deployment answers decision signals and selectors only",
+		"an embedding binding": {
+			"    system:\n", "    bindings:\n      embedding: hosted-d3\n    system:\n",
+			"embeddings and reranking need a model_runtime, openai_embeddings or rerank deployment",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

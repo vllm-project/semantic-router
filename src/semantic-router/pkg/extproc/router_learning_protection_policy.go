@@ -28,6 +28,7 @@ type routerLearningProtectionDiagnostics struct {
 	switchMargin    float64
 	stabilityWeight float64
 	rescue          bool
+	release         *protectionReleaseVerdict
 }
 
 type routerLearningIdentityDiagnostics struct {
@@ -275,6 +276,9 @@ func (d *routerLearningProtectionDiagnostics) toPolicyMap() map[string]interface
 	}
 	if d.rescue {
 		setLearningPolicyValue(out, learningPolicyFieldRescue, map[string]interface{}{"active": true})
+	}
+	if d.release != nil {
+		setLearningPolicyValue(out, learningPolicyFieldRelease, d.release.toPolicyMap())
 	}
 	if len(out) == 0 {
 		return nil

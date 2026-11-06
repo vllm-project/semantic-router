@@ -117,6 +117,8 @@ class TestServeManagedModelRuntime(MockUpstreamMixin, ServeSessionMixin, CLITest
         config["routing"]["signals"] = {"decision": [signal]}
         config["routing"]["decisions"].insert(0, route)
         config["global"]["model_catalog"]["deployments"] = deployments
+        # The route check reads x-vsr-matched-decision-model, a debug header.
+        config["global"].setdefault("router", {})["headers"] = {"debug": "any"}
         config_path.write_text(
             yaml.safe_dump(config, sort_keys=False), encoding="utf-8"
         )

@@ -1,9 +1,12 @@
 package config
 
-// AlgorithmBudget bounds only the selected algorithm's inference exchanges,
-// including transport retries, and its execution deadline. Signal evaluation
-// precedes this budget and retains its own timeouts and context cancellation.
-// Calls inside an opaque external provider are not visible to the local ledger.
+// AlgorithmBudget sets a native decision's deadline and physical inference-call
+// limit, both measured from request arrival. Before selection, the largest
+// deadline and call limit among the recipe's native decisions bound model-backed
+// signals; their own timeouts remain upper bounds. The selected decision's
+// budget then tightens the same deadline and ledger, so signal calls, stages,
+// judges and transport retries all count. Calls inside an opaque external
+// provider are not visible to the local ledger.
 type AlgorithmBudget struct {
 	Deadline string `yaml:"deadline" jsonschema:"required"`
 	MaxCalls int    `yaml:"max_calls" jsonschema:"required,minimum=1"`
