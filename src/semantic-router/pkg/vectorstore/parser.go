@@ -30,7 +30,7 @@ import (
 )
 
 // ExtractText extracts plain text from file content based on the file extension.
-// Supported extensions: .txt, .md, .json, .csv, .html
+// Supported extensions: .txt, .md, .json, .csv, .html, .htm
 func ExtractText(content []byte, filename string) (string, error) {
 	ext := strings.ToLower(filepath.Ext(filename))
 
