@@ -71,7 +71,7 @@ func TestHandleContextRecoveryFollowupCallsLooper(t *testing.T) {
 		writer.Header().Set("Content-Type", "application/json")
 		_, _ = writer.Write([]byte(`{
 			"id":"followup",
-			"model":"model",
+			"model":"served-model",
 			"usage":{"prompt_tokens":20,"completion_tokens":5,"total_tokens":25},
 			"choices":[{"index":0,"message":{"role":"assistant","content":"final answer"},"finish_reason":"stop"}]
 		}`))
@@ -122,7 +122,7 @@ func TestHandleContextRecoveryFollowupCallsLooper(t *testing.T) {
 		},
 	}
 	response := []byte(`{
-		"id":"initial","object":"chat.completion","created":1,"model":"model",
+		"id":"initial","object":"chat.completion","created":1,"model":"served-initial",
 		"usage":{"prompt_tokens":10,"completion_tokens":3,"total_tokens":13},
 		"choices":[{"index":0,"finish_reason":"tool_calls","message":{"role":"assistant","content":null,"tool_calls":[{
 			"id":"retrieve-1",
@@ -146,6 +146,11 @@ func TestHandleContextRecoveryFollowupCallsLooper(t *testing.T) {
 	usage := final["usage"].(map[string]interface{})
 	if usage["total_tokens"] != float64(38) {
 		t.Fatalf("merged usage = %#v", usage)
+	}
+	// The reply names the model the follow-up's upstream answered with, as one
+	// without recovery does, not the first reply's or the logical model.
+	if final["model"] != "served-model" {
+		t.Fatalf("recovered reply model = %#v, want served-model", final["model"])
 	}
 	messages := received["messages"].([]interface{})
 	tool := messages[len(messages)-1].(map[string]interface{})
