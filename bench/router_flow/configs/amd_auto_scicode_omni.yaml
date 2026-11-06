@@ -263,6 +263,7 @@ routing:
           reasoning_effort: medium
       algorithm:
         type: fusion
+        on_error: skip
         fusion:
           model: gpt-worker
           max_concurrent: 3
@@ -272,7 +273,6 @@ routing:
           temperature: 0.2
           include_analysis: false
           include_intermediate_responses: false
-          on_error: skip
           synthesis_template: |-
             You are the final SciCode code judge.
 
@@ -325,6 +325,7 @@ routing:
           reasoning_effort: medium
       algorithm:
         type: remom
+        on_error: skip
         remom:
           breadth_schedule: [5]
           model_distribution: round_robin
@@ -338,7 +339,6 @@ routing:
           min_successful_responses: 2
           max_responses_per_round: 5
           include_intermediate_responses: false
-          on_error: skip
           synthesis_template: |-
             You are solving one turn of SciCode. Compare the reference
             implementations against the original subproblem and return the
@@ -383,6 +383,7 @@ routing:
           reasoning_effort: medium
       algorithm:
         type: remom
+        on_error: skip
         remom:
           breadth_schedule: [3]
           model_distribution: round_robin
@@ -396,7 +397,6 @@ routing:
           min_successful_responses: 2
           max_responses_per_round: 3
           include_intermediate_responses: false
-          on_error: skip
           synthesis_template: |-
             You are solving one SciCode subproblem. Compare the reference
             implementations and return the most reliable final implementation.
@@ -435,6 +435,7 @@ routing:
           reasoning_effort: medium
       algorithm:
         type: remom
+        on_error: skip
         remom:
           breadth_schedule: [5]
           model_distribution: round_robin
@@ -448,7 +449,6 @@ routing:
           min_successful_responses: 2
           max_responses_per_round: 5
           include_intermediate_responses: false
-          on_error: skip
           synthesis_template: |-
             You are solving SciCode. Compare the reference implementations
             against the original prompt and return the single most reliable

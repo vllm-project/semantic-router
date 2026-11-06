@@ -1,0 +1,1 @@
+routing.decisions[tradeoff].algorithm: removed_algorithm_type: algorithm type automix is removed; run `vllm-sr config migrate` (type: multi_factor, weighted {quality: 1-t, cost: t} by cost_quality_tradeoff t)

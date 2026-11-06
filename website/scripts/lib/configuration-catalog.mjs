@@ -165,7 +165,7 @@ function signalEntries(repoRoot) {
     })
 }
 
-function algorithmEntries(repoRoot, algorithmType) {
+function algorithmEntries(repoRoot, algorithmType, kind) {
   const fragmentRoot = join(repoRoot, 'config', 'fragments', 'algorithm', algorithmType)
   const tutorialRoot = join(
     repoRoot,
@@ -195,7 +195,7 @@ function algorithmEntries(repoRoot, algorithmType) {
 
     return {
       family,
-      type: `${algorithmType} algorithm`,
+      type: kind,
       goal: tutorialGoal(tutorial),
       fragmentPath: `config/fragments/algorithm/${algorithmType}/${filename}`,
       fragmentKind: 'file',
@@ -229,9 +229,8 @@ function pluginEntries(repoRoot) {
 export function discoverConfigurationCatalog(repoRoot) {
   return {
     signals: signalEntries(repoRoot),
-    selectionAlgorithms: algorithmEntries(repoRoot, 'selection'),
-    looperAlgorithms: algorithmEntries(repoRoot, 'looper'),
-    nativeAlgorithms: algorithmEntries(repoRoot, 'native'),
+    selectors: algorithmEntries(repoRoot, 'selection', 'selector'),
+    executors: algorithmEntries(repoRoot, 'looper', 'executor'),
     plugins: pluginEntries(repoRoot),
   }
 }
@@ -264,17 +263,13 @@ export function renderConfigurationCatalog(catalog) {
     '',
     catalogTable(catalog.signals),
     '',
-    '### Selection algorithms',
+    '### Selectors',
     '',
-    catalogTable(catalog.selectionAlgorithms),
+    catalogTable(catalog.selectors),
     '',
-    '### Looper algorithms',
+    '### Executors',
     '',
-    catalogTable(catalog.looperAlgorithms),
-    '',
-    '### Native System One algorithms',
-    '',
-    catalogTable(catalog.nativeAlgorithms),
+    catalogTable(catalog.executors),
     '',
     '### Plugins and bundles',
     '',

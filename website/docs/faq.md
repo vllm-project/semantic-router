@@ -46,7 +46,7 @@ uses `/v1/systemone/models`; Chat model discovery uses `/v1/models`.
 
 Use a concrete model ID for direct inference in either mode. In Router mode,
 you can also publish an explicit `api: systemone` entrypoint and grant its
-`vllm-sr/auto` name on the listener to run a native cascade. The Chat default
+`vllm-sr/auto` name on the listener to run a native escalation. The Chat default
 entrypoint does not implicitly enable native routing. See the
 [System One cascade guide](tutorials/algorithm/native/cascade) and
 [Quickstart](model-runtime/quickstart) for configuration and requests.

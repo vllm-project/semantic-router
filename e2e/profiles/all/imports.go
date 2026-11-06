@@ -14,7 +14,6 @@ import (
 	longcontextrouting "github.com/vllm-project/semantic-router/e2e/profiles/long-context-routing"
 	looper "github.com/vllm-project/semantic-router/e2e/profiles/looper"
 	masking "github.com/vllm-project/semantic-router/e2e/profiles/masking"
-	mlmodelselection "github.com/vllm-project/semantic-router/e2e/profiles/ml-model-selection"
 	modelruntime "github.com/vllm-project/semantic-router/e2e/profiles/model-runtime"
 	modelruntimereal "github.com/vllm-project/semantic-router/e2e/profiles/model-runtime-real"
 	modelruntimevela3 "github.com/vllm-project/semantic-router/e2e/profiles/model-runtime-vela3"
@@ -134,11 +133,6 @@ func init() {
 		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
 	)
 	register("looper", func() framework.Profile { return looper.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
-	register(
-		"ml-model-selection",
-		func() framework.Profile { return mlmodelselection.NewProfile() },
-		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
-	)
 	register("multi-endpoint", func() framework.Profile { return multiendpoint.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("production-stack", func() framework.Profile { return productionstack.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("rag-hybrid-search", func() framework.Profile { return raghybridsearch.NewProfile() }, framework.ProfileCapabilities{})

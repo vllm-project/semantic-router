@@ -52,7 +52,7 @@ func TestNativeRequestFactsFailDuringConfigurationParsing(t *testing.T) {
 }
 
 func TestNativeStageCannotShadowJudgeAbstention(t *testing.T) {
-	raw := strings.Replace(nativeRoutingTestYAML, "name: fast, kind", "name: abstain, kind", 1)
+	raw := strings.Replace(nativeRoutingTestYAML, "name: fast, model", "name: abstain, model", 1)
 	if _, err := ParseYAMLBytes([]byte(raw)); err == nil {
 		t.Fatal("reserved judge selection accepted as a stage")
 	}

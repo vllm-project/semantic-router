@@ -199,9 +199,9 @@ func validateDecisionShadowDispatchPlugin(cfg *RouterConfig, decision *Decision)
 	if shadow == nil || !shadow.Enabled {
 		return nil
 	}
-	if decision.Algorithm != nil && IsLooperAlgorithmType(decision.Algorithm.Type) {
+	if decision.Algorithm != nil && IsExecutorAlgorithmType(decision.Algorithm.Type) {
 		return fmt.Errorf(
-			"decision %q: shadow_dispatch is not supported on looper-executed algorithm %q; the shadow hook runs only on single-model provider dispatch",
+			"decision %q: shadow_dispatch is not supported on executor algorithm %q; the shadow hook runs only on single-model provider dispatch",
 			decision.Name,
 			decision.Algorithm.Type,
 		)

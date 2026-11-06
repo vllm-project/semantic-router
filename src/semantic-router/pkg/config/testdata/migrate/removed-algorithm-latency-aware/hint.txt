@@ -1,0 +1,1 @@
+routing.decisions[fast-first-token].algorithm: removed_algorithm_type: algorithm type latency_aware is removed; run `vllm-sr config migrate` (type: multi_factor, weighted on latency)

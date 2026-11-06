@@ -140,6 +140,23 @@ func (c *RouterConfig) SystemOneSelectorDeployment(selector SystemOneSelectionCo
 	return c.deploymentOrDecisionModel(selector.Deployment)
 }
 
+// EscalateCheckDeployment returns the deployment a Chat escalation asks
+// about its answers: the answer check's own, or the decision model's shared
+// deployment, which also answers the refusal check.
+func (c *RouterConfig) EscalateCheckDeployment(accept *EscalateAccept) string {
+	if accept != nil && accept.SystemOne != nil {
+		return c.deploymentOrDecisionModel(accept.SystemOne.Deployment)
+	}
+	return c.deploymentOrDecisionModel("")
+}
+
+// EscalateChecksAnswers reports whether an algorithm is a Chat escalation
+// whose answers a System One model judges: by answer_check or refusal.
+func (a *AlgorithmConfig) EscalateChecksAnswers() bool {
+	return a != nil && a.Type == DecisionAlgorithmEscalate && a.Escalate != nil && a.Escalate.Accept != nil &&
+		(a.Escalate.Accept.SystemOne != nil || a.Escalate.Accept.Refusal != nil)
+}
+
 // deploymentOrDecisionModel returns the named deployment, or the decision
 // model's shared deployment for an empty name; empty when there is none.
 func (c *RouterConfig) deploymentOrDecisionModel(deployment string) string {

@@ -155,8 +155,9 @@ The contract is disabled by default. Once enabled:
 - Looper hops run on the client's behalf spend the same credential, typed and
   in process. Calls the Router makes on its own behalf (shadow dispatch,
   context-window probes, automatic-output preparation) never use it and fail
-  against a trusted gateway, as does System One dispatch (judges and native
-  `/v1/systemone` targets).
+  against a trusted gateway. System One calls never carry it either, so
+  configuration rejects `trusted_gateway` on an `api_format: systemone` model
+  and on the judge model of an `escalate` stage.
 - Caller attribution and any tenant, quota, budget, or spend policy stay with
   the trusted gateway.
 

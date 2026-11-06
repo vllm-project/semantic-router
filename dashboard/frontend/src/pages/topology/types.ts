@@ -145,54 +145,40 @@ export interface RawRuleCombination {
 }
 
 // ============== Algorithm Types ==============
-// concurrent and sequential are explicit legacy-display values. Canonical
-// Router inventories always come from the generated contract.
-export type AlgorithmType = CanonicalAlgorithmType | 'concurrent' | 'sequential'
+export type AlgorithmType = CanonicalAlgorithmType
 
 export interface AlgorithmConfig {
   type: AlgorithmType
   minimum_candidates?: number
-  confidence?: ConfidenceAlgorithmConfig
-  concurrent?: ConcurrentAlgorithmConfig
-  latency_aware?: LatencyAwareAlgorithmConfig
-  ratings?: GenericAlgorithmConfig
-  remom?: GenericAlgorithmConfig
-  fusion?: GenericAlgorithmConfig
-  workflows?: GenericAlgorithmConfig
-  router_dc?: GenericAlgorithmConfig
-  automix?: GenericAlgorithmConfig
-  autoMix?: GenericAlgorithmConfig
-  hybrid?: GenericAlgorithmConfig
-  knn?: GenericAlgorithmConfig
-  kmeans?: GenericAlgorithmConfig
-  svm?: GenericAlgorithmConfig
-  mlp?: GenericAlgorithmConfig
+  budget?: AlgorithmBudget
+  on_error?: string
   multi_factor?: GenericAlgorithmConfig
-  prompt?: GenericAlgorithmConfig
+  systemone?: GenericAlgorithmConfig
+  escalate?: EscalateAlgorithmConfig
+  fusion?: GenericAlgorithmConfig
+  remom?: GenericAlgorithmConfig
+  ratings?: GenericAlgorithmConfig
+  workflows?: GenericAlgorithmConfig
 }
 
 export type RawDecisionAlgorithmConfig = Omit<Partial<AlgorithmConfig>, 'type'> & {
   type: string
-  autoMix?: GenericAlgorithmConfig
 }
 
-export interface ConfidenceAlgorithmConfig {
-  threshold?: number
-  avg_logprob_threshold?: number
-  margin_threshold?: number
-  max_escalations?: number
-  on_error?: 'skip' | 'fail'
+export interface AlgorithmBudget {
+  deadline?: string
+  max_calls?: number
 }
 
-export interface ConcurrentAlgorithmConfig {
-  timeout_seconds?: number
-  on_error?: 'skip' | 'fail'
-}
-
-export interface LatencyAwareAlgorithmConfig {
-  tpot_percentile?: number
-  ttft_percentile?: number
-  description?: string
+export interface EscalateAlgorithmConfig {
+  order?: 'size' | 'cost'
+  accept?: {
+    confidence?: { method?: string; gte?: number }
+    systemone?: { gte?: number }
+    refusal?: boolean
+  }
+  quality?: GenericAlgorithmConfig
+  stages?: GenericAlgorithmConfig[]
 }
 
 export interface GenericAlgorithmConfig {

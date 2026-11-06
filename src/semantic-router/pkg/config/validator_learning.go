@@ -327,17 +327,6 @@ func isLookupTableConfigConfigured(cfg LookupTableConfig) bool {
 		len(cfg.RemainingTurnPriors) > 0
 }
 
-func isEloSelectionConfigConfigured(cfg EloSelectionConfig) bool {
-	return cfg.InitialRating != 0 ||
-		cfg.KFactor != 0 ||
-		cfg.CategoryWeighted ||
-		cfg.DecayFactor != 0 ||
-		cfg.MinComparisons != 0 ||
-		cfg.CostScalingFactor != 0 ||
-		cfg.StoragePath != "" ||
-		cfg.AutoSaveInterval != ""
-}
-
 func validateProtectionRelease(cfg RouterLearningProtectionConfig) error {
 	const field = "global.router.learning.protection.release"
 	release := cfg.Release

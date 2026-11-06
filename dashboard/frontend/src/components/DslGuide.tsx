@@ -181,10 +181,8 @@ ROUTE ai_route (description = "AI-related requests") {
 
   MODEL "qwen2.5:3b" (reasoning = false)
 
-  ALGORITHM confidence {
-    confidence_method: "hybrid"
-    threshold: 0.5
-    on_error: "skip"
+  ALGORITHM multi_factor {
+    weights: { quality: 0.6, cost: 0.4 }
   }
 
   PLUGIN safe_pii
@@ -213,9 +211,8 @@ const ROUTE_SNIPPET = `ROUTE my_route (description = "Description") {
 
   MODEL "qwen2.5:3b" (reasoning = false)
 
-  ALGORITHM confidence {
-    confidence_method: "hybrid"
-    threshold: 0.5
+  ALGORITHM multi_factor {
+    weights: { quality: 0.6, cost: 0.4 }
   }
 }`
 
@@ -587,7 +584,7 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
 
       {/* Algorithms */}
       {matchesSearch(
-        'algorithm confidence ratings remom fusion workflows static router_dc automix hybrid',
+        'algorithm static random multi_factor systemone escalate fusion remom ratings workflows',
       ) && (
         <Section title={`Algorithms (${ALGORITHM_TYPES.length} types)`} icon="🧮">
           <p className={styles.hint}>

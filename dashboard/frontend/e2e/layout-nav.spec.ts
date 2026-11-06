@@ -674,7 +674,6 @@ test.describe('Layout top navigation', () => {
     await buildMenu.getByRole('tab', { name: /Outcomes/ }).click()
     await expect(buildMenu.getByRole('link', { name: 'Insights' })).toBeVisible()
     await expect(buildMenu.getByRole('link', { name: 'Evaluation' })).toBeVisible()
-    await expect(buildMenu.getByRole('link', { name: 'ML Setup' })).toBeVisible()
 
     await operateTrigger.click()
     const operateMenu = page.getByRole('navigation', { name: 'System' })
@@ -1084,15 +1083,11 @@ test.describe('Layout top navigation', () => {
     await expect(page.getByRole('heading', { name: 'MCP Servers', exact: true })).toBeVisible()
   })
 
-  test('hides ML Setup for read users and redirects direct access back to the dashboard', async ({
-    page,
-  }) => {
+  test('hides admin pages from read users', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await mockCommon(page, { user: readUser })
 
     await page.goto('/dashboard')
-
-    await expect(page.getByRole('button', { name: 'ML Setup', exact: true })).toHaveCount(0)
 
     const workflowGroup = page.getByRole('group', { name: 'Workflow navigation' })
     await workflowGroup.getByRole('button', { name: 'System' }).click()
@@ -1106,13 +1101,7 @@ test.describe('Layout top navigation', () => {
     await workflowGroup.getByRole('button', { name: 'Build' }).click()
     const buildMenu = page.getByRole('navigation', { name: 'Build' })
     await buildMenu.getByRole('tab', { name: /Outcomes/ }).click()
-    await expect(buildMenu.getByRole('link', { name: 'ML Setup' })).toHaveCount(0)
     await expect(buildMenu.getByRole('link', { name: 'MCP Servers' })).toHaveCount(0)
-
-    await page.goto('/ml-setup')
-
-    await expect(page).toHaveURL(/\/dashboard$/)
-    await expect(page.getByRole('button', { name: 'ML Setup', exact: true })).toHaveCount(0)
   })
 
   test('opens an anchored account dropdown and allows logging out from the header', async ({

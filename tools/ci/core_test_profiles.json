@@ -49,13 +49,6 @@
       "source": "src/semantic-router/pkg/looper/grounding_live_test.go",
       "profile": "external-ollama",
       "reason": "Requires separately provisioned panel/judge LLM endpoints; production grounding orchestration has deterministic core tests."
-    },
-    {
-      "package": "./pkg/modelselection",
-      "test": "TestPublishedSelectionsMatchBindingFixtures",
-      "source": "src/semantic-router/pkg/modelselection/parity_test.go",
-      "profile": "external-selector-checkpoints",
-      "reason": "Compares the published selector artifacts (VLLM_SR_TEST_ML_MODELS_DIR) with the selections recorded from the retired bindings; parity on the checked-in artifacts runs in core."
     }
   ],
   "ginkgo_excluded_labels": {

@@ -7,49 +7,6 @@ import (
 
 func boolPtr(b bool) *bool { return &b }
 
-var _ = Describe("validateLatencyAwareAlgorithmConfig", func() {
-	It("accepts both percentiles set", func() {
-		cfg := &LatencyAwareAlgorithmConfig{TPOTPercentile: 10, TTFTPercentile: 50}
-		Expect(validateLatencyAwareAlgorithmConfig(cfg)).To(Succeed())
-	})
-
-	It("accepts TPOT-only", func() {
-		cfg := &LatencyAwareAlgorithmConfig{TPOTPercentile: 50}
-		Expect(validateLatencyAwareAlgorithmConfig(cfg)).To(Succeed())
-	})
-
-	It("accepts TTFT-only", func() {
-		cfg := &LatencyAwareAlgorithmConfig{TTFTPercentile: 50}
-		Expect(validateLatencyAwareAlgorithmConfig(cfg)).To(Succeed())
-	})
-
-	It("accepts boundary values 1 and 100", func() {
-		cfg := &LatencyAwareAlgorithmConfig{TPOTPercentile: 1, TTFTPercentile: 100}
-		Expect(validateLatencyAwareAlgorithmConfig(cfg)).To(Succeed())
-	})
-
-	It("rejects zero percentiles", func() {
-		cfg := &LatencyAwareAlgorithmConfig{}
-		err := validateLatencyAwareAlgorithmConfig(cfg)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("must specify at least one of"))
-	})
-
-	It("rejects TPOT > 100", func() {
-		cfg := &LatencyAwareAlgorithmConfig{TPOTPercentile: 101}
-		err := validateLatencyAwareAlgorithmConfig(cfg)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("tpot_percentile must be between 1 and 100"))
-	})
-
-	It("rejects TTFT > 100", func() {
-		cfg := &LatencyAwareAlgorithmConfig{TTFTPercentile: 200}
-		err := validateLatencyAwareAlgorithmConfig(cfg)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("ttft_percentile must be between 1 and 100"))
-	})
-})
-
 var _ = Describe("validateLoRAName", func() {
 	loraConfig := func(model string, loras ...string) *RouterConfig {
 		adapters := make([]LoRAAdapter, len(loras))
@@ -432,65 +389,74 @@ func registerValidateConfigStructureAlgorithmSpecs() {
 	registerValidateConfigStructureSignalReferenceSpecs()
 }
 
+func escalateDecisionConfig(algorithm *AlgorithmConfig) *RouterConfig {
+	return &RouterConfig{
+		IntelligentRouting: IntelligentRouting{
+			Decisions: []Decision{{
+				Name: "escalate",
+				ModelRefs: []ModelRef{
+					{Model: "model-a", ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(false)}},
+					{Model: "model-b", ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(false)}},
+				},
+				Algorithm: algorithm,
+			}},
+		},
+	}
+}
+
 func registerValidateConfigStructureAlgorithmSchemaSpecs() {
-	It("rejects latency_aware without algorithm.latency_aware", func() {
-		cfg := &RouterConfig{
-			IntelligentRouting: IntelligentRouting{
-				Decisions: []Decision{{
-					Name: "x",
-					ModelRefs: []ModelRef{{
-						Model:                 "model-a",
-						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
-					}},
-					Algorithm: &AlgorithmConfig{
-						Type: "latency_aware",
-					},
-				}},
-			},
-		}
-		err := validateConfigStructure(cfg)
+	It("rejects escalate without algorithm.escalate", func() {
+		err := validateConfigStructure(escalateDecisionConfig(&AlgorithmConfig{Type: "escalate"}))
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("algorithm.type=latency_aware requires algorithm.latency_aware configuration"))
+		Expect(err.Error()).To(ContainSubstring("algorithm.type=escalate requires algorithm.escalate configuration"))
 	})
 
-	It("accepts latency_aware-only configuration", func() {
-		cfg := &RouterConfig{
-			IntelligentRouting: IntelligentRouting{
-				Decisions: []Decision{{
-					Name: "new-latency-aware",
-					ModelRefs: []ModelRef{{
-						Model:                 "model-a",
-						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
-					}},
-					Algorithm: &AlgorithmConfig{
-						Type:         "latency_aware",
-						LatencyAware: &LatencyAwareAlgorithmConfig{TPOTPercentile: 20, TTFTPercentile: 20},
-					},
-				}},
+	It("accepts a Chat escalate judged by confidence", func() {
+		gte := 0.7
+		cfg := escalateDecisionConfig(&AlgorithmConfig{
+			Type: "escalate", OnError: EscalateOnErrorFail, Budget: &AlgorithmBudget{Deadline: "20s", MaxCalls: 2},
+			Escalate: &EscalateAlgorithmConfig{
+				Order:  EscalateOrderCost,
+				Accept: &EscalateAccept{Confidence: &EscalateConfidence{Method: ConfidenceMethodMargin, GTE: &gte}},
 			},
-		}
+		})
+		Expect(validateConfigStructure(withDecisionBackends(cfg))).To(Succeed())
+	})
 
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+	It("rejects a Chat escalate whose accept is not exactly one check", func() {
+		gte := 0.7
+		for _, accept := range []*EscalateAccept{
+			nil,
+			{},
+			{Confidence: &EscalateConfidence{GTE: &gte}, Refusal: boolPtr(false)},
+			{Refusal: boolPtr(true)},
+			{Confidence: &EscalateConfidence{}},
+			{Native: []NativeAcceptanceRule{{QuestionType: "choice", Field: "confidence", NumericPredicate: NumericPredicate{GTE: &gte}}}},
+		} {
+			cfg := escalateDecisionConfig(&AlgorithmConfig{Type: "escalate", Escalate: &EscalateAlgorithmConfig{Accept: accept}})
+			Expect(validateConfigStructure(withDecisionBackends(cfg))).To(HaveOccurred(), "accept %+v", accept)
+		}
+	})
+
+	It("rejects Chat escalate settings that belong to another path or executor", func() {
+		gte := 0.7
+		accept := &EscalateAccept{Confidence: &EscalateConfidence{GTE: &gte}}
+		for _, algorithm := range []*AlgorithmConfig{
+			{Type: "escalate", OnError: "skip", Escalate: &EscalateAlgorithmConfig{Accept: accept}},
+			{Type: "escalate", Escalate: &EscalateAlgorithmConfig{Order: "automix", Accept: accept}},
+			{Type: "escalate", Escalate: &EscalateAlgorithmConfig{Accept: accept, Quality: &EscalateQuality{Type: EscalateQualityUncalibrated}}},
+			{Type: "escalate", Escalate: &EscalateAlgorithmConfig{Accept: accept, Stages: []EscalateStage{{Model: "model-a"}}}},
+		} {
+			Expect(validateConfigStructure(withDecisionBackends(escalateDecisionConfig(algorithm)))).To(HaveOccurred(), "algorithm %+v", algorithm)
+		}
 	})
 
 	It("rejects multiple algorithm config blocks in one decision", func() {
-		cfg := &RouterConfig{
-			IntelligentRouting: IntelligentRouting{
-				Decisions: []Decision{{
-					Name: "mixed-algo-blocks",
-					ModelRefs: []ModelRef{{
-						Model:                 "model-a",
-						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
-					}},
-					Algorithm: &AlgorithmConfig{
-						Type:         "latency_aware",
-						LatencyAware: &LatencyAwareAlgorithmConfig{TPOTPercentile: 20},
-						AutoMix:      &AutoMixSelectionConfig{},
-					},
-				}},
-			},
-		}
-
+		cfg := escalateDecisionConfig(&AlgorithmConfig{
+			Type:        "multi_factor",
+			MultiFactor: &MultiFactorSelectionConfig{},
+			Fusion:      &FusionAlgorithmConfig{},
+		})
 		err := validateConfigStructure(cfg)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("cannot be combined with multiple algorithm config blocks"))
@@ -522,12 +488,12 @@ func registerValidateConfigStructureReMoMDecisionSpecs() {
 						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
 					}},
 					Algorithm: &AlgorithmConfig{
-						Type: "remom",
+						Type:    "remom",
+						OnError: ReMoMOnErrorSkip,
 						ReMoM: &ReMoMAlgorithmConfig{
 							BreadthSchedule:    []int{3, 2},
 							ModelDistribution:  ReMoMDistributionRoundRobin,
 							CompactionStrategy: ReMoMCompactionLastNTokens,
-							OnError:            ReMoMOnErrorSkip,
 						},
 					},
 				}},
@@ -648,10 +614,9 @@ func registerValidateConfigStructureFusionSpecs() {
 						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
 					}},
 					Algorithm: &AlgorithmConfig{
-						Type: "fusion",
-						Fusion: &FusionAlgorithmConfig{
-							OnError: "ignore",
-						},
+						Type:    "fusion",
+						OnError: "ignore",
+						Fusion:  &FusionAlgorithmConfig{},
 					},
 				}},
 			},
@@ -659,7 +624,54 @@ func registerValidateConfigStructureFusionSpecs() {
 
 		err := validateConfigStructure(cfg)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("algorithm.fusion: on_error must be one of"))
+		Expect(err.Error()).To(ContainSubstring(`algorithm.on_error of fusion must be "skip" or "fail"`))
+	})
+
+	It("rejects executor settings on a selector", func() {
+		for _, algorithm := range []*AlgorithmConfig{
+			{Type: "static", OnError: "skip"},
+			{Type: "multi_factor", Budget: &AlgorithmBudget{Deadline: "2s", MaxCalls: 1}, MultiFactor: &MultiFactorSelectionConfig{}},
+		} {
+			cfg := &RouterConfig{
+				IntelligentRouting: IntelligentRouting{
+					Decisions: []Decision{{
+						Name: "selector-with-executor-settings",
+						ModelRefs: []ModelRef{
+							{Model: "model-a", ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(false)}},
+							{Model: "model-b", ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(false)}},
+						},
+						Algorithm: algorithm,
+					}},
+				},
+			}
+
+			err := validateConfigStructure(cfg)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("apply to executors; " + algorithm.Type + " is a selector"))
+		}
+	})
+
+	It("rejects an executor budget without a deadline", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "ratings-without-deadline",
+					ModelRefs: []ModelRef{{
+						Model:                 "model-a",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+					}},
+					Algorithm: &AlgorithmConfig{
+						Type:    "ratings",
+						Budget:  &AlgorithmBudget{MaxCalls: 2},
+						Ratings: &RatingsAlgorithmConfig{},
+					},
+				}},
+			},
+		}
+
+		err := validateConfigStructure(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("algorithm.budget.deadline"))
 	})
 }
 
@@ -942,8 +954,8 @@ func registerValidateConfigStructureAlgorithmTypeMismatchSpecs() {
 						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
 					}},
 					Algorithm: &AlgorithmConfig{
-						Type:   "automix",
-						Hybrid: &HybridSelectionConfig{},
+						Type:    "fusion",
+						Ratings: &RatingsAlgorithmConfig{},
 					},
 				}},
 			},
@@ -951,7 +963,7 @@ func registerValidateConfigStructureAlgorithmTypeMismatchSpecs() {
 
 		err := validateConfigStructure(cfg)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("requires algorithm.automix configuration; found algorithm.hybrid"))
+		Expect(err.Error()).To(ContainSubstring("requires algorithm.fusion configuration; found algorithm.ratings"))
 	})
 
 	It("rejects unsupported algorithm block for static type", func() {
@@ -964,8 +976,8 @@ func registerValidateConfigStructureAlgorithmTypeMismatchSpecs() {
 						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
 					}},
 					Algorithm: &AlgorithmConfig{
-						Type:    "static",
-						AutoMix: &AutoMixSelectionConfig{},
+						Type:        "static",
+						MultiFactor: &MultiFactorSelectionConfig{},
 					},
 				}},
 			},
@@ -973,7 +985,7 @@ func registerValidateConfigStructureAlgorithmTypeMismatchSpecs() {
 
 		err := validateConfigStructure(cfg)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("algorithm.type=static cannot be used with algorithm.automix configuration"))
+		Expect(err.Error()).To(ContainSubstring("algorithm.type=static cannot be used with algorithm.multi_factor configuration"))
 	})
 }
 

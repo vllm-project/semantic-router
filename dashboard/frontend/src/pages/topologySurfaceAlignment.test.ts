@@ -73,7 +73,7 @@ describe('topology v0.3 surface alignment', () => {
     expect(ALGORITHM_ICONS).toMatchObject({
       fusion: 'FU',
       workflows: 'FL',
-      mlp: 'MLP',
+      escalate: 'ES',
       multi_factor: 'MF',
     })
     expect(PLUGIN_ICONS).toMatchObject({

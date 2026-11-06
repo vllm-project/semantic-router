@@ -206,11 +206,6 @@ type RouteDiagnostics struct {
 	FusionQuorum                   *FusionQuorumDiagnostics             `json:"fusion_quorum,omitempty"`
 	Looper                         *LooperDiagnostics                   `json:"looper,omitempty"`
 	PreparedDispatch               *PreparedDispatchReceipt             `json:"prepared_dispatch,omitempty"`
-	PromptHelperModel              string                               `json:"prompt_helper_model,omitempty"`
-	PromptHelperPromptTokens       int64                                `json:"prompt_helper_prompt_tokens,omitempty"`
-	PromptHelperCompletionTokens   int64                                `json:"prompt_helper_completion_tokens,omitempty"`
-	PromptHelperTotalTokens        int64                                `json:"prompt_helper_total_tokens,omitempty"`
-	PromptHelperLatencyMs          int64                                `json:"prompt_helper_latency_ms,omitempty"`
 	OriginalModel                  string                               `json:"original_model,omitempty"`
 	ProposalModel                  string                               `json:"proposal_model,omitempty"`
 	PreviousModel                  string                               `json:"previous_model,omitempty"`

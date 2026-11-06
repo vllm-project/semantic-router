@@ -35,7 +35,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     clear_route_cache: true,
     model_selection: {
       enabled: true,
-      method: 'knn',
     },
   } satisfies RouterCoreConfig,
   learning: {
@@ -223,7 +222,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   clear_route_cache: true,
   model_selection: {
     enabled: true,
-    method: 'knn',
   } satisfies ModelSelectionConfig,
   api: {
     batch_classification: {
@@ -375,7 +373,7 @@ export const SECTION_META: Record<
   model_selection: {
     title: 'Model Selection',
     eyebrow: 'Router',
-    description: 'Selection strategy and ML-backed model-ranking settings used by the router core.',
+    description: 'Turns on the selection algorithms that decisions configure.',
   },
   api: {
     title: 'API Service',

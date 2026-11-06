@@ -291,6 +291,7 @@ routing:
           reasoning_effort: high
       algorithm:
         type: remom
+        on_error: skip
         remom:
           breadth_schedule: [4]
           model_distribution: round_robin
@@ -304,7 +305,6 @@ routing:
           min_successful_responses: 2
           max_responses_per_round: 4
           include_intermediate_responses: false
-          on_error: skip
           synthesis_template: |-
             You are the final HLE answer synthesizer for a competitive hybrid
             router. The candidate panel contains GLM-5.2 breadth attempts and
@@ -355,6 +355,7 @@ routing:
           reasoning_effort: high
       algorithm:
         type: fusion
+        on_error: skip
         fusion:
           model: gemini31-finalizer
           analysis_models: [glm52-breadth-a, gpt55-verifier, opus48-verifier]
@@ -365,7 +366,6 @@ routing:
           temperature: 0.8
           include_analysis: false
           include_intermediate_responses: false
-          on_error: skip
           synthesis_template: |-
             You are the final HLE answer judge.
 
@@ -410,6 +410,7 @@ routing:
           reasoning_effort: high
       algorithm:
         type: remom
+        on_error: skip
         remom:
           breadth_schedule: [3]
           model_distribution: round_robin
@@ -423,7 +424,6 @@ routing:
           min_successful_responses: 2
           max_responses_per_round: 3
           include_intermediate_responses: false
-          on_error: skip
           synthesis_template: |-
             Produce the final HLE answer from the hybrid attempts.
 

@@ -110,14 +110,14 @@ func TestBenchmarkUsageLooperIncludesEveryCallAndFailsClosed(t *testing.T) {
 	}
 }
 
-func TestBenchmarkCallLimitStopsBeforePromptSelection(t *testing.T) {
+func TestBenchmarkCallLimitStopsBeforeSystemOneSelection(t *testing.T) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{}}
 	ctx := &RequestContext{Headers: map[string]string{headers.SRBenchMaxInferenceCalls: "1"}}
-	selected := &config.Decision{Name: "paid_selector", Algorithm: &config.AlgorithmConfig{Type: "prompt"}}
+	selected := &config.Decision{Name: "paid_selector", Algorithm: &config.AlgorithmConfig{Type: "systemone"}}
 	// No selector/client is initialized: reaching model selection would fail.
 	_, _, _, model, err := router.finalizeDecisionEvaluation(&decision.DecisionResult{Decision: selected}, "vllm-sr/auto", "query", ctx)
 	if !errors.Is(err, errBenchmarkCallLimit) || model != "" {
-		t.Fatalf("prompt selection was not stopped: model=%q err=%v", model, err)
+		t.Fatalf("systemone selection was not stopped: model=%q err=%v", model, err)
 	}
 }
 

@@ -9,24 +9,15 @@ import (
 )
 
 var algorithmTutorialBuckets = map[string]string{
-	"cascade":       "native",
-	"automix":       "selection",
-	"confidence":    "looper",
+	"escalate":      "looper",
 	"fusion":        "looper",
-	"hybrid":        "selection",
-	"kmeans":        "selection",
-	"knn":           "selection",
 	"latency-aware": "selection",
-	"mlp":           "selection",
 	"multi-factor":  "selection",
 	"random":        "selection",
 	"ratings":       "looper",
 	"remom":         "looper",
-	"router-dc":     "selection",
 	"static":        "selection",
-	"svm":           "selection",
 	"workflows":     "looper",
-	"prompt":        "selection",
 	"systemone":     "selection",
 }
 

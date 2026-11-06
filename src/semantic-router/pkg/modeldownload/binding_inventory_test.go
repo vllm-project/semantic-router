@@ -245,8 +245,9 @@ func TestGlobalServiceDownloadsIgnoreRecipeOverrides(t *testing.T) {
 	}
 }
 
-// deploymentConfig binds the embedding model a router_dc decision reads to a
-// model_runtime deployment of artifact, pinned when artifact is a repository.
+// deploymentConfig binds the embedding model a decision's context compression
+// scores with to a model_runtime deployment of artifact, pinned when artifact
+// is a repository.
 func deploymentConfig(artifact string) *config.RouterConfig {
 	cfg := &config.RouterConfig{MoMRegistry: map[string]string{artifact: "test/new"}}
 	deployment := config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: artifact}
@@ -256,7 +257,10 @@ func deploymentConfig(artifact string) *config.RouterConfig {
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"new": deployment}
 	cfg.EmbeddingConfig.ModelType = "mmbert"
 	cfg.ModelBindings = map[string]config.ModelBinding{"embedding": embeddingBinding("new", "")}
-	cfg.Decisions = []config.Decision{{Name: "route", Algorithm: &config.AlgorithmConfig{Type: "router_dc"}}}
+	cfg.Decisions = []config.Decision{{Name: "route", Plugins: []config.DecisionPlugin{{
+		Type:          config.DecisionPluginContextCompression,
+		Configuration: config.MustStructuredPayload(map[string]any{"enabled": true, "scoring": map[string]any{"method": config.ContextCompressionScoringEmbedding}}),
+	}}}}
 	return cfg
 }
 

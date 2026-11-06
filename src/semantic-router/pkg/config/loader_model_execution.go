@@ -91,8 +91,6 @@ func rejectRemovedModelExecutionFields(raw map[string]interface{}) error {
 	for _, name := range sortedMapKeys(stores) {
 		removed = appendRetiredEmbeddingType(removed, "global.stores."+name+".embedding_model", nestedStringMap(stores[name])["embedding_model"])
 	}
-	selection := nestedStringMap(nestedStringMap(nestedStringMap(global["router"])["model_selection"])["ml"])
-	removed = appendRetiredEmbeddingType(removed, "global.router.model_selection.ml.model_type", selection["model_type"])
 	removed = appendPresent(removed, "global.model_catalog.system", nestedStringMap(catalog["system"]), "hallucination_explainer")
 	removed = appendPresent(removed, "global.stores.response_cache", nestedStringMap(stores["response_cache"]), "polarity_guard")
 	removed = append(removed, removedNLIRoutingFields("routing", nestedStringMap(raw["routing"]))...)

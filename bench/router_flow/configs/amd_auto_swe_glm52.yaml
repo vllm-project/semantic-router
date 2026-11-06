@@ -303,6 +303,7 @@ routing:
           reasoning_effort: high
       algorithm:
         type: workflows
+        on_error: skip
         workflows:
           mode: static
           template: swe-bench-pro-glm52-v1
@@ -343,7 +344,6 @@ routing:
           min_successful_responses: 1
           temperature: 1.0
           include_intermediate_responses: false
-          on_error: skip
 
     - name: swe_medium_risk_fusion
       description: Medium-risk tasks use two GLM 5.2 patch candidates and GLM 5.2 synthesis.
@@ -382,6 +382,7 @@ routing:
           reasoning_effort: high
       algorithm:
         type: fusion
+        on_error: skip
         fusion:
           model: glm52-finalizer
           analysis_models: [glm52-patcher-a, glm52-patcher-b]
@@ -392,7 +393,6 @@ routing:
           temperature: 1.0
           include_analysis: false
           include_intermediate_responses: false
-          on_error: skip
           synthesis_template: |-
             You are the final SWE-Bench Pro patch judge.
 
@@ -449,6 +449,7 @@ routing:
           reasoning_effort: high
       algorithm:
         type: remom
+        on_error: skip
         remom:
           breadth_schedule: [2]
           model_distribution: round_robin
@@ -462,7 +463,6 @@ routing:
           min_successful_responses: 1
           max_responses_per_round: 2
           include_intermediate_responses: false
-          on_error: skip
           synthesis_template: |-
             Produce the next SWE-Bench Pro EvalScope backticks action from the
             GLM-5.2 attempts.

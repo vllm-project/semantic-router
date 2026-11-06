@@ -77,27 +77,28 @@ recipes:
           rules: {type: systemone, name: task_kind, label: simple}
           modelRefs: [{model: kai}]
           algorithm:
-            type: cascade
+            type: escalate
             budget: {deadline: 150ms, max_calls: 2}
-            quality: &quality
-              type: uncalibrated
-              acceptance:
-                rules: [{question_type: noul, field: top_probability, predicate: {gte: 0}}]
-            stages: [{name: answer, kind: native, model: kai}]
+            escalate:
+              quality: &quality
+                type: uncalibrated
+                accept:
+                  native: [{question_type: noul, field: top_probability, gte: 0}]
+              stages: [{name: answer, model: kai}]
         - name: hard
           rules: {type: systemone, name: task_kind, label: hard}
           modelRefs: [{model: kai}, {model: vega}]
           algorithm:
-            type: cascade
+            type: escalate
             budget: {deadline: 200ms, max_calls: 3}
-            quality: *quality
-            stages:
-              - name: fast
-                kind: native
-                model: kai
-                accept:
-                  rules: [{question_type: noul, field: top_probability, predicate: {gte: 0.9}}]
-              - {name: strong, kind: native, model: vega}
+            escalate:
+              quality: *quality
+              stages:
+                - name: fast
+                  model: kai
+                  accept:
+                    native: [{question_type: noul, field: top_probability, gte: 0.9}]
+                - {name: strong, model: vega}
 `))
 	if err != nil {
 		t.Fatal(err)

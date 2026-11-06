@@ -442,10 +442,6 @@ func validateDecisionAlgorithmConfig(decisionName string, modelRefs []ModelRef, 
 	if algorithm == nil {
 		return nil
 	}
-	if err := validateNativeAlgorithmConfig(decisionName, modelRefs, algorithm); err != nil {
-		return err
-	}
-
 	normalizedType, displayType, err := normalizeDecisionAlgorithmType(
 		decisionName,
 		algorithm,
@@ -465,6 +461,9 @@ func validateDecisionAlgorithmConfig(decisionName string, modelRefs []ModelRef, 
 		configuredBlocks,
 	)
 	if err != nil {
+		return err
+	}
+	if err := validateExecutorSettings(decisionName, normalizedType, algorithm); err != nil {
 		return err
 	}
 	if terminal {
@@ -583,25 +582,45 @@ func expectedAlgorithmBlock(normalizedType string) (string, bool) {
 
 func validateSpecializedAlgorithmConfig(decisionName string, modelRefs []ModelRef, normalizedType string, algorithm *AlgorithmConfig) error {
 	switch normalizedType {
-	case "confidence":
-		return wrapAlgorithmValidationError(decisionName, "confidence", ValidateConfidenceAlgorithmConfig(algorithm.Confidence))
-	case "latency_aware":
-		return validateDecisionLatencyAwareAlgorithm(decisionName, algorithm.LatencyAware)
-	case "remom":
+	case DecisionAlgorithmEscalate:
+		return validateEscalateAlgorithmConfig(decisionName, modelRefs, algorithm)
+	case DecisionAlgorithmReMoM:
 		return validateDecisionReMoMAlgorithm(decisionName, modelRefs, algorithm.ReMoM)
-	case "fusion":
+	case DecisionAlgorithmFusion:
 		return validateDecisionFusionAlgorithm(decisionName, modelRefs, algorithm.Fusion)
-	case "workflows":
+	case DecisionAlgorithmWorkflows:
 		return validateDecisionWorkflowsAlgorithm(decisionName, modelRefs, algorithm.Workflows)
-	case "prompt":
-		return validatePromptAlgorithmConfig(decisionName, modelRefs, algorithm)
 	case DecisionAlgorithmSystemOne:
 		return validateSystemOneSelectorConfig(decisionName, modelRefs, algorithm)
-	case "multi_factor":
+	case DecisionAlgorithmMultiFactor:
 		return validateDecisionMultiFactorAlgorithm(decisionName, algorithm.MultiFactor)
 	}
 	if _, registered, err := DecodeDecisionAlgorithm(decisionName, algorithm); registered {
 		return err
+	}
+	return nil
+}
+
+// validateExecutorSettings checks the executors' shared budget and on_error,
+// and refuses them on a selector, which calls one candidate. Escalate's
+// on_error depends on its path and is checked with its block.
+func validateExecutorSettings(decisionName, algorithmType string, algorithm *AlgorithmConfig) error {
+	if !IsExecutorAlgorithmType(algorithmType) {
+		if algorithm.Budget != nil || algorithm.OnError != "" {
+			return fmt.Errorf("decision '%s': algorithm.budget and algorithm.on_error apply to executors; %s is a selector", decisionName, algorithmType)
+		}
+		return nil
+	}
+	if algorithmType == DecisionAlgorithmEscalate {
+		return nil
+	}
+	switch algorithm.OnError {
+	case "", FusionOnErrorSkip, FusionOnErrorFail:
+	default:
+		return fmt.Errorf("decision '%s': algorithm.on_error of %s must be %q or %q, got %q", decisionName, algorithmType, FusionOnErrorSkip, FusionOnErrorFail, algorithm.OnError)
+	}
+	if err := algorithm.Budget.Validate(); err != nil {
+		return fmt.Errorf("decision '%s': %w", decisionName, err)
 	}
 	return nil
 }
@@ -717,62 +736,9 @@ func wrapAlgorithmValidationError(decisionName, algorithmType string, err error)
 	return fmt.Errorf("decision '%s', algorithm.%s: %w", decisionName, algorithmType, err)
 }
 
-func validateDecisionLatencyAwareAlgorithm(decisionName string, cfg *LatencyAwareAlgorithmConfig) error {
-	if cfg == nil {
-		return fmt.Errorf("decision '%s': algorithm.type=latency_aware requires algorithm.latency_aware configuration", decisionName)
-	}
-	return wrapAlgorithmValidationError(decisionName, "latency_aware", validateLatencyAwareAlgorithmConfig(cfg))
-}
-
 func validateDecisionReMoMAlgorithm(decisionName string, modelRefs []ModelRef, cfg *ReMoMAlgorithmConfig) error {
 	if err := ValidateReMoMAlgorithmConfig(cfg); err != nil {
 		return wrapAlgorithmValidationError(decisionName, "remom", err)
 	}
 	return wrapAlgorithmValidationError(decisionName, "remom", ValidateReMoMModelRefs(cfg, modelRefs))
-}
-
-// validateLatencyAwareAlgorithmConfig validates latency_aware algorithm configuration.
-func validateLatencyAwareAlgorithmConfig(cfg *LatencyAwareAlgorithmConfig) error {
-	hasTPOTPercentile := cfg.TPOTPercentile > 0
-	hasTTFTPercentile := cfg.TTFTPercentile > 0
-
-	if !hasTPOTPercentile && !hasTTFTPercentile {
-		return fmt.Errorf("must specify at least one of tpot_percentile (1-100) or ttft_percentile (1-100). RECOMMENDED: use both for comprehensive latency evaluation")
-	}
-
-	warnIncompleteLatencyAwarePercentiles(hasTPOTPercentile, hasTTFTPercentile)
-
-	for _, field := range []struct {
-		name    string
-		value   int
-		enabled bool
-	}{
-		{name: "tpot_percentile", value: cfg.TPOTPercentile, enabled: hasTPOTPercentile},
-		{name: "ttft_percentile", value: cfg.TTFTPercentile, enabled: hasTTFTPercentile},
-	} {
-		if err := validateLatencyAwarePercentile(field.name, field.value, field.enabled); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func warnIncompleteLatencyAwarePercentiles(hasTPOTPercentile bool, hasTTFTPercentile bool) {
-	if hasTPOTPercentile && !hasTTFTPercentile {
-		logging.Warnf("algorithm.latency_aware: only tpot_percentile is set. RECOMMENDED: also set ttft_percentile for comprehensive latency evaluation (user-perceived latency)")
-	}
-	if !hasTPOTPercentile && hasTTFTPercentile {
-		logging.Warnf("algorithm.latency_aware: only ttft_percentile is set. RECOMMENDED: also set tpot_percentile for comprehensive latency evaluation (token generation throughput)")
-	}
-}
-
-func validateLatencyAwarePercentile(name string, value int, enabled bool) error {
-	if !enabled {
-		return nil
-	}
-	if value < 1 || value > 100 {
-		return fmt.Errorf("%s must be between 1 and 100, got: %d", name, value)
-	}
-	return nil
 }

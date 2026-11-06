@@ -507,11 +507,6 @@ def _migrate_decision(
                 f"{path}.plugins[{index}].configuration.use_nli",
                 "removed; NLI explanations are retired",
             )
-    mlp = dict_at(decision, "algorithm", "mlp")
-    if mlp is not None and mlp.pop("device", None) is not None:
-        notes.changed(
-            path + ".algorithm.mlp.device", "removed; the MLP selector runs in Go"
-        )
     grounding = dict_at(decision, "algorithm", "fusion", "grounding")
     if grounding is not None and "nli_contradiction_penalty" in grounding:
         penalty = grounding.pop("nli_contradiction_penalty")

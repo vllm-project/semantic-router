@@ -63,7 +63,6 @@ var maintainedValuesConfigAssets = []string{
 	repoRel("e2e", "profiles", "authz-rbac", "values.yaml"),
 	repoRel("e2e", "profiles", "dashboard", "values.yaml"),
 	repoRel("e2e", "profiles", "dynamic-config", "values.yaml"),
-	repoRel("e2e", "profiles", "ml-model-selection", "values.yaml"),
 	repoRel("e2e", "profiles", "multi-endpoint", "values.yaml"),
 	repoRel("e2e", "profiles", "production-stack", "values.yaml"),
 	repoRel("e2e", "profiles", "rag-hybrid-search", "values.yaml"),

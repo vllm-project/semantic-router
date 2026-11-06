@@ -12,13 +12,6 @@ func TestRoutingCorpusLoadersRejectInvalidData(t *testing.T) {
 		load func(string) (int, error)
 	}{
 		{
-			name: "model selection",
-			load: func(path string) (int, error) {
-				cases, err := loadModelSelectionCases(path)
-				return len(cases), err
-			},
-		},
-		{
 			name: "signal routing",
 			load: func(path string) (int, error) {
 				cases, err := loadSignalRoutingCases(path)
@@ -60,9 +53,6 @@ func TestRoutingCorpusLoadersRejectInvalidData(t *testing.T) {
 }
 
 func TestRoutingCorporaAreNonEmpty(t *testing.T) {
-	if _, err := loadModelSelectionCases("testdata/model_selection_cases.json"); err != nil {
-		t.Fatal(err)
-	}
 	for _, signal := range []string{
 		"complexity", "context", "conversation", "event", "language",
 		"preference", "reask", "structure",

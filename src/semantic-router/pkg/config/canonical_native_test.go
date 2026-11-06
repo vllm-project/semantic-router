@@ -51,21 +51,22 @@ recipes:
           rules: {}
           modelRefs: [{model: kai}, {model: strong}, {model: reviewer}]
           algorithm:
-            type: cascade
+            type: escalate
             budget: {deadline: 3s, max_calls: 4}
-            quality:
-              type: uncalibrated
-              acceptance:
-                rules:
-                  - {state: document, question: task, question_type: choice, field: confidence, predicate: {gte: 0.8}}
-            stages:
-              - {name: fast, kind: native, model: kai}
-              - {name: strong, kind: native, model: strong, timeout: 1s}
-              - name: review
-                kind: judge
-                model: reviewer
-                enabled: false
-                generation: {max_output_tokens: 256}
+            escalate:
+              quality:
+                type: uncalibrated
+                accept:
+                  native:
+                    - {state: document, question: task, question_type: choice, field: confidence, gte: 0.8}
+              stages:
+                - {name: fast, model: kai}
+                - {name: strong, model: strong, timeout: 1s}
+                - name: review
+                  kind: judge
+                  model: reviewer
+                  enabled: false
+                  generation: {max_output_tokens: 256}
 `
 
 func TestCanonicalNativeRoutingRoundTrip(t *testing.T) {
@@ -117,14 +118,14 @@ func TestCanonicalNativeRoutingRejectsAmbiguousContracts(t *testing.T) {
 		{"zero budget", "max_calls: 4", "max_calls: 0", "max_calls must be positive"},
 		{"infinite deadline", "deadline: 3s", "deadline: 0s", "positive duration"},
 		{"unknown stage model", "model: strong, timeout", "model: absent, timeout", "undeclared modelRef"},
-		{"duplicate stage", "name: strong, kind", "name: fast, kind", "distinct and non-empty"},
-		{"wrong role", "name: strong, kind: native", "name: strong, kind: judge", "generation.max_output_tokens"},
-		{"wrong native protocol", "name: strong, kind: native, model: strong", "name: strong, kind: native, model: reviewer", "requires api_format: systemone"},
+		{"duplicate stage", "name: strong, model: strong", "name: fast, model: strong", "distinct and non-empty"},
+		{"wrong role", "name: strong, model: strong", "name: strong, kind: judge, model: strong", "generation.max_output_tokens"},
+		{"wrong native protocol", "name: strong, model: strong", "name: strong, model: reviewer", "requires api_format: systemone"},
 		{"unsupported fallback", "kind: judge", "kind: typed_fallback", "separate response contract"},
 		{"missing LLM bound", "generation: {max_output_tokens: 256}", "generation: {max_output_tokens: 0}", "generation.max_output_tokens"},
 		{"raw score", "field: confidence", "field: value", "score value is not confidence"},
 		{"unsupported native type", "question_type: choice", "question_type: span", "question_type must be"},
-		{"native Chat recipe", "api: systemone", "api: chat", "native algorithms require"},
+		{"native Chat recipe", "api: systemone", "api: chat", "require an isolated native recipe"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -143,6 +144,27 @@ func TestCanonicalNativeRoutingRejectsAmbiguousContracts(t *testing.T) {
 	}
 }
 
+// System One calls carry no client's gateway credential, so neither a
+// systemone backend nor a stage's judge model may be a trusted gateway.
+func TestCanonicalNativeRoutingRefusesTrustedGateways(t *testing.T) {
+	enabled := strings.Replace(nativeRoutingTestYAML, "global:\n", "global:\n  services:\n    authz:\n      gateway_credential: {enabled: true}\n", 1)
+	for _, test := range []struct{ name, backend string }{
+		{"systemone backend", "        - provider: systemone-compatible\n"},
+		{"judge model", "        - provider: openai-compatible\n"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			raw := strings.Replace(enabled, test.backend, test.backend+"          trusted_gateway: true\n", 1)
+			if enabled == nativeRoutingTestYAML || raw == enabled {
+				t.Fatal("test mutation did not match")
+			}
+			_, err := ParseYAMLBytes([]byte(raw))
+			if err == nil || !strings.Contains(err.Error(), "without a client's gateway credential") {
+				t.Fatalf("got %v, want the trusted gateway refusal", err)
+			}
+		})
+	}
+}
+
 func TestNativeRuntimeDemandRequiresPublicationAndEnabledStage(t *testing.T) {
 	cfg, err := ParseYAMLBytes([]byte(nativeRoutingTestYAML))
 	if err != nil {
@@ -155,7 +177,7 @@ func TestNativeRuntimeDemandRequiresPublicationAndEnabledStage(t *testing.T) {
 	cfg.Listeners[0].SystemOne = &ListenerSystemOne{Models: []string{DefaultEntrypointModel}}
 	recipe := findRecipe(cfg.Recipes, "native-decisions")
 	enabled := false
-	recipe.Profile.Decisions[0].Algorithm.Stages[0].Enabled = &enabled
+	recipe.Profile.Decisions[0].Algorithm.Escalate.Stages[0].Enabled = &enabled
 	if used := ModelRuntimeDeploymentsInUse(cfg); len(used) != 0 {
 		t.Fatalf("disabled native action started models: %v", used)
 	}

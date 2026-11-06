@@ -1,0 +1,1 @@
+routing.decisions[escalate].algorithm: removed_algorithm_type: algorithm type confidence is removed; run `vllm-sr config migrate` (type: escalate, with its method and threshold under escalate.accept)

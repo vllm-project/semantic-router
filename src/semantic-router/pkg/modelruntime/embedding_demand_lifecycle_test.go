@@ -12,37 +12,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/runtimetest"
 )
 
-func TestOwnedMLPreparesSelectedEmbeddingWithoutUnusedPrimary(t *testing.T) {
-	cfg := &config.RouterConfig{}
-	cfg.EmbeddingConfig.ModelType = "mmbert"
-	cfg.MmBertModelPath = "/does-not-exist/unused-primary"
-	cfg.Qwen3ModelPath = t.TempDir()
-	cfg.ModelSelection.Enabled = true
-	cfg.ModelSelection.ML.ModelsPath, cfg.ModelSelection.ML.ModelType = "selectors", "qwen3"
-	cfg.Decisions = []config.Decision{{Algorithm: &config.AlgorithmConfig{Type: "knn"}}}
-	qwen3 := embeddingDeployment(t, cfg, "qwen3")
-	services := newEmbeddingRuntime(qwen3)
-	runtime := serving.New(services, nil)
-	prepared, err := PrepareOwnedEmbeddings(context.Background(), cfg, runtime)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer prepared.Close()
-	provider, err := prepared.Get("qwen3", 0, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if vector, err := provider.Embed(context.Background(), "routing query"); err != nil || len(vector) != 8 {
-		t.Fatalf("selected ML embedding = %v, %v", vector, err)
-	}
-	if _, err := prepared.Get("mmbert", 0, 0); err == nil {
-		t.Fatal("unused primary was prepared")
-	}
-	if entries := runtime.PreparedBindings(); len(entries) != 1 || entries[0].Identity.Deployment != qwen3 {
-		t.Fatalf("prepared bindings = %+v", entries)
-	}
-}
-
 func TestNamedSharedConsumersPrepareTheirGlobalEmbedding(t *testing.T) {
 	for _, consumer := range []string{"tool_selection", "memory", "embedding API"} {
 		t.Run(consumer, func(t *testing.T) {

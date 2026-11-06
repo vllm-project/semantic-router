@@ -28,25 +28,15 @@ func TestConfigFragmentCatalogCoversSupportedRoutingSurfaces(t *testing.T) {
 	}
 
 	requiredAlgorithmFragments := map[string]string{
-		"cascade":       filepath.Join("native", "cascade.yaml"),
-		"automix":       filepath.Join("selection", "automix.yaml"),
-		"confidence":    filepath.Join("looper", "confidence.yaml"),
-		"fusion":        filepath.Join("looper", "fusion.yaml"),
-		"hybrid":        filepath.Join("selection", "hybrid.yaml"),
-		"kmeans":        filepath.Join("selection", "kmeans.yaml"),
-		"knn":           filepath.Join("selection", "knn.yaml"),
-		"latency_aware": filepath.Join("selection", "latency-aware.yaml"),
-		"mlp":           filepath.Join("selection", "mlp.yaml"),
-		"multi_factor":  filepath.Join("selection", "multi-factor.yaml"),
-		"random":        filepath.Join("selection", "random.yaml"),
-		"ratings":       filepath.Join("looper", "ratings.yaml"),
-		"remom":         filepath.Join("looper", "remom.yaml"),
-		"router_dc":     filepath.Join("selection", "router-dc.yaml"),
-		"static":        filepath.Join("selection", "static.yaml"),
-		"svm":           filepath.Join("selection", "svm.yaml"),
-		"workflows":     filepath.Join("looper", "workflows.yaml"),
-		"prompt":        filepath.Join("selection", "prompt.yaml"),
-		"systemone":     filepath.Join("selection", "systemone.yaml"),
+		"static":       filepath.Join("selection", "static.yaml"),
+		"random":       filepath.Join("selection", "random.yaml"),
+		"multi_factor": filepath.Join("selection", "multi-factor.yaml"),
+		"systemone":    filepath.Join("selection", "systemone.yaml"),
+		"escalate":     filepath.Join("looper", "escalate.yaml"),
+		"fusion":       filepath.Join("looper", "fusion.yaml"),
+		"ratings":      filepath.Join("looper", "ratings.yaml"),
+		"remom":        filepath.Join("looper", "remom.yaml"),
+		"workflows":    filepath.Join("looper", "workflows.yaml"),
 	}
 	for _, algorithmType := range SupportedDecisionAlgorithmTypes() {
 		relPath, ok := requiredAlgorithmFragments[algorithmType]

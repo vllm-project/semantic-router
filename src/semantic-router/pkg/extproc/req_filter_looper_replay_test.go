@@ -31,12 +31,12 @@ func TestHandleLooperExecutionFailureIsVisibleAndTerminalInReplay(t *testing.T) 
 		ReplayRecorder: routerreplay.NewRecorder(store.NewMemoryStore(10, 0)),
 	}
 	decision := &config.Decision{
-		Name: "confidence-route",
+		Name: "escalate-route",
 		ModelRefs: []config.ModelRef{
 			{Model: "model-a"},
 			{Model: "model-b"},
 		},
-		Algorithm: &config.AlgorithmConfig{Type: "confidence"},
+		Algorithm: &config.AlgorithmConfig{Type: "escalate"},
 	}
 	request := testNeutralRequest("router-entrypoint", "hello")
 	ctx := &RequestContext{
@@ -77,7 +77,7 @@ func TestHandleLooperExecutionFailureIsVisibleAndTerminalInReplay(t *testing.T) 
 	}
 }
 
-func TestHandleConfidencePartialFailurePersistsAccountingWithoutCandidateBody(t *testing.T) {
+func TestHandleEscalatePartialFailurePersistsAccountingWithoutCandidateBody(t *testing.T) {
 	server := newConfidencePartialFailureServer(t)
 	defer server.Close()
 
@@ -92,14 +92,16 @@ func TestHandleConfidencePartialFailurePersistsAccountingWithoutCandidateBody(t 
 		},
 		ReplayRecorder: routerreplay.NewRecorder(store.NewMemoryStore(10, 0)),
 	}
+	gte := 0.0
 	decision := &config.Decision{
-		Name:      "confidence-partial-route",
+		Name:      "escalate-partial-route",
 		ModelRefs: []config.ModelRef{{Model: "small"}, {Model: "large"}},
 		Algorithm: &config.AlgorithmConfig{
-			Type: "confidence",
-			Confidence: &config.ConfidenceAlgorithmConfig{
-				ConfidenceMethod: "avg_logprob",
-				OnError:          "fail",
+			Type:    "escalate",
+			OnError: "fail",
+			Escalate: &config.EscalateAlgorithmConfig{
+				Order:  config.EscalateOrderSize,
+				Accept: &config.EscalateAccept{Confidence: &config.EscalateConfidence{Method: "avg_logprob", GTE: &gte}},
 			},
 		},
 	}
@@ -182,33 +184,37 @@ func assertPartialConfidenceRecord(t *testing.T, record store.Record, found bool
 	assertPartialConfidenceTrace(t, record)
 }
 
+// Neither answer carries logprobs, so neither can be judged: escalate moves
+// on from the small model to the large one and fails with both attempts paid.
 func assertPartialConfidenceUsage(t *testing.T, record store.Record) {
 	t.Helper()
-	if record.PromptTokens == nil || *record.PromptTokens != 5 ||
-		record.CompletionTokens == nil || *record.CompletionTokens != 2 ||
-		record.TotalTokens == nil || *record.TotalTokens != 7 {
-		t.Fatalf("replay usage = prompt %v completion %v total %v, want 5/2/7", record.PromptTokens, record.CompletionTokens, record.TotalTokens)
+	if record.PromptTokens == nil || *record.PromptTokens != 10 ||
+		record.CompletionTokens == nil || *record.CompletionTokens != 4 ||
+		record.TotalTokens == nil || *record.TotalTokens != 14 {
+		t.Fatalf("replay usage = prompt %v completion %v total %v, want 10/4/14", record.PromptTokens, record.CompletionTokens, record.TotalTokens)
 	}
 }
 
 func assertPartialConfidenceTrace(t *testing.T, record store.Record) {
 	t.Helper()
-	if record.SelectionMethod != "confidence" || record.RouteDiagnostics == nil ||
-		!strings.Contains(record.RouteDiagnostics.SelectionReasoning, "1 call attempts") ||
-		!strings.Contains(record.RouteDiagnostics.SelectionReasoning, "small") {
-		t.Fatalf("replay confidence trace = method %q diagnostics %+v", record.SelectionMethod, record.RouteDiagnostics)
+	if record.SelectionMethod != "escalate" || record.RouteDiagnostics == nil ||
+		!strings.Contains(record.RouteDiagnostics.SelectionReasoning, "2 call attempts") ||
+		!strings.Contains(record.RouteDiagnostics.SelectionReasoning, "small") ||
+		!strings.Contains(record.RouteDiagnostics.SelectionReasoning, "large") {
+		t.Fatalf("replay escalate trace = method %q diagnostics %+v", record.SelectionMethod, record.RouteDiagnostics)
 	}
 	if strings.Contains(record.ResponseBody, "candidate private answer") {
 		t.Fatalf("replay response body leaked candidate answer: %q", record.ResponseBody)
 	}
 	looperTrace := record.RouteDiagnostics.Looper
-	if looperTrace == nil || len(looperTrace.Attempts) != 1 {
-		t.Fatalf("replay Looper trace = %+v, want one completed attempt", looperTrace)
+	if looperTrace == nil || len(looperTrace.Attempts) != 2 {
+		t.Fatalf("replay Looper trace = %+v, want two completed attempts", looperTrace)
 	}
-	attempt := looperTrace.Attempts[0]
-	if attempt.Ordinal != 1 || attempt.Status != string(looper.AttemptStatusSucceeded) ||
-		attempt.Reason != string(looper.AttemptReasonUnusable) || attempt.Usage.TotalTokens != 7 {
-		t.Fatalf("replay Looper attempt = %+v", attempt)
+	for index, attempt := range looperTrace.Attempts {
+		if attempt.Ordinal != index+1 || attempt.Status != string(looper.AttemptStatusSucceeded) ||
+			attempt.Reason != string(looper.AttemptReasonUnusable) || attempt.Usage.TotalTokens != 7 {
+			t.Fatalf("replay Looper attempt = %+v", attempt)
+		}
 	}
 }
 

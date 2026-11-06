@@ -322,7 +322,7 @@ decisions:
     model: vllm-sr/mom-v1-flash
     expected_recipe: speed-first
     expected_decision: unified_speed_heavy_route
-    expected_algorithm: latency_aware
+    expected_algorithm: multi_factor
     variants:
       - id: architecture
         query: Produce a detailed architecture for a multi-region cache.
@@ -550,38 +550,38 @@ decisions:
     model: vllm-sr/mom-v1-ultra
     expected_recipe: accuracy-first
     expected_decision: unified_frontier_verified_answer
-    expected_algorithm: confidence
+    expected_algorithm: escalate
     variants:
       - id: evidence_en
         query: Verify the answer with evidence and cite reliable sources.
         expected_signals:
           systemone: [verification]
-        tags: [recipe:accuracy-first, language:en, signal:keyword, looper:confidence]
+        tags: [recipe:accuracy-first, language:en, signal:keyword, looper:escalate]
       - id: evidence_zh
         query: 请用证据核实答案，并核实每个事实。
         expected_signals:
           systemone: [verification]
-        tags: [recipe:accuracy-first, language:zh, signal:keyword, looper:confidence]
+        tags: [recipe:accuracy-first, language:zh, signal:keyword, looper:escalate]
       - id: evidence_es
         query: Verificar con evidencia cada afirmación y citar fuentes fiables.
         expected_signals:
           systemone: [verification]
-        tags: [recipe:accuracy-first, language:es, signal:keyword, looper:confidence]
+        tags: [recipe:accuracy-first, language:es, signal:keyword, looper:escalate]
       - id: evidence_fr
         query: Vérifier avec des preuves chaque affirmation et citer des sources fiables.
         expected_signals:
           systemone: [verification]
-        tags: [recipe:accuracy-first, language:fr, signal:keyword, looper:confidence]
+        tags: [recipe:accuracy-first, language:fr, signal:keyword, looper:escalate]
       - id: evidence_ja
         query: 証拠で検証し、信頼できる情報源を示してください。
         expected_signals:
           systemone: [verification]
-        tags: [recipe:accuracy-first, language:ja, signal:keyword, looper:confidence]
+        tags: [recipe:accuracy-first, language:ja, signal:keyword, looper:escalate]
       - id: disputed_claim
         query: The Great Wall is visible from the Moon with the naked eye. Is that claim accurate?
         expected_signals:
           systemone: [verification]
-        tags: [recipe:accuracy-first, language:en, signal:keyword, looper:confidence]
+        tags: [recipe:accuracy-first, language:en, signal:keyword, looper:escalate]
 
   - id: frontier_remom
     model: vllm-sr/mom-v1-ultra

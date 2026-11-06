@@ -256,8 +256,9 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 
 // validateCanonicalTrustedGateways checks every backend_ref that opts into
 // the request's trusted gateway credential: the authz contract that supplies
-// the credential must be enabled, and the backend must not also carry a
-// static key, which would otherwise stand in silently for a missing one.
+// the credential must be enabled, the backend must not serve System One
+// calls, which never carry it, and it must not also carry a static key,
+// which would otherwise stand in silently for a missing one.
 func validateCanonicalTrustedGateways(canonical *CanonicalConfig) error {
 	enabled := false
 	if canonical.Global != nil {
@@ -275,6 +276,12 @@ func validateCanonicalTrustedGateways(canonical *CanonicalConfig) error {
 			if !enabled {
 				return fmt.Errorf(
 					"providers.models[%s].backend_refs[%d].trusted_gateway requires global.services.authz.gateway_credential.enabled: true",
+					model.Name, index,
+				)
+			}
+			if model.APIFormat == APIFormatSystemOne {
+				return fmt.Errorf(
+					"providers.models[%s].backend_refs[%d].trusted_gateway: only System One calls reach an api_format: systemone backend, and they go without a client's gateway credential; give it its own key",
 					model.Name, index,
 				)
 			}

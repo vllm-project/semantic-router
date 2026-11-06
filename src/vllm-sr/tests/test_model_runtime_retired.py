@@ -134,7 +134,6 @@ def _legacy() -> dict:
                     "polarity_guard": {"mode": "lexical"},
                 }
             },
-            "router": {"model_selection": {"ml": {"model_type": "bert"}}},
         },
     }
 
@@ -162,7 +161,6 @@ def test_every_retired_setting_is_found_by_its_path():
         "global.model_catalog.embeddings.semantic.bert_model_path",
         "global.model_catalog.embeddings.semantic.embedding_config.model_type: gemma",
         "global.stores.response_cache.embedding_model: bert",
-        "global.router.model_selection.ml.model_type: bert",
         "global.model_catalog.system.hallucination_explainer",
         "global.stores.response_cache.polarity_guard",
     ]

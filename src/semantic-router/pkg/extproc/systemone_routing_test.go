@@ -78,19 +78,19 @@ recipes:
           rules: {type: keyword, name: greeting}
           modelRefs: [{model: fast}, {model: strong}]
           algorithm:
-            type: cascade
+            type: escalate
             budget: {deadline: 2s, max_calls: 2}
-            quality:
-              type: uncalibrated
-              acceptance:
-                rules: [{question_type: choice, field: top_probability, predicate: {gte: 0}}]
-            stages:
-              - name: fast
-                kind: native
-                model: fast
+            escalate:
+              quality:
+                type: uncalibrated
                 accept:
-                  rules: [{question_type: choice, field: top_probability, predicate: {gte: 0.9}}]
-              - {name: strong, kind: native, model: strong}
+                  native: [{question_type: choice, field: top_probability, gte: 0}]
+              stages:
+                - name: fast
+                  model: fast
+                  accept:
+                    native: [{question_type: choice, field: top_probability, gte: 0.9}]
+                - {name: strong, model: strong}
 `, backend.URL, backend.URL)))
 	if err != nil {
 		t.Fatal(err)
@@ -156,7 +156,7 @@ recipes:
 func TestSystemOneBudgetIncludesRemoteSignalAndTransportRetries(t *testing.T) {
 	var signalCalls, fastAttempts, strongAttempts atomic.Int64
 	signalMetricBefore := testutil.ToFloat64(metrics.SystemOneSignalCalls)
-	stageMetricBefore := testutil.ToFloat64(metrics.SystemOneStageCalls.WithLabelValues("cascade", "fast", "fast"))
+	stageMetricBefore := testutil.ToFloat64(metrics.SystemOneStageCalls.WithLabelValues("escalate", "fast", "fast"))
 	decisionServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/v1/systemone/models" {
 			http.NotFound(w, r)
@@ -248,19 +248,19 @@ recipes:
           rules: {type: systemone, name: task_kind, label: simple}
           modelRefs: [{model: fast}, {model: strong}]
           algorithm:
-            type: cascade
+            type: escalate
             budget: {deadline: 2s, max_calls: 3}
-            quality:
-              type: uncalibrated
-              acceptance:
-                rules: [{question_type: choice, field: top_probability, predicate: {gte: 0.9}}]
-            stages:
-              - name: fast
-                kind: native
-                model: fast
+            escalate:
+              quality:
+                type: uncalibrated
                 accept:
-                  rules: [{question_type: choice, field: top_probability, predicate: {gte: 0.9}}]
-              - {name: strong, kind: native, model: strong}
+                  native: [{question_type: choice, field: top_probability, gte: 0.9}]
+              stages:
+                - name: fast
+                  model: fast
+                  accept:
+                    native: [{question_type: choice, field: top_probability, gte: 0.9}]
+                - {name: strong, model: strong}
 `, backendServer.URL, backendServer.URL, decisionServer.URL)))
 	if err != nil {
 		t.Fatal(err)
@@ -310,7 +310,7 @@ recipes:
 	if got := testutil.ToFloat64(metrics.SystemOneSignalCalls) - signalMetricBefore; got != 1 {
 		t.Fatalf("signal telemetry=%v, want 1 physical exchange", got)
 	}
-	if got := testutil.ToFloat64(metrics.SystemOneStageCalls.WithLabelValues("cascade", "fast", "fast")) - stageMetricBefore; got != 2 {
+	if got := testutil.ToFloat64(metrics.SystemOneStageCalls.WithLabelValues("escalate", "fast", "fast")) - stageMetricBefore; got != 2 {
 		t.Fatalf("stage telemetry=%v, want 2 physical exchanges including retry", got)
 	}
 	t.Logf("HTTP %d: model_calls=%d signal_calls=%d fast_attempts=%d strong_attempts=%d",
@@ -366,13 +366,14 @@ recipes:
           rules: {type: systemone, name: task_kind, label: simple}
           modelRefs: [{model: fast}]
           algorithm:
-            type: cascade
+            type: escalate
             budget: {deadline: 100ms, max_calls: 2}
-            quality:
-              type: uncalibrated
-              acceptance:
-                rules: [{question_type: noul, field: top_probability, predicate: {gte: 0}}]
-            stages: [{name: answer, kind: native, model: fast}]
+            escalate:
+              quality:
+                type: uncalibrated
+                accept:
+                  native: [{question_type: noul, field: top_probability, gte: 0}]
+              stages: [{name: answer, model: fast}]
 `, decisionServer.URL)))
 	if err != nil {
 		t.Fatal(err)

@@ -113,13 +113,6 @@ var configContractRequiredDocs = []docNeedles{
 		},
 	},
 	{
-		path: repoRel("website", "docs", "training", "ml-model-selection.md"),
-		needles: []string{
-			"global:\n  router:\n    model_selection:",
-			"routing:\n  decisions:",
-		},
-	},
-	{
 		path: repoRel("website", "docs", "training", "model-performance-eval.md"),
 		needles: []string{
 			"listeners: []",
@@ -243,15 +236,6 @@ var configContractRequiredDocs = []docNeedles{
 			"providers:\n  defaults:",
 			"routing:\n  modelCards:",
 			"global:\n  model_catalog:\n    modules:\n      classifier:",
-		},
-	},
-	{
-		path: repoRel("src", "semantic-router", "pkg", "modelselection", "README.md"),
-		needles: []string{
-			"global:\n  router:\n    model_selection:",
-			"providers:\n  models:",
-			"backend_refs:",
-			"routing:\n  decisions:",
 		},
 	},
 }
@@ -393,14 +377,6 @@ var configContractForbiddenDocs = []docNeedles{
 		},
 	},
 	{
-		path: repoRel("src", "semantic-router", "pkg", "modelselection", "README.md"),
-		needles: []string{
-			"\nvllm_endpoints:\n",
-			"\nmodel_config:\n",
-			"access_key:",
-		},
-	},
-	{
 		path: repoRel("website", "docs", "tutorials", "algorithm", "overview.md"),
 		needles: []string{
 			"computer_science",
@@ -456,10 +432,10 @@ var latestTutorialOverviewDocs = []docNeedles{
 		path: repoRel("website", "docs", "tutorials", "algorithm", "overview.md"),
 		needles: []string{
 			"An algorithm runs after a decision matches",
-			"### Selection Algorithms",
-			"### Looper Algorithms",
+			"### Selectors",
+			"### Executors",
 			"[Static](./selection/static)",
-			"[Confidence](./looper/confidence)",
+			"[Escalate](./looper/escalate)",
 		},
 	},
 	{
@@ -506,8 +482,8 @@ var latestTutorialSidebarRequired = []string{
 	"label: 'Learned'",
 	"label: 'Decisions'",
 	"label: 'Algorithms'",
-	"label: 'Selection'",
-	"label: 'Looper'",
+	"label: 'Selectors'",
+	"label: 'Executors'",
 	"label: 'Plugins'",
 	"label: 'Response and Mutation'",
 	"label: 'Retrieval and Memory'",

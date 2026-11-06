@@ -139,6 +139,7 @@ Minimal algorithm configuration:
 ```yaml
 algorithm:
   type: fusion
+  on_error: skip
   fusion:
     model: qwen3-32b
     analysis_models:
@@ -159,7 +160,6 @@ algorithm:
     temperature: 0.2
     include_analysis: true
     include_intermediate_responses: true
-    on_error: skip
     quorum_failure_policy: fail
     judge_prompt_version: fusion-v1
 ```
@@ -218,7 +218,7 @@ belong under `global.integrations.looper`; it does not declare public names.
 | `temperature` | float | request default | Recipe-owned temperature applied to Fusion subrequests |
 | `include_analysis` | bool | `true` | Recipe-owned visibility for an available structured judge analysis; this does not control execution |
 | `include_intermediate_responses` | bool | `true` | Recipe-owned visibility for raw panel responses |
-| `on_error` | string | `skip` | Recipe-owned handling: `skip` individual failed or unusable panel responses while enforcing quorum, or `fail` on the first such response |
+| `algorithm.on_error` | string | `skip` | Set beside `type`, not in this block. Recipe-owned handling: `skip` individual failed or unusable panel responses while enforcing quorum, or `fail` on the first such response |
 | `quorum_failure_policy` | string | `fail` | Panel-level behavior when usable responses fall below `min_successful_responses`: `fail` returns a typed quorum failure, `fallback` routes the request to `quorum_fallback_target`. Recipe-owned; requests cannot override it |
 | `quorum_fallback_target` | string | none | Concrete provider model to route to when `quorum_failure_policy: fallback`. Required by, and only valid with, that policy |
 | `analysis_template` | string | built-in | Recipe-owned separate-analysis prompt with `{{original}}` and `{{responses}}`; rejected outside `separate` |

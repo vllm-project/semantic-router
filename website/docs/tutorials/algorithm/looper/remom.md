@@ -135,6 +135,7 @@ Minimal algorithm configuration:
 ```yaml
 algorithm:
   type: remom
+  on_error: skip                       # skip or fail
   remom:
     breadth_schedule: [3, 2]            # Parallel calls before final synthesis
     model_distribution: weighted         # weighted, equal, round_robin, or first_only
@@ -150,7 +151,6 @@ algorithm:
     shuffle_seed: 42                     # Seed for response shuffling
     include_intermediate_responses: false # Include intermediate responses in output
     max_responses_per_round: null        # Limit responses per round
-    on_error: skip                       # skip or fail
 ```
 
 ### Parameters
@@ -166,12 +166,16 @@ algorithm:
 | `synthesis_template` | string | — | Custom synthesis prompt template |
 | `max_concurrent` | int | — | Maximum concurrent model calls per round |
 | `max_completion_tokens` | int | request default | Maximum completion tokens applied to every ReMoM subrequest |
-| `round_timeout_seconds` | int | — | Maximum seconds to wait for a round before using partial responses when `on_error: skip` |
+| `round_timeout_seconds` | int | — | Maximum seconds to wait for a round before using partial responses when `algorithm.on_error: skip` |
 | `min_successful_responses` | int | — | Return from a parallel round after this many successful responses |
 | `shuffle_seed` | int | `42` | Random seed for response shuffling |
 | `include_intermediate_responses` | bool | `true` | Include intermediate responses in output |
 | `max_responses_per_round` | int | — | Maximum responses to keep per round |
-| `on_error` | string | `skip` | Behavior on failure: `skip` or `fail` |
+
+`algorithm.on_error`, beside the type, decides what a failed call does: `skip`
+(the default) continues with the responses that succeeded, `fail` ends the run.
+Like every executor, ReMoM also reads `algorithm.budget`; see
+[Executors](../overview#executors).
 
 Each round shares request-derived and intermediate text with its assigned
 models, and the synthesis model receives the collected results. Bound breadth,

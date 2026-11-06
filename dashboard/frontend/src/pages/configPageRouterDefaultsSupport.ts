@@ -427,14 +427,8 @@ function summaryForKey(
       return [
         { label: 'Startup behavior', value: data ? 'Clear route cache' : 'Retain route cache' },
       ]
-    case 'model_selection': {
-      const ml = asObject(section?.ml)
-      return [
-        { label: 'Method', value: stringOrFallback(section?.method) },
-        { label: 'Models path', value: stringOrFallback(ml?.models_path) },
-        { label: 'ML configured', value: ml ? 'Enabled' : 'Disabled' },
-      ]
-    }
+    case 'model_selection':
+      return [{ label: 'Model selection', value: section?.enabled ? 'Enabled' : 'Disabled' }]
     case 'api': {
       const batchClassification = asObject(section?.batch_classification)
       const metrics = asObject(batchClassification?.metrics)
@@ -852,28 +846,7 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
     case 'clear_route_cache':
       return [{ name: 'value', label: 'Clear Route Cache On Reload', type: 'boolean' }]
     case 'model_selection':
-      return [
-        { name: 'enabled', label: 'Enable Model Selection', type: 'boolean' },
-        {
-          name: 'default_algorithm',
-          label: 'Method',
-          type: 'select',
-          options: ['knn', 'kmeans', 'svm', 'router_dc', 'automix', 'hybrid'],
-          required: true,
-        },
-        {
-          name: 'models_path',
-          label: 'ML Models Path',
-          type: 'text',
-          placeholder: 'models/model_selection',
-        },
-        routerStructuredField(key, 'knn'),
-        routerStructuredField(key, 'kmeans'),
-        routerStructuredField(key, 'svm'),
-        routerStructuredField(key, 'router_dc'),
-        routerStructuredField(key, 'automix'),
-        routerStructuredField(key, 'hybrid'),
-      ]
+      return [{ name: 'enabled', label: 'Enable Model Selection', type: 'boolean' }]
     case 'api':
       return [routerStructuredField(key, 'batch_classification')]
   }
@@ -917,11 +890,9 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
   const omit =
     key === 'router_core'
       ? ['clear_route_cache', 'model_selection', 'learning']
-      : key === 'model_selection'
-        ? ['method', 'ml']
-        : MODEL_MODULE_KEYS.has(key)
-          ? DEPRECATED_MODULE_MODEL_FIELDS
-          : []
+      : MODEL_MODULE_KEYS.has(key)
+        ? DEPRECATED_MODULE_MODEL_FIELDS
+        : []
   return mergeGeneratedRouterFields(['global', ...CURATED_ROUTER_SECTIONS[key].path], curated, {
     omit,
   })
@@ -970,22 +941,6 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
   }
   if (key === 'embedding_models') {
     return embeddingModelsEditData(data)
-  }
-  if (key === 'model_selection') {
-    const selection = asObject(data)
-    const ml = asObject(selection?.ml)
-    return {
-      ...(selection || {}),
-      enabled: selection?.enabled,
-      default_algorithm: selection?.method,
-      models_path: ml?.models_path,
-      knn: asObject(ml?.knn) || {},
-      kmeans: asObject(ml?.kmeans) || {},
-      svm: asObject(ml?.svm) || {},
-      router_dc: asObject(selection?.router_dc) || {},
-      automix: asObject(selection?.automix) || {},
-      hybrid: asObject(selection?.hybrid) || {},
-    }
   }
   const objectData = asObject(data)
   return objectData ? { ...objectData } : asObject(cloneDefaultSection(key)) || {}
@@ -1066,24 +1021,6 @@ function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<Config
     }
     delete hallucination.explainer
     return buildNestedPatch(CURATED_ROUTER_SECTIONS[key].path, hallucination) as Partial<ConfigData>
-  }
-  if (key === 'model_selection') {
-    const { default_algorithm, models_path, knn, kmeans, svm, ml, ...selectionFields } = data
-    return buildNestedPatch(CURATED_ROUTER_SECTIONS[key].path, {
-      ...selectionFields,
-      enabled: Boolean(data.enabled),
-      method: default_algorithm,
-      router_dc: asObject(data.router_dc) || {},
-      automix: asObject(data.automix) || {},
-      hybrid: asObject(data.hybrid) || {},
-      ml: {
-        ...(asObject(ml) || {}),
-        models_path,
-        knn: asObject(knn) || {},
-        kmeans: asObject(kmeans) || {},
-        svm: asObject(svm) || {},
-      },
-    }) as Partial<ConfigData>
   }
   return buildNestedPatch(CURATED_ROUTER_SECTIONS[key].path, data) as Partial<ConfigData>
 }

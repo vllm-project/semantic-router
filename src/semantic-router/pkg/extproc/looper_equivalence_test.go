@@ -116,7 +116,8 @@ var looperFixtures = []looperFixture{
       modelRefs: [{model: model-a, use_reasoning: true}, {model: model-b}, {model: model-c}]
       algorithm:
         type: ratings
-        ratings: {max_concurrent: 2, on_error: skip}
+        on_error: skip
+        ratings: {max_concurrent: 2}
       plugins:
         - type: system_prompt
           configuration: {enabled: true, mode: insert, system_prompt: Answer in one sentence.}
@@ -127,15 +128,15 @@ var looperFixtures = []looperFixture{
       modelRefs: [{model: model-a}, {model: model-b}, {model: model-c}]
       algorithm:
         type: ratings
-        ratings: {max_concurrent: 3, on_error: skip}`},
-	{name: "confidence", request: looperClientRequest, decision: `
+        on_error: skip
+        ratings: {max_concurrent: 3}`},
+	{name: "escalate", request: looperClientRequest, decision: `
       modelRefs: [{model: model-a}, {model: model-b}]
       algorithm:
-        type: confidence
-        confidence:
-          confidence_method: avg_logprob
-          threshold: 0.6
-          escalation_order: small_to_large`},
+        type: escalate
+        escalate:
+          order: size
+          accept: {confidence: {method: avg_logprob, gte: 0.6}}`},
 	{name: "remom", request: looperClientRequest, decision: `
       modelRefs: [{model: model-a}, {model: model-b}]
       algorithm:
@@ -150,30 +151,25 @@ var looperFixtures = []looperFixture{
       modelRefs: [{model: model-a}, {model: model-b}]
       algorithm:
         type: fusion
+        on_error: skip
         fusion:
           model: judge
           analysis_models: [model-a, model-b, model-c]
           analysis_mode: one_call
           max_concurrent: 3
-          min_successful_responses: 3
-          on_error: skip`},
+          min_successful_responses: 3`},
 	{name: "fusion-separate-quorum", request: looperClientRequest, failing: []string{"model-c"}, slow: 50 * time.Millisecond, decision: `
       modelRefs: [{model: model-a}, {model: model-b}]
       algorithm:
         type: fusion
+        on_error: skip
         fusion:
           model: judge
           analysis_models: [model-a, model-b, model-c]
           analysis_mode: separate
           max_concurrent: 3
           min_successful_responses: 2
-          include_analysis: true
-          on_error: skip`},
-	{name: "prompt-selection", request: looperClientRequest, decision: `
-      modelRefs: [{model: model-a}, {model: model-b}]
-      algorithm:
-        type: prompt
-        prompt: {model: judge, instructions: Choose model-b for geography.}`},
+          include_analysis: true`},
 	{name: "workflows-static", request: looperClientRequest, decision: `
       modelRefs: [{model: model-a}, {model: model-b}, {model: judge}]
       algorithm:

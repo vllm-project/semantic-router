@@ -14,7 +14,7 @@ import (
 func (r *OpenAIRouter) selectAutomaticEvalCandidate(input services.EvalModelSelectionInput) services.EvalModelSelection {
 	decision := input.Decision
 	method := r.getSelectionMethod(decision.Algorithm)
-	if config.IsLooperAlgorithmType(evalAlgorithmType(decision)) || !evalSupportsDryRunSelection(method) {
+	if config.IsExecutorAlgorithmType(evalAlgorithmType(decision)) || !evalSupportsDryRunSelection(method) {
 		return automaticEvalExecutionRequired(decision, "the configured algorithm requires execution")
 	}
 	effective, err := selection.EffectiveCandidateRequest(input.SemanticRequest, decision)

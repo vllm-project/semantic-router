@@ -263,6 +263,7 @@ routing:
           reasoning_effort: medium
       algorithm:
         type: workflows
+        on_error: skip
         workflows:
           mode: dynamic
           template: micro_agent
@@ -274,7 +275,6 @@ routing:
           min_successful_responses: 2
           max_completion_tokens: 8192
           include_intermediate_responses: true
-          on_error: skip
     - name: accuracy_long_context_direct
       description: Keep long-context work on one frontier model instead of paying the latency and token
         multiplier of fan-out.
@@ -326,6 +326,7 @@ routing:
           use_reasoning: false
       algorithm:
         type: fusion
+        on_error: skip
         fusion:
           model: qwen-coordinator
           analysis_models:
@@ -336,7 +337,6 @@ routing:
           min_successful_responses: 2
           include_analysis: true
           include_intermediate_responses: true
-          on_error: skip
     - name: accuracy_direct
       description: Everything else, including a request for one direct answer and requests the decision
         model cannot answer, goes to one frontier worker that the decision model picks.

@@ -1068,6 +1068,7 @@ recipes:
         on_unknown: no_match
       algorithm:
         type: workflows
+        on_error: skip
         minimum_candidates: 2
         workflows:
           mode: dynamic
@@ -1077,7 +1078,6 @@ recipes:
           max_completion_tokens: 4096
           min_successful_responses: 2
           round_timeout_seconds: 180
-          on_error: skip
           planner:
             max_completion_tokens: 4096
           final: {}
@@ -1113,13 +1113,13 @@ recipes:
         on_unknown: no_match
       algorithm:
         type: fusion
+        on_error: skip
         minimum_candidates: 2
         fusion:
           max_concurrent: 2
           min_successful_responses: 2
           max_completion_tokens: 2048
           round_timeout_seconds: 180
-          on_error: skip
           include_analysis: false
           include_intermediate_responses: false
       adaptations:

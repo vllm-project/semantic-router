@@ -27,13 +27,10 @@ type TaskDefinition struct {
 }
 
 // TaskConsumerReference describes a registry-owned consumer requirement.
-// Optional tasks enrich a consumer (for example exact positions), but their
-// absence must not disable its verdict-only implementation.
 type TaskConsumerReference struct {
-	Kind     string `json:"kind"`
-	Type     string `json:"type"`
-	Binding  string `json:"binding,omitempty"`
-	Optional bool   `json:"optional,omitempty"`
+	Kind    string `json:"kind"`
+	Type    string `json:"type"`
+	Binding string `json:"binding,omitempty"`
 }
 
 // TaskCapability describes structural support, never measured model quality.

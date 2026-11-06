@@ -486,14 +486,17 @@ def test_local_stack_reads_the_router_container(monkeypatch, tmp_path):
     monkeypatch.setattr(
         local_stack_config,
         "_container_env",
-        lambda _name: {"VLLM_SR_PLATFORM": "rocm", "VLLM_SR_ALGORITHM_OVERRIDE": "knn"},
+        lambda _name: {
+            "VLLM_SR_PLATFORM": "rocm",
+            "VLLM_SR_ALGORITHM_OVERRIDE": "random",
+        },
     )
 
     found = local_stack_config.local_stack()
 
     assert found is not None
     assert found.state_dir == state_dir
-    assert (found.platform, found.algorithm) == ("rocm", "knn")
+    assert (found.platform, found.algorithm) == ("rocm", "random")
     assert found.owns(tmp_path / "config.yaml")
     assert not found.owns(tmp_path / "elsewhere" / "config.yaml")
 

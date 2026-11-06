@@ -58,9 +58,5 @@ export function routerSectionSchemaPath(key: RouterSystemKey): string[] {
 }
 
 export function routerStructuredFieldSchemaPath(key: RouterSystemKey, name: string): string[] {
-  const section = routerSectionSchemaPath(key)
-  if (key === 'model_selection' && ['knn', 'kmeans', 'svm'].includes(name)) {
-    return [...section, 'ml', name]
-  }
-  return [...section, name]
+  return [...routerSectionSchemaPath(key), name]
 }

@@ -28,9 +28,6 @@ func (s *RandomSelector) Tier() AlgorithmTier { return TierSupported }
 // ExternalDependencies returns external dependencies (none for random)
 func (s *RandomSelector) ExternalDependencies() []Dependency { return []Dependency{} }
 
-// UpdateFeedback does nothing for the random selector (no learning)
-func (s *RandomSelector) UpdateFeedback(context.Context, *Feedback) error { return nil }
-
 // Select draws one candidate uniformly from the eligible candidate models
 func (s *RandomSelector) Select(_ context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
 	if err := ValidateSelectionContext(selCtx); err != nil {

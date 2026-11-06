@@ -143,7 +143,7 @@ func TestRatingsResponsesIngressPreservesCapabilityGate(t *testing.T) {
 				request, rejected := router.prepareProtocolRequest(looperIngressBody(t, ctx.SourceFormat, stream), ctx)
 				require.Nil(t, rejected)
 				refs := []config.ModelRef{{Model: "panel-a"}, {Model: "panel-b"}}
-				decision := &config.Decision{Name: "ratings-ingress", ModelRefs: refs[:candidates], Algorithm: &config.AlgorithmConfig{Type: "ratings", Ratings: &config.RatingsAlgorithmConfig{OnError: "fail"}}}
+				decision := &config.Decision{Name: "ratings-ingress", ModelRefs: refs[:candidates], Algorithm: &config.AlgorithmConfig{Type: "ratings", OnError: "fail", Ratings: &config.RatingsAlgorithmConfig{}}}
 				response, err := router.handleLooperExecution(context.Background(), request, decision, ctx)
 				require.NoError(t, err)
 				if candidates == 2 {

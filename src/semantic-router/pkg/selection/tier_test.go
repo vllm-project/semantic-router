@@ -2,7 +2,6 @@ package selection
 
 import (
 	"context"
-	"strings"
 	"testing"
 )
 
@@ -19,12 +18,6 @@ func TestDependencyType_Constants(t *testing.T) {
 	if DependencyExternalService != DependencyType("external_service") {
 		t.Errorf("DependencyExternalService = %q, want %q", DependencyExternalService, "external_service")
 	}
-	if DependencyPretrainedModel != DependencyType("pretrained_model") {
-		t.Errorf("DependencyPretrainedModel = %q, want %q", DependencyPretrainedModel, "pretrained_model")
-	}
-	if DependencyEmbeddingFunc != DependencyType("embedding_function") {
-		t.Errorf("DependencyEmbeddingFunc = %q, want %q", DependencyEmbeddingFunc, "embedding_function")
-	}
 }
 
 func TestSupportedAlgorithms_Tier(t *testing.T) {
@@ -33,10 +26,7 @@ func TestSupportedAlgorithms_Tier(t *testing.T) {
 		selector Selector
 	}{
 		{"static", NewStaticSelector(DefaultStaticConfig())},
-		{"elo", NewEloSelector(DefaultEloConfig())},
-		{"router_dc", NewRouterDCSelector(DefaultRouterDCConfig())},
-		{"latency_aware", NewLatencyAwareSelector(nil)},
-		{"hybrid", NewHybridSelector(DefaultHybridConfig())},
+		{"multi_factor", NewMultiFactorSelector(nil)},
 		{"random", NewRandomSelector()},
 	}
 
@@ -60,91 +50,13 @@ func TestSupportedAlgorithms_Tier(t *testing.T) {
 	}
 }
 
-func TestExperimentalAlgorithms_Tier(t *testing.T) {
-	tests := []struct {
-		name     string
-		selector Selector
-	}{
-		{"automix", NewAutoMixSelector(DefaultAutoMixConfig())},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tier := tt.selector.Tier(); tier != TierExperimental {
-				t.Errorf("%s.Tier() = %q, want %q", tt.name, tier, TierExperimental)
-			}
-
-			deps := tt.selector.ExternalDependencies()
-			if deps == nil {
-				t.Errorf("%s.ExternalDependencies() returned nil, want non-nil", tt.name)
-			}
-		})
-	}
-}
-
-func TestMLAdapterAlgorithms_Tier(t *testing.T) {
-	methods := []SelectionMethod{MethodKNN, MethodKMeans, MethodSVM, MethodMLP}
-
-	for _, method := range methods {
-		t.Run(string(method), func(t *testing.T) {
-			adapter := NewMLSelectorAdapter(nil, method)
-
-			if tier := adapter.Tier(); tier != TierExperimental {
-				t.Errorf("%s.Tier() = %q, want %q", method, tier, TierExperimental)
-			}
-
-			deps := adapter.ExternalDependencies()
-			if deps == nil {
-				t.Errorf("%s.ExternalDependencies() returned nil, want non-nil", method)
-			}
-
-			foundPretrained := false
-			for _, dep := range deps {
-				if dep.Type == DependencyPretrainedModel {
-					foundPretrained = true
-					break
-				}
-			}
-			if !foundPretrained {
-				t.Errorf("%s: expected at least one pretrained_model dependency", method)
-			}
-		})
-	}
-}
-
-func TestAutoMixSelector_DependenciesWithVerifier(t *testing.T) {
-	cfg := DefaultAutoMixConfig()
-	cfg.EnableSelfVerification = true
-	cfg.VerifierServerURL = "http://localhost:8090"
-	selector := NewAutoMixSelector(cfg)
-
-	deps := selector.ExternalDependencies()
-	foundVerifier := false
-	for _, dep := range deps {
-		if dep.Type == DependencyExternalService && strings.Contains(dep.Name, "Verifier") {
-			foundVerifier = true
-			if dep.HealthURL != "http://localhost:8090/health" {
-				t.Errorf("Verifier HealthURL = %q, want %q", dep.HealthURL, "http://localhost:8090/health")
-			}
-		}
-	}
-	if !foundVerifier {
-		t.Error("AutoMix with self-verification should declare verifier external service dependency")
-	}
-}
-
 func TestRegistry_AllSelectors_HaveTier(t *testing.T) {
-	factory := NewFactory(DefaultModelSelectionConfig())
-	registry := factory.CreateAll()
+	registry := NewFactory().CreateAll()
 
 	expectedTiers := map[SelectionMethod]AlgorithmTier{
-		MethodStatic:       TierSupported,
-		MethodElo:          TierSupported,
-		MethodRouterDC:     TierSupported,
-		MethodLatencyAware: TierSupported,
-		MethodHybrid:       TierSupported,
-		MethodRandom:       TierSupported,
-		MethodAutoMix:      TierExperimental,
+		MethodStatic:      TierSupported,
+		MethodRandom:      TierSupported,
+		MethodMultiFactor: TierSupported,
 	}
 
 	for method, expectedTier := range expectedTiers {
@@ -160,8 +72,7 @@ func TestRegistry_AllSelectors_HaveTier(t *testing.T) {
 }
 
 func TestSelect_PopulatesTier(t *testing.T) {
-	factory := NewFactory(DefaultModelSelectionConfig())
-	SetGlobalRegistry(factory.CreateAll())
+	SetGlobalRegistry(NewFactory().CreateAll())
 
 	candidates := createCandidateModels("model-a", "model-b")
 	selCtx := &SelectionContext{

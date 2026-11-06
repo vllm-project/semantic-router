@@ -430,11 +430,11 @@ class CLITestBase(unittest.TestCase):
         if looper:
             decision["algorithm"] = {
                 "type": "remom",
+                "on_error": "fail",
                 "remom": {
                     "breadth_schedule": [1],
                     "model_distribution": "first_only",
                     "min_successful_responses": 1,
-                    "on_error": "fail",
                 },
             }
 

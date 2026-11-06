@@ -60,9 +60,6 @@ func validateDecisionExecution(cfg *RouterConfig, decision Decision) error {
 	if err := validateDecisionAutomaticOutput(decision); err != nil {
 		return err
 	}
-	if err := validateDecisionPromptModel(cfg, decision); err != nil {
-		return err
-	}
 	if err := validateDecisionFusionFallbackTarget(cfg, decision); err != nil {
 		return err
 	}

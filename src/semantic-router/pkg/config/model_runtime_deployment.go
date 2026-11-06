@@ -121,6 +121,13 @@ func ModelRuntimeDeploymentsInUse(cfg *RouterConfig) map[string]ModelDeployment 
 				strings.EqualFold(strings.TrimSpace(decision.Algorithm.Type), DecisionAlgorithmSystemOne) {
 				mark(decision.Algorithm.SystemOne.Deployment)
 			}
+			if decision.Algorithm.EscalateChecksAnswers() {
+				deployment := ""
+				if check := decision.Algorithm.Escalate.Accept.SystemOne; check != nil {
+					deployment = check.Deployment
+				}
+				mark(deployment)
+			}
 		}
 	}
 	scan(cfg.Signals, cfg.Decisions)

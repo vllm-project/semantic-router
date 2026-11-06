@@ -220,7 +220,7 @@ var registry = []Header{
 	{VSRLooperModel, ToClient, SurfaceDebug, SensitivityNone, "looper", "v0.2", "Final model of the Looper."},
 	{VSRLooperModelsUsed, ToClient, SurfaceDebug, SensitivityNone, "looper", "v0.2", "Models the Looper called, comma-separated."},
 	{VSRLooperIterations, ToClient, SurfaceDebug, SensitivityNone, "looper", "v0.2", "Model calls the Looper made."},
-	{VSRLooperAlgorithm, ToClient, SurfaceDebug, SensitivityNone, "looper", "v0.2", "Looper algorithm, such as `confidence`."},
+	{VSRLooperAlgorithm, ToClient, SurfaceDebug, SensitivityNone, "looper", "v0.2", "Executor algorithm, such as `escalate`."},
 	{VSRLooperLatencyMs, ToClient, SurfaceDebug, SensitivityNone, "looper", "v0.4", "Looper wall-clock latency, in milliseconds."},
 	{VSRLooperPromptTokens, ToClient, SurfaceDebug, SensitivityNone, "looper", "v0.4", "Prompt tokens across the Looper's calls."},
 	{VSRLooperCompletionTokens, ToClient, SurfaceDebug, SensitivityNone, "looper", "v0.4", "Completion tokens across the Looper's calls."},

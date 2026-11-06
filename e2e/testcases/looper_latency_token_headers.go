@@ -23,7 +23,7 @@ func init() {
 // looperMetricsProbeKeyword is the sentinel token wired into the kubernetes
 // profile's looper_metrics_probe_decision (see
 // e2e/profiles/ai-gateway/values.yaml). A prompt containing it deterministically
-// routes to that confidence-algorithm decision, which executes the looper
+// routes to that escalate decision, which executes the looper
 // across two model refs.
 const looperMetricsProbeKeyword = "__MULTI_MODEL_PROBE__"
 

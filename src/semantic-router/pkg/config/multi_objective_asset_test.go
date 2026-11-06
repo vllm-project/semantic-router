@@ -109,7 +109,9 @@ func assertMultiObjectiveEfficiencyRecipes(t *testing.T, cfg *RouterConfig) {
 		t.Fatalf("speed-first recipe lost its latency-first selector: %+v", speedWeights)
 	}
 	heavyAlgorithm := multiObjectiveDecision(t, speed, "unified_speed_heavy_route").Algorithm
-	requireMultiObjectiveAlgorithmType(t, heavyAlgorithm, DecisionAlgorithmLatencyAware, "speed-first heavy route")
+	if heavyWeights := requireMultiObjectiveMultiFactorWeights(t, heavyAlgorithm, "speed-first heavy route"); heavyWeights.Latency != 1 {
+		t.Fatalf("speed-first heavy route must choose by latency alone: %+v", heavyWeights)
+	}
 
 	cost, _ := cfg.RecipeByName("cost-first")
 	assertMultiObjectiveQuestions(t, cost, map[string]float64{"depth": 0.6})
@@ -155,7 +157,7 @@ func assertMultiObjectiveAccuracyRecipe(t *testing.T, cfg *RouterConfig) {
 	}
 	assertMultiObjectiveVerifiedDecision(t, accuracy)
 	for decisionName, algorithmType := range map[string]string{
-		"unified_frontier_verified_answer": DecisionAlgorithmConfidence,
+		"unified_frontier_verified_answer": DecisionAlgorithmEscalate,
 		"unified_frontier_workflow":        DecisionAlgorithmWorkflows,
 		"unified_frontier_fusion":          DecisionAlgorithmFusion,
 		"unified_frontier_remom":           DecisionAlgorithmReMoM,
@@ -181,8 +183,9 @@ func assertMultiObjectiveVerifiedDecision(t *testing.T, accuracy *RoutingRecipe)
 		verified.Rules.Conditions[0].Name != "verification" {
 		t.Fatalf("frontier verification must require the user's explicit verification request: %+v", verified.Rules)
 	}
-	if verified.Algorithm == nil || verified.Algorithm.Confidence == nil ||
-		verified.Algorithm.Confidence.ConfidenceMethod != "avg_logprob" {
+	if verified.Algorithm == nil || verified.Algorithm.Escalate == nil || verified.Algorithm.Escalate.Accept == nil ||
+		verified.Algorithm.Escalate.Accept.Confidence == nil ||
+		verified.Algorithm.Escalate.Accept.Confidence.EffectiveMethod() != ConfidenceMethodAverageLogprob {
 		t.Fatalf("frontier verification must use supported streaming confidence: %+v", verified.Algorithm)
 	}
 	verifiedModels := make([]string, 0, len(verified.ModelRefs))

@@ -92,17 +92,12 @@ global:
       embedding_model: bert
     memory:
       embedding_model: mmbert
-  router:
-    model_selection:
-      ml:
-        model_type: bert
 `,
 			want: []string{
 				"global.model_catalog.embeddings.semantic.gemma_model_path",
 				"global.model_catalog.embeddings.semantic.bert_model_path",
 				"global.model_catalog.embeddings.semantic.embedding_config.model_type: gemma",
 				"global.stores.semantic_cache.embedding_model: bert",
-				"global.router.model_selection.ml.model_type: bert",
 				"Vela Embedding (mmbert) replaces the gemma and bert embedding models",
 			},
 		},

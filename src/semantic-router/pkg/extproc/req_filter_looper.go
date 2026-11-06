@@ -49,7 +49,7 @@ func (r *OpenAIRouter) shouldUseLooper(decision *config.Decision) bool {
 	if decision.Algorithm == nil {
 		return false
 	}
-	if !config.IsLooperAlgorithmType(decision.Algorithm.Type) {
+	if !config.IsExecutorAlgorithmType(decision.Algorithm.Type) || decision.Algorithm.IsNative() {
 		return false
 	}
 
@@ -95,8 +95,8 @@ func (r *OpenAIRouter) logLooperConstructionFailure(decision *config.Decision, r
 }
 
 // looperModelClient is the client for the Router's own model calls outside a
-// request graph, such as a prompt selector's or a context recovery's: hops
-// served in process. It is nil when the router has nothing to send hops with.
+// request graph, such as a context recovery's: hops served in process. It is
+// nil when the router has nothing to send hops with.
 func (r *OpenAIRouter) looperModelClient() *looper.Client {
 	hops := r.looperHops()
 	if hops == nil {
@@ -186,7 +186,7 @@ func (r *OpenAIRouter) runLooper(
 	for _, entrypoint := range r.Config.EffectiveEntrypoints(config.ChatAPI) {
 		runtimeConfig.EntrypointModels = append(runtimeConfig.EntrypointModels, entrypoint.ModelNames...)
 	}
-	program, err := looper.Template(&runtimeConfig, decision.Algorithm.Type, r.WorkflowStateService)
+	program, err := looper.Template(&runtimeConfig, decision.Algorithm.Type, decision.Algorithm.Budget, r.WorkflowStateService)
 	if err != nil {
 		return nil, r.looperConstructionFailed(decision, reqCtx, err)
 	}
@@ -259,6 +259,7 @@ func (r *OpenAIRouter) buildLooperRequest(
 					OutputContract:        decision.OutputContract,
 					OutputContractSpec:    decision.OutputContractSpec,
 					ToolStageGate:         r.looperToolStageGate(request, decision, reqCtx),
+					AnswerChecks:          r.escalateAnswerChecker(decision.Algorithm),
 				}
 				if params := decision.GetRequestParamsConfig(); params != nil && params.MaxTokensLimit != nil {
 					limit := *params.MaxTokensLimit

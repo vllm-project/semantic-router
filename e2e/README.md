@@ -127,7 +127,6 @@ until the selected cases are known to be isolated.
 - **remote-embedding**: OpenAI-compatible remote embedding providers.
 - **looper**: deterministic Looper algorithm contracts.
 - **production-stack**: HA, load balancing, failover, and load checks.
-- **ml-model-selection**: trained model-selector behavior.
 - **multi-endpoint**: environment policy across several backends.
 - **authz-rbac**: authorization routing and rate-limit behavior.
 - **streaming**: streamed request bodies and cache round trips.

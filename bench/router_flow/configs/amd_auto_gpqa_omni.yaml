@@ -177,6 +177,7 @@ routing:
           reasoning_effort: high
       algorithm:
         type: remom
+        on_error: skip
         remom:
           breadth_schedule: [3]
           model_distribution: round_robin
@@ -190,7 +191,6 @@ routing:
           min_successful_responses: 2
           max_responses_per_round: 3
           include_intermediate_responses: false
-          on_error: skip
           synthesis_template: |-
             You are solving a strict benchmark problem. Compare the reference responses against the original problem, identify the strongest answer, and return only the final answer in the format requested by the benchmark.
 
@@ -238,6 +238,7 @@ routing:
           reasoning_effort: high
       algorithm:
         type: remom
+        on_error: skip
         remom:
           breadth_schedule: [3]
           model_distribution: round_robin
@@ -251,7 +252,6 @@ routing:
           min_successful_responses: 2
           max_responses_per_round: 3
           include_intermediate_responses: false
-          on_error: skip
           synthesis_template: |-
             You are solving a strict benchmark problem. Compare the reference
             responses against the original problem and return only the final

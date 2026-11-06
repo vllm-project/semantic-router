@@ -72,6 +72,7 @@ routing:
         - model: qwen/qwen3.6-rocm
       algorithm:
         type: workflows
+        on_error: skip
         workflows:
           mode: dynamic
           planner:
@@ -81,7 +82,6 @@ routing:
           max_parallel: 3
           round_timeout_seconds: 90
           min_successful_responses: 2
-          on_error: skip
 ```
 
 `output_contract` is decision-scoped prompt text. Use it for benchmark or
@@ -135,6 +135,7 @@ routing:
         - model: deepseek-worker
       algorithm:
         type: workflows
+        on_error: skip
         workflows:
           mode: static
           roles:
@@ -149,7 +150,6 @@ routing:
           max_steps: 3
           max_parallel: 1
           round_timeout_seconds: 90
-          on_error: skip
 ```
 
 ## Parameters
@@ -173,7 +173,7 @@ routing:
 | `min_successful_responses` | int | all models | Continue a parallel step once this many workers succeed |
 | `temperature` | float | request default | Temperature for planner, worker, and synthesis calls |
 | `include_intermediate_responses` | bool | `true` | Include Flow plan and worker outputs in the response trace |
-| `on_error` | string | `fail` | `fail` on worker error or `skip` failed workers when at least one worker succeeds |
+| `algorithm.on_error` | string | `fail` | Set beside `type`, not in this block: `fail` on worker error or `skip` failed workers when at least one worker succeeds |
 
 Every static role and every planner-generated step must contain at least
 `min_successful_responses` Models. A plan that cannot satisfy its configured

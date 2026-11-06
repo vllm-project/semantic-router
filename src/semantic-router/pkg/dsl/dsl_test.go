@@ -279,9 +279,8 @@ func TestParseMultiModel(t *testing.T) {
   WHEN domain("test")
   MODEL "qwen3:70b" (reasoning = true, effort = "high", param_size = "70b"),
         "qwen2.5:3b" (reasoning = false, param_size = "3b")
-  ALGORITHM confidence {
-    confidence_method: "hybrid"
-    threshold: 0.5
+  ALGORITHM escalate {
+    accept: { confidence: { method: "hybrid", gte: 0.5 } }
   }
 }`
 	prog, errs := Parse(input)
@@ -295,8 +294,8 @@ func TestParseMultiModel(t *testing.T) {
 	if r.Models[0].ParamSize != "70b" || r.Models[1].ParamSize != "3b" {
 		t.Errorf("param_size mismatch: %s, %s", r.Models[0].ParamSize, r.Models[1].ParamSize)
 	}
-	if r.Algorithm == nil || r.Algorithm.AlgoType != "confidence" {
-		t.Error("expected confidence algorithm")
+	if r.Algorithm == nil || r.Algorithm.AlgoType != "escalate" {
+		t.Error("expected escalate algorithm")
 	}
 }
 
@@ -522,11 +521,9 @@ ROUTE test {
   PRIORITY 1
   WHEN domain("test")
   MODEL "m1:7b", "m2:3b"
-  ALGORITHM confidence {
-    confidence_method: "hybrid"
-    threshold: 0.5
-    hybrid_weights: { logprob_weight: 0.6, margin_weight: 0.4 }
-    on_error: "skip"
+  ALGORITHM escalate {
+    on_error: "last_attempt"
+    accept: { confidence: { method: "hybrid", gte: 0.5, hybrid_weights: { logprob_weight: 0.6, margin_weight: 0.4 } } }
   }
 }`
 	cfg, errs := Compile(input)
@@ -537,23 +534,27 @@ ROUTE test {
 	if algo == nil {
 		t.Fatal("expected algorithm")
 	}
-	if algo.Type != "confidence" {
-		t.Errorf("expected confidence, got %s", algo.Type)
+	if algo.Type != "escalate" {
+		t.Errorf("expected escalate, got %s", algo.Type)
 	}
-	if algo.Confidence == nil {
-		t.Fatal("expected confidence config")
+	if algo.OnError != "last_attempt" {
+		t.Errorf("expected on_error last_attempt, got %q", algo.OnError)
 	}
-	if algo.Confidence.ConfidenceMethod != "hybrid" {
-		t.Errorf("expected hybrid method, got %s", algo.Confidence.ConfidenceMethod)
+	if algo.Escalate == nil || algo.Escalate.Accept == nil || algo.Escalate.Accept.Confidence == nil {
+		t.Fatal("expected escalate accept.confidence")
 	}
-	if algo.Confidence.Threshold != 0.5 {
-		t.Errorf("expected threshold 0.5, got %f", algo.Confidence.Threshold)
+	confidence := algo.Escalate.Accept.Confidence
+	if confidence.Method != "hybrid" {
+		t.Errorf("expected hybrid method, got %s", confidence.Method)
 	}
-	if algo.Confidence.HybridWeights == nil {
+	if confidence.GTE == nil || *confidence.GTE != 0.5 {
+		t.Errorf("expected gte 0.5, got %v", confidence.GTE)
+	}
+	if confidence.HybridWeights == nil {
 		t.Fatal("expected hybrid weights")
 	}
-	if algo.Confidence.HybridWeights.LogprobWeight != 0.6 {
-		t.Errorf("expected logprob_weight 0.6, got %f", algo.Confidence.HybridWeights.LogprobWeight)
+	if confidence.HybridWeights.LogprobWeight != 0.6 {
+		t.Errorf("expected logprob_weight 0.6, got %f", confidence.HybridWeights.LogprobWeight)
 	}
 }
 
@@ -765,11 +766,9 @@ ROUTE urgent_ai_route {
   WHEN keyword("urgent_request") AND jailbreak("ai_topics") AND NOT domain("other")
   MODEL "qwen3:70b" (reasoning = true, effort = "high"),
         "qwen2.5:3b" (reasoning = false)
-  ALGORITHM confidence {
-    confidence_method: "hybrid"
-    threshold: 0.5
-    hybrid_weights: { logprob_weight: 0.6, margin_weight: 0.4 }
-    on_error: "skip"
+  ALGORITHM escalate {
+    on_error: "last_attempt"
+    accept: { confidence: { method: "hybrid", gte: 0.5, hybrid_weights: { logprob_weight: 0.6, margin_weight: 0.4 } } }
   }
   PLUGIN default_cache
 }
@@ -829,8 +828,8 @@ func TestCompileFullExample(t *testing.T) {
 			if len(d.ModelRefs) != 2 {
 				t.Errorf("expected 2 model refs, got %d", len(d.ModelRefs))
 			}
-			if d.Algorithm == nil || d.Algorithm.Type != "confidence" {
-				t.Error("expected confidence algorithm")
+			if d.Algorithm == nil || d.Algorithm.Type != "escalate" {
+				t.Error("expected escalate algorithm")
 			}
 			break
 		}
@@ -899,11 +898,9 @@ ROUTE urgent_ai_route {
   WHEN keyword("urgent") AND jailbreak("ai_topics")
   MODEL "qwen3:70b" (reasoning = true, effort = "high"),
         "qwen2.5:3b" (reasoning = false)
-  ALGORITHM confidence {
-    confidence_method: "hybrid"
-    threshold: 0.5
-    hybrid_weights: { logprob_weight: 0.6, margin_weight: 0.4 }
-    on_error: "skip"
+  ALGORITHM escalate {
+    on_error: "last_attempt"
+    accept: { confidence: { method: "hybrid", gte: 0.5, hybrid_weights: { logprob_weight: 0.6, margin_weight: 0.4 } } }
   }
 }
 `
@@ -1038,23 +1035,24 @@ ROUTE urgent_ai_route {
 	if urgentDec.Algorithm == nil {
 		t.Fatal("round-trip: urgent_ai_route algorithm is nil")
 	}
-	if urgentDec.Algorithm.Type != "confidence" {
-		t.Errorf("round-trip: algorithm type = %q, want %q", urgentDec.Algorithm.Type, "confidence")
+	if urgentDec.Algorithm.Type != "escalate" {
+		t.Errorf("round-trip: algorithm type = %q, want %q", urgentDec.Algorithm.Type, "escalate")
 	}
-	if urgentDec.Algorithm.Confidence == nil {
-		t.Fatal("round-trip: algorithm.confidence is nil")
+	if urgentDec.Algorithm.Escalate == nil || urgentDec.Algorithm.Escalate.Accept == nil || urgentDec.Algorithm.Escalate.Accept.Confidence == nil {
+		t.Fatal("round-trip: algorithm.escalate.accept.confidence is nil")
 	}
-	if urgentDec.Algorithm.Confidence.ConfidenceMethod != "hybrid" {
-		t.Errorf("round-trip: confidence_method = %q, want %q", urgentDec.Algorithm.Confidence.ConfidenceMethod, "hybrid")
+	confidence := urgentDec.Algorithm.Escalate.Accept.Confidence
+	if confidence.Method != "hybrid" {
+		t.Errorf("round-trip: method = %q, want %q", confidence.Method, "hybrid")
 	}
-	if urgentDec.Algorithm.Confidence.Threshold != 0.5 {
-		t.Errorf("round-trip: confidence threshold = %v, want 0.5", urgentDec.Algorithm.Confidence.Threshold)
+	if confidence.GTE == nil || *confidence.GTE != 0.5 {
+		t.Errorf("round-trip: gte = %v, want 0.5", confidence.GTE)
 	}
-	if urgentDec.Algorithm.Confidence.HybridWeights == nil {
+	if confidence.HybridWeights == nil {
 		t.Fatal("round-trip: hybrid_weights is nil")
 	}
-	if urgentDec.Algorithm.Confidence.HybridWeights.LogprobWeight != 0.6 {
-		t.Errorf("round-trip: logprob_weight = %v, want 0.6", urgentDec.Algorithm.Confidence.HybridWeights.LogprobWeight)
+	if confidence.HybridWeights.LogprobWeight != 0.6 {
+		t.Errorf("round-trip: logprob_weight = %v, want 0.6", confidence.HybridWeights.LogprobWeight)
 	}
 
 	if roundTripped.ModelConfig["qwen3:70b"].Modality != "text" {
@@ -1426,75 +1424,8 @@ func TestCompileAllAlgorithmTypes(t *testing.T) {
 				if algo.Ratings.MaxConcurrent != 4 {
 					t.Errorf("max_concurrent = %d, want 4", algo.Ratings.MaxConcurrent)
 				}
-			},
-		},
-		{
-			name:     "router_dc",
-			algoType: "router_dc",
-			body:     `temperature: 0.8 dimension_size: 128 min_similarity: 0.3 use_query_contrastive: true use_model_contrastive: false`,
-			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
-				if algo.RouterDC == nil {
-					t.Fatal("expected router_dc config")
-				}
-				if algo.RouterDC.Temperature != 0.8 {
-					t.Errorf("temperature = %v, want 0.8", algo.RouterDC.Temperature)
-				}
-				if algo.RouterDC.DimensionSize != 128 {
-					t.Errorf("dimension_size = %d, want 128", algo.RouterDC.DimensionSize)
-				}
-				if !algo.RouterDC.UseQueryContrastive {
-					t.Error("expected use_query_contrastive = true")
-				}
-			},
-		},
-		{
-			name:     "automix",
-			algoType: "automix",
-			body:     `verification_threshold: 0.9 max_escalations: 3 cost_aware_routing: true`,
-			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
-				if algo.AutoMix == nil {
-					t.Fatal("expected automix config")
-				}
-				if algo.AutoMix.VerificationThreshold != 0.9 {
-					t.Errorf("verification_threshold = %v, want 0.9", algo.AutoMix.VerificationThreshold)
-				}
-				if algo.AutoMix.MaxEscalations != 3 {
-					t.Errorf("max_escalations = %d, want 3", algo.AutoMix.MaxEscalations)
-				}
-				if !algo.AutoMix.CostAwareRouting {
-					t.Error("expected cost_aware_routing = true")
-				}
-			},
-		},
-		{
-			name:     "hybrid",
-			algoType: "hybrid",
-			body:     `experience_weight: 0.3 router_dc_weight: 0.3 automix_weight: 0.2 cost_weight: 0.2`,
-			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
-				if algo.Hybrid == nil {
-					t.Fatal("expected hybrid config")
-				}
-				if algo.Hybrid.ExperienceWeight != 0.3 {
-					t.Errorf("experience_weight = %v, want 0.3", algo.Hybrid.ExperienceWeight)
-				}
-				if algo.Hybrid.CostWeight != 0.2 {
-					t.Errorf("cost_weight = %v, want 0.2", algo.Hybrid.CostWeight)
-				}
-			},
-		},
-		{
-			name:     "latency_aware",
-			algoType: "latency_aware",
-			body:     `tpot_percentile: 95 ttft_percentile: 90`,
-			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
-				if algo.LatencyAware == nil {
-					t.Fatal("expected latency_aware config")
-				}
-				if algo.LatencyAware.TPOTPercentile != 95 {
-					t.Errorf("tpot_percentile = %d, want 95", algo.LatencyAware.TPOTPercentile)
-				}
-				if algo.LatencyAware.TTFTPercentile != 90 {
-					t.Errorf("ttft_percentile = %d, want 90", algo.LatencyAware.TTFTPercentile)
+				if algo.OnError != "skip" {
+					t.Errorf("on_error = %q, want skip on the algorithm", algo.OnError)
 				}
 			},
 		},
@@ -1509,42 +1440,33 @@ func TestCompileAllAlgorithmTypes(t *testing.T) {
 			},
 		},
 		{
-			name:     "knn",
-			algoType: "knn",
+			name:     "random",
+			algoType: "random",
 			body:     ``,
 			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
-				if algo.Type != "knn" {
-					t.Errorf("type = %q, want knn", algo.Type)
+				if algo.Type != "random" {
+					t.Errorf("type = %q, want random", algo.Type)
 				}
 			},
 		},
 		{
-			name:     "kmeans",
-			algoType: "kmeans",
-			body:     ``,
+			name:     "systemone",
+			algoType: "systemone",
+			body:     `systemone: { instructions: "Which model should answer?", timeout_ms: 2000 }`,
 			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
-				if algo.Type != "kmeans" {
-					t.Errorf("type = %q, want kmeans", algo.Type)
+				if algo.SystemOne == nil || algo.SystemOne.Instructions != "Which model should answer?" || algo.SystemOne.TimeoutMs != 2000 {
+					t.Fatalf("systemone = %#v", algo.SystemOne)
 				}
 			},
 		},
 		{
-			name:     "svm",
-			algoType: "svm",
-			body:     ``,
+			name:     "escalate",
+			algoType: "escalate",
+			body:     `on_error: "fail" order: "size" accept: { refusal: false }`,
 			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
-				if algo.Type != "svm" {
-					t.Errorf("type = %q, want svm", algo.Type)
-				}
-			},
-		},
-		{
-			name:     "mlp",
-			algoType: "mlp",
-			body:     ``,
-			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
-				if algo.Type != "mlp" {
-					t.Errorf("type = %q, want mlp", algo.Type)
+				if algo.OnError != "fail" || algo.Escalate == nil || algo.Escalate.Order != "size" ||
+					algo.Escalate.Accept == nil || algo.Escalate.Accept.Refusal == nil || *algo.Escalate.Accept.Refusal {
+					t.Fatalf("escalate = on_error %q, %#v", algo.OnError, algo.Escalate)
 				}
 			},
 		},
@@ -2237,40 +2159,36 @@ SIGNAL keyword advanced_kw {
 	}
 }
 
-// ---------- P1-15: Confidence Algorithm Full Fields ----------
+// ---------- P1-15: Escalate Algorithm Full Fields ----------
 
-func TestCompileConfidenceAlgoFullFields(t *testing.T) {
+func TestCompileEscalateAlgoFullFields(t *testing.T) {
 	input := `
 SIGNAL domain test { description: "test" }
 ROUTE test {
   PRIORITY 1
   WHEN domain("test")
   MODEL "m1:7b", "m2:3b"
-  ALGORITHM confidence {
-    confidence_method: "hybrid"
-    threshold: 0.8
-    on_error: "skip"
-    escalation_order: "automix"
-    cost_quality_tradeoff: 0.7
-    hybrid_weights: { logprob_weight: 0.5, margin_weight: 0.5 }
+  ALGORITHM escalate {
+    on_error: "fail"
+    budget: { deadline: "30s", max_calls: 2 }
+    order: "cost"
+    accept: { systemone: { gte: 0.8, deployment: "checker", timeout_ms: 4000 } }
   }
 }`
 	cfg, errs := Compile(input)
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	c := cfg.Decisions[0].Algorithm.Confidence
-	if c.ConfidenceMethod != "hybrid" {
-		t.Errorf("method = %q", c.ConfidenceMethod)
+	algorithm := cfg.Decisions[0].Algorithm
+	if algorithm.OnError != "fail" || algorithm.Budget == nil || algorithm.Budget.Deadline != "30s" || algorithm.Budget.MaxCalls != 2 {
+		t.Errorf("executor settings = on_error %q, budget %+v", algorithm.OnError, algorithm.Budget)
 	}
-	if c.OnError != "skip" {
-		t.Errorf("on_error = %q", c.OnError)
+	if algorithm.Escalate.Order != "cost" {
+		t.Errorf("order = %q", algorithm.Escalate.Order)
 	}
-	if c.EscalationOrder != "automix" {
-		t.Errorf("escalation_order = %q", c.EscalationOrder)
-	}
-	if c.CostQualityTradeoff != 0.7 {
-		t.Errorf("cost_quality_tradeoff = %v", c.CostQualityTradeoff)
+	check := algorithm.Escalate.Accept.SystemOne
+	if check == nil || check.GTE == nil || *check.GTE != 0.8 || check.Deployment != "checker" || check.TimeoutMs != 4000 {
+		t.Errorf("accept.systemone = %+v", check)
 	}
 }
 
@@ -2735,8 +2653,8 @@ func TestFullExampleYAMLRoundTrip(t *testing.T) {
 			if len(d.ModelRefs) != 2 {
 				t.Errorf("urgent model_refs = %d", len(d.ModelRefs))
 			}
-			if d.Algorithm == nil || d.Algorithm.Type != "confidence" {
-				t.Error("urgent should have confidence algorithm")
+			if d.Algorithm == nil || d.Algorithm.Type != "escalate" {
+				t.Error("urgent should have escalate algorithm")
 			}
 			if len(d.Plugins) != 1 {
 				t.Errorf("urgent plugins = %d, want 1", len(d.Plugins))
@@ -2962,10 +2880,9 @@ ROUTE test {
   PRIORITY 1
   WHEN domain("test")
   MODEL "m1:7b", "m2:3b"
-  ALGORITHM confidence {
-    confidence_method: "hybrid"
-    threshold: 0.5
-    on_error: "skip"
+  ALGORITHM escalate {
+    on_error: "fail"
+    accept: { confidence: { method: "hybrid", gte: 0.5 } }
   }
 }`
 	cfg, errs := Compile(input)
@@ -2973,12 +2890,15 @@ ROUTE test {
 		t.Fatalf("compile errors: %v", errs)
 	}
 	algo := cfg.Decisions[0].Algorithm
-	// For confidence/ratings/remom, on_error goes into the sub-config, not the top level
-	if algo.OnError != "" {
-		t.Errorf("algo top-level on_error = %q, want empty", algo.OnError)
+	if algo.OnError != "fail" {
+		t.Errorf("algo top-level on_error = %q, want fail", algo.OnError)
 	}
-	if algo.Confidence == nil || algo.Confidence.OnError != "skip" {
-		t.Errorf("algo.Confidence.OnError = %q, want skip", algo.Confidence.OnError)
+	text, err := Decompile(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if roundTrip := mustCompilePolicyDSL(t, text); roundTrip.Decisions[0].Algorithm.OnError != "fail" {
+		t.Errorf("on_error lost on round trip:\n%s", text)
 	}
 }
 
@@ -3128,20 +3048,20 @@ ROUTE test {
   PRIORITY 1
   WHEN domain("test")
   MODEL "m:1b"
-  ALGORITHM confdence { threshold: 0.5 }
+  ALGORITHM escalat { order: "size" }
 }
 `
 	diags, _ := Validate(input)
 	found := false
 	for _, d := range diags {
-		if d.Level == DiagConstraint && strings.Contains(d.Message, "confdence") {
+		if d.Level == DiagConstraint && strings.Contains(d.Message, "escalat") {
 			found = true
-			// Good — got suggestion if d.Fix != nil && d.Fix.NewText == "confidence"
+			// Good — got suggestion if d.Fix != nil && d.Fix.NewText == "escalate"
 			break
 		}
 	}
 	if !found {
-		t.Error("expected constraint violation for unknown algorithm type 'confdence'")
+		t.Error("expected constraint violation for unknown algorithm type 'escalat'")
 	}
 }
 
@@ -3409,10 +3329,9 @@ ROUTE test {
   PRIORITY 1
   WHEN domain("test")
   MODEL "m1:7b", "m2:3b"
-  ALGORITHM confidence {
-    confidence_method: "hybrid"
-    threshold: 0.5
-    on_error: "skip"
+  ALGORITHM escalate {
+    on_error: "fail"
+    accept: { confidence: { method: "hybrid", gte: 0.5 } }
   }
 }
 `
@@ -3426,11 +3345,11 @@ ROUTE test {
 		t.Fatalf("decompile error: %v", err)
 	}
 
-	if !strings.Contains(dslText, "ALGORITHM confidence") {
+	if !strings.Contains(dslText, "ALGORITHM escalate") {
 		t.Error("missing algorithm in decompiled output")
 	}
-	if !strings.Contains(dslText, "confidence_method") {
-		t.Error("missing confidence_method in decompiled output")
+	if !strings.Contains(dslText, "accept") {
+		t.Error("missing accept in decompiled output")
 	}
 }
 

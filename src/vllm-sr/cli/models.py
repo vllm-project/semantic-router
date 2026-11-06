@@ -44,7 +44,6 @@ from .context_bands import normalize_token_count, validate_context_band
 from .durations import parse_duration
 
 RoutingStrategy = Literal["priority", "confidence"]
-PROMPT_MIN_CANDIDATES = 2
 MAX_DECISION_ANNOTATIONS = 32
 MAX_DECISION_ANNOTATION_BYTES = 4096
 # Condition types whose conditions may name one of the rule's options.
@@ -1726,9 +1725,11 @@ class Decision(BaseModel):
         algorithm = data.get("algorithm")
         # These Chat directives have no native owner; reject before Pydantic
         # can discard fields outside its typed view.
+        escalate = algorithm.get("escalate") if isinstance(algorithm, dict) else None
         if (
-            isinstance(algorithm, dict)
-            and algorithm.get("type") == "cascade"
+            isinstance(escalate, dict)
+            and algorithm.get("type") == "escalate"
+            and escalate.get("stages")
             and (data.get("candidateIterations") or data.get("emits"))
         ):
             raise ValueError(
@@ -1747,7 +1748,7 @@ class Decision(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def validate_prompt_candidates(self):
+    def validate_minimum_candidates(self):
         if self.algorithm and self.algorithm.minimum_candidates and self.modelRefs:
             effective_names = {
                 (model_ref.model.strip(), (model_ref.lora_name or "").strip())
@@ -1759,23 +1760,6 @@ class Decision(BaseModel):
                     "algorithm.minimum_candidates="
                     f"{self.algorithm.minimum_candidates} requires at least that many "
                     f"unique modelRefs, got {len(effective_names)}"
-                )
-        if (
-            self.algorithm
-            and self.algorithm.type == "prompt"
-            and len(self.modelRefs) < PROMPT_MIN_CANDIDATES
-        ):
-            raise ValueError("algorithm.type=prompt requires at least two modelRefs")
-        if self.algorithm and self.algorithm.type == "prompt":
-            model_names = [model_ref.model for model_ref in self.modelRefs]
-            if len(model_names) != len(set(model_names)):
-                raise ValueError("algorithm.type=prompt requires unique modelRefs")
-            effective_names = [
-                model_ref.lora_name or model_ref.model for model_ref in self.modelRefs
-            ]
-            if len(effective_names) != len(set(effective_names)):
-                raise ValueError(
-                    "algorithm.type=prompt requires unique effective model identities"
                 )
         return self
 

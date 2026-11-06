@@ -39,10 +39,8 @@ func TestEmbeddingConsumerUsesSelectedRecipeBinding(t *testing.T) {
 	cfg.EmbeddingConfig.ModelType = "remote"
 	cfg.EmbeddingConfig.TargetDimension = 2
 	cfg.Tools.Enabled = true
-	cfg.ModelSelection.Enabled = true
-	cfg.ModelSelection.ML.ModelsPath = "test-selection"
-	cfg.ModelSelection.ML.ModelType = config.EmbeddingModelTypeRemote
-	cfg.Decisions = []config.Decision{{Name: "nearest", Algorithm: &config.AlgorithmConfig{Type: "knn"}}}
+	compression := config.DecisionPlugin{Type: config.DecisionPluginContextCompression, Configuration: config.MustStructuredPayload(map[string]any{"enabled": true, "scoring": map[string]any{"method": config.ContextCompressionScoringEmbedding}})}
+	cfg.Decisions = []config.Decision{{Name: "nearest", Plugins: []config.DecisionPlugin{compression}}}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"default-embedding": {Provider: "http", ExternalModel: "default"}, "named-embedding": {Provider: "http", ExternalModel: "named"}}
 	cfg.ExternalModels = []config.ExternalModelConfig{{Name: "default", ModelName: "default", ModelEndpoint: config.ClassifierVLLMEndpoint{Address: endpoint.URL}}, {Name: "named", ModelName: "named", ModelEndpoint: config.ClassifierVLLMEndpoint{Address: endpoint.URL}}}
 	binding := func(deployment string) map[string]config.ModelBinding {

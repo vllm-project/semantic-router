@@ -986,7 +986,7 @@ routing:
               - search_web
             block_tools:
               - exec_cmd
-        # Disabled sample: add mode only (filter fields belong under mode: filter; see legal_confidence_route).
+        # Disabled sample: add mode only (filter fields belong under mode: filter; see legal_escalate_route).
         - type: tool_selection
           configuration:
             enabled: false
@@ -1025,8 +1025,8 @@ routing:
             keep_current_model: true
             prefer_prefix_retention: true
 
-    - name: legal_confidence_route
-      description: Confidence-routed legal and factual traffic.
+    - name: legal_escalate_route
+      description: Legal and factual traffic tries the small model first and escalates when its answer's confidence is weak.
       priority: 190
       rules:
         operator: OR
@@ -1046,22 +1046,26 @@ routing:
           reasoning_effort: high
           weight: 0.6
       algorithm:
-        type: confidence
+        type: escalate
         minimum_candidates: 2
-        on_error: fallback
-        confidence:
-          confidence_method: hybrid
-          threshold: 0.72
-          hybrid_weights:
-            logprob_weight: 0.65
-            margin_weight: 0.35
-          on_error: skip
-          escalation_order: small_to_large
-          cost_quality_tradeoff: 0.45
-          token_filter: tool_call_args
-          verifier_server_url: ""
-          verifier_timeout_seconds: 0
-          max_response_bytes: 0
+        # budget and on_error are every executor's settings: the calls it may
+        # make within the deadline, and, for escalate, what it returns when no
+        # answer is accepted (last_attempt: the last judged answer; fail: an
+        # error).
+        budget:
+          deadline: 60s
+          max_calls: 2
+        on_error: last_attempt
+        escalate:
+          order: size
+          accept:
+            confidence:
+              method: hybrid
+              gte: 0.72
+              hybrid_weights:
+                logprob_weight: 0.65
+                margin_weight: 0.35
+              token_filter: tool_call_args
       plugins:
         # Answers to prompts that need fact checking are checked against
         # their grounding context; an unsupported one is delivered with
@@ -1115,9 +1119,9 @@ routing:
           reasoning_effort: high
       algorithm:
         type: ratings
+        on_error: skip
         ratings:
           max_concurrent: 3
-          on_error: skip
       adaptations:
         mode: bypass
       plugins:
@@ -1181,6 +1185,7 @@ routing:
           weight: 0.3
       algorithm:
         type: remom
+        on_error: skip
         remom:
           breadth_schedule: [3, 2]
           model_distribution: round_robin
@@ -1194,7 +1199,6 @@ routing:
           max_completion_tokens: 1024
           round_timeout_seconds: 120
           min_successful_responses: 2
-          on_error: skip
           shuffle_seed: 7
           include_intermediate_responses: true
           max_responses_per_round: 2
@@ -1239,6 +1243,7 @@ routing:
           weight: 0.5
       algorithm:
         type: fusion
+        on_error: skip
         fusion:
           model: qwen3-32b
           analysis_models:
@@ -1259,11 +1264,11 @@ routing:
           temperature: 0.2
           include_analysis: true
           include_intermediate_responses: true
-          on_error: skip
           # Panel-level policy when usable responses fall below
           # min_successful_responses: fail (typed error) or fallback (route to
-          # quorum_fallback_target). Independent of on_error, which governs one
-          # failed panel attempt. Recipe-owned; requests cannot override it.
+          # quorum_fallback_target). Independent of algorithm.on_error, which
+          # governs one failed panel attempt. Recipe-owned; requests cannot
+          # override it.
           # quorum_fallback_target is required by, and only valid with, fallback.
           quorum_failure_policy: fail
           quorum_fallback_target: ""
@@ -1312,6 +1317,7 @@ routing:
           weight: 0.5
       algorithm:
         type: workflows
+        on_error: fail
         workflows:
           mode: dynamic
           template: micro_agent
@@ -1324,7 +1330,6 @@ routing:
           min_successful_responses: 1
           temperature: 0.2
           include_intermediate_responses: true
-          on_error: fail
 
     - name: terse_feedback_route
       description: Terse-answer route that allows Router Learning adaptation to adjust feedback-driven routing.
@@ -1357,8 +1362,8 @@ routing:
             max_n: 4
             strip_unknown: false
 
-    - name: support_router_dc_route
-      description: Embedding-driven support route that escalates only when the derived projection band says the request is not a simple support query.
+    - name: support_selection_route
+      description: Embedding-driven support route that escalates only when the derived projection band says the request is not a simple support query; the decision model picks the model by its description.
       priority: 150
       rules:
         operator: AND
@@ -1373,15 +1378,9 @@ routing:
         - model: qwen3-32b
           use_reasoning: true
       algorithm:
-        type: router_dc
-        router_dc:
-          temperature: 0.2
-          dimension_size: 384
-          min_similarity: 0.7
-          use_query_contrastive: true
-          use_model_contrastive: true
-          require_descriptions: true
-          use_capabilities: true
+        type: systemone
+        systemone:
+          instructions: Which model should answer this support request?
       # Overrides the recipe's cross-model fallback policy (routing.fallback,
       # then global.router.fallback) field by field for this route. The
       # candidates stay this decision's ranked models; circuit_breaker is per
@@ -1404,8 +1403,8 @@ routing:
             delete:
               - X-Debug-Trace
 
-    - name: urgent_automix_route
-      description: Cost-aware urgent handling with AutoMix.
+    - name: urgent_cost_route
+      description: Cost-aware urgent handling that weighs each candidate's quality against its cost.
       priority: 145
       rules:
         operator: AND
@@ -1418,14 +1417,11 @@ routing:
         - model: qwen3-32b
           use_reasoning: true
       algorithm:
-        type: automix
-        automix:
-          verification_threshold: 0.78
-          max_escalations: 2
-          cost_aware_routing: true
-          cost_quality_tradeoff: 0.35
-          discount_factor: 0.9
-          use_logprob_verification: true
+        type: multi_factor
+        multi_factor:
+          weights:
+            quality: 0.65
+            cost: 0.35
       plugins:
         - type: response_guard
           configuration:
@@ -1436,8 +1432,8 @@ routing:
                 action: block
             on_unknown: block
 
-    - name: safe_hybrid_route
-      description: Composite route combining AND, OR, and NOT with Hybrid selection.
+    - name: safe_composite_route
+      description: Composite route combining AND, OR, and NOT.
       priority: 140
       rules:
         operator: AND
@@ -1460,15 +1456,6 @@ routing:
           use_reasoning: true
         - model: qwen3-32b
           use_reasoning: true
-      algorithm:
-        type: hybrid
-        hybrid:
-          experience_weight: 0.4
-          router_dc_weight: 0.3
-          automix_weight: 0.2
-          cost_weight: 0.1
-          quality_gap_threshold: 0.08
-          normalize_scores: true
       plugins:
         - type: tools
           configuration:
@@ -1550,8 +1537,8 @@ routing:
               headers:
                 X-Environment: admin
 
-    - name: long_context_latency_route
-      description: Long-context route with latency-aware policy. MCP RAG stays disabled until an invoker exists.
+    - name: long_context_route
+      description: Long-context route. MCP RAG stays disabled until an invoker exists.
       priority: 125
       rules:
         operator: AND
@@ -1561,12 +1548,6 @@ routing:
       modelRefs:
         - model: qwen3-32b
           use_reasoning: true
-      algorithm:
-        type: latency_aware
-        latency_aware:
-          tpot_percentile: 90
-          ttft_percentile: 95
-          description: Balance throughput and first-token latency for long prompts.
       # Overrides the provider model's timeouts and retries for this route.
       # Envoy applies these fields per request; idle_timeout,
       # first_byte_timeout, back-off and retry_after_max need --gateway standalone.
@@ -1600,8 +1581,8 @@ routing:
 
     # multi_factor example: composes quality/latency/cost/load into one
     # weighted score with optional SLO ceilings. Issue #37.
-    - name: prompt_selected_route
-      description: Prompt-driven selection among bounded decision candidates.
+    - name: instructed_selection_route
+      description: The decision model follows the operator's instructions to choose among the decision's candidates.
       priority: 126
       rules:
         operator: AND
@@ -1614,14 +1595,12 @@ routing:
         - model: qwen3-32b
           use_reasoning: true
       algorithm:
-        type: prompt
-        on_error: fallback
-        prompt:
-          model: qwen3-8b
+        type: systemone
+        systemone:
           instructions: >-
             Choose qwen3-8b for ordinary requests and qwen3-32b for hard
             reasoning, coding, or multi-step analysis.
-          timeout_seconds: 5
+          timeout_ms: 5000
 
     - name: decision_model_route
       description: Let a decision model pick the model for hard code requests.
@@ -1731,8 +1710,8 @@ routing:
         type: random
         minimum_candidates: 2
 
-    - name: fallback_knn_route
-      description: KNN fallback route for general traffic with OpenAI vector-store RAG.
+    - name: fallback_general_route
+      description: Fallback route for general traffic with OpenAI vector-store RAG.
       priority: 120
       rules:
         operator: AND
@@ -1742,8 +1721,6 @@ routing:
       modelRefs:
         - model: qwen3-8b
           use_reasoning: false
-      algorithm:
-        type: knn
       plugins:
         - type: rag
           configuration:
@@ -1769,8 +1746,8 @@ routing:
               timeout_seconds: 20
               workflow_mode: tool_based
 
-    - name: clarification_kmeans_route
-      description: KMeans route for clarification requests with local vector-store RAG.
+    - name: clarification_route
+      description: Clarification requests with local vector-store RAG, answered by the first candidate.
       priority: 115
       rules:
         operator: AND
@@ -1783,7 +1760,7 @@ routing:
         - model: qwen3-32b
           use_reasoning: true
       algorithm:
-        type: kmeans
+        type: static
       plugins:
         - type: rag
           configuration:
@@ -1848,8 +1825,8 @@ routing:
       modelRefs:
         - model: qwen3-8b
           use_reasoning: false
-    - name: safe_only_svm_route
-      description: SVM route that only matches when prompt-injection signals are absent.
+    - name: safe_only_route
+      description: Route that only matches when prompt-injection signals are absent.
       priority: 110
       rules:
         operator: NOT
@@ -1859,8 +1836,6 @@ routing:
       modelRefs:
         - model: qwen3-8b
           use_reasoning: false
-      algorithm:
-        type: svm
       plugins:
         - type: rag
           configuration:
@@ -1884,8 +1859,8 @@ routing:
                 endpoint: https://search.example.com/query
                 request_format: pinecone
 
-    - name: mlp_experimental_route
-      description: Experimental MLP-based model selection route.
+    - name: machine_learning_route
+      description: Machine-learning questions go to the local model.
       priority: 103
       rules:
         operator: AND
@@ -1895,8 +1870,6 @@ routing:
       modelRefs:
         - model: qwen3-8b
           use_reasoning: false
-      algorithm:
-        type: mlp
 
     - name: image_generation_route
       description: Dedicated image-generation route using the OpenAI image backend.
@@ -1998,40 +1971,39 @@ recipes:
     description: Complete typed requests use explicit native stages and an algorithm execution budget.
     routing:
       decisions:
-        - name: typed-cascade
+        - name: typed-escalate
           rules: {}
           modelRefs: [{model: native-kai}, {model: native-vega}, {model: remote-openai-reference}]
           algorithm:
-            type: cascade
+            type: escalate
             budget: {deadline: 3s, max_calls: 4}
-            quality:
-              type: uncalibrated
-              acceptance:
-                rules:
-                  - {question_type: choice, field: top_probability, predicate: {gte: 0}}
-                  - {question_type: score, field: top_probability, predicate: {gte: 0}}
-                  - {question_type: noul, field: top_probability, predicate: {gte: 0}}
-            stages:
-              # Measured pilot gate for the pinned Kai/Vega pair; re-evaluate
-              # when the model identity or question distribution changes.
-              - name: fast
-                kind: native
-                model: native-kai
+            escalate:
+              quality:
+                type: uncalibrated
                 accept:
-                  rules:
-                    - {question_type: choice, field: top_probability, predicate: {gte: 0.6059704079536342}}
-                    - {question_type: score, field: top_probability, predicate: {gte: 0.6059704079536342}}
-                    - {question_type: noul, field: top_probability, predicate: {gte: 0.6059704079536342}}
-              - name: strong
-                kind: native
-                model: native-vega
-                timeout: 1s
-              - name: review
-                kind: judge
-                enabled: false
-                model: remote-openai-reference
-                generation: {max_output_tokens: 256}
-                instructions: Select a complete prior response only when it answers every question.
+                  native:
+                    - {question_type: choice, field: top_probability, gte: 0}
+                    - {question_type: score, field: top_probability, gte: 0}
+                    - {question_type: noul, field: top_probability, gte: 0}
+              stages:
+                # Measured pilot gate for the pinned Kai/Vega pair; re-evaluate
+                # when the model identity or question distribution changes.
+                - name: fast
+                  model: native-kai
+                  accept:
+                    native:
+                      - {question_type: choice, field: top_probability, gte: 0.6059704079536342}
+                      - {question_type: score, field: top_probability, gte: 0.6059704079536342}
+                      - {question_type: noul, field: top_probability, gte: 0.6059704079536342}
+                - name: strong
+                  model: native-vega
+                  timeout: 1s
+                - name: review
+                  kind: judge
+                  enabled: false
+                  model: remote-openai-reference
+                  generation: {max_output_tokens: 256}
+                  instructions: Select a complete prior response only when it answers every question.
 
 global:
   router:
@@ -2094,48 +2066,7 @@ global:
         - start: '<relevant-memories>'
           end: '</relevant-memories>'
     model_selection:
-      method: hybrid
       enabled: true
-      router_dc:
-        temperature: 0.2
-        dimension_size: 384
-        min_similarity: 0.7
-        use_query_contrastive: true
-        use_model_contrastive: true
-        require_descriptions: true
-        use_capabilities: true
-      automix:
-        verification_threshold: 0.8
-        max_escalations: 2
-        cost_aware_routing: true
-        cost_quality_tradeoff: 0.4
-        discount_factor: 0.9
-        use_logprob_verification: true
-      hybrid:
-        experience_weight: 0.4
-        router_dc_weight: 0.25
-        automix_weight: 0.25
-        cost_weight: 0.1
-        quality_gap_threshold: 0.08
-        normalize_scores: true
-      ml:
-        models_path: models/model-selection
-        model_type: mmbert
-        embedding_dim: 384
-        knn:
-          k: 5
-          pretrained_path: models/model-selection/knn.bin
-        kmeans:
-          num_clusters: 8
-          efficiency_weight: 0.35
-          pretrained_path: models/model-selection/kmeans.bin
-        svm:
-          kernel: rbf
-          gamma: 0.12
-          pretrained_path: models/model-selection/svm.bin
-        mlp:
-          device: cpu
-          pretrained_path: models/model-selection/mlp.pt
     learning:
       enabled: true
       adaptation:

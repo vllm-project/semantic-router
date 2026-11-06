@@ -13,14 +13,14 @@ func TestNativeCascadeBudgetBelongsToSelectedAlgorithm(t *testing.T) {
 }
 
 func TestNativeLearnedPolicyIsNotAProductAlgorithm(t *testing.T) {
-	raw := strings.Replace(nativeRoutingTestYAML, "type: cascade", "type: policy\n            policy: {source: policy.json, sha256: "+strings.Repeat("a", 64)+"}", 1)
+	raw := strings.Replace(nativeRoutingTestYAML, "type: escalate", "type: policy\n            policy: {source: policy.json, sha256: "+strings.Repeat("a", 64)+"}", 1)
 	if _, err := ParseYAMLBytes([]byte(raw)); err == nil {
 		t.Fatal("removed native policy accepted")
 	}
 }
 
 func TestNativeCascadeRejectsChatCandidateMinimum(t *testing.T) {
-	raw := strings.Replace(nativeRoutingTestYAML, "type: cascade", "type: cascade\n            minimum_candidates: 2", 1)
+	raw := strings.Replace(nativeRoutingTestYAML, "type: escalate", "type: escalate\n            minimum_candidates: 2", 1)
 	if _, err := ParseYAMLBytes([]byte(raw)); err == nil || !strings.Contains(err.Error(), "minimum_candidates") {
 		t.Fatalf("native cascade accepted an unenforced Chat candidate minimum: %v", err)
 	}
@@ -36,7 +36,7 @@ func TestLegacyRecipeBudgetAndChatAlgorithmBudgetAreRejected(t *testing.T) {
 		}
 	}
 	algorithm := &AlgorithmConfig{Type: "static", Budget: &AlgorithmBudget{Deadline: "3s", MaxCalls: 1}}
-	if err := validateDecisionAlgorithmConfig("chat", []ModelRef{{Model: "chat"}}, algorithm); err == nil || !strings.Contains(err.Error(), "require cascade") {
+	if err := validateDecisionAlgorithmConfig("chat", []ModelRef{{Model: "chat"}}, algorithm); err == nil || !strings.Contains(err.Error(), "apply to executors") {
 		t.Fatalf("Chat algorithm silently ignored budget: %v", err)
 	}
 }

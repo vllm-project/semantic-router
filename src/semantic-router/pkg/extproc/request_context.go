@@ -211,16 +211,11 @@ type RequestContext struct {
 	VSRSelectedDecisionConfidenceScored bool                                        // False for structural and error-policy matches without model scores
 	VSRReasoningMode                    string                                      // "on" or "off" - whether reasoning mode was determined to be used
 	VSRSelectedModel                    string                                      // The model selected by VSR
-	VSRSelectionMethod                  string                                      // Model selection algorithm used (e.g., "elo", "static", "router_dc")
+	VSRSelectionMethod                  string                                      // Model selection algorithm used (e.g., "static", "systemone", "escalate")
 	VSRSelectionReasoning               string                                      // Bounded human-readable selector rationale for replay
 	VSRSelectionTrace                   *selectiontrace.MultiFactorObjective        // Base objective evidence, before Router Learning
 	VSRFusionQuorum                     *routerreplay.FusionQuorumDiagnostics       // Content-free Fusion panel quorum evidence for replay
 	VSRLooperDiagnostics                *routerreplay.LooperDiagnostics             // Content-free Looper attempt evidence for replay
-	VSRPromptHelperModel                string                                      // Concrete prompt-selector helper model
-	VSRPromptHelperPromptTokens         int64                                       // Prompt tokens consumed by the helper
-	VSRPromptHelperCompletionTokens     int64                                       // Completion tokens consumed by the helper
-	VSRPromptHelperTotalTokens          int64                                       // Total helper tokens
-	VSRPromptHelperLatencyMs            int64                                       // Helper model round-trip latency
 	VSRLearningPolicy                   *routerLearningPolicy                       // Primary Router Learning trace
 	VSRLearningPolicies                 routerLearningPolicies                      // Router Learning traces by component
 	VSRLearningProtectionPreflight      *routerreplay.LearningProtectionDiagnostics // Protection preflight trace for replay

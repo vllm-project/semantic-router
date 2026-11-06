@@ -204,7 +204,7 @@ x-vsr-replay-id: replay_01J...
 | `x-vsr-learning-methods` | response | debug | none | router_learning | v0.4 | Router Learning methods the learning headers summarize, such as `adaptation,protection`. |
 | `x-vsr-learning-reasons` | response | debug | none | router_learning | v0.4 | Reason per method, such as `adaptation=sampled_win`. |
 | `x-vsr-learning-scopes` | response | debug | none | router_learning | v0.4 | Identity scope per method, such as `protection=conversation`. |
-| `x-vsr-looper-algorithm` | response | debug | none | looper | v0.2 | Looper algorithm, such as `confidence`. |
+| `x-vsr-looper-algorithm` | response | debug | none | looper | v0.2 | Executor algorithm, such as `escalate`. |
 | `x-vsr-looper-completion-tokens` | response | debug | none | looper | v0.4 | Completion tokens across the Looper's calls. |
 | `x-vsr-looper-iterations` | response | debug | none | looper | v0.2 | Model calls the Looper made. |
 | `x-vsr-looper-latency-ms` | response | debug | none | looper | v0.4 | Looper wall-clock latency, in milliseconds. |

@@ -22,19 +22,7 @@ func assertReferenceConfigRouterGlobalCoverage(t testingT, router map[string]int
 	assertMapCoversStructFields(t, mustMapAt(t, router, "routing_input"), reflect.TypeOf(RoutingInputConfig{}), "global.router.routing_input")
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, router, "routing_input", "strip_blocks"), reflect.TypeOf(RoutingInputStripBlock{}), "global.router.routing_input.strip_blocks")
 	assertMapCoversStructFields(t, modelSelection, reflect.TypeOf(ModelSelectionConfig{}), "global.router.model_selection")
-	assertReferenceConfigRouterSelectionCoverage(t, modelSelection)
 	assertReferenceConfigRouterLearningCoverage(t, learning)
-}
-
-func assertReferenceConfigRouterSelectionCoverage(t testingT, modelSelection map[string]interface{}) {
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml"), reflect.TypeOf(MLSelectionConfig{}), "global.router.model_selection.ml")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "router_dc"), reflect.TypeOf(RouterDCSelectionConfig{}), "global.router.model_selection.router_dc")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "automix"), reflect.TypeOf(AutoMixSelectionConfig{}), "global.router.model_selection.automix")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "hybrid"), reflect.TypeOf(HybridSelectionConfig{}), "global.router.model_selection.hybrid")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "knn"), reflect.TypeOf(MLKNNConfig{}), "global.router.model_selection.ml.knn")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "kmeans"), reflect.TypeOf(MLKMeansConfig{}), "global.router.model_selection.ml.kmeans")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "svm"), reflect.TypeOf(MLSVMConfig{}), "global.router.model_selection.ml.svm")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "mlp"), reflect.TypeOf(MLMLPConfig{}), "global.router.model_selection.ml.mlp")
 }
 
 func assertReferenceConfigRouterLearningCoverage(t testingT, learning map[string]interface{}) {

@@ -39,13 +39,14 @@ recipes:
           rules: {}
           modelRefs: [{model: kai}]
           algorithm:
-            type: cascade
+            type: escalate
             budget: {deadline: 2s, max_calls: 1}
-            quality:
-              type: uncalibrated
-              acceptance:
-                rules: [{question_type: noul, field: top_probability, predicate: {gte: 0}}]
-            stages: [{name: fast, kind: native, model: kai}]
+            escalate:
+              quality:
+                type: uncalibrated
+                accept:
+                  native: [{question_type: noul, field: top_probability, gte: 0}]
+              stages: [{name: fast, model: kai}]
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -56,7 +57,7 @@ recipes:
 	}
 	recipe, _ := cfg.RecipeByName("native")
 	algorithm := recipe.Profile.Decisions[0].Algorithm
-	algorithm.Quality = &config.NativeQualityConfig{Type: "calibrated"}
+	algorithm.Escalate.Quality = &config.EscalateQuality{Type: "calibrated"}
 	// The evaluator fixture isolates metadata visibility; artifact admission and
 	// statistical acceptance are covered by the systemone calibration tests.
 	executor, err := systemone.NewExecutor(algorithm, func(_ *systemone.NativeRequest, candidate systemone.Candidate) (bool, error) {

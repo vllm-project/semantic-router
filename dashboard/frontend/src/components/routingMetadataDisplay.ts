@@ -33,9 +33,8 @@ const LANGUAGE_NAMES: Record<string, string> = {
 }
 
 const IDENTIFIER_LABELS: Record<string, string> = {
-  latency_aware: 'Latency-Aware',
   multi_factor: 'Multi-Factor',
-  router_dc: 'Router DC',
+  systemone: 'System One',
 }
 
 const humanizeToken = (token: string): string => {

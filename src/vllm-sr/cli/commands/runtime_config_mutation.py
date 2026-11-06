@@ -25,32 +25,16 @@ _CANONICAL_ALGORITHM_TYPES = frozenset(
 # remains discoverable through `vllm-sr config schema`.
 ALGORITHM_OVERRIDE_TYPES = (
     "static",
-    "router_dc",
-    "automix",
-    "hybrid",
-    "workflows",
-    "latency_aware",
-    "knn",
-    "kmeans",
-    "svm",
-    "mlp",
-    "multi_factor",
     "random",
+    "multi_factor",
+    "workflows",
 )
 
 if not set(ALGORITHM_OVERRIDE_TYPES).issubset(_CANONICAL_ALGORITHM_TYPES):
     raise RuntimeError("CLI algorithm override policy is stale against Router schema")
 
 ALGORITHM_HINTS = {
-    "router_dc": "  Tip: Ensure models have 'description' fields",
-    "automix": "  Tip: Configure model 'pricing' for cost optimization",
-    "hybrid": "  Tip: Configure weights in decision.algorithm.hybrid",
     "workflows": "  Tip: Configure decision.algorithm.workflows; dynamic mode requires planner.model",
-    "latency_aware": "  Tip: Configure decision.algorithm.latency_aware with TPOT or TTFT percentiles",
-    "knn": "  Tip: Configure global.router.model_selection.ml.knn for trained KNN routing",
-    "kmeans": "  Tip: Configure global.router.model_selection.ml.kmeans for cluster routing",
-    "svm": "  Tip: Configure global.router.model_selection.ml.svm for trained SVM routing",
-    "mlp": "  Tip: Configure global.router.model_selection.ml.mlp for trained MLP routing",
     "multi_factor": "  Tip: Configure decision.algorithm.multi_factor for SLO-aware scoring",
     "random": "  Tip: No configuration needed",
 }
@@ -61,6 +45,17 @@ ALGORITHM_CONFIG_BLOCKS = tuple(
     if surface.get("config_field")
 )
 
+EXECUTOR_ALGORITHM_TYPES = frozenset(
+    surface["type"]
+    for surface in _ALGORITHM_SURFACES
+    if surface.get("kind") == "executor"
+)
+
+# The settings every executor reads; a selector carries neither.
+EXECUTOR_SETTINGS = ("budget", "on_error")
+
+# Blocks of retired and removed algorithm types, and the native cascade's
+# settings, which an override replaces with the overriding type's own.
 RETIRED_ALGORITHM_CONFIG_BLOCKS = (
     "session_aware",
     "elo",
@@ -68,6 +63,14 @@ RETIRED_ALGORITHM_CONFIG_BLOCKS = (
     "gmtrouter",
     "bandit",
     "personalization",
+    "confidence",
+    "prompt",
+    "router_dc",
+    "automix",
+    "hybrid",
+    "latency_aware",
+    "quality",
+    "stages",
 )
 
 EXPECTED_CONFIG_BLOCK_BY_ALGORITHM = {
@@ -77,10 +80,6 @@ EXPECTED_CONFIG_BLOCK_BY_ALGORITHM = {
 }
 
 DEFAULT_CONFIG_BLOCK_BY_ALGORITHM: dict[str, dict[str, object]] = {
-    "latency_aware": {
-        "tpot_percentile": 90,
-        "ttft_percentile": 95,
-    },
     "workflows": {
         "template": "micro_agent",
     },
@@ -305,6 +304,9 @@ def _replace_algorithm_config(
     for block in (*ALGORITHM_CONFIG_BLOCKS, *RETIRED_ALGORITHM_CONFIG_BLOCKS):
         if block != expected_block:
             algorithm_config.pop(block, None)
+    if normalized_algorithm not in EXECUTOR_ALGORITHM_TYPES:
+        for setting in EXECUTOR_SETTINGS:
+            algorithm_config.pop(setting, None)
     algorithm_config["type"] = normalized_algorithm
     if (
         expected_block

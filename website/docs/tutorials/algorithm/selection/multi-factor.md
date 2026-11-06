@@ -37,7 +37,8 @@ auditable decision policy.
 
 Use `multi_factor` when a decision has at least two candidate models and must
 optimize a quality/latency/cost/load trade-off. Use `static` when order alone is
-the policy, or `latency_aware` when latency is the only selection signal.
+the policy. When latency is the only selection signal, weight `multi_factor` on
+latency alone, as [Latency-Aware Selection](./latency-aware) shows.
 
 ## Configuration
 

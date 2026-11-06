@@ -80,7 +80,8 @@ routing:
       modelRefs: [{model: a}, {model: b}]
       algorithm:
         type: ratings
-        ratings: {max_concurrent: 2, on_error: fail}
+        on_error: fail
+        ratings: {max_concurrent: 2}
 `, "BACKEND", strings.TrimPrefix(backend.URL, "http://"))
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	if err := os.WriteFile(path, []byte(document), 0o600); err != nil {

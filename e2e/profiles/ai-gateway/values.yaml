@@ -88,12 +88,11 @@ config:
             lora_name: math-expert
             use_reasoning: false
         algorithm:
-          type: confidence
-          confidence:
-            confidence_method: hybrid
-            threshold: 0.72
-            on_error: skip
-            escalation_order: small_to_large
+          type: escalate
+          escalate:
+            order: size
+            accept:
+              confidence: {method: hybrid, gte: 0.72}
       - &plugin_request_mutations_decision
         name: plugin_request_mutations_decision
         description: Deterministic route for provider-boundary plugin mutation coverage (issue #3180).

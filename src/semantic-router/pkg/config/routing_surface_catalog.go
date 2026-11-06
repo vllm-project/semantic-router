@@ -7,25 +7,15 @@ import (
 )
 
 const (
-	DecisionAlgorithmCascade      = "cascade"
-	DecisionAlgorithmAutoMix      = "automix"
-	DecisionAlgorithmConfidence   = "confidence"
-	DecisionAlgorithmFusion       = "fusion"
-	DecisionAlgorithmHybrid       = "hybrid"
-	DecisionAlgorithmKMeans       = "kmeans"
-	DecisionAlgorithmKNN          = "knn"
-	DecisionAlgorithmLatencyAware = "latency_aware"
-	DecisionAlgorithmMLP          = "mlp"
-	DecisionAlgorithmMultiFactor  = "multi_factor"
-	DecisionAlgorithmRandom       = "random"
-	DecisionAlgorithmRatings      = "ratings"
-	DecisionAlgorithmReMoM        = "remom"
-	DecisionAlgorithmRouterDC     = "router_dc"
-	DecisionAlgorithmStatic       = "static"
-	DecisionAlgorithmSVM          = "svm"
-	DecisionAlgorithmWorkflows    = "workflows"
-	DecisionAlgorithmPrompt       = "prompt"
-	DecisionAlgorithmSystemOne    = "systemone"
+	DecisionAlgorithmStatic      = "static"
+	DecisionAlgorithmRandom      = "random"
+	DecisionAlgorithmMultiFactor = "multi_factor"
+	DecisionAlgorithmSystemOne   = "systemone"
+	DecisionAlgorithmEscalate    = "escalate"
+	DecisionAlgorithmFusion      = "fusion"
+	DecisionAlgorithmReMoM       = "remom"
+	DecisionAlgorithmRatings     = "ratings"
+	DecisionAlgorithmWorkflows   = "workflows"
 
 	DecisionPluginResponseCache = "response_cache"
 	// DecisionPluginSemanticCache is the deprecated public spelling retained
@@ -94,13 +84,14 @@ type DecisionPluginCatalogEntry struct {
 	Description string `json:"description"`
 }
 
-// AlgorithmExecution identifies the runtime path for a decision algorithm.
-type AlgorithmExecution string
+// AlgorithmKind is what a decision algorithm does with its candidates: a
+// selector chooses one before calling it; an executor calls several and
+// returns one response.
+type AlgorithmKind string
 
 const (
-	AlgorithmExecutionNative   AlgorithmExecution = "native"
-	AlgorithmExecutionLooper   AlgorithmExecution = "looper"
-	AlgorithmExecutionSelector AlgorithmExecution = "selector"
+	AlgorithmKindSelector AlgorithmKind = "selector"
+	AlgorithmKindExecutor AlgorithmKind = "executor"
 )
 
 // AlgorithmPayloadShape describes whether an algorithm's public DSL fields
@@ -109,14 +100,15 @@ type AlgorithmPayloadShape string
 
 const AlgorithmPayloadNested AlgorithmPayloadShape = "nested"
 
-// AlgorithmCatalogEntry describes a decision algorithm, its tier, and the
-// runtime path that executes it.
+// AlgorithmCatalogEntry describes a decision algorithm, its tier, its kind
+// and the APIs (entrypoint protocols) whose recipes can use it.
 type AlgorithmCatalogEntry struct {
-	Type         string                `json:"type"`         // algorithm type name (e.g., "automix")
+	Type         string                `json:"type"`         // algorithm type name (e.g., "escalate")
 	DisplayName  string                `json:"display_name"` // concise user-facing name
 	Description  string                `json:"description"`  // request-time behavior
 	Tier         string                `json:"tier"`         // "supported" or "experimental"
-	Execution    AlgorithmExecution    `json:"execution"`    // "selector", "looper", or "native"
+	Kind         AlgorithmKind         `json:"kind"`         // "selector" or "executor"
+	APIs         []InferenceAPI        `json:"apis"`         // "chat" and, for escalate, "systemone"
 	ConfigField  string                `json:"config_field,omitempty"`
 	PayloadShape AlgorithmPayloadShape `json:"payload_shape,omitempty"` // empty/flat or nested in public DSL editors
 }
@@ -139,26 +131,33 @@ type DecisionAlgorithmType struct {
 	Validate func(decision string, payload interface{}) error
 }
 
+var (
+	chatAPIs     = []InferenceAPI{ChatAPI}
+	escalateAPIs = []InferenceAPI{ChatAPI, SystemOneAPI}
+)
+
+func selectorEntry(entry AlgorithmCatalogEntry) AlgorithmCatalogEntry {
+	entry.Kind, entry.APIs = AlgorithmKindSelector, chatAPIs
+	return entry
+}
+
+// executorEntry is an executor's catalog entry; its settings are the block
+// named after its type, beside the shared budget and on_error.
+func executorEntry(entry AlgorithmCatalogEntry, apis []InferenceAPI) AlgorithmCatalogEntry {
+	entry.Kind, entry.APIs, entry.ConfigField = AlgorithmKindExecutor, apis, entry.Type
+	return entry
+}
+
 var builtinDecisionAlgorithms = []DecisionAlgorithmType{
-	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmCascade, DisplayName: "Native Cascade", Description: "Escalate complete typed responses through declared stages.", Tier: "experimental", Execution: AlgorithmExecutionNative}},
-	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmAutoMix, DisplayName: "AutoMix", Description: "Optimize a cost-quality escalation policy.", Tier: "experimental", Execution: AlgorithmExecutionSelector, ConfigField: "automix"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.AutoMix != nil }},
-	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmConfidence, DisplayName: "Confidence", Description: "Escalate across candidate models until confidence is sufficient.", Tier: "supported", Execution: AlgorithmExecutionLooper, ConfigField: "confidence"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.Confidence != nil }},
-	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmFusion, DisplayName: "Fusion", Description: "Run a parallel panel and synthesize a judged final response.", Tier: "experimental", Execution: AlgorithmExecutionLooper, ConfigField: "fusion"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.Fusion != nil }},
-	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmHybrid, DisplayName: "Hybrid", Description: "Combine experience, similarity, AutoMix, and cost signals.", Tier: "supported", Execution: AlgorithmExecutionSelector, ConfigField: "hybrid"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.Hybrid != nil }},
-	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmKMeans, DisplayName: "K-Means", Description: "Select a model with the shared K-Means classifier.", Tier: "experimental", Execution: AlgorithmExecutionSelector}},
-	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmKNN, DisplayName: "KNN", Description: "Select a model with the shared nearest-neighbor classifier.", Tier: "experimental", Execution: AlgorithmExecutionSelector}},
-	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmLatencyAware, DisplayName: "Latency Aware", Description: "Select against configured latency percentiles.", Tier: "supported", Execution: AlgorithmExecutionSelector, ConfigField: "latency_aware"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.LatencyAware != nil }},
-	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmMLP, DisplayName: "MLP", Description: "Select a model with the shared neural classifier.", Tier: "experimental", Execution: AlgorithmExecutionSelector}},
-	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmMultiFactor, DisplayName: "Multi Factor", Description: "Score quality, latency, cost, and load under optional SLOs.", Tier: "supported", Execution: AlgorithmExecutionSelector, ConfigField: "multi_factor"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.MultiFactor != nil }},
-	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmRandom, DisplayName: "Random", Description: "Select uniformly from the eligible candidate models.", Tier: "supported", Execution: AlgorithmExecutionSelector}},
-	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmRatings, DisplayName: "Ratings", Description: "Execute a bounded candidate set and return comparable choices.", Tier: "supported", Execution: AlgorithmExecutionLooper, ConfigField: "ratings"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.Ratings != nil }},
-	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmReMoM, DisplayName: "ReMoM", Description: "Run multi-round parallel reasoning and synthesis.", Tier: "supported", Execution: AlgorithmExecutionLooper, ConfigField: "remom"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.ReMoM != nil }},
-	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmRouterDC, DisplayName: "RouterDC", Description: "Match the request to candidate descriptions with dual contrastive embeddings.", Tier: "supported", Execution: AlgorithmExecutionSelector, ConfigField: "router_dc"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.RouterDC != nil }},
-	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmStatic, DisplayName: "Static", Description: "Select from configured candidate order and weights.", Tier: "supported", Execution: AlgorithmExecutionSelector}},
-	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmSVM, DisplayName: "SVM", Description: "Select a model with the shared support-vector classifier.", Tier: "experimental", Execution: AlgorithmExecutionSelector}},
-	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmWorkflows, DisplayName: "Workflows", Description: "Execute a static or dynamically planned Router Flow.", Tier: "experimental", Execution: AlgorithmExecutionLooper, ConfigField: "workflows"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.Workflows != nil }},
-	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmPrompt, DisplayName: "Prompt", Description: "Use a helper model to select one declared candidate.", Tier: "experimental", Execution: AlgorithmExecutionSelector, ConfigField: "prompt", PayloadShape: AlgorithmPayloadNested}, IsConfigured: func(config *AlgorithmConfig) bool { return config.Prompt != nil }},
-	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmSystemOne, DisplayName: "System One", Description: "Ask a System One model which declared candidate should answer.", Tier: "supported", Execution: AlgorithmExecutionSelector, ConfigField: "systemone", PayloadShape: AlgorithmPayloadNested}, IsConfigured: func(config *AlgorithmConfig) bool { return config.SystemOne != nil }},
+	{Catalog: selectorEntry(AlgorithmCatalogEntry{Type: DecisionAlgorithmStatic, DisplayName: "Static", Description: "Select from configured candidate order and weights.", Tier: "supported"})},
+	{Catalog: selectorEntry(AlgorithmCatalogEntry{Type: DecisionAlgorithmRandom, DisplayName: "Random", Description: "Select uniformly from the eligible candidate models.", Tier: "supported"})},
+	{Catalog: selectorEntry(AlgorithmCatalogEntry{Type: DecisionAlgorithmMultiFactor, DisplayName: "Multi Factor", Description: "Score quality, latency, cost, and load under optional SLOs.", Tier: "supported", ConfigField: "multi_factor"}), IsConfigured: func(config *AlgorithmConfig) bool { return config.MultiFactor != nil }},
+	{Catalog: selectorEntry(AlgorithmCatalogEntry{Type: DecisionAlgorithmSystemOne, DisplayName: "System One", Description: "Ask a System One model which declared candidate should answer.", Tier: "supported", ConfigField: "systemone", PayloadShape: AlgorithmPayloadNested}), IsConfigured: func(config *AlgorithmConfig) bool { return config.SystemOne != nil }},
+	{Catalog: executorEntry(AlgorithmCatalogEntry{Type: DecisionAlgorithmEscalate, DisplayName: "Escalate", Description: "Call the candidates in order until one answer is accepted.", Tier: "supported"}, escalateAPIs), IsConfigured: func(config *AlgorithmConfig) bool { return config.Escalate != nil }},
+	{Catalog: executorEntry(AlgorithmCatalogEntry{Type: DecisionAlgorithmFusion, DisplayName: "Fusion", Description: "Run a parallel panel and synthesize a judged final response.", Tier: "experimental"}, chatAPIs), IsConfigured: func(config *AlgorithmConfig) bool { return config.Fusion != nil }},
+	{Catalog: executorEntry(AlgorithmCatalogEntry{Type: DecisionAlgorithmReMoM, DisplayName: "ReMoM", Description: "Run multi-round parallel reasoning and synthesis.", Tier: "supported"}, chatAPIs), IsConfigured: func(config *AlgorithmConfig) bool { return config.ReMoM != nil }},
+	{Catalog: executorEntry(AlgorithmCatalogEntry{Type: DecisionAlgorithmRatings, DisplayName: "Ratings", Description: "Execute a bounded candidate set and return comparable choices.", Tier: "supported"}, chatAPIs), IsConfigured: func(config *AlgorithmConfig) bool { return config.Ratings != nil }},
+	{Catalog: executorEntry(AlgorithmCatalogEntry{Type: DecisionAlgorithmWorkflows, DisplayName: "Workflows", Description: "Execute a static or dynamically planned Router Flow.", Tier: "experimental"}, chatAPIs), IsConfigured: func(config *AlgorithmConfig) bool { return config.Workflows != nil }},
 }
 
 // signalTypes and decisionAlgorithms hold the signal families and decision
@@ -289,25 +288,24 @@ func configuredDecisionAlgorithmBlocks(config *AlgorithmConfig) []string {
 	return blocks
 }
 
-// SupportedLooperAlgorithmTypes returns the decision algorithms executed by
-// the multi-model Looper runtime.
-func SupportedLooperAlgorithmTypes() []string {
+// SupportedExecutorAlgorithmTypes returns the decision algorithms that call
+// several candidates and return one response.
+func SupportedExecutorAlgorithmTypes() []string {
 	types := make([]string, 0)
 	for _, entry := range registeredSpecs(decisionAlgorithms) {
-		if entry.Catalog.Execution == AlgorithmExecutionLooper {
+		if entry.Catalog.Kind == AlgorithmKindExecutor {
 			types = append(types, entry.Catalog.Type)
 		}
 	}
 	return cloneSortedStrings(types)
 }
 
-// IsLooperAlgorithmType reports whether an algorithm is executed by Looper.
-func IsLooperAlgorithmType(algorithmType string) bool {
+// IsExecutorAlgorithmType reports whether an algorithm is an executor. A
+// Chat decision's executor runs on the Looper; escalate also runs a System
+// One recipe's stages.
+func IsExecutorAlgorithmType(algorithmType string) bool {
 	entry, ok := decisionAlgorithmCatalogEntry(algorithmType)
-	if ok {
-		return entry.Execution == AlgorithmExecutionLooper
-	}
-	return false
+	return ok && entry.Kind == AlgorithmKindExecutor
 }
 
 // DecisionAlgorithmCatalog returns the full structured catalog of algorithm types and tiers
@@ -315,6 +313,7 @@ func DecisionAlgorithmCatalog() []AlgorithmCatalogEntry {
 	result := make([]AlgorithmCatalogEntry, len(decisionAlgorithms.Entries()))
 	for index, entry := range registeredSpecs(decisionAlgorithms) {
 		result[index] = entry.Catalog
+		result[index].APIs = append([]InferenceAPI(nil), entry.Catalog.APIs...)
 	}
 	return result
 }

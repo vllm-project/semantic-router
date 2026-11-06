@@ -134,6 +134,7 @@ routing:
 ```yaml
 algorithm:
   type: remom
+  on_error: skip                       # skip or fail
   remom:
     breadth_schedule: [3, 2]            # Parallel calls before final synthesis
     model_distribution: weighted         # weighted, equal, round_robin, or first_only
@@ -149,7 +150,6 @@ algorithm:
     shuffle_seed: 42                     # Seed for response shuffling
     include_intermediate_responses: false # Include intermediate responses in output
     max_responses_per_round: null        # Limit responses per round
-    on_error: skip                       # skip or fail
 ```
 
 ### 参数
@@ -170,7 +170,7 @@ algorithm:
 | `shuffle_seed` | int | `42` | 响应打乱的随机种子 |
 | `include_intermediate_responses` | bool | `true` | 在输出中包含中间响应 |
 | `max_responses_per_round` | int | — | 每轮最多保留的响应数 |
-| `on_error` | string | `skip` | 失败时的行为：`skip` 或 `fail` |
+| `algorithm.on_error` | string | `skip` | 与 `type` 并列，而不在此块中：失败时的行为，`skip` 或 `fail` |
 
 每轮会与分配到的模型共享请求派生文本和中间文本，合成模型会收到收集到的结果。投产前请限制带宽、补全 token、并发和超时。完整示例见：
 [`config/fragments/algorithm/looper/remom.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/remom.yaml)。

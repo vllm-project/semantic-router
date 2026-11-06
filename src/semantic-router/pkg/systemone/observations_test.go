@@ -26,10 +26,10 @@ func TestNativeObservationKeepsAllStatesAndConfidentFalse(t *testing.T) {
 		t.Fatal("complete multi-state response marked invalid")
 	}
 	threshold := 0.75
-	acceptance := &config.NativeAcceptance{Rules: []config.NativeAcceptanceRule{
-		{QuestionType: "choice", Field: "confidence", Predicate: config.NumericPredicate{GTE: &threshold}},
-		{QuestionType: "score", Field: "confidence", Predicate: config.NumericPredicate{GTE: &threshold}},
-		{QuestionType: "noul", Field: "probability_margin", Predicate: config.NumericPredicate{GTE: &threshold}},
+	acceptance := &config.EscalateAccept{Native: []config.NativeAcceptanceRule{
+		{QuestionType: "choice", Field: "confidence", NumericPredicate: config.NumericPredicate{GTE: &threshold}},
+		{QuestionType: "score", Field: "confidence", NumericPredicate: config.NumericPredicate{GTE: &threshold}},
+		{QuestionType: "noul", Field: "probability_margin", NumericPredicate: config.NumericPredicate{GTE: &threshold}},
 	}}
 	if !acceptNative(o, acceptance, true) {
 		t.Fatal("confident false should satisfy the probability margin")
@@ -61,20 +61,20 @@ func TestNativeGateRequiresCoverageAndKnownStatistics(t *testing.T) {
 	r, _ := ParseNativeRequest(json.RawMessage(mixedRequest))
 	o := r.Observe(json.RawMessage(mixedResponse))
 	zero := 0.0
-	partial := &config.NativeAcceptance{Rules: []config.NativeAcceptanceRule{{Question: "task", Field: "confidence", Predicate: config.NumericPredicate{GTE: &zero}}}}
+	partial := &config.EscalateAccept{Native: []config.NativeAcceptanceRule{{Question: "task", Field: "confidence", NumericPredicate: config.NumericPredicate{GTE: &zero}}}}
 	if acceptNative(o, partial, true) {
 		t.Fatal("uncovered answers accepted")
 	}
 	if !acceptNative(o, partial, false) {
 		t.Fatal("additional stage predicate failed")
 	}
-	partial.Rules[0].Question = "risk"
+	partial.Native[0].Question = "risk"
 	if acceptNative(o, partial, false) {
 		t.Fatal("absent Noul confidence was imputed as zero")
 	}
 	bad := strings.Replace(mixedResponse, `"0":0.9,"1":0.1`, `"10":0.9,"11":0.1`, 1)
-	partial.Rules[0].Question = "difficulty"
-	partial.Rules[0].Field = "top_probability"
+	partial.Native[0].Question = "difficulty"
+	partial.Native[0].Field = "top_probability"
 	if acceptNative(r.Observe(json.RawMessage(bad)), partial, false) {
 		t.Fatal("invalid score level probabilities accepted")
 	}

@@ -332,7 +332,7 @@ func assembleRouterComponents(cfg *config.RouterConfig, pool *binding.Pool, sign
 		replayReaderForLookup = components.replayRecorder.Reader()
 	}
 	if cfg.ModelSelection.Enabled {
-		components.recipeModelSelectors, components.modelSelector, components.lookupTable, components.lookupTableCancel = createModelSelectorRegistries(cfg, replayReaderForLookup, components.recipeClassifiers)
+		components.recipeModelSelectors, components.modelSelector, components.lookupTable, components.lookupTableCancel = createModelSelectorRegistries(cfg, replayReaderForLookup)
 		registerModelSelectorResources(components.resources, components.recipeModelSelectors, components.lookupTableCancel)
 	} else {
 		logging.ComponentEvent("extproc", "model_selection_disabled", map[string]interface{}{})

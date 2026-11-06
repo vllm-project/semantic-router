@@ -4,12 +4,6 @@
 
 ##@ Models
 
-test-model-selection-parity: ## Compare Python-trained selectors with the router's selectors
-	@python3 -m pytest -q src/training/model_selection/ml_model_selection/tests/test_selector_parity.py
-	@python3 -m pytest -q src/training/model_selection/ml_model_selection/tests/test_service_boundary.py
-
-.PHONY: test-model-selection-parity
-
 ONNX_ARTIFACT_PYTHON_DEPS ?= onnx==1.22.0 onnxruntime==1.24.2
 
 .PHONY: onnx-artifact-deps onnx-artifact-test

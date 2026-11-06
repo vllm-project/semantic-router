@@ -103,7 +103,12 @@
           "if": {
             "properties": {
               "type": {
-                "const": "cascade"
+                "enum": [
+                  "static",
+                  "random",
+                  "multi_factor",
+                  "systemone"
+                ]
               }
             },
             "required": [
@@ -111,18 +116,6 @@
             ]
           },
           "then": {
-            "not": {
-              "required": [
-                "minimum_candidates"
-              ]
-            },
-            "required": [
-              "budget",
-              "quality",
-              "stages"
-            ]
-          },
-          "else": {
             "not": {
               "anyOf": [
                 {
@@ -132,16 +125,39 @@
                 },
                 {
                   "required": [
-                    "quality"
-                  ]
-                },
-                {
-                  "required": [
-                    "stages"
+                    "on_error"
                   ]
                 }
               ]
             }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "escalate"
+              },
+              "escalate": {
+                "required": [
+                  "stages"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "escalate"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "minimum_candidates"
+              ]
+            },
+            "required": [
+              "budget"
+            ]
           }
         }
       ],
@@ -149,80 +165,46 @@
         "type": {
           "type": "string",
           "enum": [
-            "automix",
-            "cascade",
-            "confidence",
+            "escalate",
             "fusion",
-            "hybrid",
-            "kmeans",
-            "knn",
-            "latency_aware",
-            "mlp",
             "multi_factor",
-            "prompt",
             "random",
             "ratings",
             "remom",
-            "router_dc",
             "static",
-            "svm",
             "systemone",
             "workflows"
           ]
         },
-        "quality": {
-          "$ref": "#/$defs/NativeQualityConfig"
-        },
-        "stages": {
-          "items": {
-            "$ref": "#/$defs/CascadeStage"
-          },
-          "type": "array"
+        "minimum_candidates": {
+          "type": "integer"
         },
         "budget": {
           "$ref": "#/$defs/AlgorithmBudget"
         },
-        "minimum_candidates": {
-          "type": "integer"
-        },
-        "confidence": {
-          "$ref": "#/$defs/ConfidenceAlgorithmConfig"
-        },
-        "ratings": {
-          "$ref": "#/$defs/RatingsAlgorithmConfig"
-        },
-        "remom": {
-          "$ref": "#/$defs/ReMoMAlgorithmConfig"
-        },
-        "fusion": {
-          "$ref": "#/$defs/FusionAlgorithmConfig"
-        },
-        "workflows": {
-          "$ref": "#/$defs/WorkflowsAlgorithmConfig"
-        },
-        "router_dc": {
-          "$ref": "#/$defs/RouterDCSelectionConfig"
-        },
-        "automix": {
-          "$ref": "#/$defs/AutoMixSelectionConfig"
-        },
-        "hybrid": {
-          "$ref": "#/$defs/HybridSelectionConfig"
-        },
-        "latency_aware": {
-          "$ref": "#/$defs/LatencyAwareAlgorithmConfig"
+        "on_error": {
+          "type": "string"
         },
         "multi_factor": {
           "$ref": "#/$defs/MultiFactorSelectionConfig"
         },
-        "prompt": {
-          "$ref": "#/$defs/PromptSelectionConfig"
-        },
         "systemone": {
           "$ref": "#/$defs/SystemOneSelectionConfig"
         },
-        "on_error": {
-          "type": "string"
+        "escalate": {
+          "$ref": "#/$defs/EscalateAlgorithmConfig"
+        },
+        "fusion": {
+          "$ref": "#/$defs/FusionAlgorithmConfig"
+        },
+        "remom": {
+          "$ref": "#/$defs/ReMoMAlgorithmConfig"
+        },
+        "ratings": {
+          "$ref": "#/$defs/RatingsAlgorithmConfig"
+        },
+        "workflows": {
+          "$ref": "#/$defs/WorkflowsAlgorithmConfig"
         }
       },
       "additionalProperties": false,
@@ -259,30 +241,6 @@
             "type": "string"
           },
           "type": "object"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "AutoMixSelectionConfig": {
-      "properties": {
-        "verification_threshold": {
-          "type": "number"
-        },
-        "max_escalations": {
-          "type": "integer"
-        },
-        "cost_aware_routing": {
-          "type": "boolean"
-        },
-        "cost_quality_tradeoff": {
-          "type": "number"
-        },
-        "discount_factor": {
-          "type": "number"
-        },
-        "use_logprob_verification": {
-          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -1471,45 +1429,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "CascadeStage": {
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "kind": {
-          "type": "string",
-          "enum": [
-            "native",
-            "judge"
-          ]
-        },
-        "model": {
-          "type": "string"
-        },
-        "enabled": {
-          "type": "boolean"
-        },
-        "timeout": {
-          "type": "string"
-        },
-        "accept": {
-          "$ref": "#/$defs/NativeAcceptance"
-        },
-        "generation": {
-          "$ref": "#/$defs/NativeGenerationConfig"
-        },
-        "instructions": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "name",
-        "kind",
-        "model"
-      ]
-    },
     "Category": {
       "properties": {
         "name": {
@@ -1607,42 +1526,6 @@
           "type": "string"
         },
         "timeout_ms": {
-          "type": "integer"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "ConfidenceAlgorithmConfig": {
-      "properties": {
-        "confidence_method": {
-          "type": "string"
-        },
-        "threshold": {
-          "type": "number"
-        },
-        "hybrid_weights": {
-          "$ref": "#/$defs/HybridWeightsConfig"
-        },
-        "on_error": {
-          "type": "string"
-        },
-        "escalation_order": {
-          "type": "string"
-        },
-        "cost_quality_tradeoff": {
-          "type": "number"
-        },
-        "token_filter": {
-          "type": "string"
-        },
-        "verifier_server_url": {
-          "type": "string"
-        },
-        "verifier_timeout_seconds": {
-          "type": "integer"
-        },
-        "max_response_bytes": {
           "type": "integer"
         }
       },
@@ -2637,6 +2520,163 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "EscalateAccept": {
+      "properties": {
+        "confidence": {
+          "$ref": "#/$defs/EscalateConfidence"
+        },
+        "systemone": {
+          "$ref": "#/$defs/EscalateAnswerCheck"
+        },
+        "refusal": {
+          "type": "boolean"
+        },
+        "native": {
+          "items": {
+            "$ref": "#/$defs/NativeAcceptanceRule"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "EscalateAlgorithmConfig": {
+      "properties": {
+        "order": {
+          "type": "string",
+          "enum": [
+            "size",
+            "cost"
+          ]
+        },
+        "accept": {
+          "$ref": "#/$defs/EscalateAccept"
+        },
+        "quality": {
+          "$ref": "#/$defs/EscalateQuality"
+        },
+        "stages": {
+          "items": {
+            "$ref": "#/$defs/EscalateStage"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "EscalateAnswerCheck": {
+      "properties": {
+        "gte": {
+          "type": "number"
+        },
+        "deployment": {
+          "type": "string"
+        },
+        "timeout_ms": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "gte"
+      ]
+    },
+    "EscalateConfidence": {
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": [
+            "avg_logprob",
+            "margin",
+            "hybrid",
+            "self_verify"
+          ]
+        },
+        "gte": {
+          "type": "number"
+        },
+        "hybrid_weights": {
+          "$ref": "#/$defs/HybridWeightsConfig"
+        },
+        "token_filter": {
+          "type": "string",
+          "enum": [
+            "all",
+            "tool_call_args"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "gte"
+      ]
+    },
+    "EscalateQuality": {
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "uncalibrated",
+            "calibrated"
+          ]
+        },
+        "accept": {
+          "$ref": "#/$defs/EscalateAccept"
+        },
+        "calibration": {
+          "type": "string"
+        },
+        "loss": {
+          "type": "string"
+        },
+        "max_risk": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "EscalateStage": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "native",
+            "judge"
+          ]
+        },
+        "model": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "timeout": {
+          "type": "string"
+        },
+        "accept": {
+          "$ref": "#/$defs/EscalateAccept"
+        },
+        "generation": {
+          "$ref": "#/$defs/NativeGenerationConfig"
+        },
+        "instructions": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "model"
+      ]
+    },
     "ExternalModelConfig": {
       "properties": {
         "name": {
@@ -2863,9 +2903,6 @@
         "include_analysis": {
           "type": "boolean"
         },
-        "on_error": {
-          "type": "string"
-        },
         "quorum_failure_policy": {
           "type": "string"
         },
@@ -3060,30 +3097,6 @@
         },
         "repetition_penalty_strength": {
           "type": "number"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "HybridSelectionConfig": {
-      "properties": {
-        "experience_weight": {
-          "type": "number"
-        },
-        "router_dc_weight": {
-          "type": "number"
-        },
-        "automix_weight": {
-          "type": "number"
-        },
-        "cost_weight": {
-          "type": "number"
-        },
-        "quality_gap_threshold": {
-          "type": "number"
-        },
-        "normalize_scores": {
-          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -3420,21 +3433,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "LatencyAwareAlgorithmConfig": {
-      "properties": {
-        "tpot_percentile": {
-          "type": "integer"
-        },
-        "ttft_percentile": {
-          "type": "integer"
-        },
-        "description": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "Listener": {
       "properties": {
         "name": {
@@ -3571,87 +3569,6 @@
         },
         "flow": {
           "$ref": "#/$defs/FlowRuntimeConfig"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "MLKMeansConfig": {
-      "properties": {
-        "num_clusters": {
-          "type": "integer"
-        },
-        "efficiency_weight": {
-          "type": "number"
-        },
-        "pretrained_path": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "MLKNNConfig": {
-      "properties": {
-        "k": {
-          "type": "integer"
-        },
-        "pretrained_path": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "MLMLPConfig": {
-      "properties": {
-        "device": {
-          "type": "string"
-        },
-        "pretrained_path": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "MLSVMConfig": {
-      "properties": {
-        "kernel": {
-          "type": "string"
-        },
-        "gamma": {
-          "type": "number"
-        },
-        "pretrained_path": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "MLSelectionConfig": {
-      "properties": {
-        "models_path": {
-          "type": "string"
-        },
-        "model_type": {
-          "type": "string"
-        },
-        "embedding_dim": {
-          "type": "integer"
-        },
-        "knn": {
-          "$ref": "#/$defs/MLKNNConfig"
-        },
-        "kmeans": {
-          "$ref": "#/$defs/MLKMeansConfig"
-        },
-        "svm": {
-          "$ref": "#/$defs/MLSVMConfig"
-        },
-        "mlp": {
-          "$ref": "#/$defs/MLMLPConfig"
         }
       },
       "additionalProperties": false,
@@ -4468,23 +4385,8 @@
     },
     "ModelSelectionConfig": {
       "properties": {
-        "method": {
-          "type": "string"
-        },
         "enabled": {
           "type": "boolean"
-        },
-        "router_dc": {
-          "$ref": "#/$defs/RouterDCSelectionConfig"
-        },
-        "automix": {
-          "$ref": "#/$defs/AutoMixSelectionConfig"
-        },
-        "hybrid": {
-          "$ref": "#/$defs/HybridSelectionConfig"
-        },
-        "ml": {
-          "$ref": "#/$defs/MLSelectionConfig"
         }
       },
       "additionalProperties": false,
@@ -4588,22 +4490,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "NativeAcceptance": {
-      "properties": {
-        "rules": {
-          "items": {
-            "$ref": "#/$defs/NativeAcceptanceRule"
-          },
-          "type": "array",
-          "minItems": 1
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "rules"
-      ]
-    },
     "NativeAcceptanceRule": {
       "properties": {
         "question": {
@@ -4623,15 +4509,23 @@
             "probability_margin"
           ]
         },
-        "predicate": {
-          "$ref": "#/$defs/NumericPredicate"
+        "gt": {
+          "type": "number"
+        },
+        "gte": {
+          "type": "number"
+        },
+        "lt": {
+          "type": "number"
+        },
+        "lte": {
+          "type": "number"
         }
       },
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "field",
-        "predicate"
+        "field"
       ]
     },
     "NativeGenerationConfig": {
@@ -4645,34 +4539,6 @@
       "type": "object",
       "required": [
         "max_output_tokens"
-      ]
-    },
-    "NativeQualityConfig": {
-      "properties": {
-        "type": {
-          "type": "string",
-          "enum": [
-            "uncalibrated",
-            "calibrated"
-          ]
-        },
-        "acceptance": {
-          "$ref": "#/$defs/NativeAcceptance"
-        },
-        "calibration": {
-          "type": "string"
-        },
-        "loss": {
-          "type": "string"
-        },
-        "max_risk": {
-          "type": "number"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "type"
       ]
     },
     "Normalization": {
@@ -5205,21 +5071,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "PromptSelectionConfig": {
-      "properties": {
-        "model": {
-          "type": "string"
-        },
-        "instructions": {
-          "type": "string"
-        },
-        "timeout_seconds": {
-          "type": "integer"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "PrototypeScoringConfig": {
       "properties": {
         "enabled": {
@@ -5531,9 +5382,6 @@
       "properties": {
         "max_concurrent": {
           "type": "integer"
-        },
-        "on_error": {
-          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -5579,9 +5427,6 @@
         },
         "min_successful_responses": {
           "type": "integer"
-        },
-        "on_error": {
-          "type": "string"
         },
         "shuffle_seed": {
           "type": "integer"
@@ -6107,33 +5952,6 @@
         },
         "role": {
           "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "RouterDCSelectionConfig": {
-      "properties": {
-        "temperature": {
-          "type": "number"
-        },
-        "dimension_size": {
-          "type": "integer"
-        },
-        "min_similarity": {
-          "type": "number"
-        },
-        "use_query_contrastive": {
-          "type": "boolean"
-        },
-        "use_model_contrastive": {
-          "type": "boolean"
-        },
-        "require_descriptions": {
-          "type": "boolean"
-        },
-        "use_capabilities": {
-          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -7809,9 +7627,6 @@
         },
         "include_intermediate_responses": {
           "type": "boolean"
-        },
-        "on_error": {
-          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -8031,163 +7846,110 @@
     ],
     "algorithms": [
       {
-        "type": "cascade",
-        "display_name": "Native Cascade",
-        "description": "Escalate complete typed responses through declared stages.",
-        "tier": "experimental",
-        "execution": "native"
-      },
-      {
-        "type": "automix",
-        "display_name": "AutoMix",
-        "description": "Optimize a cost-quality escalation policy.",
-        "tier": "experimental",
-        "execution": "selector",
-        "config_field": "automix",
-        "schema_ref": "#/$defs/AutoMixSelectionConfig"
-      },
-      {
-        "type": "confidence",
-        "display_name": "Confidence",
-        "description": "Escalate across candidate models until confidence is sufficient.",
+        "type": "static",
+        "display_name": "Static",
+        "description": "Select from configured candidate order and weights.",
         "tier": "supported",
-        "execution": "looper",
-        "config_field": "confidence",
-        "schema_ref": "#/$defs/ConfidenceAlgorithmConfig"
-      },
-      {
-        "type": "fusion",
-        "display_name": "Fusion",
-        "description": "Run a parallel panel and synthesize a judged final response.",
-        "tier": "experimental",
-        "execution": "looper",
-        "config_field": "fusion",
-        "schema_ref": "#/$defs/FusionAlgorithmConfig"
-      },
-      {
-        "type": "hybrid",
-        "display_name": "Hybrid",
-        "description": "Combine experience, similarity, AutoMix, and cost signals.",
-        "tier": "supported",
-        "execution": "selector",
-        "config_field": "hybrid",
-        "schema_ref": "#/$defs/HybridSelectionConfig"
-      },
-      {
-        "type": "kmeans",
-        "display_name": "K-Means",
-        "description": "Select a model with the shared K-Means classifier.",
-        "tier": "experimental",
-        "execution": "selector"
-      },
-      {
-        "type": "knn",
-        "display_name": "KNN",
-        "description": "Select a model with the shared nearest-neighbor classifier.",
-        "tier": "experimental",
-        "execution": "selector"
-      },
-      {
-        "type": "latency_aware",
-        "display_name": "Latency Aware",
-        "description": "Select against configured latency percentiles.",
-        "tier": "supported",
-        "execution": "selector",
-        "config_field": "latency_aware",
-        "schema_ref": "#/$defs/LatencyAwareAlgorithmConfig"
-      },
-      {
-        "type": "mlp",
-        "display_name": "MLP",
-        "description": "Select a model with the shared neural classifier.",
-        "tier": "experimental",
-        "execution": "selector"
-      },
-      {
-        "type": "multi_factor",
-        "display_name": "Multi Factor",
-        "description": "Score quality, latency, cost, and load under optional SLOs.",
-        "tier": "supported",
-        "execution": "selector",
-        "config_field": "multi_factor",
-        "schema_ref": "#/$defs/MultiFactorSelectionConfig"
+        "kind": "selector",
+        "apis": [
+          "chat"
+        ]
       },
       {
         "type": "random",
         "display_name": "Random",
         "description": "Select uniformly from the eligible candidate models.",
         "tier": "supported",
-        "execution": "selector"
+        "kind": "selector",
+        "apis": [
+          "chat"
+        ]
       },
       {
-        "type": "ratings",
-        "display_name": "Ratings",
-        "description": "Execute a bounded candidate set and return comparable choices.",
+        "type": "multi_factor",
+        "display_name": "Multi Factor",
+        "description": "Score quality, latency, cost, and load under optional SLOs.",
         "tier": "supported",
-        "execution": "looper",
-        "config_field": "ratings",
-        "schema_ref": "#/$defs/RatingsAlgorithmConfig"
-      },
-      {
-        "type": "remom",
-        "display_name": "ReMoM",
-        "description": "Run multi-round parallel reasoning and synthesis.",
-        "tier": "supported",
-        "execution": "looper",
-        "config_field": "remom",
-        "schema_ref": "#/$defs/ReMoMAlgorithmConfig"
-      },
-      {
-        "type": "router_dc",
-        "display_name": "RouterDC",
-        "description": "Match the request to candidate descriptions with dual contrastive embeddings.",
-        "tier": "supported",
-        "execution": "selector",
-        "config_field": "router_dc",
-        "schema_ref": "#/$defs/RouterDCSelectionConfig"
-      },
-      {
-        "type": "static",
-        "display_name": "Static",
-        "description": "Select from configured candidate order and weights.",
-        "tier": "supported",
-        "execution": "selector"
-      },
-      {
-        "type": "svm",
-        "display_name": "SVM",
-        "description": "Select a model with the shared support-vector classifier.",
-        "tier": "experimental",
-        "execution": "selector"
-      },
-      {
-        "type": "workflows",
-        "display_name": "Workflows",
-        "description": "Execute a static or dynamically planned Router Flow.",
-        "tier": "experimental",
-        "execution": "looper",
-        "config_field": "workflows",
-        "schema_ref": "#/$defs/WorkflowsAlgorithmConfig"
-      },
-      {
-        "type": "prompt",
-        "display_name": "Prompt",
-        "description": "Use a helper model to select one declared candidate.",
-        "tier": "experimental",
-        "execution": "selector",
-        "config_field": "prompt",
-        "payload_shape": "nested",
-        "schema_ref": "#/$defs/PromptSelectionConfig"
+        "kind": "selector",
+        "apis": [
+          "chat"
+        ],
+        "config_field": "multi_factor",
+        "schema_ref": "#/$defs/MultiFactorSelectionConfig"
       },
       {
         "type": "systemone",
         "display_name": "System One",
         "description": "Ask a System One model which declared candidate should answer.",
         "tier": "supported",
-        "execution": "selector",
+        "kind": "selector",
+        "apis": [
+          "chat"
+        ],
         "config_field": "systemone",
         "payload_shape": "nested",
         "schema_ref": "#/$defs/SystemOneSelectionConfig"
+      },
+      {
+        "type": "escalate",
+        "display_name": "Escalate",
+        "description": "Call the candidates in order until one answer is accepted.",
+        "tier": "supported",
+        "kind": "executor",
+        "apis": [
+          "chat",
+          "systemone"
+        ],
+        "config_field": "escalate",
+        "schema_ref": "#/$defs/EscalateAlgorithmConfig"
+      },
+      {
+        "type": "fusion",
+        "display_name": "Fusion",
+        "description": "Run a parallel panel and synthesize a judged final response.",
+        "tier": "experimental",
+        "kind": "executor",
+        "apis": [
+          "chat"
+        ],
+        "config_field": "fusion",
+        "schema_ref": "#/$defs/FusionAlgorithmConfig"
+      },
+      {
+        "type": "remom",
+        "display_name": "ReMoM",
+        "description": "Run multi-round parallel reasoning and synthesis.",
+        "tier": "supported",
+        "kind": "executor",
+        "apis": [
+          "chat"
+        ],
+        "config_field": "remom",
+        "schema_ref": "#/$defs/ReMoMAlgorithmConfig"
+      },
+      {
+        "type": "ratings",
+        "display_name": "Ratings",
+        "description": "Execute a bounded candidate set and return comparable choices.",
+        "tier": "supported",
+        "kind": "executor",
+        "apis": [
+          "chat"
+        ],
+        "config_field": "ratings",
+        "schema_ref": "#/$defs/RatingsAlgorithmConfig"
+      },
+      {
+        "type": "workflows",
+        "display_name": "Workflows",
+        "description": "Execute a static or dynamically planned Router Flow.",
+        "tier": "experimental",
+        "kind": "executor",
+        "apis": [
+          "chat"
+        ],
+        "config_field": "workflows",
+        "schema_ref": "#/$defs/WorkflowsAlgorithmConfig"
       }
     ],
     "plugins": [

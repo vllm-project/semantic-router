@@ -26,8 +26,8 @@ This section covers creating and evaluating your own task models.
 
 [Vela's model catalog](./model-catalog) lists the task checkpoints. Vela 1.0
 accepts text; [multimodal embeddings](./multimodal-embeddings) are a separate
-family. [Provider model evaluation](./model-performance-eval) and
-[learned model selection](./ml-model-selection) help choose the downstream LLM.
+family. [Provider model evaluation](./model-performance-eval) helps choose the
+downstream LLM.
 
 ## Choose your starting checkpoint {#record-the-base-and-task-lineage}
 

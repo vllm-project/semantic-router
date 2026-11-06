@@ -70,15 +70,25 @@ describe('DSL structured field schemas', () => {
       'disable_quality',
     ])
 
-    const prompt = getAlgorithmFieldSchema('prompt')
-    const promptConfig = requireField(prompt, 'prompt')
-    expect(promptConfig.type).toBe('object')
-    expect(promptConfig.fields?.map((field) => field.key)).toEqual([
-      'model',
-      'instructions',
-      'timeout_seconds',
+    const systemOne = getAlgorithmFieldSchema('systemone')
+    const systemOneConfig = requireField(systemOne, 'systemone')
+    expect(systemOneConfig.type).toBe('object')
+    expect(systemOneConfig.fields?.map((field) => field.key)).toEqual(
+      expect.arrayContaining(['instructions', 'timeout_ms']),
+    )
+    expect(systemOne.some((field) => field.key === 'budget' || field.key === 'on_error')).toBe(
+      false,
+    )
+
+    const escalate = getAlgorithmFieldSchema('escalate')
+    expect(requireField(escalate, 'budget').type).toBe('object')
+    expect(requireField(escalate, 'on_error').options).toEqual(['', 'last_attempt', 'fail'])
+    expect(requireField(escalate, 'order').options).toEqual(['', 'size', 'cost'])
+    expect(requireField(getAlgorithmFieldSchema('fusion'), 'on_error').options).toEqual([
+      '',
+      'skip',
+      'fail',
     ])
-    expect(prompt.some((field) => field.key === 'model')).toBe(false)
   })
 
   it('maps stable signal and header contracts to object and object-list editors', () => {

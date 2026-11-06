@@ -110,26 +110,22 @@ type CandidateIterationOutputConfig struct {
 	Value string `yaml:"value,omitempty"`
 }
 
-// AlgorithmConfig defines how multiple models should be executed and aggregated.
+// AlgorithmConfig is how a decision uses its candidate models: a selector
+// chooses one before calling it, an executor calls several and returns one
+// response. Each type's settings are the block named after it; Budget and
+// OnError are the executors' shared settings.
 type AlgorithmConfig struct {
-	Type              string                       `yaml:"type"`
-	Quality           *NativeQualityConfig         `yaml:"quality,omitempty"`
-	Stages            []CascadeStage               `yaml:"stages,omitempty"`
-	Budget            *AlgorithmBudget             `yaml:"budget,omitempty"`
-	MinimumCandidates int                          `yaml:"minimum_candidates,omitempty"`
-	Confidence        *ConfidenceAlgorithmConfig   `yaml:"confidence,omitempty"`
-	Ratings           *RatingsAlgorithmConfig      `yaml:"ratings,omitempty"`
-	ReMoM             *ReMoMAlgorithmConfig        `yaml:"remom,omitempty"`
-	Fusion            *FusionAlgorithmConfig       `yaml:"fusion,omitempty"`
-	Workflows         *WorkflowsAlgorithmConfig    `yaml:"workflows,omitempty"`
-	RouterDC          *RouterDCSelectionConfig     `yaml:"router_dc,omitempty"`
-	AutoMix           *AutoMixSelectionConfig      `yaml:"automix,omitempty"`
-	Hybrid            *HybridSelectionConfig       `yaml:"hybrid,omitempty"`
-	LatencyAware      *LatencyAwareAlgorithmConfig `yaml:"latency_aware,omitempty"`
-	MultiFactor       *MultiFactorSelectionConfig  `yaml:"multi_factor,omitempty"`
-	Prompt            *PromptSelectionConfig       `yaml:"prompt,omitempty"`
-	SystemOne         *SystemOneSelectionConfig    `yaml:"systemone,omitempty"`
-	OnError           string                       `yaml:"on_error,omitempty"`
+	Type              string                      `yaml:"type"`
+	MinimumCandidates int                         `yaml:"minimum_candidates,omitempty"`
+	Budget            *AlgorithmBudget            `yaml:"budget,omitempty"`
+	OnError           string                      `yaml:"on_error,omitempty"`
+	MultiFactor       *MultiFactorSelectionConfig `yaml:"multi_factor,omitempty"`
+	SystemOne         *SystemOneSelectionConfig   `yaml:"systemone,omitempty"`
+	Escalate          *EscalateAlgorithmConfig    `yaml:"escalate,omitempty"`
+	Fusion            *FusionAlgorithmConfig      `yaml:"fusion,omitempty"`
+	ReMoM             *ReMoMAlgorithmConfig       `yaml:"remom,omitempty"`
+	Ratings           *RatingsAlgorithmConfig     `yaml:"ratings,omitempty"`
+	Workflows         *WorkflowsAlgorithmConfig   `yaml:"workflows,omitempty"`
 	// Extensions holds the blocks of algorithm types registered outside the
 	// Router, each under its type's name.
 	Extensions map[string]*StructuredPayload `yaml:",inline" json:"-" jsonschema:"-"`
@@ -139,47 +135,13 @@ type AlgorithmConfig struct {
 // algorithm types the Router does not build in.
 func (*AlgorithmConfig) extensionFields() []string { return extensionAlgorithmTypes() }
 
-// PromptSelectionConfig configures deterministic, prompt-driven selection
-// among a decision's ModelRefs. The runtime owns the structured output schema,
-// temperature, token bound, candidate descriptions, and fallback behavior.
-type PromptSelectionConfig struct {
-	Model          string `yaml:"model"`
-	Instructions   string `yaml:"instructions"`
-	TimeoutSeconds int    `yaml:"timeout_seconds,omitempty"`
-}
-
-type ConfidenceAlgorithmConfig struct {
-	ConfidenceMethod    string               `yaml:"confidence_method,omitempty"`
-	Threshold           float64              `yaml:"threshold,omitempty"`
-	HybridWeights       *HybridWeightsConfig `yaml:"hybrid_weights,omitempty"`
-	OnError             string               `yaml:"on_error,omitempty"`
-	EscalationOrder     string               `yaml:"escalation_order,omitempty"`
-	CostQualityTradeoff float64              `yaml:"cost_quality_tradeoff,omitempty"`
-	TokenFilter         string               `yaml:"token_filter,omitempty"`
-
-	// VerifierServerURL points to the AutoMix self-verification server when
-	// confidence_method=automix_entailment. The server implements few-shot
-	// entailment verification per arXiv:2310.12963 §3.2 and is reached over
-	// HTTP via selection.AutoMixVerifierClient. A reference implementation
-	// lives at src/training/model_selection/rl_model_selection/automix_verifier.py.
-	// Required when confidence_method=automix_entailment and rejected otherwise.
-	VerifierServerURL string `yaml:"verifier_server_url,omitempty"`
-
-	// VerifierTimeoutSeconds bounds each verifier HTTP call. Defaults to 60
-	// when zero, matching selection.NewAutoMixVerifierClient. Only consulted
-	// when confidence_method=automix_entailment and is rejected otherwise.
-	VerifierTimeoutSeconds int   `yaml:"verifier_timeout_seconds,omitempty"`
-	MaxResponseBytes       int64 `yaml:"max_response_bytes,omitempty"`
-}
-
 type HybridWeightsConfig struct {
 	LogprobWeight float64 `yaml:"logprob_weight,omitempty"`
 	MarginWeight  float64 `yaml:"margin_weight,omitempty"`
 }
 
 type RatingsAlgorithmConfig struct {
-	MaxConcurrent int    `yaml:"max_concurrent,omitempty"`
-	OnError       string `yaml:"on_error,omitempty"`
+	MaxConcurrent int `yaml:"max_concurrent,omitempty"`
 }
 
 type ReMoMAlgorithmConfig struct {
@@ -195,7 +157,6 @@ type ReMoMAlgorithmConfig struct {
 	MaxCompletionTokens          *int    `yaml:"max_completion_tokens,omitempty"`
 	RoundTimeoutSeconds          int     `yaml:"round_timeout_seconds,omitempty"`
 	MinSuccessfulResponses       int     `yaml:"min_successful_responses,omitempty"`
-	OnError                      string  `yaml:"on_error,omitempty"`
 	ShuffleSeed                  int     `yaml:"shuffle_seed,omitempty"`
 	IncludeIntermediateResponses bool    `yaml:"include_intermediate_responses,omitempty"`
 	MaxResponsesPerRound         int     `yaml:"max_responses_per_round,omitempty"`

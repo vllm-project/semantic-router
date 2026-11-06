@@ -201,16 +201,15 @@ routing:
         - model: large-code-model
           use_reasoning: false
       algorithm:
-        type: confidence
-        confidence:
-          confidence_method: hybrid
-          threshold: 0.72
-          escalation_order: small_to_large
-          on_error: skip
+        type: escalate
+        escalate:
+          order: size
+          accept:
+            confidence: {method: hybrid, gte: 0.72}
 ```
 
 The `computer science` signal and both provider models must also exist in the
-same recipe. See the [Confidence tutorial](/docs/tutorials/algorithm/looper/confidence)
+same recipe. See the [Escalate tutorial](../../tutorials/algorithm/looper/escalate.md)
 for the complete contract.
 
 When the client sends `"stream": true`, Semantic Router calls the candidate model(s), aggregates the looper result, and returns an immediate SSE body to the gateway. The client still receives a normal OpenAI-compatible stream:

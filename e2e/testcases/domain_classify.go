@@ -49,9 +49,9 @@ func domainFixtureForProfile(profile string) (domainClassificationFixture, error
 	switch profile {
 	case "envoy-ai-gateway":
 		return domainClassificationFixture{model: "e2e-domain", requiredRecipe: "e2e-domain"}, nil
-	case "ml-model-selection", "production-stack":
-		// These profiles own top-level routing and use their default recipe
-		// request contract. They do not declare the AI Gateway feature recipe.
+	case "production-stack":
+		// This profile owns top-level routing and uses its default recipe
+		// request contract. It does not declare the AI Gateway feature recipe.
 		return domainClassificationFixture{model: "vllm-sr/auto"}, nil
 	default:
 		return domainClassificationFixture{}, fmt.Errorf("domain-classify has no fixture contract for profile %q", profile)

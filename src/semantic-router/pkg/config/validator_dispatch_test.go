@@ -46,7 +46,7 @@ func TestConfigLoadValidatesGlobalsForEverySource(t *testing.T) {
 		{"learning_backend", `router: {learning: {state_store: {backend: redis_typo}}}`, "state_store.backend"},
 		{"learning_ttl", `router: {learning: {state_store: {ttl_seconds: -1}}}`, "state_store.ttl_seconds"},
 		{"learning_strategy", `router: {learning: {adaptation: {strategy: unknown}}}`, "adaptation.strategy"},
-		{"retired_selector", `router: {model_selection: {method: elo}}`, "model_selection.method=elo"},
+		{"retired_selector", `router: {model_selection: {method: elo}}`, "global.router.model_selection.method is removed"},
 		{"embedding_dimensions", remoteEmbeddingGlobal("dimensions: 64"), "must match embedding_config.target_dimension"},
 		{"embedding_retries", remoteEmbeddingGlobal("max_retries: -1"), "endpoint.max_retries"},
 		{"embedding_timeout", remoteEmbeddingGlobal("timeout_seconds: -1"), "endpoint.timeout_seconds"},

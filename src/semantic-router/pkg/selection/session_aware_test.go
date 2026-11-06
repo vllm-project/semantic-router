@@ -26,7 +26,7 @@ func TestSessionAwareSelectorPreservesLatencyScoreDirection(t *testing.T) {
 	selector := NewSessionAwareSelector(nil)
 	selector.SetBaseSelector(stubSessionBase{result: &SelectionResult{
 		SelectedModel: "fast", Score: 1, ScoreDirection: LowerIsBetter,
-		Method: MethodLatencyAware, AllScores: map[string]float64{"fast": 1, "slow": 2},
+		Method: MethodMultiFactor, AllScores: map[string]float64{"fast": 1, "slow": 2},
 	}})
 	result, err := selector.Select(context.Background(), &SelectionContext{
 		CandidateModels: []config.ModelRef{{Model: "fast"}, {Model: "slow"}, {Model: "unmeasured"}},
@@ -53,7 +53,7 @@ func TestSessionAwareSelectorToolLoopHardLocksCurrentModel(t *testing.T) {
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.95,
-			Method:        MethodHybrid,
+			Method:        MethodMultiFactor,
 			AllScores: map[string]float64{
 				"current":  0.40,
 				"frontier": 0.95,
@@ -97,7 +97,7 @@ func TestSessionAwareSelectorProviderStateHardLocksCurrentModel(t *testing.T) {
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.95,
-			Method:        MethodHybrid,
+			Method:        MethodMultiFactor,
 			AllScores: map[string]float64{
 				"current":  0.40,
 				"frontier": 0.95,
@@ -159,7 +159,7 @@ func TestSessionAwareSelectorIdleSessionAllowsBaseSwitch(t *testing.T) {
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.90,
-			Method:        MethodHybrid,
+			Method:        MethodMultiFactor,
 			AllScores: map[string]float64{
 				"current":  0.20,
 				"frontier": 0.90,
@@ -387,7 +387,7 @@ func TestSessionAwareSelectorUsesRouterMemoryTurnCountBeforeFullParsing(t *testi
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.90,
-			Method:        MethodHybrid,
+			Method:        MethodMultiFactor,
 			AllScores: map[string]float64{
 				"current":  0.20,
 				"frontier": 0.90,
@@ -429,7 +429,7 @@ func TestSessionAwareNetSwitchAdvantageUsesAdjustedCurrentScore(t *testing.T) {
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.62,
-			Method:        MethodHybrid,
+			Method:        MethodMultiFactor,
 			AllScores: map[string]float64{
 				"current":  0.50,
 				"frontier": 0.62,
@@ -596,7 +596,7 @@ func TestSessionAwareRemainingTurnPriorRaisesContinuationMass(t *testing.T) {
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.55,
-			Method:        MethodHybrid,
+			Method:        MethodMultiFactor,
 			AllScores: map[string]float64{
 				"current":  0.50,
 				"frontier": 0.55,
@@ -672,7 +672,7 @@ func TestSessionAwareRemainingTurnPriorRejectsLowReplaySampleCount(t *testing.T)
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.55,
-			Method:        MethodHybrid,
+			Method:        MethodMultiFactor,
 			AllScores: map[string]float64{
 				"current":  0.50,
 				"frontier": 0.55,
@@ -734,7 +734,7 @@ func TestSessionAwareRemainingTurnPriorTrustsConfigOverrideWithoutSamples(t *tes
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.55,
-			Method:        MethodHybrid,
+			Method:        MethodMultiFactor,
 			AllScores: map[string]float64{
 				"current":  0.50,
 				"frontier": 0.55,
@@ -794,9 +794,7 @@ func (s stubSessionBase) Select(context.Context, *SelectionContext) (*SelectionR
 	return &copy, nil
 }
 
-func (s stubSessionBase) Method() SelectionMethod { return MethodHybrid }
-
-func (s stubSessionBase) UpdateFeedback(context.Context, *Feedback) error { return nil }
+func (s stubSessionBase) Method() SelectionMethod { return MethodMultiFactor }
 
 func (s stubSessionBase) Tier() AlgorithmTier { return TierSupported }
 

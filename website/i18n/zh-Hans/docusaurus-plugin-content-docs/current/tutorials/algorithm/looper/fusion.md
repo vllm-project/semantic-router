@@ -120,6 +120,7 @@ routing:
 ```yaml
 algorithm:
   type: fusion
+  on_error: skip
   fusion:
     model: qwen3-32b
     analysis_models:
@@ -140,7 +141,6 @@ algorithm:
     temperature: 0.2
     include_analysis: true
     include_intermediate_responses: true
-    on_error: skip
     judge_prompt_version: fusion-v1
 ```
 
@@ -197,7 +197,7 @@ recipes:
 | `temperature` | float | 请求默认值 | 配方拥有的、应用到 Fusion 子请求的温度 |
 | `include_analysis` | bool | `true` | 配方拥有的、对可用结构化裁判分析的可见性；这不控制执行 |
 | `include_intermediate_responses` | bool | `true` | 配方拥有的、对原始面板响应的可见性 |
-| `on_error` | string | `skip` | 配方拥有的处理：在强制法定人数的同时 `skip` 单个失败或不可用的面板响应，或在第一个此类响应上 `fail` |
+| `algorithm.on_error` | string | `skip` | 与 `type` 并列，而不在此块中。配方拥有的处理：在强制法定人数的同时 `skip` 单个失败或不可用的面板响应，或在第一个此类响应上 `fail` |
 | `analysis_template` | string | 内置 | 配方拥有的单独分析提示，含 `{{original}}` 和 `{{responses}}`；在 `separate` 之外会被拒绝 |
 | `synthesis_template` | string | 内置 | 配方拥有的各模式终端提示，含 `{{original}}`、`{{responses}}` 和 `{{analysis}}`；在 `separate` 之外分析为空 |
 | `judge_prompt_version` | string | `fusion-v1` | 配方拥有的版本标记，会写入 Fusion 响应追踪 |

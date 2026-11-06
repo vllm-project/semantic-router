@@ -55,7 +55,7 @@ func runTrustedFactsLooper(t *testing.T, stageRoles []string, want llmprotocol.T
 	decision := &config.Decision{
 		Name:      "trusted-looper",
 		ModelRefs: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
-		Algorithm: &config.AlgorithmConfig{Type: "confidence"},
+		Algorithm: &config.AlgorithmConfig{Type: "escalate"},
 		Plugins:   []config.DecisionPlugin{mustToolsDecisionPlugin(t, toolsCfg)},
 	}
 	router := &OpenAIRouter{

@@ -135,7 +135,7 @@ func (r *OpenAIRouter) RouteSystemOne(ctx context.Context, model string, body js
 	response["routing"], _ = json.Marshal(map[string]any{
 		"recipe": string(recipe.Name), "decision": decision.Decision.Name,
 		"algorithm": decision.Decision.Algorithm.Type, "stage": result.Stage, "selected_model": result.Model,
-		"quality": decision.Decision.Algorithm.Quality.Type, "model_calls": ledger.Used(),
+		"quality": decision.Decision.Algorithm.NativeQuality().EffectiveType(), "model_calls": ledger.Used(),
 	})
 	encoded, err := json.Marshal(response)
 	return http.StatusOK, encoded, err

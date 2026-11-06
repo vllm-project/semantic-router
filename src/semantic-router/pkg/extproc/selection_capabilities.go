@@ -100,7 +100,7 @@ func (r *OpenAIRouter) candidateCapabilityMismatch(ref config.ModelRef, request 
 
 func (r *OpenAIRouter) capabilityEligibleSelectionContext(input *selection.SelectionContext, algorithm *config.AlgorithmConfig, ctx *RequestContext) (*selection.SelectionContext, error) {
 	if r == nil || r.Config == nil || ctx == nil || ctx.SemanticRequest == nil ||
-		(algorithm != nil && config.IsLooperAlgorithmType(algorithm.Type)) {
+		(algorithm != nil && config.IsExecutorAlgorithmType(algorithm.Type)) {
 		return input, nil
 	}
 	if err := selection.ValidateSelectionContext(input); err != nil {

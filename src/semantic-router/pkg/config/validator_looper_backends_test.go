@@ -39,7 +39,8 @@ func looperDecision(algorithm *AlgorithmConfig, models ...string) Decision {
 func TestDecisionCallsNeedABackend(t *testing.T) {
 	ratings := &AlgorithmConfig{Type: "ratings"}
 	fusion := &AlgorithmConfig{Type: "fusion", Fusion: &FusionAlgorithmConfig{Model: "judge", AnalysisModels: []string{"panel"}}}
-	prompt := &AlgorithmConfig{Type: "prompt", Prompt: &PromptSelectionConfig{Model: "helper"}}
+	escalate := &AlgorithmConfig{Type: "escalate", Escalate: &EscalateAlgorithmConfig{Order: EscalateOrderSize}}
+	stages := &AlgorithmConfig{Type: "escalate", Escalate: &EscalateAlgorithmConfig{Stages: []EscalateStage{{Model: "a"}, {Model: "b"}}}}
 	flow := &AlgorithmConfig{Type: "workflows", Workflows: &WorkflowsAlgorithmConfig{
 		Mode: "dynamic", Planner: WorkflowPlannerConfig{Model: "planner"},
 	}}
@@ -52,7 +53,8 @@ func TestDecisionCallsNeedABackend(t *testing.T) {
 		{"every candidate of a Looper", looperDecision(ratings, "a", "b"), []string{"a"}, "b"},
 		{"the Fusion judge", looperDecision(fusion, "a"), []string{"a", "panel"}, "judge"},
 		{"the Fusion panel", looperDecision(fusion, "a"), []string{"a", "judge"}, "panel"},
-		{"the prompt helper", looperDecision(prompt, "a", "b"), []string{"a", "b"}, "helper"},
+		{"every candidate of a Chat escalate", looperDecision(escalate, "a", "b"), []string{"a"}, "b"},
+		{"a System One escalate", looperDecision(stages, "a", "b"), nil, ""},
 		{"the Flow planner", looperDecision(flow, "a"), []string{"a"}, "planner"},
 		{"a served Looper", looperDecision(ratings, "a", "b"), []string{"a", "b"}, ""},
 		{"a static decision", looperDecision(&AlgorithmConfig{Type: "static"}, "a", "b"), nil, ""},

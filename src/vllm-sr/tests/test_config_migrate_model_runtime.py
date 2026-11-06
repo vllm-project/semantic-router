@@ -738,11 +738,6 @@ def test_stores_selection_and_rag_leave_the_retired_minilm_default():
                         "semantic": {"bert_model_path": "models/mom-embedding-light"}
                     }
                 },
-                "router": {
-                    "model_selection": {
-                        "ml": {"models_path": "models/selection", "model_type": "bert"}
-                    }
-                },
                 "stores": {
                     "response_cache": {"enabled": True, "backend_type": "memory"},
                     "memory": {
@@ -768,9 +763,6 @@ def test_stores_selection_and_rag_leave_the_retired_minilm_default():
     assert stores["memory"]["embedding_model"] == "mmbert"
     assert stores["vector_store"]["embedding_model"] == "mmbert"
     assert "embedding_model" not in stores["tool_sessions"]
-    assert (
-        migrated["global"]["router"]["model_selection"]["ml"]["model_type"] == "mmbert"
-    )
     by_path = {note.path: note for note in notes}
     cache = by_path["global.stores.response_cache.embedding_model"]
     assert not cache.action_required
@@ -778,7 +770,6 @@ def test_stores_selection_and_rag_leave_the_retired_minilm_default():
     for path in (
         "global.stores.memory.embedding_model",
         "global.stores.vector_store.embedding_model",
-        "global.router.model_selection.ml.model_type",
         "routing.decisions[0].plugins[0].configuration.backend",
     ):
         assert by_path[path].action_required, path
@@ -891,14 +882,13 @@ def test_signal_and_plugin_nli_options_and_mlp_devices_are_removed():
             }
         ],
         "algorithm": {
-            "type": "mlp",
-            "mlp": {"device": "cpu", "pretrained_path": "/models/mlp.json"},
+            "type": "fusion",
             "fusion": {
                 "grounding": {"enabled": True, "nli_contradiction_penalty": 0.5}
             },
         },
     }
-    migrated, notes = _migrate(
+    migrated, _ = _migrate(
         _config(
             routing={
                 "signals": {
@@ -926,14 +916,10 @@ def test_signal_and_plugin_nli_options_and_mlp_devices_are_removed():
         "enabled": True,
         "hallucination_action": "header",
     }
-    assert migrated_decision["algorithm"]["mlp"] == {
-        "pretrained_path": "/models/mlp.json"
-    }
     assert migrated_decision["algorithm"]["fusion"]["grounding"] == {
         "enabled": True,
         "contradiction_penalty": 0.5,
     }
-    assert "routing.decisions[0].algorithm.mlp.device" in _note_paths(notes)
 
 
 def _is_reembed_reminder(note):

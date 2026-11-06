@@ -7,7 +7,7 @@ description: How virtual models turn a shared pool of independent models into st
 # Mixture of Models
 
 A **Mixture of Models (MoM)** presents independently deployed models as one
-virtual model. A recipe selects a model, cascade, panel, or bounded workflow for
+virtual model. A recipe selects a model, escalation, panel, or bounded workflow for
 each request. Your harness uses a stable name and retains its task loop and tools.
 
 ```mermaid
@@ -50,11 +50,12 @@ Most requests should take a direct path. Policy narrows the eligible set and an
 algorithm selects one backend by semantic fit, latency, relative cost, feedback,
 or a fixed order.
 
-### Cascade
+### Escalate
 
 Start with an efficient model, inspect a bounded confidence or verification
-signal, and escalate only when needed. Cascades trade extra worst-case latency
-for lower average cost.
+signal, and escalate only when needed, with the
+[`escalate`](../tutorials/algorithm/looper/escalate) algorithm. Escalation
+trades extra worst-case latency for lower average cost.
 
 ### Orchestrate several models
 

@@ -157,12 +157,6 @@ def _retired_embedding_models(
         )
         for name in sorted(stores)
     ]
-    ml = _mapping(
-        _mapping(_mapping(root.get("router")).get("model_selection")).get("ml")
-    )
-    selections.append(
-        ("global.router.model_selection.ml.model_type", ml.get("model_type"))
-    )
     for field, value in selections:
         if isinstance(value, str) and value.strip().lower() in RETIRED_EMBEDDING_TYPES:
             removed.append(f"{field}: {value}")

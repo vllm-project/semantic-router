@@ -117,10 +117,10 @@ def test_supported_intent_preserves_unrelated_config_and_redacts_secrets(tmp_pat
     candidate = yaml.safe_load(document["candidate_yaml"])
     default_route = candidate["routing"]["decisions"][0]
     keep_me = candidate["routing"]["decisions"][1]
-    assert default_route["algorithm"]["type"] == "latency_aware"
-    assert default_route["algorithm"]["latency_aware"] == {
-        "tpot_percentile": 90,
-        "ttft_percentile": 95,
+    assert default_route["algorithm"]["type"] == "multi_factor"
+    assert default_route["algorithm"]["multi_factor"] == {
+        "weights": {"latency": 1},
+        "latency_percentile": 90,
     }
     assert default_route["description"] == "Catch-all route"
     assert keep_me["name"] == "keep-me"
@@ -139,7 +139,7 @@ def test_supported_intent_preserves_unrelated_config_and_redacts_secrets(tmp_pat
         candidate["providers"]["models"][0]["backend_refs"][0]["api_key_env"]
         == "LOCAL_MODEL_API_KEY"
     )
-    assert "latency_aware" in document["diff"]
+    assert "multi_factor" in document["diff"]
     removed = [
         line[1:]
         for line in document["diff"].splitlines()
@@ -666,7 +666,7 @@ def test_installed_package_resolves_intents_without_checkout(tmp_path, monkeypat
     fragment = assets / "fragments" / "algorithm" / "selection" / "latency-aware.yaml"
     fragment.write_text(
         fragment.read_text(encoding="utf-8").replace(
-            "tpot_percentile: 90", "tpot_percentile: 91"
+            "latency_percentile: 90", "latency_percentile: 91"
         ),
         encoding="utf-8",
     )
@@ -691,8 +691,8 @@ def test_installed_package_resolves_intents_without_checkout(tmp_path, monkeypat
     algorithm = yaml.safe_load(latency["candidate_yaml"])["routing"]["decisions"][0][
         "algorithm"
     ]
-    assert algorithm["type"] == "latency_aware"
-    assert algorithm["latency_aware"]["tpot_percentile"] == 91
+    assert algorithm["type"] == "multi_factor"
+    assert algorithm["multi_factor"]["latency_percentile"] == 91
     assert (
         latency["provenance"]["sources"][0]["path"]
         == "config/fragments/algorithm/selection/latency-aware.yaml"

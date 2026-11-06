@@ -70,13 +70,13 @@ func quorumFallbackDecision() *config.Decision {
 	return &config.Decision{
 		Name: "fusion-quorum-fallback-route",
 		Algorithm: &config.AlgorithmConfig{
-			Type: config.DecisionAlgorithmFusion,
+			Type:    config.DecisionAlgorithmFusion,
+			OnError: config.FusionOnErrorSkip,
 			Fusion: &config.FusionAlgorithmConfig{
 				Model:                  "judge",
 				AnalysisModels:         []string{"panel-a", "panel-b"},
 				MaxConcurrent:          2,
 				MinSuccessfulResponses: 2,
-				OnError:                config.FusionOnErrorSkip,
 				QuorumFailurePolicy:    config.FusionQuorumFailurePolicyFallback,
 				QuorumFallbackTarget:   "backup-model",
 			},

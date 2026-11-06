@@ -13,6 +13,7 @@ from cli.config_contract import (
     iter_routing_profiles,
 )
 from cli.config_migration_looper import LOOPER_ENDPOINT_PATH
+from cli.config_algorithm_forms import removed_algorithm_forms
 from cli.config_application_forms import removed_application_forms
 from cli.config_heuristic_forms import removed_heuristic_forms
 from cli.config_plugin_forms import removed_plugin_forms
@@ -232,6 +233,7 @@ def _reject_invalid_config_surfaces(data: Dict[str, Any], config_path: str) -> N
         removed_plugin_forms(data)
         + removed_application_forms(data)
         + removed_heuristic_forms(data)
+        + removed_algorithm_forms(data)
     )
     if removed_forms:
         raise ConfigParseError("\n".join(removed_forms))

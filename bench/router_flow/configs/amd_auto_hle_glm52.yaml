@@ -288,6 +288,7 @@ routing:
           reasoning_effort: high
       algorithm:
         type: remom
+        on_error: skip
         remom:
           breadth_schedule: [3]
           model_distribution: round_robin
@@ -301,7 +302,6 @@ routing:
           min_successful_responses: 2
           max_responses_per_round: 3
           include_intermediate_responses: false
-          on_error: skip
           synthesis_template: |-
             You are the final HLE text-only answer synthesizer.
 
@@ -346,6 +346,7 @@ routing:
           reasoning_effort: high
       algorithm:
         type: remom
+        on_error: skip
         remom:
           breadth_schedule: [2]
           model_distribution: round_robin
@@ -359,7 +360,6 @@ routing:
           min_successful_responses: 1
           max_responses_per_round: 2
           include_intermediate_responses: false
-          on_error: skip
           synthesis_template: |-
             You are answering HLE text-only questions. Compare the attempts
             against the original question and preserve the required format.
@@ -399,6 +399,7 @@ routing:
           reasoning_effort: high
       algorithm:
         type: remom
+        on_error: skip
         remom:
           breadth_schedule: [2]
           model_distribution: round_robin
@@ -412,7 +413,6 @@ routing:
           min_successful_responses: 1
           max_responses_per_round: 2
           include_intermediate_responses: false
-          on_error: skip
           synthesis_template: |-
             Produce a final HLE answer from the GLM-5.2 attempts.
 

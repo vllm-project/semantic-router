@@ -31,19 +31,16 @@ func (r *OpenAIRouter) benchmarkUsageScopeKnown(ctx *RequestContext, allowLooper
 	if method == "" {
 		method = "static"
 	}
-	if config.IsLooperAlgorithmType(method) {
+	if config.IsExecutorAlgorithmType(method) {
 		if !allowLooper {
 			return false
 		}
 	} else {
 		switch method {
-		case "static", "automix", "hybrid", "router_dc", "knn", "kmeans", "svm", "mlp", "latency_aware", "multi_factor", "random":
+		case config.DecisionAlgorithmStatic, config.DecisionAlgorithmMultiFactor, config.DecisionAlgorithmRandom:
 		default:
 			return false
 		}
-	}
-	if r.Config.ModelSelection.Enabled && strings.EqualFold(r.Config.ModelSelection.Method, "prompt") {
-		return false
 	}
 	for _, plugin := range decision.Plugins {
 		switch config.NormalizeDecisionPluginType(plugin.Type) {

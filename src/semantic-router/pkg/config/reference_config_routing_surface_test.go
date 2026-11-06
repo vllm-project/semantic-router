@@ -22,30 +22,32 @@ func assertSupportedAlgorithmsInReferenceConfig(t testingT, decisions []interfac
 			t.Fatalf("config/config.yaml must include at least one decision.algorithm.type=%q", algorithmType)
 		}
 	}
-	assertReferenceConfidenceAlgorithmCoverage(t, algorithmsByType)
+	assertReferenceEscalateAlgorithmCoverage(t, decisions)
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["ratings"], "ratings"), reflect.TypeOf(RatingsAlgorithmConfig{}), "routing.decisions[].algorithm.ratings")
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["remom"], "remom"), reflect.TypeOf(ReMoMAlgorithmConfig{}), "routing.decisions[].algorithm.remom")
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["fusion"], "fusion"), reflect.TypeOf(FusionAlgorithmConfig{}), "routing.decisions[].algorithm.fusion")
-	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["router_dc"], "router_dc"), reflect.TypeOf(RouterDCSelectionConfig{}), "routing.decisions[].algorithm.router_dc")
-	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["automix"], "automix"), reflect.TypeOf(AutoMixSelectionConfig{}), "routing.decisions[].algorithm.automix")
-	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["hybrid"], "hybrid"), reflect.TypeOf(HybridSelectionConfig{}), "routing.decisions[].algorithm.hybrid")
-	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["latency_aware"], "latency_aware"), reflect.TypeOf(LatencyAwareAlgorithmConfig{}), "routing.decisions[].algorithm.latency_aware")
 	multiFactor := mustMapAt(t, algorithmsByType["multi_factor"], "multi_factor")
 	assertMapCoversStructFields(t, multiFactor, reflect.TypeOf(MultiFactorSelectionConfig{}), "routing.decisions[].algorithm.multi_factor")
 	assertMapCoversStructFields(t, mustMapAt(t, multiFactor, "quality"), reflect.TypeOf(QualityEvidenceConfig{}), "routing.decisions[].algorithm.multi_factor.quality")
-	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["prompt"], "prompt"), reflect.TypeOf(PromptSelectionConfig{}), "routing.decisions[].algorithm.prompt")
 }
 
-func assertReferenceConfidenceAlgorithmCoverage(t testingT, algorithmsByType map[string]map[string]interface{}) {
-	confidence := algorithmsByType["confidence"]
-	requireMapKeys(t, confidence, "routing.decisions[].algorithm(type=confidence)", "type", "confidence", "on_error")
-	assertMapCoversStructFields(t, mustMapAt(t, confidence, "confidence"), reflect.TypeOf(ConfidenceAlgorithmConfig{}), "routing.decisions[].algorithm.confidence")
-	assertMapCoversStructFields(
-		t,
-		mustMapAt(t, confidence, "confidence", "hybrid_weights"),
-		reflect.TypeOf(HybridWeightsConfig{}),
-		"routing.decisions[].algorithm.confidence.hybrid_weights",
-	)
+// The Chat escalate decision covers the accept settings; the System One one
+// lives in a native recipe.
+func assertReferenceEscalateAlgorithmCoverage(t testingT, decisions []interface{}) {
+	var escalate map[string]interface{}
+	for _, algorithm := range collectChildMapsFromSlice(t, decisions, "algorithm", "routing.decisions") {
+		if block, ok := algorithm["escalate"].(map[string]interface{}); ok && algorithm["type"] == DecisionAlgorithmEscalate && block["accept"] != nil {
+			escalate = algorithm
+		}
+	}
+	if escalate == nil {
+		t.Fatalf("config/config.yaml must include a Chat escalate decision")
+	}
+	requireMapKeys(t, escalate, "routing.decisions[].algorithm(type=escalate)", "type", "budget", "on_error", "escalate")
+	requireMapKeys(t, mustMapAt(t, escalate, "escalate"), "routing.decisions[].algorithm.escalate", "order", "accept")
+	confidence := mustMapAt(t, escalate, "escalate", "accept", "confidence")
+	assertMapCoversStructFields(t, confidence, reflect.TypeOf(EscalateConfidence{}), "routing.decisions[].algorithm.escalate.accept.confidence")
+	assertMapCoversStructFields(t, mustMapAt(t, confidence, "hybrid_weights"), reflect.TypeOf(HybridWeightsConfig{}), "routing.decisions[].algorithm.escalate.accept.confidence.hybrid_weights")
 }
 
 func assertSupportedPluginsInReferenceConfig(t testingT, decisions []interface{}) {

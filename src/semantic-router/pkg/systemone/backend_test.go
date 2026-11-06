@@ -86,13 +86,6 @@ global:
         enabled: true
 providers:
   models:
-    - name: native
-      api_format: systemone
-      provider_model_id: native-model
-      backend_refs:
-        - provider: systemone-compatible
-          base_url: %[1]s/custom/v1
-          trusted_gateway: true
     - name: judge
       api_format: openai
       provider_model_id: judge-model
@@ -109,11 +102,11 @@ providers:
 		t.Fatal(err)
 	}
 	defer remote.Close(context.Background())
+	// A loaded configuration refuses a trusted gateway on a systemone backend
+	// or a stage's judge model; dispatch still never sends one a call.
 	invoke := BackendInvoker(cfg, "", nil, remote)
-	for _, alias := range []string{"native", "judge"} {
-		if _, _, err := invoke(context.Background(), alias, json.RawMessage(singleRequest)); !errors.Is(err, errTrustedGatewayUnsupported) {
-			t.Fatalf("%s: error = %v, want the trusted gateway refusal", alias, err)
-		}
+	if _, _, err := invoke(context.Background(), "judge", json.RawMessage(singleRequest)); !errors.Is(err, errTrustedGatewayUnsupported) {
+		t.Fatalf("error = %v, want the trusted gateway refusal", err)
 	}
 	if calls.Load() != 0 {
 		t.Fatalf("a trusted gateway received %d calls without a credential", calls.Load())

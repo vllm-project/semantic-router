@@ -1208,7 +1208,7 @@ test.describe('Dashboard auth flow', () => {
       const iframe = document.createElement('iframe')
       iframe.src = '/embedded/grafana/'
 
-      const source = new EventSource('/api/ml-pipeline/stream/job-1')
+      const source = new EventSource('/api/events')
       const sourceUrl = source.url
       source.close()
 

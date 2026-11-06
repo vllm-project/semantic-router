@@ -553,11 +553,11 @@ recipes:
       - model: local/qwen3.6-27b-coder
         use_reasoning: false
       algorithm:
-        type: latency_aware
-        latency_aware:
-          tpot_percentile: 90
-          ttft_percentile: 90
-          description: Minimize observed generation and first-token latency.
+        type: multi_factor
+        multi_factor:
+          weights:
+            latency: 1
+          latency_percentile: 90
     - name: unified_speed_first_route
       description: Choose the fastest healthy candidate from live p90 latency and load.
       priority: 100
@@ -816,6 +816,7 @@ recipes:
         use_reasoning: false
       algorithm:
         type: workflows
+        on_error: skip
         workflows:
           mode: dynamic
           template: micro_agent
@@ -826,7 +827,6 @@ recipes:
           round_timeout_seconds: 120
           min_successful_responses: 2
           include_intermediate_responses: false
-          on_error: skip
     - name: unified_frontier_tool_result_synthesis
       description: Synthesize an existing client tool result directly without spawning another tool or multi-agent loop.
       priority: 375
@@ -884,6 +884,7 @@ recipes:
         use_reasoning: false
       algorithm:
         type: fusion
+        on_error: skip
         fusion:
           model: local/qwen3.5-122b-frontier
           analysis_models:
@@ -896,7 +897,6 @@ recipes:
           temperature: 0.2
           include_analysis: false
           include_intermediate_responses: false
-          on_error: skip
           judge_prompt_version: fusion-v1
     - name: unified_frontier_verified_answer
       description: Escalate evidence-sensitive factual answers from an efficient model to frontier models only when confidence
@@ -923,12 +923,13 @@ recipes:
       - model: local/qwen3.5-122b-frontier
         use_reasoning: false
       algorithm:
-        type: confidence
-        confidence:
-          confidence_method: avg_logprob
-          threshold: 0.72
-          escalation_order: small_to_large
-          on_error: skip
+        type: escalate
+        escalate:
+          order: size
+          accept:
+            confidence:
+              method: avg_logprob
+              gte: 0.72
     - name: unified_frontier_remom
       description: Use bounded multi-round search and synthesis for deep reasoning tasks.
       priority: 300
@@ -954,6 +955,7 @@ recipes:
         reasoning_mode: enabled
       algorithm:
         type: remom
+        on_error: skip
         remom:
           breadth_schedule:
           - 3
@@ -969,7 +971,6 @@ recipes:
           min_successful_responses: 2
           max_responses_per_round: 3
           include_intermediate_responses: false
-          on_error: skip
     - name: unified_frontier_direct
       description: Use the strongest direct model when orchestration would add little value.
       priority: 100

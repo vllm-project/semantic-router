@@ -77,10 +77,9 @@ Changes to review
 | `gemma_model_path` 或 `bert_model_path`（即使为空） | 移除：运行时没有 EmbeddingGemma 或 MiniLM 系列，由 Vela Embedding（`mmbert_model_path`）替代 |
 | 响应缓存、记忆或向量存储上的 `embedding_model: bert` 或 `gemma`，或在 MiniLM 为默认值时未设置 `embedding_model` | `embedding_model: mmbert`（Vela Embedding）；重新向量化已存储的向量 |
 | 使用 `mmbert` 的存储上设置了 Vela Embedding 不提供的向量维度（例如 MiniLM 的 384） | 记忆使用 256，响应缓存和向量存储使用 768；按该维度重新创建集合或索引 |
-| `model_selection.ml.model_type: bert` 或 `gemma` | `model_type: mmbert`；用 Vela Embedding 向量重新训练选择模型 |
+| `global.router.model_selection.ml` 以及训练得到的 `knn`、`kmeans`、`svm` 和 `mlp` 选择器 | 移除：由不需要训练模型的 `systemone` 选择器替代 |
 | 模块上的 `variant`、`model_type`、`use_modernbert`、`use_mmbert_32k` | 移除：运行时从模型读取架构 |
 | 旧模型目录中的标签映射，例如 `category_mapping_path: models/mom-domain-classifier/category_mapping.json` | 移除：路由器读取所运行模型的标签 |
-| MLP 选择算法上的 `mlp.device` | 移除：MLP 选择器在路由器内运行 |
 | fusion 算法的 `grounding.nli_contradiction_penalty` | `grounding.contradiction_penalty`：grounding 现在读取幻觉检测器 |
 | 使用 `backend: endpoint`、`endpoint` 和 `model_id` 的幻觉检测器 | 该聊天服务的 `openai_chat` 部署，以及指向它的 `hallucination` 绑定；路径不是 `/v1` 的 endpoint 需要手动编写 |
 

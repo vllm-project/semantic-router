@@ -17,19 +17,10 @@ import (
 )
 
 var selectionMethodByAlgorithmType = map[string]selection.SelectionMethod{
-	"router_dc":     selection.MethodRouterDC,
-	"automix":       selection.MethodAutoMix,
-	"hybrid":        selection.MethodHybrid,
-	"latency_aware": selection.MethodLatencyAware,
-	"static":        selection.MethodStatic,
-	"knn":           selection.MethodKNN,
-	"kmeans":        selection.MethodKMeans,
-	"svm":           selection.MethodSVM,
-	"multi_factor":  selection.MethodMultiFactor,
-	"random":        selection.MethodRandom,
-	"mlp":           selection.MethodMLP,
-	"prompt":        selection.MethodPrompt,
-	"systemone":     selection.MethodSystemOne,
+	config.DecisionAlgorithmStatic:      selection.MethodStatic,
+	config.DecisionAlgorithmRandom:      selection.MethodRandom,
+	config.DecisionAlgorithmMultiFactor: selection.MethodMultiFactor,
+	config.DecisionAlgorithmSystemOne:   selection.MethodSystemOne,
 }
 
 func (r *OpenAIRouter) evaluateSignalsForDecision(
@@ -415,7 +406,6 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 		eligibleModelRefs,
 		decisionName,
 		userContent,
-		result.Decision.Algorithm,
 		categoryName,
 		result.Decision.CandidateIterations,
 		ctx,

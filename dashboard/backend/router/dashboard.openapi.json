@@ -850,7 +850,7 @@
             }
           },
           "503": {
-            "description": "The route is unavailable, the request was canceled, or the cascade could not resolve the request",
+            "description": "The route is unavailable, the request was canceled, or no escalate stage could resolve the request",
             "content": {
               "application/json": {
                 "schema": {
@@ -1018,7 +1018,7 @@
             }
           },
           "503": {
-            "description": "The route is unavailable, the request was canceled, or the cascade could not resolve the request",
+            "description": "The route is unavailable, the request was canceled, or no escalate stage could resolve the request",
             "content": {
               "application/json": {
                 "schema": {
@@ -1909,245 +1909,6 @@
         "x-vllm-sr-audit-action": "mcp.tool.execute_stream",
         "x-vllm-sr-csrf": true,
         "x-vllm-sr-max-body-bytes": 2097152,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/ml-pipeline/benchmark": {
-      "post": {
-        "operationId": "postApiMlPipelineBenchmark",
-        "summary": "POST /api/ml-pipeline/benchmark",
-        "tags": [
-          "ml-pipeline"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "mlpipeline.manage",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "ml",
-        "x-vllm-sr-audit-mode": "required",
-        "x-vllm-sr-audit-action": "ml.benchmark",
-        "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 33554432,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/ml-pipeline/config": {
-      "post": {
-        "operationId": "postApiMlPipelineConfig",
-        "summary": "POST /api/ml-pipeline/config",
-        "tags": [
-          "ml-pipeline"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "mlpipeline.manage",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "ml",
-        "x-vllm-sr-audit-mode": "required",
-        "x-vllm-sr-audit-action": "ml.config",
-        "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 4194304,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/ml-pipeline/download/{subpath}": {
-      "get": {
-        "operationId": "getApiMlPipelineDownloadSubpath",
-        "summary": "GET /api/ml-pipeline/download/",
-        "tags": [
-          "ml-pipeline"
-        ],
-        "parameters": [
-          {
-            "name": "subpath",
-            "in": "path",
-            "description": "Remaining path below the registered subtree pattern.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "mlpipeline.manage",
-        "x-vllm-sr-sensitivity": "secret",
-        "x-vllm-sr-resource-owner": "ml",
-        "x-vllm-sr-audit-mode": "required",
-        "x-vllm-sr-audit-action": "mlpipeline.manage.read",
-        "x-vllm-sr-csrf": false,
-        "x-vllm-sr-route-pattern": "/api/ml-pipeline/download/",
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/ml-pipeline/jobs": {
-      "get": {
-        "operationId": "getApiMlPipelineJobs",
-        "summary": "GET /api/ml-pipeline/jobs",
-        "tags": [
-          "ml-pipeline"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "mlpipeline.manage",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "ml",
-        "x-vllm-sr-audit-mode": "none",
-        "x-vllm-sr-csrf": false,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/ml-pipeline/jobs/{subpath}": {
-      "get": {
-        "operationId": "getApiMlPipelineJobsSubpath",
-        "summary": "GET /api/ml-pipeline/jobs/",
-        "tags": [
-          "ml-pipeline"
-        ],
-        "parameters": [
-          {
-            "name": "subpath",
-            "in": "path",
-            "description": "Remaining path below the registered subtree pattern.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "mlpipeline.manage",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "ml",
-        "x-vllm-sr-audit-mode": "none",
-        "x-vllm-sr-csrf": false,
-        "x-vllm-sr-route-pattern": "/api/ml-pipeline/jobs/",
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/ml-pipeline/stream/{subpath}": {
-      "get": {
-        "operationId": "getApiMlPipelineStreamSubpath",
-        "summary": "GET /api/ml-pipeline/stream/",
-        "tags": [
-          "ml-pipeline"
-        ],
-        "parameters": [
-          {
-            "name": "subpath",
-            "in": "path",
-            "description": "Remaining path below the registered subtree pattern.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "mlpipeline.manage",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "ml",
-        "x-vllm-sr-audit-mode": "none",
-        "x-vllm-sr-csrf": false,
-        "x-vllm-sr-route-pattern": "/api/ml-pipeline/stream/",
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/ml-pipeline/train": {
-      "post": {
-        "operationId": "postApiMlPipelineTrain",
-        "summary": "POST /api/ml-pipeline/train",
-        "tags": [
-          "ml-pipeline"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "mlpipeline.manage",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "ml",
-        "x-vllm-sr-audit-mode": "required",
-        "x-vllm-sr-audit-action": "ml.train",
-        "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 67108864,
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
@@ -8960,7 +8721,6 @@
                               "runtime_config_not_writable",
                               "sr_bench_auth_unconfigured",
                               "upstream_unreachable",
-                              "ml_pipeline_disabled",
                               "mcp_disabled"
                             ]
                           },

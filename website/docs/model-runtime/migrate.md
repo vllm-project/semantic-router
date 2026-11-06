@@ -89,10 +89,9 @@ or stored vectors to re-embed because their embedding model changed (see
 | `gemma_model_path` or `bert_model_path`, even empty | removed: the runtime has no EmbeddingGemma or MiniLM family, and Vela Embedding (`mmbert_model_path`) replaces them |
 | `embedding_model: bert` or `gemma` on the response cache, memory or vector store, or no `embedding_model` where MiniLM was the default | `embedding_model: mmbert` (Vela Embedding); re-embed stored vectors |
 | a vector size Vela Embedding does not serve (such as MiniLM's 384) on a store that embeds with `mmbert` | 256 for memory, 768 for the response cache and the vector store; re-create the collection or index at that size |
-| `model_selection.ml.model_type: bert` or `gemma` | `model_type: mmbert`; retrain the selection models on Vela Embedding vectors |
+| `global.router.model_selection.ml`, with the trained `knn`, `kmeans`, `svm` and `mlp` selectors | removed: the `systemone` selector, which needs no trained model, replaces them |
 | `variant`, `model_type`, `use_modernbert`, `use_mmbert_32k` on a module | removed: the runtime reads the architecture from the model |
 | a label map inside an older model's directory, such as `category_mapping_path: models/mom-domain-classifier/category_mapping.json` | removed: the router reads the labels of the model it runs |
-| `mlp.device` on the MLP selection algorithm | removed: the MLP selector runs in the router |
 | `grounding.nli_contradiction_penalty` of the fusion algorithm | `grounding.contradiction_penalty`: grounding now reads the hallucination detector |
 | a hallucination detector with `backend: endpoint`, `endpoint` and `model_id` | an `openai_chat` deployment of that chat service and a `hallucination` binding to it; an endpoint whose path is not `/v1` has to be written by hand |
 

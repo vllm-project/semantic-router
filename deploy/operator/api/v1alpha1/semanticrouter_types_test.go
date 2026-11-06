@@ -594,8 +594,8 @@ func TestConfigSpecPreservesCanonicalRoutingAndAlgorithmObjects(t *testing.T) {
 					},
 				},
 				Algorithm: &apiextensionsv1.JSON{Raw: []byte(`{
-					"type": "hybrid",
-					"hybrid": {"elo_weight": 0.4, "router_dc_weight": 0.4}
+					"type": "multi_factor",
+					"multi_factor": {"weights": {"quality": 0.6, "cost": 0.4}}
 				}`)},
 			},
 		},
@@ -608,7 +608,7 @@ func TestConfigSpecPreservesCanonicalRoutingAndAlgorithmObjects(t *testing.T) {
 	serialized := string(data)
 	if !strings.Contains(serialized, `"routing"`) ||
 		!strings.Contains(serialized, `"keywords"`) ||
-		!strings.Contains(serialized, `"hybrid"`) {
+		!strings.Contains(serialized, `"multi_factor"`) {
 		t.Fatalf("expected canonical routing and algorithm objects to serialize as public fields, got %s", serialized)
 	}
 
@@ -621,7 +621,7 @@ func TestConfigSpecPreservesCanonicalRoutingAndAlgorithmObjects(t *testing.T) {
 	}
 	if len(decoded.Decisions) != 1 ||
 		decoded.Decisions[0].Algorithm == nil ||
-		!strings.Contains(string(decoded.Decisions[0].Algorithm.Raw), "hybrid") {
+		!strings.Contains(string(decoded.Decisions[0].Algorithm.Raw), "multi_factor") {
 		t.Fatalf("expected decision algorithm raw object to round-trip, got %#v", decoded.Decisions)
 	}
 }

@@ -51,7 +51,6 @@ class SelectionTests(unittest.TestCase):
                 "long-context-routing",
                 "preference-routing",
             },
-            "model_selection.go": {"ml-model-selection"},
             "failover_during_traffic.go": {"production-stack"},
             "streaming_body.go": {"streaming"},
             "response_api_basic.go": {"response-api"},

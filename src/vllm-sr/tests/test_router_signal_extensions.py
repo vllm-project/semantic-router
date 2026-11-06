@@ -10,14 +10,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from cli.algorithms import (  # noqa: E402
-    AlgorithmConfig,
-    ModelRef,
-    PromptSelectionConfig,
-)
 from cli.models import (  # noqa: E402
     Condition,
-    Decision,
     MetadataPredicate,
     MetadataRule,
     Rules,
@@ -122,27 +116,6 @@ def test_nested_condition_rejects_on_unknown():
         )
 
 
-def test_prompt_decision_rejects_duplicate_base_models():
-    with pytest.raises(ValidationError):
-        Decision(
-            name="prompt-route",
-            description="duplicate candidates",
-            priority=1,
-            rules=Rules(),
-            modelRefs=[
-                ModelRef(model="model-a"),
-                ModelRef(model="model-a", lora_name="specialist"),
-            ],
-            algorithm=AlgorithmConfig(
-                type="prompt",
-                prompt=PromptSelectionConfig(
-                    model="router-small",
-                    instructions="Choose.",
-                ),
-            ),
-        )
-
-
 def test_user_config_accepts_recipe_entrypoints():
     config = UserConfig.model_validate(
         {
@@ -191,96 +164,6 @@ def test_user_config_rejects_unknown_recipe_entrypoint():
     assert any("unknown recipe" in error.message.lower() for error in errors)
 
 
-def test_prompt_dependency_validation_covers_recipes():
-    config = UserConfig.model_validate(
-        {
-            "version": "v0.3",
-            "providers": {
-                "models": [
-                    {"name": "model-a"},
-                    {"name": "model-b"},
-                ]
-            },
-            "recipes": [
-                {
-                    "name": "prompt-recipe",
-                    "routing": {
-                        "decisions": [
-                            {
-                                "name": "prompt-route",
-                                "description": "prompt",
-                                "priority": 1,
-                                "rules": {},
-                                "modelRefs": [
-                                    {"model": "model-a"},
-                                    {"model": "model-b"},
-                                ],
-                                "algorithm": {
-                                    "type": "prompt",
-                                    "prompt": {
-                                        "model": "missing-helper",
-                                        "instructions": "Choose.",
-                                    },
-                                },
-                            }
-                        ]
-                    },
-                }
-            ],
-        }
-    )
-    errors = validate_user_config(config)
-    fields = {error.field for error in errors}
-    assert (
-        "recipes.prompt-recipe.decisions.prompt-route.algorithm.prompt.model" in fields
-    )
-    # The helper call runs in process, so no Looper endpoint is required.
-    assert "recipes.prompt-recipe.decisions.prompt-route.algorithm.prompt" not in fields
-
-
-def test_prompt_dependency_validation_rejects_anthropic_helper():
-    config = UserConfig.model_validate(
-        {
-            "version": "v0.3",
-            "providers": {
-                "models": [
-                    {"name": "model-a"},
-                    {"name": "model-b"},
-                    {"name": "helper", "api_format": "AnThRoPiC"},
-                ]
-            },
-            "routing": {
-                "decisions": [
-                    {
-                        "name": "prompt-route",
-                        "description": "prompt",
-                        "priority": 1,
-                        "rules": {},
-                        "modelRefs": [
-                            {"model": "model-a"},
-                            {"model": "model-b"},
-                        ],
-                        "algorithm": {
-                            "type": "prompt",
-                            "prompt": {
-                                "model": "helper",
-                                "instructions": "Choose.",
-                            },
-                        },
-                    }
-                ]
-            },
-            "global": {
-                "integrations": {
-                    "looper": {"endpoint": "http://envoy:8899/v1/chat/completions"}
-                }
-            },
-        }
-    )
-    errors = validate_user_config(config)
-    assert any("OpenAI-compatible" in error.message for error in errors)
-
-
 def test_general_validators_cover_recipe_decisions():
     config = UserConfig.model_validate(
         {
@@ -303,11 +186,7 @@ def test_general_validators_cover_recipe_decisions():
                                 "modelRefs": [{"model": "missing-model"}],
                                 "algorithm": {
                                     "type": "static",
-                                    "hybrid": {
-                                        "elo_weight": 1,
-                                        "router_dc_weight": 0,
-                                        "automix_weight": 0,
-                                    },
+                                    "multi_factor": {"weights": {"quality": 1}},
                                 },
                             }
                         ]
@@ -319,7 +198,10 @@ def test_general_validators_cover_recipe_decisions():
     errors = validate_user_config(config)
     fields = {error.field for error in errors}
     assert "recipes.invalid-recipe.decisions.invalid-route.modelRefs" in fields
-    assert "recipes.invalid-recipe.decisions.invalid-route.algorithm.hybrid" in fields
+    assert (
+        "recipes.invalid-recipe.decisions.invalid-route.algorithm.multi_factor"
+        in fields
+    )
     assert (
         "recipes.invalid-recipe.routing.decisions.invalid-route.rules.conditions"
         in fields

@@ -1,0 +1,25 @@
+# The prompt selector is the systemone selector: the decision model answers the
+# same instructions, its timeout is timeout_ms, and its fallback on_error is
+# what every selector does.
+version: v0.3
+providers:
+  defaults: {model: small}
+  models:
+    - name: small
+      backend_refs: [{name: small, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+    - name: large
+      backend_refs: [{name: large, endpoint: "127.0.0.1:8001", protocol: http, weight: 1}]
+routing:
+  modelCards:
+    - {name: small, description: Fast general model}
+    - {name: large, description: Strong reasoning model}
+  decisions:
+    - name: pick
+      priority: 100
+      rules: {operator: AND, conditions: []}
+      modelRefs: [{model: small}, {model: large}]
+      algorithm:
+        type: systemone
+        systemone:
+          instructions: Choose the model that best fits the request.
+          timeout_ms: 5000

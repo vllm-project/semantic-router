@@ -50,16 +50,17 @@ recipes:
           rules: {}
           modelRefs: [{model: kai}, {model: strong}]
           algorithm:
-            type: cascade
+            type: escalate
             budget: {deadline: 3s, max_calls: 3}
-            quality:
-              type: uncalibrated
-              acceptance:
-                rules:
-                  - {question_type: choice, field: top_probability, predicate: {gte: 0.9}}
-            stages:
-              - {name: fast, kind: native, model: kai}
-              - {name: strong, kind: native, model: strong}
+            escalate:
+              quality:
+                type: uncalibrated
+                accept:
+                  native:
+                    - {question_type: choice, field: top_probability, gte: 0.9}
+              stages:
+                - {name: fast, model: kai}
+                - {name: strong, model: strong}
 """
     )
 
@@ -83,7 +84,7 @@ def test_native_round_trip_and_listener_scope(native_document, tmp_path):
 def test_native_cascade_and_calibration_survive_projection(native_document):
     document = deepcopy(native_document)
     algorithm = document["recipes"][0]["routing"]["decisions"][0]["algorithm"]
-    algorithm["quality"] = {
+    algorithm["escalate"]["quality"] = {
         "type": "calibrated",
         "calibration": "suite",
         "loss": "bundle_error",
@@ -104,9 +105,8 @@ def test_native_cascade_and_calibration_survive_projection(native_document):
 
 @pytest.mark.parametrize("field, value", [("models", ["kai"]), ("unknown_field", True)])
 def test_native_stage_uses_generated_closed_contract(native_document, field, value):
-    stage = native_document["recipes"][0]["routing"]["decisions"][0]["algorithm"][
-        "stages"
-    ][0]
+    algorithm = native_document["recipes"][0]["routing"]["decisions"][0]["algorithm"]
+    stage = algorithm["escalate"]["stages"][0]
     stage[field] = value
     with pytest.raises(ValidationError, match="Additional properties"):
         UserConfig.model_validate(native_document)
@@ -115,9 +115,9 @@ def test_native_stage_uses_generated_closed_contract(native_document, field, val
 @pytest.mark.parametrize("mutation", ["wrong_stage", "chat_default"])
 def test_native_invalid_resource_references_are_rejected(native_document, mutation):
     if mutation == "wrong_stage":
-        native_document["recipes"][0]["routing"]["decisions"][0]["algorithm"]["stages"][
-            1
-        ]["model"] = "missing"
+        native_document["recipes"][0]["routing"]["decisions"][0]["algorithm"][
+            "escalate"
+        ]["stages"][1]["model"] = "missing"
     elif mutation == "chat_default":
         native_document["providers"]["defaults"] = {"model": "kai"}
     config = UserConfig.model_validate(native_document)
@@ -273,9 +273,9 @@ def test_native_signal_backend_lifecycle(native_document, variant):
 
 
 def test_native_stage_cannot_shadow_abstention(native_document):
-    native_document["recipes"][0]["routing"]["decisions"][0]["algorithm"]["stages"][0][
-        "name"
-    ] = "abstain"
+    native_document["recipes"][0]["routing"]["decisions"][0]["algorithm"]["escalate"][
+        "stages"
+    ][0]["name"] = "abstain"
     assert validate_native_execution(UserConfig.model_validate(native_document))
 
 

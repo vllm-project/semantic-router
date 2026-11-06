@@ -46,7 +46,7 @@ vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine
 `/v1/systemone/models`，Chat 模型发现使用 `/v1/models`。
 
 两种模式都可以用具体模型 ID 直接推理。Router 模式还可以显式声明
-`api: systemone` 入口，并在 listener 中授权其 `vllm-sr/auto` 名称，运行原生级联。
+`api: systemone` 入口，并在 listener 中授权其 `vllm-sr/auto` 名称，运行原生 escalate。
 默认 Chat 入口不会隐式开启原生路由。配置和请求示例见
 [System One 级联指南（英文）](https://vllm-sr.ai/docs/tutorials/algorithm/native/cascade)和
 [快速开始](model-runtime/quickstart)。

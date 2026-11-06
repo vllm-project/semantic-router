@@ -376,9 +376,6 @@ func rejectRemovedRouterLearningFields(raw map[string]interface{}) error {
 			removedGlobal = append(removedGlobal, "global.router.model_selection."+field)
 		}
 	}
-	if method := strings.TrimSpace(fmt.Sprint(modelSelection["method"])); removedGlobalLearningSelector(method) {
-		removedGlobal = append(removedGlobal, "global.router.model_selection.method="+method)
-	}
 	if len(removedGlobal) > 0 {
 		return fmt.Errorf(
 			"removed config fields are no longer supported: %s; use global.router.learning.adaptation and global.router.learning.protection for cross-request learning",
@@ -441,15 +438,6 @@ func removedLearningAlgorithmTypeError(index int, algorithmType string) error {
 		)
 	}
 	return nil
-}
-
-func removedGlobalLearningSelector(method string) bool {
-	switch strings.TrimSpace(method) {
-	case "session_aware", "lookup_tables", "elo", "rl_driven", "gmtrouter", "bandit", "personalization":
-		return true
-	default:
-		return false
-	}
 }
 
 func removedDecisionLearningBlocks() map[string]string {

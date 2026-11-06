@@ -95,23 +95,15 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
   ],
 
   algoTypes: [
-    'confidence',
-    'ratings',
-    'remom',
-    'fusion',
-    'workflows',
     'static',
-    'router_dc',
-    'automix',
-    'hybrid',
-    'latency_aware',
-    'knn',
-    'kmeans',
-    'svm',
-    'mlp',
+    'random',
     'multi_factor',
     'systemone',
-    'random',
+    'escalate',
+    'fusion',
+    'remom',
+    'ratings',
+    'workflows',
   ],
 
   booleans: ['true', 'false'],
@@ -151,7 +143,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
       // Algorithm types
       [
-        /\b(confidence|ratings|remom|fusion|workflows|static|router_dc|automix|hybrid|latency_aware|knn|kmeans|svm|mlp|multi_factor|random)\b/,
+        /\b(static|random|multi_factor|systemone|escalate|fusion|remom|ratings|workflows)\b/,
         'type.algorithm',
       ],
 
@@ -282,7 +274,7 @@ const KEYWORD_SUGGESTIONS = [
   { label: 'MODEL', insertText: 'MODEL "${1:model-name}"', detail: 'Model reference' },
   {
     label: 'ALGORITHM',
-    insertText: 'ALGORITHM ${1:confidence} {\n\t$0\n}',
+    insertText: 'ALGORITHM ${1:escalate} {\n\t$0\n}',
     detail: 'Algorithm block',
   },
   { label: 'AND', insertText: 'AND', detail: 'Boolean AND' },
@@ -312,23 +304,15 @@ const PLUGIN_TYPE_SUGGESTIONS = [
 ]
 
 const ALGO_TYPE_SUGGESTIONS = [
-  { label: 'confidence', detail: 'Confidence-based routing' },
-  { label: 'ratings', detail: 'Ratings-based routing' },
-  { label: 'remom', detail: 'ReMoM algorithm' },
-  { label: 'fusion', detail: 'Fusion panel deliberation' },
-  { label: 'workflows', detail: 'Router Flow orchestration' },
   { label: 'static', detail: 'Static model assignment' },
-  { label: 'router_dc', detail: 'Router DC algorithm' },
-  { label: 'automix', detail: 'AutoMix algorithm' },
-  { label: 'hybrid', detail: 'Hybrid routing' },
-  { label: 'latency_aware', detail: 'Latency-aware routing' },
-  { label: 'knn', detail: 'KNN model-selection classifier' },
-  { label: 'kmeans', detail: 'KMeans model-selection classifier' },
-  { label: 'svm', detail: 'SVM model-selection classifier' },
-  { label: 'mlp', detail: 'MLP model-selection classifier' },
+  { label: 'random', detail: 'Uniform pick among eligible candidates' },
   { label: 'multi_factor', detail: 'Quality/latency/cost/load scoring' },
   { label: 'systemone', detail: 'System One model chooses a candidate' },
-  { label: 'random', detail: 'Uniform pick among eligible candidates' },
+  { label: 'escalate', detail: 'Try candidates in order until an answer is accepted' },
+  { label: 'fusion', detail: 'Fusion panel deliberation' },
+  { label: 'remom', detail: 'ReMoM algorithm' },
+  { label: 'ratings', detail: 'Ratings-based routing' },
+  { label: 'workflows', detail: 'Router Flow orchestration' },
 ]
 
 /**

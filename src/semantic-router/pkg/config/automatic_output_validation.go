@@ -13,8 +13,8 @@ func validateDecisionAutomaticOutput(decision Decision) error {
 	if decision.Algorithm == nil {
 		return nil
 	}
-	if IsLooperAlgorithmType(decision.Algorithm.Type) {
-		return fmt.Errorf("decision %q: automatic output does not support Looper algorithms", decision.Name)
+	if IsExecutorAlgorithmType(decision.Algorithm.Type) {
+		return fmt.Errorf("decision %q: automatic output does not support executor algorithms", decision.Name)
 	}
 	if decision.Algorithm.Type == DecisionAlgorithmMultiFactor && decision.Algorithm.MultiFactor != nil && decision.Algorithm.MultiFactor.ExpectedOutputTokens == nil {
 		return fmt.Errorf("decision %q: automatic output with multi_factor requires expected_output_tokens as a cost forecast", decision.Name)

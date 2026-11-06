@@ -757,40 +757,6 @@ export interface CanonicalSystemModels extends DeprecatedSystemModelLines {
 
 export interface ModelSelectionConfig {
   enabled?: boolean
-  method?: string
-  router_dc?: {
-    temperature?: number
-    dimension_size?: number
-    min_similarity?: number
-    use_query_contrastive?: boolean
-    use_model_contrastive?: boolean
-    require_descriptions?: boolean
-    use_capabilities?: boolean
-  }
-  automix?: {
-    verification_threshold?: number
-    max_escalations?: number
-    cost_aware_routing?: boolean
-    cost_quality_tradeoff?: number
-    discount_factor?: number
-    use_logprob_verification?: boolean
-  }
-  hybrid?: {
-    experience_weight?: number
-    router_dc_weight?: number
-    automix_weight?: number
-    cost_weight?: number
-    quality_gap_threshold?: number
-    normalize_scores?: boolean
-  }
-  ml?: {
-    models_path?: string
-    embedding_dim?: number
-    knn?: { k?: number; pretrained_path?: string }
-    kmeans?: { num_clusters?: number; efficiency_weight?: number; pretrained_path?: string }
-    svm?: { kernel?: string; gamma?: number; pretrained_path?: string }
-    mlp?: { device?: string; pretrained_path?: string }
-  }
 }
 
 export interface CanonicalClassifierConfig {

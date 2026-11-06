@@ -133,6 +133,7 @@ zh-Hans	troubleshooting/container-connectivity.md
 zh-Hans	troubleshooting/network-tips.md
 zh-Hans	troubleshooting/vsr-headers.md
 zh-Hans	tutorials/algorithm/looper/confidence.md
+zh-Hans	tutorials/algorithm/looper/escalate.md
 zh-Hans	tutorials/algorithm/looper/fusion.md
 zh-Hans	tutorials/algorithm/looper/ratings.md
 zh-Hans	tutorials/algorithm/looper/remom.md

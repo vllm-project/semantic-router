@@ -1,0 +1,1 @@
+routing.decisions[pinned].algorithm: removed_field: algorithm.on_error of a selector is removed; run `vllm-sr config migrate` (nothing: a selector that fails falls back to the first candidate, and on_error is an executor setting)

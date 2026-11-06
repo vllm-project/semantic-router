@@ -66,8 +66,6 @@ func (s *DecisionModelSelector) ExternalDependencies() []Dependency {
 	}}
 }
 
-func (s *DecisionModelSelector) UpdateFeedback(context.Context, *Feedback) error { return nil }
-
 func (s *DecisionModelSelector) Select(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
 	if err := ValidateSelectionContext(selCtx); err != nil {
 		return nil, err
@@ -83,7 +81,7 @@ func (s *DecisionModelSelector) Select(ctx context.Context, selCtx *SelectionCon
 		}
 		return nil, fmt.Errorf("%w: %w", ErrDecisionModelInvocation, err)
 	}
-	selected := promptCandidateByModel(selCtx.CandidateModels, answer.Choice)
+	selected := candidateByModel(selCtx.CandidateModels, answer.Choice)
 	if selected == nil {
 		return nil, fmt.Errorf("%w: %q is not a candidate", ErrDecisionModelAnswer, answer.Choice)
 	}
@@ -110,6 +108,15 @@ func (s *DecisionModelSelector) Select(ctx context.Context, selCtx *SelectionCon
 		ScoreDirection:    HigherIsBetter,
 		AllScores:         all,
 	}, nil
+}
+
+func candidateByModel(candidates []config.ModelRef, model string) *config.ModelRef {
+	for i := range candidates {
+		if candidates[i].Model == model {
+			return &candidates[i]
+		}
+	}
+	return nil
 }
 
 func (s *DecisionModelSelector) choices(candidates []config.ModelRef) []DecisionModelChoice {

@@ -1432,22 +1432,17 @@ kubernetes - Kubernetes deployment via Helm (k8s is the old name, for this
              release only)
 ```
 
-MODEL SELECTION ALGORITHMS:
+ALGORITHM OVERRIDES (--algorithm):
 
 ```text
 static     - Use first configured model (default, no learning)
-router_dc  - Query-model matching via embedding similarity
-automix    - Cost-quality optimization using POMDP
-hybrid     - Combine multiple methods with configurable weights
-workflows  - Router Flow static/dynamic micro-agent orchestration
-latency_aware - TPOT/TTFT percentile-aware selection
-knn        - KNN selector using shared ML model-selection settings
-kmeans     - KMeans selector using shared ML model-selection settings
-svm        - SVM selector using shared ML model-selection settings
-mlp        - MLP selector using shared ML model-selection settings
-multi_factor - Quality, latency, cost, and load scoring
 random     - Uniform pick among eligible candidates (no configuration)
+multi_factor - Quality, latency, cost, and load scoring
+workflows  - Router Flow static/dynamic micro-agent orchestration
 ```
+
+The systemone selector and the escalate, fusion, remom and ratings
+executors need authored settings; configure them in config.yaml.
 
 Cross-request learning lives under global.router.learning.adaptation and
 global.router.learning.protection instead of --algorithm.
@@ -1466,7 +1461,7 @@ vllm-sr serve --config my-models.yaml --replace-active-config
 # Deploy a user-owned config to Kubernetes
 vllm-sr serve --target kubernetes --config my-models.yaml --namespace my-ns
 # Runtime policy and image overrides
-vllm-sr serve --algorithm latency_aware
+vllm-sr serve --algorithm multi_factor
 vllm-sr serve --image-pull-policy always
 vllm-sr serve --readonly
 vllm-sr serve --minimal
@@ -1523,7 +1518,7 @@ Backend LLMs, named deployments, listeners and API grants belong in --config.
 | `-v, --verbose` | Show every startup detail; engine mode otherwise prints a short summary. Default: false. |
 | `--log-level CHOICE` | Log level of the Router, or of the runtime in engine mode (debug, info, warn, error, dpanic, panic, fatal) Choices: debug, info, warn, warning, error, dpanic, panic, fatal. |
 | `--platform CHOICE` | Execution backend: auto (default) discovers the deployment target; cpu, cuda or rocm select it explicitly. Choices: auto, cpu, cuda, rocm. |
-| `--algorithm CHOICE` | Request-time base algorithm override for payload-safe algorithms: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor, random. Algorithms that require an authored payload remain available in config.yaml. Cross-request learning uses global.router.learning.adaptation/protection. Choices: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor, random. |
+| `--algorithm CHOICE` | Request-time base algorithm override for payload-safe algorithms: static, random, multi_factor, workflows. Algorithms that require an authored payload remain available in config.yaml. Cross-request learning uses global.router.learning.adaptation/protection. Choices: static, random, multi_factor, workflows. |
 | `--target TEXT` | Deployment target: docker, kubernetes (default: docker) |
 | `--gateway CHOICE` | Where client traffic enters: standalone (default; the Router serves the OpenAI-compatible API on the config's listeners, with no Envoy) or extproc (an Envoy-based gateway in front of the Router: the Envoy container on the docker target, your gateway on kubernetes). Choices: standalone, extproc. |
 | `--namespace TEXT` | Kubernetes namespace (kubernetes target only) |

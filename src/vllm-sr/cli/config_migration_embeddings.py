@@ -63,7 +63,6 @@ def migrate_embedding_models(canonical: dict[str, Any], notes: MigrationNotes) -
     if semantic is not None:
         _migrate_semantic(semantic, notes)
     _migrate_stores(canonical, fallback, notes)
-    _migrate_model_selection(canonical, notes)
     for path, decision in decisions(canonical):
         _note_rag_collections(path, decision, notes)
 
@@ -186,21 +185,6 @@ def _fit_store_widths(name: str, store: dict[str, Any], notes: MigrationNotes) -
             f"{width} -> {default}: Vela Embedding serves 64, 128, 256, 512 or 768 "
             f"dimensions; re-create the collection or index at {default}",
         )
-
-
-def _migrate_model_selection(canonical: dict[str, Any], notes: MigrationNotes) -> None:
-    ml = dict_at(canonical, "global", "router", "model_selection", "ml")
-    if ml is None:
-        return
-    model_type = str(ml.get("model_type") or "").strip().lower()
-    if model_type not in RETIRED_EMBEDDING_TYPES:
-        return
-    ml["model_type"] = VELA_EMBEDDING
-    notes.action(
-        "global.router.model_selection.ml.model_type",
-        f"{model_type} -> mmbert (Vela Embedding); retrain the selection models "
-        "on Vela Embedding vectors, the published ones match their embedding model",
-    )
 
 
 def _note_rag_collections(

@@ -80,7 +80,7 @@ func TestRatingsStreamingHonorsErrorPolicyOverHTTP(t *testing.T) {
 				defer l.Close()
 				req := usageBackendRequest(config.ModelRef{Model: "healthy"}, config.ModelRef{Model: "broken"})
 				req.IsStreaming = true
-				req.Algorithm = &config.AlgorithmConfig{Type: "ratings", Ratings: &config.RatingsAlgorithmConfig{OnError: onError}}
+				req.Algorithm = &config.AlgorithmConfig{OnError: onError, Type: "ratings", Ratings: &config.RatingsAlgorithmConfig{}}
 				out, err := l.Execute(context.Background(), req)
 				if onError == "fail" {
 					require.Error(t, err)
@@ -120,9 +120,9 @@ func TestConfidenceStreamingPreservesParallelToolsOverHTTP(t *testing.T) {
 		})
 	}))
 	defer server.Close()
-	l := NewConfidenceLooper(&config.LooperConfig{Endpoint: server.URL})
+	l := NewEscalateLooper(&config.LooperConfig{Endpoint: server.URL})
 	defer l.Close()
-	req := confidenceLogprobRequest("fail")
+	req := escalateRequest(config.EscalateOnErrorFail, config.ConfidenceMethodAverageLogprob)
 	req.IsStreaming = true
 	out, err := l.Execute(context.Background(), req)
 	require.NoError(t, err)

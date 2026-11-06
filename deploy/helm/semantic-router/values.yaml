@@ -506,11 +506,9 @@ toolsDb:
 # When multiple models are specified in modelRefs, use
 # algorithm.type to determine which model handles the request.
 #
-# Supported algorithms:
-#   - knn: K-Nearest Neighbors (semantic similarity)
-#   - kmeans: KMeans clustering (pattern-based routing)
-#   - svm: Support Vector Machine (classification-based)
-#   - mlp: Multi-Layer Perceptron (neural selector)
+# Selectors choose one model before calling it: static, random,
+# multi_factor and systemone. Executors call several and return one
+# response: escalate, fusion, remom, ratings and workflows.
 #
 # Example configuration:
 #
@@ -518,7 +516,7 @@ toolsDb:
 #   routing:
 #     decisions:
 #       - name: "multi_model_routing"
-#         description: "Route to best model using ML"
+#         description: "Let the decision model pick the model"
 #         priority: 100
 #         rules:
 #           operator: "OR"
@@ -526,26 +524,16 @@ toolsDb:
 #             - type: "domain"
 #               name: "general"
 #         algorithm:
-#           type: "knn"       # Per-decision selector choice
+#           type: "systemone"   # Per-decision selector choice
+#           systemone:
+#             instructions: "Which model should answer this request?"
 #         modelRefs:
 #           - model: "model-small"
 #             use_reasoning: false
-#   global:
-#     router:
-#       model_selection:
-#         ml:
-#           knn:
-#             k: 5
-#           kmeans:
-#             num_clusters: 8
-#           svm:
-#             kernel: "rbf"
-#           mlp:
-#             device: "cpu"
-#         - model: "model-medium"
-#           use_reasoning: false
-#         - model: "model-large"
-#           use_reasoning: true
+#           - model: "model-medium"
+#             use_reasoning: false
+#           - model: "model-large"
+#             use_reasoning: true
 #
 # ============================================================================
 

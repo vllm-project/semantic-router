@@ -113,8 +113,8 @@ Inside a ROUTE block:
   MODEL "<name>" (reasoning = true, effort = "high", lora = "<name>", weight = 1.0, param_size = "3b")
 
 ### Algorithm Types
-  confidence, ratings, remom, router_dc, automix, hybrid, latency_aware,
-  static, knn, kmeans, svm, random
+  static, random, multi_factor, systemone,
+  escalate, fusion, remom, ratings, workflows
 
 ### Plugin Types (inline)
   system_prompt, semantic_cache, hallucination, memory, rag, tools,
@@ -336,10 +336,9 @@ ROUTE hard_math {
   WHEN domain("math") AND complexity("hard_problem")
   MODEL "qwen2.5-math:72b" (reasoning = true, effort = "high"),
         "deepseek-r1:70b" (reasoning = true)
-  ALGORITHM confidence {
-    confidence_method: "avg_logprob"
-    threshold: 0.85
-    on_error: "skip"
+  ALGORITHM escalate {
+    order: "size"
+    accept: { confidence: { method: "avg_logprob", gte: 0.85 } }
   }
 }
 

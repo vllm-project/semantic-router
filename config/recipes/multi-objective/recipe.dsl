@@ -280,10 +280,9 @@ RECIPE speed-first (description = "Prefer the lowest observed latency while pres
           "local/qwen3.6-35b-flash" (reasoning = false),
           "local/gemma4-26b-balanced" (reasoning = false),
           "local/qwen3.6-27b-coder" (reasoning = false)
-    ALGORITHM latency_aware {
-      description: "Minimize observed generation and first-token latency."
-      tpot_percentile: 90
-      ttft_percentile: 90
+    ALGORITHM multi_factor {
+      latency_percentile: 90
+      weights: { latency: 1 }
     }
   }
 
@@ -514,11 +513,9 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
           "local/qwen3.6-27b-coder" (reasoning = false),
           "local/qwen3.6-35b-flash" (reasoning = false),
           "local/qwen3.5-122b-frontier" (reasoning = false)
-    ALGORITHM confidence {
-      confidence_method: "avg_logprob"
-      escalation_order: "small_to_large"
-      on_error: "skip"
-      threshold: 0.72
+    ALGORITHM escalate {
+      accept: { confidence: { gte: 0.72, method: "avg_logprob" } }
+      order: "size"
     }
   }
 

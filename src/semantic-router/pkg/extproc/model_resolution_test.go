@@ -142,11 +142,12 @@ func TestLooperEntrypointRoutingSetsSelectedDecisionName(t *testing.T) {
 	router, cfg := newModelResolutionTestRouter(t)
 	cfg.Looper.Endpoint = "http://127.0.0.1:0/v1/chat/completions" // unreachable; only ctx state before dispatch is under test
 	ctx := newModelResolutionTestContext(t)
+	threshold := 0.5
 	decision := &config.Decision{
 		Name: "looper_test_decision",
 		Algorithm: &config.AlgorithmConfig{
-			Type:       "confidence",
-			Confidence: &config.ConfidenceAlgorithmConfig{ConfidenceMethod: "hybrid", Threshold: 0.5},
+			Type:     "escalate",
+			Escalate: &config.EscalateAlgorithmConfig{Accept: &config.EscalateAccept{Confidence: &config.EscalateConfidence{Method: "hybrid", GTE: &threshold}}},
 		},
 		ModelRefs: []config.ModelRef{
 			{Model: "known-model"},

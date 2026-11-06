@@ -23,7 +23,6 @@ func TestDomainClassificationUsesIsolatedUpstreamPrediction(t *testing.T) {
 		{"envoy-ai-gateway", "e2e-domain", "e2e-domain", "cache", false},
 		{"envoy-ai-gateway", "e2e-domain", "mom", "upstream", false},
 		{"envoy-ai-gateway", "e2e-domain", "e2e-domain", "fast_response", false},
-		{"ml-model-selection", "vllm-sr/auto", "", "upstream", true},
 		{"production-stack", "vllm-sr/auto", "", "upstream", true},
 	} {
 		t.Run(surface.profile+"/"+surface.recipe+"/"+surface.path, func(t *testing.T) {

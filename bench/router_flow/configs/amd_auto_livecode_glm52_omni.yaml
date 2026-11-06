@@ -279,6 +279,7 @@ routing:
         - model: glm52-finalizer
       algorithm:
         type: fusion
+        on_error: skip
         fusion:
           model: glm52-finalizer
           analysis_models: [glm52-solver-a, glm52-solver-b]
@@ -289,7 +290,6 @@ routing:
           temperature: 0.2
           include_analysis: false
           include_intermediate_responses: false
-          on_error: skip
           synthesis_template: |-
             You are the final LiveCodeBench code judge.
 
@@ -332,6 +332,7 @@ routing:
         - model: glm52-finalizer
       algorithm:
         type: fusion
+        on_error: skip
         fusion:
           model: glm52-finalizer
           analysis_models: [glm52-solver-a, glm52-solver-b]
@@ -342,7 +343,6 @@ routing:
           temperature: 0.2
           include_analysis: false
           include_intermediate_responses: false
-          on_error: skip
           synthesis_template: |-
             You are the final LiveCodeBench code judge.
 
@@ -387,6 +387,7 @@ routing:
         - model: glm52-finalizer
       algorithm:
         type: remom
+        on_error: skip
         remom:
           breadth_schedule: [2]
           model_distribution: round_robin
@@ -400,7 +401,6 @@ routing:
           min_successful_responses: 1
           max_responses_per_round: 2
           include_intermediate_responses: false
-          on_error: skip
           synthesis_template: |-
             You are solving LiveCodeBench. Compare the reference solutions
             against the original programming problem and return the single most
@@ -439,6 +439,7 @@ routing:
         - model: glm52-finalizer
       algorithm:
         type: remom
+        on_error: skip
         remom:
           breadth_schedule: [2]
           model_distribution: round_robin
@@ -452,7 +453,6 @@ routing:
           min_successful_responses: 1
           max_responses_per_round: 2
           include_intermediate_responses: false
-          on_error: skip
           synthesis_template: |-
             You are solving LiveCodeBench. Compare the reference solutions
             against the original programming problem and return the single most
@@ -487,6 +487,7 @@ routing:
         - model: glm52-finalizer
       algorithm:
         type: remom
+        on_error: skip
         remom:
           breadth_schedule: [2]
           model_distribution: round_robin
@@ -500,7 +501,6 @@ routing:
           min_successful_responses: 1
           max_responses_per_round: 2
           include_intermediate_responses: false
-          on_error: skip
           synthesis_template: |-
             You are solving LiveCodeBench. Compare the reference solutions
             against the original programming problem and return the single most

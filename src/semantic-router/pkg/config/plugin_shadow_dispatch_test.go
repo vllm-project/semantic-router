@@ -114,8 +114,8 @@ func TestShadowDispatchModelMustHaveBackend(t *testing.T) {
 	})
 	decision.Algorithm = &AlgorithmConfig{Type: DecisionAlgorithmRatings}
 	err = validateDecisionShadowDispatchPlugin(cfg, decision)
-	if err == nil || !strings.Contains(err.Error(), "looper-executed") {
-		t.Fatalf("error = %v, want looper rejection", err)
+	if err == nil || !strings.Contains(err.Error(), "executor algorithm") {
+		t.Fatalf("error = %v, want executor rejection", err)
 	}
 }
 

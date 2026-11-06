@@ -159,10 +159,6 @@ func (s *closeTrackingSelector) Select(context.Context, *selection.SelectionCont
 
 func (s *closeTrackingSelector) Method() selection.SelectionMethod { return s.method }
 
-func (s *closeTrackingSelector) UpdateFeedback(context.Context, *selection.Feedback) error {
-	return nil
-}
-
 func (s *closeTrackingSelector) Tier() selection.AlgorithmTier { return selection.TierSupported }
 
 func (s *closeTrackingSelector) ExternalDependencies() []selection.Dependency { return nil }

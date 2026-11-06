@@ -41,7 +41,7 @@ routing:
 	if err != nil {
 		t.Fatal(err)
 	}
-	selector := NewFactory(nil).WithCategories(cfg.Categories).Create()
+	selector, _ := NewFactory().WithCategories(cfg.Categories).CreateAll().Get(MethodStatic)
 	decision := cfg.Decisions[0]
 	result, err := selector.Select(context.Background(), &SelectionContext{
 		CategoryName:    "business",

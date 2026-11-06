@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"strings"
 )
 
 func validateRoutingStrategy(cfg *RouterConfig) error {
@@ -15,12 +14,6 @@ func validateRoutingStrategy(cfg *RouterConfig) error {
 func validateModelSelectionConfig(cfg *RouterConfig) error {
 	if isLookupTableConfigConfigured(cfg.ModelSelection.LookupTables) {
 		return fmt.Errorf("global.router.model_selection.lookup_tables has moved to future Router Learning experience; remove lookup_tables from public config")
-	}
-	if method := strings.TrimSpace(cfg.ModelSelection.Method); removedGlobalLearningSelector(method) {
-		return fmt.Errorf("global.router.model_selection.%s is no longer supported; use global.router.learning.adaptation", method)
-	}
-	if isEloSelectionConfigConfigured(cfg.ModelSelection.Elo) {
-		return fmt.Errorf("global.router.model_selection.elo is no longer supported; use global.router.learning.adaptation")
 	}
 	return nil
 }

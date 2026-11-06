@@ -157,15 +157,14 @@ routing:
         - model: large-code-model
           use_reasoning: false
       algorithm:
-        type: confidence
-        confidence:
-          confidence_method: hybrid
-          threshold: 0.72
-          escalation_order: small_to_large
-          on_error: skip
+        type: escalate
+        escalate:
+          order: size
+          accept:
+            confidence: {method: hybrid, gte: 0.72}
 ```
 
-`computer science` 信号和两个提供商模型也必须存在于同一配方中。完整约定见[置信度教程](/zh-Hans/docs/tutorials/algorithm/looper/confidence)。
+`computer science` 信号和两个提供商模型也必须存在于同一配方中。完整约定见[Escalate 教程](../../tutorials/algorithm/looper/escalate.md)。
 
 当客户端发送 `"stream": true` 时，Semantic Router 调用候选模型，聚合 looper 结果，并向网关返回立即 SSE body。客户端仍收到正常的 OpenAI 兼容流：
 

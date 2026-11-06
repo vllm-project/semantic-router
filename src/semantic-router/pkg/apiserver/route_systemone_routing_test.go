@@ -57,13 +57,14 @@ recipes:
           rules: {type: keyword, name: greeting}
           modelRefs: [{model: fast}]
           algorithm: &simple
-            type: cascade
+            type: escalate
             budget: {deadline: 2s, max_calls: 1}
-            quality:
-              type: uncalibrated
-              acceptance:
-                rules: [{question_type: choice, field: top_probability, predicate: {gte: 0}}]
-            stages: [{name: fast, kind: native, model: fast}]
+            escalate:
+              quality:
+                type: uncalibrated
+                accept:
+                  native: [{question_type: choice, field: top_probability, gte: 0}]
+              stages: [{name: fast, model: fast}]
         - name: complex
           rules: {}
           modelRefs: [{model: fast}]

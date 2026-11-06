@@ -71,6 +71,7 @@ routing:
         - model: qwen/qwen3.6-rocm
       algorithm:
         type: workflows
+        on_error: skip
         workflows:
           mode: dynamic
           planner:
@@ -80,7 +81,6 @@ routing:
           max_parallel: 3
           round_timeout_seconds: 90
           min_successful_responses: 2
-          on_error: skip
 ```
 
 `output_contract` 是决策范围的提示词文本。把它用于应同时作用于静态 Flow、动态 Flow、Fusion 和 ReMoM 的基准或应用格式要求，而不是把任务特定提示词硬编码进算法。使用 `output_contract_spec` 做类型化的路由器可执行归一化和后处理，例如 choice 提取、终端动作 JSON 归一化或引用解引用。提取默认精确匹配 `content`；仅当决策明确允许更宽的解析器时，才使用 `extract.sources` 或 `extract.mode: json_object`。
@@ -105,6 +105,7 @@ routing:
         - model: deepseek-worker
       algorithm:
         type: workflows
+        on_error: skip
         workflows:
           mode: static
           roles:
@@ -119,7 +120,6 @@ routing:
           max_steps: 3
           max_parallel: 1
           round_timeout_seconds: 90
-          on_error: skip
 ```
 
 ## 参数
@@ -143,7 +143,7 @@ routing:
 | `min_successful_responses` | int | 全部模型 | 达到该成功 worker 数后即可继续并行步骤 |
 | `temperature` | float | 请求默认值 | 规划器、worker 和合成调用的温度 |
 | `include_intermediate_responses` | bool | `true` | 在响应追踪中包含 Flow 计划和 worker 输出 |
-| `on_error` | string | `fail` | worker 出错时 `fail`，或在至少一个 worker 成功时 `skip` 失败的 worker |
+| `algorithm.on_error` | string | `fail` | 与 `type` 并列，而不在此块中：worker 出错时 `fail`，或在至少一个 worker 成功时 `skip` 失败的 worker |
 
 每个静态角色和每个规划器生成的步骤都必须包含至少 `min_successful_responses` 个模型。无法满足配置法定人数的计划会被拒绝，而不是以静默降低的法定人数运行。
 

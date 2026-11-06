@@ -259,7 +259,7 @@ func TestNativePreviewRejectsUnprojectedDynamicRequestsBeforeRender(t *testing.T
 		}},
 		{name: "lora", mutate: func(ctx *RequestContext) { ctx.VSRSelectedDecision.ModelRefs[0].LoRAName = "adapter" }},
 		{name: "looper", mutate: func(ctx *RequestContext) {
-			ctx.VSRSelectedDecision.Algorithm = &config.AlgorithmConfig{Type: config.DecisionAlgorithmConfidence}
+			ctx.VSRSelectedDecision.Algorithm = &config.AlgorithmConfig{Type: config.DecisionAlgorithmEscalate}
 		}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

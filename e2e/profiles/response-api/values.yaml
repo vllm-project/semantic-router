@@ -127,7 +127,7 @@ config:
         modelRefs:
           - model: mock/cache-affinity-b
       - name: cache_affinity_decision
-        description: Tie two identical candidates under hybrid selection.
+        description: Tie two identical candidates under multi_factor selection.
         priority: 105
         rules:
           operator: AND
@@ -138,12 +138,9 @@ config:
           - model: mock/cache-affinity-a
           - model: mock/cache-affinity-b
         algorithm:
-          type: hybrid
-          hybrid:
-            experience_weight: 0.4
-            router_dc_weight: 0.4
-            automix_weight: 0.2
-            cost_weight: 0.1
+          type: multi_factor
+          multi_factor:
+            weights: {quality: 0.2, cost: 0.1}
       - name: default_decision
         description: Default catch-all decision
         priority: 1

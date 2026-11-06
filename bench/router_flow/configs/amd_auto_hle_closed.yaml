@@ -189,6 +189,7 @@ routing:
           reasoning_effort: high
       algorithm:
         type: remom
+        on_error: skip
         remom:
           breadth_schedule: [4]
           model_distribution: round_robin
@@ -202,7 +203,6 @@ routing:
           min_successful_responses: 2
           max_responses_per_round: 4
           include_intermediate_responses: false
-          on_error: skip
           synthesis_template: |-
             You are the final HLE answer synthesizer for a closed-model router.
             The candidate panel contains only Claude Opus 4.8 and Gemini 3.1 Pro
@@ -247,6 +247,7 @@ routing:
           reasoning_effort: high
       algorithm:
         type: fusion
+        on_error: skip
         fusion:
           model: gemini31-worker
           analysis_models: [opus48-worker, gemini31-worker]
@@ -257,7 +258,6 @@ routing:
           temperature: 0.8
           include_analysis: false
           include_intermediate_responses: false
-          on_error: skip
           synthesis_template: |-
             You are the final HLE answer judge for a closed-model router.
 
@@ -299,6 +299,7 @@ routing:
           reasoning_effort: high
       algorithm:
         type: remom
+        on_error: skip
         remom:
           breadth_schedule: [3]
           model_distribution: round_robin
@@ -312,7 +313,6 @@ routing:
           min_successful_responses: 2
           max_responses_per_round: 3
           include_intermediate_responses: false
-          on_error: skip
           synthesis_template: |-
             Produce the final HLE answer from closed-model attempts only.
 

@@ -42,30 +42,3 @@ def test_decision_annotations_enforce_transport_bounds():
                 "annotations": {"payload": "x" * 4097},
             }
         )
-
-
-def test_prompt_candidates_reject_effective_lora_identity_collision():
-    with pytest.raises(PydanticValidationError):
-        Decision.model_validate(
-            {
-                "name": "prompt-route",
-                "description": "route",
-                "priority": 1,
-                "rules": {},
-                "modelRefs": [
-                    {
-                        "model": "base",
-                        "lora_name": "specialist",
-                        "use_reasoning": False,
-                    },
-                    {"model": "specialist", "use_reasoning": False},
-                ],
-                "algorithm": {
-                    "type": "prompt",
-                    "prompt": {
-                        "model": "helper",
-                        "instructions": "Choose.",
-                    },
-                },
-            }
-        )

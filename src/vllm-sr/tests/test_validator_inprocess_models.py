@@ -86,10 +86,10 @@ def _refused(model: str) -> str:
         pytest.param(
             """      modelRefs: [{model: a}, {model: b}]
       algorithm:
-        type: prompt
-        prompt: {model: b, instructions: Pick one.}""",
+        type: escalate
+        escalate: {accept: {confidence: {method: avg_logprob, gte: 0.6}}}""",
             "b",
-            id="the prompt helper",
+            id="an escalate candidate",
         ),
         pytest.param(
             """      modelRefs: [{model: b}]
@@ -117,6 +117,21 @@ def test_a_model_called_in_process_needs_backend_refs(tmp_path, decision, missin
             """      modelRefs: [{model: a}, {model: b}]
       algorithm: {type: static}""",
             id="a decision that only routes",
+        ),
+        pytest.param(
+            """      modelRefs: [{model: a}, {model: b}]
+      algorithm:
+        type: escalate
+        budget: {deadline: 3s, max_calls: 2}
+        escalate:
+          quality:
+            type: uncalibrated
+            accept:
+              native:
+                - {question_type: choice, field: top_probability, gte: 0.9}
+          stages:
+            - {name: fast, model: b}""",
+            id="System One escalate stages",
         ),
     ],
 )

@@ -47,7 +47,7 @@ _INTENTS: dict[str, dict[str, str]] = {
         "fragment": "fragments/algorithm/selection/latency-aware.yaml",
         "source": "config/fragments/algorithm/selection/latency-aware.yaml",
         "summary": (
-            "Attach the maintained latency-aware selection algorithm to one "
+            "Attach the maintained latency-weighted multi_factor selector to one "
             "existing decision."
         ),
     },

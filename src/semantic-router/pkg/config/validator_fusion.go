@@ -85,7 +85,7 @@ func validateFusionFallbackTargetModel(
 		return fusionFallbackTargetError(decision.Name, target,
 			"must use an OpenAI-compatible API format")
 	}
-	if !promptHelperModalitySupported(modelConfig.Modality) {
+	if !chatTextModality(modelConfig.Modality) {
 		return fusionFallbackTargetError(decision.Name, target,
 			"must be chat-capable text modality")
 	}
@@ -94,11 +94,29 @@ func validateFusionFallbackTargetModel(
 	if reason := fusionFallbackPanelRejection(cfg, decision, fusion, target); reason != "" {
 		return fusionFallbackTargetError(decision.Name, target, reason)
 	}
-	if !promptHelperHasBackend(cfg, target) {
+	if !modelHasBackend(cfg, target) {
 		return fusionFallbackTargetError(decision.Name, target,
 			"requires a provider backend")
 	}
 	return nil
+}
+
+func modelHasBackend(cfg *RouterConfig, model string) bool {
+	for _, endpoint := range cfg.VLLMEndpoints {
+		if endpoint.Model == model || endpoint.Name == model {
+			return true
+		}
+	}
+	return false
+}
+
+func chatTextModality(modality string) bool {
+	switch strings.ToLower(strings.TrimSpace(modality)) {
+	case "", "text", "ar", "both", "multimodal":
+		return true
+	default:
+		return false
+	}
 }
 
 // fusionFallbackPanelRejection reports why the target cannot serve the effective

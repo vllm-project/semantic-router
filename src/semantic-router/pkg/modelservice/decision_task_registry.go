@@ -54,12 +54,13 @@ func BuiltinTasks() []TaskDefinition {
 		preset("pii_spans", "Personal data locations", presets.PII, "request", "text"),
 		noul("hallucination", "Grounded answer", "Does the answer contain any factual claim that is unsupported by or contradicts the supplied grounding context? Judge the answer against context, not outside knowledge.", "response", "grounded"),
 		preset("hallucination_spans", "Unsupported answer locations", presets.Hallucination, "response", "grounded"),
+		preset("answer_check", "Correct and complete answer", presets.AnswerCheck, "response", "answer"),
 		choice("model_selection", "Choose a candidate model", "Which candidate model is best suited to answer this request? Choose only a listed candidate.", false,
 			Choice{"fast", "fast model for straightforward requests"}, Choice{"reasoning", "model for complex reasoning"}),
 	}
 	tasks[len(tasks)-1].Stage = "selection"
 	for i := range tasks {
-		kind, consumer, binding, optional := "signal", tasks[i].ID, tasks[i].ID, false
+		kind, consumer, binding := "signal", tasks[i].ID, tasks[i].ID
 		switch tasks[i].ID {
 		case "pii_presence", "pii_categories":
 			kind, consumer, binding = "plugin", "masking", "pii"
@@ -74,8 +75,10 @@ func BuiltinTasks() []TaskDefinition {
 			consumer = "hallucination"
 		case "model_selection":
 			kind, consumer, binding = "algorithm", "systemone", ""
+		case "answer_check":
+			kind, consumer, binding = "algorithm", "escalate", ""
 		}
-		tasks[i].Consumers = []TaskConsumerReference{{Kind: kind, Type: consumer, Optional: optional, Binding: binding}}
+		tasks[i].Consumers = []TaskConsumerReference{{Kind: kind, Type: consumer, Binding: binding}}
 	}
 	return tasks
 }
@@ -146,6 +149,8 @@ func (d TaskDefinition) Template() TaskTemplate {
 		state = map[string]string{"context": "The library is open Monday through Friday, 09:00–17:00.", "request": "Is the library open on Sunday?", "answer": "Yes, it is open on Sunday."}
 	} else if d.Input == "pair" {
 		state = map[string]string{"current": "Could you explain binary search more clearly?", "prior": "How does binary search work?"}
+	} else if d.Input == "answer" {
+		state = map[string]string{"request": "What is the capital of France?", "answer": "The capital of France is Paris."}
 	} else if d.ID == "pii_presence" || d.ID == "pii_categories" || d.ID == "pii_spans" {
 		state = "Please email Alex at alex@example.com."
 	}

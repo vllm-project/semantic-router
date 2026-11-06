@@ -21,12 +21,10 @@ describe('decision editor preservation', () => {
       ],
       plugins: [],
       algorithm: {
-        type: 'prompt',
-        on_error: 'fallback',
-        prompt: {
-          model: 'router-small',
+        type: 'systemone',
+        systemone: {
           instructions: 'Choose.',
-          timeout_seconds: 5,
+          timeout_ms: 5000,
         },
       },
     }

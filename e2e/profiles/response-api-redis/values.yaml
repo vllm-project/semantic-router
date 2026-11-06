@@ -33,12 +33,12 @@ config:
               name: workflow_keyword
         algorithm:
           type: workflows
+          on_error: skip
           workflows:
             mode: dynamic
             planner:
               model: openai/workflow-planner
             max_steps: 2
-            on_error: skip
             final:
               model: openai/gpt-oss-20b
         modelRefs:

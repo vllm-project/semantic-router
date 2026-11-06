@@ -24,7 +24,7 @@ translation:
 | 检测个人信息 | [PII](./classifier-models#pii-detector) | 实体片段 |
 | 应用内容风险策略 | [Safety 和 Hazard](./mmbert-safety-classifier) | 安全判断和风险类别 |
 
-[Vela 模型目录](./model-catalog)列出了各任务 checkpoint。Vela 1.0 接受文本输入；[多模态嵌入](./multimodal-embeddings)属于独立家族。[后端模型评测](./model-performance-eval)和[学习式模型选择](./ml-model-selection)用于选择下游 LLM。
+[Vela 模型目录](./model-catalog)列出了各任务 checkpoint。Vela 1.0 接受文本输入；[多模态嵌入](./multimodal-embeddings)属于独立家族。[后端模型评测](./model-performance-eval)用于选择下游 LLM。
 
 ## 选择起始模型 {#record-the-base-and-task-lineage}
 

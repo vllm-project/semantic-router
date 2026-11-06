@@ -241,7 +241,7 @@ export const X_VSR_LEARNING_REASONS = 'x-vsr-learning-reasons'
 /** Identity scope per method, such as `protection=conversation`. Surface: debug. */
 export const X_VSR_LEARNING_SCOPES = 'x-vsr-learning-scopes'
 
-/** Looper algorithm, such as `confidence`. Surface: debug. */
+/** Executor algorithm, such as `escalate`. Surface: debug. */
 export const X_VSR_LOOPER_ALGORITHM = 'x-vsr-looper-algorithm'
 
 /** Completion tokens across the Looper's calls. Surface: debug. */

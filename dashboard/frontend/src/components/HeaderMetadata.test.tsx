@@ -9,7 +9,7 @@ const routingHeaders = {
   'x-vsr-response-path': 'upstream',
   'x-vsr-selected-model': 'qwen/qwen3.5-rocm',
   'x-vsr-selected-decision': 'complex-specialist',
-  'x-vsr-selected-algorithm': 'router_dc',
+  'x-vsr-selected-algorithm': 'systemone',
   'x-vsr-matched-domains': 'computer science',
 }
 

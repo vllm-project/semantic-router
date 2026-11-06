@@ -31,7 +31,7 @@ func TestTaskCatalogSeparatesAvailableTasksFromActiveBindings(t *testing.T) {
 		}
 	}
 	for _, task := range response.Tasks {
-		if task.ID == "pii_spans" && (len(task.Consumers) != 1 || task.Consumers[0].Optional || task.Consumers[0].Binding != "pii") {
+		if task.ID == "pii_spans" && (len(task.Consumers) != 1 || task.Consumers[0].Binding != "pii") {
 			t.Fatal("a pii rule requires span answers")
 		}
 	}

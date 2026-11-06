@@ -146,12 +146,9 @@ func TestBuildCanonicalConfigAppliesCanonicalRoutingOverride(t *testing.T) {
 								{"model": "deep-model"}
 							],
 							"algorithm": {
-								"type": "hybrid",
-								"hybrid": {
-									"experience_weight": 0.4,
-									"router_dc_weight": 0.4,
-									"automix_weight": 0.2,
-									"normalize_scores": true
+								"type": "multi_factor",
+								"multi_factor": {
+									"weights": {"quality": 0.6, "cost": 0.4}
 								}
 							}
 						}
@@ -176,7 +173,7 @@ func TestBuildCanonicalConfigPreservesDecisionAlgorithm(t *testing.T) {
 			Config: vllmv1alpha1.ConfigSpec{
 				Decisions: []vllmv1alpha1.DecisionConfig{
 					{
-						Name: "hybrid-route",
+						Name: "weighted-route",
 						Rules: vllmv1alpha1.RuleCombinationConfig{
 							Operator:  "AND",
 							OnUnknown: "fail_request",
@@ -189,12 +186,9 @@ func TestBuildCanonicalConfigPreservesDecisionAlgorithm(t *testing.T) {
 							{Model: "deep-model"},
 						},
 						Algorithm: rawCanonicalRoutingJSON(t, `{
-							"type": "hybrid",
-							"hybrid": {
-								"experience_weight": 0.4,
-								"router_dc_weight": 0.4,
-								"automix_weight": 0.2,
-								"normalize_scores": true
+							"type": "multi_factor",
+							"multi_factor": {
+								"weights": {"quality": 0.6, "cost": 0.4}
 							}
 						}`),
 					},
@@ -212,11 +206,11 @@ func TestBuildCanonicalConfigPreservesDecisionAlgorithm(t *testing.T) {
 		t.Fatalf("expected one decision, got %#v", canonical.Routing.Decisions)
 	}
 	algorithm := canonical.Routing.Decisions[0].Algorithm
-	if algorithm == nil || algorithm.Type != "hybrid" || algorithm.Hybrid == nil {
-		t.Fatalf("expected hybrid algorithm to survive typed decision conversion, got %#v", algorithm)
+	if algorithm == nil || algorithm.Type != "multi_factor" || algorithm.MultiFactor == nil || algorithm.MultiFactor.Weights == nil {
+		t.Fatalf("expected multi_factor algorithm to survive typed decision conversion, got %#v", algorithm)
 	}
-	if algorithm.Hybrid.ExperienceWeight != 0.4 || !algorithm.Hybrid.NormalizeScores {
-		t.Fatalf("expected hybrid fields to survive typed decision conversion, got %#v", algorithm.Hybrid)
+	if algorithm.MultiFactor.Weights.Quality != 0.6 || algorithm.MultiFactor.Weights.Cost != 0.4 {
+		t.Fatalf("expected multi_factor weights to survive typed decision conversion, got %#v", algorithm.MultiFactor)
 	}
 	if canonical.Routing.Decisions[0].Rules.Conditions[0].Type != "keyword" {
 		t.Fatalf("expected keyword condition to survive typed decision conversion, got %#v", canonical.Routing.Decisions[0].Rules)
@@ -353,11 +347,11 @@ func assertCanonicalAgenticWorkflowDecision(t *testing.T, decisions []routerconf
 		decision.Rules.Conditions[2].Type != "projection" {
 		t.Fatalf("unexpected decision condition types: %#v", decision.Rules.Conditions)
 	}
-	if decision.Algorithm == nil || decision.Algorithm.Type != "hybrid" || decision.Algorithm.Hybrid == nil {
-		t.Fatalf("expected hybrid algorithm, got %#v", decision.Algorithm)
+	if decision.Algorithm == nil || decision.Algorithm.Type != "multi_factor" || decision.Algorithm.MultiFactor == nil || decision.Algorithm.MultiFactor.Weights == nil {
+		t.Fatalf("expected multi_factor algorithm, got %#v", decision.Algorithm)
 	}
-	if decision.Algorithm.Hybrid.ExperienceWeight != 0.4 || !decision.Algorithm.Hybrid.NormalizeScores {
-		t.Fatalf("expected hybrid fields, got %#v", decision.Algorithm.Hybrid)
+	if decision.Algorithm.MultiFactor.Weights.Quality != 0.6 || decision.Algorithm.MultiFactor.Weights.Cost != 0.4 {
+		t.Fatalf("expected multi_factor weights, got %#v", decision.Algorithm.MultiFactor)
 	}
 }
 

@@ -75,9 +75,9 @@ func (r *OpenAIRouter) looperExecutionErrorResponse(
 }
 
 func looperFailureEvidenceFromError(err error) (looperFailureEvidence, bool) {
-	if evidence, ok := looper.ConfidenceEvidenceFromError(err); ok {
+	if evidence, ok := looper.EscalateEvidenceFromError(err); ok {
 		return looperFailureEvidence{
-			algorithm:      config.DecisionAlgorithmConfidence,
+			algorithm:      config.DecisionAlgorithmEscalate,
 			modelsUsed:     append([]string(nil), evidence.ModelsUsed...),
 			iterations:     evidence.Iterations,
 			usage:          evidence.Usage,
@@ -136,7 +136,7 @@ func (evidence looperFailureEvidence) addLogFields(fields map[string]interface{}
 	fields["prompt_tokens"] = evidence.usage.PromptTokens
 	fields["completion_tokens"] = evidence.usage.CompletionTokens
 	fields["total_tokens"] = evidence.usage.TotalTokens
-	if evidence.algorithm == config.DecisionAlgorithmConfidence {
+	if evidence.algorithm == config.DecisionAlgorithmEscalate {
 		fields["models_used"] = evidence.modelsUsed
 		fields["iterations"] = evidence.iterations
 	}
@@ -178,7 +178,7 @@ func (r *OpenAIRouter) recordLooperFailure(
 
 func applyLooperFailureEvidence(ctx *RequestContext, evidence looperFailureEvidence) {
 	switch evidence.algorithm {
-	case config.DecisionAlgorithmConfidence:
+	case config.DecisionAlgorithmEscalate:
 		ctx.VSRLooperDiagnostics = looperReplayDiagnostics(evidence.executionTrace)
 		if evidence.iterations <= 0 {
 			return

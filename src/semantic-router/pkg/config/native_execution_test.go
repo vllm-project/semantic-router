@@ -13,7 +13,7 @@ func TestNativeCascadeAndCalibrationUseCommonContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	algorithm := findRecipe(cfg.Recipes, "native-decisions").Profile.Decisions[0].Algorithm
-	if algorithm.Budget.MaxCalls != 4 || len(algorithm.Stages) != 3 || algorithm.Quality.Type != "uncalibrated" {
+	if algorithm.Budget.MaxCalls != 4 || len(algorithm.Escalate.Stages) != 3 || algorithm.Escalate.Quality.Type != "uncalibrated" {
 		t.Fatalf("cascade contract lost: %+v", algorithm)
 	}
 	// Configuration parsing checks references and immutable identities without
@@ -21,7 +21,7 @@ func TestNativeCascadeAndCalibrationUseCommonContract(t *testing.T) {
 	canonical := CanonicalConfigFromRouterConfig(cfg)
 	risk := 0.01
 	canonical.Evaluation = &CanonicalEvaluation{Calibrations: []CalibrationArtifact{{Name: "suite-v1", Source: "./calibration/suite.json", SHA256: digest}}}
-	canonical.Recipes[0].Routing.Decisions[0].Algorithm.Quality = &NativeQualityConfig{
+	canonical.Recipes[0].Routing.Decisions[0].Algorithm.Escalate.Quality = &EscalateQuality{
 		Type: "calibrated", Calibration: "suite-v1", Loss: "bundle_error", MaxRisk: &risk,
 	}
 	calibrated, err := normalizeCanonicalConfig(&canonical)
@@ -32,7 +32,7 @@ func TestNativeCascadeAndCalibrationUseCommonContract(t *testing.T) {
 	if !ok || artifact.SHA256 != digest {
 		t.Fatalf("calibration reference = %+v, %v", artifact, ok)
 	}
-	canonical.Recipes[0].Routing.Decisions[0].Algorithm.Quality.Calibration = "missing"
+	canonical.Recipes[0].Routing.Decisions[0].Algorithm.Escalate.Quality.Calibration = "missing"
 	if _, err := normalizeCanonicalConfig(&canonical); err == nil || !strings.Contains(err.Error(), "unknown evaluation calibration") {
 		t.Fatalf("unresolved evidence reference accepted: %v", err)
 	}
@@ -51,14 +51,14 @@ func TestNativeArtifactAndQualityValidation(t *testing.T) {
 		}
 	}
 	for _, risk := range []float64{math.NaN(), math.Inf(1), -0.01, 1.01} {
-		if err := validateNativeQuality(&NativeQualityConfig{Type: "calibrated", Calibration: "suite", Loss: "bundle_error", MaxRisk: &risk}); err == nil {
+		if err := validateNativeQuality(&EscalateQuality{Type: "calibrated", Calibration: "suite", Loss: "bundle_error", MaxRisk: &risk}); err == nil {
 			t.Fatalf("invalid risk accepted: %v", risk)
 		}
 	}
-	if err := validateNativeQuality(&NativeQualityConfig{Type: "uncalibrated", Calibration: "suite"}); err == nil {
+	if err := validateNativeQuality(&EscalateQuality{Type: "uncalibrated", Calibration: "suite"}); err == nil {
 		t.Fatal("uncalibrated policy accepted calibrated evidence")
 	}
-	if err := validateNativeQuality(&NativeQualityConfig{Type: "calibrated", Calibration: "suite", Loss: "bundle_error"}); err == nil {
+	if err := validateNativeQuality(&EscalateQuality{Type: "calibrated", Calibration: "suite", Loss: "bundle_error"}); err == nil {
 		t.Fatal("omitted risk target interpreted as a scientific default")
 	}
 }
@@ -102,7 +102,7 @@ func TestNativeStageRestrictionsAndSharedCandidateRoster(t *testing.T) {
 		t.Fatal(err)
 	}
 	decision := findRecipe(cfg.Recipes, "native-decisions").Profile.Decisions[0]
-	decision.Algorithm.Stages[1].Model = "undeclared"
+	decision.Algorithm.Escalate.Stages[1].Model = "undeclared"
 	if err := validateDecisionAlgorithmConfig(decision.Name, decision.ModelRefs, decision.Algorithm); err == nil {
 		t.Fatal("stage expanded the sole candidate roster")
 	}
@@ -115,28 +115,28 @@ func TestNativeExportDoesNotMutateRetainedPolicy(t *testing.T) {
 	}
 	retained := findRecipe(cfg.Recipes, "native-decisions").Profile.Decisions[0].Algorithm
 	exported := CanonicalConfigFromRouterConfig(cfg).Recipes[0].Routing.Decisions[0].Algorithm
-	exported.Stages[0].Model = "different"
-	*exported.Stages[2].Enabled = true
-	*exported.Quality.Acceptance.Rules[0].State = "another-state"
-	*exported.Quality.Acceptance.Rules[0].Predicate.GTE = 0.01
-	if retained.Stages[0].Model != "kai" || retained.Stages[2].IsEnabled() ||
-		*retained.Quality.Acceptance.Rules[0].State != "document" || *retained.Quality.Acceptance.Rules[0].Predicate.GTE != 0.8 {
+	exported.Escalate.Stages[0].Model = "different"
+	*exported.Escalate.Stages[2].Enabled = true
+	*exported.Escalate.Quality.Accept.Native[0].State = "another-state"
+	*exported.Escalate.Quality.Accept.Native[0].GTE = 0.01
+	if retained.Escalate.Stages[0].Model != "kai" || retained.Escalate.Stages[2].IsEnabled() ||
+		*retained.Escalate.Quality.Accept.Native[0].State != "document" || *retained.Escalate.Quality.Accept.Native[0].GTE != 0.8 {
 		t.Fatal("export mutated a retained native execution graph")
 	}
 }
 
 func TestNativeAcceptanceProbabilityBounds(t *testing.T) {
 	for _, value := range []float64{math.NaN(), math.Inf(1), -0.01, 1.01} {
-		err := validateNativeAcceptance(&NativeAcceptance{Rules: []NativeAcceptanceRule{{
-			QuestionType: "choice", Field: "top_probability", Predicate: NumericPredicate{GTE: &value},
+		err := validateNativeAcceptance(&EscalateAccept{Native: []NativeAcceptanceRule{{
+			QuestionType: "choice", Field: "top_probability", NumericPredicate: NumericPredicate{GTE: &value},
 		}}})
 		if err == nil {
 			t.Fatalf("invalid probability threshold accepted: %v", value)
 		}
 	}
 	for _, value := range []float64{0, 0.9, 1} {
-		err := validateNativeAcceptance(&NativeAcceptance{Rules: []NativeAcceptanceRule{{
-			QuestionType: "noul", Field: "top_probability", Predicate: NumericPredicate{GTE: &value},
+		err := validateNativeAcceptance(&EscalateAccept{Native: []NativeAcceptanceRule{{
+			QuestionType: "noul", Field: "top_probability", NumericPredicate: NumericPredicate{GTE: &value},
 		}}})
 		if err != nil {
 			t.Fatalf("valid native threshold failed: %v", err)

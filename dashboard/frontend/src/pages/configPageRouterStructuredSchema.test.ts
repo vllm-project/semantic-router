@@ -229,13 +229,7 @@ describe('router defaults structured schemas', () => {
   it('builds custom controls for every migrated field and preserves model-selection extensions', () => {
     const selection = {
       enabled: true,
-      method: 'hybrid',
       momentum: { enabled: true, attack: 0.7 },
-      ml: {
-        models_path: 'models/selection',
-        knn: { k: 5 },
-        tuning: { switch_margin: 0.05 },
-      },
     }
     const cards = buildRouterSectionCards({
       config: null,
@@ -260,11 +254,7 @@ describe('router defaults structured schemas', () => {
       'boolean',
     )
     const selectionCard = cards.find((card) => card.key === 'model_selection')
-    expect(
-      selectionCard?.editFields
-        .filter((field) => ['knn', 'router_dc', 'hybrid'].includes(field.name))
-        .every((field) => field.type === 'custom'),
-    ).toBe(true)
+    expect(selectionCard?.editFields.map((field) => field.name)).toEqual(['enabled'])
 
     const remainingJsonFields = cards.flatMap((card) =>
       card.editFields
@@ -275,17 +265,12 @@ describe('router defaults structured schemas', () => {
 
     const patch = selectionCard?.save({
       ...selectionCard.editData,
-      knn: { k: 9 },
+      enabled: false,
     }) as { router?: { model_selection?: Record<string, unknown> } }
-    const saved = patch.router?.model_selection
-    expect(saved?.momentum).toEqual({ enabled: true, attack: 0.7 })
-    expect(saved?.ml).toEqual(
-      expect.objectContaining({
-        models_path: 'models/selection',
-        knn: { k: 9 },
-        tuning: { switch_margin: 0.05 },
-      }),
-    )
+    expect(patch.router?.model_selection).toEqual({
+      enabled: false,
+      momentum: { enabled: true, attack: 0.7 },
+    })
 
     const classifierCard = cards.find((card) => card.key === 'classifier')
     const classifierPatch = classifierCard?.save(classifierCard.editData) as {

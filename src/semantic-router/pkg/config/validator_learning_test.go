@@ -769,8 +769,8 @@ global:
 			if err == nil {
 				t.Fatalf("expected model_selection.method=%s to be rejected", method)
 			}
-			if !strings.Contains(err.Error(), "global.router.learning.adaptation") {
-				t.Fatalf("expected Router Learning migration error, got %v", err)
+			if !strings.Contains(err.Error(), "global.router.model_selection.method is removed") {
+				t.Fatalf("expected the removed selection method error, got %v", err)
 			}
 		})
 	}

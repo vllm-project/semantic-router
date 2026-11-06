@@ -65,12 +65,7 @@ func TestSelectorsRejectInvalidSelectionContextWithoutPanic(t *testing.T) {
 		}
 	}{
 		{name: "static", selector: NewStaticSelector(nil)},
-		{name: "elo", selector: NewEloSelector(nil)},
-		{name: "router_dc", selector: NewRouterDCSelector(nil)},
-		{name: "automix", selector: NewAutoMixSelector(nil)},
-		{name: "hybrid", selector: NewHybridSelector(nil)},
-		{name: "latency_aware", selector: NewLatencyAwareSelector(nil)},
-		{name: "ml_adapter", selector: NewMLSelectorAdapter(nil, MethodKNN)},
+		{name: "random", selector: NewRandomSelector()},
 		{name: "session_aware", selector: NewSessionAwareSelector(nil)},
 	}
 
@@ -116,12 +111,5 @@ func TestGlobalSelectRejectsInvalidSelectionContextBeforeFallback(t *testing.T) 
 	})
 	if !errors.Is(err, ErrCandidateModelNameMissing) {
 		t.Fatalf("expected %v, got %v", ErrCandidateModelNameMissing, err)
-	}
-}
-
-func TestSelectorCascadeEntrypointsRejectInvalidSelectionContext(t *testing.T) {
-	autoMix := NewAutoMixSelector(nil)
-	if _, _, err := autoMix.InitializeCascade(context.Background(), nil); !errors.Is(err, ErrSelectionContextRequired) {
-		t.Fatalf("expected %v, got %v", ErrSelectionContextRequired, err)
 	}
 }

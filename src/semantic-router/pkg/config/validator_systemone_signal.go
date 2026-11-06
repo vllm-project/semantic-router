@@ -38,15 +38,37 @@ func validateSystemOneContracts(cfg *RouterConfig) error {
 		return err
 	}
 	for _, decision := range cfg.Decisions {
-		algorithm := decision.Algorithm
-		if algorithm == nil || !strings.EqualFold(strings.TrimSpace(algorithm.Type), DecisionAlgorithmSystemOne) || algorithm.SystemOne == nil {
-			continue
+		if err := validateDecisionSystemOneQuestions(cfg, decision); err != nil {
+			return err
 		}
+	}
+	return nil
+}
+
+// validateDecisionSystemOneQuestions checks the deployment that answers a
+// decision's own System One question: the systemone selector's choice, or a
+// Chat escalation's answer_check (yes/no) or refusal (choice).
+func validateDecisionSystemOneQuestions(cfg *RouterConfig, decision Decision) error {
+	algorithm := decision.Algorithm
+	switch {
+	case algorithm != nil && strings.EqualFold(strings.TrimSpace(algorithm.Type), DecisionAlgorithmSystemOne) && algorithm.SystemOne != nil:
 		if err := validateQuestionDeployment(cfg, algorithm.SystemOne.Deployment, "selector"); err != nil {
 			return fmt.Errorf("decision '%s', algorithm.systemone: %w", decision.Name, err)
 		}
 		if err := validateDeclaredQuestionType(cfg, cfg.SystemOneSelectorDeployment(*algorithm.SystemOne), SystemOneQuestionChoice); err != nil {
 			return fmt.Errorf("decision '%s', algorithm.systemone: %w", decision.Name, err)
+		}
+	case algorithm.EscalateChecksAnswers():
+		accept := algorithm.Escalate.Accept
+		path, questionType := "algorithm.escalate.accept.refusal", SystemOneQuestionChoice
+		if accept.SystemOne != nil {
+			path, questionType = "algorithm.escalate.accept.systemone", SystemOneQuestionNoul
+			if err := validateQuestionDeployment(cfg, accept.SystemOne.Deployment, "answer check"); err != nil {
+				return fmt.Errorf("decision '%s', %s: %w", decision.Name, path, err)
+			}
+		}
+		if err := validateDeclaredQuestionType(cfg, cfg.EscalateCheckDeployment(accept), questionType); err != nil {
+			return fmt.Errorf("decision '%s', %s: %w", decision.Name, path, err)
 		}
 	}
 	return nil

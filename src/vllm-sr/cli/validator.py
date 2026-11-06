@@ -28,10 +28,6 @@ from pydantic import ValidationError as PydanticValidationError
 from cli.utils import get_logger
 from cli.validation_error import ValidationError
 from cli.validator_decision_model import validate_systemone_signals
-from cli.validator_latency import (
-    validate_latency_aware_algorithm_config,
-)
-from cli.validator_prompt import validate_prompt_dependencies
 from cli.validator_inprocess_models import validate_inprocess_model_backends
 from cli.validator_projection_embedding import (
     validate_projection_score_dependencies,
@@ -313,58 +309,6 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
     return errors
 
 
-def _router_dc_missing_description_errors(
-    decision, algo, config: UserConfig
-) -> List[ValidationError]:
-    if (
-        algo.type != "router_dc"
-        or not algo.router_dc
-        or not algo.router_dc.require_descriptions
-    ):
-        return []
-    errs: List[ValidationError] = []
-    routing_cards = {card.name: card for card in config.routing.model_cards}
-    for model_ref in decision.modelRefs:
-        model_card = routing_cards.get(model_ref.model)
-        if model_card is None or model_card.description:
-            continue
-        errs.append(
-            ValidationError(
-                f"Decision '{decision.name}' uses router_dc with require_descriptions=true, "
-                f"but model '{model_ref.model}' has no description",
-                field=f"routing.modelCards.{model_ref.model}.description",
-            )
-        )
-    return errs
-
-
-def _maybe_hybrid_weight_error(
-    decision_name: str,
-    algo_type: str,
-    algo,
-    field_prefix: str = "decisions",
-) -> ValidationError | None:
-    if algo_type != "hybrid" or not algo.hybrid:
-        return None
-    h = algo.hybrid
-    # Per-weight non-negativity is enforced by the pydantic model (ge=0).
-    # Weights are normalized at runtime, so they need not sum to 1.0 — but an
-    # all-zero set leaves the selector with nothing to normalize, so reject it.
-    total = (
-        (0.3 if h.experience_weight is None else h.experience_weight)
-        + (0.3 if h.router_dc_weight is None else h.router_dc_weight)
-        + (0.2 if h.automix_weight is None else h.automix_weight)
-        + (0.2 if h.cost_weight is None else h.cost_weight)
-    )
-    if total <= 0:
-        return ValidationError(
-            f"Decision '{decision_name}' hybrid weights are all zero; "
-            "at least one weight must be positive",
-            field=f"{field_prefix}.{decision_name}.algorithm.hybrid",
-        )
-    return None
-
-
 def _decision_candidate_names(decision) -> set[str]:
     return {
         (model_ref.lora_name or model_ref.model).strip()
@@ -466,10 +410,8 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
     """
     Validate algorithm configurations in decisions.
 
-    Validates both looper algorithms (confidence, ratings, remom, fusion,
-    workflows)
-    and selection algorithms (static, router_dc, automix, hybrid,
-    knn, kmeans, svm, mlp, multi_factor, latency_aware, prompt).
+    Validates the executors (escalate, fusion, remom, ratings, workflows)
+    and the selectors (static, random, multi_factor, systemone).
 
     Args:
         config: User configuration
@@ -497,18 +439,8 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
             )
             continue
 
-        errors.extend(_router_dc_missing_description_errors(decision, algo, config))
         errors.extend(_algorithm_quorum_errors(decision, algo, field_prefix))
         errors.extend(_workflow_configuration_errors(decision, algo, field_prefix))
-
-        hybrid_err = _maybe_hybrid_weight_error(
-            decision.name,
-            algo_type,
-            algo,
-            field_prefix,
-        )
-        if hybrid_err is not None:
-            errors.append(hybrid_err)
 
         remom_cfg = getattr(algo, "remom", None)
         if (
@@ -561,7 +493,6 @@ def validate_user_config(
     # Validate signal references
     errors.extend(validate_signal_references(config))
     errors.extend(validate_algorithm_one_of(config))
-    errors.extend(validate_latency_aware_algorithm_config(config))
 
     # Validate domain references
     errors.extend(validate_domain_references(config))
@@ -576,7 +507,6 @@ def validate_user_config(
 
     # Validate algorithm configurations
     errors.extend(validate_algorithm_configurations(config))
-    errors.extend(validate_prompt_dependencies(config))
     errors.extend(validate_inprocess_model_backends(config))
 
     # Validate projection score dependency ordering

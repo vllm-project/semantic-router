@@ -341,7 +341,7 @@ def test_serve_help_describes_docker_only_runtime():
     assert "Podman" not in result.output
     assert "--topology" not in result.output
     assert "--log-level" in result.output
-    assert "latency_aware" in result.output
+    assert "multi_factor" in result.output
     assert "random" in result.output
     assert "session_aware" not in result.output
     assert "--sim-image" not in result.output
@@ -887,7 +887,7 @@ def test_algorithm_mutation_consumes_generated_router_payload_inventory():
     }
 
 
-def test_inject_latency_aware_algorithm_keeps_matching_config_block(tmp_path: Path):
+def test_inject_selector_drops_executor_settings(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         yaml.safe_dump(
@@ -899,10 +899,12 @@ def test_inject_latency_aware_algorithm_keeps_matching_config_block(tmp_path: Pa
                 "routing": {
                     "decisions": [
                         {
-                            "name": "latency",
+                            "name": "panel",
                             "algorithm": {
-                                "type": "hybrid",
-                                "hybrid": {"experience_weight": 0.6},
+                                "type": "fusion",
+                                "on_error": "fail",
+                                "budget": {"deadline": "30s", "max_calls": 3},
+                                "fusion": {"model": "judge"},
                             },
                         },
                     ]
@@ -913,16 +915,13 @@ def test_inject_latency_aware_algorithm_keeps_matching_config_block(tmp_path: Pa
     )
 
     rewritten_path = runtime_commands.inject_algorithm_into_config(
-        config_path, "latency_aware"
+        config_path, "random"
     )
 
     with rewritten_path.open() as handle:
         rewritten = yaml.safe_load(handle)
 
-    assert rewritten["routing"]["decisions"][0]["algorithm"] == {
-        "type": "latency_aware",
-        "latency_aware": {"tpot_percentile": 90, "ttft_percentile": 95},
-    }
+    assert rewritten["routing"]["decisions"][0]["algorithm"] == {"type": "random"}
 
 
 def test_inject_workflows_algorithm_keeps_matching_config_block(tmp_path: Path):

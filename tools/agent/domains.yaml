@@ -709,15 +709,6 @@ domains:
     checks: [make test-training-contracts]
     verifications: [training]
 
-  model-selection-parity:
-    owner: training
-    paths:
-      - src/training/model_selection/ml_model_selection/models.py
-      - src/training/model_selection/ml_model_selection/tests/**
-      - src/training/model_selection/ml_model_selection/requirements-parity.txt
-    checks: []
-    verifications: [core]
-
   storage-integration:
     owner: router-core
     paths:
@@ -1109,17 +1100,6 @@ profiles:
       - e2e/profiles/production-stack/**
       - deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml
       - deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml
-  ml-model-selection:
-    display_name: Learned Model Selection
-    owner: e2e
-    coverage_role: ml-model-selection-contracts
-    selection: pr
-    paths:
-      - e2e/testcases/testdata/model_selection_cases.json
-      - e2e/testcases/model_selection.go
-      - e2e/profiles/ml-model-selection/**
-      - src/semantic-router/pkg/modelselection/**
-      - src/training/model_selection/ml_model_selection/**
   multi-endpoint:
     display_name: Multiple Endpoints
     owner: e2e

@@ -78,14 +78,14 @@ multiple named states. The selected native response retains its answers,
 probabilities, usage and other fields. `model` stays the public entrypoint;
 the additional `routing` object identifies the execution. Set
 `options.return_meta: true` to include the selected model's runtime metadata.
-Calibrated cascades collect this provenance internally even when
+Calibrated escalations collect this provenance internally even when
 you leave response metadata disabled.
 
 ```json
 {
-  "recipe": "native-cascade",
+  "recipe": "native-escalate",
   "decision": "classify",
-  "algorithm": "cascade",
+  "algorithm": "escalate",
   "stage": "strong",
   "selected_model": "vega",
   "quality": "uncalibrated",
@@ -97,7 +97,7 @@ you leave response metadata disabled.
 the selected algorithm, including remote decision-model calls and transport
 retries. Signal timeouts remain upper bounds inside the shared request deadline.
 It is not a count of GPU forwards. `usage` belongs to the returned native
-candidate and is not total cascade billing.
+candidate and is not total escalation billing.
 The `quality` field names the configured acceptance method; it is not an
 accuracy score. Native discovery marks recipe entrypoints with `routing: true`
 and concrete models with `routing: false`.
@@ -108,7 +108,7 @@ passes the declared acceptance rule, the request returns `503` with
 `503`; exhausting its deadline returns `504`. Both budget errors use
 `systemone_budget_exhausted` and include the reason and `model_calls` count.
 Failed candidates never become empty successful answers. Direct model requests
-keep their existing native API contract and do not run the cascade.
+keep their existing native API contract and do not run the escalation.
 
 A remote Engine backend must expose a concrete model. Native backend calls
 carry `X-VSR-SystemOne-Backend: 1`; a receiving Router returns `409`

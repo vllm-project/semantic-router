@@ -103,7 +103,7 @@ verifications:
     executor: core
     category: components
     workflow: .github/workflows/test-and-build.yml
-    inventory: go-core-and-selector-parity
+    inventory: go-core-framework-discovery
   storage:
     layer: runtime
     execution: approved

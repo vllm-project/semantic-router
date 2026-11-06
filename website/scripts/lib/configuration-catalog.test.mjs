@@ -66,20 +66,19 @@ test('replaces only the marked generated catalog block', () => {
   )
 })
 
-test('publishes native System One algorithms separately from Chat algorithms', () => {
+test('publishes selectors and executors as separate tables', () => {
   const entry = {
-    family: 'cascade',
-    type: 'native algorithm',
-    goal: 'Keep the typed request together.',
-    fragmentPath: 'config/fragments/algorithm/native/cascade.yaml',
+    family: 'escalate',
+    type: 'executor',
+    goal: 'Call the candidates in order until one answer is accepted.',
+    fragmentPath: 'config/fragments/algorithm/looper/escalate.yaml',
     fragmentKind: 'file',
-    guide: '../tutorials/algorithm/native/cascade',
+    guide: '../tutorials/algorithm/looper/escalate',
   }
   const catalog = renderConfigurationCatalog({
-    signals: [], selectionAlgorithms: [], looperAlgorithms: [],
-    nativeAlgorithms: [entry], plugins: [],
+    signals: [], selectors: [], executors: [entry], plugins: [],
   })
-  assert.match(catalog, /### Native System One algorithms/)
-  assert.match(catalog, /`cascade` — native algorithm/)
-  assert.match(catalog, /tutorials\/algorithm\/native\/cascade/)
+  assert.match(catalog, /### Selectors/)
+  assert.match(catalog, /### Executors\n\n.*\n.*\n\| `escalate` — executor/)
+  assert.doesNotMatch(catalog, /Native System One/)
 })

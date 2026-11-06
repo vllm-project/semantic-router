@@ -17809,9 +17809,6 @@
                                 "kind": {
                                   "type": "string"
                                 },
-                                "optional": {
-                                  "type": "boolean"
-                                },
                                 "type": {
                                   "type": "string"
                                 }
@@ -25427,21 +25424,6 @@
                               "previous_model": {
                                 "type": "string"
                               },
-                              "prompt_helper_completion_tokens": {
-                                "type": "integer"
-                              },
-                              "prompt_helper_latency_ms": {
-                                "type": "integer"
-                              },
-                              "prompt_helper_model": {
-                                "type": "string"
-                              },
-                              "prompt_helper_prompt_tokens": {
-                                "type": "integer"
-                              },
-                              "prompt_helper_total_tokens": {
-                                "type": "integer"
-                              },
                               "proposal_model": {
                                 "type": "string"
                               },
@@ -30353,21 +30335,6 @@
                         },
                         "previous_model": {
                           "type": "string"
-                        },
-                        "prompt_helper_completion_tokens": {
-                          "type": "integer"
-                        },
-                        "prompt_helper_latency_ms": {
-                          "type": "integer"
-                        },
-                        "prompt_helper_model": {
-                          "type": "string"
-                        },
-                        "prompt_helper_prompt_tokens": {
-                          "type": "integer"
-                        },
-                        "prompt_helper_total_tokens": {
-                          "type": "integer"
                         },
                         "proposal_model": {
                           "type": "string"

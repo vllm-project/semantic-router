@@ -123,9 +123,9 @@ const (
 	// selected backend for that automatic-output dispatch, including reasoning.
 	VSREffectiveMaxOutputTokens = "x-vsr-effective-max-output-tokens" // #nosec G101 -- public header name, not a credential
 
-	// VSRSelectedAlgorithm indicates the model-selection algorithm used after
-	// the routing decision matched. Example values: "static", "elo", "knn",
-	// "router_dc", "fusion", "remom", "workflows".
+	// VSRSelectedAlgorithm indicates the algorithm, a selector or an executor,
+	// used after the routing decision matched. Example values: "static",
+	// "multi_factor", "systemone", "escalate", "fusion", "workflows".
 	VSRSelectedAlgorithm = "x-vsr-selected-algorithm"
 
 	// VSRRoutingLatencyMs is the time the router spent choosing the model for
@@ -517,7 +517,7 @@ const (
 	VSRLooperIterations = "x-vsr-looper-iterations"
 
 	// VSRLooperAlgorithm indicates the algorithm used by the looper.
-	// Value: "confidence", "ratings", "cost-aware"
+	// Value: "escalate", "fusion", "remom", "ratings", "workflows"
 	VSRLooperAlgorithm = "x-vsr-looper-algorithm"
 
 	// VSRLooperLatencyMs indicates the wall-clock latency, in milliseconds,

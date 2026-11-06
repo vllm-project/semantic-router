@@ -1,63 +1,33 @@
 ---
 is_mtpe: false
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "72b3d17c5fdcaa506e603b1697fdb2d4b6318a6e"
   source_file: "docs/tutorials/algorithm/selection/prompt.md"
   outdated: false
 ---
 
-# 提示词选择
+# 提示词选择（已移除）
 
 ## 概览
 
-`prompt` 使用具体的辅助模型，从匹配决策的 `modelRefs` 中恰好选择一个模型。运行时拥有候选列表、结构化响应 schema、确定性生成设置和回退行为。
+`prompt` 选择器已被移除。[System One](./systemone) 选择器会向决策模型提出同样的问题。
 
-## 主要优势
+## 它解决什么问题？
 
-- 用普通指令表达模型选择策略
-- 将辅助模型约束在已声明的决策候选内
-- 复用模型卡片描述和现有选择注册表
-- 辅助调用失败时回退到第一个有效候选
-
-## 解决什么问题？
-
-语义和基于指标的选择器并不总是编码定性路由策略的最简单方式。提示词选择让小模型在有界候选集中选择，同时不把请求资格或安全逻辑移出信号和决策。
+它让一个辅助模型按照运维人员的指令，从决策的候选中选择一个。`systemone` 选择器把同样的指令作为针对候选的类型化选择问题提给决策模型。
 
 ## 何时使用
 
-当决策有多个有效候选，且选择取决于定性任务要求时，使用提示词选择。把元数据、授权、隐私和其他确定性门控留在信号和决策中。
+不要再配置它：仍然使用它的配置会在加载时失败。请使用 [System One](./systemone)。
 
 ## 配置
 
+运行 `vllm-sr config migrate` 来改写它。指令会被保留，`timeout_seconds` 变为 `timeout_ms`，辅助模型不再参与选择：如需询问决策模型以外的 System One 部署，请设置 `systemone.deployment`。
+
 ```yaml
-routing:
-  decisions:
-    - name: adaptive-model-choice
-      description: Let a helper model choose the best eligible candidate.
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: general-small
-          use_reasoning: false
-        - model: reasoning-large
-          use_reasoning: true
-      algorithm:
-        type: prompt
-        on_error: fallback
-        prompt:
-          model: router-small
-          instructions: >-
-            Use general-small for ordinary requests. Use reasoning-large for
-            hard reasoning, coding, debugging, or multi-step analysis.
-          timeout_seconds: 5
+algorithm:
+  type: systemone
+  systemone:
+    instructions: Choose the model that best fits the request.
+    timeout_ms: 5000
 ```
-
-`model` 必须是在 `routing.modelCards` 中声明、并由 `providers.models` 支持的具体模型，且必须使用 OpenAI 兼容 API 格式。候选基础模型名必须唯一；当 LoRA 或推理变体共享同一基础模型时，使用单独的决策。候选名称和可用的模型卡片描述由运行时添加。选择器接收当前用户回合，并返回包含精确候选名称和简短理由的固定 JSON 对象。
-路由器在进程内发起辅助调用，发送到辅助模型的 `providers.models[].backend_refs`。
-
-模型生成的理由文本不会按原文记录或持久化。回放存储有界的结果/回退原因码，指标暴露选择器耗时和回退次数，不含请求内容。
-
-辅助模型会收到当前用户回合和候选描述，因此其提供商必须被路由的数据策略允许。它的选择被限制在已声明候选内，但仍是模型生成的；确定性的隐私、授权和安全门控属于信号和决策。完整示例见：
-[`config/fragments/algorithm/selection/prompt.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/prompt.yaml)。
