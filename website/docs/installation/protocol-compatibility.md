@@ -207,6 +207,10 @@ an OpenAI-compatible server can accept the Chat request shape while rejecting
 images or tools for a particular model. Qualify the actual endpoint and model
 revision before adding them to a routing pool.
 
+Responses requires a detail level on every input image. An image that arrives
+without one, as every Messages image and tool-result image does, reaches a
+Responses backend with `detail: auto`, the Responses default.
+
 When translating Chat history to an Anthropic Messages backend, empty text
 blocks are omitted. An assistant's `content: ""` beside `tool_calls` therefore
 behaves like `content: null`. Empty tool results keep their call IDs and use
