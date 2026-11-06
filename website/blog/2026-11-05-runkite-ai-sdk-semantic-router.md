@@ -88,11 +88,17 @@ The [full factory](https://gist.github.com/sharanharsoor/84f4dbd4913106d06f8b815
 
 The next step was to give that one endpoint a choice of backends. The model name `vllm-sr/runkite` stays constant in the SDK, while the router configuration defines the `local-fast` and `local-specialist` model aliases and their backend bindings. Those names describe roles in the example configuration. In your deployment, bind routing roles to your own compatible model pool.
 
-To make the example's route choices reproducible, I used an explicit keyword signal. Requests containing `diagnose`, `specialist`, `code` or `algorithm` select the specialist route; other requests use the default model. The alias names are not measured claims about speed or answer quality.
+In the example's pinned Semantic Router 0.4.0 configuration, `global.router.auto_model_names` registers `vllm-sr/runkite` as an automatic-routing alias. Keep that entry when changing the backend bindings; without it, the router treats the request's model name as a concrete model and returns HTTP 400 if no such model is configured.
 
-The relevant decision is small:
+To make the example's route choices reproducible, I used an explicit keyword signal. Requests containing the words `diagnose`, `specialist`, `code` or `algorithm` select the specialist route; other requests use the default model. The signal uses case-insensitive regular expressions with word boundaries. The alias names are not measured claims about speed or answer quality.
+
+The alias registration and routing decision look like this:
 
 ```yaml
+global:
+  router:
+    auto_model_names: [vllm-sr/runkite]
+
 routing:
   decisions:
     - name: specialist-route
