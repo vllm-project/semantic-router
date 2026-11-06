@@ -84,6 +84,7 @@ function mergeStructuredSchema(
     const generatedFields = generated.fields ?? {}
     const curatedFields = curated.fields ?? {}
     merged.fields = { ...generatedFields }
+    for (const name of curated.omit ?? []) delete merged.fields[name]
     for (const [name, schema] of Object.entries(curatedFields)) {
       merged.fields[name] = generatedFields[name]
         ? mergeStructuredSchema(generatedFields[name], schema)

@@ -38,7 +38,7 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 }
 
 func (p *Profile) GetTestCases() []string {
-	return []string{"progress-gate-evidence-to-switch"}
+	return []string{"progress-gate-evidence-to-switch", "protection-explicit-release"}
 }
 
 func (p *Profile) GetServiceConfig() framework.ServiceConfig { return p.stack.ServiceConfig() }

@@ -4,7 +4,8 @@
 
 `classifier` exposes reusable label scores from a local native sequence classifier,
 a remote sequence classifier, or a configured external LLM. Decisions test a
-declared label using a numeric predicate or an explicitly bound operating point.
+declared label using a numeric predicate or the operating point its deployment
+pins.
 
 Specialized domain, PII, jailbreak, fact-check, KB, and preference signals
 remain the preferred interfaces for their respective domains.
@@ -29,15 +30,26 @@ preference signals for response-style routing.
 
 ## Configuration
 
+Each classifier rule asks its own question, so it names the deployment that
+answers it with `deployment`. A rule without `deployment` is asked of the
+decision model. [Choose a model for a signal](../../../installation/choose-a-model-for-a-signal.md)
+explains how rules resolve.
+
 ```yaml
+global:
+  model_catalog:
+    deployments:
+      phishing-model:
+        provider: model_runtime
+        artifact: /models/phishing-email
+        device: cpu
+
 routing:
   signals:
     classifiers:
       - name: phishing
-        type: local
-        model_path: models/phishing-email
+        deployment: phishing-model
         labels: [BENIGN, PHISHING]
-        use_cpu: true
 
   decisions:
     - name: phishing-local
@@ -57,62 +69,56 @@ routing:
           use_reasoning: false
 ```
 
-LLM classifiers reference a named `global.model_catalog.external` entry and
-add `instructions`. The runtime fixes temperature, output schema,
-exact-label validation, and a 1 MiB default response limit. Set
-`max_response_bytes` on the external model entry to override that limit.
-Because the runtime owns the output schema, `parser_type` on that entry
-must be `json` or unset; other values are rejected at config load.
-Set `disable_rationale: true` on an `llm` classifier rule to request only
+The deployment's `provider` decides how the rule is asked:
+
+| `provider` | How the rule is answered |
+| --- | --- |
+| `model_runtime` | A sequence classifier in the model runtime scores the declared labels |
+| `classify` | The Router posts the text to `<endpoint>/classify` and reads the full label distribution |
+| `openai_chat` | A chat model scores the declared labels, following the rule's `instructions` |
+| (no `deployment`) | The decision model answers a label question |
+
+### Chat models as classifiers
+
+A rule answered by an `openai_chat` deployment adds `instructions`. The Router
+fixes the output schema and exact-label validation, and reads responses up to
+1 MiB unless the deployment's `limits.max_response_bytes` sets another limit.
+It asks at temperature 0; the deployment's `generation` sets another
+temperature or completion length.
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      risk-judge:
+        provider: openai_chat
+        endpoint: https://llm.example.com/v1
+        model: qwen/qwen3.8-27b
+        auth: {api_key_env: RISK_JUDGE_KEY}
+        timeout_ms: 5000
+        generation: {max_tokens: 256}
+
+routing:
+  signals:
+    classifiers:
+      - name: tool-risk
+        deployment: risk-judge
+        labels: [SAFE, RISKY]
+        instructions: Choose RISKY only for destructive or irreversible tool operations.
+```
+
+Set `disable_rationale: true` on such a rule to request only
 `{"scores": {...}}`. The response may omit `rationale` or include an empty
 string; if present, it must still be a string. Other response fields are
 rejected. When the flag is omitted or `false`, the prompt requests both
 `scores` and `rationale`, and the response must include a nonempty rationale.
-The flag does not apply to `local` or `sequence_classifier` rules.
+The flag applies only to rules answered by an `openai_chat` deployment.
 The model must report a score for every declared
 label; each score must be between `0` and `1`, and the complete distribution
 must sum to approximately `1.0`. These are model-reported confidence scores,
 not calibrated classifier probabilities. Classifier and decision-model leaves
 accept condition-level `on_error`; classifier failures expose the bounded
 `classifier_evaluation_failed` code in eval/replay diagnostics.
-
-An LLM classifier can also attach a reasoning preference to its external model:
-
-```yaml
-global:
-  model_catalog:
-    external:
-      - name: risk-judge
-        llm_provider: vllm
-        model_role: classification
-        llm_endpoint:
-          address: vllm-classifier.example.com
-          port: 8000
-          protocol: http
-        llm_model_name: qwen/qwen3.8-27b
-        reasoning:
-          family: qwen3.8
-          use_reasoning: true
-          reasoning_effort: low
-```
-
-`family` references an existing reasoning family; external models cannot define
-an inline family. Both `family` and `use_reasoning` are required when the block
-is present. `reasoning_effort` is optional when reasoning is enabled and must be
-one of the family's declared levels. Disabling an always-on family, or setting
-an effort while reasoning is disabled, is rejected during configuration load.
-
-Reasoning control is currently supported only when the external classifier uses
-`llm_provider: vllm`. Mode and ordinary effort controls are projected into
-`chat_template_kwargs`; families declared with `top_level_reasoning_effort` use
-the typed top-level `reasoning_effort` field. The control applies only to
-`type: llm` classifier requests. It does not affect `sequence_classifier`,
-other router model calls, or response parsing. This is a request preference:
-the upstream model may still ignore it or fail to produce the requested JSON
-contract, which remains subject to the normal classifier error policy. If the
-model reasons anyway but still returns valid classifier JSON, the Router uses
-that JSON as before; parsing or exposing a separate reasoning trace remains
-outside this change.
 
 On failure, the decision tree evaluates this leaf as `Unknown` until the full
 AND/OR/NOT expression is known. Root-level `rules.on_unknown` then chooses
@@ -128,55 +134,48 @@ default for jailbreak rules. Diagnostics include both the signal error and any
 terminal policy that was applied. See
 [Safety models](../../../model-runtime/guides/safety.md).
 
-`sequence_classifier` classifiers also reference a named external model, but
-use the shared `http_classify` contract and preserve its full label distribution.
-The response must contain exactly the declared labels, with scores that sum to
-approximately `1.0`; sigmoid multi-label outputs and label subsets are rejected.
-They require at least two labels and do not accept `instructions`, `model_path`,
-or `use_cpu`.
+### Remote classification services
 
-Local classifiers use `model_path` and support two or more declared labels.
-They run in the [model runtime](../../../model-runtime/guides/classify.md#use-your-own-classifier),
+A rule answered by a `classify` deployment preserves the service's full label
+distribution. The response must contain exactly the declared labels, with
+scores that sum to approximately `1.0`; sigmoid multi-label outputs and label
+subsets are rejected. Such a rule needs at least two labels and takes no
+`instructions`.
+
+### Local classifiers
+
+A rule answered by a `model_runtime` deployment runs in the
+[model runtime](../../../model-runtime/guides/classify.md#use-your-own-classifier),
 which loads Hugging Face ModernBERT and mmBERT sequence classifiers; other
-architectures need a [family plugin](../../../model-runtime/plugins.md). Set
-`use_cpu: true` for CPU execution. The declared labels must match the
-checkpoint's numeric `id2label` order.
+architectures need a [family plugin](../../../model-runtime/plugins.md). The
+deployment's `device` decides where it runs. The rule declares two or more
+labels, which must match the checkpoint's numeric `id2label` order.
 Each rule owns a prepared model handle, so a recipe can declare multiple local
 classifiers. Local decision predicates retain `gte: 0.5` or higher. Model or
 label changes prepare a candidate generation before activation; a failed
 candidate leaves the current generation available.
 
-A recipe can select execution explicitly with a `classifier.<rule name>` entry
-in `model_bindings`; this replaces the rule's `model` or `model_path` selector.
-Local and sequence rules support local sequence deployments or HTTP
-`http_classify`, while LLM rules retain their scored extraction instructions
-and require HTTP `http_chat`. These use `label_distribution.v1`, with the rule's
-ordered `labels` as the mapping. See [Run it with the router](../../../model-runtime/deploy.md).
+The rules in a recipe's own `routing.signals` name their deployments the same
+way, so each recipe chooses the models of its rules. The rule's ordered
+`labels` are its label mapping. See [Run it with the router](../../../model-runtime/deploy.md).
 
 ## Independent labels with a frozen operating point
 
 A multi-label classifier, such as Hazard, can run independently of the Safety
-signal. Bind `label_scores.v1` to a model runtime deployment whose package
-ships a version-2 `operating_point.json`. Model, tokenizer, execution, label
-order, window geometry and thresholds are bound inside that file, and the
-runtime verifies it before serving. The binding's `operating_point` pins the
-file: `path` names it inside the deployment artifact and `sha256` its bytes.
-Preparation rejects the binding when the runtime serves a policy with a
-different digest.
+signal. Answer the rule with a model runtime deployment whose package ships a
+version-2 `operating_point.json`. Model, tokenizer, execution, label order,
+window geometry and thresholds are bound inside that file, and the runtime
+verifies it before serving. The deployment's `operating_point` pins the file:
+`path` names it inside the deployment artifact and `sha256` its bytes. The rule
+then reads independent label scores. Preparation rejects the deployment when
+the runtime serves a policy with a different digest.
 
 ```yaml
 routing:
-  model_bindings:
-    classifier.content-risk:
-      deployment: content-risk-cpu
-      contract: label_scores.v1
-      operating_point:
-        path: operating_point.json
-        sha256: <SHA256 of the exact version-2 sidecar>
   signals:
     classifiers:
       - name: content-risk
-        type: local
+        deployment: content-risk-cpu
         labels: [violence, criminal_activity, sexual_content, child_exploitation,
                  hate, harassment_abuse, regulated_substances, weapons, self_harm,
                  privacy, specialized_advice, misinformation]
@@ -202,14 +201,17 @@ global:
         input:
           max_tokens: 32768
           overflow: reject
+        operating_point:
+          path: operating_point.json
+          sha256: <SHA256 of the exact version-2 sidecar>
 ```
 
 Replace the SHA256 placeholder and use the artifact's complete ordered labels.
 The document budget must equal the sidecar's budget. Omitting `predicate` uses
 that label's frozen threshold (`score >= threshold`); several labels or none
 may match. An explicit predicate queries the raw independent score instead.
-Scores do not sum to one. Categorical and unbound classifiers still require
-their existing predicates.
+Scores do not sum to one. Rules answered without an operating point still
+require a predicate.
 
 The model runtime applies the policy at the model's published FP32 precision
 (`dtype: auto`). The sidecar
@@ -251,10 +253,10 @@ The tool neither selects thresholds nor qualifies a
 model, and refuses to overwrite an existing file. Publish this sidecar with the
 exact native files; do not copy thresholds between checkpoints.
 
-The local path processes request text within the local model deployment. Both `llm` and
-`sequence_classifier` send that text to their configured external model, so
-choose the provider and retention policy accordingly. Labels and thresholds
-must be evaluated as one versioned contract. See complete examples for
-[`llm`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/classifier/label-score.yaml)
+A `model_runtime` deployment processes the request text locally. `openai_chat`
+and `classify` deployments send that text to a remote service, so choose the
+provider and retention policy accordingly. Labels and thresholds must be
+evaluated as one versioned contract. See complete examples for
+[a chat model](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/classifier/label-score.yaml)
 and
-[`sequence_classifier`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/classifier/sequence-label-score.yaml).
+[a classification service](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/classifier/sequence-label-score.yaml).

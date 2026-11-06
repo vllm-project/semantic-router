@@ -44,8 +44,10 @@ func NewFactCheckClassifier(cfg *config.FactCheckModelConfig, models ...*classif
 		return nil, nil // Disabled
 	}
 
-	runtime := consumerModelRuntime(models)
-	spec, err := runtime.localSpec("fact_check_classifier", cfg.ModelID, "auto", config.RemoteClassifierContractLabelDistribution, cfg.UseCPU, cfg.MaxSequenceLength)
+	runtime := consumerModelRuntime(models).withModule(cfg.ModelID, func(scoped *config.RouterConfig) {
+		scoped.HallucinationMitigation.FactCheckModel = *cfg
+	})
+	spec, err := runtime.localSpec("fact_check_classifier", "auto", config.RemoteClassifierContractLabelDistribution, cfg.MaxSequenceLength)
 	classifier := &FactCheckClassifier{
 		backend: &ownedSequenceBackend{runtime: runtime.runtime, spec: spec, err: err},
 		config:  cfg,
@@ -75,20 +77,15 @@ func (c *FactCheckClassifier) Initialize() error {
 		},
 	}
 
-	// Initialize ML model - ModelID is required
-	if c.config.ModelID == "" {
-		return fmt.Errorf("fact-check classifier requires ModelID to be configured")
-	}
-
 	c.backend.labels = indexedNativeLabels(c.mapping.IdxToLabel)
-	if err := c.backend.Init(c.config.ModelID, c.config.UseCPU, 2); err != nil {
+	if err := c.backend.Init(c.backend.spec.Binding.Deployment, c.config.UseCPU, 2); err != nil {
 		return err
 	}
 
 	c.initialized = true
 	logging.ComponentEvent("classifier", "fact_check_classifier_initialized", map[string]interface{}{
-		"backend":   c.backend.spec.Deployment.Provider,
-		"model_ref": c.config.ModelID,
+		"backend":    c.backend.spec.Deployment.Provider,
+		"deployment": c.backend.spec.Binding.Deployment,
 	})
 
 	return nil

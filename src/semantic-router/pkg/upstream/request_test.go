@@ -55,6 +55,7 @@ func TestOutboundAppliesTheTemplateRouteRules(t *testing.T) {
 			{Name: "X-Tenant", Value: "operator"},
 			{Name: "x-authz-user-id", Value: "route-cannot-add-internal"},
 		},
+		RemoveHeaders: []string{"x-jwt-sub"},
 	}
 	ep := &EndpointSpec{Name: "e", Scheme: "http", Host: "10.0.0.1", Port: 8000, Weight: 1}
 	req := &Request{
@@ -66,6 +67,9 @@ func TestOutboundAppliesTheTemplateRouteRules(t *testing.T) {
 			"x-vsr-looper-request": {"true"},
 			"x-vsr-looper-secret":  {"s"},
 			"x-authz-user-groups":  {"admins"},
+			"x-authz-team-id":      {"team-a"},
+			"x-authz-tenant-id":    {"tenant-a"},
+			"x-jwt-sub":            {"alice"},
 			":authority":           {"client.example"},
 			"host":                 {"client.example"},
 			"content-length":       {"999"},

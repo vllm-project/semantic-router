@@ -30,6 +30,8 @@ func Warnings(cfg *RouterConfig) []ConfigWarning {
 	if warning, ok := modalityDetectorOffWarning(cfg); ok {
 		warnings = append(warnings, warning)
 	}
+	warnings = append(warnings, cfg.ModelResourceTranslation()...)
+	warnings = append(warnings, modelResolutionWarnings(cfg)...)
 	return warnings
 }
 
@@ -80,6 +82,12 @@ func logConfigWarnings(cfg *RouterConfig) error {
 		return nil
 	}
 	if warning, ok := modalityDetectorOffWarning(cfg); ok {
+		logging.ComponentWarnEvent("config", warning.Code, map[string]interface{}{
+			"field":  warning.Field,
+			"reason": warning.Message,
+		})
+	}
+	for _, warning := range append(cfg.ModelResourceTranslation(), modelResolutionWarnings(cfg)...) {
 		logging.ComponentWarnEvent("config", warning.Code, map[string]interface{}{
 			"field":  warning.Field,
 			"reason": warning.Message,

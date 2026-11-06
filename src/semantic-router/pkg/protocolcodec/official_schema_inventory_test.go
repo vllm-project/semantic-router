@@ -10,7 +10,7 @@ import (
 // OpenAI OpenAPI contract at 690521b1753dce0c6d6b275f583d22537679cff9 and the
 // generated Anthropic Messages API types at
 // d19dea9ed85bbb5fdb2d6f20fb6f903920ed23fa, plus the later published
-// context-editing, thinking-token-count, and iteration-usage fields.
+// context-editing, thinking-token-count, iteration-usage, and speed-mode fields.
 // Every field is either represented semantically or decoded into an explicit
 // unsupported_feature error; adding a silent JSON sink is not allowed.
 func TestOfficialRequestFieldInventoriesAreClosed(t *testing.T) {
@@ -224,6 +224,7 @@ func TestOfficialUsageFieldInventoriesAreClosed(t *testing.T) {
 			official: fields(
 				"cache_creation", "cache_creation_input_tokens", "cache_read_input_tokens", "inference_geo",
 				"input_tokens", "iterations", "output_tokens", "output_tokens_details", "server_tool_use", "service_tier",
+				"speed",
 			),
 		},
 	}
