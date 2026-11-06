@@ -98,6 +98,9 @@ class ExecutionBatchTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory, patch(
             "run_platform_batch.time.monotonic", side_effect=[0, 10, 20, 30]
+        ), patch(
+            "run_platform_batch.actual_platform",
+            return_value=batch["verifications"][0]["platform"],
         ):
             self.assertTrue(run_batch(batch, Path(directory), run=process))
         self.assertEqual(budgets, [7190, 7180, 7170])
@@ -240,7 +243,10 @@ class ExecutionBatchTests(unittest.TestCase):
                 destination.write_text("{}\n")
             return SimpleNamespace(returncode=0)
 
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "run_platform_batch.actual_platform",
+            return_value=batches[0]["verifications"][0]["platform"],
+        ):
             self.assertEqual(len(batches), 1)
             self.assertFalse(
                 run_batch(batches[0], Path(directory) / batches[0]["id"], run=process)

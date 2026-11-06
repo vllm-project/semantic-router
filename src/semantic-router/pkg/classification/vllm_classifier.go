@@ -26,11 +26,11 @@ type VLLMJailbreakInference struct {
 // NewVLLMJailbreakInference prepares a categorical guard. Its binary mapping
 // maps unsafe to the configured positive label; safe and controversial retain
 // their original SourceLabel and use the negative policy label.
-func NewVLLMJailbreakInference(cfg *config.ExternalModelConfig, defaultThreshold float32, mapping *JailbreakMapping, positiveLabels []string) (*VLLMJailbreakInference, error) {
-	if cfg.ModelEndpoint.Address == "" {
-		return nil, fmt.Errorf("vLLM endpoint address is required for guardrail")
+func NewVLLMJailbreakInference(deployment config.ModelDeployment, defaultThreshold float32, mapping *JailbreakMapping, positiveLabels []string) (*VLLMJailbreakInference, error) {
+	if deployment.Endpoint == "" {
+		return nil, fmt.Errorf("vLLM endpoint is required for guardrail")
 	}
-	if cfg.ModelName == "" {
+	if deployment.Model == "" {
 		return nil, fmt.Errorf("vLLM model name is required for guardrail")
 	}
 	if mapping == nil {
@@ -44,31 +44,26 @@ func NewVLLMJailbreakInference(cfg *config.ExternalModelConfig, defaultThreshold
 		return nil, err
 	}
 
-	client := newVLLMClientFromConfig(cfg)
+	client := newVLLMClientForDeployment(deployment)
 	if client.initErr != nil {
 		return nil, fmt.Errorf("guard connector preparation failed: %w", client.initErr)
 	}
 
-	// Use timeout from config, default to 30 seconds
-	timeout := cfg.GetTimeout()
-
-	// Use threshold from config, fallback to default
-	threshold := defaultThreshold
-	if cfg.Threshold > 0 {
-		threshold = cfg.Threshold
-	}
-
-	// Use parser type from config, default to "auto"
-	parserType := cfg.ParserType
-	if parserType == "" {
-		parserType = "auto"
+	threshold, parserType := defaultThreshold, "auto"
+	if legacy := deployment.LegacyExternal(); legacy != nil {
+		if legacy.Threshold > 0 {
+			threshold = legacy.Threshold
+		}
+		if legacy.ParserType != "" {
+			parserType = legacy.ParserType
+		}
 	}
 
 	return &VLLMJailbreakInference{
 		client:         client,
-		modelName:      cfg.ModelName,
+		modelName:      deployment.Model,
 		threshold:      threshold,
-		timeout:        timeout,
+		timeout:        client.timeout,
 		parserType:     parserType,
 		mapping:        mapping,
 		positiveLabels: positiveLabels,

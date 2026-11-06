@@ -1,19 +1,14 @@
 """Cross-resource checks for native System One execution.
 
 Payload structure is validated by the generated Router schema. This owner only
-checks the relationships the CLI must resolve before forwarding configuration.
+checks the relationships the CLI must resolve before forwarding configuration;
+the Router validates the deployments and bindings native execution uses.
 """
 
 from cli.config_contract import iter_condition_leaves, iter_routing_profiles
-from cli.decision_model import decision_model_deployment
 from cli.durations import parse_duration
-from cli.model_runtime_defaults import (
-    effective_model_bindings,
-    effective_model_deployments,
-)
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
-from cli.validator_decision_model import _reference_error, public_model_name
 
 NATIVE_ALGORITHMS = {"cascade"}
 _UNAVAILABLE_NATIVE_CONTEXT = {
@@ -37,7 +32,6 @@ def _is_native(decision) -> bool:
 def validate_native_execution(config: UserConfig) -> list[ValidationError]:
     errors = []
     models = {model.name: model for model in config.providers.models}
-    deployments = effective_model_deployments(config)
     native = {name for name, model in models.items() if model.api_format == "systemone"}
     default = config.providers.defaults.model
     if default in native:
@@ -62,34 +56,12 @@ def validate_native_execution(config: UserConfig) -> list[ValidationError]:
                         field=field,
                     )
                 )
-            if deployments.get(model.deployment, {}).get("provider") != "model_runtime":
-                errors.append(
-                    ValidationError(
-                        "deployment must reference a model_runtime deployment",
-                        field=field + ".deployment",
-                    )
-                )
-            # A local alias is served through the decisions API even when no
-            # listener publishes it. A remote alias has no deployment.
-            elif model.api_format == "systemone" and (
-                message := _reference_error(deployments, model.deployment)
-            ):
-                errors.append(ValidationError(message, field=field + ".deployment"))
         elif name in native and not model.backend_refs:
             errors.append(
                 ValidationError(
                     "systemone requires deployment or backend_refs", field=field
                 )
             )
-        if name in native:
-            for key, deployment in deployments.items():
-                if public_model_name(deployment) == name and model.deployment != key:
-                    errors.append(
-                        ValidationError(
-                            "native alias conflicts with a different deployment's public model",
-                            field=field,
-                        )
-                    )
     native_recipes = {
         entry.recipe for entry in config.entrypoints if entry.api == "systemone"
     }
@@ -185,9 +157,7 @@ def _native_profile_errors(config, profile, field):
     references.extend(
         item.type for score in profile.projections.scores or [] for item in score.inputs
     )
-    errors.extend(
-        _native_signal_backend_errors(config, profile, set(references), field)
-    )
+    errors.extend(_native_signal_backend_errors(config, set(references), field))
     for kind in references:
         if (kind or "").strip().lower() in _UNAVAILABLE_NATIVE_CONTEXT:
             errors.append(
@@ -199,59 +169,17 @@ def _native_profile_errors(config, profile, field):
     return errors
 
 
-def _native_signal_backend_errors(config, profile, references, field):
+def _native_signal_backend_errors(config, references, field):
     catalog = (config.global_ or {}).get("model_catalog") or {}
     classifier = (catalog.get("modules") or {}).get("classifier") or {}
-    errors = []
     if "domain" in references and (classifier.get("mcp") or {}).get("enabled"):
-        errors.append(
+        return [
             ValidationError(
                 "native domain signals do not support the MCP classifier; use a model deployment binding",
                 field=field,
             )
-        )
-    if "preference" not in references:
-        return errors
-    binding = effective_model_bindings(config, profile).get("preference")
-    if binding is None or binding.contract != "decision.v1":
-        preference = classifier.get("preference") or {}
-        external = any(
-            item.get("model_role") == "preference"
-            for item in catalog.get("external") or []
-        )
-        prototypes = preference.get("use_contrastive")
-        if prototypes is None:
-            prototypes = not external and (
-                preference.get("embedding_model")
-                or any(rule.examples for rule in profile.signals.preferences or [])
-            )
-        if prototypes or external:
-            errors.append(
-                ValidationError(
-                    "native preference requires a decision task deployment; contrastive and external preference adapters do not support native request accounting",
-                    field=field,
-                )
-            )
-            return errors
-    if binding is not None:
-        deployment = effective_model_deployments(config).get(binding.deployment) or {}
-        if (
-            deployment.get("provider") != "model_runtime"
-            or binding.head
-            or binding.operating_point is not None
-        ):
-            errors.append(
-                ValidationError(
-                    "native preference requires a model_runtime decision task binding without a classifier head or operating point",
-                    field=field,
-                )
-            )
-    else:
-        try:
-            decision_model_deployment({"global": config.global_ or {}})
-        except ValueError as error:
-            errors.append(ValidationError(str(error), field=field))
-    return errors
+        ]
+    return []
 
 
 def _native_decision_errors(decision, models, calibrations, path):

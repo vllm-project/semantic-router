@@ -157,10 +157,13 @@ as unsupported shared use of replica-local learning state.
 
 The Grafana Live render tests require `helm`, `kubectl` (including Kustomize),
 and PyYAML. They run in `helm-ci-validate` and `validate-chart.sh`, without
-accessing a cluster. After resolving chart dependencies, run them directly:
+accessing a cluster, as do the data-directory tests, which also render the
+Helm values the [storage guide](../../website/docs/installation/storage-overview.md)
+shows. After resolving chart dependencies, run them directly:
 
 ```bash
 .venv-agent/bin/python -m unittest discover -s deploy/helm -p test_grafana_live.py -v
+.venv-agent/bin/python -m unittest discover -s deploy/helm -p test_data_volume.py -v
 ```
 
 When a chart value changes, update `values.yaml`, `values.schema.json`, the

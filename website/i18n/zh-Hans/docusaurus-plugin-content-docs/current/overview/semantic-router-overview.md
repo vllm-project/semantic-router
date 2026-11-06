@@ -24,7 +24,7 @@ Agent harness 调用稳定的模型端点。Semantic Router 根据策略选择�
 - **Agent harness** 负责任务循环、工具执行与持久任务状态。每次推理调用经过 Router，响应回到 harness，由其推进下一步。
 - **前端** 接收客户端流量、执行 listener 访问控制并适配协议。使用 `--gateway extproc` 时，外部网关负责入口和转发，通过 ExtProc 调用 Router。
 - **Semantic Router** 提取信号、评估策略、应用路由特定行为，并选择或协调模型候选。
-- **模型运行时** 为已配置的使用方运行判断、分类、embedding 和重排序模型，worker 可以受管或附加。
+- **模型运行时** 运行已配置的信号和功能所需的判断、分类、embedding 和重排序模型，worker 可以受管或附加。
 - **Chat 后端** 是已配置的模型服务或提供方端点，由其运维方负责权重和生成能力。
 
 ### 控制面

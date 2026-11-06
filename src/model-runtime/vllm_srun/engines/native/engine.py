@@ -48,7 +48,8 @@ from .models.branch import (
     static_layout,
 )
 from .models.forest import ForestShape
-from .models.lora import attach
+from .models.gated_lora import Gate, attach_gated
+from .models.lora import attach, fold_scaling
 from .models.packed import Packed, packed_unavailable
 from .models.qwen3_5 import noncausal_masks, rope_index
 from .models.tree import Tree
@@ -120,12 +121,26 @@ class NativeEngineModel(EngineModel):
         self.device = accelerator.torch_device(device_info)
         self.spec = spec
         self.options = options
+        # Gated adapters wrap the placed backbone's Linears before any view or layout copies them.
+        self.gate = Gate()
+        self.gated = (
+            attach_gated(backbone, spec.backbone.gated, self.gate, self.device)
+            if spec.backbone.gated
+            else {}
+        )
         self.residency = residency
         self.reduced_kind = reduced_kind
         self.reduced_skipped = (
             None
             if reduced_kind is None
             else unavailable(reduced_kind, self.device, device_info.bf16)
+        )
+        # An encoder's LoRA layers drop their scaling multiply (exact; a decoder's GPU fast path
+        # takes lean LoRA instead). Before the views, which copy the factors.
+        folded = (
+            sum(fold_scaling(module) for module in self.stacks().values())
+            if spec.encoder
+            else 0
         )
         # Views are taken before the linears are laid out: they copy nn.Linear layers.
         self.reduced: dict[str | None, nn.Module] = (
@@ -150,7 +165,7 @@ class NativeEngineModel(EngineModel):
                 layer.unscaled_product &= self.kernels.allow_approximate
             elif isinstance(layer, quantized.NVFP4Linear):
                 nvfp4.append(layer)
-        self.fast: dict[str, Any] = {}
+        self.fast: dict[str, Any] = {"lora_folded": folded} if folded else {}
         self.linear = self.kernels.select("linear")
         if self.linear.variant is not None:
             for module in (backbone, *self.branches.values(), *self.towers.values()):
@@ -193,7 +208,12 @@ class NativeEngineModel(EngineModel):
             if spec.encoder
             else packed_unavailable(backbone, self.kernels)
         )
-        if self.device.type == "cuda" and not spec.encoder:
+        if self.gated:
+            # Fused layers bypass the wrapped Linears and graphs replay with every adapter off.
+            self.fast["gated_adapters"] = self.gated
+            if self.device.type == "cuda":
+                self.fast["fast_path_skipped"] = "gated adapters run eager"
+        elif self.device.type == "cuda" and not spec.encoder:
             self._install_fast()
         if (
             nvfp4
@@ -818,7 +838,23 @@ class NativeEngineModel(EngineModel):
         return self.packed_reason is None
 
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
-        return self._with_threads(batch.input_ids.numel(), lambda: self._forward(batch))
+        adapter = batch.adapter
+        padded_text = not (
+            batch.shared_prefix or batch.packed or batch.images is not None
+        )
+        if adapter is not None:
+            if adapter.name not in self.gated:
+                raise ValueError(f"the model has no gated adapter {adapter.name!r}")
+            if not padded_text:
+                raise ValueError("an adapter gate runs padded text rows only")
+        if batch.noncausal and not (padded_text and batch.states is None):
+            raise ValueError("a noncausal forward runs padded text rows only")
+
+        def run() -> ForwardOutput:
+            with self.gate.on(adapter):
+                return self._forward(batch)
+
+        return self._with_threads(batch.input_ids.numel(), run)
 
     def _forward(self, batch: ForwardBatch) -> ForwardOutput:
         if batch.shared_prefix:
@@ -835,6 +871,9 @@ class NativeEngineModel(EngineModel):
         with torch.inference_mode(), self.autocast():
             if batch.images is not None:
                 hidden = self._forward_images(batch, input_ids, attention_mask, padded)
+            elif batch.noncausal:
+                # A noncausal request runs eager: the graphs and fast masks hold the model's own layout.
+                hidden = self._forward_noncausal(input_ids, attention_mask, padded)
             elif self.graphs is not None:
                 hidden = self.graphs(input_ids, attention_mask, batch.lengths)
             elif self.masks is not None:
@@ -844,16 +883,23 @@ class NativeEngineModel(EngineModel):
                     masks=self.masks.build(attention_mask, padded),
                 )
             elif self.noncausal:
-                full, linear = noncausal_masks(attention_mask, padded)
-                hidden = self.backbone(
-                    input_ids, attention_mask, masks={"full": full, "linear": linear}
-                )
+                hidden = self._forward_noncausal(input_ids, attention_mask, padded)
             else:
                 hidden = self.backbone(input_ids, attention_mask)
             rows = torch.arange(hidden.shape[0], device=hidden.device)
             gathered = hidden[rows[:, None], gather]
             queried = hidden[rows, query]
         return ForwardOutput(gathered=gathered, query=queried)
+
+    def _forward_noncausal(
+        self, input_ids: torch.Tensor, attention_mask: torch.Tensor, padded: bool
+    ) -> torch.Tensor:
+        """The backbone under the noncausal full-attention mask (eager)."""
+        full, linear = noncausal_masks(attention_mask, padded)
+        hidden: torch.Tensor = self.backbone(
+            input_ids, attention_mask, masks={"full": full, "linear": linear}
+        )
+        return hidden
 
     def _forward_images(
         self,
