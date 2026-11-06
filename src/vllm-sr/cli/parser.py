@@ -21,7 +21,7 @@ from cli.model_runtime_retired import (
     removed_deployment_profiles,
     retired_model_fields,
 )
-from cli.models import UserConfig
+from cli.models import REMOVED_BACKEND_REF_FIELDS, UserConfig
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -71,6 +71,33 @@ def _deprecated_config_fields(data: Dict[str, Any]) -> list[str]:
         fields.append("global.modules")
 
     return fields
+
+
+def _removed_backend_ref_fields(data: Dict[str, Any]) -> list[tuple[str, str]]:
+    """Backend refs that still set a removed gateway opt-in, as (path, field)."""
+
+    found: list[tuple[str, str]] = []
+    providers = data.get("providers")
+    models = providers.get("models") if isinstance(providers, dict) else None
+    if not isinstance(models, list):
+        return found
+    for index, model in enumerate(models):
+        if not isinstance(model, dict):
+            continue
+        name = model.get("name")
+        label = name if isinstance(name, str) and name.strip() else str(index)
+        refs = model.get("backend_refs")
+        if not isinstance(refs, list):
+            continue
+        for ref_index, ref in enumerate(refs):
+            if not isinstance(ref, dict):
+                continue
+            for field in REMOVED_BACKEND_REF_FIELDS:
+                if field in ref:
+                    found.append(
+                        (f"providers.models[{label}].backend_refs[{ref_index}]", field)
+                    )
+    return found
 
 
 def _removed_router_learning_fields(data: Dict[str, Any]) -> list[str]:
@@ -156,6 +183,14 @@ def _reject_invalid_config_surfaces(data: Dict[str, Any], config_path: str) -> N
             "Deprecated config fields are no longer supported: "
             f"{joined_fields}. Use `vllm-sr config migrate --config {config_path}` "
             "or rewrite the file to canonical v0.3 `providers/routing/global`."
+        )
+
+    removed_backend_ref_fields = _removed_backend_ref_fields(data)
+    if removed_backend_ref_fields:
+        path, field = removed_backend_ref_fields[0]
+        raise ConfigParseError(
+            f"{path}: {field} was removed; gateway response fields are accepted "
+            "by default, so delete it"
         )
 
     removed_router_learning_fields = _removed_router_learning_fields(data)

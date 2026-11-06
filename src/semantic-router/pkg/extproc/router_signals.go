@@ -26,7 +26,10 @@ type signalRuntime struct {
 	// configuration lifecycle names it, and never shared while empty.
 	key string
 
-	modelLease        *modelservice.Lease
+	modelLease *modelservice.Lease
+	// systemOne asks the systemone deployments' remote APIs. Their
+	// definitions are runtime models, so a change builds another runtime.
+	systemOne         *modelservice.RemoteSystemOne
 	serving           *serving.Runtime
 	embeddings        *embedding.Set
 	serviceEmbeddings *embedding.Set
@@ -50,24 +53,32 @@ func buildSignalRuntime(cfg *config.RouterConfig, pool *binding.Pool) (*signalRu
 }
 
 func (s *signalRuntime) build(cfg *config.RouterConfig, pool *binding.Pool) error {
+	var err error
+	if s.systemOne, err = modelservice.NewRemoteSystemOne(cfg); err != nil {
+		return err
+	}
+	s.resources.add(s.systemOne.Close)
 	var services serving.Services
 	if manager := modelservice.DefaultManager(); manager != nil {
-		lease, err := manager.Acquire(cfg)
-		if err != nil {
+		if s.modelLease, err = manager.Acquire(cfg); err != nil {
 			return err
 		}
-		s.modelLease, services = lease, lease
-		s.resources.add(lease.Close)
+		services = s.modelLease
+		s.resources.add(s.modelLease.Close)
 		// Decision signals and the decision selector fail open while their
 		// model loads, so a generation that served before its Router-managed
 		// models are ready would route on unknown answers.
-		if err := lease.WaitManaged(context.Background()); err != nil {
+		if err = s.modelLease.WaitManaged(context.Background()); err != nil {
 			return err
 		}
 	}
+	// Built-in signals that resolve to a systemone deployment ask it through
+	// the same runtime as the model_runtime ones.
+	if !s.systemOne.Empty() {
+		services = serving.WithRemote(services, s.systemOne)
+	}
 	s.serving = serving.New(services, pool)
 
-	var err error
 	if s.embeddings, err = modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, s.serving); err != nil {
 		return err
 	}
@@ -92,7 +103,7 @@ func (s *signalRuntime) build(cfg *config.RouterConfig, pool *binding.Pool) erro
 	s.resources.add(func() error { return modelruntime.CloseRerankers(s.rerankers) })
 
 	s.recipeClassifiers, s.classifier, err = buildRecipeClassifiers(cfg, classification.RecipeRuntimeOptions{
-		Runtime: s.serving, Embeddings: s.embeddings,
+		Runtime: s.serving, Embeddings: s.embeddings, SystemOne: s.systemOne,
 	})
 	if err != nil {
 		return err
@@ -101,9 +112,11 @@ func (s *signalRuntime) build(cfg *config.RouterConfig, pool *binding.Pool) erro
 	return nil
 }
 
-// share holds the runtime for one more generation.
+// share holds the runtime for one more generation. The remote answers
+// cached for the generation before it are dropped.
 func (s *signalRuntime) share() *signalRuntime {
 	s.refs.Add(1)
+	s.systemOne.ResetCache()
 	return s
 }
 

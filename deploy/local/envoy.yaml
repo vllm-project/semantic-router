@@ -41,8 +41,9 @@ static_resources:
             virtual_hosts:
             - name: local_service
               domains: ["*"]
-              # Security: strip internal headers from client requests to prevent
-              # looper bypass, identity spoofing, and credential leakage.
+              # Internal and identity headers never reach the backend. Envoy
+              # removes them from the request it sends upstream, after the HTTP
+              # filters ran; client-sent identity is removed at ingress below.
               request_headers_to_remove:
               - "x-vsr-looper-request"
               - "x-vsr-looper-secret"
@@ -50,6 +51,8 @@ static_resources:
               - "x-vsr-looper-iteration"
               - "x-authz-user-id"
               - "x-authz-user-groups"
+              - "x-authz-team-id"
+              - "x-authz-tenant-id"
               response_headers_to_add:
               - header:
                   key: "x-vsr-upstream-host"
@@ -64,6 +67,17 @@ static_resources:
                   cluster: vllm_backend_cluster
                   timeout: 300s
           http_filters:
+          # No authenticator runs in front of this listener, so a client's
+          # identity headers are removed before the Router reads them.
+          - name: strip-client-identity
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.header_mutation.v3.HeaderMutation
+              mutations:
+                request_mutations:
+                - remove: "x-authz-user-id"
+                - remove: "x-authz-user-groups"
+                - remove: "x-authz-team-id"
+                - remove: "x-authz-tenant-id"
           - name: envoy.filters.http.ext_proc
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor

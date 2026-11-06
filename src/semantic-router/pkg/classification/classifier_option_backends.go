@@ -2,49 +2,35 @@ package classification
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 func (b *classifierOptionBuilder) addCategoryClassifier(categoryMapping *CategoryMapping) error {
-	// Keep the construction seam on the same validator as config loading and
-	// BuildClassifier. This prevents an already-decoded config from bypassing
-	// backend/model compatibility checks when this builder is used directly.
-	if err := config.ValidateCategoryModelBackend(b.cfg); err != nil {
+	models := b.runtime()
+	spec, ok, err := models.task("domain_classifier")
+	if err != nil && !config.IsDeferredModelError(err) {
 		return err
 	}
-	if b.cfg.CategoryModel.ModelID == "" && b.cfg.CategoryModel.Backend == nil {
+	if err == nil && !ok {
 		return nil
 	}
-	if b.cfg.CategoryModel.Backend != nil {
-		return b.addRemoteCategoryClassifier(categoryMapping)
+	if err == nil && remoteTask(spec) {
+		return b.addRemoteCategoryClassifier(models, spec, categoryMapping)
 	}
 	return b.addLocalCategoryClassifier(categoryMapping)
 }
 
-func (b *classifierOptionBuilder) addRemoteCategoryClassifier(categoryMapping *CategoryMapping) error {
-	backendCfg := b.cfg.CategoryModel.Backend
-	external, err := config.ResolveRemoteClassifierBackend(
-		b.cfg,
-		backendCfg,
-		config.ModelRoleClassification,
-		config.RemoteClassifierContractLabelDistribution,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to resolve category backend: %w", err)
+func (b *classifierOptionBuilder) addRemoteCategoryClassifier(models *classifierModelRuntime, spec config.ResolvedModelBinding, categoryMapping *CategoryMapping) error {
+	if spec.Binding.Adapter != config.RemoteClassifierProtocolHTTPClassify {
+		return fmt.Errorf("category deployment %q: the domain signal reads the classify API", spec.Binding.Deployment)
 	}
-	if backendCfg.Protocol != config.RemoteClassifierProtocolHTTPClassify {
-		return fmt.Errorf("category backend protocol %q is not supported", backendCfg.Protocol)
-	}
-	timeout := time.Duration(backendCfg.EffectiveDeadlineMs()) * time.Millisecond
-	transport, err := newHTTPClassifierInference(external, categoryMapping, timeout)
+	transport, err := newHTTPClassifierInference(spec.Deployment, categoryMapping)
 	if err != nil {
 		return err
 	}
-	models := consumerModelRuntime([]*classifierModelRuntime{b.models})
-	owned, err := prepareRemoteSequence(models, models.remoteSpec("domain_classifier", backendCfg), external, transport)
+	owned, err := prepareRemoteSequence(models, spec, transport)
 	if err != nil {
 		return err
 	}
@@ -54,8 +40,8 @@ func (b *classifierOptionBuilder) addRemoteCategoryClassifier(categoryMapping *C
 }
 
 func (b *classifierOptionBuilder) addLocalCategoryClassifier(categoryMapping *CategoryMapping) error {
-	models := consumerModelRuntime([]*classifierModelRuntime{b.models})
-	spec, err := models.localSpec("domain_classifier", b.cfg.CategoryModel.ModelID, "auto", config.RemoteClassifierContractLabelDistribution, b.cfg.CategoryModel.UseCPU, b.cfg.CategoryModel.MaxSequenceLength)
+	models := b.runtime()
+	spec, err := models.localSpec("domain_classifier", "auto", config.RemoteClassifierContractLabelDistribution, b.cfg.CategoryModel.MaxSequenceLength)
 	var labels []string
 	if categoryMapping != nil {
 		labels = indexedNativeLabels(categoryMapping.IdxToCategory)
@@ -83,7 +69,7 @@ func buildJailbreakDependencies(cfg *config.RouterConfig, jailbreakMapping *Jail
 		backend, err := newWindowedJailbreakBackend(cfg.PromptGuard, jailbreakMapping, models...)
 		return backend, backend, err
 	}
-	if cfg.PromptGuard.Backend != nil {
+	if remoteModule(cfg, "prompt_guard") {
 		// Remote backends have no local model to initialize.
 		jailbreakInference, err := createJailbreakInference(&cfg.PromptGuard, cfg, jailbreakMapping, models...)
 		if err != nil {
@@ -92,7 +78,7 @@ func buildJailbreakDependencies(cfg *config.RouterConfig, jailbreakMapping *Jail
 		return nil, jailbreakInference, nil
 	}
 	runtime := consumerModelRuntime(models)
-	spec, err := runtime.localSpec("prompt_guard", cfg.PromptGuard.ModelID, "auto", config.RemoteClassifierContractLabelDistribution, cfg.PromptGuard.UseCPU, cfg.PromptGuard.MaxSequenceLength)
+	spec, err := runtime.localSpec("prompt_guard", "auto", config.RemoteClassifierContractLabelDistribution, cfg.PromptGuard.MaxSequenceLength)
 	var labels []string
 	if jailbreakMapping != nil {
 		labels = indexedNativeLabels(jailbreakMapping.IdxToLabel)
@@ -102,7 +88,8 @@ func buildJailbreakDependencies(cfg *config.RouterConfig, jailbreakMapping *Jail
 }
 
 func buildPIIDependencies(cfg *config.RouterConfig, piiMapping *PIIMapping, models ...*classifierModelRuntime) (PIIInitializer, PIIInference, error) {
-	if cfg.NeedsPIIMappingForRouting() && cfg.PIIModel.Backend == nil && cfg.PIIModel.Window == nil {
+	remote := remoteModule(cfg, "pii_classifier")
+	if cfg.NeedsPIIMappingForRouting() && !remote && cfg.PIIModel.Window == nil {
 		backend, err := prepareDecisionPII(consumerModelRuntime(models))
 		if err != nil {
 			return nil, nil, err
@@ -118,7 +105,7 @@ func buildPIIDependencies(cfg *config.RouterConfig, piiMapping *PIIMapping, mode
 		}
 		return backend, backend, nil
 	}
-	if cfg.PIIModel.Backend != nil {
+	if remote {
 		if piiMapping == nil {
 			// The mapping loader is skipped on purpose when no reachable routing
 			// decision consumes the PII signal. With no consumer there is nothing
@@ -133,26 +120,19 @@ func buildPIIDependencies(cfg *config.RouterConfig, piiMapping *PIIMapping, mode
 		// Remote inference is fully constructed here and has no local model
 		// lifecycle, so the initializer is nil, as it is for a remote category
 		// backend.
-		backendCfg := cfg.PIIModel.Backend
-		external, err := config.ResolveRemoteClassifierBackend(
-			cfg,
-			backendCfg,
-			config.ModelRoleClassification,
-			config.RemoteClassifierContractTokenSpans,
-		)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to resolve PII backend: %w", err)
-		}
-		if backendCfg.Protocol != config.RemoteClassifierProtocolHTTPClassify {
-			return nil, nil, fmt.Errorf("PII backend protocol %q is not supported", backendCfg.Protocol)
-		}
-		timeout := time.Duration(backendCfg.EffectiveDeadlineMs()) * time.Millisecond
-		transport, err := newPIIHTTPTokenClassifierInference(external, piiMapping, timeout)
+		modelRuntime := consumerModelRuntime(models)
+		spec, _, err := modelRuntime.task("pii_classifier")
 		if err != nil {
 			return nil, nil, err
 		}
-		modelRuntime := consumerModelRuntime(models)
-		inference, err := prepareRemoteTokens(modelRuntime, modelRuntime.remoteSpec("pii_classifier", backendCfg), external, transport)
+		if spec.Binding.Adapter != config.RemoteClassifierProtocolHTTPClassify {
+			return nil, nil, fmt.Errorf("PII deployment %q: the pii signal reads the classify API", spec.Binding.Deployment)
+		}
+		transport, err := newPIIHTTPTokenClassifierInference(spec.Deployment, piiMapping)
+		if err != nil {
+			return nil, nil, err
+		}
+		inference, err := prepareRemoteTokens(modelRuntime, spec, transport)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -162,7 +142,7 @@ func buildPIIDependencies(cfg *config.RouterConfig, piiMapping *PIIMapping, mode
 		return nil, inference, nil
 	}
 	runtime := consumerModelRuntime(models)
-	spec, err := runtime.localSpec("pii_classifier", cfg.PIIModel.ModelID, "auto", config.RemoteClassifierContractTokenSpans, cfg.PIIModel.UseCPU, cfg.PIIModel.MaxSequenceLength)
+	spec, err := runtime.localSpec("pii_classifier", "auto", config.RemoteClassifierContractTokenSpans, cfg.PIIModel.MaxSequenceLength)
 	var labels []string
 	if piiMapping != nil {
 		labels = indexedNativeLabels(piiMapping.IdxToLabel)
@@ -181,64 +161,50 @@ func buildPIIDependencies(cfg *config.RouterConfig, piiMapping *PIIMapping, mode
 // vocabulary declared inline, exactly as the generic classifier signal does.
 func (b *classifierOptionBuilder) addComplexityBackend() error {
 	// The same validator globalConfigContractValidators runs at config load, so
-	// a directly-built classifier cannot bypass the backend and boundary
-	// checks either.
+	// a directly-built classifier cannot bypass the boundary checks either.
 	if err := config.ValidateComplexityModelBackend(b.cfg); err != nil {
 		return err
 	}
-	backendCfg := b.cfg.ComplexityModel.Backend
-	if backendCfg == nil {
-		return nil
+	models := b.runtime()
+	remote, ok, err := models.cfg.ComplexityRemoteTask()
+	if err != nil || !ok {
+		return err
 	}
-
-	external, err := config.ResolveRemoteClassifierBackend(
-		b.cfg,
-		backendCfg,
-		config.ModelRoleClassification,
-		config.ComplexityBackendContracts...,
-	)
+	spec, _, err := models.task(remote.Consumer)
 	if err != nil {
-		return fmt.Errorf("failed to resolve complexity backend: %w", err)
+		return err
 	}
-	deadline := time.Duration(backendCfg.EffectiveDeadlineMs()) * time.Millisecond
-	models := consumerModelRuntime([]*classifierModelRuntime{b.models})
-	spec := models.remoteSpec("complexity", backendCfg)
-
-	switch backendCfg.Contract {
+	switch spec.Binding.Contract {
 	case config.RemoteClassifierContractScore:
-		scorer, err := newScoringHTTPBackend(external, deadline)
+		scorer, err := newScoringHTTPBackend(spec.Deployment)
 		if err != nil {
 			return err
 		}
 		logging.ComponentEvent("classifier", "complexity_backend_selected", map[string]interface{}{
 			"contract": config.RemoteClassifierContractScore,
 		})
-		owned, err := prepareRemoteScore(models, spec, external, scorer)
+		owned, err := prepareRemoteScore(models, spec, scorer)
 		if err != nil {
 			return err
 		}
 		b.options = append(b.options, withComplexityScoreBackend(owned))
 	case config.RemoteClassifierContractLabelDistribution:
-		labels, err := newHTTPClassifierInference(
-			external,
-			newDeclaredLabelMapping(ComplexityVerdictLabels),
-			deadline,
-		)
+		labels, err := newHTTPClassifierInference(spec.Deployment, newDeclaredLabelMapping(ComplexityVerdictLabels))
 		if err != nil {
 			return err
 		}
 		logging.ComponentEvent("classifier", "complexity_backend_selected", map[string]interface{}{
 			"contract": config.RemoteClassifierContractLabelDistribution,
 		})
-		owned, err := prepareRemoteSequence(models, spec, external, labels)
+		owned, err := prepareRemoteSequence(models, spec, labels)
 		if err != nil {
 			return err
 		}
 		b.options = append(b.options, withComplexityLabelBackend(owned))
 	default:
-		// Unreachable: the validator above rejects anything else. Kept so a
+		// Unreachable: the binding plan rejects anything else. Kept so a
 		// future contract cannot be silently ignored here.
-		return fmt.Errorf("complexity backend contract %q has no reader", backendCfg.Contract)
+		return fmt.Errorf("complexity backend contract %q has no reader", spec.Binding.Contract)
 	}
 	return nil
 }

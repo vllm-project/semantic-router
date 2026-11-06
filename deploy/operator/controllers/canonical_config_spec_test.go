@@ -180,8 +180,10 @@ func TestOperatorPIIBackendResolvesInGeneratedRouterConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("router rejects the operator-generated config: %v\n%s", err, data)
 	}
-	if cfg.PIIModel.Backend == nil || cfg.PIIModel.Backend.Model != "pii-spans" {
-		t.Fatalf("PII backend did not reach the parsed router config: %#v", cfg.PIIModel.Backend)
+	backend, ok, err := cfg.ResolveTask("pii_classifier")
+	if err != nil || !ok || backend.Deployment.Provider != routerconfig.ClassifyProvider ||
+		backend.Deployment.Endpoint != "http://pii-spans.default.svc:8080" || backend.Deployment.Model != "pii-spans-v1" || backend.Deployment.TimeoutMs != 1500 {
+		t.Fatalf("PII backend did not reach the parsed router config: %+v (%v)", backend, err)
 	}
 	if err := routerconfig.ValidatePIIModelBackend(cfg); err != nil {
 		t.Fatalf("PII backend does not resolve in the parsed router config: %v", err)

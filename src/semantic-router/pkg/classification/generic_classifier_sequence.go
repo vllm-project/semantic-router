@@ -2,7 +2,6 @@ package classification
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -51,28 +50,14 @@ type sequenceLabelClassifier struct {
 
 func newSequenceLabelClassifier(
 	rule config.ClassifierSignalRule,
-	external *config.ExternalModelConfig,
-	models ...*classifierModelRuntime,
+	spec config.ResolvedModelBinding,
+	runtime *classifierModelRuntime,
 ) (labelClassifier, error) {
-	return newSequenceLabelClassifierForBinding("classifier."+rule.Name, rule, external, models...)
-}
-
-func newSequenceLabelClassifierForBinding(
-	consumerName string,
-	rule config.ClassifierSignalRule,
-	external *config.ExternalModelConfig,
-	models ...*classifierModelRuntime,
-) (labelClassifier, error) {
-	if external == nil {
-		return nil, fmt.Errorf("external model %q is not configured", rule.Model)
-	}
-	backend, err := NewHTTPClassifierInference(external, newDeclaredLabelMapping(rule.Labels))
+	backend, err := NewHTTPClassifierInference(spec.Deployment, newDeclaredLabelMapping(rule.Labels))
 	if err != nil {
 		return nil, err
 	}
-	runtime := consumerModelRuntime(models)
-	backendCfg := &config.RemoteClassifierBackend{Model: external.Name, Protocol: config.RemoteClassifierProtocolHTTPClassify, Contract: config.RemoteClassifierContractLabelDistribution}
-	owned, err := prepareRemoteSequence(runtime, runtime.remoteSpec(consumerName, backendCfg), external, backend)
+	owned, err := prepareRemoteSequence(runtime, spec, backend)
 	if err != nil {
 		return nil, err
 	}

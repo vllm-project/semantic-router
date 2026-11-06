@@ -176,6 +176,24 @@ func TestRAGRerankSurvivesDSLCompileAndRoundTrip(t *testing.T) {
 	}
 }
 
+func TestRAGRerankDeploymentSurvivesDSLRoundTrip(t *testing.T) {
+	cfg := mustCompile(t, ragRerankDSL(`rerank: { deployment: "document-ranker", top_k: 2, layer: 22, dimension: 768 }`))
+	source, err := Decompile(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fromAST, errs := CompileAST(DecompileToAST(cfg))
+	if len(errs) != 0 {
+		t.Fatalf("AST round-trip: %v", errs)
+	}
+	for _, current := range []*config.RouterConfig{cfg, mustCompile(t, source), fromAST} {
+		rerank := mustExtractRAGPluginConfig(t, current).Rerank
+		if rerank == nil || rerank.Deployment != "document-ranker" || rerank.TopK == nil || *rerank.TopK != 2 || rerank.Layer != 22 || rerank.Dimension != 768 {
+			t.Fatalf("rerank = %+v\n%s", rerank, source)
+		}
+	}
+}
+
 func TestRAGRerankRejectsMalformedDSLValues(t *testing.T) {
 	for _, field := range []string{`rerank: true`, `rerank: { top_k: "two" }`} {
 		if _, errs := Compile(ragRerankDSL(field)); len(errs) == 0 {
