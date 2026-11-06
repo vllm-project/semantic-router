@@ -51,6 +51,11 @@ const (
 	// omits or demotes to replay are emitted inline for that request — the
 	// debug/replay-mode trigger for the v0.4 header surface. See issue #2216.
 	VSRDebug = "x-vsr-debug"
+
+	// VSRProtectionRelease asks router-learning protection for a fresh
+	// decision on the request's protection key. Any non-empty value requests
+	// it; global.router.learning.protection.release.header can rename it.
+	VSRProtectionRelease = "x-vsr-protection-release"
 )
 
 // VSR Decision Tracking Headers
