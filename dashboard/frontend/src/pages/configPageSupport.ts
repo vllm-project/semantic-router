@@ -1004,6 +1004,11 @@ export interface RouterLearningConfig {
       switch_margin?: number
       stability_weight?: number
     }
+    release?: {
+      enabled?: boolean
+      header?: string
+      min_user_turns_between?: number
+    }
   }
   state_store?: {
     backend?: string
