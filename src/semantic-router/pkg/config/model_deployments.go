@@ -34,18 +34,63 @@ type ModelDeployment struct {
 	// EnableSharedContext computes the shared state of a multi-question
 	// request once; unset leaves it to the model family (on for Decision 2.0).
 	EnableSharedContext *bool `yaml:"enable_shared_context,omitempty" json:"enable_shared_context,omitempty"`
+	// MaxModelLen is the most input tokens one question of a local Decision
+	// deployment may have: it lowers the package's limit and never raises it.
+	// Unset keeps the package's limit; attached endpoints and replicas refuse it.
+	MaxModelLen *int `yaml:"max_model_len,omitempty" json:"max_model_len,omitempty"`
 	// Endpoint attaches a model_runtime deployment to an engine the Router does
-	// not manage (unix:///path, http://host:port or https://host:port).
+	// not manage (unix:///path, http://host:port or https://host:port). For a
+	// systemone deployment it is the URL its System One API answers POST
+	// requests on, path prefix included (https://host/v1/systemone); for the
+	// other remote providers it is the base URL of their API
+	// (https://host/v1), which their operation path follows.
 	Endpoint string `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
+	// Model is the model a remote API answers with; on an attached
+	// model_runtime endpoint it selects the served model (served_name).
+	Model string `yaml:"model,omitempty" json:"model,omitempty"`
+	// Auth is the credential an attached or remote deployment takes.
+	Auth *DeploymentAuth `yaml:"auth,omitempty" json:"auth,omitempty"`
+	// Headers are further non-secret headers every call carries.
+	Headers map[string]string `yaml:"headers,omitempty" json:"headers,omitempty"`
+	// TimeoutMs bounds one attempt of a call to an attached or remote
+	// deployment; a decision question or selector's own timeout_ms wins.
+	TimeoutMs int `yaml:"timeout_ms,omitempty" json:"timeout_ms,omitempty"`
+	// MaxRetries is the number of transport retries after a first attempt,
+	// within the caller's deadline.
+	MaxRetries *int `yaml:"max_retries,omitempty" json:"max_retries,omitempty"`
+	// TLS verifies an https endpoint and presents a client certificate.
+	TLS *DeploymentTLS `yaml:"tls,omitempty" json:"tls,omitempty"`
+	// Limits bounds the request and response bodies of one exchange.
+	Limits *DeploymentLimits `yaml:"limits,omitempty" json:"limits,omitempty"`
+	// Capabilities declares what a remote model answers when its API lists
+	// nothing for it.
+	Capabilities *DeploymentCapabilities `yaml:"capabilities,omitempty" json:"capabilities,omitempty"`
+	// OperatingPoint pins the packaged operating point of a managed scores
+	// head: a classifier rule the deployment answers reads independent label
+	// scores at the thresholds of the policy file with this digest.
+	OperatingPoint *OperatingPointReference `yaml:"operating_point,omitempty" json:"operating_point,omitempty"`
+	// Generation sets the completion length and sampling temperature of an
+	// openai_chat deployment's calls.
+	Generation *DeploymentGeneration `yaml:"generation,omitempty" json:"generation,omitempty"`
+	// QuestionTypes is the deprecated spelling of capabilities.question_types.
+	QuestionTypes []string `yaml:"question_types,omitempty" json:"question_types,omitempty"`
 	// Replicas places independent workers for this logical resource. Omission
 	// uses the single device/endpoint placement above.
 	Replicas []ModelReplica `yaml:"replicas,omitempty" json:"replicas,omitempty"`
-	// ServedName selects the model on an attached runtime that serves several
-	// (default: the deployment name).
+	// ServedName is the deprecated spelling of Model on an attached runtime.
 	ServedName string `yaml:"served_name,omitempty" json:"served_name,omitempty"`
 	// PublicName is the inference API identity. It never identifies a socket,
 	// local package path, or internal deployment key.
 	PublicName string `yaml:"public_name,omitempty" json:"public_name,omitempty"`
+
+	// translated marks a deployment a deprecated model path declared.
+	translated bool
+	// legacyPath is the model path a translated model_runtime deployment
+	// came from.
+	legacyPath string
+	// legacyExternal is the external[] model a translated deployment came
+	// from.
+	legacyExternal *ExternalModelConfig
 }
 
 // PublicModelName returns a safe public identity, independently of the name
@@ -69,18 +114,26 @@ type ModelInputBudget struct {
 	Overflow  string `yaml:"overflow,omitempty" json:"overflow,omitempty"`
 }
 
-// ModelBinding declares a shared task default or a recipe-local deployment use.
-// Head and MappingPath
-// describe task interpretation and never imply physical resource compatibility.
+// ModelBinding names the deployment that answers one signal type, globally
+// or in one recipe (see model_binding_forms.go). Head selects a classify head
+// of the deployment; the other fields are deprecated.
 type ModelBinding struct {
 	Deployment     string                   `yaml:"deployment" json:"deployment"`
-	Contract       string                   `yaml:"contract" json:"contract"`
-	Adapter        string                   `yaml:"adapter" json:"adapter"`
+	Contract       string                   `yaml:"contract,omitempty" json:"contract,omitempty"`
+	Adapter        string                   `yaml:"adapter,omitempty" json:"adapter,omitempty"`
 	Head           string                   `yaml:"head,omitempty" json:"head,omitempty"`
 	MappingPath    string                   `yaml:"mapping_path,omitempty" json:"mapping_path,omitempty"`
 	PairScorer     *PairScorerSelection     `yaml:"pair_scorer,omitempty" json:"pair_scorer,omitempty"`
 	OperatingPoint *OperatingPointReference `yaml:"operating_point,omitempty" json:"operating_point,omitempty"`
+
+	// contractImplied marks a contract the signal implied rather than the
+	// configuration wrote.
+	contractImplied bool
 }
+
+// ContractImplied reports whether the binding's contract is the one its
+// signal implies, not one the configuration wrote.
+func (b ModelBinding) ContractImplied() bool { return b.contractImplied }
 
 // DecisionTaskContract binds a semantic judgment without requiring token
 // positions or a classifier head. Its concrete typed question comes from the
@@ -152,7 +205,14 @@ func (d ModelDeployment) validate(cfg *RouterConfig) error {
 		return fmt.Errorf("public_name must be a trimmed public model ID, not a path or endpoint")
 	}
 	switch d.Provider {
-	case "http":
+	case SystemOneProvider:
+		return d.validateSystemOne()
+	case OpenAIEmbeddingsProvider, ClassifyProvider, OpenAIChatProvider, RerankProvider:
+		return d.validateRemote()
+	case LegacyHTTPProvider:
+		if d.hasConnectionBlock() || d.Capabilities != nil {
+			return fmt.Errorf("an http deployment names an external_model; declare provider classify or openai_chat with a connection block instead")
+		}
 		if d.Artifact != "" || strings.TrimSpace(d.ExternalModel) == "" {
 			return fmt.Errorf("http deployment requires external_model and cannot set artifact")
 		}
@@ -195,55 +255,195 @@ func CompileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 }
 
 // compileModelBindings assumes global deployment contracts were already
-// validated by the caller, then resolves global defaults and recipe overrides.
+// validated by the caller. Each recipe's plan holds the consumers whose
+// deployment the configuration names, by rule or binding (model_resolution.go),
+// with the contract and adapter their signal and provider imply.
 func compileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
+	cfg = cfg.withModelResources()
 	global, err := resolveGlobalModelBindings(cfg)
 	if err != nil {
 		return nil, err
 	}
 	plan := &ModelBindingPlan{recipes: make(map[RecipeName]map[string]ResolvedModelBinding), global: global}
-	profiles := cfg.Recipes
-	if len(profiles) == 0 {
+	scopes := map[RecipeName]*RouterConfig{}
+	if len(cfg.Recipes) == 0 {
 		recipe := cfg.RoutingScope
 		if recipe == "" {
 			recipe = DefaultRecipeName
 		}
-		profiles = []RoutingRecipe{{Name: recipe, Profile: RoutingProfile{ModelBindings: cfg.ModelBindings, Signals: cfg.Signals}}}
+		scopes[recipe] = cfg
 	}
-	for _, recipe := range profiles {
-		declarations := cfg.EffectiveModelBindings(recipe.Profile.Signals, recipe.Profile.ModelBindings)
-		bindings := make(map[string]ResolvedModelBinding, len(declarations))
-		for _, name := range sortedModelKeys(declarations) {
-			decl := declarations[name]
-			deployment, exists := cfg.ModelDeployments[decl.Deployment]
-			if !exists {
-				return nil, fmt.Errorf("recipes[%s].routing.model_bindings.%s: unknown deployment %q", recipe.Name, name, decl.Deployment)
-			}
-			deployment = deployment.WithDefaults()
-			if err := validateTaskModelBinding(name, decl, deployment); err != nil {
-				return nil, fmt.Errorf("recipes[%s].routing.model_bindings.%s: %w", recipe.Name, name, err)
-			}
-			if strings.HasPrefix(name, "classifier.") {
-				rule := classifierSignalRuleByName(recipe.Profile.Signals.ClassifierRules, strings.TrimPrefix(name, "classifier."))
-				if err := validateGenericModelBinding(cfg, rule, decl, deployment); err != nil {
-					return nil, fmt.Errorf("recipes[%s].routing.model_bindings.%s: %w", recipe.Name, name, err)
-				}
-			}
-			if strings.HasPrefix(name, "safety.") {
-				if err := validateSafetyModelBinding(recipe.Profile.Signals.SafetyRules, name, decl, deployment); err != nil {
-					return nil, fmt.Errorf("recipes[%s].routing.model_bindings.%s: %w", recipe.Name, name, err)
-				}
-			}
-			bindings[name] = ResolvedModelBinding{Recipe: recipe.Name, Name: name, Binding: decl, Deployment: deployment, Admission: cfg.ModelAdmission[decl.Deployment]}
+	for i := range cfg.Recipes {
+		scopes[cfg.Recipes[i].Name] = cfg.ConfigForRecipe(&cfg.Recipes[i])
+	}
+	for _, recipe := range sortedRecipeNames(scopes) {
+		scoped := scopes[recipe]
+		if err := validateDeclaredBindingKeys(recipe, scoped); err != nil {
+			return nil, err
 		}
-		plan.recipes[recipe.Name] = bindings
+		bindings := make(map[string]ResolvedModelBinding)
+		for _, consumer := range scoped.scopeConsumers() {
+			resolved, ok, err := scoped.resolveTask(consumer)
+			if err != nil && scoped.translationError(err) {
+				continue
+			}
+			if err != nil {
+				return nil, fmt.Errorf("recipes[%s]: %w", recipe, err)
+			}
+			if !ok || !resolved.Explicit() {
+				continue
+			}
+			decl := resolved.Binding
+			decl.Deployment = resolved.Name
+			deployment := resolved.Deployment
+			decl = withImpliedContract(consumer, decl, deployment)
+			path := fmt.Sprintf("recipes[%s].routing.model_bindings.%s", recipe, BindingKey(consumer))
+			if err := validateTaskModelBinding(consumer, decl, deployment); err != nil {
+				return nil, fmt.Errorf("%s: %w", path, err)
+			}
+			if strings.HasPrefix(consumer, "classifier.") {
+				rule := classifierSignalRuleByName(scoped.ClassifierRules, strings.TrimPrefix(consumer, "classifier."))
+				if err := validateGenericModelBinding(cfg, rule, decl, deployment); err != nil {
+					return nil, fmt.Errorf("%s: %w", path, err)
+				}
+			}
+			if strings.HasPrefix(consumer, "safety.") {
+				if err := validateSafetyModelBinding(scoped.SafetyRules, consumer, decl, deployment); err != nil {
+					return nil, fmt.Errorf("%s: %w", path, err)
+				}
+			}
+			bindings[consumer] = ResolvedModelBinding{Recipe: recipe, Name: consumer, Binding: decl, Deployment: deployment, Admission: cfg.ModelAdmission[decl.Deployment]}
+		}
+		plan.recipes[recipe] = bindings
 	}
 	return plan, nil
 }
 
+func sortedRecipeNames(scopes map[RecipeName]*RouterConfig) []RecipeName {
+	names := make([]RecipeName, 0, len(scopes))
+	for name := range scopes {
+		names = append(names, name)
+	}
+	sort.Slice(names, func(i, j int) bool { return names[i] < names[j] })
+	return names
+}
+
+// validateDeclaredBindingKeys refuses a recipe binding for a rule the recipe
+// does not declare.
+func validateDeclaredBindingKeys(recipe RecipeName, scoped *RouterConfig) error {
+	for _, key := range sortedModelKeys(scoped.recipeBindings()) {
+		binding := scoped.recipeBindings()[key]
+		if !knownBindingKey(key) {
+			return fmt.Errorf("recipes[%s].routing.model_bindings.%s: unknown task consumer %q", recipe, BindingKey(key), key)
+		}
+		if _, exists := scoped.ModelDeployments[binding.Deployment]; !exists {
+			return fmt.Errorf("recipes[%s].routing.model_bindings.%s: unknown deployment %q; %s", recipe, BindingKey(key), binding.Deployment, declaredDeployments(scoped.ModelDeployments))
+		}
+		switch {
+		case strings.HasPrefix(key, "classifier."):
+			if classifierSignalRuleByName(scoped.ClassifierRules, strings.TrimPrefix(key, "classifier.")) == nil {
+				return fmt.Errorf("recipes[%s].routing.model_bindings.%s: generic classifier binding requires an existing rule in the same recipe", recipe, key)
+			}
+		case strings.HasPrefix(key, "safety."):
+			if rule, _ := safetyRuleForBinding(scoped.SafetyRules, key); rule == nil {
+				return fmt.Errorf("recipes[%s].routing.model_bindings.%s: safety binding must identify exactly one recipe signal head", recipe, key)
+			}
+		}
+	}
+	return nil
+}
+
+// withImpliedContract fills the contract and adapter a binding leaves out:
+// the signal decides the contract, the provider the adapter.
+// ImpliedBinding is a binding with the contract its signal implies and the
+// adapter its deployment's provider implies, where it writes neither.
+func ImpliedBinding(consumer string, decl ModelBinding, deployment ModelDeployment) ModelBinding {
+	return withImpliedContract(consumer, decl, deployment)
+}
+
+func withImpliedContract(consumer string, decl ModelBinding, deployment ModelDeployment) ModelBinding {
+	if decl.OperatingPoint == nil && deployment.OperatingPoint != nil && strings.HasPrefix(ruleConsumer(consumer), "classifier.") {
+		pinned := *deployment.OperatingPoint
+		decl.OperatingPoint = &pinned
+	}
+	if decl.Contract == "" {
+		decl.Contract, decl.contractImplied = impliedContract(consumer, decl, deployment), true
+	}
+	if decl.Adapter == "" {
+		switch deployment.Provider {
+		case ClassifyProvider:
+			decl.Adapter = RemoteClassifierProtocolHTTPClassify
+		case OpenAIChatProvider:
+			decl.Adapter = RemoteClassifierProtocolHTTPChat
+		case OpenAIEmbeddingsProvider:
+			decl.Adapter = EmbeddingBackendOpenAICompatible
+		case ModelRuntimeProvider:
+			// A built-in model's card names the adapter its published task
+			// reads with, as an explicit adapter on the binding did.
+			if model := RegisteredModel(deployment.Artifact); model != nil {
+				decl.Adapter = model.DefaultAdapter
+			}
+		}
+	}
+	return decl
+}
+
+func impliedContract(consumer string, decl ModelBinding, deployment ModelDeployment) string {
+	consumer = ruleConsumer(consumer)
+	remote := deployment.Provider == ClassifyProvider || deployment.Provider == OpenAIChatProvider
+	switch {
+	case consumer == "pii_classifier" || consumer == "hallucination_detector":
+		return RemoteClassifierContractTokenSpans
+	case consumer == "embedding":
+		return "embedding.v1"
+	case consumer == RAGRerankerConsumer:
+		return RelevanceScoresContract
+	case consumer == "preference" && deployment.Provider == OpenAIChatProvider:
+		// The chat model picks a route by name; no task contract applies.
+		return ""
+	case consumer == "preference" || consumer == "reask" || strings.HasPrefix(consumer, "decision."):
+		return DecisionTaskContract
+	case consumer == "prompt_guard" && deployment.Provider == OpenAIChatProvider:
+		return RemoteClassifierContractLabelDecision
+	case consumer == "complexity" || strings.HasPrefix(consumer, "complexity."):
+		if remote {
+			return RemoteClassifierContractScore
+		}
+		return DecisionTaskContract
+	case strings.HasPrefix(consumer, "safety.") && strings.HasSuffix(consumer, ".hazard"):
+		return RemoteClassifierContractLabelScores
+	case strings.HasPrefix(consumer, "classifier.") && decl.OperatingPoint != nil:
+		return RemoteClassifierContractLabelScores
+	}
+	return RemoteClassifierContractLabelDistribution
+}
+
+// remoteTaskProvider reports whether a deployment answers a task over a
+// remote classify, chat or embeddings API (or the deprecated http provider).
+func remoteTaskProvider(deployment ModelDeployment) bool {
+	switch deployment.Provider {
+	case LegacyHTTPProvider, ClassifyProvider, OpenAIChatProvider, OpenAIEmbeddingsProvider:
+		return true
+	}
+	return false
+}
+
 func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDeployment) error {
+	if err := providerAnswers(name, deployment, decl); err != nil {
+		return err
+	}
+	name = ruleConsumer(name)
+	if deployment.IsSystemOne() || (name == "preference" && deployment.Provider == OpenAIChatProvider) {
+		return nil
+	}
+	if deployment.Provider == RerankProvider {
+		if decl.MappingPath != "" || decl.Head != "" {
+			return fmt.Errorf("a rerank deployment returns relevance scores; it takes no head or mapping_path")
+		}
+		return nil
+	}
 	if decl.Contract == DecisionTaskContract {
-		allowed := name == "pii_classifier" || name == "hallucination_detector" || name == "preference" || name == "reask" || name == "complexity" || strings.HasPrefix(name, "classifier.") || strings.HasPrefix(name, "safety.")
+		allowed := name == "pii_classifier" || name == "hallucination_detector" || name == "preference" || name == "reask" || name == "complexity" || strings.HasPrefix(name, "complexity.") || strings.HasPrefix(name, "classifier.") || strings.HasPrefix(name, "safety.") || strings.HasPrefix(name, "decision.")
 		if !allowed || !deployment.IsModelRuntime() || decl.Head != "" || decl.MappingPath != "" || decl.OperatingPoint != nil || decl.PairScorer != nil {
 			return fmt.Errorf("decision.v1 requires a supported judgment consumer and model_runtime deployment, without head, mapping_path or a classifier operating point")
 		}
@@ -261,10 +461,14 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 	if decl.PairScorer != nil && name != RAGRerankerConsumer {
 		return fmt.Errorf("pair_scorer selection is only supported by rag.reranker")
 	}
-	switch name {
+	kind := name
+	if strings.HasPrefix(name, "complexity.") {
+		kind = "complexity"
+	}
+	switch kind {
 	case "prompt_guard":
 		want = RemoteClassifierContractLabelDistribution
-		if deployment.Provider == "http" && decl.Adapter == RemoteClassifierProtocolHTTPChat {
+		if remoteTaskProvider(deployment) && decl.Adapter == RemoteClassifierProtocolHTTPChat {
 			want = "label_decision.v1"
 		}
 	case "domain_classifier", "fact_check_classifier", "feedback_detector", "modality_detector":
@@ -309,13 +513,13 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 	if strings.TrimSpace(decl.Adapter) == "" && !deployment.IsModelRuntime() {
 		return fmt.Errorf("adapter is required")
 	}
-	if name == "complexity" && deployment.Provider != "http" {
+	if kind == "complexity" && !remoteTaskProvider(deployment) {
 		return fmt.Errorf("complexity requires an HTTP score or distribution adapter")
 	}
-	if deployment.Provider == "http" && decl.Head != "" {
+	if remoteTaskProvider(deployment) && decl.Head != "" {
 		return fmt.Errorf("remote task cannot bind a local head")
 	}
-	if deployment.Provider == "http" {
+	if remoteTaskProvider(deployment) {
 		if name == "fact_check_classifier" || name == "feedback_detector" || name == "modality_detector" {
 			return fmt.Errorf("%s has no HTTP task adapter", name)
 		}

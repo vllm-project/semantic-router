@@ -22,10 +22,10 @@ func labelEndpoint(t *testing.T, body string) SequenceClassifierBackend {
 
 	// The real transport and the real declared mapping, so this exercises the
 	// wiring the option builder produces rather than a stand-in.
-	backend, err := newHTTPClassifierInference(&config.ExternalModelConfig{
+	backend, err := newHTTPClassifierInference(externalClassifyDeployment(&config.ExternalModelConfig{
 		ModelEndpoint: endpointForTestServer(t, server),
 		ModelName:     "difficulty-classifier-svc",
-	}, newDeclaredLabelMapping(ComplexityVerdictLabels), time.Second)
+	}, time.Second), newDeclaredLabelMapping(ComplexityVerdictLabels))
 	if err != nil {
 		t.Fatalf("newHTTPClassifierInference: %v", err)
 	}
