@@ -18,6 +18,15 @@ type CanonicalGlobal struct {
 	Stores       CanonicalStoreGlobal       `yaml:"stores"`
 	Integrations CanonicalIntegrationGlobal `yaml:"integrations"`
 	ModelCatalog CanonicalModelCatalog      `yaml:"model_catalog"`
+
+	// legacyModelSources, legacyFieldWarnings and authoredThresholds carry
+	// what readLegacyModuleModels and authoredModuleThresholds read from
+	// the document to the router configuration.
+	legacyModelSources  map[string]string
+	legacyFieldWarnings []ConfigWarning
+	authoredThresholds  map[string]bool
+	// noModel are the modules a document turns off with model_ref: "".
+	noModel map[string]bool
 }
 
 // CanonicalRouterGlobal captures router-engine control knobs.
@@ -37,6 +46,9 @@ type CanonicalRouterGlobal struct {
 	AllowLossyTranslation []string `yaml:"allow_lossy_translation,omitempty"`
 	// RoutingInput chooses the user text that routing reads.
 	RoutingInput RoutingInputConfig `yaml:"routing_input,omitempty"`
+	// Headers governs the optional response headers, such as who may turn on
+	// the debug headers.
+	Headers RouterHeadersConfig `yaml:"headers,omitempty"`
 }
 
 // CanonicalStreamedBody groups streaming request body controls.
@@ -93,9 +105,14 @@ type CanonicalModelCatalog struct {
 	SignalTimeoutMs int `yaml:"signal_timeout_ms,omitempty"`
 }
 
-// CanonicalEmbeddingModels groups embedding-related model assets.
+// CanonicalEmbeddingModels groups embedding-related model assets. Default and
+// Multimodal name the deployments that embed text and images; Semantic holds
+// the embedding settings, and its model paths and endpoint are the
+// deprecated way to choose those models.
 type CanonicalEmbeddingModels struct {
-	Semantic EmbeddingModels `yaml:"semantic"`
+	Default    string          `yaml:"default,omitempty"`
+	Multimodal string          `yaml:"multimodal,omitempty"`
+	Semantic   EmbeddingModels `yaml:"semantic"`
 }
 
 // CanonicalModelModules groups configurable capability modules built on top of
@@ -193,10 +210,7 @@ func (m CanonicalHallucinationModule) runtimeConfig() HallucinationMitigationCon
 func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPayload) (CanonicalGlobal, error) {
 	defaults := DefaultCanonicalGlobal()
 	if rawOverride == nil && override == nil {
-		if err := applyDecisionModel(&defaults, nil); err != nil {
-			return CanonicalGlobal{}, err
-		}
-		if err := resolveModuleModelRefs(&defaults); err != nil {
+		if err := validateDecisionModel(&defaults); err != nil {
 			return CanonicalGlobal{}, err
 		}
 		return defaults, nil
@@ -210,13 +224,13 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 	if err := rejectLegacyPromptGuardProtocol(rawOverride); err != nil {
 		return CanonicalGlobal{}, err
 	}
-	if err := applyDecisionModel(&resolved, rawOverride); err != nil {
+	if err := validateDecisionModel(&resolved); err != nil {
 		return CanonicalGlobal{}, err
 	}
-	if err := resolveModuleModelRefs(&resolved); err != nil {
+	if err := readLegacyModuleModels(&resolved, rawOverride); err != nil {
 		return CanonicalGlobal{}, err
 	}
-	normalizeModuleOperatingPoints(&resolved, rawOverride)
+	resolved.authoredThresholds = authoredModuleThresholds(rawOverride)
 	return resolved, nil
 }
 
@@ -276,6 +290,10 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	applyCanonicalStoreGlobal(cfg, global.Stores)
 	applyCanonicalIntegrationGlobal(cfg, global.Integrations)
 	applyCanonicalModelCatalogGlobal(cfg, global.ModelCatalog)
+	cfg.legacyModelSources = global.legacyModelSources
+	cfg.noModel = global.noModel
+	cfg.ModelResourceWarnings = append(cfg.ModelResourceWarnings, global.legacyFieldWarnings...)
+	cfg.AuthoredThresholds = global.authoredThresholds
 	return nil
 }
 
@@ -296,6 +314,7 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 	cfg.Fallback = router.Fallback.Clone()
 	cfg.AllowLossyTranslation = router.AllowLossyTranslation
 	cfg.RoutingInput = router.RoutingInput
+	cfg.Headers = router.Headers
 }
 
 func applyCanonicalServiceGlobal(cfg *RouterConfig, services CanonicalServiceGlobal) {
@@ -331,6 +350,8 @@ func applyCanonicalIntegrationGlobal(cfg *RouterConfig, integrations CanonicalIn
 
 func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalModelCatalog) {
 	cfg.DecisionModel = modelCatalog.System.DecisionModel.Deployment
+	cfg.EmbeddingDeployment = modelCatalog.Embeddings.Default
+	cfg.MultimodalEmbeddingDeployment = modelCatalog.Embeddings.Multimodal
 	cfg.ModelDeployments = cloneModelMap(modelCatalog.Deployments)
 	cfg.GlobalModelBindings = cloneModelMap(modelCatalog.Bindings)
 	cfg.ExternalModels = append([]ExternalModelConfig(nil), modelCatalog.External...)
@@ -359,98 +380,133 @@ func cloneAdmissionMap(admission map[string]AdmissionConfig) map[string]Admissio
 	return cloned
 }
 
-func resolveModuleModelRefs(global *CanonicalGlobal) error {
-	if global == nil {
-		return nil
-	}
+// legacyModule is one built-in module's deprecated model fields: its
+// model_id and model_ref, and the system line it reads without a model_ref.
+type legacyModule struct {
+	consumer string
+	path     string
+	modelID  *string
+	modelRef *string
+	line     string
+}
 
-	var err error
-	for name, head := range map[string]*SequenceHeadModelConfig{
-		"safety": &global.ModelCatalog.Modules.Safety.Safety,
-		"hazard": &global.ModelCatalog.Modules.Safety.Hazard,
-	} {
-		if head.ModelID, err = resolveSystemModelRef(head.ModelRef, head.ModelID, global.ModelCatalog.System); err != nil {
-			return fmt.Errorf("global.model_catalog.modules.safety.%s: %w", name, err)
+func legacyModules(global *CanonicalGlobal) []legacyModule {
+	m := &global.ModelCatalog.Modules
+	return []legacyModule{
+		{bindingKeySafety, "global.model_catalog.modules.safety.safety", &m.Safety.Safety.ModelID, &m.Safety.Safety.ModelRef, "safety"},
+		{bindingKeyHazard, "global.model_catalog.modules.safety.hazard", &m.Safety.Hazard.ModelID, &m.Safety.Hazard.ModelRef, ""},
+		{"prompt_guard", "global.model_catalog.modules.prompt_guard", &m.PromptGuard.ModelID, &m.PromptGuard.ModelRef, "prompt_guard"},
+		{"domain_classifier", "global.model_catalog.modules.classifier.domain", &m.Classifier.Domain.ModelID, &m.Classifier.Domain.ModelRef, "domain_classifier"},
+		{"pii_classifier", "global.model_catalog.modules.classifier.pii", &m.Classifier.PII.ModelID, &m.Classifier.PII.ModelRef, "pii_classifier"},
+		{"fact_check_classifier", "global.model_catalog.modules.hallucination_mitigation.fact_check", &m.HallucinationMitigation.FactCheck.ModelID, &m.HallucinationMitigation.FactCheck.ModelRef, "fact_check_classifier"},
+		{"hallucination_detector", "global.model_catalog.modules.hallucination_mitigation.detector", &m.HallucinationMitigation.Detector.ModelID, &m.HallucinationMitigation.Detector.ModelRef, "hallucination_detector"},
+		{"feedback_detector", "global.model_catalog.modules.feedback_detector", &m.FeedbackDetector.ModelID, &m.FeedbackDetector.ModelRef, "feedback_detector"},
+	}
+}
+
+// readLegacyModuleModels resolves each module's deprecated model: its
+// model_id, else the system line its model_ref names, else its own system
+// line (the hazard module reads none without a model_ref). The model goes in
+// the module's model_id, which model resource translation reads as a
+// deployment and binding; model_ref and the system lines are cleared.
+func readLegacyModuleModels(global *CanonicalGlobal, raw *StructuredPayload) error {
+	system := &global.ModelCatalog.System
+	lines := make(map[string]string, len(systemLines))
+	for _, line := range systemLines {
+		lines[line.key] = strings.TrimSpace(*line.value(system))
+	}
+	authored := rawModuleKeys(raw)
+	global.legacyModelSources = map[string]string{}
+	for _, module := range legacyModules(global) {
+		ref, modelID := strings.TrimSpace(*module.modelRef), strings.TrimSpace(*module.modelID)
+		*module.modelRef = ""
+		source := module.path + ".model_id"
+		if modelID == "" {
+			line := module.line
+			if ref == "" && authored[module.path+".model_ref"] {
+				line = ""
+			}
+			if ref != "" {
+				if _, known := lines[ref]; !known {
+					return fmt.Errorf("%s: unknown model_ref %q", module.path, ref)
+				}
+				line = ref
+				source = module.path + ".model_ref"
+			}
+			switch {
+			case line != "" && lines[line] != "":
+				modelID = lines[line]
+				if ref == "" {
+					source = "global.model_catalog.system." + line
+				}
+			case ref == "hazard":
+				// An unset hazard line was Vela 1.0 Hazard; every other line
+				// was the decision model's model, which the module follows.
+				modelID = vela1HazardModel
+			}
+		}
+		*module.modelID = modelID
+		if modelID != "" {
+			global.legacyModelSources[module.consumer] = source
+		}
+		// model_ref: "" without a model_id ran no model, which a safety
+		// rule answers with the decision model instead.
+		if modelID == "" && ref == "" && authored[module.path+".model_ref"] && module.line != "" && module.consumer != bindingKeySafety {
+			if global.noModel == nil {
+				global.noModel = map[string]bool{}
+			}
+			global.noModel[module.consumer] = true
+			global.legacyFieldWarnings = append(global.legacyFieldWarnings, ConfigWarning{
+				Code: warningDeprecatedModelField, Field: module.path + ".model_ref",
+				Message: `model_ref: "" is deprecated; the module still runs no model. Set the module's enabled: false, or remove the signal`,
+			})
+			continue
+		}
+		for _, key := range []string{"model_id", "model_ref"} {
+			if authored[module.path+"."+key] && modelID == "" {
+				global.legacyFieldWarnings = append(global.legacyFieldWarnings, ConfigWarning{
+					Code: warningDeprecatedModelField, Field: module.path + "." + key,
+					Message: key + " is deprecated; an empty value has no effect: the signal follows its binding or the decision model",
+				})
+			}
 		}
 	}
-	if global.ModelCatalog.Modules.PromptGuard.ModelID, err = resolveSystemModelRef(
-		global.ModelCatalog.Modules.PromptGuard.ModelRef,
-		global.ModelCatalog.Modules.PromptGuard.ModelID,
-		global.ModelCatalog.System,
-	); err != nil {
-		return fmt.Errorf("global.model_catalog.modules.prompt_guard: %w", err)
-	}
-	if global.ModelCatalog.Modules.Classifier.Domain.ModelID, err = resolveSystemModelRef(
-		global.ModelCatalog.Modules.Classifier.Domain.ModelRef,
-		global.ModelCatalog.Modules.Classifier.Domain.ModelID,
-		global.ModelCatalog.System,
-	); err != nil {
-		return fmt.Errorf("global.model_catalog.modules.classifier.domain: %w", err)
-	}
-	if global.ModelCatalog.Modules.Classifier.PII.ModelID, err = resolveSystemModelRef(
-		global.ModelCatalog.Modules.Classifier.PII.ModelRef,
-		global.ModelCatalog.Modules.Classifier.PII.ModelID,
-		global.ModelCatalog.System,
-	); err != nil {
-		return fmt.Errorf("global.model_catalog.modules.classifier.pii: %w", err)
-	}
-	if global.ModelCatalog.Modules.HallucinationMitigation.FactCheck.ModelID, err = resolveSystemModelRef(
-		global.ModelCatalog.Modules.HallucinationMitigation.FactCheck.ModelRef,
-		global.ModelCatalog.Modules.HallucinationMitigation.FactCheck.ModelID,
-		global.ModelCatalog.System,
-	); err != nil {
-		return fmt.Errorf("global.model_catalog.modules.hallucination_mitigation.fact_check: %w", err)
-	}
-	if global.ModelCatalog.Modules.HallucinationMitigation.Detector.ModelID, err = resolveSystemModelRef(
-		global.ModelCatalog.Modules.HallucinationMitigation.Detector.ModelRef,
-		global.ModelCatalog.Modules.HallucinationMitigation.Detector.ModelID,
-		global.ModelCatalog.System,
-	); err != nil {
-		return fmt.Errorf("global.model_catalog.modules.hallucination_mitigation.detector: %w", err)
-	}
-	if global.ModelCatalog.Modules.FeedbackDetector.ModelID, err = resolveSystemModelRef(
-		global.ModelCatalog.Modules.FeedbackDetector.ModelRef,
-		global.ModelCatalog.Modules.FeedbackDetector.ModelID,
-		global.ModelCatalog.System,
-	); err != nil {
-		return fmt.Errorf("global.model_catalog.modules.feedback_detector: %w", err)
+	for _, line := range systemLines {
+		*line.value(system) = ""
 	}
 	return nil
 }
 
-func resolveSystemModelRef(ref string, explicitModelID string, catalog CanonicalSystemModels) (string, error) {
-	if explicitModelID != "" {
-		return explicitModelID, nil
+// rawModuleKeys lists the model_id and model_ref keys a configuration
+// writes under its modules, as "<module path>.<key>".
+func rawModuleKeys(raw *StructuredPayload) map[string]bool {
+	keys := map[string]bool{}
+	if raw == nil {
+		return keys
 	}
-	if ref == "" {
-		return "", nil
+	global, err := raw.AsStringMap()
+	if err != nil {
+		return keys
 	}
-
-	var modelID string
-	switch ref {
-	case "safety":
-		modelID = catalog.Safety
-	case "hazard":
-		modelID = catalog.Hazard
-	case "prompt_guard":
-		modelID = catalog.PromptGuard
-	case "domain_classifier":
-		modelID = catalog.DomainClassifier
-	case "pii_classifier":
-		modelID = catalog.PIIClassifier
-	case "fact_check_classifier":
-		modelID = catalog.FactCheckClassifier
-	case "hallucination_detector":
-		modelID = catalog.HallucinationDetector
-	case "feedback_detector":
-		modelID = catalog.FeedbackDetector
-	default:
-		return "", fmt.Errorf("unknown model_ref %q", ref)
+	modules := nestedStringMap(nestedStringMap(global["model_catalog"])["modules"])
+	paths := map[string]map[string]interface{}{
+		"global.model_catalog.modules.safety.safety":                       nestedStringMap(nestedStringMap(modules["safety"])["safety"]),
+		"global.model_catalog.modules.safety.hazard":                       nestedStringMap(nestedStringMap(modules["safety"])["hazard"]),
+		"global.model_catalog.modules.prompt_guard":                        nestedStringMap(modules["prompt_guard"]),
+		"global.model_catalog.modules.classifier.domain":                   nestedStringMap(nestedStringMap(modules["classifier"])["domain"]),
+		"global.model_catalog.modules.classifier.pii":                      nestedStringMap(nestedStringMap(modules["classifier"])["pii"]),
+		"global.model_catalog.modules.hallucination_mitigation.fact_check": nestedStringMap(nestedStringMap(modules["hallucination_mitigation"])["fact_check"]),
+		"global.model_catalog.modules.hallucination_mitigation.detector":   nestedStringMap(nestedStringMap(modules["hallucination_mitigation"])["detector"]),
+		"global.model_catalog.modules.feedback_detector":                   nestedStringMap(modules["feedback_detector"]),
 	}
-	if modelID == "" {
-		return "", fmt.Errorf("model_ref %q is not configured in global.model_catalog.system", ref)
+	for path, module := range paths {
+		for _, key := range []string{"model_id", "model_ref"} {
+			if hasRawKey(module, key) {
+				keys[path+"."+key] = true
+			}
+		}
 	}
-	return modelID, nil
+	return keys
 }
 
 // rejectLegacyPromptGuardProtocol refuses the legacy protocol key, which the

@@ -168,7 +168,9 @@ The Operator renders a canonical config from two Kubernetes-native inputs:
 Other `spec.config` fields are typed Operator adapters for response cache,
 classifiers, tools, observability, reasoning families, and related shared
 settings. The Operator translates them into canonical provider and `global`
-sections.
+sections. `spec.config.model_deployments`, `model_bindings` and
+`decision_model` carry the model catalog; see
+[Model deployments and the decision model](../api/semantic-router-crd#model-deployments-and-the-decision-model).
 
 ```yaml
 spec:

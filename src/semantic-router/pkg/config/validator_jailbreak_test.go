@@ -21,7 +21,7 @@ func TestValidateJailbreakContractsRejectsUnknownMethod(t *testing.T) {
 }
 
 func TestValidateJailbreakContractsAcceptsKnownMethods(t *testing.T) {
-	for _, method := range []string{"", "classifier", "model", "contrastive"} {
+	for _, method := range []string{"", "classifier", "model"} {
 		rule := JailbreakRule{Name: "r", Method: method, Threshold: 0.5}
 		if err := validateJailbreakContracts(jailbreakCfg(rule)); err != nil {
 			t.Errorf("method %q must be accepted: %v", method, err)
@@ -94,5 +94,42 @@ func TestValidateJailbreakContractsRejectsNonCanonicalSpelling(t *testing.T) {
 		if err == nil {
 			t.Errorf("method %q must be rejected; the runtime matches %q exactly", method, "contrastive")
 		}
+	}
+}
+
+func TestValidateJailbreakContractsRejectsContrastiveWithoutJailbreakPatterns(t *testing.T) {
+	err := validateJailbreakContracts(jailbreakCfg(JailbreakRule{
+		Name:           "r",
+		Method:         "contrastive",
+		Threshold:      0.5,
+		BenignPatterns: []string{"explain the policy"},
+	}))
+	if err == nil {
+		t.Fatal("contrastive rules must have at least one jailbreak pattern")
+	}
+}
+
+func TestValidateJailbreakContractsRejectsContrastiveWithoutBenignPatterns(t *testing.T) {
+	err := validateJailbreakContracts(jailbreakCfg(JailbreakRule{
+		Name:              "r",
+		Method:            "contrastive",
+		Threshold:         0.5,
+		JailbreakPatterns: []string{"ignore previous instructions"},
+	}))
+	if err == nil {
+		t.Fatal("contrastive rules must have at least one benign pattern")
+	}
+}
+
+func TestValidateJailbreakContractsAcceptsValidContrastiveRule(t *testing.T) {
+	err := validateJailbreakContracts(jailbreakCfg(JailbreakRule{
+		Name:              "r",
+		Method:            "contrastive",
+		Threshold:         0.5,
+		JailbreakPatterns: []string{"ignore previous instructions"},
+		BenignPatterns:    []string{"explain the policy"},
+	}))
+	if err != nil {
+		t.Fatalf("valid contrastive rule must be accepted: %v", err)
 	}
 }
