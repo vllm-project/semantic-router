@@ -64,7 +64,7 @@ func TestUpdateConfigHandler_ValidUpdates(t *testing.T) {
 				t.Errorf("Expected status 200, got %d. Response body: %s", w.Code, w.Body.String())
 			}
 
-			var result map[string]string
+			var result map[string]any
 			if decodeErr := json.NewDecoder(w.Body).Decode(&result); decodeErr != nil {
 				t.Errorf("Response is not valid JSON: %v", decodeErr)
 			}
@@ -153,9 +153,9 @@ func TestUpdateConfigHandler_InvalidUpdates(t *testing.T) {
 		expectedError  string
 	}{
 		{
-			name:           "Invalid config - protocol prefix in address",
+			name:           "Invalid config - credentials in backend ref endpoint",
 			method:         http.MethodPost,
-			requestBody:    canonicalConfigBody("http://127.0.0.1:8000"),
+			requestBody:    canonicalConfigBody("http://user:secret@127.0.0.1:8000"),
 			expectedStatus: http.StatusBadRequest,
 			expectedError:  "Config validation failed",
 		},
@@ -455,7 +455,7 @@ func TestUpdateConfigHandler_ValidationIntegration(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 
-	invalidConfig := canonicalConfigBody("http://127.0.0.1:8000")
+	invalidConfig := canonicalConfigBody("ftp://127.0.0.1:8000")
 	bodyBytes, _ := json.Marshal(invalidConfig)
 	req := httptest.NewRequest(http.MethodPost, "/api/router/config/update", bytes.NewReader(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
