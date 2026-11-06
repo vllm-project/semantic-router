@@ -7,7 +7,7 @@ dependencies = [
     # Lower bounds are the ones in requirements.txt; upper bounds stop at the next major.
     # accelerate is not imported by name. SentenceTransformerTrainer needs it.
     "accelerate>=1.12.0,<2",
-    "datasets>=4.5.0,<5",
+    "datasets>=4.5.0,<6",
     # The documented `hf download` command comes from this package.
     "huggingface-hub>=0.36.0,<1",
     "numpy>=2.2.2,<3",
@@ -18,7 +18,7 @@ dependencies = [
     # requirements.txt pins 5.3.0, so the range stays on that minor. 5.4 is a
     # migration release. 5.7 also changes AdaptiveLayerLoss and Matryoshka2dLoss
     # defaults, which this trainer uses.
-    "sentence-transformers>=5.3.0,<5.4",
+    "sentence-transformers>=5.3.0,<5.7",
     # runtime.json pins the release image at PyTorch 2.10.0. The default wheel
     # is PyPI, so the lock can resolve a newer torch than that image.
     "torch>=2.10.0,<3",
