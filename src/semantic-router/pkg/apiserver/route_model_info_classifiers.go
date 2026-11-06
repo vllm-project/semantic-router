@@ -73,7 +73,7 @@ func buildRoutingClassifierModels(
 			Categories: configuredCategoryNames(cfg),
 			Metadata: map[string]string{
 				"mapping_path": categoryModel.CategoryMappingPath,
-				"model_type":   localModelType(categoryModel.Backend),
+				"model_type":   consumerModelType(cfg, "domain_classifier"),
 				"threshold":    fmt.Sprintf("%.2f", categoryModel.Threshold),
 			},
 		})
@@ -88,7 +88,7 @@ func buildRoutingClassifierModels(
 			ModelPath: piiModel.ModelID,
 			Metadata: map[string]string{
 				"mapping_path": piiModel.PIIMappingPath,
-				"model_type":   localModelType(piiModel.Backend),
+				"model_type":   consumerModelType(cfg, "pii_classifier"),
 				"threshold":    fmt.Sprintf("%.2f", piiModel.Threshold),
 			},
 		})
@@ -104,7 +104,7 @@ func buildRoutingClassifierModels(
 			Metadata: map[string]string{
 				"enabled":                "true",
 				"jailbreak_mapping_path": promptGuard.JailbreakMappingPath,
-				"backend":                localModelType(promptGuard.Backend),
+				"backend":                consumerModelType(cfg, "prompt_guard"),
 			},
 		})
 	}
@@ -112,13 +112,17 @@ func buildRoutingClassifierModels(
 	return models
 }
 
-// localModelType names how a classifier module runs: the built-in model
-// runtime, or a remote classifier's transport.
-func localModelType(backend *routerconfig.RemoteClassifierBackend) string {
-	if backend != nil {
-		return backend.Protocol
+// consumerModelType reports how a module's model runs: the protocol of the
+// remote deployment it resolves to, or the model runtime.
+func consumerModelType(cfg *routerconfig.RouterConfig, consumer string) string {
+	task, ok, err := cfg.ResolveTask(consumer)
+	if !ok || err != nil || task.Deployment.IsModelRuntime() {
+		return routerconfig.ModelRuntimeProvider
 	}
-	return routerconfig.ModelRuntimeProvider
+	if adapter := routerconfig.ImpliedBinding(consumer, task.Binding, task.Deployment).Adapter; adapter != "" {
+		return adapter
+	}
+	return task.Deployment.Provider
 }
 
 func buildHallucinationModels(
@@ -260,8 +264,12 @@ func remoteHallucinationBinding(cfg *routerconfig.RouterConfig) (routerconfig.Re
 		return routerconfig.ResolvedModelBinding{}, false
 	}
 	spec, ok := plan.Lookup(recipe, "hallucination_detector")
-	if !ok || spec.Deployment.Provider != "http" {
+	if !ok {
 		return routerconfig.ResolvedModelBinding{}, false
 	}
-	return spec, true
+	switch spec.Deployment.Provider {
+	case routerconfig.ClassifyProvider, routerconfig.OpenAIChatProvider, routerconfig.LegacyHTTPProvider:
+		return spec, true
+	}
+	return routerconfig.ResolvedModelBinding{}, false
 }

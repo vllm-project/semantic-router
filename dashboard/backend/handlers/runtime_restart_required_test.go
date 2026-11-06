@@ -145,7 +145,7 @@ func TestAFailedSaveRestoresWithoutRecordingARestart(t *testing.T) {
 
 func TestRestartRequiredResponseIsAccepted(t *testing.T) {
 	recorder := httptest.NewRecorder()
-	writeRestartRequiredResponse(recorder, "20261007-1", "Restart required: run `vllm-sr serve` to apply.")
+	writeRestartRequiredResponse(recorder, "20261007-1", "Restart required: run `vllm-sr serve` to apply.", nil)
 	var body map[string]string
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)

@@ -22,6 +22,17 @@ type embeddingRuntime struct {
 	served map[string]int
 }
 
+// embeddingDeployment is the deployment cfg serves an embedding model
+// keyword on.
+func embeddingDeployment(t *testing.T, cfg *config.RouterConfig, model string) string {
+	t.Helper()
+	name, _, err := cfg.EmbeddingModelDeployment(model)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return name
+}
+
 func newEmbeddingRuntime(deployments ...string) *embeddingRuntime {
 	runtime := &embeddingRuntime{cards: make(map[string]modelservice.ModelCard), served: make(map[string]int)}
 	for i, deployment := range deployments {
@@ -83,7 +94,6 @@ func (r *embeddingRuntime) inputs(deployment string) int {
 }
 
 func TestImplicitEmbeddingDeploymentsServeModuleDefaults(t *testing.T) {
-	services := newEmbeddingRuntime("@embedding.mmbert", "@embedding.qwen3")
 	cfg := &config.RouterConfig{}
 	cfg.EmbeddingConfig.ModelType = "mmbert"
 	cfg.MmBertModelPath = "models/Vela-1.0-Encoder-307M-Embedding"
@@ -91,13 +101,15 @@ func TestImplicitEmbeddingDeploymentsServeModuleDefaults(t *testing.T) {
 	cfg.EmbeddingRules = []config.EmbeddingRule{{Name: "route", Candidates: []string{"hello"}}}
 	cfg.ModelSelection.ML.ModelsPath, cfg.ModelSelection.ML.ModelType = "selectors", "qwen3"
 	cfg.Decisions = []config.Decision{{Algorithm: &config.AlgorithmConfig{Type: "knn"}}}
+	deployments := map[string]string{"mmbert": embeddingDeployment(t, cfg, "mmbert"), "qwen3": embeddingDeployment(t, cfg, "qwen3")}
+	services := newEmbeddingRuntime(deployments["mmbert"], deployments["qwen3"])
 	runtime := serving.New(services, binding.NewPool())
 	prepared, err := PrepareOwnedEmbeddings(context.Background(), cfg, runtime)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer prepared.Close()
-	for model, deployment := range map[string]string{"mmbert": "@embedding.mmbert", "qwen3": "@embedding.qwen3"} {
+	for model, deployment := range deployments {
 		provider, err := prepared.Get(model, 0, 0)
 		if err != nil {
 			t.Fatal(err)
@@ -123,7 +135,7 @@ func TestImplicitEmbeddingSpecResolvesRegistryPackages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if spec.Binding.Deployment != "@embedding.mmbert" || spec.Deployment.Artifact != "vllm-sr/Vela-1.0-Encoder-307M-Embedding" ||
+	if spec.Binding.Deployment != "Vela-1.0-Encoder-307M-Embedding" || spec.Deployment.Artifact != "vllm-sr/Vela-1.0-Encoder-307M-Embedding" ||
 		len(spec.Deployment.Revision) != 40 || spec.Deployment.Device != "cpu" || spec.Deployment.Input.Overflow != "truncate" ||
 		spec.Deployment.HasEngineArgs() {
 		t.Fatalf("mmbert spec %+v", spec)
@@ -185,11 +197,12 @@ func TestConfiguredViewDoesNotChangeGlobalConsumers(t *testing.T) {
 }
 
 func TestPreparedEmbeddingsShareTheContentCache(t *testing.T) {
-	services := newEmbeddingRuntime("@embedding.mmbert")
 	cfg := &config.RouterConfig{}
 	cfg.EmbeddingConfig.ModelType = "mmbert"
 	cfg.MmBertModelPath = t.TempDir()
 	cfg.EmbeddingRules = []config.EmbeddingRule{{Name: "route", Candidates: []string{"hello"}}}
+	mmbert := embeddingDeployment(t, cfg, "mmbert")
+	services := newEmbeddingRuntime(mmbert)
 	runtime := serving.New(services, nil)
 	first, err := PrepareOwnedEmbeddings(context.Background(), cfg, runtime)
 	if err != nil {
@@ -203,7 +216,7 @@ func TestPreparedEmbeddingsShareTheContentCache(t *testing.T) {
 	defer second.Close()
 	a, _ := first.Default()
 	b, _ := second.Default()
-	before := services.inputs("@embedding.mmbert")
+	before := services.inputs(mmbert)
 	text := "one request, two consumers, one runtime input"
 	if _, err := a.Embed(context.Background(), text); err != nil {
 		t.Fatal(err)
@@ -211,7 +224,7 @@ func TestPreparedEmbeddingsShareTheContentCache(t *testing.T) {
 	if _, err := embedding.Embed(context.Background(), b, text, embedding.Options{}); err != nil {
 		t.Fatal(err)
 	}
-	if got := services.inputs("@embedding.mmbert") - before; got != 1 {
+	if got := services.inputs(mmbert) - before; got != 1 {
 		t.Fatalf("%d runtime inputs for one text, want 1", got)
 	}
 }

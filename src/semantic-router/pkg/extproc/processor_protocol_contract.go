@@ -291,7 +291,7 @@ func (r *OpenAIRouter) decodeClientResponse(
 	ctx.SemanticResponse = &decoded.Response
 	ctx.ResponseEnvelope = decoded.Envelope
 	ctx.ResponseBodyNeedsRewrite = decoded.Envelope.ResponseReencodeRequired
-	ctx.ResponseVendorExtensions = protocolcodec.DiagnosticsDroppedVendorExtensions(decoded.Diagnostics)
+	ctx.ResponseUnknownFields = protocolcodec.DiagnosticsDroppedUnknownFields(decoded.Diagnostics)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, decoded.Diagnostics...)
 	return ctx.SemanticResponse, nil
 }
@@ -329,6 +329,24 @@ func (r *OpenAIRouter) encodeClientResponse(
 	response llmprotocol.Response,
 	ctx *RequestContext,
 ) ([]byte, error) {
+	return r.encodeClientResponseWithReplay(response, ctx, true)
+}
+
+// encodeCanonicalClientResponse renders the client wire from the neutral
+// response without replaying the upstream bytes, which may carry members the
+// wire contract does not declare.
+func (r *OpenAIRouter) encodeCanonicalClientResponse(
+	response llmprotocol.Response,
+	ctx *RequestContext,
+) ([]byte, error) {
+	return r.encodeClientResponseWithReplay(response, ctx, false)
+}
+
+func (r *OpenAIRouter) encodeClientResponseWithReplay(
+	response llmprotocol.Response,
+	ctx *RequestContext,
+	replay bool,
+) ([]byte, error) {
 	engine, err := r.protocolEngine()
 	if err != nil {
 		return nil, err
@@ -341,6 +359,9 @@ func (r *OpenAIRouter) encodeClientResponse(
 		}
 		envelope = ctx.ResponseEnvelope
 		envelope.ResponseRender.PreviousResponseID = responseObjectPreviousID(ctx)
+	}
+	if !replay {
+		envelope.ResponseReencodeRequired = true
 	}
 	encoded, err := engine.EncodeResponse(format, response, envelope)
 	if err != nil {

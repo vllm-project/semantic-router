@@ -328,10 +328,11 @@ for capture limits and access controls.
 vllm-sr serve
 ```
 
-Connect models in the Dashboard, choose a recipe, assign its decision pools,
-and publish an entrypoint. Use **Preview** to inspect signals, decisions, and
-candidate selection. Then send a real request through the entrypoint to verify
-backend execution and latency.
+Connect models in the Dashboard, open **Build → Mixture-of-Models → Recipes**,
+and choose **Create model** on a recipe under **Built-in recipes**. Name its
+entrypoint and assign each decision's pool; Vault's `guard` needs none. Use
+**Preview** to inspect signals, decisions, and candidate selection. Then send a
+real request through the entrypoint to verify backend execution and latency.
 
 When upgrading to policy 4.0, Speed, Cost, Accuracy and Vault keep their
 decisions, but the decision model now selects them: named questions replace the

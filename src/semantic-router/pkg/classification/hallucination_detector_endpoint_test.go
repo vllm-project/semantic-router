@@ -451,3 +451,20 @@ func TestEndpointDetector_ChatSpansUseTheSharedAlignment(t *testing.T) {
 		t.Errorf("1999 at [%d,%d), want [16,20) in bytes", result.Spans[0].Start, result.Spans[0].End)
 	}
 }
+
+// A chat deployment that sets no timeout_ms is asked within the default
+// classifier deadline: the connector refuses a zero attempt timeout.
+func TestEndpointDetectorOnAChatDeploymentWithoutTimeout(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"judge": {Provider: config.OpenAIChatProvider, Endpoint: "http://127.0.0.1:1/v1", Model: "judge"}}
+	cfg.ModelBindings = map[string]config.ModelBinding{"hallucination_detector": {Deployment: "judge"}}
+	models, err := newClassifierModelRuntime(cfg, RecipeRuntimeOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	detector, err := NewEndpointHallucinationDetector(&models.cfg.HallucinationMitigation.HallucinationModel, models)
+	if err != nil {
+		t.Fatalf("a chat deployment without timeout_ms was refused: %v", err)
+	}
+	_ = detector.Close()
+}
