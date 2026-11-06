@@ -101,8 +101,6 @@ config:
         tracing: {enabled: false}
     stores:
       response_cache: {enabled: false}
-    integrations:
-      tools: {enabled: false}
     model_catalog:
       embeddings:
         semantic: {mmbert_model_path: ""}

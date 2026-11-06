@@ -10,7 +10,6 @@ from cli.models import (
     RequestParamsPluginConfig,
     ResponseGuardPluginConfig,
     ToolsPluginConfig,
-    ToolSelectionPluginConfig,
     SystemPromptPluginConfig,
     HeaderMutationPluginConfig,
     RouterReplayPluginConfig,
@@ -282,7 +281,6 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
         PluginType.MEMORY.value: MemoryPluginConfig,
         PluginType.RAG.value: RAGPluginConfig,
         PluginType.TOOLS.value: ToolsPluginConfig,
-        PluginType.TOOL_SELECTION.value: ToolSelectionPluginConfig,
         PluginType.PROMPT_CACHE.value: PromptCachePluginConfig,
     }
 

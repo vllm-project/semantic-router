@@ -715,26 +715,6 @@ export interface ExternalModelConfig {
   temperature?: number
 }
 
-export interface ToolFilteringWeights {
-  embed?: number
-  lexical?: number
-  tag?: number
-  name?: number
-  category?: number
-}
-
-export interface AdvancedToolFilteringConfig {
-  enabled?: boolean
-  candidate_pool_size?: number
-  min_lexical_overlap?: number
-  min_combined_score?: number
-  weights?: ToolFilteringWeights
-  use_category_filter?: boolean
-  category_confidence_threshold?: number
-  allow_tools?: string[]
-  block_tools?: string[]
-}
-
 /** Model paths a deprecated system line names, by line; read-only in the Dashboard. */
 export type DeprecatedSystemModelLines = Partial<
   Record<
@@ -817,17 +797,7 @@ export interface CanonicalStoreGlobalConfig {
   vector_store?: VectorStoreConfig
 }
 
-export interface ToolIntegrationConfig {
-  enabled?: boolean
-  top_k?: number
-  similarity_threshold?: number
-  tools_db_path?: string
-  fallback_to_empty?: boolean
-  advanced_filtering?: AdvancedToolFilteringConfig
-}
-
 export interface CanonicalIntegrationGlobalConfig {
-  tools?: ToolIntegrationConfig
   looper?: LooperConfig
 }
 
@@ -1480,7 +1450,6 @@ export interface ConfigData {
   response_cache?: SemanticCacheConfig
   /** @deprecated Use response_cache. */
   semantic_cache?: SemanticCacheConfig
-  tools?: ToolIntegrationConfig
   prompt_guard?: ModelConfig & { enabled: boolean }
   vllm_endpoints?: VLLMEndpoint[]
   classifier?: {

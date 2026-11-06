@@ -14,9 +14,6 @@ func (c *RouterConfig) ConfigForGlobalModelServices() *RouterConfig {
 		if !c.IsRecipeReachableForRouting(ref.Recipe) {
 			continue
 		}
-		if plugin := ref.Decision.GetToolSelectionConfig(); plugin != nil && plugin.Enabled {
-			scoped.Tools.Enabled = true
-		}
 		if plugin := ref.Decision.GetMemoryConfig(); plugin != nil && plugin.Enabled {
 			scoped.Memory.Enabled = true
 		}

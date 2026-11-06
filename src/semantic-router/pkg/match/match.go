@@ -57,9 +57,23 @@ type Index interface {
 // the listed Candidates by BM25; a judge without recall reads the listed
 // Candidates.
 type Input struct {
-	Request    string
+	Request string
+	// History is the earlier user turns a judge reads beside the request,
+	// for a feature that reads them; empty reads the request alone.
+	History    string
 	Candidates []Candidate
 	Index      Index
+}
+
+// State is the state a choice judge asks about: the request, with the
+// earlier turns as their own part when the input carries them. A caller's
+// question about the same state, asked in the judge's bundle, shares its
+// call.
+func (input Input) State() modelservice.Request {
+	if strings.TrimSpace(input.History) == "" {
+		return modelservice.Request{State: input.Request}
+	}
+	return modelservice.Request{Parts: map[string]string{historyPart: input.History, requestPart: input.Request}}
 }
 
 // Result is what a match kept, best first, and what each of its stages did.
@@ -151,7 +165,7 @@ func (m *Matcher) Match(ctx context.Context, feature config.MatchFeature, block 
 		result.Kept = candidates
 		return result, nil
 	}
-	judged, stage, err := m.judge(ctx, *spec.Judge, input.Request, candidates)
+	judged, stage, err := m.judge(ctx, *spec.Judge, input, candidates)
 	if err != nil {
 		stage.Outcome = OutcomeFailed
 		if spec.Judge.EffectiveOnError() == config.MatchOnErrorSkip {

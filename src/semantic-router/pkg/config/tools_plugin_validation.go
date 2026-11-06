@@ -1,103 +1,183 @@
 package config
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+	"io/fs"
+	"strings"
 
-func (c *ToolsPluginConfig) Validate() error {
-	if c == nil || !c.Enabled {
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/presets"
+)
+
+// ErrToolSelectionStickyUnsupported is returned when sticky.enabled is true.
+// The config, state and trust contract of issue #3347 ship without a request
+// path that reads them, so an enabled block would construct and then never
+// run; it is refused until Phase 3 (#4519) integrates reuse, authorization,
+// invalidation, recovery and fallback together.
+var ErrToolSelectionStickyUnsupported = errors.New(
+	"sticky.enabled is not supported in this release (runtime integration is scheduled for Phase 3, issue #4519)",
+)
+
+// validateToolsPlugin checks a decision's tools plugin; path is the document
+// path of its configuration.
+func validateToolsPlugin(cfg *RouterConfig, path string, plugin *ToolsPluginConfig) error {
+	if err := plugin.Policy.validate(path + ".policy"); err != nil {
+		return err
+	}
+	if plugin.Select == nil {
 		return nil
 	}
-
-	mode := c.EffectiveMode()
-	if err := validateToolsPluginMode(mode); err != nil {
-		return err
-	}
-	if err := validateToolsPluginLists(mode, c.AllowTools, c.BlockTools); err != nil {
-		return err
-	}
-	if c.StripToolHistory && mode != ToolsPluginModeNone {
-		return fmt.Errorf("tools plugin: strip_tool_history requires mode=%q", ToolsPluginModeNone)
-	}
-
-	if err := c.DynamicRetrieval.Validate(); err != nil {
-		return err
-	}
-
-	return c.TrustedFacts.Validate()
+	return validateToolsSelect(cfg, path+".select", plugin.Select, plugin.Policy)
 }
 
-func validateToolsPluginMode(mode string) error {
-	switch mode {
-	case ToolsPluginModeNone, ToolsPluginModePassthrough, ToolsPluginModeFiltered:
+func (p *ToolsPolicyConfig) validate(path string) error {
+	if p == nil {
 		return nil
+	}
+	mode := p.EffectiveMode()
+	switch mode {
+	case ToolsPolicyModePassthrough, ToolsPolicyModeFiltered, ToolsPolicyModeNone:
 	default:
-		return fmt.Errorf("tools plugin: mode must be one of %q, %q, or %q", ToolsPluginModeNone, ToolsPluginModePassthrough, ToolsPluginModeFiltered)
+		return fmt.Errorf("%s.mode must be %s, %s or %s", path, ToolsPolicyModePassthrough, ToolsPolicyModeFiltered, ToolsPolicyModeNone)
 	}
+	lists := len(p.AllowTools) > 0 || len(p.BlockTools) > 0
+	if mode == ToolsPolicyModeFiltered && !lists {
+		return fmt.Errorf("%s: mode %s requires allow_tools or block_tools", path, ToolsPolicyModeFiltered)
+	}
+	if mode != ToolsPolicyModeFiltered && lists {
+		return fmt.Errorf("%s: allow_tools and block_tools require mode %s", path, ToolsPolicyModeFiltered)
+	}
+	if p.StripToolHistory && mode != ToolsPolicyModeNone {
+		return fmt.Errorf("%s.strip_tool_history requires mode %s", path, ToolsPolicyModeNone)
+	}
+	if err := p.TrustedFacts.Validate(); err != nil {
+		return fmt.Errorf("%s.trusted_facts: %w", path, err)
+	}
+	return nil
 }
 
-func validateToolsPluginLists(mode string, allowTools, blockTools []string) error {
-	hasLists := len(allowTools) > 0 || len(blockTools) > 0
-	switch mode {
-	case ToolsPluginModeFiltered:
-		if !hasLists {
-			return fmt.Errorf("tools plugin: mode=%q requires allow_tools or block_tools", ToolsPluginModeFiltered)
+// validateToolsSelect checks a selection: its mode's fields, its gate and
+// keep rules, the deployment that answers tool_rank and tool_need, and add
+// mode's catalog.
+func validateToolsSelect(cfg *RouterConfig, path string, spec *ToolsSelectConfig, policy *ToolsPolicyConfig) error {
+	if spec.Mode != ToolsSelectModeFilter && spec.Mode != ToolsSelectModeAdd {
+		return fmt.Errorf("%s.mode must be %s or %s", path, ToolsSelectModeFilter, ToolsSelectModeAdd)
+	}
+	if policy.EffectiveMode() == ToolsPolicyModeNone {
+		return fmt.Errorf("%s: policy mode %s removes every tool, so there is none to select", path, ToolsPolicyModeNone)
+	}
+	if err := validateToolsSelectModeFields(path, spec); err != nil {
+		return err
+	}
+	if bound := spec.NeedThreshold; bound != nil && !within(*bound, 0, 1) {
+		return fmt.Errorf("%s.need_threshold must be within [0, 1]", path)
+	}
+	if spec.TimeoutMs < 0 || spec.TimeoutMs > MaxSystemOneTimeoutMs {
+		return fmt.Errorf("%s.timeout_ms must be within [1, %d] when set", path, MaxSystemOneTimeoutMs)
+	}
+	if err := validateToolsSelectMatch(cfg, path+".match", spec.Match); err != nil {
+		return err
+	}
+	if err := spec.Sticky.validate(path + ".sticky"); err != nil {
+		return err
+	}
+	if spec.Mode == ToolsSelectModeAdd {
+		return validateToolCatalog(cfg, path+".tools_db_path", spec.ToolsDBPath, policy)
+	}
+	return nil
+}
+
+func validateToolsSelectModeFields(path string, spec *ToolsSelectConfig) error {
+	if spec.Mode == ToolsSelectModeAdd {
+		switch {
+		case strings.TrimSpace(spec.ToolsDBPath) == "":
+			return fmt.Errorf("%s.tools_db_path is required: add mode chooses from its catalog", path)
+		case spec.PreserveCount != 0:
+			return fmt.Errorf("%s.preserve_count keeps request tools in filter mode; add mode never removes them", path)
+		case spec.OnOverflow != "":
+			return fmt.Errorf("%s.on_overflow applies to filter mode; add mode's catalog is checked at load", path)
+		case spec.OnError != "" && spec.OnError != ToolsSelectOnErrorSkip && spec.OnError != ToolsSelectOnErrorFail:
+			return fmt.Errorf("%s.on_error must be %s or %s in add mode", path, ToolsSelectOnErrorSkip, ToolsSelectOnErrorFail)
 		}
-	default:
-		if hasLists {
-			return fmt.Errorf("tools plugin: allow_tools/block_tools require mode=%q", ToolsPluginModeFiltered)
+		return nil
+	}
+	switch {
+	case spec.ToolsDBPath != "":
+		return fmt.Errorf("%s.tools_db_path is read in add mode; filter mode chooses among the request's tools", path)
+	case spec.PreserveCount < 0 || spec.PreserveCount > presets.MaxChoices:
+		return fmt.Errorf("%s.preserve_count must be within [0, %d]", path, presets.MaxChoices)
+	case spec.OnOverflow != "" && spec.OnOverflow != ToolsSelectOnOverflowKeep && spec.OnOverflow != ToolsSelectOnOverflowReject:
+		return fmt.Errorf("%s.on_overflow must be %s or %s", path, ToolsSelectOnOverflowKeep, ToolsSelectOnOverflowReject)
+	case spec.OnError != "" && spec.OnError != ToolsSelectOnErrorKeep && spec.OnError != ToolsSelectOnErrorStrip && spec.OnError != ToolsSelectOnErrorFail:
+		return fmt.Errorf("%s.on_error must be %s, %s or %s in filter mode", path, ToolsSelectOnErrorKeep, ToolsSelectOnErrorStrip, ToolsSelectOnErrorFail)
+	}
+	return nil
+}
+
+// validateToolsSelectMatch checks the judge that ranks the candidates. The
+// selection's own on_error and timeout_ms govern its one call, which also
+// asks tool_need on the judge's deployment.
+func validateToolsSelectMatch(cfg *RouterConfig, path string, block *MatchConfig) error {
+	if err := validateMatch(cfg, path, block, MatchToolsSelect); err != nil {
+		return err
+	}
+	judge := *MatchToolsSelect.Effective(block).Judge
+	switch {
+	case judge.OnError != "":
+		return fmt.Errorf("%s.judge.on_error: the selection's on_error decides what a failed call does; remove it", path)
+	case judge.TimeoutMs != 0:
+		return fmt.Errorf("%s.judge.timeout_ms: the selection's timeout_ms bounds its call; remove it", path)
+	case judge.TopK > presets.MaxChoices:
+		return fmt.Errorf("%s.judge.top_k must be within [1, %d]", path, presets.MaxChoices)
+	}
+	deployment := cfg.MatchJudgeDeployment(judge)
+	for _, questionType := range []string{judge.QuestionType(), SystemOneQuestionNoul} {
+		if err := validateDeclaredQuestionType(cfg, deployment, questionType); err != nil {
+			return fmt.Errorf("%s.judge: %w", path, err)
 		}
 	}
 	return nil
 }
 
-// Validate checks the dynamic_retrieval block for legal strategy names and
-// numeric ranges.  When the receiver is nil or Enabled is false, validation
-// is a no-op so that adding the block to a config never breaks existing
-// deployments that leave it disabled.
-func (d *DynamicRetrievalConfig) Validate() error {
-	if d == nil || !d.Enabled {
+// validateToolCatalog checks add mode's catalog where the configuration
+// loads, when the file is there to read; the Router reads it again to serve
+// it. A decision model chooses among at most 255 options in one question.
+func validateToolCatalog(cfg *RouterConfig, path, file string, policy *ToolsPolicyConfig) error {
+	if cfg.SkipExternalAssetValidation {
 		return nil
 	}
-
-	switch d.Strategy {
-	case "", DynamicRetrievalStrategySemanticOnly, DynamicRetrievalStrategyHybridHistory:
-	default:
-		return fmt.Errorf("tools plugin: dynamic_retrieval.strategy must be one of %q or %q",
-			DynamicRetrievalStrategySemanticOnly, DynamicRetrievalStrategyHybridHistory)
+	catalog, err := LoadToolCatalog(file)
+	var duplicate *DuplicateToolError
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return nil
+	case errors.As(err, &duplicate):
+		return CheckError(path, CodeDuplicateToolName, fmt.Sprintf("%s lists tool %q twice; a decision model tells the tools apart by name", file, duplicate.Name))
+	case err != nil:
+		return fmt.Errorf("%s: %w", path, err)
 	}
-
-	if d.EffectiveStrategy() == DynamicRetrievalStrategyHybridHistory && d.HistoryWindow < 1 {
-		return fmt.Errorf("tools plugin: dynamic_retrieval.history_window must be >= 1 when strategy=%q",
-			DynamicRetrievalStrategyHybridHistory)
+	allowed := len(policy.AllowedTools(catalog))
+	switch {
+	case allowed > presets.MaxChoices:
+		return CheckError(path, CodeToolCatalogTooLarge, fmt.Sprintf("%s has %d tools the policy allows; a decision model chooses among at most %d, the options of one question", file, allowed, presets.MaxChoices))
+	case allowed == 0:
+		return fmt.Errorf("%s: %s has no tool the policy allows", path, file)
 	}
-
-	if d.MinHistoryConfidence < 0.0 || d.MinHistoryConfidence > 1.0 {
-		return fmt.Errorf("tools plugin: dynamic_retrieval.min_history_confidence must be between 0.0 and 1.0")
-	}
-
-	if d.Weights != nil {
-		if err := d.Weights.Validate(); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
-// Validate ensures each weight is non-negative.  Zero weights are permitted
-// and mean the corresponding signal is ignored by the retriever.
-func (w *DynamicRetrievalWeights) Validate() error {
-	if w == nil {
+func (s *StickyToolSelectionConfig) validate(path string) error {
+	if s == nil {
 		return nil
 	}
-	for name, val := range map[string]float64{
-		"semantic":           w.Semantic,
-		"history":            w.History,
-		"decision_prior":     w.DecisionPrior,
-		"repetition_penalty": w.RepetitionPenalty,
-	} {
-		if val < 0.0 {
-			return fmt.Errorf("tools plugin: dynamic_retrieval.weights.%s must be non-negative", name)
-		}
+	if s.MaxTools != nil && (*s.MaxTools <= 0 || *s.MaxTools > StickyToolSelectionMaxToolsUpperBound) {
+		return fmt.Errorf("%s.max_tools must be within [1, %d]", path, StickyToolSelectionMaxToolsUpperBound)
+	}
+	if limit := s.EffectiveMaxTools(); s.MaxNewToolsPerTurn != nil && (*s.MaxNewToolsPerTurn < 0 || *s.MaxNewToolsPerTurn > limit) {
+		return fmt.Errorf("%s.max_new_tools_per_turn must be within [0, %d], max_tools", path, limit)
+	}
+	if s.Enabled {
+		return fmt.Errorf("%s: %w", path, ErrToolSelectionStickyUnsupported)
 	}
 	return nil
 }
@@ -118,12 +198,12 @@ func (t *TrustedFactsConfig) Validate() error {
 	switch t.EffectiveEnforcement() {
 	case TrustedEnforcementDisabled, TrustedEnforcementAdvisory, TrustedEnforcementAuthoritative:
 	default:
-		return fmt.Errorf("tools plugin: trusted_facts.enforcement must be one of %q, %q, or %q",
+		return fmt.Errorf("enforcement must be one of %q, %q, or %q",
 			TrustedEnforcementDisabled, TrustedEnforcementAdvisory, TrustedEnforcementAuthoritative)
 	}
 
 	if len(t.TrustSources) == 0 {
-		return fmt.Errorf("tools plugin: trusted_facts.trust_sources must declare at least one authoritative source")
+		return fmt.Errorf("trust_sources must declare at least one authoritative source")
 	}
 	allowedSources := map[string]bool{
 		TrustedSourceOperatorPolicy:  true,
@@ -132,13 +212,13 @@ func (t *TrustedFactsConfig) Validate() error {
 	}
 	for _, s := range t.TrustSources {
 		if !allowedSources[s] {
-			return fmt.Errorf("tools plugin: trusted_facts.trust_sources %q is not authoritative (must be one of %q, %q, %q)",
+			return fmt.Errorf("trust_sources %q is not authoritative (must be one of %q, %q, %q)",
 				s, TrustedSourceOperatorPolicy, TrustedSourceGatewayAttested, TrustedSourceRuntimeFresh)
 		}
 	}
 
 	if t.FreshnessSeconds < 0 || t.FreshnessSeconds > 86400 {
-		return fmt.Errorf("tools plugin: trusted_facts.freshness_seconds must be in [0, 86400]")
+		return fmt.Errorf("freshness_seconds must be in [0, 86400]")
 	}
 
 	// A runtime-fresh claim without a freshness bound disables the very check
@@ -146,12 +226,12 @@ func (t *TrustedFactsConfig) Validate() error {
 	// source is declared.
 	for _, s := range t.TrustSources {
 		if s == TrustedSourceRuntimeFresh && t.FreshnessSeconds == 0 {
-			return fmt.Errorf("tools plugin: trusted_facts.freshness_seconds must be >0 when trust_sources includes %q", TrustedSourceRuntimeFresh)
+			return fmt.Errorf("freshness_seconds must be >0 when trust_sources includes %q", TrustedSourceRuntimeFresh)
 		}
 	}
 
 	if len(t.StageRoles) == 0 {
-		return fmt.Errorf("tools plugin: trusted_facts.stage_roles must declare at least one Looper stage role")
+		return fmt.Errorf("stage_roles must declare at least one Looper stage role")
 	}
 	allowedRoles := map[string]bool{
 		TrustedStageCandidate: true,
@@ -161,7 +241,7 @@ func (t *TrustedFactsConfig) Validate() error {
 	}
 	for _, r := range t.StageRoles {
 		if !allowedRoles[r] {
-			return fmt.Errorf("tools plugin: trusted_facts.stage_roles %q must be one of %q, %q, %q, %q",
+			return fmt.Errorf("stage_roles %q must be one of %q, %q, %q, %q",
 				r, TrustedStageCandidate, TrustedStageVerifier, TrustedStageAdvisor, TrustedStageFinal)
 		}
 	}

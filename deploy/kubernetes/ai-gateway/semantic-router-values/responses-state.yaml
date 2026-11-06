@@ -40,9 +40,6 @@ configOverride:
         enabled: false
       memory:
         enabled: false
-    integrations:
-      tools:
-        enabled: false
     model_catalog:
       embeddings:
         semantic:

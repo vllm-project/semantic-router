@@ -154,8 +154,6 @@ routing:
 global:
   stores:
     response_cache: {}
-  integrations:
-    tools: {}
   model_catalog:
     embeddings: {}
     modules:

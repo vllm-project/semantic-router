@@ -121,7 +121,7 @@ func (r *OpenAIRouter) handleLooperExecution(
 		defer r.WorkflowStateService.Release()
 	}
 	// Looper forwards the original tool-bearing request and never reaches
-	// handleToolSelection. The trusted-facts gate therefore runs inside Looper,
+	// applyToolsPlugin. The trusted-facts gate therefore runs inside Looper,
 	// per model attempt, at each attempt's own stage (see buildLooperRequest).
 	resp, errorResponse := r.runLooper(ctx, request, decision, reqCtx)
 	if errorResponse != nil {

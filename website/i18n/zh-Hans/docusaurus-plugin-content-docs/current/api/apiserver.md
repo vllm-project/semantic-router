@@ -238,7 +238,7 @@ Router 管理的存储和记忆：
 | `system_prompt`、`request_params`、`header_mutation`、`fast_response` | `POST /api/v1/plugins/{type}/preview`，使用 typed `configuration` 或活动 `binding` |
 | `response_guard` | 在给定的问题、上下文和回答上读取活动守卫的规则；`mode: probe` 调用已配置的模型 |
 | `rag` | 用 `supplied_context` 预览注入；`mode: probe` 执行检索并绕过 RAG 结果缓存 |
-| `tools`、`tool_selection` | 预览静态工具策略；语义选择必须显式使用 `mode: probe` |
+| `tools` | 预览工具策略；决策模型的工具选择必须显式使用 `mode: probe` |
 | `context_compression` | 保留已有压缩预览契约 |
 | `response_cache`、`memory` | 操作 `/api/v1/storage` 下的资源 |
 | `router_replay`、`shadow_dispatch` | 通过 `/api/v1/observability/replays` 查询记录 |

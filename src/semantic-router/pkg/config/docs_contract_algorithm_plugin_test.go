@@ -41,7 +41,6 @@ var pluginTutorialBuckets = map[string]string{
 	"shadow-dispatch":     "retrieval-and-memory",
 	"response-cache":      "retrieval-and-memory",
 	"system-prompt":       "response-and-mutation",
-	"tool-selection":      "response-and-mutation",
 	"tools":               "response-and-mutation",
 }
 

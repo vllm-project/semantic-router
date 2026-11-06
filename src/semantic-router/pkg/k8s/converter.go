@@ -371,24 +371,12 @@ var pluginConfigurationValidators = map[string]func([]byte) error{
 	"header_mutation": validateHeaderMutationPluginConfig,
 	"router_replay":   validateRouterReplayPluginConfig,
 	"shadow_dispatch": validateShadowDispatchPluginConfig,
-	"tool_selection":  validateToolSelectionPluginConfigRaw,
 }
 
 func decodePluginConfiguration(rawConfig []byte, target any) error {
 	decoder := json.NewDecoder(bytes.NewReader(rawConfig))
 	decoder.DisallowUnknownFields()
 	return decoder.Decode(target)
-}
-
-func validateToolSelectionPluginConfigRaw(rawConfig []byte) error {
-	var cfg config.ToolSelectionPluginConfig
-	if err := decodePluginConfiguration(rawConfig, &cfg); err != nil {
-		return fmt.Errorf("failed to unmarshal tool_selection config: %w", err)
-	}
-	if err := cfg.Validate(); err != nil {
-		return err
-	}
-	return nil
 }
 
 func validateSemanticCachePluginConfig(rawConfig []byte) error {

@@ -19,9 +19,6 @@ func TestFeatureRecipesReuseBaselinePluginContracts(t *testing.T) {
 	}
 	names := []string{
 		"plugin_request_mutations", "tools_passthrough", "tools_filtered", "tools_none",
-		"tool_selection_add_weather", "tool_selection_add_calc",
-		"tool_selection_filter", "tool_selection_filter_threshold", "tool_selection_add_topk_one",
-		"tool_selection_with_system_prompt",
 	}
 	if len(routing["decisions"].([]any)) != len(names) || len(signals["keywords"].([]any)) != len(names) {
 		t.Fatal("plugin recipe must preserve every feature route without additional policies")
@@ -40,20 +37,20 @@ func TestFeatureRecipesReuseBaselinePluginContracts(t *testing.T) {
 	}
 }
 
-func TestPIIPrecedenceRecipeOrdersOnlyTheBaselinePIIBlockAndToolSelection(t *testing.T) {
+func TestPIIPrecedenceRecipeOrdersOnlyTheBaselinePIIBlockAndToolsRoute(t *testing.T) {
 	config := profileConfig(t)
 	baseline := profileMap(t, config, "routing")
 	routing := profileMap(t, profileNamed(t, config["recipes"], "e2e-pii-precedence"), "routing")
 	signals := profileMap(t, routing, "signals")
 	if len(signals) != 2 || len(routing["decisions"].([]any)) != 2 {
-		t.Fatalf("PII precedence recipe must hold only the PII block and one tool selection: %#v", routing)
+		t.Fatalf("PII precedence recipe must hold only the PII block and one tools route: %#v", routing)
 	}
-	for _, name := range []string{"block_pii", "tool_selection_add_weather_decision"} {
+	for _, name := range []string{"block_pii", "tools_passthrough_decision"} {
 		if !reflect.DeepEqual(profileNamed(t, baseline["decisions"], name), profileNamed(t, routing["decisions"], name)) {
 			t.Fatalf("PII precedence recipe changed the baseline decision %s", name)
 		}
 	}
-	for signalType, name := range map[string]string{"keywords": "tool_selection_add_weather", "pii": "pii_deny_all"} {
+	for signalType, name := range map[string]string{"keywords": "tools_passthrough", "pii": "pii_deny_all"} {
 		original := profileNamed(t, profileMap(t, baseline, "signals")[signalType], name)
 		if !reflect.DeepEqual(original, profileNamed(t, signals[signalType], name)) {
 			t.Fatalf("PII precedence recipe changed the baseline signal %s", name)

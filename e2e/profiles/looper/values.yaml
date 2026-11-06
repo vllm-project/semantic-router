@@ -541,9 +541,6 @@ config:
           mmbert_model_path: ""
           multimodal_model_path: ""
           use_cpu: true
-    integrations:
-      tools:
-        enabled: false
 
 resources:
   limits:

@@ -100,7 +100,7 @@ func TestDecompileRoutingRoundTripsHeaderAndResponsePlugins(t *testing.T) {
 	}
 }
 
-func TestDecompileRoutingRoundTripsToolsDynamicRetrievalPluginConfig(t *testing.T) {
+func TestDecompileRoutingRoundTripsToolsPluginConfig(t *testing.T) {
 	cfg := mustParseRoutingPluginConfigTest(t, `
 version: v0.3
 routing:
@@ -125,36 +125,39 @@ routing:
         - type: tools
           configuration:
             enabled: true
-            mode: passthrough
-            semantic_selection: true
-            strategy: custom
-            dynamic_retrieval:
-              enabled: true
-              strategy: hybrid_history
-              history_window: 8
-              min_history_confidence: 0.4
-              fallback_on_low_confidence: true
-              weights:
-                semantic: 1.0
-                history: 0.7
-                decision_prior: 0.2
-                repetition_penalty: 0.1
+            policy:
+              mode: filtered
+              allow_tools: [docs.search, tickets.lookup]
+            select:
+              mode: filter
+              match:
+                judge: {preset: tool_rank, top_k: 4, min_ratio: 0.2}
+              need_threshold: 0.6
+              preserve_count: 1
+              on_error: strip
+              input: {history: true}
 `)
 
 	dslText := mustDecompileRoutingPluginConfigTest(t, cfg)
 	assertDecompiledPluginConfigContains(t, dslText, []string{
 		`PLUGIN tools`,
-		`strategy: "custom"`,
-		`dynamic_retrieval: {`,
-		`strategy: "hybrid_history"`,
-		`history_window: 8`,
-		`min_history_confidence: 0.4`,
-		`fallback_on_low_confidence: true`,
-		`weights: { decision_prior: 0.2, history: 0.7, repetition_penalty: 0.1, semantic: 1 }`,
+		`policy: { allow_tools: ["docs.search", "tickets.lookup"], mode: "filtered" }`,
+		`judge: { min_ratio: 0.2, preset: "tool_rank", top_k: 4 }`,
+		`need_threshold: 0.6`,
 	})
 
 	compiled := mustCompileRoutingPluginConfigTest(t, dslText)
-	assertToolsPluginDynamicRetrievalRoundTrip(t, compiled.Decisions[0])
+	plugin := findDecisionPluginForTest(t, compiled.Decisions[0], "tools")
+	var pluginConfig config.ToolsPluginConfig
+	if err := config.UnmarshalPluginConfig(plugin.Configuration, &pluginConfig); err != nil {
+		t.Fatalf("tools decode error: %v", err)
+	}
+	spec := pluginConfig.Select
+	if !pluginConfig.Enabled || pluginConfig.Policy.EffectiveMode() != config.ToolsPolicyModeFiltered || spec == nil ||
+		spec.Match.Judge.TopK != 4 || spec.EffectiveNeedThreshold() != 0.6 || spec.PreserveCount != 1 ||
+		spec.EffectiveOnError() != config.ToolsSelectOnErrorStrip || !spec.Input.History {
+		t.Fatalf("round-tripped tools plugin = %+v / %+v", pluginConfig.Policy, spec)
+	}
 }
 
 func mustParseRoutingPluginConfigTest(t *testing.T, configYAML string) *config.RouterConfig {
@@ -452,33 +455,6 @@ ROUTE invalid_prompt_cache {
 	}
 }
 
-func assertToolsPluginDynamicRetrievalRoundTrip(t *testing.T, decision config.Decision) {
-	t.Helper()
-
-	plugin := findDecisionPluginForTest(t, decision, "tools")
-	var pluginConfig config.ToolsPluginConfig
-	if err := config.UnmarshalPluginConfig(plugin.Configuration, &pluginConfig); err != nil {
-		t.Fatalf("tools decode error: %v", err)
-	}
-	if !pluginConfig.Enabled {
-		t.Fatal("tools.enabled = false, want true")
-	}
-	assertRoundTripToolsPluginBasics(t, &pluginConfig)
-	assertDynamicRetrievalConfig(t, pluginConfig.DynamicRetrieval)
-}
-
-func assertRoundTripToolsPluginBasics(t *testing.T, cfg *config.ToolsPluginConfig) {
-	t.Helper()
-
-	if cfg.Mode != config.ToolsPluginModePassthrough {
-		t.Fatalf("tools.mode = %q", cfg.Mode)
-	}
-	if cfg.SemanticSelection == nil || !*cfg.SemanticSelection {
-		t.Fatalf("tools.semantic_selection = %#v", cfg.SemanticSelection)
-	}
-	assertToolsPluginStrategy(t, cfg)
-}
-
 func TestDecompileRoutingRoundTripsToolsStripHistory(t *testing.T) {
 	cfg := mustParseRoutingPluginConfigTest(t, `
 version: v0.3
@@ -494,19 +470,16 @@ routing:
         - type: tools
           configuration:
             enabled: true
-            mode: none
-            strip_tool_history: true
+            policy: {mode: none, strip_tool_history: true}
 `)
 
 	dslText := mustDecompileRoutingPluginConfigTest(t, cfg)
 	assertDecompiledPluginConfigContains(t, dslText, []string{
 		`PLUGIN tools`,
-		`mode: "none"`,
-		`strip_tool_history: true`,
+		`policy: { mode: "none", strip_tool_history: true }`,
 	})
 	compiled := mustCompileRoutingPluginConfigTest(t, dslText)
-	toolsCfg := compiled.Decisions[0].GetToolsConfig()
-	if toolsCfg == nil || !toolsCfg.StripToolHistory {
+	if policy := compiled.Decisions[0].GetToolsConfig().ActivePolicy(); policy == nil || !policy.StripToolHistory {
 		t.Fatal("tools.strip_tool_history was not preserved")
 	}
 }

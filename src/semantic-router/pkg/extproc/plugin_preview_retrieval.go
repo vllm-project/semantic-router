@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/pluginruntime"
@@ -84,7 +82,7 @@ func (r *OpenAIRouter) PreviewTools(ctx context.Context, input pluginruntime.Too
 	if err != nil {
 		return pluginruntime.ToolsPreviewResponse{}, err
 	}
-	if input.Plugin != config.DecisionPluginTools && input.Plugin != config.DecisionPluginToolSelection {
+	if input.Plugin != config.DecisionPluginTools {
 		return pluginruntime.ToolsPreviewResponse{}, pluginruntime.ErrInvalidBinding
 	}
 	requestContext, err := r.pluginPreviewContext(ctx, input.Binding, input.Plugin)
@@ -98,62 +96,21 @@ func (r *OpenAIRouter) PreviewTools(ctx context.Context, input pluginruntime.Too
 		return pluginruntime.ToolsPreviewResponse{}, fmt.Errorf("invalid request_body: %w", err)
 	}
 	requestContext.SemanticRequest = &request
-	toolsPolicy := requestContext.VSRSelectedDecision.GetToolsConfig()
-	selectionPolicy := requestContext.VSRSelectedDecision.GetToolSelectionConfig()
-	enabled := toolsPolicy != nil && toolsPolicy.Enabled
-	if input.Plugin == config.DecisionPluginToolSelection {
-		enabled = selectionPolicy != nil && selectionPolicy.Enabled
+	plugin := requestContext.VSRSelectedDecision.GetToolsConfig()
+	result := pluginruntime.ToolsPreviewResponse{Guarantees: pluginruntime.Guarantees{Mode: mode}, Binding: input.Binding, Plugin: input.Plugin, Enabled: plugin != nil && plugin.Enabled, SelectedTools: []string{}}
+	// The gate and the policy run as dispatch runs them, on private decoded
+	// state; the selection asks the decision model and never runs a tool.
+	if result.Enabled && !r.applyTrustedFactsGate(&request, requestContext, plugin, trustedFactsRequestStage) &&
+		applyToolsPolicy(&request, plugin.Policy) && plugin.Select != nil && leavesToolChoiceToModel(&request) {
+		if mode != pluginruntime.ModeProbe {
+			return result, pluginruntime.ErrProbeRequired
+		}
+		result.BackendCalls = true
+		if failure := r.selectTools(&request, plugin, requestContext); failure != nil {
+			return result, fmt.Errorf("%w: %s", pluginruntime.ErrUnavailable, failure.message)
+		}
 	}
-	result := pluginruntime.ToolsPreviewResponse{Guarantees: pluginruntime.Guarantees{Mode: mode}, Binding: input.Binding, Plugin: input.Plugin, Enabled: enabled, SelectedTools: []string{}}
-	if enabled {
-		// Apply the same early static policy as dispatch, on private decoded state.
-		effectivePolicy := toolsPolicy
-		if effectivePolicy == nil || !effectivePolicy.Enabled {
-			effectivePolicy = &config.ToolsPluginConfig{Enabled: true, Mode: config.ToolsPluginModePassthrough}
-		}
-		var response *ext_proc.ProcessingResponse
-		canSelect, policyErr := r.handleEarlyToolModes(&request, &response, requestContext, effectivePolicy)
-		if policyErr != nil {
-			return result, policyErr
-		}
-		signals := extractSemanticRequestSignalsWith(&request, r.routingInputSelector())
-		query, _, hasQuery := buildToolClassificationText(signals.UserContent, signals.NonUserMessages)
-		selectionEnabled := (selectionPolicy != nil && selectionPolicy.Enabled) || (toolsPolicy != nil && toolsPolicy.SelectionEnabled())
-		if selectionPolicy != nil && selectionPolicy.Enabled && selectionPolicy.Mode == config.ToolSelectionModeFilter && len(request.Tools) == 0 {
-			selectionEnabled = false
-		}
-		if canSelect && selectionEnabled && hasQuery {
-			if mode != pluginruntime.ModeProbe {
-				return result, pluginruntime.ErrProbeRequired
-			}
-			if selectionPolicy != nil && selectionPolicy.Enabled {
-				if selectionPolicy.Mode == config.ToolSelectionModeFilter {
-					if len(request.Tools) == 0 {
-						selectionEnabled = false
-					} else if r.toolEmbedder == nil {
-						return result, pluginruntime.ErrUnavailable
-					}
-				} else {
-					database, _, databaseErr := r.toolDatabaseForSelectionPlugin(selectionPolicy)
-					if databaseErr != nil {
-						return result, databaseErr
-					}
-					if database == nil || !database.IsEnabled() {
-						return result, pluginruntime.ErrUnavailable
-					}
-				}
-			} else if r.ToolsDatabase == nil || !r.ToolsDatabase.IsEnabled() {
-				return result, pluginruntime.ErrUnavailable
-			}
-			result.BackendCalls = selectionEnabled
-			// Existing selection implementations may memoize embeddings and report
-			// retrieval metrics, but never execute tools or record conversation state.
-			if err = r.handleToolSelection(&request, query, signals.NonUserMessages, &response, requestContext); err != nil {
-				return result, err
-			}
-		}
-		clearSemanticToolChoiceWhenNoTools(&request)
-	}
+	clearSemanticToolChoiceWhenNoTools(&request)
 	encoded, err := engine.EncodeRequest(format, request, envelope)
 	if err != nil {
 		return result, err

@@ -174,7 +174,8 @@ routing:
         - type: tools
           configuration:
             enabled: true
-            mode: none
+            policy:
+              mode: none
         - type: router_replay
           configuration:
             enabled: true
@@ -197,10 +198,11 @@ routing:
         - type: tools
           configuration:
             enabled: true
-            mode: filtered
-            allow_tools:
-              - local_search
-              - local_read
+            policy:
+              mode: filtered
+              allow_tools:
+                - local_search
+                - local_read
         - type: router_replay
           configuration:
             enabled: true
@@ -228,10 +230,11 @@ routing:
         - type: tools
           configuration:
             enabled: true
-            mode: filtered
-            allow_tools:
-              - local_search
-              - local_read
+            policy:
+              mode: filtered
+              allow_tools:
+                - local_search
+                - local_read
         - type: router_replay
           configuration:
             enabled: true
@@ -268,7 +271,8 @@ routing:
         - type: tools
           configuration:
             enabled: true
-            mode: passthrough
+            policy:
+              mode: passthrough
         - type: router_replay
           configuration:
             enabled: true
@@ -286,10 +290,11 @@ routing:
         - type: tools
           configuration:
             enabled: true
-            mode: filtered
-            allow_tools:
-              - local_search
-              - local_read
+            policy:
+              mode: filtered
+              allow_tools:
+                - local_search
+                - local_read
         - type: router_replay
           configuration:
             enabled: true

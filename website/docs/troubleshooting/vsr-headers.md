@@ -26,8 +26,8 @@ The router splits response headers across two surfaces:
   response the Router answers itself, such as a block, a validation error, a
   cache hit or `GET /v1/models`. A request keeps the version it started on,
   even when a hot reload activates another one while it runs.
-- **Debug surface** — intermediate classification details, matched signals,
-  tool-selection metrics, and `x-vsr-retention-*` directives appear inline
+- **Debug surface** — intermediate classification details, matched signals
+  and `x-vsr-retention-*` directives appear inline
   only when the request sets `x-vsr-debug: true` and
   [`global.router.headers.debug`](#who-may-turn-on-the-debug-headers) allows
   the caller. It allows nobody by default. When replay is enabled, the same
@@ -151,7 +151,7 @@ without `pricing` omit both headers.
 ## Cache and plugin headers
 
 `x-vsr-cache-hit` and `x-vsr-fast-response` identify an immediate response on
-the public surface. Cache-similarity, tool-selection metrics, and prompt-cache
+the public surface. Cache-similarity and prompt-cache
 receipts require `x-vsr-debug`.
 
 The prompt-cache headers are content-free: they report counts and outcomes,
@@ -327,9 +327,6 @@ generates this table; run `make headers-generate` after changing it.
 | `x-vsr-selected-modality` | response | debug | none | classification | v0.2 | Modality result and optional method, such as `AR;classifier`. |
 | `x-vsr-selected-reasoning` | response | debug | none | classification | v0.1 | Reasoning mode chosen for the request: `on` or `off`. |
 | `x-vsr-session-phase` | response | debug | none | router_learning | v0.3 | Protection phase: `user_turn`, `tool_loop` or `provider_state`. |
-| `x-vsr-tools-confidence` | response | debug | none | tools | v0.3 | Highest similarity score among the selected tools. |
-| `x-vsr-tools-latency-ms` | response | debug | none | tools | v0.3 | Tool-selection retriever latency, in milliseconds. |
-| `x-vsr-tools-strategy` | response | debug | none | tools | v0.3 | Retriever strategy of semantic tool selection. |
 | `x-claude-code-session-id` | request, provider request | control | none | session | v0.3 | Conversation id Claude Code sends; `x-session-id` takes precedence, and providers receive it. |
 | `x-conversation-id` | request, provider request | control | none | router_learning | v0.4 | Client conversation id; Router Learning `scope: conversation` protects it, and providers receive it. |
 | `x-disable-router-memory` | request | control | none | memory | v0.3 | `true` keeps Router-managed memory out of the request. |

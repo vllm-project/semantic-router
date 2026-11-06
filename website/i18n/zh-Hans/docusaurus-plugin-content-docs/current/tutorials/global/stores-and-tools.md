@@ -168,18 +168,12 @@ global:
 
 ### 工具 {#tools}
 
-```yaml
-global:
-  integrations:
-    tools:
-      enabled: true
-      top_k: 3
-      tools_db_path: config/runtime/tools/tools_db.json
-```
+工具目录属于决策，而不属于 `global`：决策的[工具插件](../plugin/tools.md)中 `select.tools_db_path`
+指定其 add 模式从中选择的目录。
 
 ## 数据与安全 {#data-and-security}
 
 - 缓存、memory 和向量存储可能包含提示词、响应、嵌入、检索文档或提取的记忆。为所选后端配置认证、加密、保留策略和租户/用户范围。
 - 嵌入维度必须与现有集合匹配。嵌入模型或维度变更时，请重建或迁移索引。
-- 工具检索控制向模型展示什么；它不授权工具执行。请在工具服务上强制权限。
+- 工具选择控制向模型展示什么；它不授权工具执行。请在工具服务上强制权限。
 - 见[完整后端示例](https://github.com/vllm-project/semantic-router/tree/main/config/runtime)以及 [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml) 中的完整配置契约。

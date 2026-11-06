@@ -3124,28 +3124,6 @@ spec:
                         minimum: 0
                         type: integer
                     type: object
-                  tools:
-                    description: Tools configuration
-                    properties:
-                      enabled:
-                        default: true
-                        type: boolean
-                      fallback_to_empty:
-                        default: true
-                        type: boolean
-                      similarity_threshold:
-                        default: "0.2"
-                        description: Similarity threshold for tool selection (0.0-1.0).
-                          Stored as string to avoid float precision issues.
-                        pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
-                        type: string
-                      tools_db_path:
-                        default: config/tools_db.json
-                        type: string
-                      top_k:
-                        default: 3
-                        type: integer
-                    type: object
                 type: object
               env:
                 description: Environment variables

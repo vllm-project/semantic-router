@@ -89,7 +89,6 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
     'fast_response',
     'request_params',
     'response_guard',
-    'tool_selection',
     'prompt_cache',
     'masking',
   ],
@@ -137,7 +136,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
       // Plugin types
       [
-        /\b(response_cache|memory|system_prompt|header_mutation|router_replay|rag|tools|fast_response|request_params|response_guard|tool_selection|prompt_cache|masking)\b/,
+        /\b(response_cache|memory|system_prompt|header_mutation|router_replay|rag|tools|fast_response|request_params|response_guard|prompt_cache|masking)\b/,
         'type.plugin',
       ],
 
@@ -294,8 +293,7 @@ const PLUGIN_TYPE_SUGGESTIONS = [
   { label: 'header_mutation', detail: 'HTTP header mutation plugin' },
   { label: 'router_replay', detail: 'Request replay plugin' },
   { label: 'rag', detail: 'RAG (Retrieval Augmented Generation) plugin' },
-  { label: 'tools', detail: 'Route-local tool policy and semantic selection plugin' },
-  { label: 'tool_selection', detail: 'Semantic tool add/filter plugin' },
+  { label: 'tools', detail: 'Route-local tool policy and decision-model tool selection plugin' },
   { label: 'fast_response', detail: 'Short-circuit fixed response plugin' },
   { label: 'request_params', detail: 'Request parameter mutation plugin' },
   { label: 'response_guard', detail: 'Block or annotate answers on the signals they are checked with' },

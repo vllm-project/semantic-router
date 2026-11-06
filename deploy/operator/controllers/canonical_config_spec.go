@@ -87,13 +87,6 @@ func (r *SemanticRouterReconciler) applyOperatorStoresAndIntegrations(canonical 
 		}
 		canonical.Global.Stores.ResponseCache = typedCache
 	}
-	if spec.Tools != nil {
-		tools, err := convertToTypedConfig[routerconfig.ToolsConfig](r, spec.Tools)
-		if err != nil {
-			return fmt.Errorf("config.tools: %w", err)
-		}
-		canonical.Global.Integrations.Tools = tools
-	}
 	return nil
 }
 

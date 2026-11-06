@@ -23,9 +23,6 @@ describe('Vela defaults and explicit legacy models', () => {
       config: authored ? ({ global: { model_catalog: authored } } as ConfigData) : null,
       routerConfig: { system_models: system },
       routerDefaults: null,
-      toolsData: [],
-      toolsLoading: false,
-      toolsError: null,
     }).find((card) => card.key === 'system_models')!
 
   it('shows the decision model and per-signal bindings instead of system lines', () => {
@@ -188,9 +185,6 @@ describe('Vela defaults and explicit legacy models', () => {
       config: null,
       routerConfig: {},
       routerDefaults: null,
-      toolsData: [],
-      toolsLoading: false,
-      toolsError: null,
     })
     const saved = (key: string) => {
       const card = cards.find((candidate) => candidate.key === key)!
@@ -240,9 +234,6 @@ describe('Vela defaults and explicit legacy models', () => {
         },
       },
       routerDefaults: null,
-      toolsData: [],
-      toolsLoading: false,
-      toolsError: null,
     })
     const card = (key: string) => cards.find((candidate) => candidate.key === key)!
     const saved = (key: string) => card(key).save(card(key).editData)
@@ -272,9 +263,6 @@ describe('Vela defaults and explicit legacy models', () => {
       config: null,
       routerConfig: { prompt_guard: { enabled: true, threshold: 0.9 } },
       routerDefaults: null,
-      toolsData: [],
-      toolsLoading: false,
-      toolsError: null,
     }).find((candidate) => candidate.key === 'prompt_guard')!
 
     expect(card.save({ ...card.editData, threshold: '' })).toEqual({
@@ -295,9 +283,6 @@ describe('Vela defaults and explicit legacy models', () => {
       config: null,
       routerConfig: { vector_store: { enabled: true } },
       routerDefaults: null,
-      toolsData: [],
-      toolsLoading: false,
-      toolsError: null,
     })
     const vectorStore = cards.find((card) => card.key === 'vector_store')
     expect(

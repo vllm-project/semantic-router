@@ -13,9 +13,13 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/presets"
 )
 
-// candidatePart is the state part a judge reads a candidate in, beside the
-// request part; the model reads it as context.
-const candidatePart = "candidate"
+// The state parts a judge reads: the request, the earlier user turns when
+// the feature reads them, and a candidate, which the model reads as context.
+const (
+	requestPart   = "request"
+	historyPart   = "history"
+	candidatePart = "candidate"
+)
 
 // questionID is the ID a judge's question carries on the wire: the Router's
 // own, with a ':', so it never turns on an adapter trained under another ID.
@@ -25,7 +29,7 @@ func questionID(name string) string {
 
 // judge scores the candidates with the judge's question and keeps them by
 // its rules, best first.
-func (m *Matcher) judge(ctx context.Context, spec config.MatchJudge, request string, candidates []Scored) ([]Scored, Stage, error) {
+func (m *Matcher) judge(ctx context.Context, spec config.MatchJudge, input Input, candidates []Scored) ([]Scored, Stage, error) {
 	stage := Stage{Name: StageJudge, Method: spec.Preset, Candidates: len(candidates)}
 	if spec.Question != nil {
 		stage.Method = "question"
@@ -36,7 +40,7 @@ func (m *Matcher) judge(ctx context.Context, spec config.MatchJudge, request str
 	}
 	stage.Deployment = m.cfg.MatchJudgeDeployment(spec)
 	started := time.Now()
-	scores, asked, err := m.score(ctx, spec, stage.Deployment, request, candidates)
+	scores, asked, err := m.score(ctx, spec, stage.Deployment, input, candidates)
 	stage.Duration = time.Since(started)
 	if err != nil {
 		stage.Reason = reason(err)
@@ -53,7 +57,7 @@ func (m *Matcher) judge(ctx context.Context, spec config.MatchJudge, request str
 // question chooses among the candidates about the request; any other is
 // asked about each candidate, each a state of the same call, and a candidate
 // without text scores 0 unasked.
-func (m *Matcher) score(ctx context.Context, spec config.MatchJudge, deployment, request string, candidates []Scored) ([]float64, int, error) {
+func (m *Matcher) score(ctx context.Context, spec config.MatchJudge, deployment string, input Input, candidates []Scored) ([]float64, int, error) {
 	chooses := spec.Chooses()
 	if chooses && len(candidates) > presets.MaxChoices {
 		return nil, 0, ErrTooManyCandidates
@@ -79,7 +83,7 @@ func (m *Matcher) score(ctx context.Context, spec config.MatchJudge, deployment,
 	defer cancel()
 	scores := make([]float64, len(candidates))
 	if chooses {
-		answer, err := m.ask(ctx, deployment, modelservice.Request{State: request}, plan)
+		answer, err := m.ask(ctx, deployment, input.State(), plan)
 		if err != nil {
 			return nil, 1, err
 		}
@@ -96,7 +100,11 @@ func (m *Matcher) score(ctx context.Context, spec config.MatchJudge, deployment,
 	}
 	errs := make([]error, len(asked))
 	fan(ctx, len(asked), func(ctx context.Context, i int) {
-		state := modelservice.Request{Parts: map[string]string{"request": request, candidatePart: candidates[asked[i]].Text}}
+		parts := map[string]string{requestPart: input.Request, candidatePart: candidates[asked[i]].Text}
+		if strings.TrimSpace(input.History) != "" {
+			parts[historyPart] = input.History
+		}
+		state := modelservice.Request{Parts: parts}
 		answer, err := m.ask(ctx, deployment, state, plan)
 		if err != nil {
 			errs[i] = err
@@ -113,6 +121,15 @@ func (m *Matcher) score(ctx context.Context, spec config.MatchJudge, deployment,
 		}
 	}
 	return scores, len(asked), nil
+}
+
+// Prepare compiles a judge's question for the card of the deployment that
+// answers it, as a request does, so a generation refuses a judge its
+// deployment cannot answer before a request asks it.
+func Prepare(spec config.MatchJudge, card modelservice.ModelCard) error {
+	definition, question := judgeQuestion(spec)
+	_, err := modelservice.CompileTask(definition, question, card)
+	return err
 }
 
 // judgeQuestion is the task a judge's question compiles as and the question

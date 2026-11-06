@@ -21,8 +21,7 @@ var typedPluginConfigEmitters = map[string]typedPluginConfigEmitter{
 	"response_guard":      emitStructuredPluginConfig,
 	"fast_response":       emitFastResponsePluginConfig,
 	"request_params":      emitRequestParamsPluginConfig,
-	"tool_selection":      emitToolSelectionPluginConfig,
-	"tools":               emitToolsPluginConfig,
+	"tools":               emitStructuredPluginConfig,
 	"rag":                 emitRAGPluginConfig,
 	"header_mutation":     emitHeaderMutationPluginConfig,
 	"masking":             emitStructuredPluginConfig,
@@ -144,71 +143,6 @@ func emitRequestParamsPluginConfig(sb *strings.Builder, p *config.DecisionPlugin
 	}
 	if cfg.StripUnknown {
 		fmt.Fprintf(sb, "    strip_unknown: true\n")
-	}
-}
-
-func emitToolSelectionPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
-	cfg, ok := decodePluginConfig[config.ToolSelectionPluginConfig](p)
-	if !ok {
-		return
-	}
-	if cfg.Enabled {
-		fmt.Fprintf(sb, "    enabled: true\n")
-	}
-	if cfg.Mode != "" {
-		fmt.Fprintf(sb, "    mode: %q\n", cfg.Mode)
-	}
-	if cfg.ToolsDBPath != "" {
-		fmt.Fprintf(sb, "    tools_db_path: %q\n", cfg.ToolsDBPath)
-	}
-	if cfg.TopK != 0 {
-		fmt.Fprintf(sb, "    top_k: %d\n", cfg.TopK)
-	}
-	if cfg.SimilarityThreshold != nil {
-		fmt.Fprintf(sb, "    similarity_threshold: %v\n", *cfg.SimilarityThreshold)
-	}
-	if cfg.Strategy != "" {
-		fmt.Fprintf(sb, "    strategy: %q\n", cfg.Strategy)
-	}
-	if cfg.FallbackToEmpty != nil {
-		fmt.Fprintf(sb, "    fallback_to_empty: %v\n", *cfg.FallbackToEmpty)
-	}
-	if cfg.RelevanceThreshold != nil {
-		fmt.Fprintf(sb, "    relevance_threshold: %v\n", *cfg.RelevanceThreshold)
-	}
-	if cfg.PreserveCount != 0 {
-		fmt.Fprintf(sb, "    preserve_count: %d\n", cfg.PreserveCount)
-	}
-}
-
-func emitToolsPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
-	cfg, ok := decodePluginConfig[config.ToolsPluginConfig](p)
-	if !ok {
-		return
-	}
-	if cfg.Enabled {
-		fmt.Fprintf(sb, "    enabled: true\n")
-	}
-	if cfg.Mode != "" {
-		fmt.Fprintf(sb, "    mode: %q\n", cfg.Mode)
-	}
-	if cfg.SemanticSelection != nil {
-		fmt.Fprintf(sb, "    semantic_selection: %v\n", *cfg.SemanticSelection)
-	}
-	if cfg.Strategy != "" {
-		fmt.Fprintf(sb, "    strategy: %q\n", cfg.Strategy)
-	}
-	if len(cfg.AllowTools) > 0 {
-		fmt.Fprintf(sb, "    allow_tools: %s\n", formatStringArray(cfg.AllowTools))
-	}
-	if len(cfg.BlockTools) > 0 {
-		fmt.Fprintf(sb, "    block_tools: %s\n", formatStringArray(cfg.BlockTools))
-	}
-	if cfg.StripToolHistory {
-		fmt.Fprintf(sb, "    strip_tool_history: true\n")
-	}
-	if cfg.DynamicRetrieval != nil {
-		fmt.Fprintf(sb, "    dynamic_retrieval: %s\n", formatPluginConfigValue(dynamicRetrievalConfigMap(cfg.DynamicRetrieval)))
 	}
 }
 

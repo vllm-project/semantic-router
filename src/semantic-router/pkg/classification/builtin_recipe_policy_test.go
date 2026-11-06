@@ -208,7 +208,7 @@ func TestBuiltinVaultDataControlsAreIndependentOfVerdict(t *testing.T) {
 			tools := route.GetToolsConfig()
 			memory := route.GetMemoryConfig()
 			cache := route.GetResponseCacheConfig()
-			if tools == nil || !tools.Enabled || tools.EffectiveMode() != config.ToolsPluginModeNone || !tools.StripToolHistory {
+			if policy := tools.ActivePolicy(); policy.EffectiveMode() != config.ToolsPolicyModeNone || !policy.StripToolHistory {
 				t.Fatal("every Vault verdict must prevent client tool dispatch")
 			}
 			if memory == nil || memory.Enabled || cache == nil || cache.Enabled {

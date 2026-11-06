@@ -148,7 +148,7 @@ class DomainRegistryTests(unittest.TestCase):
         self,
     ) -> None:
         for path in (
-            "src/semantic-router/pkg/config/tool_selection_plugin.go",
+            "src/semantic-router/pkg/config/tools_plugin.go",
             "src/semantic-router/pkg/config/vela_defaults_test.go",
         ):
             with self.subTest(path=path):

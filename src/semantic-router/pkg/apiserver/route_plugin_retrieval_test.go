@@ -28,7 +28,7 @@ func TestPluginRetrievalRequiresContentReadPermissions(t *testing.T) {
 		Tokens: []config.ManagementAPITokenRef{{Env: "VSR_RAG_PERMISSION_TEST_TOKEN", Role: "classify-only"}},
 		Roles:  map[string][]string{"classify-only": {string(PermClassifyInvoke)}},
 	}})
-	for _, plugin := range []string{"rag", "tools", "tool_selection"} {
+	for _, plugin := range []string{"rag", "tools"} {
 		for _, mode := range []string{"preview", "probe"} {
 			response := httptest.NewRecorder()
 			request := httptest.NewRequest(http.MethodPost, apiPluginsPath+"/"+plugin+"/preview", strings.NewReader(`{"mode":"`+mode+`","binding":{"recipe":"private","decision":"retrieve"},"request_body":{}}`))
@@ -68,7 +68,7 @@ func TestPluginRetrievalRoutesUsePublishedRuntimeAndTypedContracts(t *testing.T)
 	server := &ClassificationAPIServer{runtimeRegistry: registry}
 	mux := server.setupRoutes()
 	spec := server.generateOpenAPISpec()
-	for _, plugin := range []string{"rag", "tools", "tool_selection"} {
+	for _, plugin := range []string{"rag", "tools"} {
 		path := apiPluginsPath + "/" + plugin + "/preview"
 		t.Run(plugin, func(t *testing.T) {
 			response := httptest.NewRecorder()
@@ -100,7 +100,7 @@ func TestPluginRetrievalRoutesUsePublishedRuntimeAndTypedContracts(t *testing.T)
 	// redirect execution to another plugin or an arbitrary retrieval endpoint.
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, apiPluginsPath+"/tools/preview", strings.NewReader(`{"binding":{"recipe":"isolated","decision":"selected"},"request_body":{},"plugin":"rag","endpoint":"http://example.invalid"}`)))
-	if response.Code != http.StatusBadRequest || stub.calls != 3 {
+	if response.Code != http.StatusBadRequest || stub.calls != 2 {
 		t.Fatalf("unknown input reached runtime: status=%d calls=%d", response.Code, stub.calls)
 	}
 }

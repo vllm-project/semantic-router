@@ -34,7 +34,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
@@ -74,16 +73,9 @@ type OpenAIRouter struct {
 	CompressionScorer      contextcompression.RelevanceScorer
 	compressionScorers     map[string]contextcompression.RelevanceScorer
 	contextCompressionMu   sync.Mutex
-	ToolsDatabase          *tools.ToolsDatabase
-	ToolsRegistry          *tools.Registry // retriever strategy registry
-	toolSelectionDBMu      sync.Mutex
-	toolSelectionDBByPath  map[string]*tools.ToolsDatabase
-	// toolEmbedder embeds request-supplied tool definitions for tool_selection
-	// filter mode, memoizing them across requests. Set once at router
-	// construction and read-only afterwards; nil (remote provider construction
-	// failed, or a directly assembled test router) makes filter mode error into
-	// its configured fallback instead of embedding.
-	toolEmbedder      *cachedToolEmbedder
+	// toolCatalogs are the catalogs the tools plugin's add mode chooses from,
+	// by tools_db_path, read when the generation was built.
+	toolCatalogs      map[string]*toolCatalog
 	ResponseAPIFilter *ResponseAPIFilter
 	ReplayRecorder    *routerreplay.Recorder
 	ReplayStoreShared bool
@@ -265,28 +257,6 @@ func (r *OpenAIRouter) createErrorResponse(statusCode int, message string) *ext_
 // shouldClearRouteCache checks if route cache should be cleared.
 func (r *OpenAIRouter) shouldClearRouteCache() bool {
 	return r.Config.ClearRouteCache
-}
-
-// LoadToolsDatabase loads tools from file after embedding models are initialized.
-func (r *OpenAIRouter) LoadToolsDatabase() error {
-	if !r.ToolsDatabase.IsEnabled() {
-		return nil
-	}
-
-	if r.Config.Tools.ToolsDBPath == "" {
-		logging.Warnf("Tools database enabled but no tools file path configured; skipping load")
-		return nil
-	}
-
-	if err := r.ToolsDatabase.LoadToolsFromFile(r.Config.Tools.ToolsDBPath); err != nil {
-		return err
-	}
-
-	// Wire the default embedding retriever into the registry now that
-	// the database is loaded and embeddings are available.
-	r.ToolsRegistry = tools.NewDefaultRegistry(r.ToolsDatabase)
-
-	return nil
 }
 
 func (r *OpenAIRouter) fallbackOrchestratorForContext(ctx *RequestContext) *fallback.Orchestrator {

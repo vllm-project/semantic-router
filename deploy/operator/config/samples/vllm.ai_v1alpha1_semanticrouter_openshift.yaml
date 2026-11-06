@@ -152,14 +152,6 @@ spec:
       eviction_policy: lru  # fifo, lru, or lfu
       embedding_model: mmbert
 
-    # Tools auto-selection based on semantic similarity
-    tools:
-      enabled: true
-      top_k: 3
-      similarity_threshold: "0.2"
-      tools_db_path: config/tools_db.json
-      fallback_to_empty: true
-
     # Reasoning families configuration
     reasoning_effort: medium  # low, medium, high
 

@@ -44,6 +44,14 @@ var (
 		status: http.StatusServiceUnavailable, category: llmprotocol.ErrorInternal,
 		code: "no_eligible_model", message: "no model is eligible to serve the request",
 	}
+	routingFailureToolSelection = routingFailure{
+		status: http.StatusServiceUnavailable, category: llmprotocol.ErrorInternal,
+		code: "tool_selection_failed", message: "the tools for the request could not be selected",
+	}
+	routingFailureTooManyTools = routingFailure{
+		status: http.StatusBadRequest, category: llmprotocol.ErrorInvalidRequest,
+		code: "too_many_tools", message: "the request has more tools than tool selection chooses among",
+	}
 )
 
 // routingFailureResponse answers a request with failure. The client's error

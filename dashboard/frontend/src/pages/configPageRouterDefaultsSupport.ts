@@ -24,7 +24,7 @@ import {
   embeddingModelsSummary,
   embeddingModelsView,
 } from './configPageEmbeddingModelsSupport'
-import type { CanonicalGlobalConfig, ConfigData, Tool } from './configPageSupport'
+import type { CanonicalGlobalConfig, ConfigData } from './configPageSupport'
 import {
   generatedRouterValueField,
   mergeGeneratedRouterFields,
@@ -72,9 +72,6 @@ interface RouterSectionContext {
   config: ConfigData | null
   routerConfig: RouterConfigSectionData
   routerDefaults: CanonicalGlobalConfig | null
-  toolsData: Tool[]
-  toolsLoading: boolean
-  toolsError: string | null
 }
 
 export const ROUTER_LAYER_META: Record<RouterLayerKey, { title: string; description: string }> = {
@@ -93,7 +90,7 @@ export const ROUTER_LAYER_META: Record<RouterLayerKey, { title: string; descript
   },
   integrations: {
     title: 'Integrations',
-    description: 'Auxiliary runtime integrations used by routing and tool selection.',
+    description: 'Auxiliary runtime integrations used by routing.',
   },
   model_catalog: {
     title: 'Model Catalog',
@@ -122,7 +119,6 @@ const LEGACY_ROOT_KEYS: Partial<Record<RouterSystemKey, keyof ConfigData>> = {
   router_replay: 'router_replay',
   memory: 'memory',
   response_cache: 'response_cache',
-  tools: 'tools',
   prompt_guard: 'prompt_guard',
   classifier: 'classifier',
   hallucination_mitigation: 'hallucination_mitigation',
@@ -327,12 +323,6 @@ function summaryForKey(
         { label: 'Embedding model', value: stringOrFallback(section?.embedding_model) },
         { label: 'Enabled', value: stringOrFallback(section?.enabled, 'Disabled') },
       ]
-    case 'tools':
-      return [
-        { label: 'Top K', value: stringOrFallback(section?.top_k) },
-        { label: 'Similarity threshold', value: percentOrFallback(section?.similarity_threshold) },
-        { label: 'Tool DB path', value: stringOrFallback(section?.tools_db_path) },
-      ]
     case 'prompt_guard':
       return [
         { label: 'Model', value: signalModel('jailbreak') },
@@ -450,22 +440,8 @@ function summaryForKey(
   return [{ label: 'Fields', value: `${keys}` }]
 }
 
-function badgesForKey(
-  key: RouterSystemKey,
-  data: unknown,
-  ctx: RouterSectionContext,
-): RouterSectionBadge[] {
+function badgesForKey(key: RouterSystemKey, data: unknown): RouterSectionBadge[] {
   const badges: RouterSectionBadge[] = []
-
-  if (key === 'tools') {
-    if (ctx.toolsLoading) {
-      badges.push({ label: 'Loading tools DB', tone: 'info' })
-    } else if (ctx.toolsError) {
-      badges.push({ label: 'Tools DB error', tone: 'inactive' })
-    } else if (ctx.toolsData.length > 0) {
-      badges.push({ label: `${ctx.toolsData.length} tools loaded`, tone: 'active' })
-    }
-  }
 
   if (key === 'embedding_models') {
     badges.push(...embeddingModelsBadges(data))
@@ -684,25 +660,6 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
         routerStructuredField(key, 'memory'),
         routerStructuredField(key, 'milvus'),
         routerStructuredField(key, 'llama_stack'),
-      ]
-    case 'tools':
-      return [
-        { name: 'enabled', label: 'Enable Tool Auto Selection', type: 'boolean' },
-        { name: 'top_k', label: 'Top K', type: 'number', placeholder: '3' },
-        {
-          name: 'similarity_threshold',
-          label: 'Similarity Threshold',
-          type: 'percentage',
-          placeholder: '20',
-        },
-        {
-          name: 'tools_db_path',
-          label: 'Tools DB Path',
-          type: 'text',
-          placeholder: 'config/tools_db.json',
-        },
-        { name: 'fallback_to_empty', label: 'Fallback To Empty', type: 'boolean' },
-        routerStructuredField(key, 'advanced_filtering'),
       ]
     case 'prompt_guard':
       return [
@@ -1078,7 +1035,7 @@ export function buildRouterSectionCards(ctx: RouterSectionContext): RouterSectio
     }
     return {
       ...card,
-      badges: badgesForKey(key, view, ctx),
+      badges: badgesForKey(key, view),
       summary: summaryForKey(key, view, signalModel),
       editData: editDataForKey(key, view),
       editFields: fieldsForKey(key),

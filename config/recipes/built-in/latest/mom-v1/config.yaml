@@ -1347,8 +1347,9 @@ recipes:
       - type: tools
         configuration:
           enabled: true
-          mode: none
-          strip_tool_history: true
+          policy:
+            mode: none
+            strip_tool_history: true
       - type: memory
         configuration:
           enabled: false
@@ -1404,8 +1405,9 @@ recipes:
       - type: tools
         configuration:
           enabled: true
-          mode: none
-          strip_tool_history: true
+          policy:
+            mode: none
+            strip_tool_history: true
       - type: memory
         configuration:
           enabled: false
@@ -1448,8 +1450,9 @@ recipes:
       - type: tools
         configuration:
           enabled: true
-          mode: none
-          strip_tool_history: true
+          policy:
+            mode: none
+            strip_tool_history: true
       - type: memory
         configuration:
           enabled: false

@@ -129,48 +129,6 @@ type AdmissionConfig struct {
 	OnOverflow     string `yaml:"on_overflow,omitempty"`
 }
 
-type ToolFilteringWeights struct {
-	Embed    *float32 `json:"embed,omitempty" yaml:"embed,omitempty"`
-	Lexical  *float32 `json:"lexical,omitempty" yaml:"lexical,omitempty"`
-	Tag      *float32 `json:"tag,omitempty" yaml:"tag,omitempty"`
-	Name     *float32 `json:"name,omitempty" yaml:"name,omitempty"`
-	Category *float32 `json:"category,omitempty" yaml:"category,omitempty"`
-}
-
-type AdvancedToolFilteringConfig struct {
-	Enabled                     bool                              `json:"enabled" yaml:"enabled"`
-	RetrievalStrategy           string                            `json:"retrieval_strategy,omitempty" yaml:"retrieval_strategy,omitempty"`
-	CandidatePoolSize           *int                              `json:"candidate_pool_size,omitempty" yaml:"candidate_pool_size,omitempty"`
-	MinLexicalOverlap           *int                              `json:"min_lexical_overlap,omitempty" yaml:"min_lexical_overlap,omitempty"`
-	MinCombinedScore            *float32                          `json:"min_combined_score,omitempty" yaml:"min_combined_score,omitempty"`
-	Weights                     ToolFilteringWeights              `json:"weights,omitempty" yaml:"weights,omitempty"`
-	UseCategoryFilter           *bool                             `json:"use_category_filter,omitempty" yaml:"use_category_filter,omitempty"`
-	CategoryConfidenceThreshold *float32                          `json:"category_confidence_threshold,omitempty" yaml:"category_confidence_threshold,omitempty"`
-	AllowTools                  []string                          `json:"allow_tools,omitempty" yaml:"allow_tools,omitempty"`
-	BlockTools                  []string                          `json:"block_tools,omitempty" yaml:"block_tools,omitempty"`
-	HybridHistory               *HybridHistoryToolRetrievalConfig `json:"hybrid_history,omitempty" yaml:"hybrid_history,omitempty"`
-}
-
-// HybridHistoryToolRetrievalConfig tunes hybrid_history retrieval (semantic + short history + priors + repetition).
-type HybridHistoryToolRetrievalConfig struct {
-	HistoryHorizon             *int     `json:"history_horizon,omitempty" yaml:"history_horizon,omitempty"`
-	MinHistorySteps            *int     `json:"min_history_steps,omitempty" yaml:"min_history_steps,omitempty"`
-	HistoryConfidenceThreshold *float32 `json:"history_confidence_threshold,omitempty" yaml:"history_confidence_threshold,omitempty"`
-	WeightSemantic             *float32 `json:"weight_semantic,omitempty" yaml:"weight_semantic,omitempty"`
-	WeightHistoryTransition    *float32 `json:"weight_history_transition,omitempty" yaml:"weight_history_transition,omitempty"`
-	WeightDecisionPrior        *float32 `json:"weight_decision_prior,omitempty" yaml:"weight_decision_prior,omitempty"`
-	RepetitionPenaltyStrength  *float32 `json:"repetition_penalty_strength,omitempty" yaml:"repetition_penalty_strength,omitempty"`
-}
-
-type ToolsConfig struct {
-	Enabled             bool                         `yaml:"enabled"`
-	TopK                int                          `yaml:"top_k"`
-	SimilarityThreshold *float32                     `yaml:"similarity_threshold,omitempty"`
-	ToolsDBPath         string                       `yaml:"tools_db_path"`
-	FallbackToEmpty     bool                         `yaml:"fallback_to_empty"`
-	AdvancedFiltering   *AdvancedToolFilteringConfig `yaml:"advanced_filtering,omitempty"`
-}
-
 type ClassifierVLLMEndpoint struct {
 	Address         string `yaml:"address"`
 	Port            int    `yaml:"port"`

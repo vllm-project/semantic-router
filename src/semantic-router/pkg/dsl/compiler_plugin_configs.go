@@ -77,12 +77,22 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 	"request_params": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileRequestParamsPluginConfig(fields), true
 	},
-	"tool_selection": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		return c.withObjectFields(c.compileToolSelectionPluginConfig(fields), fields, "advanced_filtering")
-	},
-	"tools": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		return c.compileToolsPlugin(fields), true
-	},
+	"tools": compileToolsPluginConfig,
+}
+
+// compileToolsPluginConfig keeps the tools plugin's fields as written, its
+// policy, select and match blocks included, once they decode as one.
+func compileToolsPluginConfig(c *Compiler, fields map[string]Value) (interface{}, bool) {
+	raw := fieldsToMap(fields)
+	payload, err := config.NewStructuredPayload(raw)
+	if err == nil {
+		err = payload.DecodeIntoStrict(&config.ToolsPluginConfig{})
+	}
+	if err != nil {
+		c.addError(Position{}, "invalid tools configuration: %v; the tools plugin takes enabled, policy and select", err)
+		return nil, false
+	}
+	return raw, true
 }
 
 func compilePromptCachePluginConfig(
@@ -333,38 +343,6 @@ func (c *Compiler) compileRequestParamsPluginConfig(fields map[string]Value) con
 	}
 	if v, ok := getBoolField(fields, "strip_unknown"); ok {
 		cfg.StripUnknown = v
-	}
-	return cfg
-}
-
-func (c *Compiler) compileToolSelectionPluginConfig(fields map[string]Value) config.ToolSelectionPluginConfig {
-	cfg := config.ToolSelectionPluginConfig{}
-	if v, ok := getBoolField(fields, "enabled"); ok {
-		cfg.Enabled = v
-	}
-	if v, ok := getStringField(fields, "mode"); ok {
-		cfg.Mode = v
-	}
-	if v, ok := getIntField(fields, "top_k"); ok {
-		cfg.TopK = v
-	}
-	if v, ok := getFloat32Field(fields, "similarity_threshold"); ok {
-		cfg.SimilarityThreshold = &v
-	}
-	if v, ok := getStringField(fields, "tools_db_path"); ok {
-		cfg.ToolsDBPath = v
-	}
-	if v, ok := getFloat32Field(fields, "relevance_threshold"); ok {
-		cfg.RelevanceThreshold = &v
-	}
-	if v, ok := getIntField(fields, "preserve_count"); ok {
-		cfg.PreserveCount = v
-	}
-	if v, ok := getStringField(fields, "strategy"); ok {
-		cfg.Strategy = v
-	}
-	if v, ok := getBoolField(fields, "fallback_to_empty"); ok {
-		cfg.FallbackToEmpty = &v
 	}
 	return cfg
 }

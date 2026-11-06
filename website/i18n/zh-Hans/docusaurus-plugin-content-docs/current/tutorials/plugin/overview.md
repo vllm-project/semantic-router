@@ -56,8 +56,7 @@ routing:
 | `system_prompt` | 插入或替换路由专用指令 | 无 | [系统提示词](./system-prompt) |
 | `header_mutation` | 添加、更新或删除 Router 不拥有的发往提供商的请求头 | 无 | [请求头修改](./header-mutation) |
 | `request_params` | 强制请求参数限制 | 无 | [请求参数](./request-params) |
-| `tools` | 允许、阻止、过滤或移除工具和工具历史 | 可选的全局工具目录 | [工具](./tools) |
-| `tool_selection` | 从目录添加工具，或按语义过滤调用方工具 | 嵌入运行时；`add` 模式需要工具数据库 | [工具选择](./tool-selection) |
+| `tools` | 允许、阻止或移除工具和工具历史；由决策模型过滤或添加请求所需的工具 | `select` 需要决策模型；`add` 需要工具目录 | [工具](./tools) |
 | `context_compression` | 缩减绑定提供商的大型工具输出或历史 | 可选的嵌入运行时和恢复存储 | [上下文压缩](./context-compression) |
 | `response_cache` | 复用兼容的先前响应 | `global.stores.response_cache` | [响应缓存](./response-cache) |
 | `memory` | 检索并可选存储对话记忆 | `global.stores.memory` | [记忆](./memory) |

@@ -1,0 +1,42 @@
+# tool_selection ran under the decision's tools plugin policy; it is now the
+# select block of that plugin. Without a tools plugin it becomes one.
+version: v0.3
+providers:
+  defaults: {model: local}
+  models:
+    - name: local
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+routing:
+  modelCards:
+    - {name: local, description: Local model}
+  decisions:
+    - name: agent
+      priority: 200
+      rules: {operator: AND, conditions: []}
+      modelRefs: [{model: local}]
+      plugins:
+        - type: tools
+          configuration: {enabled: true, mode: filtered, allow_tools: [docs.search, tickets.lookup]}
+        - type: tool_selection
+          configuration:
+            enabled: true
+            mode: add
+            tools_db_path: config/tools_db.json
+            top_k: 5
+            similarity_threshold: 0.35
+            advanced_filtering: {enabled: true, min_combined_score: 0.4}
+            fallback_to_empty: true
+    - name: coding
+      priority: 100
+      rules: {operator: AND, conditions: []}
+      modelRefs: [{model: local}]
+      plugins:
+        - type: tool_selection
+          configuration: {enabled: true, mode: filter, relevance_threshold: 0.25, preserve_count: 2}
+    - name: chat
+      priority: 50
+      rules: {operator: AND, conditions: []}
+      modelRefs: [{model: local}]
+      plugins:
+        - type: tool_selection
+          configuration: {enabled: false, mode: add}

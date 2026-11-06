@@ -370,59 +370,6 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
       }),
     },
   },
-  tools: {
-    advanced_filtering: {
-      label: 'Advanced Filtering',
-      description: 'Typed retrieval, weighting, category, allow/block, and history controls.',
-      schema: object('Advanced Filtering', {
-        enabled: boolean('Enabled'),
-        retrieval_strategy: select('Retrieval Strategy', ['weighted', 'hybrid_history']),
-        candidate_pool_size: number('Candidate Pool Size', { min: 0 }),
-        min_lexical_overlap: number('Min Lexical Overlap', { min: 0 }),
-        min_combined_score: number('Min Combined Score', { min: 0, max: 1, step: 0.01 }),
-        weights: object('Weights', {
-          embed: number('Embedding', { min: 0, max: 1, step: 0.01 }),
-          lexical: number('Lexical', { min: 0, max: 1, step: 0.01 }),
-          tag: number('Tag', { min: 0, max: 1, step: 0.01 }),
-          name: number('Name', { min: 0, max: 1, step: 0.01 }),
-          category: number('Category', { min: 0, max: 1, step: 0.01 }),
-        }),
-        use_category_filter: boolean('Use Category Filter'),
-        category_confidence_threshold: number('Category Confidence Threshold', {
-          min: 0,
-          max: 1,
-          step: 0.01,
-        }),
-        allow_tools: stringList('Allowed Tool', 'docs.search'),
-        block_tools: stringList('Blocked Tool', 'admin.delete'),
-        hybrid_history: object('Hybrid History', {
-          history_horizon: number('History Horizon', { min: 0 }),
-          min_history_steps: number('Min History Steps', { min: 0 }),
-          history_confidence_threshold: number('History Confidence Threshold', {
-            min: 0,
-            max: 1,
-            step: 0.01,
-          }),
-          weight_semantic: number('Semantic Weight', { min: 0, max: 1, step: 0.01 }),
-          weight_history_transition: number('History Transition Weight', {
-            min: 0,
-            max: 1,
-            step: 0.01,
-          }),
-          weight_decision_prior: number('Decision Prior Weight', {
-            min: 0,
-            max: 1,
-            step: 0.01,
-          }),
-          repetition_penalty_strength: number('Repetition Penalty Strength', {
-            min: 0,
-            max: 1,
-            step: 0.01,
-          }),
-        }),
-      }),
-    },
-  },
   classifier: {
     domain: {
       label: 'Domain Module',

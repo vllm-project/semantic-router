@@ -427,7 +427,7 @@ it does not duplicate their state under a plugin-specific resource tree.
 | `system_prompt`, `request_params`, `header_mutation`, `fast_response` | `POST /api/v1/plugins/{type}/preview` using a typed candidate `configuration` or an active `binding` |
 | `response_guard` | Read an active guard's rules over a supplied question, context and answer; `mode: probe` invokes the configured models |
 | `rag` | Preview context injection with `supplied_context`; `mode: probe` performs configured retrieval without the RAG result cache |
-| `tools`, `tool_selection` | Preview static tool policy; semantic selection requires explicit `mode: probe` |
+| `tools` | Preview the tools policy; the decision model's tool selection requires explicit `mode: probe` |
 | `context_compression` | Preview retained targets and budgets using the existing compression contract |
 | `response_cache`, `memory` | Operate their resources under `/api/v1/storage` |
 | `router_replay`, `shadow_dispatch` | Inspect recorded outcomes under `/api/v1/observability/replays` |
@@ -670,8 +670,7 @@ Discover recipe-scoped plugin bindings, dependencies, and typed behavior preview
 | `POST` | `/api/v1/plugins/fast_response/preview` | Preview fixed assistant text before transport encoding; no persistence or backend calls |
 | `POST` | `/api/v1/plugins/response_guard/preview` | Preview what an active binding's response_guard does with an answer; mode=probe reads the guard's request-stage conditions on the question and its response-stage signals on the answer and context, without generation or persistence |
 | `POST` | `/api/v1/plugins/rag/preview` | Preview configured RAG context injection using supplied_context; mode=probe retrieves from the configured backend without the RAG result cache or generation |
-| `POST` | `/api/v1/plugins/tools/preview` | Preview the configured tools policy; mode=probe permits semantic tool retrieval but never executes tools |
-| `POST` | `/api/v1/plugins/tool_selection/preview` | Preview the configured tool_selection policy; mode=probe permits configured retrieval and embedding calls but never executes tools |
+| `POST` | `/api/v1/plugins/tools/preview` | Preview the configured tools policy; mode=probe also lets the selection ask the decision model, and never executes tools |
 
 ### diagnostics
 

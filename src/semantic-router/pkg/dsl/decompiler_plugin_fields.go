@@ -19,8 +19,7 @@ var pluginFieldsDecoders = map[string]pluginFieldsDecoder{
 	"response_guard":      pluginFieldsStructuredConfiguration,
 	"fast_response":       pluginFieldsFastResponse,
 	"request_params":      pluginFieldsRequestParams,
-	"tool_selection":      pluginFieldsToolSelection,
-	"tools":               pluginFieldsTools,
+	"tools":               pluginFieldsStructuredConfiguration,
 	"rag":                 pluginFieldsRAG,
 	"header_mutation":     pluginFieldsHeaderMutation,
 	"masking":             pluginFieldsStructuredConfiguration,
@@ -124,75 +123,6 @@ func pluginFieldsRequestParams(p *config.DecisionPlugin) map[string]Value {
 	}
 	if cfg.StripUnknown {
 		fields["strip_unknown"] = BoolValue{V: true}
-	}
-	return fields
-}
-
-func pluginFieldsToolSelection(p *config.DecisionPlugin) map[string]Value {
-	fields := make(map[string]Value)
-	cfg, ok := decodePluginConfig[config.ToolSelectionPluginConfig](p)
-	if !ok {
-		return fields
-	}
-	if cfg.Enabled {
-		fields["enabled"] = BoolValue{V: true}
-	}
-	if cfg.Mode != "" {
-		fields["mode"] = StringValue{V: cfg.Mode}
-	}
-	if cfg.ToolsDBPath != "" {
-		fields["tools_db_path"] = StringValue{V: cfg.ToolsDBPath}
-	}
-	if cfg.TopK != 0 {
-		fields["top_k"] = IntValue{V: cfg.TopK}
-	}
-	if cfg.SimilarityThreshold != nil {
-		fields["similarity_threshold"] = FloatValue{V: float64(*cfg.SimilarityThreshold)}
-	}
-	if cfg.Strategy != "" {
-		fields["strategy"] = StringValue{V: cfg.Strategy}
-	}
-	if cfg.FallbackToEmpty != nil {
-		fields["fallback_to_empty"] = BoolValue{V: *cfg.FallbackToEmpty}
-	}
-	if cfg.RelevanceThreshold != nil {
-		fields["relevance_threshold"] = FloatValue{V: float64(*cfg.RelevanceThreshold)}
-	}
-	if cfg.PreserveCount != 0 {
-		fields["preserve_count"] = IntValue{V: cfg.PreserveCount}
-	}
-	return fields
-}
-
-func pluginFieldsTools(p *config.DecisionPlugin) map[string]Value {
-	fields := make(map[string]Value)
-	cfg, ok := decodePluginConfig[config.ToolsPluginConfig](p)
-	if !ok {
-		return fields
-	}
-	if cfg.Enabled {
-		fields["enabled"] = BoolValue{V: true}
-	}
-	if cfg.Mode != "" {
-		fields["mode"] = StringValue{V: cfg.Mode}
-	}
-	if cfg.SemanticSelection != nil {
-		fields["semantic_selection"] = BoolValue{V: *cfg.SemanticSelection}
-	}
-	if cfg.Strategy != "" {
-		fields["strategy"] = StringValue{V: cfg.Strategy}
-	}
-	if len(cfg.AllowTools) > 0 {
-		fields["allow_tools"] = stringsToArray(cfg.AllowTools)
-	}
-	if len(cfg.BlockTools) > 0 {
-		fields["block_tools"] = stringsToArray(cfg.BlockTools)
-	}
-	if cfg.StripToolHistory {
-		fields["strip_tool_history"] = BoolValue{V: true}
-	}
-	if cfg.DynamicRetrieval != nil {
-		fields["dynamic_retrieval"] = dynamicRetrievalObjectValue(cfg.DynamicRetrieval)
 	}
 	return fields
 }

@@ -47,7 +47,7 @@ describe('topology v0.3 surface alignment', () => {
               multi_factor: { latency_percentile: 95 },
             },
             modelRefs: [{ model: 'fast' }],
-            plugins: [{ type: 'tool_selection', enabled: true }],
+            plugins: [{ type: 'tools', enabled: true }],
           },
         ],
       },
@@ -63,7 +63,7 @@ describe('topology v0.3 surface alignment', () => {
     )
     expect(topology.decisions[0].algorithm?.type).toBe('multi_factor')
     expect(topology.decisions[0].algorithm?.multi_factor).toEqual({ latency_percentile: 95 })
-    expect(topology.decisions[0].plugins?.[0].type).toBe('tool_selection')
+    expect(topology.decisions[0].plugins?.[0].type).toBe('tools')
   })
 
   it('declares display metadata for v0.3 topology surfaces', () => {
@@ -77,7 +77,7 @@ describe('topology v0.3 surface alignment', () => {
       multi_factor: 'MF',
     })
     expect(PLUGIN_ICONS).toMatchObject({
-      tool_selection: 'TS',
+      tools: 'TL',
       prompt_cache: 'PC',
     })
     expect(PLUGIN_TYPES).toContain('prompt_cache')

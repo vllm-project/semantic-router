@@ -25,7 +25,7 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 	defaultScope := *cfg.ModelConsumerScope()
 	defaultScope.Recipes, defaultScope.Entrypoints = nil, nil
 	defaultScope.SemanticCache.Enabled = false
-	defaultScope.Tools.Enabled, defaultScope.Memory.Enabled = false, false
+	defaultScope.Memory.Enabled = false
 	defaultScope.VectorStore = nil
 	if err := inventory.addScope(cfg.ConfigForGlobalModelServices(), plan); err != nil {
 		return nil, err

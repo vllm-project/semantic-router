@@ -261,14 +261,9 @@ verification is a separate capability.
 
 ### Tools
 
-```yaml
-global:
-  integrations:
-    tools:
-      enabled: true
-      top_k: 3
-      tools_db_path: config/runtime/tools/tools_db.json
-```
+Tool catalogs belong to decisions, not to `global`: the `select.tools_db_path`
+of a decision's [tools plugin](../plugin/tools.md) names the catalog its
+add mode chooses from.
 
 ## Data and Security
 
@@ -277,7 +272,7 @@ global:
   encryption, retention, and tenant/user scope for the selected backend.
 - Embedding dimensions must match existing collections. Rebuild or migrate an
   index when the embedding model or dimension changes.
-- Tool retrieval controls what is shown to a model; it does not authorize tool
+- Tool selection controls what is shown to a model; it does not authorize tool
   execution. Enforce permissions at the tool service.
 - See
   [complete backend examples](https://github.com/vllm-project/semantic-router/tree/main/config/runtime)

@@ -530,14 +530,6 @@ func CreateTestConfig() *config.RouterConfig {
 			EmbeddingModel:      "bert", // Default for tests
 			TTLSeconds:          3600,
 		},
-		ToolSelection: config.ToolSelection{
-			Tools: config.ToolsConfig{
-				Enabled:         false, // Disable for most tests
-				TopK:            3,
-				ToolsDBPath:     "",
-				FallbackToEmpty: true,
-			},
-		},
 		ResponseAPI: config.ResponseAPIConfig{
 			Enabled:      true,
 			StoreBackend: "memory",
@@ -593,13 +585,6 @@ var _ = Describe("ExtProc Package", func() {
 			Expect(cfg.SemanticCache.SimilarityThreshold).NotTo(BeNil())
 			Expect(*cfg.SemanticCache.SimilarityThreshold).To(BeNumerically(">=", 0))
 			Expect(*cfg.SemanticCache.SimilarityThreshold).To(BeNumerically("<=", 1))
-		})
-
-		It("should have valid tools configuration", func() {
-			cfg := CreateTestConfig()
-
-			Expect(cfg.ToolSelection.Tools.TopK).To(BeNumerically(">", 0))
-			Expect(cfg.ToolSelection.Tools.FallbackToEmpty).To(BeTrue())
 		})
 	})
 

@@ -147,8 +147,8 @@ config:
           - type: tools
             configuration:
               enabled: true
-              mode: passthrough
-              semantic_selection: false
+              policy:
+                mode: passthrough
       - &tools_filtered_decision
         name: tools_filtered_decision
         description: "Deterministic route for tools allow-list provider-boundary coverage (issue #3180)."
@@ -166,10 +166,10 @@ config:
           - type: tools
             configuration:
               enabled: true
-              mode: filtered
-              semantic_selection: false
-              allow_tools:
-                - get_weather
+              policy:
+                mode: filtered
+                allow_tools:
+                  - get_weather
       - &tools_none_decision
         name: tools_none_decision
         description: "Deterministic route for tools removal provider-boundary coverage (issue #3180)."
@@ -187,167 +187,8 @@ config:
           - type: tools
             configuration:
               enabled: true
-              mode: none
-              semantic_selection: false
-      - &tool_selection_add_weather_decision
-        name: tool_selection_add_weather_decision
-        description: Contract route for tool_selection add mode (weather-aligned retrieval)
-        priority: 500
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: tool_selection_add_weather
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins:
-          - type: tools
-            configuration:
-              enabled: true
-              mode: passthrough
-              semantic_selection: false
-          - type: tool_selection
-            configuration:
-              enabled: true
-              mode: add
-              top_k: 3
-              similarity_threshold: 0.01
-              strategy: default
-      - &tool_selection_add_calc_decision
-        name: tool_selection_add_calc_decision
-        description: Contract route for tool_selection add mode (math-aligned retrieval)
-        priority: 500
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: tool_selection_add_calc
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins:
-          - type: tools
-            configuration:
-              enabled: true
-              mode: passthrough
-              semantic_selection: false
-          - type: tool_selection
-            configuration:
-              enabled: true
-              mode: add
-              top_k: 3
-              similarity_threshold: 0.01
-              strategy: default
-      - &tool_selection_filter_decision
-        name: tool_selection_filter_decision
-        description: Contract route for tool_selection filter mode
-        priority: 500
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: tool_selection_filter
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins:
-          - type: tools
-            configuration:
-              enabled: true
-              mode: passthrough
-              semantic_selection: false
-          - type: tool_selection
-            configuration:
-              enabled: true
-              mode: filter
-              relevance_threshold: 0.95
-              preserve_count: 2
-      - &tool_selection_filter_threshold_decision
-        name: tool_selection_filter_threshold_decision
-        description: Contract route for tool_selection filter mode with strict relevance threshold
-        priority: 500
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: tool_selection_filter_threshold
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins:
-          - type: tools
-            configuration:
-              enabled: true
-              mode: passthrough
-              semantic_selection: false
-          - type: tool_selection
-            configuration:
-              enabled: true
-              mode: filter
-              relevance_threshold: 0.95
-              preserve_count: 1
-      - &tool_selection_add_topk_one_decision
-        name: tool_selection_add_topk_one_decision
-        description: Contract route for tool_selection add mode with alternate top_k
-        priority: 500
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: tool_selection_add_topk_one
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins:
-          - type: tools
-            configuration:
-              enabled: true
-              mode: passthrough
-              semantic_selection: false
-          - type: tool_selection
-            configuration:
-              enabled: true
-              mode: add
-              top_k: 1
-              similarity_threshold: 0.01
-              strategy: default
-      - &tool_selection_with_system_prompt_decision
-        name: tool_selection_with_system_prompt_decision
-        description: Contract route for tool_selection stacked with system_prompt plugin
-        priority: 500
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: tool_selection_with_system_prompt
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins:
-          - type: tools
-            configuration:
-              enabled: true
-              mode: passthrough
-              semantic_selection: false
-          - type: tool_selection
-            configuration:
-              enabled: true
-              mode: add
-              top_k: 2
-              similarity_threshold: 0.01
-              strategy: default
-          - type: system_prompt
-            configuration:
-              enabled: true
-              system_prompt: "Contract route: system_prompt + tool_selection (non-PII path)."
-              mode: replace
+              policy:
+                mode: none
       - &business_decision
         name: business_decision
         description: Business and management related queries
@@ -762,42 +603,6 @@ config:
           keywords:
             - __CONTEXT_SAFETY_OVERLAP__
           case_sensitive: false
-        - &tool_selection_add_weather
-          name: tool_selection_add_weather
-          operator: OR
-          keywords:
-            - __TOOL_SELECTION_ADD_WEATHER__
-          case_sensitive: false
-        - &tool_selection_add_calc
-          name: tool_selection_add_calc
-          operator: OR
-          keywords:
-            - __TOOL_SELECTION_ADD_CALC__
-          case_sensitive: false
-        - &tool_selection_filter
-          name: tool_selection_filter
-          operator: OR
-          keywords:
-            - __TOOL_SELECTION_FILTER__
-          case_sensitive: false
-        - &tool_selection_filter_threshold
-          name: tool_selection_filter_threshold
-          operator: OR
-          keywords:
-            - __TOOL_SELECTION_FILTER_THRESHOLD__
-          case_sensitive: false
-        - &tool_selection_add_topk_one
-          name: tool_selection_add_topk_one
-          operator: OR
-          keywords:
-            - __TOOL_SELECTION_ADD_TOPK_ONE__
-          case_sensitive: false
-        - &tool_selection_with_system_prompt
-          name: tool_selection_with_system_prompt
-          operator: OR
-          keywords:
-            - __TOOL_SELECTION_WITH_SYSTEM_PROMPT__
-          case_sensitive: false
         - &plugin_request_mutations
           name: plugin_request_mutations
           operator: OR
@@ -1017,38 +822,26 @@ config:
             - *tools_passthrough
             - *tools_filtered
             - *tools_none
-            - *tool_selection_add_weather
-            - *tool_selection_add_calc
-            - *tool_selection_filter
-            - *tool_selection_filter_threshold
-            - *tool_selection_add_topk_one
-            - *tool_selection_with_system_prompt
         decisions:
           - *plugin_request_mutations_decision
           - *tools_passthrough_decision
           - *tools_filtered_decision
           - *tools_none_decision
-          - *tool_selection_add_weather_decision
-          - *tool_selection_add_calc_decision
-          - *tool_selection_filter_decision
-          - *tool_selection_filter_threshold_decision
-          - *tool_selection_add_topk_one_decision
-          - *tool_selection_with_system_prompt_decision
     - name: e2e-pii-precedence
       # Only the two decisions the case orders: the baseline's jailbreak guard
-      # also reads the tool-selection marker, and Vela 2.0 scores the marker
-      # before payment data as an injection.
-      description: A PII block outranks tool selection on the same request.
+      # also reads the tools marker, and Vela 2.0 scores the marker before
+      # payment data as an injection.
+      description: A PII block outranks a tools route on the same request.
       routing:
         strategy: priority
         signals:
           keywords:
-            - *tool_selection_add_weather
+            - *tools_passthrough
           pii:
             - *pii_deny_all
         decisions:
           - *block_pii_decision
-          - *tool_selection_add_weather_decision
+          - *tools_passthrough_decision
     - name: e2e-cache
       description: Cache hit, paraphrase, and contradiction probes independent of domain routing.
       routing:
@@ -1217,13 +1010,6 @@ config:
         embedding_model: mmbert
       vector_store:
         embedding_model: mmbert
-    integrations:
-      tools:
-        enabled: true
-        top_k: 3
-        similarity_threshold: 0.2
-        tools_db_path: config/tools_db.json
-        fallback_to_empty: true
 toolsDb:
   - tool:
       type: function

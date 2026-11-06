@@ -55,8 +55,7 @@ routing:
 | `system_prompt` | Insert or replace route-specific instructions | None | [System Prompt](./system-prompt) |
 | `header_mutation` | Add, update, or delete provider-bound headers the Router does not own | None | [Header Mutation](./header-mutation) |
 | `request_params` | Enforce request parameter limits | None | [Request Parameters](./request-params) |
-| `tools` | Allow, block, filter, or remove tools and tool history | Optional global tool catalog | [Tools](./tools) |
-| `tool_selection` | Add tools from a catalog or filter caller tools semantically | Embedding runtime; tool database for `add` mode | [Tool Selection](./tool-selection) |
+| `tools` | Allow, block or remove tools and tool history; let the decision model filter or add the tools a request needs | Decision model for `select`; a tool catalog for `add` | [Tools](./tools) |
 | `context_compression` | Reduce large provider-bound tool output or history | Optional embedding runtime and recovery store | [Context Compression](./context-compression) |
 | `response_cache` | Reuse compatible prior responses | `global.stores.response_cache` | [Response Cache](./response-cache) |
 | `prompt_cache` | Insert Anthropic prompt-cache breakpoints on instructions and tools | None | [Prompt Cache](./prompt-cache) |

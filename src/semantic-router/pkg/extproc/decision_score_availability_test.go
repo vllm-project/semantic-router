@@ -5,11 +5,10 @@ import (
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
-func TestDecisionScoreAvailabilityReachesHeadersReplayAndTools(t *testing.T) {
+func TestDecisionScoreAvailabilityReachesHeadersAndReplay(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
 		value     float64
@@ -40,23 +39,6 @@ func TestDecisionScoreAvailabilityReachesHeadersReplayAndTools(t *testing.T) {
 			if record.ConfidenceScoreAvailable != tc.available {
 				t.Fatal("replay lost decision score availability")
 			}
-			input := newToolRetrievalInput("query", "", 1, 1, ctx, nil)
-			if input.DecisionConfidenceAvailable != tc.available || (!tc.available && input.DecisionConfidence != 0) {
-				t.Fatal("structural confidence became tool model evidence")
-			}
 		})
-	}
-}
-
-func TestToolCategoryThresholdRequiresReportedConfidence(t *testing.T) {
-	enabled, threshold := true, float32(0.5)
-	advanced := &config.AdvancedToolFilteringConfig{UseCategoryFilter: &enabled, CategoryConfidenceThreshold: &threshold}
-	ctx := &RequestContext{VSRSelectedCategory: "math", VSRSelectedDecisionConfidence: 1}
-	if got := resolveCategory(advanced, ctx); got != "" {
-		t.Fatal("unscored structural match satisfied model confidence threshold")
-	}
-	ctx.VSRSelectedDecisionConfidenceScored = true
-	if got := resolveCategory(advanced, ctx); got != "math" {
-		t.Fatal("reported model score did not satisfy category threshold")
 	}
 }

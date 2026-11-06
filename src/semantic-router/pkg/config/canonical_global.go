@@ -76,7 +76,6 @@ type CanonicalStoreGlobal struct {
 // CanonicalIntegrationGlobal groups external helper services used by the router.
 type CanonicalIntegrationGlobal struct {
 	KVTransfer *KVTransferConfig `yaml:"kv_transfer,omitempty"`
-	Tools      ToolsConfig       `yaml:"tools"`
 	Looper     LooperConfig      `yaml:"looper"`
 }
 
@@ -236,7 +235,6 @@ func applyCanonicalStoreGlobal(cfg *RouterConfig, stores CanonicalStoreGlobal) {
 
 func applyCanonicalIntegrationGlobal(cfg *RouterConfig, integrations CanonicalIntegrationGlobal) {
 	cfg.KVTransfer = integrations.KVTransfer
-	cfg.Tools = integrations.Tools
 	cfg.Looper = integrations.Looper
 	if integrations.Looper.Endpoint != "" {
 		logging.ComponentWarnEvent("config", "looper_endpoint_deprecated", map[string]interface{}{

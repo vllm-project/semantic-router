@@ -32,7 +32,7 @@ memory, and tools around a routed request.
 | [Deliberation Algorithms](./deliberation-algorithms) | 2026-06-17 | Proposal | Grounding-aware multi-model synthesis. |
 | [Agentic Memory](./agentic-memory) | 2026-02-09 | Proof of concept | Cross-session memory retrieval and persistence. |
 | [OpenAI RAG Integration](./agentic-rag) | 2026-01-23 | Implemented | Retrieval through OpenAI Files and Vector Stores. |
-| [Advanced Tool Filtering](./advanced-tool-filtering) | 2026-01-14 | Implemented | Explainable filtering and reranking of tool candidates. |
+| [Advanced Tool Filtering](./advanced-tool-filtering) | 2026-01-14 | Superseded | Explainable filtering and reranking of tool candidates. |
 
 ## Safety & Resilience
 

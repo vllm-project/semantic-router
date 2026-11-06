@@ -50,7 +50,7 @@ func TestBuildModelSpecsExcludesOnnxWeightsForAliasedEmbeddingModel(t *testing.T
 			}
 
 			cfg.EmbeddingConfig.ModelType = "mmbert"
-			cfg.Tools.Enabled = true
+			cfg.Memory.Enabled, cfg.Memory.EmbeddingModel = true, "mmbert"
 			specs, err := BuildModelSpecs(cfg)
 			if err != nil {
 				t.Fatalf("BuildModelSpecs() error = %v", err)

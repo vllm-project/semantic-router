@@ -30,7 +30,6 @@ var (
 		validateRoutingInputContracts,
 		validateRouterHeadersContracts,
 		validateFlowContracts,
-		validateAdvancedToolFilteringConfig,
 		validatePromptCompressionContracts,
 		validateModelAdmissionContracts,
 		validateModelSignalTimeoutContracts,

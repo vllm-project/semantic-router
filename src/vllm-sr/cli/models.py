@@ -846,70 +846,21 @@ class ResponseGuardPluginConfig(BaseModel):
     on_unknown: Optional[ResponseGuardAction] = None
 
 
-class ToolsDynamicRetrievalWeights(BaseModel):
-    """Per-source weights for decision-scoped dynamic tool retrieval."""
+class ToolsPolicyConfig(BaseModel):
+    """The tools plugin's deterministic policy.
 
-    semantic: Optional[float] = None
-    history: Optional[float] = None
-    decision_prior: Optional[float] = None
-    repetition_penalty: Optional[float] = None
+    Mirrors the Go-side `config.ToolsPolicyConfig`; the Go side is
+    authoritative for trusted_facts.
+    """
 
-
-class ToolsDynamicRetrievalConfig(BaseModel):
-    """History-aware retrieval settings owned by the tools plugin."""
-
-    enabled: bool
-    strategy: str = "semantic_only"
-    history_window: Optional[int] = None
-    weights: Optional[ToolsDynamicRetrievalWeights] = None
-    min_history_confidence: Optional[float] = None
-    fallback_on_low_confidence: Optional[bool] = None
-
-    @model_validator(mode="after")
-    def validate_enabled_contract(self):
-        if not self.enabled:
-            return self
-        if self.strategy not in ("", "semantic_only", "hybrid_history"):
-            raise ValueError(
-                "dynamic_retrieval.strategy must be semantic_only or hybrid_history"
-            )
-        if self.strategy == "hybrid_history" and (
-            self.history_window is None or self.history_window < 1
-        ):
-            raise ValueError(
-                "history_window must be at least 1 when dynamic_retrieval.strategy=hybrid_history"
-            )
-        if self.min_history_confidence is not None and not (
-            0.0 <= self.min_history_confidence <= 1.0
-        ):
-            raise ValueError("min_history_confidence must be between 0.0 and 1.0")
-        if self.weights is not None:
-            for name, value in self.weights.model_dump(exclude_none=True).items():
-                if value < 0.0:
-                    raise ValueError(
-                        f"dynamic_retrieval.weights.{name} must be non-negative"
-                    )
-        return self
-
-
-class ToolsPluginConfig(BaseModel):
-    """Configuration for tools plugin."""
-
-    enabled: bool
-    mode: str = "passthrough"
-    semantic_selection: Optional[bool] = None
+    mode: Literal["passthrough", "filtered", "none"] = "passthrough"
     allow_tools: Optional[List[str]] = None
     block_tools: Optional[List[str]] = None
     strip_tool_history: Optional[bool] = None
-    strategy: Optional[str] = None
-    dynamic_retrieval: Optional[ToolsDynamicRetrievalConfig] = None
+    trusted_facts: Optional[Dict[str, Any]] = None
 
     @model_validator(mode="after")
     def validate_mode_contract(self):
-        if not self.enabled:
-            return self
-        if self.mode not in ("none", "passthrough", "filtered"):
-            raise ValueError("mode must be none, passthrough, or filtered")
         has_filters = bool(self.allow_tools or self.block_tools)
         if self.mode == "filtered" and not has_filters:
             raise ValueError("mode=filtered requires allow_tools or block_tools")
@@ -920,61 +871,6 @@ class ToolsPluginConfig(BaseModel):
         return self
 
 
-class ToolFilteringWeights(BaseModel):
-    """Weights for tool_selection advanced_filtering combined score.
-
-    Mirrors the Go-side `config.ToolFilteringWeights`. All weights are optional
-    pointers on the Go side; non-negative is the only structural constraint.
-    Cross-field rules (e.g. weights-all-zero) are enforced by the Go validator.
-    """
-
-    embed: Optional[float] = Field(default=None, ge=0.0)
-    lexical: Optional[float] = Field(default=None, ge=0.0)
-    tag: Optional[float] = Field(default=None, ge=0.0)
-    name: Optional[float] = Field(default=None, ge=0.0)
-    category: Optional[float] = Field(default=None, ge=0.0)
-
-
-class HybridHistoryConfig(BaseModel):
-    """Sub-config for `retrieval_strategy: hybrid_history`.
-
-    Mirrors the Go-side `config.HybridHistoryToolRetrievalConfig`. Cross-field
-    semantic rules (e.g. min_history_steps > history_horizon) are enforced by
-    the Go validator; this layer only mirrors the schema surface so Pydantic
-    stops dropping the subtree.
-    """
-
-    history_horizon: Optional[int] = Field(default=None, ge=0)
-    min_history_steps: Optional[int] = Field(default=None, ge=0)
-    history_confidence_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    weight_semantic: Optional[float] = Field(default=None, ge=0.0)
-    weight_history_transition: Optional[float] = Field(default=None, ge=0.0)
-    weight_decision_prior: Optional[float] = Field(default=None, ge=0.0)
-    repetition_penalty_strength: Optional[float] = Field(default=None, ge=0.0)
-
-
-class AdvancedToolFilteringConfig(BaseModel):
-    """Advanced filtering layer applied on top of semantic retrieval.
-
-    Mirrors the Go-side `config.AdvancedToolFilteringConfig`. The Go side
-    treats `retrieval_strategy: hybrid_history` as opt-in; without this model
-    the nested subtree was silently dropped by Pydantic and the Go router
-    received an effectively empty advanced_filtering block.
-    """
-
-    enabled: Optional[bool] = None
-    retrieval_strategy: Optional[Literal["weighted", "hybrid_history"]] = None
-    candidate_pool_size: Optional[int] = Field(default=None, ge=0)
-    min_lexical_overlap: Optional[int] = Field(default=None, ge=0)
-    min_combined_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    weights: Optional[ToolFilteringWeights] = None
-    use_category_filter: Optional[bool] = None
-    category_confidence_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    allow_tools: Optional[List[str]] = None
-    block_tools: Optional[List[str]] = None
-    hybrid_history: Optional[HybridHistoryConfig] = None
-
-
 class StickyToolSelectionConfig(BaseModel):
     """Session-scoped sticky tool-set selection (issue #3347).
 
@@ -982,7 +878,7 @@ class StickyToolSelectionConfig(BaseModel):
     disabled by default. This layer only mirrors the schema surface so
     Pydantic stops dropping the subtree; the Go side is authoritative for
     bounds (max_tools 1..128, max_new_tools_per_turn 0..max_tools) and for
-    rejecting sticky.enabled under a disabled tool_selection plugin.
+    refusing sticky.enabled in this release.
     """
 
     enabled: bool = False
@@ -991,20 +887,70 @@ class StickyToolSelectionConfig(BaseModel):
     pin_called_tools: Optional[bool] = None
 
 
-class ToolSelectionPluginConfig(BaseModel):
-    """Configuration for tool_selection plugin (semantic add/filter on request tools)."""
+class ToolsSelectInput(BaseModel):
+    """What the decision model reads to choose the tools."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    history: Optional[bool] = None
+
+
+class ToolsSelectConfig(BaseModel):
+    """The tools the decision model chooses, among the request's own tools
+    (filter) or a catalog's (add).
+
+    Mirrors the Go-side `config.ToolsSelectConfig`; the Go side is
+    authoritative for the match block and the catalog.
+    """
+
+    mode: Literal["filter", "add"]
+    tools_db_path: Optional[str] = None
+    match: Optional[Dict[str, Any]] = None
+    need_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    preserve_count: Optional[int] = Field(default=None, ge=0, le=255)
+    on_error: Optional[Literal["keep", "strip", "skip", "fail"]] = None
+    on_overflow: Optional[Literal["keep", "reject"]] = None
+    input: Optional[ToolsSelectInput] = None
+    timeout_ms: Optional[int] = Field(default=None, ge=0, le=60000)
+    sticky: Optional[StickyToolSelectionConfig] = None
+
+    @model_validator(mode="after")
+    def validate_mode_fields(self):
+        if self.mode == "add":
+            if not self.tools_db_path:
+                raise ValueError("mode=add requires tools_db_path")
+            if self.preserve_count is not None or self.on_overflow is not None:
+                raise ValueError("preserve_count and on_overflow apply to mode=filter")
+            if self.on_error not in (None, "skip", "fail"):
+                raise ValueError("mode=add takes on_error skip or fail")
+        else:
+            if self.tools_db_path:
+                raise ValueError("tools_db_path applies to mode=add")
+            if self.on_error not in (None, "keep", "strip", "fail"):
+                raise ValueError("mode=filter takes on_error keep, strip or fail")
+        return self
+
+
+class ToolsPluginConfig(BaseModel):
+    """Configuration for the tools plugin."""
+
+    model_config = ConfigDict(extra="forbid")
 
     enabled: bool
-    mode: Optional[Literal["add", "filter"]] = None
-    tools_db_path: Optional[str] = None
-    top_k: Optional[int] = Field(default=None, ge=0)
-    similarity_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    strategy: Optional[str] = None
-    fallback_to_empty: Optional[bool] = None
-    relevance_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    preserve_count: Optional[int] = Field(default=None, ge=0)
-    advanced_filtering: Optional[AdvancedToolFilteringConfig] = None
-    sticky: Optional[StickyToolSelectionConfig] = None
+    policy: Optional[ToolsPolicyConfig] = None
+    select: Optional[ToolsSelectConfig] = None
+
+    @model_validator(mode="after")
+    def validate_select_has_tools(self):
+        if (
+            self.select is not None
+            and self.policy is not None
+            and self.policy.mode == "none"
+        ):
+            raise ValueError(
+                "select requires a policy that keeps tools; mode=none removes every tool"
+            )
+        return self
 
 
 class SystemPromptPluginConfig(BaseModel):

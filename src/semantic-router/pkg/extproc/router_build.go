@@ -26,7 +26,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
 type routerComponents struct {
@@ -47,8 +46,7 @@ type routerComponents struct {
 	semanticCache               cache.CacheBackend
 	responseCache               *cache.ResponseCacheService
 	semanticCacheIdentity       string
-	toolsDatabase               *tools.ToolsDatabase
-	toolEmbedder                *cachedToolEmbedder
+	toolCatalogs                map[string]*toolCatalog
 	responseAPIFilter           *ResponseAPIFilter
 	replayRecorder              *routerreplay.Recorder
 	replayStoreShared           bool
@@ -180,11 +178,11 @@ func buildOpenAIRouterSharingSignals(cfg *config.RouterConfig, pool *binding.Poo
 }
 
 // validateStickyToolSelectionPhaseSupport rejects any decision that enables
-// tool_selection.sticky.enabled through Phase 2 (#4517): no
+// tools.select.sticky.enabled through Phase 2 (#4517): no
 // production request path consumes ResolveStickyToolIdentity or the
 // sessiontools store yet, so accepting sticky.enabled: true here would
 // construct successfully and then silently never activate sticky selection
-// for any request. config.ToolSelectionPluginConfig.Validate() already
+// for any request. Config validation already
 // rejects this at config-admission time (config.ErrToolSelectionStickyUnsupported);
 // this is a second, router-construction-time gate over the same condition
 // via the same sentinel error, checked here too since config admission and
@@ -197,8 +195,7 @@ func validateStickyToolSelectionPhaseSupport(cfg *config.RouterConfig) error {
 		return nil
 	}
 	for _, decision := range cfg.AllRoutingDecisions() {
-		plugin := decision.GetToolSelectionConfig()
-		if plugin == nil || plugin.Sticky == nil || !plugin.Sticky.Enabled {
+		if !stickyToolSelectionEnabled(&decision) {
 			continue
 		}
 		return config.ErrToolSelectionStickyUnsupported
@@ -207,7 +204,7 @@ func validateStickyToolSelectionPhaseSupport(cfg *config.RouterConfig) error {
 }
 
 // validateStickyToolSelectionSecret requires USER_SCOPE_NAMESPACE_SECRET
-// whenever any decision enables tool_selection.sticky.enabled (issue #3347,
+// whenever any decision enables tools.select.sticky.enabled (issue #3347,
 // PL-0042 section 2.4). Retained as a construction-time guard for once
 // Phase 3 (#4519) lifts validateStickyToolSelectionPhaseSupport's rejection above —
 // sticky.enabled: true cannot reach this check today, since the
@@ -227,13 +224,19 @@ func validateStickyToolSelectionSecret(cfg *config.RouterConfig) error {
 		return nil
 	}
 	for _, decision := range cfg.AllRoutingDecisions() {
-		plugin := decision.GetToolSelectionConfig()
-		if plugin == nil || plugin.Sticky == nil || !plugin.Sticky.Enabled {
+		if !stickyToolSelectionEnabled(&decision) {
 			continue
 		}
-		return fmt.Errorf("USER_SCOPE_NAMESPACE_SECRET is required when tool_selection sticky selection is enabled")
+		return fmt.Errorf("USER_SCOPE_NAMESPACE_SECRET is required when tools.select.sticky selection is enabled")
 	}
 	return nil
+}
+
+// stickyToolSelectionEnabled reports whether a decision's tools selection
+// turns sticky selection on.
+func stickyToolSelectionEnabled(decision *config.Decision) bool {
+	plugin := decision.GetToolsConfig()
+	return plugin != nil && plugin.Select != nil && plugin.Select.Sticky != nil && plugin.Select.Sticky.Enabled
 }
 
 func validateResponseCacheScopeSecret(cfg *config.RouterConfig) error {
@@ -416,7 +419,7 @@ func (components *routerComponents) buildEarlyResources() error {
 		components.resources.add(components.semanticCache.Close)
 	}
 
-	components.toolsDatabase, components.toolEmbedder, err = buildToolsRuntime(components.cfg, components.serviceEmbeddings)
+	components.toolCatalogs, err = loadToolCatalogs(components.cfg)
 	if err != nil {
 		return rollbackResources(components.resources, err)
 	}
@@ -502,24 +505,6 @@ func rollbackResources(resources *resourceScope, cause error) error {
 	return cause
 }
 
-func buildToolsRuntime(cfg *config.RouterConfig, sets ...*embedding.Set) (*tools.ToolsDatabase, *cachedToolEmbedder, error) {
-	// One provider serves both the tools database and the tool embedder, so a
-	// remote endpoint gets a single HTTP client/connection pool.
-	provider, providerErr := toolsEmbeddingProvider(cfg, sets...)
-	if providerErr != nil && cfg.Tools.Enabled {
-		return nil, nil, providerErr
-	}
-	database, err := createToolsDatabase(cfg, provider)
-	if err != nil {
-		return nil, nil, err
-	}
-	if providerErr != nil {
-		logging.Warnf("tool_selection: embedding provider unavailable, filter mode will use its fallback: %v", providerErr)
-		return database, nil, nil
-	}
-	return database, newToolEmbedderForConfig(cfg, provider), nil
-}
-
 func (components *routerComponents) buildRouter() *OpenAIRouter {
 	router := &OpenAIRouter{
 		signals:                     components.signals,
@@ -535,8 +520,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		ClassificationService:       components.classificationSvc,
 		Cache:                       components.semanticCache,
 		ResponseCache:               components.responseCache,
-		ToolsDatabase:               components.toolsDatabase,
-		toolEmbedder:                components.toolEmbedder,
+		toolCatalogs:                components.toolCatalogs,
 		ResponseAPIFilter:           components.responseAPIFilter,
 		ReplayRecorder:              components.replayRecorder,
 		ReplayStoreShared:           components.replayStoreShared,

@@ -15,9 +15,7 @@ import {
 } from './configPageCanonicalization'
 import { ConfigFormat, detectConfigFormat } from '../types/config'
 import {
-  CanonicalGlobalConfig,
   ConfigData,
-  Tool,
   getDefaultModelName,
   getReasoningFamiliesMap,
 } from './configPageSupport'
@@ -54,13 +52,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   const configEditorReadonly = configReadonly
 
   // Effective global runtime config resolved from router defaults + config.yaml overrides
-  const [routerDefaults, setRouterDefaults] = useState<CanonicalGlobalConfig | null>(null)
 
   // Tools database state
   const [saveWarnings, setSaveWarnings] = useState<RouterConfigWarning[]>([])
-  const [toolsData, setToolsData] = useState<Tool[]>([])
-  const [toolsLoading, setToolsLoading] = useState(false)
-  const [toolsError, setToolsError] = useState<string | null>(null)
 
   // Removed visibleAddresses state - no longer needed
 
@@ -98,29 +92,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     void fetchConfig()
   }, [isMCPSection])
 
-  useEffect(() => {
-    if (activeSection === 'global-config') void fetchRouterDefaults()
-  }, [activeSection])
-
-  // Fetch tools database only for the section that displays it.
-  useEffect(() => {
-    if (activeSection !== 'global-config') return
-
-    const toolsDBPath =
-      routerDefaults?.integrations?.tools?.tools_db_path ||
-      config?.global?.integrations?.tools?.tools_db_path ||
-      config?.tools?.tools_db_path
-
-    if (toolsDBPath) {
-      fetchToolsDB()
-    }
-  }, [
-    config?.global?.integrations?.tools?.tools_db_path,
-    config?.tools?.tools_db_path,
-    routerDefaults?.integrations?.tools?.tools_db_path,
-    activeSection,
-  ])
-
   const fetchConfig = async (showLoading = true): Promise<boolean> => {
     if (showLoading) setLoading(true)
     setError(null)
@@ -147,42 +118,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       return false
     } finally {
       if (showLoading) setLoading(false)
-    }
-  }
-
-  const fetchRouterDefaults = async () => {
-    try {
-      const data = await withRequestTimeout(async (signal) => {
-        const response = await fetch('/api/router/config/global', { signal })
-        if (!response.ok) {
-          throw new Error(`Global runtime config not available: ${response.status}`)
-        }
-        return await response.json()
-      })
-      setRouterDefaults(data)
-    } catch (err) {
-      console.warn('Failed to fetch global runtime config:', err)
-      setRouterDefaults(null)
-    }
-  }
-
-  const fetchToolsDB = async () => {
-    setToolsLoading(true)
-    setToolsError(null)
-    try {
-      const data = await withRequestTimeout(async (signal) => {
-        const response = await fetch('/api/tools-db', { signal })
-        if (!response.ok) {
-          throw new Error(await responseErrorMessage(response))
-        }
-        return await response.json()
-      })
-      setToolsData(data)
-    } catch (err) {
-      setToolsError(err instanceof Error ? err.message : 'Failed to fetch tools database')
-      setToolsData([])
-    } finally {
-      setToolsLoading(false)
     }
   }
 
@@ -349,9 +284,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   const renderGlobalConfigSection = () => (
     <ConfigPageRouterConfigSection
       config={config}
-      toolsData={toolsData}
-      toolsLoading={toolsLoading}
-      toolsError={toolsError}
       isReadonly={configEditorReadonly}
       openEditModal={openEditModal}
       saveConfig={saveConfig}

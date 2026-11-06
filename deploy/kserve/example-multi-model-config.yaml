@@ -108,10 +108,3 @@ data:
           similarity_threshold: 0.85
           max_entries: 5000
           ttl_seconds: 7200
-      integrations:
-        tools:
-          enabled: true
-          top_k: 5
-          similarity_threshold: 0.2
-          tools_db_path: config/tools_db.json
-          fallback_to_empty: true

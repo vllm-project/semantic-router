@@ -134,8 +134,7 @@ Router 询问的模型（回答信号、嵌入文本和重排文档的模型）�
 | `router-replay` — 路由插件 | `router_replay` 是在一条路由上覆盖回放/调试捕获的路由局部插件。 | [`config/fragments/plugin/router-replay/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/router-replay/) | [指南](../tutorials/plugin/router-replay) |
 | `shadow-dispatch` — 路由插件 | `shadow_dispatch` 是将已批准请求的有界采样副本发送到次级模型，并在不更改或延迟主响应的情况下记录结果的路由局部插件。 | [`config/fragments/plugin/shadow-dispatch/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/shadow-dispatch/) | [指南](../tutorials/plugin/shadow-dispatch) |
 | `system-prompt` — 路由插件 | `system_prompt` 是在匹配流量上插入或修改系统提示词的路由局部插件。 | [`config/fragments/plugin/system-prompt/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/system-prompt/) | [指南](../tutorials/plugin/system-prompt) |
-| `tool-selection` — 路由插件 | `tool_selection` 是控制匹配路由如何选择工具的决策插件。 | [`config/fragments/plugin/tool-selection/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/tool-selection/) | [指南](../tutorials/plugin/tool-selection) |
-| `tools` — 路由插件 | `tools` 是进行工具过滤和语义工具选择的路由局部插件。 | [`config/fragments/plugin/tools/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/tools/) | [指南](../tutorials/plugin/tools) |
+| `tools` — 路由插件 | `tools` 是允许、阻止或移除请求工具，并由决策模型过滤或添加请求所需工具的路由局部插件。 | [`config/fragments/plugin/tools/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/tools/) | [指南](../tutorials/plugin/tools) |
 
 <!-- END GENERATED CONFIGURATION CATALOG -->
 

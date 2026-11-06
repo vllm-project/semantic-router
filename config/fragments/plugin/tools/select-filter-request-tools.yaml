@@ -1,0 +1,14 @@
+plugin:
+  type: tools
+  configuration:
+    enabled: true
+    # The decision model keeps the request's tools it needs, in the request's
+    # order, and the first preserve_count tools whatever it answers.
+    select:
+      mode: filter
+      match:
+        judge: {preset: tool_rank, min_ratio: 0.1}
+      preserve_count: 2
+      on_error: keep
+      on_overflow: keep
+      input: {history: true}

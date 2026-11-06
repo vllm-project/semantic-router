@@ -22,28 +22,21 @@ const nestedPluginSettingsYAML = `routing:
               recency_decay_days: 14
               dedup_threshold: 0.9
               block_patterns: [api key, password]
-        - type: tool_selection
+        - type: tools
           configuration:
             enabled: true
-            advanced_filtering:
-              enabled: true
-              retrieval_strategy: hybrid_history
-              candidate_pool_size: 30
-              min_lexical_overlap: 2
-              min_combined_score: 0.4
-              weights: {embed: 0.5, lexical: 0.2, tag: 0.1, name: 0.1, category: 0.1}
-              use_category_filter: true
-              category_confidence_threshold: 0.7
-              allow_tools: [docs.search]
-              block_tools: [admin.delete]
-              hybrid_history:
-                history_horizon: 4
-                min_history_steps: 2
-                history_confidence_threshold: 0.3
-                weight_semantic: 0.5
-                weight_history_transition: 0.3
-                weight_decision_prior: 0.2
-                repetition_penalty_strength: 0.1
+            select:
+              mode: filter
+              match:
+                judge:
+                  question: {type: choice, instructions: "Which listed tool does the request need?"}
+                  top_k: 4
+                  min_score: 0.2
+                  min_ratio: 0.3
+              need_threshold: 0.6
+              preserve_count: 1
+              input: {history: true}
+              sticky: {enabled: false, max_tools: 8, max_new_tools_per_turn: 1, pin_called_tools: false}
 `
 
 func TestDecisionPluginsReadNestedSettings(t *testing.T) {
@@ -72,7 +65,7 @@ func TestDecisionPluginsReadNestedSettings(t *testing.T) {
 		decoded interface{}
 	}{
 		{"memory.reflection", plugins[0].Configuration["reflection"], decision.GetMemoryConfig().Reflection},
-		{"tool_selection.advanced_filtering", plugins[1].Configuration["advanced_filtering"], decision.GetToolSelectionConfig().AdvancedFiltering},
+		{"tools.select", plugins[1].Configuration["select"], decision.GetToolsConfig().Select},
 	} {
 		encoded, err := yaml.Marshal(tc.decoded)
 		if err != nil {
@@ -87,9 +80,9 @@ func TestDecisionPluginsReadNestedSettings(t *testing.T) {
 		}
 	}
 
-	invalid := strings.Replace(nestedPluginSettingsYAML, "candidate_pool_size: 30", "candidate_pool_size: -1", 1)
-	if _, err := ParseRoutingYAMLBytes([]byte(invalid)); err == nil || !strings.Contains(err.Error(), "candidate_pool_size") {
-		t.Errorf("negative per-decision candidate_pool_size: got error %v", err)
+	invalid := strings.Replace(nestedPluginSettingsYAML, "preserve_count: 1", "preserve_count: -1", 1)
+	if _, err := ParseRoutingYAMLBytes([]byte(invalid)); err == nil || !strings.Contains(err.Error(), "preserve_count") {
+		t.Errorf("negative per-decision preserve_count: got error %v", err)
 	}
 }
 

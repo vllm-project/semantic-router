@@ -555,13 +555,6 @@ export interface LegacyConfig {
     max_entries?: number
     ttl_seconds?: number
   }
-  tools?: {
-    enabled: boolean
-    top_k: number
-    similarity_threshold: number
-    tools_db_path: string
-    fallback_to_empty: boolean
-  }
   default_model?: string
   reasoning_families?: Record<string, ReasoningFamily>
   default_reasoning_effort?: string
@@ -624,13 +617,6 @@ export interface UnifiedConfig extends Partial<PythonCLIConfig>, Partial<LegacyC
     metrics?: { enabled: boolean }
   }
   api?: APIConfig
-  tools?: {
-    enabled: boolean
-    top_k: number
-    similarity_threshold: number
-    tools_db_path: string
-    fallback_to_empty: boolean
-  }
 }
 
 // =============================================================================

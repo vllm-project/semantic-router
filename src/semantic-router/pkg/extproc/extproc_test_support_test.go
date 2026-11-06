@@ -1,23 +1,17 @@
 package extproc
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-	. "github.com/onsi/ginkgo/v2"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
 func testNeutralRequest(model, text string) *llmprotocol.Request {
@@ -54,28 +48,11 @@ func immediateHeaderValue(response *ext_proc.ProcessingResponse, key string) str
 	return ""
 }
 
-var extprocTestModelWeightCandidates = []string{
-	"model.safetensors",
-	"model.safetensors.index.json",
-	"pytorch_model.bin",
-	"adapter_model.safetensors",
-}
-
 // CreateTestRouter creates a properly initialized router for testing.
 func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
-	return createTestRouterWithToolsProvider(cfg, nil)
-}
-
-func createTestRouterWithToolsProvider(cfg *config.RouterConfig, provider embedding.Provider) (*OpenAIRouter, error) {
 	classifierCfg := cloneRouterConfigForTest(cfg)
 	semanticCache, err := newTestSemanticCache(classifierCfg)
 	if err != nil {
-		return nil, err
-	}
-
-	toolsDatabase, err := newTestToolsDatabase(classifierCfg, provider)
-	if err != nil {
-		_ = semanticCache.Close()
 		return nil, err
 	}
 
@@ -94,7 +71,6 @@ func createTestRouterWithToolsProvider(cfg *config.RouterConfig, provider embedd
 		CategoryDescriptions: cfg.GetCategoryDescriptions(),
 		Classifier:           classifier,
 		Cache:                semanticCache,
-		ToolsDatabase:        toolsDatabase,
 		ResponseAPIFilter:    newTestResponseAPIFilter(cfg),
 		CredentialResolver:   newTestCredentialResolver(cfg),
 		FallbackOrchestrator: orchestrator,
@@ -121,29 +97,6 @@ func newTestSemanticCache(cfg *config.RouterConfig) (cache.CacheBackend, error) 
 	})
 }
 
-func newTestToolsDatabase(cfg *config.RouterConfig, provider embedding.Provider) (*tools.ToolsDatabase, error) {
-	toolCfg := cfg.Tools
-	toolsSimilarityThreshold := float32(0.2)
-	if toolCfg.SimilarityThreshold != nil {
-		toolsSimilarityThreshold = *toolCfg.SimilarityThreshold
-	}
-
-	toolsDatabase := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
-		SimilarityThreshold: toolsSimilarityThreshold,
-		Enabled:             toolCfg.Enabled,
-		ModelType:           cfg.EmbeddingConfig.ModelType,
-		TargetDimension:     cfg.EmbeddingConfig.TargetDimension,
-		Provider:            provider,
-	})
-	if !toolCfg.Enabled || toolCfg.ToolsDBPath == "" {
-		return toolsDatabase, nil
-	}
-	if err := toolsDatabase.LoadToolsFromFile(toolCfg.ToolsDBPath); err != nil {
-		return nil, fmt.Errorf("failed to load tools database: %w", err)
-	}
-	return toolsDatabase, nil
-}
-
 func newTestResponseAPIFilter(cfg *config.RouterConfig) *ResponseAPIFilter {
 	if !cfg.ResponseAPI.Enabled {
 		return nil
@@ -158,63 +111,4 @@ func newTestCredentialResolver(cfg *config.RouterConfig) *authz.CredentialResolv
 	)
 	credResolver.SetFailOpen(true)
 	return credResolver
-}
-
-func findExtprocTestProjectRoot() string {
-	wd, err := os.Getwd()
-	if err != nil {
-		return ""
-	}
-	for current := wd; current != filepath.Dir(current); current = filepath.Dir(current) {
-		if _, err := os.Stat(filepath.Join(current, "models")); err == nil {
-			return current
-		}
-	}
-	return ""
-}
-
-func resolveExtprocTestPath(relativePath string) string {
-	if _, err := os.Stat(relativePath); err == nil {
-		return relativePath
-	}
-	root := findExtprocTestProjectRoot()
-	if root == "" {
-		return relativePath
-	}
-	trimmed := strings.TrimPrefix(relativePath, "../../../../")
-	trimmed = strings.TrimPrefix(trimmed, "../../../../../")
-	absolute := filepath.Join(root, trimmed)
-	if _, err := os.Stat(absolute); err == nil {
-		return absolute
-	}
-	return relativePath
-}
-
-func extprocTestModelArtifactsAvailable(modelPath string) bool {
-	info, err := os.Stat(modelPath)
-	if err != nil || !info.IsDir() {
-		return false
-	}
-	if _, err := os.Stat(filepath.Join(modelPath, "config.json")); err != nil {
-		return false
-	}
-	for _, candidate := range extprocTestModelWeightCandidates {
-		if _, err := os.Stat(filepath.Join(modelPath, candidate)); err == nil {
-			return true
-		}
-	}
-	if matches, _ := filepath.Glob(filepath.Join(modelPath, "*.safetensors")); len(matches) > 0 {
-		return true
-	}
-	if matches, _ := filepath.Glob(filepath.Join(modelPath, "*.bin")); len(matches) > 0 {
-		return true
-	}
-	return false
-}
-
-func skipExtprocSpecIfModelArtifactsMissing(label string, modelPath string) {
-	if extprocTestModelArtifactsAvailable(modelPath) {
-		return
-	}
-	Skip(fmt.Sprintf("%s artifacts not available at %s (missing model weights)", label, modelPath))
 }

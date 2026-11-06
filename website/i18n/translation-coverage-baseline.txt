@@ -187,7 +187,6 @@ zh-Hans	tutorials/plugin/response-guard.md
 zh-Hans	tutorials/plugin/router-replay.md
 zh-Hans	tutorials/plugin/shadow-dispatch.md
 zh-Hans	tutorials/plugin/system-prompt.md
-zh-Hans	tutorials/plugin/tool-selection.md
 zh-Hans	tutorials/plugin/tools.md
 zh-Hans	tutorials/projection/mappings.md
 zh-Hans	tutorials/projection/overview.md

@@ -478,7 +478,7 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     ALGORITHM static
     PLUGIN tools {
       enabled: true
-      mode: "none"
+      policy: { mode: "none" }
     }
   }
 
@@ -615,7 +615,7 @@ RECIPE privacy-first (description = "Keep every request local; named decision-mo
     ALGORITHM static
     PLUGIN tools {
       enabled: true
-      mode: "none"
+      policy: { mode: "none" }
     }
   }
 
@@ -627,7 +627,7 @@ RECIPE privacy-first (description = "Keep every request local; named decision-mo
     ALGORITHM static
     PLUGIN tools {
       enabled: true
-      mode: "none"
+      policy: { mode: "none" }
     }
   }
 
@@ -639,7 +639,7 @@ RECIPE privacy-first (description = "Keep every request local; named decision-mo
     ALGORITHM static
     PLUGIN tools {
       enabled: true
-      mode: "none"
+      policy: { mode: "none" }
     }
   }
 

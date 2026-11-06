@@ -9,7 +9,7 @@ import (
 
 func TestUnusedEmbeddingCatalogEntriesAreNotDownloaded(t *testing.T) {
 	cfg := newEmbeddingOnlyConfig()
-	cfg.Tools.Enabled = false
+	cfg.Memory.Enabled = false
 	specs, err := BuildModelSpecs(cfg)
 	if err != nil {
 		t.Fatal(err)

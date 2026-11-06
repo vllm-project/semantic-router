@@ -34,9 +34,6 @@ func EmbeddingModelsNeeded(cfg *RouterConfig, primary string, sharedServices boo
 	if sharedServices && cfg.API.Embeddings.Enabled {
 		needed[primary] = true
 	}
-	if sharedServices && cfg.Tools.Enabled {
-		needed[primary] = true
-	}
 	if cacheNeeded {
 		needed[SemanticCacheEmbeddingModel(cfg)] = true
 	}

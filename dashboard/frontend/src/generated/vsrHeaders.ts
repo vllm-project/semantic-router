@@ -418,15 +418,6 @@ export const X_VSR_SKIP_PROCESSING = 'x-vsr-skip-processing'
 /** Marks a System One request one Router forwards to another, which refuses to forward it again. Surface: internal. */
 export const X_VSR_SYSTEMONE_BACKEND = 'x-vsr-systemone-backend'
 
-/** Highest similarity score among the selected tools. Surface: debug. */
-export const X_VSR_TOOLS_CONFIDENCE = 'x-vsr-tools-confidence'
-
-/** Tool-selection retriever latency, in milliseconds. Surface: debug. */
-export const X_VSR_TOOLS_LATENCY_MS = 'x-vsr-tools-latency-ms'
-
-/** Retriever strategy of semantic tool selection. Surface: debug. */
-export const X_VSR_TOOLS_STRATEGY = 'x-vsr-tools-strategy'
-
 /** Endpoint Envoy reports on the provider response for KV registry writes; removed before the client. Surface: internal. */
 export const X_VSR_UPSTREAM_HOST = 'x-vsr-upstream-host'
 

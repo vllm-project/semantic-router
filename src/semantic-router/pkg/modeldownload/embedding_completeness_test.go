@@ -26,7 +26,7 @@ func newEmbeddingOnlyConfig() *config.RouterConfig {
 		},
 	}
 	cfg.EmbeddingConfig.ModelType = "mmbert"
-	cfg.Tools.Enabled = true
+	cfg.Memory.Enabled, cfg.Memory.EmbeddingModel = true, "mmbert"
 	return cfg
 }
 
@@ -165,7 +165,6 @@ func newLocalEmbeddingConfig() *config.RouterConfig {
 		},
 	}
 	cfg.EmbeddingConfig.ModelType = "qwen3"
-	cfg.Tools.Enabled = true
 	cfg.SemanticCache.Enabled = true
 	cfg.SemanticCache.EmbeddingModel = "mmbert"
 	cfg.Memory.Enabled = true

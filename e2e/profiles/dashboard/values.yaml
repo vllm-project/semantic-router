@@ -39,9 +39,6 @@ configOverride:
     stores:
       response_cache:
         enabled: false
-    integrations:
-      tools:
-        enabled: false
 
 persistence:
   enabled: false

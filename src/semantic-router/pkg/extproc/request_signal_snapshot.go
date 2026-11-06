@@ -48,7 +48,6 @@ type requestSignalSnapshot struct {
 	ToolChoiceNone            bool
 	AssistantToolCallCount    int
 	ToolResultCount           int
-	AssistantToolNames        []string
 	LastMessageRole           string
 	LastMessageToolResult     bool
 	LastMessageFlowToolResult bool

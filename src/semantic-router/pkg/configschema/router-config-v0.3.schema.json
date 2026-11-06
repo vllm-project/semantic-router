@@ -35,51 +35,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "AdvancedToolFilteringConfig": {
-      "properties": {
-        "enabled": {
-          "type": "boolean"
-        },
-        "retrieval_strategy": {
-          "type": "string"
-        },
-        "candidate_pool_size": {
-          "type": "integer"
-        },
-        "min_lexical_overlap": {
-          "type": "integer"
-        },
-        "min_combined_score": {
-          "type": "number"
-        },
-        "weights": {
-          "$ref": "#/$defs/ToolFilteringWeights"
-        },
-        "use_category_filter": {
-          "type": "boolean"
-        },
-        "category_confidence_threshold": {
-          "type": "number"
-        },
-        "allow_tools": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "block_tools": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "hybrid_history": {
-          "$ref": "#/$defs/HybridHistoryToolRetrievalConfig"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "AlgorithmBudget": {
       "properties": {
         "deadline": {
@@ -649,9 +604,6 @@
       "properties": {
         "kv_transfer": {
           "$ref": "#/$defs/KVTransferConfig"
-        },
-        "tools": {
-          "$ref": "#/$defs/ToolsConfig"
         },
         "looper": {
           "$ref": "#/$defs/LooperConfig"
@@ -2130,25 +2082,6 @@
           "if": {
             "properties": {
               "type": {
-                "const": "tool_selection"
-              }
-            },
-            "required": [
-              "type"
-            ]
-          },
-          "then": {
-            "properties": {
-              "configuration": {
-                "$ref": "#/$defs/ToolSelectionPluginConfig"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "type": {
                 "const": "request_params"
               }
             },
@@ -2258,7 +2191,6 @@
             "router_replay",
             "shadow_dispatch",
             "system_prompt",
-            "tool_selection",
             "tools"
           ]
         },
@@ -2401,48 +2333,6 @@
         },
         "insecure_skip_verify": {
           "type": "boolean"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "DynamicRetrievalConfig": {
-      "properties": {
-        "enabled": {
-          "type": "boolean"
-        },
-        "strategy": {
-          "type": "string"
-        },
-        "history_window": {
-          "type": "integer"
-        },
-        "weights": {
-          "$ref": "#/$defs/DynamicRetrievalWeights"
-        },
-        "min_history_confidence": {
-          "type": "number"
-        },
-        "fallback_on_low_confidence": {
-          "type": "boolean"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "DynamicRetrievalWeights": {
-      "properties": {
-        "semantic": {
-          "type": "number"
-        },
-        "history": {
-          "type": "number"
-        },
-        "decision_prior": {
-          "type": "number"
-        },
-        "repetition_penalty": {
-          "type": "number"
         }
       },
       "additionalProperties": false,
@@ -3075,33 +2965,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "HybridHistoryToolRetrievalConfig": {
-      "properties": {
-        "history_horizon": {
-          "type": "integer"
-        },
-        "min_history_steps": {
-          "type": "integer"
-        },
-        "history_confidence_threshold": {
-          "type": "number"
-        },
-        "weight_semantic": {
-          "type": "number"
-        },
-        "weight_history_transition": {
-          "type": "number"
-        },
-        "weight_decision_prior": {
-          "type": "number"
-        },
-        "repetition_penalty_strength": {
-          "type": "number"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "HybridWeightsConfig": {
       "properties": {
         "logprob_weight": {
@@ -3647,6 +3510,76 @@
             "type": "string"
           },
           "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MatchConfig": {
+      "properties": {
+        "recall": {
+          "$ref": "#/$defs/MatchRecall"
+        },
+        "judge": {
+          "$ref": "#/$defs/MatchJudge"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MatchJudge": {
+      "properties": {
+        "preset": {
+          "type": "string",
+          "enum": [
+            "relevance",
+            "same_request",
+            "tool_rank"
+          ]
+        },
+        "question": {
+          "$ref": "#/$defs/SystemOneQuestion"
+        },
+        "deployment": {
+          "type": "string"
+        },
+        "top_k": {
+          "type": "integer"
+        },
+        "min_score": {
+          "type": "number"
+        },
+        "min_ratio": {
+          "type": "number"
+        },
+        "on_error": {
+          "type": "string",
+          "enum": [
+            "fail",
+            "skip"
+          ]
+        },
+        "timeout_ms": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MatchRecall": {
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": [
+            "embedding",
+            "bm25"
+          ]
+        },
+        "top_k": {
+          "type": "integer"
+        },
+        "min_similarity": {
+          "type": "number"
         }
       },
       "additionalProperties": false,
@@ -6888,66 +6821,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "ToolFilteringWeights": {
-      "properties": {
-        "embed": {
-          "type": "number"
-        },
-        "lexical": {
-          "type": "number"
-        },
-        "tag": {
-          "type": "number"
-        },
-        "name": {
-          "type": "number"
-        },
-        "category": {
-          "type": "number"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "ToolSelectionPluginConfig": {
-      "properties": {
-        "enabled": {
-          "type": "boolean"
-        },
-        "mode": {
-          "type": "string"
-        },
-        "tools_db_path": {
-          "type": "string"
-        },
-        "top_k": {
-          "type": "integer"
-        },
-        "similarity_threshold": {
-          "type": "number"
-        },
-        "advanced_filtering": {
-          "$ref": "#/$defs/AdvancedToolFilteringConfig"
-        },
-        "strategy": {
-          "type": "string"
-        },
-        "fallback_to_empty": {
-          "type": "boolean"
-        },
-        "relevance_threshold": {
-          "type": "number"
-        },
-        "preserve_count": {
-          "type": "integer"
-        },
-        "sticky": {
-          "$ref": "#/$defs/StickyToolSelectionConfig"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "ToolSessionRedisConfig": {
       "properties": {
         "address": {
@@ -6993,40 +6866,30 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "ToolsConfig": {
-      "properties": {
-        "enabled": {
-          "type": "boolean"
-        },
-        "top_k": {
-          "type": "integer"
-        },
-        "similarity_threshold": {
-          "type": "number"
-        },
-        "tools_db_path": {
-          "type": "string"
-        },
-        "fallback_to_empty": {
-          "type": "boolean"
-        },
-        "advanced_filtering": {
-          "$ref": "#/$defs/AdvancedToolFilteringConfig"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "ToolsPluginConfig": {
       "properties": {
         "enabled": {
           "type": "boolean"
         },
-        "mode": {
-          "type": "string"
+        "policy": {
+          "$ref": "#/$defs/ToolsPolicyConfig"
         },
-        "semantic_selection": {
-          "type": "boolean"
+        "select": {
+          "$ref": "#/$defs/ToolsSelectConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ToolsPolicyConfig": {
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "passthrough",
+            "filtered",
+            "none"
+          ]
         },
         "allow_tools": {
           "items": {
@@ -7043,14 +6906,67 @@
         "strip_tool_history": {
           "type": "boolean"
         },
-        "strategy": {
-          "type": "string"
-        },
-        "dynamic_retrieval": {
-          "$ref": "#/$defs/DynamicRetrievalConfig"
-        },
         "trusted_facts": {
           "$ref": "#/$defs/TrustedFactsConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ToolsSelectConfig": {
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "filter",
+            "add"
+          ]
+        },
+        "tools_db_path": {
+          "type": "string"
+        },
+        "match": {
+          "$ref": "#/$defs/MatchConfig"
+        },
+        "need_threshold": {
+          "type": "number"
+        },
+        "preserve_count": {
+          "type": "integer"
+        },
+        "on_error": {
+          "type": "string",
+          "enum": [
+            "skip",
+            "keep",
+            "strip",
+            "fail"
+          ]
+        },
+        "on_overflow": {
+          "type": "string",
+          "enum": [
+            "keep",
+            "reject"
+          ]
+        },
+        "input": {
+          "$ref": "#/$defs/ToolsSelectInput"
+        },
+        "timeout_ms": {
+          "type": "integer"
+        },
+        "sticky": {
+          "$ref": "#/$defs/StickyToolSelectionConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ToolsSelectInput": {
+      "properties": {
+        "history": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -8004,14 +7920,8 @@
       {
         "type": "tools",
         "display_name": "Tools",
-        "description": "Apply route-local tool filtering and selection.",
+        "description": "Allow, block or remove the request's tools, then let the decision model filter or add the tools it needs.",
         "schema_ref": "#/$defs/ToolsPluginConfig"
-      },
-      {
-        "type": "tool_selection",
-        "display_name": "Tool Selection",
-        "description": "Add or filter tools using semantic retrieval.",
-        "schema_ref": "#/$defs/ToolSelectionPluginConfig"
       },
       {
         "type": "request_params",
@@ -8204,15 +8114,6 @@
         "path": [
           "integrations",
           "kv_transfer"
-        ]
-      },
-      {
-        "key": "tools",
-        "layer": "integrations",
-        "display_name": "Tools",
-        "path": [
-          "integrations",
-          "tools"
         ]
       },
       {

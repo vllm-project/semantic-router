@@ -53,7 +53,6 @@ func TestConfigLoadValidatesGlobalsForEverySource(t *testing.T) {
 		{"admission_overflow", `model_catalog: {admission: {primary: {max_concurrency: 1, on_overflow: drop}}}`, "on_overflow"},
 		{"admission_queue", `model_catalog: {admission: {primary: {max_concurrency: 1, max_queue: -1}}}`, "max_queue"},
 		{"deployment_provider", `model_catalog: {deployments: {encoder: {artifact: models/encoder, provider: unknown}}}`, "unsupported provider"},
-		{"tool_filter", `integrations: {tools: {advanced_filtering: {enabled: true, min_combined_score: 1.5}}}`, "min_combined_score"},
 		{"prompt_profile", `model_catalog: {modules: {prompt_compression: {profile: unknown}}}`, "prompt_compression.profile"},
 		{"remom_models", `integrations: {looper: {remom: {model_names: [""]}}}`, "remom.model_names was removed"},
 		{"fusion_models", `integrations: {looper: {fusion: {model_names: [""]}}}`, "fusion.model_names was removed"},

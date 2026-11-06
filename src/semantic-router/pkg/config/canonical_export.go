@@ -334,7 +334,6 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 		},
 		Integrations: CanonicalIntegrationGlobal{
 			KVTransfer: cfg.KVTransfer,
-			Tools:      cfg.Tools,
 			Looper:     cfg.Looper,
 		},
 		ModelCatalog: canonicalModelCatalogFromRouterConfig(cfg),

@@ -53,9 +53,6 @@ describe('router defaults structured schemas', () => {
       config: null,
       routerConfig: { router_replay: replay },
       routerDefaults: null,
-      toolsData: [],
-      toolsLoading: false,
-      toolsError: null,
     })
     const card = cards.find((item) => item.key === 'router_replay')!
     expect(card.editFields.map((field) => field.name)).toEqual(
@@ -98,9 +95,6 @@ describe('router defaults structured schemas', () => {
       config: null,
       routerConfig: { router_core: { strategy: 'priority' } },
       routerDefaults: null,
-      toolsData: [],
-      toolsLoading: false,
-      toolsError: null,
     })
     const routerCore = cards.find((card) => card.key === 'router_core')
     const patch = routerCore?.save(routerCore.editData) as {
@@ -125,9 +119,6 @@ describe('router defaults structured schemas', () => {
       config: null,
       routerConfig: { external_models: external },
       routerDefaults: null,
-      toolsData: [],
-      toolsLoading: false,
-      toolsError: null,
     })
     const externalModels = cards.find((card) => card.key === 'external_models')!
 
@@ -168,30 +159,7 @@ describe('router defaults structured schemas', () => {
     ])
   })
 
-  it('round-trips typed tool filtering and classifier modules with unknown keys', () => {
-    const tools = normalizeRouterStructuredFields('tools', {
-      advanced_filtering: {
-        enabled: true,
-        retrieval_strategy: 'hybrid_history',
-        allow_tools: [' docs.search '],
-        hybrid_history: {
-          history_horizon: 8,
-          future_history_weight: 0.25,
-        },
-        future_retriever: 'preserved',
-      },
-    })
-    expect(tools.advanced_filtering).toEqual(
-      expect.objectContaining({
-        allow_tools: ['docs.search'],
-        future_retriever: 'preserved',
-        hybrid_history: {
-          history_horizon: 8,
-          future_history_weight: 0.25,
-        },
-      }),
-    )
-
+  it('round-trips typed classifier modules with unknown keys', () => {
     const classifier = normalizeRouterStructuredFields('classifier', {
       preference: {
         use_contrastive: true,
@@ -244,9 +212,6 @@ describe('router defaults structured schemas', () => {
         },
       },
       routerDefaults: null,
-      toolsData: [],
-      toolsLoading: false,
-      toolsError: null,
     })
 
     const routerCore = cards.find((card) => card.key === 'router_core')
@@ -296,9 +261,6 @@ describe('router defaults structured schemas', () => {
         },
       },
       routerDefaults: null,
-      toolsData: [],
-      toolsLoading: false,
-      toolsError: null,
     })
     const embeddingCard = embeddingCards.find((card) => card.key === 'embedding_models')
     expect(embeddingCard?.editFields.find((field) => field.name === 'provider_type')).toEqual(
@@ -354,9 +316,6 @@ describe('router defaults structured schemas', () => {
         admission: { default: { max_concurrency: 8 } },
       },
       routerDefaults: null,
-      toolsData: [],
-      toolsLoading: false,
-      toolsError: null,
     })
 
     expect(cards.map((card) => card.key)).toEqual(

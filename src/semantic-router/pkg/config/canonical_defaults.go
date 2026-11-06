@@ -112,12 +112,6 @@ func defaultCanonicalStoreGlobal() CanonicalStoreGlobal {
 
 func defaultCanonicalIntegrationGlobal() CanonicalIntegrationGlobal {
 	return CanonicalIntegrationGlobal{
-		Tools: ToolsConfig{
-			Enabled:         false,
-			TopK:            3,
-			ToolsDBPath:     "config/tools_db.json",
-			FallbackToEmpty: true,
-		},
 		Looper: LooperConfig{
 			TimeoutSeconds: 1200,
 			Headers:        map[string]string{},

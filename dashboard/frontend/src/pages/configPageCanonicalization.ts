@@ -32,7 +32,6 @@ const LEGACY_GLOBAL_ROOT_KEYS = [
   'router_replay',
   'api',
   'observability',
-  'tools',
   'looper',
   'clear_route_cache',
   'model_selection',
@@ -432,7 +431,6 @@ const promoteLegacyGlobalBlocks = (cfg: ConfigData) => {
   placeBlockIfMissing(['services', 'router_replay'], cfg.router_replay)
   placeBlockIfMissing(['services', 'api'], cfg.api)
   placeBlockIfMissing(['services', 'observability'], cfg.observability)
-  placeBlockIfMissing(['integrations', 'tools'], cfg.tools)
   placeBlockIfMissing(['integrations', 'looper'], cfg.looper)
   placeBlockIfMissing(['router', 'clear_route_cache'], cfg.clear_route_cache)
   placeBlockIfMissing(['router', 'model_selection'], cfg.model_selection)
@@ -482,7 +480,6 @@ const promoteLegacyGlobalBlocks = (cfg: ConfigData) => {
         case 'vector_store':
           placeBlockIfMissing(['stores', key], value)
           break
-        case 'tools':
         case 'looper':
           placeBlockIfMissing(['integrations', key], value)
           break

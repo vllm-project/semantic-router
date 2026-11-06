@@ -8,7 +8,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
 func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cache.CacheBackend, string, error) {
@@ -78,51 +77,6 @@ func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cach
 
 func detectSemanticCacheEmbeddingModel(cfg *config.RouterConfig) string {
 	return config.SemanticCacheEmbeddingModel(cfg)
-}
-
-func createToolsDatabase(cfg *config.RouterConfig, provider embedding.Provider) (*tools.ToolsDatabase, error) {
-	embeddingModels := cfg.EmbeddingModels
-	toolsThreshold := embeddingModels.MinSimilarityThreshold()
-	if cfg.Tools.SimilarityThreshold != nil {
-		toolsThreshold = *cfg.Tools.SimilarityThreshold
-	}
-	if !cfg.Tools.Enabled {
-		provider = nil
-	}
-
-	toolsDatabase := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
-		SimilarityThreshold: toolsThreshold,
-		Enabled:             cfg.Tools.Enabled,
-		ModelType:           embeddingModels.EmbeddingConfig.ModelType,
-		TargetDimension:     embeddingModels.EmbeddingConfig.TargetDimension,
-		Provider:            provider,
-	})
-
-	if toolsDatabase.IsEnabled() {
-		logging.ComponentEvent("extproc", "tools_database_initialized", map[string]interface{}{
-			"similarity_threshold": toolsThreshold,
-			"top_k":                cfg.Tools.TopK,
-		})
-	} else {
-		logging.ComponentEvent("extproc", "tools_database_disabled", map[string]interface{}{})
-	}
-
-	return toolsDatabase, nil
-}
-
-func toolsEmbeddingProvider(cfg *config.RouterConfig, sets ...*embedding.Set) (embedding.Provider, error) {
-	if len(sets) > 0 && sets[0] != nil {
-		return sets[0].Get("", cfg.EmbeddingConfig.TargetDimension, 0)
-	}
-
-	if cfg == nil || !cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
-		return nil, nil
-	}
-	provider, err := embedding.NewProvider(cfg.EmbeddingModels)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create tools embedding provider: %w", err)
-	}
-	return provider, nil
 }
 
 func createResponseAPIFilter(cfg *config.RouterConfig) *ResponseAPIFilter {

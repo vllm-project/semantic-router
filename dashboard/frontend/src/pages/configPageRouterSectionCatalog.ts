@@ -15,7 +15,6 @@ export const CURATED_ROUTER_SECTIONS = {
   memory: { path: ['stores', 'memory'], layer: 'stores' },
   response_cache: { path: ['stores', 'response_cache'], layer: 'stores' },
   vector_store: { path: ['stores', 'vector_store'], layer: 'stores' },
-  tools: { path: ['integrations', 'tools'], layer: 'integrations' },
   prompt_guard: {
     path: ['model_catalog', 'modules', 'prompt_guard'],
     layer: 'model_catalog',

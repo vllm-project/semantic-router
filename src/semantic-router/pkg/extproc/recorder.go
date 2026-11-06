@@ -127,7 +127,7 @@ func (r *OpenAIRouter) startRouterReplay(
 	if !persistReplayRecord(ctx, recorder, record) {
 		return
 	}
-	appendPendingTrustedFactsOutcomes(ctx, recorder)
+	appendPendingToolsOutcomes(ctx, recorder)
 	if ctx.RouterReplayContentOmitted && prompt != "" {
 		r.attachPromptOnceVerified(ctx, recorder, prompt)
 	}

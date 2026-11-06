@@ -520,7 +520,7 @@ func TestAuthenticateRouterRetrievalRequiresResourceReadInAdditionToEvaluation(t
 	}
 	called := false
 	handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true; w.WriteHeader(http.StatusNoContent) }))
-	for _, plugin := range []string{"rag", "tools", "tool_selection"} {
+	for _, plugin := range []string{"rag", "tools"} {
 		path := "/api/router/api/v1/plugins/" + plugin + "/preview"
 		if got := RequiredPermissions(http.MethodPost, path); !reflect.DeepEqual(got, []string{PermEvalRun, PermConfigRead}) {
 			t.Fatalf("incomplete retrieval permissions: %v", got)

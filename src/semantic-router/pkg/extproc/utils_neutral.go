@@ -182,11 +182,6 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 			if message.Role == llmprotocol.RoleAssistant {
 				result.LastAssistantToolCall = true
 			}
-			if content.ToolCall != nil {
-				if content.ToolCall.Name != "" {
-					result.AssistantToolNames = append(result.AssistantToolNames, content.ToolCall.Name)
-				}
-			}
 		case llmprotocol.ContentToolResult:
 			result.ToolResultCount++
 			result.LastMessageToolResult = true

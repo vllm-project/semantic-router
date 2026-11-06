@@ -340,10 +340,6 @@ type ConfigSpec struct {
 	// +optional
 	SemanticCache *SemanticCacheConfig `json:"semantic_cache,omitempty"`
 
-	// Tools configuration
-	// +optional
-	Tools *ToolsConfig `json:"tools,omitempty"`
-
 	// PromptGuard is removed: the decision model answers jailbreak rules, and
 	// a threshold is a jailbreak rule's predicate. A resource that sets it is
 	// refused.
@@ -1478,27 +1474,6 @@ type ModelRefConfig struct {
 	// ReasoningEffort selects one of the model family's declared effort levels.
 	// +optional
 	ReasoningEffort string `json:"reasoning_effort,omitempty" yaml:"reasoning_effort,omitempty"`
-}
-
-// ToolsConfig defines tools configuration
-type ToolsConfig struct {
-	// +kubebuilder:default=true
-	// +optional
-	Enabled bool `json:"enabled,omitempty"`
-	// +kubebuilder:default=3
-	// +optional
-	TopK int `json:"top_k,omitempty"`
-	// Similarity threshold for tool selection (0.0-1.0). Stored as string to avoid float precision issues.
-	// +kubebuilder:default="0.2"
-	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
-	// +optional
-	SimilarityThreshold string `json:"similarity_threshold,omitempty"`
-	// +kubebuilder:default="config/tools_db.json"
-	// +optional
-	ToolsDBPath string `json:"tools_db_path,omitempty"`
-	// +kubebuilder:default=true
-	// +optional
-	FallbackToEmpty bool `json:"fallback_to_empty,omitempty"`
 }
 
 // APIConfig defines API configuration

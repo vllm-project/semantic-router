@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/match"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
@@ -15,8 +16,9 @@ type modelCardProvider interface {
 
 // prepareDecisionSelectionCards admits the System One questions decisions ask
 // about their candidates while building a generation: the systemone
-// selector's, and a Chat escalation's answer_check or refusal. Requests only
-// read this snapshot; no discovery runs on their selection path.
+// selector's, a Chat escalation's answer_check or refusal, and the judges of
+// match blocks. Requests only read this snapshot; no discovery runs on their
+// selection path.
 func prepareDecisionSelectionCards(cfg *config.RouterConfig, provider modelCardProvider) (map[string]modelservice.ModelCard, error) {
 	cards := map[string]modelservice.ModelCard{}
 	if cfg == nil {
@@ -46,6 +48,16 @@ func prepareDecisionSelectionCards(cfg *config.RouterConfig, provider modelCardP
 					return nil, fmt.Errorf("prepare escalate %s: %w", decision.Name, err)
 				}
 			}
+		}
+	}
+	for _, judge := range matchJudges(cfg) {
+		deployment := cfg.MatchJudgeDeployment(judge)
+		card, err := preparedCard(cards, cfg, provider, deployment, judge.EffectiveTimeout())
+		if err == nil {
+			err = match.Prepare(judge, card)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("prepare match judge on deployment %s: %w", deployment, err)
 		}
 	}
 	return cards, nil

@@ -16,7 +16,7 @@ Router 把响应头分到两个面：
 
 - **公开面** — 每个未被响应缓存服务的路由推理响应都包含 `x-vsr-schema-version` 和 `x-vsr-response-path`。这两个关键头由路由流水线产生，因此改由 Router 自身处理器应答的响应（例如 `GET /v1/models`）会省略它们。唯一例外是管理端点 `POST /api/v1/routing/preview`：它在结果成功时返回 `x-vsr-config-hash`。成功路由的响应还可以包含最终配方、决策、置信度、算法、模型、路由延迟、成本和回放 id——仅当启用 Router Replay 且记录已持久化时才包含回放 id。发生协议转换时会出现协议标记；仅在存在警告时出现协议警告。
 - **配置版本** — `x-vsr-config-version` 指明服务该请求的配置版本。它出现在每个未被响应缓存服务的路由响应上（无论成功还是出错），也出现在 Router 自己应答的每个响应上，例如拦截、校验错误、缓存命中或 `GET /v1/models`。请求始终保留开始时的版本，即使运行期间热重载激活了另一个版本。
-- **调试面** — 中间分类细节、匹配信号、工具选择指标和 `x-vsr-retention-*` 指令仅在请求设置 `x-vsr-debug: true`、且 [`global.router.headers.debug`](#who-may-turn-on-the-debug-headers) 允许该调用方时内联出现；默认不允许任何调用方。启用回放时，同样的诊断上下文仍可通过 `x-vsr-replay-id` 获得。
+- **调试面** — 中间分类细节、匹配信号和 `x-vsr-retention-*` 指令仅在请求设置 `x-vsr-debug: true`、且 [`global.router.headers.debug`](#who-may-turn-on-the-debug-headers) 允许该调用方时内联出现；默认不允许任何调用方。启用回放时，同样的诊断上下文仍可通过 `x-vsr-replay-id` 获得。
 
 决策和匹配信号头还要求同时满足以下全部条件：
 
@@ -91,7 +91,7 @@ global:
 
 ## 缓存与插件头
 
-`x-vsr-cache-hit` 和 `x-vsr-fast-response` 在公开面上标识立即响应。缓存相似度、工具选择指标和 prompt-cache 回执需要 `x-vsr-debug`。
+`x-vsr-cache-hit` 和 `x-vsr-fast-response` 在公开面上标识立即响应。缓存相似度和 prompt-cache 回执需要 `x-vsr-debug`。
 
 prompt-cache 头不含内容：它们只报告计数和结果，从不包含缓存文本本身，也从不声称缓存命中或提供方侧节省。
 
@@ -242,9 +242,6 @@ x-vsr-replay-id: replay_01J...
 | `x-vsr-selected-modality` | response | debug | none | classification | v0.2 | Modality result and optional method, such as `AR;classifier`. |
 | `x-vsr-selected-reasoning` | response | debug | none | classification | v0.1 | Reasoning mode chosen for the request: `on` or `off`. |
 | `x-vsr-session-phase` | response | debug | none | router_learning | v0.3 | Protection phase: `user_turn`, `tool_loop` or `provider_state`. |
-| `x-vsr-tools-confidence` | response | debug | none | tools | v0.3 | Highest similarity score among the selected tools. |
-| `x-vsr-tools-latency-ms` | response | debug | none | tools | v0.3 | Tool-selection retriever latency, in milliseconds. |
-| `x-vsr-tools-strategy` | response | debug | none | tools | v0.3 | Retriever strategy of semantic tool selection. |
 | `x-claude-code-session-id` | request, provider request | control | none | session | v0.3 | Conversation id Claude Code sends; `x-session-id` takes precedence, and providers receive it. |
 | `x-conversation-id` | request, provider request | control | none | router_learning | v0.4 | Client conversation id; Router Learning `scope: conversation` protects it, and providers receive it. |
 | `x-disable-router-memory` | request | control | none | memory | v0.3 | `true` keeps Router-managed memory out of the request. |

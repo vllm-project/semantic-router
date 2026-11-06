@@ -128,6 +128,9 @@ func ModelRuntimeDeploymentsInUse(cfg *RouterConfig) map[string]ModelDeployment 
 				}
 				mark(deployment)
 			}
+			for _, judge := range decision.MatchJudges() {
+				mark(judge.Deployment)
+			}
 		}
 	}
 	scan(cfg.Signals, cfg.Decisions)

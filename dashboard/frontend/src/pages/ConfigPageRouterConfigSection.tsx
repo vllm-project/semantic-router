@@ -13,15 +13,12 @@ import {
   type RouterSectionBadge,
 } from './configPageRouterDefaultsSupport'
 import type { OpenEditModal } from './configPageRouterSectionSupport'
-import type { CanonicalGlobalConfig, ConfigData, Tool } from './configPageSupport'
+import type { CanonicalGlobalConfig, ConfigData } from './configPageSupport'
 
 type GlobalEditorMode = 'visual' | 'raw'
 
 interface ConfigPageRouterConfigSectionProps {
   config: ConfigData | null
-  toolsData: Tool[]
-  toolsLoading: boolean
-  toolsError: string | null
   isReadonly: boolean
   openEditModal: OpenEditModal
   saveConfig: (config: ConfigData) => Promise<void>
@@ -42,9 +39,6 @@ function badgeClassName(badge: RouterSectionBadge): string {
 
 export default function ConfigPageRouterConfigSection({
   config,
-  toolsData,
-  toolsLoading,
-  toolsError,
   isReadonly,
   openEditModal,
   saveConfig,
@@ -130,9 +124,6 @@ export default function ConfigPageRouterConfigSection({
     config,
     routerConfig: effectiveRouterConfig,
     routerDefaults,
-    toolsData,
-    toolsLoading,
-    toolsError,
   })
 
   const configuredCount = sectionCards.filter((card) => card.data !== undefined).length

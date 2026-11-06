@@ -154,8 +154,7 @@ func builtinDecisionPlugins() []DecisionPluginType {
 				return validateFastResponsePlugin(at.Decision, at.Index, at.Type, p)
 			},
 		}),
-		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginTools, DisplayName: "Tools", Description: "Apply route-local tool filtering and selection."}, PluginOptions[ToolsPluginConfig]{}),
-		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginToolSelection, DisplayName: "Tool Selection", Description: "Add or filter tools using semantic retrieval."}, PluginOptions[ToolSelectionPluginConfig]{}),
+		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginTools, DisplayName: "Tools", Description: "Allow, block or remove the request's tools, then let the decision model filter or add the tools it needs."}, PluginOptions[ToolsPluginConfig]{Strict: true}),
 		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginRequestParams, DisplayName: "Request Parameters", Description: "Constrain or remove provider request parameters."}, PluginOptions[RequestParamsPluginConfig]{
 			Strict: true,
 			Validate: func(at PluginAt, p *RequestParamsPluginConfig) error {

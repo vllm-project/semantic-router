@@ -100,7 +100,7 @@ func TestCountTokensEstimatesWithoutAMessagesBackend(t *testing.T) {
 	require.NoError(t, err)
 	fastResponse, err := config.NewStructuredPayload(map[string]any{"message": "refused"})
 	require.NoError(t, err)
-	stripTools, err := config.NewStructuredPayload(map[string]any{"enabled": true, "mode": "none", "strip_tool_history": true})
+	stripTools, err := config.NewStructuredPayload(map[string]any{"enabled": true, "policy": map[string]any{"mode": "none", "strip_tool_history": true}})
 	require.NoError(t, err)
 	for name, guard := range map[string]config.Decision{
 		"a decision masks content":       {Plugins: []config.DecisionPlugin{{Type: config.DecisionPluginMasking, Configuration: masking}}},

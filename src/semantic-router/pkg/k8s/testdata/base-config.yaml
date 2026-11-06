@@ -46,13 +46,6 @@ global:
       ttl_seconds: 3600
       eviction_policy: fifo
       embedding_model: mmbert
-  integrations:
-    tools:
-      enabled: true
-      top_k: 3
-      similarity_threshold: 0.2
-      tools_db_path: config/tools_db.json
-      fallback_to_empty: true
   model_catalog:
     embeddings:
       semantic:

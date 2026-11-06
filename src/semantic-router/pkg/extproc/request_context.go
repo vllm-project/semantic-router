@@ -371,9 +371,10 @@ type RequestContext struct {
 	// separately checks stage-specific evidence and the resolved capture policy.
 	RouterReplayContentOmitted bool
 
-	// pendingTrustedFactsOutcomes holds trusted-facts gate outcomes evaluated
-	// before Replay created its record; startRouterReplay appends them.
-	pendingTrustedFactsOutcomes []routerreplay.Outcome
+	// pendingToolsOutcomes holds the tools plugin's outcomes (its
+	// trusted-facts gate and its selection) recorded before Replay created
+	// its record; startRouterReplay appends them.
+	pendingToolsOutcomes []routerreplay.Outcome
 
 	// ShadowDispatchPluginConfig is the per-decision shadow_dispatch plugin
 	// configuration, or nil when the selected decision declares none.

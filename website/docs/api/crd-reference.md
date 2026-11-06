@@ -151,7 +151,6 @@ _Appears in:_
 | `embedding_models` _[EmbeddingModelsConfig](#embeddingmodelsconfig)_ | Embedding models configuration (qwen3, gemma, mmbert) |  | Optional: \{\} <br /> |
 | `response_cache` _[SemanticCacheConfig](#semanticcacheconfig)_ | Response cache configuration. |  | Optional: \{\} <br /> |
 | `semantic_cache` _[SemanticCacheConfig](#semanticcacheconfig)_ | SemanticCache is the deprecated response-cache field. |  | Optional: \{\} <br /> |
-| `tools` _[ToolsConfig](#toolsconfig)_ | Tools configuration |  | Optional: \{\} <br /> |
 | `prompt_guard` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | PromptGuard is removed: the decision model answers jailbreak rules, and<br />a threshold is a jailbreak rule's predicate. A resource that sets it is<br />refused. |  | Type: object <br />Optional: \{\} <br /> |
 | `classifier` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Classifier is removed: the decision model answers domain and pii rules,<br />and a threshold is the rule's predicate. A resource that sets it is<br />refused. |  | Type: object <br />Optional: \{\} <br /> |
 | `complexity_rules` _[ComplexityRulesConfig](#complexityrulesconfig) array_ | Complexity rules for complexity-aware routing |  | Optional: \{\} <br /> |
@@ -1220,22 +1219,6 @@ _Appears in:_
 | `type` _string_ |  |  | Optional: \{\} <br /> |
 | `properties` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ |  |  | Type: object <br />Optional: \{\} <br /> |
 | `required` _string array_ |  |  | Optional: \{\} <br /> |
-
-#### ToolsConfig
-
-ToolsConfig defines tools configuration
-
-_Appears in:_
-
-- [ConfigSpec](#configspec)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `enabled` _boolean_ |  | true | Optional: \{\} <br /> |
-| `top_k` _integer_ |  | 3 | Optional: \{\} <br /> |
-| `similarity_threshold` _string_ | Similarity threshold for tool selection (0.0-1.0). Stored as string to avoid float precision issues. | 0.2 | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
-| `tools_db_path` _string_ |  | config/tools_db.json | Optional: \{\} <br /> |
-| `fallback_to_empty` _boolean_ |  | true | Optional: \{\} <br /> |
 
 #### TracingConfig
 

@@ -11,9 +11,7 @@ embedding model serves every feature that needs one:
 - the [semantic cache](tutorials/plugin/response-cache.md): answer a
   repeated question from the cache;
 - [memory](tutorials/plugin/memory.md) and [RAG](tutorials/plugin/rag.md):
-  find stored facts and documents;
-- [tool selection](tutorials/plugin/tool-selection.md): offer the tools
-  that fit the request.
+  find stored facts and documents.
 
 The default model is Vela 1.0 Embedding. It reads up to 32,768 tokens and can
 return smaller vectors from earlier layers when you need speed: layers 3, 6,

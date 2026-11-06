@@ -1,5 +1,10 @@
 # PL-0042: Session-Scoped Sticky Tool-Set Selection
 
+The `tool_selection` plugin has since merged into the `tools` plugin: the
+sticky block is `tools.select.sticky` (`config/tools_plugin.go`), and the
+selection is asked of the decision model. The task records below keep the
+paths of their time.
+
 ## Goal
 
 Implement an opt-in, bounded session tool-set policy around the existing

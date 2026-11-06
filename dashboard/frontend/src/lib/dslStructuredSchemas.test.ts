@@ -128,11 +128,14 @@ describe('DSL structured field schemas', () => {
     expect(requireField(headerMutation, 'delete').type).toBe('string[]')
 
     const tools = getPluginFieldSchema('tools')
-    expect(requireField(tools, 'strip_tool_history').type).toBe('boolean')
-    const dynamicRetrieval = requireField(tools, 'dynamic_retrieval')
-    expect(dynamicRetrieval.type).toBe('object')
-    expect(requireField(dynamicRetrieval.fields || [], 'history_window').type).toBe('number')
-    expect(requireField(dynamicRetrieval.fields || [], 'weights').type).toBe('object')
+    const policy = requireField(tools, 'policy')
+    expect(policy.type).toBe('object')
+    expect(requireField(policy.fields || [], 'strip_tool_history').type).toBe('boolean')
+    const select = requireField(tools, 'select')
+    expect(select.type).toBe('object')
+    expect(requireField(select.fields || [], 'preserve_count').type).toBe('number')
+    const match = requireField(select.fields || [], 'match')
+    expect(requireField(match.fields || [], 'judge').type).toBe('object')
   })
 
   it('offers every conversation source type and non_user as a role', () => {

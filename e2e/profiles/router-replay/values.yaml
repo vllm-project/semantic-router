@@ -400,9 +400,6 @@ config:
         embedding_model: mmbert
       vector_store:
         embedding_model: mmbert
-    integrations:
-      tools:
-        enabled: false
 resources:
   limits:
     cpu: '2'

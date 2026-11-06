@@ -88,8 +88,8 @@ func TestMaintainedPrivacyRecipeDSLRoundTrip(t *testing.T) {
 		switch {
 		case (left == nil) != (right == nil):
 			t.Errorf("round-trip decision %q tools plugin presence mismatch", dec.Name)
-		case left != nil && right != nil && left.EffectiveMode() != right.EffectiveMode():
-			t.Errorf("round-trip decision %q tools mode: %q → %q", dec.Name, left.EffectiveMode(), right.EffectiveMode())
+		case left != nil && right != nil && left.Policy.EffectiveMode() != right.Policy.EffectiveMode():
+			t.Errorf("round-trip decision %q tools mode: %q → %q", dec.Name, left.Policy.EffectiveMode(), right.Policy.EffectiveMode())
 		}
 	}
 }

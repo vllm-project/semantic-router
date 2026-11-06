@@ -20,13 +20,6 @@ func TestBuildCanonicalConfigAppliesOperatorDefaults(t *testing.T) {
 			Config: vllmv1alpha1.ConfigSpec{
 				Strategy:        "priority",
 				ReasoningEffort: "high",
-				Tools: &vllmv1alpha1.ToolsConfig{
-					Enabled:             true,
-					TopK:                7,
-					SimilarityThreshold: "0.4",
-					ToolsDBPath:         "/config/tools.json",
-					FallbackToEmpty:     true,
-				},
 				ComplexityRules: []vllmv1alpha1.ComplexityRulesConfig{
 					{Name: "code", Description: "Code difficulty"},
 				},
@@ -48,7 +41,6 @@ func TestBuildCanonicalConfigAppliesOperatorDefaults(t *testing.T) {
 	}
 
 	assertOperatorRouterProviderConfig(t, canonical)
-	assertOperatorToolsConfig(t, canonical.Global.Integrations.Tools)
 	assertOperatorComplexityConfig(t, canonical.Routing.Signals.Complexity)
 	assertOperatorExternalModels(t, canonical.Global.ModelCatalog.External)
 }
@@ -352,17 +344,6 @@ func assertCanonicalAgenticWorkflowDecision(t *testing.T, decisions []routerconf
 	}
 	if decision.Algorithm.MultiFactor.Weights.Quality != 0.6 || decision.Algorithm.MultiFactor.Weights.Cost != 0.4 {
 		t.Fatalf("expected multi_factor weights, got %#v", decision.Algorithm.MultiFactor)
-	}
-}
-
-func assertOperatorToolsConfig(t *testing.T, tools routerconfig.ToolsConfig) {
-	t.Helper()
-
-	if tools.TopK != 7 || tools.ToolsDBPath != "/config/tools.json" || !tools.FallbackToEmpty {
-		t.Fatalf("unexpected tools config: %#v", tools)
-	}
-	if tools.SimilarityThreshold == nil || *tools.SimilarityThreshold < 0.399 || *tools.SimilarityThreshold > 0.401 {
-		t.Fatalf("unexpected tools threshold: %#v", tools.SimilarityThreshold)
 	}
 }
 

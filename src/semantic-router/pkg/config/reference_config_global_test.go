@@ -218,23 +218,7 @@ func assertReferenceConfigVectorStoreCoverage(t testingT, vectorStore map[string
 }
 
 func assertReferenceConfigIntegrationGlobalCoverage(t testingT, integrations map[string]interface{}) {
-	tools := mustMapAt(t, integrations, "tools")
-
 	assertMapCoversStructFields(t, integrations, reflect.TypeOf(CanonicalIntegrationGlobal{}), "global.integrations")
-	assertMapCoversStructFields(t, tools, reflect.TypeOf(ToolsConfig{}), "global.integrations.tools")
-	assertMapCoversStructFields(t, mustMapAt(t, tools, "advanced_filtering"), reflect.TypeOf(AdvancedToolFilteringConfig{}), "global.integrations.tools.advanced_filtering")
-	assertMapCoversStructFields(
-		t,
-		mustMapAt(t, tools, "advanced_filtering", "hybrid_history"),
-		reflect.TypeOf(HybridHistoryToolRetrievalConfig{}),
-		"global.integrations.tools.advanced_filtering.hybrid_history",
-	)
-	assertMapCoversStructFields(
-		t,
-		mustMapAt(t, tools, "advanced_filtering", "weights"),
-		reflect.TypeOf(ToolFilteringWeights{}),
-		"global.integrations.tools.advanced_filtering.weights",
-	)
 	assertMapCoversStructFields(t, mustMapAt(t, integrations, "looper"), reflect.TypeOf(LooperConfig{}), "global.integrations.looper", "endpoint")
 	flow := mustMapAt(t, integrations, "looper", "flow")
 	assertMapCoversStructFields(t, flow, reflect.TypeOf(FlowRuntimeConfig{}), "global.integrations.looper.flow")

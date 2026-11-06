@@ -14,6 +14,7 @@ import (
 var RemovedPluginTypes = map[string]string{
 	"response_jailbreak": "a response_guard rule over a jailbreak signal with stage: response",
 	"hallucination":      "a response_guard rule over the fact_check and hallucination signals",
+	"tool_selection":     "a select block in the decision's tools plugin",
 }
 
 // pluginForms are the plugin forms that ran their own detectors or read their

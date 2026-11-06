@@ -333,22 +333,15 @@ func validateOneDecisionPluginContracts(
 			)
 		}
 		seenPluginTypes[normalizedType] = plugin.Type
-		if err := validateDecisionPluginPayload(
-			decision.Name,
-			index,
-			plugin,
-		); err != nil {
+		payload, err := DecodeDecisionPluginAt(PluginAt{Decision: decision.Name, Index: index, Type: plugin.Type}, plugin)
+		if err != nil {
 			return err
 		}
-	}
-	if toolsCfg := decision.GetToolsConfig(); toolsCfg != nil {
-		if err := toolsCfg.Validate(); err != nil {
-			return fmt.Errorf("decision '%s': %w", decision.Name, err)
-		}
-	}
-	if tsCfg := decision.GetToolSelectionConfig(); tsCfg != nil {
-		if err := tsCfg.Validate(); err != nil {
-			return fmt.Errorf("decision '%s': %w", decision.Name, err)
+		if tools, ok := payload.(*ToolsPluginConfig); ok {
+			path := cfg.ScopePath(fmt.Sprintf("decisions[%s].plugins[%d].configuration", decision.Name, index))
+			if err := validateToolsPlugin(cfg, path, tools); err != nil {
+				return err
+			}
 		}
 	}
 	if err := validateDecisionShadowDispatchPlugin(cfg, decision); err != nil {

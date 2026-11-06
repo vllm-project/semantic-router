@@ -47,23 +47,12 @@ func (r *OpenAIRouter) InspectPluginBinding(binding pluginruntime.Binding, plugi
 		// decision model or their deployments.
 		add("response_signals", classifier != nil)
 	case *config.ToolsPluginConfig:
-		if policy.SelectionEnabled() {
-			add("tool_retriever", r.ToolsDatabase != nil && r.ToolsDatabase.IsEnabled())
-		}
-	case *config.ToolSelectionPluginConfig:
-		if policy.Mode == config.ToolSelectionModeFilter {
-			add("tool_embeddings", r.toolEmbedder != nil)
-		} else if policy.ToolsDBPath != "" {
-			r.toolSelectionDBMu.Lock()
-			database := r.toolSelectionDBByPath[policy.ToolsDBPath]
-			r.toolSelectionDBMu.Unlock()
-			if database == nil {
-				unknown("tool_retriever")
-			} else {
-				add("tool_retriever", database.IsEnabled())
+		if spec := policy.Select; spec != nil {
+			_, ready := routerMatchAnswerer{r}.Card(r.Config.MatchJudgeDeployment(*spec.EffectiveMatch().Judge))
+			add("decision_model", ready)
+			if spec.Mode == config.ToolsSelectModeAdd {
+				add("tool_catalog", r.toolCatalogs[spec.ToolsDBPath] != nil)
 			}
-		} else {
-			add("tool_retriever", r.ToolsDatabase != nil && r.ToolsDatabase.IsEnabled())
 		}
 	case *config.RAGPluginConfig:
 		if policy.Backend == "vectorstore" {

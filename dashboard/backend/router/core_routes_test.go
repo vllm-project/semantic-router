@@ -347,13 +347,7 @@ func TestRuntimeConfigCapabilityGuardsLocalWriteRoutes(t *testing.T) {
 func TestResolveToolsDBPathUsesRouterContractPath(t *testing.T) {
 	configDir := t.TempDir()
 	configPath := filepath.Join(configDir, "config.yaml")
-	if err := os.WriteFile(configPath, []byte(`
-version: v0.3
-global:
-  integrations:
-    tools:
-      tools_db_path: "/tmp/custom-tools.json"
-`), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte(toolsCatalogConfig("/tmp/custom-tools.json")), 0o644); err != nil {
 		t.Fatalf("WriteFile(config): %v", err)
 	}
 

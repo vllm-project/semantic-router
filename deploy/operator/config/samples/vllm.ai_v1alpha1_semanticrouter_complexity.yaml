@@ -79,10 +79,6 @@ spec:
       ttl_seconds: 7200
 
     # Prompt guard
-    # Tools configuration
-    tools:
-      enabled: true
-      top_k: 3
 
     # Default reasoning effort for queries without complexity classification
     reasoning_effort: "medium"

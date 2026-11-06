@@ -1,6 +1,6 @@
 import type { FieldConfig } from '../components/EditModal'
 import type { ViewSection } from '../components/ViewModal'
-import type { ConfigData, Tool } from './configPageSupport'
+import type { ConfigData } from './configPageSupport'
 
 export type OpenEditModal = <TForm extends object>(
   title: string,
@@ -18,7 +18,7 @@ export type OpenViewModal = (
 
 export type RouterConfigSectionData = Pick<
   ConfigData,
-  'embedding_models' | 'response_cache' | 'tools' | 'prompt_guard' | 'classifier' | 'api' | 'observability'
+  'embedding_models' | 'response_cache' | 'prompt_guard' | 'classifier' | 'api' | 'observability'
 >
 
 export interface RouterSectionBaseProps {
@@ -27,12 +27,6 @@ export interface RouterSectionBaseProps {
   isReadonly: boolean
   openEditModal: OpenEditModal
   saveConfig: (config: ConfigData) => Promise<void>
-}
-
-export interface RouterToolsSectionProps extends RouterSectionBaseProps {
-  toolsData: Tool[]
-  toolsLoading: boolean
-  toolsError: string | null
 }
 
 export interface LegacyCategoriesSectionProps {

@@ -28,7 +28,6 @@ const (
 	DecisionPluginRAG                = "rag"
 	DecisionPluginFastResponse       = "fast_response"
 	DecisionPluginRequestParams      = "request_params"
-	DecisionPluginToolSelection      = "tool_selection"
 	DecisionPluginContextCompression = "context_compression"
 	DecisionPluginPromptCache        = "prompt_cache"
 	DecisionPluginShadowDispatch     = "shadow_dispatch"

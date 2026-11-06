@@ -150,9 +150,6 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	}
 
 	embeddingRuntime := routerServer.EmbeddingRuntimeState()
-	if err = warmupRouterRuntime(ctx, routerServer); err != nil {
-		return recordStartupError(startupWriter, "warm up router runtime", err)
-	}
 	logStartupSummary(cfg, opts, embeddingRuntime.AnyReady)
 	servingLifecycle, err = runRouterServing(ctx, cfg, opts, routerServer, startupWriter)
 	if err != nil {

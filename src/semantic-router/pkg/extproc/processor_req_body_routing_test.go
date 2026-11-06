@@ -200,12 +200,9 @@ func TestProviderDispatchAppliesReasoningBeforeExternalModelIDRewrite(t *testing
 }
 
 func TestToolSelectionMutatesNeutralRequestBeforeEveryProviderEncoding(t *testing.T) {
-	semanticSelection := false
 	payload, err := config.NewStructuredPayload(config.ToolsPluginConfig{
-		Enabled:           true,
-		Mode:              config.ToolsPluginModeFiltered,
-		AllowTools:        []string{"lookup_weather"},
-		SemanticSelection: &semanticSelection,
+		Enabled: true,
+		Policy:  &config.ToolsPolicyConfig{Mode: config.ToolsPolicyModeFiltered, AllowTools: []string{"lookup_weather"}},
 	})
 	if err != nil {
 		t.Fatal(err)

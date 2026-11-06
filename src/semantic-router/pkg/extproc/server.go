@@ -45,26 +45,6 @@ var (
 	buildReloadRouter               = buildOpenAIRouterFromConfig
 	buildReloadRouterSharingSignals = buildOpenAIRouterSharingSignals
 	replaceReloadConfig             = config.Replace
-
-	warmupReloadRouter = func(router *OpenAIRouter) error {
-		if router == nil {
-			return nil
-		}
-		state := router.embeddingRuntimeState()
-		_, err := modelruntime.WarmupRouter(context.Background(), []modelruntime.RouterWarmupTask{
-			{
-				Name:       "tools_database",
-				Ready:      state.ToolsReady,
-				SkipReason: "embedding_runtime_not_ready_for_tools",
-				Load:       router.LoadToolsDatabase,
-			},
-		}, modelruntime.WarmupRouterOptions{
-			Component:      "extproc",
-			MaxParallelism: 2,
-			OnEvent:        logReloadRuntimeLifecycleEvent,
-		})
-		return err
-	}
 )
 
 // Server represents a gRPC server for the Envoy ExtProc
@@ -149,32 +129,6 @@ func NewServer(
 // GetRouter returns the current router instance
 func (s *Server) GetRouter() *OpenAIRouter {
 	return s.service.GetRouter()
-}
-
-// WarmupRouter loads generation-owned runtime data before serving requests.
-func (s *Server) WarmupRouter(
-	ctx context.Context,
-	options modelruntime.WarmupRouterOptions,
-) error {
-	if s == nil || s.service == nil {
-		return nil
-	}
-	generation := s.service.current.Load()
-	if generation == nil || generation.router == nil {
-		return nil
-	}
-	state := generation.router.embeddingRuntimeState()
-	_, err := modelruntime.WarmupRouter(ctx, []modelruntime.RouterWarmupTask{
-		{
-			Name:       "tools_database",
-			Ready:      state.ToolsReady,
-			SkipReason: "embedding_runtime_not_ready_for_tools",
-			Load: func() error {
-				return generation.withLease(generation.router.LoadToolsDatabase)
-			},
-		},
-	}, options)
-	return err
 }
 
 // Start serves requests until Stop is called or the gRPC server fails.
@@ -488,15 +442,6 @@ func (g *routerGeneration) acquire() (func(), bool) {
 	}, true
 }
 
-func (g *routerGeneration) withLease(work func() error) error {
-	release, acquired := g.acquire()
-	if !acquired {
-		return errors.New("router generation is shutting down")
-	}
-	defer release()
-	return work()
-}
-
 func (g *routerGeneration) retire() {
 	if g == nil {
 		return
@@ -777,29 +722,6 @@ func (s *Server) usesKubernetesConfigSource() bool {
 	return cfg != nil && cfg.ConfigSource == config.ConfigSourceKubernetes
 }
 
-func logReloadRuntimeLifecycleEvent(event modelruntime.Event) {
-	if event.Status != modelruntime.TaskFailed && event.Status != modelruntime.TaskSkipped {
-		return
-	}
-
-	payload := map[string]interface{}{
-		"task":        event.Task,
-		"best_effort": event.BestEffort,
-	}
-	if event.Error != nil {
-		payload["error"] = event.Error.Error()
-	}
-	if event.Status == modelruntime.TaskSkipped {
-		logging.ComponentWarnEvent("extproc", "runtime_lifecycle_task_skipped", payload)
-		return
-	}
-	if event.BestEffort {
-		logging.ComponentWarnEvent("extproc", "runtime_lifecycle_task_failed", payload)
-		return
-	}
-	logging.ComponentErrorEvent("extproc", "runtime_lifecycle_task_failed", payload)
-}
-
 func attachRuntimeRegistry(router *OpenAIRouter, runtimeRegistry *routerruntime.Registry) {
 	if router == nil {
 		return
@@ -878,6 +800,5 @@ func (s *Server) EmbeddingRuntimeState() modelruntime.EmbeddingRuntimeState {
 func (r *OpenAIRouter) embeddingRuntimeState() modelruntime.EmbeddingRuntimeState {
 	state := modelruntime.EmbeddingState(r.Config, r.Embeddings)
 	state.AnyReady = state.AnyReady || r.serviceEmbeddings.Ready() || r.cacheEmbeddings.Ready() || r.RecipeClassifiers.HasAnyPreparedEmbeddings()
-	state.ToolsReady = r.ToolsDatabase != nil && r.ToolsDatabase.IsEnabled() && r.serviceEmbeddings.Has("")
 	return state
 }

@@ -75,7 +75,7 @@ ROUTE local_security_containment (description = "An attempt to make the assistan
   MODEL "local/private-qwen" (reasoning = false)
   PLUGIN tools {
     enabled: true
-    mode: "none"
+    policy: { mode: "none" }
   }
   PLUGIN router_replay {
     enabled: true
@@ -92,8 +92,7 @@ ROUTE omni (description = "Image-bearing requests stay on the local visual-langu
   ALGORITHM static
   PLUGIN tools {
     enabled: true
-    mode: "filtered"
-    allow_tools: ["local_search", "local_read"]
+    policy: { allow_tools: ["local_search", "local_read"], mode: "filtered" }
   }
   PLUGIN router_replay {
     enabled: true
@@ -109,8 +108,7 @@ ROUTE local_privacy_policy (description = "Private material or a request to keep
   MODEL "local/private-qwen" (reasoning = true, mode = "enabled")
   PLUGIN tools {
     enabled: true
-    mode: "filtered"
-    allow_tools: ["local_search", "local_read"]
+    policy: { allow_tools: ["local_search", "local_read"], mode: "filtered" }
   }
   PLUGIN router_replay {
     enabled: true
@@ -126,7 +124,7 @@ ROUTE cloud_frontier_reasoning (description = "Only a request that needs deep re
   MODEL "cloud/frontier-reasoning" (reasoning = true, effort = "high")
   PLUGIN tools {
     enabled: true
-    mode: "passthrough"
+    policy: { mode: "passthrough" }
   }
   PLUGIN router_replay {
     enabled: true
@@ -141,8 +139,7 @@ ROUTE local_standard (description = "Everything else stays on the local model.")
   MODEL "local/private-qwen" (reasoning = true, mode = "enabled")
   PLUGIN tools {
     enabled: true
-    mode: "filtered"
-    allow_tools: ["local_search", "local_read"]
+    policy: { allow_tools: ["local_search", "local_read"], mode: "filtered" }
   }
   PLUGIN router_replay {
     enabled: true

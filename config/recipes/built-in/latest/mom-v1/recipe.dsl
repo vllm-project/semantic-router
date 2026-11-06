@@ -700,8 +700,7 @@ RECIPE vault (description = "Keep private traffic inside the assigned deployment
     }
     PLUGIN tools {
       enabled: true
-      mode: "none"
-      strip_tool_history: true
+      policy: { mode: "none", strip_tool_history: true }
     }
     PLUGIN memory {
       enabled: false
@@ -730,8 +729,7 @@ RECIPE vault (description = "Keep private traffic inside the assigned deployment
     }
     PLUGIN tools {
       enabled: true
-      mode: "none"
-      strip_tool_history: true
+      policy: { mode: "none", strip_tool_history: true }
     }
     PLUGIN memory {
       enabled: false
@@ -759,8 +757,7 @@ RECIPE vault (description = "Keep private traffic inside the assigned deployment
     }
     PLUGIN tools {
       enabled: true
-      mode: "none"
-      strip_tool_history: true
+      policy: { mode: "none", strip_tool_history: true }
     }
     PLUGIN memory {
       enabled: false

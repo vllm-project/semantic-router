@@ -98,6 +98,3 @@ global:
         enabled: true
       tracing:
         enabled: false
-  integrations:
-    tools:
-      enabled: false

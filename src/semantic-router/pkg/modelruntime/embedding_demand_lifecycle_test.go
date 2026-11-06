@@ -13,7 +13,7 @@ import (
 )
 
 func TestNamedSharedConsumersPrepareTheirGlobalEmbedding(t *testing.T) {
-	for _, consumer := range []string{"tool_selection", "memory", "embedding API"} {
+	for _, consumer := range []string{"memory", "embedding API"} {
 		t.Run(consumer, func(t *testing.T) {
 			fake := runtimetest.New(runtimetest.Model{ID: "global", Embedding: &runtimetest.Embedder{Dimensions: []int{8}, Layers: []int{6}}})
 			server := httptest.NewServer(fake.Handler())

@@ -24,7 +24,6 @@ import type {
   RouterCoreConfig,
   RouterReplayConfig,
   SemanticCacheConfig,
-  ToolIntegrationConfig,
   VectorStoreConfig,
 } from './configPageSupport'
 
@@ -122,12 +121,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
       max_entries_per_store: 100000,
     },
   } satisfies VectorStoreConfig,
-  tools: {
-    enabled: false,
-    top_k: 3,
-    tools_db_path: 'config/tools_db.json',
-    fallback_to_empty: true,
-  } satisfies ToolIntegrationConfig,
   // The module thresholds are left out: the Router gives a module without one
   // the operating point of the model it runs. No module names a model: a
   // binding of its signal does, else the decision model answers it.
@@ -294,12 +287,6 @@ export const SECTION_META: Record<
     eyebrow: 'Stores',
     description:
       'Document ingestion, vector backend selection, and file-backed knowledge-store defaults.',
-  },
-  tools: {
-    title: 'Tool Selection',
-    eyebrow: 'Integrations',
-    description:
-      'Automatic tool ranking, similarity thresholds, and tool database lookup settings.',
   },
   prompt_guard: {
     title: 'Prompt Guard',

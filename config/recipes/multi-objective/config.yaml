@@ -851,7 +851,8 @@ recipes:
       - type: tools
         configuration:
           enabled: true
-          mode: none
+          policy:
+            mode: none
     - name: unified_frontier_fusion
       description: Use independent expert answers plus a frontier judge when disagreement resolution matters.
       priority: 350
@@ -1066,7 +1067,8 @@ recipes:
       - type: tools
         configuration:
           enabled: true
-          mode: none
+          policy:
+            mode: none
     - algorithm:
         type: static
       description: Understand private image-bearing requests on the local visual-language model.
@@ -1076,7 +1078,8 @@ recipes:
       plugins:
       - configuration:
           enabled: true
-          mode: none
+          policy:
+            mode: none
         type: tools
       priority: 250
       rules:
@@ -1107,7 +1110,8 @@ recipes:
       - type: tools
         configuration:
           enabled: true
-          mode: none
+          policy:
+            mode: none
     - name: unified_privacy_local_default
       description: Route non-sensitive traffic locally as the privacy-first default.
       priority: 100

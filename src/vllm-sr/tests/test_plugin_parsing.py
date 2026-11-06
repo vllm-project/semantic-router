@@ -68,7 +68,6 @@ class TestPluginTypeValidation:
             PluginType.REQUEST_PARAMS.value,
             PluginType.RESPONSE_GUARD.value,
             PluginType.TOOLS.value,
-            PluginType.TOOL_SELECTION.value,
             PluginType.PROMPT_CACHE.value,
             PluginType.SHADOW_DISPATCH.value,
         ]
@@ -284,42 +283,17 @@ providers:
 
 
 class TestToolsPluginConfig:
-    """Test tools plugin schema and privacy-policy round trips."""
+    """Test the tools plugin schema and its privacy-policy round trip."""
 
-    def test_strip_history_and_dynamic_retrieval_round_trip(self):
+    def test_strip_history_round_trip(self):
         privacy = ToolsPluginConfig.model_validate(
             {
                 "enabled": True,
-                "mode": "none",
-                "strip_tool_history": True,
+                "policy": {"mode": "none", "strip_tool_history": True},
             }
         )
-        assert privacy.model_dump(exclude_none=True)["strip_tool_history"] is True
-
-        retrieval = ToolsPluginConfig.model_validate(
-            {
-                "enabled": True,
-                "mode": "passthrough",
-                "strategy": "default",
-                "dynamic_retrieval": {
-                    "enabled": True,
-                    "strategy": "hybrid_history",
-                    "history_window": 8,
-                    "weights": {
-                        "semantic": 1.0,
-                        "history": 0.7,
-                        "decision_prior": 0.2,
-                        "repetition_penalty": 0.1,
-                    },
-                    "min_history_confidence": 0.4,
-                    "fallback_on_low_confidence": True,
-                },
-            }
-        )
-        dumped = retrieval.model_dump(exclude_none=True)
-        assert dumped["strategy"] == "default"
-        assert dumped["dynamic_retrieval"]["history_window"] == 8
-        assert dumped["dynamic_retrieval"]["weights"]["history"] == 0.7
+        dumped = privacy.model_dump(exclude_none=True)
+        assert dumped["policy"]["strip_tool_history"] is True
 
     def test_strip_history_requires_mode_none(self):
         with pytest.raises(
@@ -328,62 +302,18 @@ class TestToolsPluginConfig:
             ToolsPluginConfig.model_validate(
                 {
                     "enabled": True,
-                    "mode": "passthrough",
-                    "strip_tool_history": True,
+                    "policy": {"mode": "passthrough", "strip_tool_history": True},
                 }
             )
 
-    def test_hybrid_history_requires_window(self):
-        with pytest.raises(
-            PydanticValidationError, match="history_window must be at least 1"
-        ):
-            ToolsPluginConfig.model_validate(
-                {
-                    "enabled": True,
-                    "mode": "passthrough",
-                    "dynamic_retrieval": {
-                        "enabled": True,
-                        "strategy": "hybrid_history",
-                    },
-                }
-            )
-
-    def test_disabled_dynamic_retrieval_skips_inactive_constraints(self):
-        config = ToolsPluginConfig.model_validate(
-            {
-                "enabled": False,
-                "mode": "none",
-                "strip_tool_history": True,
-                "dynamic_retrieval": {
-                    "enabled": False,
-                    "strategy": "future_strategy",
-                    "history_window": -1,
-                    "min_history_confidence": 2.0,
-                    "weights": {"history": -1.0},
-                },
-            }
-        )
-        assert config.dynamic_retrieval is not None
-        assert config.dynamic_retrieval.enabled is False
-
-    def test_disabled_tools_plugin_skips_inactive_mode_constraints(self):
-        config = ToolsPluginConfig.model_validate(
-            {
-                "enabled": False,
-                "mode": "future_mode",
-                "allow_tools": ["future.tool"],
-                "strip_tool_history": True,
-            }
-        )
-        assert config.enabled is False
+    def test_policy_fields_at_the_top_are_rejected(self):
+        with pytest.raises(PydanticValidationError):
+            ToolsPluginConfig.model_validate({"enabled": True, "mode": "none"})
 
     def test_enabled_tools_plugin_rejects_unknown_mode(self):
-        with pytest.raises(PydanticValidationError, match="mode must be"):
+        with pytest.raises(PydanticValidationError):
             ToolsPluginConfig.model_validate(
-                {
-                    "enabled": True,
-                    "mode": "future_mode",
-                }
+                {"enabled": True, "policy": {"mode": "future_mode"}}
             )
 
 

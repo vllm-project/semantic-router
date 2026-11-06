@@ -29,8 +29,6 @@ export function getCuratedPluginFieldSchema(pluginType: string): FieldSchema[] {
       return getFastResponsePluginFieldSchema()
     case 'tools':
       return getToolsPluginFieldSchema()
-    case 'tool_selection':
-      return getToolSelectionPluginFieldSchema()
     case 'request_params':
       return getRequestParamsPluginFieldSchema()
     default:
@@ -243,132 +241,112 @@ function getToolsPluginFieldSchema(): FieldSchema[] {
   return [
     { key: 'enabled', label: 'Enabled', type: 'boolean' },
     {
-      key: 'mode',
-      label: 'Mode',
-      type: 'select',
-      options: ['passthrough', 'filtered', 'none'],
-      required: true,
-    },
-    {
-      key: 'semantic_selection',
-      label: 'Semantic Selection',
-      type: 'boolean',
-      description: 'Run semantic tool selection from the global tools database',
-    },
-    {
-      key: 'strip_tool_history',
-      label: 'Strip Tool History',
-      type: 'boolean',
-      description:
-        'With mode none, remove prior tool calls and results from the provider-bound body',
-    },
-    {
-      key: 'allow_tools',
-      label: 'Allow Tools',
-      type: 'string[]',
-      placeholder: 'Tool name to allow',
-    },
-    {
-      key: 'block_tools',
-      label: 'Block Tools',
-      type: 'string[]',
-      placeholder: 'Tool name to block',
-    },
-    {
-      key: 'strategy',
-      label: 'Retrieval Strategy',
-      type: 'string',
-      placeholder: 'default',
-    },
-    {
-      key: 'dynamic_retrieval',
-      label: 'Dynamic Retrieval',
+      key: 'policy',
+      label: 'Policy',
       type: 'object',
+      description: 'Allow, block or remove tools by name; runs before the selection',
       fields: [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
         {
-          key: 'strategy',
-          label: 'Strategy',
+          key: 'mode',
+          label: 'Mode',
           type: 'select',
-          options: ['semantic_only', 'hybrid_history'],
-        },
-        { key: 'history_window', label: 'History Window', type: 'number' },
-        {
-          key: 'weights',
-          label: 'Weights',
-          type: 'object',
-          fields: [
-            { key: 'semantic', label: 'Semantic', type: 'number' },
-            { key: 'history', label: 'History', type: 'number' },
-            { key: 'decision_prior', label: 'Decision Prior', type: 'number' },
-            { key: 'repetition_penalty', label: 'Repetition Penalty', type: 'number' },
-          ],
+          options: ['passthrough', 'filtered', 'none'],
         },
         {
-          key: 'min_history_confidence',
-          label: 'Minimum History Confidence',
-          type: 'number',
+          key: 'allow_tools',
+          label: 'Allow Tools',
+          type: 'string[]',
+          placeholder: 'Tool name to allow',
         },
         {
-          key: 'fallback_on_low_confidence',
-          label: 'Fallback on Low Confidence',
+          key: 'block_tools',
+          label: 'Block Tools',
+          type: 'string[]',
+          placeholder: 'Tool name to block',
+        },
+        {
+          key: 'strip_tool_history',
+          label: 'Strip Tool History',
           type: 'boolean',
+          description:
+            'With mode none, remove prior tool calls and results from the provider-bound body',
         },
       ],
     },
-  ]
-}
-
-function getToolSelectionPluginFieldSchema(): FieldSchema[] {
-  return [
-    { key: 'enabled', label: 'Enabled', type: 'boolean' },
     {
-      key: 'mode',
-      label: 'Mode',
-      type: 'select',
-      options: ['', 'add', 'filter'],
-      description: 'Add tools from a catalog or filter request-provided tools',
-    },
-    {
-      key: 'tools_db_path',
-      label: 'Tools DB Path',
-      type: 'string',
-      placeholder: 'config/tools_db.json',
-    },
-    { key: 'top_k', label: 'Top K', type: 'number', placeholder: '3' },
-    {
-      key: 'similarity_threshold',
-      label: 'Similarity Threshold',
-      type: 'number',
-      placeholder: '0.7',
-    },
-    {
-      key: 'strategy',
-      label: 'Strategy',
-      type: 'select',
-      options: ['', 'default', 'weighted', 'hybrid_history'],
-    },
-    {
-      key: 'relevance_threshold',
-      label: 'Relevance Threshold',
-      type: 'number',
-      placeholder: '0.5',
-    },
-    { key: 'preserve_count', label: 'Preserve Count', type: 'number', placeholder: '0' },
-    {
-      key: 'sticky',
-      label: 'Session-Scoped Sticky Selection',
+      key: 'select',
+      label: 'Select',
       type: 'object',
+      description:
+        'The decision model chooses the tools the request needs, among its own (filter) or a catalog (add)',
       fields: [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        { key: 'max_tools', label: 'Max Tools', type: 'number', placeholder: '16' },
         {
-          key: 'max_new_tools_per_turn',
-          label: 'Max New Tools Per Turn',
-          type: 'number',
-          placeholder: '2',
+          key: 'mode',
+          label: 'Mode',
+          type: 'select',
+          options: ['filter', 'add'],
+          required: true,
         },
-        { key: 'pin_called_tools', label: 'Pin Called Tools', type: 'boolean' },
+        {
+          key: 'tools_db_path',
+          label: 'Tool Catalog',
+          type: 'string',
+          placeholder: 'config/tools_db.json',
+          description: 'Add mode: the catalog the decision model adds tools from',
+        },
+        {
+          key: 'match',
+          label: 'Match',
+          type: 'object',
+          fields: [
+            {
+              key: 'judge',
+              label: 'Judge',
+              type: 'object',
+              fields: [
+                { key: 'preset', label: 'Preset', type: 'string', placeholder: 'tool_rank' },
+                { key: 'deployment', label: 'Deployment', type: 'string' },
+                { key: 'top_k', label: 'Top K', type: 'number', placeholder: '3' },
+                { key: 'min_ratio', label: 'Min Ratio', type: 'number', placeholder: '0.1' },
+                { key: 'min_score', label: 'Min Score', type: 'number' },
+              ],
+            },
+          ],
+        },
+        {
+          key: 'need_threshold',
+          label: 'Need Threshold',
+          type: 'number',
+          placeholder: '0.5',
+          description: 'Below this P(tool_need), no tools are kept or added',
+        },
+        {
+          key: 'preserve_count',
+          label: 'Preserve Count',
+          type: 'number',
+          description: "Filter mode: the request's first tools are always kept",
+        },
+        {
+          key: 'on_error',
+          label: 'On Error',
+          type: 'select',
+          options: ['keep', 'strip', 'skip', 'fail'],
+          description: 'Filter: keep, strip or fail; add: skip or fail',
+        },
+        {
+          key: 'on_overflow',
+          label: 'On Overflow',
+          type: 'select',
+          options: ['keep', 'reject'],
+          description: 'Filter mode, more than 255 tools',
+        },
+        {
+          key: 'input',
+          label: 'Input',
+          type: 'object',
+          fields: [{ key: 'history', label: 'Read Earlier User Turns', type: 'boolean' }],
+        },
+        { key: 'timeout_ms', label: 'Timeout (ms)', type: 'number', placeholder: '1000' },
       ],
     },
   ]

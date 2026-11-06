@@ -309,8 +309,6 @@ jobs:
                 backend_type: "memory"
                 embedding_model: "mmbert"
                 max_entries: 100
-              tools:
-                enabled: false
               api:
                 batch_classification:
                   max_batch_size: 50

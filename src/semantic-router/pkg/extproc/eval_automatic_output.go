@@ -109,14 +109,11 @@ func automaticEvalRequestLimitation(request *llmprotocol.Request, decision *conf
 		return "memory enrichment requires execution"
 	}
 	tools := decision.GetToolsConfig()
-	if tools != nil && tools.Enabled && tools.EffectiveMode() == config.ToolsPluginModeFiltered {
+	if tools.ActivePolicy().EffectiveMode() == config.ToolsPolicyModeFiltered {
 		return "configured tool filtering requires execution"
 	}
-	if request.ToolChoice.Mode == llmprotocol.ToolChoiceAuto && (tools == nil || !tools.Enabled || tools.EffectiveMode() != config.ToolsPluginModeNone) {
-		selectionPlugin := decision.GetToolSelectionConfig()
-		if tools.SelectionEnabled() || selectionPlugin != nil && selectionPlugin.Enabled {
-			return "semantic tool selection requires execution"
-		}
+	if tools.ActiveSelect() != nil && leavesToolChoiceToModel(request) {
+		return "tool selection requires execution"
 	}
 	if compression := decision.GetContextCompressionConfig(); compression != nil && compression.Enabled {
 		if compression.Targets != nil && compression.EffectiveTargetMode(compression.Targets.History) != config.ContextCompressionTargetPreserve && len(request.Messages) > 1 {

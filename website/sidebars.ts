@@ -192,7 +192,6 @@ const sidebars: SidebarsConfig = {
                 'tutorials/plugin/masking',
                 'tutorials/plugin/request-params',
                 'tutorials/plugin/system-prompt',
-                'tutorials/plugin/tool-selection',
                 'tutorials/plugin/tools',
               ],
             },

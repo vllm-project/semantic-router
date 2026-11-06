@@ -31,7 +31,7 @@ translation:
 | [审议算法](./deliberation-algorithms) | 2026-06-17 | 提案 | 感知依据的多模型综合。 |
 | [智能体记忆](./agentic-memory) | 2026-02-09 | 概念验证 | 跨会话记忆检索与持久化。 |
 | [OpenAI RAG 集成](./agentic-rag) | 2026-01-23 | 已实现 | 通过 OpenAI Files 和 Vector Stores 检索。 |
-| [高级工具过滤](./advanced-tool-filtering) | 2026-01-14 | 已实现 | 对工具候选做可解释的过滤和重排序。 |
+| [高级工具过滤](./advanced-tool-filtering) | 2026-01-14 | 已取代 | 对工具候选做可解释的过滤和重排序。 |
 
 ## 安全与韧性 {#safety--resilience}
 

@@ -190,36 +190,8 @@ func (r *OpenAIRouter) extractContextFromMCPResult(result interface{}) (string, 
 	return "", fmt.Errorf("unable to extract context from MCP result: unsupported format")
 }
 
-// MCPToolInvoker defines the minimal interface required to invoke an MCP tool.
-// This allows the RAG plugin to work with any ToolsDatabase implementation
-// that supports MCP tool invocation, without requiring a specific concrete type.
-// When ToolsDatabase is extended to support MCP, it should implement this interface.
-type MCPToolInvoker interface {
-	InvokeMCPTool(ctx context.Context, serverName string, toolName string, args map[string]interface{}) (interface{}, error)
-}
-
-// invokeMCPTool invokes an MCP tool using the router's ToolsDatabase if it supports MCPToolInvoker.
-// This design allows the MCP backend to work when a compatible ToolsDatabase is configured,
-// while gracefully handling cases where MCP support is not available.
-//
-// Note: Currently, ToolsDatabase does not implement MCPToolInvoker. When MCP support is added
-// to ToolsDatabase, it should implement this interface and this function will automatically work.
-func (r *OpenAIRouter) invokeMCPTool(ctx context.Context, serverName string, toolName string, args map[string]interface{}) (interface{}, error) {
-	// Ensure a tools database is configured
-	if r.ToolsDatabase == nil {
-		return nil, fmt.Errorf("MCP tool invocation not available: ToolsDatabase not initialized (server: %s, tool: %s)", serverName, toolName)
-	}
-
-	// Try to use ToolsDatabase as MCPToolInvoker if it implements the interface
-	// This will work automatically when ToolsDatabase is extended to support MCP
-	var invoker MCPToolInvoker
-	var ok bool
-	// Use a type assertion on the interface{} to check if ToolsDatabase implements MCPToolInvoker
-	if invoker, ok = interface{}(r.ToolsDatabase).(MCPToolInvoker); ok {
-		return invoker.InvokeMCPTool(ctx, serverName, toolName, args)
-	}
-
-	// ToolsDatabase is present but does not support MCP invocation
-	// This is expected until MCP support is added to ToolsDatabase
-	return nil, fmt.Errorf("MCP tool invocation not supported: ToolsDatabase does not implement MCPToolInvoker (server: %s, tool: %s). MCP support needs to be added to ToolsDatabase", serverName, toolName)
+// invokeMCPTool would call the MCP tool a RAG mcp backend names. No Router
+// component invokes MCP tools, so the backend always fails with this error.
+func (r *OpenAIRouter) invokeMCPTool(_ context.Context, serverName string, toolName string, _ map[string]interface{}) (interface{}, error) {
+	return nil, fmt.Errorf("MCP tool invocation is not supported (server: %s, tool: %s)", serverName, toolName)
 }

@@ -67,8 +67,6 @@ func TestDecisionPluginActivationMatchesEveryRuntimeGetter(t *testing.T) {
 					want = decision.GetFastResponseConfig() != nil
 				case *ToolsPluginConfig:
 					want = decision.GetToolsConfig().Enabled
-				case *ToolSelectionPluginConfig:
-					want = decision.GetToolSelectionConfig().Enabled
 				case *RequestParamsPluginConfig:
 					want = decision.GetRequestParamsConfig() != nil
 				case *ContextCompressionPluginConfig:

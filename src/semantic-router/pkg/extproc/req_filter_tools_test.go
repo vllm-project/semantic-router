@@ -3,639 +3,390 @@ package extproc
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"os"
-	"path/filepath"
+	"fmt"
+	"net/http/httptest"
+	"reflect"
+	"strings"
+	"sync"
+	"testing"
+	"time"
 
-	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	"github.com/openai/openai-go"
-	"github.com/openai/openai-go/packages/param"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving/servingtest"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/runtimetest"
 )
 
-func testToolsDecision(mode string, semanticSelection *bool, allowTools, blockTools []string) *config.Decision {
-	payload, err := config.NewStructuredPayload(config.ToolsPluginConfig{
-		Enabled:           true,
-		Mode:              mode,
-		SemanticSelection: semanticSelection,
-		AllowTools:        allowTools,
-		BlockTools:        blockTools,
-	})
-	Expect(err).NotTo(HaveOccurred())
-	return &config.Decision{
-		Name: "test_tools_route",
-		Plugins: []config.DecisionPlugin{
-			{Type: config.DecisionPluginTools, Configuration: payload},
-		},
+// toolsJudge is a fake decision model: it answers tool_need with need and
+// scores each tool_rank option by choose, and records every call.
+type toolsJudge struct {
+	mu     sync.Mutex
+	need   float64
+	choose map[string]float64
+	err    error
+	calls  []modelservice.Request
+}
+
+func (j *toolsJudge) Decide(_ context.Context, _ string, request modelservice.Request) (modelservice.Response, error) {
+	j.mu.Lock()
+	j.calls = append(j.calls, request)
+	j.mu.Unlock()
+	if j.err != nil {
+		return modelservice.Response{}, j.err
+	}
+	answers := make(map[string]modelservice.Answer, len(request.Questions))
+	for _, question := range request.Questions {
+		answer := modelservice.Answer{Type: question.Type, Noul: j.need, Probabilities: map[string]float64{}}
+		total := 0.0
+		for _, choice := range question.Choices {
+			total += j.choose[choice.Key]
+		}
+		for _, choice := range question.Choices {
+			answer.Probabilities[choice.Key] = 1 / float64(len(question.Choices))
+			if total > 0 {
+				answer.Probabilities[choice.Key] = j.choose[choice.Key] / total
+			}
+			if answer.Choice == "" || answer.Probabilities[choice.Key] > answer.Probabilities[answer.Choice] {
+				answer.Choice = choice.Key
+			}
+		}
+		answers[question.ID] = answer
+	}
+	return modelservice.Response{Answers: answers}, nil
+}
+
+func (j *toolsJudge) asked() []modelservice.Request {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	return append([]modelservice.Request(nil), j.calls...)
+}
+
+func toolsRouter(judge modelservice.Decider) *OpenAIRouter {
+	cfg := &config.RouterConfig{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{
+		config.DefaultDecisionDeployment: {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/vela3-fast"},
+	}
+	return &OpenAIRouter{
+		Config:          cfg,
+		decisionDecider: judge,
+		decisionCards:   map[string]modelservice.ModelCard{config.DefaultDecisionDeployment: {ID: "judge", Surfaces: []string{"decisions"}}},
 	}
 }
 
-func toolsBoolPtr(v bool) *bool {
-	return &v
+func toolsContext(plugin config.ToolsPluginConfig) *RequestContext {
+	decision := &config.Decision{Name: "agent", Plugins: []config.DecisionPlugin{
+		{Type: config.DecisionPluginTools, Configuration: config.MustStructuredPayload(plugin)},
+	}}
+	return &RequestContext{RequestID: "tools-1", Headers: map[string]string{}, VSRSelectedDecision: decision, VSRSelectedDecisionName: decision.Name}
 }
 
-var _ = Describe("Tool Selection Request Filter", Label("model-artifacts"), func() {
-	var (
-		tempDir     string
-		toolsDBPath string
-		router      *OpenAIRouter
-		cfg         *config.RouterConfig
-		testToolsDB []tools.ToolEntry
-		embeddings  *embedding.Set
-	)
-
-	createToolsRouter := func(cfg *config.RouterConfig) (*OpenAIRouter, error) {
-		provider, err := toolsEmbeddingProvider(cfg, embeddings)
-		if err != nil {
-			return nil, err
-		}
-		prepared, err := createTestRouterWithToolsProvider(cfg, provider)
-		if err != nil {
-			return nil, err
-		}
-		GinkgoT().Cleanup(func() {
-			Expect(errors.Join(
-				prepared.ResponseAPIFilter.Close(),
-				prepared.Cache.Close(),
-				prepared.Classifier.Close(),
-			)).To(Succeed())
-		})
-		return prepared, nil
+func toolsRequest(names ...string) *llmprotocol.Request {
+	request := &llmprotocol.Request{Messages: []llmprotocol.Message{
+		{Role: llmprotocol.RoleUser, Content: textBlocks("what did we decide last time?")},
+		{Role: llmprotocol.RoleAssistant, Content: textBlocks("the release moved")},
+		{Role: llmprotocol.RoleUser, Content: textBlocks("find the onboarding guide")},
+	}}
+	for _, name := range names {
+		request.Tools = append(request.Tools, llmprotocol.Tool{Name: name, Description: "Tool " + name, InputSchema: json.RawMessage(`{"type":"object"}`)})
 	}
+	return request
+}
 
-	BeforeEach(func() {
-		model := "qwen3"
-		modelPath := resolveExtprocTestPath("../../../../models/mom-embedding-pro")
-		if !extprocTestModelArtifactsAvailable(modelPath) {
-			model = "mmbert"
-			modelPath = resolveExtprocTestPath("../../../../models/Vela-1.0-Encoder-307M-Embedding")
-			if !extprocTestModelArtifactsAvailable(modelPath) {
-				Skip("Skipping tool selection tests: embedding models are not available")
-			}
+func toolNames(tools []llmprotocol.Tool) []string {
+	names := make([]string, len(tools))
+	for index, tool := range tools {
+		names[index] = tool.Name
+	}
+	return names
+}
+
+func toolsSelect(mode string, edit func(*config.ToolsSelectConfig)) config.ToolsPluginConfig {
+	spec := &config.ToolsSelectConfig{Mode: mode}
+	if edit != nil {
+		edit(spec)
+	}
+	return config.ToolsPluginConfig{Enabled: true, Select: spec}
+}
+
+func applyTools(t *testing.T, router *OpenAIRouter, plugin config.ToolsPluginConfig, request *llmprotocol.Request) (*RequestContext, *ext_proc.ProcessingResponse) {
+	t.Helper()
+	ctx := toolsContext(plugin)
+	ctx.SemanticRequest = request
+	response := &ext_proc.ProcessingResponse{Response: &ext_proc.ProcessingResponse_RequestBody{RequestBody: &ext_proc.BodyResponse{Response: &ext_proc.CommonResponse{}}}}
+	router.applyToolsPlugin(request, response, ctx)
+	return ctx, response
+}
+
+// Filter mode keeps the tools the judge keeps, in the request's own order:
+// tool_rank's default keeps the 3 best at 0.1 of the best or more.
+func TestToolsSelectFilterKeepsTheRequestOrder(t *testing.T) {
+	judge := &toolsJudge{need: 0.9, choose: map[string]float64{"c": 0.5, "a": 0.3, "d": 0.15, "b": 0.05, "e": 0.0}}
+	request := toolsRequest("a", "b", "c", "d", "e")
+	request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
+	applyTools(t, toolsRouter(judge), toolsSelect(config.ToolsSelectModeFilter, nil), request)
+	if got := toolNames(request.Tools); !reflect.DeepEqual(got, []string{"a", "c", "d"}) {
+		t.Fatalf("kept %v, want the three best in the request's order", got)
+	}
+	if request.ToolChoice.Mode != llmprotocol.ToolChoiceAuto {
+		t.Fatal("a request that keeps tools keeps its tool_choice")
+	}
+}
+
+// Add mode appends the catalog's chosen tools after the request's own, best
+// first, never one the request carries or the policy refuses.
+func TestToolsSelectAddAppendsCatalogTools(t *testing.T) {
+	judge := &toolsJudge{need: 0.9, choose: map[string]float64{"w": 0.6, "y": 0.3, "z": 0.02}}
+	router := toolsRouter(judge)
+	catalog := []config.CatalogTool{}
+	for _, name := range []string{"x", "y", "z", "w", "admin.delete"} {
+		catalog = append(catalog, config.CatalogTool{Tool: llmprotocol.Tool{Name: name, InputSchema: json.RawMessage(`{"type":"object"}`)}, Description: "Use " + name})
+	}
+	router.toolCatalogs = map[string]*toolCatalog{"tools.json": {tools: catalog, loadedAt: time.Now()}}
+	plugin := toolsSelect(config.ToolsSelectModeAdd, func(s *config.ToolsSelectConfig) { s.ToolsDBPath = "tools.json" })
+	plugin.Policy = &config.ToolsPolicyConfig{Mode: config.ToolsPolicyModeFiltered, BlockTools: []string{"admin.delete"}}
+	request := toolsRequest("x")
+	applyTools(t, router, plugin, request)
+	if got := toolNames(request.Tools); !reflect.DeepEqual(got, []string{"x", "w", "y"}) {
+		t.Fatalf("tools %v, want the request's x, then w and y best first", got)
+	}
+	rank := judge.asked()[0]
+	if len(judge.asked()) != 2 || rank.Questions[0].ID == toolNeedQuestionID {
+		rank = judge.asked()[1]
+	}
+	var options []string
+	for _, choice := range rank.Questions[0].Choices {
+		options = append(options, choice.Key+"="+choice.Description)
+	}
+	if !reflect.DeepEqual(options, []string{"y=Use y", "z=Use z", "w=Use w"}) {
+		t.Fatalf("tool_rank options %v: the catalog's tools the request lacks and the policy allows", options)
+	}
+}
+
+// Below need_threshold the judge's tools are neither kept nor added: filter
+// mode keeps only the request's first preserve_count tools.
+func TestToolsSelectNeedGate(t *testing.T) {
+	choose := map[string]float64{"c": 0.9, "a": 0.1}
+	for name, test := range map[string]struct {
+		preserve int
+		want     []string
+	}{
+		"preserve none": {0, []string{}},
+		"preserve one":  {1, []string{"a"}},
+	} {
+		request := toolsRequest("a", "b", "c")
+		request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
+		applyTools(t, toolsRouter(&toolsJudge{need: 0.2, choose: choose}), toolsSelect(config.ToolsSelectModeFilter, func(s *config.ToolsSelectConfig) { s.PreserveCount = test.preserve }), request)
+		if got := toolNames(request.Tools); !reflect.DeepEqual(got, test.want) {
+			t.Errorf("%s: tools %v, want %v", name, got, test.want)
 		}
-
-		tempDir = GinkgoT().TempDir()
-
-		toolsDBPath = filepath.Join(tempDir, "tools.json")
-
-		// Create test tools with different categories and tags
-		testToolsDB = []tools.ToolEntry{
-			{
-				Tool: openai.ChatCompletionToolParam{
-					Type: "function",
-					Function: openai.FunctionDefinitionParam{
-						Name:        "get_weather",
-						Description: param.NewOpt("Get current weather information for a location"),
-					},
-				},
-				Description: "Get current weather information, temperature, conditions, forecast for any location, city, or place",
-				Category:    "weather",
-				Tags:        []string{"weather", "temperature", "forecast"},
-			},
-			{
-				Tool: openai.ChatCompletionToolParam{
-					Type: "function",
-					Function: openai.FunctionDefinitionParam{
-						Name:        "search_web",
-						Description: param.NewOpt("Search the web for information"),
-					},
-				},
-				Description: "Search the internet, web search, find information online, browse web content",
-				Category:    "search",
-				Tags:        []string{"search", "web", "internet"},
-			},
-			{
-				Tool: openai.ChatCompletionToolParam{
-					Type: "function",
-					Function: openai.FunctionDefinitionParam{
-						Name:        "calculate",
-						Description: param.NewOpt("Perform mathematical calculations"),
-					},
-				},
-				Description: "Calculate mathematical expressions, solve math problems, arithmetic operations",
-				Category:    "math",
-				Tags:        []string{"math", "calculation", "arithmetic"},
-			},
-			{
-				Tool: openai.ChatCompletionToolParam{
-					Type: "function",
-					Function: openai.FunctionDefinitionParam{
-						Name:        "send_email",
-						Description: param.NewOpt("Send an email message"),
-					},
-				},
-				Description: "Send email messages, email communication, contact people via email",
-				Category:    "communication",
-				Tags:        []string{"email", "send", "communication"},
-			},
+		if len(request.Tools) == 0 && request.ToolChoice.Mode != "" {
+			t.Errorf("%s: a request left without tools drops its tool_choice", name)
 		}
+	}
+	threshold := 0.1
+	request := toolsRequest("a", "b", "c")
+	applyTools(t, toolsRouter(&toolsJudge{need: 0.2, choose: choose}), toolsSelect(config.ToolsSelectModeFilter, func(s *config.ToolsSelectConfig) { s.NeedThreshold = &threshold }), request)
+	if got := toolNames(request.Tools); !reflect.DeepEqual(got, []string{"a", "c"}) {
+		t.Fatalf("need_threshold 0.1 passes P(need) 0.2: tools %v", got)
+	}
+}
 
-		// Write tools database to file
-		data, err := json.Marshal(testToolsDB)
-		Expect(err).NotTo(HaveOccurred())
-		err = os.WriteFile(toolsDBPath, data, 0o644)
-		Expect(err).NotTo(HaveOccurred())
+// preserve_count keeps the request's first tools beside the judge's.
+func TestToolsSelectPreserveCount(t *testing.T) {
+	request := toolsRequest("a", "b", "c", "d")
+	judge := &toolsJudge{need: 0.9, choose: map[string]float64{"d": 0.9}}
+	applyTools(t, toolsRouter(judge), toolsSelect(config.ToolsSelectModeFilter, func(s *config.ToolsSelectConfig) { s.PreserveCount = 2 }), request)
+	if got := toolNames(request.Tools); !reflect.DeepEqual(got, []string{"a", "b", "d"}) {
+		t.Fatalf("tools %v", got)
+	}
+}
 
-		// Create base config
-		cfg = CreateTestConfig()
-		cfg.EmbeddingConfig.ModelType = model
-
-		// Tools borrow a real generation-owned provider, just as router assembly does.
-		prepareCfg := &config.RouterConfig{}
-		prepareCfg.EmbeddingModels = cfg.EmbeddingModels
-		prepareCfg.Tools.Enabled = true
-		prepareCfg.ModelBindings = map[string]config.ModelBinding{
-			"embedding": {Deployment: "tools-test", Contract: "embedding.v1"},
+// on_error decides what a failed call does, per mode; fail refuses the
+// request with tool_selection_failed.
+func TestToolsSelectOnError(t *testing.T) {
+	for name, test := range map[string]struct {
+		mode, onError string
+		want          []string
+		refused       bool
+	}{
+		"filter keeps by default": {config.ToolsSelectModeFilter, "", []string{"a", "b"}, false},
+		"filter strips":           {config.ToolsSelectModeFilter, config.ToolsSelectOnErrorStrip, []string{}, false},
+		"filter fails":            {config.ToolsSelectModeFilter, config.ToolsSelectOnErrorFail, []string{"a", "b"}, true},
+		"add skips by default":    {config.ToolsSelectModeAdd, "", []string{"a", "b"}, false},
+		"add fails":               {config.ToolsSelectModeAdd, config.ToolsSelectOnErrorFail, []string{"a", "b"}, true},
+	} {
+		router := toolsRouter(&toolsJudge{err: modelservice.ErrOverloaded})
+		router.toolCatalogs = map[string]*toolCatalog{"tools.json": {tools: []config.CatalogTool{{Tool: llmprotocol.Tool{Name: "c"}}, {Tool: llmprotocol.Tool{Name: "d"}}}}}
+		request := toolsRequest("a", "b")
+		ctx, response := applyTools(t, router, toolsSelect(test.mode, func(s *config.ToolsSelectConfig) {
+			s.OnError = test.onError
+			if test.mode == config.ToolsSelectModeAdd {
+				s.ToolsDBPath = "tools.json"
+			}
+		}), request)
+		if got := toolNames(request.Tools); !reflect.DeepEqual(got, test.want) {
+			t.Errorf("%s: tools %v, want %v", name, got, test.want)
 		}
-		prepareCfg.ModelDeployments = map[string]config.ModelDeployment{
-			"tools-test": {Provider: config.ModelRuntimeProvider, Device: "cpu", Artifact: modelPath},
+		immediate := response.GetImmediateResponse()
+		if test.refused != (immediate != nil) {
+			t.Fatalf("%s: refused = %v", name, immediate != nil)
 		}
-		embeddings, err = modelruntime.PrepareOwnedEmbeddings(context.Background(), prepareCfg, servingtest.Managed(GinkgoT()))
-		Expect(err).NotTo(HaveOccurred())
-		GinkgoT().Cleanup(func() { Expect(embeddings.Close()).To(Succeed()) })
-	})
-
-	Describe("Tools Database Loading", func() {
-		Context("with valid tools database path", func() {
-			It("should load tools from toolsDBPath successfully", func() {
-				cfg.Tools.Enabled = true
-				cfg.Tools.ToolsDBPath = toolsDBPath
-				cfg.Tools.TopK = 3
-				cfg.Tools.SimilarityThreshold = &[]float32{0.2}[0]
-
-				var err error
-				router, err = createToolsRouter(cfg)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(router.ToolsDatabase).NotTo(BeNil())
-				Expect(router.ToolsDatabase.IsEnabled()).To(BeTrue())
-				Expect(router.ToolsDatabase.GetToolCount()).To(Equal(4))
-
-				allTools := router.ToolsDatabase.GetAllTools()
-				Expect(allTools).To(HaveLen(4))
-				// Check that all tools are loaded (order may vary due to concurrent processing)
-				toolNames := make([]string, len(allTools))
-				for i, tool := range allTools {
-					toolNames[i] = tool.Function.Name
-				}
-				Expect(toolNames).To(ContainElement("get_weather"))
-				Expect(toolNames).To(ContainElement("search_web"))
-				Expect(toolNames).To(ContainElement("calculate"))
-				Expect(toolNames).To(ContainElement("send_email"))
-			})
-		})
-
-		Context("with invalid tools database path", func() {
-			It("should return error when file does not exist", func() {
-				cfg.Tools.Enabled = true
-				cfg.Tools.ToolsDBPath = "/nonexistent/tools.json"
-				cfg.Tools.TopK = 3
-
-				_, err := createToolsRouter(cfg)
-				Expect(err).To(HaveOccurred())
-			})
-
-			It("should return error with malformed JSON", func() {
-				badJSONPath := filepath.Join(tempDir, "bad.json")
-				err := os.WriteFile(badJSONPath, []byte("{invalid json"), 0o644)
-				Expect(err).NotTo(HaveOccurred())
-
-				cfg.Tools.Enabled = true
-				cfg.Tools.ToolsDBPath = badJSONPath
-				cfg.Tools.TopK = 3
-
-				_, err = createToolsRouter(cfg)
-				Expect(err).To(HaveOccurred())
-			})
-		})
-
-		Context("when tools database is disabled", func() {
-			It("should not load tools", func() {
-				cfg.Tools.Enabled = false
-				cfg.Tools.ToolsDBPath = toolsDBPath
-
-				var err error
-				router, err = createToolsRouter(cfg)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(router.ToolsDatabase).NotTo(BeNil())
-				Expect(router.ToolsDatabase.IsEnabled()).To(BeFalse())
-				Expect(router.ToolsDatabase.GetToolCount()).To(Equal(0))
-			})
-		})
-	})
-
-	Describe("Top-K Tool Selection", func() {
-		BeforeEach(func() {
-			cfg.Tools.Enabled = true
-			cfg.Tools.ToolsDBPath = toolsDBPath
-			cfg.Tools.SimilarityThreshold = &[]float32{0.2}[0]
-
-			var err error
-			router, err = createToolsRouter(cfg)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("should select top-1 tool when topK=1", func() {
-			cfg.Tools.TopK = 1
-
-			selectedTools, err := router.ToolsDatabase.FindSimilarTools("What's the weather like?", 1)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(selectedTools).To(HaveLen(1))
-			Expect(selectedTools[0].Function.Name).To(Equal("get_weather"))
-		})
-
-		It("should select top-2 tools when topK=2", func() {
-			cfg.Tools.TopK = 2
-
-			selectedTools, err := router.ToolsDatabase.FindSimilarTools("search weather forecast", 2)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(selectedTools)).To(BeNumerically("<=", 2))
-			Expect(len(selectedTools)).To(BeNumerically(">", 0))
-		})
-
-		It("should select top-3 tools when topK=3", func() {
-			cfg.Tools.TopK = 3
-
-			selectedTools, err := router.ToolsDatabase.FindSimilarTools("calculate math and search", 3)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(selectedTools)).To(BeNumerically("<=", 3))
-			Expect(len(selectedTools)).To(BeNumerically(">", 0))
-		})
-
-		It("should limit results to available tools when topK > tool count", func() {
-			cfg.Tools.TopK = 10
-
-			selectedTools, err := router.ToolsDatabase.FindSimilarTools("weather", 10)
-			Expect(err).NotTo(HaveOccurred())
-			// Should return at most the number of tools that meet threshold
-			Expect(len(selectedTools)).To(BeNumerically("<=", 4))
-		})
-
-		It("should return most relevant tools first", func() {
-			cfg.Tools.TopK = 3
-
-			selectedTools, err := router.ToolsDatabase.FindSimilarTools("weather forecast temperature", 3)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(selectedTools)).To(BeNumerically(">", 0))
-			// First tool should be weather-related
-			Expect(selectedTools[0].Function.Name).To(Equal("get_weather"))
-		})
-	})
-
-	Describe("Similarity Threshold Filtering", func() {
-		BeforeEach(func() {
-			cfg.Tools.Enabled = true
-			cfg.Tools.ToolsDBPath = toolsDBPath
-			cfg.Tools.TopK = 5
-
-			var err error
-			router, err = createToolsRouter(cfg)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("should filter out tools below threshold with threshold=0.7", func() {
-			cfg.Tools.SimilarityThreshold = &[]float32{0.7}[0]
-
-			// Recreate router with new threshold
-			var err error
-			router, err = createToolsRouter(cfg)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Use a very specific query to test high threshold
-			selectedTools, err := router.ToolsDatabase.FindSimilarTools("weather", 5)
-			Expect(err).NotTo(HaveOccurred())
-			// With high threshold, may get fewer results
-			for _, tool := range selectedTools {
-				// All returned tools should be relevant
-				Expect(tool.Function.Name).NotTo(BeEmpty())
-			}
-		})
-
-		It("should include more tools with lower threshold=0.2", func() {
-			cfg.Tools.SimilarityThreshold = &[]float32{0.2}[0]
-
-			// Recreate router with new threshold
-			var err error
-			router, err = createToolsRouter(cfg)
-			Expect(err).NotTo(HaveOccurred())
-
-			selectedTools, err := router.ToolsDatabase.FindSimilarTools("weather", 5)
-			Expect(err).NotTo(HaveOccurred())
-			// Lower threshold should return more tools
-			Expect(len(selectedTools)).To(BeNumerically(">=", 1))
-		})
-
-		It("should return empty list when no tools meet high threshold", func() {
-			cfg.Tools.SimilarityThreshold = &[]float32{0.99}[0]
-
-			// Recreate router with new threshold
-			var err error
-			router, err = createToolsRouter(cfg)
-			Expect(err).NotTo(HaveOccurred())
-
-			selectedTools, err := router.ToolsDatabase.FindSimilarTools("xyzabc123", 5)
-			Expect(err).NotTo(HaveOccurred())
-			// Very high threshold with nonsense query should return nothing
-			Expect(selectedTools).To(BeEmpty())
-		})
-
-		It("should respect both topK and threshold constraints", func() {
-			cfg.Tools.SimilarityThreshold = &[]float32{0.5}[0]
-			cfg.Tools.TopK = 2
-
-			// Recreate router with new threshold
-			var err error
-			router, err = createToolsRouter(cfg)
-			Expect(err).NotTo(HaveOccurred())
-
-			selectedTools, err := router.ToolsDatabase.FindSimilarTools("weather forecast", 2)
-			Expect(err).NotTo(HaveOccurred())
-			// Should return at most 2 tools that meet the threshold
-			Expect(len(selectedTools)).To(BeNumerically("<=", 2))
-		})
-	})
-
-	Describe("Fallback Strategy", func() {
-		var (
-			request  *llmprotocol.Request
-			response *ext_proc.ProcessingResponse
-			ctx      *RequestContext
-		)
-
-		BeforeEach(func() {
-			cfg.Tools.Enabled = true
-			cfg.Tools.ToolsDBPath = toolsDBPath
-			cfg.Tools.TopK = 3
-			cfg.Tools.SimilarityThreshold = &[]float32{0.2}[0]
-
-			var err error
-			router, err = createToolsRouter(cfg)
-			Expect(err).NotTo(HaveOccurred())
-
-			request = testNeutralRequest("test-model", "What's the weather?")
-			request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
-
-			response = &ext_proc.ProcessingResponse{
-				Response: &ext_proc.ProcessingResponse_RequestBody{
-					RequestBody: &ext_proc.BodyResponse{
-						Response: &ext_proc.CommonResponse{
-							Status: ext_proc.CommonResponse_CONTINUE,
-							HeaderMutation: &ext_proc.HeaderMutation{
-								SetHeaders: []*core.HeaderValueOption{},
-							},
-						},
-					},
-				},
-			}
-
-			ctx = &RequestContext{
-				ExpectStreamingResponse: false,
-				VSRSelectedDecision:     testToolsDecision(config.ToolsPluginModePassthrough, toolsBoolPtr(true), nil, nil),
-			}
-		})
-
-		Context("with fallbackToEmpty=true", func() {
-			It("should return empty tools when no tools meet threshold", func() {
-				cfg.Tools.FallbackToEmpty = true
-				cfg.Tools.SimilarityThreshold = &[]float32{0.99}[0]
-
-				testRouter, err := createToolsRouter(cfg)
-				Expect(err).NotTo(HaveOccurred())
-
-				err = testRouter.handleToolSelection(request, "xyzabc nonsense", []string{}, &response, ctx)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(request.Tools).To(BeEmpty())
-				Expect(request.ToolChoice.Mode).To(Equal(llmprotocol.ToolChoiceAuto))
-			})
-
-			It("should return empty tools on database error", func() {
-				cfg.Tools.FallbackToEmpty = true
-				// Corrupt the database by making it disabled
-				router.ToolsDatabase = tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
-					Enabled:             false,
-					SimilarityThreshold: 0.2,
-				})
-
-				err := router.handleToolSelection(request, "weather", []string{}, &response, ctx)
-				Expect(err).NotTo(HaveOccurred())
-				// Should handle gracefully and return empty
-			})
-		})
-
-		Context("with fallbackToEmpty=false", func() {
-			It("should keep original tools when no tools meet threshold", func() {
-				cfg.Tools.FallbackToEmpty = false
-				cfg.Tools.SimilarityThreshold = &[]float32{0.99}[0]
-
-				testRouter, err := createToolsRouter(cfg)
-				Expect(err).NotTo(HaveOccurred())
-
-				// Set initial tools
-				request.Tools = []llmprotocol.Tool{{Name: "original_tool", InputSchema: []byte(`{"type":"object"}`)}}
-
-				err = testRouter.handleToolSelection(request, "xyzabc nonsense", []string{}, &response, ctx)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(request.Tools).NotTo(BeNil())
-			})
-		})
-	})
-
-	Describe("Tool choice normalization", func() {
-		It("clears auto tool_choice when no tools remain", func() {
-			request := testNeutralRequest("test-model", "你好")
-			request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
-
-			changed := clearSemanticToolChoiceWhenNoTools(request)
-
-			Expect(changed).To(BeTrue())
-			Expect(request.ToolChoice).To(Equal(llmprotocol.ToolChoice{}))
-		})
-
-		It("keeps tool_choice when tools are present", func() {
-			request := testNeutralRequest("test-model", "天气如何")
-			request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
-			request.Tools = []llmprotocol.Tool{{Name: "lookup_weather", InputSchema: []byte(`{"type":"object"}`)}}
-
-			changed := clearSemanticToolChoiceWhenNoTools(request)
-
-			Expect(changed).To(BeFalse())
-			Expect(request.ToolChoice.Mode).To(Equal(llmprotocol.ToolChoiceAuto))
-		})
-	})
-
-	Describe("Tool Selection Integration", func() {
-		BeforeEach(func() {
-			cfg.Tools.Enabled = true
-			cfg.Tools.ToolsDBPath = toolsDBPath
-			cfg.Tools.TopK = 3
-			cfg.Tools.SimilarityThreshold = &[]float32{0.2}[0]
-			cfg.Tools.FallbackToEmpty = true
-
-			var err error
-			router, err = createToolsRouter(cfg)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("should select weather tool for weather query", func() {
-			selectedTools, err := router.ToolsDatabase.FindSimilarTools("What's the weather like today?", 3)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(selectedTools)).To(BeNumerically(">", 0))
-			Expect(selectedTools[0].Function.Name).To(Equal("get_weather"))
-		})
-
-		It("should select calculate tool for math query", func() {
-			selectedTools, err := router.ToolsDatabase.FindSimilarTools("Calculate 25 + 37", 3)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(selectedTools)).To(BeNumerically(">", 0))
-			// Calculator should be among the top results
-			toolNames := make([]string, len(selectedTools))
-			for i, tool := range selectedTools {
-				toolNames[i] = tool.Function.Name
-			}
-			Expect(toolNames).To(ContainElement("calculate"))
-		})
-
-		It("should select search tool for search query", func() {
-			selectedTools, err := router.ToolsDatabase.FindSimilarTools("Search for latest news", 3)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(selectedTools)).To(BeNumerically(">", 0))
-			toolNames := make([]string, len(selectedTools))
-			for i, tool := range selectedTools {
-				toolNames[i] = tool.Function.Name
-			}
-			Expect(toolNames).To(ContainElement("search_web"))
-		})
-
-		It("should select email tool for email query", func() {
-			selectedTools, err := router.ToolsDatabase.FindSimilarTools("Send an email to John", 3)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(selectedTools)).To(BeNumerically(">", 0))
-			toolNames := make([]string, len(selectedTools))
-			for i, tool := range selectedTools {
-				toolNames[i] = tool.Function.Name
-			}
-			Expect(toolNames).To(ContainElement("send_email"))
-		})
-
-		It("should handle queries that match multiple categories", func() {
-			selectedTools, err := router.ToolsDatabase.FindSimilarTools("search for weather information and calculate temperature", 3)
-			Expect(err).NotTo(HaveOccurred())
-			// Should return up to 3 relevant tools
-			Expect(len(selectedTools)).To(BeNumerically("<=", 3))
-			Expect(len(selectedTools)).To(BeNumerically(">", 0))
-		})
-	})
-
-	Describe("Tool Selection with Request Processing", func() {
-		var (
-			response *ext_proc.ProcessingResponse
-			ctx      *RequestContext
-		)
-
-		BeforeEach(func() {
-			cfg.Tools.Enabled = true
-			cfg.Tools.ToolsDBPath = toolsDBPath
-			cfg.Tools.TopK = 3
-			cfg.Tools.SimilarityThreshold = &[]float32{0.2}[0]
-			cfg.Tools.FallbackToEmpty = true
-
-			var err error
-			router, err = createToolsRouter(cfg)
-			Expect(err).NotTo(HaveOccurred())
-
-			response = &ext_proc.ProcessingResponse{
-				Response: &ext_proc.ProcessingResponse_RequestBody{
-					RequestBody: &ext_proc.BodyResponse{
-						Response: &ext_proc.CommonResponse{
-							Status: ext_proc.CommonResponse_CONTINUE,
-							HeaderMutation: &ext_proc.HeaderMutation{
-								SetHeaders: []*core.HeaderValueOption{},
-							},
-						},
-					},
-				},
-			}
-
-			ctx = &RequestContext{
-				ExpectStreamingResponse: false,
-				VSRSelectedDecision:     testToolsDecision(config.ToolsPluginModePassthrough, toolsBoolPtr(true), nil, nil),
-			}
-		})
-
-		It("should only process requests with tool_choice=auto", func() {
-			request := testNeutralRequest("test-model", "What's the weather?")
-			request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceNamed, Name: "specific_function"}
-
-			err := router.handleToolSelection(request, "weather", []string{}, &response, ctx)
-			Expect(err).NotTo(HaveOccurred())
-			// Should not modify tools when tool_choice is not auto
-		})
-
-		It("should skip processing when content is empty", func() {
-			request := testNeutralRequest("test-model", "")
-			request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
-
-			err := router.handleToolSelection(request, "", []string{}, &response, ctx)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("should skip processing when tools database is disabled", func() {
-			cfg.Tools.Enabled = false
-			testRouter, err := createToolsRouter(cfg)
-			Expect(err).NotTo(HaveOccurred())
-
-			request := testNeutralRequest("test-model", "What's the weather?")
-			request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
-
-			err = testRouter.handleToolSelection(request, "weather", []string{}, &response, ctx)
-			Expect(err).NotTo(HaveOccurred())
-		})
-	})
-
-	Describe("Category and Tag-Based Filtering", func() {
-		BeforeEach(func() {
-			cfg.Tools.Enabled = true
-			cfg.Tools.ToolsDBPath = toolsDBPath
-			cfg.Tools.TopK = 5
-			cfg.Tools.SimilarityThreshold = &[]float32{0.2}[0]
-
-			var err error
-			router, err = createToolsRouter(cfg)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("should load tools with correct categories", func() {
-			allTools := router.ToolsDatabase.GetAllTools()
-			Expect(allTools).To(HaveLen(4))
-			// Verify categories are preserved in the database
-			// Note: The current implementation doesn't expose category/tag info
-			// but we verify the tools are loaded correctly
-		})
-
-		It("should load tools with correct tags", func() {
-			allTools := router.ToolsDatabase.GetAllTools()
-			Expect(allTools).To(HaveLen(4))
-			// Tags are used internally for semantic matching
-			// Verify through semantic search behavior
-			selectedTools, err := router.ToolsDatabase.FindSimilarTools("temperature forecast", 3)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(selectedTools)).To(BeNumerically(">", 0))
-		})
-
-		It("should handle tools from different categories", func() {
-			// Test that tools from multiple categories can be selected
-			selectedTools, err := router.ToolsDatabase.FindSimilarTools("weather and email", 5)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(selectedTools)).To(BeNumerically(">", 0))
-			// Should potentially return tools from different categories
-		})
-	})
-})
+		if test.refused && (immediate.GetStatus().GetCode() != 503 || ctx.ImmediateProtocolError == nil || ctx.ImmediateProtocolError.Code != "tool_selection_failed") {
+			t.Errorf("%s: response %v, error %+v", name, immediate.GetStatus(), ctx.ImmediateProtocolError)
+		}
+	}
+}
+
+// More request tools than one question takes options: keep forwards them
+// unselected without asking, reject refuses the request.
+func TestToolsSelectOnOverflow(t *testing.T) {
+	names := make([]string, 256)
+	for index := range names {
+		names[index] = fmt.Sprintf("tool_%03d", index)
+	}
+	judge := &toolsJudge{need: 0.9}
+	request := toolsRequest(names...)
+	_, response := applyTools(t, toolsRouter(judge), toolsSelect(config.ToolsSelectModeFilter, nil), request)
+	if len(request.Tools) != 256 || response.GetImmediateResponse() != nil || len(judge.asked()) != 0 {
+		t.Fatalf("keep forwards every tool unasked: %d tools, %d calls", len(request.Tools), len(judge.asked()))
+	}
+	ctx, response := applyTools(t, toolsRouter(judge), toolsSelect(config.ToolsSelectModeFilter, func(s *config.ToolsSelectConfig) { s.OnOverflow = config.ToolsSelectOnOverflowReject }), toolsRequest(names...))
+	if response.GetImmediateResponse().GetStatus().GetCode() != 400 || ctx.ImmediateProtocolError.Code != "too_many_tools" {
+		t.Fatalf("reject refuses the request: %v %+v", response.GetImmediateResponse().GetStatus(), ctx.ImmediateProtocolError)
+	}
+}
+
+// A request that decides its tool use itself is not selected for, and a
+// policy runs before any selection.
+func TestToolsSelectRunsWhenTheModelChoosesTools(t *testing.T) {
+	for _, mode := range []llmprotocol.ToolChoiceMode{llmprotocol.ToolChoiceNone, llmprotocol.ToolChoiceRequired} {
+		judge := &toolsJudge{need: 0.9}
+		request := toolsRequest("a", "b")
+		request.ToolChoice = llmprotocol.ToolChoice{Mode: mode}
+		applyTools(t, toolsRouter(judge), toolsSelect(config.ToolsSelectModeFilter, nil), request)
+		if len(judge.asked()) != 0 || len(request.Tools) != 2 {
+			t.Errorf("tool_choice %s: %d calls, tools %v", mode, len(judge.asked()), toolNames(request.Tools))
+		}
+	}
+	plugin := config.ToolsPluginConfig{Enabled: true, Policy: &config.ToolsPolicyConfig{Mode: config.ToolsPolicyModeFiltered, AllowTools: []string{"a", "c"}}}
+	request := toolsRequest("a", "b", "c")
+	applyTools(t, toolsRouter(&toolsJudge{}), plugin, request)
+	if got := toolNames(request.Tools); !reflect.DeepEqual(got, []string{"a", "c"}) {
+		t.Fatalf("the filtered policy keeps the allowed tools: %v", got)
+	}
+}
+
+// With input.history the questions read the earlier user turns as their own
+// part, beside the current turn.
+func TestToolsSelectReadsHistoryWhenAsked(t *testing.T) {
+	judge := &toolsJudge{need: 0.9, choose: map[string]float64{"a": 0.9}}
+	applyTools(t, toolsRouter(judge), toolsSelect(config.ToolsSelectModeFilter, func(s *config.ToolsSelectConfig) { s.Input.History = true }), toolsRequest("a", "b"))
+	for _, state := range judge.asked() {
+		if state.Parts["history"] != "what did we decide last time?" || state.Parts["request"] != "find the onboarding guide" {
+			t.Fatalf("state %+v", state)
+		}
+	}
+	judge = &toolsJudge{need: 0.9, choose: map[string]float64{"a": 0.9}}
+	applyTools(t, toolsRouter(judge), toolsSelect(config.ToolsSelectModeFilter, nil), toolsRequest("a", "b"))
+	if state := judge.asked()[0]; state.State != "find the onboarding guide" || state.Parts != nil {
+		t.Fatalf("without history the state is the current turn: %+v", state)
+	}
+}
+
+// The selection is recorded for the replay record: what it kept and P(need).
+func TestToolsSelectIsRecorded(t *testing.T) {
+	ctx, _ := applyTools(t, toolsRouter(&toolsJudge{need: 0.75, choose: map[string]float64{"b": 0.9}}), toolsSelect(config.ToolsSelectModeFilter, nil), toolsRequest("a", "b"))
+	if len(ctx.pendingToolsOutcomes) != 1 {
+		t.Fatalf("outcomes %+v", ctx.pendingToolsOutcomes)
+	}
+	outcome := ctx.pendingToolsOutcomes[0]
+	if outcome.Target != "select" || outcome.Verdict != toolsSelected || outcome.Metadata["kept"] != "b" || outcome.Metadata["tool_need"] != "0.7500" || outcome.Metadata["deployment"] != config.DefaultDecisionDeployment {
+		t.Fatalf("outcome %+v", outcome)
+	}
+}
+
+// tool_rank and tool_need go to the decision model in one decisions call
+// about one state.
+func TestToolsSelectAsksInOneCall(t *testing.T) {
+	runtime := runtimetest.New(runtimetest.Model{ID: "vela"})
+	server := httptest.NewServer(runtime.Handler())
+	t.Cleanup(server.Close)
+	deployments := map[string]config.ModelDeployment{"vela": {Provider: config.ModelRuntimeProvider, Endpoint: server.URL}}
+	manager := modelservice.NewManager()
+	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
+	lease, err := manager.AcquireDeployments(deployments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	card, err := lease.Card(ctx, "vela")
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := toolsRouter(lease)
+	router.Config.DecisionModel, router.Config.ModelDeployments = "vela", deployments
+	router.decisionCards = map[string]modelservice.ModelCard{"vela": card}
+	request := toolsRequest("calendar", "search", "billing")
+	applyTools(t, router, toolsSelect(config.ToolsSelectModeFilter, func(s *config.ToolsSelectConfig) { s.TimeoutMs = 20000 }), request)
+	calls := runtime.Decisions()
+	if len(calls) != 1 || calls[0].State != "find the onboarding guide" || len(calls[0].Questions) != 2 {
+		t.Fatalf("decisions calls %+v, want one about the request with both questions", calls)
+	}
+	if choices := calls[0].Questions["match:tool_rank"].Choices; choices == nil || len(*choices) != 3 {
+		t.Fatalf("tool_rank options %+v", calls[0].Questions["match:tool_rank"])
+	}
+	if _, ok := calls[0].Questions[toolNeedQuestionID]; !ok {
+		t.Fatalf("questions %v", calls[0].Questions)
+	}
+	if got := toolNames(request.Tools); !reflect.DeepEqual(got, []string{"calendar", "search", "billing"}) {
+		t.Fatalf("tools %v: the fake needs a tool at 0.8 and chooses the first option at 0.7", got)
+	}
+}
+
+// The tools plugin answers the client's debug surface and the replay record
+// only: it sets no header on the provider-bound request, debug or not.
+func TestToolsPluginSetsNoProviderBoundHeader(t *testing.T) {
+	router := toolsRouter(&toolsJudge{need: 0.9, choose: map[string]float64{"a": 0.9}})
+	router.Config.Headers.Debug = config.DebugHeadersAny
+	ctx := toolsContext(toolsSelect(config.ToolsSelectModeFilter, nil))
+	if _, err := router.handleRequestHeaders(headerContractRequest(map[string]string{headers.VSRDebug: "true"}), ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !debugHeadersRequested(ctx) {
+		t.Fatal("the caller is allowed the debug headers")
+	}
+	request := toolsRequest("a", "b")
+	ctx.SemanticRequest = request
+	response := &ext_proc.ProcessingResponse{Response: &ext_proc.ProcessingResponse_RequestBody{RequestBody: &ext_proc.BodyResponse{Response: &ext_proc.CommonResponse{}}}}
+	router.applyToolsPlugin(request, response, ctx)
+	for _, option := range response.GetRequestBody().GetResponse().GetHeaderMutation().GetSetHeaders() {
+		if name := strings.ToLower(option.GetHeader().GetKey()); strings.HasPrefix(name, "x-vsr-") {
+			t.Errorf("the tools plugin set %s on the provider-bound request", name)
+		}
+	}
+	if len(ctx.pendingToolsOutcomes) != 1 {
+		t.Fatal("the selection is recorded for the replay record")
+	}
+}
+
+// A judge error is reported by its reason in the replay record.
+func TestToolsSelectFailureIsRecorded(t *testing.T) {
+	ctx, _ := applyTools(t, toolsRouter(&toolsJudge{err: modelservice.ErrUnavailable}), toolsSelect(config.ToolsSelectModeFilter, nil), toolsRequest("a", "b"))
+	outcome := ctx.pendingToolsOutcomes[0]
+	if outcome.Verdict != toolsSelectFailed || outcome.Reason != "unavailable" || outcome.Metadata["action"] != config.ToolsSelectOnErrorKeep {
+		t.Fatalf("outcome %+v", outcome)
+	}
+}
+
+func mustToolsDecisionPlugin(t *testing.T, cfg *config.ToolsPluginConfig) config.DecisionPlugin {
+	t.Helper()
+	payload, err := config.NewStructuredPayload(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return config.DecisionPlugin{Type: config.DecisionPluginTools, Configuration: payload}
+}

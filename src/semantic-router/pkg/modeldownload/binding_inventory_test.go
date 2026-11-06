@@ -204,7 +204,7 @@ func TestGlobalServiceDownloadsIgnoreRecipeOverrides(t *testing.T) {
 			cfg.MmBertModelPath = "models/global-embedding"
 			cfg.EmbeddingConfig.ModelType = "mmbert"
 			cfg.EmbeddingModels.UseCPU = true
-			cfg.Tools.Enabled = true
+			cfg.Memory.Enabled, cfg.Memory.EmbeddingModel = true, "mmbert"
 			cfg.SemanticCache.Enabled = true
 			cfg.SemanticCache.EmbeddingModel = "mmbert"
 			cfg.ModelDeployments = map[string]config.ModelDeployment{
@@ -232,7 +232,7 @@ func TestGlobalServiceDownloadsIgnoreRecipeOverrides(t *testing.T) {
 			if got["models/recipe-embedding"] || got["models/global-embedding"] != want["models/global-embedding"] || len(got) > 1 {
 				t.Fatalf("service download used recipe source: %+v", specs)
 			}
-			cfg.Tools.Enabled = false
+			cfg.Memory.Enabled = false
 			cfg.Decisions = []config.Decision{{Name: "no-cache-consumer"}}
 			specs, err = BuildModelSpecs(cfg)
 			if err != nil {
