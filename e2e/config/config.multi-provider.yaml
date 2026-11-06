@@ -7,36 +7,36 @@ providers:
     - name: gpt-4o
       backend_refs:
         - name: openai
-          base_url: https://api.openai.com/v1
+          endpoint: https://api.openai.com/v1
           provider: openai
     - name: gpt-4o-azure
       provider_model_id: gpt-4o
       backend_refs:
         - name: azure-east
-          base_url: https://my-resource.openai.azure.com/openai/deployments/gpt-4o
+          endpoint: https://my-resource.openai.azure.com/openai/deployments/gpt-4o
           provider: azure-openai
           api_version: '2024-10-21'
     - name: gpt-4o-mini
       backend_refs:
         - name: openai
-          base_url: https://api.openai.com/v1
+          endpoint: https://api.openai.com/v1
           provider: openai
     - name: claude-sonnet-4-20250514
       backend_refs:
         - name: anthropic
-          base_url: https://api.anthropic.com
+          endpoint: https://api.anthropic.com
           provider: anthropic
-          extra_headers:
+          headers:
             anthropic-version: '2023-06-01'
     - name: MiniMax-M3
       backend_refs:
         - name: minimax
-          base_url: https://api.minimax.io
+          endpoint: https://api.minimax.io
           provider: minimax
     - name: MiniMax-M2.7
       backend_refs:
         - name: minimax
-          base_url: https://api.minimax.io
+          endpoint: https://api.minimax.io
           provider: minimax
     - name: Qwen/Qwen2.5-14B-Instruct
       external_model_ids:
