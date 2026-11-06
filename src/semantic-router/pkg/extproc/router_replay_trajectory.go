@@ -224,12 +224,19 @@ func trajectoryMessageFromStep(step routerreplay.ToolTraceStep, turnIndex int) *
 	case replayToolStepUserInput:
 		return &trajectoryMessage{Role: "user", Content: step.Text, TurnIndex: turnIndex}
 	case replayToolStepClientToolResult:
+		// Captured results live in Output; records written before results
+		// were redacted carried them in Text.
+		content := step.Output
+		if content == "" {
+			content = step.Text
+		}
 		return &trajectoryMessage{
-			Role:       "tool",
-			Content:    step.Text,
-			ToolCallID: step.ToolCallID,
-			ToolName:   step.ToolName,
-			TurnIndex:  turnIndex,
+			Role:             "tool",
+			Content:          content,
+			ToolCallID:       step.ToolCallID,
+			ToolName:         step.ToolName,
+			ContentTruncated: step.Output != "" && step.Truncated,
+			TurnIndex:        turnIndex,
 		}
 	case replayToolStepAssistantFinalResponse:
 		return &trajectoryMessage{Role: "assistant", Content: step.Text, TurnIndex: turnIndex}

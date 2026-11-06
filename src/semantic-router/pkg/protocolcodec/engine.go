@@ -574,10 +574,9 @@ func validatePolicy(policy llmprotocol.Policy) error {
 	if policy.SourcePreservation != llmprotocol.SourceDisabled && policy.SourcePreservation != llmprotocol.SourceBoundedSameFormat {
 		return fmt.Errorf("source-preservation policy is invalid")
 	}
-	if policy.ResponseVendor != "" && policy.ResponseVendor != llmprotocol.ResponseVendorAzure &&
-		policy.ResponseVendor != llmprotocol.ResponseVendorCloudflare &&
+	if policy.ResponseVendor != "" && policy.ResponseVendor != llmprotocol.ResponseVendorCloudflare &&
 		policy.ResponseVendor != llmprotocol.ResponseVendorSnowflake &&
-		policy.ResponseVendor != llmprotocol.ResponseVendorOpenAICompatGateway {
+		policy.ResponseVendor != llmprotocol.ResponseVendorOpenRouter {
 		return fmt.Errorf("response-vendor policy is invalid")
 	}
 	if !positiveProtocolLimits(policy.Limits) {

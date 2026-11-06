@@ -49,8 +49,9 @@ routing:
 Each rule compares the current user turn to the latest `lookback_turns` prior user turns. A rule matches only when every turn in that recent streak stays above the configured similarity threshold.
 
 The default score is cosine similarity, including when a default decision model
-is configured. An explicit `routing.model_bindings.reask` binding with
-`contract: decision.v1` selects a native repeated-intent judgment instead. Its
+is configured. A `reask` binding (`routing.model_bindings.reask` or
+`global.model_catalog.bindings.reask`) selects a native repeated-intent
+judgment on that deployment instead. Its
 score is the probability that the requests seek the same information or action.
 Calibrate that probability threshold for the selected model; a cosine threshold
 does not transfer to it. Both modes count consecutive turns in the router and

@@ -38,7 +38,7 @@ global:
 
 ## 选它跑在哪 {#choose-where-it-runs}
 
-绑定名叫 `embedding`，读的是向量（`embedding.v1`）。所有需要嵌入的服务（缓存、记忆、向量库、工具）都用这个全局绑定，声明一次就够：
+`global.model_catalog.embeddings.default` 指定嵌入文本的部署，不改的话就是预先声明的 `vela-embedding`。所有需要嵌入的服务（缓存、记忆、向量库、工具）都用它。想改它的设备或输入预算，就用同一个名字声明这个部署：
 
 ```yaml
 global:
@@ -51,32 +51,30 @@ global:
         input:
           max_tokens: 8192
           overflow: truncate
-    bindings:
-      embedding:
-        deployment: vela-embedding
-        contract: embedding.v1
+    embeddings:
+      default: vela-embedding
 ```
 
 不同功能可以读同一个模型的不同视图，比如语义缓存用第 6 层的 256 维向量、路由用第 22 层的 768 维向量。它们共用一个部署；每个视图自成一个向量空间，分开存。
 
 ## 用外部嵌入服务 {#use-an-external-embedding-service}
 
-任何 OpenAI 兼容的 `/embeddings` 端点（比如挂了嵌入模型的 `vllm serve`）都能换掉本地模型处理文本。它换掉的是上面那个 `embedding` 绑定，所以那个绑定就别写了：
+任何 OpenAI 兼容的 `/embeddings` 端点（比如挂了嵌入模型的 `vllm serve`）都能换掉本地模型处理文本。把它声明为 `openai_embeddings` 部署，并在 `embeddings.default` 中指定它；Router 向 `<endpoint>/embeddings` 发送请求：
 
 ```yaml alternative
 global:
   model_catalog:
+    deployments:
+      remote-embed:
+        provider: openai_embeddings
+        endpoint: https://embedding.example.com/v1
+        model: BAAI/bge-m3
+        auth: {api_key_env: EMBEDDING_API_KEY}
+        timeout_ms: 5000
+        max_retries: 2
+        capabilities: {dimensions: 1024}
     embeddings:
-      semantic:
-        embedding_config:
-          backend: openai_compatible
-          model_type: remote
-          target_dimension: 1024
-        endpoint:
-          base_url: https://embedding.example.com/v1
-          model: BAAI/bge-m3
-          api_key_env: EMBEDDING_API_KEY
-          dimensions: 1024
+      default: remote-embed
 ```
 
 服务方会收到待嵌入的文本。要图像、音频、层视图或长文本开窗的功能，还是得用本地模型。

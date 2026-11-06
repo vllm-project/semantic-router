@@ -36,7 +36,7 @@ func decodeSnowflakeTransportError(
 	format llmprotocol.WireFormat,
 ) (llmprotocol.TransportError, llmprotocol.Diagnostics, error) {
 	var wire snowflakeTransportErrorWire
-	if _, _, err := decodeProviderWireVendorAware(body, &wire, policy); err != nil ||
+	if _, _, err := decodeProviderWireTolerant(body, &wire, policy); err != nil ||
 		strings.TrimSpace(wire.Code) == "" || strings.TrimSpace(wire.Message) == "" {
 		return decodeOpenAITransportError(body, policy, format)
 	}
