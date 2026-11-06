@@ -151,7 +151,7 @@ fi
 
 log_info "Testing backend target compatibility rendering..."
 backend_fields=(
-    "base_url: https://provider.example/v1"
+    "endpoint: https://provider.example/v1"
     "provider_model_id: provider/model-id"
     "api_key_env: PROVIDER_API_KEY"
     "X-Tenant: production"

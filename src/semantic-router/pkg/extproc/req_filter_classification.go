@@ -348,6 +348,8 @@ func (r *OpenAIRouter) buildAgenticSessionContextForKey(
 		MemoryCost:                  snapshot.CumulativeCost,
 		MemoryEstimatedCacheSavings: snapshot.CumulativeEstimatedCacheSavings,
 		MemoryCacheAccountingSource: snapshot.LastCacheAccountingSource,
+		MemoryUserTurnCount:         snapshot.UserTurnCount,
+		MemoryLastReleaseUserTurn:   snapshot.LastReleaseUserTurn,
 		LastDecisionName:            snapshot.LastDecisionName,
 		LastDecisionReason:          snapshot.LastDecisionReason,
 		HistoryTokens:               reqCtx.HistoryTokenCount,

@@ -45,3 +45,22 @@ func TestNestedAndCanceledContextsCannotReplenishBudget(t *testing.T) {
 		t.Fatalf("expected cancellation, got %v", err)
 	}
 }
+
+func TestTightenLimitKeepsCallsAlreadyUsed(t *testing.T) {
+	ctx, ledger := WithLimit(context.Background(), 3)
+	if err := Consume(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !ledger.TightenLimit(2) || ledger.Remaining() != 1 {
+		t.Fatalf("tightened budget has remaining=%d", ledger.Remaining())
+	}
+	if err := Consume(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if ledger.TightenLimit(1) || ledger.Remaining() != -1 {
+		t.Fatalf("a used budget was replenished: remaining=%d", ledger.Remaining())
+	}
+	if err := Consume(ctx); !errors.Is(err, ErrExhausted) {
+		t.Fatalf("expected exhaustion, got %v", err)
+	}
+}

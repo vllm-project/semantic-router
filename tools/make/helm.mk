@@ -168,7 +168,7 @@ helm-ci-validate: helm-ci-setup $(HARNESS_VENV_DEPS)
 		-f "$(HELM_BACKEND_TARGET_VALUES)" \
 		--namespace $(HELM_NAMESPACE) > "$(HELM_BACKEND_TARGET_OUTPUT)"
 	@for field in \
-		"base_url: https://provider.example/v1" \
+		"endpoint: https://provider.example/v1" \
 		"provider_model_id: provider/model-id" \
 		"api_key_env: PROVIDER_API_KEY" \
 		"X-Tenant: production" \

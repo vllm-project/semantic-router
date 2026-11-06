@@ -119,7 +119,20 @@ Qdrant 示例的 0.30 阈值基于原始余弦分数，只是起点，而不是�
 - [Qdrant](../../installation/qdrant) — Docker、Kubernetes、配置参考、调优和排障
 - `config/runtime/memory/` 提供后端专用配置参考
 
-当配置了带 `model_role: memory_rewrite` 的外部模型时，其 `max_response_bytes` 限制每次查询改写响应。省略或非正值使用 1 MiB 默认值。
+`query_rewrite.deployment` 指定在记忆检索前结合对话改写查询的 `openai_chat` 部署；未配置时按原样检索查询。该部署的 `limits.max_response_bytes` 限制每次改写响应（默认 1 MiB）：
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      rewriter:
+        provider: openai_chat
+        endpoint: http://llm.example.com:8000/v1
+        model: qwen3
+  stores:
+    memory:
+      query_rewrite: {deployment: rewriter}
+```
 
 #### 混合检索与反思 {#hybrid-search-and-reflection}
 

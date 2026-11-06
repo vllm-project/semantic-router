@@ -42,7 +42,7 @@ func TestLLMLabelClassifierMaxTokens(t *testing.T) {
 			}))
 			defer server.Close()
 
-			classifier, err := newLLMLabelClassifier(
+			classifier, err := llmLabelClassifierFor(
 				config.ClassifierSignalRule{
 					Model:        "test-model",
 					Labels:       []string{"safe", "unsafe"},

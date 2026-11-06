@@ -66,10 +66,10 @@ These fields are easy to confuse:
 - backend-ref `provider` supplies provider-specific authentication and path
   defaults. It does not prove that the endpoint implements an API format.
 
-For every backend format, `base_url` names the complete upstream API root. Its
-path is retained and the protocol operation suffix is appended exactly once;
-the protocol's default `/v1` base path is used only when the URL has no path.
-`chat_path` applies only to Chat Completions.
+For every backend format, a full URL in `endpoint` names the complete upstream
+API root. Its path is retained and the protocol operation suffix is appended
+exactly once; the protocol's default `/v1` base path is used only when the URL
+has no path. `chat_path` applies only to Chat Completions.
 
 With `--gateway extproc`, the generated Envoy cluster for an HTTPS backend
 verifies both the server
@@ -207,6 +207,10 @@ an OpenAI-compatible server can accept the Chat request shape while rejecting
 images or tools for a particular model. Qualify the actual endpoint and model
 revision before adding them to a routing pool.
 
+Responses requires a detail level on every input image. An image that arrives
+without one, as every Messages image and tool-result image does, reaches a
+Responses backend with `detail: auto`, the Responses default.
+
 When translating Chat history to an Anthropic Messages backend, empty text
 blocks are omitted. An assistant's `content: ""` beside `tool_calls` therefore
 behaves like `content: null`. Empty tool results keep their call IDs and use
@@ -276,10 +280,10 @@ providers:
       api_format: anthropic
       backend_refs:
         - name: anthropic-primary
-          base_url: https://api.anthropic.com
+          endpoint: https://api.anthropic.com
           provider: anthropic
-          api_key_env: ANTHROPIC_API_KEY
-          extra_headers:
+          auth: {api_key_env: ANTHROPIC_API_KEY}
+          headers:
             anthropic-version: "2023-06-01"
           weight: 100
 ```

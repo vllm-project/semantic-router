@@ -161,8 +161,9 @@ func askSystemOneDeployment(ctx context.Context, remote modelservice.Remote, dep
 // decisionCallContext bounds a deployment's call by the shortest timeout its
 // rules set. Questions to a model_runtime decision model that set none join
 // the built-in signals' call, so they take its deadline rather than the
-// default timeout. A systemone deployment's call joins none: a rule without
-// a timeout takes the deployment's own, else the default.
+// default timeout. Questions to a systemone deployment travel with the
+// built-in signals that ask it too, but a rule without a timeout takes the
+// deployment's own, else the default: the remote API's latency is its own.
 // Once the stage sends a call, its questions wait for it as long as its
 // latest caller does: a timeout bounds the wait for the other askers, never
 // an answer of a call the stage waits for anyway (modelservice.Bundle).
