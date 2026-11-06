@@ -83,13 +83,19 @@ func TestSelectTreatsDimensionAsACapability(t *testing.T) {
 		t.Errorf("primary fallback: selected %q (%v), want custom", got, err)
 	}
 
-	_, err := both.Select("short text", 0.9, 0.1, 384)
+	// multimodal declares 384 but is not an auto text candidate: the error
+	// must speak for the candidates checked, not for every prepared model.
+	withMultimodal := NewSet(map[string]Provider{"mmbert": mmbert, "qwen3": qwen3, "multimodal": dimensionCapabilityProvider{base, []int{384, 256}}}, "mmbert")
+	_, err := withMultimodal.Select("short text", 0.9, 0.1, 384)
 	if !errors.Is(err, binding.ErrCapability) {
 		t.Fatalf("unsupported dimension error = %v, want ErrCapability", err)
 	}
-	for _, want := range []string{"dimension 384", "mmbert supports [768 256]", "qwen3 supports [1024 768 512]"} {
+	for _, want := range []string{"no auto embedding candidate supports dimension 384", "mmbert supports [768 256]", "qwen3 supports [1024 768 512]"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("unsupported dimension error = %q, want it to contain %q", err, want)
 		}
+	}
+	if strings.Contains(err.Error(), "multimodal") {
+		t.Errorf("unsupported dimension error = %q, want only the checked candidates", err)
 	}
 }

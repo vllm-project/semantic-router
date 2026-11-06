@@ -124,8 +124,10 @@ func (s *Set) Select(text string, quality, latency float32, dimension int) (stri
 	return "", fmt.Errorf("no prepared embedding model is available")
 }
 
-// unsupportedDimension names the requested width and what each rejected
+// unsupportedDimension names the requested width and what each rejected auto
 // candidate declares, so the client can pick a dimension that will be served.
+// It speaks only for the candidates Select checked: another prepared model,
+// such as multimodal, may still serve the width when requested explicitly.
 func (s *Set) unsupportedDimension(dimension int, rejected []string) error {
 	var declared []string
 	for _, info := range s.Models() {
@@ -133,7 +135,7 @@ func (s *Set) unsupportedDimension(dimension int, rejected []string) error {
 			declared = append(declared, fmt.Sprintf("%s supports %v", info.Name, info.Dimensions))
 		}
 	}
-	return fmt.Errorf("%w: no prepared embedding model supports dimension %d (%s)", binding.ErrCapability, dimension, strings.Join(declared, "; "))
+	return fmt.Errorf("%w: no auto embedding candidate supports dimension %d (%s)", binding.ErrCapability, dimension, strings.Join(declared, "; "))
 }
 
 // SelectModalities chooses one already prepared representation for an entire
