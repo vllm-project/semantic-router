@@ -1,6 +1,8 @@
 # Domain-Adapted Embedding Usage
 
-Run commands from `src/training/model_embeddings/domain_adapted_embeddings/`.
+Create the environment with `uv sync --locked` in
+`src/training/model_embeddings/domain_adapted_embeddings/`. Run the commands
+below from the repository root through that locked project.
 
 ## Prepare Data
 
@@ -14,7 +16,8 @@ one object per line:
 Prepare a local file:
 
 ```bash
-python prepare_data.py \
+uv run --project src/training/model_embeddings/domain_adapted_embeddings \
+  python src/training/model_embeddings/domain_adapted_embeddings/prepare_data.py \
   --source jsonl \
   --input-file domain_qa.jsonl \
   --output-dir data \
@@ -25,7 +28,8 @@ Or use a Hugging Face dataset whose rows contain `question`/`answer` or
 `Question`/`Answer`:
 
 ```bash
-python prepare_data.py \
+uv run --project src/training/model_embeddings/domain_adapted_embeddings \
+  python src/training/model_embeddings/domain_adapted_embeddings/prepare_data.py \
   --source huggingface \
   --dataset DATASET_ID \
   --split train \
@@ -45,7 +49,8 @@ answers across the train and test sets can inflate retrieval metrics.
 ## Train
 
 ```bash
-python train.py \
+uv run --project src/training/model_embeddings/domain_adapted_embeddings \
+  python src/training/model_embeddings/domain_adapted_embeddings/train.py \
   --data-dir data \
   --output-dir models/domain-adapted
 ```
@@ -65,8 +70,15 @@ Important options include:
 | `--top-k` | retrieval depth used during mining |
 | `--hard-neg-rank` | rank boundary for hard negatives |
 
-Use `python train.py --help` for current defaults. Tune on validation data and
-preserve the final test split for one unbiased evaluation.
+Use this command for current defaults:
+
+```bash
+uv run --project src/training/model_embeddings/domain_adapted_embeddings \
+  python src/training/model_embeddings/domain_adapted_embeddings/train.py --help
+```
+
+Tune on validation data and preserve the final test split for one unbiased
+evaluation.
 
 ## Load the Result
 
