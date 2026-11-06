@@ -123,13 +123,13 @@ func (b *classifierOptionBuilder) buildComplexityClassifierOption() (option, err
 	if len(b.cfg.ComplexityRules) == 0 {
 		return nil, nil
 	}
-	// A configured backend produces the score, so the prototype path is
+	// A remote deployment produces the score, so the prototype path is
 	// unreachable. Building it anyway is not merely wasted work: preloading
 	// the candidate embeddings requires the local embedding model, so a
 	// remote-only config would fail to start on a host that has no business
 	// carrying one. This is the same conclusion the startup advisory reports.
-	if b.cfg.ComplexityModel.Backend != nil {
-		return nil, nil
+	if _, remote, err := b.cfg.ComplexityRemoteTask(); err != nil || remote {
+		return nil, err
 	}
 	judgment, err := prepareDecisionComplexity(b.models, b.cfg.ComplexityRules)
 	if err != nil {

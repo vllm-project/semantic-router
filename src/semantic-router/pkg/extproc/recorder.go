@@ -121,6 +121,7 @@ func (r *OpenAIRouter) startRouterReplay(
 		MaxToolTraceSteps:   policy.MaxToolTraceSteps,
 	})
 	record := buildReplayRoutingRecord(ctx, originalModel, selectedModel, decisionName)
+	prompt := record.Prompt
 	ctx.RouterReplayContentOmitted = !r.personalDataReplayAllowed(ctx)
 	applyReplayPrivacyEvidence(ctx, &record, !ctx.RouterReplayContentOmitted)
 	r.populateReplayIdentity(&record, ctx)
@@ -128,6 +129,9 @@ func (r *OpenAIRouter) startRouterReplay(
 		return
 	}
 	appendPendingTrustedFactsOutcomes(ctx, recorder)
+	if ctx.RouterReplayContentOmitted && prompt != "" {
+		r.attachPromptOnceVerified(ctx, recorder, prompt)
+	}
 }
 
 // populateReplayIdentity records the same explicit identity used by protection,
@@ -282,13 +286,17 @@ func buildReplayRoutingRecord(
 		record.PreviousResponseID = state.PreviousResponseID
 		record.ConversationID = state.ConversationID
 	}
-	// The sanitiser drops tool-result payloads on every route; a masking route
-	// additionally persists no request text at all, because Replay snapshots
-	// the request before masking runs (D3, #3566).
+	// The sanitiser drops tool-result payloads unless the route captures tool
+	// results; a masking route persists no request text at all, because Replay
+	// snapshots the request before masking runs (D3, #3566).
 	suppressBody := replaySuppressesBody(ctx)
 	if ctx.SemanticRequest != nil {
-		replayRequest := replaySafeSemanticRequest(*ctx.SemanticRequest)
-		prompt, toolDefinitions := extractSemanticPromptAndTools(&replayRequest)
+		replayRequest := *ctx.SemanticRequest
+		if !replayCapturesToolResults(ctx) {
+			replayRequest = replaySafeSemanticRequest(replayRequest)
+		}
+		_, toolDefinitions := extractSemanticPromptAndTools(&replayRequest)
+		prompt := replayPrompt(ctx, &replayRequest)
 		// Tool definitions are operator-authored, not user content, so they
 		// are kept even when the prompt is suppressed.
 		record.ToolDefinitions = toolDefinitions
@@ -794,7 +802,7 @@ func hallucinationReplayOutcome(ctx *RequestContext, rule config.HallucinationRu
 }
 
 func (r *OpenAIRouter) updateRouterReplayUsageCost(ctx *RequestContext, usage routerreplay.UsageCost) {
-	if ctx == nil || ctx.RouterReplayID == "" || usage.TotalTokens == nil {
+	if ctx == nil || ctx.RouterReplayID == "" || (usage.TotalTokens == nil && usage.ProviderCache == nil) {
 		return
 	}
 

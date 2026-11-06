@@ -40,7 +40,7 @@ func prepareDecisionComplexity(models *classifierModelRuntime, rules []config.Co
 				question.Levels[level] += ": " + strings.Join(examples, "; ")
 			}
 		}
-		judgment, err := newDecisionJudgment(models, "complexity", "complexity", &question)
+		judgment, err := newDecisionJudgment(models, "complexity."+rule.Name, "complexity", &question)
 		if err != nil || judgment == nil {
 			return nil, err
 		}
