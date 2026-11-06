@@ -123,6 +123,22 @@ def test_sub_budget_packing_keeps_its_budget_when_the_family_splits():
     ]
 
 
+def test_sub_budget_packing_recovers_after_an_over_budget_row():
+    """The over-budget flag resets with the batch: sub-budget rows pack again after mixed traffic."""
+    over_jobs = [job([item(f"o{i}", 300)]) for i in range(2)]  # padded 304 > 256
+    small_jobs = [job([item(f"s{i}", 100)]) for i in range(4)]  # 104*3 > 256
+    model = FakeModel(256)
+    model.splits_forwards = True
+    batches = batcher(model, EngineArgs(max_num_batched_tokens=256)).plan(
+        over_jobs + small_jobs, None
+    )
+    assert [[(id(job), idx) for job, idx in b.parts] for b in batches] == [
+        [(id(over_jobs[0]), [0]), (id(over_jobs[1]), [0])],
+        [(id(small_jobs[0]), [0]), (id(small_jobs[1]), [0])],
+        [(id(small_jobs[2]), [0]), (id(small_jobs[3]), [0])],
+    ]
+
+
 def test_one_seq_per_forward_runs_every_row_alone():
     jobs = [
         job([item("a", 9), item("b", 17)]),

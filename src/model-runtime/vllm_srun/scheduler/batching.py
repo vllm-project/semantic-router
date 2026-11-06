@@ -168,7 +168,7 @@ def coalesced(
                 or count + 1 > max_rows
             ):
                 batches.append(_batch(current, exact=False, lane=name))
-                current, total, count = {}, 0, 0
+                current, total, count, over = {}, 0, 0, False
                 new_width = length
             current.setdefault(id(job), (job, []))[1].append(index)
             width, total, count = new_width, total + length, count + 1
