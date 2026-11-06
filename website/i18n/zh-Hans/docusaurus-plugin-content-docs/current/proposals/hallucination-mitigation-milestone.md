@@ -94,7 +94,7 @@ routing:
             hallucination_action: header
 ```
 
-提案不要求一种检测器架构或一家模型供应商。当前幻觉插件文档仍是实际已实现行为的事实来源。
+提案不要求一种检测器架构或一家模型供应商。当前的 [`response_guard`](../tutorials/plugin/response-guard) 与[幻觉信号](../tutorials/signal/learned/hallucination)文档仍是实际已实现行为的事实来源。
 
 ## 评估 {#evaluation}
 
@@ -119,7 +119,7 @@ routing:
 
 ## 参考资料 {#references}
 
-- [当前幻觉插件指南](../tutorials/plugin/hallucination)
+- [当前响应守卫指南](../tutorials/plugin/response-guard)
 - [LettuceDetect](https://arxiv.org/abs/2502.17125)
 - [SelfCheckGPT](https://arxiv.org/abs/2303.08896)
 - [Self-Refine](https://arxiv.org/abs/2303.17651)

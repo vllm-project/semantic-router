@@ -148,6 +148,7 @@ func GenerateFromSource(repositoryRoot string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	setResponseGuardConditionSchema(schema, append(routerconfig.SupportedSignalTypes(), routerconfig.SignalTypeProjection))
 	addPluginPayloadConditions(schema, pluginRefs)
 	addAlgorithmExtensionBlocks(reflector, schema)
 	extension, err := buildExtension(schema, pluginRefs)
@@ -400,6 +401,44 @@ func setPropertyConst(_ *jsonschema.Schema, owner *jsonschema.Schema, property s
 	}
 	if field, ok := owner.Properties.Get(property); ok {
 		field.Const = value
+	}
+}
+
+// setResponseGuardConditionSchema gives response_guard rules their own
+// condition tree: a RuleNode that names any signal, the response-stage ones
+// included, and sets no on_error or on_unknown, which the guard's on_unknown
+// replaces.
+func setResponseGuardConditionSchema(root *jsonschema.Schema, signalTypes []string) {
+	ruleNode, rule := root.Definitions["RuleNode"], root.Definitions["ResponseGuardRule"]
+	if ruleNode == nil || ruleNode.Properties == nil || rule == nil || rule.Properties == nil {
+		return
+	}
+	const ref = "#/$defs/ResponseGuardCondition"
+	properties := jsonschema.NewProperties()
+	for pair := ruleNode.Properties.Oldest(); pair != nil; pair = pair.Next() {
+		switch pair.Key {
+		case "on_error", "on_unknown":
+		case "type":
+			field := *pair.Value
+			field.Enum = make([]any, len(signalTypes))
+			for index, value := range signalTypes {
+				field.Enum[index] = value
+			}
+			properties.Set(pair.Key, &field)
+		case "conditions":
+			properties.Set(pair.Key, &jsonschema.Schema{Type: "array", Items: &jsonschema.Schema{Ref: ref}})
+		default:
+			properties.Set(pair.Key, pair.Value)
+		}
+	}
+	root.Definitions["ResponseGuardCondition"] = &jsonschema.Schema{
+		Type:                 "object",
+		Description:          "A response_guard condition: a leaf naming any signal, or AND, OR or NOT over conditions.",
+		Properties:           properties,
+		AdditionalProperties: jsonschema.FalseSchema,
+	}
+	if when, ok := rule.Properties.Get("when"); ok {
+		when.Ref = ref
 	}
 }
 

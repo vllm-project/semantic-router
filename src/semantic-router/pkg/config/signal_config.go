@@ -44,8 +44,8 @@ type Signals struct {
 // HallucinationRule declares the response-stage hallucination observation:
 // the model's answer is checked against the grounding context the request
 // carried (tool results or retrieved context). It has no request direction; it
-// only exists once the model has answered, and the hallucination plugin of the
-// decision selected for the request consumes it. The detector's own threshold
+// only exists once the model has answered, and the response_guard of the
+// decision selected for the request reads it. The detector's own threshold
 // and span filters stay on hallucination_model; a rule names the observation
 // and chooses how it is explained.
 type HallucinationRule struct {

@@ -52,7 +52,7 @@ func (p *Profile) Name() string {
 
 // Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests the hallucination signal over the pluggable endpoint detector backend and the hallucination plugin that enforces on it"
+	return "Tests the hallucination signal over the pluggable endpoint detector backend and the response_guard that acts on it"
 }
 
 // Setup deploys the shared gateway stack and hallucination resources.

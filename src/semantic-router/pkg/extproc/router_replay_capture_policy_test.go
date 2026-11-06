@@ -203,17 +203,19 @@ func TestReplayOmittedContentDropsResponseDetectorExcerpts(t *testing.T) {
 			cfg := &config.RouterConfig{RouterReplay: config.RouterReplayConfig{Enabled: true, CapturePersonalData: &capture}}
 			router := replayRuntimeRouter(t, cfg)
 			ctx := replayPolicyRequest(t)
-			ctx.VSRSelectedDecision = &config.Decision{Name: "ordinary", Plugins: []config.DecisionPlugin{{
-				Type: "hallucination", Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true}),
-			}}}
+			ctx.VSRSelectedDecision = &config.Decision{Name: "ordinary"}
 			router.startRouterReplay(ctx, "public-entry", "model", "ordinary")
-			ctx.HallucinationDetected, ctx.HallucinationScoreAvailable = true, true
-			ctx.HallucinationConfidence = 0.9
-			ctx.HallucinationSpans = []string{"private@example.invalid"}
-			ctx.EnhancedHallucinationInfo = &EnhancedHallucinationInfo{Spans: []EnhancedHallucinationSpan{{
-				Text: "private@example.invalid", Explanation: "The private@example.invalid address is unsupported.",
+			evidence := &classification.HallucinationEvidence{
+				Detected: true, Confidence: 0.9, Score: classification.HallucinationScore{Available: true, Kind: "probability"},
+				Spans: []string{"private@example.invalid"},
+				Explained: []classification.EnhancedHallucinationSpan{{
+					Text: "private@example.invalid", Explanation: "The private@example.invalid address is unsupported.",
+				}},
+			}
+			ctx.ResponseGuard = &responseGuardRun{conditions: observedConditions{hallucination: &classification.ResponseHallucinationObservation{
+				Evidence: evidence, Signal: &classification.ResponseHallucinationSignal{MatchedRules: []string{"ungrounded"}},
 			}}}
-			router.updateRouterReplayHallucinationStatus(ctx)
+			router.updateRouterReplayHallucinationStatus(ctx, router.ReplayRecorder)
 			record, found := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
 			if !found || !record.HallucinationDetected || !record.HallucinationScoreAvailable || record.HallucinationConfidence != 0.9 {
 				t.Fatal("detector verdict or score metadata was lost")
@@ -221,7 +223,7 @@ func TestReplayOmittedContentDropsResponseDetectorExcerpts(t *testing.T) {
 			if (len(record.HallucinationSpans) > 0) != capture || (len(record.HallucinationSpanDetails) > 0) != capture {
 				t.Fatalf("detector response excerpts did not follow capture policy: capture=%t", capture)
 			}
-			if len(ctx.HallucinationSpans) != 1 || len(ctx.EnhancedHallucinationInfo.Spans) != 1 {
+			if len(evidence.Spans) != 1 || len(evidence.Explained) != 1 {
 				t.Fatal("Replay changed the response detector result")
 			}
 		})

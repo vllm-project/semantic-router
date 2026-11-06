@@ -1,0 +1,1 @@
+routing.decisions[support].plugins[0]: invalid_value: system_prompt mode "append" is neither insert nor replace; run `vllm-sr config migrate` (mode: replace, which is what it did)

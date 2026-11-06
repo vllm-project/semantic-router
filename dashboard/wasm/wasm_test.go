@@ -338,7 +338,7 @@ func TestDecompileKeepsEnvironmentReferences(t *testing.T) {
         - type: header_mutation
           configuration:
             add:
-              - name: Authorization
+              - name: X-Upstream-Token
                 value: "Bearer ${UPSTREAM_TOKEN}"
               - name: X-Tenant
                 value: "${TENANT_ID:-default-tenant}"

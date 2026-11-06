@@ -28,11 +28,15 @@ config:
       description: Masks detected PII before dispatch on every request
       routing:
         strategy: priority
-        signals: {}
+        signals:
+          pii:
+            # No decision gates on this rule: masking reads it at the
+            # dispatch boundary (applyMaskingBeforeDispatch), over the
+            # request as it is sent.
+            - name: personal_data
+              threshold: 0.5
+              description: Personal data masked before dispatch.
         decisions:
-          # There is no PII signal to gate on: masking calls the classifier
-          # directly at the dispatch boundary (applyMaskingBeforeDispatch)
-          # rather than through a routing-time signal.
           - name: mask_pii
             description: Masks detected PII before dispatch
             priority: 100
@@ -46,7 +50,7 @@ config:
               - type: masking
                 configuration:
                   enabled: true
-                  threshold: 0.5
+                  signal: personal_data
                   entity_types: []
                   placeholders: {}
   routing:

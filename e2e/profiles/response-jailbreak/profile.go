@@ -1,5 +1,5 @@
 // Package responsejailbreak provides the e2e test profile for the
-// response-direction jailbreak signal and the response_jailbreak plugin. It
+// response-direction jailbreak signal and the response_guard that acts on it. It
 // deploys the router with prompt_guard pointed at a window-limited
 // http_classify stand-in, then verifies that jailbreak content the model emits
 // past that window is still caught in the buffered response and reported
@@ -32,7 +32,7 @@ var waitDeployments = []helpers.DeploymentRef{
 	{Namespace: "default", Name: "provider-mocker"},
 }
 
-// Profile implements the response_jailbreak test profile.
+// Profile implements the response-jailbreak test profile.
 type Profile struct {
 	stack *gatewaystack.Stack
 }
@@ -57,7 +57,7 @@ func (p *Profile) Name() string {
 
 // Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests the response-direction jailbreak signal on LLM output past the classifier's sequence window and the response_jailbreak plugin that enforces on it"
+	return "Tests the response-direction jailbreak signal on LLM output past the classifier's sequence window and the response_guard that acts on it"
 }
 
 // Setup deploys the shared gateway stack and this profile's resources.

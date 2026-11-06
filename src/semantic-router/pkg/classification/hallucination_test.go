@@ -507,15 +507,7 @@ var _ = Describe("Classifier with Hallucination Mitigation", func() {
 			cfg = &config.RouterConfig{}
 			cfg.HallucinationMitigation.HallucinationModel.Backend = config.HallucinationBackendEndpoint
 			cfg.HallucinationMitigation.HallucinationModel.ModelID = "test-model"
-			cfg.Decisions = []config.Decision{{
-				Name: "verified-route",
-				Plugins: []config.DecisionPlugin{{
-					Type: config.DecisionPluginHallucination,
-					Configuration: config.MustStructuredPayload(map[string]interface{}{
-						"enabled": true,
-					}),
-				}},
-			}}
+			cfg.HallucinationRules = []config.HallucinationRule{{Name: "ungrounded"}}
 
 			classifier = &Classifier{Config: cfg}
 			Expect(classifier.IsHallucinationDetectionEnabled()).To(BeTrue())

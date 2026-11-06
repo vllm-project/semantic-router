@@ -7,18 +7,20 @@ description: Check a model's answer against the context it was given and mark th
 
 Vela 1.0 Halu reads the context a request carried (tool results, retrieved
 documents), the user's question and the model's answer, and marks the spans
-of the answer that the context does not support. The
-[`hallucination` plugin](tutorials/plugin/hallucination.md) then adds a
-warning header, a note in the response body, or only records the result.
+of the answer that the context does not support. A
+[`response_guard`](tutorials/plugin/response-guard.md) rule then blocks the
+answer, adds a warning header and optionally a note in the response body, or
+only records the result.
 
 It checks support, not truth: an answer can be supported by wrong context, and
 an answer with no context to check is reported as unverified instead.
 
 ## Turn it on
 
-Declare the observation as a signal and enforce it with the plugin on the
-routes that should be checked. Vela FactCheck decides first whether a request
-makes claims worth checking.
+Declare the observation as a signal and name it in a `response_guard` rule on
+the routes that should be checked. Vela FactCheck decides first whether a
+request makes claims worth checking: the rule's `AND` reaches the detector only
+when it does.
 
 ```yaml
 routing:
@@ -40,12 +42,19 @@ routing:
       modelRefs:
         - model: answer-model
       plugins:
-        - type: hallucination
+        - type: response_guard
           configuration:
-            enabled: true
-            hallucination_action: header
-            unverified_factual_action: header
-            include_hallucination_details: true
+            rules:
+              - when:
+                  operator: AND
+                  conditions:
+                    - type: fact_check
+                      name: needs_fact_check
+                    - type: hallucination
+                      name: ungrounded_claims
+                action: annotate
+                details: true
+            on_unknown: annotate
 global:
   model_catalog:
     modules:

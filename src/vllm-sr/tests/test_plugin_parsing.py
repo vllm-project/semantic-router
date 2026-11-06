@@ -61,13 +61,12 @@ class TestPluginTypeValidation:
             PluginType.RESPONSE_CACHE.value,
             PluginType.SYSTEM_PROMPT.value,
             PluginType.HEADER_MUTATION.value,
-            PluginType.HALLUCINATION.value,
             PluginType.ROUTER_REPLAY.value,
             PluginType.MEMORY.value,
             PluginType.RAG.value,
             PluginType.FAST_RESPONSE.value,
             PluginType.REQUEST_PARAMS.value,
-            PluginType.RESPONSE_JAILBREAK.value,
+            PluginType.RESPONSE_GUARD.value,
             PluginType.TOOLS.value,
             PluginType.TOOL_SELECTION.value,
             PluginType.PROMPT_CACHE.value,
@@ -126,11 +125,13 @@ decisions:
           max_tokens_limit: 256
           max_n: 1
           strip_unknown: true
-      - type: "response_jailbreak"
+      - type: "response_guard"
         configuration:
-          enabled: true
-          threshold: 0.7
-          action: "header"
+          rules:
+            - when: {type: "keyword", name: "test_keywords"}
+              action: "annotate"
+              details: true
+          on_unknown: "none"
 providers:
   models:
     - name: "test_model"

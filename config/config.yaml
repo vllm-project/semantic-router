@@ -621,7 +621,7 @@ routing:
           - summarize the safety rules
       # direction: response scores the model's output instead of the prompt, so
       # this rule only exists once the model has answered; the selected
-      # decision's response_jailbreak plugin enforces on it.
+      # decision's response_guard acts on it.
       - name: unsafe_completion
         direction: response
         threshold: 0.90
@@ -630,7 +630,7 @@ routing:
     # Hallucination rules check the model's answer against the grounding
     # context the request carried (tool results or retrieved context), so they
     # only exist once the model has answered; the selected decision's
-    # hallucination plugin enforces on them.
+    # response_guard acts on them.
     hallucination:
       - name: ungrounded_claims
         description: Detect claims the grounding context does not support.
@@ -643,6 +643,11 @@ routing:
         pii_types_allowed:
           - EMAIL_ADDRESS
         description: Sensitive prompts where only low-risk identifiers may pass through.
+      # The masking plugin of static_business_route masks what this rule
+      # detects in the request as it is sent.
+      - name: business_contact_pii
+        threshold: 0.85
+        description: Contact details masked before business requests leave the Router.
 
     kb:
       - name: privacy_policy
@@ -1142,7 +1147,7 @@ routing:
         - type: masking
           configuration:
             enabled: true
-            threshold: 0.85
+            signal: business_contact_pii
             entity_types:
               - EMAIL_ADDRESS
               - PHONE_NUMBER
@@ -1195,12 +1200,22 @@ routing:
           verifier_timeout_seconds: 0
           max_response_bytes: 0
       plugins:
-        - type: hallucination
+        # Answers to prompts that need fact checking are checked against
+        # their grounding context; an unsupported one is delivered with
+        # x-vsr-response-warnings and a note naming the unsupported spans.
+        - type: response_guard
           configuration:
-            enabled: true
-            hallucination_action: header
-            unverified_factual_action: header
-            include_hallucination_details: true
+            rules:
+              - when:
+                  operator: AND
+                  conditions:
+                    - type: fact_check
+                      name: needs_fact_check
+                    - type: hallucination
+                      name: ungrounded_claims
+                action: annotate
+                details: true
+            on_unknown: annotate
         # Disabled sample: filter mode only (reference config union coverage for ToolSelectionPluginConfig filter fields).
         - type: tool_selection
           configuration:
@@ -1545,11 +1560,14 @@ routing:
           discount_factor: 0.9
           use_logprob_verification: true
       plugins:
-        - type: response_jailbreak
+        - type: response_guard
           configuration:
-            enabled: true
-            threshold: 0.85
-            action: header
+            rules:
+              - when:
+                  type: jailbreak
+                  name: unsafe_completion
+                action: block
+            on_unknown: block
 
     - name: safe_hybrid_route
       description: Composite route combining AND, OR, and NOT with Hybrid selection.

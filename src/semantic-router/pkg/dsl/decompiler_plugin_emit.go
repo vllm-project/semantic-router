@@ -18,14 +18,13 @@ var typedPluginConfigEmitters = map[string]typedPluginConfigEmitter{
 	"router_replay":       emitRouterReplayPluginConfig,
 	"shadow_dispatch":     emitStructuredPluginConfig,
 	"memory":              emitMemoryPluginConfig,
-	"hallucination":       emitHallucinationPluginConfig,
+	"response_guard":      emitStructuredPluginConfig,
 	"fast_response":       emitFastResponsePluginConfig,
 	"request_params":      emitRequestParamsPluginConfig,
 	"tool_selection":      emitToolSelectionPluginConfig,
 	"tools":               emitToolsPluginConfig,
 	"rag":                 emitRAGPluginConfig,
 	"header_mutation":     emitHeaderMutationPluginConfig,
-	"response_jailbreak":  emitResponseJailbreakPluginConfig,
 	"masking":             emitStructuredPluginConfig,
 }
 
@@ -109,25 +108,6 @@ func emitMemoryPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
 	}
 	if cfg.AutoStore != nil {
 		fmt.Fprintf(sb, "    auto_store: %v\n", *cfg.AutoStore)
-	}
-}
-
-func emitHallucinationPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
-	cfg, ok := decodePluginConfig[config.HallucinationPluginConfig](p)
-	if !ok {
-		return
-	}
-	if cfg.Enabled {
-		fmt.Fprintf(sb, "    enabled: true\n")
-	}
-	if cfg.HallucinationAction != "" {
-		fmt.Fprintf(sb, "    hallucination_action: %q\n", cfg.HallucinationAction)
-	}
-	if cfg.UnverifiedFactualAction != "" {
-		fmt.Fprintf(sb, "    unverified_factual_action: %q\n", cfg.UnverifiedFactualAction)
-	}
-	if cfg.IncludeHallucinationDetails {
-		fmt.Fprintf(sb, "    include_hallucination_details: true\n")
 	}
 }
 
@@ -314,23 +294,6 @@ func emitHeaderMutationPluginConfig(sb *strings.Builder, p *config.DecisionPlugi
 	}
 	if len(cfg.Delete) > 0 {
 		fmt.Fprintf(sb, "    delete: %s\n", formatStringArray(cfg.Delete))
-	}
-}
-
-func emitResponseJailbreakPluginConfig(
-	sb *strings.Builder,
-	p *config.DecisionPlugin,
-) {
-	cfg, ok := decodePluginConfig[config.ResponseJailbreakPluginConfig](p)
-	if !ok {
-		return
-	}
-	fmt.Fprintf(sb, "    enabled: %t\n", cfg.Enabled)
-	if cfg.Threshold != 0 {
-		fmt.Fprintf(sb, "    threshold: %g\n", cfg.Threshold)
-	}
-	if cfg.Action != "" {
-		fmt.Fprintf(sb, "    action: %q\n", cfg.Action)
 	}
 }
 

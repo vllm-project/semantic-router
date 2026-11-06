@@ -33306,592 +33306,6 @@
         "x-vllm-sr-visibility": "primary"
       }
     },
-    "/api/v1/plugins/hallucination/preview": {
-      "post": {
-        "summary": "Preview an active binding's hallucination policy and supplied fact-check/context conditions; mode=probe explicitly invokes configured detectors without generation or persistence",
-        "description": "Preview an active binding's hallucination policy and supplied fact-check/context conditions; mode=probe explicitly invokes configured detectors without generation or persistence",
-        "operationId": "post_api_v1_plugins_hallucination_preview",
-        "tags": [
-          "plugins"
-        ],
-        "security": [
-          {},
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Guard policy and optional grounded detector evidence",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "action": {
-                      "type": "string"
-                    },
-                    "backend_calls": {
-                      "type": "boolean"
-                    },
-                    "binding": {
-                      "type": "object",
-                      "properties": {
-                        "decision": {
-                          "type": "string"
-                        },
-                        "recipe": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "recipe",
-                        "decision"
-                      ]
-                    },
-                    "detected": {
-                      "type": "boolean"
-                    },
-                    "detection_source": {
-                      "type": "string"
-                    },
-                    "eligible": {
-                      "type": "boolean"
-                    },
-                    "enabled": {
-                      "type": "boolean"
-                    },
-                    "label": {
-                      "type": "string"
-                    },
-                    "matched_rules": {
-                      "nullable": true,
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "mode": {
-                      "type": "string"
-                    },
-                    "persisted": {
-                      "type": "boolean"
-                    },
-                    "reason": {
-                      "type": "string"
-                    },
-                    "resolved": {
-                      "type": "boolean"
-                    },
-                    "score": {
-                      "nullable": true,
-                      "type": "number"
-                    },
-                    "score_kind": {
-                      "type": "string"
-                    },
-                    "unsupported_spans": {
-                      "nullable": true,
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    }
-                  },
-                  "required": [
-                    "mode",
-                    "persisted",
-                    "backend_calls",
-                    "binding",
-                    "enabled",
-                    "eligible",
-                    "resolved",
-                    "detected",
-                    "action",
-                    "detection_source"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        },
-                        "timestamp": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "A management bearer token is required or invalid when bearer authentication is enabled",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        },
-                        "timestamp": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The authenticated role lacks the operation permission",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        },
-                        "timestamp": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        },
-                        "timestamp": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request body too large",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        },
-                        "timestamp": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        },
-                        "timestamp": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        },
-                        "timestamp": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        },
-                        "timestamp": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "504": {
-            "description": "Gateway Timeout",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        },
-                        "timestamp": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "description": "application/json request payload. Limit: 10485760 bytes.",
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "binding": {
-                    "type": "object",
-                    "properties": {
-                      "decision": {
-                        "type": "string"
-                      },
-                      "recipe": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "recipe",
-                      "decision"
-                    ],
-                    "additionalProperties": false
-                  },
-                  "context": {
-                    "type": "string"
-                  },
-                  "fact_check_needed": {
-                    "type": "boolean"
-                  },
-                  "mode": {
-                    "type": "string"
-                  },
-                  "question": {
-                    "type": "string"
-                  },
-                  "response": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "binding",
-                  "question",
-                  "context",
-                  "response",
-                  "fact_check_needed"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "x-vllm-sr-permission": "classify.invoke",
-        "x-vllm-sr-sensitivity": "operational",
-        "x-vllm-sr-plane": "management",
-        "x-vllm-sr-audiences": [
-          "agent",
-          "operator"
-        ],
-        "x-vllm-sr-stability": "stable",
-        "x-vllm-sr-plugin-operations": [
-          {
-            "plugin": "hallucination",
-            "mode": "preview"
-          },
-          {
-            "plugin": "hallucination",
-            "mode": "probe"
-          }
-        ],
-        "x-vllm-sr-visibility": "primary"
-      }
-    },
     "/api/v1/plugins/header_mutation/preview": {
       "post": {
         "summary": "Preview ordered Envoy header operations; values require secret_view; no persistence or backend calls",
@@ -35321,11 +34735,11 @@
         "x-vllm-sr-visibility": "primary"
       }
     },
-    "/api/v1/plugins/response_jailbreak/preview": {
+    "/api/v1/plugins/response_guard/preview": {
       "post": {
-        "summary": "Preview an active binding's response-jailbreak policy; mode=probe explicitly invokes its configured classifier without generation or persistence",
-        "description": "Preview an active binding's response-jailbreak policy; mode=probe explicitly invokes its configured classifier without generation or persistence",
-        "operationId": "post_api_v1_plugins_response_jailbreak_preview",
+        "summary": "Preview what an active binding's response_guard does with an answer; mode=probe reads the guard's request-stage conditions on the question and its response-stage signals on the answer and context, without generation or persistence",
+        "description": "Preview what an active binding's response_guard does with an answer; mode=probe reads the guard's request-stage conditions on the question and its response-stage signals on the answer and context, without generation or persistence",
+        "operationId": "post_api_v1_plugins_response_guard_preview",
         "tags": [
           "plugins"
         ],
@@ -35337,7 +34751,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Guard policy and optional classifier evidence",
+            "description": "Guard action, rule outcomes and the response-stage signals they read",
             "content": {
               "application/json": {
                 "schema": {
@@ -35364,28 +34778,6 @@
                         "decision"
                       ]
                     },
-                    "detected": {
-                      "type": "boolean"
-                    },
-                    "detection_source": {
-                      "type": "string"
-                    },
-                    "eligible": {
-                      "type": "boolean"
-                    },
-                    "enabled": {
-                      "type": "boolean"
-                    },
-                    "label": {
-                      "type": "string"
-                    },
-                    "matched_rules": {
-                      "nullable": true,
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
                     "mode": {
                       "type": "string"
                     },
@@ -35395,17 +34787,78 @@
                     "reason": {
                       "type": "string"
                     },
-                    "resolved": {
-                      "type": "boolean"
-                    },
-                    "score": {
+                    "rules": {
                       "nullable": true,
-                      "type": "number"
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "action": {
+                            "type": "string"
+                          },
+                          "matched_rules": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "state": {
+                            "type": "string"
+                          },
+                          "warnings": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "state"
+                        ]
+                      }
                     },
-                    "score_kind": {
-                      "type": "string"
+                    "signals": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "label": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "score": {
+                            "nullable": true,
+                            "type": "number"
+                          },
+                          "score_kind": {
+                            "type": "string"
+                          },
+                          "signal": {
+                            "type": "string"
+                          },
+                          "unsupported_spans": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "verdict": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "signal",
+                          "verdict"
+                        ]
+                      }
                     },
-                    "unsupported_spans": {
+                    "warnings": {
                       "nullable": true,
                       "type": "array",
                       "items": {
@@ -35418,12 +34871,7 @@
                     "persisted",
                     "backend_calls",
                     "binding",
-                    "enabled",
-                    "eligible",
-                    "resolved",
-                    "detected",
-                    "action",
-                    "detection_source"
+                    "action"
                   ]
                 }
               }
@@ -35858,7 +35306,13 @@
                     ],
                     "additionalProperties": false
                   },
+                  "context": {
+                    "type": "string"
+                  },
                   "mode": {
+                    "type": "string"
+                  },
+                  "question": {
                     "type": "string"
                   },
                   "response": {
@@ -35867,6 +35321,7 @@
                 },
                 "required": [
                   "binding",
+                  "question",
                   "response"
                 ],
                 "additionalProperties": false
@@ -35884,11 +35339,11 @@
         "x-vllm-sr-stability": "stable",
         "x-vllm-sr-plugin-operations": [
           {
-            "plugin": "response_jailbreak",
+            "plugin": "response_guard",
             "mode": "preview"
           },
           {
-            "plugin": "response_jailbreak",
+            "plugin": "response_guard",
             "mode": "probe"
           }
         ],

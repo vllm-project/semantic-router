@@ -153,13 +153,13 @@ config:
           - type: header_mutation
             configuration:
               add:
-                - name: x-vsr-e2e-added
+                - name: x-e2e-added
                   value: added-by-router
               update:
-                - name: x-vsr-e2e-updated
+                - name: x-e2e-updated
                   value: updated-by-router
               delete:
-                - x-vsr-e2e-deleted
+                - x-e2e-deleted
       - &tools_passthrough_decision
         name: tools_passthrough_decision
         description: "Deterministic route for tools passthrough provider-boundary coverage (issue #3180)."
@@ -377,7 +377,7 @@ config:
             configuration:
               enabled: true
               system_prompt: "Contract route: system_prompt + tool_selection (non-PII path)."
-              mode: append
+              mode: replace
       - &business_decision
         name: business_decision
         description: Business and management related queries

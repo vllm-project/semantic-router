@@ -9,6 +9,7 @@ import (
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
@@ -68,10 +69,14 @@ func recordResponseHeaderFacts(ctx *RequestContext) {
 		&ctx.VSRMatchedModality, &ctx.VSRMatchedAuthz, &ctx.VSRMatchedJailbreak, &ctx.VSRMatchedSafety,
 		&ctx.VSRMatchedPII, &ctx.VSRMatchedKB, &ctx.VSRMatchedConversation, &ctx.VSRMatchedEvent,
 		&ctx.VSRMatchedInputModality, &ctx.VSRMatchedDecisionModel, &ctx.VSRMatchedProjection,
-		&ctx.VSRMatchedResponseJailbreak, &ctx.VSRMatchedHallucination,
 	} {
 		*matched = []string{"matched-rule"}
 	}
+	ctx.ResponseGuard = &responseGuardRun{conditions: observedConditions{
+		jailbreak:     &classification.ResponseJailbreakObservation{Signal: &classification.ResponseJailbreakSignal{MatchedRules: []string{"matched-rule"}}},
+		hallucination: &classification.ResponseHallucinationObservation{Signal: &classification.ResponseHallucinationSignal{MatchedRules: []string{"matched-rule"}}},
+		systemOne:     &classification.ResponseSystemOneSignal{MatchedRules: []string{"matched-rule"}},
+	}}
 	ctx.VSRContextTokenCount = 1500
 }
 

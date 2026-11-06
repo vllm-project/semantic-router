@@ -698,7 +698,6 @@ func applyParsedConfigDefaults(cfg *RouterConfig) {
 		cfg.VectorStore.ApplyDefaults()
 	}
 	applyBatchConcurrencyMigration(cfg)
-	dropReliabilityHeaderMutations(cfg)
 }
 
 func logParsedDecisions(cfg *RouterConfig) {

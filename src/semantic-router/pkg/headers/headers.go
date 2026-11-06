@@ -384,18 +384,22 @@ const (
 )
 
 // Response Warnings Header (v0.4)
-// VSRResponseWarnings consolidates the response-quality warnings into a single
-// comma-separated header on the default response surface (#2204, #2200). The
-// per-warning detail (hallucination spans, jailbreak type/confidence,
-// fact-check verification context) stays in the replay record, recoverable via
-// x-vsr-replay-id. Absent when no warnings were produced.
+// VSRResponseWarnings carries, comma-separated, the codes of the selected
+// decision's response_guard rules that annotated the answer (#2204, #2200).
+// The per-warning detail (hallucination spans, jailbreak type/confidence)
+// stays in the replay record, recoverable via x-vsr-replay-id. Absent when no
+// rule annotated.
 const (
 	VSRResponseWarnings = "x-vsr-response-warnings"
 
-	// Warning codes carried, in order, in the VSRResponseWarnings value.
+	// Warning codes carried, in rule order, in the VSRResponseWarnings value:
+	// a rule over a hallucination signal (unverified_factual when the answer
+	// could not be checked), over a response-stage jailbreak signal, or over
+	// any other signal.
 	ResponseWarningHallucination     = "hallucination"
 	ResponseWarningUnverifiedFactual = "unverified_factual"
 	ResponseWarningJailbreak         = "response_jailbreak"
+	ResponseWarningGuard             = "response_guard"
 )
 
 // Auth Backend Injected Headers

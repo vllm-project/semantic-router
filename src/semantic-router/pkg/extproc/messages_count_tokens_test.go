@@ -96,7 +96,7 @@ func TestCountTokensEstimatesWithoutAMessagesBackend(t *testing.T) {
 		response, _ := sendCountTokens(t, routingTestRouter("chat-model"), "chat-session", body)
 		require.Equal(t, want, countTokensEstimate(t, response))
 	})
-	masking, err := config.NewStructuredPayload(map[string]any{"enabled": true})
+	masking, err := config.NewStructuredPayload(map[string]any{"enabled": true, "signal": "personal"})
 	require.NoError(t, err)
 	fastResponse, err := config.NewStructuredPayload(map[string]any{"message": "refused"})
 	require.NoError(t, err)

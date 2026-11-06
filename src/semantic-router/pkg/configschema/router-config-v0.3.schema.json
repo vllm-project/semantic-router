@@ -2593,7 +2593,7 @@
           "if": {
             "properties": {
               "type": {
-                "const": "hallucination"
+                "const": "response_guard"
               }
             },
             "required": [
@@ -2603,7 +2603,7 @@
           "then": {
             "properties": {
               "configuration": {
-                "$ref": "#/$defs/HallucinationPluginConfig"
+                "$ref": "#/$defs/ResponseGuardPluginConfig"
               }
             }
           }
@@ -2726,25 +2726,6 @@
           "if": {
             "properties": {
               "type": {
-                "const": "response_jailbreak"
-              }
-            },
-            "required": [
-              "type"
-            ]
-          },
-          "then": {
-            "properties": {
-              "configuration": {
-                "$ref": "#/$defs/ResponseJailbreakPluginConfig"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "type": {
                 "const": "context_compression"
               }
             },
@@ -2824,7 +2805,6 @@
           "enum": [
             "context_compression",
             "fast_response",
-            "hallucination",
             "header_mutation",
             "masking",
             "memory",
@@ -2832,7 +2812,7 @@
             "rag",
             "request_params",
             "response_cache",
-            "response_jailbreak",
+            "response_guard",
             "router_replay",
             "shadow_dispatch",
             "system_prompt",
@@ -3506,24 +3486,6 @@
         },
         "prototype_scoring": {
           "$ref": "#/$defs/PrototypeScoringConfig"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "HallucinationPluginConfig": {
-      "properties": {
-        "enabled": {
-          "type": "boolean"
-        },
-        "hallucination_action": {
-          "type": "string"
-        },
-        "unverified_factual_action": {
-          "type": "string"
-        },
-        "include_hallucination_details": {
-          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -4376,8 +4338,8 @@
         "enabled": {
           "type": "boolean"
         },
-        "threshold": {
-          "type": "number"
+        "signal": {
+          "type": "string"
         },
         "entity_types": {
           "items": {
@@ -6717,16 +6679,98 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "ResponseJailbreakPluginConfig": {
+    "ResponseGuardCondition": {
       "properties": {
-        "enabled": {
-          "type": "boolean"
+        "type": {
+          "type": "string",
+          "enum": [
+            "action",
+            "authz",
+            "classifier",
+            "complexity",
+            "context",
+            "conversation",
+            "domain",
+            "embedding",
+            "event",
+            "fact_check",
+            "hallucination",
+            "input_modality",
+            "jailbreak",
+            "kb",
+            "keyword",
+            "language",
+            "metadata",
+            "modality",
+            "pii",
+            "preference",
+            "reask",
+            "safety",
+            "structure",
+            "systemone",
+            "topic_continuity",
+            "user_feedback",
+            "projection"
+          ]
         },
-        "threshold": {
-          "type": "number"
+        "name": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "predicate": {
+          "$ref": "#/$defs/NumericPredicate"
+        },
+        "operator": {
+          "type": "string"
+        },
+        "conditions": {
+          "items": {
+            "$ref": "#/$defs/ResponseGuardCondition"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "A response_guard condition: a leaf naming any signal, or AND, OR or NOT over conditions."
+    },
+    "ResponseGuardPluginConfig": {
+      "properties": {
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/ResponseGuardRule"
+          },
+          "type": "array"
+        },
+        "on_unknown": {
+          "type": "string",
+          "enum": [
+            "block",
+            "annotate",
+            "none"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ResponseGuardRule": {
+      "properties": {
+        "when": {
+          "$ref": "#/$defs/ResponseGuardCondition"
         },
         "action": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "block",
+            "annotate",
+            "none"
+          ]
+        },
+        "details": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -7860,7 +7904,11 @@
           "type": "string"
         },
         "mode": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "insert",
+            "replace"
+          ]
         }
       },
       "additionalProperties": false,
@@ -9059,14 +9107,14 @@
       {
         "type": "header_mutation",
         "display_name": "Header Mutation",
-        "description": "Add, update, or remove provider-bound headers.",
+        "description": "Add, update, or remove provider-bound headers the Router does not own.",
         "schema_ref": "#/$defs/HeaderMutationPluginConfig"
       },
       {
-        "type": "hallucination",
-        "display_name": "Hallucination",
-        "description": "Apply response hallucination handling.",
-        "schema_ref": "#/$defs/HallucinationPluginConfig"
+        "type": "response_guard",
+        "display_name": "Response Guard",
+        "description": "Block or annotate answers on the signals they are checked with.",
+        "schema_ref": "#/$defs/ResponseGuardPluginConfig"
       },
       {
         "type": "router_replay",
@@ -9105,12 +9153,6 @@
         "schema_ref": "#/$defs/RequestParamsPluginConfig"
       },
       {
-        "type": "response_jailbreak",
-        "display_name": "Response Jailbreak",
-        "description": "Screen generated responses for jailbreak-like output.",
-        "schema_ref": "#/$defs/ResponseJailbreakPluginConfig"
-      },
-      {
         "type": "context_compression",
         "display_name": "Context Compression",
         "description": "Compress selected context before provider dispatch.",
@@ -9131,7 +9173,7 @@
       {
         "type": "masking",
         "display_name": "Masking",
-        "description": "Replace detected PII in the provider-bound request with placeholders.",
+        "description": "Replace the personal data a pii rule finds in the provider-bound request with placeholders.",
         "schema_ref": "#/$defs/MaskingPluginConfig"
       }
     ],

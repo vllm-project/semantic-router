@@ -27,38 +27,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/topiccontinuity"
 )
 
-// EnhancedHallucinationSpan is one unsupported span with its offsets, score,
-// severity and explanation.
-type EnhancedHallucinationSpan struct {
-	Text                    string  `json:"text"`
-	Start                   int     `json:"start"`
-	End                     int     `json:"end"`
-	HallucinationConfidence float32 `json:"hallucination_confidence,omitempty"`
-	ScoreAvailable          bool    `json:"score_available"`
-	Severity                int     `json:"severity"`    // 0-4: 0=low, 4=critical
-	Explanation             string  `json:"explanation"` // Human-readable explanation
-}
-
-// ResponseHallucinationEvidence is the detector output behind the
-// hallucination signal: the verdict, its confidence, and the spans it rests
-// on, with span details when the detector explains them.
-type ResponseHallucinationEvidence struct {
-	Detected       bool
-	Confidence     float32
-	ScoreAvailable bool
-	ScoreKind      string
-	Spans          []string
-	Enhanced       *EnhancedHallucinationInfo
-}
-
-// EnhancedHallucinationInfo contains detailed NLI analysis of hallucinations.
-type EnhancedHallucinationInfo struct {
-	Confidence     float32                     `json:"confidence,omitempty"`
-	ScoreAvailable bool                        `json:"score_available"`
-	ScoreKind      string                      `json:"score_kind,omitempty"`
-	Spans          []EnhancedHallucinationSpan `json:"spans"`
-}
-
 // SessionProvenance identifies how RequestContext.SessionID was derived. A
 // closed enum: only the values declared below are valid, and callers must
 // not construct or compare against any other string. See
@@ -350,25 +318,18 @@ type RequestContext struct {
 	VSRSignalValues           map[string]float64
 	VSRSignalErrors           map[string]string
 	VSRSignalErrorMatches     map[string]bool
-	// VSRMatchedResponseJailbreak holds response-direction jailbreak rules that
-	// matched. Populated after the model answers, unlike every VSRMatched*
-	// above it.
-	VSRMatchedResponseJailbreak []string
-	// VSRResponseJailbreakType and VSRResponseJailbreakRisk are the evidence the
-	// response-stage signal was computed from, kept so the plugin does not have
-	// to re-derive them from the per-rule confidences.
-	VSRResponseJailbreakType           string
-	VSRResponseJailbreakRisk           float32
-	VSRResponseJailbreakScoreAvailable bool
-	VSRResponseJailbreakDecision       *tasks.LabelDecision
-	// VSRMatchedHallucination holds hallucination rules that matched once the
-	// model answered. VSRHallucinationEvidence is what the observation was
-	// computed from, kept for the plugin that consumes it and for Router
-	// Replay; it is nil when the rule was not evaluated for this request.
-	VSRMatchedHallucination  []string
-	VSRHallucinationEvidence *ResponseHallucinationEvidence
-	VSRDecisionDiagnostics   decision.EvaluationDiagnostics
-	VSRProjectionTrace       *projectiontrace.Trace
+	// RoutedSignals is the decision engine's view of the request-stage
+	// signals, which the selected decision's response_guard reads once the
+	// model has answered.
+	RoutedSignals *decision.SignalMatches
+	// ResponseStage is what response-stage rules read about the request; the
+	// answer and its grounding context join it once the model has answered.
+	ResponseStage classification.ResponseInput
+	// ResponseGuard is what the selected decision's response_guard made of
+	// the answer, nil until it ran.
+	ResponseGuard          *responseGuardRun
+	VSRDecisionDiagnostics decision.EvaluationDiagnostics
+	VSRProjectionTrace     *projectiontrace.Trace
 
 	// VSRContextReserveTokens is the reserve part of VSRContextTokenCount
 	// (llmprotocol.InputEstimate.ReserveTokens). Refusals rest on the count
@@ -376,21 +337,13 @@ type RequestContext struct {
 	// reserve from VSRContextTokenCount for the rest of the request.
 	VSRContextReserveTokens int
 
-	// Hallucination mitigation tracking
-	FactCheckNeeded             bool     // Result of fact-check classification
-	FactCheckConfidence         float32  // Confidence score of fact-check classification
-	HasToolsForFactCheck        bool     // Request has tools that provide context for fact-checking
-	ToolResultsContext          string   // Aggregated tool results for hallucination check
-	UserContent                 string   // Stored user content for hallucination detection
-	RequestAudio                string   // First inline user audio, never a remote URL or local path
-	RequestImageURL             string   // First image URL from user messages (for Tier 1 complexity classification)
-	HallucinationDetected       bool     // Result of hallucination detection
-	HallucinationSpans          []string // Unsupported spans found in answer (basic mode)
-	HallucinationScoreAvailable bool
-	HallucinationScoreKind      string
-	HallucinationConfidence     float32                    // Confidence score of hallucination detection
-	EnhancedHallucinationInfo   *EnhancedHallucinationInfo // Detailed NLI info (when use_nli enabled)
-	UnverifiedFactualResponse   bool                       // True if fact-check needed but no tools to verify against
+	// Fact-check state that memory admission and RAG read.
+	FactCheckNeeded      bool    // Result of fact-check classification
+	FactCheckConfidence  float32 // Confidence score of fact-check classification
+	HasToolsForFactCheck bool    // Request has tools that provide context for fact-checking
+	UserContent          string  // The routing text the request selected
+	RequestAudio         string  // First inline user audio, never a remote URL or local path
+	RequestImageURL      string  // First image URL from user messages (for Tier 1 complexity classification)
 
 	// Jailbreak Detection Results (request-level, from signal classification)
 	JailbreakDetected       bool   // True if jailbreak was detected in user input
@@ -398,13 +351,6 @@ type RequestContext struct {
 	JailbreakDecision       *tasks.LabelDecision
 	JailbreakConfidence     float32 // Confidence score of jailbreak detection
 	JailbreakScoreAvailable bool
-
-	// Response-level Jailbreak Detection Results (from response body scanning)
-	ResponseJailbreakDetected       bool   // True if jailbreak content detected in LLM response
-	ResponseJailbreakType           string // Type of jailbreak detected in response
-	ResponseJailbreakDecision       *tasks.LabelDecision
-	ResponseJailbreakConfidence     float32 // Confidence score of response jailbreak detection
-	ResponseJailbreakScoreAvailable bool
 
 	// PII Detection Results
 	// PIIContentVerified means the classifier fully scanned the available text without PII.
@@ -499,6 +445,9 @@ type RequestContext struct {
 	// Masking is the request-scoped placeholder allocator: created on the
 	// first masked dispatch, never persisted, logged or shared (D5).
 	Masking *masking.Allocator
+	// PIIScans holds the request's PII classifications by text, so masking
+	// does not ask the model again about text routing already read.
+	PIIScans *classification.PIIScans
 
 	// RAG (Retrieval-Augmented Generation) tracking
 	RAGRetrievedContext string  // Retrieved context from RAG plugin

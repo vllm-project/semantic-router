@@ -116,23 +116,3 @@ func TestGenericClassifierSignalMetricsUseRecipeScope(t *testing.T) {
 		t.Fatalf("unscoped match counter moved by %v, want 0", got)
 	}
 }
-
-// Response-stage evaluators live in extproc and reach the scoping through the
-// exported wrapper, so the wrapper has to scope exactly like the in-package
-// helper it forwards to.
-func TestExportedRecordSignalExtractionUsesRecipeScope(t *testing.T) {
-	const signalName = "metric_scope_exported_rule"
-	classifier := &Classifier{Config: &config.RouterConfig{RoutingScope: "metric-scope-recipe"}}
-	scoped := config.RoutingNamespaceKey(classifier.Config.RoutingScope, signalName)
-	before := extractionCount(config.SignalTypeJailbreak, scoped)
-	beforeLocal := extractionCount(config.SignalTypeJailbreak, signalName)
-
-	classifier.RecordSignalExtraction(config.SignalTypeJailbreak, signalName, 0.01)
-
-	if got := extractionCount(config.SignalTypeJailbreak, scoped) - before; got != 1 {
-		t.Fatalf("scoped extraction counter moved by %v, want 1", got)
-	}
-	if got := extractionCount(config.SignalTypeJailbreak, signalName) - beforeLocal; got != 0 {
-		t.Fatalf("unscoped extraction counter moved by %v, want 0", got)
-	}
-}

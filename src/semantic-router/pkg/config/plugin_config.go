@@ -197,11 +197,18 @@ type RequestParamsPluginConfig struct {
 	StripUnknown bool `json:"strip_unknown,omitempty" yaml:"strip_unknown,omitempty"`
 }
 
+// How system_prompt applies its prompt: insert puts it before the first
+// system block's content, replace takes that block's place.
+const (
+	SystemPromptModeInsert  = "insert"
+	SystemPromptModeReplace = "replace"
+)
+
 // SystemPromptPluginConfig represents configuration for system_prompt plugin.
 type SystemPromptPluginConfig struct {
 	Enabled      *bool  `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 	SystemPrompt string `json:"system_prompt,omitempty" yaml:"system_prompt,omitempty"`
-	Mode         string `json:"mode,omitempty" yaml:"mode,omitempty"`
+	Mode         string `json:"mode,omitempty" yaml:"mode,omitempty" jsonschema:"enum=insert,enum=replace"`
 }
 
 // IsEnabled preserves the implicit activation of a nonempty system prompt.
@@ -217,9 +224,17 @@ func (c *SystemPromptPluginConfig) IsEnabled() bool {
 
 func (c *SystemPromptPluginConfig) EffectiveMode() string {
 	if c == nil || c.Mode == "" {
-		return "insert"
+		return SystemPromptModeInsert
 	}
 	return c.Mode
+}
+
+func validateSystemPromptPlugin(at PluginAt, p *SystemPromptPluginConfig) error {
+	switch p.Mode {
+	case "", SystemPromptModeInsert, SystemPromptModeReplace:
+		return nil
+	}
+	return at.Errorf("mode must be insert or replace")
 }
 
 // HeaderMutationPluginConfig represents configuration for header_mutation plugin.
@@ -233,21 +248,6 @@ type HeaderMutationPluginConfig struct {
 type HeaderPair struct {
 	Name  string `json:"name" yaml:"name"`
 	Value string `json:"value" yaml:"value"`
-}
-
-// ResponseJailbreakPluginConfig represents configuration for response-level jailbreak detection.
-type ResponseJailbreakPluginConfig struct {
-	Enabled   bool    `json:"enabled" yaml:"enabled"`
-	Threshold float32 `json:"threshold,omitempty" yaml:"threshold,omitempty"`
-	Action    string  `json:"action,omitempty" yaml:"action,omitempty"`
-}
-
-// HallucinationPluginConfig represents configuration for hallucination detection plugin.
-type HallucinationPluginConfig struct {
-	Enabled                     bool   `json:"enabled" yaml:"enabled"`
-	HallucinationAction         string `json:"hallucination_action,omitempty" yaml:"hallucination_action,omitempty"`
-	UnverifiedFactualAction     string `json:"unverified_factual_action,omitempty" yaml:"unverified_factual_action,omitempty"`
-	IncludeHallucinationDetails bool   `json:"include_hallucination_details,omitempty" yaml:"include_hallucination_details,omitempty"`
 }
 
 // RouterReplayPluginConfig represents configuration for router_replay plugin.
@@ -376,18 +376,6 @@ func (d *Decision) GetSystemPromptConfig() *SystemPromptPluginConfig {
 func (d *Decision) GetHeaderMutationConfig() *HeaderMutationPluginConfig {
 	result := &HeaderMutationPluginConfig{}
 	return decodeDecisionPlugin(d, "header_mutation", result)
-}
-
-// GetHallucinationConfig returns the hallucination plugin configuration.
-func (d *Decision) GetHallucinationConfig() *HallucinationPluginConfig {
-	result := &HallucinationPluginConfig{}
-	return decodeDecisionPlugin(d, "hallucination", result)
-}
-
-// GetResponseJailbreakConfig returns the response_jailbreak plugin configuration.
-func (d *Decision) GetResponseJailbreakConfig() *ResponseJailbreakPluginConfig {
-	result := &ResponseJailbreakPluginConfig{}
-	return decodeDecisionPlugin(d, "response_jailbreak", result)
 }
 
 // GetRouterReplayConfig returns the router_replay plugin configuration.

@@ -33,6 +33,10 @@ plugins:
       system_prompt: You are a domain expert. Answer precisely and state tradeoffs.
 ```
 
+`mode: replace` (the default) replaces the caller's system prompt;
+`mode: insert` puts this prompt before it. Any other mode fails at load, and
+`vllm-sr config migrate` writes it as `replace`, which is what it did.
+
 The inserted text is sent to the selected model and can change cache identity
 and model behavior. Keep secrets and untrusted caller text out of it. See a
 complete example:

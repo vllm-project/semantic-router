@@ -23,6 +23,9 @@ recipes:
         fact_check:
           - name: verification-needed
             description: Requests that require verification.
+        hallucination:
+          - name: ungrounded
+            description: Answers with claims their context does not support.
       projections:
         scores:
           - name: verification-score
@@ -44,9 +47,17 @@ recipes:
             type: projection
             name: verify
           plugins:
-            - type: hallucination
+            - type: response_guard
               configuration:
-                enabled: true
+                rules:
+                  - when:
+                      operator: AND
+                      conditions:
+                        - type: fact_check
+                          name: verification-needed
+                        - type: hallucination
+                          name: ungrounded
+                    action: annotate
 
   - name: feedback
     routing:

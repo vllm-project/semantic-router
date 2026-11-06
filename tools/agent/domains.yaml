@@ -1050,6 +1050,7 @@ profiles:
       - src/semantic-router/pkg/masking/**
       - src/semantic-router/pkg/config/masking_plugin.go
       - src/semantic-router/pkg/extproc/req_filter_masking.go
+      - src/semantic-router/pkg/classification/classifier_pii_rule_spans.go
   local-classifier-backend:
     display_name: Local Classifier Backend
     owner: e2e
@@ -1483,8 +1484,8 @@ profiles:
       - e2e/testcases/hallucination_detection*.go
       - deploy/kubernetes/hallucination/**
       - e2e/testcases/testdata/hallucination_detection_cases.json
-      - src/semantic-router/pkg/extproc/res_filter_hallucination.go
-      - src/semantic-router/pkg/extproc/res_filter_response_stage_hallucination.go
+      - src/semantic-router/pkg/extproc/res_filter_response_guard*.go
+      - src/semantic-router/pkg/classification/classifier_response_conditions.go
       - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
       - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
   jailbreak-onerror:
@@ -1506,8 +1507,8 @@ profiles:
       - e2e/testcases/response_jailbreak_window.go
       - e2e/testcases/response_jailbreak_signal.go
       - deploy/kubernetes/response-jailbreak/**
-      - src/semantic-router/pkg/extproc/res_filter_jailbreak.go
-      - src/semantic-router/pkg/extproc/res_filter_response_stage_signal.go
+      - src/semantic-router/pkg/extproc/res_filter_response_guard*.go
+      - src/semantic-router/pkg/classification/classifier_response_conditions.go
       - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
       - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
       - src/semantic-router/pkg/classification/classifier_signal_response_jailbreak.go

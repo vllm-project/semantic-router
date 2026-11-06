@@ -186,10 +186,10 @@ func (c *Classifier) evaluateSystemOneSignals(
 	mu.Unlock()
 }
 
-// ResponseSystemOneInput is what a response-stage rule reads: the request
-// that was answered, the model's answer and its grounding context (retrieved
+// ResponseInput is what a response-stage rule reads: the request that was
+// answered, the model's answer and its grounding context (retrieved
 // documents and tool results), and the conversation of the request.
-type ResponseSystemOneInput struct {
+type ResponseInput struct {
 	Request           string
 	Answer            string
 	Context           string
@@ -212,7 +212,7 @@ type ResponseSystemOneSignal struct {
 // EvaluateResponseSystemOne asks the named response-stage rules about one
 // answer, one call per deployment, as the request stage asks its rules. A
 // name that is no response-stage rule is skipped.
-func (c *Classifier) EvaluateResponseSystemOne(ctx context.Context, input ResponseSystemOneInput, names []string) *ResponseSystemOneSignal {
+func (c *Classifier) EvaluateResponseSystemOne(ctx context.Context, input ResponseInput, names []string) *ResponseSystemOneSignal {
 	if ctx == nil {
 		ctx = context.Background()
 	}

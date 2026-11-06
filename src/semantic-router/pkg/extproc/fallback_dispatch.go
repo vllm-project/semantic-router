@@ -1077,25 +1077,7 @@ func (r *OpenAIRouter) rollbackFallbackContext(
 	ctx.RequestCostPriced = false
 	ctx.RequestCost = 0
 	ctx.RequestCostCurrency = ""
-	ctx.HallucinationDetected = false
-	ctx.HallucinationConfidence = 0
-	ctx.HallucinationScoreAvailable = false
-	ctx.HallucinationScoreKind = ""
-	ctx.HallucinationSpans = nil
-	ctx.EnhancedHallucinationInfo = nil
-	ctx.UnverifiedFactualResponse = false
-	ctx.ResponseJailbreakDetected = false
-	ctx.ResponseJailbreakType = ""
-	ctx.ResponseJailbreakDecision = nil
-	ctx.ResponseJailbreakConfidence = 0
-	ctx.ResponseJailbreakScoreAvailable = false
-	ctx.VSRMatchedResponseJailbreak = nil
-	ctx.VSRResponseJailbreakType = ""
-	ctx.VSRResponseJailbreakRisk = 0
-	ctx.VSRResponseJailbreakScoreAvailable = false
-	ctx.VSRResponseJailbreakDecision = nil
-	ctx.VSRMatchedHallucination = nil
-	ctx.VSRHallucinationEvidence = nil
+	ctx.ResponseGuard = nil
 	ctx.PrimaryOutputDigest = ""
 	ctx.PrimaryOutputChars = 0
 	r.updateRouterReplayStatus(ctx, primaryStatusCode, wasStreaming)

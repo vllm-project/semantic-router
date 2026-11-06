@@ -162,6 +162,7 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRSignalErrors = cloneReplayStringMap(signals.SignalErrors)
 	ctx.VSRSignalErrorMatches = cloneReplayBoolMap(signals.SignalErrorMatches)
 	ctx.VSRProjectionTrace = cloneProjectionTraceForReplay(signals.ProjectionTrace)
+	ctx.RoutedSignals = signals.Matches()
 
 	if signals.JailbreakDetected || signals.JailbreakScoreAvailable {
 		ctx.JailbreakDetected = signals.JailbreakDetected

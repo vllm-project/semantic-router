@@ -32,12 +32,18 @@ config:
           - model: openai/gpt-oss-20b
             use_reasoning: false
         plugins:
-          - type: hallucination
+          - type: response_guard
             configuration:
-              enabled: true
-              hallucination_action: header
-              unverified_factual_action: header
-              include_hallucination_details: true
+              rules:
+                - when:
+                    operator: AND
+                    conditions:
+                      - type: fact_check
+                        name: needs_fact_check
+                      - type: hallucination
+                        name: ungrounded_claims
+                  action: annotate
+              on_unknown: annotate
       - name: default_decision
         description: Default catch-all decision
         priority: 1
@@ -54,8 +60,7 @@ config:
         - name: no_fact_check_needed
           description: Query is creative, code, or opinion based - no fact verification needed
       # Checked from the model's answer against the tool context the request
-      # carried. The hallucination plugin above enforces on this observation;
-      # without it the plugin would classify the answer itself.
+      # carried. The response_guard above annotates the answer on it.
       hallucination:
         - name: ungrounded_claims
           description: Detect claims in the answer that the tool context does not support.

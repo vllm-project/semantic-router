@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // ReliabilityHeaders are the per-request headers through which the Router
@@ -22,60 +21,6 @@ var ReliabilityHeaders = []string{
 
 func isReliabilityHeader(name string) bool {
 	return slices.Contains(ReliabilityHeaders, strings.ToLower(strings.TrimSpace(name)))
-}
-
-// dropReliabilityHeaderMutations removes the reliability headers from every
-// decision's header_mutation plugin, with a warning. Envoy's ext_proc ignored
-// such entries before its filter allowed these headers, so no working config
-// changes behavior, and the reliability block stays the one retry authority.
-func dropReliabilityHeaderMutations(cfg *RouterConfig) {
-	scopes := [][]Decision{cfg.Decisions}
-	for i := range cfg.Recipes {
-		scopes = append(scopes, cfg.Recipes[i].Profile.Decisions)
-	}
-	for _, decisions := range scopes {
-		for i := range decisions {
-			for j := range decisions[i].Plugins {
-				dropReliabilityHeaderMutation(decisions[i].Name, &decisions[i].Plugins[j])
-			}
-		}
-	}
-}
-
-func dropReliabilityHeaderMutation(decision string, plugin *DecisionPlugin) {
-	if NormalizeDecisionPluginType(plugin.Type) != DecisionPluginHeaderMutation || plugin.Configuration == nil {
-		return
-	}
-	var mutation HeaderMutationPluginConfig
-	if plugin.Configuration.DecodeInto(&mutation) != nil {
-		return
-	}
-	var dropped []string
-	keep := func(name string) bool {
-		if isReliabilityHeader(name) {
-			dropped = append(dropped, strings.ToLower(strings.TrimSpace(name)))
-			return false
-		}
-		return true
-	}
-	keepPairs := func(pairs []HeaderPair) []HeaderPair {
-		return slices.DeleteFunc(pairs, func(pair HeaderPair) bool { return !keep(pair.Name) })
-	}
-	mutation.Add, mutation.Update = keepPairs(mutation.Add), keepPairs(mutation.Update)
-	mutation.Delete = slices.DeleteFunc(mutation.Delete, func(name string) bool { return !keep(name) })
-	if len(dropped) == 0 {
-		return
-	}
-	payload, err := NewStructuredPayload(mutation)
-	if err != nil {
-		return
-	}
-	plugin.Configuration = payload
-	logging.ComponentWarnEvent("config", "reliability_header_mutation_dropped", map[string]interface{}{
-		"decision": decision,
-		"headers":  dropped,
-		"reason":   "a decision's reliability block is the only writer of these headers",
-	})
 }
 
 // DecisionReliability overrides, for the requests a decision routes, the

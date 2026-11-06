@@ -4318,35 +4318,6 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
-    "/api/router/api/v1/plugins/hallucination/preview": {
-      "post": {
-        "operationId": "postApiRouterApiV1PluginsHallucinationPreview",
-        "summary": "POST /api/router/api/v1/plugins/hallucination/preview",
-        "tags": [
-          "router"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "evaluation.run",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "evaluation",
-        "x-vllm-sr-audit-mode": "none",
-        "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
     "/api/router/api/v1/plugins/header_mutation/preview": {
       "post": {
         "operationId": "postApiRouterApiV1PluginsHeaderMutationPreview",
@@ -4437,10 +4408,10 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
-    "/api/router/api/v1/plugins/response_jailbreak/preview": {
+    "/api/router/api/v1/plugins/response_guard/preview": {
       "post": {
-        "operationId": "postApiRouterApiV1PluginsResponseJailbreakPreview",
-        "summary": "POST /api/router/api/v1/plugins/response_jailbreak/preview",
+        "operationId": "postApiRouterApiV1PluginsResponseGuardPreview",
+        "summary": "POST /api/router/api/v1/plugins/response_guard/preview",
         "tags": [
           "router"
         ],

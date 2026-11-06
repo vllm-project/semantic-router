@@ -19,11 +19,11 @@ translation:
 - 将检测不受支持的主张与 Router 对此采取的动作分开。
 - 将 detected、not-detected 与 unavailable 作为不同状态报告，因此无法检查的回答绝不会被读成已核验。
 - 像其他规则一样，把检查范围限定在请求解析到的配方。
-- 为每条规则记录一条路由回放结果，包含判定、置信度、片段数量以及插件应用的动作。
+- 为每条规则记录一条路由回放结果，包含判定、置信度、片段数量以及守卫应用的动作。
 
 ## 解决什么问题？ {#what-problem-does-it-solve}
 
-即使给了证据，模型仍可能答出范围之外的内容：错误数字、编造的名字、上下文从未陈述的细节。在绑定到 `hallucination` 插件内检查回答，会把检测与执行绑在一起：检查只在启用插件的地方运行，结果只对该插件可见，失败或无法检查看起来与干净回答一样。
+即使给了证据，模型仍可能答出范围之外的内容：错误数字、编造的名字、上下文从未陈述的细节。在执行动作的插件内部检查回答，会把检测与执行绑在一起：结果只对该插件可见，失败或无法检查看起来与干净回答一样。
 
 `hallucination` 把检查作为响应阶段观察发布在 `hallucination:<name>` 键下，形状与路由回放和插件读取其他信号时相同。
 
@@ -32,8 +32,8 @@ translation:
 在以下情况使用 `hallucination`：
 
 - 依据工具结果或检索上下文的回答必须在信任前被检查
-- 决策的 `hallucination` 插件应在证据上执行，而不是产生证据
-- 路由回放应记录回答是否被检查、结果如何，无论插件是否据此行动
+- 决策的 [`response_guard`](../../plugin/response-guard) 应依据证据行动，而不是产生证据
+- 路由回放应记录回答是否被检查、结果如何，无论守卫是否据此行动
 - 不受支持的主张应连同其所依据的片段一起报告
 
 ## 配置 {#configuration}
@@ -50,20 +50,19 @@ routing:
 
 ### 阶段 {#stage}
 
-幻觉规则在响应阶段观察：它检查模型回答，因此只有模型回答后才存在。它不是决策输入。决策在请求路由时、模型回答前选定，因此在规则中或通过投影直接读取该规则的决策会在配置加载时被拒绝。观察由请求所选决策的 `hallucination` 插件消费：匹配时应用 `hallucination_action`，对没有可对照检查内容的回答应用 `unverified_factual_action`。
+幻觉规则在响应阶段观察：它检查模型回答，因此只有模型回答后才存在。它不是决策输入。决策在请求路由时、模型回答前选定，因此在规则中或通过投影直接读取该规则的决策会在配置加载时被拒绝。观察由请求所选决策的 [`response_guard`](../../plugin/response-guard) 读取，由其规则按名称引用。同时读取请求阶段 [fact-check](./fact-check) 信号的规则（如 `AND[fact_check, hallucination]`）只检查那些提出值得锚定主张的提示的回答：`AND` 在为假的事实核查条件处停止，检测器不会运行。
 
-仅当请求阶段的 [fact-check](./fact-check) 信号表明提示提出值得锚定的主张、且请求携带了可对照的上下文时，检测器才有东西可检查：
+回答对照 RAG 检索到的文档和请求自身的工具结果进行检查：
 
 - 回答有依据上下文并已检查：`detected` 或 `not_detected`，检测器置信度在 `hallucination:<name>` 下
-- 提示需要锚定，但请求没有携带工具结果或检索上下文：unavailable，通过 `SignalErrors` 报告为 `hallucination_context_unavailable`，这是插件的 `unverified_factual_action` 所作用的情况
+- 请求没有携带工具结果或检索上下文：unavailable，通过 `SignalErrors` 报告为 `hallucination_context_unavailable`
 - 检测器失败或从未供给，或响应没有可检查的文本：unavailable，报告为 `hallucination_evaluation_failed`
-- 提示没有提出值得锚定的主张：规则不适用且不发布；路由回放将其记录为 `not_applicable`
 
-使用 `x-vsr-debug` 时，`x-vsr-matched-hallucination` 请求头携带匹配的规则。
+读取不可用规则的守卫规则采用守卫的 `on_unknown`，并以 `unverified_factual` 而非 `hallucination` 标注。使用 `x-vsr-debug` 时，`x-vsr-matched-hallucination` 请求头携带匹配的规则。
 
-流式回答在流结束后检查，并以 `enforcement: not_enforced_streaming` 代替动作记录。此时字节已到达客户端，因此 `hallucination` 插件不运行，`hallucination_action` 与 `unverified_factual_action` 都不适用。从未到达终端回答的流不检查，也不记录任何内容。
+流式回答在流结束后检查，并以 `enforcement: not_enforced_streaming` 代替动作记录。此时字节已到达客户端，因此不执行任何守卫动作。从未到达终端回答的流不检查，也不记录任何内容。
 
-声明规则就足以为本配方供给检测器，即使没有决策启用插件。决策的 `hallucination` 插件在未声明规则时运行会在加载时报告：插件随后自己对回答分类，这是兼容路径。
+声明规则就足以为本配方供给检测器，即使没有守卫读取它。
 
 ## Vela 2.0 {#vela-20}
 

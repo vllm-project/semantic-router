@@ -39,19 +39,23 @@ plugins:
       add:
         - name: X-Safety-Profile
           value: standard
-  - type: response_jailbreak
+  - type: response_guard
     configuration:
-      enabled: true
-      threshold: 0.8
-      action: header
+      rules:
+        - when:
+            type: jailbreak
+            name: unsafe_completion
+          action: annotate
 ```
 
 This is a composition example, not a `content_safety` plugin type. The
 `system_prompt` adds request-side guidance, `header_mutation` adds a policy
-label, and `response_jailbreak` evaluates the generated response. The bundle
-does not run a request-side content classifier, and the header is not proof
-that content is safe. Calibrate response screening and decide whether
-header-only handling is sufficient.
+label, and the [`response_guard`](./response-guard) annotates a generated
+response that the jailbreak rule `unsafe_completion`, declared with
+`direction: response`, flags. The bundle does not run a request-side content
+classifier, and the header is not proof that content is safe. Calibrate the
+rule's threshold and decide whether annotating is sufficient or the rule
+should block.
 
 See the complete bundle:
 [`config/fragments/plugin/content-safety/hybrid.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/content-safety/hybrid.yaml).

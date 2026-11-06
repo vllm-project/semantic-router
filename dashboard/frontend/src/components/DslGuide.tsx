@@ -610,7 +610,7 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
 
       {/* Plugins */}
       {matchesSearch(
-        'plugin jailbreak pii cache memory rag request_params fast_response response_jailbreak tools',
+        'plugin jailbreak pii cache memory rag request_params fast_response response_guard tools',
       ) && (
         <Section title={`Plugins (${PLUGIN_TYPES.length} types)`} icon="🔌">
           <p className={styles.hint}>

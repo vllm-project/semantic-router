@@ -511,7 +511,6 @@ var knownInlinePluginAliases = map[string]string{
 	"shadow-dispatch":     "shadow_dispatch",
 	"fast-response":       "fast_response",
 	"request-params":      "request_params",
-	"response-jailbreak":  "response_jailbreak",
 }
 
 // normalizePluginName converts known hyphenated plugin type aliases to their

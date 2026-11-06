@@ -175,7 +175,6 @@ zh-Hans	tutorials/learning/protection.md
 zh-Hans	tutorials/plugin/content-safety.md
 zh-Hans	tutorials/plugin/context-compression.md
 zh-Hans	tutorials/plugin/fast-response.md
-zh-Hans	tutorials/plugin/hallucination.md
 zh-Hans	tutorials/plugin/header-mutation.md
 zh-Hans	tutorials/plugin/memory.md
 zh-Hans	tutorials/plugin/overview.md
@@ -183,7 +182,7 @@ zh-Hans	tutorials/plugin/prompt-cache.md
 zh-Hans	tutorials/plugin/rag.md
 zh-Hans	tutorials/plugin/request-params.md
 zh-Hans	tutorials/plugin/response-cache.md
-zh-Hans	tutorials/plugin/response-jailbreak.md
+zh-Hans	tutorials/plugin/response-guard.md
 zh-Hans	tutorials/plugin/router-replay.md
 zh-Hans	tutorials/plugin/shadow-dispatch.md
 zh-Hans	tutorials/plugin/system-prompt.md

@@ -185,7 +185,7 @@ rejected on it. Matches, scores and failures are reported under the same
 `jailbreak:<name>` key as a request-direction rule. Router Replay records the
 observation as one outcome per response-direction rule, with the verdict
 (`detected`, `not_detected` or `unavailable`), the score it thresholded or the
-failure code, and the action the plugin applied; with `x-vsr-debug`, the
+failure code, and the action the guard applied; with `x-vsr-debug`, the
 `x-vsr-matched-jailbreak` header carries the matched response rules after the
 request ones.
 
@@ -193,21 +193,18 @@ A response-direction rule is not a decision input. Decisions are selected while
 the request is being routed, before the model has answered, so a decision that
 reads one, directly in its rules or through a projection, is rejected when the
 configuration loads. The observation is
-consumed by the `response_jailbreak` plugin of the decision selected for the
-request, which applies its configured action to it. The rule is read from the
-recipe the request resolved to, so a rule declared on one entrypoint's recipe
-scores only that entrypoint's responses. The plugin's own `threshold` is ignored
-once a response-direction rule is declared, and the load reports that; the rule
-owns the threshold. A decision whose `response_jailbreak` plugin runs with no
-response-direction rule declared is also reported at load: the plugin is then
-classifying the response itself, which is the compatibility path. Either one
-is enough to provision the jailbreak signal for the recipe: its model and
-label mapping are loaded for the response stage even when no decision rule
-reads a jailbreak signal.
+read by the [`response_guard`](../../plugin/response-guard) of the decision
+selected for the request, whose rules name it and apply their action to it.
+The rule is read from the recipe the request resolved to, so a rule declared
+on one entrypoint's recipe scores only that entrypoint's responses. The rule
+owns the threshold. Declaring it is enough to provision the jailbreak signal
+for the recipe: its model and label mapping are loaded for the response stage
+even when no decision rule reads a jailbreak signal.
 
 An unresolved detector (backend failure, or a response with no text to score)
 is reported through `SignalErrors`, the way every other signal reports one,
-rather than looking like a clean response. A response is clean only when every
+rather than looking like a clean response; a guard rule that reads it takes the
+guard's `on_unknown`. A response is clean only when every
 chunk of it was scored: a chunk the backend failed on leaves the rule
 unresolved unless the score the other chunks produced already matches it. The
 response is scored once and each rule draws its own line across that score, so
@@ -217,8 +214,7 @@ where a higher score would have been.
 
 A streamed response is scored once the stream ends and recorded with
 `enforcement: not_enforced_streaming` in place of an action. Its bytes are
-already with the client by then, so the `response_jailbreak` plugin does not
-run and no `block`, header or body action applies.
+already with the client by then, so no guard action applies.
 
 ## Dependencies and Limitations
 

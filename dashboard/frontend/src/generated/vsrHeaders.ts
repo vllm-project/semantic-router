@@ -382,7 +382,7 @@ export const X_VSR_REPLAY_ID = 'x-vsr-replay-id'
 /** How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `image_generation`, `blocked`, `rate_limited`, `error` or `fallback`. Surface: public. */
 export const X_VSR_RESPONSE_PATH = 'x-vsr-response-path'
 
-/** Response warning codes, in order: `hallucination`, `unverified_factual`, `response_jailbreak`. Surface: public. */
+/** Codes of the `response_guard` rules that annotated the answer, in rule order: `hallucination`, `unverified_factual`, `response_jailbreak` or `response_guard`. Surface: public. */
 export const X_VSR_RESPONSE_WARNINGS = 'x-vsr-response-warnings'
 
 /** Whether the matched decision's retention directive keeps the response out of the response cache. Surface: debug. */

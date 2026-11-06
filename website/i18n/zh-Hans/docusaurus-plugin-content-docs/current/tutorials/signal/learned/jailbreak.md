@@ -109,13 +109,13 @@ routing:
         description: Detect jailbreak content in the model's own output.
 ```
 
-响应方向规则只使用序列分类器：`method: contrastive`、模式列表与 `include_history` 是请求阶段设置，在其上会被拒绝。匹配、分数与失败报告在与请求方向规则相同的 `jailbreak:<name>` 键下。路由回放将观察记录为每条响应方向规则一条结果，包含判定（`detected`、`not_detected` 或 `unavailable`）、它阈值化的分数或失败码，以及插件应用的动作；使用 `x-vsr-debug` 时，`x-vsr-matched-jailbreak` 请求头在请求规则之后携带匹配的响应规则。
+响应方向规则只使用序列分类器：`method: contrastive`、模式列表与 `include_history` 是请求阶段设置，在其上会被拒绝。匹配、分数与失败报告在与请求方向规则相同的 `jailbreak:<name>` 键下。路由回放将观察记录为每条响应方向规则一条结果，包含判定（`detected`、`not_detected` 或 `unavailable`）、它阈值化的分数或失败码，以及守卫应用的动作；使用 `x-vsr-debug` 时，`x-vsr-matched-jailbreak` 请求头在请求规则之后携带匹配的响应规则。
 
-响应方向规则不是决策输入。决策在请求路由时、模型回答前选定，因此在规则中或通过投影直接读取该规则的决策会在配置加载时被拒绝。观察由请求所选决策的 `response_jailbreak` 插件消费，并对其应用已配置动作。规则从请求解析到的配方读取，因此在一个入口配方上声明的规则只对该入口的响应打分。一旦声明了响应方向规则，插件自己的 `threshold` 会被忽略，加载时会报告这一点；阈值由规则拥有。决策的 `response_jailbreak` 插件在未声明响应方向规则时运行也会在加载时报告：插件随后自己对响应分类，这是兼容路径。任一方都足以为本配方供给 jailbreak 信号：即使没有决策规则读取 jailbreak 信号，它的模型及标签映射也会为响应阶段加载。
+响应方向规则不是决策输入。决策在请求路由时、模型回答前选定，因此在规则中或通过投影直接读取该规则的决策会在配置加载时被拒绝。观察由请求所选决策的 [`response_guard`](../../plugin/response-guard) 读取，其规则按名称引用它并对其应用动作。规则从请求解析到的配方读取，因此在一个入口配方上声明的规则只对该入口的响应打分。阈值由规则拥有。声明该规则就足以为本配方供给 jailbreak 信号：即使没有决策规则读取 jailbreak 信号，它的模型及标签映射也会为响应阶段加载。
 
 未解析的检测器（后端失败，或响应没有可打分的文本）通过 `SignalErrors` 报告，方式与其他信号相同，而不会看起来像干净响应。只有每一块都被打分时，响应才是干净的：后端失败的块会让规则保持未解析，除非其他块已经产生的分数已经匹配它。响应只打分一次，每条规则在该分数上画自己的线，因此部分扫描按规则解析：分数 0.5 匹配阈值为 0.4 的规则，并使阈值为 0.9 的规则保持未解析，因为从未打分的那一块本可能给出更高分数。
 
-流式响应在流结束后打分，并以 `enforcement: not_enforced_streaming` 代替动作记录。此时字节已到达客户端，因此 `response_jailbreak` 插件不运行，`block`、请求头或 body 动作都不适用。
+流式响应在流结束后打分，并以 `enforcement: not_enforced_streaming` 代替动作记录。此时字节已到达客户端，因此不执行任何守卫动作。
 
 ## 依赖与限制 {#dependencies-and-limitations}
 

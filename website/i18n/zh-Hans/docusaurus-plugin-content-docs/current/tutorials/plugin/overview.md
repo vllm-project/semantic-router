@@ -53,8 +53,8 @@ routing:
 | 类型 | 目标 | 共享依赖 | 指南 |
 |---|---|---|---|
 | `fast_response` | 不调用模型即返回配置的响应 | 无 | [快速响应](./fast-response) |
-| `system_prompt` | 插入、替换或追加路由专用指令 | 无 | [系统提示词](./system-prompt) |
-| `header_mutation` | 添加、更新或删除下游请求头 | 无 | [请求头修改](./header-mutation) |
+| `system_prompt` | 插入或替换路由专用指令 | 无 | [系统提示词](./system-prompt) |
+| `header_mutation` | 添加、更新或删除 Router 不拥有的发往提供商的请求头 | 无 | [请求头修改](./header-mutation) |
 | `request_params` | 强制请求参数限制 | 无 | [请求参数](./request-params) |
 | `tools` | 允许、阻止、过滤或移除工具和工具历史 | 可选的全局工具目录 | [工具](./tools) |
 | `tool_selection` | 从目录添加工具，或按语义过滤调用方工具 | 嵌入运行时；`add` 模式需要工具数据库 | [工具选择](./tool-selection) |
@@ -64,8 +64,7 @@ routing:
 | `rag` | 在生成前检索文档 | 已配置的 RAG/向量后端 | [RAG](./rag) |
 | `router_replay` | 覆盖单条路由的回放采集 | `global.services.router_replay` | [路由回放](./router-replay) |
 | `shadow_dispatch` | 在采样流量上观察次要模型，且不触碰线上响应 | 用于结果采集的回放记录（`router_replay`） | [Shadow Dispatch](./shadow-dispatch) |
-| `hallucination` | 检查响应中的事实依据 | 按配置的幻觉/NLI 模块 | [幻觉检测](./hallucination) |
-| `response_jailbreak` | 筛查生成响应中的越狱内容 | Prompt-guard 运行时 | [响应越狱](./response-jailbreak) |
+| `response_guard` | 按检查回答所用的信号拦截或标注回答 | 其规则读取的响应阶段信号 | [响应守卫](./response-guard) |
 
 [内容安全](./content-safety) 打包了三个受支持插件，而不是额外的插件类型。
 

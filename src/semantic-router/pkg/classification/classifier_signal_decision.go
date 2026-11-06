@@ -62,38 +62,7 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		c.Config.Strategy,
 	).WithRoutingScope(c.Config.RoutingScope)
 
-	sm := &decision.SignalMatches{
-		KeywordRules:       signals.MatchedKeywordRules,
-		EmbeddingRules:     signals.MatchedEmbeddingRules,
-		DomainRules:        signals.MatchedDomainRules,
-		FactCheckRules:     signals.MatchedFactCheckRules,
-		UserFeedbackRules:  signals.MatchedUserFeedbackRules,
-		ReaskRules:         signals.MatchedReaskRules,
-		PreferenceRules:    signals.MatchedPreferenceRules,
-		LanguageRules:      signals.MatchedLanguageRules,
-		ContextRules:       signals.MatchedContextRules,
-		StructureRules:     signals.MatchedStructureRules,
-		ComplexityRules:    signals.MatchedComplexityRules,
-		ModalityRules:      signals.MatchedModalityRules,
-		SignalConfidences:  signals.SignalConfidences,
-		AuthzRules:         signals.MatchedAuthzRules,
-		JailbreakRules:     signals.MatchedJailbreakRules,
-		SafetyRules:        signals.MatchedSafetyRules,
-		PIIRules:           signals.MatchedPIIRules,
-		KBRules:            signals.MatchedKBRules,
-		ConversationRules:  signals.MatchedConversationRules,
-		EventRules:         signals.MatchedEventRules,
-		MetadataRules:      signals.MatchedMetadataRules,
-		ClassifierRules:    signals.MatchedClassifierRules,
-		InputModalityRules: signals.MatchedInputModalityRules,
-		ActionRules:        signals.MatchedActionRules,
-		SystemOneRules:     signals.MatchedSystemOneRules,
-		ProjectionRules:    signals.MatchedProjectionRules,
-		Observations:       signals.Observations,
-		SignalValues:       signals.SignalValues,
-		SignalErrors:       signals.SignalErrors,
-		SignalErrorMatches: signals.SignalErrorMatches,
-	}
+	sm := signals.Matches()
 
 	var result *decision.DecisionResult
 	var traces []decision.DecisionTrace

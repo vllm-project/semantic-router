@@ -19,8 +19,11 @@ func (c *Classifier) getUsedSignals() map[string]bool {
 func (c *Classifier) getUsedSignalsForDecisions(decisions []config.Decision) map[string]bool {
 	usedSignals := make(map[string]bool)
 
-	for _, decision := range decisions {
-		c.analyzeRuleCombination(decision.Rules, usedSignals)
+	for i := range decisions {
+		c.analyzeRuleCombination(decisions[i].Rules, usedSignals)
+		for _, condition := range c.Config.ResponseGuardRequestConditions(&decisions[i]) {
+			c.analyzeRuleCombination(condition, usedSignals)
+		}
 	}
 	// Replay's privacy check reads the PII rules after routing (ReplayPromptEvidence), never here.
 	c.expandTransitiveSignalDependencies(usedSignals)

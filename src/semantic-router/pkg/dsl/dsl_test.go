@@ -301,16 +301,15 @@ func TestParseMultiModel(t *testing.T) {
 }
 
 func TestParsePluginTemplate(t *testing.T) {
-	input := `PLUGIN my_hallu hallucination {
-  enabled: true
-  hallucination_action: "warn"
+	input := `PLUGIN my_guard response_guard {
+  rules: [{ when: { type: "hallucination", name: "ungrounded" }, action: "annotate" }]
 }
 
 ROUTE test {
   PRIORITY 1
   WHEN domain("test")
   MODEL "m:1b"
-  PLUGIN my_hallu
+  PLUGIN my_guard
 }`
 	prog, errs := Parse(input)
 	if len(errs) > 0 {
@@ -320,13 +319,13 @@ ROUTE test {
 		t.Fatalf("expected 1 plugin decl, got %d", len(prog.Plugins))
 	}
 	pd := prog.Plugins[0]
-	if pd.Name != "my_hallu" || pd.PluginType != "hallucination" {
-		t.Errorf("expected my_hallu/hallucination, got %s/%s", pd.Name, pd.PluginType)
+	if pd.Name != "my_guard" || pd.PluginType != "response_guard" {
+		t.Errorf("expected my_guard/response_guard, got %s/%s", pd.Name, pd.PluginType)
 	}
 
 	r := prog.Routes[0]
-	if len(r.Plugins) != 1 || r.Plugins[0].Name != "my_hallu" {
-		t.Error("expected plugin ref to my_hallu")
+	if len(r.Plugins) != 1 || r.Plugins[0].Name != "my_guard" {
+		t.Error("expected plugin ref to my_guard")
 	}
 }
 
@@ -432,19 +431,19 @@ ROUTE math_route {
 }
 
 func TestCompilePluginTemplate(t *testing.T) {
-	input := `PLUGIN my_hallu hallucination {
-  enabled: true
-  hallucination_action: "warn"
+	input := `PLUGIN my_guard response_guard {
+  rules: [{ when: { type: "hallucination", name: "ungrounded" }, action: "annotate" }]
 }
 
 ROUTE test {
   PRIORITY 1
   WHEN domain("test")
   MODEL "m:1b"
-  PLUGIN my_hallu
+  PLUGIN my_guard
 }
 
-SIGNAL domain test { description: "test" }`
+SIGNAL domain test { description: "test" }
+SIGNAL hallucination ungrounded { description: "Claims the context does not support." }`
 
 	cfg, errs := Compile(input)
 	if len(errs) > 0 {
@@ -457,8 +456,8 @@ SIGNAL domain test { description: "test" }`
 		t.Fatalf("expected 1 plugin, got %d", len(cfg.Decisions[0].Plugins))
 	}
 	p := cfg.Decisions[0].Plugins[0]
-	if p.Type != "hallucination" {
-		t.Errorf("expected plugin type hallucination, got %s", p.Type)
+	if p.Type != "response_guard" {
+		t.Errorf("expected plugin type response_guard, got %s", p.Type)
 	}
 }
 
@@ -1286,6 +1285,28 @@ ROUTE test {
 	}
 }
 
+// A removed plugin type fails with what replaced it.
+func TestNegativeCompileRemovedPluginType(t *testing.T) {
+	for pluginType, replacement := range config.RemovedPluginTypes {
+		input := `
+SIGNAL domain test { description: "test" }
+ROUTE test {
+  PRIORITY 1
+  WHEN domain("test")
+  MODEL "m:1b" (reasoning = false)
+  PLUGIN ` + pluginType + ` {
+    enabled: true
+  }
+}
+`
+		_, errs := Compile(input)
+		want := fmt.Sprintf("plugin %q was removed; write %s", pluginType, replacement)
+		if len(errs) == 0 || !strings.Contains(errs[0].Error(), want) {
+			t.Errorf("%s: errors = %v, want %q", pluginType, errs, want)
+		}
+	}
+}
+
 func TestNegativeCompileUnknownAlgorithmType(t *testing.T) {
 	input := `
 SIGNAL domain test { description: "test" }
@@ -1697,10 +1718,10 @@ func TestCompileAllPluginTypes(t *testing.T) {
 		verifyType string // expected type after normalization
 	}{
 		{
-			name:       "hallucination",
-			pluginType: "hallucination",
-			body:       `enabled: true hallucination_action: "warn"`,
-			verifyType: "hallucination",
+			name:       "response_guard",
+			pluginType: "response_guard",
+			body:       `rules: [{ when: { type: "domain", name: "test" }, action: "annotate" }] on_unknown: "none"`,
+			verifyType: "response_guard",
 		},
 		{
 			name:       "memory",

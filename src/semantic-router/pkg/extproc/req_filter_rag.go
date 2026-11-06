@@ -344,7 +344,6 @@ func (r *OpenAIRouter) injectAsToolRole(request *llmprotocol.Request, context st
 	request.Generation++
 	ctx.RAGRetrievedContext = context
 	ctx.HasToolsForFactCheck = true
-	ctx.ToolResultsContext = context // Store for hallucination detection
 
 	logging.Debugf("Injected RAG context as tool role (%d chars)", len(context))
 	return nil

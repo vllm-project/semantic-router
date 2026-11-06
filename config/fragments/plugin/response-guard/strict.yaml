@@ -1,0 +1,12 @@
+# Refuses an answer that carries jailbreak content, and one the check could
+# not read. Reads the jailbreak rule unsafe_completion, declared with
+# direction: response.
+plugin:
+  type: response_guard
+  configuration:
+    rules:
+      - when:
+          type: jailbreak
+          name: unsafe_completion
+        action: block
+    on_unknown: block

@@ -83,13 +83,12 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
     'memory',
     'system_prompt',
     'header_mutation',
-    'hallucination',
     'router_replay',
     'rag',
     'tools',
     'fast_response',
     'request_params',
-    'response_jailbreak',
+    'response_guard',
     'tool_selection',
     'prompt_cache',
     'masking',
@@ -146,7 +145,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
       // Plugin types
       [
-        /\b(response_cache|memory|system_prompt|header_mutation|hallucination|router_replay|rag|tools|fast_response|request_params|response_jailbreak|tool_selection|prompt_cache|masking)\b/,
+        /\b(response_cache|memory|system_prompt|header_mutation|router_replay|rag|tools|fast_response|request_params|response_guard|tool_selection|prompt_cache|masking)\b/,
         'type.plugin',
       ],
 
@@ -301,14 +300,13 @@ const PLUGIN_TYPE_SUGGESTIONS = [
   { label: 'memory', detail: 'Conversation memory plugin' },
   { label: 'system_prompt', detail: 'System prompt injection plugin' },
   { label: 'header_mutation', detail: 'HTTP header mutation plugin' },
-  { label: 'hallucination', detail: 'Hallucination detection plugin' },
   { label: 'router_replay', detail: 'Request replay plugin' },
   { label: 'rag', detail: 'RAG (Retrieval Augmented Generation) plugin' },
   { label: 'tools', detail: 'Route-local tool policy and semantic selection plugin' },
   { label: 'tool_selection', detail: 'Semantic tool add/filter plugin' },
   { label: 'fast_response', detail: 'Short-circuit fixed response plugin' },
   { label: 'request_params', detail: 'Request parameter mutation plugin' },
-  { label: 'response_jailbreak', detail: 'Response-side jailbreak screening plugin' },
+  { label: 'response_guard', detail: 'Block or annotate answers on the signals they are checked with' },
   { label: 'prompt_cache', detail: 'Route-local Anthropic prompt-cache marker injection' },
   { label: 'masking', detail: 'Provider-bound PII masking plugin' },
 ]

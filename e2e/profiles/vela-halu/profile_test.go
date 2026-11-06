@@ -54,7 +54,13 @@ func TestProfilePinsVela1HaluWithoutAuxiliaryClassifiers(t *testing.T) {
 	}
 	plugin := plugins[0].(map[string]any)
 	policy := section(plugin, "configuration")
-	if plugin["type"] != "hallucination" || policy["enabled"] != true || policy["include_hallucination_details"] != true {
+	rules, _ := policy["rules"].([]any)
+	if plugin["type"] != "response_guard" || policy["on_unknown"] != "annotate" || len(rules) != 1 {
+		t.Fatalf("published detector policy changed: %+v", plugin)
+	}
+	rule, _ := rules[0].(map[string]any)
+	when := section(rule, "when")
+	if rule["action"] != "annotate" || when["type"] != "hallucination" || when["name"] != "ungrounded_claims" {
 		t.Fatalf("published detector policy changed: %+v", plugin)
 	}
 	if _, retired := policy["use_nli"]; retired {

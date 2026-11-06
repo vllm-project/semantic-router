@@ -8,41 +8,39 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// TestPluginFieldsHallucinationEmitsAllAuthorableFields locks in that the
-// AST emitter for the hallucination plugin surfaces every field the DSL
-// compiler can read (enabled, hallucination_action). Without this guard
-// the AST converter silently drops those fields while the text decompiler
-// emits them, making any runtime config -> AST -> compile round trip
-// lossy on those knobs even though the runtime schema and the text DSL
-// fully support them.
-func TestPluginFieldsHallucinationEmitsAllAuthorableFields(t *testing.T) {
-	cfg := config.HallucinationPluginConfig{
-		Enabled:             true,
-		HallucinationAction: "block",
+// TestPluginFieldsResponseGuardKeepsRuleTrees locks in that the AST emitter
+// carries a response_guard's rules, condition trees included, and its
+// on_unknown, so a runtime config -> AST -> compile round trip loses none of
+// them.
+func TestPluginFieldsResponseGuardKeepsRuleTrees(t *testing.T) {
+	cfg := config.ResponseGuardPluginConfig{
+		Rules: []config.ResponseGuardRule{{
+			When:   config.RuleNode{Type: config.SignalTypeHallucination, Name: "ungrounded"},
+			Action: config.ResponseGuardAnnotate, Details: true,
+		}},
+		OnUnknown: config.ResponseGuardBlock,
 	}
-	plugin := pluginFromConfig(t, config.DecisionPluginHallucination, cfg)
+	plugin := pluginFromConfig(t, config.DecisionPluginResponseGuard, cfg)
 
-	fields := pluginFieldsHallucination(plugin)
+	fields := pluginConfigToFields(plugin)
 
-	requirePluginBoolField(t, "hallucination", "enabled", fields, true)
-	requirePluginStringField(t, "hallucination", "hallucination_action", fields, "block")
-}
-
-// TestPluginFieldsHallucinationOmitsZeroValuedFields documents the
-// omit-when-default contract: when the runtime config carries zero / empty
-// values, the AST emitter must not introduce noisy default fields.
-func TestPluginFieldsHallucinationOmitsZeroValuedFields(t *testing.T) {
-	cfg := config.HallucinationPluginConfig{Enabled: true}
-	plugin := pluginFromConfig(t, config.DecisionPluginHallucination, cfg)
-
-	fields := pluginFieldsHallucination(plugin)
-
-	if _, ok := fields["use_nli"]; ok {
-		t.Errorf("expected use_nli to be omitted when false")
+	requirePluginStringField(t, "response_guard", "on_unknown", fields, "block")
+	rules, ok := fields["rules"].(ArrayValue)
+	if !ok || len(rules.Items) != 1 {
+		t.Fatalf("rules = %#v, want one rule", fields["rules"])
 	}
-	if _, ok := fields["hallucination_action"]; ok {
-		t.Errorf("expected hallucination_action to be omitted when empty")
+	rule, ok := rules.Items[0].(ObjectValue)
+	if !ok {
+		t.Fatalf("rule = %#v, want an object", rules.Items[0])
 	}
+	requirePluginStringField(t, "response_guard rule", "action", rule.Fields, "annotate")
+	requirePluginBoolField(t, "response_guard rule", "details", rule.Fields, true)
+	when, ok := rule.Fields["when"].(ObjectValue)
+	if !ok {
+		t.Fatalf("when = %#v, want the rule's condition", rule.Fields["when"])
+	}
+	requirePluginStringField(t, "response_guard when", "type", when.Fields, "hallucination")
+	requirePluginStringField(t, "response_guard when", "name", when.Fields, "ungrounded")
 }
 
 // TestPluginFieldsRAGEmitsOnFailure locks in that the AST emitter for

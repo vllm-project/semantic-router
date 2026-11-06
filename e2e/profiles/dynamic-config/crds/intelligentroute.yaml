@@ -104,9 +104,9 @@ spec:
         - type: "header_mutation"
           configuration:
             add:
-              - name: "x-vsr-pii-violation"
+              - name: "x-route-pii-violation"
                 value: "true"
-              - name: "x-vsr-signal-pii_detected"
+              - name: "x-route-signal-pii-detected"
                 value: "true"
 
     # Block Security Threats
@@ -126,9 +126,9 @@ spec:
         - type: "header_mutation"
           configuration:
             add:
-              - name: "x-vsr-security-violation"
+              - name: "x-route-security-violation"
                 value: "true"
-              - name: "x-vsr-signal-security_threat"
+              - name: "x-route-signal-security-threat"
                 value: "true"
 
     # Route to Kubernetes Expert
@@ -148,7 +148,7 @@ spec:
         - type: "header_mutation"
           configuration:
             add:
-              - name: "x-vsr-signal-kubernetes_topic"
+              - name: "x-route-signal-kubernetes-topic"
                 value: "true"
         - type: "system_prompt"
           configuration:
