@@ -8,6 +8,9 @@ sigmoid ``beta``, and ``g = -exp(A_log) * softplus(a + dt_bias)``. This tool
 qualifies bit-exact prep against the installed causal-conv1d released path
 (``validation=released-reference``). ``--no-causal-conv1d`` compares the torch
 fallback as a diagnostic and never sets ``passed``. All five outputs are scored.
+The installed-package comparison bypasses kernel selection: CUDA now classifies
+causal-conv1d as approximate and selects torch reference for exact-only or
+non-consenting models, even where their package runtime uses causal-conv1d.
 
 ``passed`` is not a gate for approximate CUDA fusion. That registration needs
 Ampere, Triton and FLA, and selection additionally needs family consent; it does
@@ -171,7 +174,9 @@ def main() -> int:
             "that whole path. Exact-profile eligibility requires exact=true on "
             "representative shapes and a model-level gpu_parity pass. "
             "Approximate CUDA fusion uses separate model-parity evidence and "
-            "family consent; this exact-qualification result does not gate it."
+            "family consent; this exact-qualification result does not gate it. "
+            "The installed causal-conv1d comparison bypasses CUDA selection policy, "
+            "which uses torch reference for exact-only/non-consenting models."
         ),
         "passed": accepted,
         "exact_vs_reference": all_exact,

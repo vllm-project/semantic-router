@@ -114,15 +114,17 @@ def optional_kernels(monkeypatch, fused_module, fla_installed, causal_conv1d_ins
 
 @pytest.mark.parametrize("arch", ["sm_70", "sm_75", "sm_89", "sm_121"])
 @pytest.mark.parametrize("allow_approximate", [False, True])
-def test_optional_kernels_preserve_convolution_selection_and_gate_fused_prep(
+def test_optional_kernels_require_consent_for_cuda_conv_and_fused_prep(
     optional_kernels, fla_installed, causal_conv1d_installed, arch, allow_approximate
 ):
     kernels = cuda.CUDAAccelerator().kernels(device(arch))
     kernels.allow_approximate = allow_approximate
-    # Keep the released runtime's installed-package preference in both modes.
+    # Optional CUDA convolution needs consent, independently of FLA and arch.
     # These stubs check selection policy, not numerical exactness.
     assert kernels.select("causal_conv1d").source == (
-        "causal-conv1d" if causal_conv1d_installed else "torch-reference"
+        "causal-conv1d"
+        if causal_conv1d_installed and allow_approximate
+        else "torch-reference"
     )
     assert kernels.select("chunk_gated_delta_rule").source == (
         "fla" if fla_installed else "torch-reference"

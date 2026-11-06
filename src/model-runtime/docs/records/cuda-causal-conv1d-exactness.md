@@ -1,8 +1,9 @@
 # CUDA causal-conv1d exactness
 
 Directly comparing `_wrap_conv(causal_conv1d_fn)` with `causal_conv1d_ref`
-produces deterministic bit differences. This is evidence about numerical
-implementations, not a change to the released-runtime selection policy.
+produces deterministic bit differences, supporting approximate classification
+on CUDA. This changes selection on hosts with causal-conv1d installed; the
+released-runtime impact is recorded below.
 The [A/B model experiment](cuda-gdn-prep-without-causal-conv1d.md) tests a
 separate question: both historical variants classified causal-conv1d as approximate.
 
@@ -92,20 +93,47 @@ The JSON includes all input, weight and output bits for this case.
 ## Selection impact
 
 The probe disproves unconditional bit equality between these two implementations
-on the recorded stack. It does not establish which implementation each released
-model runtime uses. Decision 1.0 Qwen and BF16 Decision 3.0 use causal-conv1d on
-CUDA hosts where it is installed; changing them to torch reference would move
-away from that runtime. This PR therefore retains the existing `exact=True`
-registration and installed-package preference; changing that classification is
-outside its scope.
+on the recorded stack. This PR marks optional CUDA causal-conv1d `exact=False`,
+so it is selected only when the model permits approximate kernels. The change
+applies independently of FLA installation and the Ampere fused-kernel gate.
 
 | Selection | Before PR | After PR |
 | --- | --- | --- |
-| causal-conv1d installed, with or without approximate consent | causal-conv1d | causal-conv1d |
+| causal-conv1d installed, approximate allowed | causal-conv1d | causal-conv1d |
+| causal-conv1d installed, exact-only or family does not consent | causal-conv1d | torch reference |
 | causal-conv1d absent | torch reference | torch reference |
 
-The standard CUDA image has no causal-conv1d. The historical A/B record applied
-an approximate classification in both variants, so its non-consenting models
-compared reference against reference. It does not validate the final policy on
-installed hosts. These results cover the recorded GB10 stack, not every
-GPU/version or a full model-accuracy evaluation.
+This selection policy is deliberately stricter than the installed-package
+preference in some released CUDA runtimes. The mapping below follows the
+[review of pinned package code](https://github.com/vllm-project/semantic-router/pull/5694#pullrequestreview-5795254517):
+
+| Family | Released CUDA convolution with causal-conv1d installed | Router with this PR |
+| --- | --- | --- |
+| Vela 2.0 decoders | `F.conv1d` | `F.conv1d`; optional slot unused |
+| Decision 2.0, approximate allowed | causal-conv1d | causal-conv1d |
+| Decision 1.0 Qwen (Eos/Sol/Nox/Lux), non-consenting | causal-conv1d | torch reference |
+| BF16 Decision 3.0 (including d3-edge), non-consenting | causal-conv1d | torch reference |
+
+For Decision 1.0 Qwen and BF16 Decision 3.0 on such hosts, the selected
+convolution no longer follows their package runtime bit for bit: the released
+runtime uses the installed causal-conv1d implementation, while the router uses
+torch reference. An explicit exact-only option also forces torch reference for
+otherwise consenting families. The BF16-resident + SiLU probe cases differ by
+up to one BF16 ULP on about 25% of convolution outputs. The autocast/FP32-weight
+cases have larger ULP distances; the one-ULP observation is not a universal
+bound. These are convolution measurements on random tensors, not bounds on
+full-model output drift or a full-model accuracy evaluation for these paths.
+
+The standard CUDA image has no causal-conv1d, so this classification change
+does not alter its exact/non-consenting convolution path. Previously recorded
+CUDA parity runs without that package do not measure the installed-host change.
+The historical A/B record already applied approximate classification in both
+variants; its non-consenting models compared reference against reference. It cannot establish
+unchanged outputs versus pre-PR main on installed hosts or replace a package
+runtime comparison for the two affected families.
+
+A reviewer also reported reproducing the non-exact convolution result on an
+RTX 4070 Ti SUPER (sm_89) in [PR review](https://github.com/vllm-project/semantic-router/pull/5694#pullrequestreview-5796680417).
+That is independent corroboration, not an additional raw run in this record.
+The committed raw measurements cover the recorded GB10 stack, not every
+GPU/version.

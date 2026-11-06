@@ -9,9 +9,12 @@ This GB10 experiment compares the proposals in
 
 These are historical experimental variants: both classify optional causal-conv1d
 as approximate, so non-consenting models compare reference against reference.
-The final PR retains the existing installed-package preference instead; these
-results do not qualify that final policy on installed hosts. Numerical
-implementation differences are in the
+The final PR also uses approximate classification. This experiment does not
+compare its installed-host policy against pre-PR main or each released package
+runtime. In particular, Decision 1.0 Qwen and BF16 Decision 3.0 on installed
+hosts now use torch reference instead of their package runtime's causal-conv1d;
+full-model drift for those paths was not measured here. Numerical
+implementation differences and the selection impact are in the
 [direct convolution record](cuda-causal-conv1d-exactness.md).
 
 ## Environment and method

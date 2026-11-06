@@ -1937,6 +1937,6 @@
     "probe_sha256": "280d7d3f820514f60918c0337c422e3e1171d3a3c59701e26c2f4ffa5a4f46d5",
     "image_id": "sha256:a852d0e2d1119bbf17ae8d17e11e16d3951849cabcb20b656b6ad4170e7a0d66",
     "image_note": "Local Docker image ID, not a registry manifest digest; source mounted separately.",
-    "final_policy_coverage": "Historical variants both classify causal-conv1d approximate. No rerun of final installed-host selection policy is claimed."
+    "final_policy_coverage": "Both historical variants and the final PR classify CUDA causal-conv1d approximate. The A/B does not compare pre-PR main or package runtimes on installed hosts; Decision 1.0 Qwen and BF16 Decision 3.0 then use torch reference instead of their released causal-conv1d path. No full-model drift measurement for those affected paths is claimed."
   }
 }
