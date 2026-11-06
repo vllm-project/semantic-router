@@ -36,7 +36,6 @@ def test_reference_vela_policy_survives_runtime_materialization(
     assert catalog["system"] == authored["system"]
     for section in ("embeddings", "modules"):
         assert _without_use_cpu(catalog[section]) == _without_use_cpu(authored[section])
-    assert catalog["system"]["hazard"] == "models/Vela-1.0-Encoder-307M-Hazard"
     semantic = catalog["embeddings"]["semantic"]
     assert semantic["mmbert_model_path"] == "models/Vela-1.0-Encoder-307M-Embedding"
     assert semantic["embedding_config"]["full_context"] is False
@@ -44,7 +43,7 @@ def test_reference_vela_policy_survives_runtime_materialization(
     # platform materialization must preserve its resource and input policy.
     assert catalog["system"]["decision_model"] == {"deployment": "primary"}
     assert catalog["deployments"] == authored["deployments"]
-    assert catalog["deployments"]["primary"]["artifact"] == "vllm-sr/Vela-2.0-0.3B"
+    assert catalog["deployments"]["primary"]["artifact"] == "vllm-sr/vela3-fast"
     modules = catalog["modules"]
     for module in (
         modules["safety"]["safety"],
@@ -65,7 +64,8 @@ def test_reference_vela_policy_survives_runtime_materialization(
     ):
         # The decision model's calibrated threshold applies.
         assert "threshold" not in module
-    assert modules["modality_detector"]["classifier"]["model_path"] == ""
+    # The modality classifier asks the decision model; it names no model.
+    assert "model_path" not in modules["modality_detector"]["classifier"]
     for module in (modules["prompt_guard"], modules["classifier"]["pii"]):
         assert "window" not in module
     for module in (

@@ -19,6 +19,7 @@
             {
               "content": [
                 {
+                  "detail": "auto",
                   "image_url": "data:image/png;base64,aW1hZ2U=",
                   "type": "input_image"
                 }

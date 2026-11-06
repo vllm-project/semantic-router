@@ -3,6 +3,7 @@ package modelservice
 import (
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -25,8 +26,11 @@ type TaskCatalogDeployment struct {
 }
 
 type TaskCatalogBinding struct {
-	TaskID     string              `json:"task_id"`
-	Consumer   string              `json:"consumer"`
+	TaskID   string `json:"task_id"`
+	Consumer string `json:"consumer"`
+	// Key is the binding key a configuration writes for the consumer: its
+	// signal type, or the rule consumer of a rule that names its deployment.
+	Key        string              `json:"key"`
 	Recipe     string              `json:"recipe"`
 	Deployment string              `json:"deployment"`
 	Model      string              `json:"model"`
@@ -85,25 +89,18 @@ func ProjectTaskCatalog(cfg *config.RouterConfig, statuses []DeploymentStatus) T
 		sort.Slice(response.Deployments, func(i, j int) bool { return response.Deployments[i].Deployment < response.Deployments[j].Deployment })
 		return response
 	}
-	response.DefaultDeployment, _, _, _ = cfg.DecisionModelDeployment()
+	response.DefaultDeployment, _, _, _ = cfg.DecisionModelResource()
 	for name, binding := range cfg.GlobalModelBindings {
 		response.GlobalBindings[name] = binding
 	}
 	for _, consumer := range taskConsumers(cfg) {
 		if consumer.name == "reask" {
-			// There is no implicit native binding: unbound reask uses cosine
+			// There is no default native binding: unbound reask uses cosine
 			// similarity, whose thresholds are not Noul probabilities.
 			continue
 		}
-		name, _, ok, _ := cfg.ImplicitTaskDeployment(consumer.name)
-		if !ok {
-			name = response.DefaultDeployment
-		}
-		contract := consumer.contract
-		if name == response.DefaultDeployment && (consumer.task == "pii_presence" || consumer.task == "hallucination" || consumer.task == "preference" || consumer.task == "reask" || consumer.task == "complexity") {
-			contract = config.DecisionTaskContract
-		}
-		response.DefaultBindings[consumer.name] = config.ModelBinding{Deployment: name, Contract: contract}
+		binding, _ := resolvedTaskBinding(cfg, consumer, response.DefaultDeployment)
+		response.DefaultBindings[consumer.name] = config.ModelBinding{Deployment: binding.Deployment, Contract: binding.Contract}
 	}
 	for name, resource := range cfg.ModelDeployments {
 		if _, exists := observed[name]; exists {
@@ -139,34 +136,94 @@ func ProjectTaskCatalog(cfg *config.RouterConfig, statuses []DeploymentStatus) T
 			if !config.TaskConsumerInUse(scoped, recipe.Name, consumer.name) {
 				continue
 			}
-			binding, source := recipe.Profile.ModelBindings[consumer.name], "recipe"
-			if binding.Deployment == "" {
-				binding, source = cfg.GlobalModelBindings[consumer.name], "global"
-			}
-			if binding.Deployment == "" {
-				name, _, ok, _ := scoped.ImplicitTaskDeployment(consumer.name)
-				if !ok {
-					name = response.DefaultDeployment
-				}
-				binding = config.ModelBinding{Deployment: name, Contract: consumer.contract}
-				if name == response.DefaultDeployment && (consumer.task == "pii_presence" || consumer.task == "hallucination" || consumer.task == "preference" || consumer.task == "reask" || consumer.task == "complexity") {
-					binding.Contract = config.DecisionTaskContract
-				}
-				source = "default"
-				if name != response.DefaultDeployment {
-					source = "module"
-				}
-			}
+			binding, source := resolvedTaskBinding(scoped, consumer, response.DefaultDeployment)
 			status := observed[binding.Deployment]
 			model := taskCatalogModelName(status, cfg.ModelDeployments[binding.Deployment].Artifact)
 			response.Bindings = append(response.Bindings, TaskCatalogBinding{
-				TaskID: consumer.task, Consumer: consumer.name, Recipe: string(recipe.Name),
+				TaskID: consumer.task, Consumer: consumer.name, Key: config.BindingKey(consumer.name), Recipe: string(recipe.Name),
 				Deployment: binding.Deployment, Model: model, Source: source, Ready: status.Ready, Editable: true,
 				Path: append(append([]string(nil), path...), consumer.name), Binding: binding,
 			})
 		}
+		// A decision selector names its deployment in its algorithm block,
+		// which the decision's own editor writes.
+		for _, decision := range scoped.Decisions {
+			if decision.Algorithm == nil || decision.Algorithm.Decision == nil || !strings.EqualFold(strings.TrimSpace(decision.Algorithm.Type), config.DecisionAlgorithmDecision) {
+				continue
+			}
+			name, source := scoped.DecisionSelectorDeployment(*decision.Algorithm.Decision), "rule"
+			if strings.TrimSpace(decision.Algorithm.Decision.Deployment) == "" {
+				source = "default"
+			}
+			status := observed[name]
+			response.Bindings = append(response.Bindings, TaskCatalogBinding{
+				TaskID: "selector", Consumer: "selector." + decision.Name, Key: "selector." + decision.Name, Recipe: string(recipe.Name),
+				Deployment: name, Model: taskCatalogModelName(status, cfg.ModelDeployments[name].Artifact), Source: source, Ready: status.Ready,
+				Binding: config.ModelBinding{Deployment: name, Contract: config.DecisionTaskContract},
+			})
+		}
 	}
 	return response
+}
+
+// resolvedTaskBinding is the deployment that answers a task consumer in a
+// scope, with its contract, and where the configuration chose it: the rule,
+// the recipe or global binding, the decision model (default) or a
+// pre-declared deployment (predeclared).
+func resolvedTaskBinding(scoped *config.RouterConfig, consumer taskConsumer, defaultDeployment string) (config.ModelBinding, string) {
+	name := consumer.name
+	// The complexity task stands for every complexity rule, which names its
+	// deployment itself; the rules a scope declares answer as its first.
+	if name == "complexity" && len(scoped.ComplexityRules) > 0 {
+		name = "complexity." + scoped.ComplexityRules[0].Name
+	}
+	resolved, ok, err := scoped.ResolveTask(name)
+	if err != nil {
+		// A binding the Router refuses is still the one the configuration
+		// writes, which the editor corrects.
+		for _, scope := range []struct {
+			bindings map[string]config.ModelBinding
+			source   string
+		}{{scoped.ModelBindings, "recipe"}, {scoped.GlobalModelBindings, "global"}} {
+			if binding, bound := scope.bindings[consumer.name]; bound {
+				return binding, scope.source
+			}
+		}
+	}
+	if err != nil || !ok {
+		binding := config.ModelBinding{Deployment: defaultDeployment, Contract: consumer.contract}
+		if judgmentTask(consumer.task) {
+			binding.Contract = config.DecisionTaskContract
+		}
+		return binding, "default"
+	}
+	binding := config.ImpliedBinding(name, resolved.Binding, resolved.Deployment)
+	binding.Deployment = resolved.Name
+	switch resolved.Source {
+	case config.ResolvedByRule:
+		return binding, "rule"
+	case config.ResolvedByRecipeBinding:
+		return binding, "recipe"
+	case config.ResolvedByGlobalBinding:
+		return binding, "global"
+	case config.ResolvedByDefault:
+		return binding, "predeclared"
+	}
+	binding.Contract = consumer.contract
+	if judgmentTask(consumer.task) {
+		binding.Contract = config.DecisionTaskContract
+	}
+	return binding, "default"
+}
+
+// judgmentTask reports whether the decision model answers a task as a
+// native judgment rather than with its consumer's own contract.
+func judgmentTask(task string) bool {
+	switch task {
+	case "pii_presence", "hallucination", "preference", "reask", "complexity":
+		return true
+	}
+	return false
 }
 
 // Runtime card IDs address logical deployments or served aliases. Display the

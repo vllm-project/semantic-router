@@ -17,6 +17,7 @@ import { buildRoutingExplanationSections } from './insightsPageRouting'
 import { renderToolNamesCell } from './insightsPageToolTrace'
 import { buildSignalFields, collectSignals } from './insightsRecordSignals'
 import { buildInsightsPluginFields } from './insightsRecordPlugins'
+import { buildProviderCacheSection } from './insightsProviderCache'
 import styles from './InsightsPage.module.css'
 
 export { filterInsightsRecords } from './insightsPageFilters'
@@ -438,6 +439,8 @@ export function buildInsightsRecordSections(
       },
     ],
   })
+
+  sections.push(buildProviderCacheSection(record))
 
   const signalFields = buildSignalFields(record.signals)
   if (signalFields.length > 0) {

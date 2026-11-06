@@ -33,7 +33,15 @@ func runProtocolCodecToolLifecycle(
 		return historyErr
 	}
 	if backendFormat == "openai.chat.v1" {
+		if historyErr := runEmptyChatToolResults(ctx, session, provider, model); historyErr != nil {
+			return historyErr
+		}
 		if historyErr := runResponsesParallelHistory(ctx, session, provider, model); historyErr != nil {
+			return historyErr
+		}
+	}
+	if backendFormat == "openai.chat.v1" || backendFormat == "anthropic.messages.v1" {
+		if historyErr := runResponsesStepHistory(ctx, session, provider, model, backendFormat); historyErr != nil {
 			return historyErr
 		}
 	}
