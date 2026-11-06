@@ -2,7 +2,7 @@ package config
 
 import "testing"
 
-func TestModelBindingProjectionKeepsCanonicalSourceImmutable(t *testing.T) {
+func TestABindingResolvesByNameAndLeavesTheSourceUntouched(t *testing.T) {
 	cfg := &RouterConfig{}
 	cfg.CategoryModel.ModelID = "models/default"
 	cfg.ModelDeployments = map[string]ModelDeployment{"private": {Provider: ModelRuntimeProvider, Artifact: "/mounted/private"}}
@@ -12,45 +12,42 @@ func TestModelBindingProjectionKeepsCanonicalSourceImmutable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	projected, err := ProjectRecipeModelBindings(cfg, plan, "private")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if projected.CategoryModel.ModelID != "/mounted/private" || projected.CategoryMappingPath != "/mounted/maps/domain.json" {
-		t.Fatalf("incorrect projection: %#v", projected.CategoryModel)
+	spec, ok := plan.Lookup("private", "domain_classifier")
+	if !ok || spec.Binding.Deployment != "private" || spec.Deployment.Artifact != "/mounted/private" || spec.Binding.MappingPath != "/mounted/maps/domain.json" {
+		t.Fatalf("binding resolved to %+v, %v", spec, ok)
 	}
 	if cfg.CategoryModel.ModelID != "models/default" || cfg.CategoryMappingPath != "" {
-		t.Fatal("source mutated")
+		t.Fatal("resolution wrote the binding back into the module")
 	}
-	if _, err := ProjectRecipeModelBindings(cfg, plan, "other"); err == nil {
+	if _, ok := plan.Lookup("other", "domain_classifier"); ok {
 		t.Fatal("foreign recipe binding resolved")
 	}
 }
 
-func TestModelBindingProjectionNamesTheModelAnAttachedRuntimeServes(t *testing.T) {
+func TestAnAttachedRuntimeAnswersWithTheModelItServes(t *testing.T) {
 	cfg := &RouterConfig{}
 	cfg.ModelDeployments = map[string]ModelDeployment{
 		"domain-a": {Provider: ModelRuntimeProvider, Endpoint: "http://runtime:8100"},
 		"guard-a":  {Provider: ModelRuntimeProvider, Endpoint: "unix:///run/runtime.sock", ServedName: "vela-guard"},
+		"halu-a":   {Provider: ModelRuntimeProvider, Endpoint: "https://runtime.example.com:8100", Model: "vela-halu"},
 	}
 	cfg.ModelBindings = map[string]ModelBinding{
-		"domain_classifier": {Deployment: "domain-a", Contract: RemoteClassifierContractLabelDistribution, Adapter: "modernbert"},
-		"prompt_guard":      {Deployment: "guard-a", Contract: RemoteClassifierContractLabelDistribution, Adapter: "modernbert"},
+		"domain":        {Deployment: "domain-a"},
+		"jailbreak":     {Deployment: "guard-a"},
+		"hallucination": {Deployment: "halu-a"},
 	}
 	cfg.RoutingScope = "private"
-	plan, err := CompileModelBindings(cfg)
-	if err != nil {
-		t.Fatal(err)
+	for consumer, want := range map[string]string{"domain_classifier": "domain-a", "prompt_guard": "vela-guard", "hallucination_detector": "vela-halu"} {
+		resolved, ok, err := cfg.ResolveTask(consumer)
+		if err != nil || !ok {
+			t.Fatalf("%s: %v %v", consumer, ok, err)
+		}
+		if got := resolved.Deployment.ServedModel(resolved.Name); got != want {
+			t.Fatalf("%s answers with %q, want %q", consumer, got, want)
+		}
 	}
-	projected, err := ProjectRecipeModelBindings(cfg, plan, "private")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if projected.CategoryModel.ModelID != "domain-a" || !projected.IsCategoryClassifierEnabled() {
-		t.Fatalf("an attached domain classifier without an artifact must stay enabled: %#v", projected.CategoryModel)
-	}
-	if projected.PromptGuard.ModelID != "vela-guard" {
-		t.Fatalf("the guard must name the model its runtime serves: %q", projected.PromptGuard.ModelID)
+	if !cfg.IsCategoryClassifierEnabled() {
+		t.Fatal("an attached domain classifier without an artifact must stay enabled")
 	}
 }
 

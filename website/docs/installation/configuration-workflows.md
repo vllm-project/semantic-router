@@ -45,7 +45,9 @@ After activation, open **Build → Routing → Models** to connect physical Chat
 backends. **Mixture-of-Models** has three tabs:
 
 - **Models** publishes and manages public model entrypoints;
-- **Recipes** manages the policies those entrypoints select;
+- **Recipes** manages the policies those entrypoints select and lists the
+  built-in Recipes installed with vLLM-SR; **Create model** on a built-in
+  Recipe assigns your Models to its decisions and publishes it;
 - **Probes** inspects recipe scenarios and supports generation or routing-only
   validation.
 
@@ -166,7 +168,9 @@ The Operator renders a canonical config from two Kubernetes-native inputs:
 Other `spec.config` fields are typed Operator adapters for response cache,
 classifiers, tools, observability, reasoning families, and related shared
 settings. The Operator translates them into canonical provider and `global`
-sections.
+sections. `spec.config.model_deployments`, `model_bindings` and
+`decision_model` carry the model catalog; see
+[Model deployments and the decision model](../api/semantic-router-crd#model-deployments-and-the-decision-model).
 
 ```yaml
 spec:

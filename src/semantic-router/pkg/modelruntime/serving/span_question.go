@@ -69,7 +69,7 @@ func (r *Runtime) prepareSpanQuestion(ctx context.Context, spec config.ResolvedM
 		return nil, binding.Capability{}, nil, err
 	}
 	capability := binding.Capability{
-		Contract: spec.Binding.Contract, Provider: Provider, Device: card.Device, Precision: card.Dtype, Preset: preset,
+		Contract: spec.Binding.Contract, Provider: providerOf(spec), Device: card.Device, Precision: card.Dtype, Preset: preset,
 		Deployment: spec.Binding.Deployment,
 		Limits:     binding.Limits{ModelTokens: card.MaxInputTokens, Overflow: spec.Deployment.Input.Overflow},
 	}

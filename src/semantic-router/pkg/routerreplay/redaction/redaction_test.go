@@ -203,3 +203,27 @@ func TestRedactResponseBodyRetainsFusionQuorumDiagnostics(t *testing.T) {
 		t.Fatalf("Fusion attempt diagnostics changed during redaction: %#v", second)
 	}
 }
+
+func TestRedactResponseBodyRemovesCapturedToolResults(t *testing.T) {
+	const private = "private-tool-result"
+	body := []byte(`{"object":"list","data":[{
+		"id":"replay-tool-result",
+		"request_body":"{\"messages\":[{\"role\":\"tool\",\"content\":\"private-tool-result\"}]}",
+		"tool_trace":{"steps":[{"type":"client_tool_result","tool_call_id":"call-1","status":"failed","output":"private-tool-result","truncated":true}]}
+	}]}`)
+
+	redacted := mustRedactChanged(t, body)
+	if bytes.Contains(redacted, []byte(private)) {
+		t.Fatalf("redacted list still contains the captured tool result: %s", redacted)
+	}
+	var payload struct {
+		Data []store.Record `json:"data"`
+	}
+	if err := json.Unmarshal(redacted, &payload); err != nil {
+		t.Fatalf("decode redacted list: %v", err)
+	}
+	step := payload.Data[0].ToolTrace.Steps[0]
+	if !step.ContentRedacted || step.Status != RedactedToolResultStatusFailed || step.Output != "" {
+		t.Fatalf("captured tool result step = %+v, want redacted with its status", step)
+	}
+}

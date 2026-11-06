@@ -16,8 +16,7 @@ start those inference backends.
 | --- | --- |
 | [Accuracy](accuracy/README.md) | Direct answers by default, with bounded workflow or fusion when accuracy benefits from orchestration. |
 | [Agent](agent/README.md) | Coding, research, specialist, privacy, and security work across local and frontier lanes. |
-| [Balanced](balance/README.md) | General-purpose quality, latency, cost, and answer-recovery trade-offs. |
-| [Decision Balance](decision-balance/README.md) | One decision-model call per request sets the reasoning effort and model across GLM-5.3-Flash and two Qwen3.8 models; MoM V1 Balance runs the same policy over the models you assign. |
+| [Balanced](balance/README.md) | General-purpose quality, latency, cost, and answer-recovery trade-offs, routed on four named decision-model questions. |
 | [Feedback Recovery](feedback/README.md) | Corrections, repeated dissatisfaction, failed code, and verification requests. |
 | [Knowledge](knowledge/README.md) | Evidence-based escalation from a small local model to a stronger model. |
 | [Multi-Objective](multi-objective/README.md) | Five request-facing balance, speed, cost, accuracy, and privacy profiles over one shared pool. |
@@ -27,7 +26,9 @@ start those inference backends.
 The [built-in virtual model catalog](built-in/README.md) is a separate
 distribution surface. Its [MoM V1 Model
 Card](built-in/latest/mom-v1/README.md) describes the virtual models bundled
-with `vllm-sr`.
+with `vllm-sr`. MoM V1 Balance is the Decision Balance policy: one
+decision-model call per request selects one of its ten lanes and the reasoning
+effort of the models you assign to it.
 
 ## Use a recipe
 
@@ -46,13 +47,17 @@ Multi-profile recipes expose named virtual model IDs through top-level
 
 ## Use a built-in Recipe
 
-Start `vllm-sr serve`, then open **Build → Mixture-of-Models → Recipes** in
-Dashboard. Choose a built-in Recipe, assign connected Models to its decisions,
-and publish the resulting Mixture-of-Model. The Recipe contains routing policy;
-it does not start physical model engines or embed their credentials.
+Start `vllm-sr serve`, connect your Models, then open **Build →
+Mixture-of-Models → Recipes** in Dashboard. Under **Built-in recipes**, choose
+**Create model** on a Recipe, enter its public model name and optional aliases,
+and assign connected Models to each decision that calls one. Creating the model
+adds the Recipe and its entrypoint to the active configuration. The Recipe
+contains routing policy; it does not start physical model engines or embed
+their credentials.
 
-For a reviewed YAML deployment, copy the built-in source into a user-owned
-configuration, validate it, and serve that complete file with
+Without Dashboard, `vllm-sr recipe builtin init` writes the same composition to
+a new config file. For a reviewed YAML deployment, copy the built-in source into
+a user-owned configuration, validate it, and serve that complete file with
 `vllm-sr serve --config mom-custom.yaml`.
 
 See the [built-in catalog guide](built-in/README.md) for the packaged inventory

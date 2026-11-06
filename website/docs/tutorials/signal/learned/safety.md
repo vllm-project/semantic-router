@@ -37,11 +37,15 @@ routing:
           threshold: 0.6
 ```
 
-Omitted `model` uses the built-in local Safety or Hazard module. An explicit
-`model` resolves a classification endpoint in `global.model_catalog.external`.
-Both forms expose the same score semantics. For local artifacts, `labels` must
-exactly match `config.json`'s `id2label` order; the loader checks the head's
-`problem_type` as well. For external endpoints, labels are aligned by name.
+Each safety rule asks its own question. A rule without `deployment` asks the
+decision model, and its `hazard` part asks the pre-declared `hazard`
+deployment (Vela 1.0 Hazard). Write `deployment` on the rule, or in its
+`hazard` part, to name another deployment; see
+[Choose a model for a signal](../../../installation/choose-a-model-for-a-signal.md).
+Every deployment exposes the same score semantics. For a local model, `labels`
+must exactly match `config.json`'s `id2label` order; the loader checks the
+head's `problem_type` as well. For a `classify` service, labels are aligned by
+name.
 
 - `labels` and `unsafe_labels` default to `[safe, unsafe]` and `[unsafe]`.
 - A binary rule compares the sum of its selected unsafe label scores with
@@ -90,33 +94,41 @@ selects the configured handling route. Diagnostics expose matched rule names in
 `x-vsr-matched-safety`, the classification result, dashboard and replay record.
 
 See [shared model configuration](../../../model-runtime/guides/safety)
-for native context budgets, external endpoints and failure policies, and the
+for native context budgets, remote deployments and failure policies, and the
 [complete HTTP example](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/safety/content-safety.yaml)
 for a category-specific policy.
 
 ## Select Vela Shield
 
-Without an explicit specialist binding, Safety uses the selected decision
-deployment, Vela 2.0 0.3B by default.
+Without a `deployment` on the rule, Safety asks the decision model,
+vela3-fast by default.
 [Vela Safety](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-Safety) and
 [Vela Shield](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-Shield)
 are specialist classifiers with the same `safe`/`unsafe` labels. Existing rules
 can keep their labels, but thresholds must be evaluated again after switching
 models.
 
-To use Shield for every safety rule, set the module's model:
+To use Shield, declare a deployment of it and name it on each safety rule that
+should use it:
 
 ```yaml
 global:
   model_catalog:
-    modules:
-      safety:
-        safety:
-          model_id: models/Vela-1.0-Encoder-307M-Shield
+    deployments:
+      shield:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Shield
+        revision: a981a99eeb05a2859b88b5cee9af4352897ec4ec
+routing:
+  signals:
+    safety:
+      - name: unsafe-content
+        deployment: shield
+        threshold: 0.5
 ```
 
-To use Shield for one rule in one recipe, declare a deployment and bind the
-rule to it. Other recipes keep the module's model:
+A rule in a recipe names its deployment the same way, so one recipe can use
+Shield while the others keep the decision model:
 
 ```yaml
 global:
@@ -129,50 +141,60 @@ global:
 recipes:
   - name: care
     routing:
-      model_bindings:
-        safety.unsafe-content:
-          deployment: shield
-          contract: label_distribution.v1
       signals:
         safety:
           - name: unsafe-content
+            deployment: shield
             threshold: 0.5
 ```
 
-The module form uses the pinned revision from the built-in registry; a
-deployment uses the `revision` it declares. Either way, the download contains
-only the root classifier. The Shield repository also publishes auxiliary heads
+The deployment downloads the `revision` it declares, and only the root
+classifier. The Shield repository also publishes auxiliary heads
 under `heads/` and a label-conditioned encoder under `lc/`; the router does not
 load them and does not download them.
 
 ## Long-input scanning
 
 Safety heads use whole-input inference by default. A separately calibrated
-window policy can scan local risks throughout a long request:
+window policy can scan local risks throughout a long request. Give the rule's
+deployment the complete-document budget, and the module the window geometry:
 
 ```yaml
 global:
   model_catalog:
+    deployments:
+      my-safety:
+        provider: model_runtime
+        artifact: /models/my-safety-model
+        device: cpu
+        input:
+          max_tokens: 32768
+          overflow: window
     modules:
       safety:
         safety:
-          model_id: models/my-safety-model
-          max_sequence_length: 32768
           window:
             size: 512
             overlap: 255
+routing:
+  signals:
+    safety:
+      - name: unsafe-content
+        deployment: my-safety
+        threshold: 0.5
 ```
 
-`max_sequence_length` limits the complete tokenized request, including special
+`input.max_tokens` limits the complete tokenized request, including special
 tokens. Longer inputs fail; the router never silently keeps only the first
 window. `window.size` includes special tokens, while `overlap` counts content
 tokens. For a tokenizer adding two special tokens, this example advances by
 255 content tokens. Each window restores the original special tokens and
 starts positions at zero. Empty content and invalid window budgets fail.
 
-For a named local binding, deployment `input.max_tokens` replaces the module's
-complete-document budget. A document budget of 65,536 and a `window.size` of
-32,768 are valid when the loaded checkpoint and graph support 32K forwards.
+A rule without `deployment` takes its complete-document budget from the
+module's `max_sequence_length` instead. A document budget of 65,536 and a
+`window.size` of 32,768 are valid when the loaded checkpoint and graph support
+32K forwards.
 Only the window must fit the single-forward capacity; the document may require
 multiple windows. Counts come from the classifier tokenizer, not the downstream
 generative model's tokenizer. A failed window fails the complete scan instead of
@@ -183,8 +205,8 @@ last window short. It sums selected unsafe probabilities within each window,
 then takes the largest window score and applies the rule's threshold once.
 Hazard similarly takes the maximum selected category probability across
 windows. Set a separate `window` under the `hazard` head if that artifact has
-been evaluated with scanning. External classifiers retain their own input
-processing contract. The published Vela Hazard operating point retains its
+been evaluated with scanning. Remote `classify` deployments retain their own
+input processing contract. The published Vela Hazard operating point retains its
 supplied 2,048-token windows and 32K document policy; configuring a larger
 document budget does not qualify that operating point for a different scan.
 

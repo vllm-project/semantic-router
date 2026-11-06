@@ -31,10 +31,7 @@ func (r *OpenAIRouter) applySemanticReasoningMode(
 		return false
 	}
 	effort, mode := semanticReasoningControls(r, family, decision, model, targetFormat, enabled)
-	var budget *int64
-	if targetFormat == llmprotocol.AnthropicMessagesV1 && mode == llmprotocol.ReasoningModeEnabled {
-		budget = request.ReasoningBudgetTokens
-	}
+	mode, budget := messagesThinkingBudget(targetFormat, mode, request.ReasoningBudgetTokens)
 	if request.ReasoningEffort == effort && request.ReasoningMode == mode && request.ReasoningBudgetTokens == budget {
 		return false
 	}
@@ -43,6 +40,24 @@ func (r *OpenAIRouter) applySemanticReasoningMode(
 	request.ReasoningBudgetTokens = budget
 	logging.Infof("Applied reasoning controls to model %q", model)
 	return true
+}
+
+// messagesThinkingBudget keeps a client's thinking budget only where the
+// Messages wire carries one. Messages has no enabled thinking without a
+// budget, so a family's enabled mode without one is sent as adaptive thinking
+// at the selected effort.
+func messagesThinkingBudget(
+	targetFormat llmprotocol.WireFormat,
+	mode llmprotocol.ReasoningMode,
+	budget *int64,
+) (llmprotocol.ReasoningMode, *int64) {
+	if targetFormat != llmprotocol.AnthropicMessagesV1 || mode != llmprotocol.ReasoningModeEnabled {
+		return mode, nil
+	}
+	if budget == nil {
+		return llmprotocol.ReasoningModeAdaptive, nil
+	}
+	return mode, budget
 }
 
 func semanticReasoningControls(
