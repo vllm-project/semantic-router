@@ -178,7 +178,7 @@ Inspired by
 answering passage).
 
 ```bash
-python prepare_data.py \
+python src/training/model_embeddings/domain_adapted_embeddings/prepare_data.py \
   --source huggingface \
   --dataset keivalya/MedQuad-MedicalQnADataset
 ```
@@ -195,7 +195,7 @@ Base model is often
 [mmbert-embed-32k-2d-matryoshka](https://huggingface.co/vllm-sr/mmbert-embed-32k-2d-matryoshka).
 
 ```bash
-python train.py \
+python src/training/model_embeddings/domain_adapted_embeddings/train.py \
   --data-dir data \
   --output-dir models/trained \
   --base-model vllm-sr/mmbert-embed-32k-2d-matryoshka \
@@ -209,7 +209,7 @@ and accumulate triplets across iterations.
 
 ### Step 3 — Measure gains
 
-On MedQuAD, MRR@5 improved by **+71.18%** (from 0.4284 to 0.7333) versus baseline after two iterations (`lr=5e-5`).
+On MedQuAD, MRR@5 improved by **+71.18%** over the baseline after two iterations (`lr=5e-5`, recorded in `src/training/model_embeddings/domain_adapted_embeddings/train.py`).
 The published model is
 [mmbert-embed-medical](https://huggingface.co/vllm-sr/mmbert-embed-medical).
 
