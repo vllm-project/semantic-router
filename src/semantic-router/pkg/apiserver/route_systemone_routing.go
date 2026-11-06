@@ -47,7 +47,7 @@ func (SystemOneRouteDiagnosticRequest) JSONWire() any {
 func apiSystemOneRoutingRoutes() []apiRoute {
 	return []apiRoute{
 		managedRoute(EndpointMetadata{Path: systemOneRoutingDiagnosticPath, Method: http.MethodGet, Description: "List active native recipe entrypoints for operator diagnostics without probing models; availability describes the routing plan, not backend health"}, routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig}, (*ClassificationAPIServer).handleSystemOneRoutes, jsonResponse[SystemOneRoutes](http.StatusOK, "Active native routing plans")),
-		managedRoute(EndpointMetadata{Path: systemOneRoutingDiagnosticPath, Method: http.MethodPost, Description: "Run a native recipe using operator classify.invoke permission; the selected algorithm owns its execution deadline and physical call budget, while signals use their own timeouts; independent of public listener grants"}, routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational}, (*ClassificationAPIServer).handleSystemOneRouteDiagnostic, strictJSONBodyFor[SystemOneRouteDiagnosticRequest](), jsonResponse[map[string]any](http.StatusOK, "Selected native response and routing outcome"), errorResponses(400, 404, 413, 502, 503, 504)),
+		managedRoute(EndpointMetadata{Path: systemOneRoutingDiagnosticPath, Method: http.MethodPost, Description: "Run a native recipe using operator classify.invoke permission; signals and the selected algorithm share one deadline and physical call ledger, with per-decision limits tightening the request ceiling; independent of public listener grants"}, routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational}, (*ClassificationAPIServer).handleSystemOneRouteDiagnostic, strictJSONBodyFor[SystemOneRouteDiagnosticRequest](), jsonResponse[map[string]any](http.StatusOK, "Selected native response and routing outcome"), errorResponses(400, 404, 413, 502, 503, 504)),
 	}
 }
 
@@ -92,6 +92,7 @@ func (s *ClassificationAPIServer) handleSystemOneRoutes(w http.ResponseWriter, _
 }
 
 func (s *ClassificationAPIServer) handleSystemOneRouteDiagnostic(w http.ResponseWriter, r *http.Request) {
+	r = r.WithContext(systemone.WithRequestArrival(r.Context(), time.Now()))
 	body, err := readJSONRequestBody(r, systemOneRequestLimit)
 	if errors.Is(err, errRequestBodyTooLarge) {
 		writeSystemOneError(w, http.StatusRequestEntityTooLarge, "request_too_large", "The request exceeds 2 MiB")

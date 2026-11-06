@@ -35,6 +35,7 @@ import {
 } from '@/lib/dslMutations'
 import type { RouteInput } from '@/lib/dslMutations'
 import type { EditorMode, CompileResult, ValidateResult, DSLFieldObject } from '@/types/dsl'
+import { configSaveWarnings } from '@/utils/configSaveWarnings'
 import type { DSLStore } from './dslStoreTypes'
 import { initialDSLState, type DeployStatusResponse } from './dslStoreSupport'
 import { renderCanonicalYaml } from './dslStoreYamlSupport'
@@ -624,6 +625,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
         return
       }
 
+      const warnings = configSaveWarnings(data)
       if (data.status === 'persisted' || data.status === 'restart_required') {
         set({
           deploying: false,
@@ -633,6 +635,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
             version: data.version,
             message:
               data.message || 'Configuration saved. Roll out Router and Envoy to activate it.',
+            warnings,
           },
           savedSource: dslSource,
         })
@@ -676,6 +679,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
           message: healthy
             ? `Deployed v${data.version} — ${reloaded} reloaded successfully.`
             : `Deployed v${data.version} — Runtime reload status unknown (check logs).`,
+          warnings,
         },
         savedSource: dslSource,
       })
