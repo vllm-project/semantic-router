@@ -33,11 +33,8 @@ from ..decision3.family import Decision3Model, Item, passes
 from ..decision3.state_once import StateOnceModel
 from ..vela3_shared import invalid
 from .gates import Gates
-from .span_policy import Definitions, Policy
-from .span_read import SpanReader
-from .span_read import answer as span_answer
-from .span_render import Renderer
-from .spans import SpanItem, is_span, plan_question
+from .span_read import SpanItem
+from .spans import Spans, is_span
 
 
 @dataclass(frozen=True)
@@ -52,16 +49,6 @@ def adapter_of(item: Item) -> str | None:
 
 
 # ------------------------------------------------------------------ span questions
-
-
-@dataclass(frozen=True)
-class SpanSetup:
-    """What a model needs to plan and run span questions (``spans.py`` and its ``span_*`` modules)."""
-
-    policy: Policy
-    renderer: Renderer
-    reader: SpanReader
-    definitions: Definitions
 
 
 SPAN_IMAGES = "span questions read text only on this model"
@@ -190,13 +177,13 @@ class Vela3D3Model(Decision3Model):
     """
 
     gates: Gates
-    span_setup: SpanSetup
+    spans: Spans
     replay_gated: ClassVar[bool] = False
 
-    def attach(self, gates: Gates, span_setup: SpanSetup) -> None:
-        """Give the loaded base model the package's gates and span setup (``Vela3D3Family.load``)."""
+    def attach(self, gates: Gates, spans: Spans) -> None:
+        """Give the loaded base model the package's gates and span questions (``Vela3D3Family.load``)."""
         self.gates = gates
-        self.span_setup = span_setup
+        self.spans = spans
 
     def plan(
         self, state: Any, questions: dict[str, Any], scan: int | None = None
@@ -209,19 +196,10 @@ class Vela3D3Model(Decision3Model):
         return with_spans(plan, asked, list(questions), self._span_planner(state))
 
     def _span_planner(self, state: Any) -> Callable[[str, dict[str, Any]], SpanItem]:
-        """Plans one span question over ``state`` with the package's span setup and the base's length check."""
-        setup = self.span_setup
+        """Plans one span question over ``state`` with the base's length check."""
 
         def plan_span(question_id: str, question: dict[str, Any]) -> SpanItem:
-            return plan_question(
-                question_id,
-                question,
-                state,
-                setup.policy,
-                setup.renderer,
-                setup.definitions,
-                self.length_error,
-            )
+            return self.spans.plan(question_id, question, state, self.length_error)
 
         return plan_span
 
@@ -334,13 +312,12 @@ class Vela3D3Model(Decision3Model):
                     for value in self._replay([group[j] for j in chunk], adapter)
                 ],
             )
-        reader = self.span_setup.reader
-        spans = [items[i] for i in part.spans]
+        span_items = [items[i] for i in part.spans]
         put(
             part.spans,
             [
-                span_answer(item, *reader.logits(item))
-                for item in spans
+                self.spans.answer(item)
+                for item in span_items
                 if isinstance(item, SpanItem)
             ],
         )

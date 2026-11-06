@@ -23,6 +23,16 @@ func remotePIIConfig() *config.RouterConfig {
 	return cfg
 }
 
+// A remote PII backend keeps its bounded input once the Router reads it as a
+// deployment; only a local model's sequence length opts into the full text.
+func TestLoadedRemotePIIBackendKeepsItsBoundedInput(t *testing.T) {
+	cfg := remotePIIConfig()
+	cfg.PIIModel.MaxSequenceLength = 32768
+	if (&Classifier{Config: config.WithModelResources(cfg)}).hasLongContextClassifier(config.SignalTypePII) {
+		t.Fatal("a remote PII backend read the full context")
+	}
+}
+
 // A remote PII backend in a configuration where no reachable routing decision
 // consumes the PII signal: the mapping loader hands BuildClassifier a nil
 // mapping on purpose, and the backend must not be constructed against it

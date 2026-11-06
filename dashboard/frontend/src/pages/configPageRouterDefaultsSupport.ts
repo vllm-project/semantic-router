@@ -1,14 +1,27 @@
 import type { EditFormData, FieldConfig } from '../components/EditModal'
 import { ROUTER_CONFIG_EXTENSION } from '../generated/routerConfigContract'
+import {
+  decisionBindingsBadges,
+  decisionBindingsEditData,
+  decisionBindingsFields,
+  decisionBindingsPatch,
+  decisionBindingsState,
+  decisionBindingsSummary,
+  signalModelSummary,
+} from './configPageDecisionBindingsSupport'
 import { DEFAULT_SECTIONS, SECTION_META } from './configPageRouterDefaultsCatalog'
 import { routerStructuredField } from './configPageRouterStructuredFields'
-import { normalizeRouterStructuredFields } from './configPageRouterStructuredSchema'
+import {
+  DEPRECATED_MODULE_MODEL_FIELDS,
+  normalizeRouterStructuredFields,
+} from './configPageRouterStructuredSchema'
 import {
   embeddingModelsBadges,
-  embeddingModelsCatalogValue,
   embeddingModelsEditData,
   embeddingModelsFields,
+  embeddingModelsPatch,
   embeddingModelsSummary,
+  embeddingModelsView,
 } from './configPageEmbeddingModelsSupport'
 import type { CanonicalGlobalConfig, ConfigData, Tool } from './configPageSupport'
 import {
@@ -20,7 +33,6 @@ import {
   type RouterLayerKey,
   type RouterSystemKey,
 } from './configPageRouterSectionCatalog'
-import { configuredDecisionModel } from './decisionModelSupport'
 
 export type { RouterLayerKey, RouterSystemKey } from './configPageRouterSectionCatalog'
 export type RouterConfigSectionData = Partial<Record<RouterSystemKey, unknown>>
@@ -51,6 +63,8 @@ export interface RouterSectionCard {
   editData: EditFormData
   editFields: FieldConfig[]
   save: (data: EditFormData) => Partial<ConfigData>
+  /** A deprecated section is shown, but the Dashboard no longer writes it. */
+  deprecation?: string
 }
 
 interface RouterSectionContext {
@@ -144,29 +158,6 @@ function stringOrFallback(value: unknown, fallback = 'Not set'): string {
   return fallback
 }
 
-function compactPathLikeString(value: unknown, fallback = 'Not set'): string {
-  if (typeof value !== 'string' || !value.trim()) {
-    return stringOrFallback(value, fallback)
-  }
-
-  const trimmed = value.trim()
-  if (trimmed.length <= 40 || !trimmed.includes('/')) {
-    return trimmed
-  }
-
-  const segments = trimmed.split('/').filter(Boolean)
-  if (segments.length === 0) {
-    return trimmed
-  }
-
-  const tail = segments[segments.length - 1]
-  if (segments[0] === 'models') {
-    return `models/.../${tail}`
-  }
-
-  return `.../${tail}`
-}
-
 function percentOrFallback(value: unknown, fallback = 'Not set'): string {
   return typeof value === 'number' ? `${Math.round(value * 100)}%` : fallback
 }
@@ -239,7 +230,11 @@ function getSectionValue(
   return legacyKey ? maybeConfig[legacyKey] : undefined
 }
 
-function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummaryItem[] {
+function summaryForKey(
+  key: RouterSystemKey,
+  data: unknown,
+  signalModel: (signal: string) => string,
+): RouterSectionSummaryItem[] {
   const section = asObject(data)
 
   switch (key) {
@@ -339,28 +334,15 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
       ]
     case 'prompt_guard':
       return [
-        {
-          label: 'Model Ref',
-          value: compactPathLikeString(section?.model_ref ?? section?.model_id),
-        },
+        { label: 'Model', value: signalModel('jailbreak') },
         { label: 'Threshold', value: percentOrFallback(section?.threshold) },
         { label: 'Runtime', value: section?.use_cpu ? 'CPU' : 'GPU' },
       ]
     case 'classifier': {
       const classifier = section
       return [
-        {
-          label: 'Domain model',
-          value: compactPathLikeString(
-            asObject(classifier?.domain)?.model_ref ?? asObject(classifier?.domain)?.model_id,
-          ),
-        },
-        {
-          label: 'PII model',
-          value: compactPathLikeString(
-            asObject(classifier?.pii)?.model_ref ?? asObject(classifier?.pii)?.model_id,
-          ),
-        },
+        { label: 'Domain model', value: signalModel('domain') },
+        { label: 'PII model', value: signalModel('pii') },
         {
           label: 'Preference mode',
           value: asObject(classifier?.preference)?.use_contrastive
@@ -371,25 +353,12 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
     }
     case 'hallucination_mitigation':
       return [
-        {
-          label: 'Fact-check model',
-          value: compactPathLikeString(
-            asObject(section?.fact_check)?.model_ref ?? asObject(section?.fact_check)?.model_id,
-          ),
-        },
-        {
-          label: 'Detector model',
-          value: compactPathLikeString(
-            asObject(section?.detector)?.model_ref ?? asObject(section?.detector)?.model_id,
-          ),
-        },
+        { label: 'Fact-check model', value: signalModel('fact_check') },
+        { label: 'Detector model', value: signalModel('hallucination') },
       ]
     case 'feedback_detector':
       return [
-        {
-          label: 'Model Ref',
-          value: compactPathLikeString(section?.model_ref ?? section?.model_id),
-        },
+        { label: 'Model', value: signalModel('user_feedback') },
         { label: 'Threshold', value: percentOrFallback(section?.threshold) },
         { label: 'Runtime', value: section?.use_cpu ? 'CPU' : 'GPU' },
       ]
@@ -419,29 +388,8 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
           label: 'Prototype scoring',
           value: asObject(section?.prototype_scoring) ? 'Configured' : 'Not configured',
         },
-        { label: 'Backend', value: asObject(section?.backend) ? 'Configured' : 'Local' },
+        { label: 'Model', value: "Each rule's deployment, else the decision model" },
       ]
-    case 'system_models': {
-      const decisionModel = configuredDecisionModel({
-        global: { model_catalog: { system: section } },
-      })
-      const inheritedBinding = `Follows ${decisionModel}`
-      return [
-        {
-          label: 'Decision Model',
-          value: section?.decision_model ? decisionModel : `${decisionModel} (default)`,
-        },
-        {
-          label: 'Prompt Guard',
-          value: compactPathLikeString(section?.prompt_guard, inheritedBinding),
-        },
-        {
-          label: 'Domain',
-          value: compactPathLikeString(section?.domain_classifier, inheritedBinding),
-        },
-        { label: 'PII', value: compactPathLikeString(section?.pii_classifier, inheritedBinding) },
-      ]
-    }
     case 'embedding_models':
       return embeddingModelsSummary(data)
     case 'prompt_compression':
@@ -520,7 +468,6 @@ function badgesForKey(
   data: unknown,
   ctx: RouterSectionContext,
 ): RouterSectionBadge[] {
-  const section = asObject(data)
   const badges: RouterSectionBadge[] = []
 
   if (key === 'tools') {
@@ -535,16 +482,6 @@ function badgesForKey(
 
   if (key === 'embedding_models') {
     badges.push(...embeddingModelsBadges(data))
-  }
-
-  if (key === 'system_models') {
-    const configuredRefs = Object.entries(section || {}).filter(
-      ([name, value]) => name !== 'decision_model' && typeof value === 'string' && value.trim(),
-    ).length
-    badges.push({
-      label: `${configuredRefs} explicit ${configuredRefs === 1 ? 'binding' : 'bindings'}`,
-      tone: configuredRefs > 0 ? 'active' : 'inactive',
-    })
   }
 
   if (key === 'external_models') {
@@ -783,13 +720,6 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
     case 'prompt_guard':
       return [
         { name: 'enabled', label: 'Enable Prompt Guard', type: 'boolean' },
-        { name: 'model_ref', label: 'Model Ref', type: 'text', placeholder: 'prompt_guard' },
-        {
-          name: 'model_id',
-          label: 'Model ID Override',
-          type: 'text',
-          placeholder: 'models/vela3-fast',
-        },
         { name: 'threshold', label: 'Threshold', type: 'percentage', placeholder: '70' },
         { name: 'use_cpu', label: 'Use CPU', type: 'boolean' },
         {
@@ -815,58 +745,11 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
     case 'feedback_detector':
       return [
         { name: 'enabled', label: 'Enable Feedback Detector', type: 'boolean' },
-        { name: 'model_ref', label: 'Model Ref', type: 'text', placeholder: 'feedback_detector' },
-        {
-          name: 'model_id',
-          label: 'Model ID Override',
-          type: 'text',
-          placeholder: 'models/vela3-fast',
-        },
         { name: 'threshold', label: 'Threshold', type: 'percentage', placeholder: '70' },
         { name: 'use_cpu', label: 'Use CPU', type: 'boolean' },
       ]
     case 'external_models':
       return [routerStructuredField(key, 'items')]
-    case 'system_models':
-      return [
-        routerStructuredField(key, 'decision_model'),
-        {
-          name: 'prompt_guard',
-          label: 'Prompt Guard Binding',
-          type: 'text',
-          placeholder: 'models/vela3-fast',
-        },
-        {
-          name: 'domain_classifier',
-          label: 'Domain Classifier Binding',
-          type: 'text',
-          placeholder: 'models/vela3-fast',
-        },
-        {
-          name: 'pii_classifier',
-          label: 'PII Classifier Binding',
-          type: 'text',
-          placeholder: 'models/vela3-fast',
-        },
-        {
-          name: 'fact_check_classifier',
-          label: 'Fact Check Binding',
-          type: 'text',
-          placeholder: 'models/vela3-fast',
-        },
-        {
-          name: 'hallucination_detector',
-          label: 'Hallucination Detector Binding',
-          type: 'text',
-          placeholder: 'models/vela3-fast',
-        },
-        {
-          name: 'feedback_detector',
-          label: 'Feedback Detector Binding',
-          type: 'text',
-          placeholder: 'models/vela3-fast',
-        },
-      ]
     case 'embedding_models':
       return embeddingModelsFields()
     case 'prompt_compression':
@@ -1005,6 +888,22 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
   return []
 }
 
+// Modules whose model a binding chooses; their deprecated model fields are
+// neither offered nor saved.
+const MODEL_MODULE_KEYS = new Set<RouterSystemKey>([
+  'prompt_guard',
+  'classifier',
+  'hallucination_mitigation',
+  'feedback_detector',
+  'complexity',
+])
+
+function withoutModelFields(module: unknown): Record<string, unknown> {
+  const rest = { ...(asObject(module) || {}) }
+  for (const field of DEPRECATED_MODULE_MODEL_FIELDS) delete rest[field]
+  return rest
+}
+
 function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
   const curated = curatedFieldsForKey(key)
   if (key === 'external_models') {
@@ -1028,7 +927,9 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
       ? ['clear_route_cache', 'model_selection', 'learning']
       : key === 'model_selection'
         ? ['method', 'ml']
-        : []
+        : MODEL_MODULE_KEYS.has(key)
+          ? DEPRECATED_MODULE_MODEL_FIELDS
+          : []
   return mergeGeneratedRouterFields(['global', ...CURATED_ROUTER_SECTIONS[key].path], curated, {
     omit,
   })
@@ -1095,12 +996,6 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
     }
   }
   const objectData = asObject(data)
-  if (key === 'system_models') {
-    return {
-      ...objectData,
-      decision_model: asObject(objectData?.decision_model) || { deployment: 'primary' },
-    }
-  }
   return objectData ? { ...objectData } : asObject(cloneDefaultSection(key)) || {}
 }
 
@@ -1122,8 +1017,8 @@ function withoutEmptyThreshold(module: Record<string, unknown>): Record<string, 
 function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<ConfigData> {
   if (key === 'embedding_models') {
     return buildNestedPatch(
-      CURATED_ROUTER_SECTIONS[key].path,
-      embeddingModelsCatalogValue(rawData),
+      CURATED_ROUTER_SECTIONS[key].path.slice(0, -1),
+      embeddingModelsPatch(rawData),
     ) as Partial<ConfigData>
   }
   const data = normalizeRouterStructuredFields(key, rawData)
@@ -1158,8 +1053,8 @@ function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<Config
   if (key === 'classifier') {
     return buildNestedPatch(CURATED_ROUTER_SECTIONS[key].path, {
       ...data,
-      domain: withoutEmptyThreshold(asObject(data.domain) || {}),
-      pii: withoutEmptyThreshold(asObject(data.pii) || {}),
+      domain: withoutEmptyThreshold(withoutModelFields(data.domain)),
+      pii: withoutEmptyThreshold(withoutModelFields(data.pii)),
       mcp: asObject(data.mcp) || {},
       preference: asObject(data.preference) || {},
     }) as Partial<ConfigData>
@@ -1167,18 +1062,24 @@ function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<Config
   if (key === 'prompt_guard' || key === 'feedback_detector') {
     return buildNestedPatch(
       CURATED_ROUTER_SECTIONS[key].path,
-      withoutEmptyThreshold(data),
+      withoutEmptyThreshold(withoutModelFields(data)),
     ) as Partial<ConfigData>
   }
   if (key === 'hallucination_mitigation') {
     const hallucination: Record<string, unknown> = {
       ...data,
       enabled: Boolean(data.enabled),
-      fact_check: withoutEmptyThreshold(asObject(data.fact_check) || {}),
-      detector: asObject(data.detector) || {},
+      fact_check: withoutEmptyThreshold(withoutModelFields(data.fact_check)),
+      detector: withoutModelFields(data.detector),
     }
     delete hallucination.explainer
     return buildNestedPatch(CURATED_ROUTER_SECTIONS[key].path, hallucination) as Partial<ConfigData>
+  }
+  if (key === 'complexity') {
+    return buildNestedPatch(
+      CURATED_ROUTER_SECTIONS[key].path,
+      withoutModelFields(data),
+    ) as Partial<ConfigData>
   }
   if (key === 'model_selection') {
     const { default_algorithm, models_path, knn, kmeans, svm, ml, ...selectionFields } = data
@@ -1214,13 +1115,22 @@ export function buildEffectiveRouterConfig(
 
 export function buildRouterSectionCards(ctx: RouterSectionContext): RouterSectionCard[] {
   const orderedKeys = Object.keys(CURATED_ROUTER_SECTIONS) as RouterSystemKey[]
+  const decisionBindings = decisionBindingsState(
+    ctx.routerConfig.system_models,
+    ctx.config,
+    ctx.routerDefaults,
+  )
+  const signalModel = (signal: string) => signalModelSummary(decisionBindings, signal)
 
+  const deployments =
+    getNestedValue(ctx.routerDefaults, ['model_catalog', 'deployments']) ??
+    getNestedValue(ctx.config?.global, ['model_catalog', 'deployments'])
   const curatedCards: RouterSectionCard[] = orderedKeys.map((key) => {
     const data = ctx.routerConfig[key]
+    const view = key === 'embedding_models' ? embeddingModelsView(data, deployments) : data
     const meta = SECTION_META[key]
     const source = sourceBadge(key, ctx.routerDefaults, data)
-
-    return {
+    const card = {
       key,
       layer: CURATED_ROUTER_SECTIONS[key].layer,
       path: [...CURATED_ROUTER_SECTIONS[key].path],
@@ -1231,11 +1141,31 @@ export function buildRouterSectionCards(ctx: RouterSectionContext): RouterSectio
       sourceLabel: source.label,
       sourceTone: source.tone,
       status: statusForKey(data),
-      badges: badgesForKey(key, data, ctx),
-      summary: summaryForKey(key, data),
-      editData: editDataForKey(key, data),
+    }
+
+    if (key === 'system_models') {
+      return {
+        ...card,
+        badges: decisionBindingsBadges(decisionBindings),
+        summary: decisionBindingsSummary(decisionBindings),
+        editData: decisionBindingsEditData(decisionBindings),
+        editFields: decisionBindingsFields(decisionBindings),
+        save: (nextData: EditFormData) => decisionBindingsPatch(decisionBindings, nextData),
+      }
+    }
+    return {
+      ...card,
+      badges: badgesForKey(key, view, ctx),
+      summary: summaryForKey(key, view, signalModel),
+      editData: editDataForKey(key, view),
       editFields: fieldsForKey(key),
-      save: (nextData) => saveForKey(key, nextData),
+      save: (nextData: EditFormData) => saveForKey(key, nextData),
+      ...(key === 'external_models'
+        ? {
+            deprecation:
+              'External models are deprecated: the Router reads each one as a deployment. Declare remote models in Deployments with provider classify, openai_chat or openai_embeddings, then bind signals to them.',
+          }
+        : {}),
     }
   })
 
@@ -1245,10 +1175,15 @@ export function buildRouterSectionCards(ctx: RouterSectionContext): RouterSectio
   const generatedCards: RouterSectionCard[] = ROUTER_CONFIG_EXTENSION.global_sections
     // KB management is not a Dashboard surface; the canonical schema and raw editor retain it.
     .filter((surface) => surface.path.join('.') !== 'model_catalog.kbs')
+    // Decision Model & Bindings edits the bindings.
+    .filter((surface) => surface.path.join('.') !== 'model_catalog.bindings')
     .filter((surface) => !curatedPaths.has(surface.path.join('.')))
     .map((surface) => {
       const schemaPath = ['global', ...surface.path]
-      const generatedFields = mergeGeneratedRouterFields(schemaPath, [])
+      const moduleSection = surface.path[0] === 'model_catalog' && surface.path[1] === 'modules'
+      const generatedFields = mergeGeneratedRouterFields(schemaPath, [], {
+        omitNested: moduleSection ? DEPRECATED_MODULE_MODEL_FIELDS : [],
+      })
       const objectForm = generatedFields.length > 0
       const defaultData = getNestedValue(ctx.routerDefaults, surface.path)
       const overrideData = getNestedValue(ctx.config?.global, surface.path)
@@ -1286,7 +1221,16 @@ export function buildRouterSectionCards(ctx: RouterSectionContext): RouterSectio
         save: (nextData) =>
           buildNestedPatch(
             surface.path,
-            objectForm ? nextData : nextData.value,
+            !objectForm
+              ? nextData.value
+              : moduleSection
+                ? Object.fromEntries(
+                    Object.entries(nextData).map(([name, value]) => [
+                      name,
+                      asObject(value) ? withoutModelFields(value) : value,
+                    ]),
+                  )
+                : nextData,
           ) as Partial<ConfigData>,
       }
     })
