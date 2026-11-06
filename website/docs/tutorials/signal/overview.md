@@ -83,16 +83,13 @@ detectors. They do not require a general-purpose classifier model.
 
 | Signal | Use it to |
 | ------ | --------- |
-| [Action](./heuristic/action) | route by the operation a request asks for, such as explain, fix, or refactor |
 | [Authz](./heuristic/authz) | route from trusted identity, role, or tenant policy |
 | [Conversation](./heuristic/conversation) | detect multi-turn, tool-heavy, or agentic request structure |
 | [Context](./heuristic/context) | route by effective context-window needs |
-| [Event](./heuristic/event) | detect structured events by type, severity, action code, or urgency |
 | [Input Modality](./heuristic/input-modality) | detect which input modalities (text, image, audio, video) are present |
-| [Keyword](./heuristic/keyword) | match explicit words, phrases, BM25 terms, or n-grams |
+| [Keyword](./heuristic/keyword) | match explicit words, phrases, BM25 terms, or n-grams, or count how often they occur |
 | [Language](./heuristic/language) | route by detected request language |
 | [Metadata](./heuristic/metadata) | use bounded, caller-provided application hints |
-| [Structure](./heuristic/structure) | detect counts, density, and ordered markers in a prompt |
 
 ### Learned Signals
 

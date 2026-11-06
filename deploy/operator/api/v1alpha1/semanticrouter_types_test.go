@@ -581,7 +581,7 @@ func TestConfigSpecPreservesCanonicalRoutingAndAlgorithmObjects(t *testing.T) {
 	config := ConfigSpec{
 		Routing: &apiextensionsv1.JSON{Raw: []byte(`{
 			"signals": {
-				"events": [{"name": "critical_payment_event", "event_types": ["payment_failed"]}]
+				"keywords": [{"name": "critical_payment_event", "operator": "AND", "keywords": ["payment_failed", "critical"]}]
 			}
 		}`)},
 		Decisions: []DecisionConfig{
@@ -590,7 +590,7 @@ func TestConfigSpecPreservesCanonicalRoutingAndAlgorithmObjects(t *testing.T) {
 				Rules: RuleCombinationConfig{
 					Operator: "AND",
 					Conditions: []RuleConditionConfig{
-						{Type: "event", Name: "critical_payment_event"},
+						{Type: "keyword", Name: "critical_payment_event"},
 					},
 				},
 				Algorithm: &apiextensionsv1.JSON{Raw: []byte(`{
@@ -607,7 +607,7 @@ func TestConfigSpecPreservesCanonicalRoutingAndAlgorithmObjects(t *testing.T) {
 	}
 	serialized := string(data)
 	if !strings.Contains(serialized, `"routing"`) ||
-		!strings.Contains(serialized, `"events"`) ||
+		!strings.Contains(serialized, `"keywords"`) ||
 		!strings.Contains(serialized, `"hybrid"`) {
 		t.Fatalf("expected canonical routing and algorithm objects to serialize as public fields, got %s", serialized)
 	}

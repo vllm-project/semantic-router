@@ -152,11 +152,28 @@ class KeywordSignal(BaseModel):
     """Keyword-based signal configuration."""
 
     name: str
+    description: Optional[str] = None
     operator: str
     keywords: List[str]
     case_sensitive: bool = False
     # Also match prior user messages; False keeps current-turn-only matching.
     include_history: bool = False
+    # At most one: an OR rule matches on how often its keywords occur, as a
+    # count or as occurrences per 1,000 characters.
+    count: Optional[NumericPredicate] = None
+    density: Optional[NumericPredicate] = None
+
+    @model_validator(mode="after")
+    def validate_measure(self):
+        if self.count is not None and self.density is not None:
+            raise ValueError("set count or density, not both")
+        measure = "count" if self.count is not None else "density"
+        if (self.count or self.density) and self.operator != "OR":
+            raise ValueError(
+                f"{measure} counts the keywords an OR rule finds; "
+                f"operator {self.operator!r} matches on which keywords occur"
+            )
+        return self
 
 
 class ProjectionPartition(BaseModel):
@@ -263,38 +280,6 @@ class ContextRule(BaseModel):
         return self
 
 
-class StructureSource(BaseModel):
-    """Source selector for structure-based signals."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    type: str
-    pattern: Optional[str] = None
-    keywords: Optional[List[str]] = None
-    case_sensitive: bool = False
-    sequences: Optional[List[List[str]]] = None
-
-
-class StructureFeature(BaseModel):
-    """Typed request-shape feature extractor."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    type: str
-    source: StructureSource
-
-
-class StructureRule(BaseModel):
-    """Request-shape routing signal configuration."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    name: str
-    description: Optional[str] = None
-    feature: StructureFeature
-    predicate: Optional[NumericPredicate] = None
-
-
 class ConversationSource(BaseModel):
     """Source selector for conversation-shape signals."""
 
@@ -322,19 +307,6 @@ class ConversationRule(BaseModel):
     description: Optional[str] = None
     feature: ConversationFeature
     predicate: Optional[NumericPredicate] = None
-
-
-class EventRule(BaseModel):
-    """Structured event metadata routing signal configuration."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    name: str
-    event_types: Optional[List[str]] = None
-    severities: Optional[List[str]] = None
-    action_codes: Optional[List[str]] = None
-    temporal: bool = False
-    description: Optional[str] = None
 
 
 class PrototypeScoringConfig(BaseModel):
@@ -455,15 +427,6 @@ class InputModalityRule(BaseModel):
         return self
 
 
-class ActionRule(BaseModel):
-    """One action from the fixed vocabulary, referenced by decisions as type: action."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    name: Literal["generate", "explain", "fix", "refactor", "test", "other"]
-    description: Optional[str] = None
-
-
 class Signals(BaseModel):
     """All signal configurations."""
 
@@ -473,7 +436,6 @@ class Signals(BaseModel):
     user_feedbacks: Optional[List[UserFeedback]] = []
     language: Optional[List[Language]] = []
     context: Optional[List[ContextRule]] = []
-    structure: Optional[List[StructureRule]] = []
     complexity: Optional[List[ComplexityRule]] = []
     modality: Optional[List[ModalityRule]] = []
     role_bindings: Optional[List[RoleBindingRule]] = []
@@ -484,10 +446,8 @@ class Signals(BaseModel):
     turn_relation: Optional[List[TurnRelationRule]] = []
     pii: Optional[List[PIIRule]] = []
     conversation: Optional[List[ConversationRule]] = []
-    events: Optional[List[EventRule]] = []
     metadata: Optional[List[MetadataRule]] = []
     input_modality: Optional[List[InputModalityRule]] = []
-    actions: Optional[List[ActionRule]] = []
     systemone: Optional[List[SystemOneRule]] = []
 
     @model_validator(mode="after")

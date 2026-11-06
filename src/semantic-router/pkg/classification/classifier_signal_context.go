@@ -17,12 +17,9 @@ func (c *Classifier) signalReadiness() map[string]bool {
 		config.SignalTypeKeyword:       c.keywordClassifier != nil,
 		config.SignalTypeLanguage:      len(c.Config.LanguageRules) > 0 && c.IsLanguageEnabled(),
 		config.SignalTypeContext:       c.contextClassifier != nil,
-		config.SignalTypeStructure:     c.structureClassifier != nil,
 		config.SignalTypeConversation:  len(c.Config.ConversationRules) > 0,
-		config.SignalTypeEvent:         c.eventClassifier != nil,
 		config.SignalTypeMetadata:      len(c.Config.MetadataRules) > 0,
 		config.SignalTypeInputModality: len(c.Config.InputModalityRules) > 0,
-		config.SignalTypeAction:        len(c.Config.ActionRules) > 0,
 		config.SignalTypeSystemOne:     len(c.Config.SystemOneRules) > 0,
 	}
 	for _, rule := range c.applicationRules {

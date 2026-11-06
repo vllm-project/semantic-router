@@ -226,7 +226,7 @@ const PLUGIN_SNIPPET = `PLUGIN my_plugin pii {
 
 // Signal type descriptions
 const SIGNAL_DESCRIPTIONS: Record<string, string> = {
-  keyword: 'Match queries by keyword lists (regex, BM25, n-gram)',
+  keyword: 'Match queries by keyword lists (regex, BM25, n-gram), or count how often they occur',
   embedding: 'Semantic similarity matching via embedding vectors',
   domain: 'MMLU-based academic domain detection',
   fact_check: 'Flag queries requiring factual verification',
@@ -235,7 +235,6 @@ const SIGNAL_DESCRIPTIONS: Record<string, string> = {
   preference: 'User preference-based routing',
   language: 'Detect query language',
   context: 'Context window length requirements',
-  structure: 'Detect request-shape features such as counts, density, and ordered markers',
   complexity: 'Estimate query difficulty from example sets or a remote scoring model',
   modality: 'Detect multi-modal input (text, image, audio)',
   authz: 'Authorization-based routing (RBAC)',

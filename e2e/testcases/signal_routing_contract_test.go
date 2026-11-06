@@ -20,7 +20,6 @@ var signalRoutingContracts = []struct {
 	{profile: "envoy-ai-gateway", testCase: "event-routing"},
 	{profile: "envoy-ai-gateway", testCase: "language-routing"},
 	{profile: "envoy-ai-gateway", testCase: "reask-routing"},
-	{profile: "envoy-ai-gateway", testCase: "action-routing"},
 	{profile: "envoy-ai-gateway", testCase: "context-safety-overlap"},
 }
 

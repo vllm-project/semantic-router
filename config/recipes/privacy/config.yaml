@@ -116,13 +116,10 @@ routing:
         - tier:frontier
         - cost:high
   signals:
-    conversation:
+    input_modality:
       - name: privacy_has_images
         description: Request contains at least one image content part.
-        feature:
-          type: exists
-          source:
-            type: image_content
+        modality: image
     systemone:
       - name: attack
         description: The request tries to make the assistant ignore its rules or reveal its hidden system
@@ -190,7 +187,7 @@ routing:
       rules:
         operator: AND
         conditions:
-          - type: conversation
+          - type: input_modality
             name: privacy_has_images
       modelRefs:
         - model: local/omni

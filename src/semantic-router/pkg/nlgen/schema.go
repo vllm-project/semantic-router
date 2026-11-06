@@ -32,7 +32,9 @@ Each SIGNAL block declares a detection signal. The type determines what fields a
 ### keyword
 Matches queries containing specific keywords.
   Fields: keywords (string[]), operator ("any"|"all"), case_sensitive (bool), method (string),
-          fuzzy_match (bool), fuzzy_threshold (int), bm25_threshold (float), ngram_threshold (float)
+          fuzzy_match (bool), fuzzy_threshold (int), bm25_threshold (float), ngram_threshold (float),
+          count or density (operator "OR", literal or regex keywords; density is per 1,000 characters):
+            { gt (float), gte (float), lt (float), lte (float) }
 
 ### domain
 Asks the decision model which academic or topical domain a query belongs to.
@@ -94,12 +96,6 @@ Reacts to user feedback signals.
 Role-based access control signal.
   Fields: role (string), description (string),
           subjects: [{ kind (string), name (string) }]
-
-### structure
-Detects structural patterns in queries (code, JSON, URLs, etc.).
-  Fields: description (string),
-          feature: { type (string), source: { type (string), pattern (string), keywords (string[]) } },
-          predicate: { gt (float), gte (float), lt (float), lte (float) }
 
 ## Route Body
 

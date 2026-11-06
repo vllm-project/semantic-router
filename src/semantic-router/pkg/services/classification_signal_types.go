@@ -78,7 +78,6 @@ type MatchedSignals struct {
 	TurnRelation  []string `json:"turn_relation,omitempty"`
 	Language      []string `json:"language,omitempty"`
 	Context       []string `json:"context,omitempty"`
-	Structure     []string `json:"structure,omitempty"`
 	Complexity    []string `json:"complexity,omitempty"`
 	Modality      []string `json:"modality,omitempty"`
 	Authz         []string `json:"authz,omitempty"`
@@ -86,10 +85,8 @@ type MatchedSignals struct {
 	Safety        []string `json:"safety,omitempty"`
 	PII           []string `json:"pii,omitempty"`
 	Conversation  []string `json:"conversation,omitempty"`
-	Event         []string `json:"event,omitempty"`
 	Metadata      []string `json:"metadata,omitempty"`
 	InputModality []string `json:"input_modality,omitempty"`
-	Action        []string `json:"action,omitempty"`
 	SystemOne     []string `json:"systemone,omitempty"`
 	Projection    []string `json:"projection,omitempty"`
 }

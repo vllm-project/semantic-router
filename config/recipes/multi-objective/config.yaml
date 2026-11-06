@@ -322,13 +322,10 @@ recipes:
   description: Mixture-of-Models · Balanced — adaptive quality, speed, and efficiency for everyday routing.
   routing:
     signals:
-      conversation:
-      - description: Request contains at least one image content part.
-        feature:
-          source:
-            type: image_content
-          type: exists
-        name: unified_balance_has_images
+      input_modality:
+      - name: unified_balance_has_images
+        description: Request contains at least one image content part.
+        modality: image
       context:
       - name: unified_balance_long_context
         min_tokens: 12K
@@ -395,7 +392,7 @@ recipes:
       rules:
         operator: AND
         conditions:
-        - type: conversation
+        - type: input_modality
           name: unified_balance_has_images
         on_unknown: no_match
     - name: unified_balance_recovery
@@ -495,13 +492,10 @@ recipes:
   description: Prefer the lowest observed latency while preserving a bounded lane for heavy requests.
   routing:
     signals:
-      conversation:
-      - description: Request contains at least one image content part.
-        feature:
-          source:
-            type: image_content
-          type: exists
-        name: unified_speed_has_images
+      input_modality:
+      - name: unified_speed_has_images
+        description: Request contains at least one image content part.
+        modality: image
       context:
       - name: unified_speed_long_context
         min_tokens: 16K
@@ -532,7 +526,7 @@ recipes:
       rules:
         operator: AND
         conditions:
-        - type: conversation
+        - type: input_modality
           name: unified_speed_has_images
         on_unknown: no_match
     - name: unified_speed_heavy_route
@@ -599,13 +593,10 @@ recipes:
   description: Keep every request local and spend additional compute only when the request justifies reasoning.
   routing:
     signals:
-      conversation:
-      - description: Request contains at least one image content part.
-        feature:
-          source:
-            type: image_content
-          type: exists
-        name: unified_cost_has_images
+      input_modality:
+      - name: unified_cost_has_images
+        description: Request contains at least one image content part.
+        modality: image
       context:
       - name: unified_cost_long_context
         min_tokens: 16K
@@ -638,7 +629,7 @@ recipes:
       rules:
         operator: AND
         conditions:
-        - type: conversation
+        - type: input_modality
           name: unified_cost_has_images
         on_unknown: no_match
     - name: unified_cost_local_reasoning
@@ -698,18 +689,16 @@ recipes:
   routing:
     signals:
       conversation:
-      - description: Request contains at least one image content part.
-        feature:
-          source:
-            type: image_content
-          type: exists
-        name: unified_frontier_has_images
       - name: unified_frontier_active_tool_loop
         description: Continue an already active tool loop through Router Flow.
         feature:
           type: exists
           source:
             type: active_tool_loop
+      input_modality:
+      - name: unified_frontier_has_images
+        description: Request contains at least one image content part.
+        modality: image
       systemone:
       - name: workflow
         description: Whether the request asks for a task carried out in stages, such as research, implement and validate,
@@ -796,7 +785,7 @@ recipes:
       rules:
         operator: AND
         conditions:
-        - type: conversation
+        - type: input_modality
           name: unified_frontier_has_images
         on_unknown: no_match
     - name: unified_frontier_workflow
@@ -1008,13 +997,10 @@ recipes:
   description: Keep every request local; named decision-model questions isolate suspicious and sensitive prompts.
   routing:
     signals:
-      conversation:
-      - description: Request contains at least one image content part.
-        feature:
-          source:
-            type: image_content
-          type: exists
-        name: unified_privacy_has_images
+      input_modality:
+      - name: unified_privacy_has_images
+        description: Request contains at least one image content part.
+        modality: image
       systemone:
       - name: attack
         description: Whether the message tells the assistant to override its rules, reveal hidden instructions or secrets,
@@ -1095,7 +1081,7 @@ recipes:
       rules:
         operator: AND
         conditions:
-        - type: conversation
+        - type: input_modality
           name: unified_privacy_has_images
         on_unknown: no_match
       tier: 2

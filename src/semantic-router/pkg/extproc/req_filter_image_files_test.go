@@ -78,8 +78,8 @@ func firstImageContent(t *testing.T, request *llmprotocol.Request) llmprotocol.C
 func TestResponsesFileIDImageCountsAsImageInput(t *testing.T) {
 	request, _ := decodeImageFileRequest(t, &OpenAIRouter{}, responsesImageFileRequest("file_abc123"))
 	snapshot := extractSemanticRequestSignals(request)
-	if snapshot.ImageContentCount != 1 {
-		t.Fatalf("ImageContentCount = %d, want 1", snapshot.ImageContentCount)
+	if snapshot.InputModality.ImageContentCount != 1 {
+		t.Fatalf("ImageContentCount = %d, want 1", snapshot.InputModality.ImageContentCount)
 	}
 	if snapshot.UserContent != "what is shown here?" {
 		t.Fatalf("UserContent = %q", snapshot.UserContent)

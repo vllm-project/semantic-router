@@ -65,9 +65,9 @@ func recordResponseHeaderFacts(ctx *RequestContext) {
 	for _, matched := range []*[]string{
 		&ctx.VSRMatchedKeywords, &ctx.VSRMatchedDomains, &ctx.VSRMatchedFactCheck,
 		&ctx.VSRMatchedUserFeedback, &ctx.VSRMatchedTurnRelation, &ctx.VSRMatchedLanguage,
-		&ctx.VSRMatchedAction, &ctx.VSRMatchedContext, &ctx.VSRMatchedStructure, &ctx.VSRMatchedComplexity,
+		&ctx.VSRMatchedContext, &ctx.VSRMatchedComplexity,
 		&ctx.VSRMatchedModality, &ctx.VSRMatchedAuthz, &ctx.VSRMatchedJailbreak, &ctx.VSRMatchedSafety,
-		&ctx.VSRMatchedPII, &ctx.VSRMatchedConversation, &ctx.VSRMatchedEvent,
+		&ctx.VSRMatchedPII, &ctx.VSRMatchedConversation,
 		&ctx.VSRMatchedInputModality, &ctx.VSRMatchedDecisionModel, &ctx.VSRMatchedProjection,
 	} {
 		*matched = []string{"matched-rule"}

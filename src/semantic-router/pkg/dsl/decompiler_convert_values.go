@@ -99,38 +99,7 @@ func dynamicRetrievalWeightsObjectValue(weights *config.DynamicRetrievalWeights)
 	return ObjectValue{Fields: fields}
 }
 
-func structureFeatureValue(feature config.StructureFeature) ObjectValue {
-	fields := map[string]Value{
-		"type":   StringValue{V: feature.Type},
-		"source": structureSourceValue(feature.Source),
-	}
-	return ObjectValue{Fields: fields}
-}
-
-func structureSourceValue(source config.StructureSource) ObjectValue {
-	fields := map[string]Value{
-		"type": StringValue{V: source.Type},
-	}
-	if source.Pattern != "" {
-		fields["pattern"] = StringValue{V: source.Pattern}
-	}
-	if len(source.Keywords) > 0 {
-		fields["keywords"] = stringsToArray(source.Keywords)
-	}
-	if source.CaseSensitive {
-		fields["case_sensitive"] = BoolValue{V: true}
-	}
-	if len(source.Sequences) > 0 {
-		items := make([]Value, 0, len(source.Sequences))
-		for _, sequence := range source.Sequences {
-			items = append(items, stringsToArray(sequence))
-		}
-		fields["sequences"] = ArrayValue{Items: items}
-	}
-	return ObjectValue{Fields: fields}
-}
-
-func structurePredicateValue(predicate *config.NumericPredicate) ObjectValue {
+func numericPredicateObject(predicate *config.NumericPredicate) ObjectValue {
 	fields := make(map[string]Value)
 	if predicate.GT != nil {
 		fields["gt"] = FloatValue{V: *predicate.GT}
@@ -145,33 +114,6 @@ func structurePredicateValue(predicate *config.NumericPredicate) ObjectValue {
 		fields["lte"] = FloatValue{V: *predicate.LTE}
 	}
 	return ObjectValue{Fields: fields}
-}
-
-func structureFeatureToMap(feature config.StructureFeature) map[string]interface{} {
-	values := map[string]interface{}{
-		"type":   feature.Type,
-		"source": structureSourceToMap(feature.Source),
-	}
-	return values
-}
-
-func structureSourceToMap(source config.StructureSource) map[string]interface{} {
-	values := map[string]interface{}{
-		"type": source.Type,
-	}
-	if source.Pattern != "" {
-		values["pattern"] = source.Pattern
-	}
-	if len(source.Keywords) > 0 {
-		values["keywords"] = source.Keywords
-	}
-	if source.CaseSensitive {
-		values["case_sensitive"] = true
-	}
-	if len(source.Sequences) > 0 {
-		values["sequences"] = source.Sequences
-	}
-	return values
 }
 
 func conversationFeatureValue(feature config.ConversationFeature) ObjectValue {
@@ -209,7 +151,7 @@ func conversationSourceToMap(source config.ConversationSource) map[string]interf
 	return values
 }
 
-func structurePredicateToMap(predicate *config.NumericPredicate) map[string]interface{} {
+func numericPredicateToMap(predicate *config.NumericPredicate) map[string]interface{} {
 	values := make(map[string]interface{})
 	if predicate == nil {
 		return values

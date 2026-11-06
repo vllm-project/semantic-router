@@ -15,7 +15,6 @@ var matchedSignalResolvers = map[string]func(*MatchedSignals) *[]string{
 	config.SignalTypeTurnRelation:  func(target *MatchedSignals) *[]string { return &target.TurnRelation },
 	config.SignalTypeLanguage:      func(target *MatchedSignals) *[]string { return &target.Language },
 	config.SignalTypeContext:       func(target *MatchedSignals) *[]string { return &target.Context },
-	config.SignalTypeStructure:     func(target *MatchedSignals) *[]string { return &target.Structure },
 	config.SignalTypeComplexity:    func(target *MatchedSignals) *[]string { return &target.Complexity },
 	config.SignalTypeModality:      func(target *MatchedSignals) *[]string { return &target.Modality },
 	config.SignalTypeAuthz:         func(target *MatchedSignals) *[]string { return &target.Authz },
@@ -23,10 +22,8 @@ var matchedSignalResolvers = map[string]func(*MatchedSignals) *[]string{
 	config.SignalTypeSafety:        func(target *MatchedSignals) *[]string { return &target.Safety },
 	config.SignalTypePII:           func(target *MatchedSignals) *[]string { return &target.PII },
 	config.SignalTypeConversation:  func(target *MatchedSignals) *[]string { return &target.Conversation },
-	config.SignalTypeEvent:         func(target *MatchedSignals) *[]string { return &target.Event },
 	config.SignalTypeMetadata:      func(target *MatchedSignals) *[]string { return &target.Metadata },
 	config.SignalTypeInputModality: func(target *MatchedSignals) *[]string { return &target.InputModality },
-	config.SignalTypeAction:        func(target *MatchedSignals) *[]string { return &target.Action },
 	config.SignalTypeSystemOne:     func(target *MatchedSignals) *[]string { return &target.SystemOne },
 	config.SignalTypeProjection:    func(target *MatchedSignals) *[]string { return &target.Projection },
 }
@@ -44,7 +41,6 @@ func buildMatchedSignals(signals *classification.SignalResults) *MatchedSignals 
 		TurnRelation:  signals.MatchedTurnRelationRules,
 		Language:      signals.MatchedLanguageRules,
 		Context:       signals.MatchedContextRules,
-		Structure:     signals.MatchedStructureRules,
 		Complexity:    signals.MatchedComplexityRules,
 		Modality:      signals.MatchedModalityRules,
 		Authz:         signals.MatchedAuthzRules,
@@ -52,10 +48,8 @@ func buildMatchedSignals(signals *classification.SignalResults) *MatchedSignals 
 		Safety:        signals.MatchedSafetyRules,
 		PII:           signals.MatchedPIIRules,
 		Conversation:  signals.MatchedConversationRules,
-		Event:         signals.MatchedEventRules,
 		Metadata:      signals.MatchedMetadataRules,
 		InputModality: signals.MatchedInputModalityRules,
-		Action:        signals.MatchedActionRules,
 		SystemOne:     signals.MatchedSystemOneRules,
 		Projection:    signals.MatchedProjectionRules,
 	}
@@ -112,12 +106,10 @@ func getUnmatchedSignals(
 	collectUnmatchedRuleNames(&unmatched.Keywords, cfg.KeywordRules, signals.MatchedKeywordRules, func(rule config.KeywordRule) string { return rule.Name })
 	collectUnmatchedRuleNames(&unmatched.Language, cfg.LanguageRules, signals.MatchedLanguageRules, func(rule config.LanguageRule) string { return rule.Name })
 	collectUnmatchedRuleNames(&unmatched.Context, cfg.ContextRules, signals.MatchedContextRules, func(rule config.ContextRule) string { return rule.Name })
-	collectUnmatchedRuleNames(&unmatched.Structure, cfg.StructureRules, signals.MatchedStructureRules, func(rule config.StructureRule) string { return rule.Name })
 	collectUnmatchedAuthzRules(&unmatched.Authz, cfg.GetRoleBindings(), signals.MatchedAuthzRules)
 	collectUnmatchedProjectionOutputs(&unmatched.Projection, cfg.Projections.Mappings, signals.MatchedProjectionRules)
 	collectUnmatchedRuleNames(&unmatched.Metadata, cfg.MetadataRules, signals.MatchedMetadataRules, func(rule config.MetadataRule) string { return rule.Name })
 	collectUnmatchedRuleNames(&unmatched.InputModality, cfg.InputModalityRules, signals.MatchedInputModalityRules, func(rule config.InputModalityRule) string { return rule.Name })
-	collectUnmatchedRuleNames(&unmatched.Action, cfg.ActionRules, signals.MatchedActionRules, func(rule config.ActionRule) string { return rule.Name })
 	systemOne := make([]string, len(cfg.SystemOneRules))
 	for index, rule := range cfg.SystemOneRules {
 		systemOne[index] = rule.Name

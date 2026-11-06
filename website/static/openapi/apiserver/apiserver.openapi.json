@@ -8286,13 +8286,6 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
-                            "action": {
-                              "nullable": true,
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
-                            },
                             "authz": {
                               "nullable": true,
                               "type": "array",
@@ -8322,13 +8315,6 @@
                               }
                             },
                             "domains": {
-                              "nullable": true,
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
-                            },
-                            "event": {
                               "nullable": true,
                               "type": "array",
                               "items": {
@@ -8399,13 +8385,6 @@
                               }
                             },
                             "safety": {
-                              "nullable": true,
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
-                            },
-                            "structure": {
                               "nullable": true,
                               "type": "array",
                               "items": {
@@ -9518,13 +9497,6 @@
                       "nullable": true,
                       "type": "object",
                       "properties": {
-                        "action": {
-                          "nullable": true,
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          }
-                        },
                         "authz": {
                           "nullable": true,
                           "type": "array",
@@ -9554,13 +9526,6 @@
                           }
                         },
                         "domains": {
-                          "nullable": true,
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          }
-                        },
-                        "event": {
                           "nullable": true,
                           "type": "array",
                           "items": {
@@ -9631,13 +9596,6 @@
                           }
                         },
                         "safety": {
-                          "nullable": true,
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          }
-                        },
-                        "structure": {
                           "nullable": true,
                           "type": "array",
                           "items": {
@@ -25803,13 +25761,6 @@
                                   "type": "string"
                                 }
                               },
-                              "event": {
-                                "nullable": true,
-                                "type": "array",
-                                "items": {
-                                  "type": "string"
-                                }
-                              },
                               "fact_check": {
                                 "nullable": true,
                                 "type": "array",
@@ -25867,13 +25818,6 @@
                                 }
                               },
                               "safety": {
-                                "nullable": true,
-                                "type": "array",
-                                "items": {
-                                  "type": "string"
-                                }
-                              },
-                              "structure": {
                                 "nullable": true,
                                 "type": "array",
                                 "items": {
@@ -30744,13 +30688,6 @@
                             "type": "string"
                           }
                         },
-                        "event": {
-                          "nullable": true,
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          }
-                        },
                         "fact_check": {
                           "nullable": true,
                           "type": "array",
@@ -30808,13 +30745,6 @@
                           }
                         },
                         "safety": {
-                          "nullable": true,
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          }
-                        },
-                        "structure": {
                           "nullable": true,
                           "type": "array",
                           "items": {
@@ -37149,13 +37079,6 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
-                            "action": {
-                              "nullable": true,
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
-                            },
                             "authz": {
                               "nullable": true,
                               "type": "array",
@@ -37185,13 +37108,6 @@
                               }
                             },
                             "domains": {
-                              "nullable": true,
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
-                            },
-                            "event": {
                               "nullable": true,
                               "type": "array",
                               "items": {
@@ -37262,13 +37178,6 @@
                               }
                             },
                             "safety": {
-                              "nullable": true,
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
-                            },
-                            "structure": {
                               "nullable": true,
                               "type": "array",
                               "items": {
@@ -37309,13 +37218,6 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
-                            "action": {
-                              "nullable": true,
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
-                            },
                             "authz": {
                               "nullable": true,
                               "type": "array",
@@ -37345,13 +37247,6 @@
                               }
                             },
                             "domains": {
-                              "nullable": true,
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
-                            },
-                            "event": {
                               "nullable": true,
                               "type": "array",
                               "items": {
@@ -37422,13 +37317,6 @@
                               }
                             },
                             "safety": {
-                              "nullable": true,
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
-                            },
-                            "structure": {
                               "nullable": true,
                               "type": "array",
                               "items": {
@@ -37462,13 +37350,6 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
-                            "action": {
-                              "nullable": true,
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
-                            },
                             "authz": {
                               "nullable": true,
                               "type": "array",
@@ -37498,13 +37379,6 @@
                               }
                             },
                             "domains": {
-                              "nullable": true,
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
-                            },
-                            "event": {
                               "nullable": true,
                               "type": "array",
                               "items": {
@@ -37575,13 +37449,6 @@
                               }
                             },
                             "safety": {
-                              "nullable": true,
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
-                            },
-                            "structure": {
                               "nullable": true,
                               "type": "array",
                               "items": {
@@ -37702,29 +37569,6 @@
                       "nullable": true,
                       "type": "object",
                       "properties": {
-                        "action": {
-                          "type": "object",
-                          "properties": {
-                            "confidence": {
-                              "nullable": true,
-                              "type": "number"
-                            },
-                            "confidence_available": {
-                              "nullable": true,
-                              "type": "boolean"
-                            },
-                            "execution_time_ms": {
-                              "type": "number"
-                            },
-                            "method": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "execution_time_ms",
-                            "confidence"
-                          ]
-                        },
                         "authz": {
                           "type": "object",
                           "properties": {
@@ -37818,29 +37662,6 @@
                           ]
                         },
                         "domain": {
-                          "type": "object",
-                          "properties": {
-                            "confidence": {
-                              "nullable": true,
-                              "type": "number"
-                            },
-                            "confidence_available": {
-                              "nullable": true,
-                              "type": "boolean"
-                            },
-                            "execution_time_ms": {
-                              "type": "number"
-                            },
-                            "method": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "execution_time_ms",
-                            "confidence"
-                          ]
-                        },
-                        "event": {
                           "type": "object",
                           "properties": {
                             "confidence": {
@@ -38070,29 +37891,6 @@
                             "confidence"
                           ]
                         },
-                        "structure": {
-                          "type": "object",
-                          "properties": {
-                            "confidence": {
-                              "nullable": true,
-                              "type": "number"
-                            },
-                            "confidence_available": {
-                              "nullable": true,
-                              "type": "boolean"
-                            },
-                            "execution_time_ms": {
-                              "type": "number"
-                            },
-                            "method": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "execution_time_ms",
-                            "confidence"
-                          ]
-                        },
                         "systemone": {
                           "type": "object",
                           "properties": {
@@ -38171,7 +37969,6 @@
                         "turn_relation",
                         "language",
                         "context",
-                        "structure",
                         "complexity",
                         "modality",
                         "authz",
@@ -38179,10 +37976,8 @@
                         "safety",
                         "pii",
                         "conversation",
-                        "event",
                         "metadata",
                         "input_modality",
-                        "action",
                         "systemone"
                       ]
                     },
@@ -38847,13 +38642,6 @@
                               "nullable": true,
                               "type": "object",
                               "properties": {
-                                "action": {
-                                  "nullable": true,
-                                  "type": "array",
-                                  "items": {
-                                    "type": "string"
-                                  }
-                                },
                                 "authz": {
                                   "nullable": true,
                                   "type": "array",
@@ -38883,13 +38671,6 @@
                                   }
                                 },
                                 "domains": {
-                                  "nullable": true,
-                                  "type": "array",
-                                  "items": {
-                                    "type": "string"
-                                  }
-                                },
-                                "event": {
                                   "nullable": true,
                                   "type": "array",
                                   "items": {
@@ -38960,13 +38741,6 @@
                                   }
                                 },
                                 "safety": {
-                                  "nullable": true,
-                                  "type": "array",
-                                  "items": {
-                                    "type": "string"
-                                  }
-                                },
-                                "structure": {
                                   "nullable": true,
                                   "type": "array",
                                   "items": {
@@ -39007,13 +38781,6 @@
                               "nullable": true,
                               "type": "object",
                               "properties": {
-                                "action": {
-                                  "nullable": true,
-                                  "type": "array",
-                                  "items": {
-                                    "type": "string"
-                                  }
-                                },
                                 "authz": {
                                   "nullable": true,
                                   "type": "array",
@@ -39043,13 +38810,6 @@
                                   }
                                 },
                                 "domains": {
-                                  "nullable": true,
-                                  "type": "array",
-                                  "items": {
-                                    "type": "string"
-                                  }
-                                },
-                                "event": {
                                   "nullable": true,
                                   "type": "array",
                                   "items": {
@@ -39120,13 +38880,6 @@
                                   }
                                 },
                                 "safety": {
-                                  "nullable": true,
-                                  "type": "array",
-                                  "items": {
-                                    "type": "string"
-                                  }
-                                },
-                                "structure": {
                                   "nullable": true,
                                   "type": "array",
                                   "items": {
@@ -39160,13 +38913,6 @@
                               "nullable": true,
                               "type": "object",
                               "properties": {
-                                "action": {
-                                  "nullable": true,
-                                  "type": "array",
-                                  "items": {
-                                    "type": "string"
-                                  }
-                                },
                                 "authz": {
                                   "nullable": true,
                                   "type": "array",
@@ -39196,13 +38942,6 @@
                                   }
                                 },
                                 "domains": {
-                                  "nullable": true,
-                                  "type": "array",
-                                  "items": {
-                                    "type": "string"
-                                  }
-                                },
-                                "event": {
                                   "nullable": true,
                                   "type": "array",
                                   "items": {
@@ -39273,13 +39012,6 @@
                                   }
                                 },
                                 "safety": {
-                                  "nullable": true,
-                                  "type": "array",
-                                  "items": {
-                                    "type": "string"
-                                  }
-                                },
-                                "structure": {
                                   "nullable": true,
                                   "type": "array",
                                   "items": {
@@ -39400,29 +39132,6 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
-                            "action": {
-                              "type": "object",
-                              "properties": {
-                                "confidence": {
-                                  "nullable": true,
-                                  "type": "number"
-                                },
-                                "confidence_available": {
-                                  "nullable": true,
-                                  "type": "boolean"
-                                },
-                                "execution_time_ms": {
-                                  "type": "number"
-                                },
-                                "method": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "execution_time_ms",
-                                "confidence"
-                              ]
-                            },
                             "authz": {
                               "type": "object",
                               "properties": {
@@ -39516,29 +39225,6 @@
                               ]
                             },
                             "domain": {
-                              "type": "object",
-                              "properties": {
-                                "confidence": {
-                                  "nullable": true,
-                                  "type": "number"
-                                },
-                                "confidence_available": {
-                                  "nullable": true,
-                                  "type": "boolean"
-                                },
-                                "execution_time_ms": {
-                                  "type": "number"
-                                },
-                                "method": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "execution_time_ms",
-                                "confidence"
-                              ]
-                            },
-                            "event": {
                               "type": "object",
                               "properties": {
                                 "confidence": {
@@ -39768,29 +39454,6 @@
                                 "confidence"
                               ]
                             },
-                            "structure": {
-                              "type": "object",
-                              "properties": {
-                                "confidence": {
-                                  "nullable": true,
-                                  "type": "number"
-                                },
-                                "confidence_available": {
-                                  "nullable": true,
-                                  "type": "boolean"
-                                },
-                                "execution_time_ms": {
-                                  "type": "number"
-                                },
-                                "method": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "execution_time_ms",
-                                "confidence"
-                              ]
-                            },
                             "systemone": {
                               "type": "object",
                               "properties": {
@@ -39869,7 +39532,6 @@
                             "turn_relation",
                             "language",
                             "context",
-                            "structure",
                             "complexity",
                             "modality",
                             "authz",
@@ -39877,10 +39539,8 @@
                             "safety",
                             "pii",
                             "conversation",
-                            "event",
                             "metadata",
                             "input_modality",
-                            "action",
                             "systemone"
                           ]
                         },

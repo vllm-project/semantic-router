@@ -117,12 +117,7 @@ they are not estimates or the model's configured maximum context length.
 ## Matched signal headers
 
 Matched signal headers contain comma-separated rule names. They require
-`x-vsr-debug` and are omitted when that signal family did not match. A rule
-asked of a decision model (an application signal or a `systemone` rule) is
-listed by name when it matched. A choice rule without labels, which conditions
-name by label, is listed as `<rule>:<option>` with the option its answer chose,
-such as `task_difficulty:hard`. An option that did not make its rule match is
-never listed.
+`x-vsr-debug` and are omitted when that signal family did not match.
 `x-vsr-matched-projections` lists the projection mapping outputs that matched
 the request.
 
@@ -302,14 +297,12 @@ generates this table; run `make headers-generate` after changing it.
 | `x-vsr-looper-models-used` | response | debug | none | looper | v0.2 | Models the Looper called, comma-separated. |
 | `x-vsr-looper-prompt-tokens` | response | debug | none | looper | v0.4 | Prompt tokens across the Looper's calls. |
 | `x-vsr-looper-total-tokens` | response | debug | none | looper | v0.4 | Total tokens across the Looper's calls. |
-| `x-vsr-matched-action` | response | debug | none | signals | v0.5 | Matched `action` rule. |
 | `x-vsr-matched-authz` | response | debug | none | signals | v0.2 | Matched `authz` rules. |
 | `x-vsr-matched-complexity` | response | debug | none | signals | v0.2 | Matched `complexity` rules, and `rule:option` for a rule without labels, such as `task_difficulty:hard`. |
 | `x-vsr-matched-context` | response | debug | none | signals | v0.2 | Matched `context` rules. |
 | `x-vsr-matched-conversation` | response | debug | none | signals | v0.3 | Matched `conversation` rules. |
 | `x-vsr-matched-decision-model` | response | debug | none | signals | v0.5 | Matched `systemone` rules, and `rule:option` for a choice rule without labels. |
 | `x-vsr-matched-domains` | response | debug | none | signals | v0.1 | Matched `domain` rules. |
-| `x-vsr-matched-event` | response | debug | none | signals | v0.3 | Matched `event` rules. |
 | `x-vsr-matched-fact-check` | response | debug | none | signals | v0.1 | Matched `fact_check` rules. |
 | `x-vsr-matched-hallucination` | response | debug | none | signals | v0.4 | Matched `hallucination` rules, once the answer is checked. |
 | `x-vsr-matched-input-modality` | response | debug | none | signals | v0.4 | Matched `input_modality` rules. |
@@ -320,7 +313,6 @@ generates this table; run `make headers-generate` after changing it.
 | `x-vsr-matched-pii` | response | debug | none | signals | v0.2 | Matched `pii` rules. |
 | `x-vsr-matched-projections` | response | debug | none | signals | v0.3 | Matched projection outputs. |
 | `x-vsr-matched-safety` | response | debug | none | signals | v0.4 | Matched content `safety` rules. |
-| `x-vsr-matched-structure` | response | debug | none | signals | v0.3 | Matched `structure` rules. |
 | `x-vsr-matched-turn-relation` | response | debug | none | signals | v0.5 | Matched `turn_relation` rules, and `rule:option` for a rule without labels. |
 | `x-vsr-matched-user-feedback` | response | debug | none | signals | v0.1 | Matched `user_feedback` rules, and `rule:option` for a rule without labels. |
 | `x-vsr-prompt-cache-action` | response | debug | none | prompt_cache | v0.4 | Outcome of the `prompt_cache` plugin: `inserted`, `preserved`, `skipped` or `rejected`. |

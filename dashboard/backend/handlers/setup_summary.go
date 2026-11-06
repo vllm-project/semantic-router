@@ -54,7 +54,6 @@ func countCanonicalSignals(signals routerconfig.CanonicalSignals) int {
 		len(signals.UserFeedbacks) +
 		len(signals.Language) +
 		len(signals.Context) +
-		len(signals.Structure) +
 		len(signals.Complexity) +
 		len(signals.Modality) +
 		len(signals.RoleBindings) +
@@ -65,7 +64,6 @@ func countCanonicalSignals(signals routerconfig.CanonicalSignals) int {
 		len(signals.TurnRelation) +
 		len(signals.PII) +
 		len(signals.Conversation) +
-		len(signals.EventRules) +
 		len(signals.Metadata) +
 		len(signals.SystemOne)
 }

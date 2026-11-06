@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { KeyValueEditor } from '@/components/KeyValueEditor'
 import { ObjectListEditor, type ObjectEditorField } from '@/components/ObjectListEditor'
 import { StringListEditor } from '@/components/StringListEditor'
-import { DECISION_SIGNAL_TYPES } from '@/generated/routerConfigContract'
+import { DECISION_SIGNAL_TYPES, ROUTER_CONFIG_EXTENSION } from '@/generated/routerConfigContract'
 import type { FieldSchema } from '@/lib/dslMutations'
 import type { DSLFieldObject, DSLFieldValue } from '@/types/dsl'
 
@@ -12,7 +12,6 @@ import {
   normalizeStructuredObject,
   normalizeStructuredObjectList,
   normalizeStructuredStringList,
-  normalizeStructuredStringMatrix,
   removeStructuredObjectListItem,
   requiredStructuredFieldErrors,
   structuredItemLabel,
@@ -255,64 +254,18 @@ function RecursiveObjectListField({
   )
 }
 
-function StringMatrixField({
-  schema,
-  value,
-  onChange,
-}: Omit<StructuredFieldEditorProps, 'renderField'>) {
-  const rows = normalizeStructuredStringMatrix(value)
-  return (
-    <FieldShell schema={schema}>
-      <div className={styles.structuredList}>
-        {rows.map((row, index) => (
-          <section key={index} className={styles.structuredCard}>
-            <div className={styles.structuredCardHeader}>
-              <div>
-                <span className={styles.structuredIndex}>{String(index + 1).padStart(2, '0')}</span>
-                <h4>Sequence {index + 1}</h4>
-              </div>
-              <button
-                type="button"
-                className={styles.structuredRemoveButton}
-                onClick={() => onChange(rows.filter((_, rowIndex) => rowIndex !== index))}
-              >
-                Remove
-              </button>
-            </div>
-            {row.length < 2 ? (
-              <p className={styles.structuredInlineError}>Add at least two markers.</p>
-            ) : null}
-            <StringListEditor
-              value={row}
-              onChange={(nextRow) =>
-                onChange(rows.map((current, rowIndex) => (rowIndex === index ? nextRow : current)))
-              }
-              addLabel="Add marker"
-              emptyLabel="No markers configured."
-              itemLabel="Marker"
-              placeholder="Sequence marker"
-            />
-          </section>
-        ))}
-      </div>
-      {rows.length === 0 ? (
-        <p className={styles.structuredEmpty}>{schema.emptyLabel || 'No sequences configured.'}</p>
-      ) : null}
-      <button
-        type="button"
-        className={styles.structuredAddButton}
-        onClick={() => onChange([...rows, ['', '']])}
-      >
-        <span aria-hidden="true">+</span>
-        {schema.addLabel || 'Add sequence'}
-      </button>
-    </FieldShell>
-  )
-}
+// System One and application signal conditions name a label; only System One
+// conditions set their own on_error.
+const LABELLED_CONDITION_TYPES = new Set<string>(
+  ROUTER_CONFIG_EXTENSION.signals.flatMap((surface) =>
+    'reference_qualifier' in surface && surface.reference_qualifier === 'label'
+      ? [surface.type]
+      : [],
+  ),
+)
 
-// Classifier and System One conditions name a label and set their own on_error.
 function labelledCondition(type: unknown): boolean {
-  return type === 'classifier' || type === 'systemone'
+  return typeof type === 'string' && LABELLED_CONDITION_TYPES.has(type)
 }
 
 function RuleNodeEditor({
@@ -406,7 +359,7 @@ function RuleNodeEditor({
             </label>
             {labelledCondition(node.type) || node.label !== undefined ? (
               <label className={styles.structuredMiniLabel}>
-                {node.type === 'systemone' ? 'Option or Label' : 'Classifier Label'}
+                {node.type === 'systemone' ? 'Option or Label' : 'Label'}
                 <input
                   className={styles.fieldInput}
                   value={typeof node.label === 'string' ? node.label : ''}
@@ -415,11 +368,11 @@ function RuleNodeEditor({
                       updateStructuredObjectField(node, 'label', event.target.value || undefined),
                     )
                   }
-                  placeholder={node.type === 'systemone' ? 'billing' : 'SAFE'}
+                  placeholder={node.type === 'systemone' ? 'billing' : 'hard'}
                 />
               </label>
             ) : null}
-            {labelledCondition(node.type) || node.on_error !== undefined ? (
+            {node.type === 'systemone' || node.on_error !== undefined ? (
               <label className={styles.structuredMiniLabel}>
                 On Error
                 <select
@@ -549,9 +502,6 @@ export function StructuredFieldEditor({
         renderField={renderField}
       />
     )
-  }
-  if (schema.type === 'string[][]') {
-    return <StringMatrixField schema={schema} value={value} onChange={onChange} />
   }
   if (schema.type === 'rule') {
     return <RuleField schema={schema} value={value} onChange={onChange} />

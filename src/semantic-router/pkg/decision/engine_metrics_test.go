@@ -115,8 +115,8 @@ func TestDecisionConfidenceMetricsRespectScoredStatus(t *testing.T) {
 		},
 		{
 			name:    "predicate",
-			rule:    config.RuleNode{Type: "structure", Name: "size", Predicate: &config.NumericPredicate{GTE: float64Ptr(1)}},
-			signals: &SignalMatches{SignalValues: map[string]float64{"structure:size": 2}},
+			rule:    config.RuleNode{Type: "keyword", Name: "size", Predicate: &config.NumericPredicate{GTE: float64Ptr(1)}},
+			signals: &SignalMatches{SignalValues: map[string]float64{"keyword:size": 2}},
 		},
 		{
 			name: "reported_zero",

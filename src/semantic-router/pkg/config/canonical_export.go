@@ -78,7 +78,6 @@ func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 		UserFeedbacks: append([]UserFeedbackRule(nil), signals.UserFeedbackRules...),
 		Language:      append([]LanguageRule(nil), signals.LanguageRules...),
 		Context:       append([]ContextRule(nil), signals.ContextRules...),
-		Structure:     append([]StructureRule(nil), signals.StructureRules...),
 		Complexity:    append([]ComplexityRule(nil), signals.ComplexityRules...),
 		Modality:      append([]ModalityRule(nil), signals.ModalityRules...),
 		RoleBindings:  append([]RoleBinding(nil), signals.RoleBindings...),
@@ -89,10 +88,8 @@ func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 		TurnRelation:  append([]TurnRelationRule(nil), signals.TurnRelationRules...),
 		PII:           append([]PIIRule(nil), signals.PIIRules...),
 		Conversation:  append([]ConversationRule(nil), signals.ConversationRules...),
-		EventRules:    append([]EventRule(nil), signals.EventRules...),
 		Metadata:      append([]MetadataRule(nil), signals.MetadataRules...),
 		InputModality: append([]InputModalityRule(nil), signals.InputModalityRules...),
-		Actions:       append([]ActionRule(nil), signals.ActionRules...),
 		SystemOne:     append([]SystemOneRule(nil), signals.SystemOneRules...),
 	}
 }

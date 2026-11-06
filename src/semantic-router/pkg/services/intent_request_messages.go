@@ -348,7 +348,6 @@ func hasIntentConversationFacts(facts classification.ConversationFacts) bool {
 		facts.AssistantMessageCount > 0 ||
 		facts.SystemMessageCount > 0 ||
 		facts.ToolMessageCount > 0 ||
-		facts.ImageContentCount > 0 ||
 		facts.ToolDefinitionCount > 0 ||
 		facts.ToolChoiceRequired ||
 		facts.ToolChoiceNone ||
@@ -383,7 +382,6 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 				history.currentUserRawText = rawText
 			}
 			counts := countIntentMessageModalities(msg.Content)
-			history.conversationFacts.ImageContentCount += counts.ImageContentCount
 			history.inputModality.ImageContentCount += counts.ImageContentCount
 			history.inputModality.AudioContentCount += counts.AudioContentCount
 			history.inputModality.VideoContentCount += counts.VideoContentCount

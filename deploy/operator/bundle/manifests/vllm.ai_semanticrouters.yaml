@@ -1478,7 +1478,6 @@ spec:
                                     - preference
                                     - language
                                     - context
-                                    - structure
                                     - complexity
                                     - modality
                                     - authz
@@ -1486,7 +1485,6 @@ spec:
                                     - pii
                                     - kb
                                     - conversation
-                                    - event
                                     - projection
                                     type: string
                                 required:

@@ -288,13 +288,11 @@ type RequestContext struct {
 	VSRMatchedUserFeedback    []string // Matched user feedback signals
 	VSRMatchedTurnRelation    []string // Matched turn_relation rules and rule:label references
 	VSRMatchedLanguage        []string // Matched language signals
-	VSRMatchedAction          []string // Matched action signal names
 	VSRMatchedContext         []string // Matched context rule names (e.g. "low_token_count")
 	VSRContextTokenCount      int      // Conservative request-context token estimate used for routing
 	VSRContextTextBytes       int      // Actual semantic-text bytes eligible for online text calibration
 	VSRContextEquivalentBytes int      // Content-free byte equivalent of the conservative routing floor
 	VSRContextHasNonText      bool     // Structured JSON or image reserves make text-only calibration unsafe
-	VSRMatchedStructure       []string // Matched structure rule names
 	VSRMatchedComplexity      []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
 	VSRMatchedModality        []string // Matched modality signals: "AR", "DIFFUSION", or "BOTH"
 	VSRMatchedAuthz           []string // Matched authz rule names for user-level routing
@@ -302,7 +300,6 @@ type RequestContext struct {
 	VSRMatchedSafety          []string // Matched safety rule names (confidence >= threshold)
 	VSRMatchedPII             []string // Matched PII rule names (denied PII types detected)
 	VSRMatchedConversation    []string // Matched conversation-shape signal names
-	VSRMatchedEvent           []string // Matched event signal names
 	VSRMatchedMetadata        []string // Matched untrusted request metadata signal names
 	VSRMatchedInputModality   []string // Matched structural input-modality signal names
 	VSRMatchedDecisionModel   []string // Matched decision-model signals (rule or rule:choice)

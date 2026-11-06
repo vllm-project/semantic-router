@@ -39,12 +39,6 @@ type Classifier struct {
 	// tokenCalibrator learns provider-specific prompt token ratios for context routing.
 	tokenCalibrator *CalibratedTokenCounter
 
-	// Structure classifier for request-shape routing signals
-	structureClassifier *StructureClassifier
-
-	// Event classifier for event-driven request routing
-	eventClassifier *EventClassifier
-
 	// Authz classifier for user-level authorization signal classification
 	authzClassifier *AuthzClassifier
 
@@ -63,18 +57,6 @@ type option func(*Classifier)
 func withKeywordClassifier(keywordClassifier *KeywordClassifier) option {
 	return func(c *Classifier) {
 		c.keywordClassifier = keywordClassifier
-	}
-}
-
-func withStructureClassifier(structureClassifier *StructureClassifier) option {
-	return func(c *Classifier) {
-		c.structureClassifier = structureClassifier
-	}
-}
-
-func withEventClassifier(eventClassifier *EventClassifier) option {
-	return func(c *Classifier) {
-		c.eventClassifier = eventClassifier
 	}
 }
 

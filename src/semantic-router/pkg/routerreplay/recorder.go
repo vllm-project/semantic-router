@@ -506,7 +506,6 @@ func logSignalFields(signals Signal) map[string]interface{} {
 		"turn_relation": signals.TurnRelation,
 		"language":      signals.Language,
 		"context":       signals.Context,
-		"structure":     signals.Structure,
 		"complexity":    signals.Complexity,
 		"modality":      signals.Modality,
 		"authz":         signals.Authz,

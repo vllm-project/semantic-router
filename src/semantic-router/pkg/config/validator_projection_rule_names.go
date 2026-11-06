@@ -28,14 +28,6 @@ func collectContextRuleNames(rules []ContextRule) map[string]struct{} {
 	return names
 }
 
-func collectStructureRuleNames(rules []StructureRule) map[string]struct{} {
-	names := make(map[string]struct{}, len(rules))
-	for _, rule := range rules {
-		names[rule.Name] = struct{}{}
-	}
-	return names
-}
-
 // collectRoleBindingRoles returns the roles the bindings grant: the authz
 // signal emits a matched binding's role, never its name.
 func collectRoleBindingRoles(rules []RoleBinding) map[string]struct{} {
@@ -56,23 +48,7 @@ func collectConversationRuleNames(rules []ConversationRule) map[string]struct{} 
 	return names
 }
 
-func collectEventRuleNames(rules []EventRule) map[string]struct{} {
-	names := make(map[string]struct{}, len(rules))
-	for _, rule := range rules {
-		names[rule.Name] = struct{}{}
-	}
-	return names
-}
-
 func collectInputModalityRuleNames(rules []InputModalityRule) map[string]struct{} {
-	names := make(map[string]struct{}, len(rules))
-	for _, rule := range rules {
-		names[rule.Name] = struct{}{}
-	}
-	return names
-}
-
-func collectActionRuleNames(rules []ActionRule) map[string]struct{} {
 	names := make(map[string]struct{}, len(rules))
 	for _, rule := range rules {
 		names[rule.Name] = struct{}{}

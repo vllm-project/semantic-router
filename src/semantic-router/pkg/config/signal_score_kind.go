@@ -7,7 +7,7 @@ type ScoreKind string
 
 const (
 	// ScoreKindNone marks a policy leaf. Keyword rules, conversation and
-	// metadata predicates, projection outputs, structural and event rules all
+	// metadata predicates, input modalities and projection outputs all
 	// restate a decision the operator already made, so they gate eligibility
 	// without adding evidence.
 	ScoreKindNone ScoreKind = ""

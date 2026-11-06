@@ -69,7 +69,7 @@ func TestPredicateMatchesUseBooleanConfidenceForRanking(t *testing.T) {
 			Priority: 10,
 			Tier:     1,
 			Rules: config.RuleNode{
-				Type:      "structure",
+				Type:      "keyword",
 				Name:      "small",
 				Predicate: &config.NumericPredicate{LT: float64Ptr(0.2)},
 			},
@@ -79,7 +79,7 @@ func TestPredicateMatchesUseBooleanConfidenceForRanking(t *testing.T) {
 			Priority: 20,
 			Tier:     1,
 			Rules: config.RuleNode{
-				Type:      "structure",
+				Type:      "keyword",
 				Name:      "large",
 				Predicate: &config.NumericPredicate{GTE: float64Ptr(0.5)},
 			},
@@ -88,8 +88,8 @@ func TestPredicateMatchesUseBooleanConfidenceForRanking(t *testing.T) {
 
 	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
 		SignalValues: map[string]float64{
-			"structure:small": 0.01,
-			"structure:large": 0.5,
+			"keyword:small": 0.01,
+			"keyword:large": 0.5,
 		},
 	})
 	if err != nil {
@@ -107,14 +107,14 @@ func TestScorePredicateCanMatchPublishedZeroValue(t *testing.T) {
 	engine := NewDecisionEngine([]config.Decision{{
 		Name: "empty",
 		Rules: config.RuleNode{
-			Type:      "structure",
+			Type:      "keyword",
 			Name:      "bytes",
 			Predicate: &config.NumericPredicate{LTE: float64Ptr(0)},
 		},
 	}}, "priority")
 
 	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
-		SignalValues: map[string]float64{"structure:bytes": 0},
+		SignalValues: map[string]float64{"keyword:bytes": 0},
 	})
 	if err != nil {
 		t.Fatalf("EvaluateDecisionsWithSignals() error = %v", err)

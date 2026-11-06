@@ -73,6 +73,30 @@ func TestConfigFormPatternsMatchEveryPlace(t *testing.T) {
 	}
 }
 
+// A match reaches the nodes that hold it, up to the document root, so a
+// rewrite can edit the routing scope it lies in.
+func TestConfigFormMatchesReachTheirHolders(t *testing.T) {
+	root := parseFormsDocument(t, formsDocument)
+	items := ConfigForm{Paths: RoutingScopes("signals.old[]")}.matches(root)
+	if len(items) != 3 {
+		t.Fatalf("items: %d", len(items))
+	}
+	first, third := items[0], items[2]
+	if first.Above(1) != mappingValue(mappingAt(root, "routing", "signals"), "old") || first.Above(2) != mappingAt(root, "routing", "signals") ||
+		first.Above(3) != mappingAt(root, "routing") || first.Above(4) != root || first.Above(5) != nil || first.Above(0) != nil {
+		t.Fatalf("top-level holders: %+v", first.Ancestors)
+	}
+	recipe := mappingValue(root, "recipes").Content[0]
+	if third.Above(3) != mappingAt(recipe, "routing") || third.Above(4) != recipe || third.Above(6) != root {
+		t.Fatalf("recipe holders: %+v", third.Ancestors)
+	}
+	nested := ConfigForm{Paths: RoutingScopes("decisions[].rules.**"), Match: hasType("old")}.matches(root)[1]
+	rules := mappingAt(sequenceAt(root, "routing", "decisions")[0], "rules")
+	if nested.Above(2) != sequenceAt(rules, "conditions")[1] || nested.Above(4) != rules || nested.Above(7) != mappingAt(root, "routing") {
+		t.Fatalf("nested condition holders: %s %+v", nested.Path, nested.Ancestors)
+	}
+}
+
 func renamedOldForm() ConfigForm {
 	return ConfigForm{
 		Code: CodeRenamedSignalType, Paths: RoutingScopes("signals.old"), Renamed: true,

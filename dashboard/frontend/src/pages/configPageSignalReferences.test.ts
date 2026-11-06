@@ -18,7 +18,7 @@ describe('signal references', () => {
             easy: { candidates: [] },
             composer: {
               operator: 'AND',
-              conditions: [{ type: 'event', name: 'release' }],
+              conditions: [{ type: 'keyword', name: 'release' }],
             },
           },
         ],
@@ -26,27 +26,27 @@ describe('signal references', () => {
       projections: {
         scores: [
           {
-            name: 'event-score',
+            name: 'release-score',
             method: 'weighted_sum',
-            inputs: [{ type: 'event', name: 'release', weight: 1 }],
+            inputs: [{ type: 'keyword', name: 'release', weight: 1 }],
           },
         ],
       },
       decisions: [
         {
-          name: 'event-route',
+          name: 'release-route',
           description: '',
           priority: 1,
           rules: {
             operator: 'AND',
-            conditions: [{ type: 'event', name: 'release' }],
+            conditions: [{ type: 'keyword', name: 'release' }],
           },
           modelRefs: [],
         },
       ],
     }
 
-    expect(getSignalReferenceCountInRoutingProfile(routing, 'Event', 'release')).toBe(3)
+    expect(getSignalReferenceCountInRoutingProfile(routing, 'Keywords', 'release')).toBe(3)
   })
 
   it('keeps reference counts local to the selected recipe', () => {

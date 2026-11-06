@@ -312,6 +312,58 @@ routing:
         keywords: ["local model only", "do not upload to cloud"]
         case_sensitive: false
         include_history: true
+      # count and density make an OR rule match on how often its keywords
+      # occur: count on the number of occurrences, density on occurrences per
+      # 1,000 characters. Either is published as keyword:<rule>.
+      - name: many_questions
+        description: Prompts that contain many explicit questions.
+        operator: OR
+        method: regex
+        keywords: ['[?？]']
+        case_sensitive: false
+        count:
+          gte: 4
+      - name: at_most_one_question
+        description: Prompts with one or fewer explicit questions.
+        operator: OR
+        method: regex
+        keywords: ['[?？]']
+        case_sensitive: false
+        count:
+          lte: 1
+      - name: numbered_steps
+        description: Prompts that contain numbered list items such as "1. ..."
+        operator: OR
+        method: regex
+        keywords: ['(?m)^\s*\d+\.\s+']
+        case_sensitive: false
+      - name: first_then_flow
+        description: Prompts that express an ordered workflow.
+        operator: OR
+        method: regex
+        keywords: ['(?s)first.*then', '(?s)first.*next.*finally', '(?s)首先.*然后', '(?s)先.*再']
+        case_sensitive: false
+      - name: constraint_dense
+        description: Prompts with dense explicit constraints.
+        operator: OR
+        keywords: ["under", "at most", "at least", "within", "no more than", "不超过", "至少", "最多"]
+        case_sensitive: false
+        density:
+          gt: 16
+      - name: low_question_density
+        description: Prompts with very few questions for their length.
+        operator: OR
+        method: regex
+        keywords: ['[?？]']
+        case_sensitive: false
+        density:
+          lt: 10
+      - name: critical_payment_event
+        description: Critical payment or transaction events that need incident-grade routing.
+        operator: OR
+        keywords: ["payment_failed", "transaction_declined", "critical", "high", "TXN_DECLINE", "urgent", "immediate", "asap"]
+        case_sensitive: false
+
     domains:
       - name: business
         description: Business and management related queries.
@@ -390,89 +442,6 @@ routing:
         min_tokens: 32K
         max_tokens: 256K
         description: Requests that need larger effective context windows.
-
-    structure:
-      - name: many_questions
-        description: Prompts that contain many explicit questions.
-        feature:
-          type: count
-          source:
-            type: regex
-            pattern: '[?？]'
-        predicate:
-          gte: 4
-      - name: at_most_one_question
-        description: Prompts with one or fewer explicit questions.
-        feature:
-          type: count
-          source:
-            type: regex
-            pattern: '[?？]'
-        predicate:
-          lte: 1
-      - name: numbered_steps
-        description: Prompts that contain numbered list items such as "1. ..."
-        feature:
-          type: exists
-          source:
-            type: regex
-            pattern: '(?m)^\s*\d+\.\s+'
-      - name: first_then_flow
-        description: Prompts that express an ordered workflow.
-        feature:
-          type: sequence
-          source:
-            type: sequence
-            case_sensitive: false
-            sequences:
-              - ["first", "then"]
-              - ["first", "next", "finally"]
-              - ["首先", "然后"]
-              - ["先", "再"]
-      - name: constraint_dense
-        description: Prompts with dense explicit constraints relative to multilingual text units.
-        feature:
-          type: density
-          source:
-            type: keyword_set
-            case_sensitive: false
-            keywords:
-              - under
-              - at most
-              - at least
-              - within
-              - no more than
-              - 不超过
-              - 至少
-              - 最多
-        predicate:
-          gt: 0.08
-      - name: format_directive_dense
-        description: Prompts with dense output-format directives relative to multilingual text units.
-        feature:
-          type: density
-          source:
-            type: keyword_set
-            keywords: ["table", "bullet", "json", "markdown", "表格", "列表", "JSON"]
-        predicate:
-          gt: 0.08
-      - name: low_question_density
-        description: Prompts with very low question density relative to multilingual text units.
-        feature:
-          type: density
-          source:
-            type: regex
-            pattern: '[?？]'
-        predicate:
-          lt: 0.05
-      - name: long_current_turn_bytes
-        description: Current user turn is at least four thousand UTF-8 bytes.
-        feature:
-          type: count
-          source:
-            type: text_bytes
-        predicate:
-          gte: 4000
 
     complexity:
       - name: needs_reasoning
@@ -629,25 +598,6 @@ routing:
         predicate:
           gt: 5
           lte: 99
-      - name: has_images
-        description: Request contains at least one image content part.
-        feature:
-          type: exists
-          source:
-            type: image_content
-
-    events:
-      - name: critical_payment_event
-        description: Critical payment or transaction events that need incident-grade routing.
-        event_types:
-          - payment_failed
-          - transaction_declined
-        severities:
-          - critical
-          - high
-        action_codes:
-          - TXN_DECLINE
-        temporal: true
 
     metadata:
       - name: consent_denied
@@ -664,11 +614,6 @@ routing:
         description: Request contains at least one audio content part.
         modality: audio
 
-    actions:
-      - name: explain
-        description: Describe code or answer a question without editing anything.
-      - name: fix
-        description: Repair a bug or a failing behavior.
     # Typed questions. deployment names the deployment that answers each one:
     # the built-in model runtime (provider model_runtime) or a remote System
     # One API (provider systemone). A question without one asks the decision
@@ -885,7 +830,7 @@ routing:
           - type: context
             name: long_context
             weight: 0.18
-          - type: structure
+          - type: keyword
             name: first_then_flow
             weight: 0.12
     mappings:

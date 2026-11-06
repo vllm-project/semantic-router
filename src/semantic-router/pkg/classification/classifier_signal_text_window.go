@@ -7,7 +7,7 @@ import (
 )
 
 // semanticSignalUnitLimit bounds one embedding/classifier forward pass. The
-// request's full text still reaches exact-match, structure, and context signals;
+// request's full text still reaches the keyword and context signals;
 // semantic signals receive representative head, middle, and tail views so a
 // model with a large context window cannot force internal routing models to
 // allocate against that same unbounded window. Units are quarter-token
@@ -18,7 +18,6 @@ const signalWindowOmissionMarker = "\n... [content sampled for routing signal ev
 
 var boundedSemanticSignalTypes = map[string]struct{}{
 	config.SignalTypeLanguage: {},
-	config.SignalTypeEvent:    {},
 }
 
 func textForRoutingSignal(signalType, text string) string {

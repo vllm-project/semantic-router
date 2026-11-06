@@ -2,9 +2,9 @@
 # SIGNALS
 # =============================================================================
 
-SIGNAL conversation privacy_has_images {
+SIGNAL input_modality privacy_has_images {
   description: "Request contains at least one image content part."
-  feature: { source: { type: "image_content" }, type: "exists" }
+  modality: "image"
 }
 
 SIGNAL systemone attack {
@@ -87,7 +87,7 @@ ROUTE local_security_containment (description = "An attempt to make the assistan
 ROUTE omni (description = "Image-bearing requests stay on the local visual-language model.") {
   PRIORITY 275
   TIER 2
-  WHEN conversation("privacy_has_images")
+  WHEN input_modality("privacy_has_images")
   MODEL "local/omni" (reasoning = false)
   ALGORITHM static
   PLUGIN tools {

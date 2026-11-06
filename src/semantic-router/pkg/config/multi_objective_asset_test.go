@@ -283,7 +283,7 @@ func assertMultiObjectiveQuestions(t *testing.T, recipe *RoutingRecipe, want map
 	if !maps.Equal(got, want) {
 		t.Fatalf("recipe %q decision questions = %v, want %v", recipe.Name, got, want)
 	}
-	legacy := len(signals.KeywordRules) + len(signals.ComplexityRules) + len(signals.StructureRules) +
+	legacy := len(signals.KeywordRules) + len(signals.ComplexityRules) +
 		len(signals.LanguageRules) + len(signals.FactCheckRules) + len(signals.UserFeedbackRules) +
 		len(signals.JailbreakRules) + len(signals.PIIRules)
 	if legacy != 0 || len(recipe.Profile.Projections.Scores) != 0 || len(recipe.Profile.Projections.Mappings) != 0 {

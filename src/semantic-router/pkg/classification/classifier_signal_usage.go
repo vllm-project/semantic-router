@@ -49,7 +49,6 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 	collectSignalKeys(allSignals, config.SignalTypeUserFeedback, c.Config.UserFeedbackRules, func(r config.UserFeedbackRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeLanguage, c.Config.LanguageRules, func(r config.LanguageRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeContext, c.Config.ContextRules, func(r config.ContextRule) string { return r.Name })
-	collectSignalKeys(allSignals, config.SignalTypeStructure, c.Config.StructureRules, func(r config.StructureRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeComplexity, c.Config.ComplexityRules, func(r config.ComplexityRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeModality, c.Config.ModalityRules, func(r config.ModalityRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeAuthz, c.Config.GetRoleBindings(), func(rb config.RoleBinding) string { return rb.Role })
@@ -58,10 +57,8 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 	collectSignalKeys(allSignals, config.SignalTypePII, c.Config.PIIRules, func(r config.PIIRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeTurnRelation, c.Config.TurnRelationRules, func(r config.TurnRelationRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeConversation, c.Config.ConversationRules, func(r config.ConversationRule) string { return r.Name })
-	collectSignalKeys(allSignals, config.SignalTypeEvent, c.Config.EventRules, func(r config.EventRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeMetadata, c.Config.MetadataRules, func(r config.MetadataRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeInputModality, c.Config.InputModalityRules, func(r config.InputModalityRule) string { return r.Name })
-	collectSignalKeys(allSignals, config.SignalTypeAction, c.Config.ActionRules, func(r config.ActionRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeSystemOne, c.Config.SystemOneRules, func(r config.SystemOneRule) string { return r.Name })
 	for _, mapping := range c.Config.Projections.Mappings {
 		for _, output := range mapping.Outputs {

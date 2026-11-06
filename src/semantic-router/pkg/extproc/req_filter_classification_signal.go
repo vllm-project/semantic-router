@@ -58,7 +58,6 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 			ToolChoiceNone:            history.toolChoiceNone,
 			AssistantToolCallCount:    history.assistantToolCallCount,
 			ToolResultCount:           history.toolResultCount,
-			ImageContentCount:         history.imageContentCount,
 			LastMessageRole:           history.lastMessageRole,
 			LastMessageToolResult:     history.lastMessageToolResult,
 			LastMessageFlowToolResult: history.lastMessageFlowToolResult,
@@ -136,10 +135,8 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRMatchedUserFeedback = signals.ReportedMatches(config.SignalTypeUserFeedback)
 	ctx.VSRMatchedTurnRelation = signals.ReportedMatches(config.SignalTypeTurnRelation)
 	ctx.VSRMatchedLanguage = signals.MatchedLanguageRules
-	ctx.VSRMatchedAction = signals.MatchedActionRules
 	ctx.VSRMatchedContext = signals.MatchedContextRules
 	ctx.VSRContextTokenCount = signals.TokenCount
-	ctx.VSRMatchedStructure = signals.MatchedStructureRules
 	ctx.VSRMatchedComplexity = signals.ReportedMatches(config.SignalTypeComplexity)
 	ctx.VSRMatchedModality = signals.ReportedMatches(config.SignalTypeModality)
 	ctx.VSRMatchedAuthz = signals.MatchedAuthzRules
@@ -147,7 +144,6 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRMatchedSafety = signals.ReportedMatches(config.SignalTypeSafety)
 	ctx.VSRMatchedPII = signals.ReportedMatches(config.SignalTypePII)
 	ctx.VSRMatchedConversation = signals.MatchedConversationRules
-	ctx.VSRMatchedEvent = signals.MatchedEventRules
 	ctx.VSRMatchedMetadata = signals.MatchedMetadataRules
 	ctx.VSRMatchedInputModality = signals.MatchedInputModalityRules
 	ctx.VSRMatchedDecisionModel = signals.ReportedMatches(config.SignalTypeSystemOne)
@@ -236,7 +232,6 @@ func collectMatchedSignalRules(signals *classification.SignalResults) []string {
 	allMatchedRules = append(allMatchedRules, signals.MatchedTurnRelationRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedLanguageRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedContextRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedStructureRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedComplexityRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedModalityRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedAuthzRules...)
@@ -244,7 +239,6 @@ func collectMatchedSignalRules(signals *classification.SignalResults) []string {
 	allMatchedRules = append(allMatchedRules, signals.MatchedSafetyRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedPIIRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedConversationRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedEventRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedMetadataRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedInputModalityRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedSystemOneRules...)

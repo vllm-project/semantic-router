@@ -5,6 +5,9 @@ import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 func (d *decompiler) decompileKeywordSignals() {
 	for _, kw := range d.cfg.KeywordRules {
 		d.write("SIGNAL keyword %s {\n", quoteName(kw.Name))
+		if kw.Description != "" {
+			d.write("  description: %q\n", kw.Description)
+		}
 		if kw.Operator != "" {
 			d.write("  operator: %q\n", kw.Operator)
 		}
@@ -34,6 +37,12 @@ func (d *decompiler) decompileKeywordSignals() {
 		}
 		if kw.IncludeHistory {
 			d.write("  include_history: true\n")
+		}
+		if kw.Count != nil {
+			d.write("  count: %s\n", formatPluginConfigValue(numericPredicateToMap(kw.Count)))
+		}
+		if kw.Density != nil {
+			d.write("  density: %s\n", formatPluginConfigValue(numericPredicateToMap(kw.Density)))
 		}
 		d.write("}\n\n")
 	}
@@ -68,20 +77,6 @@ func (d *decompiler) decompileContextSignals() {
 	}
 }
 
-func (d *decompiler) decompileStructureSignals() {
-	for _, structure := range d.cfg.StructureRules {
-		d.write("SIGNAL structure %s {\n", quoteName(structure.Name))
-		if structure.Description != "" {
-			d.write("  description: %q\n", structure.Description)
-		}
-		d.write("  feature: %s\n", formatPluginConfigValue(structureFeatureToMap(structure.Feature)))
-		if structure.Predicate != nil {
-			d.write("  predicate: %s\n", formatPluginConfigValue(structurePredicateToMap(structure.Predicate)))
-		}
-		d.write("}\n\n")
-	}
-}
-
 func (d *decompiler) decompileConversationSignals() {
 	for _, conv := range d.cfg.ConversationRules {
 		d.write("SIGNAL conversation %s {\n", quoteName(conv.Name))
@@ -90,7 +85,7 @@ func (d *decompiler) decompileConversationSignals() {
 		}
 		d.write("  feature: %s\n", formatPluginConfigValue(conversationFeatureToMap(conv.Feature)))
 		if conv.Predicate != nil {
-			d.write("  predicate: %s\n", formatPluginConfigValue(structurePredicateToMap(conv.Predicate)))
+			d.write("  predicate: %s\n", formatPluginConfigValue(numericPredicateToMap(conv.Predicate)))
 		}
 		d.write("}\n\n")
 	}
@@ -263,25 +258,6 @@ func (d *decompiler) decompileAuthzSignals() {
 				d.write("{ kind: %q, name: %q }", subj.Kind, subj.Name)
 			}
 			d.write("]\n")
-		}
-		d.write("}\n\n")
-	}
-}
-
-func (d *decompiler) decompileEventSignals() {
-	for _, rule := range d.cfg.EventRules {
-		d.write("SIGNAL event %s {\n", quoteName(rule.Name))
-		if len(rule.EventTypes) > 0 {
-			d.write("  event_types: %s\n", formatStringArray(rule.EventTypes))
-		}
-		if len(rule.Severities) > 0 {
-			d.write("  severities: %s\n", formatStringArray(rule.Severities))
-		}
-		if len(rule.ActionCodes) > 0 {
-			d.write("  action_codes: %s\n", formatStringArray(rule.ActionCodes))
-		}
-		if rule.Temporal {
-			d.write("  temporal: true\n")
 		}
 		d.write("}\n\n")
 	}

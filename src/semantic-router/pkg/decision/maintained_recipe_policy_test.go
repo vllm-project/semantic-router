@@ -100,8 +100,8 @@ func TestBalanceQuestionPolicy(t *testing.T) {
 		{
 			name: "an image goes to the visual lane whatever the task",
 			signals: &SignalMatches{
-				ConversationRules: []string{"has_image"},
-				SystemOneRules:    []string{"task:legal"},
+				InputModalityRules: []string{"has_image"},
+				SystemOneRules:     []string{"task:legal"},
 			},
 			expectedDecision: "omni",
 		},

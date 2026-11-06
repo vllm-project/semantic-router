@@ -263,12 +263,6 @@ routing:
         - traffic:default
   signals:
     conversation:
-      - name: has_image
-        description: The request carries at least one image.
-        feature:
-          type: exists
-          source:
-            type: image_content
       - name: has_prior_answer
         description: The conversation already holds an assistant answer.
         feature:
@@ -276,6 +270,10 @@ routing:
           source:
             type: message
             role: assistant
+    input_modality:
+      - name: has_image
+        description: The request carries at least one image.
+        modality: image
     systemone:
       - name: task
         description: The kind of work the request asks for; its most likely answer picks the work lane.
@@ -361,7 +359,7 @@ routing:
       rules:
         operator: AND
         conditions:
-          - type: conversation
+          - type: input_modality
             name: has_image
       modelRefs:
         - model: local/omni

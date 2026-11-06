@@ -52,9 +52,7 @@ func (b *classifierOptionBuilder) build() ([]option, error) {
 	steps := []func() (option, error){
 		b.buildKeywordClassifierOption,
 		b.buildContextClassifierOption,
-		b.buildStructureClassifierOption,
 		b.buildAuthzClassifierOption,
-		b.buildEventClassifierOption,
 	}
 	parallelOptions, err := b.buildParallelOptions(steps)
 	b.options = append(b.options, parallelOptions...)
@@ -130,11 +128,6 @@ func (c *Classifier) logHeuristicClassifierInitialization() {
 	if c.contextClassifier != nil {
 		logging.ComponentEvent("classifier", "context_classifier_initialized", map[string]interface{}{
 			"rules": len(c.contextClassifier.rules),
-		})
-	}
-	if c.structureClassifier != nil {
-		logging.ComponentEvent("classifier", "structure_classifier_initialized", map[string]interface{}{
-			"rules": len(c.structureClassifier.rules),
 		})
 	}
 }

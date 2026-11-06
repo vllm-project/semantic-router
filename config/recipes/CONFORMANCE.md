@@ -82,7 +82,7 @@ response's top-level `signal_values`, rather than the plural families in
 ```yaml
 expected_signal_values:
   embedding:informational: {gte: -1, lte: 1}
-  structure:question_count: {gte: 2}
+  keyword:question_count: {gte: 2}
 ```
 
 Each interval needs at least one inclusive `gte` or `lte` bound. Bounds must be

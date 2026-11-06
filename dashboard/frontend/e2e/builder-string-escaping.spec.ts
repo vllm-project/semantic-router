@@ -17,14 +17,13 @@ routing:
     - name: model-a
       modality: text
   signals:
-    structure:
+    keywords:
       - name: numbered_steps
         description: Prompts that contain numbered list items such as "1. ..."
-        feature:
-          type: exists
-          source:
-            type: regex
-            pattern: '(?m)^\s*\d+\.\s+'
+        operator: OR
+        method: regex
+        keywords:
+          - '(?m)^\s*\d+\.\s+'
 `
 
 test('keeps quotes and backslashes intact when a Builder signal is saved', async ({ page }) => {
@@ -48,5 +47,5 @@ test('keeps quotes and backslashes intact when a Builder signal is saved', async
   await expect(compiled).toContainText(
     'description: Prompts that contain numbered list items such as "1. ..."',
   )
-  await expect(compiled).toContainText(String.raw`pattern: (?m)^\s*\d+\.\s+`)
+  await expect(compiled).toContainText(String.raw`- (?m)^\s*\d+\.\s+`)
 })

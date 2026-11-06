@@ -191,13 +191,10 @@ routing:
         max_tokens: 1M
         description: Long inputs stay on one capable worker to avoid multiplying context cost across a
           fan-out workflow.
-    conversation:
+    input_modality:
       - name: accuracy_has_images
         description: Request contains at least one image content part.
-        feature:
-          type: exists
-          source:
-            type: image_content
+        modality: image
     systemone:
       - name: accuracy_mode
         description: The way of working the request asks for.
@@ -233,7 +230,7 @@ routing:
       rules:
         operator: AND
         conditions:
-          - type: conversation
+          - type: input_modality
             name: accuracy_has_images
       modelRefs:
         - model: local/omni

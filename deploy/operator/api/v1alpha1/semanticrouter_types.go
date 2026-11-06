@@ -1449,7 +1449,7 @@ type RuleCombinationConfig struct {
 // RuleConditionConfig references a specific rule by type and name
 type RuleConditionConfig struct {
 	// Type specifies the signal or projection type referenced by this condition.
-	// +kubebuilder:validation:Enum=keyword;embedding;domain;fact_check;user_feedback;reask;preference;language;context;structure;complexity;modality;authz;jailbreak;pii;kb;conversation;event;projection
+	// +kubebuilder:validation:Enum=keyword;embedding;domain;fact_check;user_feedback;reask;preference;language;context;complexity;modality;authz;jailbreak;pii;kb;conversation;projection
 	Type string `json:"type" yaml:"type"`
 
 	// Name is the name of the rule to reference

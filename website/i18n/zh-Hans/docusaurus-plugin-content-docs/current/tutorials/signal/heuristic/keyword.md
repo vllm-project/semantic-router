@@ -59,6 +59,34 @@ routing:
 
 简单场景用纯关键词列表；精确文本过脆时再使用 `method: bm25` 或 `method: ngram`。
 
+### 统计匹配次数 {#counting-matches}
+
+在 `OR` 规则上设置 `count` 或 `density`，规则就按关键词出现的频度匹配，而不只看是否出现。`count` 比较匹配次数；`density` 比较规则所读文本中每 1,000 个字符的匹配次数。两者都使用谓词字段 `gt`、`gte`、`lt` 与 `lte`：
+
+```yaml
+routing:
+  signals:
+    keywords:
+      - name: many_questions
+        description: Prompts that ask four or more explicit questions.
+        operator: OR
+        keywords: ["?", "？"]
+        count: { gte: 4 }
+      - name: numbered_steps
+        operator: OR
+        method: regex
+        keywords: ['(?m)^\s*\d+[.)]\s+']
+        count: { gte: 2 }
+      - name: constraint_dense
+        operator: OR
+        keywords: ["must", "must not", "at least", "at most", "exactly"]
+        density: { gt: 16 }
+```
+
+字面关键词只统计自成一词的出现；CJK 关键词以及不含字母或数字的关键词（如 `?`）统计每一次出现。使用 `method: regex` 时，每个模式统计其互不重叠的匹配。BM25、n-gram 与模糊匹配计算的是相似度而非出现位置，因此计数规则使用字面关键词或 `method: regex`。
+
+无论谓词是否成立，规则都会把该数值发布为自身的值：决策条件可以对 `keyword:<rule>` 应用自己的 `predicate`，投影输入可以用 `value_source: raw` 读取它。
+
 ## 依赖与限制 {#dependencies-and-limitations}
 
 关键词规则不需要模型，但对措辞敏感，也可能被有意触发。把它们用作路由提示，而不是安全边界，并在支持的语言上测试误报。完整示例见

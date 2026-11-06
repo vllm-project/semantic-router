@@ -21,13 +21,10 @@ var signalTutorialBuckets = map[string]string{
 	"keyword":        "heuristic",
 	"language":       "heuristic",
 	"modality":       "learned",
-	"structure":      "heuristic",
 	"pii":            "learned",
 	"user-feedback":  "learned",
-	"event":          "heuristic",
 	"metadata":       "heuristic",
 	"input-modality": "heuristic",
-	"action":         "heuristic",
 	"systemone":      "learned",
 	"refusal":        "learned",
 	"turn-relation":  "learned",
@@ -43,6 +40,9 @@ var retiredSignalTutorialDocs = []string{
 	repoRel("website", "docs", "tutorials", "signal", "learned", "preference.md"),
 	repoRel("website", "docs", "tutorials", "signal", "learned", "reask.md"),
 	repoRel("website", "docs", "tutorials", "signal", "heuristic", "topic-continuity.md"),
+	repoRel("website", "docs", "tutorials", "signal", "heuristic", "action.md"),
+	repoRel("website", "docs", "tutorials", "signal", "heuristic", "event.md"),
+	repoRel("website", "docs", "tutorials", "signal", "heuristic", "structure.md"),
 }
 
 func assertSignalTutorialDocsMatchConfigHierarchy(t *testing.T, root string) {

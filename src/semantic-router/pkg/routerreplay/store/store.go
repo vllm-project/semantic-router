@@ -21,7 +21,6 @@ type Signal struct {
 	TurnRelation  []string `json:"turn_relation,omitempty"`
 	Language      []string `json:"language,omitempty"`
 	Context       []string `json:"context,omitempty"`
-	Structure     []string `json:"structure,omitempty"`
 	Complexity    []string `json:"complexity,omitempty"`
 	Modality      []string `json:"modality,omitempty"`
 	Authz         []string `json:"authz,omitempty"`
@@ -29,7 +28,6 @@ type Signal struct {
 	Safety        []string `json:"safety,omitempty"`
 	PII           []string `json:"pii,omitempty"`
 	Conversation  []string `json:"conversation,omitempty"`
-	Event         []string `json:"event,omitempty"`
 	Metadata      []string `json:"metadata,omitempty"`
 	InputModality []string `json:"input_modality,omitempty"`
 	Decision      []string `json:"decision,omitempty"`
@@ -568,7 +566,6 @@ func cloneSignal(signal Signal) Signal {
 		TurnRelation:  cloneStringSlice(signal.TurnRelation),
 		Language:      cloneStringSlice(signal.Language),
 		Context:       cloneStringSlice(signal.Context),
-		Structure:     cloneStringSlice(signal.Structure),
 		Complexity:    cloneStringSlice(signal.Complexity),
 		Modality:      cloneStringSlice(signal.Modality),
 		Authz:         cloneStringSlice(signal.Authz),
@@ -576,7 +573,6 @@ func cloneSignal(signal Signal) Signal {
 		Safety:        cloneStringSlice(signal.Safety),
 		PII:           cloneStringSlice(signal.PII),
 		Conversation:  cloneStringSlice(signal.Conversation),
-		Event:         cloneStringSlice(signal.Event),
 		Metadata:      cloneStringSlice(signal.Metadata),
 		InputModality: cloneStringSlice(signal.InputModality),
 		Decision:      cloneStringSlice(signal.Decision),

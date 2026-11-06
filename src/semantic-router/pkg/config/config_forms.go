@@ -94,19 +94,33 @@ type ConfigForm struct {
 // FormMatch is one place a form occurs: the node at Path, held by Parent
 // under Key (a mapping) or at Index (a sequence). Root is the document's
 // top-level mapping, for a rewrite that reaches past the match (the signals
-// a rewritten plugin reads).
+// a rewritten plugin reads); Ancestors hold Parent, from the root down.
 type FormMatch struct {
-	Path   string
-	Parent *yaml.Node
-	Key    string
-	Index  int
-	Node   *yaml.Node
-	Root   *yaml.Node
+	Path      string
+	Parent    *yaml.Node
+	Key       string
+	Index     int
+	Node      *yaml.Node
+	Root      *yaml.Node
+	Ancestors []*yaml.Node
+}
+
+// Above is the node levels above the match: 1 is Parent, 2 the node that
+// holds it, and so on up to the document root; nil past the root.
+func (at FormMatch) Above(levels int) *yaml.Node {
+	if levels == 1 {
+		return at.Parent
+	}
+	index := len(at.Ancestors) - (levels - 1)
+	if levels < 1 || index < 0 {
+		return nil
+	}
+	return at.Ancestors[index]
 }
 
 // configForms lists every removed and renamed form, in the order migrate
 // rewrites them, as the concatenation of the per-feature lists.
-var configForms = slices.Concat(systemOneForms, pluginForms, applicationForms)
+var configForms = slices.Concat(systemOneForms, pluginForms, applicationForms, heuristicForms)
 
 // RoutingScopes returns the patterns of suffix in every routing scope of a
 // document: the top-level routing block and each recipe's.
@@ -168,15 +182,23 @@ func matchPattern(root *yaml.Node, segments []string) []FormMatch {
 			found = append(found, at)
 			return
 		}
+		// The nodes that hold node, which hold its children's parent.
+		holders := at.Ancestors
+		if at.Parent != nil {
+			holders = append(slices.Clip(holders), at.Parent)
+		}
 		segment := rest[0]
 		switch {
 		case segment == "**":
 			walk(node, rest[1:], at)
-			forEachChild(node, at.Path, func(child FormMatch) { walk(child.Node, rest, child) })
+			forEachChild(node, at.Path, func(child FormMatch) {
+				child.Ancestors = holders
+				walk(child.Node, rest, child)
+			})
 		case segment == "*":
 			for i := 0; node.Kind == yaml.MappingNode && i+1 < len(node.Content); i += 2 {
 				key := node.Content[i].Value
-				walk(node.Content[i+1], rest[1:], FormMatch{Path: joinPath(at.Path, key), Parent: node, Key: key})
+				walk(node.Content[i+1], rest[1:], FormMatch{Path: joinPath(at.Path, key), Parent: node, Key: key, Ancestors: holders})
 			}
 		case strings.HasSuffix(segment, "[]"):
 			key := strings.TrimSuffix(segment, "[]")
@@ -188,12 +210,13 @@ func matchPattern(root *yaml.Node, segments []string) []FormMatch {
 				return
 			}
 			base := joinPath(at.Path, key)
+			within := append(slices.Clip(holders), node)
 			for i, item := range items.Content {
-				walk(item, rest[1:], FormMatch{Path: base + "[" + itemLabel(item, i) + "]", Parent: items, Index: i})
+				walk(item, rest[1:], FormMatch{Path: base + "[" + itemLabel(item, i) + "]", Parent: items, Index: i, Ancestors: within})
 			}
 		default:
 			if value := mappingValue(node, segment); value != nil {
-				walk(value, rest[1:], FormMatch{Path: joinPath(at.Path, segment), Parent: node, Key: segment})
+				walk(value, rest[1:], FormMatch{Path: joinPath(at.Path, segment), Parent: node, Key: segment, Ancestors: holders})
 			}
 		}
 	}

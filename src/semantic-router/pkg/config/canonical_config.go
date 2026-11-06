@@ -94,7 +94,6 @@ type CanonicalSignals struct {
 	UserFeedbacks []UserFeedbackRule  `yaml:"user_feedbacks,omitempty"`
 	Language      []LanguageRule      `yaml:"language,omitempty"`
 	Context       []ContextRule       `yaml:"context,omitempty"`
-	Structure     []StructureRule     `yaml:"structure,omitempty"`
 	Complexity    []ComplexityRule    `yaml:"complexity,omitempty"`
 	Modality      []ModalityRule      `yaml:"modality,omitempty"`
 	RoleBindings  []RoleBinding       `yaml:"role_bindings,omitempty"`
@@ -105,10 +104,8 @@ type CanonicalSignals struct {
 	TurnRelation  []TurnRelationRule  `yaml:"turn_relation,omitempty"`
 	PII           []PIIRule           `yaml:"pii,omitempty"`
 	Conversation  []ConversationRule  `yaml:"conversation,omitempty"`
-	EventRules    []EventRule         `yaml:"events,omitempty"`
 	Metadata      []MetadataRule      `yaml:"metadata,omitempty"`
 	InputModality []InputModalityRule `yaml:"input_modality,omitempty"`
-	Actions       []ActionRule        `yaml:"actions,omitempty"`
 	SystemOne     []SystemOneRule     `yaml:"systemone,omitempty"`
 }
 
@@ -617,7 +614,6 @@ func normalizeSignals(signals CanonicalSignals) Signals {
 		UserFeedbackRules:  append([]UserFeedbackRule(nil), signals.UserFeedbacks...),
 		LanguageRules:      append([]LanguageRule(nil), signals.Language...),
 		ContextRules:       append([]ContextRule(nil), signals.Context...),
-		StructureRules:     append([]StructureRule(nil), signals.Structure...),
 		ComplexityRules:    append([]ComplexityRule(nil), signals.Complexity...),
 		ModalityRules:      append([]ModalityRule(nil), signals.Modality...),
 		RoleBindings:       append([]RoleBinding(nil), signals.RoleBindings...),
@@ -628,10 +624,8 @@ func normalizeSignals(signals CanonicalSignals) Signals {
 		TurnRelationRules:  append([]TurnRelationRule(nil), signals.TurnRelation...),
 		PIIRules:           append([]PIIRule(nil), signals.PII...),
 		ConversationRules:  append([]ConversationRule(nil), signals.Conversation...),
-		EventRules:         append([]EventRule(nil), signals.EventRules...),
 		MetadataRules:      append([]MetadataRule(nil), signals.Metadata...),
 		InputModalityRules: append([]InputModalityRule(nil), signals.InputModality...),
-		ActionRules:        append([]ActionRule(nil), signals.Actions...),
 		SystemOneRules:     append([]SystemOneRule(nil), signals.SystemOne...),
 	}
 }

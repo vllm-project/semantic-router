@@ -134,7 +134,7 @@ func decompileRuleLeaf(node *config.RuleCombination) string {
 		arguments = append(
 			arguments,
 			"predicate: "+formatPluginConfigValue(
-				structurePredicateToMap(node.Predicate),
+				numericPredicateToMap(node.Predicate),
 			),
 		)
 	}

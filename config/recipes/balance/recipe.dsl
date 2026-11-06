@@ -2,14 +2,14 @@
 # SIGNALS
 # =============================================================================
 
-SIGNAL conversation has_image {
-  description: "The request carries at least one image."
-  feature: { source: { type: "image_content" }, type: "exists" }
-}
-
 SIGNAL conversation has_prior_answer {
   description: "The conversation already holds an assistant answer."
   feature: { source: { role: "assistant", type: "message" }, type: "exists" }
+}
+
+SIGNAL input_modality has_image {
+  description: "The request carries at least one image."
+  modality: "image"
 }
 
 SIGNAL systemone task {
@@ -98,7 +98,7 @@ PLUGIN router_replay router_replay {}
 ROUTE omni (description = "Image requests go to the visual-language model.") {
   PRIORITY 300
   TIER 1
-  WHEN conversation("has_image")
+  WHEN input_modality("has_image")
   MODEL "local/omni" (reasoning = false)
   ALGORITHM static
 }

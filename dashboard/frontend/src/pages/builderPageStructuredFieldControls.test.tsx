@@ -42,7 +42,7 @@ describe('Builder structured field controls', () => {
     expect(markup).not.toContain('<textarea')
   })
 
-  it('renders fixed nested objects and string matrices with typed inputs', () => {
+  it('renders fixed nested objects with typed inputs', () => {
     const weights = requireField(getAlgorithmFieldSchema('multi_factor'), 'weights')
     const weightsMarkup = renderToStaticMarkup(
       createElement(FieldEditor, {
@@ -55,21 +55,13 @@ describe('Builder structured field controls', () => {
     expect(weightsMarkup).toContain('value="0.4"')
     expect(weightsMarkup).not.toContain('<textarea')
 
-    const structureFeature = requireField(getSignalFieldSchema('structure'), 'feature')
-    const featureMarkup = renderToStaticMarkup(
-      createElement(FieldEditor, {
-        schema: structureFeature,
-        value: {
-          type: 'sequence',
-          source: { type: 'sequence', sequences: [['first', 'then']] },
-        },
-        onChange: vi.fn(),
-      }),
+    const keywordCount = requireField(getSignalFieldSchema('keyword'), 'count')
+    const countMarkup = renderToStaticMarkup(
+      createElement(FieldEditor, { schema: keywordCount, value: { gte: 4 }, onChange: vi.fn() }),
     )
-    expect(featureMarkup).toContain('Sequence 1')
-    expect(featureMarkup).toContain('first')
-    expect(featureMarkup).toContain('then')
-    expect(featureMarkup).not.toContain('<textarea')
+    expect(countMarkup).toContain('Greater Than or Equal')
+    expect(countMarkup).toContain('value="4"')
+    expect(countMarkup).not.toContain('<textarea')
   })
 
   it('renders multi-factor objectives and quality gates as structured controls', () => {
@@ -183,6 +175,20 @@ describe('Builder structured field controls', () => {
     expect(markup).toContain('Option or Label')
     expect(markup).toContain('value="code"')
     expect(markup).toContain('Use root policy')
+  })
+
+  it('lets an application signal condition name a label but not an error policy', () => {
+    const rules: FieldSchema = { key: 'rules', label: 'Rules', type: 'rule' }
+    const markup = renderToStaticMarkup(
+      createElement(FieldEditor, {
+        schema: rules,
+        value: { type: 'turn_relation', name: 'follow_up' },
+        onChange: vi.fn(),
+      }),
+    )
+
+    expect(markup).toContain('placeholder="hard"')
+    expect(markup).not.toContain('Use root policy')
   })
 
   it('offers every System One rule field in the signal editor', () => {

@@ -36,7 +36,6 @@ type SignalResults struct {
 	MatchedLanguageRules      []string // Language codes: "en", "es", "zh", "fr", etc.
 	MatchedContextRules       []string // Matched context rule names (e.g. "low_token_count")
 	TokenCount                int      // Total token count
-	MatchedStructureRules     []string // Matched structure rule names (e.g. "many_questions")
 	MatchedComplexityRules    []string
 	MatchedModalityRules      []string
 	MatchedAuthzRules         []string // Matched authz role names for user-level RBAC routing
@@ -47,8 +46,6 @@ type SignalResults struct {
 	MatchedHallucinationRules []string // Response stage only
 	MatchedRefusalRules       []string // Response stage only
 	MatchedConversationRules  []string
-	MatchedEventRules         []string // Matched event rule names (event type, severity, temporal, action codes)
-	MatchedActionRules        []string // The request's single action, when a rule declares it
 	MatchedMetadataRules      []string // Matched untrusted request metadata rules
 	MatchedInputModalityRules []string // Matched structural input-modality presence rules
 	MatchedSystemOneRules     []string
@@ -73,7 +70,7 @@ type SignalResults struct {
 	PIIEntities        []string // Detected PII entity types (e.g., "EMAIL_ADDRESS", "PERSON")
 
 	SignalConfidences  map[string]float64             // Real confidence scores per signal, e.g. "embedding:ai" → 0.88
-	SignalValues       map[string]float64             // Raw signal values per signal when the evaluator exposes them, e.g. "structure:many_questions" → 4
+	SignalValues       map[string]float64             // Raw signal values per signal when the evaluator exposes them, e.g. "keyword:many_questions" → 4
 	SignalErrors       map[string]string              // Signal evaluation errors keyed by "type:name"
 	SignalSpans        map[string][]modelservice.Span // The matched spans of span rules keyed by "type:name"; set at the response stage
 	SignalErrorMatches map[string]bool
@@ -97,7 +94,6 @@ func (r *SignalResults) Matches() *decision.SignalMatches {
 		UserFeedbackRules:  r.MatchedUserFeedbackRules,
 		LanguageRules:      r.MatchedLanguageRules,
 		ContextRules:       r.MatchedContextRules,
-		StructureRules:     r.MatchedStructureRules,
 		ComplexityRules:    r.MatchedComplexityRules,
 		ModalityRules:      r.MatchedModalityRules,
 		SignalConfidences:  r.SignalConfidences,
@@ -107,10 +103,8 @@ func (r *SignalResults) Matches() *decision.SignalMatches {
 		PIIRules:           r.MatchedPIIRules,
 		TurnRelationRules:  r.MatchedTurnRelationRules,
 		ConversationRules:  r.MatchedConversationRules,
-		EventRules:         r.MatchedEventRules,
 		MetadataRules:      r.MatchedMetadataRules,
 		InputModalityRules: r.MatchedInputModalityRules,
-		ActionRules:        r.MatchedActionRules,
 		SystemOneRules:     r.MatchedSystemOneRules,
 		ProjectionRules:    r.MatchedProjectionRules,
 		SignalValues:       r.SignalValues,
@@ -128,7 +122,6 @@ type SignalMetricsCollection struct {
 	TurnRelation  SignalMetrics `json:"turn_relation"`
 	Language      SignalMetrics `json:"language"`
 	Context       SignalMetrics `json:"context"`
-	Structure     SignalMetrics `json:"structure"`
 	Complexity    SignalMetrics `json:"complexity"`
 	Modality      SignalMetrics `json:"modality"`
 	Authz         SignalMetrics `json:"authz"`
@@ -136,10 +129,8 @@ type SignalMetricsCollection struct {
 	Safety        SignalMetrics `json:"safety"`
 	PII           SignalMetrics `json:"pii"`
 	Conversation  SignalMetrics `json:"conversation"`
-	Event         SignalMetrics `json:"event"`
 	Metadata      SignalMetrics `json:"metadata"`
 	InputModality SignalMetrics `json:"input_modality"`
-	Action        SignalMetrics `json:"action"`
 	SystemOne     SignalMetrics `json:"systemone"`
 }
 

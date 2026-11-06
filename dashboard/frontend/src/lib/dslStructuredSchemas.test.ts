@@ -96,10 +96,11 @@ describe('DSL structured field schemas', () => {
       'use_reasoning',
     ])
 
-    const structureFeature = requireField(getSignalFieldSchema('structure'), 'feature')
-    const source = requireField(structureFeature.fields || [], 'source')
-    expect(source.type).toBe('object')
-    expect(requireField(source.fields || [], 'sequences').type).toBe('string[][]')
+    for (const measure of ['count', 'density']) {
+      const predicate = requireField(getSignalFieldSchema('keyword'), measure)
+      expect(predicate.type).toBe('object')
+      expect(predicate.fields?.map((field) => field.key)).toEqual(['gt', 'gte', 'lt', 'lte'])
+    }
     expect(requireField(getSignalFieldSchema('authz'), 'subjects').type).toBe('object[]')
 
     const metadataPredicate = requireField(getSignalFieldSchema('metadata'), 'predicate')
@@ -108,12 +109,7 @@ describe('DSL structured field schemas', () => {
     const conversationFeature = requireField(getSignalFieldSchema('conversation'), 'feature')
     const conversationSource = requireField(conversationFeature.fields || [], 'source')
     expect(requireField(conversationSource.fields || [], 'type').options).toEqual(
-      expect.arrayContaining([
-        'tool_choice_required',
-        'tool_choice_none',
-        'flow_tool_state',
-        'image_content',
-      ]),
+      expect.arrayContaining(['tool_choice_required', 'tool_choice_none', 'flow_tool_state']),
     )
 
     const headerMutation = getPluginFieldSchema('header_mutation')
@@ -143,7 +139,6 @@ describe('DSL structured field schemas', () => {
       'assistant_tool_call',
       'assistant_tool_cycle',
       'active_tool_loop',
-      'image_content',
       'flow_tool_state',
     ])
     expect(role.options).toContain('non_user')

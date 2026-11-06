@@ -87,7 +87,7 @@ class RawSignalValueTest(unittest.TestCase):
             {
                 "id": "override",
                 "query": "Another item.",
-                "expected_signal_values": {"structure:size": {"gte": 2}},
+                "expected_signal_values": {"keyword:size": {"gte": 2}},
             },
             {"id": "empty", "query": "A third item.", "expected_signal_values": {}},
         ]
@@ -96,9 +96,7 @@ class RawSignalValueTest(unittest.TestCase):
             probes[0].expected_signal_values,
             {"domain:information": {"gte": -1, "lte": 1}},
         )
-        self.assertEqual(
-            probes[1].expected_signal_values, {"structure:size": {"gte": 2}}
-        )
+        self.assertEqual(probes[1].expected_signal_values, {"keyword:size": {"gte": 2}})
         self.assertEqual(probes[2].expected_signal_values, {})
         for index, probe in enumerate(probes):
             self.assertEqual(

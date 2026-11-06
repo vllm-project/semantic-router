@@ -30,10 +30,6 @@ func (c *Classifier) buildPolicySignalDispatchers(
 			},
 		},
 		{
-			config.SignalTypeEvent, "Event",
-			func(context.Context) { c.evaluateEventSignal(results, mu, textForSignal(config.SignalTypeEvent)) },
-		},
-		{
 			config.SignalTypeMetadata, "Metadata",
 			func(context.Context) { c.evaluateMetadataSignal(results, mu, requestFacts, usedSignals) },
 		},

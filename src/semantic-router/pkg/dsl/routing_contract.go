@@ -182,9 +182,6 @@ func (d *decompiler) appendOperationalSignals(prog *Program) {
 	for _, ctx := range d.cfg.ContextRules {
 		prog.Signals = append(prog.Signals, d.contextToSignal(&ctx))
 	}
-	for _, structure := range d.cfg.StructureRules {
-		prog.Signals = append(prog.Signals, d.structureToSignal(&structure))
-	}
 	d.appendApplicationSignals(prog, config.SignalTypeComplexity)
 	d.appendApplicationSignals(prog, config.SignalTypeModality)
 	for _, rb := range d.cfg.RoleBindings {
@@ -192,9 +189,6 @@ func (d *decompiler) appendOperationalSignals(prog *Program) {
 	}
 	for i := range d.cfg.ConversationRules {
 		prog.Signals = append(prog.Signals, d.conversationToSignal(&d.cfg.ConversationRules[i]))
-	}
-	for i := range d.cfg.EventRules {
-		prog.Signals = append(prog.Signals, d.eventRuleToDecl(&d.cfg.EventRules[i]))
 	}
 }
 

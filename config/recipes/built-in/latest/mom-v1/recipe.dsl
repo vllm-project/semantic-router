@@ -39,11 +39,6 @@ RECIPE balance (description = "Spends reasoning only where a request needs it. O
     min_tokens: "200K"
   }
 
-  SIGNAL conversation has_image {
-    description: "The request carries at least one image."
-    feature: { source: { type: "image_content" }, type: "exists" }
-  }
-
   SIGNAL conversation has_tools {
     description: "The request declares at least one tool."
     feature: { source: { type: "tool_definition" }, type: "exists" }
@@ -67,6 +62,11 @@ RECIPE balance (description = "Spends reasoning only where a request needs it. O
   SIGNAL conversation tool_required {
     description: "The client forces a tool call with tool_choice required or a named function."
     feature: { source: { type: "tool_choice_required" }, type: "exists" }
+  }
+
+  SIGNAL input_modality has_image {
+    description: "The request carries at least one image."
+    modality: "image"
   }
 
   SIGNAL systemone task {
@@ -138,7 +138,7 @@ RECIPE balance (description = "Spends reasoning only where a request needs it. O
 
   ROUTE vision (description = "Requests that carry an image, for a model that reads images.") {
     PRIORITY 850
-    WHEN conversation("has_image")
+    WHEN input_modality("has_image")
     ALGORITHM static {
       minimum_candidates: 1
     }

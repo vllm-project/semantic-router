@@ -98,7 +98,17 @@ func assertReferenceConfigRoutingCoverage(t testingT, root map[string]interface{
 
 func assertReferenceConfigSignalCoverage(t testingT, signals map[string]interface{}) {
 	assertMapCoversStructFields(t, signals, reflect.TypeOf(CanonicalSignals{}), "routing.signals")
-	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "keywords"), reflect.TypeOf(KeywordRule{}), "routing.signals.keywords")
+	keywords := mustSliceAt(t, signals, "keywords")
+	assertSliceUnionCoversStructFields(t, keywords, reflect.TypeOf(KeywordRule{}), "routing.signals.keywords")
+	assertSliceUnionCoversStructFields(
+		t,
+		append(
+			collectChildMapsFromSlice(t, keywords, "count", "routing.signals.keywords"),
+			collectChildMapsFromSlice(t, keywords, "density", "routing.signals.keywords")...,
+		),
+		reflect.TypeOf(NumericPredicate{}),
+		"routing.signals.keywords[].count and density",
+	)
 	assertSliceUnionCoversStructFields(
 		t,
 		collectNestedSliceItems(t, mustSliceAt(t, signals, "domains"), "model_scores", "routing.signals.domains"),
@@ -107,12 +117,10 @@ func assertReferenceConfigSignalCoverage(t testingT, signals map[string]interfac
 	)
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "language"), reflect.TypeOf(LanguageRule{}), "routing.signals.language")
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "context"), reflect.TypeOf(ContextRule{}), "routing.signals.context")
-	assertReferenceConfigStructureCoverage(t, mustSliceAt(t, signals, "structure"))
 	assertReferenceConfigApplicationRuleCoverage(t, signals)
 	assertReferenceConfigModelRuleCoverage(t, signals)
 	assertReferenceConfigRoleBindingCoverage(t, mustSliceAt(t, signals, "role_bindings"))
 	assertReferenceConfigConversationSignalCoverage(t, mustSliceAt(t, signals, "conversation"))
-	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "events"), reflect.TypeOf(EventRule{}), "routing.signals.events")
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "input_modality"), reflect.TypeOf(InputModalityRule{}), "routing.signals.input_modality")
 }
 
@@ -202,33 +210,6 @@ func assertReferenceConfigModelRuleCoverage(t testingT, signals map[string]inter
 		reflect.TypeOf(SystemOneInput{}),
 		"routing.signals.systemone[].input",
 		"audio",
-	)
-}
-
-func assertReferenceConfigStructureCoverage(t testingT, structure []interface{}) {
-	assertSliceUnionCoversStructFields(t, structure, reflect.TypeOf(StructureRule{}), "routing.signals.structure")
-	assertSliceUnionCoversStructFields(
-		t,
-		collectChildMapsFromSlice(t, structure, "feature", "routing.signals.structure"),
-		reflect.TypeOf(StructureFeature{}),
-		"routing.signals.structure[].feature",
-	)
-	assertSliceUnionCoversStructFields(
-		t,
-		collectChildMapsFromSlice(t, structure, "predicate", "routing.signals.structure"),
-		reflect.TypeOf(NumericPredicate{}),
-		"routing.signals.structure[].predicate",
-	)
-	assertSliceUnionCoversStructFields(
-		t,
-		collectChildMapsFromSlice(
-			t,
-			collectChildMapsFromSlice(t, structure, "feature", "routing.signals.structure"),
-			"source",
-			"routing.signals.structure[].feature",
-		),
-		reflect.TypeOf(StructureSource{}),
-		"routing.signals.structure[].feature.source",
 	)
 }
 

@@ -15,7 +15,6 @@ type Signals struct {
 	UserFeedbackRules  []UserFeedbackRule  `yaml:"user_feedback_rules,omitempty"`
 	LanguageRules      []LanguageRule      `yaml:"language_rules,omitempty"`
 	ContextRules       []ContextRule       `yaml:"context_rules,omitempty"`
-	StructureRules     []StructureRule     `yaml:"structure_rules,omitempty"`
 	ComplexityRules    []ComplexityRule    `yaml:"complexity_rules,omitempty"`
 	ModalityRules      []ModalityRule      `yaml:"modality_rules,omitempty"`
 	RoleBindings       []RoleBinding       `yaml:"role_bindings,omitempty"`
@@ -26,27 +25,14 @@ type Signals struct {
 	TurnRelationRules  []TurnRelationRule  `yaml:"turn_relation,omitempty"`
 	PIIRules           []PIIRule           `yaml:"pii,omitempty"`
 	ConversationRules  []ConversationRule  `yaml:"conversation,omitempty"`
-	EventRules         []EventRule         `yaml:"events,omitempty"`
 	MetadataRules      []MetadataRule      `yaml:"metadata,omitempty"`
 	InputModalityRules []InputModalityRule `yaml:"input_modality,omitempty"`
-	ActionRules        []ActionRule        `yaml:"actions,omitempty"`
 	SystemOneRules     []SystemOneRule     `yaml:"systemone,omitempty"`
-}
-
-// EventRule matches structured event metadata extracted from request text.
-// It routes event-driven requests (error alerts, audit logs, incident payloads)
-// to specialized model pools based on event type, severity, and temporal urgency.
-type EventRule struct {
-	Name        string   `yaml:"name"`
-	Description string   `yaml:"description,omitempty"`
-	EventTypes  []string `yaml:"event_types,omitempty"`  // e.g. ["payment_failed", "auth_error"]
-	Severities  []string `yaml:"severities,omitempty"`   // e.g. ["critical", "high"]
-	ActionCodes []string `yaml:"action_codes,omitempty"` // domain-specific codes, e.g. ["TXN_DECLINE"]
-	Temporal    bool     `yaml:"temporal,omitempty"`     // match time-sensitive markers (urgent, immediate)
 }
 
 type KeywordRule struct {
 	Name           string   `yaml:"name"`
+	Description    string   `yaml:"description,omitempty"`
 	Operator       string   `yaml:"operator"`
 	Keywords       []string `yaml:"keywords"`
 	CaseSensitive  bool     `yaml:"case_sensitive"`
@@ -62,6 +48,12 @@ type KeywordRule struct {
 	// so a marker stated earlier in the conversation still matches.
 	// Assistant and system messages are never included.
 	IncludeHistory bool `yaml:"include_history,omitempty"`
+	// Count or Density, at most one, makes an OR rule match on how often its
+	// keywords occur in the text it reads: Count on the number of
+	// occurrences, Density on occurrences per 1,000 characters. Either is
+	// published as the rule's value, whether or not its predicate holds.
+	Count   *NumericPredicate `yaml:"count,omitempty"`
+	Density *NumericPredicate `yaml:"density,omitempty"`
 }
 
 type LanguageRule struct {
@@ -253,26 +245,6 @@ func (r ContextRule) Bounds() (ContextBounds, error) {
 		)
 	}
 	return ContextBounds{Min: minTokens, Max: maxTokens}, nil
-}
-
-type StructureRule struct {
-	Name        string            `yaml:"name"`
-	Description string            `yaml:"description,omitempty"`
-	Feature     StructureFeature  `yaml:"feature"`
-	Predicate   *NumericPredicate `yaml:"predicate,omitempty"`
-}
-
-type StructureFeature struct {
-	Type   string          `yaml:"type"`
-	Source StructureSource `yaml:"source"`
-}
-
-type StructureSource struct {
-	Type          string     `yaml:"type"`
-	Pattern       string     `yaml:"pattern,omitempty"`
-	Keywords      []string   `yaml:"keywords,omitempty"`
-	CaseSensitive bool       `yaml:"case_sensitive,omitempty"`
-	Sequences     [][]string `yaml:"sequences,omitempty"`
 }
 
 type ConversationRule struct {

@@ -17,26 +17,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "ActionRule": {
-      "properties": {
-        "name": {
-          "type": "string",
-          "enum": [
-            "generate",
-            "explain",
-            "fix",
-            "refactor",
-            "test",
-            "other"
-          ]
-        },
-        "description": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "AdmissionConfig": {
       "properties": {
         "max_concurrency": {
@@ -1367,12 +1347,6 @@
           },
           "type": "array"
         },
-        "structure": {
-          "items": {
-            "$ref": "#/$defs/StructureRule"
-          },
-          "type": "array"
-        },
         "complexity": {
           "items": {
             "$ref": "#/$defs/ComplexityRule"
@@ -1433,12 +1407,6 @@
           },
           "type": "array"
         },
-        "events": {
-          "items": {
-            "$ref": "#/$defs/EventRule"
-          },
-          "type": "array"
-        },
         "metadata": {
           "items": {
             "$ref": "#/$defs/MetadataRule"
@@ -1448,12 +1416,6 @@
         "input_modality": {
           "items": {
             "$ref": "#/$defs/InputModalityRule"
-          },
-          "type": "array"
-        },
-        "actions": {
-          "items": {
-            "$ref": "#/$defs/ActionRule"
           },
           "type": "array"
         },
@@ -2675,39 +2637,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "EventRule": {
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "event_types": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "severities": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "action_codes": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "temporal": {
-          "type": "boolean"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "ExternalModelConfig": {
       "properties": {
         "name": {
@@ -3430,6 +3359,9 @@
         "name": {
           "type": "string"
         },
+        "description": {
+          "type": "string"
+        },
         "operator": {
           "type": "string"
         },
@@ -3462,6 +3394,12 @@
         },
         "include_history": {
           "type": "boolean"
+        },
+        "count": {
+          "$ref": "#/$defs/NumericPredicate"
+        },
+        "density": {
+          "$ref": "#/$defs/NumericPredicate"
         }
       },
       "additionalProperties": false,
@@ -5169,7 +5107,6 @@
             "user_feedback",
             "language",
             "context",
-            "structure",
             "complexity",
             "modality",
             "authz",
@@ -5178,7 +5115,6 @@
             "pii",
             "turn_relation",
             "conversation",
-            "event",
             "input_modality",
             "systemone",
             "projection"
@@ -6052,13 +5988,11 @@
         "type": {
           "type": "string",
           "enum": [
-            "action",
             "authz",
             "complexity",
             "context",
             "conversation",
             "domain",
-            "event",
             "fact_check",
             "hallucination",
             "input_modality",
@@ -6070,7 +6004,6 @@
             "pii",
             "refusal",
             "safety",
-            "structure",
             "systemone",
             "turn_relation",
             "user_feedback",
@@ -6760,13 +6693,11 @@
         "type": {
           "type": "string",
           "enum": [
-            "action",
             "authz",
             "complexity",
             "context",
             "conversation",
             "domain",
-            "event",
             "fact_check",
             "input_modality",
             "jailbreak",
@@ -6776,7 +6707,6 @@
             "modality",
             "pii",
             "safety",
-            "structure",
             "systemone",
             "turn_relation",
             "user_feedback",
@@ -6944,66 +6874,6 @@
         },
         "pin_called_tools": {
           "type": "boolean"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "StructureFeature": {
-      "properties": {
-        "type": {
-          "type": "string"
-        },
-        "source": {
-          "$ref": "#/$defs/StructureSource"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "StructureRule": {
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "feature": {
-          "$ref": "#/$defs/StructureFeature"
-        },
-        "predicate": {
-          "$ref": "#/$defs/NumericPredicate"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "StructureSource": {
-      "properties": {
-        "type": {
-          "type": "string"
-        },
-        "pattern": {
-          "type": "string"
-        },
-        "keywords": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "case_sensitive": {
-          "type": "boolean"
-        },
-        "sequences": {
-          "items": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -8050,14 +7920,6 @@
         "schema_ref": "#/$defs/ContextRule"
       },
       {
-        "type": "structure",
-        "display_name": "Structure",
-        "collection": "structure",
-        "observation_key": "structure",
-        "decision_referenceable": true,
-        "schema_ref": "#/$defs/StructureRule"
-      },
-      {
         "type": "complexity",
         "display_name": "Complexity",
         "collection": "complexity",
@@ -8142,14 +8004,6 @@
         "schema_ref": "#/$defs/ConversationRule"
       },
       {
-        "type": "event",
-        "display_name": "Event",
-        "collection": "events",
-        "observation_key": "event",
-        "decision_referenceable": true,
-        "schema_ref": "#/$defs/EventRule"
-      },
-      {
         "type": "metadata",
         "display_name": "Metadata",
         "collection": "metadata",
@@ -8164,14 +8018,6 @@
         "observation_key": "input_modality",
         "decision_referenceable": true,
         "schema_ref": "#/$defs/InputModalityRule"
-      },
-      {
-        "type": "action",
-        "display_name": "Action",
-        "collection": "actions",
-        "observation_key": "action",
-        "decision_referenceable": true,
-        "schema_ref": "#/$defs/ActionRule"
       },
       {
         "type": "systemone",
@@ -8460,7 +8306,6 @@
       "user_feedback",
       "language",
       "context",
-      "structure",
       "complexity",
       "modality",
       "authz",
@@ -8469,7 +8314,6 @@
       "pii",
       "turn_relation",
       "conversation",
-      "event",
       "input_modality",
       "systemone",
       "projection"

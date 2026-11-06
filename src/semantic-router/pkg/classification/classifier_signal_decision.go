@@ -45,14 +45,14 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		return nil, nil, fmt.Errorf("no decisions configured")
 	}
 
-	logging.Debugf("Signal evaluation results: keyword=%v, domain=%v, fact_check=%v, user_feedback=%v, turn_relation=%v, language=%v, context=%v, structure=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, safety=%v, pii=%v, conversation=%v, event=%v, input_modality=%v, action=%v, systemone=%v",
+	logging.Debugf("Signal evaluation results: keyword=%v, domain=%v, fact_check=%v, user_feedback=%v, turn_relation=%v, language=%v, context=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, safety=%v, pii=%v, conversation=%v, input_modality=%v, systemone=%v",
 		signals.MatchedKeywordRules, signals.MatchedDomainRules,
 		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedTurnRelationRules,
-		signals.MatchedLanguageRules, signals.MatchedContextRules, signals.MatchedStructureRules,
+		signals.MatchedLanguageRules, signals.MatchedContextRules,
 		signals.MatchedComplexityRules, signals.MatchedModalityRules, signals.MatchedAuthzRules,
 		signals.MatchedJailbreakRules, signals.MatchedSafetyRules, signals.MatchedPIIRules,
-		signals.MatchedConversationRules, signals.MatchedEventRules, signals.MatchedInputModalityRules,
-		signals.MatchedActionRules, signals.MatchedSystemOneRules)
+		signals.MatchedConversationRules, signals.MatchedInputModalityRules,
+		signals.MatchedSystemOneRules)
 
 	engine := decision.NewDecisionEngine(decisions, c.Config.Strategy).WithRoutingScope(c.Config.RoutingScope)
 

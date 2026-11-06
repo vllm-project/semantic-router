@@ -3468,7 +3468,7 @@ SIGNAL user_feedback uf { description: "feedback" labels: ["WRONG_ANSWER"] }
 SIGNAL turn_relation ra { description: "repeat question" labels: ["reask"] input: { previous_turns: 2 } }
 SIGNAL language lang { description: "English" threshold: 0.6 }
 SIGNAL context ctx { min_tokens: "1K" max_tokens: "32K" }
-SIGNAL structure struct { feature: { type: "count", source: { type: "regex", pattern: "[?]" } } predicate: { gte: 1 } }
+SIGNAL keyword questions { operator: "OR" method: "regex" keywords: ["[?]"] count: { gte: 1 } }
 SIGNAL conversation conv {
   feature: { type: "count", source: { type: "message", role: "user" } }
   predicate: { gte: 2 }
@@ -3481,12 +3481,7 @@ SIGNAL safety unsafe { labels: ["Violence"] }
 SIGNAL pii pii_rule { predicate: { gte: 0.8 } ignore_labels: ["EMAIL_ADDRESS"] input: { history: true } }
 SIGNAL hallucination halu { predicate: { gte: 0.5 } }
 SIGNAL refusal declined { predicate: { gte: 0.5 } }
-SIGNAL event critical_event {
-  event_types: ["payment_failed"]
-  severities: ["critical", "high"]
-  action_codes: ["TXN_DECLINE"]
-  temporal: true
-}
+SIGNAL input_modality pictures { modality: "image" }
 ROUTE test_route { PRIORITY 1 WHEN domain("dom") MODEL "m:1b" }
 `
 	cfg, errs := Compile(input)
@@ -3501,11 +3496,11 @@ ROUTE test_route { PRIORITY 1 WHEN domain("dom") MODEL "m:1b" }
 
 	for _, want := range []string{
 		"SIGNAL domain dom", "SIGNAL keyword kw", "SIGNAL fact_check fc", "SIGNAL user_feedback uf",
-		"SIGNAL turn_relation ra", "SIGNAL language lang", "SIGNAL context ctx", "SIGNAL structure struct",
+		"SIGNAL turn_relation ra", "SIGNAL language lang", "SIGNAL context ctx", "SIGNAL keyword questions",
 		"SIGNAL conversation conv", "SIGNAL complexity comp", "SIGNAL modality mod", "SIGNAL authz auth",
 		"SIGNAL jailbreak jb", "SIGNAL safety unsafe", "SIGNAL pii pii_rule", "SIGNAL hallucination halu",
-		"SIGNAL refusal declined", "SIGNAL event critical_event",
-		`threshold: 0.6`, `previous_turns: 2`, `model_scores:`, `event_types: ["payment_failed"]`, `temporal: true`,
+		"SIGNAL refusal declined", "SIGNAL input_modality pictures",
+		`threshold: 0.6`, `previous_turns: 2`, `model_scores:`, `count: { gte: 1 }`, `modality: "image"`,
 	} {
 		if !strings.Contains(dslText, want) {
 			t.Errorf("decompiled DSL missing %q:\n%s", want, dslText)
@@ -5122,16 +5117,18 @@ SIGNAL keyword reasoning_markers {
   operator: "OR"
   keywords: ["reason"]
 }
-SIGNAL structure many_questions {
+SIGNAL keyword many_questions {
   operator: "OR"
-  patterns: ["\\?"]
+  method: "regex"
+  keywords: ["\\?"]
+  count: { gte: 1 }
 }
 
 PROJECTION score workload_pressure {
   method: "weighted_sum"
   inputs: [
     { type: "keyword", name: "reasoning_markers", weight: 0.3, value_source: "confidence" },
-    { type: "structure", name: "many_questions", weight: 0.5, value_source: "raw" }
+    { type: "keyword", name: "many_questions", weight: 0.5, value_source: "raw" }
   ]
 }
 
@@ -5255,15 +5252,17 @@ ROUTE r {
 
 func TestValidateProjectionAcceptsRawValueSource(t *testing.T) {
 	input := `
-SIGNAL structure many_questions {
+SIGNAL keyword many_questions {
   operator: "OR"
-  patterns: ["\\?"]
+  method: "regex"
+  keywords: ["\\?"]
+  count: { gte: 1 }
 }
 
 PROJECTION score workload {
   method: "weighted_sum"
   inputs: [
-    { type: "structure", name: "many_questions", weight: 0.5, value_source: "raw" }
+    { type: "keyword", name: "many_questions", weight: 0.5, value_source: "raw" }
   ]
 }
 

@@ -14,7 +14,6 @@ import (
 
 func TestClassificationServiceEvaluatesRequestEnvelopeFacts(t *testing.T) {
 	equalsCanary := "canary"
-	minBytes := 4.0
 	cfg := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
 			Signals: config.Signals{
@@ -25,26 +24,11 @@ func TestClassificationServiceEvaluatesRequestEnvelopeFacts(t *testing.T) {
 						Equals: &equalsCanary,
 					},
 				}},
-				ConversationRules: []config.ConversationRule{{
-					Name: "has-image",
-					Feature: config.ConversationFeature{
-						Type:   "exists",
-						Source: config.ConversationSource{Type: "image_content"},
-					},
-				}},
-				StructureRules: []config.StructureRule{{
-					Name: "raw-bytes",
-					Feature: config.StructureFeature{
-						Type:   "count",
-						Source: config.StructureSource{Type: "text_bytes"},
-					},
-					Predicate: &config.NumericPredicate{GTE: &minBytes},
-				}},
+				InputModalityRules: []config.InputModalityRule{{Name: "has-image", Modality: config.InputModalityImage}},
 			},
 			Decisions: []config.Decision{
 				requestFactDecision("metadata-route", config.SignalTypeMetadata, "canary", 30),
-				requestFactDecision("image-route", config.SignalTypeConversation, "has-image", 20),
-				requestFactDecision("bytes-route", config.SignalTypeStructure, "raw-bytes", 10),
+				requestFactDecision("image-route", config.SignalTypeInputModality, "has-image", 20),
 			},
 		},
 	}
@@ -71,34 +55,7 @@ func TestClassificationServiceEvaluatesRequestEnvelopeFacts(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, imageResponse.DecisionResult)
 	require.Equal(t, "image-route", imageResponse.DecisionResult.DecisionName)
-	require.Equal(t, float64(1), imageResponse.SignalValues["conversation:has-image"])
-
-	bytesResponse, err := service.ClassifyIntentForEval(context.Background(), IntentRequest{
-		Messages: []IntentMessage{{
-			Role:    "user",
-			Content: mustMessageContent(t, " \t \n"),
-		}},
-	})
-	require.NoError(t, err)
-	require.NotNil(t, bytesResponse.DecisionResult)
-	require.Equal(t, "bytes-route", bytesResponse.DecisionResult.DecisionName)
-	require.Equal(t, float64(4), bytesResponse.SignalValues["structure:raw-bytes"])
-
-	topLevelBytesResponse, err := service.ClassifyIntentForEval(context.Background(), IntentRequest{
-		Text: " \t \n",
-	})
-	require.NoError(t, err)
-	require.NotNil(t, topLevelBytesResponse.DecisionResult)
-	require.Equal(
-		t,
-		"bytes-route",
-		topLevelBytesResponse.DecisionResult.DecisionName,
-	)
-	require.Equal(
-		t,
-		float64(4),
-		topLevelBytesResponse.SignalValues["structure:raw-bytes"],
-	)
+	require.Equal(t, float64(1), imageResponse.SignalValues["input_modality:has-image"])
 }
 
 func TestClassificationServiceContextSignalUsesFullRequestTokenFloor(t *testing.T) {

@@ -1,0 +1,21 @@
+routing:
+  signals:
+    systemone:
+      - name: action
+        description: The action the request asks for.
+        question:
+          type: choice
+          instructions: Which action does this request ask for?
+          choices:
+            - key: generate
+              description: Write new code, configuration, or scripts.
+            - key: explain
+              description: Describe code or answer a question without editing anything.
+            - key: fix
+              description: Repair a bug or a failing behavior.
+            - key: refactor
+              description: Change existing code without changing what it does.
+            - key: test
+              description: Write or extend tests.
+            - key: other
+              description: The request names none of these actions.

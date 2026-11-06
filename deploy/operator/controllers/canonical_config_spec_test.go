@@ -101,12 +101,11 @@ func TestBuildCanonicalConfigAppliesCanonicalRoutingOverride(t *testing.T) {
 								"predicate": {"gte": 1}
 							}
 						],
-						"events": [
+						"keywords": [
 							{
 								"name": "critical_payment_event",
-								"event_types": ["payment_failed"],
-								"severities": ["critical"],
-								"temporal": true
+								"operator": "AND",
+								"keywords": ["payment_failed", "critical"]
 							}
 						]
 					},
@@ -116,7 +115,7 @@ func TestBuildCanonicalConfigAppliesCanonicalRoutingOverride(t *testing.T) {
 								"name": "session_risk_score",
 								"method": "weighted_sum",
 								"inputs": [
-									{"type": "event", "name": "critical_payment_event", "weight": 1.0, "value_source": "binary"}
+									{"type": "keyword", "name": "critical_payment_event", "weight": 1.0, "value_source": "binary"}
 								]
 							}
 						],
@@ -138,7 +137,7 @@ func TestBuildCanonicalConfigAppliesCanonicalRoutingOverride(t *testing.T) {
 								"operator": "AND",
 								"conditions": [
 									{"type": "conversation", "name": "active_tool_use"},
-									{"type": "event", "name": "critical_payment_event"},
+									{"type": "keyword", "name": "critical_payment_event"},
 									{"type": "projection", "name": "risk_high"}
 								]
 							},
@@ -182,7 +181,7 @@ func TestBuildCanonicalConfigPreservesDecisionAlgorithm(t *testing.T) {
 							Operator:  "AND",
 							OnUnknown: "fail_request",
 							Conditions: []vllmv1alpha1.RuleConditionConfig{
-								{Type: "event", Name: "critical_payment_event"},
+								{Type: "keyword", Name: "critical_payment_event"},
 							},
 						},
 						ModelRefs: []vllmv1alpha1.ModelRefConfig{
@@ -219,8 +218,8 @@ func TestBuildCanonicalConfigPreservesDecisionAlgorithm(t *testing.T) {
 	if algorithm.Hybrid.ExperienceWeight != 0.4 || !algorithm.Hybrid.NormalizeScores {
 		t.Fatalf("expected hybrid fields to survive typed decision conversion, got %#v", algorithm.Hybrid)
 	}
-	if canonical.Routing.Decisions[0].Rules.Conditions[0].Type != "event" {
-		t.Fatalf("expected event condition to survive typed decision conversion, got %#v", canonical.Routing.Decisions[0].Rules)
+	if canonical.Routing.Decisions[0].Rules.Conditions[0].Type != "keyword" {
+		t.Fatalf("expected keyword condition to survive typed decision conversion, got %#v", canonical.Routing.Decisions[0].Rules)
 	}
 	if canonical.Routing.Decisions[0].Rules.OnUnknown != "fail_request" {
 		t.Fatalf("expected on_unknown to survive typed decision conversion, got %#v", canonical.Routing.Decisions[0].Rules)
@@ -295,7 +294,7 @@ func assertCanonicalV03RoutingConfig(t *testing.T, canonical *routerconfig.Canon
 	t.Helper()
 
 	assertCanonicalConversationSignal(t, canonical.Routing.Signals.Conversation)
-	assertCanonicalEventSignal(t, canonical.Routing.Signals.EventRules)
+	assertCanonicalKeywordSignal(t, canonical.Routing.Signals.Keywords)
 	assertCanonicalProjectionConfig(t, canonical.Routing.Projections)
 	assertCanonicalAgenticWorkflowDecision(t, canonical.Routing.Decisions)
 }
@@ -315,15 +314,16 @@ func assertCanonicalConversationSignal(t *testing.T, signals []routerconfig.Conv
 	}
 }
 
-func assertCanonicalEventSignal(t *testing.T, signals []routerconfig.EventRule) {
+func assertCanonicalKeywordSignal(t *testing.T, signals []routerconfig.KeywordRule) {
 	t.Helper()
 
 	if len(signals) != 1 {
-		t.Fatalf("expected one event signal, got %#v", signals)
+		t.Fatalf("expected one keyword signal, got %#v", signals)
 	}
-	event := signals[0]
-	if event.Name != "critical_payment_event" || len(event.EventTypes) != 1 || event.EventTypes[0] != "payment_failed" {
-		t.Fatalf("unexpected event signal: %#v", event)
+	keyword := signals[0]
+	if keyword.Name != "critical_payment_event" || keyword.Operator != "AND" ||
+		len(keyword.Keywords) != 2 || keyword.Keywords[0] != "payment_failed" {
+		t.Fatalf("unexpected keyword signal: %#v", keyword)
 	}
 }
 
@@ -349,7 +349,7 @@ func assertCanonicalAgenticWorkflowDecision(t *testing.T, decisions []routerconf
 		t.Fatalf("unexpected decision rules: %#v", decision.Rules)
 	}
 	if decision.Rules.Conditions[0].Type != "conversation" ||
-		decision.Rules.Conditions[1].Type != "event" ||
+		decision.Rules.Conditions[1].Type != "keyword" ||
 		decision.Rules.Conditions[2].Type != "projection" {
 		t.Fatalf("unexpected decision condition types: %#v", decision.Rules.Conditions)
 	}

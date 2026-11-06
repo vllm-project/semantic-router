@@ -181,8 +181,9 @@ decisions:
     - positive
     expected_signals:
       conversation:
-      - has_image
       - has_tools
+      input_modality:
+      - has_image
       systemone:
       - task:agentic
   - id: balance_long__image_tools__image_tools_in_30k_60k_band
@@ -223,7 +224,7 @@ decisions:
         name: lookup_context_item
         description: Look up one item from the supplied context.
     expected_signals:
-      conversation:
+      input_modality:
       - has_image
   - id: balance_long__image_tools__image_tools_in_60k_120k_band
     display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected service,
@@ -263,7 +264,7 @@ decisions:
         name: lookup_context_item
         description: Look up one item from the supplied context.
     expected_signals:
-      conversation:
+      input_modality:
       - has_image
   - id: balance_long__image_tools__image_tools_in_120k_240k_band
     display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected service,
@@ -303,7 +304,7 @@ decisions:
         name: lookup_context_item
         description: Look up one item from the supplied context.
     expected_signals:
-      conversation:
+      input_modality:
       - has_image
   - id: balance_hard__image_tradeoffs
     messages:
@@ -322,7 +323,7 @@ decisions:
     - collision
     - priority
     expected_signals:
-      conversation:
+      input_modality:
       - has_image
       projection:
       - effort_high
@@ -341,7 +342,7 @@ decisions:
     - image
     - positive
     expected_signals:
-      conversation:
+      input_modality:
       - has_image
       projection:
       - effort_off
@@ -360,7 +361,7 @@ decisions:
     - image
     - paraphrase
     expected_signals:
-      conversation:
+      input_modality:
       - has_image
       projection:
       - effort_off
@@ -394,7 +395,7 @@ decisions:
     - collision
     - priority
     expected_signals:
-      conversation:
+      input_modality:
       - has_image
   - id: balance_long__image__image_in_60k_120k_band
     display_prompt: Inspect the attached image within this long context and summarize its primary architecture flow.
@@ -426,7 +427,7 @@ decisions:
     - collision
     - priority
     expected_signals:
-      conversation:
+      input_modality:
       - has_image
   - id: balance_long__image__image_in_120k_240k_band
     display_prompt: Inspect the attached image within this long context and summarize its primary architecture flow.
@@ -458,7 +459,7 @@ decisions:
     - collision
     - priority
     expected_signals:
-      conversation:
+      input_modality:
       - has_image
   - id: balance_vision__screenshot_question
     messages:
@@ -469,7 +470,7 @@ decisions:
       - type: image_fixture
         fixture: mom_v1_architecture
     expected_signals:
-      conversation:
+      input_modality:
       - has_image
     tags:
     - language:en
@@ -483,7 +484,7 @@ decisions:
       - type: image_fixture
         fixture: mom_v1_architecture
     expected_signals:
-      conversation:
+      input_modality:
       - has_image
     tags:
     - language:zh

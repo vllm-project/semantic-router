@@ -958,7 +958,7 @@ class FailedProbeDiagnosticsTest(unittest.TestCase):
             "signal_errors": {"safety:example": "systemone_unavailable"},
             "signal_error_matches": {"safety:example": True},
             "signal_confidences": {"keyword:example": 1.0},
-            "signal_values": {"structure:items": 2},
+            "signal_values": {"keyword:items": 2},
             "applied_unknown_policies": {"sample": "fail_closed"},
             "decision_error": "classification was unavailable",
             "metrics": {"safety": {"execution_time_ms": 12.5}},

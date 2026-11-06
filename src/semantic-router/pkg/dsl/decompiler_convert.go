@@ -9,6 +9,9 @@ import (
 
 func (d *decompiler) keywordToSignal(kw *config.KeywordRule) *SignalDecl {
 	fields := make(map[string]Value)
+	if kw.Description != "" {
+		fields["description"] = StringValue{V: kw.Description}
+	}
 	if kw.Operator != "" {
 		fields["operator"] = StringValue{V: kw.Operator}
 	}
@@ -39,6 +42,12 @@ func (d *decompiler) keywordToSignal(kw *config.KeywordRule) *SignalDecl {
 	if kw.IncludeHistory {
 		fields["include_history"] = BoolValue{V: true}
 	}
+	if kw.Count != nil {
+		fields["count"] = numericPredicateObject(kw.Count)
+	}
+	if kw.Density != nil {
+		fields["density"] = numericPredicateObject(kw.Density)
+	}
 	return &SignalDecl{SignalType: "keyword", Name: kw.Name, Fields: fields}
 }
 
@@ -67,18 +76,6 @@ func (d *decompiler) contextToSignal(ctx *config.ContextRule) *SignalDecl {
 	return &SignalDecl{SignalType: "context", Name: ctx.Name, Fields: fields}
 }
 
-func (d *decompiler) structureToSignal(rule *config.StructureRule) *SignalDecl {
-	fields := make(map[string]Value)
-	if rule.Description != "" {
-		fields["description"] = StringValue{V: rule.Description}
-	}
-	fields["feature"] = structureFeatureValue(rule.Feature)
-	if rule.Predicate != nil {
-		fields["predicate"] = structurePredicateValue(rule.Predicate)
-	}
-	return &SignalDecl{SignalType: "structure", Name: rule.Name, Fields: fields}
-}
-
 func (d *decompiler) conversationToSignal(rule *config.ConversationRule) *SignalDecl {
 	fields := make(map[string]Value)
 	if rule.Description != "" {
@@ -86,7 +83,7 @@ func (d *decompiler) conversationToSignal(rule *config.ConversationRule) *Signal
 	}
 	fields["feature"] = conversationFeatureValue(rule.Feature)
 	if rule.Predicate != nil {
-		fields["predicate"] = structurePredicateValue(rule.Predicate)
+		fields["predicate"] = numericPredicateObject(rule.Predicate)
 	}
 	return &SignalDecl{SignalType: "conversation", Name: rule.Name, Fields: fields}
 }
@@ -110,23 +107,6 @@ func (d *decompiler) roleBindingToSignal(rb *config.RoleBinding) *SignalDecl {
 		fields["subjects"] = ArrayValue{Items: items}
 	}
 	return &SignalDecl{SignalType: "authz", Name: rb.Name, Fields: fields}
-}
-
-func (d *decompiler) eventRuleToDecl(rule *config.EventRule) *SignalDecl {
-	fields := make(map[string]Value)
-	if len(rule.EventTypes) > 0 {
-		fields["event_types"] = stringsToArray(rule.EventTypes)
-	}
-	if len(rule.Severities) > 0 {
-		fields["severities"] = stringsToArray(rule.Severities)
-	}
-	if len(rule.ActionCodes) > 0 {
-		fields["action_codes"] = stringsToArray(rule.ActionCodes)
-	}
-	if rule.Temporal {
-		fields["temporal"] = BoolValue{V: true}
-	}
-	return &SignalDecl{SignalType: "event", Name: rule.Name, Fields: fields}
 }
 
 func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
@@ -275,7 +255,7 @@ func decompileSignalRefNode(
 		fields["label"] = StringValue{V: node.Label}
 	}
 	if node.Predicate != nil {
-		fields["predicate"] = structurePredicateValue(node.Predicate)
+		fields["predicate"] = numericPredicateObject(node.Predicate)
 	}
 	if node.OnError != "" {
 		fields["on_error"] = StringValue{V: node.OnError}

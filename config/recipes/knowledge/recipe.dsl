@@ -2,9 +2,9 @@
 # SIGNALS
 # =============================================================================
 
-SIGNAL conversation knowledge_has_images {
+SIGNAL input_modality knowledge_has_images {
   description: "Request contains at least one image content part."
-  feature: { source: { type: "image_content" }, type: "exists" }
+  modality: "image"
 }
 
 SIGNAL systemone knowledge_subject {
@@ -36,7 +36,7 @@ MODEL local/small-7b {
 
 ROUTE omni (description = "Understand image-bearing knowledge requests with the dedicated visual-language model.") {
   PRIORITY 300
-  WHEN conversation("knowledge_has_images")
+  WHEN input_modality("knowledge_has_images")
   MODEL "local/omni" (reasoning = false)
   ALGORITHM static
 }

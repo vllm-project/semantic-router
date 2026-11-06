@@ -14,12 +14,20 @@ export type { FieldSchema } from './dslSchemaTypes'
 // cap. resolveCapabilityPluginFieldSchema moved there with it, since it's
 // only ever called from within that switch.
 
+const NUMERIC_PREDICATE_FIELDS: FieldSchema[] = [
+  { key: 'gt', label: 'Greater Than', type: 'number' },
+  { key: 'gte', label: 'Greater Than or Equal', type: 'number' },
+  { key: 'lt', label: 'Less Than', type: 'number' },
+  { key: 'lte', label: 'Less Than or Equal', type: 'number' },
+]
+
 function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
   const policyFields = getPolicySignalFieldSchema(signalType)
   if (policyFields) return policyFields
   switch (signalType) {
     case 'keyword':
       return [
+        { key: 'description', label: 'Description', type: 'string' },
         {
           key: 'operator',
           label: 'Operator',
@@ -46,6 +54,22 @@ function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
           label: 'Include History',
           type: 'boolean',
           description: 'Also match earlier user messages, not just the latest one',
+        },
+        {
+          key: 'count',
+          label: 'Count',
+          type: 'object',
+          description:
+            'An OR rule with literal or regex keywords matches on how many times they occur.',
+          fields: NUMERIC_PREDICATE_FIELDS,
+        },
+        {
+          key: 'density',
+          label: 'Density',
+          type: 'object',
+          description:
+            'An OR rule with literal or regex keywords matches on occurrences per 1,000 characters. Set count or density, not both.',
+          fields: NUMERIC_PREDICATE_FIELDS,
         },
       ]
     case 'domain':
@@ -99,69 +123,6 @@ function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
           description: 'Inclusive upper bound. Leave empty for an open-ended band.',
         },
         { key: 'description', label: 'Description', type: 'string' },
-      ]
-    case 'structure':
-      return [
-        { key: 'description', label: 'Description', type: 'string' },
-        {
-          key: 'feature',
-          label: 'Feature',
-          type: 'object',
-          required: true,
-          description:
-            'Choose the feature operation and configure its regex, keyword-set, or sequence source.',
-          fields: [
-            {
-              key: 'type',
-              label: 'Feature Type',
-              type: 'select',
-              options: ['exists', 'count', 'density', 'sequence'],
-              required: true,
-            },
-            {
-              key: 'source',
-              label: 'Source',
-              type: 'object',
-              required: true,
-              fields: [
-                {
-                  key: 'type',
-                  label: 'Source Type',
-                  type: 'select',
-                  options: ['regex', 'keyword_set', 'sequence'],
-                  required: true,
-                },
-                { key: 'pattern', label: 'Regex Pattern', type: 'string' },
-                {
-                  key: 'keywords',
-                  label: 'Keywords',
-                  type: 'string[]',
-                  placeholder: 'Add keyword...',
-                },
-                { key: 'case_sensitive', label: 'Case Sensitive', type: 'boolean' },
-                {
-                  key: 'sequences',
-                  label: 'Sequences',
-                  type: 'string[][]',
-                  addLabel: 'Add sequence',
-                  emptyLabel: 'No marker sequences configured.',
-                },
-              ],
-            },
-          ],
-        },
-        {
-          key: 'predicate',
-          label: 'Predicate',
-          type: 'object',
-          description: 'Optional numeric comparison applied to the extracted feature.',
-          fields: [
-            { key: 'gt', label: 'Greater Than', type: 'number' },
-            { key: 'gte', label: 'Greater Than or Equal', type: 'number' },
-            { key: 'lt', label: 'Less Than', type: 'number' },
-            { key: 'lte', label: 'Less Than or Equal', type: 'number' },
-          ],
-        },
       ]
     case 'modality':
       return [{ key: 'description', label: 'Description', type: 'string' }]
@@ -222,7 +183,6 @@ function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
                     'assistant_tool_call',
                     'assistant_tool_cycle',
                     'active_tool_loop',
-                    'image_content', // validator_conversation.go:16 -- #3001
                     'flow_tool_state',
                   ],
                   required: true,
@@ -246,31 +206,8 @@ function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
           label: 'Predicate',
           type: 'object',
           description: 'Optional numeric comparison for count features.',
-          fields: [
-            { key: 'gt', label: 'Greater Than', type: 'number' },
-            { key: 'gte', label: 'Greater Than or Equal', type: 'number' },
-            { key: 'lt', label: 'Less Than', type: 'number' },
-            { key: 'lte', label: 'Less Than or Equal', type: 'number' },
-          ],
+          fields: NUMERIC_PREDICATE_FIELDS,
         },
-      ]
-    case 'event':
-      return [
-        { key: 'description', label: 'Description', type: 'string' },
-        {
-          key: 'event_types',
-          label: 'Event Types',
-          type: 'string[]',
-          placeholder: 'payment_failed',
-        },
-        { key: 'severities', label: 'Severities', type: 'string[]', placeholder: 'critical' },
-        {
-          key: 'action_codes',
-          label: 'Action Codes',
-          type: 'string[]',
-          placeholder: 'TXN_DECLINE',
-        },
-        { key: 'temporal', label: 'Temporal', type: 'boolean' },
       ]
     default:
       return [{ key: 'description', label: 'Description', type: 'string' }]

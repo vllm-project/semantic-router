@@ -51,7 +51,6 @@ translation:
 - `preference`
 - `language`
 - `context`
-- `structure`
 - `complexity`
 - `modality`
 - `authz`
@@ -64,7 +63,6 @@ translation:
 - `pii`
 - `kb`
 - `conversation`
-- `event`
 - `kb_metric`
 - `projection`
 
@@ -111,12 +109,12 @@ routing:
       - name: workload_pressure
         method: weighted_sum
         inputs:
-          - type: structure
+          - type: keyword
             name: many_questions
             weight: 0.2
             value_source: raw
-          - type: structure
-            name: nested_depth
+          - type: conversation
+            name: tool_heavy
             weight: 0.4
             value_source: raw
 ```

@@ -60,7 +60,7 @@ decisions:
       - type: image_fixture
         fixture: routing_pixel
     expected_signals:
-      conversation:
+      input_modality:
       - has_image
     tags:
     - language:en

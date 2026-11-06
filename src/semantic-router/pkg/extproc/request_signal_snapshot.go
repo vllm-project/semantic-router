@@ -21,7 +21,6 @@ type requestSignalSnapshot struct {
 	LastUserHasText   bool
 	FirstImageURL     string
 	FirstAudio        string
-	ImageContentCount int
 	// Turns are the user and assistant messages with text, in order; the
 	// last user one is the current turn (PriorTurns). UserImages and
 	// UserVideos are the inline media parts of the last user message.

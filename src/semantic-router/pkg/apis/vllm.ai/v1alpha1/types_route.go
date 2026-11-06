@@ -53,11 +53,6 @@ type Signals struct {
 	// +optional
 	ContextRules []ContextRule `json:"contextRules,omitempty" yaml:"context_rules,omitempty"`
 
-	// Structure defines request-shape routing signals.
-	// +optional
-	// +kubebuilder:validation:MaxItems=100
-	Structure []StructureSignal `json:"structure,omitempty" yaml:"structure,omitempty"`
-
 	// FactCheckRules match a request whose answer needs fact checking.
 	// +optional
 	FactCheckRules []FactCheckRule `json:"factCheckRules,omitempty" yaml:"fact_check_rules,omitempty"`
@@ -66,11 +61,6 @@ type Signals struct {
 	// +optional
 	// +kubebuilder:validation:MaxItems=100
 	Conversation []ConversationSignal `json:"conversation,omitempty" yaml:"conversation,omitempty"`
-
-	// Events defines structured event metadata routing signals.
-	// +optional
-	// +kubebuilder:validation:MaxItems=100
-	Events []EventSignal `json:"events,omitempty" yaml:"events,omitempty"`
 }
 
 // FactCheckRule defines a rule for fact-check signal classification
@@ -115,26 +105,6 @@ type ContextRule struct {
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 }
 
-type StructureSignal struct {
-	Name        string            `json:"name" yaml:"name"`
-	Description string            `json:"description,omitempty" yaml:"description,omitempty"`
-	Feature     StructureFeature  `json:"feature" yaml:"feature"`
-	Predicate   *NumericPredicate `json:"predicate,omitempty" yaml:"predicate,omitempty"`
-}
-
-type StructureFeature struct {
-	Type   string          `json:"type" yaml:"type"`
-	Source StructureSource `json:"source" yaml:"source"`
-}
-
-type StructureSource struct {
-	Type          string     `json:"type" yaml:"type"`
-	Pattern       string     `json:"pattern,omitempty" yaml:"pattern,omitempty"`
-	Keywords      []string   `json:"keywords,omitempty" yaml:"keywords,omitempty"`
-	CaseSensitive bool       `json:"caseSensitive,omitempty" yaml:"case_sensitive,omitempty"`
-	Sequences     [][]string `json:"sequences,omitempty" yaml:"sequences,omitempty"`
-}
-
 // ConversationSignal defines a conversation-shape routing signal.
 // It detects multi-turn history, developer instructions, tool presence, and
 // assistant-tool interaction patterns in the request.
@@ -155,18 +125,6 @@ type ConversationCRDFeature struct {
 type ConversationCRDSource struct {
 	Type string `json:"type" yaml:"type"`
 	Role string `json:"role,omitempty" yaml:"role,omitempty"`
-}
-
-// EventSignal defines a structured event metadata routing signal.
-// It detects event types, severities, action codes, and temporal urgency
-// from incident, audit, alert, or workflow payloads in the request.
-type EventSignal struct {
-	Name        string   `json:"name" yaml:"name"`
-	Description string   `json:"description,omitempty" yaml:"description,omitempty"`
-	EventTypes  []string `json:"eventTypes,omitempty" yaml:"event_types,omitempty"`
-	Severities  []string `json:"severities,omitempty" yaml:"severities,omitempty"`
-	ActionCodes []string `json:"actionCodes,omitempty" yaml:"action_codes,omitempty"`
-	Temporal    bool     `json:"temporal,omitempty" yaml:"temporal,omitempty"`
 }
 
 type NumericPredicate struct {
@@ -198,6 +156,11 @@ type KeywordSignal struct {
 	// +kubebuilder:validation:MaxLength=100
 	Name string `json:"name" yaml:"name"`
 
+	// Description provides a human-readable explanation of the rule
+	// +optional
+	// +kubebuilder:validation:MaxLength=500
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+
 	// Operator defines the logical operator for keywords (AND/OR)
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=AND;OR
@@ -209,10 +172,25 @@ type KeywordSignal struct {
 	// +kubebuilder:validation:MaxItems=100
 	Keywords []string `json:"keywords" yaml:"keywords"`
 
+	// Method regex matches each keyword as a regular expression; by default
+	// a keyword matches literally, as a word of its own
+	// +optional
+	// +kubebuilder:validation:Enum=regex
+	Method string `json:"method,omitempty" yaml:"method,omitempty"`
+
 	// CaseSensitive specifies whether keyword matching is case-sensitive
 	// +optional
 	// +kubebuilder:default=false
 	CaseSensitive bool `json:"caseSensitive" yaml:"caseSensitive"`
+
+	// Count makes an OR rule match on the number of its keyword occurrences
+	// +optional
+	Count *NumericPredicate `json:"count,omitempty" yaml:"count,omitempty"`
+
+	// Density makes an OR rule match on its keyword occurrences per 1,000
+	// characters; set Count or Density, not both
+	// +optional
+	Density *NumericPredicate `json:"density,omitempty" yaml:"density,omitempty"`
 }
 
 // Decision defines a routing decision based on rule combinations
@@ -375,9 +353,9 @@ type SignalCombination struct {
 
 // SignalCondition defines a single signal condition
 type SignalCondition struct {
-	// Type defines the type of signal (keyword/domain/fact_check/context/structure/conversation/event)
+	// Type defines the type of signal (keyword/domain/fact_check/context/conversation)
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=keyword;domain;fact_check;context;structure;conversation;event
+	// +kubebuilder:validation:Enum=keyword;domain;fact_check;context;conversation
 	Type string `json:"type" yaml:"type"`
 
 	// Name is the name of the signal to reference

@@ -286,11 +286,10 @@ func TestBuildEvalResponse_ProjectionSignalsIncludedInUsedMatchedAndUnmatched(t 
 func TestBuildEvalResponse_IncludesSignalValues(t *testing.T) {
 	service := &ClassificationService{}
 	signals := &classification.SignalResults{
-		MatchedStructureRules: []string{"many_questions"},
-		Metrics:               &classification.SignalMetricsCollection{},
-		SignalConfidences:     map[string]float64{"structure:many_questions": 1},
-		SignalValues:          map[string]float64{"structure:many_questions": 4},
-		SignalErrors:          map[string]string{"classifier:risk": "timeout"},
+		MatchedKeywordRules: []string{"many_questions"},
+		Metrics:             &classification.SignalMetricsCollection{},
+		SignalValues:        map[string]float64{"keyword:many_questions": 4},
+		SignalErrors:        map[string]string{"classifier:risk": "timeout"},
 	}
 
 	response := service.buildEvalResponse(
@@ -301,7 +300,7 @@ func TestBuildEvalResponse_IncludesSignalValues(t *testing.T) {
 	)
 	require.NotNil(t, response)
 	require.NotNil(t, response.SignalValues)
-	assert.Equal(t, 4.0, response.SignalValues["structure:many_questions"])
+	assert.Equal(t, 4.0, response.SignalValues["keyword:many_questions"])
 	assert.Equal(t, "timeout", response.SignalErrors["classifier:risk"])
 }
 

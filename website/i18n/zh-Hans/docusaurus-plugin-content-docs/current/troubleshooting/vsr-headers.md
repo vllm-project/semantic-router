@@ -71,7 +71,7 @@ global:
 
 ## 匹配信号头
 
-匹配信号头包含逗号分隔的规则名。它们需要 `x-vsr-debug`，且在该信号族未匹配时省略。由决策模型回答的规则（应用信号或 `systemone` 规则）在匹配时以规则名列出；没有 labels 的 choice 规则由条件按 label 引用，列为 `<rule>:<option>`，即其答案选中的选项，例如 `task_difficulty:hard`。未使其规则匹配的选项从不列出。`x-vsr-matched-projections` 列出匹配该请求的投影映射输出。
+匹配信号头包含逗号分隔的规则名。它们需要 `x-vsr-debug`，且在该信号族未匹配时省略。`x-vsr-matched-projections` 列出匹配该请求的投影映射输出。
 
 投影分数和完整投影追踪保存在路由回放记录中，而不是展开到响应头。用 `x-vsr-replay-id` 在控制面板或经身份验证的 Router 管理 API 中检查这些细节；公开推理监听器不提供回放记录。
 
@@ -212,14 +212,12 @@ x-vsr-replay-id: replay_01J...
 | `x-vsr-looper-models-used` | response | debug | none | looper | v0.2 | Models the Looper called, comma-separated. |
 | `x-vsr-looper-prompt-tokens` | response | debug | none | looper | v0.4 | Prompt tokens across the Looper's calls. |
 | `x-vsr-looper-total-tokens` | response | debug | none | looper | v0.4 | Total tokens across the Looper's calls. |
-| `x-vsr-matched-action` | response | debug | none | signals | v0.5 | Matched `action` rule. |
 | `x-vsr-matched-authz` | response | debug | none | signals | v0.2 | Matched `authz` rules. |
 | `x-vsr-matched-complexity` | response | debug | none | signals | v0.2 | Matched `complexity` rules, and `rule:option` for a rule without labels, such as `task_difficulty:hard`. |
 | `x-vsr-matched-context` | response | debug | none | signals | v0.2 | Matched `context` rules. |
 | `x-vsr-matched-conversation` | response | debug | none | signals | v0.3 | Matched `conversation` rules. |
 | `x-vsr-matched-decision-model` | response | debug | none | signals | v0.5 | Matched `systemone` rules, and `rule:option` for a choice rule without labels. |
 | `x-vsr-matched-domains` | response | debug | none | signals | v0.1 | Matched `domain` rules. |
-| `x-vsr-matched-event` | response | debug | none | signals | v0.3 | Matched `event` rules. |
 | `x-vsr-matched-fact-check` | response | debug | none | signals | v0.1 | Matched `fact_check` rules. |
 | `x-vsr-matched-hallucination` | response | debug | none | signals | v0.4 | Matched `hallucination` rules, once the answer is checked. |
 | `x-vsr-matched-input-modality` | response | debug | none | signals | v0.4 | Matched `input_modality` rules. |
@@ -230,7 +228,6 @@ x-vsr-replay-id: replay_01J...
 | `x-vsr-matched-pii` | response | debug | none | signals | v0.2 | Matched `pii` rules. |
 | `x-vsr-matched-projections` | response | debug | none | signals | v0.3 | Matched projection outputs. |
 | `x-vsr-matched-safety` | response | debug | none | signals | v0.4 | Matched content `safety` rules. |
-| `x-vsr-matched-structure` | response | debug | none | signals | v0.3 | Matched `structure` rules. |
 | `x-vsr-matched-turn-relation` | response | debug | none | signals | v0.5 | Matched `turn_relation` rules, and `rule:option` for a rule without labels. |
 | `x-vsr-matched-user-feedback` | response | debug | none | signals | v0.1 | Matched `user_feedback` rules, and `rule:option` for a rule without labels. |
 | `x-vsr-prompt-cache-action` | response | debug | none | prompt_cache | v0.4 | Outcome of the `prompt_cache` plugin: `inserted`, `preserved`, `skipped` or `rejected`. |

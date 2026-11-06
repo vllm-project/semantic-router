@@ -32,14 +32,14 @@ describe('DSL string literals written by Builder mutations', () => {
 
   it('keeps an unchanged signal save parseable', () => {
     const source = [
-      'SIGNAL structure numbered_steps {',
+      'SIGNAL keyword numbered_steps {',
       String.raw`  description: "Prompts with numbered list items such as \"1. ...\""`,
       '}',
       '',
     ].join('\n')
 
     expect(
-      updateSignal(source, 'structure', 'numbered_steps', {
+      updateSignal(source, 'keyword', 'numbered_steps', {
         description: 'Prompts with numbered list items such as "1. ..."',
       }),
     ).toBe(source)

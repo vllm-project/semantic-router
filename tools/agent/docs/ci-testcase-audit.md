@@ -237,10 +237,9 @@ when sharing execution setup.
 | [session-telemetry-metrics](../../../e2e/testcases/session_telemetry_e2e.go) | Only HTTP success and metric-name presence. Treat as exporter smoke; it does not prove a request-specific counter increment. |
 | [session-pricing-chat-completions](../../../e2e/testcases/session_pricing_e2e.go) | Token/cost metric names exist, without exact amount or request attribution. Retain as smoke; consider consolidating with telemetry. |
 | [session-pricing-response-api](../../../e2e/testcases/session_pricing_e2e.go) | The Responses entrypoint succeeds and exposes token/cost metric names. It does not establish price calculation correctness. |
-| [event-routing](../../../e2e/testcases/event_routing.go) | Shared helper checks every positive/negative decision and matched event rule. Keep. |
+| [event-routing](../../../e2e/testcases/event_routing.go) | Shared helper checks every positive/negative decision and matched keyword rule for event payloads. Keep. |
 | [language-routing](../../../e2e/testcases/language_routing.go) | Every decision and language-rule expectation must pass. Keep. |
 | [reask-routing](../../../e2e/testcases/reask_routing.go) | Every decision and reask-rule expectation must pass. Keep. |
-| [action-routing](../../../e2e/testcases/action_routing.go) | Every decision and action-rule expectation must pass. Keep. |
 | [context-safety-overlap](../../../e2e/testcases/context_safety_overlap.go) | Safety wins when a long-context signal overlaps jailbreak/PII conditions. Keep the precedence boundary. |
 
 ### Dashboard

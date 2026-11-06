@@ -196,12 +196,10 @@ zh-Hans	tutorials/projection/traces.md
 zh-Hans	tutorials/signal/heuristic/authz.md
 zh-Hans	tutorials/signal/heuristic/context.md
 zh-Hans	tutorials/signal/heuristic/conversation.md
-zh-Hans	tutorials/signal/heuristic/event.md
 zh-Hans	tutorials/signal/heuristic/input-modality.md
 zh-Hans	tutorials/signal/heuristic/keyword.md
 zh-Hans	tutorials/signal/heuristic/language.md
 zh-Hans	tutorials/signal/heuristic/metadata.md
-zh-Hans	tutorials/signal/heuristic/structure.md
 zh-Hans	tutorials/signal/learned/complexity.md
 zh-Hans	tutorials/signal/learned/domain.md
 zh-Hans	tutorials/signal/learned/fact-check.md

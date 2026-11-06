@@ -28,27 +28,6 @@ func (b *classifierOptionBuilder) buildContextClassifierOption() (option, error)
 	return withCalibratedContextClassifier(NewContextClassifier(tokenCounter, b.cfg.ContextRules), tokenCounter), nil
 }
 
-func (b *classifierOptionBuilder) buildStructureClassifierOption() (option, error) {
-	if len(b.cfg.StructureRules) == 0 {
-		return nil, nil
-	}
-	structureClassifier, err := NewStructureClassifier(b.cfg.StructureRules)
-	if err != nil {
-		logging.ComponentErrorEvent("classifier", "structure_classifier_create_failed", map[string]interface{}{
-			"error": err.Error(),
-		})
-		return nil, err
-	}
-	return withStructureClassifier(structureClassifier), nil
-}
-
-func (b *classifierOptionBuilder) buildEventClassifierOption() (option, error) {
-	if len(b.cfg.EventRules) == 0 {
-		return nil, nil
-	}
-	return withEventClassifier(NewEventClassifier(b.cfg.EventRules)), nil
-}
-
 func (b *classifierOptionBuilder) buildAuthzClassifierOption() (option, error) {
 	roleBindings := b.cfg.GetRoleBindings()
 	if len(roleBindings) == 0 {

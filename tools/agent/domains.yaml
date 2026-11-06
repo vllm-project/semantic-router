@@ -990,8 +990,8 @@ profiles:
       - e2e/testcases/signal_routing_helpers.go
       - e2e/profiles/structure-routing/**
       - e2e/testcases/structure_routing.go
-      - src/semantic-router/pkg/classification/structure_classifier.go
-      - src/semantic-router/pkg/classification/classifier_signal_structure.go
+      - src/semantic-router/pkg/classification/keyword_classifier*.go
+      - src/semantic-router/pkg/classification/keyword_text.go
   conversation-routing:
     display_name: Conversation Routing
     owner: e2e

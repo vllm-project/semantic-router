@@ -324,26 +324,28 @@ func TestConvertRoutingModelCardsUsesCatalogIdentity(t *testing.T) {
 	assert.Equal(t, "private-model", cards[1].Name)
 }
 
-func TestCRDConverterConvertsEventSignals(t *testing.T) {
+func TestCRDConverterConvertsKeywordCounts(t *testing.T) {
 	pool := testPoolWithModels(v1alpha1.ModelConfig{Name: "test-model"})
+	four, sixteen := 4.0, 16.0
 	route := &v1alpha1.IntelligentRoute{
 		Spec: v1alpha1.IntelligentRouteSpec{
 			Signals: v1alpha1.Signals{
-				Events: []v1alpha1.EventSignal{
+				Keywords: []v1alpha1.KeywordSignal{
 					{
-						Name:        "critical_payment_event",
-						Description: "Critical payment incident payload.",
-						EventTypes:  []string{"payment_failed"},
-						Severities:  []string{"critical"},
-						ActionCodes: []string{"TXN_DECLINE"},
-						Temporal:    true,
+						Name:        "many_questions",
+						Description: "Prompts that contain many explicit questions.",
+						Operator:    "OR",
+						Method:      "regex",
+						Keywords:    []string{`[?？]`},
+						Count:       &v1alpha1.NumericPredicate{GTE: &four},
 					},
+					{Name: "constraint_dense", Operator: "OR", Keywords: []string{"at most"}, Density: &v1alpha1.NumericPredicate{GT: &sixteen}},
 				},
 			},
 			Decisions: []v1alpha1.Decision{
 				testDecision(
 					[]v1alpha1.ModelRef{{Model: "test-model"}},
-					v1alpha1.SignalCondition{Type: "event", Name: "critical_payment_event"},
+					v1alpha1.SignalCondition{Type: "keyword", Name: "many_questions"},
 				),
 			},
 		},
@@ -354,15 +356,14 @@ func TestCRDConverterConvertsEventSignals(t *testing.T) {
 
 	outputConfig, err := NewCRDConverter().Convert(pool, route, &config.CanonicalConfig{})
 	require.NoError(t, err)
-	require.Len(t, outputConfig.Routing.Signals.EventRules, 1)
+	require.Len(t, outputConfig.Routing.Signals.Keywords, 2)
 
-	eventRule := outputConfig.Routing.Signals.EventRules[0]
-	assert.Equal(t, "critical_payment_event", eventRule.Name)
-	assert.Equal(t, "Critical payment incident payload.", eventRule.Description)
-	assert.Equal(t, []string{"payment_failed"}, eventRule.EventTypes)
-	assert.Equal(t, []string{"critical"}, eventRule.Severities)
-	assert.Equal(t, []string{"TXN_DECLINE"}, eventRule.ActionCodes)
-	assert.True(t, eventRule.Temporal)
+	counted, dense := outputConfig.Routing.Signals.Keywords[0], outputConfig.Routing.Signals.Keywords[1]
+	assert.Equal(t, "Prompts that contain many explicit questions.", counted.Description)
+	assert.Equal(t, "regex", counted.Method)
+	assert.Equal(t, config.NumericPredicate{GTE: &four}, *counted.Count)
+	assert.Nil(t, counted.Density)
+	assert.Equal(t, config.NumericPredicate{GT: &sixteen}, *dense.Density)
 }
 
 // TestCRDValidationErrors tests that validation catches various error conditions
@@ -411,22 +412,25 @@ func coreCRDValidationErrorCases() []crdValidationErrorCase {
 			wantError: "references unknown keyword signal: nonexistent",
 		},
 		{
-			name: "UnknownEventSignalReference",
+			name: "UnknownConversationSignalReference",
 			pool: testPoolWithModels(v1alpha1.ModelConfig{Name: "test-model"}),
 			route: &v1alpha1.IntelligentRoute{
 				Spec: v1alpha1.IntelligentRouteSpec{
 					Signals: v1alpha1.Signals{
-						Events: []v1alpha1.EventSignal{{Name: "critical_event"}},
+						Conversation: []v1alpha1.ConversationSignal{{
+							Name:    "has_tools",
+							Feature: v1alpha1.ConversationCRDFeature{Type: "exists", Source: v1alpha1.ConversationCRDSource{Type: "tool_definition"}},
+						}},
 					},
 					Decisions: []v1alpha1.Decision{
 						testDecision(
 							[]v1alpha1.ModelRef{{Model: "test-model"}},
-							v1alpha1.SignalCondition{Type: "event", Name: "missing_event"},
+							v1alpha1.SignalCondition{Type: "conversation", Name: "missing_conversation"},
 						),
 					},
 				},
 			},
-			wantError: "references unknown event signal: missing_event",
+			wantError: "references unknown conversation signal: missing_conversation",
 		},
 		{
 			name: "UnknownModelReference",

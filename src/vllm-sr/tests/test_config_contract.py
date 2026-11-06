@@ -41,8 +41,8 @@ def test_quorum_failure_policy_literal_matches_allowed_values():
 def test_legacy_signal_inventory_covers_flat_authz_and_context_blocks():
     assert LEGACY_SIGNAL_KEY_TO_CANONICAL["role_bindings"] == "role_bindings"
     assert LEGACY_SIGNAL_KEY_TO_CANONICAL["context_rules"] == "context"
-    assert LEGACY_SIGNAL_KEY_TO_CANONICAL["events"] == "events"
-    assert "session_metrics" not in LEGACY_SIGNAL_KEY_TO_CANONICAL
+    for removed in ("session_metrics", "structure_rules", "events"):
+        assert removed not in LEGACY_SIGNAL_KEY_TO_CANONICAL
 
 
 def test_build_signal_reference_index_names_complexity_rules_and_authz_roles():
@@ -55,11 +55,11 @@ def test_build_signal_reference_index_names_complexity_rules_and_authz_roles():
                 "subjects": [{"kind": "User", "name": "alice"}],
             }
         ],
-        events=[
+        keywords=[
             {
                 "name": "critical_event",
-                "event_types": ["payment_failed"],
-                "severities": ["critical"],
+                "operator": "OR",
+                "keywords": ["payment_failed", "critical"],
             }
         ],
     )
@@ -68,15 +68,7 @@ def test_build_signal_reference_index_names_complexity_rules_and_authz_roles():
 
     assert signal_names["complexity"] == {"difficulty"}
     assert signal_names["authz"] == {"admin"}
-    assert signal_names["event"] == {"critical_event"}
-
-
-def test_action_signals_accept_only_the_fixed_vocabulary():
-    signals = Signals(actions=[{"name": "fix"}, {"name": "explain"}])
-
-    assert build_signal_reference_index(signals)["action"] == {"fix", "explain"}
-    with pytest.raises(ValueError, match="actions"):
-        Signals(actions=[{"name": "review"}])
+    assert signal_names["keyword"] == {"critical_event"}
 
 
 def test_signal_reference_exists_is_scoped_by_family_and_exact_runtime_name():

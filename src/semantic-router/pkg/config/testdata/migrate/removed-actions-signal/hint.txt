@@ -1,0 +1,1 @@
+routing.signals.actions: removed_signal_type: the actions signal is removed; run `vllm-sr config migrate` (the systemone choice question action over generate, explain, fix, refactor, test, other)

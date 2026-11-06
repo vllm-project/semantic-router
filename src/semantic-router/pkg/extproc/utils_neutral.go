@@ -170,7 +170,6 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 	for _, content := range message.Content {
 		switch content.Kind {
 		case llmprotocol.ContentImage:
-			result.ImageContentCount++
 			if result.FirstImageURL == "" {
 				result.FirstImageURL = neutralInlineImageDataURL(content)
 			}

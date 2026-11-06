@@ -23,48 +23,44 @@ config:
     modelCards:
       - name: general-expert
     signals:
-      structure:
+      keywords:
         - name: many_questions
           description: Prompts that contain many explicit questions.
-          feature:
-            type: count
-            source:
-              type: regex
-              pattern: '[?？]'
-          predicate:
+          operator: OR
+          method: regex
+          keywords: ['[?？]']
+          count:
             gte: 4
         - name: numbered_steps
           description: Prompts that contain numbered list items such as "1. ..."
-          feature:
-            type: exists
-            source:
-              type: regex
-              pattern: '(?m)^\s*\d+\.\s+'
+          operator: OR
+          method: regex
+          keywords: ['(?m)^\s*\d+\.\s+']
     decisions:
       - name: many_questions_routing
-        description: Route requests whose structure signal matches many_questions.
+        description: Route requests with four or more explicit questions.
         priority: 100
         rules:
           operator: AND
           conditions:
-            - type: structure
+            - type: keyword
               name: many_questions
         modelRefs:
           - model: general-expert
             use_reasoning: false
       - name: numbered_steps_routing
-        description: Route requests whose structure signal matches numbered_steps.
+        description: Route requests that contain numbered steps.
         priority: 90
         rules:
           operator: AND
           conditions:
-            - type: structure
+            - type: keyword
               name: numbered_steps
         modelRefs:
           - model: general-expert
             use_reasoning: false
       - name: default-route
-        description: Fallback route for requests matching no structure rule.
+        description: Fallback route for requests matching no request-shape rule.
         priority: 10
         rules:
           operator: AND

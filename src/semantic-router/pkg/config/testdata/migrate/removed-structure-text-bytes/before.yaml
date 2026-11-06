@@ -1,0 +1,22 @@
+# A structure rule on text_bytes has no keywords form: migrate stops at it and
+# says what to write instead.
+version: v0.3
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+routing:
+  signals:
+    structure:
+      - name: long_current_turn
+        description: Current user turn is at least four thousand UTF-8 bytes.
+        feature:
+          type: count
+          source: {type: text_bytes}
+        predicate: {gte: 4000}
+  decisions:
+    - name: long
+      priority: 100
+      rules: {type: structure, name: long_current_turn}
+      modelRefs: [{model: general}]

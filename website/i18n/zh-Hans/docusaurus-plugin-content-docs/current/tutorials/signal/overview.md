@@ -89,12 +89,10 @@ routing:
 | [Authz](./heuristic/authz) | 按可信身份、角色或租户策略路由 |
 | [Conversation](./heuristic/conversation) | 检测多轮、工具密集或智能体式请求结构 |
 | [Context](./heuristic/context) | 按有效上下文窗口需求路由 |
-| [Event](./heuristic/event) | 按类型、严重级别、动作码或紧急程度检测结构化事件 |
 | [Input Modality](./heuristic/input-modality) | 检测存在哪些输入模态（文本、图像、音频、视频） |
-| [Keyword](./heuristic/keyword) | 匹配显式词、短语、BM25 词项或 n-gram |
+| [Keyword](./heuristic/keyword) | 匹配显式词、短语、BM25 词项或 n-gram，或统计它们出现的次数 |
 | [Language](./heuristic/language) | 按检测到的请求语言路由 |
 | [Metadata](./heuristic/metadata) | 使用有界、调用方提供的应用提示 |
-| [Structure](./heuristic/structure) | 检测提示中的计数、密度与有序标记 |
 
 ### 学习型信号 {#learned-signals}
 

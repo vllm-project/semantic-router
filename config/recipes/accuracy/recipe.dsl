@@ -8,9 +8,9 @@ SIGNAL context accuracy_long_context {
   max_tokens: "1M"
 }
 
-SIGNAL conversation accuracy_has_images {
+SIGNAL input_modality accuracy_has_images {
   description: "Request contains at least one image content part."
-  feature: { source: { type: "image_content" }, type: "exists" }
+  modality: "image"
 }
 
 SIGNAL systemone accuracy_mode {
@@ -71,7 +71,7 @@ MODEL qwen-coordinator {
 
 ROUTE omni (description = "Understand image-bearing requests with the dedicated visual-language model.") {
   PRIORITY 200
-  WHEN conversation("accuracy_has_images")
+  WHEN input_modality("accuracy_has_images")
   MODEL "local/omni" (reasoning = false)
   ALGORITHM static
 }

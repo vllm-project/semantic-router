@@ -52,12 +52,6 @@ recipes:
         - 只要答案
         - 直接给答案
       conversation:
-      - name: has_image
-        description: The request carries at least one image.
-        feature:
-          type: exists
-          source:
-            type: image_content
       - name: has_tools
         description: The request declares at least one tool.
         feature:
@@ -90,6 +84,10 @@ recipes:
           type: exists
           source:
             type: tool_choice_required
+      input_modality:
+      - name: has_image
+        description: The request carries at least one image.
+        modality: image
       context:
       - name: long_input
         min_tokens: 200K
@@ -262,7 +260,7 @@ recipes:
       rules:
         operator: AND
         conditions:
-        - type: conversation
+        - type: input_modality
           name: has_image
       algorithm:
         type: static

@@ -231,6 +231,17 @@ const config: Config = {
             to: '/docs/next/tutorials/signal/learned/systemone',
           },
           {
+            from: [
+              '/docs/next/tutorials/signal/heuristic/event',
+              '/docs/next/tutorials/signal/heuristic/structure',
+            ],
+            to: '/docs/next/tutorials/signal/heuristic/keyword',
+          },
+          {
+            from: '/docs/next/tutorials/signal/heuristic/action',
+            to: '/docs/next/tutorials/signal/learned/systemone',
+          },
+          {
             from: '/docs/next/tutorials/algorithm/selection/decision',
             to: '/docs/next/tutorials/algorithm/selection/systemone',
           },

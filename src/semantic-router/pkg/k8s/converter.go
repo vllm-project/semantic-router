@@ -170,18 +170,20 @@ func convertSignals(signals v1alpha1.Signals) config.CanonicalSignals {
 		Keywords:     make([]config.KeywordRule, 0, len(signals.Keywords)),
 		Domains:      make([]config.Category, 0, len(signals.Domains)),
 		Context:      make([]config.ContextRule, 0, len(signals.ContextRules)),
-		Structure:    make([]config.StructureRule, 0, len(signals.Structure)),
 		FactCheck:    make([]config.FactCheckRule, 0, len(signals.FactCheckRules)),
 		Conversation: make([]config.ConversationRule, 0, len(signals.Conversation)),
-		EventRules:   make([]config.EventRule, 0, len(signals.Events)),
 	}
 
 	for _, signal := range signals.Keywords {
 		converted.Keywords = append(converted.Keywords, config.KeywordRule{
 			Name:          signal.Name,
+			Description:   signal.Description,
 			Operator:      signal.Operator,
 			Keywords:      signal.Keywords,
+			Method:        signal.Method,
 			CaseSensitive: signal.CaseSensitive,
+			Count:         convertNumericPredicate(signal.Count),
+			Density:       convertNumericPredicate(signal.Density),
 		})
 	}
 
@@ -195,24 +197,6 @@ func convertSignals(signals v1alpha1.Signals) config.CanonicalSignals {
 			MinTokens:   config.TokenCount(rule.MinTokens),
 			MaxTokens:   config.TokenCount(rule.MaxTokens),
 			Description: rule.Description,
-		})
-	}
-
-	for _, rule := range signals.Structure {
-		converted.Structure = append(converted.Structure, config.StructureRule{
-			Name:        rule.Name,
-			Description: rule.Description,
-			Feature: config.StructureFeature{
-				Type: rule.Feature.Type,
-				Source: config.StructureSource{
-					Type:          rule.Feature.Source.Type,
-					Pattern:       rule.Feature.Source.Pattern,
-					Keywords:      append([]string(nil), rule.Feature.Source.Keywords...),
-					CaseSensitive: rule.Feature.Source.CaseSensitive,
-					Sequences:     append([][]string(nil), rule.Feature.Source.Sequences...),
-				},
-			},
-			Predicate: convertNumericPredicate(rule.Predicate),
 		})
 	}
 
@@ -238,23 +222,6 @@ func convertSignals(signals v1alpha1.Signals) config.CanonicalSignals {
 		})
 	}
 
-	converted.EventRules = convertEventSignals(signals.Events)
-
-	return converted
-}
-
-func convertEventSignals(rules []v1alpha1.EventSignal) []config.EventRule {
-	converted := make([]config.EventRule, 0, len(rules))
-	for _, rule := range rules {
-		converted = append(converted, config.EventRule{
-			Name:        rule.Name,
-			Description: rule.Description,
-			EventTypes:  append([]string(nil), rule.EventTypes...),
-			Severities:  append([]string(nil), rule.Severities...),
-			ActionCodes: append([]string(nil), rule.ActionCodes...),
-			Temporal:    rule.Temporal,
-		})
-	}
 	return converted
 }
 

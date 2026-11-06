@@ -80,6 +80,43 @@ current message asks for, such as reasoning or architecture markers;
 otherwise a phrase from an earlier turn keeps triggering the rule on every
 later request.
 
+### Counting matches
+
+Set `count` or `density` on an `OR` rule to match on how often its keywords
+occur instead of whether one occurs. `count` compares the number of matches;
+`density` compares matches per 1,000 characters of the text the rule reads.
+Both take the predicate fields `gt`, `gte`, `lt`, and `lte`:
+
+```yaml
+routing:
+  signals:
+    keywords:
+      - name: many_questions
+        description: Prompts that ask four or more explicit questions.
+        operator: OR
+        keywords: ["?", "？"]
+        count: { gte: 4 }
+      - name: numbered_steps
+        operator: OR
+        method: regex
+        keywords: ['(?m)^\s*\d+[.)]\s+']
+        count: { gte: 2 }
+      - name: constraint_dense
+        operator: OR
+        keywords: ["must", "must not", "at least", "at most", "exactly"]
+        density: { gt: 16 }
+```
+
+A literal keyword counts each occurrence that stands as a word of its own;
+CJK keywords, and keywords with no letters or digits such as `?`, count every
+occurrence. With `method: regex`, each pattern counts its non-overlapping
+matches. BM25, n-gram, and fuzzy matching score similarity rather than locate
+occurrences, so a rule that counts uses literal keywords or `method: regex`.
+
+The rule publishes the number as its value whether or not its predicate holds:
+a decision condition can apply its own `predicate` to `keyword:<rule>`, and a
+projection input can read it with `value_source: raw`.
+
 ## Dependencies and Limitations
 
 Keyword rules require no model, but they are sensitive to wording and can be

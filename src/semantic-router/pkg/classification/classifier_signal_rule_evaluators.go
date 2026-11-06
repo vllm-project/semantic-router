@@ -14,14 +14,15 @@ func (c *Classifier) evaluateKeywordSignal(results *SignalResults, mu *sync.Mute
 }
 
 // evaluateKeywordSignalWithHistory evaluates keyword rules; rules that opted
-// into include_history also see the prior user messages.
+// into include_history also see the prior user messages. A counting rule
+// publishes its count or density as its value, matched or not.
 func (c *Classifier) evaluateKeywordSignalWithHistory(results *SignalResults, mu *sync.Mutex, text string, priorUserMessages []string) {
 	start := time.Now()
 	historyText := ""
 	if len(priorUserMessages) > 0 && c.keywordClassifier.HasHistoryRules() {
 		historyText = keywordHistoryText(text, priorUserMessages)
 	}
-	matches, err := c.keywordClassifier.MatchAllWithHistory(text, historyText)
+	matches, values, err := c.keywordClassifier.MatchAllWithHistory(text, historyText)
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()
 
@@ -49,6 +50,9 @@ func (c *Classifier) evaluateKeywordSignalWithHistory(results *SignalResults, mu
 
 	mu.Lock()
 	defer mu.Unlock()
+	for name, value := range values {
+		results.SignalValues[signalConfidenceKey(config.SignalTypeKeyword, name)] = value
+	}
 	seenKeywords := make(map[string]struct{}, len(results.MatchedKeywords))
 	for _, keyword := range results.MatchedKeywords {
 		seenKeywords[keyword] = struct{}{}

@@ -367,13 +367,16 @@ func TestTopologyTestQueryHandler_ProjectionAndExtendedSignals(t *testing.T) {
 		DecisionResult: &RouterEvalDecisionResult{
 			DecisionName: "reasoning_decision",
 			MatchedSignals: &RouterMatchedSignals{
-				Modality:   []string{"AR"},
-				Authz:      []string{"premium_tier"},
-				Jailbreak:  []string{"jailbreak:block"},
-				PII:        []string{"pii:email"},
-				KB:         []string{"privacy_policy"},
-				Event:      []string{"critical_payment_event"},
-				Projection: []string{"balance_reasoning"},
+				Modality:      []string{"AR"},
+				Authz:         []string{"premium_tier"},
+				Jailbreak:     []string{"jailbreak:block"},
+				PII:           []string{"pii:email"},
+				TurnRelation:  []string{"follow_up"},
+				Safety:        []string{"unsafe_request"},
+				Metadata:      []string{"gold_tenant"},
+				InputModality: []string{"image_input"},
+				SystemOne:     []string{"task"},
+				Projection:    []string{"balance_reasoning"},
 			},
 		},
 	})
@@ -401,16 +404,19 @@ func TestTopologyTestQueryHandler_ProjectionAndExtendedSignals(t *testing.T) {
 	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "authz", Name: "premium_tier", ConfidenceAvailable: &confidenceUnavailable, Reason: "Authorization signal matched"})
 	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "jailbreak", Name: "jailbreak:block", ConfidenceAvailable: &confidenceUnavailable, Reason: "Jailbreak signal matched"})
 	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "pii", Name: "pii:email", ConfidenceAvailable: &confidenceUnavailable, Reason: "PII signal matched"})
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "kb", Name: "privacy_policy", ConfidenceAvailable: &confidenceUnavailable, Reason: "Knowledge base signal matched"})
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "event", Name: "critical_payment_event", ConfidenceAvailable: &confidenceUnavailable, Reason: "Event signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "turn_relation", Name: "follow_up", ConfidenceAvailable: &confidenceUnavailable, Reason: "Turn relation matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "safety", Name: "unsafe_request", ConfidenceAvailable: &confidenceUnavailable, Reason: "Safety signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "metadata", Name: "gold_tenant", ConfidenceAvailable: &confidenceUnavailable, Reason: "Metadata signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "input_modality", Name: "image_input", ConfidenceAvailable: &confidenceUnavailable, Reason: "Input modality matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "systemone", Name: "task", ConfidenceAvailable: &confidenceUnavailable, Reason: "System One question matched"})
+	assert.Contains(t, result.HighlightedPath, "signal-group-safety")
+	assert.Contains(t, result.HighlightedPath, "signal-safety-unsafe_request")
 	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "projection", Name: "balance_reasoning", ConfidenceAvailable: &confidenceUnavailable, Reason: "Projection mapping matched"})
-	assert.Contains(t, result.HighlightedPath, "signal-group-kb")
-	assert.Contains(t, result.HighlightedPath, "signal-kb-privacy_policy")
 	assert.Contains(t, result.HighlightedPath, "signal-group-projection")
 	assert.Contains(t, result.HighlightedPath, "signal-projection-balance_reasoning")
 }
 
-func TestTopologyTestQueryHandler_StructureSignalIncludesComputedValue(t *testing.T) {
+func TestTopologyTestQueryHandler_KeywordCountIncludesComputedValue(t *testing.T) {
 	configPath := setupTestConfig(t)
 	defer func() { _ = os.RemoveAll(filepath.Dir(configPath)) }()
 
@@ -420,11 +426,10 @@ func TestTopologyTestQueryHandler_StructureSignalIncludesComputedValue(t *testin
 		DecisionResult: &RouterEvalDecisionResult{
 			DecisionName: "reasoning_decision",
 			MatchedSignals: &RouterMatchedSignals{
-				Structure: []string{"many_questions"},
+				Keywords: []string{"many_questions"},
 			},
 		},
-		SignalConfidences: map[string]float64{"structure:many_questions": 1.0},
-		SignalValues:      map[string]float64{"structure:many_questions": 4},
+		SignalValues: map[string]float64{"keyword:many_questions": 4},
 	})
 
 	handler := TopologyTestQueryHandler(configPath, routerAPIURL)
@@ -445,13 +450,13 @@ func TestTopologyTestQueryHandler_StructureSignalIncludesComputedValue(t *testin
 	var result TestQueryResult
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
 	require.Len(t, result.MatchedSignals, 1)
-	require.Equal(t, "structure", result.MatchedSignals[0].Type)
+	require.Equal(t, "keyword", result.MatchedSignals[0].Type)
 	require.Equal(t, "many_questions", result.MatchedSignals[0].Name)
 	require.NotNil(t, result.MatchedSignals[0].Value)
 	assert.Equal(t, 4.0, *result.MatchedSignals[0].Value)
-	assert.Equal(t, 1.0, result.MatchedSignals[0].Confidence)
-	assert.Contains(t, result.HighlightedPath, "signal-group-structure")
-	assert.Contains(t, result.HighlightedPath, "signal-structure-many_questions")
+	assert.False(t, *result.MatchedSignals[0].ConfidenceAvailable)
+	assert.Contains(t, result.HighlightedPath, "signal-group-keyword")
+	assert.Contains(t, result.HighlightedPath, "signal-keyword-many_questions")
 }
 
 func TestTopologyTestQueryHandler_MissingRouterAPI(t *testing.T) {

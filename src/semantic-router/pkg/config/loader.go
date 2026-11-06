@@ -248,7 +248,6 @@ func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
 		rejectDeprecatedUserConfigFields,
 		rejectRemovedEntrypointFields,
 		rejectRemovedEvaluationFields,
-		rejectRemovedStructureFields,
 		rejectRemovedTaxonomyLegacyFields,
 		rejectRemovedDecisionToolFields,
 		rejectRemovedRouterLearningFields,
@@ -303,16 +302,6 @@ func rejectDeprecatedUserConfigFields(raw map[string]interface{}) error {
 		return fmt.Errorf(
 			"deprecated config fields are no longer supported: %s; rewrite the file to canonical v0.3 providers/routing/global or run `vllm-sr config migrate --config old-config.yaml`",
 			strings.Join(deprecated, ", "),
-		)
-	}
-	return nil
-}
-
-func rejectRemovedStructureFields(raw map[string]interface{}) error {
-	if removed := removedStructureFields(raw); len(removed) > 0 {
-		return fmt.Errorf(
-			"removed config fields are no longer supported: %s; structure density now uses built-in multilingual normalization and no longer accepts feature.normalize_by",
-			strings.Join(removed, ", "),
 		)
 	}
 	return nil
@@ -833,25 +822,6 @@ func deprecatedDecisionConfigFields(routing map[string]interface{}) []string {
 		decision := nestedStringMap(rawDecision)
 		if _, ok := decision["modelSelectionAlgorithm"]; ok {
 			fields = append(fields, fmt.Sprintf("routing.decisions[%d].modelSelectionAlgorithm", index))
-		}
-	}
-	return fields
-}
-
-func removedStructureFields(raw map[string]interface{}) []string {
-	routing := nestedStringMap(raw["routing"])
-	signals := nestedStringMap(routing["signals"])
-	structureRules, ok := signals["structure"].([]interface{})
-	if !ok {
-		return nil
-	}
-
-	fields := make([]string, 0)
-	for index, rawRule := range structureRules {
-		rule := nestedStringMap(rawRule)
-		feature := nestedStringMap(rule["feature"])
-		if _, ok := feature["normalize_by"]; ok {
-			fields = append(fields, fmt.Sprintf("routing.signals.structure[%d].feature.normalize_by", index))
 		}
 	}
 	return fields

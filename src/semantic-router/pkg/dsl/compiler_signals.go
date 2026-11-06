@@ -1,6 +1,8 @@
 package dsl
 
 import (
+	"fmt"
+
 	"gopkg.in/yaml.v2"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -23,6 +25,9 @@ func (c *Compiler) compileSignals() {
 
 func (c *Compiler) compileKeywordSignal(s *SignalDecl) {
 	rule := config.KeywordRule{Name: s.Name}
+	if v, ok := getStringField(s.Fields, "description"); ok {
+		rule.Description = v
+	}
 	if v, ok := getStringField(s.Fields, "operator"); ok {
 		rule.Operator = v
 	}
@@ -53,7 +58,37 @@ func (c *Compiler) compileKeywordSignal(s *SignalDecl) {
 	if v, ok := getBoolField(s.Fields, "include_history"); ok {
 		rule.IncludeHistory = v
 	}
+	var err error
+	if rule.Count, err = numericPredicateField(s.Fields, "count"); err != nil {
+		c.addError(s.Pos, "keyword signal %q: %v", s.Name, err)
+		return
+	}
+	if rule.Density, err = numericPredicateField(s.Fields, "density"); err != nil {
+		c.addError(s.Pos, "keyword signal %q: %v", s.Name, err)
+		return
+	}
+	if err := config.ValidateKeywordRuleContract(rule); err != nil {
+		c.addError(s.Pos, "keyword signal %q: %v", s.Name, err)
+		return
+	}
 	c.config.KeywordRules = append(c.config.KeywordRules, rule)
+}
+
+// numericPredicateField reads the predicate object under key, if any.
+func numericPredicateField(fields map[string]Value, key string) (*config.NumericPredicate, error) {
+	object, ok := fields[key].(ObjectValue)
+	if !ok {
+		return nil, nil
+	}
+	payload, err := yaml.Marshal(fieldsToMap(object.Fields))
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", key, err)
+	}
+	var predicate config.NumericPredicate
+	if err := yaml.Unmarshal(payload, &predicate); err != nil {
+		return nil, fmt.Errorf("%s: %w", key, err)
+	}
+	return &predicate, nil
 }
 
 func (c *Compiler) compileLanguageSignal(s *SignalDecl) {
@@ -79,29 +114,6 @@ func (c *Compiler) compileContextSignal(s *SignalDecl) {
 		rule.Description = v
 	}
 	c.config.ContextRules = append(c.config.ContextRules, rule)
-}
-
-func (c *Compiler) compileStructureSignal(s *SignalDecl) {
-	payload := fieldsToMap(s.Fields)
-	payload["name"] = s.Name
-
-	raw, err := yaml.Marshal(payload)
-	if err != nil {
-		c.addError(s.Pos, "failed to encode structure signal %q: %v", s.Name, err)
-		return
-	}
-
-	var rule config.StructureRule
-	if err := yaml.Unmarshal(raw, &rule); err != nil {
-		c.addError(s.Pos, "failed to decode structure signal %q: %v", s.Name, err)
-		return
-	}
-	rule.Name = s.Name
-	if err := config.ValidateStructureRuleContract(rule); err != nil {
-		c.addError(s.Pos, "%v", err)
-		return
-	}
-	c.config.StructureRules = append(c.config.StructureRules, rule)
 }
 
 func (c *Compiler) compileMetadataSignal(s *SignalDecl) {
@@ -181,23 +193,6 @@ func (c *Compiler) compileConversationSignal(s *SignalDecl) {
 		return
 	}
 	c.config.ConversationRules = append(c.config.ConversationRules, rule)
-}
-
-func (c *Compiler) compileEventSignal(s *SignalDecl) {
-	rule := config.EventRule{Name: s.Name}
-	if v, ok := getStringArrayField(s.Fields, "event_types"); ok {
-		rule.EventTypes = v
-	}
-	if v, ok := getStringArrayField(s.Fields, "severities"); ok {
-		rule.Severities = v
-	}
-	if v, ok := getStringArrayField(s.Fields, "action_codes"); ok {
-		rule.ActionCodes = v
-	}
-	if v, ok := getBoolField(s.Fields, "temporal"); ok {
-		rule.Temporal = v
-	}
-	c.config.EventRules = append(c.config.EventRules, rule)
 }
 
 func (c *Compiler) compileAuthzSignal(s *SignalDecl) {

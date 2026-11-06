@@ -26,14 +26,6 @@ describe('topology v0.3 surface alignment', () => {
               predicate: { gte: 3 },
             },
           ],
-          events: [
-            {
-              name: 'incident',
-              event_types: ['service_incident'],
-              severities: ['critical'],
-              temporal: true,
-            },
-          ],
           metadata: [
             {
               name: 'tenant',
@@ -67,7 +59,7 @@ describe('topology v0.3 surface alignment', () => {
     const topology = parseConfigToTopology(config)
 
     expect(topology.signals.map((signal) => signal.type)).toEqual(
-      expect.arrayContaining(['conversation', 'event', 'metadata', 'input_modality']),
+      expect.arrayContaining(['conversation', 'metadata', 'input_modality']),
     )
     expect(topology.decisions[0].algorithm?.type).toBe('multi_factor')
     expect(topology.decisions[0].algorithm?.multi_factor).toEqual({ latency_percentile: 95 })

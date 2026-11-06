@@ -55,7 +55,7 @@ describe('decision editor preservation', () => {
           conditions: [
             { type: 'metadata', name: 'canary' },
             {
-              type: 'classifier',
+              type: 'systemone',
               name: 'risk',
               label: 'RISKY',
               predicate: { gte: 0.8 },
@@ -73,12 +73,12 @@ describe('decision editor preservation', () => {
     expect(result).not.toBe(existing)
   })
 
-  it('rejects a root unknown policy combined with a classifier on_error policy', () => {
+  it('rejects a root unknown policy combined with a System One on_error policy', () => {
     expect(() =>
       decisionRulesForSave({
         operator: 'AND',
         on_unknown: 'fail_request',
-        conditions: [{ type: 'classifier', name: 'risk', on_error: 'match' }],
+        conditions: [{ type: 'systemone', name: 'risk', on_error: 'match' }],
       }),
     ).toThrow(/cannot be combined/)
   })
@@ -98,14 +98,14 @@ describe('decision editor preservation', () => {
       type: 'jailbreak',
       name: 'prompt_injection',
     })
-    const classifier: DecisionConfig['rules'] = {
-      type: 'classifier',
+    const labelled: DecisionConfig['rules'] = {
+      type: 'systemone',
       name: 'risk',
       label: 'RISKY',
       predicate: { gte: 0.8 },
       on_unknown: 'no_match',
     }
-    expect(decisionRulesForSave(classifier)).toEqual(classifier)
+    expect(decisionRulesForSave(labelled)).toEqual(labelled)
     expect(decisionRulesForSave({})).toEqual({})
   })
 
@@ -115,7 +115,7 @@ describe('decision editor preservation', () => {
     )
     expect(() =>
       decisionRulesForSave({
-        type: 'classifier',
+        type: 'systemone',
         name: 'risk',
         on_error: 'match',
         on_unknown: 'fail_request',

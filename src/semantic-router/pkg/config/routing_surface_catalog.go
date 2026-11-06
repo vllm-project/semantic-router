@@ -71,7 +71,6 @@ var builtinSignalCatalog = []SignalCatalogEntry{
 	{Type: SignalTypeUserFeedback, DisplayName: "User Feedback", Collection: "user_feedbacks", ObservationKey: "user_feedback", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
 	{Type: SignalTypeLanguage, DisplayName: "Language", Collection: "language", ObservationKey: "language", DecisionReferenceable: true},
 	{Type: SignalTypeContext, DisplayName: "Context", Collection: "context", ObservationKey: "context", DecisionReferenceable: true},
-	{Type: SignalTypeStructure, DisplayName: "Structure", Collection: "structure", ObservationKey: "structure", DecisionReferenceable: true},
 	{Type: SignalTypeComplexity, DisplayName: "Complexity", Collection: "complexity", ObservationKey: "complexity", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
 	{Type: SignalTypeModality, DisplayName: "Modality", Collection: "modality", ObservationKey: "modality", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
 	{Type: SignalTypeAuthz, DisplayName: "Authz", Collection: "role_bindings", ObservationKey: "authz", DecisionReferenceable: true},
@@ -82,10 +81,8 @@ var builtinSignalCatalog = []SignalCatalogEntry{
 	{Type: SignalTypeTurnRelation, DisplayName: "Turn Relation", Collection: "turn_relation", ObservationKey: "turn_relation", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
 	{Type: SignalTypePII, DisplayName: "PII", Collection: "pii", ObservationKey: "pii", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
 	{Type: SignalTypeConversation, DisplayName: "Conversation", Collection: "conversation", ObservationKey: "conversation", DecisionReferenceable: true},
-	{Type: SignalTypeEvent, DisplayName: "Event", Collection: "events", ObservationKey: "event", DecisionReferenceable: true},
 	{Type: SignalTypeMetadata, DisplayName: "Metadata", Collection: "metadata", ObservationKey: "metadata", DecisionReferenceable: true},
 	{Type: SignalTypeInputModality, DisplayName: "Input Modality", Collection: "input_modality", ObservationKey: "input_modality", DecisionReferenceable: true},
-	{Type: SignalTypeAction, DisplayName: "Action", Collection: "actions", ObservationKey: "action", DecisionReferenceable: true},
 	{Type: SignalTypeSystemOne, DisplayName: "System One", Collection: "systemone", ObservationKey: "systemone", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
 }
 

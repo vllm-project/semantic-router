@@ -61,6 +61,11 @@ func balanceLong(in SignalResults) SignalResults {
 	return in
 }
 
+func balanceImage(in SignalResults) SignalResults {
+	in.MatchedInputModalityRules = []string{"has_image"}
+	return in
+}
+
 // These are policy counterexamples, not classifier accuracy measurements. Read
 // the shipped recipe and run its actual projections and decision evaluator.
 func TestBuiltinBalanceEffortLanes(t *testing.T) {
@@ -92,10 +97,10 @@ func TestBuiltinBalanceEffortLanes(t *testing.T) {
 		{"exact facts at maximum effort", balanceAnswers("facts", 3.5, 1, "precise_facts"), "frontier"},
 		{"long input", balanceLong(balanceAnswers("chat", 0.5, 0)), "long_context"},
 		{"long input with unknown answers", balanceLong(unknown), "long_context"},
-		{"long input outranks an image", balanceLong(balanceWith(balanceAnswers("chat", 0.5, 0), []string{"has_image"}, nil, nil)), "long_context"},
-		{"image", balanceWith(balanceAnswers("chat", 0.5, 0), []string{"has_image"}, nil, nil), "vision"},
-		{"hard question about an image", balanceWith(balanceAnswers("stem", 3.5, 1), []string{"has_image"}, nil, nil), "vision"},
-		{"image during a tool loop", balanceWith(balanceAnswers("chat", 0.5, 0), []string{"has_image", "tool_loop"}, nil, nil), "vision"},
+		{"long input outranks an image", balanceLong(balanceImage(balanceAnswers("chat", 0.5, 0))), "long_context"},
+		{"image", balanceImage(balanceAnswers("chat", 0.5, 0)), "vision"},
+		{"hard question about an image", balanceImage(balanceAnswers("stem", 3.5, 1)), "vision"},
+		{"image during a tool loop", balanceImage(balanceWith(balanceAnswers("chat", 0.5, 0), []string{"tool_loop"}, nil, nil)), "vision"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) { assertBuiltinPolicy(t, c, &tt.in, tt.want) })

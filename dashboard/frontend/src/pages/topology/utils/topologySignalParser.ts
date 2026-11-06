@@ -49,16 +49,13 @@ function legacySignalSources(config: ConfigData): LegacySignalSource[] {
     { type: 'preference', value: config.preference_rules },
     { type: 'language', value: config.language_rules },
     { type: 'context', value: config.context_rules },
-    { type: 'structure', value: config.structure_rules },
     { type: 'complexity', value: config.complexity_rules },
     { type: 'modality', value: config.modality_rules },
     { type: 'authz', value: config.role_bindings },
     { type: 'jailbreak', value: config.jailbreak },
     { type: 'hallucination', value: config.hallucination },
     { type: 'pii', value: config.pii },
-    { type: 'kb', value: config.kb },
     { type: 'conversation', value: config.conversation },
-    { type: 'event', value: config.events },
   ]
 }
 

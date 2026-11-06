@@ -64,8 +64,8 @@ func TestRoutingCorporaAreNonEmpty(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, signal := range []string{
-		"action", "complexity", "context", "conversation", "event",
-		"language", "preference", "reask", "structure",
+		"complexity", "context", "conversation", "event", "language",
+		"preference", "reask", "structure",
 	} {
 		t.Run(signal, func(t *testing.T) {
 			if _, err := loadSignalRoutingCases("testdata/" + signal + "_routing_cases.json"); err != nil {

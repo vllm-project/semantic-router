@@ -276,10 +276,6 @@ const (
 	// Example: "en,zh,es"
 	VSRMatchedLanguage = "x-vsr-matched-language"
 
-	// VSRMatchedAction contains the single matched action signal name.
-	// Example: "explain"
-	VSRMatchedAction = "x-vsr-matched-action"
-
 	// VSRMatchedContext contains comma-separated list of matched context rule names.
 	// Example: "low_token_count,high_token_count"
 	VSRMatchedContext = "x-vsr-matched-context"
@@ -288,10 +284,6 @@ const (
 	// Example: "1500"
 	//nolint:gosec
 	VSRContextTokenCount = "x-vsr-context-token-count"
-
-	// VSRMatchedStructure contains comma-separated list of matched structure rule names.
-	// Example: "many_questions,numbered_steps"
-	VSRMatchedStructure = "x-vsr-matched-structure"
 
 	// VSRMatchedComplexity contains comma-separated list of matched complexity rules with difficulty levels.
 	// Example: "code_complexity:hard,math_complexity:easy"
@@ -324,10 +316,6 @@ const (
 
 	// VSRMatchedConversation contains comma-separated list of matched conversation-shape signal names.
 	VSRMatchedConversation = "x-vsr-matched-conversation"
-
-	// VSRMatchedEvent contains comma-separated list of matched event signal names.
-	// Example: "critical_payment_event,payment_failed"
-	VSRMatchedEvent = "x-vsr-matched-event"
 
 	// VSRMatchedInputModality contains comma-separated list of matched
 	// structural input-modality signal names.

@@ -2,9 +2,9 @@
 # SIGNALS
 # =============================================================================
 
-SIGNAL conversation agent_has_images {
+SIGNAL input_modality agent_has_images {
   description: "Request contains at least one image content part."
-  feature: { source: { type: "image_content" }, type: "exists" }
+  modality: "image"
 }
 
 SIGNAL systemone attack {
@@ -114,7 +114,7 @@ ROUTE local_security_containment (description = "An attempt to make the assistan
 ROUTE omni (description = "Image-bearing requests go to the local visual-language model.") {
   PRIORITY 330
   TIER 1
-  WHEN conversation("agent_has_images")
+  WHEN input_modality("agent_has_images")
   MODEL "local/omni" (reasoning = false)
   ALGORITHM static
   PLUGIN router_replay {

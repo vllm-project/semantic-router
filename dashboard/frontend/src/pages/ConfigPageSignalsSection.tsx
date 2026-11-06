@@ -11,7 +11,10 @@ import React from 'react'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { DataTable, type Column } from '../components/DataTable'
 import type { FieldConfig } from '../components/EditModal'
-import { formatRoutingMetadataValue, matchedSignalHeader } from '../components/routingMetadataDisplay'
+import {
+  formatRoutingMetadataValue,
+  matchedSignalHeader,
+} from '../components/routingMetadataDisplay'
 import RoutingScopeSelector from '../components/RoutingScopeSelector'
 import TableHeader from '../components/TableHeader'
 import type { ViewSection } from '../components/ViewModal'
@@ -120,7 +123,6 @@ function buildLegacySignals(config: ConfigData | null): ConfigSignals | undefine
     preferences: config?.preference_rules,
     language: config?.language_rules,
     context: config?.context_rules,
-    structure: config?.structure_rules,
     complexity: config?.complexity_rules,
     jailbreak: config?.jailbreak,
     hallucination: config?.hallucination,

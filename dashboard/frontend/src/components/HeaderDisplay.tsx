@@ -22,7 +22,6 @@ import {
   X_VSR_MATCHED_CONVERSATION,
   X_VSR_MATCHED_DECISION_MODEL,
   X_VSR_MATCHED_DOMAINS,
-  X_VSR_MATCHED_EVENT,
   X_VSR_MATCHED_FACT_CHECK,
   X_VSR_MATCHED_HALLUCINATION,
   X_VSR_MATCHED_INPUT_MODALITY,
@@ -34,7 +33,6 @@ import {
   X_VSR_MATCHED_PROJECTIONS,
   X_VSR_MATCHED_TURN_RELATION,
   X_VSR_MATCHED_SAFETY,
-  X_VSR_MATCHED_STRUCTURE,
   X_VSR_MATCHED_USER_FEEDBACK,
   X_VSR_RESPONSE_PATH,
   X_VSR_RESPONSE_WARNINGS,
@@ -163,10 +161,6 @@ const HEADER_INFO: Record<
     label: 'Context',
     type: 'info',
   },
-  [X_VSR_MATCHED_STRUCTURE]: {
-    label: 'Structure',
-    type: 'info',
-  },
   [X_VSR_CONTEXT_TOKEN_COUNT]: {
     label: 'Context Count',
     type: 'info',
@@ -201,10 +195,6 @@ const HEADER_INFO: Record<
   },
   [X_VSR_MATCHED_CONVERSATION]: {
     label: 'Conversation Signal',
-    type: 'info',
-  },
-  [X_VSR_MATCHED_EVENT]: {
-    label: 'Event Signal',
     type: 'info',
   },
   [X_VSR_MATCHED_INPUT_MODALITY]: {

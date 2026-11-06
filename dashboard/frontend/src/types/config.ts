@@ -101,9 +101,14 @@ export interface Providers {
 
 export interface KeywordSignal {
   name: string
+  description?: string
   operator: 'AND' | 'OR'
   keywords: string[]
   case_sensitive: boolean
+  /** An OR rule matches on how many times its keywords occur. */
+  count?: NumericPredicate
+  /** An OR rule matches on its keyword occurrences per 1,000 characters. */
+  density?: NumericPredicate
 }
 
 export interface EmbeddingSignal {
@@ -162,31 +167,11 @@ export interface ContextSignal {
   description?: string
 }
 
-export interface StructureSource {
-  type: string
-  pattern?: string
-  keywords?: string[]
-  case_sensitive?: boolean
-  sequences?: string[][]
-}
-
-export interface StructureFeature {
-  type: string
-  source: StructureSource
-}
-
 export interface NumericPredicate {
   gt?: number
   gte?: number
   lt?: number
   lte?: number
-}
-
-export interface StructureSignal {
-  name: string
-  description?: string
-  feature: StructureFeature
-  predicate?: NumericPredicate
 }
 
 export interface ConversationSignal {
@@ -375,7 +360,6 @@ export interface Signals {
   preferences?: PreferenceSignal[]
   language?: LanguageSignal[]
   context?: ContextSignal[]
-  structure?: StructureSignal[]
   complexity?: ComplexitySignal[]
   modality?: ModalitySignal[]
   role_bindings?: RoleBindingSignal[]
@@ -405,7 +389,6 @@ export type DecisionConditionType =
   | 'fact_check'
   | 'language'
   | 'context'
-  | 'structure'
   | 'complexity'
   | 'modality'
   | 'authz'
@@ -414,7 +397,6 @@ export type DecisionConditionType =
   | 'pii'
   | 'kb'
   | 'conversation'
-  | 'event'
   | 'metadata'
   | 'classifier'
   | 'input_modality'
@@ -703,7 +685,6 @@ export function hasFlatSignals(config: unknown): boolean {
     (Array.isArray(root?.preference_rules) && root.preference_rules.length > 0) ||
     (Array.isArray(root?.language_rules) && root.language_rules.length > 0) ||
     (Array.isArray(root?.context_rules) && root.context_rules.length > 0) ||
-    (Array.isArray(root?.structure_rules) && root.structure_rules.length > 0) ||
     (Array.isArray(root?.complexity_rules) && root.complexity_rules.length > 0) ||
     (Array.isArray(root?.jailbreak) && root.jailbreak.length > 0) ||
     (Array.isArray(root?.hallucination) && root.hallucination.length > 0) ||

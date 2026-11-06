@@ -22,13 +22,11 @@ export interface SignalConfig {
     | EmbeddingSignalConfig
     | DomainSignalConfig
     | ContextSignalConfig
-    | StructureSignalConfig
     | ComplexitySignalConfig
     | ModalitySignalConfig
     | AuthzSignalConfig
     | JailbreakSignalConfig
     | PIISignalConfig
-    | KBSignalConfig
     | ProjectionSignalConfig
     | GenericSignalConfig
 }
@@ -37,6 +35,8 @@ export interface KeywordSignalConfig {
   operator: 'AND' | 'OR'
   keywords: string[]
   case_sensitive: boolean
+  count?: NumericPredicateConfig
+  density?: NumericPredicateConfig
 }
 
 export interface EmbeddingSignalConfig {
@@ -58,36 +58,11 @@ export interface ContextSignalConfig {
   max_tokens?: string
 }
 
-export interface StructureSourceConfig {
-  type: string
-  pattern?: string
-  keywords?: string[]
-  case_sensitive?: boolean
-  sequences?: string[][]
-}
-
-export interface StructureFeatureConfig {
-  type: string
-  source?: StructureSourceConfig
-}
-
 export interface NumericPredicateConfig {
   gt?: number
   gte?: number
   lt?: number
   lte?: number
-}
-
-export interface StructureSignalConfig {
-  feature?: StructureFeatureConfig
-  predicate?: NumericPredicateConfig
-}
-
-export interface StructureRuleDefinition {
-  name: string
-  description?: string
-  feature: StructureFeatureConfig
-  predicate?: NumericPredicateConfig
 }
 
 export interface ComplexitySignalConfig {
@@ -114,15 +89,6 @@ export interface PIISignalConfig {
   source?: 'tool_result'
   pii_types_allowed?: string[]
   include_history?: boolean
-}
-
-export interface KBSignalConfig {
-  kb: string
-  target: {
-    kind: 'label' | 'group'
-    value: string
-  }
-  match?: 'best' | 'threshold'
 }
 
 export interface ProjectionSignalInputRef {
@@ -458,7 +424,6 @@ export interface ConfigData {
     min_tokens?: string
     max_tokens?: string
   }>
-  structure_rules?: StructureRuleDefinition[]
   complexity_rules?: Array<{
     name: string
     threshold?: number
@@ -505,28 +470,11 @@ export interface ConfigData {
     include_history?: boolean
     description?: string
   }>
-  kb?: Array<{
-    name: string
-    kb: string
-    target: {
-      kind: 'label' | 'group'
-      value: string
-    }
-    match?: 'best' | 'threshold'
-    description?: string
-  }>
   conversation?: Array<{
     name: string
     description?: string
     feature?: Record<string, unknown>
     predicate?: Record<string, unknown>
-  }>
-  events?: Array<{
-    name: string
-    event_types?: string[]
-    severities?: string[]
-    action_codes?: string[]
-    temporal?: boolean
   }>
   projections?: {
     scores?: Array<{
@@ -617,7 +565,6 @@ export interface ConfigData {
       min_tokens?: string
       max_tokens?: string
     }>
-    structure?: StructureRuleDefinition[]
     complexity?: Array<{
       name: string
       threshold?: number
@@ -667,28 +614,11 @@ export interface ConfigData {
       on_unknown?: 'match' | 'no_match'
       description?: string
     }>
-    kb?: Array<{
-      name: string
-      kb: string
-      target: {
-        kind: 'label' | 'group'
-        value: string
-      }
-      match?: 'best' | 'threshold'
-      description?: string
-    }>
     conversation?: Array<{
       name: string
       description?: string
       feature?: Record<string, unknown>
       predicate?: Record<string, unknown>
-    }>
-    events?: Array<{
-      name: string
-      event_types?: string[]
-      severities?: string[]
-      action_codes?: string[]
-      temporal?: boolean
     }>
   }
   decisions?: Array<{

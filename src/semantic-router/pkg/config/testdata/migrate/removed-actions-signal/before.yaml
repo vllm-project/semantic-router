@@ -1,0 +1,39 @@
+# The actions are the systemone choice question action, its options described
+# by the action rules' descriptions; a condition names the action as its
+# label, and a projection input names it as action:<action>.
+version: v0.3
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+routing:
+  signals:
+    actions:
+      - name: explain
+        description: Describe code or answer a question without editing anything.
+      - name: fix
+  projections:
+    scores:
+      - name: repair_pressure
+        method: weighted_sum
+        inputs:
+          - {type: action, name: fix, weight: 1.0}
+    mappings:
+      - name: repair_band
+        source: repair_pressure
+        method: threshold_bands
+        outputs: [{name: repair_high, gte: 0.5}]
+  decisions:
+    - name: explain
+      priority: 100
+      rules: {type: action, name: explain}
+      modelRefs: [{model: general}]
+    - name: repair
+      priority: 90
+      rules:
+        operator: OR
+        conditions:
+          - {type: action, name: fix}
+          - {type: projection, name: repair_high}
+      modelRefs: [{model: general}]

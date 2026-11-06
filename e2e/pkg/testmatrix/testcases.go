@@ -59,14 +59,12 @@ var BaselineRouterContract = []string{
 	"session-telemetry-metrics",
 	"session-pricing-chat-completions",
 	"session-pricing-response-api",
-	// Event signal rule matching and routing (issue #3178)
+	// Keyword routing of event payloads (issue #3178)
 	"event-routing",
 	// Language signal rule matching and routing (issue #3178)
 	"language-routing",
 	// Reask signal rule matching and routing (issue #3178)
 	"reask-routing",
-	// Action signal rule matching and routing
-	"action-routing",
 	// Context signal / block_jailbreak / block_pii priority overlap (issue #3178)
 	"context-safety-overlap",
 }

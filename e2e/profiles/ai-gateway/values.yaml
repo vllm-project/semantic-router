@@ -656,7 +656,7 @@ config:
         rules:
           operator: OR
           conditions:
-            - type: event
+            - type: keyword
               name: critical_payment_event
         modelRefs:
           - model: base-model
@@ -686,48 +686,6 @@ config:
               enabled: true
               system_prompt: You are responding to a Spanish-language query. Respond in Spanish.
               mode: replace
-      - name: explain_action
-        description: Coding requests that ask for an explanation of code or behavior
-        priority: 30
-        rules:
-          operator: AND
-          conditions:
-            - type: domain
-              name: computer science
-            - type: action
-              name: explain
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-      - name: fix_action
-        description: Coding requests that ask to repair a bug or failing behavior
-        priority: 30
-        rules:
-          operator: AND
-          conditions:
-            - type: domain
-              name: computer science
-            - type: action
-              name: fix
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-      - name: generate_action
-        description: Coding requests that ask to write new code
-        priority: 30
-        rules:
-          operator: AND
-          conditions:
-            - type: domain
-              name: computer science
-            - type: action
-              name: generate
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
       - name: reask_escalation
         description: User has repeated a similar question across recent turns without resolution
         priority: 45
@@ -875,14 +833,14 @@ config:
           keywords:
             - __MULTI_MODEL_PROBE__
           case_sensitive: false
-      events:
+        # A payment incident by its event type, severity or action code.
         - name: critical_payment_event
-          event_types:
+          operator: OR
+          keywords:
             - payment_failed
-          severities:
             - critical
-          action_codes:
             - TXN_DECLINE
+          case_sensitive: false
       language:
         - name: es
           description: Spanish-language requests.
@@ -891,17 +849,6 @@ config:
         - name: en
           description: High-threshold isolation control for the defaulted Spanish rule.
           threshold: 0.99
-      actions:
-        - name: generate
-          description: Write new code, configuration, or scripts.
-        - name: explain
-          description: Describe code or answer a question without editing anything.
-        - name: fix
-          description: Repair a bug or a failing behavior.
-        - name: refactor
-          description: Change existing code without changing what it does.
-        - name: test
-          description: Write or extend tests.
       context:
         - name: long_context
           description: Requests estimated at 500 tokens or more.

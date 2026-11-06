@@ -389,13 +389,10 @@ func projectionDeclaredSignals(cfg *RouterConfig) map[string]map[string]struct{}
 		SignalTypeKeyword:       collectKeywordRuleNames(cfg.KeywordRules),
 		SignalTypeLanguage:      collectLanguageRuleNames(cfg.LanguageRules),
 		SignalTypeContext:       collectContextRuleNames(cfg.ContextRules),
-		SignalTypeStructure:     collectStructureRuleNames(cfg.StructureRules),
 		SignalTypeAuthz:         collectRoleBindingRoles(cfg.GetRoleBindings()),
 		SignalTypeConversation:  collectConversationRuleNames(cfg.ConversationRules),
-		SignalTypeEvent:         collectEventRuleNames(cfg.EventRules),
 		SignalTypeMetadata:      collectMetadataRuleNames(cfg.MetadataRules),
 		SignalTypeInputModality: collectInputModalityRuleNames(cfg.InputModalityRules),
-		SignalTypeAction:        collectActionRuleNames(cfg.ActionRules),
 		SignalTypeSystemOne:     collectSystemOneRuleNames(cfg.SystemOneRules),
 	}
 	for _, spec := range cfg.applicationRuleSpecs() {

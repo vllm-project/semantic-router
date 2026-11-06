@@ -8,9 +8,9 @@ SIGNAL turn_relation persistently_dissatisfied {
   input: { previous_turns: 2 }
 }
 
-SIGNAL conversation feedback_has_images {
+SIGNAL input_modality feedback_has_images {
   description: "Request contains at least one image content part."
-  feature: { source: { type: "image_content" }, type: "exists" }
+  modality: "image"
 }
 
 SIGNAL systemone wrong {
@@ -82,7 +82,7 @@ PLUGIN header_mutation header_mutation {}
 
 ROUTE omni (description = "Image-bearing follow-ups go to the visual-language model.") {
   PRIORITY 260
-  WHEN conversation("feedback_has_images")
+  WHEN input_modality("feedback_has_images")
   MODEL "local/omni" (reasoning = false)
   ALGORITHM static
 }

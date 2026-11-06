@@ -283,15 +283,13 @@ spec:
                                 minLength: 1
                                 type: string
                               type:
-                                description: Type defines the type of signal (keyword/domain/fact_check/context/structure/conversation/event)
+                                description: Type defines the type of signal (keyword/domain/fact_check/context/conversation)
                                 enum:
                                 - keyword
                                 - domain
                                 - fact_check
                                 - context
-                                - structure
                                 - conversation
-                                - event
                                 type: string
                             required:
                             - name
@@ -440,38 +438,6 @@ spec:
                       type: object
                     maxItems: 14
                     type: array
-                  events:
-                    description: Events defines structured event metadata routing
-                      signals.
-                    items:
-                      description: |-
-                        EventSignal defines a structured event metadata routing signal.
-                        It detects event types, severities, action codes, and temporal urgency
-                        from incident, audit, alert, or workflow payloads in the request.
-                      properties:
-                        actionCodes:
-                          items:
-                            type: string
-                          type: array
-                        description:
-                          type: string
-                        eventTypes:
-                          items:
-                            type: string
-                          type: array
-                        name:
-                          type: string
-                        severities:
-                          items:
-                            type: string
-                          type: array
-                        temporal:
-                          type: boolean
-                      required:
-                      - name
-                      type: object
-                    maxItems: 100
-                    type: array
                   factCheckRules:
                     description: FactCheckRules match a request whose answer needs
                       fact checking.
@@ -507,6 +473,38 @@ spec:
                           description: CaseSensitive specifies whether keyword matching
                             is case-sensitive
                           type: boolean
+                        count:
+                          description: Count makes an OR rule match on the number
+                            of its keyword occurrences
+                          properties:
+                            gt:
+                              type: number
+                            gte:
+                              type: number
+                            lt:
+                              type: number
+                            lte:
+                              type: number
+                          type: object
+                        density:
+                          description: |-
+                            Density makes an OR rule match on its keyword occurrences per 1,000
+                            characters; set Count or Density, not both
+                          properties:
+                            gt:
+                              type: number
+                            gte:
+                              type: number
+                            lt:
+                              type: number
+                            lte:
+                              type: number
+                          type: object
+                        description:
+                          description: Description provides a human-readable explanation
+                            of the rule
+                          maxLength: 500
+                          type: string
                         keywords:
                           description: Keywords is the list of keywords to match
                           items:
@@ -514,6 +512,13 @@ spec:
                           maxItems: 100
                           minItems: 1
                           type: array
+                        method:
+                          description: |-
+                            Method regex matches each keyword as a regular expression; by default
+                            a keyword matches literally, as a word of its own
+                          enum:
+                          - regex
+                          type: string
                         name:
                           description: Name is the unique identifier for this rule
                             (also used as category name)
@@ -531,60 +536,6 @@ spec:
                       - keywords
                       - name
                       - operator
-                      type: object
-                    maxItems: 100
-                    type: array
-                  structure:
-                    description: Structure defines request-shape routing signals.
-                    items:
-                      properties:
-                        description:
-                          type: string
-                        feature:
-                          properties:
-                            source:
-                              properties:
-                                caseSensitive:
-                                  type: boolean
-                                keywords:
-                                  items:
-                                    type: string
-                                  type: array
-                                pattern:
-                                  type: string
-                                sequences:
-                                  items:
-                                    items:
-                                      type: string
-                                    type: array
-                                  type: array
-                                type:
-                                  type: string
-                              required:
-                              - type
-                              type: object
-                            type:
-                              type: string
-                          required:
-                          - source
-                          - type
-                          type: object
-                        name:
-                          type: string
-                        predicate:
-                          properties:
-                            gt:
-                              type: number
-                            gte:
-                              type: number
-                            lt:
-                              type: number
-                            lte:
-                              type: number
-                          type: object
-                      required:
-                      - feature
-                      - name
                       type: object
                     maxItems: 100
                     type: array

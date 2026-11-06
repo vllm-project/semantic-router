@@ -277,9 +277,6 @@ export const X_VSR_LOOPER_SECRET = 'x-vsr-looper-secret'
 /** Total tokens across the Looper's calls. Surface: debug. */
 export const X_VSR_LOOPER_TOTAL_TOKENS = 'x-vsr-looper-total-tokens'
 
-/** Matched `action` rule. Surface: debug. */
-export const X_VSR_MATCHED_ACTION = 'x-vsr-matched-action'
-
 /** Matched `authz` rules. Surface: debug. */
 export const X_VSR_MATCHED_AUTHZ = 'x-vsr-matched-authz'
 
@@ -297,9 +294,6 @@ export const X_VSR_MATCHED_DECISION_MODEL = 'x-vsr-matched-decision-model'
 
 /** Matched `domain` rules. Surface: debug. */
 export const X_VSR_MATCHED_DOMAINS = 'x-vsr-matched-domains'
-
-/** Matched `event` rules. Surface: debug. */
-export const X_VSR_MATCHED_EVENT = 'x-vsr-matched-event'
 
 /** Matched `fact_check` rules. Surface: debug. */
 export const X_VSR_MATCHED_FACT_CHECK = 'x-vsr-matched-fact-check'
@@ -330,9 +324,6 @@ export const X_VSR_MATCHED_PROJECTIONS = 'x-vsr-matched-projections'
 
 /** Matched content `safety` rules. Surface: debug. */
 export const X_VSR_MATCHED_SAFETY = 'x-vsr-matched-safety'
-
-/** Matched `structure` rules. Surface: debug. */
-export const X_VSR_MATCHED_STRUCTURE = 'x-vsr-matched-structure'
 
 /** Matched `turn_relation` rules, and `rule:option` for a rule without labels. Surface: debug. */
 export const X_VSR_MATCHED_TURN_RELATION = 'x-vsr-matched-turn-relation'

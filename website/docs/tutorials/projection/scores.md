@@ -48,7 +48,6 @@ Supported input types include:
 - `preference`
 - `language`
 - `context`
-- `structure`
 - `complexity`
 - `modality`
 - `authz`
@@ -56,7 +55,6 @@ Supported input types include:
 - `pii`
 - `kb`
 - `conversation`
-- `event`
 - `metadata`
 - `classifier`
 - `input_modality`
@@ -111,12 +109,12 @@ routing:
       - name: workload_pressure
         method: weighted_sum
         inputs:
-          - type: structure
+          - type: keyword
             name: many_questions
             weight: 0.2
             value_source: raw
-          - type: structure
-            name: nested_depth
+          - type: conversation
+            name: tool_heavy
             weight: 0.4
             value_source: raw
 ```

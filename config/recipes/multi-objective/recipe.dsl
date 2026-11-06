@@ -145,9 +145,9 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
     max_tokens: "262K"
   }
 
-  SIGNAL conversation unified_balance_has_images {
+  SIGNAL input_modality unified_balance_has_images {
     description: "Request contains at least one image content part."
-    feature: { source: { type: "image_content" }, type: "exists" }
+    modality: "image"
   }
 
   SIGNAL systemone correction {
@@ -174,7 +174,7 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
 
   ROUTE omni (description = "Understand image-bearing requests with the dedicated visual-language model.", on_unknown = "no_match") {
     PRIORITY 400
-    WHEN conversation("unified_balance_has_images")
+    WHEN input_modality("unified_balance_has_images")
     MODEL "local/omni" (reasoning = false)
     ALGORITHM static
   }
@@ -249,9 +249,9 @@ RECIPE speed-first (description = "Prefer the lowest observed latency while pres
     max_tokens: "262K"
   }
 
-  SIGNAL conversation unified_speed_has_images {
+  SIGNAL input_modality unified_speed_has_images {
     description: "Request contains at least one image content part."
-    feature: { source: { type: "image_content" }, type: "exists" }
+    modality: "image"
   }
 
   SIGNAL systemone heavy {
@@ -266,7 +266,7 @@ RECIPE speed-first (description = "Prefer the lowest observed latency while pres
 
   ROUTE omni (description = "Keep visual requests on the dedicated low-latency visual-language model.", on_unknown = "no_match") {
     PRIORITY 300
-    WHEN conversation("unified_speed_has_images")
+    WHEN input_modality("unified_speed_has_images")
     MODEL "local/omni" (reasoning = false)
     ALGORITHM static
   }
@@ -331,9 +331,9 @@ RECIPE cost-first (description = "Keep every request local and spend additional 
     max_tokens: "262K"
   }
 
-  SIGNAL conversation unified_cost_has_images {
+  SIGNAL input_modality unified_cost_has_images {
     description: "Request contains at least one image content part."
-    feature: { source: { type: "image_content" }, type: "exists" }
+    modality: "image"
   }
 
   SIGNAL systemone depth {
@@ -348,7 +348,7 @@ RECIPE cost-first (description = "Keep every request local and spend additional 
 
   ROUTE omni (description = "Keep visual requests on the dedicated local visual-language model.", on_unknown = "no_match") {
     PRIORITY 300
-    WHEN conversation("unified_cost_has_images")
+    WHEN input_modality("unified_cost_has_images")
     MODEL "local/omni" (reasoning = false)
     ALGORITHM static
   }
@@ -400,14 +400,14 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
   # SIGNALS
   # =============================================================================
 
-  SIGNAL conversation unified_frontier_has_images {
-    description: "Request contains at least one image content part."
-    feature: { source: { type: "image_content" }, type: "exists" }
-  }
-
   SIGNAL conversation unified_frontier_active_tool_loop {
     description: "Continue an already active tool loop through Router Flow."
     feature: { source: { type: "active_tool_loop" }, type: "exists" }
+  }
+
+  SIGNAL input_modality unified_frontier_has_images {
+    description: "Request contains at least one image content part."
+    modality: "image"
   }
 
   SIGNAL systemone workflow {
@@ -446,7 +446,7 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
 
   ROUTE omni (description = "Understand image-bearing requests directly before text-only orchestration.", on_unknown = "no_match") {
     PRIORITY 500
-    WHEN conversation("unified_frontier_has_images")
+    WHEN input_modality("unified_frontier_has_images")
     MODEL "local/omni" (reasoning = false)
     ALGORITHM static
   }
@@ -577,9 +577,9 @@ RECIPE privacy-first (description = "Keep every request local; named decision-mo
   # SIGNALS
   # =============================================================================
 
-  SIGNAL conversation unified_privacy_has_images {
+  SIGNAL input_modality unified_privacy_has_images {
     description: "Request contains at least one image content part."
-    feature: { source: { type: "image_content" }, type: "exists" }
+    modality: "image"
   }
 
   SIGNAL systemone attack {
@@ -625,7 +625,7 @@ RECIPE privacy-first (description = "Keep every request local; named decision-mo
   ROUTE omni (description = "Understand private image-bearing requests on the local visual-language model.", on_unknown = "no_match") {
     PRIORITY 250
     TIER 2
-    WHEN conversation("unified_privacy_has_images")
+    WHEN input_modality("unified_privacy_has_images")
     MODEL "local/omni" (reasoning = false)
     ALGORITHM static
     PLUGIN tools {

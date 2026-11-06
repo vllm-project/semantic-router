@@ -276,13 +276,13 @@ func predicateContractCase(
 		strategy:  config.RoutingStrategyPriority,
 		decisions: []config.Decision{route("bounded", 0, 0, predicateLeaf(predicate, ""))},
 		signals: &decision.SignalMatches{
-			SignalValues: map[string]float64{"structure:count": value},
+			SignalValues: map[string]float64{"keyword:count": value},
 		},
 	}
 	if wantMatch {
 		testCase.wantDecision = "bounded"
 		testCase.wantConfidence = 1
-		testCase.wantRules = []string{"structure:count"}
+		testCase.wantRules = []string{"keyword:count"}
 	}
 	return testCase
 }
@@ -293,20 +293,20 @@ func errorContractCase(name, onError string, wantMatch bool) engineContractCase 
 		strategy:  config.RoutingStrategyPriority,
 		decisions: []config.Decision{route("guarded", 0, 0, predicateLeaf(&config.NumericPredicate{GTE: floatPtr(0.8)}, onError))},
 		signals: &decision.SignalMatches{
-			SignalErrors: map[string]string{"structure:count": "unavailable"},
+			SignalErrors: map[string]string{"keyword:count": "unavailable"},
 		},
 	}
 	if wantMatch {
 		testCase.wantDecision = "guarded"
 		testCase.wantConfidence = 1
-		testCase.wantRules = []string{"structure:count"}
+		testCase.wantRules = []string{"keyword:count"}
 	}
 	return testCase
 }
 
 func predicateLeaf(predicate *config.NumericPredicate, onError string) config.RuleNode {
 	return config.RuleNode{
-		Type:      "structure",
+		Type:      "keyword",
 		Name:      "count",
 		Predicate: predicate,
 		OnError:   onError,
@@ -334,13 +334,13 @@ func route(name string, priority, tier int, rules config.RuleNode) config.Decisi
 }
 
 func matches(
-	keywords, systemOne, structures, projections []string,
+	keywords, systemOne, contexts, projections []string,
 	confidences map[string]float64,
 ) *decision.SignalMatches {
 	return &decision.SignalMatches{
 		KeywordRules:      keywords,
 		SystemOneRules:    systemOne,
-		StructureRules:    structures,
+		ContextRules:      contexts,
 		ProjectionRules:   projections,
 		SignalConfidences: confidences,
 	}

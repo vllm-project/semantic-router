@@ -344,7 +344,7 @@ func TestIntentRequestResolveSignalInput_ExtractsImageFromCurrentUserTurn(t *tes
 
 	assert.Equal(t, "What does this screenshot show?", input.evaluationText)
 	assert.Equal(t, dataURI, input.imageURL)
-	assert.Equal(t, 1, input.conversationFacts.ImageContentCount)
+	assert.Equal(t, 1, input.requestFacts.InputModality.ImageContentCount)
 	assert.Equal(t, 1, input.conversationFacts.UserMessageCount)
 }
 
@@ -366,7 +366,7 @@ func TestIntentRequestResolveSignalInput_AcceptsImageOnlyUserTurn(t *testing.T) 
 
 	assert.Empty(t, input.evaluationText)
 	assert.Equal(t, dataURI, input.imageURL)
-	assert.Equal(t, 1, input.conversationFacts.ImageContentCount)
+	assert.Equal(t, 1, input.requestFacts.InputModality.ImageContentCount)
 }
 
 func TestIntentRequestResolveSignalInput_CanonicalizesUppercaseImageURL(t *testing.T) {
@@ -508,8 +508,8 @@ func TestIntentRequestResolveSignalInput_DropsUnsafeImageURL(t *testing.T) {
 
 	assert.Equal(t, "Describe it.", input.evaluationText)
 	assert.Empty(t, input.imageURL, "non-data-URI image references must be rejected to prevent SSRF")
-	assert.Equal(t, 1, input.conversationFacts.ImageContentCount,
-		"image_content is a shape fact and must not depend on URL fetch safety")
+	assert.Equal(t, 1, input.requestFacts.InputModality.ImageContentCount,
+		"image input is a shape fact and must not depend on URL fetch safety")
 }
 
 func TestIntentRequestResolveSignalInput_AcceptsMetadataOnly(t *testing.T) {

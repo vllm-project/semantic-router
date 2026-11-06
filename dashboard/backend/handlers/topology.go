@@ -155,24 +155,24 @@ type RouterIntentOptions struct {
 }
 
 type RouterMatchedSignals struct {
-	Keywords     []string `json:"keywords,omitempty"`
-	Embeddings   []string `json:"embeddings,omitempty"`
-	Domains      []string `json:"domains,omitempty"`
-	FactCheck    []string `json:"fact_check,omitempty"`
-	UserFeedback []string `json:"user_feedback,omitempty"`
-	Preferences  []string `json:"preferences,omitempty"`
-	Language     []string `json:"language,omitempty"`
-	Context      []string `json:"context,omitempty"`
-	Structure    []string `json:"structure,omitempty"`
-	Complexity   []string `json:"complexity,omitempty"`
-	Modality     []string `json:"modality,omitempty"`
-	Authz        []string `json:"authz,omitempty"`
-	Jailbreak    []string `json:"jailbreak,omitempty"`
-	PII          []string `json:"pii,omitempty"`
-	KB           []string `json:"kb,omitempty"`
-	Conversation []string `json:"conversation,omitempty"`
-	Event        []string `json:"event,omitempty"`
-	Projection   []string `json:"projection,omitempty"`
+	Keywords      []string `json:"keywords,omitempty"`
+	Domains       []string `json:"domains,omitempty"`
+	FactCheck     []string `json:"fact_check,omitempty"`
+	UserFeedback  []string `json:"user_feedback,omitempty"`
+	TurnRelation  []string `json:"turn_relation,omitempty"`
+	Language      []string `json:"language,omitempty"`
+	Context       []string `json:"context,omitempty"`
+	Complexity    []string `json:"complexity,omitempty"`
+	Modality      []string `json:"modality,omitempty"`
+	Authz         []string `json:"authz,omitempty"`
+	Jailbreak     []string `json:"jailbreak,omitempty"`
+	Safety        []string `json:"safety,omitempty"`
+	PII           []string `json:"pii,omitempty"`
+	Conversation  []string `json:"conversation,omitempty"`
+	Metadata      []string `json:"metadata,omitempty"`
+	InputModality []string `json:"input_modality,omitempty"`
+	SystemOne     []string `json:"systemone,omitempty"`
+	Projection    []string `json:"projection,omitempty"`
 }
 
 type RouterEvalDecisionResult struct {

@@ -81,7 +81,6 @@ _LEGACY_SIGNAL_KEYS = {
     "user_feedbacks": "user_feedback_rules",
     "language": "language_rules",
     "context": "context_rules",
-    "structure": "structure_rules",
     "complexity": "complexity_rules",
     "modality": "modality_rules",
     "role_bindings": "role_bindings",
@@ -89,7 +88,6 @@ _LEGACY_SIGNAL_KEYS = {
     "hallucination": "hallucination",
     "pii": "pii",
     "conversation": "conversation",
-    "events": "events",
     "metadata": "metadata",
     "input_modality": "input_modality",
 }

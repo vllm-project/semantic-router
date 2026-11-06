@@ -84,16 +84,13 @@ const sidebars: SidebarsConfig = {
               type: 'category',
               label: 'Heuristic',
               items: [
-                'tutorials/signal/heuristic/action',
                 'tutorials/signal/heuristic/authz',
                 'tutorials/signal/heuristic/context',
                 'tutorials/signal/heuristic/conversation',
                 'tutorials/signal/heuristic/input-modality',
                 'tutorials/signal/heuristic/keyword',
                 'tutorials/signal/heuristic/language',
-                'tutorials/signal/heuristic/event',
                 'tutorials/signal/heuristic/metadata',
-                'tutorials/signal/heuristic/structure',
               ],
             },
             {

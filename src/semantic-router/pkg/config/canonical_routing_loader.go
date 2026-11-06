@@ -23,9 +23,6 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse routing fragment: %w", err)
 	}
-	if rejectErr := rejectRemovedStructureFields(raw); rejectErr != nil {
-		return nil, rejectErr
-	}
 
 	// Fragments share the canonical routing vocabulary while omitting only
 	// infrastructure cross-reference validation.

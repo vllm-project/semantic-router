@@ -26,10 +26,8 @@ each configured rule matches independently.
 
 A common topology sends any request containing an image to a vision-capable
 model while text-only requests continue through normal semantic routing.
-Before this signal, image presence was only reachable through the
-`conversation` signal's `image_content` source, which is hard to discover and
-covers images only. `input_modality` names the concept directly and covers
-all four modalities.
+`input_modality` names what a request carries directly and covers all four
+modalities.
 
 Note that `NOT image_input` is not the same as "text-only": a request with no
 image may still be audio-only or empty. Combine the `text` modality rule with
@@ -104,6 +102,5 @@ records, and the standard per-signal Prometheus metrics
 
 - [`modality`](../learned/modality.md) — the intended output modality
   (`text`, `image`, `text_image`).
-- [`conversation`](conversation.md) — request-shape facts; its
-  `image_content` source remains supported and shares the same underlying
-  image count.
+- [`conversation`](conversation.md) — request-shape facts such as message
+  counts, tool definitions, and tool loops.

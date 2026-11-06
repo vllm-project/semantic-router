@@ -20,7 +20,7 @@ type signalDispatch struct {
 func (c *Classifier) buildSignalDispatchers(input SignalEvaluationInput, results *SignalResults, mu *sync.Mutex, textForSignal func(string) string, usedSignals map[string]bool) []signalDispatch {
 	dispatchers := c.buildPrimarySignalDispatchers(input, results, mu, textForSignal)
 	dispatchers = append(dispatchers, c.buildRequestFactSignalDispatchers(
-		results, mu, textForSignal, input.ContextText, input.CurrentUserText, input.RequestFacts,
+		results, mu, input.ContextText, input.RequestFacts,
 	)...)
 	dispatchers = append(dispatchers, c.buildPolicySignalDispatchers(
 		results, mu, textForSignal, input.PriorUserMessages, input.ToolResultTexts,
@@ -42,19 +42,13 @@ func (c *Classifier) buildPrimarySignalDispatchers(input SignalEvaluationInput, 
 			config.SignalTypeLanguage, "Language",
 			func(context.Context) { c.evaluateLanguageSignal(results, mu, textForSignal(config.SignalTypeLanguage)) },
 		},
-		{
-			config.SignalTypeAction, "Action",
-			func(context.Context) { c.evaluateActionSignal(results, mu, input.CurrentUserText) },
-		},
 	}
 }
 
 func (c *Classifier) buildRequestFactSignalDispatchers(
 	results *SignalResults,
 	mu *sync.Mutex,
-	textForSignal func(string) string,
 	contextText string,
-	currentUserText string,
 	requestFacts RequestFacts,
 ) []signalDispatch {
 	return []signalDispatch{
@@ -66,17 +60,6 @@ func (c *Classifier) buildRequestFactSignalDispatchers(
 					mu,
 					contextText,
 					requestFacts.ContextTokenFloor,
-				)
-			},
-		},
-		{
-			config.SignalTypeStructure, "Structure",
-			func(context.Context) {
-				c.evaluateStructureSignal(
-					results,
-					mu,
-					textForSignal(config.SignalTypeStructure),
-					currentUserText,
 				)
 			},
 		},

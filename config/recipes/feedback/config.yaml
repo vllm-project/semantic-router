@@ -131,13 +131,10 @@ routing:
         - tier:verified
         - purpose:feedback_recovery
   signals:
-    conversation:
+    input_modality:
       - name: feedback_has_images
         description: Request contains at least one image content part.
-        feature:
-          type: exists
-          source:
-            type: image_content
+        modality: image
     systemone:
       - name: wrong
         description: The latest message says an earlier answer or fix was wrong.
@@ -183,7 +180,7 @@ routing:
       rules:
         operator: AND
         conditions:
-          - type: conversation
+          - type: input_modality
             name: feedback_has_images
       modelRefs:
         - model: local/omni

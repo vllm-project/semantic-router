@@ -988,7 +988,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `type` _string_ | Type specifies the signal or projection type referenced by this condition. |  | Enum: [keyword embedding domain fact_check user_feedback reask preference language context structure complexity modality authz jailbreak pii kb conversation event projection] <br /> |
+| `type` _string_ | Type specifies the signal or projection type referenced by this condition. |  | Enum: [keyword embedding domain fact_check user_feedback reask preference language context complexity modality authz jailbreak pii kb conversation projection] <br /> |
 | `name` _string_ | Name is the name of the rule to reference |  |  |
 
 #### SamplingConfig

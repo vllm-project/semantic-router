@@ -66,7 +66,6 @@ type SignalMatches struct {
 	UserFeedbackRules  []string
 	LanguageRules      []string // Language codes: "en", "es", "zh", "fr", etc.
 	ContextRules       []string // Context rule names matched (e.g. "low_token_count")
-	StructureRules     []string // Structure rule names matched (e.g. "many_questions")
 	ComplexityRules    []string
 	ModalityRules      []string
 	AuthzRules         []string // Authz rule names matched for user-level routing (e.g. "premium_tier")
@@ -77,10 +76,8 @@ type SignalMatches struct {
 	RefusalRules       []string
 	TurnRelationRules  []string
 	ConversationRules  []string // Conversation-shape signal names matched
-	EventRules         []string // event rule names (event type, severity, temporal, action codes)
 	MetadataRules      []string // untrusted request metadata rule names matched
 	InputModalityRules []string // structural input-modality presence rule names matched
-	ActionRules        []string // the request's single action, when declared
 	SystemOneRules     []string
 	ProjectionRules    []string // Derived routing outputs from routing.projections.mappings
 
@@ -553,12 +550,8 @@ func resolvePrimarySignalRules(
 		return signals.SystemOneRules, true
 	case config.SignalTypeLanguage:
 		return signals.LanguageRules, true
-	case config.SignalTypeAction:
-		return signals.ActionRules, true
 	case config.SignalTypeContext:
 		return signals.ContextRules, true
-	case config.SignalTypeStructure:
-		return signals.StructureRules, true
 	case config.SignalTypeComplexity:
 		return signals.ComplexityRules, true
 	default:
@@ -587,8 +580,6 @@ func resolvePolicySignalRules(
 		return signals.PIIRules, true
 	case config.SignalTypeConversation:
 		return signals.ConversationRules, true
-	case config.SignalTypeEvent:
-		return signals.EventRules, true
 	case config.SignalTypeMetadata:
 		return signals.MetadataRules, true
 	case config.SignalTypeInputModality:

@@ -57,9 +57,6 @@ function arrayFieldType(items: JSONSchemaNode | undefined): FieldSchema['type'] 
   const item = concreteSchema(items)
   if (item.type === 'string') return 'string[]'
   if (item.type === 'number' || item.type === 'integer') return 'number[]'
-  if (item.type === 'array' && concreteSchema(item.items ?? {}).type === 'string') {
-    return 'string[][]'
-  }
   if (item.type === 'object' || item.properties) return 'object[]'
   return 'json'
 }
