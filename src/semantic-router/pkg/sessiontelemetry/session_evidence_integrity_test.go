@@ -38,7 +38,7 @@ func TestOutcomeRecoveryGuardIsGateScoped(t *testing.T) {
 		sharedSize int
 		wantModel  string
 	}{
-		{"gate_absent", 0, 0, "shared"},
+		{"gate_absent", 0, 0, "local"},
 		{"local_gate", 8, 0, "local"},
 		{"restored_gate", 0, 8, "local"},
 	} {
@@ -60,6 +60,22 @@ func TestOutcomeRecoveryGuardIsGateScoped(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("newer_shared_without_gate", func(t *testing.T) {
+		ResetRouterSessionMemoryForTesting()
+		t.Cleanup(ResetRouterSessionMemoryForTesting)
+		now := time.Now()
+		hydrateRouterSessionSnapshot(RouterSessionSnapshot{
+			SessionID: "newer_shared_without_gate", CurrentModel: "local", LastSeen: now.Add(-time.Second),
+		})
+		hydrateRouterSessionSnapshot(RouterSessionSnapshot{
+			SessionID: "newer_shared_without_gate", CurrentModel: "shared", LastSeen: now,
+		})
+		got, ok := GetRouterSessionSnapshot("newer_shared_without_gate", now)
+		if !ok || got.CurrentModel != "shared" {
+			t.Fatalf("newer shared snapshot must recover when no local window exists: %+v", got)
+		}
+	})
 }
 
 func TestOutcomeMergeIsOrderIndependentAndModelScoped(t *testing.T) {

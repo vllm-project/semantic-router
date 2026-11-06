@@ -1,6 +1,7 @@
 package sessiontelemetry
 
 import (
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -157,6 +158,157 @@ func TestPublishedStoreOperationLeaseSurvivesDoubleSwap(t *testing.T) {
 	}
 	if secondStore.closeDuringSave.Load() {
 		t.Fatal("S2 was closed while its Save operation was still active")
+	}
+}
+
+type blockingLoadRouterSessionStateStore struct {
+	loadStarted chan struct{}
+	allowLoad   chan struct{}
+	startOnce   sync.Once
+	snapshot    RouterSessionSnapshot
+}
+
+func (s *blockingLoadRouterSessionStateStore) Load(string) (RouterSessionSnapshot, bool, error) {
+	s.startOnce.Do(func() {
+		close(s.loadStarted)
+	})
+	<-s.allowLoad
+	return s.snapshot, true, nil
+}
+
+func (s *blockingLoadRouterSessionStateStore) Save(RouterSessionSnapshot, time.Duration) error {
+	return nil
+}
+
+func (s *blockingLoadRouterSessionStateStore) Close() error { return nil }
+
+func TestHydrateRouterSessionSnapshotEnforcesSizeCap(t *testing.T) {
+	ResetRouterSessionMemoryForTesting()
+	orig := maxRouterSessions
+	maxRouterSessions = 3
+	t.Cleanup(func() {
+		maxRouterSessions = orig
+		SetRouterSessionStateStore(nil)
+		ResetRouterSessionMemoryForTesting()
+	})
+
+	base := time.Now()
+	for i := 0; i < 3; i++ {
+		RecordSessionDecision(SessionDecisionParams{
+			SessionID:     "local-" + strconv.Itoa(i),
+			SelectedModel: "model-a",
+			Timestamp:     base.Add(time.Duration(i) * time.Second),
+		})
+	}
+
+	store := &fakeRouterSessionStateStore{
+		found: true,
+		snapshot: RouterSessionSnapshot{
+			SessionID:    "hydrated-new",
+			CurrentModel: "model-b",
+			LastSeen:     base.Add(4 * time.Second),
+		},
+	}
+	SetRouterSessionStateStore(store)
+
+	snapshot, ok := GetRouterSessionSnapshot("hydrated-new", base.Add(5*time.Second))
+	if !ok {
+		t.Fatal("hydrated session missing")
+	}
+	if snapshot.CurrentModel != "model-b" {
+		t.Fatalf("hydrated model = %q", snapshot.CurrentModel)
+	}
+	if got := routerSessionCount(); got > maxRouterSessions {
+		t.Fatalf("router session count %d exceeds cap %d", got, maxRouterSessions)
+	}
+	if _, ok := GetRouterSessionSnapshot("local-0", base.Add(5*time.Second)); ok {
+		t.Fatal("expected oldest local session to be evicted by hydration cap")
+	}
+}
+
+func TestHydrateRouterSessionSnapshotMergesNewerLocalState(t *testing.T) {
+	ResetRouterSessionMemoryForTesting()
+	t.Cleanup(ResetRouterSessionMemoryForTesting)
+
+	newer := time.Now()
+	older := newer.Add(-time.Minute)
+	RecordSessionDecision(SessionDecisionParams{
+		SessionID:     "merge-local",
+		SelectedModel: "model-new",
+		Timestamp:     newer,
+	})
+	hydrateRouterSessionSnapshot(RouterSessionSnapshot{
+		SessionID:    "merge-local",
+		CurrentModel: "model-old",
+		LastSeen:     older,
+		TurnCount:    1,
+	})
+
+	snapshot, ok := GetRouterSessionSnapshot("merge-local", newer)
+	if !ok {
+		t.Fatal("local session missing after hydration")
+	}
+	if snapshot.CurrentModel != "model-new" {
+		t.Fatalf("newer local model overwritten: %q", snapshot.CurrentModel)
+	}
+}
+
+func TestHydrateRouterSessionSnapshotPreservesConcurrentUpdateDuringBlockedLoad(t *testing.T) {
+	ResetRouterSessionMemoryForTesting()
+	older := time.Now().Add(-time.Minute)
+	store := &blockingLoadRouterSessionStateStore{
+		loadStarted: make(chan struct{}),
+		allowLoad:   make(chan struct{}),
+		snapshot: RouterSessionSnapshot{
+			SessionID:    "race-session",
+			CurrentModel: "model-old",
+			LastSeen:     older,
+			TurnCount:    1,
+		},
+	}
+	SetRouterSessionStateStore(store)
+	t.Cleanup(func() {
+		select {
+		case <-store.allowLoad:
+		default:
+			close(store.allowLoad)
+		}
+		SetRouterSessionStateStore(nil)
+		ResetRouterSessionMemoryForTesting()
+	})
+
+	now := time.Now()
+	done := make(chan RouterSessionSnapshot, 1)
+	go func() {
+		snapshot, ok := GetRouterSessionSnapshot("race-session", now)
+		if !ok {
+			t.Error("blocked load did not restore a snapshot")
+			close(done)
+			return
+		}
+		done <- snapshot
+	}()
+	waitForSignal(t, store.loadStarted, "shared Load did not start")
+
+	RecordSessionDecision(SessionDecisionParams{
+		SessionID:     "race-session",
+		SelectedModel: "model-new",
+		Timestamp:     now,
+	})
+	close(store.allowLoad)
+
+	select {
+	case snapshot := <-done:
+		if snapshot.CurrentModel != "model-new" {
+			t.Fatalf("blocked load replaced concurrent local state with %q", snapshot.CurrentModel)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("blocked load did not finish")
+	}
+
+	live, ok := GetRouterSessionSnapshot("race-session", now)
+	if !ok || live.CurrentModel != "model-new" {
+		t.Fatalf("live snapshot after blocked load = %+v ok=%t", live, ok)
 	}
 }
 
