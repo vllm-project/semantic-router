@@ -2,10 +2,8 @@ package testcases
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -40,10 +38,11 @@ func testProtectionExplicitRelease(ctx context.Context, client *kubernetes.Clien
 }
 
 type releaseReplayRecord struct {
-	ID            string `json:"id"`
-	SessionID     string `json:"session_id"`
-	SelectedModel string `json:"selected_model"`
-	Learning      struct {
+	ID             string `json:"id"`
+	SessionID      string `json:"session_id"`
+	SelectedModel  string `json:"selected_model"`
+	ResponseStatus int    `json:"response_status"`
+	Learning       struct {
 		Protection struct {
 			Action  string `json:"action"`
 			Release *struct {
@@ -66,18 +65,24 @@ func runProtectionExplicitRelease(ctx context.Context, public, management, token
 		if release {
 			headers[protectionReleaseHeader] = "1"
 		}
-		_, respHeaders, err := gateHTTPRequest(ctx, client, http.MethodPost, public+"/v1/chat/completions", "", map[string]any{
+		body, respHeaders, err := gateHTTPRequest(ctx, client, http.MethodPost, public+"/v1/chat/completions", "", map[string]any{
 			"model": "vllm-sr/auto", "max_tokens": 16, "messages": []map[string]string{{"role": "user", "content": keyword}},
 		}, headers)
 		if err != nil {
 			return releaseReplayRecord{}, nil, err
 		}
-		replayID := respHeaders.Get("x-vsr-replay-id")
-		if replayID == "" {
-			return releaseReplayRecord{}, nil, fmt.Errorf("missing replay id: %v", respHeaders)
+		reply, err := gateBackendReply(body, respHeaders)
+		if err != nil {
+			return releaseReplayRecord{}, nil, err
 		}
-		record, err := waitReleaseReplay(ctx, client, management, token, sid, replayID)
-		return record, respHeaders, err
+		record, err := waitSessionReplay(ctx, client, management, token, sid, reply.replayID, func(r releaseReplayRecord) string { return r.ID })
+		if err != nil {
+			return releaseReplayRecord{}, nil, err
+		}
+		if record.SelectedModel != reply.selected || record.ResponseStatus != http.StatusOK {
+			return record, nil, fmt.Errorf("routed model %q and replay disagree: %+v", reply.selected, record)
+		}
+		return record, respHeaders, nil
 	}
 
 	seed, _, err := turn("session-gate-seed", false)
@@ -130,35 +135,4 @@ func runProtectionExplicitRelease(ctx context.Context, public, management, token
 		}
 	}
 	return nil
-}
-
-func waitReleaseReplay(ctx context.Context, client *http.Client, management, token, sid, replayID string) (releaseReplayRecord, error) {
-	deadline := time.NewTimer(15 * time.Second)
-	defer deadline.Stop()
-	tick := time.NewTicker(100 * time.Millisecond)
-	defer tick.Stop()
-	for {
-		data, _, err := gateHTTPRequest(ctx, client, http.MethodGet, management+"/api/v1/observability/replays?showDetails=true&limit=30&session_id="+url.QueryEscape(sid), token, nil, nil)
-		if err != nil {
-			return releaseReplayRecord{}, err
-		}
-		var list struct {
-			Data []releaseReplayRecord `json:"data"`
-		}
-		if err = json.Unmarshal(data, &list); err != nil {
-			return releaseReplayRecord{}, err
-		}
-		for _, record := range list.Data {
-			if record.ID == replayID {
-				return record, nil
-			}
-		}
-		select {
-		case <-ctx.Done():
-			return releaseReplayRecord{}, ctx.Err()
-		case <-deadline.C:
-			return releaseReplayRecord{}, fmt.Errorf("replay %s missing", replayID)
-		case <-tick.C:
-		}
-	}
 }

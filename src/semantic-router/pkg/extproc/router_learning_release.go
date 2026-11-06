@@ -9,15 +9,15 @@ import (
 )
 
 const (
-	protectionReleaseReasonHonored     = "explicit_release"
-	protectionReleaseReasonDisabled    = "release_disabled"
-	protectionReleaseReasonNotBoundary = "release_not_at_turn_boundary"
-	protectionReleaseReasonInterval    = "release_interval"
-	protectionReleaseReasonNotApplied  = "release_not_applied"
-	protectionReleaseReasonObserveOnly = "release_observe_only"
-	protectionReleaseReasonKeptCurrent = "release_kept_current"
-	protectionReleaseReasonBypass      = "protection_bypassed"
-	protectionReleaseReasonOff         = "protection_disabled"
+	protectionReleaseReasonHonored            = "explicit_release"
+	protectionReleaseReasonReleaseDisabled    = "release_disabled"
+	protectionReleaseReasonNotBoundary        = "release_not_at_turn_boundary"
+	protectionReleaseReasonInterval           = "release_interval"
+	protectionReleaseReasonNotApplied         = "release_not_applied"
+	protectionReleaseReasonObserveOnly        = "release_observe_only"
+	protectionReleaseReasonKeptCurrent        = "release_kept_current"
+	protectionReleaseReasonProtectionBypassed = "protection_bypassed"
+	protectionReleaseReasonProtectionDisabled = "protection_disabled"
 
 	switchGateReasonRelease = "bypassed_by_release"
 )
@@ -52,7 +52,7 @@ func unavailableProtectionRelease(ctx *RequestContext, cfg config.RouterLearning
 	}
 	verdict.reason = reason
 	if !cfg.Release.EffectiveEnabled() {
-		verdict.reason = protectionReleaseReasonDisabled
+		verdict.reason = protectionReleaseReasonReleaseDisabled
 	}
 	return verdict
 }
@@ -71,7 +71,7 @@ func evaluateProtectionRelease(
 		return verdict
 	}
 	if !cfg.Release.EffectiveEnabled() {
-		verdict.reason = protectionReleaseReasonDisabled
+		verdict.reason = protectionReleaseReasonReleaseDisabled
 		return verdict
 	}
 	if session == nil || strings.TrimSpace(session.PreviousModel) == "" {

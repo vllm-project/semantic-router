@@ -13,6 +13,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
+const protectionReasonMissingIdentity = "missing_identity"
+
 type routerLearningProtectionPreflight struct {
 	enabled         bool
 	mode            string
@@ -49,7 +51,7 @@ func (r *OpenAIRouter) applyProtectionPreflight(input routerLearningInput) route
 		return preflight
 	}
 	if !identityOK {
-		preflight.policy = newProtectionPolicy(input.ctx, cfg, mode, routerLearningActionSuppressSampling, "missing_identity", scope)
+		preflight.policy = newProtectionPolicy(input.ctx, cfg, mode, routerLearningActionSuppressSampling, protectionReasonMissingIdentity, scope)
 		return preflight
 	}
 	if input.ctx != nil {
@@ -154,13 +156,13 @@ func (r *OpenAIRouter) applyProtectionSwitch(
 		}
 		decision.changesModel = learningChangesModel(input.baseResult, baseResult)
 		decision.policy = preflight.policy
-		release = unavailableProtectionRelease(input.ctx, preflight.config, protectionReleaseReasonBypass)
+		release = unavailableProtectionRelease(input.ctx, preflight.config, protectionReleaseReasonProtectionBypassed)
 		recordProtectionReleaseWarning(input.ctx, release)
 		return decision, nil
 	}
 	if !preflight.enabled {
-		reason := protectionReleaseReasonOff
-		if preflight.policy.Reason == "missing_identity" {
+		reason := protectionReleaseReasonProtectionDisabled
+		if preflight.policy.Reason == protectionReasonMissingIdentity {
 			reason = preflight.policy.Reason
 		}
 		release = unavailableProtectionRelease(input.ctx, preflight.config, reason)
