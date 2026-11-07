@@ -80,6 +80,78 @@ are hashed. `--limit` creates a labeled custom subset in either mode. Never edit
 a prepared file in place. New questions, selection rules or source bytes create
 a new identity.
 
+## Legacy MMLU-Pro diagnostic
+
+`legacy-mmlu-pro` runs the plain prompt and answer extraction from the
+[bench reasoning suite](https://github.com/vllm-project/semantic-router/blob/a00f4b219357fbc77410748f3e4dbdc0a8e59e28/bench/reasoning/router_reason_bench_multi_dataset.py)
+through sr-bench's normal request ledger and limits. It is a separate diagnostic,
+not the published `mmlu-pro` adapter. Its report has `sr_bench_score: null`;
+the published benchmarks and weights are unchanged.
+
+Install `vllm-sr[bench]` on this host, then prepare the pinned MMLU-Pro source:
+
+```bash
+vllm-sr benchmark --store ./data/sr-bench dataset prepare --local \
+  --benchmark legacy-mmlu-pro --profile smoke > legacy-mmlu-dataset.json
+```
+
+Extension preparation currently requires `--local`. It does not use the
+shared-worker automatic download flow. The prepared dataset can be run by the
+local benchmark service like any other frozen dataset.
+
+For a backend already serving `served-model-name` at
+`http://127.0.0.1:8000/v1`, write the run manifest from the prepared dataset:
+
+```python
+import json
+from pathlib import Path
+
+dataset = json.loads(Path("legacy-mmlu-dataset.json").read_text())
+manifest = {
+    "version": "sr-bench-1.0",
+    "name": "Legacy MMLU plain comparison",
+    "mode": "live",
+    "profile": dataset["profile"],
+    "seed": dataset["seed"],
+    "dataset": dataset,
+    "targets": [{
+        "id": "direct",
+        "kind": "single",
+        "base_url": "http://127.0.0.1:8000/v1",
+        "model": "served-model-name",
+    }],
+    "cost_policy": "capability_only",
+    "limits": {"concurrency": 1, "max_output_tokens": 4096},
+    "sampling": {"temperature": 0, "max_tokens": 4096},
+}
+Path("legacy-mmlu-run.json").write_text(json.dumps(manifest, indent=2))
+```
+
+Set the actual endpoint and model identity before running. This example permits
+unknown prices and cannot establish cost savings.
+
+```bash
+vllm-sr benchmark --store ./data/sr-bench plan \
+  --manifest legacy-mmlu-run.json --output legacy-mmlu-frozen.json
+vllm-sr benchmark --store ./data/sr-bench run \
+  --manifest legacy-mmlu-frozen.json
+vllm-sr benchmark --store ./data/sr-bench report RUN_ID \
+  --output legacy-mmlu-report.json
+```
+
+Preparation uses sr-bench's existing MMLU profile sizes and deterministic
+selection, not bench's per-category sampler. To compare runners, freeze the
+same source question IDs, option order and reference answers. Use `--source-path`
+and `--revision` for a saved native MMLU record file; `--limit` labels a smaller
+comparison as a custom subset.
+
+The diagnostic preserves the legacy extractor's precedence, including guesses
+from prose that the published grader rejects. It still grades only the visible
+final channel. Reasoning-only responses do not become answers, and truncated
+responses remain output failures. The legacy non-streaming/reasoning-content
+fallback, explicit-CoT and reasoning-mode comparisons are outside this
+diagnostic's parity claim. The old package, aliases and runners remain available.
+
 ## Reserve named evaluation history
 
 For repeated evaluations, prepare native sources with `--source-partition` to
