@@ -23,7 +23,6 @@ func TestLocalClassifierUsesCanonicalGuardContract(t *testing.T) {
 	}
 	// A generic local classifier runs a classify head, which Vela 2.0 does not
 	// have, so the profile keeps Vela 1.0 Guard.
-	guard := "models/Vela-1.0-Encoder-307M-Guard"
 	profile := read("values.yaml")["config"].(map[string]any)
 	routing := profile["routing"].(map[string]any)
 	classifiers := routing["signals"].(map[string]any)["classifiers"].([]any)
@@ -31,8 +30,11 @@ func TestLocalClassifierUsesCanonicalGuardContract(t *testing.T) {
 		t.Fatal("local classifier profile must exercise one isolated real classifier")
 	}
 	classifier := classifiers[0].(map[string]any)
-	if classifier["model_path"] != guard || classifier["type"] != "local" || classifier["use_cpu"] != true {
-		t.Fatalf("local classifier must use the Vela 1.0 Guard model on CPU: %#v", classifier)
+	name, _ := classifier["deployment"].(string)
+	deployments := profile["global"].(map[string]any)["model_catalog"].(map[string]any)["deployments"].(map[string]any)
+	guard, _ := deployments[name].(map[string]any)
+	if guard["provider"] != "model_runtime" || guard["artifact"] != "vllm-sr/Vela-1.0-Encoder-307M-Guard" || guard["device"] != "cpu" {
+		t.Fatalf("local classifier must use the Vela 1.0 Guard model on CPU: %#v %#v", classifier, guard)
 	}
 	if !reflect.DeepEqual(classifier["labels"], []any{"benign", "jailbreak"}) {
 		t.Fatal("local classifier labels must preserve the published Guard output order")

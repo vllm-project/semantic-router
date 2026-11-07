@@ -84,7 +84,7 @@ func TestCompileModelBindingsResolvesAnExplicitHallucinationBinding(t *testing.T
 		t.Fatal(err)
 	}
 	spec, _ := plan.Lookup(DefaultRecipeName, "hallucination_detector")
-	if spec.Deployment.ExternalModel != "grounding" || spec.Binding.Adapter != RemoteClassifierProtocolHTTPClassify {
+	if spec.Deployment.Provider != ClassifyProvider || spec.Deployment.Endpoint != "http://127.0.0.1:9000" || spec.Binding.Adapter != RemoteClassifierProtocolHTTPClassify {
 		t.Fatalf("explicit binding = %+v", spec)
 	}
 }

@@ -96,3 +96,30 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 tools/ci/community_lifecycle.py sync-issues --event "$GITHUB_EVENT_PATH"
+
+  issue-acceptance-sweep:
+    name: Reconcile issue acceptance
+    if: >-
+      (github.repository == 'vllm-project/semantic-router'
+      && github.event_name == 'schedule')
+      || github.event_name == 'workflow_dispatch'
+    concurrency:
+      group: community-label-sync-acceptance-sweep
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out trusted default-branch code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Accept issues whose /accept reconciliation was missed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Scheduled runs revisit issues updated in the last three days, well
+          # beyond the hourly interval; a manual run sweeps the whole backlog.
+          ACCEPTANCE_SWEEP_LOOKBACK_HOURS: ${{ github.event_name == 'schedule' && '72' || '0' }}
+        run: python3 tools/ci/community_lifecycle.py accept-issues --event "$GITHUB_EVENT_PATH"
