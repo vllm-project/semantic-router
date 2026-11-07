@@ -18,7 +18,13 @@ import { DashboardView, EntityListView, SidebarSection } from './builderPageDash
 import { EntityDetailView } from './builderPageEntityDetailView'
 import { AddRouteForm } from './builderPageRouteForms'
 import { BuilderValidationPanel } from './builderPageValidationPanel'
-import type { BuilderSelectedEntity, EntityKind, SectionState, Selection } from './builderPageTypes'
+import {
+  isSelectedSignal,
+  type BuilderSelectedEntity,
+  type EntityKind,
+  type SectionState,
+  type Selection,
+} from './builderPageTypes'
 import type { BuilderRoutingScope } from './builderPageRoutingScopeSupport'
 import { BuilderRoutingScopeBar } from './builderPageRoutingScopeBar'
 import { useResizableWidth } from './builderPageResizeHooks'
@@ -288,11 +294,11 @@ const VisualMode: React.FC<VisualModeProps> = ({
           >
             {ast?.signals?.map((s) => (
               <SidebarEntityItem
-                key={s.name}
-                active={selection?.kind === 'signal' && selection.name === s.name}
+                key={`${s.signalType}:${s.name}`}
+                active={isSelectedSignal(selection, s)}
                 onClick={() => {
                   onSetAddingEntity(null)
-                  onSelect({ kind: 'signal', name: s.name })
+                  onSelect({ kind: 'signal', name: s.name, signalType: s.signalType })
                 }}
               >
                 <SignalIcon className={styles.sidebarItemIcon} />
