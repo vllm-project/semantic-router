@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
@@ -63,12 +64,167 @@ func TestClassifyTurnOutcome(t *testing.T) {
 			usage: responseUsageMetrics{completionTokens: 42, completionTokensReported: true},
 			want:  sessiontelemetry.TurnProgress,
 		},
+		{
+			name: "structured tool failure precedes missing usage",
+			ctx: &RequestContext{
+				UpstreamStatusCode: 200,
+				SemanticRequest:    requestWithToolResultError(true),
+			},
+			want: sessiontelemetry.TurnToolError,
+		},
+		{
+			name: "structured tool failure precedes reported no progress",
+			ctx: &RequestContext{
+				UpstreamStatusCode: 200,
+				SemanticRequest:    requestWithToolResultError(true),
+			},
+			usage: responseUsageMetrics{completionTokens: 0, completionTokensReported: true},
+			want:  sessiontelemetry.TurnToolError,
+		},
+		{
+			name: "provider errors still precede structured tool failure",
+			ctx: &RequestContext{
+				UpstreamStatusCode: 503,
+				SemanticRequest:    requestWithToolResultError(true),
+			},
+			usage: responseUsageMetrics{completionTokens: 5, completionTokensReported: true},
+			want:  sessiontelemetry.TurnProviderError,
+		},
+		{
+			name: "free-form tool text is not a tool failure",
+			ctx: &RequestContext{
+				UpstreamStatusCode: 200,
+				SemanticRequest:    requestWithToolResultText("ERROR: tool failed"),
+			},
+			usage: responseUsageMetrics{completionTokens: 8, completionTokensReported: true},
+			want:  sessiontelemetry.TurnProgress,
+		},
+		{
+			name:  "explicit ToolResultFailed fact is enough without scanning text",
+			ctx:   &RequestContext{UpstreamStatusCode: 200, ToolResultFailed: true},
+			usage: responseUsageMetrics{completionTokens: 0},
+			want:  sessiontelemetry.TurnToolError,
+		},
+		{
+			name: "prior-turn tool failure does not classify a later user turn",
+			ctx: &RequestContext{
+				UpstreamStatusCode: 200,
+				SemanticRequest:    requestWithPriorTurnToolFailureThenNewUserTurn(),
+			},
+			usage: responseUsageMetrics{completionTokens: 8, completionTokensReported: true},
+			want:  sessiontelemetry.TurnProgress,
+		},
 	}
 
 	for _, tc := range cases {
 		if got := classifyTurnOutcome(tc.ctx, tc.usage); got != tc.want {
 			t.Fatalf("%s: category = %q, want %q", tc.name, got, tc.want)
 		}
+	}
+}
+
+func requestWithToolResultError(failed bool) *llmprotocol.Request {
+	flag := failed
+	return &llmprotocol.Request{Messages: []llmprotocol.Message{{
+		Role: llmprotocol.RoleTool,
+		Content: []llmprotocol.Content{{
+			Kind: llmprotocol.ContentToolResult,
+			ToolResult: &llmprotocol.ToolResult{
+				CallID:  "call_1",
+				IsError: &flag,
+				Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "ignored"}},
+			},
+		}},
+	}}}
+}
+
+func requestWithToolResultText(text string) *llmprotocol.Request {
+	return &llmprotocol.Request{Messages: []llmprotocol.Message{{
+		Role: llmprotocol.RoleTool,
+		Content: []llmprotocol.Content{{
+			Kind: llmprotocol.ContentToolResult,
+			ToolResult: &llmprotocol.ToolResult{
+				CallID:  "call_1",
+				Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}},
+			},
+		}},
+	}}}
+}
+
+func requestWithPriorTurnToolFailureThenNewUserTurn() *llmprotocol.Request {
+	failed := true
+	return &llmprotocol.Request{Messages: []llmprotocol.Message{
+		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "first question"}}},
+		{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: "call_1", Name: "lookup"}}}},
+		{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{
+			Kind: llmprotocol.ContentToolResult,
+			ToolResult: &llmprotocol.ToolResult{
+				CallID:  "call_1",
+				IsError: &failed,
+				Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "boom"}},
+			},
+		}}},
+		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "new question after the failure"}}},
+	}}
+}
+
+func TestAttachSemanticRequestCapturesStructuredToolFailure(t *testing.T) {
+	ctx := &RequestContext{}
+	attachSemanticRequest(ctx, requestWithToolResultError(true))
+	if !ctx.ToolResultFailed {
+		t.Fatal("structured IsError must be captured on the request context")
+	}
+	if classifyTurnOutcome(ctx, responseUsageMetrics{}) != sessiontelemetry.TurnToolError {
+		t.Fatal("captured tool failure must classify as TurnToolError")
+	}
+
+	clean := &RequestContext{}
+	attachSemanticRequest(clean, requestWithToolResultText("failed"))
+	if clean.ToolResultFailed {
+		t.Fatal("free-form tool text must not set ToolResultFailed")
+	}
+}
+
+func TestAnthropicDecodeToContextIgnoresPriorTurnToolFailure(t *testing.T) {
+	request := decodeSignalRequest(t, llmprotocol.AnthropicMessagesV1, `{
+		"model":"test-model",
+		"max_tokens":32,
+		"messages":[
+			{"role":"user","content":"first question"},
+			{"role":"assistant","content":[{"type":"tool_use","id":"call-1","name":"lookup","input":{}}]},
+			{"role":"user","content":[{"type":"tool_result","tool_use_id":"call-1","content":"boom","is_error":true}]},
+			{"role":"user","content":"new question after the failure"}
+		]
+	}`)
+	ctx := &RequestContext{UpstreamStatusCode: 200}
+	attachSemanticRequest(ctx, request)
+	if ctx.ToolResultFailed {
+		t.Fatal("a later Anthropic user turn must not inherit a prior tool_result is_error")
+	}
+	got := classifyTurnOutcome(ctx, responseUsageMetrics{completionTokens: 8, completionTokensReported: true})
+	if got != sessiontelemetry.TurnProgress {
+		t.Fatalf("category = %q, want %q", got, sessiontelemetry.TurnProgress)
+	}
+}
+
+func TestAnthropicDecodeToContextClassifiesCurrentTurnToolFailure(t *testing.T) {
+	request := decodeSignalRequest(t, llmprotocol.AnthropicMessagesV1, `{
+		"model":"test-model",
+		"max_tokens":32,
+		"messages":[
+			{"role":"user","content":"first question"},
+			{"role":"assistant","content":[{"type":"tool_use","id":"call-1","name":"lookup","input":{}}]},
+			{"role":"user","content":[{"type":"tool_result","tool_use_id":"call-1","content":"boom","is_error":true}]}
+		]
+	}`)
+	ctx := &RequestContext{UpstreamStatusCode: 200}
+	attachSemanticRequest(ctx, request)
+	if !ctx.ToolResultFailed {
+		t.Fatal("current-turn Anthropic tool_result is_error must be captured")
+	}
+	got := classifyTurnOutcome(ctx, responseUsageMetrics{completionTokens: 8, completionTokensReported: true})
+	if got != sessiontelemetry.TurnToolError {
+		t.Fatalf("category = %q, want %q", got, sessiontelemetry.TurnToolError)
 	}
 }
 

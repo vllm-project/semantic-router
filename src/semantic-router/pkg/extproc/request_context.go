@@ -172,6 +172,11 @@ type RequestContext struct {
 	// before any phase reads it.
 	UpstreamResponseGzip bool
 
+	// ToolResultFailed is a request-scoped fact: the live semantic request
+	// carries a structured tool-result failure (ToolResult.IsError=true).
+	// Free-form tool text never sets this.
+	ToolResultFailed bool
+
 	// UpstreamBackendAddress is the Envoy-selected upstream host:port for this request.
 	UpstreamBackendAddress string
 	// ResponseHeadersContinued indicates whether response headers were forwarded
