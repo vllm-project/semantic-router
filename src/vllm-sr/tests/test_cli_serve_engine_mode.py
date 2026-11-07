@@ -439,6 +439,7 @@ def test_startup_mode_preserves_source_and_resets_engine_without_flag(
 def test_serve_projects_host_ids_once_and_forwards_the_existing_mask(
     tmp_path, monkeypatch
 ):
+    monkeypatch.setattr(execution_platform.sys, "platform", "linux")
     monkeypatch.setattr(
         execution_platform,
         "_host_devices",

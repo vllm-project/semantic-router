@@ -94,6 +94,21 @@ func validateJailbreakContracts(cfg *RouterConfig) error {
 			)
 		}
 
+		if method == JailbreakMethodContrastive {
+			if !hasNonBlankJailbreakPattern(rule.JailbreakPatterns) {
+				return fmt.Errorf(
+					"routing.signals.jailbreak %q: method %q requires at least one non-blank jailbreak_pattern",
+					name, JailbreakMethodContrastive,
+				)
+			}
+			if !hasNonBlankJailbreakPattern(rule.BenignPatterns) {
+				return fmt.Errorf(
+					"routing.signals.jailbreak %q: method %q requires at least one non-blank benign_pattern",
+					name, JailbreakMethodContrastive,
+				)
+			}
+		}
+
 		if method != JailbreakMethodContrastive &&
 			(len(rule.JailbreakPatterns) > 0 || len(rule.BenignPatterns) > 0) {
 			return fmt.Errorf(
@@ -125,4 +140,13 @@ func validateJailbreakContracts(cfg *RouterConfig) error {
 		}
 	}
 	return nil
+}
+
+func hasNonBlankJailbreakPattern(patterns []string) bool {
+	for _, pattern := range patterns {
+		if strings.TrimSpace(pattern) != "" {
+			return true
+		}
+	}
+	return false
 }

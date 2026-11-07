@@ -329,7 +329,7 @@ verifications:
     worker: router
     workflow: .github/workflows/test-tools.yml
     target: test-bench-tools
-    inventory: bench-research-tools-pytest-discovery
+    inventory: bench-research-tools-framework-discovery
 
   harness-tools:
     layer: source

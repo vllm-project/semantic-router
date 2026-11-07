@@ -27,7 +27,6 @@ from cli.model_runtime_retired import (  # noqa: E402
     retired_model_fields,
 )
 from cli.parser import ConfigParseError, parse_user_config  # noqa: E402
-from cli.validator_decision_model import model_runtime_deployment_error  # noqa: E402
 
 ROUTER_PARSER = REPO_ROOT / "src/semantic-router/pkg/config/loader_model_execution.go"
 
@@ -313,5 +312,7 @@ def test_parsing_refuses_a_runtime_profile_and_names_the_migration(tmp_path):
     migrated_path = tmp_path / "migrated.yaml"
     migrated_path.write_text(yaml.safe_dump(migrated, sort_keys=False))
     parse_user_config(str(migrated_path), log_summary=False)
-    judge = migrated["global"]["model_catalog"]["deployments"]["judge"]
-    assert model_runtime_deployment_error(judge) is None
+    assert migrated["global"]["model_catalog"]["deployments"]["judge"] == {
+        "provider": "model_runtime",
+        "artifact": "vllm-sr/Vela-2.0-0.3B",
+    }

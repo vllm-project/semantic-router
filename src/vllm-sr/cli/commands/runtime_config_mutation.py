@@ -402,7 +402,7 @@ def _apply_algorithm_override(
 
 def inject_algorithm_into_config(config_path: Path, algorithm: str) -> Path:
     """Create a temporary config with algorithm.type injected into all decisions."""
-    with config_path.open() as handle:
+    with config_path.open(encoding="utf-8") as handle:
         config = yaml.safe_load(handle) or {}
 
     normalized_algorithm = algorithm.lower()

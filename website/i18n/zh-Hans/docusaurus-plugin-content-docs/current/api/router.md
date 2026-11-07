@@ -143,6 +143,30 @@ deployment Chat 路径从 URL 读取模型名；Responses 和 v1 Chat 路径从�
 
 GitHub Copilot CLI 使用 Azure 模式时，设置 `COPILOT_PROVIDER_TYPE=azure`、指向监听器的 `COPILOT_PROVIDER_BASE_URL`，以及作为 Router 模型名的 `COPILOT_PROVIDER_WIRE_MODEL`。设置 `COPILOT_PROVIDER_WIRE_API=responses` 后，CLI 使用 `/openai/v1/responses`；设置 `COPILOT_PROVIDER_AZURE_API_VERSION` 后使用 `/openai/responses`。Router 接受 Responses 请求中的 `reasoning.summary`：对 Responses 后端会转发该设置；对 Chat Completions 或 Messages 后端仍会处理请求，但丢弃摘要设置并在 `x-vsr-protocol-warnings` 中说明。
 
+Chat Completions 支持 assistant 消息及流式 delta 中的 OpenRouter
+`reasoning_details`。文本、摘要、加密和服务端工具调用块在响应及下一轮 Chat
+请求中保留原顺序、ID、格式、索引和签名。工具调用返回结果时应回传原始块，
+不要摘要或重排。缓冲响应以 `reasoning_content` 保留普通推理文本。同格式的 Chat
+流式响应会原样透传上游的 delta，保留其字段名，OpenRouter 通常为 `reasoning`；由
+Router 自行生成的 Chat 流（例如缓存重放）使用 `reasoning_content`。在下一轮请求中
+类型化块优先，Router 不会把 `reasoning` 或 `reasoning_content` 中的文本再转发一次。
+类型相同且索引或 ID 相同的流式片段按顺序累积；同一索引下出现另一种类型的片段时
+会开始一个新块，例如 Gemini 模型为工具调用发送的加密签名。同时缺少索引和 ID 的块
+保持独立，Router 不推断它们是否属于同一块。
+
+只有 Chat Completions 能承载这些块。Responses 或 Messages 客户端使用 Chat 后端时
+仍会得到响应：Router 丢弃这些块并保留推理文本。缓冲响应在
+`x-vsr-protocol-warnings` 中以 `dropped;...;reasoning_details` 报告丢弃。流式响应
+在发现丢弃时已发出响应头，因此丢弃只记录在 `llm_translation_lossy_total` 指标和
+`translation_lossy` 调试日志事件中，流本身不携带提示。
+
+历史中带有这些块的请求无法发送到 Responses 或 Messages 后端，会返回
+`unsupported_capability`。除非 `candidate_requirements.capabilities` 设为
+`declared`，候选选择不会主动避开这些后端。Looper 决策和上下文压缩恢复构造内部
+调用时无法承载这些块，因此 Router 会拒绝执行这类内部调用，而不是在缺少这些块的
+情况下发出。Looper 决策返回 400。被拒绝的上下文恢复按插件的 `failure_mode` 处理：
+`fail_closed` 返回 502，默认的 `fail_open` 返回去掉检索调用的原始响应。
+
 ## 路由错误 {#routing-errors}
 
 Router 无法路由某个请求时，会直接应答该请求，不调用任何后端。错误采用客户端所用的协议。在 OpenAI Chat Completions 和 Responses 的错误中，`error.code` 是稳定的原因码，`error.message` 是简短消息。除预算错误外，消息不包含模型、决策或请求内容：

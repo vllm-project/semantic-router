@@ -112,28 +112,31 @@ func TestDecisionModelReferenceIsExactObject(t *testing.T) {
 func TestDecisionModelCanonicalExport(t *testing.T) {
 	cfg := mustParseDecisionModel(t, selectedDecisionYAML("vllm-sr/Vela-2.0-4B", "      feedback_detector: models/Vela-1.0-Encoder-307M-Feedback\n"))
 	document := CanonicalConfigFromRouterConfig(cfg)
-	system := document.Global.ModelCatalog.System
-	if system.DecisionModel.Deployment != "selected" || system.FeedbackDetector != "models/Vela-1.0-Encoder-307M-Feedback" || system.DomainClassifier != "" {
-		t.Fatalf("bad projection %+v", system)
+	catalog := document.Global.ModelCatalog
+	if catalog.System != (CanonicalSystemModels{DecisionModel: DecisionModelBinding{Deployment: "selected"}}) {
+		t.Fatalf("the export writes only the decision model under system: %+v", catalog.System)
+	}
+	feedback, ok := catalog.Bindings[BindingKey("feedback_detector")]
+	if !ok || catalog.Deployments[feedback.Deployment].Artifact != "vllm-sr/Vela-1.0-Encoder-307M-Feedback" {
+		t.Fatalf("the feedback line is exported as a binding: %+v", catalog.Bindings)
+	}
+	if _, bound := catalog.Bindings[BindingKey("domain_classifier")]; bound {
+		t.Fatal("a module that follows the decision model is not bound")
 	}
 	if document.Global.ModelCatalog.Deployments["selected"].Artifact != "vllm-sr/Vela-2.0-4B" {
 		t.Fatal("lost selected resource")
 	}
 }
 
-// The hazard line never follows the decision model: every other artifact -
-// DefaultSystemModels, the shipped config's explicit line, the model_eval
-// mirror - pins it to the Vela 1.0 Hazard encoder, and the resolution must
-// not bind the safety module's hazard head to a model with no hazard
-// question.
+// The pre-declared hazard deployment never follows the decision model: it
+// stays the Vela 1.0 Hazard encoder, as does a deprecated model_ref: hazard.
 func TestDecisionModelPinsHazardToTheVela1Encoder(t *testing.T) {
 	cfg := mustParseDecisionModel(t, selectedDecisionYAML("vllm-sr/Vela-2.0-0.3B", ""))
-	canonical := CanonicalConfigFromRouterConfig(cfg)
-	resolved, err := resolveCanonicalGlobal(canonical.Global, canonical.globalOverrideRaw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := resolved.ModelCatalog.System.Hazard; got != "models/Vela-1.0-Encoder-307M-Hazard" {
+	if got := cfg.ModelDeployments[HazardDeployment].Artifact; got != "vllm-sr/Vela-1.0-Encoder-307M-Hazard" {
 		t.Fatalf("hazard = %q, want the Vela 1.0 Hazard encoder", got)
+	}
+	canonical := CanonicalConfigFromRouterConfig(cfg)
+	if got := canonical.Global.ModelCatalog.Deployments[HazardDeployment].Artifact; got != "vllm-sr/Vela-1.0-Encoder-307M-Hazard" {
+		t.Fatalf("exported hazard = %q, want the Vela 1.0 Hazard encoder", got)
 	}
 }
