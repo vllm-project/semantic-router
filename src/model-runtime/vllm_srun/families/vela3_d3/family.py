@@ -34,8 +34,9 @@ from ..decision3.package import STATE_ONCE_MODES
 from ..vela3_shared import PRESETS
 from . import package as pkg
 from .gates import Gates
+from .labeldef import lm_head_spec, writer_of
 from .model import GatedDecisions, SpanSetup, TurboDecisions, Vela3D3Model
-from .span_policy import ROUTES, Policy
+from .span_policy import ROUTES, Definitions, Policy
 from .span_read import SpanReader
 from .span_render import Renderer
 
@@ -137,7 +138,11 @@ class Vela3D3Family(ModelFamily):
         return replace(
             spec,
             name=package.model_name,
-            backbone=replace(spec.backbone, gated=gated),
+            backbone=replace(
+                spec.backbone,
+                gated=gated,
+                lm_head=lm_head_spec(details.root, details.vela3, spec.backbone.config),
+            ),
         )
 
     def load(
@@ -162,7 +167,7 @@ class Vela3D3Family(ModelFamily):
                 policy=Policy(details.span, set(heads)),
                 renderer=Renderer(model.tokenizer, model.codes),
                 reader=SpanReader(engine_model, heads),
-                definitions=_names_only,
+                definitions=_definitions(details, model),
             ),
         )
         model.info = replace(
@@ -194,13 +199,21 @@ def _head(path: Path, device: torch.device) -> SpanHead:
     return head.to(device).float().eval()
 
 
-def _names_only(names: list[str], only: set[str]) -> dict[str, str]:
-    """No definition writer yet: labels without a description run by name.
-
-    The packages' writers (vela3-mini's base, vela3-flash's grafted head) take
-    this place in #5703.
-    """
-    return {}
+def _definitions(details: pkg.Vela3D3Package, model: Vela3D3Model) -> Definitions:
+    """The package's definition writer. ``names`` (and a base with no head) defines nothing."""
+    definitions = details.vela3.get("definitions") or {}
+    cache = definitions.get("cache_file") if isinstance(definitions, dict) else None
+    return writer_of(
+        (
+            str(definitions.get("writer") or "names")
+            if isinstance(definitions, dict)
+            else "names"
+        ),
+        model.engine_model,
+        model.tokenizer,
+        model.pad_id,
+        details.root / cache if isinstance(cache, str) else None,
+    )
 
 
 # The one way a state-once base answers its gated rows again (``decisions.attention``): vela3-turbo's.

@@ -125,6 +125,90 @@ def causal_conv1d_ref(
     return out.to(hidden_states.dtype)
 
 
+def causal_conv1d_update_ref(
+    hidden_states: torch.Tensor,
+    conv_state: torch.Tensor,
+    weight: torch.Tensor,
+    bias: torch.Tensor | None = None,
+    activation: str | None = None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """One cached causal-conv step: concatenate the state, conv1d with no padding, keep the new tail.
+
+    ``hidden_states`` and ``conv_state`` are ``[batch, channels, time]``. The returned state is the
+    last ``conv_state`` frames of the concatenation (Transformers' ``causal_conv1d_update``).
+    """
+    _, hidden_size, seq_len = hidden_states.shape
+    state_len = conv_state.shape[-1]
+    joined = torch.cat([conv_state, hidden_states], dim=-1).to(weight.dtype)
+    updated = joined[:, :, -state_len:].contiguous()
+    out = F.conv1d(joined, weight.unsqueeze(1), bias, padding=0, groups=hidden_size)[
+        :, :, -seq_len:
+    ]
+    if activation is not None:
+        out = _activation(activation)(out)
+    return out.to(hidden_states.dtype), updated.to(hidden_states.dtype)
+
+
+def recurrent_gated_delta_rule_ref(
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    g: torch.Tensor,
+    beta: torch.Tensor,
+    initial_state: torch.Tensor | None = None,
+    output_final_state: bool = False,
+    use_qk_l2norm_in_kernel: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor | None]:
+    """The gated delta rule one token at a time (Transformers' ``torch_recurrent_gated_delta_rule``).
+
+    Inputs are ``[batch, time, heads, dim]``, the same layout as ``chunk_gated_delta_rule_ref``.
+    A cached decode step passes the prefill's final state as ``initial_state``.
+    """
+    initial_dtype = query.dtype
+    if use_qk_l2norm_in_kernel:
+        query = l2norm(query, dim=-1, eps=1e-6)
+        key = l2norm(key, dim=-1, eps=1e-6)
+    query, key, value, beta, decay = [
+        x.transpose(1, 2).to(torch.float32, memory_format=torch.contiguous_format)
+        for x in (query, key, value, beta, g)
+    ]
+    batch_size, num_heads, sequence_length, k_head_dim = key.shape
+    v_head_dim = value.shape[-1]
+    query = query * (k_head_dim**-0.5)
+    core = torch.zeros(
+        batch_size,
+        num_heads,
+        sequence_length,
+        v_head_dim,
+        dtype=value.dtype,
+        device=value.device,
+    )
+    if initial_state is None:
+        current = torch.zeros(
+            batch_size,
+            num_heads,
+            k_head_dim,
+            v_head_dim,
+            dtype=value.dtype,
+            device=value.device,
+        )
+    else:
+        current = initial_state.to(value)
+    for index in range(sequence_length):
+        query_t = query[:, :, index]
+        key_t = key[:, :, index]
+        value_t = value[:, :, index]
+        decay_t = decay[:, :, index].exp().unsqueeze(-1).unsqueeze(-1)
+        beta_t = beta[:, :, index].unsqueeze(-1)
+        current = current * decay_t
+        memory = (current * key_t.unsqueeze(-1)).sum(dim=-2)
+        delta = (value_t - memory) * beta_t
+        current = current + key_t.unsqueeze(-1) * delta.unsqueeze(-2)
+        core[:, :, index] = (current * query_t.unsqueeze(-1)).sum(dim=-2)
+    core = core.transpose(1, 2).to(initial_dtype, memory_format=torch.contiguous_format)
+    return core, current if output_final_state else None
+
+
 def gdn_prep_ref(
     mixed_qkv: torch.Tensor,
     b: torch.Tensor,
