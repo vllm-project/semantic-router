@@ -26,7 +26,7 @@ type persistenceRegressionStore struct {
 }
 
 func (s *persistenceRegressionStore) Store(ctx context.Context, mem *memory.Memory) error {
-	if s.failSession && mem.Source == "session_window" {
+	if s.failSession && mem.Source == "session_window_v2" {
 		return errors.New("session write failed")
 	}
 	// Persistence tests do not need model inference.
@@ -86,7 +86,7 @@ func TestScheduleResponseMemoryStore_QueuedJobUsesSubmissionSnapshot(t *testing.
 	for _, mem := range stored.Memories {
 		assert.NotContains(t, mem.Content, "changed conversation")
 		assert.Contains(t, mem.Content, "Explain how to deploy")
-		if mem.Source == "session_window" {
+		if mem.Source == "session_window_v2" {
 			sessionContent = mem.Content
 		}
 	}

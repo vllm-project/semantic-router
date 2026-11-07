@@ -8,6 +8,11 @@ import (
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 )
 
+const (
+	milvusMillisecondsThreshold int64 = 1e11
+	milvusNanosecondsThreshold  int64 = 1e17
+)
+
 func memoryFromQueryColumns(queryResult []entity.Column) (*Memory, error) {
 	if !queryResultHasData(queryResult) {
 		return nil, fmt.Errorf("memory not found")
@@ -45,11 +50,22 @@ func applyQueryColumnToMemory(memory *Memory, col entity.Column) {
 	case "metadata":
 		populateMemoryFromMetadataJSON(memory, col)
 	case "created_at":
-		assignInt64AtIndex(col, 0, func(v int64) { memory.CreatedAt = time.Unix(v, 0) })
+		assignInt64AtIndex(col, 0, func(v int64) { memory.CreatedAt = timeFromMilvusTimestamp(v) })
 	case "updated_at":
-		assignInt64AtIndex(col, 0, func(v int64) { memory.UpdatedAt = time.Unix(v, 0) })
+		assignInt64AtIndex(col, 0, func(v int64) { memory.UpdatedAt = timeFromMilvusTimestamp(v) })
 	case "embedding":
 		assignEmbeddingAtIndex(col, 0, func(v []float32) { memory.Embedding = v })
+	}
+}
+
+func timeFromMilvusTimestamp(value int64) time.Time {
+	switch {
+	case value >= milvusNanosecondsThreshold || value <= -milvusNanosecondsThreshold:
+		return time.Unix(0, value)
+	case value >= milvusMillisecondsThreshold || value <= -milvusMillisecondsThreshold:
+		return time.UnixMilli(value)
+	default:
+		return time.Unix(value, 0)
 	}
 }
 
@@ -159,8 +175,8 @@ func memoryFromListRow(cols listResultColumns, row int) *Memory {
 	assignVarCharColumnAt(cols.userID, row, func(v string) { mem.UserID = v })
 	assignVarCharColumnAt(cols.typeCol, row, func(v string) { mem.Type = MemoryType(v) })
 	assignListRowMetadata(cols.metadata, row, mem)
-	assignInt64ColumnAt(cols.createdAt, row, func(v int64) { mem.CreatedAt = time.Unix(v, 0) })
-	assignInt64ColumnAt(cols.updatedAt, row, func(v int64) { mem.UpdatedAt = time.Unix(v, 0) })
+	assignInt64ColumnAt(cols.createdAt, row, func(v int64) { mem.CreatedAt = timeFromMilvusTimestamp(v) })
+	assignInt64ColumnAt(cols.updatedAt, row, func(v int64) { mem.UpdatedAt = timeFromMilvusTimestamp(v) })
 	return mem
 }
 
