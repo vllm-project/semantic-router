@@ -63,6 +63,7 @@ func newWorkflowFileToolStateStore(dir string, ttl time.Duration) *workflowFileT
 	s := &workflowFileToolStateStore{
 		dir:          key,
 		ttl:          ttl,
+		now:          time.Now,
 		done:         make(chan struct{}),
 		currentBytes: cleanupStateStoreDirAndGetInitialBytes(key),
 	}
