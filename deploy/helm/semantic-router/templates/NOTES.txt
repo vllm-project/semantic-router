@@ -77,3 +77,7 @@ Gateway mode: {{ include "semantic-router.gatewayMode" . }}
 {{- if and $responseEnabled (eq $responseBackend "redis") }}
 NOTE: Response API Redis backend is not implemented yet and will fail at runtime.
 {{- end }}
+{{- with include "semantic-router.dataVolumeNote" . }}
+
+{{ . }}
+{{- end }}

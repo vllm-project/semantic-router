@@ -51,35 +51,43 @@ routing:
         - model: safety-capable-model
 ```
 
-Without overrides, prompt guard and safety use the default Vela 2.0 judgment
-deployment. The Vela 1.0 Guard and Safety specialists are explicit alternatives
-with their own input windows and calibrated thresholds. Re-evaluate rule
-thresholds when changing models, and distinguish the model input limit from
-its complete-scan budget. See [Choose a model](../choose-a-model#vela-20).
+Without a binding or a rule's own `deployment`, prompt guard and safety use the
+decision model, vela3-fast by default. The Vela 1.0 Guard and Safety
+specialists are explicit alternatives with their own input windows and
+calibrated thresholds. Re-evaluate rule thresholds when changing models, and
+distinguish the model input limit from its complete-scan budget. See
+[Choose a model](../choose-a-model#built-in-signals) and
+[Choose a model for a signal](../../installation/choose-a-model-for-a-signal.md).
 
 ## Choose a model and where it runs
 
-| Feature | Native-head binding | Native-head contract | Model |
+| Feature | Where its deployment is named | Default | Vela 1.0 specialist |
 | --- | --- | --- | --- |
-| Jailbreak | `prompt_guard` | `label_distribution.v1` | `vllm-sr/Vela-2.0-0.3B` (or `vllm-sr/Vela-1.0-Encoder-307M-Guard`) |
-| Safety rule `<name>` | `safety.<name>` | `label_distribution.v1` | `vllm-sr/Vela-2.0-0.3B` (or `vllm-sr/Vela-1.0-Encoder-307M-Safety`) |
-| Explicit hazard cascade of rule `<name>` | `safety.<name>.hazard` | `label_scores.v1` | `vllm-sr/Vela-1.0-Encoder-307M-Hazard` |
+| Jailbreak | `bindings.jailbreak` | The decision model (`vllm-sr/vela3-fast`) | `vllm-sr/Vela-1.0-Encoder-307M-Guard` |
+| Safety rule `<name>` | `deployment` on the rule | The decision model (`vllm-sr/vela3-fast`) | `vllm-sr/Vela-1.0-Encoder-307M-Safety` or `-Shield` |
+| Hazard part of rule `<name>` | `hazard.deployment` on the rule | The pre-declared `hazard` deployment (`vllm-sr/Vela-1.0-Encoder-307M-Hazard`) | |
 
-For generic judgment tasks, an explicit `decision.v1` binding uses the
-selected decision model instead of these native-head contracts. Hazard is
-opt-in: use an explicit specialist binding with its published operating point,
-or a supported generic hazard task. See the [safety signal guide](tutorials/signal/learned/safety.md)
-for complete configurations.
+A rule's hazard part uses Vela 1.0 Hazard unless it names another deployment.
+See the
+[safety signal guide](tutorials/signal/learned/safety.md) for complete
+configurations.
 
-To use Shield for every safety rule, change the module's model:
+To use Shield, declare its deployment and name it on each safety rule:
 
 ```yaml
 global:
   model_catalog:
-    modules:
-      safety:
-        safety:
-          model_id: models/Vela-1.0-Encoder-307M-Shield
+    deployments:
+      shield:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Shield
+        revision: a981a99eeb05a2859b88b5cee9af4352897ec4ec
+routing:
+  signals:
+    safety:
+      - name: unsafe-content
+        deployment: shield
+        threshold: 0.5
 ```
 
 To run Guard on a GPU, describe a deployment and bind it:
@@ -96,14 +104,14 @@ global:
           max_tokens: 32768
           overflow: window
     bindings:
-      prompt_guard:
-        deployment: vela-guard
-        contract: label_distribution.v1
+      jailbreak: vela-guard
 ```
 
-Hazard uses the twelve thresholds published with the model (its operating
-point), so each category keeps the precision it was measured at. You do not
-set them by hand; a rule's `hazard.threshold` only filters further.
+A rule's hazard part matches when the highest score among its `categories`
+reaches the rule's `hazard.threshold`: one threshold for every category it
+selects. To read each category at the threshold Vela 1.0 Hazard publishes for
+it, name the hazard deployment on a classifier rule instead; see
+[classifier signals](tutorials/signal/learned/classifier.md#independent-labels-with-a-frozen-operating-point).
 
 ## When a check cannot finish
 

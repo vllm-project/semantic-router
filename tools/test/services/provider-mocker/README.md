@@ -70,7 +70,9 @@ with `timeout`, `malformed` and `queue` scenarios. POST `/reset` accepts `health
 Protocol marker inputs select tool calls (`__mock_tool_call__`), structured schema
 echo (`__mock_structured_output__`), HTTP 429 (`__mock_provider_error__`), incomplete
 SSE (`__mock_incomplete_stream__`) and partial-output errors
-(`__mock_midstream_error__`). Messages also recognizes `__mock_protocol_matrix__`.
+(`__mock_midstream_error__`). Messages also recognizes `__mock_protocol_matrix__`
+and `__mock_gateway_fields__`, which adds fields no Messages schema declares: a
+`usage.total_cost` in exponent form and a top-level `gateway_trace_id`.
 
 ## Image inputs
 
