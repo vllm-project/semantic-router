@@ -134,4 +134,4 @@ curl -sS http://localhost:8899/v1/chat/completions \
 - 通过模型运行时状态与日志检查 worker 就绪状态和失败原因，参见[运行时排障](../model-runtime/troubleshooting.md)。
 - Router 诊断设 `SR_LOG_LEVEL=debug`。
 - 在运行时调试配置前，先跑 `vllm-sr config validate --config <file>`。
-- 启动和网络失败见[常见错误](/zh-Hans/docs/troubleshooting/common-errors)和[容器连通性](/zh-Hans/docs/troubleshooting/container-connectivity)。
+- 启动和网络失败见[常见错误](/zh-hans/docs/next/troubleshooting/common-errors)和[容器连通性](/zh-hans/docs/next/troubleshooting/container-connectivity)。

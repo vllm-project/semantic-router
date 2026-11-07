@@ -70,7 +70,7 @@ Safety 默认标签为 `safe` 和 `unsafe`。信号匹配后选择配置的处�
 
 Vela 参考配置通过绑定模型产物的 `operating_point` 使用 Hazard 发布的分类别阈值与窗口策略。从 [Vela 配置](../../tutorials/global/vela-models.md#configuration)或 [AMD 配方](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/config.yaml)复制完整 binding，选择策略需要的类别。更换引擎或模型时，保留配套的运行设置。
 
-自定义分类头也可以在 Safety 规则中设置 `hazard` 条件和经过校准的阈值。Safety 先执行，只有其有害内容条件匹配后才执行 Hazard。详见 [Safety 信号指南](/zh-Hans/docs/tutorials/signal/learned/safety)。
+自定义分类头也可以在 Safety 规则中设置 `hazard` 条件和经过校准的阈值。Safety 先执行，只有其有害内容条件匹配后才执行 Hazard。详见 [Safety 信号指南](/zh-hans/docs/tutorials/signal/learned/safety)。
 
 ## 查看实际信号 {#inspect-the-signals}
 

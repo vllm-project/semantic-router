@@ -231,7 +231,7 @@ routing:
             auto_store: true
 ```
 
-详情见 [记忆插件教程](/zh-Hans/docs/tutorials/plugin/memory)。
+详情见 [记忆插件教程](/zh-hans/docs/next/tutorials/plugin/memory)。
 
 ## 性能调优
 
