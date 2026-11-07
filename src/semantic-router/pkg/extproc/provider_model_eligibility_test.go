@@ -109,7 +109,7 @@ func TestCapabilitySelectionPreservesContextEligibility(t *testing.T) {
 		ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
 		ctx.VSRSelectedDecision = decision
 		ctx.VSRContextTokenCount = 8000
-		if _, err := router.contextEligibleDecisionModelRefs(decision.ModelRefs, decision.Name, ctx.VSRContextTokenCount, ctx); err != nil {
+		if _, err := router.contextEligibleDecisionModelRefs(decision.ModelRefs, decision.Name, ctx.VSRContextTokenCount, 1, ctx); err != nil {
 			t.Fatal(err)
 		}
 		dispatch, err := selectCapabilityTestDispatch(router, request, decision, ctx)
