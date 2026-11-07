@@ -133,6 +133,17 @@ func contextReservesCounted(ctx *RequestContext) bool {
 	return ctx != nil && ctx.VSRContextReserveTokens > 0
 }
 
+// candidateSelectionDemand is the demand live selection scores candidates on.
+// It counts reserves exactly when the eligibility filters still do, so
+// selection and preview rank on the count the filters used.
+func candidateSelectionDemand(ctx *RequestContext, decision *config.Decision) selection.CandidateDemand {
+	demand, _ := selection.EffectiveCandidateDemand(ctx.SemanticRequest, decision)
+	if !contextReservesCounted(ctx) {
+		demand = demand.WithoutReserves()
+	}
+	return demand
+}
+
 // minimumContextCandidates is how many candidates a decision needs to keep
 // before the window filter falls back to the count without reserves.
 func minimumContextCandidates(decision *config.Decision) int {

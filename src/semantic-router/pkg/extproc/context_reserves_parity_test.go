@@ -211,3 +211,21 @@ func TestKnownLimitsRefuseOnlyWithoutReserves(t *testing.T) {
 		})
 	}
 }
+
+// Live selection scores candidates on the count the eligibility filters used:
+// with the image reserve while the filters count it, without it once a filter
+// dropped it, as preview does.
+func TestLiveSelectionScoresTheCountTheFiltersUsed(t *testing.T) {
+	request := testNeutralRequest("vllm-sr/auto", "describe this screenshot")
+	request.Messages[0].Content = append(request.Messages[0].Content,
+		llmprotocol.Content{Kind: llmprotocol.ContentImage, URL: "https://example.invalid/image"})
+	full := selection.DemandForRequest(request)
+	require.Positive(t, full.InputReserveTokens)
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+	decision := &config.Decision{Name: "default"}
+
+	ctx.VSRContextReserveTokens = full.InputReserveTokens
+	require.Equal(t, full.InputTokens, candidateSelectionDemand(ctx, decision).InputTokens)
+	dropContextReserves(ctx, decision.Name)
+	require.Equal(t, full.WithoutReserves().InputTokens, candidateSelectionDemand(ctx, decision).InputTokens)
+}

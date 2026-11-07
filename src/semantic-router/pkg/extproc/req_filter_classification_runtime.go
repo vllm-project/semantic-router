@@ -429,7 +429,7 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 		ctx,
 	)
 	if selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) {
-		demand, _ := selection.EffectiveCandidateDemand(ctx.SemanticRequest, result.Decision)
+		demand := candidateSelectionDemand(ctx, result.Decision)
 		selCtx.InputTokens = demand.InputTokens
 		if demand.MaxOutputTokens != nil {
 			selCtx.ExpectedOutputTokens = int(*demand.MaxOutputTokens)
