@@ -42,6 +42,7 @@ func TestHeaderConstants(t *testing.T) {
 		{"VSRPromptCachePreserved", VSRPromptCachePreserved, "x-vsr-prompt-cache-preserved"},
 		{"VSRCacheHit", VSRCacheHit, "x-vsr-cache-hit"},
 		{"VSRKVTransferStatus", VSRKVTransferStatus, "x-vsr-kv-transfer-status"},
+		{"VSRKVTransferReason", VSRKVTransferReason, "x-vsr-kv-transfer-reason"},
 		{"VSRKVSourcePod", VSRKVSourcePod, "x-vsr-kv-source-pod"},
 		{"VSRKVCacheID", VSRKVCacheID, "x-vsr-kv-cache-id"},
 		{"VSRKVMapperID", VSRKVMapperID, "x-vsr-kv-mapper-id"},

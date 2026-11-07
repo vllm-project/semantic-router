@@ -68,23 +68,42 @@ def map_source_cache(
         positions, torch.arange(len(positions), device=positions.device)
     ):
         raise ValueError("source positions must be contiguous")
-    source_keys = {
-        layer: qwen3_rope(key, positions, theta=source_rope_theta, inverse=True)
-        for layer, (key, _) in source.items()
-    }
-    source_values = {layer: value for layer, (_, value) in source.items()}
     target: dict[int, tuple[torch.Tensor, torch.Tensor]] = {}
-    for layer in range(len(artifact.manifest.source_layers_per_target["k"])):
-        pre_rope_key = artifact.apply_layer(
-            layer, "k", source_keys, device=device, dtype=dtype
-        )
-        key = qwen3_rope(
-            pre_rope_key,
-            positions.to(device=pre_rope_key.device),
-            theta=target_rope_theta,
-        )
-        value = artifact.apply_layer(
-            layer, "v", source_values, device=device, dtype=dtype
-        )
-        target[layer] = (key, value)
+    # Bound temporary source and concatenation buffers for long prefixes.
+    for start in range(0, len(positions), 2048):
+        end = min(start + 2048, len(positions))
+        device_positions = positions[start:end].to(device=device, dtype=torch.float32)
+        source_keys = {
+            layer: qwen3_rope(
+                key[start:end].to(device=device),
+                device_positions,
+                theta=source_rope_theta,
+                inverse=True,
+            ).float()
+            for layer, (key, _) in source.items()
+        }
+        source_values = {
+            layer: value[start:end].to(device=device, dtype=torch.float32)
+            for layer, (_, value) in source.items()
+        }
+        for layer in range(len(artifact.manifest.source_layers_per_target["k"])):
+            pre_rope_key = artifact.apply_layer(
+                layer, "k", source_keys, device=device, dtype=dtype
+            )
+            key = qwen3_rope(
+                pre_rope_key,
+                device_positions,
+                theta=target_rope_theta,
+            )
+            value = artifact.apply_layer(
+                layer, "v", source_values, device=device, dtype=dtype
+            )
+            if layer not in target:
+                shape = (len(positions), *key.shape[1:])
+                target[layer] = (
+                    torch.empty(shape, device=device, dtype=dtype),
+                    torch.empty(shape, device=device, dtype=dtype),
+                )
+            target[layer][0][start:end].copy_(key)
+            target[layer][1][start:end].copy_(value)
     return target
