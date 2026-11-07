@@ -809,7 +809,12 @@ The family owns the published readouts (text pooling, the image and speech
 projections, the frozen CLAP residual and the unit normalisations) and the
 processors: the tokenizer, SigLIP's resize and normalisation, and the Whisper
 and CLAP log-mel features, with the Slaney filter banks computed as
-Transformers computes them. Verification checks the SHA-256 of every file it
+Transformers computes them. Mini's contract pins no input sample rate (Nano
+pins 16, 44.1 and 48 kHz), so the resampler refuses a rate whose reduced
+ratio to 16 or 48 kHz would need a sinc kernel above `MAX_KERNEL_ELEMENTS`
+(4M float64 elements, 32 MiB): every standard rate from 8 to 384 kHz reduces
+to under 300K elements, while 8,001 Hz, coprime with both, would need 128M
+per target and the float64 temporaries to build it. Verification checks the SHA-256 of every file it
 reads against the pinned table, that the safetensors header holds exactly the
 tensors the towers and readouts read, and the declared parameter count. The
 towers equal the reference Transformers modules bit for bit on CPU, SigLIP
