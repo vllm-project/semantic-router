@@ -161,7 +161,7 @@ func (p *RetryPolicy) retryAfter(resp *Response, rnd Rand) (time.Duration, bool)
 		return 0, false
 	}
 	seconds, err := strconv.Atoi(strings.TrimSpace(resp.Header.Get("Retry-After")))
-	if err != nil || seconds < 0 || time.Duration(seconds)*time.Second > p.RetryAfterMax {
+	if err != nil || seconds < 0 || int64(seconds) > int64(p.RetryAfterMax/time.Second) {
 		return 0, false
 	}
 	wait := time.Duration(seconds) * time.Second

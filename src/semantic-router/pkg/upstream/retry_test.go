@@ -114,7 +114,7 @@ func TestRetryAfterIsHonoredWithinItsBound(t *testing.T) {
 	if wait, ok := policy.retryAfter(withHeader("2"), rnd); !ok || wait < 2*time.Second || wait >= 3*time.Second {
 		t.Fatalf("Retry-After 2 waits %v (%v), want 2s to 3s", wait, ok)
 	}
-	for _, value := range []string{"60", "soon", "-1", ""} {
+	for _, value := range []string{"60", "18446744074", "soon", "-1", ""} {
 		if _, ok := policy.retryAfter(withHeader(value), rnd); ok {
 			t.Fatalf("Retry-After %q was honored", value)
 		}
