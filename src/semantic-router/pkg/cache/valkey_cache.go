@@ -86,7 +86,8 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 			Host: resolvedHost,
 			Port: valkeyConfig.Connection.Port,
 		}).
-		WithClientName("vllm_cache_client")
+		WithClientName("vllm_cache_client").
+		WithClientInfoTag(valkeyutil.ClientInfoTag)
 
 	if valkeyConfig.Connection.Password != "" {
 		clientConfig = clientConfig.WithCredentials(
