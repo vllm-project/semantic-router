@@ -59,6 +59,9 @@ test-router-flow-bench: $(HARNESS_VENV_DEPS) ## Test the Router Flow EvalScope h
 test-agent-crew: bench-test-deps ## Test the agent crew harness against its stub router
 	@"$(AGENT_PYTHON)" -m pytest -q bench/agent_crew
 
-test-bench-tools: test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew ## Test every registered bench/ research tool
+test-agent-run-replay-bench: $(HARNESS_VENV_DEPS) ## Test the agent run replay against a stand-in Router
+	@"$(AGENT_PYTHON)" -m pytest -q bench/agent_run_replay
 
-.PHONY: bench-test-deps test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-bench-tools
+test-bench-tools: test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-agent-run-replay-bench ## Test every registered bench/ research tool
+
+.PHONY: bench-test-deps test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-agent-run-replay-bench test-bench-tools
