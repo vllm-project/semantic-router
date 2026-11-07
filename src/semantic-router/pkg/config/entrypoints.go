@@ -41,6 +41,7 @@ func (c *RouterConfig) EffectiveEntrypoints(api InferenceAPI) []EntrypointMappin
 		}
 		entrypoint.Source = EntrypointExplicit
 		entrypoint.ModelNames = append([]string(nil), entrypoint.ModelNames...)
+		entrypoint.ClientAuth = entrypoint.ClientAuth.Clone()
 		result = append(result, entrypoint)
 		hasDefault = hasDefault || entrypoint.Recipe == DefaultRecipeName
 	}

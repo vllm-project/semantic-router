@@ -145,10 +145,10 @@ func TestCompileNamesEveryResourceAndItsReferences(t *testing.T) {
 		}
 	}
 	hosted := mustGet(t, resources, KindCluster, "hosted-model")
-	if got := refNames(hosted.Refs); len(got) != 2 || got[1] != "secret/hosted-model" {
+	if got := refNames(hosted.Refs); len(got) != 2 || got[1] != "secret/cluster/hosted-model" {
 		t.Fatalf("hosted cluster refs = %v, want its endpoint and secret", got)
 	}
-	secret := mustGet(t, resources, KindSecret, "hosted-model").Spec.(SecretSpec)
+	secret := mustGet(t, resources, KindSecret, "cluster/hosted-model").Spec.(SecretSpec)
 	if len(secret.Env) != 1 || secret.Env[0] != "TEST_HOSTED_KEY" || secret.Inline != 0 {
 		t.Fatalf("hosted secret spec = %+v", secret)
 	}
@@ -198,7 +198,7 @@ func TestResourceHashesMoveOnlyWithTheirOwnConfiguration(t *testing.T) {
 			name:    "credential value",
 			edit:    func(doc string) string { return doc },
 			env:     "rotated-secret-value",
-			changed: []string{"secret/hosted-model"},
+			changed: []string{"secret/cluster/hosted-model"},
 		},
 		{
 			name:    "listener api key",

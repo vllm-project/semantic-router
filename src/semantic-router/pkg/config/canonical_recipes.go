@@ -12,6 +12,9 @@ type CanonicalEntrypoint struct {
 	API        InferenceAPI `yaml:"api,omitempty" jsonschema:"enum=chat,enum=systemone"`
 	ModelNames []string     `yaml:"model_names"`
 	Recipe     string       `yaml:"recipe"`
+	// ClientAuth stays out of the published schema until the Router enforces
+	// it on every request path; until then normalization rejects it.
+	ClientAuth *EntrypointClientAuth `yaml:"client_auth,omitempty" jsonschema:"-"`
 }
 
 // CanonicalRecipe is a named routing profile selectable through entrypoints.
@@ -170,11 +173,16 @@ func normalizeCanonicalEntrypoints(cfg *RouterConfig, canonical *CanonicalConfig
 				return nil, fmt.Errorf("entrypoints[%d]: model name %q is already %s; entrypoint names must be new virtual names", index, name, meaning)
 			}
 		}
+		clientAuth, err := normalizeEntrypointClientAuth(index, entrypoint.ClientAuth)
+		if err != nil {
+			return nil, err
+		}
 
 		result = append(result, EntrypointMapping{
 			API:        entrypoint.API,
 			ModelNames: names,
 			Recipe:     recipeName,
+			ClientAuth: clientAuth,
 		})
 	}
 	view := *cfg
@@ -294,6 +302,7 @@ func canonicalEntrypointsFromRouterConfig(cfg *RouterConfig) []CanonicalEntrypoi
 			API:        entrypoint.API,
 			ModelNames: append([]string(nil), entrypoint.ModelNames...),
 			Recipe:     string(entrypoint.Recipe),
+			ClientAuth: entrypoint.ClientAuth.Clone(),
 		})
 	}
 	return entrypoints
