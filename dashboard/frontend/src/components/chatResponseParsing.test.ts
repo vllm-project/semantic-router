@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseChatCompletionObject } from './chatResponseParsing'
+import { consumeEventStream, parseChatCompletionObject } from './chatResponseParsing'
 
 describe('parseChatCompletionObject', () => {
   it('does not reuse a top-level candidate list as every Ratings choice model', () => {
@@ -25,5 +25,22 @@ describe('parseChatCompletionObject', () => {
     })
 
     expect(parsed?.choices.map((choice) => choice.model)).toEqual(['model-a', 'model-b'])
+  })
+})
+
+describe('consumeEventStream', () => {
+  it('accepts data lines without whitespace after the colon', async () => {
+    const body = 'data:{"choices":[{"index":0,"message":{"content":"hello"}}]}\n\ndata: [DONE]\n\n'
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(body))
+        controller.close()
+      },
+    })
+    const received: string[] = []
+
+    await consumeEventStream(stream, (data) => received.push(data))
+
+    expect(received).toEqual(['{"choices":[{"index":0,"message":{"content":"hello"}}]}'])
   })
 })
