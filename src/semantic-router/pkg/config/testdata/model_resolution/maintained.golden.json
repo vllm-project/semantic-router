@@ -589,6 +589,7 @@
       "default/classifier.user_reaction": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 feedback-a",
       "default/decision.answered": "model_runtime /tmp/vsr-fixtures/decision@ cpu replicas=0",
       "default/decision.attached_answered": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 decision-a",
+      "default/decision.follow_up_kind": "model_runtime /tmp/vsr-fixtures/decision@ cpu replicas=0",
       "default/decision.names": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 vela2-a",
       "default/decision.offline": "model_runtime http://model-runtime-offline.vllm-semantic-router-system.svc.cluster.local:8100 decision-offline",
       "default/decision.request_kind": "model_runtime /tmp/vsr-fixtures/decision@ cpu replicas=0",

@@ -801,6 +801,9 @@ routing:
               description: Mathematics or quantitative reasoning
             - key: chat
               description: Anything else
+        # Read the previous user turn too, so a follow-up such as "now make it
+        # shorter" is classified with the request it follows (0 to 8 turns).
+        prior_user_turns: 1
         timeout_ms: 1000
       - name: difficulty
         description: Expected difficulty on a three-level scale.
