@@ -42,49 +42,26 @@ type HTTPTokenClassifierInference struct {
 	// and a remote O span reaching PIIEntities or masking would break parity.
 	known   map[string]struct{}
 	outside map[string]struct{}
-	// model is the configured llm_model_name of the external model. A response
-	// envelope may name the model that produced it; when it does, it must be
-	// this one, so a reply from a differently deployed model cannot pass as
-	// valid.
+	// model is the deployment's model. A response envelope may name the
+	// model that produced it; when it does, it must be this one, so a reply
+	// from a differently deployed model cannot pass as valid.
 	model string
 }
 
-func newHTTPTokenClassifierInference(cfg *config.ExternalModelConfig, labels tasks.TokenLabelSet, deadline time.Duration) (*HTTPTokenClassifierInference, error) {
-	if cfg == nil {
-		return nil, fmt.Errorf("token_spans external model config is required")
-	}
-	if cfg.ModelEndpoint.Address == "" {
-		return nil, fmt.Errorf("token_spans endpoint address is required")
+func newHTTPTokenClassifierInference(deployment config.ModelDeployment, labels tasks.TokenLabelSet) (*HTTPTokenClassifierInference, error) {
+	if strings.TrimSpace(deployment.Endpoint) == "" {
+		return nil, fmt.Errorf("token_spans endpoint is required")
 	}
 	known, outside, err := compileTokenLabels(labels)
 	if err != nil {
 		return nil, err
 	}
-
-	scheme := strings.ToLower(strings.TrimSpace(cfg.ModelEndpoint.Protocol))
-	if scheme == "" {
-		scheme = "http"
-	}
-	baseURL := fmt.Sprintf("%s://%s:%d", scheme, strings.TrimSpace(cfg.ModelEndpoint.Address), cfg.ModelEndpoint.Port)
-
-	timeout := 5 * time.Second
-	if deadline > 0 {
-		timeout = deadline
-	} else if configured := config.DurationFromSeconds(cfg.TimeoutSeconds); configured > 0 {
-		timeout = configured
-	}
-
-	remote, err := connector.New(baseURL, bearerAuthorizer(cfg.AccessKey), connector.Options{
-		AttemptTimeout:   timeout,
-		MaxRetries:       1,
-		MaxRequestBytes:  cfg.GetMaxRequestBytes(),
-		MaxResponseBytes: cfg.GetMaxResponseBytes(),
-		MaxErrorBytes:    maxClassifyErrorBodyBytes,
-	})
+	timeout := deployment.TimeoutOr(defaultHTTPClassifyTimeout)
+	remote, err := remoteConnector(deployment, timeout, 1, maxClassifyErrorBodyBytes)
 	if err != nil {
 		return nil, fmt.Errorf("create token_spans connector: %w", err)
 	}
-	return &HTTPTokenClassifierInference{connector: remote, timeout: timeout, known: known, outside: outside, model: strings.TrimSpace(cfg.ModelName)}, nil
+	return &HTTPTokenClassifierInference{connector: remote, timeout: timeout, known: known, outside: outside, model: strings.TrimSpace(deployment.Model)}, nil
 }
 
 // tokenSpanWire is one span as the provider sends it. entity_group and word

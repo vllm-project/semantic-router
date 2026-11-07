@@ -20,7 +20,7 @@ import (
 
 // handleToolSelectionForRequest handles tool selection for the request.
 func (r *OpenAIRouter) handleToolSelectionForRequest(request *llmprotocol.Request, response *ext_proc.ProcessingResponse, ctx *RequestContext) {
-	fast := extractSemanticRequestSignals(request)
+	fast := extractSemanticRequestSignalsWith(request, r.routingInputSelector())
 	if err := r.handleToolSelection(request, fast.UserContent, fast.NonUserMessages, &response, ctx); err != nil {
 		logging.Errorf("Error in tool selection: %v", err)
 		// Continue without failing the request
@@ -385,7 +385,7 @@ func (r *OpenAIRouter) findToolsForQueryExt(
 	}
 
 	if config.IsHybridHistoryRetrieval(advanced) {
-		transition := extractToolTransitionContextFromRequest(request, config.ResolveHybridHistoryHorizon(advanced), ctx)
+		transition := extractToolTransitionContextFromRequest(request, config.ResolveHybridHistoryHorizon(advanced), ctx, r.routingInputSelector())
 		decisionConfidence := float64(0)
 		if ctx != nil && ctx.VSRSelectedDecisionConfidenceScored {
 			decisionConfidence = float64(ctx.VSRSelectedDecisionConfidence)

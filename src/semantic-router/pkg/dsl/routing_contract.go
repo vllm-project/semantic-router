@@ -70,7 +70,7 @@ func DecompileRouting(cfg *config.RouterConfig) (string, error) {
 // DecompileRoutingToAST converts runtime config to a routing-only AST.
 func DecompileRoutingToAST(cfg *config.RouterConfig) *Program {
 	d := &decompiler{cfg: cfg}
-	prog := &Program{Strategy: string(cfg.Strategy), ModelBindings: cloneModelBindings(cfg.ModelBindings), CandidateRequirements: cfg.CandidateRequirements.Clone()}
+	prog := &Program{Strategy: string(cfg.Strategy), ModelBindings: config.PublicBindings(cfg.ModelBindings), CandidateRequirements: cfg.CandidateRequirements.Clone()}
 	d.appendSignalsToProgram(prog)
 	d.appendModelsToProgram(prog)
 	d.appendRoutesToProgram(prog)
@@ -90,7 +90,7 @@ func (d *decompiler) decompileRoutingStrategy() {
 	if len(d.cfg.ModelBindings) > 0 {
 		// Convert the canonical structs through their JSON tags, then use the
 		// DSL formatter so object keys retain the grammar's identifier syntax.
-		bindings, _ := json.Marshal(d.cfg.ModelBindings)
+		bindings, _ := json.Marshal(config.PublicBindings(d.cfg.ModelBindings))
 		var fields map[string]interface{}
 		_ = json.Unmarshal(bindings, &fields)
 		d.write("  model_bindings: %s\n", formatPluginConfigValue(fields))

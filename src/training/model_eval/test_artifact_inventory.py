@@ -167,6 +167,50 @@ def test_the_maintained_config_still_parses():
     assert inventory["jailbreak"].model_path.startswith("models/")
 
 
+# The current form names no model on a module: a binding names the deployment
+# that answers a signal, and the decision model's deployment answers the rest.
+CANONICAL_CONFIG = {
+    "global": {
+        "model_catalog": {
+            "deployments": {
+                "guard": {
+                    "provider": "model_runtime",
+                    "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Guard",
+                    "device": "cpu",
+                },
+                "remote-domain": {
+                    "provider": "classify",
+                    "endpoint": "https://domain.example.com",
+                },
+            },
+            "system": {"decision_model": {"deployment": "primary"}},
+            "bindings": {"jailbreak": "guard", "domain": "remote-domain"},
+            "modules": {
+                "prompt_guard": {"enabled": True, "positive_labels": ["jailbreak"]},
+                "classifier": {"domain": {"enabled": True}, "pii": {"enabled": False}},
+                "hallucination_mitigation": {"fact_check": {"enabled": True}},
+                "feedback_detector": {"enabled": True, "threshold": 0.8},
+            },
+        }
+    }
+}
+
+
+def test_current_form_reports_what_each_deployment_serves(tmp_path):
+    inventory = served_artifacts(load_config(write_config(tmp_path, CANONICAL_CONFIG)))
+    assert inventory["jailbreak"].model_path == "models/Vela-1.0-Encoder-307M-Guard"
+    assert inventory["jailbreak"].thresholds == (0.5,)
+    assert inventory["jailbreak"].positive_labels == ("jailbreak",)
+    # The decision model, the pre-declared primary deployment, answers what no
+    # binding names; its thresholds come from its model card.
+    assert inventory["fact-check"].model_path == "models/vela3-fast"
+    assert inventory["fact-check"].thresholds == ()
+    assert inventory["feedback"].thresholds == (0.8,)
+    # A remote deployment serves no artifact, and a module switched off runs none.
+    assert "domain" not in inventory
+    assert "pii" not in inventory
+
+
 def test_positive_labels_are_read_from_the_gate_site(tmp_path):
     inventory = served_artifacts(load_config(write_config(tmp_path, MINIMAL_CONFIG)))
     assert inventory["jailbreak"].positive_labels == ("jailbreak",)
