@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -180,6 +181,14 @@ func decodeResponsesInputItem(
 	if err := validateResponsesInputItemMetadata(item); err != nil {
 		return err
 	}
+	if item.Namespace != "" && strings.TrimSpace(item.Name) != "" {
+		// Flattening shortens long parts, so bound them as the client sent them.
+		if limit := policy.Limits.ToolNameBytes; limit > 0 && (len(item.Namespace) > limit || len(item.Name) > limit) {
+			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "tool_call_limit", "tool call namespace or name exceeds the configured limit", nil)
+		}
+		item.Name = llmprotocol.FlattenToolName(item.Namespace, item.Name)
+		request.Generation++
+	}
 	return decodeResponsesInputItemKind(item, index, request, policy)
 }
 
@@ -192,7 +201,7 @@ func validateResponsesInputItemMetadata(item responsesItemWire) error {
 	}); err != nil {
 		return err
 	}
-	if item.Namespace != "" {
+	if item.Namespace != "" && item.Type != "function_call" && item.Type != "custom_tool_call" {
 		return rejectUnsupportedRequestField("input.namespace", json.RawMessage(`true`))
 	}
 	if item.Status != "" && item.Type != "" && item.Type != "message" &&

@@ -324,6 +324,9 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 				if event.ToolCall.Name != "" {
 					item.toolCall.Name = event.ToolCall.Name
 				}
+				if event.ToolCall.Namespace != "" {
+					item.toolCall.Namespace = event.ToolCall.Namespace
+				}
 				item.toolCall.Arguments += event.ToolCall.Arguments
 			}
 		case llmprotocol.EventOutputItemCompleted:
