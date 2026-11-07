@@ -1,5 +1,13 @@
 # Release note: choose the decision model
 
+:::note
+This note records an earlier release. The system lines, module `model_id` and
+`classifier.model_path` it mentions are deprecated: they still load, with a
+`deprecated_model_field` warning.
+[Migrate model resources](../installation/model-resource-migration) shows the
+current form of each.
+:::
+
 The Router selects its default judgment model through an exact deployment
 reference. The default remains Vela 2.0 0.3B on CPU. Decision 1.0 and Decision
 2.0 deployments can also answer routing tasks according to their native

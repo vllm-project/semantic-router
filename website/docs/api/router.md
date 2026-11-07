@@ -20,6 +20,7 @@ queries. See [Router management API](./apiserver).
 | `DELETE` | `/v1/responses/{id}` | OpenAI Responses | Deletes a stored response |
 | `GET` | `/v1/responses/{id}/input_items` | OpenAI Responses | Reads stored input items |
 | `POST` | `/v1/messages` | Anthropic Messages | The router translates when the selected backend uses another protocol |
+| `POST` | `/v1/messages/count_tokens` | Anthropic Messages | Counts with the Messages backend of the named model, or of the model that last served the session, at its `count_tokens` path; otherwise answers with its own estimate, which counts text by tokenizer-style pieces rather than bytes. No turn is routed or recorded. A recipe with candidate requirements, or with a decision that reads content (any signal but conversation shape and context size) or has a plugin, always gets the estimate. Rate limits, token budgets included, admit a count by its input before it is forwarded |
 | `POST` | `/openai/deployments/{deployment}/chat/completions` | Azure OpenAI Chat Completions | The deployment names the Router model; `api-version` is accepted and not forwarded |
 | `POST` | `/openai/responses` | Azure OpenAI Responses | Accepts the dated `api-version`; the model is in the request body and the Responses service must be enabled |
 | `POST` | `/openai/v1/responses` | Azure OpenAI Responses | The model is in the request body and the Responses service must be enabled |
@@ -92,20 +93,22 @@ you leave response metadata disabled.
 }
 ```
 
-`model_calls` counts physical inference attempts within the selected algorithm,
-including its transport retries. Signal calls are outside this counter and have
-their own timeouts and request cancellation. It is not a count of GPU forwards. `usage`
-belongs to the returned native candidate and is not total cascade billing.
+`model_calls` counts physical inference attempts across signal evaluation and
+the selected algorithm, including remote decision-model calls and transport
+retries. Signal timeouts remain upper bounds inside the shared request deadline.
+It is not a count of GPU forwards. `usage` belongs to the returned native
+candidate and is not total cascade billing.
 The `quality` field names the configured acceptance method; it is not an
 accuracy score. Native discovery marks recipe entrypoints with `routing: true`
 and concrete models with `routing: false`.
 
 Malformed or unsupported auto questions return `400`. If no complete answer
-passes the declared acceptance rule within the call budget, the request
-returns `503` with `systemone_unresolved`; expiration of the algorithm deadline
-returns `504` with `systemone_deadline_exceeded`. Failed
-candidates never become empty successful answers. Direct model requests keep
-their existing native API contract and do not run the cascade.
+passes the declared acceptance rule, the request returns `503` with
+`systemone_unresolved`. Exhausting the shared physical-call limit returns
+`503`; exhausting its deadline returns `504`. Both budget errors use
+`systemone_budget_exhausted` and include the reason and `model_calls` count.
+Failed candidates never become empty successful answers. Direct model requests
+keep their existing native API contract and do not run the cascade.
 
 A remote Engine backend must expose a concrete model. Native backend calls
 carry `X-VSR-SystemOne-Backend: 1`; a receiving Router returns `409`
@@ -190,7 +193,12 @@ curl -sS http://localhost:8899/v1/chat/completions \
 
 The response keeps the client protocol's shape. Its model, content, token
 usage, and optional router headers depend on the selected backend and recipe.
-See [VSR routing headers](../troubleshooting/vsr-headers) for the stable
+A reply the backend produced names the model as the backend reports it,
+whether it streams or not and whatever format the backend speaks. A stream
+whose backend names no model in its first event keeps the logical name. A
+reply the Router composes itself, from a Looper algorithm or its own refusal,
+names the logical model, the name `x-vsr-selected-model` reports. See
+[VSR routing headers](../troubleshooting/vsr-headers) for the stable
 observability contract.
 
 The model names accepted by the Router come from canonical provider entries.
