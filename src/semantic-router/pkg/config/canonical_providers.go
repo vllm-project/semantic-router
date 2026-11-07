@@ -112,6 +112,12 @@ type CanonicalBackendRef struct {
 	ChatPath     string            `yaml:"chat_path,omitempty"`
 	APIKey       string            `yaml:"api_key,omitempty"`
 	APIKeyEnv    string            `yaml:"api_key_env,omitempty"`
+	// Auth is the backend's credential, as in a deployment's connection
+	// block: the header (the provider's own when unset), the prefix ("" sends
+	// the bare key) and the key's environment variable.
+	Auth *DeploymentAuth `yaml:"auth,omitempty"`
+	// Headers are non-secret headers sent with every request.
+	Headers map[string]string `yaml:"headers,omitempty"`
 }
 
 func canonicalProviderDefaults(providers CanonicalProviders) CanonicalProviderDefaults {

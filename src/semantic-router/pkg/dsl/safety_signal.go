@@ -24,8 +24,13 @@ func (c *Compiler) compileSafetySignal(s *SignalDecl) {
 
 func (d *decompiler) safetyToSignal(rule *config.SafetyRule) *SignalDecl {
 	fields := map[string]Value{
-		"model":     StringValue{V: rule.Model},
 		"threshold": FloatValue{V: rule.Threshold},
+	}
+	if rule.Deployment != "" {
+		fields["deployment"] = StringValue{V: rule.Deployment}
+	}
+	if rule.Model != "" {
+		fields["model"] = StringValue{V: rule.Model}
 	}
 	if rule.Description != "" {
 		fields["description"] = StringValue{V: rule.Description}
@@ -37,10 +42,16 @@ func (d *decompiler) safetyToSignal(rule *config.SafetyRule) *SignalDecl {
 		fields["unsafe_labels"] = stringsToArray(rule.UnsafeLabels)
 	}
 	if h := rule.Hazard; h != nil {
-		fields["hazard"] = ObjectValue{Fields: map[string]Value{
-			"model": StringValue{V: h.Model}, "labels": stringsToArray(h.Labels),
-			"categories": stringsToArray(h.Categories), "threshold": FloatValue{V: h.Threshold},
-		}}
+		hazard := map[string]Value{
+			"labels": stringsToArray(h.Labels), "categories": stringsToArray(h.Categories), "threshold": FloatValue{V: h.Threshold},
+		}
+		if h.Deployment != "" {
+			hazard["deployment"] = StringValue{V: h.Deployment}
+		}
+		if h.Model != "" {
+			hazard["model"] = StringValue{V: h.Model}
+		}
+		fields["hazard"] = ObjectValue{Fields: hazard}
 	}
 	return &SignalDecl{SignalType: config.SignalTypeSafety, Name: rule.Name, Fields: fields}
 }
@@ -50,7 +61,7 @@ func (d *decompiler) decompileSafetySignals() {
 		signal := d.safetyToSignal(&d.cfg.SafetyRules[i])
 		d.write("SIGNAL safety %s {\n", quoteName(signal.Name))
 		// Fixed order keeps canonical DSL output stable.
-		for _, key := range []string{"description", "model", "labels", "unsafe_labels", "threshold", "hazard"} {
+		for _, key := range []string{"description", "deployment", "model", "labels", "unsafe_labels", "threshold", "hazard"} {
 			if value, ok := signal.Fields[key]; ok {
 				d.write("  %s: %s\n", key, formatPluginConfigValue(valueToInterface(value)))
 			}

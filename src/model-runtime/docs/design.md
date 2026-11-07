@@ -998,6 +998,11 @@ positions, each layer at its own rope base) with adapter networks over it.
 | Router adapters | The shared router adapter and the domain, fact-check and feedback adapters | Choice and Set questions whose instructions are a trained router text, per (part, adapter) in the Vela 2.0 0.3B layout, 8,192-token windows |
 | Span adapters | span, span-set (PII and unsupported claims), evidence (one window up to 32,768 tokens), relation and NER | Span questions, one row each, in the Vela 2.0 0.3B layout; routed by label set and wording, each route at its own temperature and threshold |
 
+A string state is one user part as it is, even when it parses as JSON
+(`vela3_encoder._parts`), so span offsets index the text the caller sent; only
+a JSON-object state is read as typed parts. Vela 2.0 reads a string that holds
+a JSON object as that object.
+
 Each adapter file holds LoRA factors for every projection of every layer, its
 own copies of the top layers it trained and the readout tensors it trained.
 The engine builds each one as an adapter network (`BackboneSpec.adapters`):
@@ -1226,7 +1231,7 @@ Section 13.4.
 | --- | --- | --- |
 | `cpu` | validated | pure-torch references, FP32; on x86, encoder linears through oneDNN's pre-packed FP32 kernel (weights reordered once at load, batch-invariant, within 3.3e-6 of `F.linear`) |
 | `rocm` | validated (MI300X, MI325X) | BF16 autocast, FLA gated delta, causal-conv1d, exact-shape HIP graphs, bit-exact fused Triton element-wise kernels (gfx942) |
-| `cuda` | validated (H200, A100, Tesla T4; Vela 2.0 0.3B@32 p50 known regression on H200; `docs/records/cuda-*.md`) | the same kernel slots; fused kernels without bit-exact evidence stay off the exact profile (`cuda-fused-kernels.md`); on Ampere and newer with Triton, a consenting family may use them under `max_speed` (Decision 2.0; `cuda-fused-approximate.md`) |
+| `cuda` | validated (H200, A100, Tesla T4; Vela 2.0 0.3B@32 p50 known regression on H200; `docs/records/cuda-*.md`) | the same kernel slots; fused kernels without bit-exact evidence stay off the exact profile (`cuda-fused-kernels.md`); on Ampere and newer with Triton, a consenting family may use them under `max_speed` (Decision 2.0; `cuda-fused-approximate.md`); fused gated-delta prep (`gdn_prep`) needs FLA but does not require causal-conv1d to be installed; optional causal-conv1d is approximate on CUDA, so exact-only/non-consenting models use torch reference even when it is installed; [convolution evidence and released-runtime impact](records/cuda-causal-conv1d-exactness.md); [A/B model comparison](records/cuda-gdn-prep-without-causal-conv1d.md) |
 | `xpu`, `mps` | built-in plugins, **unvalidated** | pure-torch references |
 
 Intel hardware that used the OpenVINO provider runs on CPU, on `xpu`, or

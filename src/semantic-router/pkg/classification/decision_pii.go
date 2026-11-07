@@ -67,13 +67,20 @@ func prepareDecisionPII(models *classifierModelRuntime) (*decisionPIIBackend, er
 	if err != nil || judgment == nil {
 		return nil, err
 	}
-	// Existing span models and explicit token contracts keep the precise path.
-	spec, explicit := models.plan.Lookup(models.recipe, "pii_classifier")
-	if judgment.card.Answers("span") && (!explicit || spec.Binding.Contract != config.DecisionTaskContract) {
+	// Models that answer span questions or define the pii preset keep the
+	// precise path unless the configuration asks for the verdict.
+	authored := authoredVerdictBinding(models, "pii_classifier")
+	if (judgment.card.Answers("span") || judgment.card.HasPreset("pii")) && !authored {
 		return nil, nil
 	}
 	if explicitSpanBinding(models, "pii_classifier") {
 		return nil, fmt.Errorf("%w: explicit pii_classifier token_spans.v1 binding requires a span model; use decision.v1 for presence/categories", binding.ErrCapability)
+	}
+	if err = rejectMaskingWithoutSpans(models.cfg, judgment.deployment); err != nil {
+		return nil, err
+	}
+	if !authored {
+		reportSpanFallback("pii_classifier", judgment)
 	}
 	definition, _ := modelservice.BuiltinTask("pii_categories")
 	question := definition.Question

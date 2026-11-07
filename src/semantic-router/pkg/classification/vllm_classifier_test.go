@@ -15,11 +15,11 @@ import (
 // local httptest.Server, bypassing address/port parsing.
 func newTestVLLMJailbreakInference(t *testing.T, server *httptest.Server, mapping *JailbreakMapping) *VLLMJailbreakInference {
 	t.Helper()
-	inf, err := NewVLLMJailbreakInference(&config.ExternalModelConfig{
+	inf, err := NewVLLMJailbreakInference(externalChatDeployment(&config.ExternalModelConfig{
 		ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "placeholder", Port: 1},
 		ModelName:     "test-guard",
 		ParserType:    "simple",
-	}, 0.5, mapping, nil)
+	}), 0.5, mapping, nil)
 	if err != nil {
 		t.Fatalf("failed to construct inference: %v", err)
 	}
