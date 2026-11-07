@@ -120,5 +120,10 @@ func isSensitiveConfigKey(key string) bool {
 			return true
 		}
 	}
+	// Plural spellings name the same secret as their singular form:
+	// listeners[].api_keys, tokens, credentials. Reuse the singular rules.
+	if strings.HasSuffix(compact, "s") && isSensitiveConfigKey(strings.TrimSuffix(compact, "s")) {
+		return true
+	}
 	return false
 }

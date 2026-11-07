@@ -111,6 +111,8 @@ func TestRedactSensitiveConfigValue(t *testing.T) {
 				},
 			},
 		},
+		"api_keys":        []interface{}{"listener-plain"},
+		"provider_keys":   []interface{}{"not-a-secret"},
 		"tokens_per_unit": 100,
 		"token_filter":    "keep",
 		"auth_token":      "auth-token",
@@ -147,6 +149,12 @@ func TestRedactSensitiveConfigValue(t *testing.T) {
 	}
 	if referenceRef["client_secret"] != redactedConfigValue {
 		t.Fatalf("environment reference with literal fallback must be redacted, got %v", referenceRef["client_secret"])
+	}
+	if redacted["api_keys"] != redactedConfigValue {
+		t.Fatalf("api_keys = %v, want %q", redacted["api_keys"], redactedConfigValue)
+	}
+	if _, ok := redacted["provider_keys"].([]interface{}); !ok {
+		t.Fatalf("provider_keys should stay a list, got %v", redacted["provider_keys"])
 	}
 	if redacted["tokens_per_unit"] != 100 {
 		t.Fatalf("tokens_per_unit should not be redacted")
@@ -324,6 +332,7 @@ func writeConfigWithPlaintextSecret(t *testing.T, canary string) string {
 	path := filepath.Join(dir, "config.yaml")
 	// Minimal YAML map — handleConfigGet unmarshals generically, no full schema needed.
 	content := "providers:\n  models:\n    - name: demo\n      backend_refs:\n        - api_key: " + canary + "\n          api_key_env: OPENAI_API_KEY\n" +
+		"listeners:\n  - name: http\n    port: 8899\n    api_keys:\n      - " + canary + "\n" +
 		"global:\n  stores:\n    vector_store:\n      llama_stack:\n        endpoint: http://llama-stack:8321\n        auth_token: " + canary + "\n"
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
