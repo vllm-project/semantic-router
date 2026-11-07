@@ -51,6 +51,9 @@ The optional `MODEL` argument replaces the artifact in the default deployment
 selected by `global.model_catalog.system.decision_model.deployment`. Omitting
 it keeps that deployment; a new configuration defaults to Vela 2.0 0.3B.
 Only explicitly supplied model or placement options override saved settings.
+That includes the model's revision, which stays when you upgrade `vllm-sr`:
+serving the same model warns when the saved revision is not the one this
+`vllm-sr` pins, and `--revision` switches it.
 
 ```bash
 # Scale the selected model to two independent workers on two AMD GPUs.
@@ -62,8 +65,8 @@ vllm-sr serve --engine --platform rocm -dp 2 --device-ids 0
 
 ## Ask about images and videos
 
-Decision 3.0 models (`vllm-sr/d3`, `d3-turbo`, `d3-flash`, `d3-mini`,
-`d3-nano`, `d3-lite`, `d3-edge`) read images and videos as well as text.
+Decision 3.0 models (`vllm-sr/d3`, `d3-turbo`, `d3-ultra`, `d3-flash`,
+`d3-mini`, `d3-nano`, `d3-lite`, `d3-edge`) read images and videos as well as text.
 Serve one on an AMD Instinct MI325X:
 
 ```bash
@@ -129,6 +132,9 @@ Serve it on an AMD Instinct MI325X:
 ```bash
 vllm-sr serve vllm-sr/d3-turbo --engine --platform rocm
 ```
+
+`vllm-sr/d3-ultra` answers the same questions the same way; a text-only
+request also lists its questions in front of its state.
 
 ```bash
 curl -s localhost:8899/v1/systemone -H 'content-type: application/json' --data-binary @- <<EOF

@@ -113,30 +113,25 @@ func NewEndpointHallucinationDetector(cfg *config.HallucinationModelConfig, mode
 	runtime := consumerModelRuntime(models)
 	spec, declared := runtime.plan.Lookup(runtime.recipe, "hallucination_detector")
 	if !declared {
-		return nil, fmt.Errorf("endpoint hallucination detector requires a hallucination_detector binding")
+		return nil, fmt.Errorf("endpoint hallucination detector requires a hallucination binding")
 	}
-	if spec.Deployment.Provider != "http" {
-		return nil, fmt.Errorf("endpoint hallucination detector requires HTTP deployment")
+	if !remoteTask(spec) {
+		return nil, fmt.Errorf("endpoint hallucination detector requires a classify or openai_chat deployment")
 	}
-	backend := &config.RemoteClassifierBackend{Model: spec.Deployment.ExternalModel, Protocol: spec.Binding.Adapter, Contract: spec.Binding.Contract}
-	external, err := config.ResolveRemoteClassifierBackend(runtime.cfg, backend, config.ModelRoleClassification, config.RemoteClassifierContractTokenSpans)
+	deployment := spec.Deployment
+	if deployment.TimeoutMs == 0 {
+		deployment.TimeoutMs = config.DefaultClassifierTimeoutSeconds * 1000
+	}
+	endpoint, _, err := config.SplitEndpoint(deployment.Endpoint)
 	if err != nil {
 		return nil, err
 	}
-	scheme := external.ModelEndpoint.Protocol
-	if scheme == "" {
-		scheme = "http"
-	}
-	endpoint := fmt.Sprintf("%s://%s:%d", scheme, external.ModelEndpoint.Address, external.ModelEndpoint.Port)
-	if spec.Binding.Adapter == config.RemoteClassifierProtocolHTTPChat {
-		endpoint += "/v1"
-	}
 	copied := *cfg
-	copied.ModelID = external.ModelName
+	copied.ModelID = deployment.Model
 	copied.Endpoint = endpoint
 	cfg = &copied
 	if cfg.ModelID == "" {
-		return nil, fmt.Errorf("hallucination model_id is required")
+		return nil, fmt.Errorf("hallucination deployment %q names no model", spec.Binding.Deployment)
 	}
 	labels, err := hallucinationLabelSet(spec)
 	if err != nil {
@@ -155,20 +150,20 @@ func NewEndpointHallucinationDetector(cfg *config.HallucinationModelConfig, mode
 		// come back with code-point offsets into the answer. The shared
 		// token_spans decoder does the alignment, so this path parses no
 		// generated text.
-		tokens, tokensErr := newHTTPTokenClassifierInference(external, labels, external.GetTimeout())
+		tokens, tokensErr := newHTTPTokenClassifierInference(deployment, labels)
 		if tokensErr != nil {
 			return nil, tokensErr
 		}
 		closer, infer = tokens, tokens.ClassifyGrounded
 	} else {
-		client, clientErr := connector.New(endpoint, bearerAuthorizer(external.AccessKey), connector.Options{AttemptTimeout: external.GetTimeout(), MaxRequestBytes: external.GetMaxRequestBytes(), MaxResponseBytes: external.GetMaxResponseBytes(), MaxErrorBytes: 4096})
+		client, clientErr := remoteConnector(deployment, deployment.TimeoutOr(0), 0, 4096)
 		if clientErr != nil {
 			return nil, clientErr
 		}
 		detector.client = client
 		closer = client
 	}
-	handle, err := remoteTaskBinding(context.Background(), runtime, spec, external, closer, infer, func(input tasks.GroundedTextRequest, out tasks.TokenClassificationResult) error {
+	handle, err := remoteTaskBinding(context.Background(), runtime, spec, closer, infer, func(input tasks.GroundedTextRequest, out tasks.TokenClassificationResult) error {
 		for _, span := range out.Entities {
 			if span.Start < 0 || span.End > len(input.Answer) || span.Start >= span.End || input.Answer[span.Start:span.End] != span.Text {
 				return fmt.Errorf("invalid grounding span")

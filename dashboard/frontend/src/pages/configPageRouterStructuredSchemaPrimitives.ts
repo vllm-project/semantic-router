@@ -22,6 +22,8 @@ export interface RouterStructuredSchema {
   max?: number
   step?: number
   fields?: Record<string, RouterStructuredSchema>
+  /** Generated fields this editor deliberately leaves out. */
+  omit?: readonly string[]
   item?: RouterStructuredSchema
   itemLabelKey?: string
   addLabel?: string

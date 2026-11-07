@@ -26,7 +26,7 @@ func TestLLMClassifierReasoningResponseThroughClient(t *testing.T) {
 				_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": tc.content}}}})
 			}))
 			defer server.Close()
-			c, err := newLLMLabelClassifier(config.ClassifierSignalRule{Name: "labels", Model: "test", Labels: []string{"A", "B"}, Instructions: "Classify this benign text."}, &config.ExternalModelConfig{ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "placeholder", Port: 1}, ModelName: "test"}, nil)
+			c, err := llmLabelClassifierFor(config.ClassifierSignalRule{Name: "labels", Model: "test", Labels: []string{"A", "B"}, Instructions: "Classify this benign text."}, &config.ExternalModelConfig{ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "placeholder", Port: 1}, ModelName: "test"}, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

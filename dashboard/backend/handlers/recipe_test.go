@@ -43,7 +43,7 @@ func TestRecipeHandlerUnmanagedDescriptorAndProbeBoundary(t *testing.T) {
 
 	methodResponse := httptest.NewRecorder()
 	handler.Descriptor(methodResponse, httptest.NewRequest(http.MethodPost, "/api/recipe", nil))
-	if methodResponse.Code != http.StatusMethodNotAllowed || methodResponse.Header().Get("Allow") != http.MethodGet {
+	if methodResponse.Code != http.StatusMethodNotAllowed || methodResponse.Header().Get("Allow") != "GET, HEAD" {
 		t.Fatalf("method response = %d Allow=%q", methodResponse.Code, methodResponse.Header().Get("Allow"))
 	}
 

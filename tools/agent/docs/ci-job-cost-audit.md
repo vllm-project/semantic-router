@@ -234,14 +234,17 @@ and process deadlines. This can take longer to finish than two concurrent jobs.
 | Live shard | Exact source and recipes | Variant weight |
 | --- | --- | ---: |
 | `standalone-0` | Standalone `multi-objective` | 129 |
-| `standalone-1` | Standalone `balance`, `knowledge` | 87 |
-| `standalone-2` | Standalone `agent`, `feedback`, `privacy`, `accuracy` | 100 |
-| `built-in-latest-0` | Built-in latest `mom-v1` | 346 |
+| `standalone-1` | Standalone `balance`, `knowledge` | 91 |
+| `standalone-2` | Standalone `agent`, `feedback`, `privacy`, `accuracy` | 103 |
+| `built-in-latest-mom-v1-0` to `-15` | Built-in latest `mom-v1`, one probe shard each | 21–32 (366 total) |
 
 All eight recipes remain. Weights count authored probe variants, not measured
 seconds. The heavy built-in recipe remains alone: its historical median job
 time was 35.02 minutes, versus 4.85–7.48 minutes for standalone recipe jobs in
-the sampled complete runs. Inventory and report aggregation add two jobs.
+the sampled complete runs. With Vela 2.0 0.8B as its decision model, its
+`evaluation.shards: 16` splits the probes into 16 jobs of similar estimated
+read cost, and the report merges them. Inventory and report aggregation add two
+jobs.
 
 ## Historical resource evidence
 
@@ -383,6 +386,13 @@ batching, caches, and failure paths, so the historic average must not be
 presented as measured future usage. With no manual dispatches and all
 prerequisites succeeding, the planned job-launch budget is 700 versus 49 per
 week; that combined count also must not be translated into a cost percentage.
+
+Weekly qualification made one failure cost a week of nightly publication, so
+issue #5845 returned it to a daily schedule with the versioned inventory kept.
+A scheduled run of a commit that another run already passed or is still
+qualifying launches one short job instead of the full qualification. A dispatch
+cancels the qualification it supersedes, a scheduled run waits for a running
+one, and a failed first attempt re-runs only its failed jobs, once.
 
 Routine Main source/component qualification remains. Expensive qualification
 and publication move to an explicit decision; they are not free when that

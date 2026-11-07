@@ -4,6 +4,8 @@
  *   signalCompile, signalValidate, signalDecompile, signalFormat, signalParseAST
  */
 
+import type { RouterConfigWarning } from '../utils/configSaveWarnings'
+
 // ---------- Diagnostics ----------
 
 export type DiagLevel = 'error' | 'warning' | 'constraint'
@@ -256,6 +258,8 @@ export interface DeployResult {
   status: 'success' | 'error'
   version?: string
   message: string
+  /** The Router's warnings about the deployed configuration. */
+  warnings?: RouterConfigWarning[]
 }
 
 export interface ConfigVersion {

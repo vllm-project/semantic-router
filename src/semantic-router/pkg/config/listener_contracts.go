@@ -80,10 +80,16 @@ func validateListenerSystemOne(cfg *RouterConfig, listener Listener) error {
 			return fmt.Errorf("listener %q: systemone.models must contain distinct non-empty model names without surrounding spaces", listener.Name)
 		}
 		seen[model] = true
+		// A routed entrypoint is not one deployment. A provider alias is
+		// checked in validateNativeRoutingConfig, published or not.
 		if _, routed := cfg.ResolveEntrypoint(SystemOneAPI, model); routed || cfg.IsSystemOneBackend(model) {
 			continue
 		}
-		if _, _, err := cfg.ResolveSystemOneDeployment(model); err != nil {
+		name, deployment, err := cfg.ResolveSystemOneDeployment(model)
+		if err != nil {
+			return fmt.Errorf("listener %q: systemone.models: %w", listener.Name, err)
+		}
+		if err := deployment.ValidateDecisionInput(name); err != nil {
 			return fmt.Errorf("listener %q: systemone.models: %w", listener.Name, err)
 		}
 	}

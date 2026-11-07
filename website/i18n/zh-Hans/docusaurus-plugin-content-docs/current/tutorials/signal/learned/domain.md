@@ -12,7 +12,7 @@ translation:
 
 `domain` 对请求主题族分类。在 `routing.signals.domains` 下定义领域规则。
 
-检测器使用 `global.model_catalog.modules.classifier` 下配置的分类器，以及 `global.model_catalog.system` 下的模型绑定。
+除非 `domain` 绑定指定了其他部署，否则由决策模型回答它；见[为信号选择模型](../../../installation/choose-a-model-for-a-signal.md)。`global.model_catalog.modules.classifier.domain` 保存它的设置，例如阈值。
 
 ## 主要优势 {#key-advantages}
 
@@ -63,33 +63,26 @@ routing:
 
 只有已声明的领域会匹配。分类器标签匹配在 `mmlu_categories` 中列出它的领域，或与它同名的领域。没有任何领域列出的标签计为 `other`，因此像上面那样列出 `other` 的领域，就是所有未声明主题的回退；没有这样的领域时，这类请求不匹配任何领域。
 
-### 本地与远程分类器选择 {#local-and-remote-classifier-selection}
+### 本地与远程模型 {#local-and-remote-models}
 
-没有 `backend` 时，领域分类器（默认 Vela 2.0 0.3B）运行在[模型运行时](../../../model-runtime/guides/classify)中。运行时从模型包读取架构，因此无需设置本地选择器；`vllm-sr config migrate` 会移除早期的 `variant`、`use_modernbert` 和 `use_mmbert_32k` 键。
+默认由决策模型（vela3-fast）在[模型运行时](../../../model-runtime/guides/classify.md)中回答 domain 信号。运行时从模型包读取架构，因此无需设置本地选择器；`vllm-sr config migrate` 会移除早期的 `variant`、`use_modernbert` 和 `use_mmbert_32k` 键。
 
-远程类别分类器使用共享 backend 块。其 `model` 是 `global.model_catalog.external[]` 中的显式名称，该目录条目必须有 `model_role: classification`。Category 目前只接受 `http_classify` 协议与 `label_distribution.v1` 约定，以便完整标签分布继续供给领域匹配与路由决策。
+远程领域分类器是 `domain` 所绑定的 `classify` 部署。Router 把请求文本发送到 `<endpoint>/classify`，并读取完整的标签分布，用于领域匹配与路由决策。
 
 ```yaml
 global:
   model_catalog:
-    external:
-      - name: domain-service
-        model_role: classification
-        llm_endpoint:
-          address: domain-classifier.default.svc
-          port: 8080
-        llm_model_name: domain-intent-v1
-    modules:
-      classifier:
-        domain:
-          backend:
-            protocol: http_classify
-            contract: label_distribution.v1
-            model: domain-service
-            deadline_ms: 5000
+    deployments:
+      domain-service:
+        provider: classify
+        endpoint: https://domain-classifier.example.com
+        auth: {api_key_env: DOMAIN_SERVICE_KEY}
+        timeout_ms: 5000
+    bindings:
+      domain: domain-service
 ```
 
 ## 依赖与限制 {#dependencies-and-limitations}
 
-领域分类使用已配置的分类器模块并处理请求文本。把 `other` 声明为回退，并在分类器变更时重新评估标签与阈值。完整示例见：
+领域分类在回答该信号的部署上处理请求文本。把 `other` 声明为回退，并在该部署变更时重新评估标签与阈值。完整示例见：
 [`config/fragments/signal/domain/mmlu.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/domain/mmlu.yaml)。

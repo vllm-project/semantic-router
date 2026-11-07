@@ -11,11 +11,13 @@ cannot also trigger a reload in the departing process.
 
 from __future__ import annotations
 
+import os
 import tempfile
 from pathlib import Path
 
 import yaml
 
+from cli import router_validation
 from cli.bootstrap import is_setup_mode_config
 from cli.commands.runtime_mode_config import apply_instance_options
 from cli.commands.runtime_observability import (
@@ -37,11 +39,14 @@ from cli.commands.runtime_support import (
     validate_config_recipe_env_bindings,
     validate_setup_mode_flags,
 )
+from cli.commands.validate import ask_router, router_refusal
 from cli.container_services import container_status_strict
 from cli.decision_model import (
     decision_model_deployment,
     gpu_requirement_error,
+    remote_decision_model,
 )
+from cli.gateway_mode import GATEWAY_ENV, resolve_gateway
 from cli.parser import parse_user_config
 from cli.recipe_activation_recovery import (
     active_recipe_package_config_path,
@@ -63,6 +68,7 @@ def _prepare_runtime_config_replacement(
     *,
     minimal: bool,
     readonly: bool,
+    models_dir: Path | None = None,
 ) -> None:
     # Validate the candidate without publishing it to the running file watcher.
     # A restart owns the next generation; the departing process must not build it.
@@ -71,10 +77,35 @@ def _prepare_runtime_config_replacement(
         candidate.write_bytes(effective_data)
         prepared = parse_user_config(str(candidate), log_summary=False)
         errors = validate_user_config(prepared, log_summary=False)
+        if not errors and not is_setup_mode_config(candidate):
+            errors = _router_refusal(candidate, models_dir)
         if errors:
             raise ValueError("Invalid runtime config: " + "; ".join(map(str, errors)))
         validate_setup_mode_flags(is_setup_mode_config(candidate), minimal, readonly)
     stop_runtime_before_config_replacement(stack_layout)
+
+
+def _router_refusal(candidate: Path, models_dir: Path | None) -> list:
+    """Why the Router on this host would refuse the candidate, if it would.
+
+    The running config is only replaced by one the Router loads: its model
+    deployments, bindings and other load-time rules are the Router's to
+    check. When no Router can run here the restart goes ahead, and the new
+    Router refuses a bad config at startup.
+    """
+
+    verdict, unavailable = ask_router(
+        lambda: router_validation.local_router_verdict(
+            candidate,
+            gateway=resolve_gateway(os.getenv(GATEWAY_ENV)),
+            models_dir=models_dir,
+        )
+    )
+    if unavailable:
+        log.info(
+            f"The Router did not check the new config before the restart: {unavailable}"
+        )
+    return router_refusal(verdict)
 
 
 def _check_served_decision_model(
@@ -82,6 +113,8 @@ def _check_served_decision_model(
 ) -> None:
     """Fail before startup when the config's decision model needs a GPU it lacks."""
 
+    if remote_decision_model(document):
+        return
     try:
         deployment = decision_model_deployment(document)
     except ValueError as error:
@@ -179,6 +212,7 @@ def _prepare_docker_runtime_config(
                     stack_layout,
                     minimal=minimal,
                     readonly=readonly,
+                    models_dir=state_root_dir / "models",
                 ),
             )
             active_bytes = effective_config_path.read_bytes()
@@ -195,7 +229,11 @@ def _prepare_docker_runtime_config(
         ):
             candidate_bytes = yaml.safe_dump(candidate, sort_keys=False).encode("utf-8")
             _prepare_runtime_config_replacement(
-                candidate_bytes, stack_layout, minimal=minimal, readonly=readonly
+                candidate_bytes,
+                stack_layout,
+                minimal=minimal,
+                readonly=readonly,
+                models_dir=state_root_dir / "models",
             )
             write_journaled_runtime_config_projection(
                 effective_config_path, candidate_bytes
@@ -214,7 +252,11 @@ def _prepare_docker_runtime_config(
                 enable_observability=observability,
                 reset_projection=source_candidate_selected,
                 before_replace=lambda data: _prepare_runtime_config_replacement(
-                    data, stack_layout, minimal=minimal, readonly=readonly
+                    data,
+                    stack_layout,
+                    minimal=minimal,
+                    readonly=readonly,
+                    models_dir=state_root_dir / "models",
                 ),
             )
         return effective_config_path, setup_mode, runtime_lock

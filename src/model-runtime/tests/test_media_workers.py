@@ -99,3 +99,26 @@ def test_requests_read_the_same_images_with_and_without_workers(
     for inline, worker in zip(answers[0][0], answers[2][0], strict=True):
         assert torch.equal(inline, worker)
     assert answers[0][1] == answers[2][1]
+
+
+def test_images_are_processed_on_the_cpu_device_thread(monkeypatch, png_url):
+    """One OpenMP team: preprocessing shares the thread CPU forwards run on, from any caller."""
+    import threading
+
+    from vllm_srun.accel.cpu import device_thread
+
+    threads = []
+    patches = img._patches
+
+    def recorded(*args):
+        threads.append(threading.current_thread().name)
+        return patches(*args)
+
+    monkeypatch.setattr(img, "_patches", recorded)
+    picture, digest = img.decode(png_url(97, 61, 5))
+    img.preprocess(picture, digest, SETTINGS)
+    pixels, _ = img.load(png_url(97, 61, 5), SETTINGS)
+    img.loaded(pixels, digest, SETTINGS)
+    device_thread().submit(img.preprocess, picture, digest, SETTINGS).result(timeout=60)
+    device = device_thread().submit(lambda: threading.current_thread().name).result()
+    assert threads == [device, device, device]

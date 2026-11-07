@@ -4,6 +4,10 @@ A question is one prompt (``prompt.py``) whose options are listed under
 single-token answer codes. The backbone reads it left-padded with noncausal
 full attention, and the FP32 readout scores the question's codes at the last
 position: softmax over the codes at the package temperature, then the answer.
+A package with ``temperature_by_questions`` sets that temperature per request
+from its number of Choice, Yes / No and Score questions (Box and track keep
+the package temperature), and one with ``prompt_layout`` ``header-v1`` lists a
+text-only request's questions in front of its state.
 A request's questions run in request order, eight per forward pass, as the
 released runtime runs them. Images (``images.py``) and videos (``videos.py``)
 are shared by every question of a request. Without videos, each question of a
@@ -30,7 +34,7 @@ import itertools
 import math
 import time
 from dataclasses import dataclass, field, replace
-from typing import Any, ClassVar, cast
+from typing import Any, ClassVar, TypeVar, cast
 
 import torch
 
@@ -46,6 +50,7 @@ from ...errors import (
     question_error,
 )
 from ...plugins.base import (
+    AdapterGate,
     BackboneSpec,
     DtypePolicy,
     EngineModel,
@@ -188,6 +193,11 @@ class Item:
     readouts: tuple[tuple[int, int], ...] | None = None
     block_images: tuple[img.ProcessedImage, ...] = ()
     at: float | None = None
+    # The request's temperature (``temperature_by_questions``); None: the package's.
+    temperature: float | None = None
+
+
+ModelT = TypeVar("ModelT", bound="Decision3Model")
 
 
 class Decision3Family(ModelFamily):
@@ -287,13 +297,35 @@ class Decision3Family(ModelFamily):
         self, package: VerifiedPackage, spec: ModelSpec, engine_model: EngineModel
     ) -> Decision3Model:
         """A ``Decision3Model``, or a ``StateOnceModel`` for a package whose layout is state-once."""
+        decision = package.details["package"].decision_config
+        return self.load_as(package, spec, engine_model, model_class_of(decision))
+
+    def load_as(
+        self,
+        package: VerifiedPackage,
+        spec: ModelSpec,
+        engine_model: EngineModel,
+        model_class: type[ModelT],
+    ) -> ModelT:
+        """The package loaded as ``model_class``.
+
+        A family that runs this package as its base passes its own subclass of
+        the one the layout needs.
+        """
         from safetensors.torch import load_file
 
+        from .state_once import StateOnceModel
+
         details: pkg.Decision3Package = package.details["package"]
+        decision = details.decision_config
+        if issubclass(model_class, StateOnceModel) != pkg.is_state_once(decision):
+            raise TypeError(
+                f"{model_class.__name__} does not fit the package's layout "
+                f"({model_class_of(decision).__name__})"
+            )
         root = details.root
         prompt.check_chat_template(root)
         backend, pad_id = prompt.load_tokenizer(root)
-        decision = details.decision_config
         prompt.check_codes(backend, decision["codes"], decision["token_ids"])
         readout_dtype = decision.get("readout_dtype", "float32")
         readout = load_file(str(root / "readout.safetensors"))["weight"].to(
@@ -400,11 +432,7 @@ class Decision3Family(ModelFamily):
             dtype=f"bf16/{'fp32' if readout_dtype == 'float32' else 'bf16'}-readout",
             modalities=modalities,
         )
-        model_class = Decision3Model
-        if decision.get("attention_mode", "causal") in pkg.STATE_ONCE_MODES:
-            from .state_once import StateOnceModel
-
-            model_class = StateOnceModel
+        if pkg.is_state_once(decision):
             # A state-once model counts each state once in usage.input_tokens, and that count of one request
             # is capped at the context length (max_request_tokens).
             info = replace(
@@ -502,6 +530,8 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         self.readout = readout
         self.codes: list[str] = decision["codes"]
         self.temperature = float(decision.get("temperature", 1.0))
+        self.temperatures = pkg.temperature_table(decision)
+        self.layout = decision.get("prompt_layout")
         self.settings = settings
         self.image_token = image_token
         self.video_settings = video_settings
@@ -560,10 +590,7 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
 
     def exact_batches(self, items: list[Item]) -> list[list[int]]:
         """Request order, eight questions per pass."""
-        return [
-            list(range(start, min(start + BATCH_SIZE, len(items))))
-            for start in range(0, len(items), BATCH_SIZE)
-        ]
+        return passes(len(items))
 
     # ------------------------------------------------------------------ planning
 
@@ -602,6 +629,44 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
             list(parsed.criteria),
         )
 
+    def _read(self, questions: dict[str, Any]) -> tuple[
+        list[tuple[str, str, Any, list[str], list[str], list[Any]]],
+        dict[str, dict[str, Any]],
+    ]:
+        """Each valid question as (ID, ``_question``'s fields), in request order, and the others' errors."""
+        read = []
+        errors: dict[str, dict[str, Any]] = {}
+        for question_id, question in questions.items():
+            kind = question.get("type") if isinstance(question, dict) else None
+            try:
+                read.append((question_id, *self._question(question)))
+            except QuestionError as exc:
+                errors[question_id] = question_error(kind, exc)
+        return read, errors
+
+    def _header(
+        self,
+        read: list[tuple[str, str, Any, list[str], list[str], list[Any]]],
+        media: RequestMedia | None,
+    ) -> str:
+        """The question list in front of the state: a text-only request's, on a ``header-v1`` package."""
+        if self.layout != pkg.HEADER_V1 or media or not read:
+            return ""
+        return prompt.header_block(
+            [
+                (instructions, None if kind == "noul" else texts)
+                for _, kind, instructions, _, texts, _ in read
+            ]
+        )
+
+    def request_temperature(self, questions: int) -> float | None:
+        """The temperature of a request with ``questions`` Choice, Yes / No and Score questions under the package's
+        ``temperature_by_questions``; None without one (each question keeps the package temperature).
+        """
+        if self.temperatures is None:
+            return None
+        return pkg.temperature_for(self.temperatures, questions)
+
     def _plan(
         self,
         state: Any,
@@ -617,30 +682,30 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
             visual += sum(image.tokens for image in media.images)
             visual += sum(len(ids) for ids in media.video_ids)
         items: list[Item] = []
-        errors: dict[str, dict[str, Any]] = {}
         tokens = 0
+        read, errors = self._read(questions)
+        header = self._header(read, media)
         rendered: list[tuple[str, str, list[str], list[Any], str]] = []
-        for question_id, question in questions.items():
-            kind = question.get("type") if isinstance(question, dict) else None
-            try:
-                kind, instructions, keys, texts, descriptions = self._question(question)
-                text = prompt.render(
-                    prompt.user_prompt(state, instructions, texts, self.codes),
-                    images,
-                    videos,
-                )
-                if media and (
-                    text.count(prompt.IMAGE_TOKEN) != images
-                    or text.count(prompt.VIDEO_TOKEN) != videos
-                ):
-                    raise QuestionError(
+        for question_id, kind, instructions, keys, texts, descriptions in read:
+            text = prompt.render(
+                prompt.user_prompt(state, instructions, texts, self.codes, header),
+                images,
+                videos,
+            )
+            if media and (
+                text.count(prompt.IMAGE_TOKEN) != images
+                or text.count(prompt.VIDEO_TOKEN) != videos
+            ):
+                errors[question_id] = question_error(
+                    kind,
+                    QuestionError(
                         INVALID_QUESTION,
                         "the state or question contains a literal image or video placeholder token",
-                    )
-            except QuestionError as exc:
-                errors[question_id] = question_error(kind, exc)
+                    ),
+                )
                 continue
             rendered.append((question_id, kind, keys, descriptions, text))
+        temperature = self.request_temperature(len(rendered))
         # One call for all questions: the tokenizer releases the GIL for a batch, not for a single text.
         encodings = self.tokenizer.encode_batch(
             [entry[-1] for entry in rendered], add_special_tokens=False
@@ -657,7 +722,17 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
             if media:
                 ids = self._expand(ids, media)
             tokens += len(ids)
-            items.append(Item(question_id, kind, ids, keys, descriptions, media))
+            items.append(
+                Item(
+                    question_id,
+                    kind,
+                    ids,
+                    keys,
+                    descriptions,
+                    media,
+                    temperature=temperature,
+                )
+            )
         return RequestPlan(
             question_ids=list(questions),
             items=items,
@@ -1094,7 +1169,10 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         images: ImageInputs | None,
         states: list[int] | None = None,
         packed: bool = False,
+        adapter: AdapterGate | None = None,
+        noncausal: bool = False,
     ) -> list[list[float] | None]:
+        """Each item's probabilities from one forward (``adapter`` and ``noncausal`` as ``ForwardBatch``'s)."""
         output = self.engine_model.forward(
             ForwardBatch(
                 input_ids=ids,
@@ -1105,6 +1183,8 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
                 images=images,
                 states=states,
                 packed=packed,
+                adapter=adapter,
+                noncausal=noncausal,
             )
         )
         return self._probabilities(items, output.query)
@@ -1112,10 +1192,14 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
     def _probabilities(
         self, items: list[Item], hidden: torch.Tensor
     ) -> list[list[float] | None]:
-        """Each question's option probabilities from its last token's final hidden state."""
+        """Each question's option probabilities from its last token's final hidden state, at its temperature."""
         counts = torch.as_tensor(
             [len(item.keys) for item in items], device=self.readout.device
         )
+        temperatures = [
+            self.temperature if item.temperature is None else item.temperature
+            for item in items
+        ]
         with torch.inference_mode():
             if self.readout.dtype == torch.float32:
                 logits = hidden.float() @ self.readout.T
@@ -1124,8 +1208,8 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
             invalid = (
                 torch.arange(MAX_OPTIONS, device=logits.device)[None] >= counts[:, None]
             )
-            probs = (
-                logits.masked_fill(invalid, float("-inf")) / self.temperature
+            probs = _scaled(
+                logits.masked_fill(invalid, float("-inf")), temperatures
             ).softmax(-1)
             values = probs.cpu().tolist()
         return [row[: len(item.keys)] for row, item in zip(values, items, strict=True)]
@@ -1203,5 +1287,39 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
             }
 
 
+def _scaled(logits: torch.Tensor, temperatures: list[float]) -> torch.Tensor:
+    """Each row of ``logits`` divided by its temperature: one division by a scalar per temperature, as a request's
+    own pass divides (a GPU divides by a scalar as a product with its reciprocal, not as an element-wise quotient).
+    """
+    distinct = sorted(set(temperatures))
+    if len(distinct) == 1:
+        return logits / distinct[0]
+    out = torch.empty_like(logits)
+    for value in distinct:
+        rows = torch.tensor(
+            [row for row, t in enumerate(temperatures) if t == value],
+            device=logits.device,
+        )
+        out[rows] = logits[rows] / value
+    return out
+
+
 def _bytes(tensor: torch.Tensor) -> int:
     return tensor.numel() * tensor.element_size()
+
+
+def passes(count: int) -> list[list[int]]:
+    """``range(count)`` in request order, ``BATCH_SIZE`` rows per pass."""
+    return [
+        list(range(start, min(start + BATCH_SIZE, count)))
+        for start in range(0, count, BATCH_SIZE)
+    ]
+
+
+def model_class_of(decision: dict[str, Any]) -> type[Decision3Model]:
+    """``Decision3Model``, or ``StateOnceModel`` for a package whose layout is state-once."""
+    if pkg.is_state_once(decision):
+        from .state_once import StateOnceModel
+
+        return StateOnceModel
+    return Decision3Model

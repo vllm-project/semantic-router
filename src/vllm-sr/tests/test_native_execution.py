@@ -112,13 +112,9 @@ def test_native_stage_uses_generated_closed_contract(native_document, field, val
         UserConfig.model_validate(native_document)
 
 
-@pytest.mark.parametrize(
-    "mutation", ["wrong_deployment", "wrong_stage", "chat_default"]
-)
+@pytest.mark.parametrize("mutation", ["wrong_stage", "chat_default"])
 def test_native_invalid_resource_references_are_rejected(native_document, mutation):
-    if mutation == "wrong_deployment":
-        native_document["providers"]["models"][0]["deployment"] = "missing"
-    elif mutation == "wrong_stage":
+    if mutation == "wrong_stage":
         native_document["recipes"][0]["routing"]["decisions"][0]["algorithm"]["stages"][
             1
         ]["model"] = "missing"
@@ -269,14 +265,11 @@ def test_native_signal_backend_lifecycle(native_document, variant):
         profile["decisions"][0]["rules"]["conditions"][0]["type"] = "domain"
     if variant in {"http", "explicit"}:
         profile["model_bindings"] = {
-            "preference": {
-                "deployment": "local-kai" if variant == "explicit" else "remote",
-                "contract": "decision.v1",
-                "adapter": "decision",
-            }
+            "preference": "local-kai" if variant == "explicit" else "remote"
         }
     errors = validate_native_execution(UserConfig.model_validate(native_document))
-    assert bool(errors) == (variant != "explicit")
+    # The Router judges the preference backend, the CLI only the MCP classifier.
+    assert bool(errors) == (variant == "mcp")
 
 
 def test_native_stage_cannot_shadow_abstention(native_document):
@@ -284,3 +277,18 @@ def test_native_stage_cannot_shadow_abstention(native_document):
         "name"
     ] = "abstain"
     assert validate_native_execution(UserConfig.model_validate(native_document))
+
+
+@pytest.mark.parametrize("publish", [False, True])
+def test_native_cascade_accepts_a_scan_budget_on_a_local_alias(
+    native_document, publish
+):
+    models = ["vllm-sr/auto", "strong"]
+    if publish:
+        models.append("kai")
+    native_document["listeners"][0]["systemone"]["models"] = models
+    native_document["global"]["model_catalog"]["deployments"]["local-kai"]["input"] = {
+        "max_tokens": 32768,
+        "overflow": "window",
+    }
+    assert validate_native_execution(UserConfig.model_validate(native_document)) == []

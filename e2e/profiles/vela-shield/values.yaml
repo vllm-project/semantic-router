@@ -1,6 +1,6 @@
-# Selects Vela Shield for the built-in safety module, which the Router serves
-# through its managed model runtime on CPU. No endpoint classifier or mock
-# classification response participates.
+# The safety rule asks Vela 1.0 Shield, which the Router serves through its
+# managed model runtime on CPU. No endpoint classifier or mock classification
+# response participates.
 config:
   version: v0.3
   listeners: []
@@ -21,6 +21,7 @@ config:
     signals:
       safety:
         - name: unsafe-content
+          deployment: vela-shield
           threshold: 0.5
     decisions:
       - name: handle-content-risk
@@ -42,10 +43,16 @@ config:
           - model: general-expert
   global:
     model_catalog:
-      modules:
-        safety:
-          safety:
-            model_id: models/Vela-1.0-Encoder-307M-Shield
+      deployments:
+        # Vela 1.0 Shield on the built-in model runtime; inputs over the
+        # model's limit are truncated rather than refused.
+        vela-shield:
+          provider: model_runtime
+          artifact: vllm-sr/Vela-1.0-Encoder-307M-Shield
+          revision: a981a99eeb05a2859b88b5cee9af4352897ec4ec
+          device: cpu
+          input:
+            overflow: truncate
 resources:
   requests:
     memory: 2Gi

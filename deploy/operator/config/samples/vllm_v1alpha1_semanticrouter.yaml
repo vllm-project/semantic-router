@@ -30,7 +30,7 @@ spec:
   # Resource requirements
   resources:
     limits:
-      memory: "7Gi"
+      memory: "12Gi"
       cpu: "2"
     requests:
       memory: "3Gi"
@@ -149,14 +149,14 @@ spec:
       tools_db_path: "config/tools_db.json"
       fallback_to_empty: true
 
-    # Prompt guard / jailbreak detection
+    # Prompt guard / jailbreak detection, answered by the decision model
+    # (vela3-fast by default).
     prompt_guard:
       enabled: true
-      model_id: "models/Vela-2.0-0.3B"
-      threshold: "0.75"
+      threshold: "0.88"
       use_cpu: true
 
-    # Domain and PII classifiers use the Vela 2.0 0.3B defaults.
+    # Domain and PII classifiers follow the decision model too.
 
     # Reasoning mode configuration per model family
     # Default reasoning effort level

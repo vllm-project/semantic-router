@@ -104,7 +104,9 @@ class RuntimeEvidenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp)
             receipts = self.write_planned_recipe_outputs(path)
-            self.assertIn("image-built-in-latest-0.json", {r.name for r in receipts})
+            self.assertIn(
+                "image-built-in-latest-mom-v1-0.json", {r.name for r in receipts}
+            )
             result = runtime_evidence.recipe_evidence(path)
             self.assertEqual(collection_errors(result, "test"), [])
             self.assertEqual(len(result["artifacts"]), len(receipts))

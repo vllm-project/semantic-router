@@ -2,7 +2,8 @@
 
 For models that name them it registers the ``geglu`` slot's ``contiguous``
 variant and, on x86, the ``linear`` slot's ``float32-packed`` one
-(``onednn.py``): together they make an encoder's forward batch-invariant.
+(``onednn.py``): together they make an encoder's forward batch-invariant where
+the packed products measure so at load (``onednn.invariant``).
 
 All CPU device work of a process runs on one thread (``execute``). PyTorch's
 OpenMP backend keeps one thread team per calling thread; as soon as two teams
@@ -19,7 +20,7 @@ import platform
 import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
+from typing import Any, TypeVar
 
 import torch
 
@@ -34,6 +35,7 @@ from .kernels import (
 )
 
 _LOCK = threading.Lock()
+T = TypeVar("T")
 _EXECUTOR: ThreadPoolExecutor | None = None
 
 
@@ -92,6 +94,13 @@ def device_thread() -> ThreadPoolExecutor:
                 max_workers=1, thread_name_prefix="vllm-sr-cpu"
             )
         return _EXECUTOR
+
+
+def on_device_thread(work: Callable[[], T]) -> T:
+    """``work`` on the CPU device thread, inline when already on it."""
+    if threading.current_thread().name.startswith("vllm-sr-cpu"):
+        return work()
+    return device_thread().submit(work).result()
 
 
 class CPUAccelerator(Accelerator):
@@ -174,6 +183,4 @@ class CPUAccelerator(Accelerator):
         return super().lacks(device, capability)
 
     def execute(self, device: DeviceInfo, work: Callable[[], Any]) -> Any:
-        if threading.current_thread().name.startswith("vllm-sr-cpu"):
-            return work()
-        return device_thread().submit(work).result()
+        return on_device_thread(work)

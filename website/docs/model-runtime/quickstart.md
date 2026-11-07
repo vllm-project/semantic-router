@@ -59,6 +59,9 @@ videos as described in [Router and Engine modes](https://github.com/vllm-project
 `vllm-sr serve vllm-sr/d3-turbo --engine --platform rocm` starts d3-turbo, which
 reads each input once for all of its questions and also finds things in images
 and videos ([Box and track questions](https://github.com/vllm-project/semantic-router/blob/main/src/vllm-sr/INSTANCE_MODES.md#find-things-in-images-and-videos)).
+`vllm-sr serve vllm-sr/d3-ultra --engine --platform rocm` starts d3-ultra, which
+answers the same questions and reads a text request's question list in front of
+its state.
 
 In Engine mode the CLI starts only the persistent frontend and a managed model
 worker: one Router container. `--dashboard` adds the Dashboard, `--observability`
@@ -221,7 +224,7 @@ runtime restarts later, the signal is unknown until the model is back and
 `on_unknown: no_match` sends requests to `default-route` meanwhile.
 
 Router and Engine mode share one managed instance. To attach an independently
-operated worker instead, use an explicit `endpoint` and `served_name`; the
+operated worker instead, use an explicit `endpoint` and `model`; the
 [deployment guide](./deploy.md) describes its separate worker API and lifecycle.
 
 ## Next steps

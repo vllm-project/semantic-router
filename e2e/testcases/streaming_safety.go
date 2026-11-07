@@ -53,7 +53,7 @@ func checkStreamingBlock(ctx context.Context, client *kubernetes.Clientset, opts
 	}
 	defer stop()
 
-	resp, err := sendNonStreamingRequest(ctx, prompt, "vllm-sr/auto", localPort)
+	resp, err := sendChunkedChatRequest(ctx, localPort, chatRequestBody(prompt, "vllm-sr/auto", false), streamedBodyWrites)
 	if err != nil {
 		return fmt.Errorf("%s: request failed: %w", testName, err)
 	}
@@ -61,6 +61,9 @@ func checkStreamingBlock(ctx context.Context, client *kubernetes.Clientset, opts
 	_ = resp.Body.Close()
 	if readErr != nil {
 		return fmt.Errorf("%s: read refusal: %w", testName, readErr)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("%s: status %d: %s", testName, resp.StatusCode, truncateString(string(body), 200))
 	}
 	if validationErr := validateStreamingSafetyResponse(resp.Header, body, decision, refusal); validationErr != nil {
 		return fmt.Errorf("%s: %w", testName, validationErr)
