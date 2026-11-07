@@ -49,9 +49,11 @@ Keep the rule names aligned with the route behavior you want decisions to
 reference.
 
 The detector is off by default, so these rules match only with a
-`modality_detector` block. With `method: classifier` and no
-`classifier.model_path`, it runs **vela3-fast** (Vela 3.0), whose calibrated
-`confidence_threshold` is 0.63:
+`modality_detector` block. With `method: classifier`, the decision model
+answers it unless a `modality` binding names another deployment
+([Choose a model for a signal](../../../installation/choose-a-model-for-a-signal.md)).
+The default decision model, **vela3-fast** (Vela 3.0), has a calibrated
+`confidence_threshold` of 0.63:
 
 ```yaml
 global:
@@ -75,12 +77,12 @@ model (`modality: omni`).
 
 ## Dependencies and Limitations
 
-Without a recipe model binding, `classifier.max_sequence_length: 0` keeps the
+Without a `modality` binding, `classifier.max_sequence_length: 0` keeps the
 512-token default. Long prompts receive representative head, middle, and tail
 samples for routing, and the model runtime truncates any input still over the
 budget. This policy limits inference cost and does not classify every token.
 
-For unsampled modality input, bind `modality_detector` to a named deployment with
+For unsampled modality input, bind `modality` to a deployment with
 `input.max_tokens` above 512. Set `input.overflow: reject` to reject input beyond
 that budget. Choose a budget qualified for the selected artifact and provider;
 a model's advertised 32K capacity does not establish 32K execution on every

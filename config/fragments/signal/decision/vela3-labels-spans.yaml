@@ -8,9 +8,7 @@ global:
     # The PII signal asks the same deployment's ready-made PII question, in the
     # same call as the decision questions below.
     bindings:
-      pii_classifier:
-        deployment: vela3
-        contract: token_spans.v1
+      pii: vela3
 routing:
   signals:
     decision:

@@ -7,6 +7,14 @@ status: Implemented
 
 > **Status:** Implemented · **Created:** 2026-03-17
 
+:::note
+This record predates the model catalog redesign. The binding contracts, module
+`backend` blocks and `external[]` models it describes are deprecated: they still
+load, with a `deprecated_model_field` warning.
+[Migrate model resources](../installation/model-resource-migration.md) shows the
+current form of each.
+:::
+
 ## Problem
 
 The router, CLI, dashboard, Helm chart, operator, and DSL previously interpreted
