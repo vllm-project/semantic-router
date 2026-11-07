@@ -37,6 +37,15 @@ var reasoningFamilyProjectors = map[string]reasoningFamilyProjector{
 	},
 }
 
+// deploymentReasoning is the reasoning an openai_chat deployment asks with:
+// its generation.reasoning, else the deprecated external[] model's.
+func deploymentReasoning(deployment config.ModelDeployment) *config.ExternalModelConfig {
+	if deployment.Generation != nil && deployment.Generation.Reasoning != nil {
+		return &config.ExternalModelConfig{Reasoning: deployment.Generation.Reasoning}
+	}
+	return deployment.LegacyExternal()
+}
+
 func resolveExternalModelReasoningControl(
 	families map[string]config.ReasoningFamilyConfig,
 	external *config.ExternalModelConfig,

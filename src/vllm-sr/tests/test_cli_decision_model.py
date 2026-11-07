@@ -8,6 +8,7 @@ import pytest
 import yaml
 from cli import decision_model, runtime_lifecycle, runtime_service_status
 from cli.commands import runtime_config_mutation, runtime_paths, runtime_serve_config
+from cli.config_schema.validation import validate_config_structure
 from cli.k8s_backend import K8sBackend
 from cli.models import UserConfig
 from cli.runtime_stack import resolve_runtime_stack
@@ -158,13 +159,18 @@ def _document(system=None):
     return document
 
 
-def test_config_validate_checks_the_decision_model():
+def test_config_validate_leaves_the_decision_model_to_the_router():
     assert _validate(_document()) == []
     assert _validate(_document({"decision_model": {"deployment": "candidate"}})) == []
-    errors = _validate(_document({"decision_model": "Decision-2.0-Nox-4B"}))
-    assert any("decision_model must be" in error for error in errors), errors
-    errors = _validate(_document({"decision_model": {"deployment": "missing"}}))
-    assert any("unknown deployment" in error for error in errors), errors
+    assert validate_config_structure(
+        _document({"decision_model": "Decision-2.0-Nox-4B"})
+    )
+    missing = _document({"decision_model": {"deployment": "missing"}})
+    assert _validate(missing) == []
+    with pytest.raises(ValueError, match="unknown deployment 'missing'"):
+        runtime_serve_config._check_served_decision_model(
+            missing, "cpu", local_host=True
+        )
 
 
 def test_status_reads_the_routers_active_decision_model(monkeypatch):

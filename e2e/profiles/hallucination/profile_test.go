@@ -22,14 +22,13 @@ func TestProfileUsesCanonicalFactCheckBindingWithRemoteDetector(t *testing.T) {
 		t.Fatal("hallucination mitigation must remain enabled")
 	}
 	factCheck := profileSection(t, module, "fact_check")
-	if factCheck["model_ref"] != "fact_check_classifier" {
-		t.Fatalf("fact-check must use the canonical system binding, got %#v", factCheck)
+	for _, selector := range []string{"model_ref", "model_id"} {
+		if value, exists := factCheck[selector]; exists {
+			t.Fatalf("fact-check must follow the decision model instead of naming a model with %s: %v", selector, value)
+		}
 	}
-	if modelID, exists := factCheck["model_id"]; exists && modelID != "" {
-		t.Fatalf("fact-check must inherit the catalog model instead of overriding it with %v", modelID)
-	}
-	// 0.86 on Vela 2.0 0.3B keeps Vela 1.0 FactCheck's operating point at 0.65.
-	if factCheck["threshold"] != 0.86 || factCheck["use_cpu"] != true {
+	// 0.9997 on vela3-fast keeps Vela 1.0 FactCheck's operating point at 0.65.
+	if factCheck["threshold"] != 0.9997 || factCheck["use_cpu"] != true {
 		t.Fatalf("fact-check execution policy changed: %#v", factCheck)
 	}
 	if _, retired := factCheck["use_mmbert_32k"]; retired {
@@ -40,24 +39,14 @@ func TestProfileUsesCanonicalFactCheckBindingWithRemoteDetector(t *testing.T) {
 		t.Fatalf("the remote detector is a binding, not the retired endpoint shorthand: %#v", detector)
 	}
 	catalog := profileSection(t, values, "config", "global", "model_catalog")
-	binding := profileSection(t, catalog, "bindings", "hallucination_detector")
-	if binding["adapter"] != "http_chat" || binding["contract"] != "token_spans.v1" {
-		t.Fatalf("the remote detector must be an http_chat token_spans.v1 binding: %#v", binding)
+	if _, external := catalog["external"]; external {
+		t.Fatal("the remote detector is a deployment, not an external model")
 	}
-	deploymentName, _ := binding["deployment"].(string)
+	deploymentName, _ := profileSection(t, catalog, "bindings")["hallucination"].(string)
 	deployment := profileSection(t, catalog, "deployments", deploymentName)
-	if deployment["provider"] != "http" || deployment["external_model"] != "hallucination-detector" {
-		t.Fatalf("the detector deployment must serve the external model over http: %#v", deployment)
-	}
-	external, _ := catalog["external"].([]any)
-	if len(external) != 1 {
-		t.Fatalf("profile must declare exactly its remote detector as an external model: %#v", external)
-	}
-	model, _ := external[0].(map[string]any)
-	endpoint, _ := model["llm_endpoint"].(map[string]any)
-	if endpoint["address"] != "mock-hallucination-detector.default.svc.cluster.local" || endpoint["port"] != 8000 ||
-		model["llm_model_name"] != "KRLabsOrg/lettucedect-v2-qwen-2b" {
-		t.Fatalf("remote detector contract changed: %#v", model)
+	if deployment["provider"] != "openai_chat" || deployment["model"] != "KRLabsOrg/lettucedect-v2-qwen-2b" ||
+		deployment["endpoint"] != "http://mock-hallucination-detector.default.svc.cluster.local:8000/v1" {
+		t.Fatalf("the hallucination binding must name the remote detector served over chat completions: %#v", deployment)
 	}
 }
 

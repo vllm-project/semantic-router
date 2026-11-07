@@ -14,6 +14,7 @@ const LEARNING_ACTION_LABELS: Record<string, string> = {
   hold_current: 'held current model',
   allow_switch: 'switch allowed',
   rescue_switch: 'rescue switch',
+  release_switch: 'explicit release',
 }
 
 const LEARNING_REASON_LABELS: Record<string, string> = {
@@ -34,6 +35,7 @@ const LEARNING_REASON_LABELS: Record<string, string> = {
   switch_margin_not_met: 'switch margin not met',
   switch_allowed: 'switch allowed',
   rescue_evidence: 'rescue evidence',
+  explicit_release: 'explicit release',
 }
 
 const HUMANIZED_VALUE_BY_HEADER: Record<string, Record<string, string>> = {

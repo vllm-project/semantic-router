@@ -205,7 +205,10 @@ traffic:
   fewer than half of the replicas remain healthy, the Router spreads requests
   over all of them rather than overloading the rest.
 - When no attempt gets a response, the client receives `503` (or `504` for a
-  timeout) in the error format of its API.
+  timeout) as Envoy's plain-text local reply, such as `upstream connect error
+  or disconnect/reset before headers. reset reason: remote connection
+  failure`. The response phases do not run on it, so it is not in the error
+  format of the client's API.
 
 The Envoy data plane has no first-byte timeout, so a configuration that sets
 `first_byte_timeout` fails when the Router renders its Envoy configuration.

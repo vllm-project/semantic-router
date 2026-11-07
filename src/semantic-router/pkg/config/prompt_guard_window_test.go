@@ -30,15 +30,10 @@ func TestPromptGuardWindowAcceptsExplicitLocalBindingWithoutLegacyVariant(t *tes
 	cfg.PromptGuard.Window = &SequenceHeadWindowConfig{Size: 1024, Overlap: 128}
 	cfg.ModelDeployments = map[string]ModelDeployment{"guard": {Provider: ModelRuntimeProvider, Artifact: "/models/guard", Input: ModelInputBudget{MaxTokens: 2048}}}
 	cfg.ModelBindings = map[string]ModelBinding{"prompt_guard": {Deployment: "guard", Adapter: "modernbert", Contract: RemoteClassifierContractLabelDistribution}}
-	plan, err := CompileModelBindings(cfg)
-	if err != nil {
+	if _, err := CompileModelBindings(cfg); err != nil {
 		t.Fatal(err)
 	}
-	projected, err := ProjectRecipeModelBindings(cfg, plan, DefaultRecipeName)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := validatePromptGuardBackend(projected); err != nil {
+	if err := validatePromptGuardBackend(cfg); err != nil {
 		t.Fatal(err)
 	}
 	d := cfg.ModelDeployments["guard"]

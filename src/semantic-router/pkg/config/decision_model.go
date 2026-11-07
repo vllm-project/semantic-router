@@ -13,7 +13,8 @@ type DecisionModelBinding struct {
 
 const (
 	DefaultDecisionDeployment = "primary"
-	DefaultDecisionModel      = "Vela-2.0-0.3B"
+	DefaultDecisionModel      = DecisionModelVela3Fast
+	DecisionModelVela3Fast    = "vela3-fast"
 	DecisionModelVela2_03B    = "Vela-2.0-0.3B"
 	DecisionModelVela2_08B    = "Vela-2.0-0.8B"
 	DecisionModelVela2_4B     = "Vela-2.0-4B"
@@ -50,26 +51,29 @@ func decisionModelSpec(name string, deployment ModelDeployment) DecisionModelSpe
 	}}
 }
 
-// systemLine is one built-in module's line under global.model_catalog.system.
+// systemLine is one built-in module's line under global.model_catalog.system:
+// key, the consumer it bound, and its value.
 type systemLine struct {
-	key   string
-	value func(*CanonicalSystemModels) *string
+	key      string
+	consumer string
+	value    func(*CanonicalSystemModels) *string
 }
 
 var systemLines = []systemLine{
-	{"safety", func(s *CanonicalSystemModels) *string { return &s.Safety }},
-	{"hazard", func(s *CanonicalSystemModels) *string { return &s.Hazard }},
-	{"prompt_guard", func(s *CanonicalSystemModels) *string { return &s.PromptGuard }},
-	{"domain_classifier", func(s *CanonicalSystemModels) *string { return &s.DomainClassifier }},
-	{"pii_classifier", func(s *CanonicalSystemModels) *string { return &s.PIIClassifier }},
-	{"fact_check_classifier", func(s *CanonicalSystemModels) *string { return &s.FactCheckClassifier }},
-	{"hallucination_detector", func(s *CanonicalSystemModels) *string { return &s.HallucinationDetector }},
-	{"feedback_detector", func(s *CanonicalSystemModels) *string { return &s.FeedbackDetector }},
+	{"safety", bindingKeySafety, func(s *CanonicalSystemModels) *string { return &s.Safety }},
+	{"hazard", bindingKeyHazard, func(s *CanonicalSystemModels) *string { return &s.Hazard }},
+	{"prompt_guard", "prompt_guard", func(s *CanonicalSystemModels) *string { return &s.PromptGuard }},
+	{"domain_classifier", "domain_classifier", func(s *CanonicalSystemModels) *string { return &s.DomainClassifier }},
+	{"pii_classifier", "pii_classifier", func(s *CanonicalSystemModels) *string { return &s.PIIClassifier }},
+	{"fact_check_classifier", "fact_check_classifier", func(s *CanonicalSystemModels) *string { return &s.FactCheckClassifier }},
+	{"hallucination_detector", "hallucination_detector", func(s *CanonicalSystemModels) *string { return &s.HallucinationDetector }},
+	{"feedback_detector", "feedback_detector", func(s *CanonicalSystemModels) *string { return &s.FeedbackDetector }},
 }
 
-// applyDecisionModel resolves the default judgment resource, preserving every
-// explicitly authored specialist module and deployment declaration.
-func applyDecisionModel(resolved *CanonicalGlobal, raw *StructuredPayload) error {
+// validateDecisionModel checks system.decision_model: it names a declared
+// model_runtime or systemone deployment. Built-in signals follow it by name
+// (model_resolution.go); nothing is copied into module fields.
+func validateDecisionModel(resolved *CanonicalGlobal) error {
 	system := &resolved.ModelCatalog.System
 	name := strings.TrimSpace(system.DecisionModel.Deployment)
 	if name == "" || name != system.DecisionModel.Deployment {
@@ -77,52 +81,50 @@ func applyDecisionModel(resolved *CanonicalGlobal, raw *StructuredPayload) error
 	}
 	deployment, exists := resolved.ModelCatalog.Deployments[name]
 	if !exists {
-		return fmt.Errorf("global.model_catalog.system.decision_model.deployment: unknown deployment %q", name)
+		return fmt.Errorf("global.model_catalog.system.decision_model.deployment: unknown deployment %q; %s", name, declaredDeployments(resolved.ModelCatalog.Deployments))
 	}
-	if !deployment.IsModelRuntime() {
-		return fmt.Errorf("global.model_catalog.system.decision_model.deployment %q must use provider model_runtime", name)
-	}
-	explicit := explicitSystemLines(raw, *system)
-	defaults := decisionModelSpec(name, deployment).System
-	for _, line := range systemLines {
-		if !explicit[line.key] {
-			*line.value(system) = *line.value(&defaults)
-		}
+	if !deployment.IsModelRuntime() && !deployment.IsSystemOne() {
+		return fmt.Errorf("global.model_catalog.system.decision_model.deployment %q must use provider model_runtime or systemone", name)
 	}
 	return nil
 }
 
-// explicitSystemLines are the system lines a configuration sets: the keys of
-// its raw global.model_catalog.system, or, for a configuration built in code,
-// the lines that differ from the defaults.
-func explicitSystemLines(raw *StructuredPayload, system CanonicalSystemModels) map[string]bool {
-	explicit := make(map[string]bool, len(systemLines))
-	if raw != nil {
-		if global, err := raw.AsStringMap(); err == nil {
-			for key := range nestedStringMap(nestedStringMap(global["model_catalog"])["system"]) {
-				explicit[key] = true
-			}
-			return explicit
-		}
-	}
-	defaults := DefaultSystemModels()
-	for _, line := range systemLines {
-		if *line.value(&system) != *line.value(&defaults) {
-			explicit[line.key] = true
-		}
-	}
-	return explicit
-}
-
-// DecisionModelSpec projects the selected deployment's model identity.
+// DecisionModelSpec projects the selected deployment's model identity. A
+// configuration built in code without a decision model, and a remote
+// decision model, report vela3-fast's.
 func (c *RouterConfig) DecisionModelSpec() DecisionModelSpec {
 	name, deployment, _, err := c.DecisionModelDeployment()
-	if err != nil && (c == nil || c.DecisionModel == "") {
-		// Directly constructed module configurations still expose their normal
-		// built-in defaults. This does not manufacture a runtime deployment.
-		deployment, _ = ImplicitModelRuntimeDeployment(Vela2SignalModel, true)
+	if err != nil && (c == nil || c.DecisionModel == "" || c.RemoteDecisionModel()) {
+		deployment, _ = ImplicitModelRuntimeDeployment(Vela3SignalModel, true)
 	}
 	return decisionModelSpec(name, deployment)
+}
+
+// DecisionModelResource resolves the decision model's deployment of either
+// kind: a model_runtime one, as DecisionModelDeployment does, or a systemone
+// one.
+func (c *RouterConfig) DecisionModelResource() (name string, deployment ModelDeployment, ok bool, err error) {
+	if c.RemoteDecisionModel() {
+		name = c.DecisionModel
+		if name == "" {
+			name = DefaultDecisionDeployment
+		}
+		return name, c.ModelDeployments[name], true, nil
+	}
+	return c.DecisionModelDeployment()
+}
+
+// RemoteDecisionModel reports whether the decision model is a systemone
+// deployment.
+func (c *RouterConfig) RemoteDecisionModel() bool {
+	if c == nil {
+		return false
+	}
+	name := c.DecisionModel
+	if name == "" {
+		name = DefaultDecisionDeployment
+	}
+	return c.IsSystemOneDeployment(name)
 }
 
 // RequiresGPU reports whether a module model runs on a GPU only.
@@ -169,6 +171,12 @@ func (c *RouterConfig) DecisionSelectorDeployment(selector DecisionSelectionConf
 func (c *RouterConfig) deploymentOrDecisionModel(deployment string) string {
 	if named := strings.TrimSpace(deployment); named != "" {
 		return named
+	}
+	if c.RemoteDecisionModel() {
+		if c.DecisionModel == "" {
+			return DefaultDecisionDeployment
+		}
+		return c.DecisionModel
 	}
 	name, _, ok, err := c.DecisionModelDeployment()
 	if !ok || err != nil {

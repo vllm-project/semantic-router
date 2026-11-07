@@ -5,9 +5,12 @@ import base64
 import http.client
 import json
 import os
+import re
 import socket
 import time
 import unittest
+from urllib.parse import urljoin
+from urllib.request import Request, urlopen
 
 from cli_test_base import CLITestBase
 from serve_session import ServeSessionMixin
@@ -36,8 +39,19 @@ class TestGrafanaLiveIntegration(ServeSessionMixin, CLITestBase):
                 "DASHBOARD_ADMIN_EMAIL": TEST_ADMIN_EMAIL,
                 "DASHBOARD_ADMIN_PASSWORD": TEST_ADMIN_PASSWORD,
             }
-        ):
+        ) as serve_process:
+            stdout, _ = serve_process.communicate()
+            grafana_line = next(
+                line
+                for line in stdout.splitlines()
+                if line.strip().startswith("Grafana")
+            )
+            self.assertIn(
+                f"{self.runtime_stack.dashboard_url}/monitoring", grafana_line
+            )
+            self.assertNotIn("admin/admin", grafana_line)
             session_token = self._dashboard_session_token()
+            self._assert_grafana_application_assets(session_token)
             allowed_status = self._wait_for_websocket_status(
                 PUBLIC_DASHBOARD_ORIGIN,
                 session_token=session_token,
@@ -50,6 +64,27 @@ class TestGrafanaLiveIntegration(ServeSessionMixin, CLITestBase):
                 ),
                 403,
             )
+
+    def _assert_grafana_application_assets(self, session_token: str) -> None:
+        url = f"{self.runtime_stack.dashboard_url}/embedded/grafana/"
+        headers = {"Cookie": f"vsr_session={session_token}"}
+        with urlopen(Request(url, headers=headers), timeout=10) as response:
+            self.assertEqual(response.status, 200)
+            document = response.read().decode()
+        base = re.search(r'<base\s+href="([^"]+)"', document)
+        self.assertIsNotNone(base)
+        base_url = urljoin(url, base.group(1))
+        scripts = re.findall(r'<script\b[^>]*\bsrc="([^"]+)"', document)
+        assets = [script for script in scripts if "public/build/" in script]
+        self.assertTrue(assets, "Grafana document has no application scripts")
+        for asset in assets:
+            with self.subTest(asset=asset):
+                request = Request(urljoin(base_url, asset), headers=headers)
+                with urlopen(request, timeout=10) as response:
+                    self.assertEqual(response.status, 200)
+                    self.assertIn(
+                        "javascript", response.headers.get("Content-Type", "")
+                    )
 
     def _wait_for_websocket_status(
         self,

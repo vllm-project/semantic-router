@@ -236,7 +236,7 @@ class ComponentBatchTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             runner.commands("arbitrary-target", Path("output"))
 
-    def test_workflow_uploads_individual_results_after_failure_and_gate_is_unchanged(
+    def test_workflow_preserves_result_uploads_and_gate_dependencies(
         self,
     ):
         data = yaml.safe_load((ROOT / ".github/workflows/test-tools.yml").read_text())
@@ -258,7 +258,7 @@ class ComponentBatchTests(unittest.TestCase):
             parent["tools"]["strategy"]["matrix"]["label"],
             "${{ fromJSON(needs.plan.outputs.worker_labels)['tools'] }}",
         )
-        self.assertEqual(parent["gate"]["if"], "always()")
+        self.assertEqual(parent["gate"]["if"], "${{ !cancelled() }}")
         self.assertIn("tools", parent["gate"]["needs"])
 
     @staticmethod
