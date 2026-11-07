@@ -106,6 +106,8 @@ accurate and allow room for generated output. Before selection, the Router
 removes decision candidates whose configured, positive context window is
 smaller than the estimated request. Missing context metadata remains eligible
 for backward compatibility; if every candidate has a known insufficient
-window, the Router rejects the request instead of forwarding it to an
-ineligible backend. See a complete example:
+window, the Router counts the request again without the estimate's reserves
+for structured data and media, keeps the candidates that count fits, and
+rejects the request only when it fits none of them instead of forwarding it to
+an ineligible backend. The backend still checks the real length. See a complete example:
 [`config/fragments/signal/context/long-context.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/context/long-context.yaml).

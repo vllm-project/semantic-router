@@ -9,9 +9,11 @@ A decision model answers questions you write in plain language about a
 request, without training a classifier for each one. The Router can use it for
 registered judgment tasks, custom questions, and backend selection:
 
-- task bindings connect domain, complexity, preference, classification, safety,
-  PII judgments, hallucination judgments, and other supported consumers to a
-  deployment; capability checks use the model's actual question types;
+- as the decision model, or through a binding or a rule's `deployment`, it
+  answers built-in signals such as domain, complexity, preference,
+  classification, safety, PII and hallucination; capability checks use the
+  model's actual question types (see
+  [Choose a model for a signal](../../installation/choose-a-model-for-a-signal.md));
 - a [`decision` signal](tutorials/signal/learned/decision.md) asks a
   question and routes on the answer;
 - the [`decision` selection algorithm](tutorials/algorithm/selection/decision.md)

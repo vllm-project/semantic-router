@@ -101,6 +101,22 @@ func TestDecisionRouteActionFailsClosedWithoutEligibleModel(t *testing.T) {
 	}
 }
 
+func TestDecisionRouteActionRefusesOnlyWithoutReservesAboveEveryWindow(t *testing.T) {
+	router := routeActionRouter(map[string]int{"safe-model": 100, "small-safe-model": 100})
+	decisionValue := guardDecision(routeAction("safe-model"), config.ModelRef{Model: "small-safe-model"})
+
+	ctx := &RequestContext{VSRContextTokenCount: 200, VSRContextReserveTokens: 150}
+	destination, terminal, err := router.decisionRouteActionDestination(decisionValue, ctx)
+	assert.NoError(t, err)
+	assert.True(t, terminal)
+	assert.Equal(t, "safe-model", destination)
+
+	ctx = &RequestContext{VSRContextTokenCount: 200, VSRContextReserveTokens: 50}
+	_, terminal, err = router.decisionRouteActionDestination(decisionValue, ctx)
+	assert.ErrorIs(t, err, errNoContextEligibleDecisionModel)
+	assert.False(t, terminal)
+}
+
 func TestDecisionRouteActionDestinationEligibleAfterContextShrinks(t *testing.T) {
 	router := routeActionRouter(map[string]int{"safe-model": 100})
 	ctx := &RequestContext{VSRContextTokenCount: 50}

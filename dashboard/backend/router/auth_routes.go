@@ -110,7 +110,7 @@ func registerAuthMethodRoute(
 	handler http.HandlerFunc,
 ) {
 	wrapped := func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != spec.method {
+		if r.Method != spec.method && (r.Method != http.MethodHead || spec.method != http.MethodGet) {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}

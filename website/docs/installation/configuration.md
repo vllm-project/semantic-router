@@ -29,13 +29,13 @@ or runtime behavior that differs from the built-in defaults.
 | Section | Owns |
 | --- | --- |
 | `version` | Canonical schema version. Use `v0.3`. |
-| `listeners` | Public Router listeners: address, port, idle timeout, optional client API keys, an optional Chat model allowlist (`models`; empty accepts all), separate native System One grants (`systemone.models`; omission publishes none) and the longest they wait for a model (`systemone.max_deadline_ms`, 10 minutes by default), optional one-way TLS (`tls.cert_file`, `tls.key_file`), and the identity sources a listener trusts (`identity.trust_headers`, `identity.trusted_peers`; by default none), which the Router honors in standalone mode. |
+| `listeners` | Public Router listeners: address, port, the default time for a whole call including its streamed response (`timeout`, 300s), which also bounds a stalled stream, so `0s` lifts both limits (to lift only the call limit for one model, set that model's `total_timeout: 0s`), optional client API keys, an optional Chat model allowlist (`models`; empty accepts all), separate native System One grants (`systemone.models`; omission publishes none) and the longest they wait for a model (`systemone.max_deadline_ms`, 10 minutes by default), optional one-way TLS (`tls.cert_file`, `tls.key_file`), and the identity sources a listener trusts (`identity.trust_headers`, `identity.trusted_peers`; by default none), which the Router honors in standalone mode. |
 | `providers` | Logical provider models, physical backend endpoints, pricing, capabilities, and defaults. |
 | `evaluation` | Optional operator-owned benchmark definitions, versioned index DAGs, and model-linked records. |
 | `routing` | The default recipe: model cards, signals, projections, decisions, strategy, algorithms, and route plugins. |
 | `entrypoints` | Public virtual model aliases mapped to the default or a named recipe. |
 | `recipes` | Additional isolated routing profiles that share providers and global infrastructure. |
-| `global` | Router services, stores, integrations, observability, learning, and router-owned model assets. |
+| `global` | Router services, stores, integrations, observability, learning, and the models the Router asks (`global.model_catalog`; see the [model catalog reference](model-catalog.md)). |
 
 Keep these boundaries clear:
 
@@ -72,17 +72,17 @@ reach a routable interface without an explicit `bind` change. The switch is read
 once at startup, so changing it requires a Router restart. See
 [API and Observability](../tutorials/global/api-and-observability).
 
-Built-in category/domain classification runs Vela Domain in the
-[model runtime](model-runtime/overview.md) when no remote backend is
-configured. To call a named external classifier, attach a
-`backend` under `global.model_catalog.modules.classifier.domain` and resolve
-its `model` from `global.model_catalog.external[]` with
-`model_role: classification`. The shared backend fields are `protocol`,
-`contract`, `model`, and optional `deadline_ms`; category
-currently supports `http_classify` with the full `label_distribution.v1`
-response contract. Omit `backend` to keep the runtime-served model. The earlier
-`variant`, `use_modernbert` and `use_mmbert_32k` selectors are gone;
-`vllm-sr config migrate` removes them.
+The models the Router asks, the ones that answer signals, embed text and
+rerank documents, are deployments under `global.model_catalog.deployments`. The
+decision model answers every question-style signal by default, in the
+[model runtime](model-runtime/overview.md). A binding
+(`global.model_catalog.bindings.<signal>`, or a recipe's
+`routing.model_bindings.<signal>`) or a rule's own `deployment` names another
+deployment, such as a remote `classify` service for domain, PII or complexity.
+[Choose a model for a signal](choose-a-model-for-a-signal.md) explains the rule,
+and the [model catalog reference](model-catalog.md) lists every deployment
+field. The earlier `variant`, `use_modernbert` and `use_mmbert_32k` selectors
+are gone; `vllm-sr config migrate` removes them.
 
 PII rules default to the legacy prompt and optional history scope. To inspect
 textual tool results, opt in per rule with `source: tool_result`; the router
@@ -91,31 +91,28 @@ supported chat, responses, and messages wire formats. Tool-result scope does
 not implicitly include the prompt or conversation history, and unsupported
 source values fail configuration validation.
 
-Complexity attaches the same block under
-`global.model_catalog.modules.complexity`, beside `prototype_scoring`. It reads
-two contracts, so `contract` cannot be defaulted and must be stated:
-`score.v1` for a regression model, where each rule turns the score into a
-verdict through its own `hard_above`/`easy_below` boundaries (or
-`hard_below`/`easy_above` for a score that falls as difficulty rises), and
-`label_distribution.v1` for a model that returns `hard`/`easy`/`medium`
-directly. `threshold` remains the symmetric shorthand for the local signed
-margin. `score.v1` reports no confidence, so decisions gated on those rules
-rank on the engine's structural default; the Router warns at startup. The
-remote call is visible through `llm_remote_connector_*` and
+A complexity rule names a remote scorer with its `deployment`: a `classify`
+deployment that returns one score, which each rule turns into a verdict
+through its own `hard_above`/`easy_below` boundaries (or
+`hard_below`/`easy_above` for a score that falls as difficulty rises). One
+score drives every complexity rule, so the rules of a routing profile name the
+same scorer. `threshold` remains the symmetric shorthand for the local signed
+margin. A remote score reports no confidence, so decisions gated on those
+rules rank on the engine's structural default; the Router warns at startup.
+The remote call is visible through `llm_remote_connector_*` and
 `llm_complexity_*` metrics, and a scorer failure is recorded on every
 complexity rule's signal errors rather than dropped.
 
-PII attaches the same block under
-`global.model_catalog.modules.classifier.pii`. It reads one contract,
-`token_spans.v1`, so `contract` may be omitted. The remote model returns entity
-spans as code-point offsets into the exact request string it was sent, and
-every label it returns must exist in the configured `pii_mapping_path`; a
-response the contract rejects is a backend failure rather than a clean "no PII"
-result. `on_error` beside the backend selects what such a failure, or a
-provider-declared `truncated_at`, does to the rule that consumed it: `allow`
-(the default) treats the content as not matching, `block` matches it as
-`classification_error`. Spans returned before a declared truncation still
-count under both policies.
+A remote PII classifier is a `classify` deployment that `pii` is bound to. It
+returns entity spans as code-point offsets into the exact request string it
+was sent, and every label it returns must exist in the configured
+`pii_mapping_path`; a response the span contract rejects is a failure rather
+than a clean "no PII" result.
+`global.model_catalog.modules.classifier.pii.on_error` selects what such a
+failure, or a provider-declared `truncated_at`, does to the rule that consumed
+it: `allow` (the default) treats the content as not matching, `block` matches
+it as `classification_error`. Spans returned before a declared truncation
+still count under both policies.
 
 The [Routing Pipeline](../overview/signal-driven-decisions) explains the design.
 Capability pages under **Capabilities** document each signal, projection,
@@ -290,7 +287,7 @@ providers:
       catalog: openai/gpt-5.6-sol
       backend_refs:
         - provider: openai
-          api_key_env: OPENAI_API_KEY
+          auth: {api_key_env: OPENAI_API_KEY}
 ```
 
 The `name` remains the local Router alias. A private or newly released model
@@ -359,8 +356,9 @@ its signal, projection, decision, algorithm, plugin, cache, learning,
 and routing state. Providers, stores, and router-owned classifier assets may be
 shared without allowing policy state to cross recipe boundaries.
 
-Set `max_response_bytes` on external LLM classifier entries and the MCP
-classifier module to cap one upstream classifier response.
+Set `limits.max_response_bytes` on a remote classifier deployment, and
+`max_response_bytes` on the MCP classifier module, to cap one upstream
+classifier response.
 
 In the schema, `entrypoints[].model_names` lists the public aliases,
 `entrypoints[].recipe` selects a named recipe, and `recipes[].routing` contains
@@ -399,7 +397,9 @@ candidate_requirements:
 `capabilities: declared` requires the assigned model to declare support for the
 request's task, including tools and image input, as well as a compatible provider
 protocol. `context: known_limits` checks estimated input demand plus the effective
-output reserve against declared model limits. The request must supply an output
+output reserve against declared model limits, and refuses a request only when it
+does not fit even without the input estimate's reserves for structured data and
+media. The request must supply an output
 bound, or its decision must configure `request_params.default_max_tokens` as a
 positive integer or `auto` (see below).
 That default applies only when the caller omits the bound; `max_tokens_limit` then
@@ -481,8 +481,11 @@ configuration.
 Set `capture_personal_data: false` globally or in the decision plugin to retain
 routing evidence while omitting content when PII is detected or its status is
 unknown. Missing PII detectors suppress content conservatively rather than
-preventing startup. Rejected requests without a selected decision use global
-capture defaults. These controls do not govern other stores or backend retention.
+preventing startup. Client tool results stay redacted unless
+`capture_tool_results: true`, which requires `capture_personal_data: true`;
+startup refuses the combination with `capture_personal_data: false`. Rejected
+requests without a selected decision use global capture defaults. These
+controls do not govern other stores or backend retention.
 See [Router Replay](../tutorials/plugin/router-replay) for the complete fields and
 examples, or inspect `vllm-sr config schema --section global.services.router_replay`.
 

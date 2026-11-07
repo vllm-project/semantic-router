@@ -12,7 +12,14 @@ import subprocess
 from pathlib import Path
 from urllib.parse import urlencode
 
-from manual_ci import PAGE_SIZE, GitHubClient, ManualCIError, read_artifact
+from manual_ci import (
+    PAGE_SIZE,
+    GitHubClient,
+    ManualCIError,
+    api_failure,
+    main_contains,
+    read_artifact,
+)
 
 CHECK = "PR Gate"
 MARKER = "<!-- semantic-router-ci-status:v1 -->"
@@ -28,18 +35,14 @@ COMMENT_ITEM_LIMIT = 30
 
 class StatusClient(GitHubClient):
     def write(self, endpoint: str, payload: dict, *, method="POST"):
-        result = subprocess.run(
+        result = self.gh(
             ["gh", "api", endpoint, "--method", method, "--input", "-"],
+            read=False,
             input=json.dumps(payload),
             text=True,
-            capture_output=True,
-            timeout=60,
-            check=False,
         )
         if result.returncode:
-            raise ManualCIError(
-                "Could not publish CI status; check workflow permissions."
-            )
+            raise api_failure(result, "Could not publish CI status")
         return json.loads(result.stdout) if result.stdout.strip() else None
 
 
@@ -313,17 +316,18 @@ def presentation(
     if state in {"awaiting-approval", "legacy", "stale"}:
         lines += [
             "",
-            "Approval applies to this revision only. New commits or a changed merge base require fresh qualification.",
+            "Approval applies to this revision only. New commits require fresh qualification.",
         ]
     return titles[state], "\n".join(lines)
 
 
-def owned_checks(client, repo: str, pull: dict) -> list[dict]:
+def owned_checks(client, repo: str, pull: dict, *, latest=False) -> list[dict]:
+    check_filter = "latest" if latest else "all"
     return [
         item
         for item in pages(
             client,
-            f"repos/{repo}/commits/{pull['head']['sha']}/check-runs?check_name=PR%20Gate&filter=all",
+            f"repos/{repo}/commits/{pull['head']['sha']}/check-runs?check_name=PR%20Gate&filter={check_filter}",
             "check_runs",
         )
         if item.get("name") == CHECK
@@ -378,6 +382,9 @@ def publish(
     }
     if dry_run:
         return result
+    visible_checks = (
+        owned_checks(client, repo, pull, latest=True) if state != "legacy" else []
+    )
     # Recheck after reading artifacts/comments; an old completion must never
     # overwrite the status of a newer run, attempt, or contributor commit.
     fresh = client.request(f"repos/{repo}/actions/runs/{run['id']}")
@@ -393,29 +400,48 @@ def publish(
     ):
         return {"ignored": "superseded while preparing status"}
     if state != "legacy":
-        existing = [item for item in checks if item.get("external_id") == external]
-        if not existing:
-            # An approval rerun should resolve its own pending check, without
-            # reopening a completed check or mutating another workflow run.
-            run_prefix = f"{PREFIX}{pull['number']}:{run['id']}:"
-            existing = [
-                item
-                for item in checks
-                if item.get("status") == "in_progress"
-                and str(item.get("external_id", "")).startswith(run_prefix)
-            ]
+        # PATCH cannot move a check into a rerun's attempt. Only reuse a
+        # visible check for this exact attempt, including when repairing an
+        # external_id that the old publisher rewrote on a superseded check.
+        existing = [
+            item for item in visible_checks if item.get("external_id") == external
+        ]
+        current_id = max((item["id"] for item in existing), default=None)
         if existing:
             update = dict(payload)
             update.pop("head_sha")
             client.write(
-                f"repos/{repo}/check-runs/{
-                    max(existing, key=lambda item: item['id'])['id']
-                }",
+                f"repos/{repo}/check-runs/{current_id}",
                 update,
                 method="PATCH",
             )
         else:
             client.write(f"repos/{repo}/check-runs", payload)
+        # Publish the authoritative check first, so retiring old pending
+        # checks cannot leave a window without the current qualification.
+        run_prefix = f"{PREFIX}{pull['number']}:{run['id']}:"
+        for item in checks:
+            if (
+                item["id"] != current_id
+                and item.get("status") == "in_progress"
+                and str(item.get("external_id", "")).startswith(run_prefix)
+            ):
+                client.write(
+                    f"repos/{repo}/check-runs/{item['id']}",
+                    {
+                        "status": "completed",
+                        "conclusion": "neutral",
+                        "output": {
+                            "title": "Superseded qualification status",
+                            "summary": (
+                                "The PR Gate for the current "
+                                f"[CI attempt {run['run_attempt']}]({payload['details_url']}) "
+                                "replaces this pending check."
+                            ),
+                        },
+                    },
+                    method="PATCH",
+                )
     if result["comment"]:
         if owned:
             comment = max(owned, key=lambda item: item["id"])
@@ -484,7 +510,7 @@ def reconcile(client, repo: str, run_id: int, *, dry_run=False) -> dict:
         jobs = [job for job in jobs if job.get("id") not in publisher_ids]
         report = artifact(client, repo, run, "ci-gate", "gate.json", 256 * 1024)
         state = verdict(run, plan, report, jobs)
-        if state != "failure" and pull.get("merge_commit_sha") != plan["source_sha"]:
+        if state != "failure" and not main_contains(client, repo, plan["base_sha"]):
             state = "stale"
     except (ManualCIError, KeyError, ValueError, TypeError):
         if not checks and not any(job.get("name") == "CI Execution" for job in jobs):
