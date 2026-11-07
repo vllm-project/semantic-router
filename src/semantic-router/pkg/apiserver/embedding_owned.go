@@ -60,7 +60,7 @@ func ownedEmbeddingOutput(ctx context.Context, set *embedding.Set, request Embed
 	model := request.Model
 	if model == "auto" || model == "" {
 		var err error
-		model, err = set.Select(text, request.QualityPriority, request.LatencyPriority, request.Dimension)
+		model, err = set.Select(text, request.QualityPriority, request.LatencyPriority, request.Dimension, request.TargetLayer)
 		if err != nil {
 			return EmbeddingResult{}, err
 		}

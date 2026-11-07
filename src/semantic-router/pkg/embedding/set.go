@@ -48,8 +48,8 @@ func (s *Set) Get(model string, dimension, layer int) (Provider, error) {
 	if !ok {
 		return nil, fmt.Errorf("%w: embedding model %q %w", binding.ErrCapability, model, ErrModelNotPrepared)
 	}
-	if dimension < 0 || dimension > math.MaxInt32 || layer < 0 || layer > math.MaxInt32 {
-		return nil, fmt.Errorf("%w: dimension and layer must fit nonnegative int32", binding.ErrCapability)
+	if err := checkViewRange(dimension, layer); err != nil {
+		return nil, err
 	}
 	if described, ok := provider.(Described); ok {
 		info := described.EmbeddingInfo()
@@ -62,6 +62,15 @@ func (s *Set) Get(model string, dimension, layer int) (Provider, error) {
 	}
 	return WithOptions(provider, Options{Dimension: dimension, Layer: layer}), nil
 }
+
+// checkViewRange rejects output views that cannot reach a binding as int32.
+func checkViewRange(dimension, layer int) error {
+	if dimension < 0 || dimension > math.MaxInt32 || layer < 0 || layer > math.MaxInt32 {
+		return fmt.Errorf("%w: dimension and layer must fit nonnegative int32", binding.ErrCapability)
+	}
+	return nil
+}
+
 func (s *Set) Default() (Provider, error) { return s.Get("", 0, 0) }
 func (s *Set) Close() error {
 	if s == nil {
@@ -90,12 +99,16 @@ func (s *Set) Has(model string) bool {
 }
 
 // Select retains the existing embedding endpoint's priority policy, using only
-// providers prepared in this snapshot. The requested dimension is a capability,
-// not a preference: a model that does not declare it is skipped so the next
-// prepared candidate can serve the request. It never loads a requested model.
-func (s *Set) Select(text string, quality, latency float32, dimension int) (string, error) {
+// providers prepared in this snapshot. The requested dimension and layer exit
+// are capabilities, not preferences: a model that does not declare them is
+// skipped so the next prepared candidate can serve the request. It never loads
+// a requested model.
+func (s *Set) Select(text string, quality, latency float32, dimension, layer int) (string, error) {
 	if s == nil {
 		return "", fmt.Errorf("no prepared embedding model is available")
+	}
+	if err := checkViewRange(dimension, layer); err != nil {
+		return "", err
 	}
 	words := len(strings.Fields(text))
 	// Input budgets belong to the selected deployment's tokenizer and overflow
@@ -112,30 +125,51 @@ func (s *Set) Select(text string, quality, latency float32, dimension int) (stri
 		if !s.Has(model) {
 			continue
 		}
-		if _, err := s.Get(model, dimension, 0); err != nil {
+		if _, err := s.Get(model, dimension, layer); err != nil {
 			rejected = append(rejected, model)
 			continue
 		}
 		return model, nil
 	}
 	if len(rejected) > 0 {
-		return "", s.unsupportedDimension(dimension, rejected)
+		return "", s.unsupportedView(dimension, layer, rejected)
 	}
 	return "", fmt.Errorf("no prepared embedding model is available")
 }
 
-// unsupportedDimension names the requested width and what each rejected auto
-// candidate declares, so the client can pick a dimension that will be served.
-// It speaks only for the candidates Select checked: another prepared model,
-// such as multimodal, may still serve the width when requested explicitly.
-func (s *Set) unsupportedDimension(dimension int, rejected []string) error {
+// unsupportedView names the requested dimension and layer exit, and what each
+// rejected auto candidate declares for them, so the client can pick values that
+// will be served. It names only the facets the request set, and speaks only for
+// the candidates Select checked: another prepared model, such as multimodal,
+// may still serve the request when named explicitly.
+func (s *Set) unsupportedView(dimension, layer int, rejected []string) error {
+	var required []string
+	if dimension > 0 {
+		required = append(required, fmt.Sprintf("dimension %d", dimension))
+	}
+	if layer > 0 {
+		required = append(required, fmt.Sprintf("layer %d", layer))
+	}
 	var declared []string
 	for _, info := range s.Models() {
-		if slices.Contains(rejected, info.Name) {
-			declared = append(declared, fmt.Sprintf("%s supports %v", info.Name, info.Dimensions))
+		if !slices.Contains(rejected, info.Name) {
+			continue
 		}
+		var facets []string
+		if dimension > 0 {
+			// Get treats undeclared dimensions as unrestricted, unlike layers.
+			dimensions := "any"
+			if len(info.Dimensions) > 0 {
+				dimensions = fmt.Sprint(info.Dimensions)
+			}
+			facets = append(facets, "dimensions "+dimensions)
+		}
+		if layer > 0 {
+			facets = append(facets, fmt.Sprintf("layers %v", info.Layers))
+		}
+		declared = append(declared, info.Name+" supports "+strings.Join(facets, " and "))
 	}
-	return fmt.Errorf("%w: no auto embedding candidate supports dimension %d (%s)", binding.ErrCapability, dimension, strings.Join(declared, "; "))
+	return fmt.Errorf("%w: no auto embedding candidate supports %s (%s)", binding.ErrCapability, strings.Join(required, " and "), strings.Join(declared, "; "))
 }
 
 // SelectModalities chooses one already prepared representation for an entire
