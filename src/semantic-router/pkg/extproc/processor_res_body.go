@@ -61,10 +61,10 @@ func (r *OpenAIRouter) handleDecodedResponseBody(
 		if contextRecoveryFailClosed(ctx) {
 			return r.createErrorResponse(502, "Context recovery followup failed")
 		}
-		responseBody = r.redactContextRecoveryToolCalls(responseBody, ctx)
 	} else {
 		responseBody = recoveredBody
 	}
+	responseBody = r.redactContextRecoveryToolCalls(responseBody, ctx)
 
 	return r.handleNonStreamingResponseBody(responseBody, ctx, completionLatency)
 }
