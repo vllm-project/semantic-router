@@ -132,7 +132,6 @@ curl -sS http://localhost:8080/api/v1/diagnostics/classify/intent \
 | `POST /label-scores` | 独立标签分数及操作点策略 | Safety、Hazard |
 | `POST /tokens` | 原始 UTF-8 字节偏移对应的实体 | PII |
 | `POST /embeddings` | 绑定的有效嵌入表示 | Embedding |
-| `POST /rerank` | 按输入顺序返回查询/文档相关性分数 | Reranker |
 
 ```bash
 curl -sS 'http://localhost:8080/api/v1/diagnostics/models?recipe=default'
@@ -237,10 +236,9 @@ Router 管理的存储和记忆：
 | --- | --- |
 | `system_prompt`、`request_params`、`header_mutation`、`fast_response` | `POST /api/v1/plugins/{type}/preview`，使用 typed `configuration` 或活动 `binding` |
 | `response_guard` | 在给定的问题、上下文和回答上读取活动守卫的规则；`mode: probe` 调用已配置的模型 |
-| `rag` | 用 `supplied_context` 预览注入；`mode: probe` 执行检索并绕过 RAG 结果缓存 |
+| `context` | 用 `supplied_context` 预览 RAG 源的注入；`mode: probe` 执行检索并绕过 RAG 结果缓存。压缩有自己的预览，位于 `/api/v1/plugins/context/compression` 下 |
 | `tools` | 预览工具策略；决策模型的工具选择必须显式使用 `mode: probe` |
-| `context_compression` | 保留已有压缩预览契约 |
-| `response_cache`、`memory` | 操作 `/api/v1/storage` 下的资源 |
+| `response_cache`、记忆源 | 操作 `/api/v1/storage` 下的资源 |
 | `router_replay`、`shadow_dispatch` | 通过 `/api/v1/observability/replays` 查询记录 |
 
 Guard、RAG 和工具预览要求显式 `binding: {"recipe":"<name>","decision":"<name>"}`。
@@ -280,10 +278,10 @@ Header 预览中的值需要 `secret_view`。
 
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
-| `GET` | `/api/v1/plugins/context_compression/capabilities` | 运行时能力 |
-| `GET` | `/api/v1/plugins/context_compression/health` | 运行时健康 |
-| `GET` | `/api/v1/observability/plugins/context_compression/stats` | 脱敏统计 |
-| `POST` | `/api/v1/plugins/context_compression/preview` | 预览压缩而不持久化 |
+| `GET` | `/api/v1/plugins/context/compression/capabilities` | 运行时能力 |
+| `GET` | `/api/v1/plugins/context/compression/health` | 运行时健康 |
+| `GET` | `/api/v1/observability/plugins/context/compression/stats` | 脱敏统计 |
+| `POST` | `/api/v1/plugins/context/compression/preview` | 预览压缩而不持久化 |
 | `POST` | `/api/v1/storage/context-recovery/invalidate` | 使受信任的恢复范围失效 |
 
 在重要流量上启用压缩前，使用 `preview` 评估会保留什么。
@@ -324,5 +322,5 @@ curl -sS http://localhost:8080/api/v1/observability/outcomes \
 
 旧 `/api/v1/response-cache/*` 和 `/api/v1/context-compression/*` 已移除。请从 `/api/v1`
 或 `/api/v1/plugins` 重新发现操作：缓存迁至 `/api/v1/storage/response-cache/*`，
-压缩能力/健康/预览迁至 `/api/v1/plugins/context_compression/*`，统计、恢复失效和审计分别
+压缩能力/健康/预览迁至 `/api/v1/plugins/context/compression/*`，统计、恢复失效和审计分别
 使用上文的 observability/storage 路径。旧地址没有变更语义重定向或兼容 handler。

@@ -41,8 +41,8 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 		cfg := &config.ResponseCachePluginConfig{}
 		return compilePluginFields(c, fields, cfg)
 	},
-	"context_compression": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		cfg := &config.ContextCompressionPluginConfig{}
+	"context": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
+		cfg := &config.ContextPluginConfig{}
 		return compilePluginFields(c, fields, cfg)
 	},
 	"prompt_cache": compilePromptCachePluginConfig,
@@ -55,12 +55,6 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 	"response_guard": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		cfg := &config.ResponseGuardPluginConfig{}
 		return compilePluginFields(c, fields, cfg)
-	},
-	"memory": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		return c.withObjectFields(c.compileMemoryPluginConfig(fields), fields, "reflection")
-	},
-	"rag": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		return c.compileRAGPlugin(fields), true
 	},
 	"header_mutation": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileHeaderMutationPluginConfig(fields), true
@@ -183,33 +177,6 @@ func compilePluginFields(
 	return target, true
 }
 
-// withObjectFields keeps nested objects as written, so the payload does not depend on their structs' JSON tags.
-func (c *Compiler) withObjectFields(cfg interface{}, fields map[string]Value, keys ...string) (interface{}, bool) {
-	payload, err := config.NewStructuredPayload(cfg)
-	if err != nil {
-		c.addError(Position{}, "failed to encode plugin fields: %v", err)
-		return nil, false
-	}
-	compiled, err := payload.AsStringMap()
-	if err != nil {
-		c.addError(Position{}, "failed to encode plugin fields: %v", err)
-		return nil, false
-	}
-	for _, key := range keys {
-		value, exists := fields[key]
-		if !exists {
-			continue
-		}
-		object, ok := value.(ObjectValue)
-		if !ok {
-			c.addError(Position{}, "plugin field %q must be an object", key)
-			return nil, false
-		}
-		compiled[key] = fieldsToMap(object.Fields)
-	}
-	return compiled, true
-}
-
 func (c *Compiler) buildPluginConfigValue(pluginType string, fields map[string]Value) (interface{}, bool) {
 	if fn, ok := pluginConfigCompilers[pluginType]; ok {
 		return fn(c, fields)
@@ -232,29 +199,6 @@ func (c *Compiler) compileSystemPromptPluginConfig(fields map[string]Value) conf
 	}
 	if v, ok := getStringField(fields, "mode"); ok {
 		cfg.Mode = v
-	}
-	return cfg
-}
-
-func (c *Compiler) compileMemoryPluginConfig(fields map[string]Value) config.MemoryPluginConfig {
-	cfg := config.MemoryPluginConfig{}
-	if v, ok := getBoolField(fields, "enabled"); ok {
-		cfg.Enabled = v
-	}
-	if v, ok := getIntField(fields, "retrieval_limit"); ok {
-		cfg.RetrievalLimit = &v
-	}
-	if v, ok := getFloat32Field(fields, "similarity_threshold"); ok {
-		cfg.SimilarityThreshold = &v
-	}
-	if v, ok := getBoolField(fields, "auto_store"); ok {
-		cfg.AutoStore = &v
-	}
-	if v, ok := getBoolField(fields, "hybrid_search"); ok {
-		cfg.HybridSearch = v
-	}
-	if v, ok := getStringField(fields, "hybrid_mode"); ok {
-		cfg.HybridMode = v
 	}
 	return cfg
 }

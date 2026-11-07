@@ -13,7 +13,7 @@ is_mtpe: true
 嵌入把文本变成向量，router 就能比语义。一个嵌入模型供所有需要它的功能用：
 
 - [语义缓存](../../tutorials/plugin/response-cache.md)：重复的问题从缓存里答；
-- [记忆](../../tutorials/plugin/memory.md)和 [RAG](../../tutorials/plugin/rag.md)：找存着的事实和文档。
+- [context 插件](../../tutorials/plugin/context.md)的记忆源和 RAG 源：找存着的事实和文档。
 
 默认模型是 Vela 1.0 Embedding，读得了 32,768 个 token；要快的话还能从更早的层取小向量：3、6、11、22 层，64、128、256、512 或 768 维。
 

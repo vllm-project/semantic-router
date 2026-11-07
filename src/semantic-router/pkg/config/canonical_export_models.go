@@ -58,7 +58,7 @@ func ruleBindingDeployment(bindings map[string]ModelBinding, keys ...string) (st
 		if !ok {
 			continue
 		}
-		if binding.Head != "" || binding.MappingPath != "" || binding.PairScorer != nil || binding.OperatingPoint != nil {
+		if binding.Head != "" || binding.MappingPath != "" || binding.OperatingPoint != nil {
 			return "", "", false
 		}
 		return binding.Deployment, key, true

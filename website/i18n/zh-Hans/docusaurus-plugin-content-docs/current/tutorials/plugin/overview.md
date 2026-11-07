@@ -57,10 +57,8 @@ routing:
 | `header_mutation` | 添加、更新或删除 Router 不拥有的发往提供商的请求头 | 无 | [请求头修改](./header-mutation) |
 | `request_params` | 强制请求参数限制 | 无 | [请求参数](./request-params) |
 | `tools` | 允许、阻止或移除工具和工具历史；由决策模型过滤或添加请求所需的工具 | `select` 需要决策模型；`add` 需要工具目录 | [工具](./tools) |
-| `context_compression` | 缩减绑定提供商的大型工具输出或历史 | 可选的嵌入运行时和恢复存储 | [上下文压缩](./context-compression) |
 | `response_cache` | 复用兼容的先前响应 | `global.stores.response_cache` | [响应缓存](./response-cache) |
-| `memory` | 检索并可选存储对话记忆 | `global.stores.memory` | [记忆](./memory) |
-| `rag` | 在生成前检索文档 | 已配置的 RAG/向量后端 | [RAG](./rag) |
+| `context` | 检索文档和记忆，在预算内压缩请求，并在响应后写入记忆 | RAG 后端、`global.stores.memory`、相关性判断所用的 decision model | [Context](./context) |
 | `router_replay` | 覆盖单条路由的回放采集 | `global.services.router_replay` | [路由回放](./router-replay) |
 | `shadow_dispatch` | 在采样流量上观察次要模型，且不触碰线上响应 | 用于结果采集的回放记录（`router_replay`） | [Shadow Dispatch](./shadow-dispatch) |
 | `response_guard` | 按检查回答所用的信号拦截或标注回答 | 其规则读取的响应阶段信号 | [响应守卫](./response-guard) |
@@ -90,8 +88,8 @@ match:
 | 功能 | 缺省 `match` | 说明 |
 |---|---|---|
 | `response_cache.semantic.match` | `recall: {method: embedding, top_k: 3, min_similarity: 0.8}` | 加上 `judge: {preset: same_request}` 可减少误命中 |
-| `context.sources[rag].match` | `recall: {method: embedding, top_k: 20, min_similarity: 0.3}`，`judge: {preset: relevance, top_k: 6, min_score: 0.5}` | 用 `embedding` 或 `bm25` 召回 |
-| `context.sources[memory].match` | `recall: {method: embedding, top_k: 5, min_similarity: 0.7}` | |
+| `context.sources[rag].match` | `recall: {method: embedding, top_k: 20, min_similarity: 0.3}`，`judge: {preset: relevance, top_k: 6, min_score: 0.5}` | 只用 `embedding` 召回 |
+| `context.sources[memory].match` | `recall: {method: embedding, top_k: 5, min_similarity: 0.7}` | 记忆存储的 `default_retrieval_limit` 和 `default_similarity_threshold` 替代召回缺省值 |
 | `context.compress.match` | `judge: {preset: relevance}` | 片段来自请求本身；只能用 `bm25` 召回；保留多少由预算决定 |
 | `tools.select.match` | `judge: {preset: tool_rank, top_k: 3, min_ratio: 0.1}` | 不召回；候选工具最多 255 个 |
 

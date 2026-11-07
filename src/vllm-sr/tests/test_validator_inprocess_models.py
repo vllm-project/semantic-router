@@ -94,8 +94,8 @@ def _refused(model: str) -> str:
         pytest.param(
             """      modelRefs: [{model: b}]
       plugins:
-        - type: context_compression
-          configuration: {enabled: true, recovery: {enabled: true, store: response_cache}}""",
+        - type: context
+          configuration: {enabled: true, compress: {recovery: {enabled: true, store: response_cache}}}""",
             "b",
             id="context recovery",
         ),

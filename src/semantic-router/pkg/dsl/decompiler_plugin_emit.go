@@ -11,20 +11,18 @@ import (
 type typedPluginConfigEmitter func(*strings.Builder, *config.DecisionPlugin)
 
 var typedPluginConfigEmitters = map[string]typedPluginConfigEmitter{
-	"system_prompt":       emitSystemPromptPluginConfig,
-	"response_cache":      emitResponseCachePluginConfig,
-	"context_compression": emitStructuredPluginConfig,
-	"prompt_cache":        emitStructuredPluginConfig,
-	"router_replay":       emitRouterReplayPluginConfig,
-	"shadow_dispatch":     emitStructuredPluginConfig,
-	"memory":              emitMemoryPluginConfig,
-	"response_guard":      emitStructuredPluginConfig,
-	"fast_response":       emitFastResponsePluginConfig,
-	"request_params":      emitRequestParamsPluginConfig,
-	"tools":               emitStructuredPluginConfig,
-	"rag":                 emitRAGPluginConfig,
-	"header_mutation":     emitHeaderMutationPluginConfig,
-	"masking":             emitStructuredPluginConfig,
+	"system_prompt":   emitSystemPromptPluginConfig,
+	"response_cache":  emitResponseCachePluginConfig,
+	"context":         emitStructuredPluginConfig,
+	"prompt_cache":    emitStructuredPluginConfig,
+	"router_replay":   emitRouterReplayPluginConfig,
+	"shadow_dispatch": emitStructuredPluginConfig,
+	"response_guard":  emitStructuredPluginConfig,
+	"fast_response":   emitFastResponsePluginConfig,
+	"request_params":  emitRequestParamsPluginConfig,
+	"tools":           emitStructuredPluginConfig,
+	"header_mutation": emitHeaderMutationPluginConfig,
+	"masking":         emitStructuredPluginConfig,
 }
 
 func decompilePluginConfig(p *config.DecisionPlugin) string {
@@ -91,25 +89,6 @@ func emitRouterReplayPluginConfig(sb *strings.Builder, p *config.DecisionPlugin)
 	writePluginConfigMap(sb, raw, "    ")
 }
 
-func emitMemoryPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
-	cfg, ok := decodePluginConfig[config.MemoryPluginConfig](p)
-	if !ok {
-		return
-	}
-	if cfg.Enabled {
-		fmt.Fprintf(sb, "    enabled: true\n")
-	}
-	if cfg.RetrievalLimit != nil {
-		fmt.Fprintf(sb, "    retrieval_limit: %d\n", *cfg.RetrievalLimit)
-	}
-	if cfg.SimilarityThreshold != nil {
-		fmt.Fprintf(sb, "    similarity_threshold: %v\n", *cfg.SimilarityThreshold)
-	}
-	if cfg.AutoStore != nil {
-		fmt.Fprintf(sb, "    auto_store: %v\n", *cfg.AutoStore)
-	}
-}
-
 func emitFastResponsePluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
 	cfg, ok := decodePluginConfig[config.FastResponsePluginConfig](p)
 	if !ok {
@@ -146,61 +125,6 @@ func emitRequestParamsPluginConfig(sb *strings.Builder, p *config.DecisionPlugin
 	}
 }
 
-func emitRAGPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
-	cfg, ok := decodePluginConfig[config.RAGPluginConfig](p)
-	if !ok {
-		return
-	}
-	emitRAGCorePluginConfig(sb, cfg)
-	emitRAGBackendAndFailureConfig(sb, cfg)
-	emitRAGCacheConfig(sb, cfg)
-}
-
-func emitRAGCorePluginConfig(sb *strings.Builder, cfg *config.RAGPluginConfig) {
-	if cfg.Enabled {
-		fmt.Fprintf(sb, "    enabled: true\n")
-	}
-	if cfg.Backend != "" {
-		fmt.Fprintf(sb, "    backend: %q\n", cfg.Backend)
-	}
-	if cfg.SimilarityThreshold != nil {
-		fmt.Fprintf(sb, "    similarity_threshold: %v\n", *cfg.SimilarityThreshold)
-	}
-	if cfg.TopK != nil {
-		fmt.Fprintf(sb, "    top_k: %d\n", *cfg.TopK)
-	}
-	if cfg.MaxContextLength != nil {
-		fmt.Fprintf(sb, "    max_context_length: %d\n", *cfg.MaxContextLength)
-	}
-	if cfg.InjectionMode != "" {
-		fmt.Fprintf(sb, "    injection_mode: %q\n", cfg.InjectionMode)
-	}
-}
-
-func emitRAGBackendAndFailureConfig(sb *strings.Builder, cfg *config.RAGPluginConfig) {
-	if cfg.Rerank != nil {
-		fmt.Fprintf(sb, "    rerank: %s\n", formatRAGRerank(cfg.Rerank))
-	}
-	if backendConfig, ok := normalizePluginConfigMap(cfg.BackendConfig); ok && len(backendConfig) > 0 {
-		fmt.Fprintf(sb, "    backend_config: %s\n", formatPluginConfigValue(backendConfig))
-	}
-	if cfg.OnFailure != "" {
-		fmt.Fprintf(sb, "    on_failure: %q\n", cfg.OnFailure)
-	}
-}
-
-func emitRAGCacheConfig(sb *strings.Builder, cfg *config.RAGPluginConfig) {
-	if cfg.CacheResults {
-		fmt.Fprintf(sb, "    cache_results: true\n")
-	}
-	if cfg.CacheTTLSeconds != nil {
-		fmt.Fprintf(sb, "    cache_ttl_seconds: %d\n", *cfg.CacheTTLSeconds)
-	}
-	if cfg.MinConfidenceThreshold != nil {
-		fmt.Fprintf(sb, "    min_confidence_threshold: %v\n", *cfg.MinConfidenceThreshold)
-	}
-}
-
 func emitHeaderMutationPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
 	cfg, ok := decodePluginConfig[config.HeaderMutationPluginConfig](p)
 	if !ok {
@@ -229,27 +153,4 @@ func emitHeaderMutationPluginConfig(sb *strings.Builder, p *config.DecisionPlugi
 	if len(cfg.Delete) > 0 {
 		fmt.Fprintf(sb, "    delete: %s\n", formatStringArray(cfg.Delete))
 	}
-}
-
-// formatRAGRerank writes a rag plugin's rerank block: the deployment that
-// scores the passages, how many it keeps, and the pair scorer's layer and
-// dimension.
-func formatRAGRerank(rerank *config.RAGRerankConfig) string {
-	var parts []string
-	if rerank.Deployment != "" {
-		parts = append(parts, fmt.Sprintf("deployment: %q", rerank.Deployment))
-	}
-	if rerank.TopK != nil {
-		parts = append(parts, fmt.Sprintf("top_k: %d", *rerank.TopK))
-	}
-	if rerank.Layer != 0 {
-		parts = append(parts, fmt.Sprintf("layer: %d", rerank.Layer))
-	}
-	if rerank.Dimension != 0 {
-		parts = append(parts, fmt.Sprintf("dimension: %d", rerank.Dimension))
-	}
-	if len(parts) == 0 {
-		return "{}"
-	}
-	return "{ " + strings.Join(parts, ", ") + " }"
 }

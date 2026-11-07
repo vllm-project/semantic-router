@@ -121,12 +121,17 @@ func TestBenchmarkCallLimitStopsBeforeSystemOneSelection(t *testing.T) {
 	}
 }
 
+// Only compression that asks no model keeps the receipt's accounting: BM25
+// order does, the relevance judge does not.
 func TestBenchmarkUsageCompressionRequiresLocalScoring(t *testing.T) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{}}
-	for _, method := range []string{"bm25", "embedding", "unknown"} {
-		ctx := &RequestContext{VSRSelectedDecision: &config.Decision{Algorithm: &config.AlgorithmConfig{Type: "multi_factor"}, Plugins: []config.DecisionPlugin{{Type: "context_compression", Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true, "scoring": map[string]interface{}{"method": method}})}}}}
-		if got := router.benchmarkUsageScopeKnown(ctx, false); got != (method == "bm25") {
-			t.Fatalf("compression scoring %s accounting=%t", method, got)
+	for name, compress := range map[string]map[string]interface{}{
+		"bm25":  {},
+		"judge": {"match": map[string]interface{}{"judge": map[string]interface{}{"preset": "relevance"}}},
+	} {
+		ctx := &RequestContext{VSRSelectedDecision: &config.Decision{Algorithm: &config.AlgorithmConfig{Type: "multi_factor"}, Plugins: []config.DecisionPlugin{{Type: config.DecisionPluginContext, Configuration: compressPayload(compress)}}}}
+		if got := router.benchmarkUsageScopeKnown(ctx, false); got != (name == "bm25") {
+			t.Fatalf("compression scoring %s accounting=%t", name, got)
 		}
 	}
 }

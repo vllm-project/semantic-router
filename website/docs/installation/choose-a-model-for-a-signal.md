@@ -25,14 +25,12 @@ specific level wins.
 A binding in `recipes[].routing.model_bindings` applies only to that recipe
 and wins over the global binding for the same signal type.
 
-Embeddings and reranking ask no question. They are named where they are
-used:
+Embeddings ask no question. They are named where they are used:
 
 | Resource | Where you name it | Default |
 | --- | --- | --- |
 | Embeddings | `global.model_catalog.embeddings.default` | `vela-embedding` |
 | Multimodal embeddings | `global.model_catalog.embeddings.multimodal` | `omni-nano` |
-| Reranking | `rerank.deployment` in the `rag` plugin | none |
 
 Three deployments are always declared, and the Router starts one only when
 something resolves to it: `primary` (`vllm-sr/vela3-fast` on CPU, the default
@@ -88,7 +86,7 @@ global:
   span questions nor the `pii`/`halu` presets fails to load
   (`span_required`). A masking plugin needs PII spans as well, so it refuses
   such a deployment.
-- Embeddings and reranking stay on their local deployments.
+- Embeddings stay on their local deployments.
 
 ## S3. Mixed: PII local, everything else remote
 
@@ -209,8 +207,8 @@ The connection block (`endpoint`, `model`, `auth`, `headers`, `timeout_ms`,
 `max_retries`, `tls`, `limits`) is the same for every remote service and for a
 model runtime the Router attaches to. The
 [model catalog reference](model-catalog.md#examples) shows a remote embedding
-model, a remote reranker, a remote jailbreak guard, a System One gateway with
-its own header, an attached runtime and a request backend.
+model, a remote jailbreak guard, a System One gateway with its own header, an
+attached runtime and a request backend.
 
 ## What the Router checks at load
 

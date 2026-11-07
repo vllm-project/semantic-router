@@ -12,16 +12,26 @@ const nestedPluginSettingsYAML = `routing:
   decisions:
     - name: nested
       plugins:
-        - type: memory
+        - type: context
           configuration:
             enabled: true
-            reflection:
-              enabled: true
-              algorithm: heuristic
-              max_inject_tokens: 384
-              recency_decay_days: 14
-              dedup_threshold: 0.9
-              block_patterns: [api key, password]
+            sources:
+              - type: memory
+                match:
+                  recall: {method: embedding, top_k: 4, min_similarity: 0.6}
+                reflection:
+                  enabled: true
+                  algorithm: heuristic
+                  max_inject_tokens: 384
+                  recency_decay_days: 14
+                  dedup_threshold: 0.9
+                  block_patterns: [api key, password]
+            compress:
+              targets: {tool_outputs: {mode: extractive, min_tokens: 1500, target_tokens: 600}}
+              match:
+                recall: {method: bm25}
+                judge: {preset: relevance, min_ratio: 0.5}
+            budget: {max_tokens: 6000, reserve_output_tokens: auto}
         - type: tools
           configuration:
             enabled: true
@@ -64,7 +74,9 @@ func TestDecisionPluginsReadNestedSettings(t *testing.T) {
 		written interface{}
 		decoded interface{}
 	}{
-		{"memory.reflection", plugins[0].Configuration["reflection"], decision.GetMemoryConfig().Reflection},
+		{"context.sources", plugins[0].Configuration["sources"], decision.GetContextConfig().Sources},
+		{"context.compress", plugins[0].Configuration["compress"], decision.GetContextConfig().Compress},
+		{"context.budget", plugins[0].Configuration["budget"], decision.GetContextConfig().Budget},
 		{"tools.select", plugins[1].Configuration["select"], decision.GetToolsConfig().Select},
 	} {
 		encoded, err := yaml.Marshal(tc.decoded)

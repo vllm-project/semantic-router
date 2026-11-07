@@ -159,11 +159,11 @@ func TestSchemaMapsCustomScalarTypesToTheirPublicYAMLShape(t *testing.T) {
 	if err := json.Unmarshal(Document(), &document); err != nil {
 		t.Fatal(err)
 	}
-	budget, ok := document.Definitions["ContextCompressionBudgetConfig"]
+	budget, ok := document.Definitions["ContextBudgetConfig"]
 	if !ok {
-		t.Fatal("ContextCompressionBudgetConfig schema is missing")
+		t.Fatal("ContextBudgetConfig schema is missing")
 	}
-	limit, ok := budget.Properties["trigger_tokens"]
+	limit, ok := budget.Properties["max_tokens"]
 	if !ok || len(limit.OneOf) != 2 {
 		t.Fatalf("CompressionTokenLimit schema = %#v, want integer-or-auto scalar", limit)
 	}

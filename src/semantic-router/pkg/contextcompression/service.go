@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -34,7 +35,7 @@ func NewService() *Service {
 func (s *Service) Capabilities(recoveryAvailable bool) Capabilities {
 	return Capabilities{
 		Strategies:             []string{"extractive", "recoverable", "truncate"},
-		ScoringMethods:         []string{"bm25", "embedding", "hybrid"},
+		ScoringMethods:         []string{"lexical", "bm25", "judge"},
 		Targets:                []string{"tool_output", "history", "rag", "memory", "current_user"},
 		Recovery:               recoveryAvailable,
 		JSONStructurePreserved: true,
@@ -266,11 +267,8 @@ func (s *Service) plan(
 		plan.TriggerReason = "item_threshold"
 	}
 	if err := scoreCandidates(ctx, request, candidates); err != nil {
-		if request.Policy.Scoring.Method == "embedding" {
-			plan.SkipReason = SkipScoringUnavailable
-			return plan, nil, err
-		}
-		plan.FallbackReason = "embedding_unavailable"
+		plan.SkipReason = SkipScoringUnavailable
+		return plan, nil, err
 	}
 	sort.SliceStable(candidates, func(left, right int) bool {
 		if (candidates[left].plan.Kind == TargetCurrentUser) != (candidates[right].plan.Kind == TargetCurrentUser) {
@@ -353,42 +351,33 @@ func candidateForBlock(
 	}, true
 }
 
+// scoreCandidates replaces the targets' lexical scores with the request's
+// scorer's, which reads them against the queries of their turns.
 func scoreCandidates(
 	ctx context.Context,
 	request Request,
 	candidates []plannedCandidate,
 ) error {
-	if request.Policy.Scoring.Method == "" || request.Policy.Scoring.Method == "bm25" {
+	if request.Scorer == nil || len(candidates) == 0 {
 		return nil
 	}
-	if request.Scorer == nil {
-		return fmt.Errorf("embedding scorer is unavailable")
-	}
 	texts := make([]string, len(candidates))
-	queryParts := make([]string, 0, len(candidates))
+	var queries []string
 	for index, candidate := range candidates {
 		texts[index] = candidate.block.Text
-		queryParts = append(queryParts, candidate.plan.Query)
+		if !slices.Contains(queries, candidate.plan.Query) {
+			queries = append(queries, candidate.plan.Query)
+		}
 	}
-	scores, err := request.Scorer.Score(
-		ctx,
-		request.Policy.Scoring.EmbeddingModelRef,
-		strings.Join(queryParts, "\n"),
-		texts,
-	)
+	scores, err := request.Scorer.Score(ctx, strings.Join(queries, "\n"), texts)
 	if err != nil {
 		return err
 	}
 	if len(scores) != len(candidates) {
-		return fmt.Errorf("embedding scorer returned %d scores for %d targets", len(scores), len(candidates))
+		return fmt.Errorf("relevance scorer returned %d scores for %d targets", len(scores), len(candidates))
 	}
 	for index, score := range scores {
-		switch request.Policy.Scoring.Method {
-		case "embedding":
-			candidates[index].plan.Score = score
-		case "hybrid":
-			candidates[index].plan.Score = 0.4*candidates[index].plan.Score + 0.6*score
-		}
+		candidates[index].plan.Score = score
 	}
 	return nil
 }

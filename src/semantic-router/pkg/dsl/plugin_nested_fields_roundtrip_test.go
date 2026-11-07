@@ -36,17 +36,20 @@ routing:
       modelRefs:
         - model: test-model
       plugins:
-        - type: memory
+        - type: context
           configuration:
             enabled: true
-            retrieval_limit: 6
-            hybrid_search: true
-            hybrid_mode: weighted
-            reflection:
-              enabled: true
-              algorithm: heuristic
-              max_inject_tokens: 384
-              block_patterns: ["api key", "password"]
+            sources:
+              - type: memory
+                match:
+                  recall: {method: embedding, top_k: 6, min_similarity: 0.5}
+                hybrid_search: true
+                hybrid_mode: weighted
+                reflection:
+                  enabled: true
+                  algorithm: heuristic
+                  max_inject_tokens: 384
+                  block_patterns: ["api key", "password"]
         - type: tools
           configuration:
             enabled: true
@@ -68,7 +71,7 @@ routing:
 				t.Fatalf("decompiled DSL has %d need_threshold fields, want 1:\n%s", count, dslText)
 			}
 			compiled := mustCompileRoutingPluginConfigTest(t, dslText)
-			for _, pluginType := range []string{"memory", "tools"} {
+			for _, pluginType := range []string{"context", "tools"} {
 				want := pluginConfigMapForTest(t, findDecisionPluginForTest(t, cfg.Decisions[0], pluginType))
 				got := pluginConfigMapForTest(t, findDecisionPluginForTest(t, compiled.Decisions[0], pluginType))
 				if !reflect.DeepEqual(got, want) {
@@ -86,14 +89,14 @@ ROUTE memory_route {
   PRIORITY 100
   WHEN domain("test")
   MODEL "m:1b"
-  PLUGIN memory {
+  PLUGIN context {
     enabled: true
-    reflection: true
+    sources: [{ type: "memory", reflection: true }]
   }
 }
 `)
-	if len(errs) == 0 || !strings.Contains(fmt.Sprint(errs), `plugin field "reflection" must be an object`) {
-		t.Fatalf("compile errors = %v, want a reflection object error", errs)
+	if len(errs) == 0 || !strings.Contains(fmt.Sprint(errs), "failed to decode plugin fields") {
+		t.Fatalf("compile errors = %v, want a reflection decode error", errs)
 	}
 }
 

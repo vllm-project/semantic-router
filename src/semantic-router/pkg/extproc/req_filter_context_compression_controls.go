@@ -10,7 +10,7 @@ import (
 
 func applyContextCompressionRequestControls(
 	ctx *RequestContext,
-	plugin *config.ContextCompressionPluginConfig,
+	plugin *config.ContextCompressConfig,
 ) {
 	if ctx == nil || plugin == nil {
 		return

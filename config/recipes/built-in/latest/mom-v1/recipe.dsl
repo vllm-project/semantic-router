@@ -680,7 +680,7 @@ RECIPE vault (description = "Keep private traffic inside the assigned deployment
   # PLUGINS
   # =============================================================================
 
-  PLUGIN memory memory {}
+  PLUGIN context context {}
 
   PLUGIN request_params request_params {}
 
@@ -702,7 +702,7 @@ RECIPE vault (description = "Keep private traffic inside the assigned deployment
       enabled: true
       policy: { mode: "none", strip_tool_history: true }
     }
-    PLUGIN memory {
+    PLUGIN context {
       enabled: false
     }
     PLUGIN response_cache {
@@ -731,7 +731,7 @@ RECIPE vault (description = "Keep private traffic inside the assigned deployment
       enabled: true
       policy: { mode: "none", strip_tool_history: true }
     }
-    PLUGIN memory {
+    PLUGIN context {
       enabled: false
     }
     PLUGIN response_cache {
@@ -759,7 +759,7 @@ RECIPE vault (description = "Keep private traffic inside the assigned deployment
       enabled: true
       policy: { mode: "none", strip_tool_history: true }
     }
-    PLUGIN memory {
+    PLUGIN context {
       enabled: false
     }
     PLUGIN response_cache {

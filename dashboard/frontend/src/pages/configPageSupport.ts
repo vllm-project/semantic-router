@@ -821,7 +821,6 @@ export type ModelDeploymentProvider =
   | 'openai_embeddings'
   | 'classify'
   | 'openai_chat'
-  | 'rerank'
 
 /** A credential read from an environment variable or a file, never written inline. */
 export interface DeploymentAuth {

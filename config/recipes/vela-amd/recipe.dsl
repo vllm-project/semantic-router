@@ -180,21 +180,14 @@ MODEL vela-default {
 # ROUTES
 # =============================================================================
 
-ROUTE knowledge (description = "Retrieve indexed documents and rerank the candidates before generation.", on_unknown = "fail_request") {
+ROUTE knowledge (description = "Retrieve indexed documents and keep the ones the decision model judges relevant before generation.", on_unknown = "fail_request") {
   PRIORITY 200
   WHEN keyword("knowledge-query")
   MODEL "vela-default" (reasoning = false)
   ALGORITHM static
-  PLUGIN rag {
+  PLUGIN context {
     enabled: true
-    backend: "vectorstore"
-    similarity_threshold: 0
-    top_k: 3
-    max_context_length: 4096
-    injection_mode: "tool_role"
-    rerank: { deployment: "reranker-amd", top_k: 2, layer: 22, dimension: 768 }
-    backend_config: { vector_store_id: "vs_your_documents" }
-    on_failure: "block"
+    sources: [{ backend: "vectorstore", backend_config: { vector_store_id: "vs_your_documents" }, match: { judge: { min_score: 0.5, preset: "relevance", top_k: 2 }, recall: { method: "embedding", min_similarity: 0, top_k: 3 } }, max_context_length: 4096, on_failure: "block", type: "rag" }]
   }
 }
 

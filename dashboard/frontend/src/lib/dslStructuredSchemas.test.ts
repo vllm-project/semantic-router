@@ -34,7 +34,7 @@ describe('DSL structured field schemas', () => {
       flattenSchema(schemas)
         .filter((field) => field.type === 'json')
         .map((field) => field.key),
-    ).toEqual(['conditions', 'backend_config'])
+    ).toEqual(['backend_config', 'conditions'])
   })
 
   it('describes workflow and multi-factor structures with typed nested schemas', () => {

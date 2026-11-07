@@ -75,10 +75,6 @@ func (f *fakeServices) Embed(context.Context, string, modelservice.EmbedRequest)
 	return modelservice.EmbedResponse{}, errors.New("not used")
 }
 
-func (f *fakeServices) Rerank(context.Context, string, modelservice.RerankRequest) (modelservice.RerankResponse, error) {
-	return modelservice.RerankResponse{}, errors.New("not used")
-}
-
 func (f *fakeServices) lastRequest() modelservice.ClassifyRequest {
 	f.mu.Lock()
 	defer f.mu.Unlock()

@@ -149,7 +149,8 @@ global:
 #### Hybrid search and reflection
 
 `hybrid_mode` and `reflection.algorithm` can be set globally under
-`global.stores.memory` and overridden in a decision's `memory` plugin. The
+`global.stores.memory` and overridden in a memory source of a decision's
+`context` plugin. The
 router refuses to start with any other value, including one set in a recipe's
 decisions:
 
@@ -166,7 +167,7 @@ already ran.
 #### Write path bounds
 
 Automatic persistence first respects Memory enablement, retention policy, and
-an explicit `auto_store: false` on the selected decision's memory plugin. A
+an explicit `store: {auto: false}` on the selected decision's memory source. A
 Responses request may opt out, but cannot override these server restrictions.
 When policy permits persistence, the Responses request's `auto_store` takes
 precedence over the decision's value, followed by `global.stores.memory`.

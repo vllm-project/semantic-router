@@ -1,14 +1,12 @@
 {
-  "06-remote-embeddings-and-reranker.yaml": {
+  "06-remote-embeddings.yaml": {
     "signals": {
-      "default/rag.reranker": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Reranker@a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf cpu replicas=0",
       "default/systemone.billing": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     },
     "started": [
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Reranker@a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf cpu replicas=0",
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     ],
-    "deprecated_fields": 2
+    "deprecated_fields": 1
   },
   "07-systemone-decision-model.yaml": {
     "signals": {

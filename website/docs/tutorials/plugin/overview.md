@@ -56,11 +56,9 @@ routing:
 | `header_mutation` | Add, update, or delete provider-bound headers the Router does not own | None | [Header Mutation](./header-mutation) |
 | `request_params` | Enforce request parameter limits | None | [Request Parameters](./request-params) |
 | `tools` | Allow, block or remove tools and tool history; let the decision model filter or add the tools a request needs | Decision model for `select`; a tool catalog for `add` | [Tools](./tools) |
-| `context_compression` | Reduce large provider-bound tool output or history | Optional embedding runtime and recovery store | [Context Compression](./context-compression) |
 | `response_cache` | Reuse compatible prior responses | `global.stores.response_cache` | [Response Cache](./response-cache) |
 | `prompt_cache` | Insert Anthropic prompt-cache breakpoints on instructions and tools | None | [Prompt Cache](./prompt-cache) |
-| `memory` | Retrieve and optionally store conversational memory | `global.stores.memory` | [Memory](./memory) |
-| `rag` | Retrieve documents before generation | Configured RAG/vector backend | [RAG](./rag) |
+| `context` | Retrieve documents and memories, compress the request within a budget, and store memories after the response | A RAG backend, `global.stores.memory`, the decision model for the relevance judge | [Context](./context) |
 | `router_replay` | Override replay capture for one route | `global.services.router_replay` | [Router Replay](./router-replay) |
 | `shadow_dispatch` | Observe a secondary model on sampled traffic without touching the live response | Replay record for outcome capture (`router_replay`) | [Shadow Dispatch](./shadow-dispatch) |
 | `response_guard` | Block or annotate an answer on the signals it is checked with | The response-stage signals its rules read | [Response Guard](./response-guard) |
@@ -71,8 +69,8 @@ plugins, not an additional plugin type.
 ## Capability Gating
 
 A plugin that acts on request content runs only when the request needs that
-content and the selected model can take it. `rag` and `memory` retrieval act on
-text, so they are skipped when the request has no text in its instructions or
+content and the selected model can take it. The `context` plugin acts on
+text, so it is skipped when the request has no text in its instructions or
 messages. Text is assumed for every model, so a model card never gates them.
 The model card gates only a plugin that acts on another modality, such as
 images: it is skipped when the card declares capabilities and omits that
@@ -87,7 +85,7 @@ A skip is typed and carries no request content:
 | `backend_lacks_capability` | The selected model declares capabilities and omits a modality the plugin acts on. |
 
 A skip is counted in `llm_plugin_execution_total` with status
-`skipped_<reason>`. For `memory`, the same reason appears as the memory outcome
+`skipped_<reason>`. For a memory source, the same reason appears as the memory outcome
 with status `skipped`. Non-text content such as images is left unchanged
 whether a plugin runs or not.
 
@@ -128,8 +126,8 @@ match:
 | Feature | Default `match` | Notes |
 |---|---|---|
 | `response_cache.semantic.match` | `recall: {method: embedding, top_k: 3, min_similarity: 0.8}` | Add `judge: {preset: same_request}` to reduce false hits |
-| `context.sources[rag].match` | `recall: {method: embedding, top_k: 20, min_similarity: 0.3}`, `judge: {preset: relevance, top_k: 6, min_score: 0.5}` | Recalls by `embedding` or `bm25` |
-| `context.sources[memory].match` | `recall: {method: embedding, top_k: 5, min_similarity: 0.7}` | |
+| `context.sources[rag].match` | `recall: {method: embedding, top_k: 20, min_similarity: 0.3}`, `judge: {preset: relevance, top_k: 6, min_score: 0.5}` | Recalls by `embedding` only |
+| `context.sources[memory].match` | `recall: {method: embedding, top_k: 5, min_similarity: 0.7}` | The memory store's `default_retrieval_limit` and `default_similarity_threshold` replace the recall defaults |
 | `context.compress.match` | `judge: {preset: relevance}` | Segments come from the request itself; recalls by `bm25` only; the budget bounds what is kept |
 | `tools.select.match` | `judge: {preset: tool_rank, top_k: 3, min_ratio: 0.1}` | No recall; at most 255 candidate tools |
 

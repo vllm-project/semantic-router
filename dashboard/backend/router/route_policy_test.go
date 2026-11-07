@@ -116,7 +116,7 @@ func TestOutboundDashboardRoutesRevalidateBeforeUse(t *testing.T) {
 	server := setupRouteInventoryServer(t)
 	for _, path := range []string{
 		"/api/router/api/v1/routing/preview",
-		"/api/router/api/v1/plugins/rag/preview",
+		"/api/router/api/v1/plugins/context/preview",
 	} {
 		policy, lookup := server.routePolicies.LookupRoutePolicy(http.MethodPost, path)
 		if lookup != auth.RouteFound || !policy.Revalidate || policy.MaxBodyBytes == 0 || policy.AuditAction == "" {

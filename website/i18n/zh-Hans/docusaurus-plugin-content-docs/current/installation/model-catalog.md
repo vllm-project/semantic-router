@@ -2,7 +2,7 @@
 is_mtpe: false
 title: 模型目录参考
 sidebar_label: 模型目录参考
-description: global.model_catalog.deployments 的每个字段、各 provider 及其能回答的内容、绑定、embedding、重排序、解析顺序、阈值和准入。
+description: global.model_catalog.deployments 的每个字段、各 provider 及其能回答的内容、绑定、embedding、解析顺序、阈值和准入。
 translation:
   source_commit: "3e9e4262e5c4e286ede3fb75cdac83edb985b6aa"
   source_file: "docs/installation/model-catalog.md"
@@ -11,7 +11,7 @@ translation:
 
 # 模型目录参考
 
-`global.model_catalog` 声明 Router 询问的每个模型：回答路由信号的模型、embedding 模型和重排序模型。请求路由的目标，即回答用户的模型，仍在 [`providers.models`](model-configuration.md) 中配置。[为信号选择模型](choose-a-model-for-a-signal.md)说明每个信号由哪个部署回答。
+`global.model_catalog` 声明 Router 询问的每个模型：回答路由信号的模型和 embedding 模型。请求路由的目标，即回答用户的模型，仍在 [`providers.models`](model-configuration.md) 中配置。[为信号选择模型](choose-a-model-for-a-signal.md)说明每个信号由哪个部署回答。
 
 ## 部署 {#deployments}
 
@@ -24,7 +24,6 @@ translation:
 | `classify` | `POST <endpoint>/classify` | masking、响应 jailbreak 和幻觉检测插件的模型（`pii`、`jailbreak` 和 `hallucination` 绑定） |
 | `openai_chat` | `POST <endpoint>/chat/completions` | 响应 jailbreak 插件的防护模型和幻觉检测插件的检测模型 |
 | `openai_embeddings` | `POST <endpoint>/embeddings` | Embedding |
-| `rerank` | `POST <endpoint>/rerank` | RAG 重排序 |
 
 部署被分配了它无法回答的信号时，Router 在加载时拒绝该部署。
 
@@ -60,7 +59,7 @@ global:
         replicas: [{device: cpu}, {endpoint: http://worker-2.example.com:8100, model: kai}]
       # Connection block: an attached model_runtime and every remote provider.
       remote-example:
-        provider: systemone              # or classify, openai_chat, openai_embeddings, rerank
+        provider: systemone              # or classify, openai_chat, openai_embeddings
         endpoint: https://api.example.com/v1/systemone  # full URL; unix:///abs.sock for an attached runtime
         model: vllm-sr/d3-ultra          # the remote model; an attached runtime's served model
         auth: {header: Authorization, prefix: Bearer, api_key_env: EXAMPLE_KEY}  # or api_key_file: /abs/path
@@ -95,8 +94,8 @@ global:
 
 | 字段 | 含义 | 限制 |
 | --- | --- | --- |
-| `endpoint` | API 的完整 URL，包括路径前缀。Router 在其后追加操作路径（`/classify`、`/chat/completions`、`/embeddings`、`/rerank`）；systemone 的 endpoint 就是提交问题的 URL。挂接的运行时可以使用 `unix:///abs/path.sock` | `http` 或 `https`；不得包含凭据或片段标识（fragment） |
-| `model` | 远程 API 用来回答的模型；在挂接的运行时上是它提供服务的模型 | `systemone`、`openai_chat`、`openai_embeddings`、`rerank` 必填 |
+| `endpoint` | API 的完整 URL，包括路径前缀。Router 在其后追加操作路径（`/classify`、`/chat/completions`、`/embeddings`）；systemone 的 endpoint 就是提交问题的 URL。挂接的运行时可以使用 `unix:///abs/path.sock` | `http` 或 `https`；不得包含凭据或片段标识（fragment） |
+| `model` | 远程 API 用来回答的模型；在挂接的运行时上是它提供服务的模型 | `systemone`、`openai_chat`、`openai_embeddings` 必填 |
 | `auth` | `header`（默认 `Authorization`）、`prefix`（默认 `Bearer`；`""` 表示发送不带前缀的密钥），以及 `api_key_env` 和 `api_key_file`（绝对路径，每次调用时读取，因此轮换后的密钥会生效）二者之一 | 密钥从不写在配置中 |
 | `headers` | 其他非机密请求头 | 拒绝 `Authorization`、`Proxy-Authorization`、`X-Api-Key`、`Api-Key`、`Ocp-Apim-Subscription-Key`、`Cookie` 以及 `auth` 所用的请求头 |
 | `timeout_ms` | 单次尝试的时限 | systemone ≤ 60000；其他 ≤ 300000 |
@@ -126,7 +125,7 @@ routing:
 
 绑定也可以写成对象，用于选择多头 `model_runtime` 部署的某个头：`pii: {deployment: local-vela, head: pii}`。工作点通过 `operating_point` 固定在部署上。
 
-每个信号的解析顺序：规则的 `deployment`，然后是配方的绑定，然后是全局绑定，问题类信号最后使用 `system.decision_model`。Embedding 通过 `embeddings.default` 解析，用自己模型做 embedding 的路由配置则通过它的 `model_bindings.embedding` 解析；重排序通过 `rag` 插件的 `rerank.deployment` 解析。
+每个信号的解析顺序：规则的 `deployment`，然后是配方的绑定，然后是全局绑定，问题类信号最后使用 `system.decision_model`。Embedding 通过 `embeddings.default` 解析，用自己模型做 embedding 的路由配置则通过它的 `model_bindings.embedding` 解析。
 
 ## 阈值 {#thresholds}
 
@@ -165,32 +164,6 @@ global:
 ```
 
 Router 向 `https://embedding.example.com/v1/embeddings` 发送请求：操作路径追加在 endpoint 的路径之后，从不由主机名和端口拼出。
-
-### R2. 挂接的重排序模型，在使用处指定 {#r2-attached-reranker-named-where-it-is-used}
-
-```yaml title="r2-attached-reranker"
-global:
-  model_catalog:
-    deployments:
-      document-ranker:
-        provider: model_runtime          # a model runtime running elsewhere (attached)
-        endpoint: https://ranker.example.com:8100
-        model: vela-reranker
-        auth: {api_key_env: RANKER_KEY}
-        tls: {ca_file: /etc/ssl/internal-ca.pem}
-        timeout_ms: 2000
-routing:
-  decisions:
-    - name: rag
-      plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: vectorstore
-            rerank: {deployment: document-ranker, top_k: 3, layer: 22, dimension: 768}
-```
-
-`layer` 和 `dimension` 选择模型运行时重排序模型的提前退出层。远程重排序 API 是 `rerank` 部署，按自己的深度作答，所以它的 `rerank` 块只写 `deployment` 和 `top_k`。
 
 ### R3. 越狱与幻觉规则使用远程决策模型 {#r3-remote-decision-model-for-jailbreak-and-hallucination}
 

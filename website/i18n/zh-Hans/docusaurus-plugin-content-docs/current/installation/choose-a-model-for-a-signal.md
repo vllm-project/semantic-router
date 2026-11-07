@@ -25,13 +25,12 @@ Router 询问的每个模型都在 `global.model_catalog.deployments` 下按名�
 
 `recipes[].routing.model_bindings` 中的绑定只作用于该配方，并优先于同一信号类型的全局绑定。
 
-Embedding 和重排序不提问。它们在使用的地方指定：
+Embedding 不提问。它们在使用的地方指定：
 
 | 资源 | 在哪里指定 | 默认值 |
 | --- | --- | --- |
 | Embedding | `global.model_catalog.embeddings.default` | `vela-embedding` |
 | 多模态 embedding | `global.model_catalog.embeddings.multimodal` | `omni-nano` |
-| 重排序 | `rag` 插件中的 `rerank.deployment` | 无 |
 
 有三个部署始终已声明，只有当某处解析到其中一个时 Router 才会启动它：`primary`（CPU 上的 `vllm-sr/vela3-fast`，默认决策模型）、`vela-embedding`（Vela 1.0 Embedding）和 `omni-nano`（Vela 1.0 Omni Nano）。要更改其中一个，声明一个同名部署即可。
 
@@ -73,7 +72,7 @@ global:
 - 在一个请求阶段内，发给同一部署的所有问题合并为一次调用。API 报告失败的问题会单独再问一次。
 - 规则的默认 predicate 来自回答的模型：它的模型卡校准的阈值，或规则写的 `predicate`。没有校准阈值的模型（本地或远程）使用 0.5，加载时报告指明该规则的 `uncalibrated_preset` 警告。
 - PII 和幻觉检测规则需要片段。`pii` 或 `hallucination` 规则解析到的部署，若其声明的 `capabilities` 既不回答 span 问题、也没有 `pii`/`halu` 预设，则加载失败（`span_required`）。masking 插件同样需要 PII 片段，因此也会拒绝这样的部署。
-- Embedding 和重排序仍使用各自的本地部署。
+- Embedding 仍使用各自的本地部署。
 
 ## S3. 混合：PII 在本地，其余在远程 {#s3-mixed-pii-local-everything-else-remote}
 
@@ -182,7 +181,7 @@ routing:
 
 ## 远程模型和挂接的模型 {#remote-and-attached-models}
 
-连接块（`endpoint`、`model`、`auth`、`headers`、`timeout_ms`、`max_retries`、`tls`、`limits`）对每个远程服务和 Router 挂接的模型运行时都相同。[模型目录参考](model-catalog.md#examples)给出了远程 embedding 模型、远程重排序模型、远程 jailbreak 防护、使用自有认证请求头的 System One 网关、挂接的运行时以及请求后端的示例。
+连接块（`endpoint`、`model`、`auth`、`headers`、`timeout_ms`、`max_retries`、`tls`、`limits`）对每个远程服务和 Router 挂接的模型运行时都相同。[模型目录参考](model-catalog.md#examples)给出了远程 embedding 模型、远程 jailbreak 防护、使用自有认证请求头的 System One 网关、挂接的运行时以及请求后端的示例。
 
 ## Router 在加载时检查什么 {#what-the-router-checks-at-load}
 

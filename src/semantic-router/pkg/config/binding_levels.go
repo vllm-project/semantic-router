@@ -14,8 +14,8 @@ import (
 //   - system.decision_model.
 //
 // A systemone rule asks its own question, so no binding chooses its
-// deployment. Embeddings and reranking ask no question; they are named where
-// they are used (embeddings.default, the rag plugin's rerank.deployment).
+// deployment. Embeddings ask no question; they are named where they are
+// used (embeddings.default).
 
 // SharedAnswerSignalTypes are the signal types a binding can choose the
 // deployment of: the application signals.
@@ -46,8 +46,6 @@ func checkBindingKeys(path string, bindings map[string]ModelBinding) ([]ConfigWa
 			// here; embeddings.default names everyone else's.
 		case key == "embedding":
 			note = "embedding asks no question; name its deployment in global.model_catalog.embeddings.default"
-		case key == RAGRerankerConsumer:
-			note = "rag.reranker is deprecated; name the deployment in the rag plugin's rerank.deployment"
 		case strings.HasPrefix(key, "safety.") || strings.HasPrefix(key, "complexity."):
 			note = fmt.Sprintf("a binding for one rule is deprecated; set deployment on the rule (%s)", ruleDeploymentPath(key))
 		case strings.HasPrefix(key, "systemone."):

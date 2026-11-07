@@ -17,35 +17,27 @@ import (
 )
 
 func init() {
-	pkgtestcases.Register("model-runtime-embeddings-rerank", pkgtestcases.TestCase{
-		Description: "The Router's embedding service and RAG reranker return the vectors and relevance logits of the runtime serving them",
-		Tags:        []string{"model-runtime", "embeddings", "rerank", "rag"},
-		Fn:          testModelRuntimeEmbeddingsRerank,
+	pkgtestcases.Register("model-runtime-embeddings", pkgtestcases.TestCase{
+		Description: "The Router's embedding service returns the vectors of the runtime serving it",
+		Tags:        []string{"model-runtime", "embeddings"},
+		Fn:          testModelRuntimeEmbeddings,
 	})
 }
 
 const mrVectorTolerance = 1e-5
 
-var (
-	mrEmbeddingText = "The tower was completed in 1889."
-	mrRerankQuery   = "When was the tower completed?"
-	mrRerankDocs    = []string{
-		"The tower was completed in 1889.",
-		"Bananas are rich in potassium.",
-		"Construction of the tower began in 1887.",
-	}
-)
+const mrEmbeddingText = "The tower was completed in 1889."
 
-// testModelRuntimeEmbeddingsRerank asks the Router's embedding API and its
-// prepared rag.reranker binding, then each deployment's own worker directly:
-// the fixtures' weights are random, so the runtime's answer is the expectation.
-func testModelRuntimeEmbeddingsRerank(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+// testModelRuntimeEmbeddings asks the Router's embedding API, then the
+// deployment's own worker directly: the fixtures' weights are random, so the
+// runtime's answer is the expectation.
+func testModelRuntimeEmbeddings(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	session, err := openRouterRuntimeSession(ctx, client, opts)
 	if err != nil {
 		return err
 	}
 	defer session.Close()
-	if err = session.waitReady(ctx, mrEmbeddingDeployment, mrRerankerDeployment); err != nil {
+	if err = session.waitReady(ctx, mrEmbeddingDeployment); err != nil {
 		return err
 	}
 	runtime, _, err := session.managed(ctx, mrEmbeddingDeployment)
@@ -56,16 +48,8 @@ func testModelRuntimeEmbeddingsRerank(ctx context.Context, client *kubernetes.Cl
 	if err != nil {
 		return fmt.Errorf("embedding: %w", err)
 	}
-	runtime, _, err = session.managed(ctx, mrRerankerDeployment)
-	if err != nil {
-		return err
-	}
-	logits, err := checkRouterRerank(ctx, session, runtime)
-	if err != nil {
-		return fmt.Errorf("rerank: %w", err)
-	}
 	if opts.SetDetails != nil {
-		opts.SetDetails(map[string]interface{}{"embedding_dimension": dimension, "rerank_logits": logits})
+		opts.SetDetails(map[string]interface{}{"embedding_dimension": dimension})
 	}
 	return nil
 }
@@ -95,48 +79,6 @@ func checkRouterEmbedding(ctx context.Context, session *modelRuntimeSession, run
 		return 0, err
 	}
 	return got.Dimension, nil
-}
-
-func checkRouterRerank(ctx context.Context, session *modelRuntimeSession, runtime *modelruntime.Client) ([]float64, error) {
-	pairs := make([]map[string]string, len(mrRerankDocs))
-	for index, document := range mrRerankDocs {
-		pairs[index] = map[string]string{"query": mrRerankQuery, "document": document}
-	}
-	var routed struct {
-		Binding struct {
-			Deployment string `json:"deployment"`
-			Provider   string `json:"provider"`
-		} `json:"binding"`
-		Result struct {
-			Scores    []float64 `json:"scores"`
-			ScoreType string    `json:"score_type"`
-		} `json:"result"`
-	}
-	request := map[string]interface{}{"recipe": "default", "binding": "rag.reranker", "pairs": pairs}
-	if err := session.postAPI(ctx, "/api/v1/diagnostics/models/rerank", request, &routed); err != nil {
-		return nil, err
-	}
-	if routed.Binding.Deployment != mrRerankerDeployment || routed.Binding.Provider != "model_runtime" {
-		return nil, fmt.Errorf("rag.reranker runs on %+v, want the %s model_runtime deployment", routed.Binding, mrRerankerDeployment)
-	}
-	direct, err := runtime.Rerank(ctx, modelruntime.RerankRequest{Model: mrRerankerDeployment, Query: mrRerankQuery, Documents: mrRerankDocs})
-	if err != nil {
-		return nil, err
-	}
-	want := make([]float64, len(mrRerankDocs))
-	for _, result := range direct.Results {
-		if result.Error != "" || result.Index < 0 || result.Index >= len(want) {
-			return nil, fmt.Errorf("the runtime did not score document %d: %+v", result.Index, result)
-		}
-		want[result.Index] = result.Logit
-	}
-	if len(routed.Result.Scores) != len(want) {
-		return nil, fmt.Errorf("the Router scored %d of %d pairs", len(routed.Result.Scores), len(want))
-	}
-	if err := sameVector(routed.Result.Scores, want); err != nil {
-		return nil, err
-	}
-	return routed.Result.Scores, nil
 }
 
 func sameVector(got, want []float64) error {

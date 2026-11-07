@@ -187,13 +187,30 @@ def _fit_store_widths(name: str, store: dict[str, Any], notes: MigrationNotes) -
         )
 
 
+def _rag_configurations(decision: dict[str, Any]):
+    """Yield (path, configuration) for a removed rag plugin and each rag
+    source of a context plugin."""
+    for index, plugin in enumerate(as_list(decision.get("plugins"))):
+        if not isinstance(plugin, dict):
+            continue
+        configuration = dict_at(plugin, "configuration", default={})
+        if plugin.get("type") == "rag":
+            yield f"plugins[{index}].configuration", configuration
+        elif plugin.get("type") == "context":
+            for source_index, source in enumerate(
+                as_list(configuration.get("sources"))
+            ):
+                if isinstance(source, dict) and source.get("type") == "rag":
+                    yield (
+                        f"plugins[{index}].configuration.sources[{source_index}]",
+                        source,
+                    )
+
+
 def _note_rag_collections(
     path: str, decision: dict[str, Any], notes: MigrationNotes
 ) -> None:
-    for index, plugin in enumerate(as_list(decision.get("plugins"))):
-        if not isinstance(plugin, dict) or plugin.get("type") != "rag":
-            continue
-        configuration = dict_at(plugin, "configuration", default={})
+    for where, configuration in _rag_configurations(decision):
         backend = str(configuration.get("backend") or "").strip().lower()
         backend_config = dict_at(configuration, "backend_config", default={})
         embeds_query = backend in _RAG_EMBEDDING_BACKENDS or (
@@ -205,7 +222,7 @@ def _note_rag_collections(
         collection = backend_config.get("collection")
         target = f"collection {collection!r}" if collection else "the collection"
         notes.action(
-            f"{path}.plugins[{index}].configuration.backend",
+            f"{path}.{where}.backend",
             "queries are now embedded with Vela Embedding (768 dimensions) instead "
             f"of MiniLM (384); re-embed {target} with Vela Embedding",
         )

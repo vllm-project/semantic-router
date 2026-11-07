@@ -75,16 +75,14 @@ export const SIGNAL_LATENCY = Object.fromEntries(
 // ============== Plugin Icons ==============
 const PLUGIN_ICON_OVERRIDES: Partial<Record<PluginType, string>> = {
   response_cache: 'RC',
-  memory: 'MEM',
+  context: 'CTX',
   system_prompt: 'SP',
   header_mutation: 'HM',
   router_replay: 'RR',
-  rag: 'RAG',
   fast_response: 'FR',
   request_params: 'RP',
   response_guard: 'RG',
   tools: 'TL',
-  context_compression: 'CC',
   prompt_cache: 'PC',
   shadow_dispatch: 'SD',
   masking: 'MSK',
@@ -98,16 +96,14 @@ export const PLUGIN_ICONS = Object.fromEntries(
 const PLUGIN_COLOR_OVERRIDES: Partial<Record<PluginType, { background: string; border: string }>> =
   {
     response_cache: { background: '#8f949c', border: '#696d74' }, // Graphite Alloy
-    memory: { background: '#3f6b73', border: '#2e4f55' },
+    context: { background: '#2f855a', border: '#276749' },
     system_prompt: { background: '#c9cbd0', border: '#8f949c' }, // Light Alloy
     header_mutation: { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
     router_replay: { background: '#737780', border: '#696d74' }, // Green (consistent with other plugins)
-    rag: { background: '#2f855a', border: '#276749' },
     fast_response: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
     request_params: { background: '#805ad5', border: '#6b46c1' },
     response_guard: { background: '#c05621', border: '#9c4221' },
     tools: { background: '#5a6c7d', border: '#3d4a59' },
-    context_compression: { background: '#606c7a', border: '#3d4a59' },
     prompt_cache: { background: '#6b7280', border: '#4b5563' },
     shadow_dispatch: { background: '#5b5f7a', border: '#3f4259' },
     masking: { background: '#4f6a7a', border: '#374d59' },

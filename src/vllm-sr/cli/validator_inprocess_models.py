@@ -80,10 +80,16 @@ def _called_models(decision: Any) -> Iterator[str]:
 
 def _recovers_context(decision: Any) -> bool:
     for plugin in decision.plugins or []:
-        if str(getattr(plugin.type, "value", plugin.type)) != "context_compression":
+        if str(getattr(plugin.type, "value", plugin.type)) != "context":
             continue
-        recovery = (plugin.configuration or {}).get("recovery")
-        if isinstance(recovery, dict) and recovery.get("enabled"):
+        configuration = plugin.configuration or {}
+        compress = configuration.get("compress")
+        recovery = compress.get("recovery") if isinstance(compress, dict) else None
+        if (
+            configuration.get("enabled")
+            and isinstance(recovery, dict)
+            and recovery.get("enabled")
+        ):
             return True
     return False
 

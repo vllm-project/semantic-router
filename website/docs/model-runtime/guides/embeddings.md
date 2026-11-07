@@ -10,7 +10,7 @@ embedding model serves every feature that needs one:
 
 - the [semantic cache](tutorials/plugin/response-cache.md): answer a
   repeated question from the cache;
-- [memory](tutorials/plugin/memory.md) and [RAG](tutorials/plugin/rag.md):
+- the memory and RAG sources of the [context plugin](tutorials/plugin/context.md):
   find stored facts and documents.
 
 The default model is Vela 1.0 Embedding. It reads up to 32,768 tokens and can

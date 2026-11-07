@@ -11,10 +11,9 @@ import (
 
 // A binding names the deployment that answers one signal type, written as
 // the deployment's name (`pii: local-vela`). The object form also takes a
-// head and an operating point; its contract, adapter, mapping_path and
-// pair_scorer fields are deprecated: the signal decides the contract, the
-// provider the adapter, and the RAG plugin's rerank block a reranker's
-// layer and dimension.
+// head and an operating point; its contract, adapter and mapping_path
+// fields are deprecated: the signal decides the contract and the provider
+// the adapter.
 
 // bindingConsumers maps a binding's signal-type key to the plugin module
 // that reads it besides the signal's rules. A key that is not listed names
@@ -63,7 +62,7 @@ func knownBindingKey(key string) bool {
 		return true
 	}
 	switch key {
-	case "prompt_guard", "pii_classifier", "hallucination_detector", "embedding", RAGRerankerConsumer, bindingKeySystemOne:
+	case "prompt_guard", "pii_classifier", "hallucination_detector", "embedding", bindingKeySystemOne:
 		return true
 	}
 	for _, prefix := range []string{"safety.", "complexity.", "systemone."} {
@@ -155,24 +154,21 @@ type modelBindingObject struct {
 	Adapter        string                   `yaml:"adapter,omitempty" json:"adapter,omitempty"`
 	Head           string                   `yaml:"head,omitempty" json:"head,omitempty"`
 	MappingPath    string                   `yaml:"mapping_path,omitempty" json:"mapping_path,omitempty"`
-	PairScorer     *PairScorerSelection     `yaml:"pair_scorer,omitempty" json:"pair_scorer,omitempty"`
 	OperatingPoint *OperatingPointReference `yaml:"operating_point,omitempty" json:"operating_point,omitempty"`
 }
 
 // OnlyDeployment reports whether a binding sets nothing but its deployment,
 // so it is written as the deployment's name.
 func (b ModelBinding) OnlyDeployment() bool {
-	return b.Contract == "" && b.Adapter == "" && b.Head == "" && b.MappingPath == "" && b.PairScorer == nil && b.OperatingPoint == nil
+	return b.Contract == "" && b.Adapter == "" && b.Head == "" && b.MappingPath == "" && b.OperatingPoint == nil
 }
 
 // DeprecatedFields lists the deprecated fields a binding sets. A binding
-// still selects a head and an operating point; the RAG plugin's rerank
-// block selects a reranker's layer and dimension.
+// still selects a head and an operating point.
 func (b ModelBinding) DeprecatedFields() []string {
 	var fields []string
 	for name, set := range map[string]bool{
 		"contract": b.Contract != "", "adapter": b.Adapter != "", "mapping_path": b.MappingPath != "",
-		"pair_scorer": b.PairScorer != nil,
 	} {
 		if set {
 			fields = append(fields, name)
@@ -232,9 +228,9 @@ func (b ModelBinding) MarshalJSON() ([]byte, error) {
 }
 
 func (o modelBindingObject) binding() ModelBinding {
-	return ModelBinding{Deployment: o.Deployment, Contract: o.Contract, Adapter: o.Adapter, Head: o.Head, MappingPath: o.MappingPath, PairScorer: o.PairScorer, OperatingPoint: o.OperatingPoint}
+	return ModelBinding{Deployment: o.Deployment, Contract: o.Contract, Adapter: o.Adapter, Head: o.Head, MappingPath: o.MappingPath, OperatingPoint: o.OperatingPoint}
 }
 
 func objectOf(b ModelBinding) modelBindingObject {
-	return modelBindingObject{Deployment: b.Deployment, Contract: b.Contract, Adapter: b.Adapter, Head: b.Head, MappingPath: b.MappingPath, PairScorer: b.PairScorer, OperatingPoint: b.OperatingPoint}
+	return modelBindingObject{Deployment: b.Deployment, Contract: b.Contract, Adapter: b.Adapter, Head: b.Head, MappingPath: b.MappingPath, OperatingPoint: b.OperatingPoint}
 }

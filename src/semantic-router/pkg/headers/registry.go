@@ -231,7 +231,7 @@ var registry = []Header{
 	{VSRSkipProcessing, FromClient, SurfaceControl, SensitivityNone, "skip_processing", "v0.3", "`true` opts the request out of Router processing when `global.router.skip_processing.enabled` is set."},
 	{VSRDebug, FromClient, SurfaceControl, SensitivityNone, "debug_headers", "v0.4", "`true` asks for the debug headers on the response; honored only for a caller `global.router.headers.debug` allows."},
 	{VSRCacheControl, FromClient, SurfaceControl, SensitivityNone, "response_cache", "v0.4", "Response-cache directives for the request, when the plugin's `request_controls` allow them."},
-	{VSRCompressionControl, FromClient, SurfaceControl, SensitivityNone, "context_compression", "v0.4", "Context-compression directives for the request, when the plugin's `request_controls` allow them."},
+	{VSRCompressionControl, FromClient, SurfaceControl, SensitivityNone, "context", "v0.4", "Context-compression directives for the request, when the plugin's `request_controls` allow them."},
 	{VSRProtectionRelease, FromClient, SurfaceControl, SensitivityNone, "router_learning", "v0.5", "Any non-empty value asks router-learning protection for a fresh decision on the request's protection key; `global.router.learning.protection.release.header` can rename it."},
 	{SRBenchExpectedConfigHash, FromClient, SurfaceControl, SensitivityNone, "benchmark", "v0.4", "Configuration hash an evaluation request requires; another active configuration fails it with 412."},
 	{SRBenchMaxInferenceCalls, FromClient, SurfaceControl, SensitivityNone, "benchmark", "v0.4", "Provider-call limit of an evaluation request; only `1` is supported."},

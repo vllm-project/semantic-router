@@ -70,13 +70,15 @@ const envReferenceRAGRouting = `routing:
         - model: test-model
           use_reasoning: false
       plugins:
-        - type: rag
+        - type: context
           configuration:
             enabled: true
-            backend: openai
-            backend_config:
-              vector_store_id: vs_docs
-              api_key: ${DEPLOY_TEST_OPENAI_API_KEY}
+            sources:
+              - type: rag
+                backend: openai
+                backend_config:
+                  vector_store_id: vs_docs
+                  api_key: ${DEPLOY_TEST_OPENAI_API_KEY}
 `
 
 const envReferenceContextRouting = `routing:
@@ -121,13 +123,15 @@ const envReferenceMixedRouting = `routing:
         - model: test-model
           use_reasoning: false
       plugins:
-        - type: rag
+        - type: context
           configuration:
             enabled: true
-            backend: openai
-            backend_config:
-              vector_store_id: vs_docs
-              api_key: ${DEPLOY_TEST_OPENAI_API_KEY}
+            sources:
+              - type: rag
+                backend: openai
+                backend_config:
+                  vector_store_id: vs_docs
+                  api_key: ${DEPLOY_TEST_OPENAI_API_KEY}
 `
 
 // The Router resolves these references with its own environment, which the

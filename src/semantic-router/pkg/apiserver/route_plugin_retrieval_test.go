@@ -28,7 +28,7 @@ func TestPluginRetrievalRequiresContentReadPermissions(t *testing.T) {
 		Tokens: []config.ManagementAPITokenRef{{Env: "VSR_RAG_PERMISSION_TEST_TOKEN", Role: "classify-only"}},
 		Roles:  map[string][]string{"classify-only": {string(PermClassifyInvoke)}},
 	}})
-	for _, plugin := range []string{"rag", "tools"} {
+	for _, plugin := range []string{config.DecisionPluginContext, "tools"} {
 		for _, mode := range []string{"preview", "probe"} {
 			response := httptest.NewRecorder()
 			request := httptest.NewRequest(http.MethodPost, apiPluginsPath+"/"+plugin+"/preview", strings.NewReader(`{"mode":"`+mode+`","binding":{"recipe":"private","decision":"retrieve"},"request_body":{}}`))
@@ -40,7 +40,7 @@ func TestPluginRetrievalRequiresContentReadPermissions(t *testing.T) {
 		}
 		operation := server.generateOpenAPISpec().Paths[apiPluginsPath+"/"+plugin+"/preview"].Post
 		permission := PermConfigRead
-		if plugin == "rag" {
+		if plugin == config.DecisionPluginContext {
 			permission = PermDataRead
 		}
 		if operation.Permission != permission || operation.Sensitivity != SensitivityConfig {
@@ -68,7 +68,7 @@ func TestPluginRetrievalRoutesUsePublishedRuntimeAndTypedContracts(t *testing.T)
 	server := &ClassificationAPIServer{runtimeRegistry: registry}
 	mux := server.setupRoutes()
 	spec := server.generateOpenAPISpec()
-	for _, plugin := range []string{"rag", "tools"} {
+	for _, plugin := range []string{config.DecisionPluginContext, "tools"} {
 		path := apiPluginsPath + "/" + plugin + "/preview"
 		t.Run(plugin, func(t *testing.T) {
 			response := httptest.NewRecorder()
@@ -83,7 +83,7 @@ func TestPluginRetrievalRoutesUsePublishedRuntimeAndTypedContracts(t *testing.T)
 			if body["mode"] != "probe" || body["persisted"] != false {
 				t.Fatalf("effects=%v", body)
 			}
-			if plugin == "rag" {
+			if plugin == config.DecisionPluginContext {
 				if stub.rag.Binding.Recipe != "isolated" {
 					t.Fatalf("binding=%+v", stub.rag.Binding)
 				}

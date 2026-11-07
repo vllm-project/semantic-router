@@ -140,20 +140,8 @@ func TestModelDiagnosticsHTTPAllVelaTaskContractsAndExplicitScope(t *testing.T) 
 	if status != 200 || len(embedded.Result.Embedding) != 2 || fake.Calls("embeddings") != embedCalls+1 || !strings.Contains(string(body), `"dimensions":[2,4]`) || !strings.Contains(string(body), `"max_seconds":30`) {
 		t.Fatalf("embedding: %d %s", status, body)
 	}
-	calls.Add(1)
-	diagnosticTestHandle(t, servingHost{runtime}, "default", "rag.reranker", "relevance_scores.v1", binding.Capability{}, func(input []tasks.QueryDocument) (tasks.RelevanceScores, error) {
-		calls.Add(1)
-		if len(input) != 2 || input[0].Document != "a" || input[1].Document != "b" {
-			t.Errorf("pairs/order lost: %+v", input)
-		}
-		return tasks.RelevanceScores{Scores: []float32{-2, 7}, Inputs: []tasks.InputUsage{*usage, *usage}}, nil
-	})
-	status, body = diagnosticRequest(t, server, "rerank", `{"recipe":"default","binding":"rag.reranker","pairs":[{"query":"q","document":"a"},{"query":"q","document":"b"}]}`)
-	if status != 200 || !strings.Contains(string(body), `"scores":[-2,7]`) || !strings.Contains(string(body), `"score_type":"relevance_logit"`) {
-		t.Fatalf("reranker: %d %s", status, body)
-	}
-	if calls.Load() != 10 {
-		t.Fatalf("inference calls = %d, want 10", calls.Load())
+	if calls.Load() != 8 {
+		t.Fatalf("inference calls = %d, want 8", calls.Load())
 	}
 	for _, bad := range []struct {
 		body   string
@@ -163,7 +151,6 @@ func TestModelDiagnosticsHTTPAllVelaTaskContractsAndExplicitScope(t *testing.T) 
 		{`{"recipe":"foreign","binding":"domain_classifier","text":"query"}`, 404},
 		{`{"recipe":"private","binding":"domain_classifier","text":"query"}`, 404},
 		{`{"recipe":"default","binding":"unloaded","text":"query"}`, 404},
-		{`{"recipe":"default","binding":"rag.reranker","text":"query"}`, 404},
 		{`{"recipe":"default","binding":"domain_classifier","text":"query","artifact":"arbitrary"}`, 400},
 	} {
 		badStatus, badBody := diagnosticRequest(t, server, "labels", bad.body)
@@ -171,7 +158,7 @@ func TestModelDiagnosticsHTTPAllVelaTaskContractsAndExplicitScope(t *testing.T) 
 			t.Fatalf("invalid scope/input %s: %d %s", bad.body, badStatus, badBody)
 		}
 	}
-	if calls.Load() != 10 {
+	if calls.Load() != 8 {
 		t.Fatal("invalid request executed a model")
 	}
 	response, err := server.Client().Get(server.URL + apiDiagnosticsPath + "/models?recipe=default")
@@ -183,7 +170,7 @@ func TestModelDiagnosticsHTTPAllVelaTaskContractsAndExplicitScope(t *testing.T) 
 	if err = json.NewDecoder(response.Body).Decode(&inventory); err != nil {
 		t.Fatal(err)
 	}
-	if response.StatusCode != 200 || len(inventory.Bindings) != 10 {
+	if response.StatusCode != 200 || len(inventory.Bindings) != 9 {
 		t.Fatalf("inventory = %+v", inventory)
 	}
 	// A recipe need not have a public model alias to be diagnosed. Sharing
@@ -280,39 +267,6 @@ func TestModelDiagnosticsHoldsLiveGenerationThroughInferenceAndUsesReplacement(t
 	status, body := diagnosticRequest(t, server, "labels", `{"recipe":"default","binding":"domain_classifier","text":"query"}`)
 	if status != 200 || !strings.Contains(string(body), `"probabilities":[0.1,0.9]`) {
 		t.Fatalf("replacement not used: %d %s", status, body)
-	}
-}
-
-func TestModelDiagnosticsRerankBoundsBatchUsingLeasedConfig(t *testing.T) {
-	for _, tc := range []struct {
-		name                 string
-		limit, count, status int
-	}{{"configured", 2, 3, 400}, {"at limit", 2, 2, 200}, {"default", 0, 101, 400}} {
-		t.Run(tc.name, func(t *testing.T) {
-			tasksRuntime := serving.New(nil, nil)
-			cfg, service := preparedInventoryServiceWith(t, classification.RecipeRuntimeOptions{Runtime: tasksRuntime})
-			cfg.API.BatchClassification.MaxBatchSize = tc.limit
-			registry := routerruntime.NewRegistry(cfg)
-			registry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{Config: cfg, ClassificationService: service})
-			stale := &config.RouterConfig{}
-			stale.API.BatchClassification.MaxBatchSize = 1
-			api := &ClassificationAPIServer{config: stale, runtimeRegistry: registry}
-			calls := 0
-			diagnosticTestHandle(t, servingHost{tasksRuntime}, "default", "rag.reranker", "relevance_scores.v1", binding.Capability{}, func(pairs []tasks.QueryDocument) (tasks.RelevanceScores, error) {
-				calls++
-				return tasks.RelevanceScores{Scores: make([]float32, len(pairs))}, nil
-			})
-			pairs := make([]ModelRerankPair, tc.count)
-			for i := range pairs {
-				pairs[i] = ModelRerankPair{Query: "q", Document: "d"}
-			}
-			body, _ := json.Marshal(ModelRerankDiagnosticRequest{ModelDiagnosticTarget: ModelDiagnosticTarget{Recipe: "default", Binding: "rag.reranker"}, Pairs: pairs})
-			response := httptest.NewRecorder()
-			api.handleModelDiagnosticRerank(response, httptest.NewRequest(http.MethodPost, "/", strings.NewReader(string(body))))
-			if response.Code != tc.status || (calls > 0) != (tc.status == 200) {
-				t.Fatalf("status=%d calls=%d body=%s", response.Code, calls, response.Body.String())
-			}
-		})
 	}
 }
 

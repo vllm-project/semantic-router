@@ -168,9 +168,9 @@ stage actually ran.
 
 ## Test retrieval, risk handling, and agent continuity
 
-**Retrieval.** Attach [RAG and neural reranking](../tutorials/plugin/rag#neural-reranking)
-to a path with a real knowledge base. Retrieve a wider candidate set and use
-`rag.rerank` to retain the most relevant documents. Check document identities,
+**Retrieval.** Attach a [context plugin with a RAG source](../tutorials/plugin/context#rag-sources)
+to a path with a real knowledge base. Recall a wider candidate set and let the
+source's relevance judge retain the most relevant documents. Check document identities,
 retrieval coverage, ranking, grounded answers, and added latency. Preview selects
 the plugin; a routed request executes it. Start with a single-model path before
 adding retrieval to every stage of a multi-model workflow.

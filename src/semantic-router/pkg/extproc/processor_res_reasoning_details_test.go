@@ -123,9 +123,9 @@ func TestContextRecoveryRefusesReasoningContinuity(t *testing.T) {
 			decision := &config.Decision{
 				Name: "recoverable",
 				Plugins: []config.DecisionPlugin{{
-					Type: config.DecisionPluginContextCompression,
-					Configuration: config.MustStructuredPayload(map[string]interface{}{
-						"enabled": true, "recovery": map[string]interface{}{"enabled": true, "store": "redis"},
+					Type: config.DecisionPluginContext,
+					Configuration: compressPayload(map[string]interface{}{
+						"recovery": map[string]interface{}{"enabled": true, "store": "redis"},
 					}),
 				}},
 			}

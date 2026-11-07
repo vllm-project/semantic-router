@@ -50,13 +50,15 @@ routing:
 `
 
 // The OpenAI RAG backend requires api_key, which the docs recommend setting via ${VAR}.
-const requiredReferenceConfig = `${referencesConfig}        - type: rag
+const requiredReferenceConfig = `${referencesConfig}        - type: context
           configuration:
             enabled: true
-            backend: openai
-            backend_config:
-              vector_store_id: vs_billing_docs
-              api_key: \${OPENAI_API_KEY}
+            sources:
+              - type: rag
+                backend: openai
+                backend_config:
+                  vector_store_id: vs_billing_docs
+                  api_key: \${OPENAI_API_KEY}
 `
 
 // Each typed value is valid only once its reference takes the default, and the
@@ -90,13 +92,15 @@ routing:
       modelRefs:
         - model: model-a
       plugins:
-        - type: rag
+        - type: context
           configuration:
             enabled: true
-            backend: openai
-            backend_config:
-              vector_store_id: vs_billing_docs
-              api_key: \${OPENAI_API_KEY}
+            sources:
+              - type: rag
+                backend: openai
+                backend_config:
+                  vector_store_id: vs_billing_docs
+                  api_key: \${OPENAI_API_KEY}
 `
 
 test.beforeEach(async ({ page }) => {

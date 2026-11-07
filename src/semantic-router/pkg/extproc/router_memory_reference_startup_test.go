@@ -101,18 +101,19 @@ func memoryStartupBuildConfig(loaded *config.RouterConfig) *config.RouterConfig 
 	cfg.Memory = loaded.Memory
 	cfg.Memory.Enabled = false
 	for _, decision := range loaded.AllRoutingDecisions() {
-		plugin := decision.GetMemoryConfig()
+		plugin := decision.GetContextConfig().Source(config.ContextSourceMemory)
 		if plugin == nil {
 			continue
 		}
-		payload := map[string]interface{}{"enabled": false, "hybrid_mode": plugin.HybridMode}
+		source := map[string]interface{}{"type": config.ContextSourceMemory, "hybrid_mode": plugin.HybridMode}
 		if plugin.Reflection != nil {
-			payload["reflection"] = map[string]interface{}{"algorithm": plugin.Reflection.Algorithm}
+			source["reflection"] = map[string]interface{}{"algorithm": plugin.Reflection.Algorithm}
 		}
+		payload := map[string]interface{}{"enabled": false, "sources": []interface{}{source}}
 		cfg.Decisions = append(cfg.Decisions, config.Decision{
 			Name:    decision.Name,
 			Rules:   config.RuleNode{Operator: "AND", Conditions: []config.RuleNode{}},
-			Plugins: []config.DecisionPlugin{{Type: config.DecisionPluginMemory, Configuration: config.MustStructuredPayload(payload)}},
+			Plugins: []config.DecisionPlugin{{Type: config.DecisionPluginContext, Configuration: config.MustStructuredPayload(payload)}},
 		})
 	}
 	cfg.RouterLearning.StateStore = config.RouterLearningStateStoreConfig{

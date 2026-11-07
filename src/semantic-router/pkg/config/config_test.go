@@ -2149,62 +2149,32 @@ func ResetConfig() {
 }
 
 var _ = Describe("Decision and Global Configuration", func() {
-	Describe("Decision.GetMemoryConfig", func() {
-		It("should return nil when no memory plugin is configured", func() {
-			decision := &Decision{
-				Name: "test_decision",
-				Plugins: []DecisionPlugin{
-					{Type: "system_prompt", Configuration: MustStructuredPayload(map[string]interface{}{"enabled": true})},
-				},
-			}
+	Describe("RouterConfig.ContextPlugin", func() {
+		contextDecision := func(configuration ContextPluginConfig) *Decision {
+			return &Decision{Name: "d", Plugins: []DecisionPlugin{{Type: DecisionPluginContext, Configuration: MustStructuredPayload(configuration)}}}
+		}
 
-			Expect(decision.GetMemoryConfig()).To(BeNil())
+		It("gives a decision without a context plugin the global memory's source", func() {
+			cfg := &RouterConfig{}
+			Expect(cfg.ContextPlugin(&Decision{Name: "d"})).To(BeNil())
+			cfg.Memory.Enabled = true
+			plugin := cfg.ContextPlugin(&Decision{Name: "d"})
+			Expect(plugin).NotTo(BeNil())
+			Expect(plugin.Sources).To(Equal([]ContextSource{{Type: ContextSourceMemory}}))
 		})
 
-		It("should return memory config when memory plugin is configured", func() {
-			decision := &Decision{
-				Name: "test_decision",
-				Plugins: []DecisionPlugin{
-					{
-						Type: "memory",
-						Configuration: MustStructuredPayload(map[string]interface{}{
-							"enabled":              true,
-							"retrieval_limit":      10,
-							"similarity_threshold": 0.75,
-							"auto_store":           true,
-						}),
-					},
-				},
-			}
-
-			memConfig := decision.GetMemoryConfig()
-			Expect(memConfig).NotTo(BeNil())
-			Expect(memConfig.Enabled).To(BeTrue())
-			Expect(*memConfig.RetrievalLimit).To(Equal(10))
-			Expect(*memConfig.SimilarityThreshold).To(BeNumerically("~", 0.75, 0.001))
-			Expect(*memConfig.AutoStore).To(BeTrue())
+		It("reads only the sources an enabled context plugin lists", func() {
+			cfg := &RouterConfig{}
+			cfg.Memory.Enabled = true
+			plugin := cfg.ContextPlugin(contextDecision(ContextPluginConfig{Enabled: true, Sources: []ContextSource{{Type: ContextSourceRAG, Backend: "vectorstore"}}}))
+			Expect(plugin.Source(ContextSourceRAG)).NotTo(BeNil())
+			Expect(plugin.Source(ContextSourceMemory)).To(BeNil())
 		})
 
-		It("should return memory config with partial settings", func() {
-			decision := &Decision{
-				Name: "test_decision",
-				Plugins: []DecisionPlugin{
-					{
-						Type: "memory",
-						Configuration: MustStructuredPayload(map[string]interface{}{
-							"enabled": false,
-							// Only enabled is set, other fields are nil
-						}),
-					},
-				},
-			}
-
-			memConfig := decision.GetMemoryConfig()
-			Expect(memConfig).NotTo(BeNil())
-			Expect(memConfig.Enabled).To(BeFalse())
-			Expect(memConfig.RetrievalLimit).To(BeNil())
-			Expect(memConfig.SimilarityThreshold).To(BeNil())
-			Expect(memConfig.AutoStore).To(BeNil())
+		It("turns context off, global memory included, for a disabled context plugin", func() {
+			cfg := &RouterConfig{}
+			cfg.Memory.Enabled = true
+			Expect(cfg.ContextPlugin(contextDecision(ContextPluginConfig{Enabled: false}))).To(BeNil())
 		})
 	})
 

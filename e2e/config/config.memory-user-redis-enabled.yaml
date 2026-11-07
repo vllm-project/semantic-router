@@ -52,12 +52,18 @@ routing:
           configuration:
             system_prompt: You are MoM, a helpful AI assistant with memory. You remember important facts about users and use this context to provide personalized assistance.
             mode: insert
-        - type: memory
+        - type: context
           configuration:
             enabled: true
-            retrieval_limit: 5
-            similarity_threshold: 0.60
-            auto_store: false
+            sources:
+              - type: memory
+                match:
+                  recall:
+                    method: embedding
+                    top_k: 5
+                    min_similarity: 0.60
+                store:
+                  auto: false
 global:
   stores:
     memory:

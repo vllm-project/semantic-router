@@ -31,7 +31,7 @@ model-runtime replicas, and explicit native recipes for System One auto.
   owns ingress and forwarding while calling the Router through ExtProc.
 - **Semantic Router** extracts signals, evaluates policy, applies route-specific
   behavior, and selects or coordinates model candidates.
-- **Model runtime** runs the decision, classifier, embedding, and reranking
+- **Model runtime** runs the decision, classifier, and embedding
   models that configured signals and features need. Its workers can be managed
   or attached.
 - **Chat backends** are configured model services or provider endpoints. Their

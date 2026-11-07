@@ -1621,16 +1621,10 @@ func TestCompileAllPluginTypes(t *testing.T) {
 			verifyType: "response_guard",
 		},
 		{
-			name:       "memory",
-			pluginType: "memory",
-			body:       `enabled: true retrieval_limit: 5 similarity_threshold: 0.7 auto_store: true`,
-			verifyType: "memory",
-		},
-		{
-			name:       "rag",
-			pluginType: "rag",
-			body:       `enabled: true backend: "chromadb" top_k: 10 similarity_threshold: 0.6 injection_mode: "prepend" on_failure: "skip" backend_config: { collection_name: "docs" }`,
-			verifyType: "rag",
+			name:       "context",
+			pluginType: "context",
+			body:       `enabled: true sources: [{ type: "memory", store: { auto: true } }] injection: { mode: "tool_role" }`,
+			verifyType: "context",
 		},
 		{
 			name:       "header_mutation",
@@ -4110,52 +4104,6 @@ func TestDecompileDropsGlobalListeners(t *testing.T) {
 	}
 	if strings.Contains(dslText, "listeners") || strings.Contains(dslText, "port: 8899") {
 		t.Fatalf("routing-only decompile leaked listeners:\n%s", dslText)
-	}
-}
-
-// TestDecompileRAGPlugin verifies RAG plugin config decompiles correctly.
-func TestDecompileRAGPlugin(t *testing.T) {
-	// Build a config with RAG plugin via compile, then inject the RAG plugin
-	input := `
-SIGNAL domain test { description: "test" }
-ROUTE rag_route (description = "RAG route") {
-  PRIORITY 100
-  WHEN domain("test")
-  MODEL "m:1b"
-  PLUGIN rag {
-    enabled: true
-    backend: "milvus"
-    similarity_threshold: 0.8
-    top_k: 5
-    max_context_length: 2000
-    injection_mode: "tool_role"
-  }
-}
-`
-	cfg, errs := Compile(input)
-	if len(errs) > 0 {
-		t.Fatalf("compile errors: %v", errs)
-	}
-
-	dslText, err := Decompile(cfg)
-	if err != nil {
-		t.Fatalf("decompile error: %v", err)
-	}
-
-	if !strings.Contains(dslText, "rag") {
-		t.Error("decompiled DSL missing 'rag' plugin")
-	}
-	if !strings.Contains(dslText, "milvus") {
-		t.Error("decompiled DSL missing RAG backend 'milvus'")
-	}
-	if !strings.Contains(dslText, "0.8") {
-		t.Error("decompiled DSL missing RAG similarity_threshold")
-	}
-	if !strings.Contains(dslText, "top_k") {
-		t.Error("decompiled DSL missing RAG top_k")
-	}
-	if !strings.Contains(dslText, "tool_role") {
-		t.Error("decompiled DSL missing RAG injection_mode")
 	}
 }
 

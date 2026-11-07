@@ -83,7 +83,7 @@ the answer could not be checked), `response_jailbreak`, and `response_guard`
 for any other rule. A blocked answer is replaced with a message that names what
 was found, never that a check failed.
 
-The grounding context is the documents the [RAG plugin](./rag) retrieved and
+The grounding context is the documents the [context plugin](./context.md) retrieved and
 the request's own tool results.
 
 A streamed answer exists as a whole only once its bytes are with the client,

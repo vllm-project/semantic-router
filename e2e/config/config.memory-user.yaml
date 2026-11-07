@@ -61,10 +61,13 @@ routing:
             max_records: 256
             capture_request_body: false
             capture_response_body: false
-        - type: memory
+        - type: context
           configuration:
             enabled: true
-            auto_store: true
+            sources:
+              - type: memory
+                store:
+                  auto: true
     # Triggered by NOMEM_MARKER keyword. Memory explicitly disabled so retrieval
     # is skipped even though global memory.enabled=true.
     - name: no_memory_route
@@ -89,7 +92,7 @@ routing:
           configuration:
             system_prompt: You are a helpful assistant. Memory access is disabled for this route.
             mode: insert
-        - type: memory
+        - type: context
           configuration:
             enabled: false
 
@@ -117,12 +120,18 @@ routing:
           configuration:
             system_prompt: You are a helpful assistant with strict memory matching.
             mode: insert
-        - type: memory
+        - type: context
           configuration:
             enabled: true
-            retrieval_limit: 5
-            similarity_threshold: 0.99
-            auto_store: true
+            sources:
+              - type: memory
+                match:
+                  recall:
+                    method: embedding
+                    top_k: 5
+                    min_similarity: 0.99
+                store:
+                  auto: true
 
     # This route checks the calibrated 0.40 cutoff with engineered Milvus scores.
     # The E2E uses mmbert to test the request path; the reference bert settings
@@ -139,11 +148,18 @@ routing:
         - model: qwen3
           use_reasoning: false
       plugins:
-        - type: memory
+        - type: context
           configuration:
             enabled: true
-            similarity_threshold: 0.40
-            auto_store: false
+            sources:
+              - type: memory
+                match:
+                  recall:
+                    method: embedding
+                    top_k: 5
+                    min_similarity: 0.40
+                store:
+                  auto: false
 
     # A zero plugin threshold must resolve to the documented 0.70 default.
     - name: zero_threshold_route
@@ -158,11 +174,18 @@ routing:
         - model: qwen3
           use_reasoning: false
       plugins:
-        - type: memory
+        - type: context
           configuration:
             enabled: true
-            similarity_threshold: 0
-            auto_store: false
+            sources:
+              - type: memory
+                match:
+                  recall:
+                    method: embedding
+                    top_k: 5
+                    min_similarity: 0.7
+                store:
+                  auto: false
 
     - name: default_route
       description: Default route for memory testing
@@ -184,12 +207,18 @@ routing:
           configuration:
             system_prompt: You are MoM, a helpful AI assistant with memory. You remember important facts about users and use this context to provide personalized assistance.
             mode: insert
-        - type: memory
+        - type: context
           configuration:
             enabled: true
-            retrieval_limit: 5
-            similarity_threshold: 0.10
-            auto_store: true
+            sources:
+              - type: memory
+                match:
+                  recall:
+                    method: embedding
+                    top_k: 5
+                    min_similarity: 0.10
+                store:
+                  auto: true
 global:
   services:
     api:

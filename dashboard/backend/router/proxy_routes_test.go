@@ -500,8 +500,8 @@ func TestRouterManagementProxyAllowlistMatchesDashboardSurfaces(t *testing.T) {
 		{method: http.MethodPost, path: "/api/router/api/v1/observability/outcomes", want: true},
 		{method: http.MethodGet, path: "/api/router/api/v1/storage/response-cache/stats", want: true},
 		{method: http.MethodPost, path: "/api/router/api/v1/storage/response-cache/invalidate", want: true},
-		{method: http.MethodPost, path: "/api/router/api/v1/plugins/context_compression/preview", want: true},
-		{method: http.MethodDelete, path: "/api/router/api/v1/plugins/context_compression/stats", want: false},
+		{method: http.MethodPost, path: "/api/router/api/v1/plugins/context/compression/preview", want: true},
+		{method: http.MethodDelete, path: "/api/router/api/v1/plugins/context/compression/stats", want: false},
 		{method: http.MethodPost, path: "/api/router/api/v1/config", want: false},
 		{method: http.MethodPost, path: "/api/router/unknown", want: false},
 	}

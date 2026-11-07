@@ -209,23 +209,26 @@ routing:
     - model: vela-default
       use_reasoning: false
     plugins:
-    - type: rag
+    - type: context
       configuration:
         enabled: true
-        backend: vectorstore
-        top_k: 3
-        similarity_threshold: 0.0
-        rerank:
-          deployment: reranker-amd
-          top_k: 2
-          layer: 22
-          dimension: 768
-        max_context_length: 4096
-        injection_mode: tool_role
-        on_failure: block
-        backend_config:
-          vector_store_id: vs_your_documents
-    description: Retrieve indexed documents and rerank the candidates before generation.
+        sources:
+        - type: rag
+          backend: vectorstore
+          match:
+            recall:
+              method: embedding
+              top_k: 3
+              min_similarity: 0.0
+            judge:
+              preset: relevance
+              top_k: 2
+              min_score: 0.5
+          max_context_length: 4096
+          on_failure: block
+          backend_config:
+            vector_store_id: vs_your_documents
+    description: Retrieve indexed documents and keep the ones the decision model judges relevant before generation.
   - name: observe
     description: Inspect Vela signals and send the request to the connected backend.
     priority: 100
@@ -366,14 +369,6 @@ global:
         provider: model_runtime
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Embedding
         revision: 1e57cebf5a7b7fec6e6973f05bbca97c5cca4436
-        device: rocm:0
-        input:
-          max_tokens: 32768
-          overflow: reject
-      reranker-amd:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Reranker
-        revision: a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf
         device: rocm:0
         input:
           max_tokens: 32768

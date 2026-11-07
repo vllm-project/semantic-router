@@ -370,10 +370,6 @@ func (m *modelResourceMigration) migrateRouting(path string, routing *yaml.Node,
 		return nil
 	}
 	bindings := m.migratedBindings(exported.ModelBindings)
-	// The rag plugins of the profile name the reranker its rag.reranker
-	// binding chose.
-	reranker, hasReranker := bindings[BindingKey(RAGRerankerConsumer)]
-	delete(bindings, BindingKey(RAGRerankerConsumer))
 	if mappingValue(routing, "model_bindings") != nil || len(bindings) > 0 {
 		if err := setValue(routing, "model_bindings", bindings, len(bindings) == 0); err != nil {
 			return err
@@ -396,14 +392,6 @@ func (m *modelResourceMigration) migrateRouting(path string, routing *yaml.Node,
 			}
 		}
 	}
-	var rerank *RAGRerankConfig
-	if hasReranker {
-		rerank = &RAGRerankConfig{Deployment: reranker.Deployment}
-		if reranker.PairScorer != nil {
-			rerank.Layer, rerank.Dimension = reranker.PairScorer.Layer, reranker.PairScorer.Dimension
-		}
-	}
-	m.migrateRerank(routing, exported, rerank)
 	return nil
 }
 
@@ -416,44 +404,6 @@ func (m *modelResourceMigration) bindingMoved(path, consumer string) bool {
 		}
 	}
 	return false
-}
-
-// migrateRerank names the reranker in each rag plugin of a profile whose
-// deprecated rag.reranker binding chose it: the plugin's rerank block, or the
-// one the export read.
-func (m *modelResourceMigration) migrateRerank(routing *yaml.Node, exported *CanonicalRouting, binding *RAGRerankConfig) {
-	for _, decision := range sequenceAt(routing, "decisions") {
-		chosen := binding
-		if chosen == nil {
-			for i := range exported.Decisions {
-				if exported.Decisions[i].Name == scalarAt(decision, "name") {
-					if rag := exported.Decisions[i].GetRAGConfig(); rag != nil && rag.Rerank != nil && rag.Rerank.Deployment != "" {
-						chosen = rag.Rerank
-					}
-				}
-			}
-		}
-		if chosen == nil {
-			continue
-		}
-		for _, plugin := range sequenceAt(decision, "plugins") {
-			configuration := mappingAt(plugin, "configuration")
-			if scalarAt(plugin, "type") != "rag" || configuration == nil || mappingValue(configuration, "rerank") == nil {
-				continue
-			}
-			rerank := mappingAt(configuration, "rerank")
-			if rerank == nil || scalarAt(rerank, "deployment") != "" {
-				continue
-			}
-			_ = setValue(rerank, "deployment", chosen.Deployment, false)
-			if chosen.Layer != 0 {
-				_ = setValue(rerank, "layer", chosen.Layer, false)
-			}
-			if chosen.Dimension != 0 {
-				_ = setValue(rerank, "dimension", chosen.Dimension, false)
-			}
-		}
-	}
 }
 
 // YAML node helpers. A mapping node holds its keys and values alternately.

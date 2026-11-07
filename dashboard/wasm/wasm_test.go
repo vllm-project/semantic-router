@@ -359,13 +359,15 @@ func TestDecompileKeepsEnvironmentReferences(t *testing.T) {
 }
 
 func TestDecompileAcceptsRequiredEnvironmentReference(t *testing.T) {
-	yamlSource := envReferenceConfigPrefix + `        - type: rag
+	yamlSource := envReferenceConfigPrefix + `        - type: context
           configuration:
             enabled: true
-            backend: openai
-            backend_config:
-              vector_store_id: vs_docs
-              api_key: ${OPENAI_API_KEY}
+            sources:
+              - type: rag
+                backend: openai
+                backend_config:
+                  vector_store_id: vs_docs
+                  api_key: ${OPENAI_API_KEY}
 `
 
 	dslText, yamlText := decompileAndRecompile(t, yamlSource)
@@ -409,13 +411,15 @@ routing:
       modelRefs:
         - model: qwen
       plugins:
-        - type: rag
+        - type: context
           configuration:
             enabled: true
-            backend: openai
-            backend_config:
-              vector_store_id: vs_docs
-              api_key: ${OPENAI_API_KEY}
+            sources:
+              - type: rag
+                backend: openai
+                backend_config:
+                  vector_store_id: vs_docs
+                  api_key: ${OPENAI_API_KEY}
 `
 
 func TestDecompileAcceptsTypedEnvironmentDefaults(t *testing.T) {

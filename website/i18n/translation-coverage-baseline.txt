@@ -82,7 +82,6 @@ zh-Hans	model-runtime/guides/embeddings.md
 zh-Hans	model-runtime/guides/hallucination.md
 zh-Hans	model-runtime/guides/multimodal.md
 zh-Hans	model-runtime/guides/pii.md
-zh-Hans	model-runtime/guides/rerank.md
 zh-Hans	model-runtime/guides/safety.md
 zh-Hans	model-runtime/migrate.md
 zh-Hans	model-runtime/overview.md
@@ -174,13 +173,11 @@ zh-Hans	tutorials/learning/memory-and-replay.md
 zh-Hans	tutorials/learning/overview.md
 zh-Hans	tutorials/learning/protection.md
 zh-Hans	tutorials/plugin/content-safety.md
-zh-Hans	tutorials/plugin/context-compression.md
+zh-Hans	tutorials/plugin/context.md
 zh-Hans	tutorials/plugin/fast-response.md
 zh-Hans	tutorials/plugin/header-mutation.md
-zh-Hans	tutorials/plugin/memory.md
 zh-Hans	tutorials/plugin/overview.md
 zh-Hans	tutorials/plugin/prompt-cache.md
-zh-Hans	tutorials/plugin/rag.md
 zh-Hans	tutorials/plugin/request-params.md
 zh-Hans	tutorials/plugin/response-cache.md
 zh-Hans	tutorials/plugin/response-guard.md

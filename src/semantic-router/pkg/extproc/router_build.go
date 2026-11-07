@@ -12,7 +12,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
@@ -37,7 +36,6 @@ type routerComponents struct {
 	systemOne                   *modelservice.RemoteSystemOne
 	decisionCards               map[string]modelservice.ModelCard
 	serving                     *serving.Runtime
-	rerankers                   map[config.RecipeName]modelruntime.PairScorer
 	cfg                         *config.RouterConfig
 	categoryDescriptions        []string
 	classifier                  *classification.Classifier
@@ -446,7 +444,6 @@ func (components *routerComponents) useSignals(signals *signalRuntime) {
 	components.embeddings = signals.embeddings
 	components.serviceEmbeddings = signals.serviceEmbeddings
 	components.cacheEmbeddings = signals.cacheEmbeddings
-	components.rerankers = signals.rerankers
 	components.recipeClassifiers = signals.recipeClassifiers
 	components.classifier = signals.classifier
 }
@@ -468,7 +465,7 @@ func createMemoryPersistenceRunner(cfg *config.RouterConfig, extractor *memory.M
 	// Workers and queue storage follow the memory store that was actually built:
 	// enablement alone still yields a nil extractor when the backend is
 	// unreachable, and every write would then be suppressed as "no_extractor".
-	if cfg == nil || extractor == nil || !isMemoryEnabled(cfg) {
+	if cfg == nil || extractor == nil || !cfg.UsesMemory() {
 		return nil
 	}
 	persistence := cfg.Memory.Persistence
@@ -512,7 +509,6 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		Embeddings:                  components.embeddings,
 		serviceEmbeddings:           components.serviceEmbeddings,
 		cacheEmbeddings:             components.cacheEmbeddings,
-		rerankers:                   components.rerankers,
 		decisionCards:               components.decisionCards,
 		CategoryDescriptions:        components.categoryDescriptions,
 		Classifier:                  components.classifier,

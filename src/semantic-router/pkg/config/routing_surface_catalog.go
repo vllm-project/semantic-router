@@ -20,17 +20,14 @@ const (
 	DecisionPluginResponseCache = "response_cache"
 	// DecisionPluginSemanticCache is the deprecated public spelling retained
 	// for source compatibility. Runtime config is normalized to response_cache.
-	DecisionPluginSemanticCache      = "semantic-cache"
-	DecisionPluginSystemPrompt       = "system_prompt"
-	DecisionPluginHeaderMutation     = "header_mutation"
-	DecisionPluginRouterReplay       = "router_replay"
-	DecisionPluginMemory             = "memory"
-	DecisionPluginRAG                = "rag"
-	DecisionPluginFastResponse       = "fast_response"
-	DecisionPluginRequestParams      = "request_params"
-	DecisionPluginContextCompression = "context_compression"
-	DecisionPluginPromptCache        = "prompt_cache"
-	DecisionPluginShadowDispatch     = "shadow_dispatch"
+	DecisionPluginSemanticCache  = "semantic-cache"
+	DecisionPluginSystemPrompt   = "system_prompt"
+	DecisionPluginHeaderMutation = "header_mutation"
+	DecisionPluginRouterReplay   = "router_replay"
+	DecisionPluginFastResponse   = "fast_response"
+	DecisionPluginRequestParams  = "request_params"
+	DecisionPluginPromptCache    = "prompt_cache"
+	DecisionPluginShadowDispatch = "shadow_dispatch"
 )
 
 // SignalReferenceQualifier describes how a signal can add a third component

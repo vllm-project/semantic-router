@@ -6,15 +6,16 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/pluginruntime"
 )
 
 func apiPluginRetrievalRoutes() []apiRoute {
 	return []apiRoute{
-		managedRoute(EndpointMetadata{Path: apiPluginsPath + "/rag/preview", Method: "POST", Description: "Preview configured RAG context injection using supplied_context; mode=probe retrieves from the configured backend without the RAG result cache or generation"},
+		managedRoute(EndpointMetadata{Path: apiPluginsPath + "/context/preview", Method: "POST", Description: "Preview the context plugin's rag source injection using supplied_context; mode=probe recalls from the configured backend and judges the documents, without the RAG result cache or generation"},
 			routePolicy{Permission: PermDataRead, Sensitivity: SensitivityConfig}, (*ClassificationAPIServer).handleRAGPluginPreview,
 			strictJSONBodyFor[pluginruntime.RAGPreviewRequest](), jsonResponse[pluginruntime.RAGPreviewResponse](http.StatusOK, "Recipe-bound RAG preview and explicit effects"), errorResponses(400, 404, 409, 429, 500, 503, 504),
-			pluginOperationFor("rag", "preview"), pluginOperationFor("rag", "probe")),
+			pluginOperationFor(config.DecisionPluginContext, "preview"), pluginOperationFor(config.DecisionPluginContext, "probe")),
 		managedRoute(EndpointMetadata{Path: apiPluginsPath + "/tools/preview", Method: "POST", Description: "Preview the configured tools policy; mode=probe also lets the selection ask the decision model, and never executes tools"},
 			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig}, (*ClassificationAPIServer).handleToolsPluginPreview,
 			strictJSONBodyFor[pluginruntime.ToolsPreviewRequest](), jsonResponse[pluginruntime.ToolsPreviewResponse](http.StatusOK, "Recipe-bound tool policy and selection result and explicit effects"), errorResponses(400, 404, 409, 429, 500, 503, 504),

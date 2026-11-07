@@ -235,29 +235,31 @@ func assertRouterReplayPluginRoundTrip(t *testing.T, decision config.Decision) {
 	}
 }
 
-func TestContextCompressionPluginNestedRoundTrip(t *testing.T) {
+func TestContextCompressNestedRoundTrip(t *testing.T) {
 	cfg := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
 			Decisions: []config.Decision{{
 				Name:      "compress",
 				ModelRefs: []config.ModelRef{{Model: "model"}},
 				Plugins: []config.DecisionPlugin{{
-					Type: config.DecisionPluginContextCompression,
+					Type: config.DecisionPluginContext,
 					Configuration: config.MustStructuredPayload(map[string]interface{}{
 						"enabled": true,
-						"mode":    "auto",
-						"targets": map[string]interface{}{
-							"tool_outputs": map[string]interface{}{
-								"mode":          "extractive",
-								"min_tokens":    2000,
-								"target_tokens": 1000,
+						"compress": map[string]interface{}{
+							"mode": "auto",
+							"targets": map[string]interface{}{
+								"tool_outputs": map[string]interface{}{
+									"mode":          "extractive",
+									"min_tokens":    2000,
+									"target_tokens": 1000,
+								},
+								"rag":          map[string]interface{}{"mode": "preserve"},
+								"current_user": map[string]interface{}{"mode": "truncate"},
 							},
-							"rag":          map[string]interface{}{"mode": "preserve"},
-							"current_user": map[string]interface{}{"mode": "truncate"},
-						},
-						"request_controls": map[string]interface{}{
-							"enabled": true,
-							"allowed": []string{"bypass", "target"},
+							"request_controls": map[string]interface{}{
+								"enabled": true,
+								"allowed": []string{"bypass", "target"},
+							},
 						},
 					}),
 				}},
@@ -266,24 +268,16 @@ func TestContextCompressionPluginNestedRoundTrip(t *testing.T) {
 	}
 	dslText := mustDecompileRoutingPluginConfigTest(t, cfg)
 	assertDecompiledPluginConfigContains(t, dslText, []string{
-		"PLUGIN context_compression",
+		"PLUGIN context",
 		"tool_outputs:",
 		"request_controls:",
 	})
 	compiled := mustCompileRoutingPluginConfigTest(t, dslText)
-	plugin := findDecisionPluginForTest(
-		t,
-		compiled.Decisions[0],
-		config.DecisionPluginContextCompression,
-	)
-	var pluginConfig config.ContextCompressionPluginConfig
-	if err := config.UnmarshalPluginConfig(plugin.Configuration, &pluginConfig); err != nil {
-		t.Fatalf("context_compression decode error: %v", err)
-	}
-	if pluginConfig.Targets == nil ||
-		pluginConfig.Targets.ToolOutputs.TargetTokens != 1000 ||
-		pluginConfig.Targets.CurrentUser.Mode != "truncate" {
-		t.Fatalf("context_compression targets = %#v", pluginConfig.Targets)
+	plugin := compiled.Decisions[0].GetContextConfig()
+	if plugin == nil || plugin.Compress == nil || plugin.Compress.Targets == nil ||
+		plugin.Compress.Targets.ToolOutputs.TargetTokens != 1000 ||
+		plugin.Compress.Targets.CurrentUser.Mode != "truncate" {
+		t.Fatalf("context compress = %#v", plugin)
 	}
 }
 

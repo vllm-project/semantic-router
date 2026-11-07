@@ -17,7 +17,7 @@ import (
 //  3. the global binding for its signal type;
 //  4. for a question the decision model answers, the decision model.
 //
-// Embeddings, reranking and the hazard head ask no question: they resolve
+// Embeddings and the hazard head ask no question: they resolve
 // where they are used, and an unnamed hazard part uses the pre-declared
 // hazard deployment. Deprecated fields are read as rule deployments and
 // bindings before resolution (model_resource_translation.go).
@@ -107,7 +107,7 @@ func (c *RouterConfig) ruleDeployment(consumer string) string {
 
 // ResolveTask resolves the deployment that answers consumer in this scope
 // (see the order above). ok is false when nothing answers it: an unbound
-// embedding, reranker or reask, or no decision model.
+// embedding or reask, or no decision model.
 func (c *RouterConfig) ResolveTask(consumer string) (TaskResolution, bool, error) {
 	if c == nil {
 		return TaskResolution{}, false, nil
@@ -162,15 +162,6 @@ func (c *RouterConfig) resolveTask(consumer string) (TaskResolution, bool, error
 			return TaskResolution{}, false, fmt.Errorf("%s: unknown deployment %q; %s", BindingKey(consumer), name, declaredDeployments(c.ModelDeployments))
 		}
 		return TaskResolution{Consumer: consumer, Name: name, Deployment: deployment.WithDefaults(), Binding: binding, Source: source}, true, nil
-	}
-	if consumer == RAGRerankerConsumer {
-		if rerank := c.ragRerank(); rerank != nil && rerank.Deployment != "" {
-			binding := ModelBinding{Deployment: rerank.Deployment}
-			if rerank.Layer != 0 || rerank.Dimension != 0 {
-				binding.PairScorer = &PairScorerSelection{Layer: rerank.Layer, Dimension: rerank.Dimension}
-			}
-			return pick(rerank.Deployment, binding, ResolvedByRule)
-		}
 	}
 	if name := strings.TrimSpace(c.ruleDeployment(consumer)); name != "" {
 		return pick(name, ModelBinding{Deployment: name}, ResolvedByRule)
@@ -267,8 +258,8 @@ func providerAnswers(consumer string, deployment ModelDeployment, binding ModelB
 		return builtInPurposeAnswers(name, consumer, deployment)
 	case SystemOneProvider:
 		switch {
-		case consumer == "embedding" || consumer == RAGRerankerConsumer:
-			return fmt.Errorf("%s: a systemone deployment answers questions; embeddings and reranking need a model_runtime, openai_embeddings or rerank deployment", name)
+		case consumer == "embedding":
+			return fmt.Errorf("%s: a systemone deployment answers questions; embeddings need a model_runtime or openai_embeddings deployment", name)
 		case binding.Head != "" || binding.OperatingPoint != nil:
 			return fmt.Errorf("%s: a systemone deployment answers questions and serves no classify head", name)
 		case binding.Contract != "" && binding.Contract != DecisionTaskContract && binding.Contract != RemoteClassifierContractTokenSpans && binding.Contract != RemoteClassifierContractLabelDistribution:
@@ -277,7 +268,7 @@ func providerAnswers(consumer string, deployment ModelDeployment, binding ModelB
 		return nil
 	case ClassifyProvider:
 		switch {
-		case isApplicationConsumer(consumer) || consumer == "embedding" || consumer == RAGRerankerConsumer:
+		case isApplicationConsumer(consumer) || consumer == "embedding":
 			return fmt.Errorf("%s: the classify API has no %s task; bind it to a model_runtime or systemone deployment", name, name)
 		case binding.Head != "":
 			return fmt.Errorf("%s: a remote classify deployment cannot select a local head", name)
@@ -293,14 +284,6 @@ func providerAnswers(consumer string, deployment ModelDeployment, binding ModelB
 			return nil
 		}
 		return fmt.Errorf("%s: an openai_embeddings deployment serves embeddings only", name)
-	case RerankProvider:
-		if consumer == RAGRerankerConsumer {
-			if binding.PairScorer != nil && (binding.PairScorer.Layer != 0 || binding.PairScorer.Dimension != 0) {
-				return fmt.Errorf("%s: rerank.layer and rerank.dimension select an early exit of a model_runtime reranker; a rerank deployment answers at its own depth, so remove them", name)
-			}
-			return nil
-		}
-		return fmt.Errorf("%s: a rerank deployment serves RAG reranking only", name)
 	case LegacyHTTPProvider:
 		return nil
 	}
@@ -308,10 +291,9 @@ func providerAnswers(consumer string, deployment ModelDeployment, binding ModelB
 }
 
 // builtInPurposeAnswers checks a model_runtime deployment of a built-in
-// model against what the consumer asks: an embedding or reranking model
-// answers no question, and only an embedding model serves embeddings and a
-// reranker reranks. A model the registry does not know is checked by its
-// card when the runtime serves it.
+// model against what the consumer asks: an embedding model answers no
+// question, and only an embedding model serves embeddings. A model the
+// registry does not know is checked by its card when the runtime serves it.
 func builtInPurposeAnswers(name, consumer string, deployment ModelDeployment) error {
 	spec := registeredModel(deployment.Artifact)
 	if spec == nil || !deployment.Managed() {
@@ -323,11 +305,7 @@ func builtInPurposeAnswers(name, consumer string, deployment ModelDeployment) er
 		if !embeds {
 			return fmt.Errorf("%s: deployment runs %s, a %s model that serves no embeddings; name an embedding model in embeddings.default", name, spec.RepoID, spec.Purpose)
 		}
-	case consumer == RAGRerankerConsumer:
-		if spec.Purpose != PurposeReranking {
-			return fmt.Errorf("%s: deployment runs %s, a %s model that does not rerank; name a reranker in rerank.deployment", name, spec.RepoID, spec.Purpose)
-		}
-	case embeds || spec.Purpose == PurposeReranking:
+	case embeds:
 		return fmt.Errorf("%s: deployment runs %s, a %s model that answers no question; bind a model that answers %s", name, spec.RepoID, spec.Purpose, name)
 	}
 	return nil
@@ -335,7 +313,7 @@ func builtInPurposeAnswers(name, consumer string, deployment ModelDeployment) er
 
 // scopeConsumers lists the consumers a scope's modules and rules may run.
 func (c *RouterConfig) scopeConsumers() []string {
-	consumers := append(c.implicitConsumers(), "embedding", RAGRerankerConsumer)
+	consumers := append(c.implicitConsumers(), "embedding")
 	sort.Strings(consumers)
 	return consumers
 }
@@ -377,9 +355,6 @@ func validateModelResolutionContracts(cfg *RouterConfig) error {
 		}
 	}
 	for scope, scoped := range resolved.consumerScopes() {
-		if err := validateRAGRerankDeployments(scope, scoped); err != nil {
-			return err
-		}
 		if err := validateTaskCapabilities(scope, scoped); err != nil {
 			return err
 		}
@@ -449,7 +424,7 @@ func validateMaskingSpans(scoped *RouterConfig) error {
 }
 
 // validateNonQuestionResources checks that the deployments named where
-// embeddings, reranking and the multimodal embedding are used serve them.
+// embeddings and the multimodal embedding are used serve them.
 func validateNonQuestionResources(scoped *RouterConfig) error {
 	if name := scoped.EmbeddingDeployment; name != "" {
 		deployment := scoped.ModelDeployments[name]
@@ -491,33 +466,4 @@ func modelResolutionWarnings(cfg *RouterConfig) []ConfigWarning {
 		}
 	}
 	return warnings
-}
-
-// ragRerank is the rerank block the scope's RAG plugins name a deployment
-// in; validateRAGRerankDeployments refuses a scope whose plugins disagree.
-func (c *RouterConfig) ragRerank() *RAGRerankConfig {
-	for i := range c.Decisions {
-		if rag := c.Decisions[i].GetRAGConfig(); rag != nil && rag.Enabled && rag.Rerank != nil && rag.Rerank.Deployment != "" {
-			return rag.Rerank
-		}
-	}
-	return nil
-}
-
-func validateRAGRerankDeployments(scope RecipeName, scoped *RouterConfig) error {
-	var first *RAGRerankConfig
-	for i := range scoped.Decisions {
-		rag := scoped.Decisions[i].GetRAGConfig()
-		if rag == nil || !rag.Enabled || rag.Rerank == nil || rag.Rerank.Deployment == "" {
-			continue
-		}
-		if first == nil {
-			first = rag.Rerank
-			continue
-		}
-		if rag.Rerank.Deployment != first.Deployment || rag.Rerank.Layer != first.Layer || rag.Rerank.Dimension != first.Dimension {
-			return fmt.Errorf("recipe %q: RAG plugins name different rerank deployments or exits (%q, %q); a recipe has one reranker", scope, first.Deployment, rag.Rerank.Deployment)
-		}
-	}
-	return nil
 }

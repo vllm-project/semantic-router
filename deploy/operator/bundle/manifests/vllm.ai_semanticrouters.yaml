@@ -1711,8 +1711,8 @@ spec:
                     description: |-
                       ModelDeployments contains canonical global.model_catalog.deployments.
                       The router validates provider, device, precision and task compatibility.
-                      A remote deployment (provider systemone, openai_embeddings, classify,
-                      openai_chat or rerank) takes a connection block: endpoint, model, auth,
+                      A remote deployment (provider systemone, openai_embeddings, classify or
+                      openai_chat) takes a connection block: endpoint, model, auth,
                       headers, timeout_ms, max_retries, tls, limits and capabilities. Its key
                       never goes in the resource: auth.api_key_env names a spec.env variable
                       that valueFrom.secretKeyRef fills from a Secret. The operator mounts no

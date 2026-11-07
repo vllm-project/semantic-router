@@ -21,7 +21,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/kvtransfer"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
@@ -45,8 +44,7 @@ type OpenAIRouter struct {
 	nativeExecutors map[string]*systemone.Executor
 	// signals is the signal runtime this router extracts signals with; a
 	// later generation can share it.
-	signals   *signalRuntime
-	rerankers map[config.RecipeName]modelruntime.PairScorer
+	signals *signalRuntime
 	// decisionDecider answers decision selectors; nil uses the process-wide model runtime manager.
 	decisionDecider modelservice.Decider
 	// systemOneDecider answers decision selectors on systemone deployments.
@@ -69,9 +67,6 @@ type OpenAIRouter struct {
 	kvAddressRegistryMu    sync.Mutex
 	ContextCompression     *contextcompression.Service
 	CompressionRecovery    contextcompression.RecoveryStore
-	CompressionEmbedding   embedding.Provider
-	CompressionScorer      contextcompression.RelevanceScorer
-	compressionScorers     map[string]contextcompression.RelevanceScorer
 	contextCompressionMu   sync.Mutex
 	// toolCatalogs are the catalogs the tools plugin's add mode chooses from,
 	// by tools_db_path, read when the generation was built.

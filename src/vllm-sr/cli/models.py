@@ -663,27 +663,25 @@ SemanticCachePluginConfig = ResponseCachePluginConfig
 CompressionTokenLimit = Literal["auto"] | int
 
 
-class ContextCompressionBudgetConfig(BaseModel):
-    trigger_tokens: Optional[CompressionTokenLimit] = None
-    target_tokens: Optional[CompressionTokenLimit] = None
+class ContextBudgetConfig(BaseModel):
+    """The request the context plugin's compress block produces: max_tokens
+    starts compression and is its target; auto is the model's window less
+    the reserved output."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_tokens: Optional[CompressionTokenLimit] = None
     reserve_output_tokens: Optional[CompressionTokenLimit] = None
 
     @model_validator(mode="after")
     def validate_budget(self):
-        values = (
-            self.trigger_tokens,
-            self.target_tokens,
-            self.reserve_output_tokens,
-        )
-        if any(isinstance(value, int) and value < 0 for value in values):
-            raise ValueError("compression token limits cannot be negative")
+        if isinstance(self.max_tokens, int) and self.max_tokens < 1:
+            raise ValueError("budget.max_tokens must be at least 1, or auto")
         if (
-            isinstance(self.trigger_tokens, int)
-            and isinstance(self.target_tokens, int)
-            and self.trigger_tokens > 0
-            and self.target_tokens >= self.trigger_tokens
+            isinstance(self.reserve_output_tokens, int)
+            and self.reserve_output_tokens < 0
         ):
-            raise ValueError("budget.target_tokens must be less than trigger_tokens")
+            raise ValueError("budget.reserve_output_tokens cannot be negative")
         return self
 
 
@@ -727,17 +725,6 @@ class ContextCompressionTargetsConfig(BaseModel):
     )
 
 
-class ContextCompressionScoringConfig(BaseModel):
-    method: Literal["bm25", "embedding", "hybrid"] = "bm25"
-    embedding_model_ref: Optional[str] = None
-
-    @model_validator(mode="after")
-    def validate_embedding_model(self):
-        if self.method != "bm25" and not self.embedding_model_ref:
-            raise ValueError("embedding_model_ref is required for embedding scoring")
-        return self
-
-
 class ContextCompressionRecoveryConfig(BaseModel):
     enabled: bool = False
     store: Optional[Literal["redis", "valkey", "response_cache"]] = None
@@ -760,19 +747,112 @@ class ContextCompressionRequestControlsConfig(BaseModel):
     max_target_tokens: int = Field(default=16000, ge=0)
 
 
-class ContextCompressionPluginConfig(BaseModel):
-    """Configuration for context_compression plugin."""
+class ContextCompressConfig(BaseModel):
+    """The context plugin's compress block: the request's own segments,
+    judged by its match block (relevance by default), shrink within the
+    budget."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Literal["auto", "always"] = "auto"
+    targets: Optional[ContextCompressionTargetsConfig] = None
+    match: Optional[Dict[str, Any]] = None
+    recovery: Optional[ContextCompressionRecoveryConfig] = None
+    request_controls: Optional[ContextCompressionRequestControlsConfig] = None
+    failure_mode: Literal["fail_open", "fail_closed"] = "fail_open"
+
+
+class ContextMemoryStoreConfig(BaseModel):
+    """Whether a memory source writes the turn after the response; unset
+    follows global.stores.memory.auto_store."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    auto: Optional[bool] = None
+
+
+class ContextSource(BaseModel):
+    """A source of retrieved context: a RAG backend or the user's memory,
+    each kept by its match block."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["rag", "memory"]
+    match: Optional[Dict[str, Any]] = None
+    backend: Optional[
+        Literal[
+            "vectorstore", "milvus", "qdrant", "external_api", "mcp", "openai", "hybrid"
+        ]
+    ] = None
+    backend_config: Optional[Dict[str, Any]] = None
+    max_context_length: Optional[int] = Field(default=None, ge=0)
+    on_failure: Optional[Literal["skip", "block", "warn"]] = None
+    cache_results: Optional[bool] = None
+    cache_ttl_seconds: Optional[int] = Field(default=None, ge=1)
+    store: Optional[ContextMemoryStoreConfig] = None
+    hybrid_search: Optional[bool] = None
+    hybrid_mode: Optional[Literal["weighted", "rrf"]] = None
+    reflection: Optional[Dict[str, Any]] = None
+
+    @model_validator(mode="after")
+    def validate_type_fields(self):
+        rag_fields = (
+            "backend",
+            "backend_config",
+            "max_context_length",
+            "on_failure",
+            "cache_results",
+            "cache_ttl_seconds",
+        )
+        memory_fields = ("store", "hybrid_search", "hybrid_mode", "reflection")
+        other = memory_fields if self.type == "rag" else rag_fields
+        for field in other:
+            if getattr(self, field) is not None:
+                raise ValueError(f"a {self.type} source takes no {field}")
+        if self.type == "rag" and not self.backend:
+            raise ValueError("a rag source needs a backend")
+        return self
+
+
+class ContextInjectionConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Literal["tool_role", "system_prompt"] = "tool_role"
+
+
+class ContextPluginConfig(BaseModel):
+    """Configuration for the context plugin: sources (RAG, memory) kept by
+    their match blocks, compress within the budget, and injection."""
 
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool
-    mode: Literal["auto", "always"] = "auto"
-    budget: Optional[ContextCompressionBudgetConfig] = None
-    targets: Optional[ContextCompressionTargetsConfig] = None
-    scoring: Optional[ContextCompressionScoringConfig] = None
-    recovery: Optional[ContextCompressionRecoveryConfig] = None
-    request_controls: Optional[ContextCompressionRequestControlsConfig] = None
-    failure_mode: Literal["fail_open", "fail_closed"] = "fail_open"
+    sources: Optional[List[ContextSource]] = None
+    compress: Optional[ContextCompressConfig] = None
+    budget: Optional[ContextBudgetConfig] = None
+    injection: Optional[ContextInjectionConfig] = None
+
+    @model_validator(mode="after")
+    def validate_context(self):
+        if not self.enabled:
+            return self
+        if not self.sources and self.compress is None:
+            raise ValueError(
+                "an enabled context plugin retrieves sources, compresses the request or both"
+            )
+        types = [source.type for source in self.sources or []]
+        for source_type in set(types):
+            if types.count(source_type) > 1:
+                raise ValueError(
+                    f"a context plugin has at most one {source_type} source"
+                )
+        if self.budget is not None and self.compress is None:
+            raise ValueError(
+                "budget bounds the request compress produces; add compress"
+            )
+        if self.injection is not None and not self.sources:
+            raise ValueError("injection places what the sources retrieve; add a source")
+        return self
 
 
 class PromptCachePluginConfig(BaseModel):
@@ -1078,146 +1158,6 @@ class ShadowDispatchPluginConfig(BaseModel):
         if self.enabled and not (self.model or "").strip():
             raise ValueError("shadow_dispatch model is required when enabled")
         return self
-
-
-class MemoryPluginConfig(BaseModel):
-    """Configuration for memory plugin (per-decision memory settings)."""
-
-    enabled: bool = True
-    retrieval_limit: Optional[int] = Field(
-        default=None,
-        gt=0,
-        description="Max memories to retrieve (default: use global config)",
-    )
-    similarity_threshold: Optional[float] = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description="Min similarity score (0.0-1.0, default: use global config)",
-    )
-    auto_store: Optional[bool] = Field(
-        default=None,
-        description="Auto-extract memories from conversation (default: use request config)",
-    )
-
-
-class RAGRerankConfig(BaseModel):
-    """Select the number of neural-reranked vectorstore hits to inject.
-
-    deployment names the deployment that scores the pairs, at the pair-scorer
-    exit layer and dimension select (zero: the model's full depth and width).
-    """
-
-    model_config = ConfigDict(extra="forbid")
-    top_k: Optional[int] = Field(default=None, ge=1)
-    deployment: Optional[str] = None
-    layer: int = 0
-    dimension: int = 0
-
-
-class RAGPluginConfig(BaseModel):
-    """Configuration for RAG (Retrieval-Augmented Generation) plugin.
-
-    The RAG plugin retrieves relevant context from external knowledge bases
-    and injects it into the LLM request.
-
-    Supported backends:
-    - milvus: Milvus vector database (reuses semantic cache connection)
-    - external_api: External REST API (OpenAI, Pinecone, Weaviate, Elasticsearch)
-    - mcp: MCP tool-based retrieval
-    - openai: OpenAI file_search with vector stores
-    - hybrid: Multi-backend with fallback strategy
-    """
-
-    rerank: Optional[RAGRerankConfig] = None
-
-    @model_validator(mode="after")
-    def validate_neural_rerank(self):
-        if self.enabled and self.rerank is not None:
-            if self.backend != "vectorstore":
-                raise ValueError(
-                    "Neural rerank requires the structured vectorstore backend"
-                )
-            if self.rerank.top_k is not None and self.rerank.top_k > (self.top_k or 5):
-                raise ValueError("rerank.top_k cannot exceed candidate top_k")
-        return self
-
-    # Required: Enable RAG retrieval
-    enabled: bool = Field(..., description="Enable RAG retrieval for this decision")
-
-    # Required: Backend type (milvus, external_api, mcp, openai, hybrid)
-    backend: str = Field(
-        ...,
-        description="Retrieval backend: milvus, external_api, mcp, openai, hybrid",
-    )
-
-    # Optional: Similarity threshold (0.0-1.0)
-    # Only documents with similarity >= threshold will be retrieved
-    similarity_threshold: Optional[float] = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description="Similarity threshold for retrieval (0.0-1.0)",
-    )
-
-    # Optional: Number of top-k documents to retrieve
-    top_k: Optional[int] = Field(
-        default=None,
-        ge=1,
-        description="Number of top-k documents to retrieve",
-    )
-
-    # Optional: Maximum context length (in characters)
-    max_context_length: Optional[int] = Field(
-        default=None,
-        ge=1,
-        description="Maximum context length to inject (characters)",
-    )
-
-    # Optional: Context injection mode
-    # - "tool_role": Inject as tool role messages (compatible with hallucination detection)
-    # - "system_prompt": Prepend to system prompt
-    injection_mode: Optional[Literal["tool_role", "system_prompt"]] = Field(
-        default=None,
-        description="Injection mode: tool_role (default) or system_prompt",
-    )
-
-    # Optional: Backend-specific configuration
-    # Structure depends on backend type (see Go: rag_plugin.go lines 64-174)
-    backend_config: Optional[Dict[str, Any]] = Field(
-        default=None,
-        description="Backend-specific configuration",
-    )
-
-    # Optional: Fallback behavior on retrieval failure
-    # - "skip": Continue without context (default)
-    # - "block": Return error response
-    # - "warn": Continue with warning header
-    on_failure: Optional[Literal["skip", "block", "warn"]] = Field(
-        default=None,
-        description="On failure: skip (default), block, or warn",
-    )
-
-    # Optional: Cache retrieved results
-    cache_results: Optional[bool] = Field(
-        default=None,
-        description="Cache retrieved results",
-    )
-
-    # Optional: Cache TTL (seconds)
-    cache_ttl_seconds: Optional[int] = Field(
-        default=None,
-        ge=1,
-        description="Cache TTL in seconds",
-    )
-
-    # Optional: Minimum confidence for triggering retrieval
-    min_confidence_threshold: Optional[float] = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description="Minimum confidence for triggering retrieval",
-    )
 
 
 class PluginConfig(BaseModel):

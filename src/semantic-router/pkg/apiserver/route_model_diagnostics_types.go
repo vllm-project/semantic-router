@@ -15,14 +15,6 @@ type ModelTextDiagnosticRequest struct {
 	ModelDiagnosticTarget
 	Text string `json:"text"`
 }
-type ModelRerankPair struct {
-	Query    string `json:"query"`
-	Document string `json:"document"`
-}
-type ModelRerankDiagnosticRequest struct {
-	ModelDiagnosticTarget
-	Pairs []ModelRerankPair `json:"pairs"`
-}
 type ModelDiagnosticWindow struct {
 	Size    int `json:"size"`
 	Overlap int `json:"overlap"`
@@ -117,11 +109,6 @@ type ModelDiagnosticTokensResult struct {
 type ModelDiagnosticEmbeddingResult struct {
 	Embedding []float32                  `json:"embedding"`
 	Input     *ModelDiagnosticInputUsage `json:"input,omitempty"`
-}
-type ModelDiagnosticRerankResult struct {
-	Scores    []float32                    `json:"scores"`
-	ScoreType string                       `json:"score_type"`
-	Inputs    []*ModelDiagnosticInputUsage `json:"inputs"`
 }
 
 func diagnosticBinding(info binding.PreparedBinding) ModelDiagnosticBinding {

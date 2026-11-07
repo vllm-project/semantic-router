@@ -75,7 +75,7 @@ routing:
 
 规则添加的警告码有 `hallucination`（回答无法检查时为 `unverified_factual`）、`response_jailbreak`，其他规则为 `response_guard`。被拦截的回答会替换为一条说明发现了什么的消息，而不会说明某项检查失败。
 
-依据上下文是 [RAG 插件](./rag)检索到的文档，以及请求自身的工具结果。
+依据上下文是 [context 插件](./context.md)检索到的文档，以及请求自身的工具结果。
 
 流式回答只有在字节已发给客户端后才完整存在，因此它的规则会被读取，并以 `enforcement: not_enforced_streaming` 记录在 [Router Replay](./router-replay) 中，但不会执行任何动作。规则必须拦截时，请使用非流式响应。
 

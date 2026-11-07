@@ -254,7 +254,7 @@ func TestRoutingTraceRAGErrorOmitsPrivateCause(t *testing.T) {
 	_, span := tracing.StartSpan(t.Context(), tracing.SpanRAGRetrieval)
 	secret := "private-provider?token=fixture-secret&prompt=private-input"
 	ctx := &RequestContext{}
-	if err := handleRAGRetrievalError(ctx, span, &config.RAGPluginConfig{Backend: "external_api", OnFailure: "skip"}, "route", errors.New(secret), .1); err != nil {
+	if err := handleRAGRetrievalError(ctx, span, &config.ContextSource{Type: config.ContextSourceRAG, Backend: "external_api", OnFailure: config.RAGOnFailureSkip}, errors.New(secret), .1); err != nil {
 		t.Fatal(err)
 	}
 	span.End()

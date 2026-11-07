@@ -30,11 +30,15 @@ func TestRAGPluginPreviewAndProbePreserveResultCache(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"object": "list", "data": []map[string]any{{"content": "retrieved evidence", "filename": "doc.txt"}}})
 	}))
 	defer backend.Close()
-	policy := &config.RAGPluginConfig{
-		Enabled: true, Backend: "openai", InjectionMode: "system_prompt", CacheResults: true,
+	policy := &config.ContextSource{
+		Type: config.ContextSourceRAG, Backend: "openai", CacheResults: true,
 		BackendConfig: config.MustStructuredPayload(config.OpenAIRAGConfig{BaseURL: backend.URL, VectorStoreID: "vs-preview"}),
+		Match:         &config.MatchConfig{Recall: &config.MatchRecall{TopK: 5}},
 	}
-	router := retrievalPreviewRouter("rag", policy)
+	router := retrievalPreviewRouter(config.DecisionPluginContext, config.ContextPluginConfig{
+		Enabled: true, Sources: []config.ContextSource{*policy},
+		Injection: &config.ContextInjectionConfig{Mode: config.ContextInjectionSystemPrompt},
+	})
 	binding := pluginruntime.Binding{Recipe: config.DefaultRecipeName, Decision: "selected"}
 	body := json.RawMessage(`{"model":"sample","messages":[{"role":"user","content":"preview-cache-isolation"}]}`)
 	request := pluginruntime.RAGPreviewRequest{Binding: binding, RequestBody: body, SuppliedContext: "offline evidence"}

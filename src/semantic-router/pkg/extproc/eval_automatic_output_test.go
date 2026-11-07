@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -250,8 +251,8 @@ func TestNativePreviewRejectsUnprojectedDynamicRequestsBeforeRender(t *testing.T
 		value        map[string]any
 		mutate       func(*RequestContext)
 	}{
-		{name: "rag", plugin: "rag", value: map[string]any{"enabled": true}},
-		{name: "memory", plugin: "memory", value: map[string]any{"enabled": true}},
+		{name: "rag", plugin: config.DecisionPluginContext, value: map[string]any{"enabled": true, "sources": []any{map[string]any{"type": "rag", "backend": "vectorstore"}}}},
+		{name: "memory", plugin: config.DecisionPluginContext, value: map[string]any{"enabled": true, "sources": []any{map[string]any{"type": "memory"}}}},
 		{name: "tool-selection", plugin: "tools", value: map[string]any{"enabled": true, "select": map[string]any{"mode": "filter"}}, mutate: func(ctx *RequestContext) { ctx.SemanticRequest.ToolChoice.Mode = llmprotocol.ToolChoiceAuto }},
 		{name: "filtered-tools", plugin: "tools", value: map[string]any{"enabled": true, "policy": map[string]any{"mode": "filtered", "allow_tools": []string{"lookup"}}}},
 		{name: "history", mutate: func(ctx *RequestContext) {
@@ -266,9 +267,20 @@ func TestNativePreviewRejectsUnprojectedDynamicRequestsBeforeRender(t *testing.T
 			calls := 0
 			r, ctx := automaticFixture(t, "hello", renderMock(t, &calls, 0, 0))
 			if tt.plugin != "" {
-				payload, err := config.NewStructuredPayload(tt.value)
+				value := maps.Clone(tt.value)
+				existing := ctx.VSRSelectedDecision.GetPlugin(tt.plugin)
+				if existing != nil {
+					value = map[string]any{}
+					require.NoError(t, config.UnmarshalPluginConfig(existing.Configuration, &value))
+					maps.Copy(value, tt.value)
+				}
+				payload, err := config.NewStructuredPayload(value)
 				require.NoError(t, err)
-				ctx.VSRSelectedDecision.Plugins = append(ctx.VSRSelectedDecision.Plugins, config.DecisionPlugin{Type: tt.plugin, Configuration: payload})
+				if existing != nil {
+					existing.Configuration = payload
+				} else {
+					ctx.VSRSelectedDecision.Plugins = append(ctx.VSRSelectedDecision.Plugins, config.DecisionPlugin{Type: tt.plugin, Configuration: payload})
+				}
 			}
 			if tt.mutate != nil {
 				tt.mutate(ctx)

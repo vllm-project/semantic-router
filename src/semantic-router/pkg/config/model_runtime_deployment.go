@@ -227,12 +227,9 @@ func TaskConsumerInUse(scoped *RouterConfig, scope RecipeName, name string) bool
 		primary := services.primaryEmbeddingModel()
 		return EmbeddingModelsNeeded(services, primary, true)[primary]
 	}
-	switch name {
-	case "embedding":
+	if name == "embedding" {
 		primary := scoped.primaryEmbeddingModel()
 		return EmbeddingModelsNeeded(scoped, primary, false)[primary]
-	case RAGRerankerConsumer:
-		return scoped.NeedsRAGReranker()
 	}
 	return false
 }

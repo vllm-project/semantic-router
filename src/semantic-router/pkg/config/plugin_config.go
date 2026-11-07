@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -94,87 +93,6 @@ func (c *ResponseCachePluginConfig) EffectiveRequestControls() ResponseCacheRequ
 		Enabled: c.AllowRequestControls,
 		Header:  c.ControlHeader,
 	}
-}
-
-// ContextCompressionPluginConfig controls route-local provider-bound context compression.
-type ContextCompressionPluginConfig struct {
-	Enabled         bool                                     `json:"enabled" yaml:"enabled"`
-	Mode            string                                   `json:"mode,omitempty" yaml:"mode,omitempty"`
-	Budget          *ContextCompressionBudgetConfig          `json:"budget,omitempty" yaml:"budget,omitempty"`
-	Targets         *ContextCompressionTargetsConfig         `json:"targets,omitempty" yaml:"targets,omitempty"`
-	Scoring         *ContextCompressionScoringConfig         `json:"scoring,omitempty" yaml:"scoring,omitempty"`
-	Recovery        *ContextCompressionRecoveryConfig        `json:"recovery,omitempty" yaml:"recovery,omitempty"`
-	RequestControls *ContextCompressionRequestControlsConfig `json:"request_controls,omitempty" yaml:"request_controls,omitempty"`
-	FailureMode     string                                   `json:"failure_mode,omitempty" yaml:"failure_mode,omitempty"`
-}
-
-func (c *ContextCompressionPluginConfig) EffectiveMode() string {
-	if c == nil || strings.TrimSpace(c.Mode) == "" {
-		return ContextCompressionModeAuto
-	}
-	return strings.TrimSpace(c.Mode)
-}
-
-func (c *ContextCompressionPluginConfig) EffectiveToolOutputTarget() ContextCompressionTargetConfig {
-	result := ContextCompressionTargetConfig{
-		Mode:         ContextCompressionTargetExtractive,
-		MinTokens:    2000,
-		TargetTokens: 1000,
-	}
-	if c == nil {
-		return result
-	}
-	if c.Targets != nil {
-		target := c.Targets.ToolOutputs
-		if strings.TrimSpace(target.Mode) != "" {
-			result.Mode = strings.TrimSpace(target.Mode)
-		}
-		if target.MinTokens != 0 {
-			result.MinTokens = target.MinTokens
-		}
-		if target.TargetTokens != 0 {
-			result.TargetTokens = target.TargetTokens
-		}
-	}
-	return result
-}
-
-func (c *ContextCompressionPluginConfig) EffectiveTargetMode(
-	target ContextCompressionTargetConfig,
-) string {
-	if strings.TrimSpace(target.Mode) == "" {
-		return ContextCompressionTargetPreserve
-	}
-	return strings.TrimSpace(target.Mode)
-}
-
-func (c *ContextCompressionPluginConfig) EffectiveScoring() ContextCompressionScoringConfig {
-	if c == nil || c.Scoring == nil {
-		return ContextCompressionScoringConfig{Method: ContextCompressionScoringBM25}
-	}
-	result := *c.Scoring
-	if strings.TrimSpace(result.Method) == "" {
-		result.Method = ContextCompressionScoringBM25
-	}
-	return result
-}
-
-func (c *ContextCompressionPluginConfig) EffectiveFailureMode() string {
-	if c == nil || strings.TrimSpace(c.FailureMode) == "" {
-		return ContextCompressionFailureOpen
-	}
-	return strings.TrimSpace(c.FailureMode)
-}
-
-// MemoryPluginConfig is per-decision memory config (overrides global MemoryConfig).
-type MemoryPluginConfig struct {
-	Enabled             bool                    `json:"enabled" yaml:"enabled"`
-	RetrievalLimit      *int                    `json:"retrieval_limit,omitempty" yaml:"retrieval_limit,omitempty"`
-	SimilarityThreshold *float32                `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"`
-	AutoStore           *bool                   `json:"auto_store,omitempty" yaml:"auto_store,omitempty"`
-	HybridSearch        bool                    `json:"hybrid_search,omitempty" yaml:"hybrid_search,omitempty"`
-	HybridMode          string                  `json:"hybrid_mode,omitempty" yaml:"hybrid_mode,omitempty"`
-	Reflection          *MemoryReflectionConfig `json:"reflection,omitempty" yaml:"reflection,omitempty"`
 }
 
 // FastResponsePluginConfig represents configuration for fast_response plugin.
@@ -360,12 +278,6 @@ func (d *Decision) GetSemanticCacheConfig() *SemanticCachePluginConfig {
 	return d.GetResponseCacheConfig()
 }
 
-// GetContextCompressionConfig returns route-local tool-output compression settings.
-func (d *Decision) GetContextCompressionConfig() *ContextCompressionPluginConfig {
-	result := &ContextCompressionPluginConfig{}
-	return decodeDecisionPlugin(d, "context_compression", result)
-}
-
 // GetSystemPromptConfig returns the system_prompt plugin configuration.
 func (d *Decision) GetSystemPromptConfig() *SystemPromptPluginConfig {
 	result := &SystemPromptPluginConfig{}
@@ -390,12 +302,6 @@ func (d *Decision) GetShadowDispatchConfig() *ShadowDispatchPluginConfig {
 	return decodeDecisionPlugin(d, DecisionPluginShadowDispatch, result)
 }
 
-// GetMemoryConfig returns the memory plugin config, or nil to use global config.
-func (d *Decision) GetMemoryConfig() *MemoryPluginConfig {
-	result := &MemoryPluginConfig{}
-	return decodeDecisionPlugin(d, "memory", result)
-}
-
 // GetFastResponseConfig returns the fast_response plugin configuration.
 func (d *Decision) GetFastResponseConfig() *FastResponsePluginConfig {
 	result := &FastResponsePluginConfig{}
@@ -406,40 +312,6 @@ func (d *Decision) GetFastResponseConfig() *FastResponsePluginConfig {
 func (d *Decision) GetRequestParamsConfig() *RequestParamsPluginConfig {
 	result := &RequestParamsPluginConfig{}
 	return decodeDecisionPlugin(d, "request_params", result)
-}
-
-// IsRAGEnabledForDecision returns whether RAG is enabled for a specific decision.
-// Checks the per-decision RAG plugin config (enabled: true).
-func (c *RouterConfig) IsRAGEnabledForDecision(decisionName string) bool {
-	decision := c.GetDecisionByName(decisionName)
-	if decision == nil {
-		return false
-	}
-	ragConfig := decision.GetRAGConfig()
-	return ragConfig != nil && ragConfig.Enabled
-}
-
-// IsMemoryEnabledForDecision returns whether memory is enabled for a specific decision.
-// A decision has memory enabled if:
-//   - It has a per-decision memory plugin with enabled: true, OR
-//   - Global memory is enabled and the decision does NOT have a per-decision
-//     memory plugin that explicitly disables it.
-func (c *RouterConfig) IsMemoryEnabledForDecision(decisionName string) bool {
-	decision := c.GetDecisionByName(decisionName)
-	if decision == nil {
-		return c.Memory.Enabled
-	}
-	memConfig := decision.GetMemoryConfig()
-	if memConfig != nil {
-		return memConfig.Enabled
-	}
-	return c.Memory.Enabled
-}
-
-// HasPersonalizationPlugins returns true if the decision has RAG or memory
-// enabled, meaning cached responses would miss personalized context.
-func (c *RouterConfig) HasPersonalizationPlugins(decisionName string) bool {
-	return c.IsRAGEnabledForDecision(decisionName) || c.IsMemoryEnabledForDecision(decisionName)
 }
 
 func decodeDecisionPlugin[T any](d *Decision, pluginType string, result *T) *T {

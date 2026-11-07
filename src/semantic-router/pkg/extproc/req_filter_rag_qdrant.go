@@ -3,10 +3,10 @@ package extproc
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/match"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -18,72 +18,40 @@ func (r *OpenAIRouter) qdrantCacheConn(reuse bool) *cache.QdrantCache {
 	return qc
 }
 
-func (r *OpenAIRouter) retrieveFromQdrant(traceCtx context.Context, ctx *RequestContext, ragConfig *config.RAGPluginConfig) (string, error) {
-	qdrantConfig, err := ragConfig.QdrantBackendConfig()
+// recallFromQdrant recalls documents from a Qdrant collection over the
+// response cache's connection.
+func (r *OpenAIRouter) recallFromQdrant(traceCtx context.Context, ctx *RequestContext, source *config.ContextSource, query string, recall config.MatchRecall) ([]match.Scored, error) {
+	qdrantConfig, err := source.QdrantBackendConfig()
 	if err != nil {
-		return "", fmt.Errorf("invalid Qdrant RAG config: %w", err)
+		return nil, fmt.Errorf("invalid Qdrant RAG config: %w", err)
 	}
-
 	qdrantCache := r.qdrantCacheConn(qdrantConfig.ReuseCacheConnection)
 	if qdrantCache == nil {
-		return "", fmt.Errorf("qdrant connection not available (reuse_cache_connection=%v)", qdrantConfig.ReuseCacheConnection)
+		return nil, fmt.Errorf("qdrant connection not available (reuse_cache_connection=%v)", qdrantConfig.ReuseCacheConnection)
 	}
-
-	query := ctx.UserContent
-	if query == "" {
-		return "", fmt.Errorf("user content is empty")
+	if qdrantConfig.Collection == "" {
+		return nil, fmt.Errorf("qdrant collection name is required")
 	}
-
-	collectionName := qdrantConfig.Collection
-	if collectionName == "" {
-		return "", fmt.Errorf("qdrant collection name is required")
-	}
-
 	contentField := qdrantConfig.ContentField
 	if contentField == "" {
 		contentField = "content"
 	}
-
-	threshold := float32(0.7)
-	if ragConfig.SimilarityThreshold != nil {
-		threshold = *ragConfig.SimilarityThreshold
-	}
-
-	topK := 5
-	if ragConfig.TopK != nil {
-		topK = *ragConfig.TopK
-	}
-
 	queryEmbedding, err := r.ragQueryEmbedding(traceCtx, query, ctx)
 	if err != nil {
 		logging.Errorf("Failed to generate embedding for Qdrant RAG query: %v", err)
-		return "", fmt.Errorf("failed to generate embedding")
+		return nil, fmt.Errorf("failed to generate embedding")
 	}
-
 	contextParts, scores, err := qdrantCache.SearchCollection(
 		traceCtx,
-		collectionName,
+		qdrantConfig.Collection,
 		queryEmbedding,
-		threshold,
-		topK,
+		recallThreshold(recall),
+		recall.TopK,
 		contentField,
 	)
 	if err != nil {
-		return "", fmt.Errorf("qdrant search failed: %w", err)
+		return nil, fmt.Errorf("qdrant search failed: %w", err)
 	}
-
-	if len(contextParts) == 0 {
-		return "", fmt.Errorf("no results above similarity threshold %.3f", threshold)
-	}
-
-	bestScore := float32(0.0)
-	if len(scores) > 0 {
-		bestScore = scores[0]
-		ctx.RAGSimilarityScore = bestScore
-	}
-
-	logging.Infof("Retrieved %d documents from Qdrant (similarity: %.3f, collection: %s)",
-		len(contextParts), bestScore, collectionName)
-
-	return strings.Join(contextParts, "\n\n---\n\n"), nil
+	logging.Infof("Recalled %d documents from Qdrant (collection: %s)", len(contextParts), qdrantConfig.Collection)
+	return scoredDocuments(contextParts, float64Scores(scores)), nil
 }

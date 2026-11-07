@@ -27,13 +27,6 @@ type values struct {
 						Deployment string `yaml:"deployment"`
 					} `yaml:"systemone"`
 				} `yaml:"algorithm"`
-				Plugins []struct {
-					Configuration struct {
-						Rerank *struct {
-							Deployment string `yaml:"deployment"`
-						} `yaml:"rerank"`
-					} `yaml:"configuration"`
-				} `yaml:"plugins"`
 			} `yaml:"decisions"`
 		} `yaml:"routing"`
 		Global struct {
@@ -102,7 +95,7 @@ func TestProfileRunsManagedAndAttachedRuntimesOnItsOwnFixtures(t *testing.T) {
 	// device: the lifecycle case checks independent workers, including auto
 	// resolving to CPU on a node without an accelerator.
 	managed := map[string]struct{ device string }{
-		"decision-fixture": {"cpu"}, "vela-embedding": {"auto"}, "vela-reranker": {"cpu"},
+		"decision-fixture": {"cpu"}, "vela-embedding": {"auto"},
 	}
 	for name, want := range managed {
 		deployment, ok := deployments[name]
@@ -158,11 +151,6 @@ func TestProfileRunsManagedAndAttachedRuntimesOnItsOwnFixtures(t *testing.T) {
 	for _, decision := range profile.Config.Routing.Decisions {
 		if decision.Algorithm != nil && decision.Algorithm.SystemOne != nil {
 			used[decision.Algorithm.SystemOne.Deployment] = true
-		}
-		for _, plugin := range decision.Plugins {
-			if plugin.Configuration.Rerank != nil {
-				used[plugin.Configuration.Rerank.Deployment] = true
-			}
 		}
 	}
 	delete(used, "")

@@ -1,0 +1,1 @@
+routing.decisions[docs].plugins[1]: removed_plugin_type: plugin rag is removed; run `vllm-sr config migrate` (a rag source of the decision's context plugin)

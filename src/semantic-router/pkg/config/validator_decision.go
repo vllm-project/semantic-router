@@ -337,98 +337,41 @@ func validateOneDecisionPluginContracts(
 		if err != nil {
 			return err
 		}
-		if tools, ok := payload.(*ToolsPluginConfig); ok {
-			path := cfg.ScopePath(fmt.Sprintf("decisions[%s].plugins[%d].configuration", decision.Name, index))
-			if err := validateToolsPlugin(cfg, path, tools); err != nil {
-				return err
-			}
+		path := cfg.ScopePath(fmt.Sprintf("decisions[%s].plugins[%d].configuration", decision.Name, index))
+		switch typed := payload.(type) {
+		case *ToolsPluginConfig:
+			err = validateToolsPlugin(cfg, path, typed)
+		case *ContextPluginConfig:
+			err = validateContextPlugin(cfg, path, typed)
+		}
+		if err != nil {
+			return err
 		}
 	}
 	if err := validateDecisionShadowDispatchPlugin(cfg, decision); err != nil {
 		return err
 	}
-	return validateDecisionRAGAndMemoryPlugins(cfg, decision)
-}
-
-// validateDecisionRAGAndMemoryPlugins validates RAG config and warns about
-// cache + personalization conflicts for a single decision.
-func validateDecisionRAGAndMemoryPlugins(cfg *RouterConfig, decision *Decision) error {
-	ragCfg := decision.GetRAGConfig()
-	if ragCfg != nil {
-		if err := ragCfg.Validate(); err != nil {
-			return fmt.Errorf("decision '%s': RAG plugin: %w", decision.Name, err)
-		}
-		if ragCfg.Enabled && ragCfg.Rerank != nil && ragCfg.Rerank.Deployment == "" {
-			if _, ok := cfg.ModelBindings[RAGRerankerConsumer]; !ok {
-				return fmt.Errorf("decision %q: rerank names no deployment; set rerank.deployment to the reranker", decision.Name)
-			}
-		}
-	}
-
-	cacheCfg := decision.GetResponseCacheConfig()
-	memCfg := decision.GetMemoryConfig()
-	cacheActive := cacheCfg != nil && cacheCfg.Enabled
-	ragActive := ragCfg != nil && ragCfg.Enabled
-	memActive := memCfg != nil && memCfg.Enabled
-	if !memActive && cfg.Memory.Enabled {
-		memActive = memCfg == nil
-	}
-	if cacheActive && (ragActive || memActive) {
-		logging.Warnf("Decision '%s': response_cache is enabled alongside %s. "+
-			"Cache reads will be automatically bypassed to preserve personalized responses. "+
-			"Cache writes still occur for observability. Remove the cache plugin if this is intentional.",
-			decision.Name, cachePersonalizationConflictDescription(ragActive, memActive))
-	}
-	return validateDecisionContextCompressionRecovery(cfg, decision)
-}
-
-func validateDecisionContextCompressionRecovery(
-	cfg *RouterConfig,
-	decision *Decision,
-) error {
-	compression := decision.GetContextCompressionConfig()
-	if compression == nil ||
-		compression.Recovery == nil ||
-		!compression.Recovery.Enabled {
-		return nil
-	}
-	store := strings.TrimSpace(compression.Recovery.Store)
-	if store == "response_cache" {
-		store = strings.TrimSpace(cfg.SemanticCache.BackendType)
-	}
-	switch store {
-	case "redis":
-		if cfg.SemanticCache.Redis == nil {
-			return fmt.Errorf(
-				"decision %q: context_compression recovery requires response_cache.redis configuration",
-				decision.Name,
-			)
-		}
-	case "valkey":
-		if cfg.SemanticCache.Valkey == nil {
-			return fmt.Errorf(
-				"decision %q: context_compression recovery requires response_cache.valkey configuration",
-				decision.Name,
-			)
-		}
-	default:
-		return fmt.Errorf(
-			"decision %q: context_compression recovery requires a Redis or Valkey shared store",
-			decision.Name,
-		)
-	}
+	warnCachedPersonalization(cfg, decision)
 	return nil
 }
 
-func cachePersonalizationConflictDescription(ragActive, memActive bool) string {
-	switch {
-	case ragActive && memActive:
-		return "RAG and memory plugins"
-	case ragActive:
-		return "RAG plugin"
-	default:
-		return "memory plugin"
+// warnCachedPersonalization warns that a decision's response cache is read
+// past: a cached response would miss the documents and memories its context
+// retrieves.
+func warnCachedPersonalization(cfg *RouterConfig, decision *Decision) {
+	cacheCfg := decision.GetResponseCacheConfig()
+	plugin := cfg.ContextPlugin(decision)
+	if cacheCfg == nil || !cacheCfg.Enabled || plugin == nil || len(plugin.Sources) == 0 {
+		return
 	}
+	sources := make([]string, len(plugin.Sources))
+	for index, source := range plugin.Sources {
+		sources[index] = source.Type
+	}
+	logging.Warnf("Decision '%s': response_cache is enabled alongside the context plugin's %s sources. "+
+		"Cache reads will be automatically bypassed to preserve personalized responses. "+
+		"Cache writes still occur for observability. Remove the cache plugin if this is intentional.",
+		decision.Name, strings.Join(sources, " and "))
 }
 
 func validateDecisionAlgorithmConfig(decisionName string, modelRefs []ModelRef, algorithm *AlgorithmConfig) error {

@@ -34,8 +34,8 @@ var allSignals = []string{
 
 // docExampleResolutions is what each documented example resolves to: an
 // application signal type, a rule (<type>.<rule>, systemone.<rule>),
-// selector.<decision>, embedding, multimodal or rerank, optionally prefixed
-// with recipe:<name>/, to the deployment that answers it. "*" sets every
+// selector.<decision>, embedding or multimodal, optionally prefixed with
+// recipe:<name>/, to the deployment that answers it. "*" sets every
 // signal in allSignals.
 var docExampleResolutions = map[string]map[string]string{
 	"s1-defaults":         {"*": "primary", "embedding": "vela-embedding", "multimodal": "omni-nano"},
@@ -50,7 +50,6 @@ var docExampleResolutions = map[string]map[string]string{
 	},
 	"field-reference":      {"*": "primary", "pii": "primary", "embedding": "vela-embedding", "multimodal": "omni-nano"},
 	"r1-remote-embedding":  {"embedding": "remote-embed", "*": "primary"},
-	"r2-attached-reranker": {"rerank": "document-ranker"},
 	"r3-remote-judge":      {"jailbreak": "d3-judge", "hallucination": "d3-judge", "domain": "primary"},
 	"r4-systemone-gateway": {"*": "d3-gateway"},
 	"r5-attached-runtime":  {"*": "decision-kai"},
@@ -155,8 +154,6 @@ func resolveDocKey(cfg *RouterConfig, key string) string {
 			return "error: " + err.Error()
 		}
 		return name
-	case key == "rerank":
-		key = RAGRerankerConsumer
 	case strings.HasPrefix(key, "systemone."):
 		for _, rule := range scoped.SystemOneRules {
 			if "systemone."+rule.Name == key {
@@ -317,7 +314,7 @@ func TestModelResourceMigrationPairsResolveToTheSameDeployments(t *testing.T) {
 			if warnings := warningCodes(current)[warningDeprecatedModelField]; warnings > 0 {
 				t.Errorf("the new form writes %d deprecated fields: %+v", warnings, Warnings(current))
 			}
-			keys := append([]string{"domain", "jailbreak", "pii", "fact_check", "user_feedback", "hallucination", "embedding", "multimodal", "rerank"}, ruleKeys(old)...)
+			keys := append([]string{"domain", "jailbreak", "pii", "fact_check", "user_feedback", "hallucination", "embedding", "multimodal"}, ruleKeys(old)...)
 			keys = append(keys, ruleKeys(current)...)
 			was, now := effectiveDeployments(old, keys), effectiveDeployments(current, keys)
 			for _, key := range sortedStringKeys(was) {

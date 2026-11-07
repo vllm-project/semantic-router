@@ -93,31 +93,31 @@ type QdrantRAGConfig struct {
 	ContentField         string `json:"content_field,omitempty" yaml:"content_field,omitempty"`
 }
 
-func (c *RAGPluginConfig) MilvusBackendConfig() (*MilvusRAGConfig, error) {
+func (c *ContextSource) MilvusBackendConfig() (*MilvusRAGConfig, error) {
 	return decodeRAGBackendConfig[MilvusRAGConfig](c, "milvus")
 }
 
-func (c *RAGPluginConfig) QdrantBackendConfig() (*QdrantRAGConfig, error) {
+func (c *ContextSource) QdrantBackendConfig() (*QdrantRAGConfig, error) {
 	return decodeRAGBackendConfig[QdrantRAGConfig](c, "qdrant")
 }
 
-func (c *RAGPluginConfig) ExternalAPIBackendConfig() (*ExternalAPIRAGConfig, error) {
+func (c *ContextSource) ExternalAPIBackendConfig() (*ExternalAPIRAGConfig, error) {
 	return decodeRAGBackendConfig[ExternalAPIRAGConfig](c, "external_api")
 }
 
-func (c *RAGPluginConfig) MCPBackendConfig() (*MCPRAGConfig, error) {
+func (c *ContextSource) MCPBackendConfig() (*MCPRAGConfig, error) {
 	return decodeRAGBackendConfig[MCPRAGConfig](c, "mcp")
 }
 
-func (c *RAGPluginConfig) OpenAIBackendConfig() (*OpenAIRAGConfig, error) {
+func (c *ContextSource) OpenAIBackendConfig() (*OpenAIRAGConfig, error) {
 	return decodeRAGBackendConfig[OpenAIRAGConfig](c, "openai")
 }
 
-func (c *RAGPluginConfig) VectorStoreBackendConfig() (*VectorStoreRAGConfig, error) {
+func (c *ContextSource) VectorStoreBackendConfig() (*VectorStoreRAGConfig, error) {
 	return decodeRAGBackendConfig[VectorStoreRAGConfig](c, "vectorstore")
 }
 
-func (c *RAGPluginConfig) HybridBackendConfig() (*HybridRAGConfig, error) {
+func (c *ContextSource) HybridBackendConfig() (*HybridRAGConfig, error) {
 	return decodeRAGBackendConfig[HybridRAGConfig](c, "hybrid")
 }
 
@@ -135,9 +135,9 @@ func (c *OpenAIRAGConfig) FilterMap() (map[string]interface{}, error) {
 	return c.Filter.AsStringMap()
 }
 
-func decodeRAGBackendConfig[T any](cfg *RAGPluginConfig, expectedBackend string) (*T, error) {
+func decodeRAGBackendConfig[T any](cfg *ContextSource, expectedBackend string) (*T, error) {
 	if cfg == nil {
-		return nil, fmt.Errorf("RAG config is nil")
+		return nil, fmt.Errorf("rag source is nil")
 	}
 	if cfg.Backend != expectedBackend {
 		return nil, fmt.Errorf("expected RAG backend %q, got %q", expectedBackend, cfg.Backend)

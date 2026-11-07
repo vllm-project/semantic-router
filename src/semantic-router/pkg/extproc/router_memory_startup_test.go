@@ -8,11 +8,11 @@ import (
 
 func TestMemoryStartupRespectsDisabledDecisionPlugins(t *testing.T) {
 	plugin := func(enabled bool) config.Decision {
-		payload, err := config.NewStructuredPayload(config.MemoryPluginConfig{Enabled: enabled})
+		payload, err := config.NewStructuredPayload(config.ContextPluginConfig{Enabled: enabled, Sources: []config.ContextSource{{Type: config.ContextSourceMemory}}})
 		if err != nil {
 			t.Fatal(err)
 		}
-		return config.Decision{Name: "private", Plugins: []config.DecisionPlugin{{Type: config.DecisionPluginMemory, Configuration: payload}}}
+		return config.Decision{Name: "private", Plugins: []config.DecisionPlugin{{Type: config.DecisionPluginContext, Configuration: payload}}}
 	}
 	tests := []struct {
 		name      string
@@ -38,7 +38,7 @@ func TestMemoryStartupRespectsDisabledDecisionPlugins(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := &config.RouterConfig{Memory: config.MemoryConfig{Enabled: tc.global}, Recipes: tc.recipes}
 			cfg.Decisions = tc.decisions
-			if got := isMemoryEnabled(cfg); got != tc.want {
+			if got := cfg.UsesMemory(); got != tc.want {
 				t.Fatalf("backend initialization = %v, want %v", got, tc.want)
 			}
 		})

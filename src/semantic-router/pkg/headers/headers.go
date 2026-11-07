@@ -65,8 +65,8 @@ const (
 	// request controls; request_controls.header names another.
 	VSRCacheControl = "x-vsr-cache-control"
 
-	// VSRCompressionControl is the default header of the context_compression
-	// plugin's request controls; request_controls.header names another.
+	// VSRCompressionControl is the default header of the context plugin's
+	// compress request controls; request_controls.header names another.
 	VSRCompressionControl = "x-vsr-compression-control"
 )
 

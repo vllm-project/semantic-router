@@ -13,16 +13,12 @@ export function getCuratedPluginFieldSchema(pluginType: string): FieldSchema[] {
   const capabilityFields = resolveCapabilityPluginFieldSchema(pluginType)
   if (capabilityFields) return capabilityFields
   switch (pluginType) {
-    case 'memory':
-      return getMemoryPluginFieldSchema()
     case 'system_prompt':
       return getSystemPromptPluginFieldSchema()
     case 'response_guard':
       return getResponseGuardPluginFieldSchema()
     case 'router_replay':
       return getRouterReplayPluginFieldSchema()
-    case 'rag':
-      return getRAGPluginFieldSchema()
     case 'header_mutation':
       return getHeaderMutationPluginFieldSchema()
     case 'fast_response':
@@ -34,31 +30,6 @@ export function getCuratedPluginFieldSchema(pluginType: string): FieldSchema[] {
     default:
       return [{ key: 'enabled', label: 'Enabled', type: 'boolean' }]
   }
-}
-
-function getMemoryPluginFieldSchema(): FieldSchema[] {
-  return [
-    { key: 'enabled', label: 'Enabled', type: 'boolean' },
-    {
-      key: 'retrieval_limit',
-      label: 'Retrieval Limit',
-      type: 'number',
-      placeholder: '5',
-      description: 'Max memories to retrieve',
-    },
-    {
-      key: 'similarity_threshold',
-      label: 'Similarity Threshold',
-      type: 'number',
-      placeholder: '0.7',
-    },
-    {
-      key: 'auto_store',
-      label: 'Auto Store',
-      type: 'boolean',
-      description: 'Automatically store conversation turns',
-    },
-  ]
 }
 
 function getSystemPromptPluginFieldSchema(): FieldSchema[] {
@@ -143,45 +114,6 @@ function getRouterReplayPluginFieldSchema(): FieldSchema[] {
       description: 'Store client tool-result text; requires personal data capture',
     },
     { key: 'max_body_bytes', label: 'Max Body Bytes', type: 'number', placeholder: '4096' },
-  ]
-}
-
-function getRAGPluginFieldSchema(): FieldSchema[] {
-  return [
-    { key: 'enabled', label: 'Enabled', type: 'boolean' },
-    {
-      key: 'backend',
-      label: 'Backend',
-      type: 'string',
-      required: true,
-      placeholder: 'my_vector_store',
-      description: 'Backend name for retrieval',
-    },
-    {
-      key: 'top_k',
-      label: 'Top K',
-      type: 'number',
-      placeholder: '5',
-      description: 'Number of documents to retrieve',
-    },
-    {
-      key: 'similarity_threshold',
-      label: 'Similarity Threshold',
-      type: 'number',
-      placeholder: '0.7',
-    },
-    {
-      key: 'injection_mode',
-      label: 'Injection Mode',
-      type: 'select',
-      options: ['', 'tool_role', 'system_prompt'],
-    },
-    {
-      key: 'on_failure',
-      label: 'On Failure',
-      type: 'select',
-      options: ['', 'skip', 'block', 'warn'],
-    },
   ]
 }
 

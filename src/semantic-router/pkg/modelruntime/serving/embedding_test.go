@@ -15,18 +15,15 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
-// embedServices serves embedding and rerank cards. A vector is [len(input),
-// dimension, layer, 1, 1, ...] truncated to the requested dimension; a rerank
-// logit is the document's length.
+// embedServices serves embedding cards. A vector is [len(input), dimension,
+// layer, 1, 1, ...] truncated to the requested dimension.
 type embedServices struct {
 	mu       sync.Mutex
 	cards    map[string]modelservice.ModelCard
 	embeds   []modelservice.EmbedRequest
-	reranks  []modelservice.RerankRequest
 	fail     string
 	inFlight int
 	peak     int
@@ -83,18 +80,6 @@ func (f *embedServices) Embed(_ context.Context, deployment string, request mode
 		vector[2] = float32(request.Layer)
 		response.Embeddings[i] = vector
 		response.Inputs[i] = &modelservice.InputUsage{Tokens: 4, ProcessedTokens: 4, Truncated: len(strings.Fields(input.Text)) > 8}
-	}
-	return response, nil
-}
-
-func (f *embedServices) Rerank(_ context.Context, _ string, request modelservice.RerankRequest) (modelservice.RerankResponse, error) {
-	f.mu.Lock()
-	f.reranks = append(f.reranks, request)
-	f.mu.Unlock()
-	response := modelservice.RerankResponse{Results: make([]modelservice.RerankResult, len(request.Documents))}
-	for i, document := range request.Documents {
-		tokens := len(strings.Fields(request.Query + " " + document))
-		response.Results[i] = modelservice.RerankResult{Index: i, Logit: float64(len(document)), Input: &modelservice.InputUsage{Tokens: tokens, ProcessedTokens: tokens}}
 	}
 	return response, nil
 }
@@ -357,56 +342,6 @@ func TestDiagnoseEmbedding(t *testing.T) {
 	result, err := runtime.DiagnoseEmbedding(context.Background(), string(config.DefaultRecipeName), "embedding", "diagnose me")
 	if err != nil || len(result.Result.Embedding) != 4 || result.Binding.Identity.Deployment != "emb-diag" {
 		t.Fatalf("diagnostic %+v, %v", result, err)
-	}
-}
-
-func rerankSpec(deployment, overflow string, selection *config.PairScorerSelection) config.ResolvedModelBinding {
-	spec := embeddingSpec(deployment)
-	spec.Name = config.RAGRerankerConsumer
-	spec.Binding.Contract = config.RelevanceScoresContract
-	spec.Binding.PairScorer = selection
-	spec.Deployment.Input.Overflow = overflow
-	return spec
-}
-
-func TestRelevanceScoresPairsPerQueryAtTheSelectedExit(t *testing.T) {
-	card := modelservice.ModelCard{
-		ID: "reranker", ModelSHA256: strings.Repeat("ef", 32), Surfaces: []string{"rerank"}, MaxInputTokens: 512, Device: "cpu", Dtype: "float32",
-		Rerank: &modelservice.RerankCard{Default: modelservice.RerankExit{Layer: 22, Dimension: 768}, Exits: []modelservice.RerankExit{{Layer: 6, Dimension: 256}}},
-	}
-	services := &embedServices{cards: map[string]modelservice.ModelCard{"reranker": card}}
-	runtime := New(services, nil)
-	if _, err := runtime.Relevance(context.Background(), rerankSpec("reranker", "truncate", nil)); err == nil {
-		t.Fatal("a truncating reranker must be rejected")
-	}
-	if _, err := runtime.Relevance(context.Background(), rerankSpec("reranker", "reject", &config.PairScorerSelection{Layer: 6, Dimension: 768})); err == nil {
-		t.Fatal("an undeclared exit must be rejected")
-	}
-	scorer, err := runtime.Relevance(context.Background(), rerankSpec("reranker", "reject", &config.PairScorerSelection{Layer: 6}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer scorer.Close()
-	if scorer.Selection() != (config.PairScorerSelection{Layer: 6, Dimension: 256}) || scorer.CacheIdentity() == "" {
-		t.Fatalf("selection %+v identity %q", scorer.Selection(), scorer.CacheIdentity())
-	}
-	pairs := []tasks.QueryDocument{{Query: "q1", Document: "aa"}, {Query: "q1", Document: "bbbb"}, {Query: "q2", Document: "c"}}
-	scores, err := scorer.ScorePairs(context.Background(), string(config.DefaultRecipeName), pairs)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if scores.Scores[0] != 2 || scores.Scores[1] != 4 || scores.Scores[2] != 1 || scores.Inputs[2].OriginalTokens != 2 {
-		t.Fatalf("scores %+v", scores)
-	}
-	services.mu.Lock()
-	reranks := services.reranks[1:]
-	services.mu.Unlock()
-	if len(reranks) != 2 || len(reranks[0].Documents) != 2 || reranks[0].Layer != 6 || reranks[0].Dimensions != 256 || reranks[0].Overflow != "reject" {
-		t.Fatalf("rerank calls %+v", reranks)
-	}
-	diagnostic, err := runtime.DiagnoseRerank(context.Background(), string(config.DefaultRecipeName), config.RAGRerankerConsumer, pairs[:1])
-	if err != nil || len(diagnostic.Result.Scores) != 1 {
-		t.Fatalf("diagnostic %+v, %v", diagnostic, err)
 	}
 }
 

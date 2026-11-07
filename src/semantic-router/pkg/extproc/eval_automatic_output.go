@@ -102,11 +102,13 @@ func automaticEvalRequestLimitation(request *llmprotocol.Request, decision *conf
 			return "automatic output preview requires text and inline tool content without external or opaque provider state"
 		}
 	}
-	if rag := decision.GetRAGConfig(); rag != nil && rag.Enabled {
-		return "retrieval enrichment requires execution"
-	}
-	if memory := decision.GetMemoryConfig(); memory != nil && memory.Enabled {
-		return "memory enrichment requires execution"
+	if plugin := decision.GetContextConfig(); plugin != nil && plugin.Enabled {
+		if plugin.Source(config.ContextSourceRAG) != nil {
+			return "retrieval enrichment requires execution"
+		}
+		if plugin.Source(config.ContextSourceMemory) != nil {
+			return "memory enrichment requires execution"
+		}
 	}
 	tools := decision.GetToolsConfig()
 	if tools.ActivePolicy().EffectiveMode() == config.ToolsPolicyModeFiltered {
@@ -115,7 +117,8 @@ func automaticEvalRequestLimitation(request *llmprotocol.Request, decision *conf
 	if tools.ActiveSelect() != nil && leavesToolChoiceToModel(request) {
 		return "tool selection requires execution"
 	}
-	if compression := decision.GetContextCompressionConfig(); compression != nil && compression.Enabled {
+	if plugin := contextCompression(decision); plugin != nil {
+		compression := plugin.Compress
 		if compression.Targets != nil && compression.EffectiveTargetMode(compression.Targets.History) != config.ContextCompressionTargetPreserve && len(request.Messages) > 1 {
 			return "configured history compression is not resolved by automatic output preview"
 		}

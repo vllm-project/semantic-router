@@ -9,20 +9,18 @@ import (
 type pluginFieldsDecoder func(*config.DecisionPlugin) map[string]Value
 
 var pluginFieldsDecoders = map[string]pluginFieldsDecoder{
-	"system_prompt":       pluginFieldsSystemPrompt,
-	"response_cache":      pluginFieldsResponseCache,
-	"context_compression": pluginFieldsStructuredConfiguration,
-	"prompt_cache":        pluginFieldsStructuredConfiguration,
-	"router_replay":       pluginFieldsStructuredConfiguration,
-	"shadow_dispatch":     pluginFieldsStructuredConfiguration,
-	"memory":              pluginFieldsMemory,
-	"response_guard":      pluginFieldsStructuredConfiguration,
-	"fast_response":       pluginFieldsFastResponse,
-	"request_params":      pluginFieldsRequestParams,
-	"tools":               pluginFieldsStructuredConfiguration,
-	"rag":                 pluginFieldsRAG,
-	"header_mutation":     pluginFieldsHeaderMutation,
-	"masking":             pluginFieldsStructuredConfiguration,
+	"system_prompt":   pluginFieldsSystemPrompt,
+	"response_cache":  pluginFieldsResponseCache,
+	"context":         pluginFieldsStructuredConfiguration,
+	"prompt_cache":    pluginFieldsStructuredConfiguration,
+	"router_replay":   pluginFieldsStructuredConfiguration,
+	"shadow_dispatch": pluginFieldsStructuredConfiguration,
+	"response_guard":  pluginFieldsStructuredConfiguration,
+	"fast_response":   pluginFieldsFastResponse,
+	"request_params":  pluginFieldsRequestParams,
+	"tools":           pluginFieldsStructuredConfiguration,
+	"header_mutation": pluginFieldsHeaderMutation,
+	"masking":         pluginFieldsStructuredConfiguration,
 }
 
 func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
@@ -60,27 +58,6 @@ func pluginFieldsStructuredConfiguration(p *config.DecisionPlugin) map[string]Va
 		return map[string]Value{}
 	}
 	return object.Fields
-}
-
-func pluginFieldsMemory(p *config.DecisionPlugin) map[string]Value {
-	fields := make(map[string]Value)
-	cfg, ok := decodePluginConfig[config.MemoryPluginConfig](p)
-	if !ok {
-		return fields
-	}
-	if cfg.Enabled {
-		fields["enabled"] = BoolValue{V: true}
-	}
-	if cfg.RetrievalLimit != nil {
-		fields["retrieval_limit"] = IntValue{V: *cfg.RetrievalLimit}
-	}
-	if cfg.SimilarityThreshold != nil {
-		fields["similarity_threshold"] = FloatValue{V: float64(*cfg.SimilarityThreshold)}
-	}
-	if cfg.AutoStore != nil {
-		fields["auto_store"] = BoolValue{V: *cfg.AutoStore}
-	}
-	return fields
 }
 
 func pluginFieldsFastResponse(p *config.DecisionPlugin) map[string]Value {
@@ -125,76 +102,6 @@ func pluginFieldsRequestParams(p *config.DecisionPlugin) map[string]Value {
 		fields["strip_unknown"] = BoolValue{V: true}
 	}
 	return fields
-}
-
-func pluginFieldsRAG(p *config.DecisionPlugin) map[string]Value {
-	fields := make(map[string]Value)
-	cfg, ok := decodePluginConfig[config.RAGPluginConfig](p)
-	if !ok {
-		return fields
-	}
-	addRAGCoreFields(fields, cfg)
-	addRAGBackendAndFailureFields(fields, cfg)
-	addRAGCacheFields(fields, cfg)
-	return fields
-}
-
-func addRAGCoreFields(fields map[string]Value, cfg *config.RAGPluginConfig) {
-	if cfg.Enabled {
-		fields["enabled"] = BoolValue{V: true}
-	}
-	if cfg.Backend != "" {
-		fields["backend"] = StringValue{V: cfg.Backend}
-	}
-	if cfg.SimilarityThreshold != nil {
-		fields["similarity_threshold"] = FloatValue{V: float64(*cfg.SimilarityThreshold)}
-	}
-	if cfg.TopK != nil {
-		fields["top_k"] = IntValue{V: *cfg.TopK}
-	}
-	if cfg.MaxContextLength != nil {
-		fields["max_context_length"] = IntValue{V: *cfg.MaxContextLength}
-	}
-	if cfg.InjectionMode != "" {
-		fields["injection_mode"] = StringValue{V: cfg.InjectionMode}
-	}
-}
-
-func addRAGBackendAndFailureFields(fields map[string]Value, cfg *config.RAGPluginConfig) {
-	if cfg.Rerank != nil {
-		rerank := make(map[string]Value)
-		if cfg.Rerank.Deployment != "" {
-			rerank["deployment"] = StringValue{V: cfg.Rerank.Deployment}
-		}
-		if cfg.Rerank.TopK != nil {
-			rerank["top_k"] = IntValue{V: *cfg.Rerank.TopK}
-		}
-		if cfg.Rerank.Layer != 0 {
-			rerank["layer"] = IntValue{V: cfg.Rerank.Layer}
-		}
-		if cfg.Rerank.Dimension != 0 {
-			rerank["dimension"] = IntValue{V: cfg.Rerank.Dimension}
-		}
-		fields["rerank"] = ObjectValue{Fields: rerank}
-	}
-	if backendConfig, ok := structuredPayloadObjectValue(cfg.BackendConfig); ok {
-		fields["backend_config"] = backendConfig
-	}
-	if cfg.OnFailure != "" {
-		fields["on_failure"] = StringValue{V: cfg.OnFailure}
-	}
-}
-
-func addRAGCacheFields(fields map[string]Value, cfg *config.RAGPluginConfig) {
-	if cfg.CacheResults {
-		fields["cache_results"] = BoolValue{V: true}
-	}
-	if cfg.CacheTTLSeconds != nil {
-		fields["cache_ttl_seconds"] = IntValue{V: *cfg.CacheTTLSeconds}
-	}
-	if cfg.MinConfidenceThreshold != nil {
-		fields["min_confidence_threshold"] = FloatValue{V: float64(*cfg.MinConfidenceThreshold)}
-	}
 }
 
 func pluginFieldsHeaderMutation(p *config.DecisionPlugin) map[string]Value {

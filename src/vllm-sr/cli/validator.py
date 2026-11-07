@@ -14,8 +14,7 @@ from cli.models import (
     HeaderMutationPluginConfig,
     RouterReplayPluginConfig,
     ShadowDispatchPluginConfig,
-    MemoryPluginConfig,
-    RAGPluginConfig,
+    ContextPluginConfig,
 )
 from cli.terminal import (
     echo,
@@ -278,8 +277,7 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
         PluginType.HEADER_MUTATION.value: HeaderMutationPluginConfig,
         PluginType.ROUTER_REPLAY.value: RouterReplayPluginConfig,
         PluginType.SHADOW_DISPATCH.value: ShadowDispatchPluginConfig,
-        PluginType.MEMORY.value: MemoryPluginConfig,
-        PluginType.RAG.value: RAGPluginConfig,
+        PluginType.CONTEXT.value: ContextPluginConfig,
         PluginType.TOOLS.value: ToolsPluginConfig,
         PluginType.PROMPT_CACHE.value: PromptCachePluginConfig,
     }

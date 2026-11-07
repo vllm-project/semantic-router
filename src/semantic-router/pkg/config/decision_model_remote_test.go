@@ -175,7 +175,7 @@ func TestSystemOneDeploymentsTakeOnlyTheirOwnFields(t *testing.T) {
 		},
 		"an embedding binding": {
 			"    system:\n", "    bindings:\n      embedding: hosted-d3\n    system:\n",
-			"embeddings and reranking need a model_runtime, openai_embeddings or rerank deployment",
+			"embeddings need a model_runtime or openai_embeddings deployment",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

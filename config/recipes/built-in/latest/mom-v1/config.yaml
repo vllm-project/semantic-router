@@ -1350,7 +1350,7 @@ recipes:
           policy:
             mode: none
             strip_tool_history: true
-      - type: memory
+      - type: context
         configuration:
           enabled: false
       - type: response_cache
@@ -1408,7 +1408,7 @@ recipes:
           policy:
             mode: none
             strip_tool_history: true
-      - type: memory
+      - type: context
         configuration:
           enabled: false
       - type: response_cache
@@ -1453,7 +1453,7 @@ recipes:
           policy:
             mode: none
             strip_tool_history: true
-      - type: memory
+      - type: context
         configuration:
           enabled: false
       - type: response_cache

@@ -14,7 +14,7 @@ func (c *RouterConfig) ConfigForGlobalModelServices() *RouterConfig {
 		if !c.IsRecipeReachableForRouting(ref.Recipe) {
 			continue
 		}
-		if plugin := ref.Decision.GetMemoryConfig(); plugin != nil && plugin.Enabled {
+		if c.ContextPlugin(ref.Decision).Source(ContextSourceMemory) != nil {
 			scoped.Memory.Enabled = true
 		}
 	}

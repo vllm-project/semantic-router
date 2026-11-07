@@ -197,7 +197,7 @@ Router 会以 `WARN` 级别记录每一次此类失败，带上请求的 `x-requ
 | `context_length_exceeded` | 准备好的输入与请求的输出放不下。 |
 | `max_output_tokens_exceeded` | 请求的输出超过了配置的模型上限。 |
 
-缺少能力、上限未知、选择证据不可用以及混合失败，保持选择错误的行为，即 `no_eligible_model`。预算检查本身不会截断请求；需要时请启用[上下文压缩](../tutorials/plugin/context-compression.md)。
+缺少能力、上限未知、选择证据不可用以及混合失败，保持选择错误的行为，即 `no_eligible_model`。预算检查本身不会截断请求；需要时请启用[上下文压缩](../tutorials/plugin/context.md#compression-and-budget)。
 
 这些计数是估算值。后端仍可能拒绝请求；其有效的 HTTP 状态码和有意义的消息会被保留。vLLM 的整数错误码在 OpenAI 兼容错误中以字符串形式暴露：`code: 400` 的 `BadRequestError` 会变成 `code: "400"` 的 `invalid_request_error`。
 

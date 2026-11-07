@@ -59,18 +59,13 @@ func TestModelCatalogRefusesWhatCannotWork(t *testing.T) {
 			"global: {model_catalog: {bindings: {pii: vela-embedding}}}",
 			"answers no question",
 		},
-		"an early exit on a remote reranker": {
-			"global:\n  model_catalog:\n    deployments:\n      remote-ranker: {provider: rerank, endpoint: https://rerank.example.com, model: bge-reranker-v2-m3}\n" +
-				"routing:\n  decisions:\n    - name: rag\n      plugins:\n        - type: rag\n          configuration: {enabled: true, backend: vectorstore, rerank: {deployment: remote-ranker, top_k: 3, layer: 22}}",
-			"a rerank deployment answers at its own depth",
-		},
 		"a question model as the default embedding": {
 			"global: {model_catalog: {embeddings: {default: primary}}}",
 			"serves no embeddings",
 		},
 		"a remote decision model as the default embedding": {
 			"global: {model_catalog: {embeddings: {default: d3-remote}}}",
-			"embeddings and reranking need",
+			"embeddings need a model_runtime or openai_embeddings deployment",
 		},
 		"remote embedding dimensions that disagree with the target dimension": {
 			"global:\n  model_catalog:\n    deployments:\n      remote-embed: {provider: openai_embeddings, endpoint: https://embedding.example.com/v1, model: BAAI/bge-m3, capabilities: {dimensions: 1024}}\n" +

@@ -102,7 +102,7 @@ vllm-sr route probe \
 
 ## 测试检索、风险处理和 Agent 连续性 {#test-retrieval-risk-handling-and-agent-continuity}
 
-**检索。** 将 [RAG 与神经重排](../tutorials/plugin/rag#neural-reranking) 配置到有真实知识库的路径。先检索较多候选，再使用 `rag.rerank` 保留最相关文档。检查文档标识、检索覆盖、排序、基于证据的回答和新增时延。Preview 选择插件，真实路由请求执行插件。先验证单模型路径，再考虑为多模型工作流的每个阶段添加检索。
+**检索。** 将[带 RAG 源的 context 插件](../tutorials/plugin/context#rag-sources)配置到有真实知识库的路径。先召回较多候选，再由该源的相关性判断保留最相关文档。检查文档标识、检索覆盖、排序、基于证据的回答和新增时延。Preview 选择插件，真实路由请求执行插件。先验证单模型路径，再考虑为多模型工作流的每个阶段添加检索。
 
 **风险处理。** [Guard](../tutorials/signal/learned/jailbreak) 检测提示词攻击；[Safety 和 Hazard](../tutorials/signal/learned/safety) 识别内容风险及类别。设计拒绝规则前，需要对照测试有害协助、求助和正常分析。PII 可以选择受限的模型池，但不会自动脱敏，也不能证明供应商的数据保留策略。
 

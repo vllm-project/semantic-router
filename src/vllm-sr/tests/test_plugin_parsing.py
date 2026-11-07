@@ -10,7 +10,8 @@ from cli.models import (
     PluginConfig,
     PluginType,
     RouterReplayPluginConfig,
-    RAGPluginConfig,
+    ContextPluginConfig,
+    ContextSource,
     ToolsPluginConfig,
 )
 from cli.config_migration import migrate_config_data
@@ -62,8 +63,7 @@ class TestPluginTypeValidation:
             PluginType.SYSTEM_PROMPT.value,
             PluginType.HEADER_MUTATION.value,
             PluginType.ROUTER_REPLAY.value,
-            PluginType.MEMORY.value,
-            PluginType.RAG.value,
+            PluginType.CONTEXT.value,
             PluginType.FAST_RESPONSE.value,
             PluginType.REQUEST_PARAMS.value,
             PluginType.RESPONSE_GUARD.value,
@@ -481,46 +481,50 @@ providers:
             os.unlink(temp_path)
 
 
-class TestRAGPluginConfig:
-    """Test RAG plugin configuration."""
+class TestContextPluginConfig:
+    """Test context plugin configuration."""
 
-    def test_valid_rag_config_all_fields(self):
-        """Test RAGPluginConfig accepts all valid fields."""
-        config = RAGPluginConfig(
+    def test_valid_rag_source_all_fields(self):
+        config = ContextPluginConfig(
             enabled=True,
-            backend="external_api",
-            similarity_threshold=0.75,
-            top_k=5,
-            max_context_length=4096,
-            injection_mode="tool_role",
-            backend_config={
-                "endpoint": "http://rag-service:8000/v1/search",
-                "request_format": "openai",
-                "timeout_seconds": 10,
-                "max_response_bytes": 4194304,
-            },
-            on_failure="skip",
-            cache_results=True,
-            cache_ttl_seconds=300,
-            min_confidence_threshold=0.5,
+            sources=[
+                {
+                    "type": "rag",
+                    "backend": "external_api",
+                    "match": {
+                        "recall": {
+                            "method": "embedding",
+                            "top_k": 5,
+                            "min_similarity": 0.75,
+                        },
+                        "judge": {"preset": "relevance", "top_k": 2},
+                    },
+                    "max_context_length": 4096,
+                    "backend_config": {
+                        "endpoint": "http://rag-service:8000/v1/search",
+                        "request_format": "openai",
+                        "timeout_seconds": 10,
+                        "max_response_bytes": 4194304,
+                    },
+                    "on_failure": "skip",
+                    "cache_results": True,
+                    "cache_ttl_seconds": 300,
+                }
+            ],
+            injection={"mode": "tool_role"},
         )
-        assert config.enabled is True
-        assert config.backend == "external_api"
-        assert config.similarity_threshold == 0.75
-        assert config.top_k == 5
-        assert config.max_context_length == 4096
-        assert config.injection_mode == "tool_role"
-        assert config.backend_config["endpoint"] == "http://rag-service:8000/v1/search"
-        assert config.backend_config["request_format"] == "openai"
-        assert config.backend_config["max_response_bytes"] == 4194304
-        assert config.on_failure == "skip"
-        assert config.cache_results is True
-        assert config.cache_ttl_seconds == 300
-        assert config.min_confidence_threshold == 0.5
+        source = config.sources[0]
+        assert source.type == "rag"
+        assert source.backend == "external_api"
+        assert source.match["judge"]["top_k"] == 2
+        assert source.backend_config["max_response_bytes"] == 4194304
+        assert source.on_failure == "skip"
+        assert source.cache_ttl_seconds == 300
+        assert config.injection.mode == "tool_role"
 
     def test_openai_response_limit_is_preserved(self):
-        config = RAGPluginConfig(
-            enabled=True,
+        source = ContextSource(
+            type="rag",
             backend="openai",
             backend_config={
                 "vector_store_id": "vs_123",
@@ -528,58 +532,43 @@ class TestRAGPluginConfig:
                 "max_response_bytes": 4194304,
             },
         )
+        assert source.backend_config["max_response_bytes"] == 4194304
 
-        assert config.backend_config["max_response_bytes"] == 4194304
+    def test_rag_source_required_fields_only(self):
+        source = ContextSource(type="rag", backend="milvus")
+        assert source.match is None
+        assert source.max_context_length is None
+        assert source.backend_config is None
+        assert source.on_failure is None
+        assert source.cache_ttl_seconds is None
 
-    def test_rag_config_required_fields_only(self):
-        """Test RAGPluginConfig with only required fields; optional fields default to None."""
-        config = RAGPluginConfig(enabled=True, backend="milvus")
-        assert config.enabled is True
-        assert config.backend == "milvus"
-        assert config.similarity_threshold is None
-        assert config.top_k is None
-        assert config.max_context_length is None
-        assert config.injection_mode is None
-        assert config.backend_config is None
-        assert config.on_failure is None
-        assert config.cache_results is None
-        assert config.cache_ttl_seconds is None
-        assert config.min_confidence_threshold is None
+    def test_source_takes_only_its_own_fields(self):
+        with pytest.raises(
+            PydanticValidationError, match="a rag source needs a backend"
+        ):
+            ContextSource(type="rag")
+        with pytest.raises(
+            PydanticValidationError, match="a memory source takes no backend"
+        ):
+            ContextSource(type="memory", backend="milvus")
+        with pytest.raises(
+            PydanticValidationError, match="a rag source takes no store"
+        ):
+            ContextSource(type="rag", backend="milvus", store={"auto": True})
+        assert ContextSource(type="memory", store={"auto": False}).store.auto is False
 
-    def test_rag_config_missing_required_fields(self):
-        """Test that missing required fields (enabled, backend) raise errors."""
-        with pytest.raises(PydanticValidationError, match="enabled"):
-            RAGPluginConfig(backend="external_api")
-
-        with pytest.raises(PydanticValidationError, match="backend"):
-            RAGPluginConfig(enabled=True)
-
-    def test_rag_config_field_constraints(self):
-        """Test that Pydantic rejects out-of-range RAG field values."""
-        # similarity_threshold > 1.0
+    def test_field_constraints(self):
         with pytest.raises(PydanticValidationError):
-            RAGPluginConfig(enabled=True, backend="milvus", similarity_threshold=1.1)
-
-        # similarity_threshold < 0.0
+            ContextSource(type="rag", backend="milvus", cache_ttl_seconds=0)
         with pytest.raises(PydanticValidationError):
-            RAGPluginConfig(enabled=True, backend="milvus", similarity_threshold=-0.1)
-
-        # top_k must be >= 1
+            ContextSource(type="rag", backend="milvus", max_context_length=-1)
         with pytest.raises(PydanticValidationError):
-            RAGPluginConfig(enabled=True, backend="milvus", top_k=0)
+            ContextSource(type="rag", backend="pinecone")
+        with pytest.raises(PydanticValidationError, match="retrieves sources"):
+            ContextPluginConfig(enabled=True)
+        assert ContextPluginConfig(enabled=False).sources is None
 
-        # cache_ttl_seconds must be >= 1
-        with pytest.raises(PydanticValidationError):
-            RAGPluginConfig(enabled=True, backend="milvus", cache_ttl_seconds=0)
-
-        # min_confidence_threshold > 1.0
-        with pytest.raises(PydanticValidationError):
-            RAGPluginConfig(
-                enabled=True, backend="milvus", min_confidence_threshold=1.1
-            )
-
-    def test_rag_plugin_in_full_config(self):
-        """Test end-to-end RAG plugin YAML parsing and validation."""
+    def test_context_plugin_in_full_config(self):
         config_yaml = """
 version: v0.1
 listeners:
@@ -596,7 +585,7 @@ signals:
       description: "Test domain"
 decisions:
   - name: "test_decision"
-    description: "Test decision with RAG"
+    description: "Test decision with context"
     priority: 100
     rules:
       operator: "OR"
@@ -606,20 +595,23 @@ decisions:
     modelRefs:
       - model: "test_model"
     plugins:
-      - type: "rag"
+      - type: "context"
         configuration:
           enabled: true
-          backend: "external_api"
-          top_k: 5
-          similarity_threshold: 0.75
-          injection_mode: "tool_role"
-          on_failure: "skip"
-          cache_results: true
-          cache_ttl_seconds: 300
-          backend_config:
-            endpoint: "http://rag-service:8000/v1/search"
-            request_format: "openai"
-            timeout_seconds: 10
+          sources:
+            - type: "rag"
+              backend: "external_api"
+              match:
+                recall: {method: embedding, top_k: 5, min_similarity: 0.75}
+              on_failure: "skip"
+              cache_results: true
+              cache_ttl_seconds: 300
+              backend_config:
+                endpoint: "http://rag-service:8000/v1/search"
+                request_format: "openai"
+                timeout_seconds: 10
+          injection:
+            mode: "tool_role"
 providers:
   models:
     - name: "test_model"
@@ -634,64 +626,42 @@ providers:
 
         try:
             config = parse_user_config(temp_path)
-            assert len(config.decisions) == 1
-            assert len(config.decisions[0].plugins) == 1
-
             plugin = config.decisions[0].plugins[0]
-            assert plugin.type.value == "rag"
-            assert plugin.configuration["enabled"] is True
-            assert plugin.configuration["backend"] == "external_api"
-            assert plugin.configuration["top_k"] == 5
-            assert plugin.configuration["similarity_threshold"] == 0.75
-            assert plugin.configuration["injection_mode"] == "tool_role"
-            assert plugin.configuration["on_failure"] == "skip"
-            assert plugin.configuration["cache_results"] is True
-            assert plugin.configuration["cache_ttl_seconds"] == 300
-            assert (
-                plugin.configuration["backend_config"]["endpoint"]
-                == "http://rag-service:8000/v1/search"
-            )
-            assert plugin.configuration["backend_config"]["request_format"] == "openai"
+            assert plugin.type.value == "context"
+            source = plugin.configuration["sources"][0]
+            assert source["backend"] == "external_api"
+            assert source["match"]["recall"]["top_k"] == 5
+            assert source["backend_config"]["request_format"] == "openai"
 
             errors = validate_user_config(config)
             assert len(errors) == 0, f"Unexpected validation errors: {errors}"
         finally:
             os.unlink(temp_path)
 
-    def test_invalid_rag_config_in_full_yaml(self):
-        """Test that invalid RAG YAML is caught by the validator."""
+    def test_invalid_context_config_in_full_yaml(self):
         config_yaml = """
 version: v0.1
 listeners:
   - name: "http-8888"
     address: "0.0.0.0"
     port: 8888
-signals:
-  keywords:
-    - name: "test_keywords"
-      operator: "OR"
-      keywords: ["test"]
-  domains:
-    - name: "test"
-      description: "Test domain"
 decisions:
   - name: "test_decision"
-    description: "Test decision with invalid RAG"
+    description: "Test decision with an invalid context source"
     priority: 100
     rules:
       operator: "OR"
-      conditions:
-        - type: "keyword"
-          name: "test_keywords"
+      conditions: []
     modelRefs:
       - model: "test_model"
     plugins:
-      - type: "rag"
+      - type: "context"
         configuration:
           enabled: true
-          backend: "external_api"
-          similarity_threshold: 1.5
-          top_k: "invalid"
+          sources:
+            - type: "rag"
+              backend: "external_api"
+              cache_ttl_seconds: "invalid"
 providers:
   models:
     - name: "test_model"
@@ -707,6 +677,6 @@ providers:
         try:
             with pytest.raises(ConfigParseError) as exc_info:
                 parse_user_config(temp_path)
-            assert "configuration.top_k" in str(exc_info.value)
+            assert "cache_ttl_seconds" in str(exc_info.value)
         finally:
             os.unlink(temp_path)

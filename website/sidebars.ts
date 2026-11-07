@@ -188,7 +188,6 @@ const sidebars: SidebarsConfig = {
               items: [
                 'tutorials/plugin/fast-response',
                 'tutorials/plugin/header-mutation',
-                'tutorials/plugin/context-compression',
                 'tutorials/plugin/masking',
                 'tutorials/plugin/request-params',
                 'tutorials/plugin/system-prompt',
@@ -199,8 +198,7 @@ const sidebars: SidebarsConfig = {
               type: 'category',
               label: 'Retrieval and Memory',
               items: [
-                'tutorials/plugin/memory',
-                'tutorials/plugin/rag',
+                'tutorials/plugin/context',
                 'tutorials/plugin/router-replay',
                 'tutorials/plugin/shadow-dispatch',
                 'tutorials/plugin/response-cache',
@@ -250,7 +248,6 @@ const sidebars: SidebarsConfig = {
             'model-runtime/guides/safety',
             'model-runtime/guides/hallucination',
             'model-runtime/guides/embeddings',
-            'model-runtime/guides/rerank',
             'model-runtime/guides/multimodal',
             'model-runtime/guides/decisions',
           ],

@@ -27,7 +27,9 @@ func TestNamedSharedConsumersPrepareTheirGlobalEmbedding(t *testing.T) {
 				cfg.API.Embeddings.Enabled = true
 			} else {
 				cfg.Recipes = []config.RoutingRecipe{{Name: config.DefaultRecipeName}, {Name: "active", Profile: config.RoutingProfile{
-					Decisions: []config.Decision{{Plugins: []config.DecisionPlugin{{Type: consumer, Configuration: config.MustStructuredPayload(map[string]any{"enabled": true})}}}},
+					Decisions: []config.Decision{{Plugins: []config.DecisionPlugin{{Type: config.DecisionPluginContext, Configuration: config.MustStructuredPayload(map[string]any{
+						"enabled": true, "sources": []any{map[string]any{"type": config.ContextSourceMemory}},
+					})}}}},
 				}}}
 				cfg.Entrypoints = []config.EntrypointMapping{{Recipe: "active", ModelNames: []string{"public"}}}
 			}

@@ -258,8 +258,10 @@ func deploymentConfig(artifact string) *config.RouterConfig {
 	cfg.EmbeddingConfig.ModelType = "mmbert"
 	cfg.ModelBindings = map[string]config.ModelBinding{"embedding": embeddingBinding("new", "")}
 	cfg.Decisions = []config.Decision{{Name: "route", Plugins: []config.DecisionPlugin{{
-		Type:          config.DecisionPluginContextCompression,
-		Configuration: config.MustStructuredPayload(map[string]any{"enabled": true, "scoring": map[string]any{"method": config.ContextCompressionScoringEmbedding}}),
+		Type: config.DecisionPluginContext,
+		Configuration: config.MustStructuredPayload(map[string]any{"enabled": true, "sources": []any{map[string]any{
+			"type": config.ContextSourceRAG, "backend": "milvus", "backend_config": map[string]any{"collection": "docs"},
+		}}}),
 	}}}}
 	return cfg
 }

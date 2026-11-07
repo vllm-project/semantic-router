@@ -99,8 +99,9 @@ func TestHandleCachingWithoutBackendStillSkipsPersonalizingDecisions(t *testing.
 		Name:      "memory-decision",
 		ModelRefs: []config.ModelRef{{Model: "m"}},
 		Plugins: []config.DecisionPlugin{
-			{Type: config.DecisionPluginMemory, Configuration: config.MustStructuredPayload(map[string]interface{}{
+			{Type: config.DecisionPluginContext, Configuration: config.MustStructuredPayload(map[string]interface{}{
 				"enabled": true,
+				"sources": []interface{}{map[string]interface{}{"type": config.ContextSourceMemory}},
 			})},
 		},
 	}

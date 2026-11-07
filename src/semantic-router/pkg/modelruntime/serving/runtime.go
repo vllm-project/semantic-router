@@ -35,7 +35,6 @@ type Services interface {
 	CurrentCard(deployment string) (modelservice.ModelCard, bool)
 	Classify(ctx context.Context, deployment string, request modelservice.ClassifyRequest) (modelservice.ClassifyResponse, error)
 	Embed(ctx context.Context, deployment string, request modelservice.EmbedRequest) (modelservice.EmbedResponse, error)
-	Rerank(ctx context.Context, deployment string, request modelservice.RerankRequest) (modelservice.RerankResponse, error)
 }
 
 // Runtime prepares task bindings for one router generation. Pool may be

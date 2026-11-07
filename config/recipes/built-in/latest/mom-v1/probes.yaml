@@ -5102,7 +5102,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   variants:
@@ -5531,7 +5531,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   variants:
@@ -5730,7 +5730,7 @@ decisions:
   expected_plugins:
   - fast_response
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   variants:
@@ -5812,7 +5812,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   variants:
@@ -6122,7 +6122,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   variants:
@@ -6143,7 +6143,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   variants:
@@ -6168,7 +6168,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   variants:
@@ -6305,7 +6305,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   variants:
@@ -6331,7 +6331,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   variants:
@@ -6356,7 +6356,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   variants:
@@ -6381,7 +6381,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   variants:
@@ -6406,7 +6406,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   variants:
@@ -6429,7 +6429,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   variants:
@@ -6454,7 +6454,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   variants:
@@ -6477,7 +6477,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   variants:
@@ -6502,7 +6502,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   variants:
@@ -6525,7 +6525,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   variants:
@@ -6551,7 +6551,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   variants:
@@ -6574,7 +6574,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   variants:
@@ -6599,7 +6599,7 @@ decisions:
   expected_plugins:
   - fast_response
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   variants:
@@ -6621,7 +6621,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   variants:
@@ -6646,7 +6646,7 @@ decisions:
   expected_plugins:
   - fast_response
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   variants:
@@ -6668,7 +6668,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   variants:
@@ -6968,7 +6968,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   objective: Personal action guidance combines a relevant domain with an operative request; harmful intent
@@ -7002,7 +7002,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   objective: An explanation or a quoted action request does not itself ask for personal action guidance.
@@ -7029,7 +7029,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   objective: A genuine personal action request can coexist with quoted material; consequential intent
@@ -7056,7 +7056,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   objective: Personal wording for ordinary technical or household work does not establish consequential support.
@@ -7083,7 +7083,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   objective: Translating a personal action request does not ask for the quoted advice.
@@ -7101,7 +7101,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   objective: A detected nationality, religious or political attribute requires an explicit personal or individual-record
@@ -7135,7 +7135,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   objective: Language options and general group descriptions do not themselves associate an attribute with
@@ -7177,7 +7177,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   objective: An ordinary possessive or a definition of a profile is not an individual attribute declaration.
@@ -7206,7 +7206,7 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
   plugin_match: exact
   objective: Quotation preserves the sensitivity of supplied contact details and personal names.

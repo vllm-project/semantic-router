@@ -18,10 +18,7 @@ func EmbeddingRequirements(cfg *RouterConfig, primary string, sharedServices boo
 	cfg = cfg.ModelConsumerScope()
 	var result []EmbeddingRequirement
 	for _, decision := range cfg.Decisions {
-		if compression := decision.GetContextCompressionConfig(); compression != nil && compression.EffectiveScoring().Method != ContextCompressionScoringBM25 {
-			result = append(result, EmbeddingRequirement{Model: primary, Consumer: "context compression", Dimension: cfg.EmbeddingConfig.TargetDimension, Layer: cfg.EmbeddingConfig.TargetLayer, LocalLayerHint: true})
-		}
-		if rag := decision.GetRAGConfig(); rag != nil && rag.Enabled && ragEmbedsQueries(rag) {
+		if rag := cfg.ContextPlugin(&decision).Source(ContextSourceRAG); rag != nil && ragEmbedsQueries(rag) {
 			result = append(result, EmbeddingRequirement{Model: RAGQueryEmbeddingModel, Consumer: "RAG query embedding"})
 		}
 	}

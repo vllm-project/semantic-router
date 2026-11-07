@@ -32,5 +32,5 @@ const (
 	apiStorageVectorStoresPath   = apiStoragePath + "/vector-stores"
 	apiStorageFilesPath          = apiStoragePath + "/files"
 	apiResponseCachePath         = apiStoragePath + "/response-cache"
-	apiContextCompressionPath    = apiRootPath + "/plugins/context_compression"
+	apiContextCompressionPath    = apiRootPath + "/plugins/context/compression"
 )

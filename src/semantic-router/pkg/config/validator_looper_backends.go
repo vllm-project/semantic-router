@@ -47,8 +47,8 @@ func decisionCalledModels(decision Decision) []string {
 			}
 		}
 	}
-	if compression := decision.GetContextCompressionConfig(); compression != nil &&
-		compression.Recovery != nil && compression.Recovery.Enabled {
+	if plugin := decision.GetContextConfig(); plugin != nil && plugin.Enabled && plugin.Compress != nil &&
+		plugin.Compress.Recovery != nil && plugin.Compress.Recovery.Enabled {
 		refs()
 	}
 	return models

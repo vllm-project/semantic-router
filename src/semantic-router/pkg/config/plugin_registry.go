@@ -139,7 +139,7 @@ func builtinDecisionPlugins() []DecisionPluginType {
 				return validateResponseCachePlugin(at.Decision, at.Index, at.Type, p)
 			},
 		}),
-		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginMemory, DisplayName: "Memory", Description: "Retrieve and store persistent conversation memory."}, PluginOptions[MemoryPluginConfig]{}),
+		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginContext, DisplayName: "Context", Description: "Retrieve documents and memories, compress the request within a budget and inject the context."}, PluginOptions[ContextPluginConfig]{Strict: true}),
 		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginSystemPrompt, DisplayName: "System Prompt", Description: "Insert or replace the system prompt."}, PluginOptions[SystemPromptPluginConfig]{
 			Validate: validateSystemPromptPlugin,
 		}),
@@ -148,7 +148,6 @@ func builtinDecisionPlugins() []DecisionPluginType {
 			Strict: true, Validate: validateResponseGuardPlugin,
 		}),
 		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginRouterReplay, DisplayName: "Router Replay", Description: "Capture bounded request and response replay evidence."}, PluginOptions[RouterReplayPluginConfig]{}),
-		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginRAG, DisplayName: "RAG", Description: "Retrieve external context and inject it into the request."}, PluginOptions[RAGPluginConfig]{}),
 		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginFastResponse, DisplayName: "Fast Response", Description: "Return a fixed response without calling an upstream model."}, PluginOptions[FastResponsePluginConfig]{
 			Validate: func(at PluginAt, p *FastResponsePluginConfig) error {
 				return validateFastResponsePlugin(at.Decision, at.Index, at.Type, p)
@@ -162,12 +161,6 @@ func builtinDecisionPlugins() []DecisionPluginType {
 					return at.Errorf("%w", err)
 				}
 				return nil
-			},
-		}),
-		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginContextCompression, DisplayName: "Context Compression", Description: "Compress selected context before provider dispatch."}, PluginOptions[ContextCompressionPluginConfig]{
-			Strict: true,
-			Validate: func(at PluginAt, p *ContextCompressionPluginConfig) error {
-				return validateContextCompressionPlugin(at.Decision, at.Index, at.Type, p)
 			},
 		}),
 		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginPromptCache, DisplayName: "Prompt Cache", Description: "Add bounded Anthropic prompt-cache markers after route selection."}, PluginOptions[PromptCachePluginConfig]{

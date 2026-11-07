@@ -25,7 +25,7 @@ func createMemoryRuntime(cfg *config.RouterConfig, sets ...*embedding.Set) (memo
 	if backend == "" {
 		backend = "milvus"
 	}
-	if !isMemoryEnabled(cfg) {
+	if !cfg.UsesMemory() {
 		return nil, nil, routerruntime.MemoryStatus{
 			Reason:  routerruntime.MemoryReasonDisabledByConfig,
 			Backend: backend,
@@ -71,12 +71,12 @@ func validateMemoryFilterAlgorithms(cfg *config.RouterConfig) error {
 		return err
 	}
 	for _, decision := range cfg.AllRoutingDecisions() {
-		memoryConfig := decision.GetMemoryConfig()
-		if memoryConfig == nil || memoryConfig.Reflection == nil {
+		source := decision.GetContextConfig().Source(config.ContextSourceMemory)
+		if source == nil || source.Reflection == nil {
 			continue
 		}
-		field := fmt.Sprintf("routing.decisions[%s].plugins[memory].reflection.algorithm", decision.Name)
-		if err := validateMemoryFilterAlgorithm(memoryConfig.Reflection.Algorithm, field); err != nil {
+		field := fmt.Sprintf("routing.decisions[%s].plugins[context].sources[memory].reflection.algorithm", decision.Name)
+		if err := validateMemoryFilterAlgorithm(source.Reflection.Algorithm, field); err != nil {
 			return err
 		}
 	}
@@ -98,21 +98,6 @@ func validateMemoryFilterAlgorithm(algorithm, field string) error {
 	}
 	return fmt.Errorf("%s %q is not a registered memory filter (registered: %s)",
 		field, algorithm, strings.Join(registered, ", "))
-}
-
-func isMemoryEnabled(cfg *config.RouterConfig) bool {
-	if cfg.Memory.Enabled {
-		return true
-	}
-
-	for _, decision := range cfg.AllRoutingDecisions() {
-		if memoryConfig := decision.GetMemoryConfig(); memoryConfig != nil && memoryConfig.Enabled {
-			logging.Infof("Memory auto-enabled: decision '%s' uses memory plugin", decision.Name)
-			return true
-		}
-	}
-
-	return false
 }
 
 // createMemoryStore creates a memory store based on configuration.

@@ -13,10 +13,13 @@ func reflectionDecision(name, algorithm string) config.Decision {
 	return config.Decision{
 		Name: name,
 		Plugins: []config.DecisionPlugin{{
-			Type: "memory",
+			Type: config.DecisionPluginContext,
 			Configuration: config.MustStructuredPayload(map[string]interface{}{
-				"enabled":    false,
-				"reflection": map[string]interface{}{"algorithm": algorithm},
+				"enabled": false,
+				"sources": []interface{}{map[string]interface{}{
+					"type":       config.ContextSourceMemory,
+					"reflection": map[string]interface{}{"algorithm": algorithm},
+				}},
 			}),
 		}},
 	}
@@ -39,7 +42,7 @@ func TestCreateMemoryRuntimeValidatesReflectionAlgorithm(t *testing.T) {
 		},
 		{
 			name:  "flat_decision",
-			field: "routing.decisions[memory_route].plugins[memory].reflection.algorithm",
+			field: "routing.decisions[memory_route].plugins[context].sources[memory].reflection.algorithm",
 			build: func(algorithm string) *config.RouterConfig {
 				cfg := &config.RouterConfig{}
 				cfg.Decisions = []config.Decision{reflectionDecision("memory_route", algorithm)}
@@ -48,7 +51,7 @@ func TestCreateMemoryRuntimeValidatesReflectionAlgorithm(t *testing.T) {
 		},
 		{
 			name:  "recipe_decision",
-			field: "routing.decisions[recipe_memory_route].plugins[memory].reflection.algorithm",
+			field: "routing.decisions[recipe_memory_route].plugins[context].sources[memory].reflection.algorithm",
 			build: func(algorithm string) *config.RouterConfig {
 				cfg := &config.RouterConfig{}
 				cfg.Recipes = []config.RoutingRecipe{

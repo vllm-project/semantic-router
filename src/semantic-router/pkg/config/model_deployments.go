@@ -124,7 +124,6 @@ type ModelBinding struct {
 	Adapter        string                   `yaml:"adapter,omitempty" json:"adapter,omitempty"`
 	Head           string                   `yaml:"head,omitempty" json:"head,omitempty"`
 	MappingPath    string                   `yaml:"mapping_path,omitempty" json:"mapping_path,omitempty"`
-	PairScorer     *PairScorerSelection     `yaml:"pair_scorer,omitempty" json:"pair_scorer,omitempty"`
 	OperatingPoint *OperatingPointReference `yaml:"operating_point,omitempty" json:"operating_point,omitempty"`
 
 	// contractImplied marks a contract the signal implied rather than the
@@ -208,7 +207,7 @@ func (d ModelDeployment) validate(cfg *RouterConfig) error {
 	switch d.Provider {
 	case SystemOneProvider:
 		return d.validateSystemOne()
-	case OpenAIEmbeddingsProvider, ClassifyProvider, OpenAIChatProvider, RerankProvider:
+	case OpenAIEmbeddingsProvider, ClassifyProvider, OpenAIChatProvider:
 		return d.validateRemote()
 	case LegacyHTTPProvider:
 		if d.hasConnectionBlock() || d.Capabilities != nil {
@@ -382,8 +381,6 @@ func impliedContract(consumer string) string {
 	switch {
 	case consumer == "embedding":
 		return "embedding.v1"
-	case consumer == RAGRerankerConsumer:
-		return RelevanceScoresContract
 	case isApplicationConsumer(BindingKey(consumer)) || strings.HasPrefix(consumer, "systemone."):
 		return DecisionTaskContract
 	}
@@ -408,15 +405,9 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 	if deployment.IsSystemOne() {
 		return nil
 	}
-	if deployment.Provider == RerankProvider {
-		if decl.MappingPath != "" || decl.Head != "" {
-			return fmt.Errorf("a rerank deployment returns relevance scores; it takes no head or mapping_path")
-		}
-		return nil
-	}
 	if decl.Contract == DecisionTaskContract {
 		allowed := isApplicationConsumer(BindingKey(name)) || strings.HasPrefix(name, "systemone.")
-		if !allowed || !deployment.IsModelRuntime() || decl.Head != "" || decl.MappingPath != "" || decl.OperatingPoint != nil || decl.PairScorer != nil {
+		if !allowed || !deployment.IsModelRuntime() || decl.Head != "" || decl.MappingPath != "" || decl.OperatingPoint != nil {
 			return fmt.Errorf("decision.v1 requires a supported judgment consumer and model_runtime deployment, without head, mapping_path or a classifier operating point")
 		}
 		return nil
@@ -425,17 +416,9 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 	if decl.OperatingPoint != nil {
 		return fmt.Errorf("operating_point calibrated a generic classifier binding; classifier rules are systemone questions now")
 	}
-	if decl.PairScorer != nil && name != RAGRerankerConsumer {
-		return fmt.Errorf("pair_scorer selection is only supported by rag.reranker")
-	}
 	switch {
 	case name == "embedding":
 		want = "embedding.v1"
-	case name == RAGRerankerConsumer:
-		want = RelevanceScoresContract
-		if err := validateRerankerBinding(decl, deployment); err != nil {
-			return err
-		}
 	case isApplicationConsumer(BindingKey(name)):
 		want = DecisionTaskContract
 	default:

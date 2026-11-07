@@ -38,7 +38,7 @@ func TestEmbeddingConsumerUsesSelectedRecipeBinding(t *testing.T) {
 	cfg := &config.RouterConfig{}
 	cfg.EmbeddingConfig.ModelType = "remote"
 	cfg.EmbeddingConfig.TargetDimension = 2
-	compression := config.DecisionPlugin{Type: config.DecisionPluginContextCompression, Configuration: config.MustStructuredPayload(map[string]any{"enabled": true, "scoring": map[string]any{"method": config.ContextCompressionScoringEmbedding}})}
+	compression := config.DecisionPlugin{Type: config.DecisionPluginContext, Configuration: config.MustStructuredPayload(map[string]any{"enabled": true, "sources": []any{map[string]any{"type": config.ContextSourceRAG, "backend": "milvus", "backend_config": map[string]any{"collection": "docs"}}}})}
 	cfg.Decisions = []config.Decision{{Name: "nearest", Plugins: []config.DecisionPlugin{compression}}}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"default-embedding": {Provider: "http", ExternalModel: "default"}, "named-embedding": {Provider: "http", ExternalModel: "named"}}
 	cfg.ExternalModels = []config.ExternalModelConfig{{Name: "default", ModelName: "default", ModelEndpoint: config.ClassifierVLLMEndpoint{Address: endpoint.URL}}, {Name: "named", ModelName: "named", ModelEndpoint: config.ClassifierVLLMEndpoint{Address: endpoint.URL}}}

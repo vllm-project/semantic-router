@@ -11,7 +11,7 @@ translation:
 ## 概览 {#overview}
 
 [Vela 1.0](https://huggingface.co/collections/vllm-sr/vela-10)
-是面向智能路由的专用模型家族。Router 注册表包含 Vela 307M Encoder 基座、任务分类器、检索与重排模型以及多模态嵌入模型，每个版本都固定到不可变的 revision。
+是面向智能路由的专用模型家族。Router 注册表包含 Vela 307M Encoder 基座、任务分类器、检索模型以及多模态嵌入模型，每个版本都固定到不可变的 revision。
 
 | 模型 | 作用 |
 | --- | --- |
@@ -25,7 +25,6 @@ translation:
 | Feedback | 四类反馈及中性 `NO_FEEDBACK` 类别 |
 | Modality | 从文本请求判断文本、图像或混合输出意图 |
 | Embedding | 多语言检索和语义匹配 |
-| Reranker | 为查询与文档对计算相关性 |
 
 完整模型名由 `Vela-1.0-Encoder-307M` 和任务后缀组成。Modality 从文本请求判断所需的输出模态。FactCheck 判断是否需要核查，并不验证回答的事实真伪。
 
@@ -125,7 +124,7 @@ global:
           overflow: reject
 ```
 
-其他共享同一回答的信号以同样方式按信号类型绑定。Embedding 在 `global.model_catalog.embeddings.default` 中指定部署，reranker 在 RAG 插件的 `rerank.deployment` 中指定。信号决定每个模型返回什么（PII 片段、embedding 向量、相关性分数），运行时从模型包读取每个模型的架构，因此不需要写契约或适配器。完整说明见[与路由器一起运行](../../model-runtime/deploy.md)。
+其他共享同一回答的信号以同样方式按信号类型绑定。Embedding 在 `global.model_catalog.embeddings.default` 中指定部署。信号决定每个模型返回什么（PII 片段、embedding 向量），运行时从模型包读取每个模型的架构，因此不需要写契约或适配器。完整说明见[与路由器一起运行](../../model-runtime/deploy.md)。
 
 要把 Hazard 作为独立分类器使用，在它的部署上用 `operating_point` 通过 SHA-256 固定 `operating_point.json`，并在分类器规则上指定该部署。该策略绑定权重、tokenizer、重叠窗口和十二个阈值。Decision 选择标签，不覆盖这些阈值；参考配置包含完整示例。
 
@@ -135,13 +134,13 @@ PII 的重叠扫描、Hazard 的窗口策略与整段文本分类不同。应按
 
 模型运行时用 PyTorch 在 CPU、CUDA 或 ROCm 上运行 Vela。支持的输入长度是容量上限，不是时延保证。长输入在少核 CPU 上可能超过请求截止时间；请按实际输入长度和并发测量，选择足够的 CPU 容量或 GPU，而不是假设延长超时就能解决容量不足。[引擎参数](../../model-runtime/engine-args)调整批处理和精度，[选择模型](../../model-runtime/choose-a-model.md)列出每个模型的开销。
 
-[Vela AMD 配方](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)把全部十个任务模型放在 AMD GPU 上，并保留发布的运行策略。`--platform rocm` 选择 AMD 镜像及设备访问，不会让所有模型自动使用 GPU，也不会覆盖显式 CPU 部署。见 [AMD ROCm](../../installation/amd-rocm.md#run-vela-routing-models-on-amd)。
+[Vela AMD 配方](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)把决策模型和 embedding 模型放在 AMD GPU 上，并保留发布的运行策略。`--platform rocm` 选择 AMD 镜像及设备访问，不会让所有模型自动使用 GPU，也不会覆盖显式 CPU 部署。见 [AMD ROCm](../../installation/amd-rocm.md#run-vela-routing-models-on-amd)。
 
 早期版本通过 Candle、ONNX Runtime、MIGraphX 或 OpenVINO 运行 Vela，并用 `head` 选择导出的 ONNX 计算图。这些 provider 已移除；模型仓库仍保留 ONNX 导出供其他工具使用。`vllm-sr config migrate` 会改写旧的 deployment，见[从原生绑定迁移](../../model-runtime/migrate.md)。
 
 各模型卡片列出支持的输入长度、用法及可比评测结果。公开对比以此前的 mmBERT 家族为基线，使用匹配数据；质量分数、最大可接受输入长度和推理性能衡量的是不同属性。
 
-## 验证真实路由与重排 {#verify-live-routing-and-reranking}
+## 验证真实路由 {#verify-live-routing}
 
 使用 Vela AMD 配方时，下载并验证完整配置，再选择 AMD 镜像启动。按配方模型卡片说明连接已有的 vLLM 后端：服务名为 `vela-default`，地址为 `vllm:8000`。
 
@@ -163,7 +162,7 @@ curl --fail 'http://localhost:8080/api/v1/routing/preview?trace=true' \
 
 使用 entrypoint 声明的公共模型名。请求前检查 `/ready`，并查看响应中的信号值与求值轨迹。
 
-重排发生在路由后的 vectorstore RAG 插件中。按[神经重排](/docs/tutorials/plugin/rag#neural-reranking)在插件的 `rerank` 块中指定 reranker 部署，通过已入库文档和真实聊天请求验证。请求 trace 记录候选数、reranker 身份、相关性分数和重排时延；routing Preview 不执行 RAG 插件。
+检索发生在路由后的 context 插件中：RAG 源召回文档，decision model 的相关性判断保留相关的文档，见 [RAG 源](../plugin/context#rag-sources)。通过已入库文档和真实聊天请求验证；routing Preview 不执行 context 插件。
 
 ## 保留旧部署 {#preserve-an-earlier-deployment}
 

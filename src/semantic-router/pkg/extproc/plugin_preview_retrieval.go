@@ -3,21 +3,26 @@ package extproc
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/match"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/pluginruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
 
 var _ pluginruntime.RetrievalPreviewRuntime = (*OpenAIRouter)(nil)
 
+// PreviewRAG previews the rag source of a decision's context plugin: in
+// probe mode it recalls and judges the documents, without the result cache,
+// and either way injects the context as the plugin does.
 func (r *OpenAIRouter) PreviewRAG(ctx context.Context, input pluginruntime.RAGPreviewRequest) (pluginruntime.RAGPreviewResponse, error) {
 	mode, err := pluginruntime.NormalizeMode(input.Mode)
 	if err != nil {
 		return pluginruntime.RAGPreviewResponse{}, err
 	}
-	requestContext, err := r.pluginPreviewContext(ctx, input.Binding, "rag")
+	requestContext, err := r.pluginPreviewContext(ctx, input.Binding, config.DecisionPluginContext)
 	if err != nil {
 		return pluginruntime.RAGPreviewResponse{}, err
 	}
@@ -31,41 +36,41 @@ func (r *OpenAIRouter) PreviewRAG(ctx context.Context, input pluginruntime.RAGPr
 	requestContext.RequestID = "plugin-preview"
 	snapshot := extractSemanticRequestSignalsWith(&request, r.routingInputSelector())
 	requestContext.UserContent, requestContext.RoutingInput = snapshot.UserContent, snapshot.RoutingInput
-	policy := requestContext.VSRSelectedDecision.GetRAGConfig()
-	if policy == nil {
+	plugin := requestContext.VSRSelectedDecision.GetContextConfig()
+	source := plugin.Source(config.ContextSourceRAG)
+	if source == nil {
 		return pluginruntime.RAGPreviewResponse{}, pluginruntime.ErrInvalidBinding
 	}
 	result := pluginruntime.RAGPreviewResponse{
 		Guarantees: pluginruntime.Guarantees{Mode: mode}, Binding: input.Binding,
-		Enabled: policy.Enabled, Stage: "injection", Backend: policy.Backend,
+		Enabled: plugin.Enabled, Stage: "injection", Backend: source.Backend,
 	}
 	contextText := input.SuppliedContext
-	if policy.Enabled && mode == pluginruntime.ModeProbe {
+	if plugin.Enabled && mode == pluginruntime.ModeProbe {
 		if input.SuppliedContext != "" {
 			return result, fmt.Errorf("supplied_context is only accepted in preview mode")
 		}
 		result.Stage = "retrieval_and_injection"
 		result.BackendCalls = true
-		if policy.Backend == "openai" {
-			backend, configErr := policy.OpenAIBackendConfig()
-			if configErr != nil {
-				return result, configErr
-			}
-			if backend.WorkflowMode == "tool_based" {
-				result.BackendCalls = false
-			}
+		matched, matchErr := r.matcher().Match(ctx, config.MatchRAG, source.Match, match.Input{
+			Request: requestContext.UserContent, Index: ragIndex{router: r, request: requestContext, source: source},
+		})
+		if matchErr != nil {
+			return result, fmt.Errorf("configured RAG retrieval failed: %w", matchErr)
 		}
-		// Intentionally call the shared backend implementation directly: the normal
-		// wrapper reads/writes the RAG result cache and changes request metrics.
-		contextText, err = r.retrieveContextFromBackend(ctx, requestContext, policy)
-		if err != nil {
-			return result, fmt.Errorf("configured RAG retrieval failed: %w", err)
+		texts := make([]string, len(matched.Kept))
+		for index, document := range matched.Kept {
+			texts[index] = document.Text
+			requestContext.RAGSimilarityScore = max(requestContext.RAGSimilarityScore, float32(document.Similarity))
 		}
+		contextText = strings.Join(texts, "\n\n---\n\n")
 	}
-	if policy.Enabled {
-		if err = r.injectRAGContext(requestContext, contextText, policy); err != nil {
+	if plugin.Enabled && contextText != "" {
+		contextText = truncateRAGContext(contextText, source)
+		if err = r.injectContext(requestContext, plugin, config.ContextSourceRAG, contextText); err != nil {
 			return result, err
 		}
+		requestContext.RAGRetrievedContext = contextText
 	}
 	encoded, err := engine.EncodeRequest(format, request, envelope)
 	if err != nil {

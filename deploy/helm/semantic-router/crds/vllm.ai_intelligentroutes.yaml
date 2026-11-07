@@ -170,13 +170,11 @@ spec:
                               Type is the plugin type. response_cache is canonical; semantic-cache,
                               semantic_cache, and response-cache are deprecated aliases.
                             enum:
-                            - context_compression
+                            - context
                             - fast_response
                             - header_mutation
                             - masking
-                            - memory
                             - prompt_cache
-                            - rag
                             - request_params
                             - response-cache
                             - response_cache

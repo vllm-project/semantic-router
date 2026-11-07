@@ -151,7 +151,7 @@ var matchFeatures = map[MatchFeature]matchFeature{
 		defaults: MatchConfig{Recall: &MatchRecall{Method: MatchRecallEmbedding, TopK: 3, MinSimilarity: matchBound(0.8)}},
 	},
 	MatchRAG: {
-		noun: "a RAG source", indexed: true, recallMethods: []string{MatchRecallEmbedding, MatchRecallBM25},
+		noun: "a RAG source", indexed: true, recallMethods: []string{MatchRecallEmbedding},
 		defaults: MatchConfig{
 			Recall: &MatchRecall{Method: MatchRecallEmbedding, TopK: 20, MinSimilarity: matchBound(0.3)},
 			Judge:  &MatchJudge{Preset: presets.Relevance, TopK: 6, MinScore: matchBound(presets.NeutralThreshold)},

@@ -15,8 +15,8 @@ import (
 )
 
 // signalRuntime is the part of a router generation that extracts signals:
-// the model runtime deployments it leases and the embeddings, rerankers and
-// recipe classifiers built on them. Building one waits until every
+// the model runtime deployments it leases and the embeddings and recipe
+// classifiers built on them. Building one waits until every
 // Router-managed deployment it leases is ready. When a configuration change
 // leaves the signals component's resources unchanged, the next generation
 // shares this runtime instead of building another, and the last generation
@@ -34,7 +34,6 @@ type signalRuntime struct {
 	embeddings        *embedding.Set
 	serviceEmbeddings *embedding.Set
 	cacheEmbeddings   *embedding.Set
-	rerankers         map[config.RecipeName]modelruntime.PairScorer
 	recipeClassifiers *classification.RecipeClassifiers
 	classifier        *classification.Classifier
 
@@ -97,11 +96,6 @@ func (s *signalRuntime) build(cfg *config.RouterConfig, pool *binding.Pool) erro
 		}
 		s.resources.add(s.cacheEmbeddings.Close)
 	}
-	if s.rerankers, err = modelruntime.PrepareRerankers(context.Background(), cfg, s.serving); err != nil {
-		return err
-	}
-	s.resources.add(func() error { return modelruntime.CloseRerankers(s.rerankers) })
-
 	s.recipeClassifiers, s.classifier, err = buildRecipeClassifiers(cfg, classification.RecipeRuntimeOptions{
 		Runtime: s.serving, Embeddings: s.embeddings, SystemOne: s.systemOne,
 	})

@@ -278,7 +278,7 @@ func assertReferenceConfigDeploymentCoverage(t testingT, deployments map[string]
 		}
 		providers[provider] = true
 	}
-	for _, provider := range []string{ModelRuntimeProvider, ModelRuntimeProvider + " (attached)", SystemOneProvider, ClassifyProvider, OpenAIChatProvider, OpenAIEmbeddingsProvider, RerankProvider} {
+	for _, provider := range []string{ModelRuntimeProvider, ModelRuntimeProvider + " (attached)", SystemOneProvider, ClassifyProvider, OpenAIChatProvider, OpenAIEmbeddingsProvider} {
 		if !providers[provider] {
 			t.Fatalf("global.model_catalog.deployments must declare a %s deployment", provider)
 		}

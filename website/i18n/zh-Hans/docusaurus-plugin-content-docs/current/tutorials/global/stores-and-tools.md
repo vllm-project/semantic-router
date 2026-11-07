@@ -136,7 +136,7 @@ global:
 
 #### 混合检索与反思 {#hybrid-search-and-reflection}
 
-`hybrid_mode` 和 `reflection.algorithm` 可以在 `global.stores.memory` 下全局设置，也可以在决策的 `memory` 插件中覆盖。配置其他任何值（包括 recipe 决策中设置的值）时，Router 将拒绝启动：
+`hybrid_mode` 和 `reflection.algorithm` 可以在 `global.stores.memory` 下全局设置，也可以在决策 `context` 插件的记忆源中覆盖。配置其他任何值（包括 recipe 决策中设置的值）时，Router 将拒绝启动：
 
 | 字段 | 可接受的值 | 默认值 |
 |------|-----------|--------|

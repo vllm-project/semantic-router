@@ -1,7 +1,7 @@
 ---
 is_mtpe: false
 title: 远程服务
-description: 连接 Router 之外部署的分类器、防护模型、chat 评判模型、嵌入模型或重排序模型。
+description: 连接 Router 之外部署的分类器、防护模型、chat 评判模型或嵌入模型。
 translation:
   source_commit: "3e9e4262e5c4e286ede3fb75cdac83edb985b6aa"
   source_file: "docs/installation/runtime/external.md"
@@ -17,7 +17,6 @@ translation:
 | 分类 API（`POST <endpoint>/classify`） | `classify` | 领域、自定义标签、提示词攻击、PII、幻觉检测、complexity、safety |
 | Chat API（`POST <endpoint>/chat/completions`） | `openai_chat` | 提示词攻击、幻觉检测、preference、LLM 分类 |
 | OpenAI 兼容的 embedding API（`POST <endpoint>/embeddings`） | `openai_embeddings` | [远程 embedding](../../model-runtime/guides/embeddings.md#use-an-external-embedding-service) |
-| Rerank API（`POST <endpoint>/rerank`） | `rerank` | [RAG 重排序](../../tutorials/plugin/rag.md#neural-reranking) |
 | System One API | `systemone` | [System One 问题](../../tutorials/signal/learned/systemone.md#ask-a-remote-system-one-model)以及每个内置问题类信号 |
 | MCP 工具 | `modules.classifier.mcp` | 通过 MCP 服务器分类 |
 

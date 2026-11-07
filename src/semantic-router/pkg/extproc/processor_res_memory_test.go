@@ -342,10 +342,10 @@ func TestResponseMemoryAutoStoreSurvivesProviderPreparation(t *testing.T) {
 				memoryPersistence: runner,
 			}
 			ctx := persistenceRegressionContext(tc.name)
-			payload, err := config.NewStructuredPayload(config.MemoryPluginConfig{Enabled: true, AutoStore: tc.decisionAutoStore})
+			payload, err := config.NewStructuredPayload(*memorySourcePlugin(tc.decisionAutoStore))
 			require.NoError(t, err)
 			ctx.VSRSelectedDecision = &config.Decision{
-				Name: tc.name, Plugins: []config.DecisionPlugin{{Type: config.DecisionPluginMemory, Configuration: payload}},
+				Name: tc.name, Plugins: []config.DecisionPlugin{{Type: config.DecisionPluginContext, Configuration: payload}},
 			}
 			ctx.SourceFormat = llmprotocol.OpenAIResponsesV1
 			ctx.RouterReplayID = tc.name

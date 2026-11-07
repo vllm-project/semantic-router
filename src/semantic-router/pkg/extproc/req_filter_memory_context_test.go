@@ -37,7 +37,7 @@ func TestConcreteModelBypassesMemoryPlugin(t *testing.T) {
 	ctx := &RequestContext{SemanticRequest: request}
 	ctx.Routing.SelectPassthrough()
 
-	require.NoError(t, router.handleMemoryRetrieval(ctx, "hello", request))
+	require.NoError(t, router.retrieveContextSources(ctx, "hello", request))
 	assert.Len(t, request.Messages, 1)
 	assert.Empty(t, ctx.MemoryBackend)
 }
@@ -77,9 +77,7 @@ func TestMemoryRuntimeReceiptRecordsFailOpenRetrievalError(t *testing.T) {
 	}
 	before := testutil.ToFloat64(metrics.PluginExecutionTotal.WithLabelValues("memory", "balance", "unavailable"))
 
-	err := router.handleMemoryRetrieval(ctx, "What did I say?", request)
-	require.ErrorContains(t, err, "memory retrieval failed")
-	require.NotContains(t, err.Error(), "secret-canary")
+	require.NoError(t, router.retrieveContextSources(ctx, "What did I say?", request))
 	assert.Len(t, request.Messages, 1)
 	assert.Equal(t, before+1, testutil.ToFloat64(metrics.PluginExecutionTotal.WithLabelValues("memory", "balance", "unavailable")))
 	diagnostics := buildReplayRouteDiagnostics(ctx, "vllm-sr/auto", "model-a", "balance", 0, 0)
@@ -107,14 +105,18 @@ func TestMemoryRuntimeInjectsNeutralMessage(t *testing.T) {
 		SemanticRequest: request,
 	}
 
-	require.NoError(t, router.handleMemoryRetrieval(ctx, "What is my deadline?", request))
-	require.Len(t, request.Messages, 2)
-	assert.Equal(t, llmprotocol.RoleUser, request.Messages[0].Role)
-	assert.Contains(t, request.Messages[0].Content[0].Text, "deadline is Friday")
-	assert.Equal(t, "What is my deadline?", request.Messages[1].Content[0].Text)
+	require.NoError(t, router.retrieveContextSources(ctx, "What is my deadline?", request))
+	require.Len(t, request.Messages, 3)
+	assert.Equal(t, "What is my deadline?", request.Messages[0].Content[0].Text)
+	call, result := request.Messages[1].Content[0].ToolCall, request.Messages[2].Content[0].ToolResult
+	require.NotNil(t, call)
+	require.NotNil(t, result)
+	assert.Equal(t, memoryContextToolName, call.Name)
+	assert.Equal(t, call.ID, result.CallID)
+	assert.Contains(t, result.Content[0].Text, "deadline is Friday")
 	assert.Equal(t, llmprotocol.RoleDeveloper, request.Instructions[0].Role)
 	assert.Equal(t, uint64(2), request.Generation)
-	assert.Contains(t, ctx.MemoryMessageIndexes, 0)
+	assert.Contains(t, ctx.MemoryToolCallIDs, call.ID)
 	diagnostics := buildReplayRouteDiagnostics(ctx, "vllm-sr/auto", "model-a", "balance", 0, 0)
 	assert.Equal(t, "used", diagnostics.MemoryStatus)
 	assert.Equal(t, "injected", diagnostics.MemoryReason)
@@ -157,7 +159,7 @@ func TestMemoryRetrievalThresholdFallsBackToConfigDefault(t *testing.T) {
 				SemanticRequest: request,
 			}
 
-			require.NoError(t, router.handleMemoryRetrieval(ctx, query, request))
+			require.NoError(t, router.retrieveContextSources(ctx, query, request))
 			assert.Equal(t, tc.want, store.threshold)
 		})
 	}
@@ -209,10 +211,10 @@ func TestReferenceMemoryCalibratedRequestPath(t *testing.T) {
 
 	decision := cfg.GetDecisionByName("computer-science-remom-route")
 	require.NotNil(t, decision)
-	plugin := decision.GetMemoryConfig()
+	plugin := decision.GetContextConfig().Source(config.ContextSourceMemory)
 	require.NotNil(t, plugin)
-	require.NotNil(t, plugin.SimilarityThreshold)
-	require.Equal(t, float32(0.40), *plugin.SimilarityThreshold)
+	require.NotNil(t, plugin.Match)
+	require.Equal(t, 0.40, *plugin.Match.Recall.MinSimilarity)
 	require.Equal(t, "weighted", plugin.HybridMode)
 	require.NotNil(t, plugin.Reflection)
 	require.Equal(t, "heuristic", plugin.Reflection.Algorithm)
@@ -243,7 +245,7 @@ func TestReferenceMemoryCalibratedRequestPath(t *testing.T) {
 					VSRSelectedDecision: tc.decision,
 					SemanticRequest:     request,
 				}
-				require.NoError(t, router.handleMemoryRetrieval(ctx, query.text, request))
+				require.NoError(t, router.retrieveContextSources(ctx, query.text, request))
 				assert.Equal(t, query.wantStatus, ctx.MemoryStatus)
 				if query.wantStatus == "used" {
 					assert.Contains(t, ctx.MemoryContext, query.wantFact)

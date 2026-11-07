@@ -59,11 +59,6 @@ BASE = {
                     "endpoint": "https://embed.example.com/v1",
                     "model": "embed-1",
                 },
-                "ranker": {
-                    "provider": "rerank",
-                    "endpoint": "https://rank.example.com/v1",
-                    "model": "rank-1",
-                },
                 "d3-remote": {
                     "provider": "systemone",
                     "endpoint": "https://systemone.example.com/v1/systemone",
@@ -125,7 +120,7 @@ def _signal_bindings(document):
     }
 
 
-def _rag_rerank(document):
+def _rag_judge(document):
     document["routing"]["decisions"] = [
         {
             "name": "retrieve",
@@ -134,18 +129,24 @@ def _rag_rerank(document):
             "modelRefs": [{"model": "small"}],
             "plugins": [
                 {
-                    "type": "rag",
+                    "type": "context",
                     "configuration": {
                         "enabled": True,
-                        "backend": "vectorstore",
-                        "top_k": 10,
-                        "rerank": {
-                            "deployment": "ranker",
-                            "top_k": 3,
-                            "layer": 22,
-                            "dimension": 768,
-                        },
-                        "backend_config": {"vector_store_id": "vs-test"},
+                        "sources": [
+                            {
+                                "type": "rag",
+                                "backend": "vectorstore",
+                                "match": {
+                                    "recall": {"method": "embedding", "top_k": 10},
+                                    "judge": {
+                                        "preset": "relevance",
+                                        "deployment": "d3-remote",
+                                        "top_k": 3,
+                                    },
+                                },
+                                "backend_config": {"vector_store_id": "vs-test"},
+                            }
+                        ],
                     },
                 }
             ],
@@ -322,7 +323,7 @@ SCHEMA_SHAPES = [
     pytest.param(_deployment_settings, id="deployment settings"),
     pytest.param(_rule_deployments, id="rule deployments"),
     pytest.param(_embedding_defaults, id="embedding defaults"),
-    pytest.param(_rag_rerank, id="rag rerank deployment"),
+    pytest.param(_rag_judge, id="rag relevance judge deployment"),
 ]
 
 

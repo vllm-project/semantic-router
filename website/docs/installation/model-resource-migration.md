@@ -156,53 +156,6 @@ global:
       query_rewrite: {deployment: rewriter}
 ```
 
-## The RAG reranker binding
-
-```yaml title="migrate-rag-reranker-before"
-global:
-  model_catalog:
-    deployments:
-      document-ranker:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Reranker
-        revision: a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf
-        device: cpu
-        input: {max_tokens: 4096, overflow: reject}
-routing:
-  model_bindings:
-    rag.reranker:
-      deployment: document-ranker
-      contract: relevance_scores.v1
-      adapter: vela_reranker
-      pair_scorer: {layer: 22, dimension: 768}
-  decisions:
-    - name: rag
-      plugins:
-        - type: rag
-          configuration: {enabled: true, backend: vectorstore, rerank: {top_k: 3}}
-```
-
-```yaml title="migrate-rag-reranker-after"
-global:
-  model_catalog:
-    deployments:
-      document-ranker:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Reranker
-        revision: a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf
-        device: cpu
-        input: {max_tokens: 4096, overflow: reject}
-routing:
-  decisions:
-    - name: rag
-      plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: vectorstore
-            rerank: {deployment: document-ranker, top_k: 3, layer: 22, dimension: 768}
-```
-
 ## Deployment fields
 
 Top-level `question_types` moves under `capabilities`, `served_name` becomes

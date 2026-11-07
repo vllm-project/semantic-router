@@ -62,7 +62,6 @@ var (
 		validateConversationContracts,
 		validateDecisionContracts,
 		validateDecisionSemanticCacheContracts,
-		validateDecisionMemoryContracts,
 		validateRoutingModalityContracts,
 		validateSignalStageContracts,
 		validateResponseGuardReferences,

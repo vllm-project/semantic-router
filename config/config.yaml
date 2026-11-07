@@ -938,45 +938,47 @@ routing:
               model_revision: "model-catalog-v1"
               prompt_revision: "prompts-v1"
               policy_revision: "policy-v1"
-        - type: context_compression
+        - type: context
           configuration:
             enabled: true
-            mode: auto
+            sources:
+              - type: memory
+            compress:
+              mode: auto
+              targets:
+                current_user:
+                  mode: preserve
+                tool_outputs:
+                  mode: extractive
+                  min_tokens: 2000
+                  target_tokens: 1000
+                history:
+                  mode: preserve
+                rag:
+                  mode: preserve
+                memory:
+                  mode: preserve
+              match:
+                recall:
+                  method: bm25
+              recovery:
+                enabled: false
+                store: response_cache
+                ttl_seconds: 900
+                max_bytes_per_request: 10485760
+                max_total_bytes: 268435456
+                max_retrievals: 8
+              request_controls:
+                enabled: false
+                header: x-vsr-compression-control
+                allowed:
+                  - bypass
+                  - target
+                max_target_tokens: 16000
+              failure_mode: fail_open
             budget:
-              trigger_tokens: auto
-              target_tokens: auto
+              max_tokens: auto
               reserve_output_tokens: auto
-            targets:
-              current_user:
-                mode: preserve
-              tool_outputs:
-                mode: extractive
-                min_tokens: 2000
-                target_tokens: 1000
-              history:
-                mode: preserve
-              rag:
-                mode: preserve
-              memory:
-                mode: preserve
-            scoring:
-              method: bm25
-              embedding_model_ref: ""
-            recovery:
-              enabled: false
-              store: response_cache
-              ttl_seconds: 900
-              max_bytes_per_request: 10485760
-              max_total_bytes: 268435456
-              max_retrievals: 8
-            request_controls:
-              enabled: false
-              header: x-vsr-compression-control
-              allowed:
-                - bypass
-                - target
-              max_target_tokens: 16000
-            failure_mode: fail_open
         - type: tools
           configuration:
             enabled: true
@@ -1197,23 +1199,29 @@ routing:
           include_intermediate_responses: true
           max_responses_per_round: 2
       plugins:
-        - type: memory
+        - type: context
           configuration:
             enabled: true
-            retrieval_limit: 6
-            similarity_threshold: 0.40
-            auto_store: true
-            hybrid_search: true
-            hybrid_mode: weighted
-            reflection:
-              enabled: true
-              algorithm: heuristic
-              max_inject_tokens: 384
-              recency_decay_days: 14
-              dedup_threshold: 0.9
-              block_patterns:
-                - api key
-                - password
+            sources:
+              - type: memory
+                match:
+                  recall:
+                    method: embedding
+                    top_k: 6
+                    min_similarity: 0.40
+                store:
+                  auto: true
+                hybrid_search: true
+                hybrid_mode: weighted
+                reflection:
+                  enabled: true
+                  algorithm: heuristic
+                  max_inject_tokens: 384
+                  recency_decay_days: 14
+                  dedup_threshold: 0.9
+                  block_patterns:
+                    - api key
+                    - password
 
     - name: deliberation-fusion-route
       description: Fusion route for prompts that benefit from panel deliberation.
@@ -1465,6 +1473,8 @@ routing:
         conditions:
           - type: language
             name: es
+          - type: fact_check
+            name: needs_fact_check
       modelRefs:
         - model: qwen3-8b
           use_reasoning: false
@@ -1477,23 +1487,35 @@ routing:
           stability_weight: 1.2
           switch_margin: 0.04
       plugins:
-        - type: rag
+        - type: context
           configuration:
             enabled: true
-            backend: milvus
-            similarity_threshold: 0.78
-            top_k: 5
-            max_context_length: 12000
-            injection_mode: tool_role
-            on_failure: warn
-            cache_results: true
-            cache_ttl_seconds: 600
-            min_confidence_threshold: 0.55
-            backend_config:
-              collection: docs
-              reuse_cache_connection: true
-              content_field: content
-              filter_expression: locale == "es"
+            sources:
+              - type: rag
+                backend: milvus
+                match:
+                  recall:
+                    method: embedding
+                    top_k: 5
+                    min_similarity: 0.78
+                  judge:
+                    preset: relevance
+                    deployment: primary
+                    top_k: 6
+                    min_score: 0.5
+                    min_ratio: 0.2
+                    on_error: skip
+                    timeout_ms: 1500
+                max_context_length: 12000
+                on_failure: warn
+                cache_results: true
+                cache_ttl_seconds: 600
+                backend_config:
+                  collection: docs
+                  reuse_cache_connection: true
+                  content_field: content
+                  filter_expression: locale == "es"
+              - type: memory
 
     - name: admin_adaptive_route
       description: Admin route with Router Learning adaptation and external API RAG.
@@ -1503,6 +1525,8 @@ routing:
         conditions:
           - type: authz
             name: admin
+          - type: fact_check
+            name: needs_fact_check
       modelRefs:
         - model: qwen3-32b
           use_reasoning: true
@@ -1510,27 +1534,37 @@ routing:
         adaptation:
           mode: apply
       plugins:
-        - type: rag
+        - type: context
           configuration:
             enabled: true
-            backend: external_api
-            similarity_threshold: 0.7
-            top_k: 6
-            max_context_length: 8000
-            injection_mode: system_prompt
-            on_failure: block
-            cache_results: false
-            min_confidence_threshold: 0.5
-            backend_config:
-              endpoint: https://search.example.com/query
-              api_key: search-api-key
-              auth_header: X-API-Key
-              request_format: custom
-              request_template: "{\"query\":\"{{.Query}}\",\"top_k\":{{.TopK}},\"threshold\":{{.Threshold}}}"
-              timeout_seconds: 15
-              max_response_bytes: 4194304
-              headers:
-                X-Environment: admin
+            sources:
+              - type: rag
+                backend: external_api
+                match:
+                  recall:
+                    method: embedding
+                    top_k: 6
+                    min_similarity: 0.7
+                  judge:
+                    preset: relevance
+                    top_k: 6
+                    min_score: 0.5
+                max_context_length: 8000
+                on_failure: block
+                cache_results: false
+                backend_config:
+                  endpoint: https://search.example.com/query
+                  api_key: search-api-key
+                  auth_header: X-API-Key
+                  request_format: custom
+                  request_template: "{\"query\":\"{{.Query}}\",\"top_k\":{{.TopK}},\"threshold\":{{.Threshold}}}"
+                  timeout_seconds: 15
+                  max_response_bytes: 4194304
+                  headers:
+                    X-Environment: admin
+              - type: memory
+            injection:
+              mode: system_prompt
 
     - name: long_context_route
       description: Long-context route. MCP RAG stays disabled until an invoker exists.
@@ -1553,26 +1587,29 @@ routing:
         retry_on: reset,connect-failure,retriable-status-codes
         retriable_status_codes: [503]
       plugins:
-        - type: rag
+        - type: context
           configuration:
-            # Keep this example. TestReferenceConfigRAGBackends requires an mcp
-            # backend_config, and enabled must stay false until an invoker exists.
+            # Keep this example: the reference coverage test needs an mcp
+            # backend_config, and enabled stays false until an invoker exists.
             enabled: false
-            backend: mcp
-            similarity_threshold: 0.74
-            top_k: 4
-            max_context_length: 10000
-            injection_mode: tool_role
-            on_failure: skip
-            cache_results: false
-            min_confidence_threshold: 0.5
-            backend_config:
-              server_name: docs-server
-              tool_name: retrieve_docs
-              tool_arguments:
-                query: ${user_content}
-                top_k: ${top_k}
-              timeout_seconds: 20
+            sources:
+              - type: rag
+                backend: mcp
+                match:
+                  recall:
+                    method: embedding
+                    top_k: 4
+                    min_similarity: 0.74
+                max_context_length: 10000
+                on_failure: skip
+                cache_results: false
+                backend_config:
+                  server_name: docs-server
+                  tool_name: retrieve_docs
+                  tool_arguments:
+                    query: ${user_content}
+                    top_k: ${top_k}
+                  timeout_seconds: 20
 
     # multi_factor example: composes quality/latency/cost/load into one
     # weighted score with optional SLO ceilings. Issue #37.
@@ -1713,33 +1750,43 @@ routing:
         conditions:
           - type: domain
             name: other
+          - type: fact_check
+            name: needs_fact_check
       modelRefs:
         - model: qwen3-8b
           use_reasoning: false
       plugins:
-        - type: rag
+        - type: context
           configuration:
             enabled: true
-            backend: openai
-            similarity_threshold: 0.73
-            top_k: 8
-            max_context_length: 9000
-            injection_mode: tool_role
-            on_failure: warn
-            cache_results: true
-            cache_ttl_seconds: 300
-            min_confidence_threshold: 0.35
-            backend_config:
-              vector_store_id: vs_docs_prod
-              base_url: https://api.openai.com
-              api_key: openai-file-search-key
-              max_num_results: 12
-              max_response_bytes: 4194304
-              file_ids: [file_a, file_b]
-              filter:
-                doc_type: manual
-              timeout_seconds: 20
-              workflow_mode: tool_based
+            sources:
+              - type: rag
+                backend: openai
+                match:
+                  recall:
+                    method: embedding
+                    top_k: 8
+                    min_similarity: 0.73
+                  judge:
+                    preset: relevance
+                    top_k: 6
+                    min_score: 0.5
+                max_context_length: 9000
+                on_failure: warn
+                cache_results: true
+                cache_ttl_seconds: 300
+                backend_config:
+                  vector_store_id: vs_docs_prod
+                  base_url: https://api.openai.com
+                  api_key: openai-file-search-key
+                  max_num_results: 12
+                  max_response_bytes: 4194304
+                  file_ids: [file_a, file_b]
+                  filter:
+                    doc_type: manual
+                  timeout_seconds: 20
+                  workflow_mode: tool_based
+              - type: memory
 
     - name: clarification_route
       description: Clarification requests with local vector-store RAG, answered by the first candidate.
@@ -1749,6 +1796,8 @@ routing:
         conditions:
           - type: user_feedback
             name: need_clarification
+          - type: fact_check
+            name: needs_fact_check
       modelRefs:
         - model: qwen3-8b
           use_reasoning: false
@@ -1757,29 +1806,29 @@ routing:
       algorithm:
         type: static
       plugins:
-        - type: rag
+        - type: context
           configuration:
             enabled: true
-            backend: vectorstore
-            similarity_threshold: 0.69
-            top_k: 5
-            # The reranker is named where it is used: document-ranker scores
-            # each query-passage pair at the pair scorer's layer-22, 768-wide
-            # exit and keeps the best 3 of the 5 candidates.
-            rerank:
-              deployment: document-ranker
-              top_k: 3
-              layer: 22
-              dimension: 768
-            max_context_length: 7000
-            injection_mode: tool_role
-            on_failure: skip
-            cache_results: true
-            cache_ttl_seconds: 900
-            min_confidence_threshold: 0.25
-            backend_config:
-              vector_store_id: local-vs
-              file_ids: [kb-001, kb-002]
+            sources:
+              - type: rag
+                backend: vectorstore
+                match:
+                  recall:
+                    method: embedding
+                    top_k: 5
+                    min_similarity: 0.69
+                  judge:
+                    preset: relevance
+                    top_k: 3
+                    min_score: 0.5
+                max_context_length: 7000
+                on_failure: skip
+                cache_results: true
+                cache_ttl_seconds: 900
+                backend_config:
+                  vector_store_id: local-vs
+                  file_ids: [kb-001, kb-002]
+              - type: memory
 
     - name: repeat_question_escalation
       description: Escalate when the user repeats the same question after an unsatisfying answer.
@@ -1824,35 +1873,47 @@ routing:
       description: Route that only matches when prompt-injection signals are absent.
       priority: 110
       rules:
-        operator: NOT
+        operator: AND
         conditions:
-          - type: jailbreak
-            name: prompt_injection
+          - operator: NOT
+            conditions:
+              - type: jailbreak
+                name: prompt_injection
+          - type: fact_check
+            name: needs_fact_check
       modelRefs:
         - model: qwen3-8b
           use_reasoning: false
       plugins:
-        - type: rag
+        - type: context
           configuration:
             enabled: true
-            backend: hybrid
-            similarity_threshold: 0.76
-            top_k: 6
-            max_context_length: 9000
-            injection_mode: tool_role
-            on_failure: warn
-            cache_results: false
-            min_confidence_threshold: 0.45
-            backend_config:
-              primary: milvus
-              fallback: external_api
-              strategy: parallel
-              primary_config:
-                collection: docs
-                reuse_cache_connection: true
-              fallback_config:
-                endpoint: https://search.example.com/query
-                request_format: pinecone
+            sources:
+              - type: rag
+                backend: hybrid
+                match:
+                  recall:
+                    method: embedding
+                    top_k: 6
+                    min_similarity: 0.76
+                  judge:
+                    preset: relevance
+                    top_k: 6
+                    min_score: 0.5
+                max_context_length: 9000
+                on_failure: warn
+                cache_results: false
+                backend_config:
+                  primary: milvus
+                  fallback: external_api
+                  strategy: parallel
+                  primary_config:
+                    collection: docs
+                    reuse_cache_connection: true
+                  fallback_config:
+                    endpoint: https://search.example.com/query
+                    request_format: pinecone
+              - type: memory
 
     - name: machine_learning_route
       description: Machine-learning questions go to the local model.
@@ -2729,12 +2790,6 @@ global:
           max_response_bytes: 16777216
         capabilities:
           dimensions: 1024
-      # A remote reranker: POST <endpoint>/rerank. Name it in a rag plugin's
-      # rerank.deployment to rerank with it.
-      remote-reranker:
-        provider: rerank
-        endpoint: https://rerank.example.com
-        model: bge-reranker-v2-m3
     # The deployments that embed text and images: embedding signals, the
     # response cache, memory and the vector store. vela-embedding and
     # omni-nano are the defaults.

@@ -168,7 +168,8 @@ func TestMaskingCoversPersonalDataInjectedByRAG(t *testing.T) {
 			detector := &stubPIIDetector{values: []string{maskingRawEmail, "carol@example.com"}}
 			useMaskingDetector(t, detector)
 			ctx := newMaskingContext(t, router, llmprotocol.OpenAIChatV1, maskingDecision(true))
-			if err := router.injectRAGContext(ctx, document, &config.RAGPluginConfig{InjectionMode: mode}); err != nil {
+			plugin := &config.ContextPluginConfig{Enabled: true, Injection: &config.ContextInjectionConfig{Mode: mode}}
+			if err := router.injectContext(ctx, plugin, config.ContextSourceRAG, document); err != nil {
 				t.Fatalf("inject: %v", err)
 			}
 

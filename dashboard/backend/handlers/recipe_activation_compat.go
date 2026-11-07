@@ -303,7 +303,7 @@ func addSemanticCacheStorage(required map[string]struct{}, config *routerconfig.
 }
 
 func addMemoryStorage(required map[string]struct{}, config *routerconfig.RouterConfig) {
-	if !memoryStoreEnabled(config) {
+	if !config.UsesMemory() {
 		return
 	}
 	backend := strings.ToLower(strings.TrimSpace(config.Memory.Backend))
@@ -332,18 +332,6 @@ func addVectorStorage(required map[string]struct{}, config *routerconfig.RouterC
 		isManagedStorageEndpoint(vector.MetadataPostgres.Host, "postgres") {
 		required["postgres"] = struct{}{}
 	}
-}
-
-func memoryStoreEnabled(config *routerconfig.RouterConfig) bool {
-	if config.Memory.Enabled {
-		return true
-	}
-	for _, decision := range config.AllRoutingDecisions() {
-		if decision.HasPlugin(routerconfig.DecisionPluginMemory) {
-			return true
-		}
-	}
-	return false
 }
 
 func anyManagedStorageEndpoint(endpoints []string, backend string) bool {

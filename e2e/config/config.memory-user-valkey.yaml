@@ -54,7 +54,7 @@ routing:
           configuration:
             system_prompt: You are a helpful assistant. Memory access is disabled for this route.
             mode: insert
-        - type: memory
+        - type: context
           configuration:
             enabled: false
 
@@ -74,12 +74,18 @@ routing:
           configuration:
             system_prompt: You are a helpful assistant with strict memory matching.
             mode: insert
-        - type: memory
+        - type: context
           configuration:
             enabled: true
-            retrieval_limit: 5
-            similarity_threshold: 0.99
-            auto_store: true
+            sources:
+              - type: memory
+                match:
+                  recall:
+                    method: embedding
+                    top_k: 5
+                    min_similarity: 0.99
+                store:
+                  auto: true
 
     - name: default_route
       description: Default route for memory testing
@@ -95,12 +101,18 @@ routing:
           configuration:
             system_prompt: You are MoM, a helpful AI assistant with memory. You remember important facts about users and use this context to provide personalized assistance.
             mode: insert
-        - type: memory
+        - type: context
           configuration:
             enabled: true
-            retrieval_limit: 5
-            similarity_threshold: 0.45
-            auto_store: true
+            sources:
+              - type: memory
+                match:
+                  recall:
+                    method: embedding
+                    top_k: 5
+                    min_similarity: 0.45
+                store:
+                  auto: true
 global:
   services:
     response_api:

@@ -89,7 +89,7 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 	}
 	// A remote default does not suppress an explicit local primary deployment.
 	active := map[string]bool{
-		"embedding": needed[primary], config.RAGRerankerConsumer: cfg.NeedsRAGReranker(),
+		"embedding": needed[primary],
 	}
 	required := ExtractRequiredFilesByModel(&scoped)
 	for path, files := range embeddingModelRequiredFiles(&scoped) {

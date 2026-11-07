@@ -60,19 +60,18 @@ func TestRetrieveFromExternalAPIEmbedsTheQueryOnce(t *testing.T) {
 				map[string]embedding.Provider{config.RAGQueryEmbeddingModel: embedder},
 				config.RAGQueryEmbeddingModel,
 			)}
-			topK := 2
-			ragConfig := &config.RAGPluginConfig{
-				Enabled:       true,
+			ragConfig := &config.ContextSource{
+				Type:          config.ContextSourceRAG,
 				Backend:       "external_api",
-				TopK:          &topK,
 				BackendConfig: config.MustStructuredPayload(&config.ExternalAPIRAGConfig{Endpoint: server.URL, RequestFormat: tt.format}),
 			}
 			query := strings.Repeat("a long preamble before the question. ", 64) + "how long does a refund take"
 
-			retrieved, err := router.retrieveFromExternalAPI(context.Background(), &RequestContext{UserContent: query}, ragConfig)
+			documents, err := router.recallFromExternalAPI(context.Background(), &RequestContext{}, ragConfig, query, config.MatchRecall{TopK: 2})
 			if err != nil {
-				t.Fatalf("retrieveFromExternalAPI() error = %v", err)
+				t.Fatalf("recallFromExternalAPI() error = %v", err)
 			}
+			retrieved := recalledTexts(documents[:min(2, len(documents))])
 			if got := requests.Load(); got != 1 {
 				t.Fatalf("sent %d requests, want 1", got)
 			}
@@ -107,8 +106,8 @@ func TestRetrieveFromExternalAPIResponseLimit(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ragConfig := &config.RAGPluginConfig{
-				Enabled: true,
+			ragConfig := &config.ContextSource{
+				Type:    config.ContextSourceRAG,
 				Backend: "external_api",
 				BackendConfig: config.MustStructuredPayload(&config.ExternalAPIRAGConfig{
 					Endpoint:         server.URL,
@@ -118,19 +117,16 @@ func TestRetrieveFromExternalAPIResponseLimit(t *testing.T) {
 				}),
 			}
 
-			contextText, err := (&OpenAIRouter{}).retrieveFromExternalAPI(
-				context.Background(),
-				&RequestContext{UserContent: "hello"},
-				ragConfig,
-			)
+			documents, err := (&OpenAIRouter{}).recallFromExternalAPI(context.Background(), &RequestContext{}, ragConfig, "hello", config.MatchRecall{TopK: 5})
+			contextText := recalledTexts(documents)
 			if tt.wantErr {
 				if err == nil || !strings.Contains(err.Error(), "response body exceeds limit") {
-					t.Fatalf("retrieveFromExternalAPI() error = %v, want response limit error", err)
+					t.Fatalf("recallFromExternalAPI() error = %v, want response limit error", err)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("retrieveFromExternalAPI() error = %v", err)
+				t.Fatalf("recallFromExternalAPI() error = %v", err)
 			}
 			if contextText != "retrieved context" {
 				t.Fatalf("context = %q, want retrieved context", contextText)

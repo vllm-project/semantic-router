@@ -6,10 +6,10 @@ func TestGlobalModelServicesUseOnlyReachableEnabledPlugins(t *testing.T) {
 	cfg := &RouterConfig{}
 	cfg.Recipes = []RoutingRecipe{
 		{Name: "dormant", Profile: RoutingProfile{Decisions: []Decision{{Plugins: []DecisionPlugin{
-			{Type: "memory", Configuration: MustStructuredPayload(MemoryPluginConfig{Enabled: true})},
+			{Type: DecisionPluginContext, Configuration: MustStructuredPayload(ContextPluginConfig{Enabled: true, Sources: []ContextSource{{Type: ContextSourceMemory}}})},
 		}}}}},
 		{Name: "active", Profile: RoutingProfile{Decisions: []Decision{{Plugins: []DecisionPlugin{
-			{Type: "memory", Configuration: MustStructuredPayload(MemoryPluginConfig{Enabled: false})},
+			{Type: DecisionPluginContext, Configuration: MustStructuredPayload(ContextPluginConfig{Enabled: false, Sources: []ContextSource{{Type: ContextSourceMemory}}})},
 		}}}}},
 	}
 	cfg.Entrypoints = []EntrypointMapping{{Recipe: "active", ModelNames: []string{"auto"}}}

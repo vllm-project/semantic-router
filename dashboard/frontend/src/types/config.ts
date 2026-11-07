@@ -429,16 +429,14 @@ export interface ModelRef {
 export interface PluginConfig {
   type:
     | 'response_cache'
-    | 'memory'
+    | 'context'
     | 'system_prompt'
     | 'header_mutation'
     | 'router_replay'
-    | 'rag'
     | 'fast_response'
     | 'tools'
     | 'request_params'
     | 'response_guard'
-    | 'context_compression'
     | 'prompt_cache'
     | 'shadow_dispatch'
     | 'masking'

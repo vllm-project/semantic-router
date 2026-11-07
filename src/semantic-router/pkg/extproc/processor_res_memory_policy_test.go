@@ -21,12 +21,18 @@ func (s *countingPolicyMemoryStore) Store(_ context.Context, _ *memory.Memory) e
 	return nil
 }
 
+// memorySourcePlugin is a context plugin whose memory source writes the
+// turn after the response as auto says.
+func memorySourcePlugin(auto *bool) *config.ContextPluginConfig {
+	return &config.ContextPluginConfig{Enabled: true, Sources: []config.ContextSource{{Type: config.ContextSourceMemory, Store: &config.ContextMemoryStoreConfig{Auto: auto}}}}
+}
+
 func TestResponseMemoryWritesHonorPolicyBeforeClientPreference(t *testing.T) {
 	yes, no := true, false
 	cases := []struct {
 		name       string
 		global     config.MemoryConfig
-		decision   *config.MemoryPluginConfig
+		decision   *config.ContextPluginConfig
 		request    *bool
 		drop       *bool
 		disable    bool
@@ -34,13 +40,13 @@ func TestResponseMemoryWritesHonorPolicyBeforeClientPreference(t *testing.T) {
 	}{
 		{name: "global default", global: config.MemoryConfig{Enabled: true, AutoStore: true}, wantWrites: 1},
 		{name: "global disabled", global: config.MemoryConfig{AutoStore: true}, request: &yes},
-		{name: "decision disabled", global: config.MemoryConfig{Enabled: true, AutoStore: true}, decision: &config.MemoryPluginConfig{Enabled: false}, request: &yes},
-		{name: "decision auto-store disabled overrides global", global: config.MemoryConfig{Enabled: true, AutoStore: true}, decision: &config.MemoryPluginConfig{Enabled: true, AutoStore: &no}},
-		{name: "decision auto-store disabled overrides client", global: config.MemoryConfig{Enabled: true, AutoStore: true}, decision: &config.MemoryPluginConfig{Enabled: true, AutoStore: &no}, request: &yes},
+		{name: "decision disabled", global: config.MemoryConfig{Enabled: true, AutoStore: true}, decision: &config.ContextPluginConfig{Enabled: false}, request: &yes},
+		{name: "decision auto-store disabled overrides global", global: config.MemoryConfig{Enabled: true, AutoStore: true}, decision: memorySourcePlugin(&no)},
+		{name: "decision auto-store disabled overrides client", global: config.MemoryConfig{Enabled: true, AutoStore: true}, decision: memorySourcePlugin(&no), request: &yes},
 		{name: "client opt-out", global: config.MemoryConfig{Enabled: true, AutoStore: true}, request: &no},
-		{name: "client opt-out overrides decision opt-in", global: config.MemoryConfig{Enabled: true}, decision: &config.MemoryPluginConfig{Enabled: true, AutoStore: &yes}, request: &no},
+		{name: "client opt-out overrides decision opt-in", global: config.MemoryConfig{Enabled: true}, decision: memorySourcePlugin(&yes), request: &no},
 		{name: "client opt-in", global: config.MemoryConfig{Enabled: true}, request: &yes, wantWrites: 1},
-		{name: "decision opt-in", global: config.MemoryConfig{}, decision: &config.MemoryPluginConfig{Enabled: true, AutoStore: &yes}, wantWrites: 1},
+		{name: "decision opt-in", global: config.MemoryConfig{}, decision: memorySourcePlugin(&yes), wantWrites: 1},
 		{name: "retention drop", global: config.MemoryConfig{Enabled: true, AutoStore: true}, request: &yes, drop: &yes},
 		{name: "retention keep", global: config.MemoryConfig{Enabled: true, AutoStore: true}, drop: &no, wantWrites: 1},
 		{name: "request memory opt-out", global: config.MemoryConfig{Enabled: true, AutoStore: true}, request: &yes, disable: true},
@@ -62,7 +68,7 @@ func TestResponseMemoryWritesHonorPolicyBeforeClientPreference(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				ctx.VSRSelectedDecision = &config.Decision{Name: "memory-policy", Plugins: []config.DecisionPlugin{{Type: config.DecisionPluginMemory, Configuration: payload}}}
+				ctx.VSRSelectedDecision = &config.Decision{Name: "memory-policy", Plugins: []config.DecisionPlugin{{Type: config.DecisionPluginContext, Configuration: payload}}}
 			}
 			if tc.drop != nil {
 				ctx.EmittedRetention = &config.RetentionDirective{Drop: tc.drop}

@@ -250,10 +250,9 @@ func checkFixtureCard(card modelruntime.ModelCard) error {
 		if card.Family != "decision2" || !card.HasSurface("decisions") {
 			return fmt.Errorf("model %s is %s serving %v, want decision2 decisions", card.ID, card.Family, card.Surfaces)
 		}
-	case mrEmbeddingDeployment, mrRerankerDeployment:
-		surface := map[string]string{mrEmbeddingDeployment: "embeddings", mrRerankerDeployment: "rerank"}[card.ID]
-		if card.Family != "task_heads" || !card.HasSurface(surface) {
-			return fmt.Errorf("model %s is %s serving %v, want task_heads %s", card.ID, card.Family, card.Surfaces, surface)
+	case mrEmbeddingDeployment:
+		if card.Family != "task_heads" || !card.HasSurface("embeddings") {
+			return fmt.Errorf("model %s is %s serving %v, want task_heads embeddings", card.ID, card.Family, card.Surfaces)
 		}
 	default:
 		return fmt.Errorf("model %s is not a managed deployment of the profile", card.ID)

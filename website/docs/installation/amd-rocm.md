@@ -7,8 +7,8 @@ description: Connect an AMD vLLM backend and run Vela routing models on AMD GPUs
 
 Semantic Router can run on CPU while vLLM serves the selected model on AMD
 Instinct GPUs. This guide starts one ROCm backend, verifies it directly, and
-then connects it to the local Router stack. To also run all ten Vela routing
-task models on AMD, use the [Vela AMD recipe](#run-vela-routing-models-on-amd)
+then connects it to the local Router stack. To also run the Vela routing
+models on AMD, use the [Vela AMD recipe](#run-vela-routing-models-on-amd)
 below.
 
 The example uses one checkpoint behind several served-model aliases so the
@@ -188,8 +188,8 @@ answer quality and operating behavior on the actual deployment.
 
 ## Run Vela routing models on AMD
 
-The Router's own models (the Vela classifiers, embeddings, reranker and
-decision models) run in the [model runtime](model-runtime/overview.md). On
+The Router's own models (the Vela classifiers, embeddings and decision
+models) run in the [model runtime](model-runtime/overview.md). On
 AMD Instinct MI300X and MI325X GPUs it runs them through PyTorch for ROCm,
 which is validated. `--platform rocm` selects the AMD image, which ships the
 runtime with the validated stack (PyTorch 2.12 for ROCm 7.2, FLA 0.5.2, and
@@ -199,7 +199,7 @@ when it loads; see
 [Choose a model](model-runtime/choose-a-model.md#hardware).
 
 The [Vela AMD Model Card](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)
-and complete config place all ten task models on `rocm:0`. Connect an existing
+and complete config place the decision model and the embedding model on `rocm:0`. Connect an existing
 OpenAI-compatible backend served with `--served-model-name vela-default`. The
 config expects `http://vllm:8000`; attach that backend to `vllm-sr-network`
 with network alias `vllm`, or edit the endpoint. Verify a direct request using
@@ -232,8 +232,8 @@ curl --fail 'http://localhost:8080/api/v1/routing/preview?trace=true' \
   | jq '{decision_result, signal_confidences, signal_values, signal_errors, metrics, eval_trace}'
 ```
 
-Preview does not execute retrieval or generation. Follow the recipe and
-[neural reranking](../tutorials/plugin/rag.md#neural-reranking) guide to index
+Preview does not execute retrieval or generation. Follow the recipe and the
+[RAG sources](../tutorials/plugin/context.md#rag-sources) guide to index
 documents and test RAG through a real chat request using `vela-auto`.
 
 ### Longer inputs
@@ -288,7 +288,7 @@ benchmark rather than these configurations.
 | Classifiers that read compressed text | Domain, jailbreak and PII in the latency tables | Domain reads it. Jailbreak and PII read the full prompt through `skip_signals`, which matches the production setup the paper describes |
 
 The paper's router GPU footprint of under 800 MB covers its three classifier
-sessions with compression on. The Vela AMD recipe loads ten task models, so
+sessions with compression on. The Vela AMD recipe loads the decision model and the embedding model, so
 size Router memory from measurements on your hardware.
 
 To use the paper's 512-token compression profile, add this block to your

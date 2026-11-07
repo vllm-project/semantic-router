@@ -29,7 +29,7 @@ func TestDecisionWillPersonalize(t *testing.T) {
 			ctx: &RequestContext{
 				VSRSelectedDecision: &config.Decision{
 					Plugins: []config.DecisionPlugin{
-						{Type: "rag", Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true})},
+						{Type: config.DecisionPluginContext, Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true, "sources": []interface{}{map[string]interface{}{"type": "rag", "backend": "vectorstore"}}})},
 					},
 				},
 			},
@@ -41,7 +41,7 @@ func TestDecisionWillPersonalize(t *testing.T) {
 			ctx: &RequestContext{
 				VSRSelectedDecision: &config.Decision{
 					Plugins: []config.DecisionPlugin{
-						{Type: "rag", Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": false})},
+						{Type: config.DecisionPluginContext, Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": false, "sources": []interface{}{map[string]interface{}{"type": "rag", "backend": "vectorstore"}}})},
 					},
 				},
 			},
@@ -53,7 +53,7 @@ func TestDecisionWillPersonalize(t *testing.T) {
 			ctx: &RequestContext{
 				VSRSelectedDecision: &config.Decision{
 					Plugins: []config.DecisionPlugin{
-						{Type: "memory", Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true})},
+						{Type: config.DecisionPluginContext, Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true, "sources": []interface{}{map[string]interface{}{"type": "memory"}}})},
 					},
 				},
 			},

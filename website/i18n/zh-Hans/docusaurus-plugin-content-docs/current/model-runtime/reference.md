@@ -334,7 +334,7 @@ Set 把每个标签作为一个 Noul 答在 `<id>.<label>` 下，并在 `sets` �
 | `bindings.<type>`、`routing.model_bindings.<type>` | `global.model_catalog`、配方 | 一个信号类型使用的部署：写部署名，或写 `{deployment, head}` 以选择头。 |
 | `deployment` | 规则 | `decision`、`classifiers`、`safety`（及 `hazard`）或 `complexity` 规则询问的部署。 |
 
-绑定键是信号类型 `domain`、`jailbreak`、`pii`、`fact_check`、`user_feedback`、`modality`、`hallucination`、`preference` 和 `reask`。Embedding 在 `global.model_catalog.embeddings.default` 中指定部署，reranker 在 RAG 插件的 `rerank.deployment` 中指定。各信号如何解析见[为信号选择模型](../installation/choose-a-model-for-a-signal.md)；各信号读取的答案见各任务指南。
+绑定键是信号类型 `domain`、`jailbreak`、`pii`、`fact_check`、`user_feedback`、`modality`、`hallucination`、`preference` 和 `reask`。Embedding 在 `global.model_catalog.embeddings.default` 中指定部署。各信号如何解析见[为信号选择模型](../installation/choose-a-model-for-a-signal.md)；各信号读取的答案见各任务指南。
 
 ## router 托管的 runtime {#router-managed-runtimes}
 

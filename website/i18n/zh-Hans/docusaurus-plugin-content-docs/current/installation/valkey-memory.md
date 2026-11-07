@@ -214,24 +214,26 @@ global:
         key_prefix: "memory_cache:"
 ```
 
-## 按决策的记忆插件
+## 按决策的记忆源 {#per-decision-memory-source}
 
-路由可以使用 `memory` 插件覆盖全局记忆设置：
+路由可以用 `context` 插件的记忆源覆盖全局记忆设置：
 
 ```yaml
 routing:
   decisions:
     - name: personalized_route
       plugins:
-        - type: memory
+        - type: context
           configuration:
             enabled: true
-            retrieval_limit: 10
-            similarity_threshold: 0.60
-            auto_store: true
+            sources:
+              - type: memory
+                match:
+                  recall: {method: embedding, top_k: 10, min_similarity: 0.60}
+                store: {auto: true}
 ```
 
-详情见 [记忆插件教程](/zh-Hans/docs/tutorials/plugin/memory)。
+详情见[记忆源教程](../tutorials/plugin/context.md#memory-sources)。
 
 ## 性能调优
 

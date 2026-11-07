@@ -21,118 +21,48 @@ package extproc
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/match"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
 
-// retrieveFromVectorStore retrieves context from a local vector store using
+// recallFromVectorStore recalls documents from a local vector store using
 // the router-owned vector-store runtime published through RuntimeRegistry.
-func (r *OpenAIRouter) retrieveFromVectorStore(traceCtx context.Context, ctx *RequestContext, ragConfig *config.RAGPluginConfig) (string, error) {
-	params, err := resolveVectorStoreRetrievalParams(ctx, ragConfig)
+func (r *OpenAIRouter) recallFromVectorStore(traceCtx context.Context, source *config.ContextSource, query string, recall config.MatchRecall) ([]match.Scored, error) {
+	vsConfig, err := source.VectorStoreBackendConfig()
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("invalid vectorstore RAG config: %w", err)
 	}
-
+	if vsConfig.VectorStoreID == "" {
+		return nil, fmt.Errorf("vector_store_id is required for vectorstore backend")
+	}
 	embedder := r.currentVectorStoreEmbedder()
 	if embedder == nil {
-		return "", fmt.Errorf("embedder not initialized for vectorstore RAG")
+		return nil, fmt.Errorf("embedder not initialized for vectorstore RAG")
 	}
 	manager := r.currentVectorStoreManager()
 	if manager == nil {
-		return "", fmt.Errorf("vector store manager not initialized")
+		return nil, fmt.Errorf("vector store manager not initialized")
 	}
-	if err = manager.CheckEmbeddingCompatibility(params.storeID); err != nil {
-		return "", err
+	if err = manager.CheckEmbeddingCompatibility(vsConfig.VectorStoreID); err != nil {
+		return nil, err
 	}
-
-	queryEmbedding, err := embedder.Embed(traceCtx, params.query)
+	queryEmbedding, err := embedder.Embed(traceCtx, query)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate query embedding: %w", err)
+		return nil, fmt.Errorf("failed to generate query embedding: %w", err)
 	}
-
-	results, err := manager.Search(
-		traceCtx,
-		params.storeID,
-		queryEmbedding,
-		params.topK,
-		params.threshold,
-		params.filter,
-	)
+	results, err := manager.Search(traceCtx, vsConfig.VectorStoreID, queryEmbedding, recall.TopK, recallThreshold(recall), vectorStoreRAGFilter(query, vsConfig.FileIDs))
 	if err != nil {
-		return "", fmt.Errorf("vectorstore search failed: %w", err)
+		return nil, fmt.Errorf("vectorstore search failed: %w", err)
 	}
-
-	results, err = r.rerankVectorStoreResults(traceCtx, ctx, ragConfig, params.query, results)
-	if err != nil {
-		return "", err
+	texts := make([]string, len(results))
+	similarities := make([]float64, len(results))
+	for index, result := range results {
+		texts[index], similarities[index] = result.Content, result.Score
 	}
-	retrievedContext, bestScore, found := formatVectorStoreRetrievalResults(results)
-	if !found {
-		logging.Debugf("RAG vectorstore: no results found for query in store %s", params.storeID)
-		return "", nil
-	}
-
-	// Store best similarity score for observability.
-	ctx.RAGSimilarityScore = bestScore
-
-	logging.Debugf("RAG vectorstore: retrieved %d chunks from store %s (best score: %.4f)",
-		len(results), params.storeID, bestScore)
-
-	return retrievedContext, nil
-}
-
-type vectorStoreRetrievalParams struct {
-	storeID   string
-	query     string
-	topK      int
-	threshold float32
-	filter    map[string]interface{}
-}
-
-func resolveVectorStoreRetrievalParams(
-	ctx *RequestContext,
-	ragConfig *config.RAGPluginConfig,
-) (vectorStoreRetrievalParams, error) {
-	vsConfig, err := ragConfig.VectorStoreBackendConfig()
-	if err != nil {
-		return vectorStoreRetrievalParams{}, fmt.Errorf("invalid vectorstore RAG config: %w", err)
-	}
-	if vsConfig == nil {
-		return vectorStoreRetrievalParams{}, fmt.Errorf("invalid vectorstore RAG config: missing backend config")
-	}
-	if vsConfig.VectorStoreID == "" {
-		return vectorStoreRetrievalParams{}, fmt.Errorf("vector_store_id is required for vectorstore backend")
-	}
-
-	query := ctx.UserContent
-	if query == "" {
-		return vectorStoreRetrievalParams{}, fmt.Errorf("no user content for RAG retrieval")
-	}
-
-	return vectorStoreRetrievalParams{
-		storeID:   vsConfig.VectorStoreID,
-		query:     query,
-		topK:      vectorStoreRAGTopK(ragConfig),
-		threshold: vectorStoreRAGThreshold(ragConfig),
-		filter:    vectorStoreRAGFilter(query, vsConfig.FileIDs),
-	}, nil
-}
-
-func vectorStoreRAGTopK(ragConfig *config.RAGPluginConfig) int {
-	if ragConfig.TopK == nil {
-		return 5
-	}
-	return *ragConfig.TopK
-}
-
-func vectorStoreRAGThreshold(ragConfig *config.RAGPluginConfig) float32 {
-	if ragConfig.SimilarityThreshold == nil {
-		return 0.7
-	}
-	return *ragConfig.SimilarityThreshold
+	logging.Debugf("RAG vectorstore: recalled %d chunks from store %s", len(results), vsConfig.VectorStoreID)
+	return scoredDocuments(texts, similarities), nil
 }
 
 func vectorStoreRAGFilter(query string, fileIDs []string) map[string]interface{} {
@@ -145,21 +75,4 @@ func vectorStoreRAGFilter(query string, fileIDs []string) map[string]interface{}
 		filter["file_id"] = fileIDs[0]
 	}
 	return filter
-}
-
-func formatVectorStoreRetrievalResults(results []vectorstore.SearchResult) (string, float32, bool) {
-	if len(results) == 0 {
-		return "", 0, false
-	}
-
-	parts := make([]string, 0, len(results))
-	bestScore := results[0].Score
-	for _, result := range results {
-		parts = append(parts, result.Content)
-		if result.Score > bestScore {
-			bestScore = result.Score
-		}
-	}
-
-	return strings.Join(parts, "\n\n---\n\n"), float32(bestScore), true
 }

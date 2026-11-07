@@ -5,21 +5,15 @@ package apiserver
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
-
-// defaultModelDiagnosticBatchSize bounds one native pair batch when the operator
-// has not configured global.services.api.batch_classification.max_batch_size.
-const defaultModelDiagnosticBatchSize = 100
 
 func apiModelDiagnosticRoutes() []apiRoute {
 	path := apiDiagnosticsPath + "/models"
@@ -30,7 +24,6 @@ func apiModelDiagnosticRoutes() []apiRoute {
 		managedRoute(EndpointMetadata{Path: path + "/label-scores", Method: http.MethodPost, Description: "Inspect independent label scores using the prepared operating point when configured"}, policy, (*ClassificationAPIServer).handleModelDiagnosticScores, strictJSONBodyFor[ModelTextDiagnosticRequest](), jsonResponse[ModelDiagnosticResponse[ModelDiagnosticScoresResult]](http.StatusOK, "Independent scores, operating policy and actual binding identity"), errorResponses(400, 404, 409, 413, 429, 503, 500)),
 		managedRoute(EndpointMetadata{Path: path + "/tokens", Method: http.MethodPost, Description: "Inspect prepared token spans with original UTF-8 byte offsets and complete configured window scanning"}, policy, (*ClassificationAPIServer).handleModelDiagnosticTokens, strictJSONBodyFor[ModelTextDiagnosticRequest](), jsonResponse[ModelDiagnosticResponse[ModelDiagnosticTokensResult]](http.StatusOK, "Token spans and actual binding identity"), errorResponses(400, 404, 409, 413, 429, 503, 500)),
 		managedRoute(EndpointMetadata{Path: path + "/embeddings", Method: http.MethodPost, Description: "Run the explicitly selected prepared embedding binding at its published representation"}, policy, (*ClassificationAPIServer).handleModelDiagnosticEmbedding, strictJSONBodyFor[ModelTextDiagnosticRequest](), jsonResponse[ModelDiagnosticResponse[ModelDiagnosticEmbeddingResult]](http.StatusOK, "Embedding vector and actual binding identity"), errorResponses(400, 404, 409, 413, 429, 503, 500)),
-		managedRoute(EndpointMetadata{Path: path + "/rerank", Method: http.MethodPost, Description: "Score query-document pairs using the selected prepared relevance binding without running a RAG request; max_batch_size applies (default 100 pairs)"}, policy, (*ClassificationAPIServer).handleModelDiagnosticRerank, strictJSONBodyFor[ModelRerankDiagnosticRequest](), jsonResponse[ModelDiagnosticResponse[ModelDiagnosticRerankResult]](http.StatusOK, "Relevance logits in input order and actual binding identity"), errorResponses(400, 404, 409, 413, 429, 503, 500)),
 	}
 }
 
@@ -147,48 +140,6 @@ func (s *ClassificationAPIServer) handleModelDiagnosticEmbedding(w http.Response
 		result, err := runtime.Tasks.DiagnoseEmbedding(ctx, req.Recipe, req.Binding, req.Text)
 		return ModelDiagnosticResponse[ModelDiagnosticEmbeddingResult]{Binding: diagnosticBinding(result.Binding), Result: ModelDiagnosticEmbeddingResult{Embedding: result.Result.Embedding, Input: diagnosticInput(result.Result.Input)}}, err
 	})
-}
-
-func (s *ClassificationAPIServer) handleModelDiagnosticRerank(w http.ResponseWriter, r *http.Request) {
-	var req ModelRerankDiagnosticRequest
-	if err := s.parseStrictJSONRequest(r, &req); err != nil {
-		s.writeJSONRequestError(w, err)
-		return
-	}
-	if strings.TrimSpace(req.Binding) == "" || len(req.Pairs) == 0 {
-		s.writeModelDiagnosticError(w, binding.ErrInvalidInput)
-		return
-	}
-	cfg, runtime, release, err := s.acquireModelDiagnostics(req.Recipe)
-	if err != nil {
-		s.writeModelDiagnosticError(w, err)
-		return
-	}
-	limit := defaultModelDiagnosticBatchSize
-	if cfg != nil && cfg.API.BatchClassification.MaxBatchSize > 0 {
-		limit = cfg.API.BatchClassification.MaxBatchSize
-	}
-	if len(req.Pairs) > limit {
-		release()
-		s.writeModelDiagnosticError(w, fmt.Errorf("%w: pairs exceeds max_batch_size %d", binding.ErrInvalidInput, limit))
-		return
-	}
-	pairs := make([]tasks.QueryDocument, len(req.Pairs))
-	for i, p := range req.Pairs {
-		pairs[i] = tasks.QueryDocument{Query: p.Query, Document: p.Document}
-	}
-	result, err := executeModelDiagnostic(w, r, release, func(ctx context.Context) (serving.DiagnosticResult[tasks.RelevanceScores], error) {
-		return runtime.Tasks.DiagnoseRerank(ctx, req.Recipe, req.Binding, pairs)
-	})
-	if err != nil {
-		s.writeModelDiagnosticError(w, err)
-		return
-	}
-	out := ModelDiagnosticRerankResult{Scores: result.Result.Scores, ScoreType: "relevance_logit", Inputs: make([]*ModelDiagnosticInputUsage, len(result.Result.Inputs))}
-	for i := range result.Result.Inputs {
-		out.Inputs[i] = diagnosticInput(&result.Result.Inputs[i])
-	}
-	s.writeJSONResponse(w, http.StatusOK, ModelDiagnosticResponse[ModelDiagnosticRerankResult]{Binding: diagnosticBinding(result.Binding), Result: out})
 }
 
 func (s *ClassificationAPIServer) writeModelDiagnosticError(w http.ResponseWriter, err error) {

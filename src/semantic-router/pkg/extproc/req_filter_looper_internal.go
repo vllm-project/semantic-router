@@ -312,10 +312,6 @@ func (r *OpenAIRouter) runLooperInternalPlugins(
 		return response
 	}
 
-	if err := r.executeRAGPlugin(ctx, decisionName); err != nil {
-		return r.createErrorResponse(503, "RAG retrieval failed")
-	}
-
 	return nil
 }
 

@@ -90,14 +90,6 @@ func (s remoteServices) Embed(ctx context.Context, deployment string, request mo
 	return s.inner.Embed(ctx, deployment, request)
 }
 
-func (s remoteServices) Rerank(ctx context.Context, deployment string, request modelservice.RerankRequest) (modelservice.RerankResponse, error) {
-	if err := s.local(deployment, "rerank"); err != nil {
-		return modelservice.RerankResponse{}, err
-	}
-	return s.inner.Rerank(ctx, deployment, request)
-}
-
-// Ensure plans a model_runtime deployment; a systemone one needs no plan.
 func (s remoteServices) Ensure(name string, deployment config.ModelDeployment) error {
 	if s.remote.Serves(name) {
 		return nil

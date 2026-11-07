@@ -18,6 +18,7 @@ from cli.config_application_forms import removed_application_forms
 from cli.config_heuristic_forms import removed_heuristic_forms
 from cli.config_plugin_forms import removed_plugin_forms
 from cli.config_renamed_forms import read_renamed_forms
+from cli.config_context_forms import removed_context_forms
 from cli.config_tools_forms import removed_tools_forms
 from cli.config_schema.validation import validate_config_structure
 from cli.config_yaml import safe_load_router_config
@@ -239,6 +240,10 @@ def _reject_invalid_config_surfaces(data: Dict[str, Any], config_path: str) -> N
     )
     if removed_forms:
         raise ConfigParseError("\n".join(removed_forms))
+
+    context_forms = removed_context_forms(data)
+    if context_forms:
+        raise ConfigParseError("\n".join(context_forms))
 
 
 def _deferred_context_limits(config: UserConfig) -> list[tuple[str, str]]:

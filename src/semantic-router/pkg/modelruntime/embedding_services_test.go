@@ -80,10 +80,6 @@ func (r *embeddingRuntime) Embed(_ context.Context, deployment string, request m
 	return response, nil
 }
 
-func (r *embeddingRuntime) Rerank(context.Context, string, modelservice.RerankRequest) (modelservice.RerankResponse, error) {
-	return modelservice.RerankResponse{}, errors.New("not served")
-}
-
 func (r *embeddingRuntime) inputs(deployment string) int {
 	r.mu.Lock()
 	defer r.mu.Unlock()

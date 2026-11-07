@@ -80,11 +80,10 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
   pluginTypes: [
     'response_cache',
-    'memory',
+    'context',
     'system_prompt',
     'header_mutation',
     'router_replay',
-    'rag',
     'tools',
     'fast_response',
     'request_params',
@@ -288,11 +287,10 @@ const SIGNAL_TYPE_SUGGESTIONS = ROUTER_CONFIG_EXTENSION.signals.map((surface) =>
 
 const PLUGIN_TYPE_SUGGESTIONS = [
   { label: 'response_cache', detail: 'Response caching plugin' },
-  { label: 'memory', detail: 'Conversation memory plugin' },
+  { label: 'context', detail: 'RAG, memory and compression context plugin' },
   { label: 'system_prompt', detail: 'System prompt injection plugin' },
   { label: 'header_mutation', detail: 'HTTP header mutation plugin' },
   { label: 'router_replay', detail: 'Request replay plugin' },
-  { label: 'rag', detail: 'RAG (Retrieval Augmented Generation) plugin' },
   { label: 'tools', detail: 'Route-local tool policy and decision-model tool selection plugin' },
   { label: 'fast_response', detail: 'Short-circuit fixed response plugin' },
   { label: 'request_params', detail: 'Request parameter mutation plugin' },

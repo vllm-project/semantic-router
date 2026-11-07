@@ -1,13 +1,13 @@
 ---
 title: Model catalog reference
 sidebar_label: Model catalog reference
-description: Every field of global.model_catalog.deployments, the providers and what each answers, bindings, embeddings, reranking, resolution order, thresholds and admission.
+description: Every field of global.model_catalog.deployments, the providers and what each answers, bindings, embeddings, resolution order, thresholds and admission.
 ---
 
 # Model catalog reference
 
 `global.model_catalog` declares every model the Router asks: the models that
-answer routing signals, embedding models and rerankers. Request routing
+answer routing signals and embedding models. Request routing
 targets, the models that answer users, stay in
 [`providers.models`](model-configuration.md).
 [Choose a model for a signal](choose-a-model-for-a-signal.md) explains which
@@ -25,7 +25,6 @@ API the Router speaks to it.
 | `classify` | `POST <endpoint>/classify` | The models of the masking, response-jailbreak and hallucination plugins (`pii`, `jailbreak` and `hallucination` bindings) |
 | `openai_chat` | `POST <endpoint>/chat/completions` | The response-jailbreak plugin's guard and the hallucination plugin's detector |
 | `openai_embeddings` | `POST <endpoint>/embeddings` | Embeddings |
-| `rerank` | `POST <endpoint>/rerank` | RAG reranking |
 
 The Router refuses at load a deployment given a signal it cannot answer.
 
@@ -62,7 +61,7 @@ global:
         replicas: [{device: cpu}, {endpoint: http://worker-2.example.com:8100, model: kai}]
       # Connection block: an attached model_runtime and every remote provider.
       remote-example:
-        provider: systemone              # or classify, openai_chat, openai_embeddings, rerank
+        provider: systemone              # or classify, openai_chat, openai_embeddings
         endpoint: https://api.example.com/v1/systemone  # full URL; unix:///abs.sock for an attached runtime
         model: vllm-sr/d3-ultra          # the remote model; an attached runtime's served model
         auth: {header: Authorization, prefix: Bearer, api_key_env: EXAMPLE_KEY}  # or api_key_file: /abs/path
@@ -98,8 +97,8 @@ deployment with `endpoint`) and every remote provider.
 
 | Field | Meaning | Limits |
 | --- | --- | --- |
-| `endpoint` | The full URL of the API, path prefix included. The Router appends the operation path (`/classify`, `/chat/completions`, `/embeddings`, `/rerank`); a systemone endpoint is the URL questions are posted to. An attached runtime may use `unix:///abs/path.sock` | `http` or `https`; no credentials or fragment |
-| `model` | The model the remote API answers with; on an attached runtime, the served model | Required for `systemone`, `openai_chat`, `openai_embeddings`, `rerank` |
+| `endpoint` | The full URL of the API, path prefix included. The Router appends the operation path (`/classify`, `/chat/completions`, `/embeddings`); a systemone endpoint is the URL questions are posted to. An attached runtime may use `unix:///abs/path.sock` | `http` or `https`; no credentials or fragment |
+| `model` | The model the remote API answers with; on an attached runtime, the served model | Required for `systemone`, `openai_chat`, `openai_embeddings` |
 | `auth` | `header` (default `Authorization`), `prefix` (default `Bearer`; `""` sends the bare key), and exactly one of `api_key_env` or `api_key_file` (an absolute path, read on each call so a rotated key applies) | A key is never written in the configuration |
 | `headers` | Further non-secret headers | `Authorization`, `Proxy-Authorization`, `X-Api-Key`, `Api-Key`, `Ocp-Apim-Subscription-Key`, `Cookie` and the `auth` header are refused |
 | `timeout_ms` | Bound of one attempt | systemone ≤ 60000; others ≤ 300000 |
@@ -142,8 +141,7 @@ Resolution, for every signal: the rule's `deployment`, then the recipe's
 binding, then the global binding, then `system.decision_model` for a
 question-style signal. Embeddings resolve through `embeddings.default`, or,
 in a routing profile that embeds with its own model, through its
-`model_bindings.embedding`; and reranking through the `rag` plugin's
-`rerank.deployment`.
+`model_bindings.embedding`.
 
 ## Thresholds
 
@@ -192,34 +190,6 @@ global:
 The Router posts to `https://embedding.example.com/v1/embeddings`: the
 operation path is appended to the endpoint's path, never assembled from a host
 and port.
-
-### R2. Attached reranker, named where it is used
-
-```yaml title="r2-attached-reranker"
-global:
-  model_catalog:
-    deployments:
-      document-ranker:
-        provider: model_runtime          # a model runtime running elsewhere (attached)
-        endpoint: https://ranker.example.com:8100
-        model: vela-reranker
-        auth: {api_key_env: RANKER_KEY}
-        tls: {ca_file: /etc/ssl/internal-ca.pem}
-        timeout_ms: 2000
-routing:
-  decisions:
-    - name: rag
-      plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: vectorstore
-            rerank: {deployment: document-ranker, top_k: 3, layer: 22, dimension: 768}
-```
-
-`layer` and `dimension` select an early exit of a model runtime reranker. A
-remote reranking API is a `rerank` deployment, which answers at its own depth,
-so its `rerank` block writes only `deployment` and `top_k`.
 
 ### R3. Remote decision model for jailbreak and hallucination
 

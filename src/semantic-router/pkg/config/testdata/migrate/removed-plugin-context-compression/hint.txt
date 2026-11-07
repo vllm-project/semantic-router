@@ -1,0 +1,1 @@
+routing.decisions[agent].plugins[0]: removed_plugin_type: plugin context_compression is removed; run `vllm-sr config migrate` (the compress block and budget of the decision's context plugin)

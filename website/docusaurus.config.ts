@@ -213,6 +213,15 @@ const config: Config = {
           },
           {
             from: [
+              '/docs/next/tutorials/plugin/rag',
+              '/docs/next/tutorials/plugin/memory',
+              '/docs/next/tutorials/plugin/context-compression',
+              '/docs/next/model-runtime/guides/rerank',
+            ],
+            to: '/docs/next/tutorials/plugin/context',
+          },
+          {
+            from: [
               '/docs/next/installation/runtime/embeddings',
               '/docs/next/tutorials/global/remote-embeddings',
             ],

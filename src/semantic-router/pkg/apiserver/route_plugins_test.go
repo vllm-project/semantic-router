@@ -168,7 +168,7 @@ func TestPluginOperationsKeepExplicitOwnershipAfterGrouping(t *testing.T) {
 	if len(pluginOperations(config.DecisionPluginSystemPrompt, apiRoutes())) != 1 {
 		t.Fatal("grouping lost explicit plugin preview ownership")
 	}
-	if len(pluginOperations(config.DecisionPluginMemory, apiRoutes())) != 4 {
-		t.Fatal("memory discovery did not reuse four owned storage operations")
+	if len(pluginOperations(config.DecisionPluginContext, apiRoutes())) != 18 {
+		t.Fatal("context discovery did not reuse its memory, vector store and compression operations and the rag preview")
 	}
 }

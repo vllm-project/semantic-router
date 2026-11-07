@@ -13,8 +13,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/match"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -46,45 +46,57 @@ func (r *OpenAIRouter) contextCompressionTokenCounter(
 	}
 }
 
-func (r *OpenAIRouter) contextCompressionScorer(ctx context.Context, cfg *config.ContextCompressionPluginConfig, request *RequestContext) contextcompression.RelevanceScorer {
-	if cfg == nil || cfg.EffectiveScoring().Method == config.ContextCompressionScoringBM25 {
-		return nil
+// contextCompressionScorer judges the compression targets with the compress
+// block's match, the decision model's relevance by default.
+func (r *OpenAIRouter) contextCompressionScorer(compress *config.ContextCompressConfig) contextcompression.RelevanceScorer {
+	return matchScorer{matcher: r.matcher(), block: compress.Match}
+}
+
+// matchScorer scores compression targets by a match block. A target the
+// match does not keep scores below every kept one, so it shrinks first.
+type matchScorer struct {
+	matcher *match.Matcher
+	block   *config.MatchConfig
+}
+
+func (s matchScorer) Score(ctx context.Context, query string, texts []string) ([]float64, error) {
+	scores := make([]float64, len(texts))
+	if strings.TrimSpace(query) == "" {
+		return scores, nil
 	}
-	modelConfig := r.Config
-	recipe := "default"
-	if request != nil && request.Routing.SelectedRecipe() != nil {
-		recipe = string(request.Routing.RecipeName())
-		classifier := r.classifierForRequest(request)
-		if classifier == nil {
-			return nil
-		}
-		modelConfig = classifier.Config
+	candidates := make([]match.Candidate, len(texts))
+	for index, text := range texts {
+		candidates[index] = match.Candidate{ID: strconv.Itoa(index), Text: text}
 	}
-	if modelConfig == nil {
-		return nil
-	}
-	provider, err := r.embeddingsForRequest(request).Get("", modelConfig.EmbeddingConfig.TargetDimension, modelConfig.EmbeddingConfig.TargetLayer)
+	result, err := s.matcher.Match(ctx, config.MatchCompress, s.block, match.Input{Request: query, Candidates: candidates})
 	if err != nil {
+		return nil, err
+	}
+	for index := range scores {
+		scores[index] = -1
+	}
+	for _, kept := range result.Kept {
+		if index, convErr := strconv.Atoi(kept.ID); convErr == nil {
+			scores[index] = kept.Score
+		}
+	}
+	return scores, nil
+}
+
+// contextCompression is the decision's context plugin when it compresses.
+func contextCompression(decision *config.Decision) *config.ContextPluginConfig {
+	if decision == nil {
 		return nil
 	}
-	key := fmt.Sprintf("%s:%s:%d:%d", recipe, embedding.Identity(provider), modelConfig.EmbeddingConfig.TargetDimension, modelConfig.EmbeddingConfig.TargetLayer)
-	r.contextCompressionMu.Lock()
-	defer r.contextCompressionMu.Unlock()
-	if r.compressionScorers == nil {
-		r.compressionScorers = make(map[string]contextcompression.RelevanceScorer)
+	plugin := decision.GetContextConfig()
+	if plugin == nil || !plugin.Enabled || plugin.Compress == nil {
+		return nil
 	}
-	scorer := r.compressionScorers[key]
-	if scorer == nil {
-		scorer = contextcompression.NewMemoizedEmbeddingScorer(func(callCtx context.Context, texts []string) ([][]float32, error) {
-			return provider.EmbedBatch(callCtx, texts)
-		}, 1024)
-		r.compressionScorers[key] = scorer
-	}
-	return scorer
+	return plugin
 }
 
 func (r *OpenAIRouter) contextCompressionRecoveryStore(
-	cfg *config.ContextCompressionPluginConfig,
+	cfg *config.ContextCompressConfig,
 ) contextcompression.RecoveryStore {
 	if cfg == nil || cfg.Recovery == nil || !cfg.Recovery.Enabled {
 		return nil
@@ -229,13 +241,6 @@ func recoveryTLSConfig(
 		tlsConfig.RootCAs = roots
 	}
 	return tlsConfig, nil
-}
-
-func contextCompressionPolicy(
-	cfg *config.ContextCompressionPluginConfig,
-	targetOverride *int,
-) contextcompression.Policy {
-	return contextcompression.PolicyFromConfig(cfg, targetOverride)
 }
 
 func compressionPolicyForRequest(

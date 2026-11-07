@@ -1,4 +1,5 @@
-import { X_VSR_CACHE_CONTROL, X_VSR_COMPRESSION_CONTROL } from '../generated/vsrHeaders'
+import { X_VSR_CACHE_CONTROL } from '../generated/vsrHeaders'
+import { contextPluginFields } from './dslContextPluginSchemas'
 import type { FieldSchema } from './dslSchemas'
 
 const promptCacheFields: FieldSchema[] = [
@@ -28,6 +29,7 @@ const additionalCapabilityPluginFields = new Map<string, FieldSchema[]>([
 // Plugin schemas added after getCapabilityPluginFieldSchema reached the
 // structure ratchet live in this table so that function never grows.
 const CAPABILITY_PLUGIN_FIELD_SCHEMAS: Record<string, FieldSchema[]> = {
+  context: contextPluginFields,
   shadow_dispatch: [
     { key: 'enabled', label: 'Enabled', type: 'boolean' },
     { key: 'model', label: 'Shadow Model', type: 'string', placeholder: 'candidate-model' },
@@ -144,120 +146,6 @@ export function getCapabilityPluginFieldSchema(pluginType: string): FieldSchema[
             { key: 'prompt_revision', label: 'Prompt Revision', type: 'string' },
             { key: 'policy_revision', label: 'Policy Revision', type: 'string' },
           ],
-        },
-      ]
-    case 'context_compression':
-      return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        {
-          key: 'mode',
-          label: 'Mode',
-          type: 'select',
-          options: ['auto', 'always'],
-        },
-        {
-          key: 'budget',
-          label: 'Request Budget',
-          type: 'object',
-          fields: [
-            { key: 'trigger_tokens', label: 'Trigger Tokens', type: 'string', placeholder: 'auto' },
-            { key: 'target_tokens', label: 'Target Tokens', type: 'string', placeholder: 'auto' },
-            {
-              key: 'reserve_output_tokens',
-              label: 'Reserved Output Tokens',
-              type: 'string',
-              placeholder: 'auto',
-            },
-          ],
-        },
-        {
-          key: 'targets',
-          label: 'Compression Targets',
-          type: 'object',
-          fields: [
-            {
-              key: 'tool_outputs',
-              label: 'Tool Outputs',
-              type: 'object',
-              fields: [
-                {
-                  key: 'mode',
-                  label: 'Mode',
-                  type: 'select',
-                  options: ['preserve', 'extractive', 'recoverable'],
-                },
-                { key: 'min_tokens', label: 'Minimum Tokens', type: 'number' },
-                { key: 'target_tokens', label: 'Target Tokens', type: 'number' },
-              ],
-            },
-            ...['history', 'rag', 'memory'].map((key) => ({
-              key,
-              label: key === 'rag' ? 'RAG' : key[0].toUpperCase() + key.slice(1),
-              type: 'object' as const,
-              fields: [
-                {
-                  key: 'mode',
-                  label: 'Mode',
-                  type: 'select' as const,
-                  options: ['preserve', 'extractive', 'recoverable'],
-                },
-              ],
-            })),
-          ],
-        },
-        {
-          key: 'scoring',
-          label: 'Relevance Scoring',
-          type: 'object',
-          fields: [
-            {
-              key: 'method',
-              label: 'Method',
-              type: 'select',
-              options: ['bm25', 'embedding', 'hybrid'],
-            },
-            { key: 'embedding_model_ref', label: 'Embedding Model Ref', type: 'string' },
-          ],
-        },
-        {
-          key: 'recovery',
-          label: 'Recoverable Compression',
-          type: 'object',
-          fields: [
-            { key: 'enabled', label: 'Enabled', type: 'boolean' },
-            {
-              key: 'store',
-              label: 'Shared Store',
-              type: 'select',
-              options: ['', 'response_cache', 'redis', 'valkey'],
-            },
-            { key: 'ttl_seconds', label: 'TTL Seconds', type: 'number' },
-            { key: 'max_bytes_per_request', label: 'Max Bytes Per Request', type: 'number' },
-            { key: 'max_total_bytes', label: 'Max Total Bytes', type: 'number' },
-            { key: 'max_retrievals', label: 'Max Retrievals', type: 'number' },
-          ],
-        },
-        {
-          key: 'request_controls',
-          label: 'Request Controls',
-          type: 'object',
-          fields: [
-            { key: 'enabled', label: 'Enabled', type: 'boolean' },
-            {
-              key: 'header',
-              label: 'Header',
-              type: 'string',
-              placeholder: X_VSR_COMPRESSION_CONTROL,
-            },
-            { key: 'allowed', label: 'Allowed Directives', type: 'string[]' },
-            { key: 'max_target_tokens', label: 'Maximum Target Tokens', type: 'number' },
-          ],
-        },
-        {
-          key: 'failure_mode',
-          label: 'Failure Mode',
-          type: 'select',
-          options: ['fail_open', 'fail_closed'],
         },
       ]
     default:

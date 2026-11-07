@@ -30,16 +30,14 @@ const (
 	// OpenAIChatProvider asks an OpenAI-compatible chat model to classify or
 	// judge: POST <endpoint>/chat/completions.
 	OpenAIChatProvider = "openai_chat"
-	// RerankProvider scores query-document pairs: POST <endpoint>/rerank.
-	RerankProvider = "rerank"
 	// LegacyHTTPProvider is the deprecated provider of a deployment that
 	// names an external[] model; the Router reads it as classify or
 	// openai_chat.
 	LegacyHTTPProvider = "http"
 )
 
-// MaxRemoteTimeoutMs bounds timeout_ms on a remote classifier, chat,
-// embedding or rerank deployment.
+// MaxRemoteTimeoutMs bounds timeout_ms on a remote classifier, chat or
+// embedding deployment.
 const MaxRemoteTimeoutMs = 300000
 
 // MaxRemoteRetries bounds max_retries on any connection block.
@@ -49,7 +47,7 @@ const MaxRemoteRetries = 10
 // remote API rather than the model runtime.
 func IsRemoteProvider(provider string) bool {
 	switch provider {
-	case SystemOneProvider, OpenAIEmbeddingsProvider, ClassifyProvider, OpenAIChatProvider, RerankProvider:
+	case SystemOneProvider, OpenAIEmbeddingsProvider, ClassifyProvider, OpenAIChatProvider:
 		return true
 	}
 	return false
@@ -317,7 +315,7 @@ func (g *DeploymentGeneration) validate() error {
 	return nil
 }
 
-// validateRemote checks a classify, openai_chat, openai_embeddings or rerank
+// validateRemote checks a classify, openai_chat or openai_embeddings
 // deployment: a connection block and nothing the model runtime owns.
 func (d ModelDeployment) validateRemote() error {
 	if d.Artifact != "" || d.Revision != "" || d.ExternalModel != "" || d.Device != "" || d.HasEngineArgs() ||
@@ -355,7 +353,7 @@ func (d ModelDeployment) validateRemote() error {
 		return fmt.Errorf("endpoint must not carry a query")
 	}
 	switch d.Provider {
-	case OpenAIEmbeddingsProvider, OpenAIChatProvider, RerankProvider:
+	case OpenAIEmbeddingsProvider, OpenAIChatProvider:
 		if strings.TrimSpace(d.Model) == "" || d.Model != strings.TrimSpace(d.Model) {
 			return fmt.Errorf("model must name the model the %s API serves", d.Provider)
 		}

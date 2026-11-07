@@ -334,7 +334,7 @@ generates this table; run `make headers-generate` after changing it.
 | `x-sr-bench-expected-config-hash` | request | control | none | benchmark | v0.4 | Configuration hash an evaluation request requires; another active configuration fails it with 412. |
 | `x-sr-bench-max-inference-calls` | request | control | none | benchmark | v0.4 | Provider-call limit of an evaluation request; only `1` is supported. |
 | `x-vsr-cache-control` | request | control | none | response_cache | v0.4 | Response-cache directives for the request, when the plugin's `request_controls` allow them. |
-| `x-vsr-compression-control` | request | control | none | context_compression | v0.4 | Context-compression directives for the request, when the plugin's `request_controls` allow them. |
+| `x-vsr-compression-control` | request | control | none | context | v0.4 | Context-compression directives for the request, when the plugin's `request_controls` allow them. |
 | `x-vsr-debug` | request | control | none | debug_headers | v0.4 | `true` asks for the debug headers on the response; honored only for a caller `global.router.headers.debug` allows. |
 | `x-vsr-protection-release` | request | control | none | router_learning | v0.5 | Any non-empty value asks router-learning protection for a fresh decision on the request's protection key; `global.router.learning.protection.release.header` can rename it. |
 | `x-vsr-skip-processing` | request | control | none | skip_processing | v0.3 | `true` opts the request out of Router processing when `global.router.skip_processing.enabled` is set. |

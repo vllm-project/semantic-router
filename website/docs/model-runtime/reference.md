@@ -665,8 +665,7 @@ In summary:
 The binding keys are the signal types `domain`, `jailbreak`, `pii`,
 `fact_check`, `user_feedback`, `modality`, `hallucination`, `preference` and
 `reask`. Embeddings name their deployment in
-`global.model_catalog.embeddings.default`, and the reranker in the RAG plugin's
-`rerank.deployment`. [Choose a model for a signal](../installation/choose-a-model-for-a-signal.md)
+`global.model_catalog.embeddings.default`. [Choose a model for a signal](../installation/choose-a-model-for-a-signal.md)
 shows how each resolves; the task guides list the answer each signal reads.
 
 ## Router-managed runtimes

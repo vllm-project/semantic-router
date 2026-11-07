@@ -15,7 +15,7 @@ const (
 
 // ragEmbedsQueries reports whether a RAG backend searches with a query
 // vector the router computes.
-func ragEmbedsQueries(rag *RAGPluginConfig) bool {
+func ragEmbedsQueries(rag *ContextSource) bool {
 	switch rag.Backend {
 	case "milvus", "qdrant", "hybrid":
 		return true
@@ -48,10 +48,7 @@ func EmbeddingModelsNeeded(cfg *RouterConfig, primary string, sharedServices boo
 		needed[model] = true
 	}
 	for _, decision := range cfg.Decisions {
-		if compression := decision.GetContextCompressionConfig(); compression != nil && compression.EffectiveScoring().Method != ContextCompressionScoringBM25 {
-			needed[primary] = true
-		}
-		if rag := decision.GetRAGConfig(); rag != nil && rag.Enabled && ragEmbedsQueries(rag) {
+		if rag := cfg.ContextPlugin(&decision).Source(ContextSourceRAG); rag != nil && ragEmbedsQueries(rag) {
 			needed[RAGQueryEmbeddingModel] = true
 		}
 	}

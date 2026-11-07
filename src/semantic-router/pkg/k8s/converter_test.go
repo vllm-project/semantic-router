@@ -21,15 +21,17 @@ func TestConvertDecisionPreservesNestedContextCompression(t *testing.T) {
 	decision, err := converter.convertDecision(v1alpha1.Decision{
 		Name: "compressed",
 		Plugins: []v1alpha1.DecisionPlugin{{
-			Type: config.DecisionPluginContextCompression,
+			Type: config.DecisionPluginContext,
 			Configuration: &runtime.RawExtension{Raw: []byte(`{
 				"enabled": true,
-				"mode": "auto",
-				"targets": {
-					"tool_outputs": {
-						"mode": "extractive",
-						"min_tokens": 2000,
-						"target_tokens": 1000
+				"compress": {
+					"mode": "auto",
+					"targets": {
+						"tool_outputs": {
+							"mode": "extractive",
+							"min_tokens": 2000,
+							"target_tokens": 1000
+						}
 					}
 				}
 			}`)},
@@ -37,7 +39,7 @@ func TestConvertDecisionPreservesNestedContextCompression(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, decision.Plugins, 1)
-	var pluginConfig config.ContextCompressionPluginConfig
+	var pluginConfig config.ContextPluginConfig
 	require.NoError(
 		t,
 		config.UnmarshalPluginConfig(
@@ -45,8 +47,9 @@ func TestConvertDecisionPreservesNestedContextCompression(t *testing.T) {
 			&pluginConfig,
 		),
 	)
-	require.NotNil(t, pluginConfig.Targets)
-	assert.Equal(t, 1000, pluginConfig.Targets.ToolOutputs.TargetTokens)
+	require.NotNil(t, pluginConfig.Compress)
+	require.NotNil(t, pluginConfig.Compress.Targets)
+	assert.Equal(t, 1000, pluginConfig.Compress.Targets.ToolOutputs.TargetTokens)
 }
 
 func TestConvertDecisionPreservesOnUnknown(t *testing.T) {

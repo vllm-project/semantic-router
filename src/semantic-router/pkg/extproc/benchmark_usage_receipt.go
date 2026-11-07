@@ -45,9 +45,10 @@ func (r *OpenAIRouter) benchmarkUsageScopeKnown(ctx *RequestContext, allowLooper
 	for _, plugin := range decision.Plugins {
 		switch config.NormalizeDecisionPluginType(plugin.Type) {
 		case config.DecisionPluginSystemPrompt, config.DecisionPluginHeaderMutation, config.DecisionPluginRequestParams, config.DecisionPluginRouterReplay, config.DecisionPluginResponseCache:
-		case config.DecisionPluginContextCompression:
-			compression := decision.GetContextCompressionConfig()
-			if compression == nil || compression.Enabled && compression.EffectiveScoring().Method != config.ContextCompressionScoringBM25 {
+		case config.DecisionPluginContext:
+			// Only compression that asks no model keeps the receipt's accounting.
+			plugin := decision.GetContextConfig()
+			if plugin == nil || plugin.Enabled && (len(plugin.Sources) > 0 || plugin.Compress == nil || config.MatchCompress.Effective(plugin.Compress.Match).Judge != nil) {
 				return false
 			}
 		default:

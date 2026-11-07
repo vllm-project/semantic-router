@@ -69,21 +69,22 @@ func assertReferenceCorePluginCoverage(t testingT, pluginsByType map[string][]ma
 	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, responseCacheConfigs, "request_controls", "plugins(response_cache).configuration"), reflect.TypeOf(ResponseCacheRequestControlsConfig{}), "plugins(response_cache).configuration.request_controls")
 	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, responseCacheConfigs, "personalized", "plugins(response_cache).configuration"), reflect.TypeOf(ResponseCachePersonalizedConfig{}), "plugins(response_cache).configuration.personalized")
 	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, responseCacheConfigs, "revision", "plugins(response_cache).configuration"), reflect.TypeOf(ResponseCacheRevisionConfig{}), "plugins(response_cache).configuration.revision")
-	compressionPlugins := pluginsByType["context_compression"]
-	assertPluginConfigCoverage(t, compressionPlugins, reflect.TypeOf(contextCompressionReferenceConfig{}), "context_compression")
-	compressionConfigs := collectChildMapsFromSlice(t, compressionPlugins, "configuration", "plugins(context_compression)")
-	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, compressionConfigs, "budget", "plugins(context_compression).configuration"), reflect.TypeOf(ContextCompressionBudgetConfig{}), "plugins(context_compression).configuration.budget")
-	compressionTargets := collectChildMapsFromSlice(t, compressionConfigs, "targets", "plugins(context_compression).configuration")
-	assertSliceUnionCoversStructFields(t, compressionTargets, reflect.TypeOf(ContextCompressionTargetsConfig{}), "plugins(context_compression).configuration.targets")
-	targetPolicies := collectChildMapsFromSlice(t, compressionTargets, "tool_outputs", "plugins(context_compression).configuration.targets")
-	targetPolicies = append(targetPolicies, collectChildMapsFromSlice(t, compressionTargets, "history", "plugins(context_compression).configuration.targets")...)
-	targetPolicies = append(targetPolicies, collectChildMapsFromSlice(t, compressionTargets, "rag", "plugins(context_compression).configuration.targets")...)
-	targetPolicies = append(targetPolicies, collectChildMapsFromSlice(t, compressionTargets, "memory", "plugins(context_compression).configuration.targets")...)
-	assertSliceUnionCoversStructFields(t, targetPolicies, reflect.TypeOf(ContextCompressionTargetConfig{}), "plugins(context_compression).configuration.targets.*")
-	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, compressionConfigs, "scoring", "plugins(context_compression).configuration"), reflect.TypeOf(ContextCompressionScoringConfig{}), "plugins(context_compression).configuration.scoring")
-	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, compressionConfigs, "recovery", "plugins(context_compression).configuration"), reflect.TypeOf(ContextCompressionRecoveryConfig{}), "plugins(context_compression).configuration.recovery")
-	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, compressionConfigs, "request_controls", "plugins(context_compression).configuration"), reflect.TypeOf(ContextCompressionRequestControlsConfig{}), "plugins(context_compression).configuration.request_controls")
-	assertPluginConfigCoverage(t, pluginsByType["memory"], reflect.TypeOf(MemoryPluginConfig{}), "memory")
+	contextPlugins := pluginsByType[DecisionPluginContext]
+	assertPluginConfigCoverage(t, contextPlugins, reflect.TypeOf(ContextPluginConfig{}), DecisionPluginContext)
+	contextConfigs := collectChildMapsFromSlice(t, contextPlugins, "configuration", "plugins(context)")
+	compressConfigs := collectChildMapsFromSlice(t, contextConfigs, "compress", "plugins(context).configuration")
+	assertSliceUnionCoversStructFields(t, compressConfigs, reflect.TypeOf(ContextCompressConfig{}), "plugins(context).configuration.compress")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, contextConfigs, "budget", "plugins(context).configuration"), reflect.TypeOf(ContextBudgetConfig{}), "plugins(context).configuration.budget")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, contextConfigs, "injection", "plugins(context).configuration"), reflect.TypeOf(ContextInjectionConfig{}), "plugins(context).configuration.injection")
+	compressionTargets := collectChildMapsFromSlice(t, compressConfigs, "targets", "plugins(context).configuration.compress")
+	assertSliceUnionCoversStructFields(t, compressionTargets, reflect.TypeOf(ContextCompressionTargetsConfig{}), "plugins(context).configuration.compress.targets")
+	targetPolicies := collectChildMapsFromSlice(t, compressionTargets, "tool_outputs", "plugins(context).configuration.compress.targets")
+	targetPolicies = append(targetPolicies, collectChildMapsFromSlice(t, compressionTargets, "history", "plugins(context).configuration.compress.targets")...)
+	targetPolicies = append(targetPolicies, collectChildMapsFromSlice(t, compressionTargets, "rag", "plugins(context).configuration.compress.targets")...)
+	targetPolicies = append(targetPolicies, collectChildMapsFromSlice(t, compressionTargets, "memory", "plugins(context).configuration.compress.targets")...)
+	assertSliceUnionCoversStructFields(t, targetPolicies, reflect.TypeOf(ContextCompressionTargetConfig{}), "plugins(context).configuration.compress.targets.*")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, compressConfigs, "recovery", "plugins(context).configuration.compress"), reflect.TypeOf(ContextCompressionRecoveryConfig{}), "plugins(context).configuration.compress.recovery")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, compressConfigs, "request_controls", "plugins(context).configuration.compress"), reflect.TypeOf(ContextCompressionRequestControlsConfig{}), "plugins(context).configuration.compress.request_controls")
 	assertPluginConfigCoverage(t, pluginsByType["fast_response"], reflect.TypeOf(FastResponsePluginConfig{}), "fast_response")
 	assertPluginConfigCoverage(t, pluginsByType["system_prompt"], reflect.TypeOf(SystemPromptPluginConfig{}), "system_prompt")
 	assertPluginConfigCoverage(t, pluginsByType["header_mutation"], reflect.TypeOf(HeaderMutationPluginConfig{}), "header_mutation")
@@ -98,17 +99,6 @@ func assertReferenceCorePluginCoverage(t testingT, pluginsByType map[string][]ma
 	assertPluginConfigCoverage(t, pluginsByType["prompt_cache"], reflect.TypeOf(PromptCachePluginConfig{}), "prompt_cache")
 }
 
-type contextCompressionReferenceConfig struct {
-	Enabled         bool                                     `yaml:"enabled"`
-	Mode            string                                   `yaml:"mode,omitempty"`
-	Budget          *ContextCompressionBudgetConfig          `yaml:"budget,omitempty"`
-	Targets         *ContextCompressionTargetsConfig         `yaml:"targets,omitempty"`
-	Scoring         *ContextCompressionScoringConfig         `yaml:"scoring,omitempty"`
-	Recovery        *ContextCompressionRecoveryConfig        `yaml:"recovery,omitempty"`
-	RequestControls *ContextCompressionRequestControlsConfig `yaml:"request_controls,omitempty"`
-	FailureMode     string                                   `yaml:"failure_mode,omitempty"`
-}
-
 type responseCacheReferenceConfig struct {
 	Enabled         bool                                `yaml:"enabled"`
 	Mode            string                              `yaml:"mode,omitempty"`
@@ -121,19 +111,41 @@ type responseCacheReferenceConfig struct {
 }
 
 func assertReferenceNestedPluginCoverage(t testingT, pluginsByType map[string][]map[string]interface{}) {
-	assertReferenceMemoryPluginCoverage(t, pluginsByType["memory"])
+	assertReferenceContextSourceCoverage(t, pluginsByType[DecisionPluginContext])
 	assertReferenceHeaderMutationCoverage(t, pluginsByType["header_mutation"])
-	assertReferenceRAGPluginCoverage(t, pluginsByType["rag"])
 }
 
-func assertReferenceMemoryPluginCoverage(t testingT, plugins []map[string]interface{}) {
-	memoryConfigs := collectChildMapsFromSlice(t, plugins, "configuration", "plugins(memory)")
-	assertSliceUnionCoversStructFields(
-		t,
-		collectChildMapsFromSlice(t, memoryConfigs, "reflection", "plugins(memory).configuration"),
-		reflect.TypeOf(MemoryReflectionConfig{}),
-		"routing.decisions[].plugins[type=memory].configuration.reflection",
-	)
+// assertReferenceContextSourceCoverage checks that the reference context
+// plugins' sources write every source field, every RAG backend's
+// configuration, the memory reflection and the match block.
+func assertReferenceContextSourceCoverage(t testingT, plugins []map[string]interface{}) {
+	configs := collectChildMapsFromSlice(t, plugins, "configuration", "plugins(context)")
+	sources := collectNestedSliceItems(t, configs, "sources", "plugins(context).configuration")
+	assertSliceUnionCoversStructFields(t, sources, reflect.TypeOf(ContextSource{}), "routing.decisions[].plugins[type=context].configuration.sources")
+	var ragSources, memorySources []map[string]interface{}
+	for _, item := range sources {
+		source, ok := item.(map[string]interface{})
+		if !ok {
+			t.Fatalf("a context source is %T, not a mapping", item)
+		}
+		if source["type"] == ContextSourceMemory {
+			memorySources = append(memorySources, source)
+		} else {
+			ragSources = append(ragSources, source)
+		}
+	}
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, memorySources, "reflection", "sources(memory)"), reflect.TypeOf(MemoryReflectionConfig{}), "sources[type=memory].reflection")
+	matches := collectChildMapsFromSlice(t, ragSources, "match", "sources(rag)")
+	assertSliceUnionCoversStructFields(t, matches, reflect.TypeOf(MatchConfig{}), "sources[type=rag].match")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, matches, "recall", "sources(rag).match"), reflect.TypeOf(MatchRecall{}), "sources[type=rag].match.recall")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, matches, "judge", "sources(rag).match"), reflect.TypeOf(MatchJudge{}), "sources[type=rag].match.judge", "question")
+	ragByBackend := mapByStringField(t, ragSources, "backend", "rag")
+	assertMapCoversStructFields(t, mustMapAt(t, ragByBackend["milvus"], "backend_config"), reflect.TypeOf(MilvusRAGConfig{}), "rag.backend_config(milvus)")
+	assertMapCoversStructFields(t, mustMapAt(t, ragByBackend["external_api"], "backend_config"), reflect.TypeOf(ExternalAPIRAGConfig{}), "rag.backend_config(external_api)")
+	assertMapCoversStructFields(t, mustMapAt(t, ragByBackend["mcp"], "backend_config"), reflect.TypeOf(MCPRAGConfig{}), "rag.backend_config(mcp)")
+	assertMapCoversStructFields(t, mustMapAt(t, ragByBackend["openai"], "backend_config"), reflect.TypeOf(OpenAIRAGConfig{}), "rag.backend_config(openai)")
+	assertMapCoversStructFields(t, mustMapAt(t, ragByBackend["vectorstore"], "backend_config"), reflect.TypeOf(VectorStoreRAGConfig{}), "rag.backend_config(vectorstore)")
+	assertMapCoversStructFields(t, mustMapAt(t, ragByBackend["hybrid"], "backend_config"), reflect.TypeOf(HybridRAGConfig{}), "rag.backend_config(hybrid)")
 }
 
 func assertReferenceHeaderMutationCoverage(t testingT, plugins []map[string]interface{}) {
@@ -150,19 +162,6 @@ func assertReferenceHeaderMutationCoverage(t testingT, plugins []map[string]inte
 		reflect.TypeOf(HeaderPair{}),
 		"routing.decisions[].plugins[type=header_mutation].configuration.update",
 	)
-}
-
-func assertReferenceRAGPluginCoverage(t testingT, plugins []map[string]interface{}) {
-	configs := collectChildMapsFromSlice(t, plugins, "configuration", "plugins(rag)")
-	ragByBackend := mapByStringField(t, configs, "backend", "rag")
-
-	assertSliceUnionCoversStructFields(t, configs, reflect.TypeOf(RAGPluginConfig{}), "routing.decisions[].plugins[type=rag].configuration")
-	assertMapCoversStructFields(t, mustMapAt(t, ragByBackend["milvus"], "backend_config"), reflect.TypeOf(MilvusRAGConfig{}), "rag.backend_config(milvus)")
-	assertMapCoversStructFields(t, mustMapAt(t, ragByBackend["external_api"], "backend_config"), reflect.TypeOf(ExternalAPIRAGConfig{}), "rag.backend_config(external_api)")
-	assertMapCoversStructFields(t, mustMapAt(t, ragByBackend["mcp"], "backend_config"), reflect.TypeOf(MCPRAGConfig{}), "rag.backend_config(mcp)")
-	assertMapCoversStructFields(t, mustMapAt(t, ragByBackend["openai"], "backend_config"), reflect.TypeOf(OpenAIRAGConfig{}), "rag.backend_config(openai)")
-	assertMapCoversStructFields(t, mustMapAt(t, ragByBackend["vectorstore"], "backend_config"), reflect.TypeOf(VectorStoreRAGConfig{}), "rag.backend_config(vectorstore)")
-	assertMapCoversStructFields(t, mustMapAt(t, ragByBackend["hybrid"], "backend_config"), reflect.TypeOf(HybridRAGConfig{}), "rag.backend_config(hybrid)")
 }
 
 func assertDecisionRuleCompositionInReferenceConfig(t testingT, decisions []interface{}) {

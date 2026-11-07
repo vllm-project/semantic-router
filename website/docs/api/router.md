@@ -411,7 +411,7 @@ only the budget check, it returns HTTP 400:
 Missing capabilities, unknown limits, unavailable selection evidence, and mixed
 failures retain their selection-error behavior, `no_eligible_model`. Budget checks do not
 truncate requests by themselves; opt into
-[context compression](../tutorials/plugin/context-compression.md) when appropriate.
+[context compression](../tutorials/plugin/context.md#compression-and-budget) when appropriate.
 
 These counts are estimates. A backend can still reject a request; its valid
 HTTP status and meaningful message are retained. vLLM integer codes are exposed

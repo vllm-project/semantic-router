@@ -47,7 +47,6 @@ Router 模式可以同时提供原生 System One 与经过路由的 Chat 请求�
 | 拦截提示词攻击和不安全内容 | Vela 1.0 Guard、Safety、Shield、Hazard | [提示词攻击与不安全内容](model-runtime/guides/safety.md) |
 | 对照来源检查回答 | Vela 1.0 Halu | [幻觉检查](model-runtime/guides/hallucination.md) |
 | 语义缓存、记忆、RAG、工具选择、embedding 信号 | Vela 1.0 Embedding、Qwen3-Embedding-0.6B | [Embeddings](model-runtime/guides/embeddings.md) |
-| 对检索到的文档重排序 | Vela 1.0 Reranker | [文档重排序](model-runtime/guides/rerank.md) |
 | 按图片和音频路由 | Vela 1.0 Omni Nano 和 Mini | [图片与音频](model-runtime/guides/multimodal.md) |
 | 用自然语言提出你自己的路由问题 | Decision 2.0、Decision 1.0、Vela 2.0 | [决策模型](model-runtime/guides/decisions.md) |
 

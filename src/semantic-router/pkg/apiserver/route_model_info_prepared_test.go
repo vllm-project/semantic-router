@@ -71,13 +71,12 @@ func TestPreparedInventoryIncludesEveryTaskAndRecipe(t *testing.T) {
 		{"safety.safe", "label_distribution.v1"},
 		{"safety.safe.hazard", "label_scores.v1"},
 		{"embedding", "embedding.v1"},
-		{"rag.reranker", "relevance_scores.v1"},
 	} {
 		prepareInventoryTask(t, runtime, "vela", task.name, task.contract, "rocm:0")
 	}
 	api := &ClassificationAPIServer{config: cfg, classificationSvc: service}
 	response := api.buildModelsInfoResponse()
-	if len(response.Models) != 10 || response.Summary.LoadedModels != 10 || response.Summary.TotalModels != 10 || !response.System.GPUAvailable {
+	if len(response.Models) != 9 || response.Summary.LoadedModels != 9 || response.Summary.TotalModels != 9 || !response.System.GPUAvailable {
 		t.Fatalf("incomplete prepared task inventory: %+v", response)
 	}
 	for _, model := range response.Models {

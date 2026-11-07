@@ -1,0 +1,1 @@
+routing.decisions[grounded].plugins[0]: removed_field: rag min_confidence_threshold is removed: it retrieved only when a fact_check rule matched; run `vllm-sr config migrate` (a fact_check condition in the decision's rules)

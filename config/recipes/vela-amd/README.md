@@ -2,10 +2,11 @@
 
 ## Overview
 
-Run the Vela decision model and the Vela 1.0 Embedding and Reranker on an AMD
+Run the Vela decision model and the Vela 1.0 Embedding on an AMD
 GPU and connect the Router to an existing OpenAI-compatible vLLM backend. The public model name is `vela-auto`; the backend
 serves `vela-default`. This recipe exposes real routing signals and enables
-retrieval with neural reranking for document questions.
+retrieval for document questions, with the decision model judging which
+documents are relevant.
 
 ## Model details
 
@@ -15,30 +16,27 @@ revision.
 | Models | Execution | Input policy |
 | --- | --- | --- |
 | vela3-fast (the decision model) | Built-in model runtime on `rocm:0`, default engine arguments | 8,192-token windows, including special tokens |
-| Embedding, Reranker | Built-in model runtime on `rocm:0`, FP32, default engine arguments | 32,768 tokens, including special tokens; reject overflow |
+| Embedding | Built-in model runtime on `rocm:0`, FP32, default engine arguments | 32,768 tokens, including special tokens; reject overflow |
 
 Every deployment is a `model_runtime` deployment: the Router starts the runtime
 and the runtime loads each pinned package on the GPU and chooses its kernels.
-Embedding uses layer 22 and dimension 768, with `full_context: true`. The
-Reranker's `pair_scorer` is exactly layer 22, dimension 768; a reduced Reranker
-sets both coordinates to another published exit (layers 3, 6 and 11,
-dimensions 64, 128, 256 and 512).
+Embedding uses layer 22 and dimension 768, with `full_context: true`.
 
 ## Intended use
 
 Use this recipe to inspect Vela signals on AMD, add semantic routing to a local
-backend, or rerank retrieved documents before generation. It is a starting
+backend, or keep the relevant retrieved documents before generation. It is a starting
 configuration for one backend, not a claim that routing improves that backend's
 answer quality. The decision model answers every routing signal in one call and
-scans longer inputs in 8K windows. Standalone Embedding and Reranker execution
-is qualified through 32K.
+scans longer inputs in 8K windows. Standalone Embedding execution is
+qualified through 32K.
 
 ## Routing behavior
 
-- `knowledge` matches the phrase `Search my documents`. It retrieves up to three
-  chunks, reranks them and injects the best two before calling `vela-default`.
-  Candidate retrieval uses `similarity_threshold: 0.0` and selects up to
-  `top_k` candidates before neural reranking.
+- `knowledge` matches the phrase `Search my documents`. It recalls up to three
+  chunks, asks the decision model which are relevant and injects the best two
+  before calling `vela-default`. Recall uses `min_similarity: 0` and keeps up
+  to `top_k` candidates for the judge.
 - `observe` combines the configured learned signals and calls the same backend.
   Requests without a matching decision also use the configured default backend.
 
@@ -114,21 +112,23 @@ curl --fail http://localhost:8899/v1/chat/completions \
 
 For RAG, create a vector store, upload and index documents, then replace
 `vs_your_documents` in the plugin with the returned store ID and activate the
-updated config. Follow [neural reranking](https://vllm-sr.ai/docs/tutorials/plugin/rag#neural-reranking)
+updated config. Follow [RAG sources](../../../website/docs/tutorials/plugin/context.md#rag-sources)
 and [vector stores](https://vllm-sr.ai/docs/tutorials/global/stores-and-tools).
 Send a real chat request beginning with `Search my documents` after indexing.
-Preview shows the selected RAG plugin but does not run retrieval or reranking.
+Preview shows the selected context plugin but does not run retrieval or the
+relevance judge.
 
 ## Evaluation
 
 [Maintained probes](probes.yaml) check both routes, the public entrypoint, text
 and message requests, semantic matching and plugin selection on a running AMD
 Router. Runtime qualification covers full-signal 8K execution and standalone
-Embedding/Reranker execution through 32K, including padded batches. These are
+Embedding execution through 32K, including padded batches. These are
 execution and numerical checks, not retrieval or classification quality scores.
 
 Inspect actual per-signal timing in Preview's `metrics`. For retrieval, inspect
-the real chat trace's candidate counts, reranker identity, scores and latency.
+the real chat trace's retrieval latency and the relevance judge's
+`vsr_match_judge_total{feature="rag"}` counter.
 Measure cold startup, warm latency and memory on the intended hardware.
 
 The [98x routing paper](https://arxiv.org/abs/2603.12646) reports latency and
@@ -139,8 +139,7 @@ compares its settings with this recipe.
 ## Limitations
 
 The decision model reads a long input in 8K windows, so a signal that spans
-two windows is judged per window. Reranker capacity includes the query,
-document and pair special tokens.
+two windows is judged per window.
 
 Preview defaults to a 120-second request budget and 16 admitted workers. Choose
 `global.services.api.routing_preview` limits from measured workload and hardware

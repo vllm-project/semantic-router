@@ -12,9 +12,12 @@ import (
 // RemovedPluginTypes says what replaced each plugin type the Router no longer
 // reads; the load error and the DSL compiler both name it.
 var RemovedPluginTypes = map[string]string{
-	"response_jailbreak": "a response_guard rule over a jailbreak signal with stage: response",
-	"hallucination":      "a response_guard rule over the fact_check and hallucination signals",
-	"tool_selection":     "a select block in the decision's tools plugin",
+	"response_jailbreak":  "a response_guard rule over a jailbreak signal with stage: response",
+	"hallucination":       "a response_guard rule over the fact_check and hallucination signals",
+	"tool_selection":      "a select block in the decision's tools plugin",
+	"rag":                 "a rag source of the decision's context plugin",
+	"memory":              "a memory source of the decision's context plugin",
+	"context_compression": "the compress block and budget of the decision's context plugin",
 }
 
 // pluginForms are the plugin forms that ran their own detectors or read their

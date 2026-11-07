@@ -292,7 +292,7 @@ def _curl_requests() -> list[tuple[str, str, dict]]:
 def test_curl_request_bodies_follow_the_runtime_contract():
     requests = _curl_requests()
 
-    assert len(requests) >= 8
+    assert len(requests) >= 7
     for where, path, body in requests:
         _validate_request(path, body, where)
 

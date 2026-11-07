@@ -12,8 +12,8 @@ func TestDecisionPluginActivationUsesTypedDefaults(t *testing.T) {
 		{&SystemPromptPluginConfig{SystemPrompt: "policy"}, true},
 		{&SystemPromptPluginConfig{Enabled: &enabled}, true},
 		{&SystemPromptPluginConfig{Enabled: &disabled}, false},
-		{&MemoryPluginConfig{}, false},
-		{&MemoryPluginConfig{Enabled: true}, true},
+		{&ContextPluginConfig{}, false},
+		{&ContextPluginConfig{Enabled: true}, true},
 		{&FastResponsePluginConfig{Message: "hello"}, true},
 		{&HeaderMutationPluginConfig{}, true},
 		{&RequestParamsPluginConfig{}, true},
@@ -51,8 +51,8 @@ func TestDecisionPluginActivationMatchesEveryRuntimeGetter(t *testing.T) {
 				switch payload.(type) {
 				case *ResponseCachePluginConfig:
 					want = decision.GetResponseCacheConfig().Enabled
-				case *MemoryPluginConfig:
-					want = decision.GetMemoryConfig().Enabled
+				case *ContextPluginConfig:
+					want = decision.GetContextConfig().Enabled
 				case *SystemPromptPluginConfig:
 					want = decision.IsSystemPromptEnabled()
 				case *HeaderMutationPluginConfig:
@@ -61,16 +61,12 @@ func TestDecisionPluginActivationMatchesEveryRuntimeGetter(t *testing.T) {
 					want = decision.GetResponseGuardConfig() != nil
 				case *RouterReplayPluginConfig:
 					want = decision.GetRouterReplayConfig().Enabled
-				case *RAGPluginConfig:
-					want = decision.GetRAGConfig().Enabled
 				case *FastResponsePluginConfig:
 					want = decision.GetFastResponseConfig() != nil
 				case *ToolsPluginConfig:
 					want = decision.GetToolsConfig().Enabled
 				case *RequestParamsPluginConfig:
 					want = decision.GetRequestParamsConfig() != nil
-				case *ContextCompressionPluginConfig:
-					want = decision.GetContextCompressionConfig().Enabled
 				case *PromptCachePluginConfig:
 					want = decision.GetPromptCacheConfig().Enabled
 				case *ShadowDispatchPluginConfig:

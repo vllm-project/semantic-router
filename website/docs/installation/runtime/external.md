@@ -1,6 +1,6 @@
 ---
 title: Remote services
-description: Connect a classifier, guard, chat judge, embedding model or reranker hosted outside the Router.
+description: Connect a classifier, guard, chat judge or embedding model hosted outside the Router.
 ---
 
 Use a remote service when another server manages the model and its hardware.
@@ -20,7 +20,6 @@ each signal's deployment is named.
 | Classification API (`POST <endpoint>/classify`) | `classify` | Domain, custom labels, prompt attacks, PII, hallucination detection, complexity, safety |
 | Chat API (`POST <endpoint>/chat/completions`) | `openai_chat` | Prompt attacks, hallucination detection, preference, LLM classification |
 | OpenAI-compatible embedding API (`POST <endpoint>/embeddings`) | `openai_embeddings` | [Remote embeddings](../../model-runtime/guides/embeddings.md#use-an-external-embedding-service) |
-| Rerank API (`POST <endpoint>/rerank`) | `rerank` | [RAG reranking](../../tutorials/plugin/rag.md#neural-reranking) |
 | System One API | `systemone` | [System One questions](../../tutorials/signal/learned/systemone.md#ask-a-remote-system-one-model) and every built-in question-style signal |
 | MCP tool | `modules.classifier.mcp` | Classification through an MCP server |
 

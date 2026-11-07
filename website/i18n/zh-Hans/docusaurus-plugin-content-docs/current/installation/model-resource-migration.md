@@ -125,53 +125,6 @@ global:
       query_rewrite: {deployment: rewriter}
 ```
 
-## RAG 重排序绑定 {#the-rag-reranker-binding}
-
-```yaml title="migrate-rag-reranker-before"
-global:
-  model_catalog:
-    deployments:
-      document-ranker:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Reranker
-        revision: a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf
-        device: cpu
-        input: {max_tokens: 4096, overflow: reject}
-routing:
-  model_bindings:
-    rag.reranker:
-      deployment: document-ranker
-      contract: relevance_scores.v1
-      adapter: vela_reranker
-      pair_scorer: {layer: 22, dimension: 768}
-  decisions:
-    - name: rag
-      plugins:
-        - type: rag
-          configuration: {enabled: true, backend: vectorstore, rerank: {top_k: 3}}
-```
-
-```yaml title="migrate-rag-reranker-after"
-global:
-  model_catalog:
-    deployments:
-      document-ranker:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Reranker
-        revision: a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf
-        device: cpu
-        input: {max_tokens: 4096, overflow: reject}
-routing:
-  decisions:
-    - name: rag
-      plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: vectorstore
-            rerank: {deployment: document-ranker, top_k: 3, layer: 22, dimension: 768}
-```
-
 ## 部署字段 {#deployment-fields}
 
 顶层的 `question_types` 移到 `capabilities` 下，`served_name` 改为 `model`，直接写在配置中的密钥（`access_key`、后端的 `api_key`）改为 `auth.api_key_env`；在部署上也可以改为 `auth.api_key_file`。

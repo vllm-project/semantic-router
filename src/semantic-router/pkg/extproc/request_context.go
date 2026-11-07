@@ -65,9 +65,6 @@ type RequestContext struct {
 	AutomaticCandidateDemands map[string]selection.CandidateDemand
 	BenchmarkModelUsage       string // Router-owned bounded accounting receipt; never copied from client or cache.
 
-	RAGRerankLatency    time.Duration
-	RAGRerankScores     []float32
-	RAGRerankerIdentity string
 	// ConfigVersion is the version of the configuration snapshot that serves
 	// the request; 0 when the router serves without the lifecycle.
 	ConfigVersion uint64
@@ -425,11 +422,14 @@ type RequestContext struct {
 	Masking *masking.Allocator
 
 	// RAG (Retrieval-Augmented Generation) tracking
-	RAGRetrievedContext string  // Retrieved context from RAG plugin
-	RAGBackend          string  // Backend used for retrieval ("milvus", "external_api", "mcp", "hybrid")
-	RAGSimilarityScore  float32 // Best similarity score from retrieval
+	RAGRetrievedContext string  // Retrieved context of the context plugin's rag source
+	RAGBackend          string  // Backend used for retrieval ("milvus", "external_api", "hybrid", ...)
+	RAGSimilarityScore  float32 // Best similarity of the documents kept
 	RAGRetrievalLatency float64 // Retrieval latency in seconds
 	RAGToolCallIDs      map[string]struct{}
+	// contextPrefixBlocks counts the system-prompt blocks the context plugin
+	// prepended, so each source's lands after the ones before it.
+	contextPrefixBlocks int
 
 	// Memory retrieval tracking
 	// Stores formatted memory context to be injected after system prompt
@@ -440,7 +440,7 @@ type RequestContext struct {
 	MemoryFallbackReason string
 	MemoryFailOpen       bool
 	MemoryResultCount    int
-	MemoryMessageIndexes map[int]struct{}
+	MemoryToolCallIDs    map[string]struct{}
 
 	// PluginBackendModel is the model selected before plugins run, and
 	// PluginSkips lists the plugins that capability gating kept from running.

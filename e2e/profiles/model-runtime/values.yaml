@@ -1,9 +1,9 @@
 # The built-in model runtime end to end, on tiny random-weight fixture packages
 # (runtime_with_fixtures.py writes them; nothing is downloaded):
 #
-# - managed: the Router starts runtime processes itself, the cpu device
-#   group (an embedder on device auto and a reranker), each in its own
-#   worker, plus a Decision 2.0 model), through VLLM_SRUN_COMMAND;
+# - managed: the Router starts runtime processes itself, through
+#   VLLM_SRUN_COMMAND: an embedder on device auto, which joins the cpu device
+#   group, and a Decision 2.0 model, each in its own worker;
 # - attached: model-runtime-attached serves a decision model and a Vela 2.0
 #   model in one process, each selected by its model;
 # - fail-open: decision-offline points at a Service with no pods.
@@ -41,11 +41,6 @@ config:
       # Replaces the chart's default general domain, which would ask the
       # system decision model this offline profile does not serve.
       domains: []
-      keywords:
-        - name: rerank_probe
-          operator: OR
-          keywords: [vsr-rerank-probe]
-          case_sensitive: false
       # testcases/decision_runtime_routing.go asks the runtimes these questions.
       systemone:
         - name: answered
@@ -118,30 +113,6 @@ config:
             threshold: 0
           timeout_ms: 10000
     decisions:
-      # Keeps the reranker prepared: only reachable recipes with an enabled
-      # rerank plugin load one. No case sends the keyword.
-      - name: rerank_route
-        description: Retrieval with neural reranking
-        priority: 600
-        rules:
-          operator: AND
-          conditions:
-            - {type: keyword, name: rerank_probe}
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
-        plugins:
-          - type: rag
-            configuration:
-              enabled: true
-              backend: vectorstore
-              backend_config:
-                vector_store_id: vs-model-runtime-e2e
-              top_k: 4
-              rerank:
-                deployment: vela-reranker
-                top_k: 2
-              on_failure: skip
       # An unknown answer never matches: the offline deployment never answers.
       - name: offline_route
         description: Fails open; never selected
@@ -236,13 +207,6 @@ config:
           input:
             max_tokens: 512
             overflow: truncate
-        vela-reranker:
-          provider: model_runtime
-          artifact: /tmp/vsr-fixtures/reranker
-          device: cpu
-          input:
-            max_tokens: 512
-            overflow: reject
         # Attached: one runtime process serving two models.
         attached-decisions:
           provider: model_runtime

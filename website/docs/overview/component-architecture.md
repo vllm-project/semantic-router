@@ -24,7 +24,7 @@ Click a diagram to open its full-size SVG.
 | --- | --- |
 | **Frontend** | Accept requests, enforce listener access, and adapt API protocols. |
 | **Decision Engine** | Resolve a routing entrypoint to its recipe, evaluate signals and decisions, and coordinate Chat or native decision-model backends. |
-| **Serving Engine / model runtime** | Serve decision, classifier, embedding, and reranking models through managed or attached workers. |
+| **Serving Engine / model runtime** | Serve decision, classifier, and embedding models through managed or attached workers. |
 | **Chat backends** | Generate responses using your vLLM, Ollama, or provider services. |
 
 The native System One API is available in both startup modes when the listener

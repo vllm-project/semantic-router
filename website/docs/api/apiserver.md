@@ -426,10 +426,9 @@ it does not duplicate their state under a plugin-specific resource tree.
 | --- | --- |
 | `system_prompt`, `request_params`, `header_mutation`, `fast_response` | `POST /api/v1/plugins/{type}/preview` using a typed candidate `configuration` or an active `binding` |
 | `response_guard` | Read an active guard's rules over a supplied question, context and answer; `mode: probe` invokes the configured models |
-| `rag` | Preview context injection with `supplied_context`; `mode: probe` performs configured retrieval without the RAG result cache |
+| `context` | Preview a RAG source's context injection with `supplied_context`; `mode: probe` performs configured retrieval without the RAG result cache. Compression has its own preview under `/api/v1/plugins/context/compression` |
 | `tools` | Preview the tools policy; the decision model's tool selection requires explicit `mode: probe` |
-| `context_compression` | Preview retained targets and budgets using the existing compression contract |
-| `response_cache`, `memory` | Operate their resources under `/api/v1/storage` |
+| `response_cache`, memory sources | Operate their resources under `/api/v1/storage` |
 | `router_replay`, `shadow_dispatch` | Inspect recorded outcomes under `/api/v1/observability/replays` |
 
 The guard, RAG, and tool previews require an explicit
@@ -488,10 +487,10 @@ and authorization metadata, not request bodies or plugin payloads.
 
 | Method | Path | Use |
 | --- | --- | --- |
-| `GET` | `/api/v1/plugins/context_compression/capabilities` | Runtime capabilities |
-| `GET` | `/api/v1/plugins/context_compression/health` | Runtime health |
-| `GET` | `/api/v1/observability/plugins/context_compression/stats` | Redacted statistics |
-| `POST` | `/api/v1/plugins/context_compression/preview` | Preview compression without persistence |
+| `GET` | `/api/v1/plugins/context/compression/capabilities` | Runtime capabilities |
+| `GET` | `/api/v1/plugins/context/compression/health` | Runtime health |
+| `GET` | `/api/v1/observability/plugins/context/compression/stats` | Redacted statistics |
+| `POST` | `/api/v1/plugins/context/compression/preview` | Preview compression without persistence |
 | `POST` | `/api/v1/storage/context-recovery/invalidate` | Invalidate a trusted recovery scope |
 
 Use `preview` to evaluate what would be retained before enabling compression on
@@ -543,7 +542,7 @@ The former `/api/v1/response-cache/*` and
 `/api/v1/context-compression/*` routes are retired. Clients should rediscover
 operations from `/api/v1` or `/api/v1/plugins`: cache operations now use
 `/api/v1/storage/response-cache/*`; compression capabilities, health, and preview
-use `/api/v1/plugins/context_compression/*`; statistics, recovery invalidation,
+use `/api/v1/plugins/context/compression/*`; statistics, recovery invalidation,
 and audit use the observability/storage paths above. No redirect or legacy
 handler changes a mutation's meaning.
 
@@ -618,7 +617,7 @@ Inspect routing replays, metrics, and management audit; submit outcome evidence.
 | `GET` | `/api/v1/observability/replays/dataset/judge-tasks` | Build blinded pairwise judge tasks over the shadow comparison dataset |
 | `GET` | `/api/v1/observability/replays/{id}` | Read one Router Replay record |
 | `GET` | `/api/v1/observability/audit` | Page through this Router process's bounded management mutation audit, configuration lifecycle outcomes included; filter by action and resume after a sequence |
-| `GET` | `/api/v1/observability/plugins/context_compression/stats` | Get redacted context-compression statistics |
+| `GET` | `/api/v1/observability/plugins/context/compression/stats` | Get redacted context-compression statistics |
 
 ### storage
 
@@ -658,9 +657,9 @@ Discover recipe-scoped plugin bindings, dependencies, and typed behavior preview
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/api/v1/plugins/context_compression/capabilities` | Get context-compression capabilities |
-| `GET` | `/api/v1/plugins/context_compression/health` | Check context-compression runtime health |
-| `POST` | `/api/v1/plugins/context_compression/preview` | Preview context compression without persistence |
+| `GET` | `/api/v1/plugins/context/compression/capabilities` | Get context-compression capabilities |
+| `GET` | `/api/v1/plugins/context/compression/health` | Check context-compression runtime health |
+| `POST` | `/api/v1/plugins/context/compression/preview` | Preview context compression without persistence |
 | `GET` | `/api/v1/plugins` | Discover every registered recipe-scoped plugin, its schema, bindings, and supported operations |
 | `GET` | `/api/v1/plugins/{type}` | Describe one canonical plugin type and its supported management operations |
 | `GET` | `/api/v1/plugins/{type}/bindings` | Inspect active recipe and decision plugin bindings and published dependency availability; does not probe network health |
@@ -669,7 +668,7 @@ Discover recipe-scoped plugin bindings, dependencies, and typed behavior preview
 | `POST` | `/api/v1/plugins/header_mutation/preview` | Preview ordered Envoy header operations; values require secret_view; no persistence or backend calls |
 | `POST` | `/api/v1/plugins/fast_response/preview` | Preview fixed assistant text before transport encoding; no persistence or backend calls |
 | `POST` | `/api/v1/plugins/response_guard/preview` | Preview what an active binding's response_guard does with an answer; mode=probe reads the guard's request-stage conditions on the question and its response-stage signals on the answer and context, without generation or persistence |
-| `POST` | `/api/v1/plugins/rag/preview` | Preview configured RAG context injection using supplied_context; mode=probe retrieves from the configured backend without the RAG result cache or generation |
+| `POST` | `/api/v1/plugins/context/preview` | Preview the context plugin's rag source injection using supplied_context; mode=probe recalls from the configured backend and judges the documents, without the RAG result cache or generation |
 | `POST` | `/api/v1/plugins/tools/preview` | Preview the configured tools policy; mode=probe also lets the selection ask the decision model, and never executes tools |
 
 ### diagnostics
@@ -700,7 +699,6 @@ Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, and r
 | `POST` | `/api/v1/diagnostics/models/label-scores` | Inspect independent label scores using the prepared operating point when configured |
 | `POST` | `/api/v1/diagnostics/models/tokens` | Inspect prepared token spans with original UTF-8 byte offsets and complete configured window scanning |
 | `POST` | `/api/v1/diagnostics/models/embeddings` | Run the explicitly selected prepared embedding binding at its published representation |
-| `POST` | `/api/v1/diagnostics/models/rerank` | Score query-document pairs using the selected prepared relevance binding without running a RAG request; max_batch_size applies (default 100 pairs) |
 <!-- END-GENERATED-ENDPOINT-INDEX -->
 
 ### Testing the Decision Model

@@ -227,24 +227,27 @@ You can layer a Redis/Valkey hot cache in front of the Valkey memory store for f
 
 Every store, update, or delete invalidates that user's cached retrievals. For the next 10 seconds that user's retrievals go to the memory store and are not cached, so a deleted memory cannot be written back into the cache by a slower or slightly stale read.
 
-## Per-Decision Memory Plugin
+## Per-Decision Memory Source
 
-Routes can override global memory settings using the `memory` plugin:
+Routes can override global memory settings with a memory source of the
+`context` plugin:
 
 ```yaml
 routing:
   decisions:
     - name: personalized_route
       plugins:
-        - type: memory
+        - type: context
           configuration:
             enabled: true
-            retrieval_limit: 10
-            similarity_threshold: 0.60
-            auto_store: true
+            sources:
+              - type: memory
+                match:
+                  recall: {method: embedding, top_k: 10, min_similarity: 0.60}
+                store: {auto: true}
 ```
 
-See the [Memory plugin tutorial](/docs/tutorials/plugin/memory) for details.
+See the [memory source tutorial](../tutorials/plugin/context.md#memory-sources) for details.
 
 ## Performance Tuning
 

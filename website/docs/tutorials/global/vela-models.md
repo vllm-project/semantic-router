@@ -4,8 +4,8 @@
 
 [Vela 1.0](https://huggingface.co/collections/vllm-sr/vela-10)
 is a family of specialist models for intelligent routing. The Router registry
-includes the Vela 307M encoder base, task classifiers, retrieval and reranking
-models, and multimodal embedders. Each registered release is pinned to an
+includes the Vela 307M encoder base, task classifiers, retrieval models and
+multimodal embedders. Each registered release is pinned to an
 immutable revision.
 
 | Model | Role |
@@ -20,7 +20,6 @@ immutable revision.
 | Feedback | Four feedback types and a neutral `NO_FEEDBACK` class |
 | Modality | Text, image, or combined output intent from a written request |
 | Embedding | Multilingual retrieval and semantic matching |
-| Reranker | Relevance scoring for query-document pairs |
 
 The full model name is `Vela-1.0-Encoder-307M`, followed by the task suffix.
 Modality classifies the requested output modality from text.
@@ -163,7 +162,7 @@ benchmarks and the fast-vision package.
 With no model configured, the built-in Domain, Guard, Safety, PII, FactCheck,
 Feedback, Modality and hallucination signals run on **vela3-fast** (Vela 3.0),
 with compatible questions grouped by deployment, input and execution stage ([Choose a model](../../model-runtime/choose-a-model.md#built-in-signals)).
-Semantic Embedding and the Reranker use Vela 1.0. The pre-declared `hazard`
+Semantic Embedding uses Vela 1.0. The pre-declared `hazard`
 deployment (Vela 1.0 Hazard) answers a safety rule's `hazard` part; its
 presence in the catalog does not enable a Safety-to-Hazard cascade. A binding
 to a deployment of a Vela 1.0 task model selects that specialist
@@ -211,9 +210,8 @@ global:
 ```
 
 Bind the other shared-answer signals the same way, by signal type. Embeddings
-name their deployment in `global.model_catalog.embeddings.default`, and the
-reranker in the RAG plugin's `rerank.deployment`. The signal decides what each
-model returns (PII spans, embedding vectors, relevance scores), and the runtime
+name their deployment in `global.model_catalog.embeddings.default`. The signal
+decides what each model returns (PII spans, embedding vectors), and the runtime
 reads each model's architecture from its package, so no contract or adapter is
 written. See [Run it with the router](../../model-runtime/deploy.md) for the
 full picture.
@@ -241,7 +239,7 @@ batching and precision, and [Choose a model](../../model-runtime/choose-a-model.
 what each model costs.
 
 The [Vela AMD recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)
-places all ten task models on an AMD GPU and preserves the published operating
+places the decision model and the embedding model on an AMD GPU and preserves the published operating
 policies. `--platform rocm` selects the AMD image and device access; it does not
 make every authored model use a GPU or override an explicit CPU deployment.
 See [AMD ROCm](../../installation/amd-rocm.md#run-vela-routing-models-on-amd).
@@ -257,7 +255,7 @@ results in their model cards. Published comparisons use the previous mmBERT
 family on matched evaluation data. Quality scores, maximum accepted input length
 and inference performance measure different properties.
 
-## Verify live routing and reranking
+## Verify live routing
 
 For the Vela AMD recipe, download and validate the complete configuration, then
 start it with the AMD image. Connect an existing vLLM backend served as
@@ -283,12 +281,11 @@ curl --fail 'http://localhost:8080/api/v1/routing/preview?trace=true' \
 Use the public model name declared by your entrypoint. Check `/ready` before
 sending requests and inspect the returned signal values and evaluation trace.
 
-Reranking executes inside the vectorstore RAG plugin after routing. Name the
-reranker deployment in the plugin's `rerank` block as described in
-[neural reranking](/docs/tutorials/plugin/rag#neural-reranking). Verify it through
-a real chat request with indexed documents. Its request trace records candidate
-count, reranker identity, relevance scores and reranking latency; routing Preview
-does not execute the RAG plugin.
+Retrieval executes inside the context plugin after routing: a RAG source
+recalls documents and the decision model's relevance judge keeps the ones that
+matter, as described in [RAG sources](../plugin/context#rag-sources). Verify it
+through a real chat request with indexed documents; routing Preview does not
+execute the context plugin.
 
 ## Preserve an earlier deployment
 

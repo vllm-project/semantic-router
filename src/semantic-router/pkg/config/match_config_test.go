@@ -131,7 +131,7 @@ func TestMatchBlockValidation(t *testing.T) {
 		block   MatchConfig
 	}{
 		"cache recall and same_request": {MatchResponseCache, MatchConfig{Recall: recall("", 3, matchBound(0.8)), Judge: judge(func(j *MatchJudge) { j.Preset, j.MinScore = presets.SameRequest, matchBound(0.9) })}},
-		"rag bm25 recall":               {MatchRAG, MatchConfig{Recall: recall(MatchRecallBM25, 10, matchBound(2.5))}},
+		"compress bm25 bound":           {MatchCompress, MatchConfig{Recall: recall(MatchRecallBM25, 10, matchBound(2.5))}},
 		"rag negative cosine bound":     {MatchRAG, MatchConfig{Recall: recall("", 10, matchBound(-0.2))}},
 		"compress bm25 without top_k":   {MatchCompress, MatchConfig{Recall: recall(MatchRecallBM25, 0, nil), Judge: judge(func(*MatchJudge) {})}},
 		"compress custom noul":          {MatchCompress, MatchConfig{Judge: judge(question(SystemOneQuestionNoul, none))}},
@@ -163,7 +163,8 @@ func TestMatchBlockValidation(t *testing.T) {
 		"index without top_k":       {MatchMemory, MatchConfig{Recall: recall("", 0, nil)}, "m.recall.top_k must be at least 1"},
 		"negative top_k":            {MatchCompress, MatchConfig{Recall: recall(MatchRecallBM25, -1, nil)}, "m.recall.top_k must be at least 1"},
 		"cosine above one":          {MatchRAG, MatchConfig{Recall: recall("", 5, matchBound(1.5))}, "m.recall.min_similarity must be a cosine similarity within [-1, 1]"},
-		"negative bm25 bound":       {MatchRAG, MatchConfig{Recall: recall(MatchRecallBM25, 5, matchBound(-1))}, "m.recall.min_similarity must be a BM25 score of at least 0"},
+		"negative bm25 bound":       {MatchCompress, MatchConfig{Recall: recall(MatchRecallBM25, 5, matchBound(-1))}, "m.recall.min_similarity must be a BM25 score of at least 0"},
+		"bm25 over documents":       {MatchRAG, MatchConfig{Recall: recall(MatchRecallBM25, 5, nil)}, "m.recall.method: a RAG source recalls with embedding only"},
 		"preset and question":       {MatchCompress, MatchConfig{Judge: judge(func(j *MatchJudge) { j.Question = &SystemOneQuestion{Type: SystemOneQuestionNoul, Instructions: "x"} })}, "m.judge: a judge asks a preset or a question, not both"},
 		"no question":               {MatchCompress, MatchConfig{Judge: judge(func(j *MatchJudge) { j.Preset = "" })}, "m.judge: preset must be relevance, same_request, tool_rank, or write a question"},
 		"signal preset":             {MatchCompress, MatchConfig{Judge: judge(func(j *MatchJudge) { j.Preset = presets.Domain })}, "m.judge: preset must be"},

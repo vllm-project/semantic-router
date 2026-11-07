@@ -72,7 +72,7 @@ vLLM Semantic Router is designed around five goals:
   state. The Router supplies decisions for its model calls.
 - Chat generation remains with backends such as vLLM, Ollama, or hosted
   providers. The built-in model runtime serves the decision, classifier,
-  embedding, and reranking models that support routing; applications can also
+  and embedding models that support routing; applications can also
   call decision models through System One.
 - It is not only a load balancer. Replica health matters, but request meaning
   and policy determine which model pool is eligible.

@@ -53,7 +53,7 @@ routing:
 | `placeholders` | Maps a PII label to a template. The template must contain `{index}`; a template without it would collapse distinct values onto one placeholder, so it is rejected at config load. Types absent from the map get the default `[TYPE_n]` shape. |
 
 The rule reads the request as it is sent, after every plugin that changes it
-has run, so personal data a [RAG](./rag) document or a system prompt brought
+has run, so personal data a [RAG](./context) document or a system prompt brought
 in is masked too. The rule's text is scanned once per request: a decision that
 also reads the rule at routing reuses the scan of the same text.
 

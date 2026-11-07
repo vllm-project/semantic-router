@@ -252,8 +252,8 @@ providers:
         finally:
             os.unlink(temp_path)
 
-    def test_multiple_plugins_with_rag(self):
-        """Test RAG alongside system_prompt, semantic-cache, and router_replay."""
+    def test_multiple_plugins_with_context(self):
+        """Test a context plugin alongside system_prompt, semantic-cache, and router_replay."""
         config_yaml = """
 version: v0.1
 listeners:
@@ -284,20 +284,23 @@ decisions:
         configuration:
           enabled: true
           system_prompt: "You are a knowledge assistant."
-      - type: "rag"
+      - type: "context"
         configuration:
           enabled: true
-          backend: "external_api"
-          top_k: 5
-          similarity_threshold: 0.75
-          injection_mode: "tool_role"
-          on_failure: "skip"
-          cache_results: true
-          cache_ttl_seconds: 300
-          backend_config:
-            endpoint: "http://rag-service:8000/v1/search"
-            request_format: "openai"
-            timeout_seconds: 10
+          sources:
+            - type: "rag"
+              backend: "external_api"
+              match:
+                recall: {method: embedding, top_k: 5, min_similarity: 0.75}
+              on_failure: "skip"
+              cache_results: true
+              cache_ttl_seconds: 300
+              backend_config:
+                endpoint: "http://rag-service:8000/v1/search"
+                request_format: "openai"
+                timeout_seconds: 10
+          injection:
+            mode: "tool_role"
       - type: "semantic-cache"
         configuration:
           enabled: true
@@ -324,19 +327,19 @@ providers:
 
             plugin_types = [p.type.value for p in config.decisions[0].plugins]
             assert "system_prompt" in plugin_types
-            assert "rag" in plugin_types
+            assert "context" in plugin_types
             assert "response_cache" in plugin_types
             assert "router_replay" in plugin_types
 
-            # Verify RAG plugin configuration is correctly parsed
-            rag_plugin = next(
-                p for p in config.decisions[0].plugins if p.type.value == "rag"
+            context_plugin = next(
+                p for p in config.decisions[0].plugins if p.type.value == "context"
             )
-            assert rag_plugin.configuration["enabled"] is True
-            assert rag_plugin.configuration["backend"] == "external_api"
-            assert rag_plugin.configuration["top_k"] == 5
+            assert context_plugin.configuration["enabled"] is True
+            rag_source = context_plugin.configuration["sources"][0]
+            assert rag_source["backend"] == "external_api"
+            assert rag_source["match"]["recall"]["top_k"] == 5
             assert (
-                rag_plugin.configuration["backend_config"]["endpoint"]
+                rag_source["backend_config"]["endpoint"]
                 == "http://rag-service:8000/v1/search"
             )
 

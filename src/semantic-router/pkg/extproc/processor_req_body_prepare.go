@@ -125,12 +125,6 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		ctx.InflightToken = 0
 		return requestDecisionState{}, resp
 	}
-	if ragErr := r.executeRAGPlugin(ctx, decisionName); ragErr != nil {
-		inflight.End(ctx.InflightModel, ctx.InflightToken)
-		ctx.InflightToken = 0
-		return requestDecisionState{}, r.createErrorResponse(503, "RAG retrieval failed")
-	}
-
 	return requestDecisionState{
 		decisionName:      decisionName,
 		reasoningDecision: reasoningDecision,
@@ -242,13 +236,10 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 		return nil, nil, status.Error(codes.InvalidArgument, "neutral inference request is unavailable")
 	}
 	populateSessionTransitionFields(ctx)
-	memErr := r.handleMemoryRetrieval(ctx, userContent, request)
-	if memErr != nil {
-		logging.ComponentWarnEvent("extproc", "memory_retrieval_failed", map[string]interface{}{
-			"request_id": ctx.RequestID,
-			"error":      memErr.Error(),
-			"fallback":   "continue_without_memory",
-		})
+	if err := r.retrieveContextSources(ctx, userContent, request); err != nil {
+		inflight.End(ctx.InflightModel, ctx.InflightToken)
+		ctx.InflightToken = 0
+		return nil, r.createErrorResponse(503, "RAG retrieval failed"), nil
 	}
 	if compressionErr := r.applyContextTransformationPlan(ctx, request); compressionErr != nil {
 		return nil, r.createErrorResponse(500, "Context compression failed under fail_closed policy"), nil
