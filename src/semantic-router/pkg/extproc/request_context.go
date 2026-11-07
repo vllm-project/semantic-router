@@ -140,8 +140,9 @@ type RequestContext struct {
 	RequestCostCurrency           string
 	RequestCostPriced             bool
 	// Streaming detection
-	ExpectStreamingResponse bool // set from request Accept header or stream parameter
-	IsStreamingResponse     bool // set from response Content-Type
+	ExpectStreamingResponse bool      // set from request Accept header or stream parameter
+	IsStreamingResponse     bool      // set from response Content-Type
+	LastStreamChunkTime     time.Time // timestamp of the most recent streaming body chunk
 
 	// Semi-streaming body handler (non-nil when Envoy sends STREAMED body chunks)
 	StreamedBody          *StreamedBodyHandler
@@ -170,7 +171,8 @@ type RequestContext struct {
 	// UpstreamResponseGzip is set at every response-header phase from that
 	// reply's Content-Encoding. The response-body phase decodes a gzip reply
 	// before any phase reads it.
-	UpstreamResponseGzip bool
+	UpstreamResponseGzip        bool
+	UpstreamErrorMetricRecorded bool
 
 	// UpstreamBackendAddress is the Envoy-selected upstream host:port for this request.
 	UpstreamBackendAddress string

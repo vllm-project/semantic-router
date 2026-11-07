@@ -1,6 +1,7 @@
 """Native Chat Completions response and stream fixtures."""
 
 import json
+import time
 from collections.abc import Iterator
 from typing import Any
 
@@ -360,6 +361,7 @@ def generate_chat_stream(
     usage: dict,
     created_ts: int,
     complete: bool = True,
+    stall_seconds: float = 0.0,
 ):
     chunk_size = 24
     response_id = response["id"]
@@ -371,6 +373,11 @@ def generate_chat_stream(
             {"content": content[i : i + chunk_size]},
             None,
         )
+        if stall_seconds > 0:
+            # Frame stall: hold stream open without sending further chunks,
+            # allowing downstream stream_idle_timeout to trigger if stall exceeds timeout.
+            time.sleep(stall_seconds)
+            stall_seconds = 0.0
         if not complete:
             return
     yield build_chat_stream_chunk(req, response_id, created_ts, {}, "stop", usage)
