@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 // ResponseExtension is optional router-generated evidence. Its contents are
@@ -41,21 +43,21 @@ func withFusionExtension(response *Response, cfg fusionExecutionConfig, trace *F
 	if !shouldIncludeFusionTrace(cfg, trace) {
 		return response, nil
 	}
-	return withRouterExtension(response, "fusion", projectFusionPublicTrace(trace))
+	return withRouterExtension(response, llmprotocol.RouterExtensionFusion, projectFusionPublicTrace(trace))
 }
 
 func withWorkflowExtension(response *Response, cfg workflowsExecutionConfig, trace *workflowTrace) (*Response, error) {
 	if trace == nil || (!cfg.IncludeIntermediateResponses && len(trace.FailedModels) == 0) {
 		return response, nil
 	}
-	return withRouterExtension(response, "flow", trace)
+	return withRouterExtension(response, llmprotocol.RouterExtensionFlow, trace)
 }
 
 func withReMoMExtension(response *Response, include bool, rounds []RoundResponse) (*Response, error) {
 	if !include {
 		return response, nil
 	}
-	return withRouterExtension(response, "reasoning_mom_responses", rounds)
+	return withRouterExtension(response, llmprotocol.RouterExtensionReMoM, rounds)
 }
 
 // Only the three typed emitter adapters above call this helper. Capture the

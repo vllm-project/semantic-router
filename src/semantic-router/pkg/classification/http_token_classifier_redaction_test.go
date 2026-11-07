@@ -69,7 +69,7 @@ func TestTokenSpansErrorsCarryNoProviderOrInputText(t *testing.T) {
 			if tc.model != "" {
 				cfg.ModelName = tc.model
 			}
-			backend, err := newPIIHTTPTokenClassifierInference(cfg, testPIIMapping(), time.Second)
+			backend, err := newPIIHTTPTokenClassifierInference(externalClassifyDeployment(cfg, time.Second), testPIIMapping())
 			if err != nil {
 				t.Fatalf("newPIIHTTPTokenClassifierInference: %v", err)
 			}

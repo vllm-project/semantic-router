@@ -5,9 +5,14 @@ import { decisionRuntimeDeclarations } from './decisionRuntimeDeployment'
 export type ReplicaPlacement = NonNullable<CanonicalModelDeployment['replicas']>[number]
 
 export function deploymentPlacements(deployment: CanonicalModelDeployment): ReplicaPlacement[] {
-  if (deployment.replicas?.length) return deployment.replicas.map((replica) => ({ ...replica }))
+  if (deployment.replicas?.length)
+    return deployment.replicas.map(({ served_name, ...replica }) => ({
+      ...replica,
+      ...(served_name && !replica.model ? { model: served_name } : {}),
+    }))
+  const model = deployment.model || deployment.served_name
   return deployment.endpoint
-    ? [{ endpoint: deployment.endpoint, served_name: deployment.served_name }]
+    ? [{ endpoint: deployment.endpoint, ...(model ? { model } : {}) }]
     : [{ device: deployment.device || 'auto' }]
 }
 
@@ -42,10 +47,7 @@ export function withDecisionReplicas(
         throw new Error(
           'Use an HTTP, HTTPS or Unix runtime endpoint without credentials or a query.',
         )
-      return {
-        endpoint,
-        ...(replica.served_name?.trim() ? { served_name: replica.served_name.trim() } : {}),
-      }
+      return { endpoint, ...(replica.model?.trim() ? { model: replica.model.trim() } : {}) }
     }
     const device = replica.device?.trim() || 'auto'
     if (!/^[a-z][a-z0-9_]*(?::[0-9]+)?$/.test(device))
@@ -56,6 +58,8 @@ export function withDecisionReplicas(
   const target = decisionRuntimeDeclarations(next)[name]
   delete target.device
   delete target.endpoint
+  // Each placement now names the served model an attached worker answers with.
+  delete target.model
   delete target.served_name
   target.replicas = placements
   return next

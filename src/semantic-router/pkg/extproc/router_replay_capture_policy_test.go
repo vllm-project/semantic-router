@@ -1,7 +1,9 @@
 package extproc
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
@@ -131,6 +133,49 @@ func TestReplayPersonalDataPolicyKeepsMetadataAndLifecycle(t *testing.T) {
 				t.Fatal("capture changed provider request")
 			}
 		})
+	}
+}
+
+func TestReplayChecksAWithheldPromptAfterRoutingAndAttachesItOnlyWhenClean(t *testing.T) {
+	const prompt = "Summarize the meeting agenda."
+	for _, clean := range []bool{true, false} {
+		no := false
+		cfg := &config.RouterConfig{
+			RouterReplay:       config.RouterReplayConfig{Enabled: true, StoreBackend: "memory", CapturePersonalData: &no},
+			IntelligentRouting: config.IntelligentRouting{Signals: config.Signals{PIIRules: []config.PIIRule{{Name: "personal_data"}}}},
+		}
+		router := replayRuntimeRouter(t, cfg)
+		router.Classifier = &classification.Classifier{Config: cfg}
+		release, read := make(chan struct{}), make(chan string, 1)
+		saved := replayPromptEvidence
+		replayPromptEvidence = func(_ *classification.Classifier, _ context.Context, text string) classification.PrivacyEvidence {
+			<-release
+			read <- text
+			return classification.NewPrivacyEvidence("request", text, true, clean)
+		}
+		ctx := replayPolicyRequest(t)
+		ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: config.DefaultRecipeName})
+		router.startRouterReplay(ctx, "public-entry", "model", "ordinary")
+		record, ok := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
+		if !ok || record.Prompt != "" || !ctx.RouterReplayContentOmitted {
+			t.Fatalf("clean=%v: the record must be written before its check, prompt withheld: %+v", clean, record)
+		}
+		close(release)
+		if got := <-read; got != prompt {
+			t.Fatalf("checked %q, want the exact prompt", got)
+		}
+		deadline := time.Now().Add(5 * time.Second)
+		for len(replayPromptCheckSlots) > 0 && time.Now().Before(deadline) {
+			time.Sleep(time.Millisecond)
+		}
+		replayPromptEvidence = saved
+		record, _ = router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
+		if want := map[bool]string{true: prompt, false: ""}[clean]; record.Prompt != want {
+			t.Fatalf("clean=%v: prompt=%q want=%q", clean, record.Prompt, want)
+		}
+		if record.RequestBody != "" || record.ToolDefinitions != "" {
+			t.Fatalf("clean=%v: a prompt check must not restore other content: %+v", clean, record)
+		}
 	}
 }
 
