@@ -210,3 +210,26 @@ func TestSchemaPublishesMemoryPersistenceBounds(t *testing.T) {
 		}
 	}
 }
+
+// The last_tool_call source fields are published, so editors and validators that
+// read the schema accept a conversation source that uses them.
+func TestSchemaPublishesLastToolCallSourceFields(t *testing.T) {
+	var document struct {
+		Defs map[string]struct {
+			Properties map[string]json.RawMessage `json:"properties"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(Document(), &document); err != nil {
+		t.Fatal(err)
+	}
+	for def, fields := range map[string][]string{
+		"ConversationSource": {"type", "role", "tools", "calls", "match"},
+		"ToolCallMatch":      {"tools", "argument", "pattern"},
+	} {
+		for _, field := range fields {
+			if _, ok := document.Defs[def].Properties[field]; !ok {
+				t.Errorf("schema %s is missing %q", def, field)
+			}
+		}
+	}
+}

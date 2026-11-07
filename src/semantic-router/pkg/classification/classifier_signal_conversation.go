@@ -1,6 +1,9 @@
 package classification
 
 import (
+	"encoding/json"
+	"regexp"
+	"slices"
 	"sync"
 	"time"
 
@@ -26,6 +29,8 @@ type ConversationFacts struct {
 	LastMessageToolResult     bool
 	LastMessageFlowToolResult bool
 	LastAssistantToolCall     bool
+	LastAssistantToolNames    []string
+	LastAssistantToolArgs     []string // raw arguments, aligned with LastAssistantToolNames
 	LastUserAfterToolResult   bool
 }
 
@@ -117,9 +122,96 @@ func resolveConversationRawCount(feature config.ConversationFeature, facts Conve
 		return conversationBoolCount(facts.LastMessageFlowToolResult)
 	case "image_content":
 		return facts.ImageContentCount
+	case "last_tool_call":
+		return countLastToolCalls(feature.Source, facts.LastAssistantToolNames, facts.LastAssistantToolArgs)
 	default:
 		return 0
 	}
+}
+
+// countLastToolCalls counts the tool calls of the latest assistant turn that
+// match the source (by name in tools, or by any entry of calls), or with match
+// no_match the calls that match none. No tools and no calls match every call.
+func countLastToolCalls(source config.ConversationSource, names []string, arguments []string) int {
+	matchers := source.Calls
+	if len(matchers) == 0 {
+		matchers = []config.ToolCallMatch{{Tools: source.Tools}}
+	}
+	want := source.Match != "no_match"
+	count := 0
+	for i, name := range names {
+		args := ""
+		if i < len(arguments) {
+			args = arguments[i]
+		}
+		matched := slices.ContainsFunc(matchers, func(m config.ToolCallMatch) bool {
+			return toolCallMatches(m, name, args)
+		})
+		if matched == want {
+			count++
+		}
+	}
+	return count
+}
+
+func toolCallMatches(match config.ToolCallMatch, name string, arguments string) bool {
+	if len(match.Tools) > 0 && !slices.Contains(match.Tools, name) {
+		return false
+	}
+	if match.Pattern == "" {
+		return true
+	}
+	pattern, err := toolArgumentPattern(match.Pattern)
+	if err != nil {
+		return false
+	}
+	value, ok := toolArgument(arguments, match.Argument)
+	return ok && pattern.MatchString(value)
+}
+
+// maxToolArgumentPatterns bounds the compiled-pattern cache, which outlives
+// configuration reloads; patterns past the bound are compiled on each use.
+const maxToolArgumentPatterns = 256
+
+var toolArgumentPatterns = struct {
+	sync.Mutex
+	compiled map[string]*regexp.Regexp
+}{compiled: map[string]*regexp.Regexp{}}
+
+func toolArgumentPattern(source string) (*regexp.Regexp, error) {
+	toolArgumentPatterns.Lock()
+	defer toolArgumentPatterns.Unlock()
+	if pattern, ok := toolArgumentPatterns.compiled[source]; ok {
+		return pattern, nil
+	}
+	pattern, err := regexp.Compile(source)
+	if err == nil && len(toolArgumentPatterns.compiled) < maxToolArgumentPatterns {
+		toolArgumentPatterns.compiled[source] = pattern
+	}
+	return pattern, err
+}
+
+// toolArgument returns one string field of a call's JSON arguments, or the raw
+// arguments when no field is named. It reports false when the arguments are not
+// a JSON object or the field is missing, null or not a string, so no pattern,
+// not even one matching an empty string, can match a call it cannot read.
+func toolArgument(arguments string, field string) (string, bool) {
+	if field == "" {
+		return arguments, true
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal([]byte(arguments), &fields) != nil {
+		return "", false
+	}
+	raw, ok := fields[field]
+	if !ok || string(raw) == "null" {
+		return "", false
+	}
+	var value string
+	if json.Unmarshal(raw, &value) != nil {
+		return "", false
+	}
+	return value, true
 }
 
 func conversationBoolCount(value bool) int {

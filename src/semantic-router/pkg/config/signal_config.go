@@ -457,8 +457,22 @@ type ConversationFeature struct {
 }
 
 type ConversationSource struct {
-	Type string `yaml:"type"`
-	Role string `yaml:"role,omitempty"`
+	Type  string   `yaml:"type"`
+	Role  string   `yaml:"role,omitempty"`
+	Tools []string `yaml:"tools,omitempty"`
+	// Calls lists the tool calls last_tool_call counts, by name and by one
+	// argument; Match no_match counts the latest calls that match none of them.
+	Calls []ToolCallMatch `yaml:"calls,omitempty"`
+	Match string          `yaml:"match,omitempty"`
+}
+
+// ToolCallMatch matches a tool call whose name is listed (any name when none
+// is) and whose Argument, a JSON string field, matches Pattern. Without an
+// Argument the pattern reads the raw arguments.
+type ToolCallMatch struct {
+	Tools    []string `yaml:"tools,omitempty"`
+	Argument string   `yaml:"argument,omitempty"`
+	Pattern  string   `yaml:"pattern,omitempty"`
 }
 
 type NumericPredicate struct {
