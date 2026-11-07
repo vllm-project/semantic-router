@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 func TestParseNonStreamingResponseKeepsReasoningSeparateFromContent(t *testing.T) {
@@ -75,7 +77,7 @@ func TestParseStreamingResponseCollectsReasoningFields(t *testing.T) {
 			"data: [DONE]\r\n\r\n",
 	)
 
-	response, err := (&Client{}).parseStreamingResponse(body, "model-a")
+	response, err := (&Client{}).parseStreamingResponse(body, "model-a", llmprotocol.DefaultPolicy())
 	require.NoError(t, err)
 	assert.Equal(t, "reasoned answer", response.ReasoningContent)
 	assert.Empty(t, response.Content)
@@ -90,7 +92,7 @@ func TestParseStreamingResponsePrefersExplicitContent(t *testing.T) {
 			"data: [DONE]\n\n",
 	)
 
-	response, err := (&Client{}).parseStreamingResponse(body, "model-a")
+	response, err := (&Client{}).parseStreamingResponse(body, "model-a", llmprotocol.DefaultPolicy())
 	require.NoError(t, err)
 	assert.Equal(t, "analysis", response.ReasoningContent)
 	assert.Equal(t, "answer", response.Content)

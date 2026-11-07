@@ -31,6 +31,7 @@ var (
 		validatePIIModelBackendContracts,
 		validateGlobalRouterLearningConfig,
 		validateLossyTranslationContracts,
+		validateProtocolLimitContracts,
 		validateRoutingInputContracts,
 		validateRouterHeadersContracts,
 		validateFlowContracts,

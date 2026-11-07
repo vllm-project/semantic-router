@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"math"
 	"strings"
@@ -251,8 +252,8 @@ func validateRequestInstructions(instructions []InstructionBlock, limits Limits,
 func validateRequestTools(tools []Tool, limits Limits) (map[string]struct{}, int, error) {
 	namedTools := make(map[string]struct{}, len(tools))
 	schemaBytes := 0
-	for _, tool := range tools {
-		if err := validateRequestTool(tool, limits); err != nil {
+	for index, tool := range tools {
+		if err := validateRequestTool(index, tool, limits); err != nil {
 			return nil, 0, err
 		}
 		if _, duplicate := namedTools[tool.Name]; duplicate {
@@ -270,9 +271,9 @@ func validateRequestTools(tools []Tool, limits Limits) (map[string]struct{}, int
 	return namedTools, schemaBytes, nil
 }
 
-func validateRequestTool(tool Tool, limits Limits) error {
+func validateRequestTool(index int, tool Tool, limits Limits) error {
 	if tool.Kind == ToolKindCustom {
-		return validateCustomTool(tool, limits)
+		return validateCustomTool(index, tool, limits)
 	}
 	if tool.Kind != "" || tool.CustomFormat != nil {
 		return NewError(ErrorInvalidRequest, "invalid_tool", "tool kind is unsupported", nil)
@@ -280,8 +281,8 @@ func validateRequestTool(tool Tool, limits Limits) error {
 	if strings.TrimSpace(tool.Name) == "" || len(tool.InputSchema) == 0 || !json.Valid(tool.InputSchema) {
 		return NewError(ErrorInvalidRequest, "invalid_tool", "tool name and JSON Schema are required", nil)
 	}
-	if exceeds(tool.Name, limits.ToolNameBytes) || exceeds(tool.Description, limits.ToolDescriptionBytes) {
-		return NewError(ErrorInvalidRequest, "tool_text_limit", "tool name or description exceeds the configured limit", nil)
+	if err := validateToolText(index, tool, limits); err != nil {
+		return err
 	}
 	if limits.SchemaBytes > 0 && len(tool.InputSchema) > limits.SchemaBytes {
 		return NewError(ErrorInvalidRequest, "schema_limit", "tool schema limit exceeded", nil)
@@ -292,12 +293,28 @@ func validateRequestTool(tool Tool, limits Limits) error {
 	return validateSchemaObject(tool.InputSchema, "tool schema", limits)
 }
 
-func validateCustomTool(tool Tool, limits Limits) error {
+// validateToolText reports sizes but never the text, because descriptions can
+// carry client prompts.
+func validateToolText(index int, tool Tool, limits Limits) error {
+	field, size, limit := "", 0, 0
+	switch {
+	case exceeds(tool.Name, limits.ToolNameBytes):
+		field, size, limit = "name", len(tool.Name), limits.ToolNameBytes
+	case exceeds(tool.Description, limits.ToolDescriptionBytes):
+		field, size, limit = "description", len(tool.Description), limits.ToolDescriptionBytes
+	default:
+		return nil
+	}
+	return NewError(ErrorInvalidRequest, "tool_text_limit",
+		fmt.Sprintf("tools[%d].%s is %d bytes and exceeds the configured limit of %d bytes", index, field, size, limit), nil)
+}
+
+func validateCustomTool(index int, tool Tool, limits Limits) error {
 	if strings.TrimSpace(tool.Name) == "" || len(tool.InputSchema) != 0 || tool.Strict != nil {
 		return NewError(ErrorInvalidRequest, "invalid_tool", "custom tools require a name and take no JSON Schema", nil)
 	}
-	if exceeds(tool.Name, limits.ToolNameBytes) || exceeds(tool.Description, limits.ToolDescriptionBytes) {
-		return NewError(ErrorInvalidRequest, "tool_text_limit", "tool name or description exceeds the configured limit", nil)
+	if err := validateToolText(index, tool, limits); err != nil {
+		return err
 	}
 	if format := tool.CustomFormat; format != nil {
 		if format.Syntax != "lark" && format.Syntax != "regex" || strings.TrimSpace(format.Definition) == "" {

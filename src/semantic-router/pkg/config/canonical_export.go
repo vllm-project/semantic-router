@@ -321,6 +321,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			Fallback:       cfg.RoutingDefaults.Fallback.Clone(),
 
 			AllowLossyTranslation: cfg.AllowLossyTranslation,
+			ProtocolLimits:        cfg.ProtocolLimits,
 			RoutingInput:          cfg.RoutingInput,
 			Headers:               cfg.Headers,
 		},
