@@ -10,8 +10,9 @@ is_mtpe: true
 
 # 决策模型 {#decision-models}
 
-决策模型用大白话回答你就一个请求提的问题，不用为每个问题训练一个分类器。router 在两个地方用它：
+决策模型用大白话回答你就一个请求提的问题，不用为每个问题训练一个分类器。router 在三个地方用它：
 
+- 作为决策模型，或通过绑定或规则的 `deployment`，它回答 domain、complexity、preference、分类、safety、PII 和幻觉等内置信号；能力检查使用模型实际的问题类型（见[为信号选择模型](../../installation/choose-a-model-for-a-signal.md)）；
 - [`decision` 信号](tutorials/signal/learned/decision.md) 提一个问题，按答案路由；
 - [`decision` 选择算法](tutorials/algorithm/selection/decision.md) 问一条路由的模型里该由谁答。
 

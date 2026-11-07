@@ -95,6 +95,10 @@
     "message": "模型",
     "description": "The label for category Models in sidebar tutorialSidebar"
   },
+  "sidebar.tutorialSidebar.category.Router Model Catalog": {
+    "message": "Router 模型目录",
+    "description": "The label for category Router Model Catalog in sidebar tutorialSidebar"
+  },
   "sidebar.tutorialSidebar.category.Deploy": {
     "message": "部署",
     "description": "The label for category Deploy in sidebar tutorialSidebar"

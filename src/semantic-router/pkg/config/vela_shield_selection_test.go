@@ -20,8 +20,9 @@ global:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.SafetyModels.Safety.ModelID != velaShieldSelectionPath || !cfg.SafetyModels.Safety.UseCPU {
-		t.Fatalf("safety module resolved to %+v", cfg.SafetyModels.Safety)
+	resolved, ok, err := cfg.ResolveTask("safety.unsafe-content")
+	if err != nil || !ok || !sameModel(resolved.Deployment.Artifact, velaShieldSelectionPath) || resolved.Deployment.Device != "cpu" {
+		t.Fatalf("safety module resolved to %+v (%v)", resolved.Deployment, err)
 	}
 	if err := validateSafetySignalContracts(cfg); err != nil {
 		t.Fatal(err)
@@ -70,7 +71,7 @@ global:
 	if _, leaked := plan.Lookup(DefaultRecipeName, "safety.unsafe-content"); leaked {
 		t.Fatal("recipe Shield binding leaked into the default scope")
 	}
-	if cfg.SafetyModels.Safety.ModelID != DefaultSystemModels().Safety {
-		t.Fatalf("recipe binding changed the global safety module to %q", cfg.SafetyModels.Safety.ModelID)
+	if got := effectiveModel(t, cfg, "safety.unsafe-content"); !sameModel(got, DefaultSystemModels().Safety) {
+		t.Fatalf("recipe binding changed the global safety module to %q", got)
 	}
 }
