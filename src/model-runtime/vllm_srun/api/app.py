@@ -235,16 +235,35 @@ async def until_disconnect(request: Request, work: Awaitable[T]) -> T | None:
 
     Then ``work`` is cancelled, which cancels its jobs' futures, so the
     scheduler skips their batches that have not run yet.
+
+    A disconnect observed in the same turn as the work's outcome still wins:
+    the client is gone, so the caller answers 499 instead of the work. The
+    work's discarded outcome is consumed, so the loop does not report it
+    unretrieved, and it never reaches the caller.
     """
     task = asyncio.ensure_future(work)
     left = asyncio.ensure_future(_disconnected(request))
+    disconnected = False
     try:
-        await asyncio.wait((task, left), return_when=asyncio.FIRST_COMPLETED)
+        done, _pending = await asyncio.wait(
+            (task, left), return_when=asyncio.FIRST_COMPLETED
+        )
+        disconnected = left in done
     finally:
         left.cancel()
         if not task.done():
             task.cancel()
+    if disconnected:
+        _consume(left)
+        _consume(task)
+        return None
     return task.result() if task.done() else None
+
+
+def _consume(task: asyncio.Task[Any]) -> None:
+    """Retrieve a finished task's outcome, so the loop does not report it unretrieved."""
+    if task.done() and not task.cancelled():
+        task.exception()
 
 
 async def _disconnected(request: Request) -> None:
