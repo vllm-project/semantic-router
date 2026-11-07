@@ -245,6 +245,7 @@
         "remote_host",
         "remote_port",
         "search_results",
+        "time_info",
         "usage_breakdown",
         "x_groq"
       ],
@@ -446,7 +447,11 @@
       "extension_response_fields": [
         "billing",
         "conversation_id",
+        "ec_transfer_params",
         "frequency_penalty",
+        "input_messages",
+        "kv_transfer_params",
+        "output_messages",
         "presence_penalty",
         "store",
         "tool_usage"
@@ -516,7 +521,8 @@
         "output_tokens",
         "output_tokens_details",
         "server_tool_use",
-        "service_tier"
+        "service_tier",
+        "speed"
       ]
     },
     "openai_images": {

@@ -227,6 +227,9 @@ func schemaTypeMapper(value reflect.Type) *jsonschema.Schema {
 			},
 		}
 	}
+	if value == reflect.TypeOf(routerconfig.ModelBinding{}) {
+		return modelBindingSchema()
+	}
 	if value == reflect.TypeOf(time.Duration(0)) {
 		return &jsonschema.Schema{
 			Description: "A duration string (e.g. '30s', '100ms') or nanoseconds integer.",
@@ -237,6 +240,42 @@ func schemaTypeMapper(value reflect.Type) *jsonschema.Schema {
 		}
 	}
 	return nil
+}
+
+// modelBindingSchema publishes a binding's two forms: the name of the
+// deployment that answers the signal, or an object that also selects a head
+// or pins an operating point. contract, adapter, mapping_path and
+// pair_scorer are deprecated: the signal decides the contract, the provider
+// the adapter, and the rag plugin's rerank block a reranker's layer and
+// dimension.
+func modelBindingSchema() *jsonschema.Schema {
+	text := func(description string) *jsonschema.Schema {
+		return &jsonschema.Schema{Type: "string", Description: description}
+	}
+	deprecated := func(description string) *jsonschema.Schema {
+		return &jsonschema.Schema{Type: "string", Description: description, Deprecated: true}
+	}
+	properties := jsonschema.NewProperties()
+	properties.Set("deployment", text("The deployment that answers the signal: a name in global.model_catalog.deployments."))
+	properties.Set("head", text("The classify head of a multi-head model_runtime deployment."))
+	operatingPoint := jsonschema.NewProperties()
+	operatingPoint.Set("path", text("The operating point file in the deployment's package."))
+	operatingPoint.Set("sha256", text("The digest of the operating point file the runtime must serve."))
+	properties.Set("operating_point", &jsonschema.Schema{Type: "object", Properties: operatingPoint, Required: []string{"path", "sha256"}, AdditionalProperties: jsonschema.FalseSchema})
+	properties.Set("contract", deprecated("Deprecated: the signal decides the result contract."))
+	properties.Set("adapter", deprecated("Deprecated: the deployment's provider decides the adapter."))
+	properties.Set("mapping_path", deprecated("Deprecated: the module's own mapping path names the labels."))
+	pairScorer := jsonschema.NewProperties()
+	pairScorer.Set("layer", &jsonschema.Schema{Type: "integer"})
+	pairScorer.Set("dimension", &jsonschema.Schema{Type: "integer"})
+	properties.Set("pair_scorer", &jsonschema.Schema{Type: "object", Properties: pairScorer, Deprecated: true, Description: "Deprecated: write layer and dimension in the rag plugin's rerank block."})
+	return &jsonschema.Schema{
+		Description: "The deployment that answers a signal, by name, or an object that also selects a head or pins an operating point.",
+		OneOf: []*jsonschema.Schema{
+			{Type: "string", Description: "The deployment that answers the signal."},
+			{Type: "object", Properties: properties, Required: []string{"deployment"}, AdditionalProperties: jsonschema.FalseSchema},
+		},
+	}
 }
 
 // CanonicalRecipe deliberately reuses CanonicalRouting in Go so normalization
@@ -276,6 +315,7 @@ func setCoreEnums(root *jsonschema.Schema) {
 			lossy.Items.Enum = append(lossy.Items.Enum, field)
 		}
 	}
+	setDefinitionPropertyEnum(root, "RouterHeadersConfig", "debug", routerconfig.SupportedDebugHeadersModes())
 	setDefinitionPropertyEnum(root, "AlgorithmConfig", "type", routerconfig.SupportedDecisionAlgorithmTypes())
 	setDefinitionPropertyEnum(root, "CandidateRequirements", "capabilities", []string{routerconfig.CandidateCapabilitiesDeclared})
 	setDefinitionPropertyEnum(root, "CandidateRequirements", "context", []string{routerconfig.CandidateContextKnownLimits})
@@ -348,6 +388,8 @@ func setCoreEnums(root *jsonschema.Schema) {
 	for _, field := range []string{"session", "conversation", "agent"} {
 		setDefinitionPropertyMinLength(root, "RouterLearningIdentityHeadersConfig", field, 1)
 	}
+	setDefinitionPropertyMinLength(root, "RouterLearningProtectionReleaseConfig", "header", 1)
+	setDefinitionPropertyMinimum(root, "RouterLearningProtectionReleaseConfig", "min_user_turns_between", 0)
 	setDefinitionPropertyMinLength(root, "RouterLearningRedisStateStoreConfig", "address", 1)
 	addRouterLearningStateStoreCondition(root)
 }

@@ -37,7 +37,7 @@ func EmbeddingModelsNeeded(cfg *RouterConfig, primary string, sharedServices boo
 	if len(cfg.EmbeddingRules) > 0 || (len(cfg.ReaskRules) > 0 && !cfg.ReaskUsesDecisionTask()) || len(cfg.KnowledgeBases) > 0 {
 		needed[primary] = true
 	}
-	if cfg.ComplexityModel.Backend == nil {
+	if _, remote, _ := cfg.ComplexityRemoteTask(); !remote {
 		for _, rule := range cfg.ComplexityRules {
 			if cfg.ComplexityRuleUsesPrototypes(rule) {
 				needed[primary] = true
@@ -49,7 +49,7 @@ func EmbeddingModelsNeeded(cfg *RouterConfig, primary string, sharedServices boo
 		if model == "" {
 			model = "mmbert"
 		}
-		if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+		if cfg.UsesRemoteEmbeddings() {
 			model = primary
 		}
 		needed[model] = true
