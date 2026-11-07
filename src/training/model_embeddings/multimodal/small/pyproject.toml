@@ -1,0 +1,81 @@
+[project]
+name = "multimodal-small"
+version = "0.0.0"
+description = "Environment for the small multimodal embedding trainer under src/training/model_embeddings/multimodal/small"
+requires-python = ">=3.10"
+dependencies = [
+    # Lower bounds are the ones in requirements.txt. The torch line stays below 2.11
+    # so this project cannot resolve the modality classifier's torch==2.14.0 pin.
+    "numpy>=1.26.0,<3",
+    "pillow>=10.0.0,<13",
+    "pyyaml>=6.0,<7",
+    # Shard and checkpoint loading. The import is lazy, and the published format needs it.
+    "safetensors>=0.6.0,<1",
+    "tqdm>=4.66.0,<5",
+    "transformers>=4.57.0,<4.58",
+]
+
+[project.optional-dependencies]
+# Pick exactly one. requirements.txt sends pip at the ROCm 7.1 index; these
+# extras record that index plus the CPU and default PyPI (CUDA on Linux) builds.
+cpu = [
+    # accelerate depends on torch, so it stays with the extra that selects the build.
+    # requirements.txt pins it; the modules do not import it directly.
+    "accelerate>=1.10.0,<2",
+    "torch>=2.10.0,<2.11",
+    "torchvision>=0.25.0,<0.26",
+    "torchaudio>=2.10.0,<2.11",
+]
+cuda = [
+    "accelerate>=1.10.0,<2",
+    "torch>=2.10.0,<2.11",
+    "torchvision>=0.25.0,<0.26",
+    "torchaudio>=2.10.0,<2.11",
+]
+rocm = [
+    "accelerate>=1.10.0,<2",
+    "torch>=2.10.0,<2.11",
+    "torchvision>=0.25.0,<0.26",
+    "torchaudio>=2.10.0,<2.11",
+    # torch 2.10+rocm7.1 depends on this build, and it is published only on the ROCm index.
+    "triton-rocm==3.6.0; sys_platform == 'linux'",
+]
+
+[dependency-groups]
+# download_data.py and the release.py upload path import huggingface-hub.
+hub = ["huggingface-hub>=0.34.0,<1"]
+
+[tool.uv]
+package = false
+conflicts = [
+    [
+        { extra = "cpu" },
+        { extra = "cuda" },
+        { extra = "rocm" },
+    ],
+]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-rocm", extra = "rocm", marker = "sys_platform == 'linux'" },
+]
+triton-rocm = { index = "pytorch-rocm", extra = "rocm" }
+torchvision = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-rocm", extra = "rocm", marker = "sys_platform == 'linux'" },
+]
+torchaudio = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-rocm", extra = "rocm", marker = "sys_platform == 'linux'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-rocm"
+url = "https://download.pytorch.org/whl/rocm7.1"
+explicit = true
