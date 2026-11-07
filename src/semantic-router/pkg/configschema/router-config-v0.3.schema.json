@@ -1441,7 +1441,9 @@
             "type": "string",
             "enum": [
               "tool_result.is_error",
-              "messages[].role"
+              "messages[].role",
+              "content.file",
+              "reasoning.signature"
             ]
           },
           "type": "array"

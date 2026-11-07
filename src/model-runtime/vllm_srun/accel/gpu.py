@@ -27,6 +27,16 @@ from .kernels import Kernel, KernelSet, reference_kernels, varlen_attention_ref
 _DEVICE_LOCKS: dict[int, Any] = {}
 _LOCKS = threading.Lock()
 
+# Cached but unused device memory that device work on an integrated GPU hands back
+# once it grows past this: a long forward's peak otherwise stays cached, and there
+# that cache is host RAM nothing else on the machine can use. A discrete GPU keeps
+# its cache, so the next long forward does not pay to allocate it again.
+RELEASE_IDLE_BYTES = 2 << 30
+# Per device, what the last release left idle (blocks the cache cannot free,
+# such as graph pools), so that slack does not trigger a release on every call.
+_IDLE_FLOOR: dict[int, int] = {}
+_INTEGRATED: dict[int, bool] = {}
+
 # Errors after which the process's device context stays unusable.
 DEVICE_FAULT_MARKERS = (
     "CUDA error",
@@ -49,6 +59,41 @@ def _current_device(target: torch.device) -> AbstractContextManager[Any]:
     if target.type != "cuda" or not torch.cuda.is_available():
         return nullcontext()
     return torch.cuda.device(target)
+
+
+def _idle_bytes(index: int) -> int:
+    stats = torch.cuda.memory_stats(index)
+    return stats["reserved_bytes.all.current"] - stats["allocated_bytes.all.current"]
+
+
+def _integrated(index: int) -> bool:
+    integrated = _INTEGRATED.get(index)
+    if integrated is None:
+        properties = torch.cuda.get_device_properties(index)
+        integrated = _INTEGRATED[index] = bool(
+            getattr(properties, "is_integrated", False)
+        )
+    return integrated
+
+
+def _release_idle_cache(target: torch.device) -> None:
+    """On an integrated GPU, return the allocator's unused blocks once they exceed
+    ``RELEASE_IDLE_BYTES`` over the last release.
+
+    Runs under the device lock, so no graph capture on the device is in flight.
+    A failure here never replaces the device work's own result or error.
+    """
+    if target.type != "cuda" or not torch.cuda.is_available():
+        return
+    index = target.index or 0
+    try:
+        if not _integrated(index):
+            return
+        if _idle_bytes(index) > _IDLE_FLOOR.get(index, 0) + RELEASE_IDLE_BYTES:
+            torch.cuda.empty_cache()
+            _IDLE_FLOOR[index] = _idle_bytes(index)
+    except Exception:
+        pass
 
 
 def _optional(module: str, attribute: str) -> Any:
@@ -192,9 +237,15 @@ class GPUAccelerator(Accelerator):
         Triton kernels (FLA's among them) launch on the thread's current
         device, so the work makes the model's GPU current: otherwise a model on
         any GPU but the first faults reading its own memory from GPU 0.
+        On an integrated GPU the work's idle cache is released afterwards
+        (``_release_idle_cache``).
         """
-        with device_lock(device.index or 0), _current_device(self.torch_device(device)):
-            return work()
+        target = self.torch_device(device)
+        with device_lock(device.index or 0), _current_device(target):
+            try:
+                return work()
+            finally:
+                _release_idle_cache(target)
 
     def device_fault(self, error: BaseException) -> bool:
         """Device errors poison the context; running out of memory fails only the batch."""
