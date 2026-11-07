@@ -1441,13 +1441,18 @@
             "type": "string",
             "enum": [
               "tool_result.is_error",
-              "messages[].role"
+              "messages[].role",
+              "content.file",
+              "reasoning.signature"
             ]
           },
           "type": "array"
         },
         "routing_input": {
           "$ref": "#/$defs/RoutingInputConfig"
+        },
+        "headers": {
+          "$ref": "#/$defs/RouterHeadersConfig"
         }
       },
       "additionalProperties": false,
@@ -2308,6 +2313,24 @@
         },
         "role": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DebugPrincipals": {
+      "properties": {
+        "users": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "groups": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -6844,6 +6867,23 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "RouterHeadersConfig": {
+      "properties": {
+        "debug": {
+          "type": "string",
+          "enum": [
+            "none",
+            "any",
+            "authenticated"
+          ]
+        },
+        "debug_principals": {
+          "$ref": "#/$defs/DebugPrincipals"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "RouterLearningAdaptationConfig": {
       "properties": {
         "enabled": {
@@ -6932,6 +6972,26 @@
         },
         "tuning": {
           "$ref": "#/$defs/RouterLearningProtectionTuning"
+        },
+        "release": {
+          "$ref": "#/$defs/RouterLearningProtectionReleaseConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RouterLearningProtectionReleaseConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "header": {
+          "type": "string",
+          "minLength": 1
+        },
+        "min_user_turns_between": {
+          "type": "integer",
+          "minimum": 0
         }
       },
       "additionalProperties": false,

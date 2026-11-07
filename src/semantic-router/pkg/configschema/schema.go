@@ -315,6 +315,7 @@ func setCoreEnums(root *jsonschema.Schema) {
 			lossy.Items.Enum = append(lossy.Items.Enum, field)
 		}
 	}
+	setDefinitionPropertyEnum(root, "RouterHeadersConfig", "debug", routerconfig.SupportedDebugHeadersModes())
 	setDefinitionPropertyEnum(root, "AlgorithmConfig", "type", routerconfig.SupportedDecisionAlgorithmTypes())
 	setDefinitionPropertyEnum(root, "CandidateRequirements", "capabilities", []string{routerconfig.CandidateCapabilitiesDeclared})
 	setDefinitionPropertyEnum(root, "CandidateRequirements", "context", []string{routerconfig.CandidateContextKnownLimits})
@@ -387,6 +388,8 @@ func setCoreEnums(root *jsonschema.Schema) {
 	for _, field := range []string{"session", "conversation", "agent"} {
 		setDefinitionPropertyMinLength(root, "RouterLearningIdentityHeadersConfig", field, 1)
 	}
+	setDefinitionPropertyMinLength(root, "RouterLearningProtectionReleaseConfig", "header", 1)
+	setDefinitionPropertyMinimum(root, "RouterLearningProtectionReleaseConfig", "min_user_turns_between", 0)
 	setDefinitionPropertyMinLength(root, "RouterLearningRedisStateStoreConfig", "address", 1)
 	addRouterLearningStateStoreCondition(root)
 }
