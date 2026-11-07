@@ -451,6 +451,31 @@ class HarnessMakeContractTests(unittest.TestCase):
         self.assertIn("go test -json -count=1 ./...", backend)
         self.assertNotIn("VLLM_SR_EVALUATION_TEST_PYTHON", backend)
 
+    def test_dashboard_backend_tests_retry_once_under_ci(self) -> None:
+        backend = target_block("dashboard-test-backend", DASHBOARD_MAKE)
+        # The suite's timing-sensitive MCP lifecycle tests flake under a loaded
+        # runner (#5205); one extra attempt lets such a run self-heal.
+        self.assertIn(
+            'if [ -n "$$CI" ]',
+            backend,
+            "'dashboard-test-backend' must gate its retry on $$CI (#5205); "
+            "without the gate every local failure pays the retry delay.",
+        )
+        self.assertIn(
+            "for attempt in 1 2",
+            backend,
+            "'dashboard-test-backend' must bound the retry to one extra "
+            "attempt (#5205); an unbounded loop would retry a "
+            "deterministic failure into a pass.",
+        )
+        self.assertIn(
+            "backend-attempt-$$attempt.jsonl",
+            backend,
+            "'dashboard-test-backend' must keep each failed attempt's "
+            "evidence (#5205); overwriting it would erase the flake the "
+            "retry survived.",
+        )
+
     def test_precommit_toolchain_path_selects_an_isolated_python(self) -> None:
         dockerfile = (REPO_ROOT / "tools/docker/Dockerfile.precommit").read_text()
         environment = re.search(r'^ENV PATH="([^"\n]+)"$', dockerfile, re.M)
