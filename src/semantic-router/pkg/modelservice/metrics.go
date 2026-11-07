@@ -77,6 +77,13 @@ var (
 		},
 		[]string{"deployment", "round"},
 	)
+	systemOneRetries = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "vsr_model_runtime_systemone_retries_total",
+			Help: "System One calls asked again without the one question that failed the first call as a whole.",
+		},
+		[]string{"deployment"},
+	)
 	unknownAnswers = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "vsr_model_runtime_unknown_answers_total",

@@ -13,7 +13,7 @@ func TestRemoteOperationIdentityUsesActualSelectorAndTarget(t *testing.T) {
 		{"chat", config.RemoteClassifierProtocolHTTPChat, "http://example.com:80/v1/chat/completions", "model-one"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			endpoint, model, err := remoteOperationIdentity(test.adapter, &base)
+			endpoint, model, err := remoteOperationIdentity(test.adapter, deploymentFor(test.adapter, base))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -22,7 +22,7 @@ func TestRemoteOperationIdentityUsesActualSelectorAndTarget(t *testing.T) {
 			}
 			alias := base
 			alias.Name, alias.ModelName = "catalog-alias", "model-two"
-			aliasEndpoint, aliasModel, aliasErr := remoteOperationIdentity(test.adapter, &alias)
+			aliasEndpoint, aliasModel, aliasErr := remoteOperationIdentity(test.adapter, deploymentFor(test.adapter, alias))
 			if aliasErr != nil {
 				t.Fatal(aliasErr)
 			}
@@ -41,11 +41,11 @@ func TestRemoteOperationIdentityUsesActualSelectorAndTarget(t *testing.T) {
 	// operation, even when the former omits the default port and includes /v1.
 	explicit := base
 	explicit.ModelEndpoint = config.ClassifierVLLMEndpoint{Address: "http://example.com/v1/"}
-	namedEndpoint, namedModel, err := remoteOperationIdentity(config.RemoteClassifierProtocolHTTPChat, &base)
+	namedEndpoint, namedModel, err := remoteOperationIdentity(config.RemoteClassifierProtocolHTTPChat, deploymentFor(config.RemoteClassifierProtocolHTTPChat, base))
 	if err != nil {
 		t.Fatal(err)
 	}
-	explicitEndpoint, explicitModel, explicitErr := remoteOperationIdentity(config.RemoteClassifierProtocolHTTPChat, &explicit)
+	explicitEndpoint, explicitModel, explicitErr := remoteOperationIdentity(config.RemoteClassifierProtocolHTTPChat, deploymentFor(config.RemoteClassifierProtocolHTTPChat, explicit))
 	if explicitErr != nil {
 		t.Fatal(explicitErr)
 	}
@@ -55,8 +55,15 @@ func TestRemoteOperationIdentityUsesActualSelectorAndTarget(t *testing.T) {
 }
 
 func TestRemoteOperationIdentityRejectsUnsupportedAdapter(t *testing.T) {
-	external := &config.ExternalModelConfig{ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "example.com", Port: 80}}
-	if _, _, err := remoteOperationIdentity("unknown", external); err == nil {
+	external := config.ExternalModelConfig{ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "example.com", Port: 80}}
+	if _, _, err := remoteOperationIdentity("unknown", deploymentFor(config.RemoteClassifierProtocolHTTPClassify, external)); err == nil {
 		t.Fatal("unsupported adapter silently accepted")
 	}
+}
+
+func deploymentFor(adapter string, external config.ExternalModelConfig) config.ModelDeployment {
+	if adapter == config.RemoteClassifierProtocolHTTPChat {
+		return config.ExternalModelDeployment(external, config.OpenAIChatProvider)
+	}
+	return config.ExternalModelDeployment(external, config.ClassifyProvider)
 }

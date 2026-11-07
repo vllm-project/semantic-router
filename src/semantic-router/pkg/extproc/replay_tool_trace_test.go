@@ -220,3 +220,96 @@ func TestBuildReplayRoutingRecordSuppressesRequestTraceWhenMasking(t *testing.T)
 		require.Equal(t, "model-a", record.SelectedModel)
 	}
 }
+
+func toolResultReplayContext(t *testing.T, result string) *RequestContext {
+	t.Helper()
+	return &RequestContext{
+		TraceContext: t.Context(),
+		RequestID:    "req-tool-result",
+		SourceFormat: llmprotocol.OpenAIChatV1,
+		SemanticRequest: &llmprotocol.Request{
+			Model: "vllm-sr/auto",
+			Messages: []llmprotocol.Message{
+				{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Find the weather in San Francisco."}}},
+				{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{
+					ID: "call_weather", Name: "get_weather", Arguments: `{"location":"San Francisco"}`,
+				}}}},
+				{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{
+					CallID: "call_weather", Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: result}},
+				}}}},
+			},
+		},
+	}
+}
+
+func TestBuildReplayRoutingRecordCapturesToolResultsOnlyWhenOptedIn(t *testing.T) {
+	const result = "Sunny, 21C in San Francisco."
+	no := false
+	for _, test := range []struct {
+		name    string
+		policy  *config.RouterReplayPluginConfig
+		capture bool
+	}{
+		{"default", &config.RouterReplayPluginConfig{Enabled: true}, false},
+		{"opted in", &config.RouterReplayPluginConfig{Enabled: true, CaptureToolResults: true}, true},
+		{"personal data withheld", &config.RouterReplayPluginConfig{Enabled: true, CaptureToolResults: true, CapturePersonalData: &no}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := toolResultReplayContext(t, result)
+			ctx.RouterReplayPluginConfig = test.policy
+			record := buildReplayRoutingRecord(ctx, "vllm-sr/auto", "model-a", "default_route")
+			require.NotNil(t, record.ToolTrace)
+			require.Len(t, record.ToolTrace.Steps, 3)
+			step := record.ToolTrace.Steps[2]
+			require.Equal(t, replayToolStepClientToolResult, step.Type)
+			require.Equal(t, "succeeded", step.Status)
+			require.Empty(t, step.Text)
+			require.Empty(t, step.RawOutput)
+			if test.capture {
+				require.Equal(t, result, step.Output)
+				require.False(t, step.ContentRedacted)
+				require.Contains(t, record.RequestBody, result)
+			} else {
+				require.Empty(t, step.Output)
+				require.True(t, step.ContentRedacted)
+				require.NotContains(t, record.RequestBody, result)
+			}
+			require.Equal(t, "Find the weather in San Francisco.", record.Prompt)
+			require.Equal(t, result, ctx.SemanticRequest.Messages[2].Content[0].ToolResult.Content[0].Text)
+		})
+	}
+}
+
+func TestReplayToolResultCaptureIsBoundedByMaxToolTraceBytes(t *testing.T) {
+	yes, limit := true, 5
+	cfg := &config.RouterConfig{RouterReplay: config.RouterReplayConfig{
+		Enabled: true, StoreBackend: "memory", CaptureToolResults: &yes, MaxToolTraceBytes: &limit,
+	}}
+	router := replayRuntimeRouter(t, cfg)
+	ctx := toolResultReplayContext(t, "Sunny, 21C in San Francisco.")
+	router.startRouterReplay(ctx, "vllm-sr/auto", "model-a", "")
+	record, ok := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
+	require.True(t, ok)
+	require.NotNil(t, record.ToolTrace)
+	step := record.ToolTrace.Steps[2]
+	require.Equal(t, "Sunny", step.Output)
+	require.True(t, step.Truncated)
+	require.False(t, step.ContentRedacted)
+}
+
+func TestTrajectoryToolMessageReadsCapturedOutput(t *testing.T) {
+	captured := trajectoryMessageFromStep(routerreplay.ToolTraceStep{
+		Type: replayToolStepClientToolResult, ToolCallID: "call_weather", Output: "Sunny", Truncated: true,
+	}, 1)
+	require.Equal(t, "Sunny", captured.Content)
+	require.True(t, captured.ContentTruncated)
+
+	older := trajectoryMessageFromStep(routerreplay.ToolTraceStep{Type: replayToolStepClientToolResult, Text: "Sunny"}, 1)
+	require.Equal(t, "Sunny", older.Content)
+	require.False(t, older.ContentTruncated)
+
+	redacted := trajectoryMessageFromStep(routerreplay.ToolTraceStep{
+		Type: replayToolStepClientToolResult, Status: "succeeded", ContentRedacted: true,
+	}, 1)
+	require.Empty(t, redacted.Content)
+}

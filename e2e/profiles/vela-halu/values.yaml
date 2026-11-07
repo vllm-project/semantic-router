@@ -36,16 +36,21 @@ config:
               include_hallucination_details: true
   global:
     model_catalog:
+      deployments:
+        vela-halu:
+          provider: model_runtime
+          artifact: vllm-sr/Vela-1.0-Encoder-307M-Halu
+          revision: ca87531211e414ac21c641b2faa8b8e21619de8f
+          device: cpu
+      bindings:
+        hallucination: vela-halu
       modules:
         hallucination_mitigation:
           enabled: true
-          detector:
-            model_id: models/Vela-1.0-Encoder-307M-Halu
           # The probe supplies whether fact checking is needed. It exercises
           # the actual detector without adding another classifier's verdict.
           fact_check:
-            model_ref: ""
-            model_id: ""
+            enabled: false
 resources:
   requests:
     memory: 2Gi

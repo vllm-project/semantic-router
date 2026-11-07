@@ -162,6 +162,11 @@ def iter_condition_leaves(conditions: Any) -> Iterable[Any]:
             yield condition
 
 
+# The Router emits a matched role binding's role, never the binding's name, so
+# authz conditions reference the role.
+_SIGNAL_REFERENCE_FIELDS = {"role_bindings": "role"}
+
+
 def build_signal_reference_index(signals: Any) -> dict[str, set[str]]:
     """Index valid decision references by canonical condition type."""
     names: dict[str, set[str]] = {}
@@ -170,8 +175,9 @@ def build_signal_reference_index(signals: Any) -> dict[str, set[str]]:
 
     for spec in SIGNAL_FAMILY_SPECS:
         family_names = names.setdefault(spec.condition_type, set())
+        field = _SIGNAL_REFERENCE_FIELDS.get(spec.signal_attr, "name")
         for signal in getattr(signals, spec.signal_attr, None) or []:
-            name = getattr(signal, "name", None)
+            name = getattr(signal, field, None)
             if not name:
                 continue
             if spec.reference_suffixes:
