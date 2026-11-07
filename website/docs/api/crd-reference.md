@@ -91,7 +91,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `model_id` _string_ |  |  | Optional: \{\} <br /> |
+| `model_id` _string_ | ModelID binds the domain classifier to one model. Deprecated: bind domain<br />in model_bindings instead. |  | Optional: \{\} <br /> |
 | `threshold` _string_ | Classification threshold (0.0-1.0). Stored as string to avoid float precision issues. |  | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 | `use_cpu` _boolean_ |  |  | Optional: \{\} <br /> |
 | `category_mapping_path` _string_ |  |  | Optional: \{\} <br /> |
@@ -195,8 +195,9 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `routing` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Routing contains canonical v0.3 routing configuration under config.routing.<br />It is intentionally preserved as an object so the operator can pass through<br />the router-owned signal, projection, decision, and algorithm contract without<br />lagging behind every router schema addition. |  | Type: object <br />Optional: \{\} <br /> |
-| `decision_model` _[DecisionModelBinding](#decisionmodelbinding)_ | DecisionModel selects the declared deployment that answers default judgment tasks.<br />Omitted uses the Router's primary deployment. Artifact identity belongs in<br />model_deployments; the reference never infers a model family or alias. |  | Optional: \{\} <br /> |
-| `model_deployments` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelDeployments contains canonical global.model_catalog.deployments.<br />The router validates provider, device, precision and task compatibility. |  | Type: object <br />Optional: \{\} <br /> |
+| `decision_model` _[DecisionModelBinding](#decisionmodelbinding)_ | DecisionModel selects the declared deployment that answers default judgment<br />tasks: a model_runtime deployment, or a systemone deployment that a remote<br />System One API serves. Every built-in signal that no binding names follows<br />it. A module threshold the resource does not set comes from the deployment<br />that answers the module: calibrated for a built-in model, 0.5 for a<br />systemone one. Omitted uses the Router's primary deployment. Artifact<br />identity belongs in model_deployments; the reference never infers a model<br />family or alias. |  | Optional: \{\} <br /> |
+| `model_deployments` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelDeployments contains canonical global.model_catalog.deployments.<br />The router validates provider, device, precision and task compatibility.<br />A remote deployment (provider systemone, openai_embeddings, classify,<br />openai_chat or rerank) takes a connection block: endpoint, model, auth,<br />headers, timeout_ms, max_retries, tls, limits and capabilities. Its key<br />never goes in the resource: auth.api_key_env names a spec.env variable<br />that valueFrom.secretKeyRef fills from a Secret. The operator mounts no<br />Secret into the Pod, so auth.api_key_file is not available. |  | Type: object <br />Optional: \{\} <br /> |
+| `model_bindings` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelBindings contains canonical global.model_catalog.bindings: each key<br />is a signal type whose rules share one answer (domain, jailbreak, pii,<br />fact_check, user_feedback, modality, hallucination, preference, reask),<br />and each value names the model_deployments entry that answers it. A rule<br />that asks its own question names its deployment on the rule. A signal no<br />binding names follows decision_model; routing.model_bindings binds in<br />the routing scope and wins over these. |  | Type: object <br />Optional: \{\} <br /> |
 | `model_admission` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelAdmission contains canonical global.model_catalog.admission budgets.<br />Keys name deployments or the router's existing admission consumers. |  | Type: object <br />Optional: \{\} <br /> |
 | `embedding_models` _[EmbeddingModelsConfig](#embeddingmodelsconfig)_ | Embedding models configuration (qwen3, gemma, mmbert) |  | Optional: \{\} <br /> |
 | `response_cache` _[SemanticCacheConfig](#semanticcacheconfig)_ | Response cache configuration. |  | Optional: \{\} <br /> |
@@ -776,7 +777,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `max_sequence_length` _integer_ | MaxSequenceLength is the total tokenized input budget, including special<br />tokens. Omission or zero preserves the 512-token legacy limit. |  | Minimum: 0 <br />Optional: \{\} <br /> |
 | `window` _[PromptGuardWindowConfig](#promptguardwindowconfig)_ | Window scans original content tokens with explicit overlap. Omission or<br />null leaves window selection unchanged; no CRD defaults are injected. |  | Optional: \{\} <br /> |
-| `model_id` _string_ |  |  | Optional: \{\} <br /> |
+| `model_id` _string_ | ModelID binds the PII classifier to one model. Deprecated: bind pii in<br />model_bindings instead. |  | Optional: \{\} <br /> |
 | `threshold` _string_ | Detection threshold (0.0-1.0). Stored as string to avoid float precision issues. |  | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 | `use_cpu` _boolean_ |  |  | Optional: \{\} <br /> |
 | `pii_mapping_path` _string_ |  |  | Optional: \{\} <br /> |
@@ -845,8 +846,8 @@ _Appears in:_
 | `max_sequence_length` _integer_ | MaxSequenceLength limits the total tokenized input, including special<br />tokens. Omission or zero retains the 512-token budget. The model loader<br />validates the requested budget against the loaded model's capacity. |  | Minimum: 0 <br />Optional: \{\} <br /> |
 | `window` _[PromptGuardWindowConfig](#promptguardwindowconfig)_ | Window enables explicit scanning of all input tokens. Omission or null<br />keeps whole-input inference. Only the local model supports it. |  | Optional: \{\} <br /> |
 | `enabled` _boolean_ |  | true | Optional: \{\} <br /> |
-| `model_id` _string_ | ModelID binds the guard to one model; empty runs the decision model. |  | Optional: \{\} <br /> |
-| `threshold` _string_ | Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float<br />precision issues; empty takes the threshold calibrated for the model. |  | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
+| `model_id` _string_ | ModelID binds the guard to one model; empty runs the deployment<br />model_bindings names for jailbreak, else the decision model. Deprecated:<br />bind jailbreak in model_bindings instead. |  | Optional: \{\} <br /> |
+| `threshold` _string_ | Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float<br />precision issues; empty takes the threshold of the deployment that<br />answers the guard. |  | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 | `use_cpu` _boolean_ |  | true | Optional: \{\} <br /> |
 | `jailbreak_mapping_path` _string_ |  |  | Optional: \{\} <br /> |
 | `positive_labels` _string array_ | PositiveLabels lists the jailbreak_mapping labels that count as unsafe,<br />for a custom backend whose positive class isn't named "jailbreak"<br />(e.g. "INJECTION", "malicious"). Defaults to ["jailbreak"] when unset. |  | Optional: \{\} <br /> |

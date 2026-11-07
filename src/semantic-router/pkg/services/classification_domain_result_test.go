@@ -148,7 +148,9 @@ func TestIntentQueueFullDoesNotRetryOrInventScore(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("model request did not acquire the slot")
 	}
-	counter := metrics.ModelAdmissionOutcomes.WithLabelValues("domain_classifier", "shed")
+	resolved, _, err := service.config.ResolveTask("domain_classifier")
+	require.NoError(t, err)
+	counter := metrics.ModelAdmissionOutcomes.WithLabelValues(resolved.Name, "shed")
 	before := testutil.ToFloat64(counter)
 	response, err := service.ClassifyIntent(context.Background(), IntentRequest{Text: "shed this request", Options: &IntentOptions{ReturnProbabilities: true}})
 	holding.Store(false)
