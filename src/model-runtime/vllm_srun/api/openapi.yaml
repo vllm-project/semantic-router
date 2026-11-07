@@ -496,6 +496,16 @@ components:
         preset:
           type: string
           description: A question the model defines; the model fills in its type, instructions and criteria.
+        decision_adapter:
+          type: boolean
+          default: false
+          description: |
+            Vela 3.0 d3 sizes (family `vela3_d3`) whose package declares `decision_opt_in`: true answers a
+            Choice, Noul or Score question with the opt-in decision adapter (`decision_optin`, else the router
+            adapter), as the package's runtime does. A router question keeps the router adapter; one the package
+            routes to a task adapter takes the opt-in adapter instead. Only true turns it on; any other value, a
+            package without opt-in, and a request with images, videos, assets or Box / track questions (which
+            runs every adapter off) answer it as false. Other models answer the field with invalid_question.
     ChoiceOption:
       type: object
       additionalProperties: false
@@ -1713,6 +1723,13 @@ components:
         enable_shared_context:
           type: boolean
           description: Whether a multi-question decision request computes its shared state once.
+        max_model_len:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: |
+            The most input tokens one question of a Decision model may have, as configured; null keeps the
+            package's limit. The limit the model applies is the card's `limits.max_input_tokens`.
     GoldenStatus:
       type: object
       required: [status]

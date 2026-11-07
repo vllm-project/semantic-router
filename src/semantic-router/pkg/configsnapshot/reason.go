@@ -39,6 +39,9 @@ const (
 	CodeRestartRequired Code = "restart_required"
 	// CodeArtifactUnavailable: a model artifact the candidate needs is missing.
 	CodeArtifactUnavailable Code = "artifact_unavailable"
+	// CodeStorageUnavailable: a local directory the candidate writes is not
+	// writable.
+	CodeStorageUnavailable Code = "storage_unavailable"
 	// CodeUnsupported: the candidate needs something the running Router lacks.
 	CodeUnsupported Code = "unsupported"
 	// CodeModelUnavailable: a model could not be downloaded or prepared.

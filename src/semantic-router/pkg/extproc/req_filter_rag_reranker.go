@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
@@ -37,7 +38,12 @@ func (r *OpenAIRouter) rerankVectorStoreResults(traceCtx context.Context, ctx *R
 	if err != nil {
 		return nil, fmt.Errorf("RAG pair scoring failed: %w", err)
 	}
-	if err = tasks.ValidateRelevanceScores(pairs, output); err != nil {
+	if modelruntime.PairScorerReportsInputUsage(scorer) {
+		err = tasks.ValidateRelevanceScores(pairs, output)
+	} else {
+		err = tasks.ValidateRelevanceScoreValues(pairs, output)
+	}
+	if err != nil {
 		return nil, fmt.Errorf("RAG pair scoring returned invalid output: %w", err)
 	}
 	if err = traceCtx.Err(); err != nil {

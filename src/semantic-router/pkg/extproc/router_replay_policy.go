@@ -1,7 +1,12 @@
 package extproc
 
 import (
+	"context"
+	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
@@ -14,7 +19,7 @@ func (r *OpenAIRouter) personalDataReplayAllowed(ctx *RequestContext) bool {
 	if ctx.RouterReplayPluginConfig.CapturesPersonalData() {
 		return true
 	}
-	prompt, _ := extractSemanticPromptAndTools(ctx.SemanticRequest)
+	prompt := replayPrompt(ctx, ctx.SemanticRequest)
 	if prompt == "" {
 		return false
 	}
@@ -24,6 +29,61 @@ func (r *OpenAIRouter) personalDataReplayAllowed(ctx *RequestContext) bool {
 		}
 	}
 	return false
+}
+
+// A record whose prompt no routing evidence covers is written without it; the
+// prompt is read after routing and attached once found clean, so a request
+// never waits for Replay's privacy check. At most replayPromptChecks run at
+// once, and a record whose check cannot start keeps its prompt withheld.
+const (
+	replayPromptChecks       = 2
+	replayPromptCheckTimeout = 30 * time.Second
+)
+
+var replayPromptCheckSlots = make(chan struct{}, replayPromptChecks)
+
+// replayPromptEvidence reads a prompt with a recipe's PII rules (tests replace it).
+var replayPromptEvidence = (*classification.Classifier).ReplayPromptEvidence
+
+// attachPromptOnceVerified reads the request's exact prompt in the background
+// and attaches stored, the prompt the record withheld, when that read is
+// complete and clean.
+func (r *OpenAIRouter) attachPromptOnceVerified(ctx *RequestContext, recorder *routerreplay.Recorder, stored string) {
+	classifier := r.classifierForRequest(ctx)
+	prompt := replayPrompt(ctx, ctx.SemanticRequest)
+	if classifier == nil || classifier.Config == nil || !classifier.Config.ReplayNeedsPIIEvidence() || prompt == "" {
+		return
+	}
+	select {
+	case replayPromptCheckSlots <- struct{}{}:
+	default:
+		logging.ComponentDebugEvent("extproc", "router_replay_prompt_check_skipped", map[string]interface{}{
+			"request_id": ctx.RequestID, "reason": "checks_busy",
+		})
+		return
+	}
+	id, requestID := ctx.RouterReplayID, ctx.RequestID
+	go func() {
+		defer func() { <-replayPromptCheckSlots }()
+		checkCtx, cancel := context.WithTimeout(context.Background(), replayPromptCheckTimeout)
+		defer cancel()
+		evidence := replayPromptEvidence(classifier, checkCtx, prompt)
+		if !evidence.CoversClean("request", prompt) {
+			reason := "personal_data"
+			if evidence.Coverage != "complete" {
+				reason = "incomplete_read"
+			}
+			logging.ComponentEvent("extproc", "router_replay_prompt_withheld", map[string]interface{}{
+				"request_id": requestID, "reason": reason,
+			})
+			return
+		}
+		if err := recorder.AttachPrompt(id, stored); err != nil {
+			logging.ComponentErrorEvent("extproc", "router_replay_prompt_attach_failed", map[string]interface{}{
+				"request_id": requestID, "error": err.Error(),
+			})
+		}
+	}()
 }
 
 // No existing response-stage task scans personal data. A request-stage clean

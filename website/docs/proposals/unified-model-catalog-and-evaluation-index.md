@@ -14,6 +14,14 @@ status: Implemented
 > Use the [Intelligence Index](../benchmarking/open-intelligence-index) for the
 > active 1.0 contract.
 
+:::note
+The backend examples in this record write `api_key_env` and `base_url`
+directly on a backend ref. Those spellings are deprecated: they still load,
+with a `deprecated_model_field` warning.
+[Migrate model resources](../installation/model-resource-migration.md#request-backends)
+shows the `endpoint`, `auth` and `headers` form.
+:::
+
 ## Problem
 
 vLLM Semantic Router currently describes model support in several independent
