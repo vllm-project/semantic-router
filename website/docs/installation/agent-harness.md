@@ -100,7 +100,8 @@ streamed response included, and output arriving does not extend it. Agent calls
 with high reasoning effort can stream for longer: in live Terminal-Bench 2.1
 runs of Claude Code 2.1.304 at `xhigh` effort on Qwen3.8-27B-FP8, served by
 vLLM 0.32 on one MI300X, 2.5% to 4% of calls took more than 300 seconds and the longest about 17 minutes. A call that reaches the
-limit is cut off and its output is lost. For agent models,
+limit is cut off: the stream is reset and the rest of the answer never
+arrives. For agent models,
 set the model's `total_timeout` to `0s` and keep `idle_timeout` to bound a
 stalled stream, as described under
 [model configuration](model-configuration#tune-timeouts-retries-and-endpoint-health).
