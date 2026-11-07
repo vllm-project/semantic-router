@@ -3,6 +3,7 @@ package protocolcodec
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strconv"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -455,7 +456,7 @@ func buildAnthropicRequestWire(
 	if instructionErr := encodeAnthropicInstructions(&wire, request); instructionErr != nil {
 		return anthropicRequestWire{}, diagnostics, instructionErr
 	}
-	if messagesErr := appendAnthropicMessages(&wire, request.Messages); messagesErr != nil {
+	if messagesErr := appendAnthropicMessages(&wire, responsesAssistantTurns(request)); messagesErr != nil {
 		return anthropicRequestWire{}, diagnostics, messagesErr
 	}
 	if toolsErr := appendAnthropicTools(&wire, request.Tools); toolsErr != nil {
@@ -567,7 +568,8 @@ func encodeAnthropicBaseRequest(request llmprotocol.Request) (anthropicRequestWi
 			Target: llmprotocol.AnthropicMessagesV1,
 			Field:  "max_tokens",
 			Action: llmprotocol.DiagnosticGenerated,
-			Reason: "Anthropic Messages requires an explicit output limit; the source request omitted one",
+			Reason: fmt.Sprintf("Anthropic Messages requires an explicit output limit; the source request omitted one, so %d was sent; "+
+				"request_params.default_max_tokens sets this value", defaultAnthropicMaxOutputTokens),
 		})
 	} else {
 		wire.MaxTokens = llmprotocol.Int64(*request.Sampling.MaxOutputTokens)

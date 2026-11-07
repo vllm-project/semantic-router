@@ -132,6 +132,7 @@ type responsesItemWire struct {
 	Name             string          `json:"name,omitempty"`
 	CallID           string          `json:"call_id,omitempty"`
 	Caller           json.RawMessage `json:"caller,omitempty"`
+	Async            json.RawMessage `json:"async,omitempty"`
 	Namespace        string          `json:"namespace,omitempty"`
 	Arguments        string          `json:"arguments,omitempty"`
 	Input            string          `json:"input,omitempty"`
@@ -291,6 +292,9 @@ func decodeResponsesDroppedFields(wire responsesRequestWire, policy llmprotocol.
 	}
 	if len(wire.ClientMetadata) > 0 {
 		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, "client_metadata", "client telemetry is not model input")
+	}
+	if bytes.Contains(wire.Input, []byte(`"`+codexItemMetadataField+`"`)) {
+		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, "input[]."+codexItemMetadataField, "client metadata is not model input")
 	}
 	return diagnostics, nil
 }

@@ -18,7 +18,7 @@ REMOVED_EMBEDDING_BACKENDS = frozenset({"candle", "openvino"})
 # replaces them. Their path keys are refused even when empty.
 RETIRED_EMBEDDING_TYPES = frozenset({"gemma", "bert"})
 RETIRED_EMBEDDING_PATHS = ("gemma_model_path", "bert_model_path")
-# A remote hallucination detector is a hallucination_detector binding; the
+# A remote hallucination detector is a hallucination binding; the
 # `backend: endpoint` shorthand was desugared into one.
 REMOVED_DETECTOR_BACKENDS = frozenset({"candle", "endpoint"})
 REMOVED_DEPLOYMENT_FIELDS = ("precision", "custom_ops_profile", "compilation_cache_dir")

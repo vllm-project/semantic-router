@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 )
 
 func newLimitedVLLMClient(server *httptest.Server, maxResponseBytes int64) *VLLMClient {
@@ -59,5 +58,7 @@ func TestVLLMClientErrorBodyIsTruncated(t *testing.T) {
 
 func setTestVLLMClientURL(client *VLLMClient, url string) {
 	_ = client.Close()
-	client.connector, client.initErr = connector.New(url, bearerAuthorizer(client.accessKey), client.transportOptions)
+	deployment := client.deployment
+	deployment.Endpoint = url + "/v1"
+	client.connector, client.initErr = remoteConnector(deployment, client.timeout, 0, maxClassifyErrorBodyBytes)
 }

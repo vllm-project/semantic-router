@@ -1,0 +1,43 @@
+# Deprecated: system lines and model_ref pin the built-in signals to Vela 1.0 specialists.
+version: v0.3
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+routing:
+  signals:
+    domains: [{name: math, description: Mathematics}]
+    jailbreak: [{name: injection, threshold: 0.6}]
+    pii: [{name: personal, threshold: 0.5}]
+    fact_check: [{name: needs_fact_check, description: Needs checking}]
+    user_feedbacks: [{name: unhappy, description: Wrong answer}]
+  decisions:
+    - name: route
+      priority: 100
+      rules:
+        operator: OR
+        conditions:
+          - {type: domain, name: math}
+          - {type: jailbreak, name: injection}
+          - {type: pii, name: personal}
+          - {type: fact_check, name: needs_fact_check}
+          - {type: user_feedback, name: unhappy}
+      modelRefs: [{model: general}]
+global:
+  model_catalog:
+    system:
+      decision_model: {deployment: primary}
+      prompt_guard: models/Vela-1.0-Encoder-307M-Guard
+      domain_classifier: models/Vela-1.0-Encoder-307M-Domain
+      pii_classifier: models/Vela-1.0-Encoder-307M-PII
+      fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck
+      feedback_detector: models/Vela-1.0-Encoder-307M-Feedback
+    modules:
+      prompt_guard: {enabled: true, model_ref: prompt_guard, use_cpu: true}
+      classifier:
+        domain: {model_ref: domain_classifier, use_cpu: true}
+        pii: {model_ref: pii_classifier, use_cpu: true}
+      hallucination_mitigation:
+        fact_check: {model_ref: fact_check_classifier, use_cpu: true}
+      feedback_detector: {enabled: true, model_ref: feedback_detector, use_cpu: true}

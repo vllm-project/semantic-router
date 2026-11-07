@@ -5,7 +5,7 @@
 `fact-check` decides whether a prompt should be treated as evidence-sensitive
 traffic. Define its labels under `routing.signals.fact_check`.
 
-This family is learned: it relies on the fact-check classification path under `global.model_catalog.modules.hallucination_mitigation.fact_check`.
+This family is learned: the decision model answers it unless a `fact_check` binding names another deployment ([Choose a model for a signal](../../../installation/choose-a-model-for-a-signal.md)). `global.model_catalog.modules.hallucination_mitigation.fact_check` holds its settings.
 
 ## Key Advantages
 

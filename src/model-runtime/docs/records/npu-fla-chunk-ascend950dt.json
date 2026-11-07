@@ -1,0 +1,75 @@
+{
+  "comment": "Recorded data for the fla-npu chunk on Ascend 950DT, backing docs/records/npu-fla-chunk-ascend950dt.md. The npu golden-check entry this work added to registry/golden_answers_decision3.json comes from the same reference-kernel recording (model_sha256 9ac186bb30b30c129d7aae03d73932600424963bd4644c2041a9d7120f029af5, the registry's pinned identity for vllm-sr/d3-mini); a rerun on the host after it was re-provisioned reproduced the recorded entry byte for byte.",
+  "issue": "https://github.com/vllm-project/semantic-router/issues/5698",
+  "pull_request": "https://github.com/vllm-project/semantic-router/pull/5498",
+  "date": "2026-10-28",
+  "rerun": "2026-11-02",
+  "hardware": "Huawei Ascend 950DT",
+  "CANN": "9.1",
+  "model": "vllm-sr/d3-mini",
+  "model_sha256": "9ac186bb30b30c129d7aae03d73932600424963bd4644c2041a9d7120f029af5",
+  "corpus": "office label-diff, 60 requests",
+  "label_diff": {
+    "requests": 60,
+    "flipped_requests": 4,
+    "row_agreement": 0.9333,
+    "flips": [
+      {
+        "row": 22,
+        "leaf": "fact_check",
+        "reference": "FACT_CHECK_NEEDED",
+        "flanpu": "NO_FACT_CHECK_NEEDED",
+        "reference_top2_gap": 0.008035
+      },
+      {
+        "row": 28,
+        "leaf": "jailbreak",
+        "reference": "benign",
+        "flanpu": "jailbreak",
+        "reference_top2_gap": 0.018877
+      },
+      {
+        "row": 52,
+        "leaf": "fact_check",
+        "reference": "FACT_CHECK_NEEDED",
+        "flanpu": "NO_FACT_CHECK_NEEDED",
+        "reference_top2_gap": 0.008035
+      },
+      {
+        "row": 58,
+        "leaf": "jailbreak",
+        "reference": "benign",
+        "flanpu": "jailbreak",
+        "reference_top2_gap": 0.018877
+      }
+    ],
+    "notes": "One leaf per flipped request; rows 22 and 52 are the same prompt run twice and rows 28 and 58 likewise (each pair shows the identical gap), so every flip is deterministic. Every flipped leaf has a two-option probability gap <= 0.02 and leaves with larger margins do not move; the two flip directions are opposite, consistent with a random walk rather than a systematic bias. The two fused implementations (triton-FLA and Ascend C) agree with each other on all 60; the NPU reference implementation agrees with the CUDA production recordings on all 60."
+  },
+  "chunk_probe": {
+    "chunk_reference_latency_ms": 107.1,
+    "chunk_flanpu_latency_ms": 0.42,
+    "e2e_forward_reference_ms": 2911.8,
+    "e2e_forward_flanpu_ms": 77.6,
+    "cuda_h20_parity_ms": 107.3,
+    "notes": "Single-request d3-mini forward on this corpus run (the record quotes 77.5 and 79.2 ms across runs), chunk term isolated by single-point synchronous timing; the chunk term is 97% of the baseline forward."
+  },
+  "divergence_probe": {
+    "per_call_max_abs_diff": 0.00390625,
+    "per_call_max_abs_diff_note": "2^-8, the reported BF16 GDN rounding floor (arxiv 2609.04098); single-call divergence does not grow with sequence length (T=200..500 all <= 3.9e-3)",
+    "injection_growth_per_layer": 0.96,
+    "layers": 24,
+    "fp64_truth_max_ulp": 1,
+    "fp64_truth_max_ulp_note": "both implementations sit at max 1 ulp from the fp64 reference: two equally-correct rounding paths, not a wrong kernel"
+  },
+  "g_distribution_probe": {
+    "calls": 1944,
+    "g_min": -729.37,
+    "g_max": 0.0,
+    "beta_min": 2.6e-11,
+    "beta_max": 1.0,
+    "notes": "The measured d3-mini decay range; why the CANN ops-transformer chunk_gated_delta_rule (hard constraint g in [-1, 0]) cannot serve this model, and why clamping would break long-range forgetting."
+  },
+  "gates": {
+    "consent": "93.3% row agreement < the 99% bar: the released BF16 d3 packages keep exact kernels; the slot lands default-off behind the FLA_NPU_APPROXIMATE opt-in, to flip only when the quantized d3 accuracy record lands"
+  }
+}
