@@ -365,9 +365,16 @@ func (c *Classifier) hasLongContextClassifier(signalType string) bool {
 		return false
 	}
 	consumer := classifierInputConsumer(signalType)
-	if binding, exists := c.Config.ModelBindings[consumer]; exists {
-		deployment, exists := c.Config.ModelDeployments[binding.Deployment]
-		return exists && deployment.Provider != "http" && deployment.Input.MaxTokens > 512
+	if task, ok, err := c.Config.ResolveTask(consumer); ok && err == nil && task.Explicit() {
+		// A remote model keeps its bounded input, including one a deprecated
+		// module backend named; a deployment written in the catalog reads
+		// up to its own input budget.
+		if !task.Deployment.IsModelRuntime() {
+			return false
+		}
+		if !task.Deployment.Translated() {
+			return task.Deployment.Input.MaxTokens > 512
+		}
 	}
 	switch signalType {
 	case config.SignalTypeEmbedding:
@@ -375,17 +382,18 @@ func (c *Classifier) hasLongContextClassifier(signalType string) bool {
 	case config.SignalTypeComplexity:
 		// Local Complexity uses the semantic embedding provider's input policy.
 		// An independent remote scorer retains its existing bounded input.
-		return c.Config.ComplexityModel.Backend == nil && c.Config.EmbeddingConfig.FullContext
+		_, remote, _ := c.Config.ComplexityRemoteTask()
+		return !remote && c.Config.EmbeddingConfig.FullContext
 	case config.SignalTypeDomain:
-		return c.Config.CategoryModel.Backend == nil && c.Config.CategoryModel.MaxSequenceLength > 512
+		return c.Config.CategoryModel.MaxSequenceLength > 512
 	case config.SignalTypeFactCheck:
 		return c.Config.HallucinationMitigation.FactCheckModel.MaxSequenceLength > 512
 	case config.SignalTypeUserFeedback:
 		return c.Config.FeedbackDetector.MaxSequenceLength > 512
 	case config.SignalTypePII:
-		return c.Config.PIIModel.Backend == nil && c.Config.PIIModel.MaxSequenceLength > 512
+		return c.Config.PIIModel.MaxSequenceLength > 512
 	case config.SignalTypeJailbreak:
-		return c.Config.PromptGuard.Backend == nil && c.Config.PromptGuard.MaxSequenceLength > 512
+		return c.Config.PromptGuard.MaxSequenceLength > 512
 	case config.SignalTypeModality:
 		return c.Config.ModalityDetector.Classifier != nil && c.Config.ModalityDetector.Classifier.MaxSequenceLength > 512
 	}

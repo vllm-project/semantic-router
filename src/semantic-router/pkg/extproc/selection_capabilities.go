@@ -64,9 +64,7 @@ func (r *OpenAIRouter) candidateCapabilityMismatch(ref config.ModelRef, request 
 				exact.ModelRefs = []config.ModelRef{ref}
 				enabled := ref.UseReasoning != nil && *ref.UseReasoning
 				preview.ReasoningEffort, preview.ReasoningMode = semanticReasoningControls(r, family, &exact, ref.Model, format, enabled)
-				if format != llmprotocol.AnthropicMessagesV1 || preview.ReasoningMode != llmprotocol.ReasoningModeEnabled {
-					preview.ReasoningBudgetTokens = nil
-				}
+				preview.ReasoningMode, preview.ReasoningBudgetTokens = messagesThinkingBudget(format, preview.ReasoningMode, preview.ReasoningBudgetTokens)
 			}
 		}
 	}

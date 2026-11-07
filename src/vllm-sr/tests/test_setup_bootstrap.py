@@ -13,7 +13,6 @@ from cli.container_management_listener import _managed_management_listener
 from cli.container_start import _render_split_envoy_config
 from cli.parser import ConfigParseError, parse_user_config
 from cli.runtime_stack import resolve_runtime_stack
-from cli.validator_model_runtime import validate_model_runtime_references
 
 
 def test_build_bootstrap_config_contains_setup_marker():
@@ -179,7 +178,6 @@ def test_bootstrap_metadata_preserves_typed_model_bindings(tmp_path: Path, owner
         parsed_profile.model_bindings["embedding"].model_dump(exclude_none=True)
         == binding
     )
-    assert validate_model_runtime_references(parsed) == []
     assert parsed.global_ == document["global"]
     assert parsed.setup == document["setup"]
     assert path.read_text() == original

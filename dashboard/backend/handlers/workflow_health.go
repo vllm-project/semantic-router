@@ -24,7 +24,7 @@ func WorkflowHealthHandler(wf *workflowstore.Store) http.HandlerFunc {
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
