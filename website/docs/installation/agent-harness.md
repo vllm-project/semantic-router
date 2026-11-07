@@ -95,6 +95,17 @@ scoring. This does not configure the harness's own context management. Follow
 [Virtual Models: limits for agent clients](../tutorials/global/entrypoints-and-recipes#limits-for-agent-clients)
 for the example and exact eligibility behavior.
 
+A listener's `timeout` (300 seconds by default) bounds a whole call, the
+streamed response included, and output arriving does not extend it. Agent calls
+with high reasoning effort can stream for longer: in live Terminal-Bench 2.1
+runs of Claude Code 2.1.304 at `xhigh` effort on Qwen3.8-27B-FP8, served by
+vLLM 0.32 on one MI300X, 2.5% to 4% of calls took more than 300 seconds and the longest about 17 minutes. A call that reaches the
+limit is cut off: the stream is reset and the rest of the answer never
+arrives. For agent models,
+set the model's `total_timeout` to `0s` and keep `idle_timeout` to bound a
+stalled stream, as described under
+[model configuration](model-configuration#tune-timeouts-retries-and-endpoint-health).
+
 ## Preserve tool and conversation continuity
 
 Run a real tool loop: model requests a tool → harness executes it → next call
@@ -118,13 +129,22 @@ protection. Responses history, including `previous_response_id`, does not
 replace these headers. See [Session identification](../api/session-identification)
 for identity priority and privacy boundaries.
 
+When the task changes phase, the harness can ask for a fresh routing decision
+in the same session. It sends `x-vsr-protection-release: 1` on the first request
+of the new phase, at a user turn rather than inside a tool loop. Send it on that
+one request only. A refused release returns its reason in
+`x-vsr-protocol-warnings`. Do not set it through Claude Code's
+`ANTHROPIC_CUSTOM_HEADERS`, which sends it on every request. See
+[Explicit release](../tutorials/learning/protection#explicit-release).
+
 Check the selected model on tool continuations and user follow-ups. The harness
 retains tool permissions, task state, and the outer loop; recipes do not configure
 delegated agents.
 
-Claude Code sends `x-claude-code-session-id` instead of `x-session-id`. See
+Claude Code sends `x-claude-code-session-id` instead of `x-session-id`, and
+Codex CLI sends `session-id` and `thread-id`. See
 [Agents that delegate to subagents](../tutorials/learning/protection#agents-that-delegate-to-subagents)
-for the identity headers that hold its runs and its subagents.
+for the identity headers that hold their runs and their subagents.
 
 ### Agents that send tool output as messages
 

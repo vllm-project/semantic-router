@@ -29,7 +29,7 @@ or runtime behavior that differs from the built-in defaults.
 | Section | Owns |
 | --- | --- |
 | `version` | Canonical schema version. Use `v0.3`. |
-| `listeners` | Public Router listeners: address, port, idle timeout, optional client API keys, an optional Chat model allowlist (`models`; empty accepts all), separate native System One grants (`systemone.models`; omission publishes none) and the longest they wait for a model (`systemone.max_deadline_ms`, 10 minutes by default), optional one-way TLS (`tls.cert_file`, `tls.key_file`), and the identity sources a listener trusts (`identity.trust_headers`, `identity.trusted_peers`; by default none), which the Router honors in standalone mode. |
+| `listeners` | Public Router listeners: address, port, the default time for a whole call including its streamed response (`timeout`, 300s), which also bounds a stalled stream, so `0s` lifts both limits (to lift only the call limit for one model, set that model's `total_timeout: 0s`), optional client API keys, an optional Chat model allowlist (`models`; empty accepts all), separate native System One grants (`systemone.models`; omission publishes none) and the longest they wait for a model (`systemone.max_deadline_ms`, 10 minutes by default), optional one-way TLS (`tls.cert_file`, `tls.key_file`), and the identity sources a listener trusts (`identity.trust_headers`, `identity.trusted_peers`; by default none), which the Router honors in standalone mode. |
 | `providers` | Logical provider models, physical backend endpoints, pricing, capabilities, and defaults. |
 | `evaluation` | Optional operator-owned benchmark definitions, versioned index DAGs, and model-linked records. |
 | `routing` | The default recipe: model cards, signals, projections, decisions, strategy, algorithms, and route plugins. |
@@ -397,7 +397,9 @@ candidate_requirements:
 `capabilities: declared` requires the assigned model to declare support for the
 request's task, including tools and image input, as well as a compatible provider
 protocol. `context: known_limits` checks estimated input demand plus the effective
-output reserve against declared model limits. The request must supply an output
+output reserve against declared model limits, and refuses a request only when it
+does not fit even without the input estimate's reserves for structured data and
+media. The request must supply an output
 bound, or its decision must configure `request_params.default_max_tokens` as a
 positive integer or `auto` (see below).
 That default applies only when the caller omits the bound; `max_tokens_limit` then
