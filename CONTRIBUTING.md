@@ -285,6 +285,36 @@ Summary check shows the effective conditions, including inherited requirements.
   leave it off, update the branch yourself after a dequeue. See
   [GitHub's explanation of fork permissions][fork-permissions].
 
+- **Conflicting `PR Gate` results:** a successful publisher check does not
+  necessarily supersede a failed native Actions check on the same head. Inspect
+  both `filter=all` and `filter=latest`, the check suites, and GitHub's required
+  flags rather than choosing the highest check ID. From a trusted checkout,
+  collect a read-only diagnostic with explicit identities:
+
+  ```bash
+  GITHUB_REPOSITORY=vllm-project/semantic-router python3 tools/ci/pr_ci_status.py \
+    --diagnose --pr <number> --head <full-head-sha> \
+    --run-id <replacement-run-id> --attempt <replacement-attempt>
+  ```
+
+  This command reports evidence; it does not update checks, authorize CI, or
+  requeue the PR. Unavailable requiredness or provenance is unknown, not proof
+  of a recoverable failure. Save the diagnostic and the queue's refusal before
+  recovery. Do not rerun a cancelled sibling or repeatedly requeue the same
+  head to try to erase a required failure.
+
+  Any fresh-head recovery needs the author's or maintainer's explicit consent
+  and confirmation that the PR is no longer queued. Use a normal merge from
+  upstream `main` or **Update branch**, not a default rebase/force-push. Confirm
+  that the head actually changed, the new Plan matches the current head/base/
+  merge revision, and affected qualification passes with fresh authorization
+  where needed. Recheck required checks, valid approvals and resolved threads,
+  then observe requeue/merge eligibility. A new green check alone is not proof
+  of recovery. If no new head is produced or the new head is still refused,
+  stop and retain the evidence; do not change native failures to success or
+  neutral. This is a controlled recovery path, not a guarantee that every
+  branch update resolves every check conflict.
+
 To recover from a branch-update failure, merge upstream `main` into your PR
 branch and push it, or use GitHub's **Update branch** button when available.
 
