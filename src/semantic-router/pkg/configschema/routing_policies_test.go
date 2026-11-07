@@ -39,7 +39,7 @@ func TestReplayCaptureDefaultsAndOverridesAreDiscoverable(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, representation := range map[string]Representation{"global": global, "decision plugin": plugin} {
-		for _, field := range []string{"enabled", "capture_request_body", "capture_response_body", "capture_personal_data", "max_records", "max_body_bytes", "max_tool_trace_bytes", "max_tool_trace_steps"} {
+		for _, field := range []string{"enabled", "capture_request_body", "capture_response_body", "capture_personal_data", "capture_tool_results", "max_records", "max_body_bytes", "max_tool_trace_bytes", "max_tool_trace_steps"} {
 			if !strings.Contains(string(representation.Body), `"`+field+`"`) {
 				t.Errorf("%s replay schema omits %s", name, field)
 			}

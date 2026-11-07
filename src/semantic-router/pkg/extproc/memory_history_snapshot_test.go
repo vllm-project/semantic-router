@@ -72,3 +72,32 @@ func TestExtractMemoryInfo_DetachesNestedHistory(t *testing.T) {
 	assert.Equal(t, "original-session", sessionID)
 	assert.Equal(t, "original-user", userID)
 }
+
+func TestMemoryHistoryForExtractorHonorsAcceptedLosses(t *testing.T) {
+	failed := true
+	history := []llmprotocol.Message{
+		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "List /nope"}}},
+		{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{
+			Kind:     llmprotocol.ContentToolCall,
+			ToolCall: &llmprotocol.ToolCall{ID: "call_1", Name: "Bash", Arguments: `{"command":"ls /nope"}`},
+		}}},
+		{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{
+			Kind: llmprotocol.ContentToolResult,
+			ToolResult: &llmprotocol.ToolResult{
+				CallID:  "call_1",
+				IsError: &failed,
+				Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Exit code 2"}},
+			},
+		}}},
+	}
+
+	_, err := memoryHistoryForExtractor(nil, nil, history)
+	require.ErrorContains(t, err, "translation would lose tool_result.is_error")
+
+	messages, err := memoryHistoryForExtractor(nil, llmprotocol.OptInLossyFields(), history)
+	require.NoError(t, err)
+	require.Len(t, messages, 3)
+	encoded, err := json.Marshal(messages[2])
+	require.NoError(t, err)
+	assert.Contains(t, string(encoded), "Exit code 2")
+}

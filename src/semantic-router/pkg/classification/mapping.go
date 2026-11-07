@@ -206,6 +206,11 @@ func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 			"jailbreak mapping %s: label %q is reserved for content the model did not read and cannot be a configured label",
 			path, JailbreakUnscannedType)
 	}
+	if _, collides := mapping.GetIndexForJailbreakType(JailbreakExplicitPatternType); collides {
+		return nil, fmt.Errorf(
+			"jailbreak mapping %s: label %q is reserved for explicit pattern matches and cannot be a configured label",
+			path, JailbreakExplicitPatternType)
+	}
 
 	return &mapping, nil
 }

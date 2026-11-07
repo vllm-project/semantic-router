@@ -57,6 +57,7 @@ func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 			CaptureRequestBody:  canonicalBoolPtr(true),
 			CaptureResponseBody: canonicalBoolPtr(true),
 			CapturePersonalData: canonicalBoolPtr(true),
+			CaptureToolResults:  canonicalBoolPtr(false),
 			MaxRecords:          canonicalIntPtr(defaultRouterReplayMaxRecords),
 			MaxBodyBytes:        canonicalIntPtr(defaultRouterReplayMaxBodyBytes),
 			MaxToolTraceBytes:   canonicalIntPtr(0),
@@ -147,29 +148,49 @@ func defaultCanonicalIntegrationGlobal() CanonicalIntegrationGlobal {
 	}
 }
 
+// The deployments every configuration declares. Declaring one does not start
+// it: a deployment runs only when a consumer resolves to it.
+const (
+	HazardDeployment              = "hazard"
+	EmbeddingDefaultDeployment    = "vela-embedding"
+	MultimodalEmbeddingDeployment = "omni-nano"
+)
+
 func defaultCanonicalModelCatalog() CanonicalModelCatalog {
 	catalog := CanonicalModelCatalog{
 		Embeddings: defaultCanonicalEmbeddingModels(),
-		System:     DefaultSystemModels(),
+		System:     CanonicalSystemModels{DecisionModel: DecisionModelBinding{Deployment: DefaultDecisionDeployment}},
 		KBs:        defaultCanonicalKnowledgeBases(),
 		Modules:    defaultCanonicalModelModules(),
 	}
-	// Declaring a deployment does not activate it. Recipes opt in through an
-	// independent-score binding that names the artifact's operating point.
-	if hazard, err := ImplicitModelRuntimeDeployment(catalog.System.Hazard, true); err == nil {
-		hazard.Input = ModelInputBudget{MaxTokens: 32768, Overflow: "reject"}
-		catalog.Deployments = map[string]ModelDeployment{"hazard": hazard}
-	}
-	primary, err := ImplicitModelRuntimeDeployment(Vela2SignalModel, true)
-	if err == nil {
-		if catalog.Deployments == nil {
-			catalog.Deployments = make(map[string]ModelDeployment)
-		}
-		catalog.Deployments[DefaultDecisionDeployment] = primary
-	}
+	catalog.Deployments = DefaultModelDeployments()
 	enabledSoftMatching := false
 	catalog.Embeddings.Semantic.EmbeddingConfig.EnableSoftMatching = &enabledSoftMatching
 	return catalog
+}
+
+// DefaultModelDeployments are the pre-declared deployments: primary, the
+// default decision model (vela3-fast); hazard, Vela 1.0 Hazard, which a
+// safety rule's hazard part names to score categories with its operating
+// point; vela-embedding and omni-nano, the default text and multimodal
+// embedding models.
+func DefaultModelDeployments() map[string]ModelDeployment {
+	deployments := make(map[string]ModelDeployment)
+	if primary, err := ImplicitModelRuntimeDeployment(Vela3SignalModel, true); err == nil {
+		deployments[DefaultDecisionDeployment] = primary
+	}
+	if hazard, err := ImplicitModelRuntimeDeployment(vela1HazardModel, true); err == nil {
+		hazard.Input = ModelInputBudget{MaxTokens: 32768, Overflow: "reject"}
+		deployments[HazardDeployment] = hazard
+	}
+	embeddings := defaultCanonicalEmbeddingModels().Semantic
+	for name, model := range map[string]string{EmbeddingDefaultDeployment: embeddings.MmBertModelPath, MultimodalEmbeddingDeployment: embeddings.MultiModalModelPath} {
+		if deployment, err := ImplicitModelRuntimeDeployment(model, true); err == nil {
+			deployment.Input.Overflow = "truncate"
+			deployments[name] = deployment
+		}
+	}
+	return deployments
 }
 
 func defaultCanonicalKnowledgeBases() []KnowledgeBaseConfig {
@@ -254,7 +275,7 @@ func defaultCanonicalEmbeddingModels() CanonicalEmbeddingModels {
 
 func defaultCanonicalModelModules() CanonicalModelModules {
 	return CanonicalModelModules{
-		Safety:                  SafetyModelsConfig{Safety: SequenceHeadModelConfig{ModelRef: "safety", UseCPU: true}},
+		Safety:                  SafetyModelsConfig{Safety: SequenceHeadModelConfig{UseCPU: true}},
 		PromptGuard:             defaultPromptGuardModule(),
 		Classifier:              defaultClassifierModule(),
 		Complexity:              ComplexityModelConfig{}.WithDefaults(),
@@ -265,10 +286,9 @@ func defaultCanonicalModelModules() CanonicalModelModules {
 
 func defaultPromptGuardModule() CanonicalPromptGuardModule {
 	return CanonicalPromptGuardModule{
-		ModelRef: "prompt_guard",
 		PromptGuardConfig: PromptGuardConfig{
 			Enabled:   true,
-			Threshold: 0.75,
+			Threshold: ModuleThresholdsOf(Vela3SignalModel).PromptGuard,
 			UseCPU:    true,
 		},
 	}
@@ -277,16 +297,14 @@ func defaultPromptGuardModule() CanonicalPromptGuardModule {
 func defaultClassifierModule() CanonicalClassifierModule {
 	return CanonicalClassifierModule{
 		Domain: CanonicalCategoryModule{
-			ModelRef: "domain_classifier",
 			CategoryModel: CategoryModel{
-				Threshold: 0.28,
+				Threshold: ModuleThresholdsOf(Vela3SignalModel).Domain,
 				UseCPU:    true,
 			},
 		},
 		PII: CanonicalPIIModule{
-			ModelRef: "pii_classifier",
 			PIIModel: PIIModel{
-				Threshold: 0.01,
+				Threshold: ModuleThresholdsOf(Vela3SignalModel).PII,
 				UseCPU:    true,
 			},
 		},
@@ -298,14 +316,12 @@ func defaultHallucinationModule() CanonicalHallucinationModule {
 	return CanonicalHallucinationModule{
 		Enabled: false,
 		FactCheck: CanonicalFactCheckModule{
-			ModelRef: "fact_check_classifier",
 			FactCheckModelConfig: FactCheckModelConfig{
-				Threshold: 0.93,
+				Threshold: ModuleThresholdsOf(Vela3SignalModel).FactCheck,
 				UseCPU:    true,
 			},
 		},
 		Detector: CanonicalHallucinationDetector{
-			ModelRef: "hallucination_detector",
 			HallucinationModelConfig: HallucinationModelConfig{
 				Threshold:         0.5,
 				UseCPU:            true,
@@ -319,29 +335,29 @@ func defaultHallucinationModule() CanonicalHallucinationModule {
 
 func defaultFeedbackDetectorModule() CanonicalFeedbackDetectorModule {
 	return CanonicalFeedbackDetectorModule{
-		ModelRef: "feedback_detector",
 		FeedbackDetectorConfig: FeedbackDetectorConfig{
 			Enabled:   true,
-			Threshold: 0.37,
+			Threshold: ModuleThresholdsOf(Vela3SignalModel).Feedback,
 			UseCPU:    true,
 		},
 	}
 }
 
-// DefaultSystemModels returns stable capability bindings for built-in runtime
-// models: Vela 2.0 0.3B for every built-in signal it answers, which then share
-// one deployment and one call per request, and Vela 1.0 Hazard.
+// DefaultSystemModels returns the models the built-in modules run when no
+// binding names one: Vela 3.0 vela3-fast, the default decision model's, for
+// every built-in signal it answers, and Vela 1.0 Hazard, the pre-declared
+// hazard deployment's.
 func DefaultSystemModels() CanonicalSystemModels {
 	return CanonicalSystemModels{
 		DecisionModel:         DecisionModelBinding{Deployment: DefaultDecisionDeployment},
-		Safety:                Vela2SignalModel,
+		Safety:                Vela3SignalModel,
 		Hazard:                "models/Vela-1.0-Encoder-307M-Hazard",
-		PromptGuard:           Vela2SignalModel,
-		DomainClassifier:      Vela2SignalModel,
-		PIIClassifier:         Vela2SignalModel,
-		FactCheckClassifier:   Vela2SignalModel,
-		HallucinationDetector: Vela2SignalModel,
-		FeedbackDetector:      Vela2SignalModel,
+		PromptGuard:           Vela3SignalModel,
+		DomainClassifier:      Vela3SignalModel,
+		PIIClassifier:         Vela3SignalModel,
+		FactCheckClassifier:   Vela3SignalModel,
+		HallucinationDetector: Vela3SignalModel,
+		FeedbackDetector:      Vela3SignalModel,
 	}
 }
 
@@ -363,7 +379,6 @@ func Vela1SystemModels() CanonicalSystemModels {
 // DefaultGlobalConfig materializes canonical global defaults into the runtime RouterConfig.
 func DefaultGlobalConfig() RouterConfig {
 	global := DefaultCanonicalGlobal()
-	_ = resolveModuleModelRefs(&global)
 	cfg := RouterConfig{}
 	_ = applyCanonicalGlobal(&cfg, &global)
 	if cfg.VectorStore != nil {

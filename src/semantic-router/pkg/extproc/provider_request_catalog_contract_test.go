@@ -149,6 +149,16 @@ func TestBuiltInCatalogLocalRuntimeReasoningWireContracts(t *testing.T) {
 			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "medium"}},
 		},
 		{
+			name: "Messages Qwen effort without a budget is adaptive", catalog: "qwen/qwen3.8-27b",
+			provider: "anthropic-compatible", providerModelID: "qwen38-27b",
+			apiFormat: config.APIFormatAnthropic, enabled: true, mode: config.ReasoningModeEnabled, effort: "medium",
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{
+				"thinking":      map[string]interface{}{"type": "adaptive"},
+				"output_config": map[string]interface{}{"effort": "medium"},
+			},
+		},
+		{
 			name: "SGLang Qwen top-level effort and template switch", catalog: "qwen/qwen3.8-27b", provider: "sglang",
 			enabled: true, mode: config.ReasoningModeEnabled, effort: "low",
 			wantTransport: modelcatalog.ReasoningTransportEffortTemplateSwitch,

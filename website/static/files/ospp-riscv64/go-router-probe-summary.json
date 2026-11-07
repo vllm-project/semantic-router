@@ -1,0 +1,506 @@
+{
+  "riscv64": {
+    "environment": {
+      "passed": true,
+      "source_revision": "2e89999771dc3bb2458e1bc86ef00c4e918dd591",
+      "machine": "riscv64",
+      "kernel": "6.6.63-cloud",
+      "router_cpus": 2,
+      "router_memory": "1g",
+      "router_gomaxprocs": 2,
+      "router_log_level": "warn",
+      "helper_gomaxprocs": 2,
+      "seconds": 15,
+      "repeats": 3,
+      "concurrencies": "1,4,16,64",
+      "helper_sha256": "fe3cd2f4480fd958a72b6534b4bbc4164ce1c22299e60129d9aa79e2de9aa31a",
+      "cpu_sample_interval": 0.5,
+      "image": {
+        "name": "semantic-router-router:frozen-2e89999771dc",
+        "id": "sha256:3ad42927fea7b3d11b041244f8eb54317994ffbde98a24e86172229d8f4371ea",
+        "architecture": "riscv64"
+      },
+      "load_before": [
+        2.197265625,
+        2.36328125,
+        2.587890625
+      ],
+      "load_after": [
+        5.6845703125,
+        4.77734375,
+        3.646484375
+      ],
+      "cleanup_errors": [],
+      "resources_preserved": true
+    },
+    "requests": 504194,
+    "router_requests": 42897,
+    "rows": [
+      {
+        "path": "backend",
+        "concurrency": 1,
+        "requests_per_second": 849.9559518344697,
+        "p50_ms": 1.106,
+        "p95_ms": 1.623,
+        "rps_range": [
+          829.9045533836342,
+          851.7799556663067
+        ],
+        "cpu_cores": {
+          "client": 0.8437191185861167,
+          "backend": 0.6237516606462788,
+          "router": 0.010594508036454614
+        }
+      },
+      {
+        "path": "router",
+        "concurrency": 1,
+        "requests_per_second": 121.2930134325583,
+        "p50_ms": 7.969,
+        "p95_ms": 9.771,
+        "rps_range": [
+          120.9490298415145,
+          121.31880432750008
+        ],
+        "cpu_cores": {
+          "client": 0.17871651782951542,
+          "backend": 0.1328818081733212,
+          "router": 1.0000383501703562
+        },
+        "internal_routing_ms": {
+          "p50_ms": 2.54,
+          "p95_ms": 3.119
+        },
+        "cgroup_deltas": [
+          {
+            "usage_usec": 14965742,
+            "nr_throttled": 0,
+            "throttled_usec": 0
+          },
+          {
+            "usage_usec": 15196980,
+            "nr_throttled": 0,
+            "throttled_usec": 0
+          },
+          {
+            "usage_usec": 14596124,
+            "nr_throttled": 0,
+            "throttled_usec": 0
+          }
+        ]
+      },
+      {
+        "path": "backend",
+        "concurrency": 4,
+        "requests_per_second": 2907.5633882601983,
+        "p50_ms": 1.236,
+        "p95_ms": 2.303,
+        "rps_range": [
+          2877.6519521965674,
+          2936.1379207728837
+        ],
+        "cpu_cores": {
+          "client": 1.81042103365778,
+          "backend": 1.588544409547044,
+          "router": 0.008595863198521405
+        }
+      },
+      {
+        "path": "router",
+        "concurrency": 4,
+        "requests_per_second": 277.63368284579934,
+        "p50_ms": 13.27,
+        "p95_ms": 24.172,
+        "rps_range": [
+          277.1666361039827,
+          282.7472621103492
+        ],
+        "cpu_cores": {
+          "client": 0.42225181495125086,
+          "backend": 0.3326564166398623,
+          "router": 1.9491656845351935
+        },
+        "internal_routing_ms": {
+          "p50_ms": 2.741,
+          "p95_ms": 6.384
+        },
+        "cgroup_deltas": [
+          {
+            "usage_usec": 29602474,
+            "nr_throttled": 21,
+            "throttled_usec": 44421
+          },
+          {
+            "usage_usec": 29413388,
+            "nr_throttled": 26,
+            "throttled_usec": 2475
+          },
+          {
+            "usage_usec": 29521974,
+            "nr_throttled": 21,
+            "throttled_usec": 934
+          }
+        ]
+      },
+      {
+        "path": "backend",
+        "concurrency": 16,
+        "requests_per_second": 3321.4840385782,
+        "p50_ms": 4.304,
+        "p95_ms": 10.14,
+        "rps_range": [
+          3299.2850485128865,
+          3405.045257000581
+        ],
+        "cpu_cores": {
+          "client": 1.9171168576550757,
+          "backend": 1.589332578949806,
+          "router": 0.02701601813306032
+        }
+      },
+      {
+        "path": "router",
+        "concurrency": 16,
+        "requests_per_second": 276.0294555916784,
+        "p50_ms": 54.673,
+        "p95_ms": 96.529,
+        "rps_range": [
+          275.9886315141592,
+          277.72458425610506
+        ],
+        "cpu_cores": {
+          "client": 0.4345034576273713,
+          "backend": 0.3291893425474055,
+          "router": 1.9691868502986494
+        },
+        "internal_routing_ms": {
+          "p50_ms": 2.785,
+          "p95_ms": 17.284
+        },
+        "cgroup_deltas": [
+          {
+            "usage_usec": 29720656,
+            "nr_throttled": 86,
+            "throttled_usec": 44328
+          },
+          {
+            "usage_usec": 29106179,
+            "nr_throttled": 69,
+            "throttled_usec": 95879
+          },
+          {
+            "usage_usec": 29788756,
+            "nr_throttled": 89,
+            "throttled_usec": 35236
+          }
+        ]
+      },
+      {
+        "path": "backend",
+        "concurrency": 64,
+        "requests_per_second": 3146.1038795631184,
+        "p50_ms": 18.71,
+        "p95_ms": 38.662,
+        "rps_range": [
+          3140.9944475861994,
+          3151.6698779062053
+        ],
+        "cpu_cores": {
+          "client": 1.9654613688182871,
+          "backend": 1.5384454166270745,
+          "router": 0.0
+        }
+      },
+      {
+        "path": "router",
+        "concurrency": 64,
+        "requests_per_second": 273.1822287130072,
+        "p50_ms": 227.671,
+        "p95_ms": 343.737,
+        "rps_range": [
+          268.83346242786706,
+          274.3838633766157
+        ],
+        "cpu_cores": {
+          "client": 0.4459556935212122,
+          "backend": 0.3361371430883695,
+          "router": 1.9765399733044884
+        },
+        "internal_routing_ms": {
+          "p50_ms": 2.85,
+          "p95_ms": 66.078
+        },
+        "cgroup_deltas": [
+          {
+            "usage_usec": 29951500,
+            "nr_throttled": 81,
+            "throttled_usec": 27578
+          },
+          {
+            "usage_usec": 29658078,
+            "nr_throttled": 91,
+            "throttled_usec": 53910
+          },
+          {
+            "usage_usec": 30239886,
+            "nr_throttled": 83,
+            "throttled_usec": 33785
+          }
+        ]
+      }
+    ],
+    "maximum_cpu_boundary_offset_seconds": 0.24808822199702263
+  },
+  "amd64": {
+    "environment": {
+      "passed": true,
+      "source_revision": "2e89999771dc3bb2458e1bc86ef00c4e918dd591",
+      "machine": "x86_64",
+      "kernel": "6.8.0-147-generic",
+      "router_cpus": 2,
+      "router_memory": "1g",
+      "router_gomaxprocs": 2,
+      "router_log_level": "warn",
+      "helper_gomaxprocs": 2,
+      "seconds": 15,
+      "repeats": 3,
+      "concurrencies": "1,4,16,64",
+      "helper_sha256": "8ee26a206df7c13e8a124e298d4c2adb90d37bfc36535dc74efa2d58d509e239",
+      "cpu_sample_interval": 0.5,
+      "image": {
+        "name": "semantic-router-router:frozen-2e899997-amd64",
+        "id": "sha256:d0adba12e2fdd7a7476d3593ff861156a0e20a36c137fded5026b2b93cd040b5",
+        "architecture": "amd64"
+      },
+      "load_before": [
+        0.15380859375,
+        0.39599609375,
+        0.7724609375
+      ],
+      "load_after": [
+        5.9248046875,
+        3.5205078125,
+        1.96240234375
+      ],
+      "cleanup_errors": [],
+      "resources_preserved": true
+    },
+    "requests": 22913211,
+    "router_requests": 1556699,
+    "rows": [
+      {
+        "path": "backend",
+        "concurrency": 1,
+        "requests_per_second": 49847.87749371038,
+        "p50_ms": 0.019,
+        "p95_ms": 0.024,
+        "rps_range": [
+          49219.041211661555,
+          50453.81523402386
+        ],
+        "cpu_cores": {
+          "client": 0.8215232553229125,
+          "backend": 0.5190520489241781,
+          "router": 0.0006663055827014687
+        }
+      },
+      {
+        "path": "router",
+        "concurrency": 1,
+        "requests_per_second": 4745.471931357314,
+        "p50_ms": 0.196,
+        "p95_ms": 0.283,
+        "rps_range": [
+          4579.4359108644885,
+          4856.217023501784
+        ],
+        "cpu_cores": {
+          "client": 0.15123885083365307,
+          "backend": 0.10659959847029987,
+          "router": 1.0120344247414887
+        },
+        "internal_routing_ms": {
+          "p50_ms": 0.066,
+          "p95_ms": 0.094
+        },
+        "cgroup_deltas": [
+          {
+            "usage_usec": 15225054,
+            "nr_throttled": 0,
+            "throttled_usec": 0
+          },
+          {
+            "usage_usec": 15193727,
+            "nr_throttled": 0,
+            "throttled_usec": 0
+          },
+          {
+            "usage_usec": 15195272,
+            "nr_throttled": 0,
+            "throttled_usec": 0
+          }
+        ]
+      },
+      {
+        "path": "backend",
+        "concurrency": 4,
+        "requests_per_second": 125278.91679625421,
+        "p50_ms": 0.026,
+        "p95_ms": 0.06,
+        "rps_range": [
+          84280.70839321362,
+          125438.04812071969
+        ],
+        "cpu_cores": {
+          "client": 1.626399769888412,
+          "backend": 1.1106957871380514,
+          "router": 0.0019987065980543077
+        }
+      },
+      {
+        "path": "router",
+        "concurrency": 4,
+        "requests_per_second": 10533.890919233105,
+        "p50_ms": 0.306,
+        "p95_ms": 0.815,
+        "rps_range": [
+          6023.883193689591,
+          10687.668215741649
+        ],
+        "cpu_cores": {
+          "client": 0.2744908872037616,
+          "backend": 0.1885459249482151,
+          "router": 1.986723603858759
+        },
+        "internal_routing_ms": {
+          "p50_ms": 0.061,
+          "p95_ms": 0.162
+        },
+        "cgroup_deltas": [
+          {
+            "usage_usec": 29814343,
+            "nr_throttled": 45,
+            "throttled_usec": 42411
+          },
+          {
+            "usage_usec": 29816014,
+            "nr_throttled": 44,
+            "throttled_usec": 32149
+          },
+          {
+            "usage_usec": 28873836,
+            "nr_throttled": 4,
+            "throttled_usec": 2840
+          }
+        ]
+      },
+      {
+        "path": "backend",
+        "concurrency": 16,
+        "requests_per_second": 157307.8577843433,
+        "p50_ms": 0.085,
+        "p95_ms": 0.242,
+        "rps_range": [
+          138274.66318474174,
+          160296.39797645633
+        ],
+        "cpu_cores": {
+          "client": 1.951650987159659,
+          "backend": 1.3711195572417014,
+          "router": 0.0033315995001007067
+        }
+      },
+      {
+        "path": "router",
+        "concurrency": 16,
+        "requests_per_second": 10795.923141358644,
+        "p50_ms": 1.261,
+        "p95_ms": 3.303,
+        "rps_range": [
+          9262.560487515353,
+          10989.976344515484
+        ],
+        "cpu_cores": {
+          "client": 0.280485566261886,
+          "backend": 0.18055009134672487,
+          "router": 1.9880188952632758
+        },
+        "internal_routing_ms": {
+          "p50_ms": 0.059,
+          "p95_ms": 0.209
+        },
+        "cgroup_deltas": [
+          {
+            "usage_usec": 29840480,
+            "nr_throttled": 63,
+            "throttled_usec": 57002
+          },
+          {
+            "usage_usec": 29848110,
+            "nr_throttled": 63,
+            "throttled_usec": 55563
+          },
+          {
+            "usage_usec": 29783236,
+            "nr_throttled": 49,
+            "throttled_usec": 45829
+          }
+        ]
+      },
+      {
+        "path": "backend",
+        "concurrency": 64,
+        "requests_per_second": 161315.6284264642,
+        "p50_ms": 0.337,
+        "p95_ms": 0.925,
+        "rps_range": [
+          160639.65627791782,
+          161368.96141107442
+        ],
+        "cpu_cores": {
+          "client": 1.984773884762578,
+          "backend": 1.3851109429938329,
+          "router": 0.0006662550804845897
+        }
+      },
+      {
+        "path": "router",
+        "concurrency": 64,
+        "requests_per_second": 10444.907254071406,
+        "p50_ms": 5.839,
+        "p95_ms": 11.806,
+        "rps_range": [
+          10339.350161713595,
+          10509.051960724362
+        ],
+        "cpu_cores": {
+          "client": 0.26849563424963196,
+          "backend": 0.17588491256860309,
+          "router": 1.989399414067993
+        },
+        "internal_routing_ms": {
+          "p50_ms": 0.061,
+          "p95_ms": 0.284
+        },
+        "cgroup_deltas": [
+          {
+            "usage_usec": 29896208,
+            "nr_throttled": 61,
+            "throttled_usec": 51633
+          },
+          {
+            "usage_usec": 29860247,
+            "nr_throttled": 58,
+            "throttled_usec": 50809
+          },
+          {
+            "usage_usec": 29816908,
+            "nr_throttled": 72,
+            "throttled_usec": 62104
+          }
+        ]
+      }
+    ],
+    "maximum_cpu_boundary_offset_seconds": 0.46646561700617895
+  }
+}

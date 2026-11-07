@@ -60,7 +60,7 @@ func StatusHandler(routerAPIURL, envoyURL, configDir string, stack StackState, c
 // Handler serves the live snapshot together with server-observed hourly history.
 func (m *StatusMonitor) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
 			return
 		}
