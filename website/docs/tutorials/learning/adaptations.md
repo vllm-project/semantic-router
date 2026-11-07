@@ -44,7 +44,17 @@ global:
         enabled: true
         strategy: routing_sampling
         candidate_set: decision
+        success:
+          outcome: request_completion
+          stale_after_seconds: 86400
 ```
+
+Observe mode records a typed success estimate per candidate. Omitted
+`success` fields inherit `outcome: request_completion` and
+`stale_after_seconds: 86400`. Set `stale_after_seconds: 0` to disable the
+stale horizon. Evidence older than the horizon is reported as `stale`
+instead of a calibrated probability. This does not change the selected
+model.
 
 ## Candidate Sets
 
