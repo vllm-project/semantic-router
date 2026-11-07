@@ -121,6 +121,7 @@ def coalesced(
     max_rows: int,
     lane: Callable[[WorkItem], str] | None = None,
     packed: bool = False,
+    splits: bool = False,
 ) -> list[Batch]:
     """Rows of every queued request in shared batches, each holding the rows of one lane.
 
@@ -135,6 +136,12 @@ def coalesced(
     of arrivals adds as many turns as its busiest lane needs, as it would
     without lanes. The batches are approximate: a row's neighbours, padding
     and GEMM shapes depend on the rows beside it.
+
+    ``splits`` says the model splits an over-budget batch itself (a state-once
+    family's branched forwards), so a row costlier than its budget no longer
+    runs alone: rows costlier than the budget share a batch, up to
+    ``max_rows``, and the model splits it. Batches of sub-budget rows keep
+    their budget bound.
     """
     lanes: dict[str, list[tuple[Job, int]]] = {}
     for job in jobs:
@@ -149,16 +156,23 @@ def coalesced(
         batches: list[Batch] = []
         current: dict[int, tuple[Job, list[int]]] = {}
         width = total = count = 0
+        over = False  # the current batch holds a row costlier than the budget
         for job, index in rows:
             length = padded(cost(job.items[index]))
             new_width = max(width, length)
             size = total + length if packed else new_width * (count + 1)
-            if current and (size > cap or count + 1 > max_rows):
+            row_over = length > cap
+            if current and (
+                (size > cap and not (splits and (over or row_over)))
+                or (splits and over != row_over)  # over-budget rows batch apart
+                or count + 1 > max_rows
+            ):
                 batches.append(_batch(current, exact=False, lane=name))
-                current, total, count = {}, 0, 0
+                current, total, count, over = {}, 0, 0, False
                 new_width = length
             current.setdefault(id(job), (job, []))[1].append(index)
             width, total, count = new_width, total + length, count + 1
+            over = over or row_over
         if current:
             batches.append(_batch(current, exact=False, lane=name))
         planned.append(batches)
@@ -386,5 +400,6 @@ class Batcher:
             return min(budget, family) if family else budget
 
         return trees + coalesced(
-            rest, lane_budget, self.max_num_seqs, model.lane, model.packs_merged_rows
+            rest, lane_budget, self.max_num_seqs, model.lane, model.packs_merged_rows,
+            model.splits_forwards,
         )
