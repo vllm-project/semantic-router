@@ -116,7 +116,7 @@
             {
               "content": [
                 {
-                  "file_data": "aGVsbG8=",
+                  "file_data": "data:text/plain;base64,aGVsbG8=",
                   "filename": "brief.txt",
                   "type": "input_file"
                 }

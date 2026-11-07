@@ -112,9 +112,53 @@ func ValidateComplexityRuleBoundaries(cfg *RouterConfig) error {
 	return nil
 }
 
+// complexityScoreBackendConfigured reports whether complexity resolves to a
+// remote classify deployment read as a score (score.v1, unless its binding
+// writes label_distribution.v1).
 func complexityScoreBackendConfigured(cfg *RouterConfig) bool {
-	backend := cfg.ComplexityModel.Backend
-	return backend != nil && backend.EffectiveContract("") == RemoteClassifierContractScore
+	task, ok, err := cfg.ComplexityRemoteTask()
+	if !ok || err != nil {
+		return false
+	}
+	return withImpliedContract("complexity", task.Binding, task.Deployment).Contract == RemoteClassifierContractScore
+}
+
+// ComplexityRemoteTask is the remote deployment that scores the complexity
+// signal: the one its rules name, or the one a deprecated module backend
+// declared. One score drives every rule, so the rules a remote deployment
+// answers name one, and a scope's rules either all ask it or none does.
+func (c *RouterConfig) ComplexityRemoteTask() (TaskResolution, bool, error) {
+	if c == nil {
+		return TaskResolution{}, false, nil
+	}
+	resolved := c.withModelResources()
+	var remote TaskResolution
+	var asked, local []string
+	for _, rule := range resolved.ComplexityRules {
+		task, ok, err := resolved.resolveTask("complexity." + rule.Name)
+		if err != nil {
+			return TaskResolution{}, false, err
+		}
+		if !ok || !remoteTaskProvider(task.Deployment) {
+			local = append(local, rule.Name)
+			continue
+		}
+		if remote.Name != "" && task.Name != remote.Name {
+			return TaskResolution{}, false, fmt.Errorf("complexity rules %q and %q name remote deployments %q and %q; one remote score drives every complexity rule, so they name one", asked[0], rule.Name, remote.Name, task.Name)
+		}
+		remote, asked = task, append(asked, rule.Name)
+	}
+	if remote.Name == "" {
+		task, ok, err := resolved.resolveTask("complexity")
+		if !ok || err != nil || !remoteTaskProvider(task.Deployment) {
+			return TaskResolution{}, false, err
+		}
+		return task, true, nil
+	}
+	if len(local) > 0 {
+		return TaskResolution{}, false, fmt.Errorf("complexity rule %q asks remote deployment %q but %q does not; one remote score drives every complexity rule, so set the same deployment on each", asked[0], remote.Name, local[0])
+	}
+	return remote, true, nil
 }
 
 type complexityRuleRef struct {
@@ -151,7 +195,7 @@ func complexityRuleRefs(cfg *RouterConfig) []complexityRuleRef {
 // testable without capturing log output; ValidateComplexityModelBackend emits
 // them.
 func ComplexityBackendAdvisories(cfg *RouterConfig) []string {
-	if cfg == nil || cfg.ComplexityModel.Backend == nil {
+	if _, remote, err := cfg.ComplexityRemoteTask(); !remote || err != nil {
 		return nil
 	}
 	advisories := make([]string, 0, 2)
@@ -161,7 +205,7 @@ func ComplexityBackendAdvisories(cfg *RouterConfig) []string {
 	// the engine's structural default instead. A rule alongside it on the
 	// local path still reports one, so the change is invisible in the config
 	// but visible in which decision wins.
-	if cfg.ComplexityModel.Backend.Contract == RemoteClassifierContractScore {
+	if complexityScoreBackendConfigured(cfg) {
 		advisories = append(advisories, fmt.Sprintf(
 			"complexity.backend uses %s, which reports no confidence: decisions gated on a complexity rule "+
 				"will rank on the engine's structural default rather than a reported score. "+

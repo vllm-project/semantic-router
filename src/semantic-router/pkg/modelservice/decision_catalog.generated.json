@@ -241,6 +241,46 @@
         "noul",
         "span"
       ]
+    },
+    {
+      "id": "vllm-sr/vela3-lite",
+      "family": "vela3_d3",
+      "question_types": [
+        "choice",
+        "noul",
+        "score",
+        "span"
+      ]
+    },
+    {
+      "id": "vllm-sr/vela3-mini",
+      "family": "vela3_d3",
+      "question_types": [
+        "choice",
+        "noul",
+        "score",
+        "span"
+      ]
+    },
+    {
+      "id": "vllm-sr/vela3-flash",
+      "family": "vela3_d3",
+      "question_types": [
+        "choice",
+        "noul",
+        "score",
+        "span"
+      ]
+    },
+    {
+      "id": "vllm-sr/vela3-turbo",
+      "family": "vela3_d3",
+      "question_types": [
+        "choice",
+        "noul",
+        "score",
+        "span"
+      ]
     }
   ]
 }

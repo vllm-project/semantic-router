@@ -21,6 +21,7 @@ const (
 	routerLearningActionHoldCurrent       routerLearningAction = "hold_current"
 	routerLearningActionAllowSwitch       routerLearningAction = "allow_switch"
 	routerLearningActionRescueSwitch      routerLearningAction = "rescue_switch"
+	routerLearningActionReleaseSwitch     routerLearningAction = "release_switch"
 )
 
 type routerLearningMethod string
@@ -49,6 +50,8 @@ type routerLearningIdentity struct {
 	scope              string
 	sessionHeader      string
 	conversationHeader string
+	agentID            string
+	agentHeader        string
 }
 
 func firstNonNilSelectionContext(values ...*selection.SelectionContext) *selection.SelectionContext {

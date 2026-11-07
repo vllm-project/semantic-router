@@ -132,7 +132,7 @@ func TestOpenAIChatResponseAcceptsOllamaToolCallIndex(t *testing.T) {
 	}
 
 	unknown := strings.Replace(ollamaChatToolCallResponseFixture, `"index":0,"type"`, `"index":0,"future":1,"type"`, 1)
-	_, err := engine.TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, []byte(unknown), nil)
+	_, err := conformanceEngine().TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, []byte(unknown), nil)
 	if err == nil || !strings.Contains(err.Error(), "invalid_upstream_json") {
 		t.Fatalf("unknown tool call field error = %v", err)
 	}
@@ -164,7 +164,7 @@ func TestOpenAIChatResponseExtensionEnvelopeRoundTripAndUnknownRejection(t *test
 	}
 
 	future := bytes.Replace(raw, []byte(`"kv_transfer_params":{}`), []byte(`"kv_transfer_params":{},"future_field":true`), 1)
-	_, translateErr = engine.TranslateResponse(
+	_, translateErr = conformanceEngine().TranslateResponse(
 		llmprotocol.OpenAIChatV1,
 		llmprotocol.OpenAIChatV1,
 		future,
@@ -224,7 +224,13 @@ func TestOpenAIChatResponseRejectsInvalidClosedExecutionMetadata(t *testing.T) {
 	}
 	for name, raw := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, translateErr := engine.TranslateResponse(
+			decoder := engine
+			if strings.HasPrefix(name, "nested_") {
+				// An undeclared member inside a closed object is an unknown
+				// field: only the conformance contract rejects it.
+				decoder = conformanceEngine()
+			}
+			_, translateErr := decoder.TranslateResponse(
 				llmprotocol.OpenAIChatV1,
 				llmprotocol.OpenAIChatV1,
 				[]byte(raw),
@@ -265,10 +271,10 @@ func TestOpenAIChatStreamAcceptsClosedVLLMExecutionMetadataAndRejectsFutureField
 	}
 
 	future := bytes.Replace(frame, []byte(`"kv_transfer_params":{}`), []byte(`"kv_transfer_params":{},"future_field":true`), 1)
-	assertChatStreamRejected(t, engine, context, future, "invalid_upstream_json")
+	assertChatStreamRejected(t, conformanceEngine(), context, future, "invalid_upstream_json")
 	sameModelContext := llmprotocol.StreamContext{PublicModel: "same-model", ProviderModel: "same-model"}
-	assertChatStreamRejected(t, engine, sameModelContext, future, "invalid_upstream_json")
-	if _, _, decodeErr := engine.DecodeResponseStream(
+	assertChatStreamRejected(t, conformanceEngine(), sameModelContext, future, "invalid_upstream_json")
+	if _, _, decodeErr := conformanceEngine().DecodeResponseStream(
 		llmprotocol.OpenAIChatV1,
 		append(append([]byte(nil), future...), []byte("data: [DONE]\n\n")...),
 		sameModelContext,
@@ -277,7 +283,7 @@ func TestOpenAIChatStreamAcceptsClosedVLLMExecutionMetadataAndRejectsFutureField
 	}
 
 	nestedFuture := bytes.Replace(frame, []byte(`"kv_transfer_params":{}`), []byte(`"kv_transfer_params":{"future":true}`), 1)
-	assertChatStreamRejected(t, engine, context, nestedFuture, "invalid_upstream_json")
+	assertChatStreamRejected(t, conformanceEngine(), context, nestedFuture, "invalid_upstream_json")
 	withLogprobs := bytes.Replace(frame, []byte(`"logprobs":null`), []byte(`"logprobs":{"content":[]}`), 1)
 	assertChatStreamRejected(t, engine, context, withLogprobs, "unsupported_upstream_stream_logprobs")
 }
