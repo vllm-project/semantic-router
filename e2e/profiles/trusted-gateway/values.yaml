@@ -4,7 +4,7 @@
 #   gateway-model → trusted-gateway (trusted_gateway: true). The mocker accepts
 #                   only "Bearer gw-virtual-key-alice", the credential the
 #                   stand-in authenticator attaches for alice.
-#   static-model  → static-backend (api_key). The mocker accepts only
+#   static-model  → static-backend (auth.api_key_env). The mocker accepts only
 #                   "Bearer static-key-e2e", so a leaked gateway credential
 #                   would fail this path.
 # Both mockers refuse any request that still carries x-vsr-gateway-credential.
@@ -40,7 +40,8 @@ config:
             endpoint: static-backend.trusted-gateway-system.svc.cluster.local:8000
             weight: 1
             provider: openai-compatible
-            api_key: static-key-e2e
+            auth:
+              api_key_env: TRUSTED_GATEWAY_E2E_STATIC_KEY
   evaluation:
     records:
       - model: gateway-model
@@ -86,3 +87,9 @@ config:
       observability:
         metrics:
           enabled: true
+
+# The static backend's test key; the Router reads it from the environment,
+# never from its configuration.
+extraEnv:
+  - name: TRUSTED_GATEWAY_E2E_STATIC_KEY
+    value: static-key-e2e

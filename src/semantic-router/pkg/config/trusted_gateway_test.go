@@ -81,7 +81,11 @@ func TestTrustedGatewayBackendIsRejectedWhenTheContractIsOff(t *testing.T) {
 }
 
 func TestTrustedGatewayBackendRejectsAStaticKey(t *testing.T) {
-	for _, key := range []string{"api_key: shared-secret", "api_key_env: GATEWAY_KEY"} {
+	for _, key := range []string{
+		"api_key: shared-secret",
+		"api_key_env: GATEWAY_KEY",
+		"auth:\n            api_key_env: GATEWAY_KEY",
+	} {
 		_, err := ParseYAMLBytes([]byte(trustedGatewayConfig(`
         - name: gateway
           provider: openai-compatible
@@ -92,6 +96,32 @@ func TestTrustedGatewayBackendRejectsAStaticKey(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "cannot combine with api_key") {
 			t.Fatalf("%s: error = %v, want the static key rejection", key, err)
 		}
+	}
+}
+
+func TestTrustedGatewayBackendUsesTheAuthBlockHeader(t *testing.T) {
+	cfg, err := ParseYAMLBytes([]byte(trustedGatewayConfig(`
+        - name: gateway
+          provider: openai-compatible
+          endpoint: https://gateway.example/v1
+          trusted_gateway: true
+          auth:
+            header: X-Gateway-Key
+            prefix: ""
+`, true)))
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes() error = %v", err)
+	}
+	profile, err := cfg.GetProviderProfileForEndpoint("gateway-model_gateway")
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth, err := profile.ResolveAuth()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !profile.TrustedGateway || auth.Header != "X-Gateway-Key" || auth.Prefix != "" {
+		t.Fatalf("profile = %+v, auth = %+v, want the auth block's header without a prefix", profile, auth)
 	}
 }
 

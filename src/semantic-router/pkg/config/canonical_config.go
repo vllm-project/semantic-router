@@ -161,6 +161,15 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	if err := validateCanonicalContract(canonical); err != nil {
 		return nil, err
 	}
+	backendWarnings := backendConnectionWarnings(canonical.Providers.Models)
+	if err := normalizeBackendConnections(canonical); err != nil {
+		return nil, err
+	}
+	bindingWarnings, err := checkCanonicalBindingKeys(canonical)
+	if err != nil {
+		return nil, err
+	}
+	backendWarnings = append(backendWarnings, bindingWarnings...)
 
 	input, err := canonicalCatalogInput(canonical)
 	if err != nil {
@@ -192,6 +201,11 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	if err := applyEffectiveModelRegistry(&cfg, effective, canonical.Providers.Models); err != nil {
 		return nil, err
 	}
+	if err := cfg.translateModelResources(); err != nil {
+		return nil, err
+	}
+	cfg.ModelResourceWarnings = append(cfg.ModelResourceWarnings, backendWarnings...)
+	cfg.applyModuleThresholds()
 	cfg.EffectiveModelRegistry = effective
 	cfg.Evaluation = cloneCanonicalEvaluation(canonical.Evaluation)
 	if err := validateNativeRoutingConfig(&cfg); err != nil {
@@ -275,9 +289,12 @@ func validateCanonicalTrustedGateways(canonical *CanonicalConfig) error {
 					model.Name, index,
 				)
 			}
-			if backend.APIKey != "" || backend.APIKeyEnv != "" {
+			// Contract validation runs before auth is normalized, so a key set
+			// through auth.api_key_env is still under backend.Auth here.
+			if backend.APIKey != "" || backend.APIKeyEnv != "" ||
+				(backend.Auth != nil && backend.Auth.APIKeyEnv != "") {
 				return fmt.Errorf(
-					"providers.models[%s].backend_refs[%d].trusted_gateway cannot combine with api_key or api_key_env: the request supplies the credential",
+					"providers.models[%s].backend_refs[%d].trusted_gateway cannot combine with api_key, api_key_env or auth.api_key_env: the request supplies the credential",
 					model.Name, index,
 				)
 			}

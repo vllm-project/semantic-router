@@ -270,7 +270,7 @@ func validateTrustedGatewayProfile(profile *ProviderProfile) error {
 	}
 	if auth.Strategy == "none" || strings.TrimSpace(auth.Header) == "" {
 		return fmt.Errorf(
-			"trusted_gateway needs an auth header to carry the gateway credential; provider %q sends none, set auth_header",
+			"trusted_gateway needs an auth header to carry the gateway credential; provider %q sends none, set auth.header",
 			profile.Type,
 		)
 	}
@@ -302,9 +302,8 @@ func materializedProviderProfile(
 		ExtraHeaders:       mergeProviderHeaders(provider.Definition.DefaultHeaders, provider.Instance.Headers),
 		APIVersion:         provider.Instance.APIVersion, AuthHeader: provider.Instance.AuthHeader,
 		AuthPrefix: provider.Instance.AuthPrefix, AuthPrefixSet: provider.Instance.AuthPrefixSet,
-		ChatPath:            provider.Instance.ChatPath,
-		OpenAICompatGateway: provider.Instance.OpenAICompatGateway,
-		TrustedGateway:      provider.Instance.TrustedGateway,
+		ChatPath:       provider.Instance.ChatPath,
+		TrustedGateway: provider.Instance.TrustedGateway,
 	}
 }
 
