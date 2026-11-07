@@ -51,11 +51,11 @@ docker-build-vllm-sr-rocm:
 	@echo "Building vllm-sr-rocm Docker image (x86_64 only, ROCm PyTorch)..."
 	@$(CONTAINER_RUNTIME) build --build-arg ACCELERATOR=rocm -f tools/docker/Dockerfile.extproc -t $(DOCKER_REGISTRY)/vllm-sr-rocm:$(DOCKER_TAG) .
 
-# The router image for NVIDIA GPUs (CUDA, x86_64 only)
+# The router image for NVIDIA GPUs (CUDA)
 docker-build-vllm-sr-cuda: ## Build the vllm-sr-cuda router image (NVIDIA GPU)
 docker-build-vllm-sr-cuda:
 	@$(LOG_TARGET)
-	@echo "Building vllm-sr-cuda Docker image (x86_64 only, CUDA PyTorch)..."
+	@echo "Building vllm-sr-cuda Docker image (CUDA PyTorch)..."
 	@$(CONTAINER_RUNTIME) build --build-arg ACCELERATOR=cuda -f tools/docker/Dockerfile.extproc -t $(DOCKER_REGISTRY)/vllm-sr-cuda:$(DOCKER_TAG) .
 
 # One shared deterministic backend; publishing is handled by its scoped CI job.
@@ -204,8 +204,8 @@ docker-help: ## Show help for Docker-related make targets and environment variab
 	@echo "  PROVIDER_MOCKER_IMAGE - Existing mocker image to reuse (otherwise build locally)"
 	@echo "  VLLM_SR_PLATFORM  - vllm-sr platform hint (set to rocm for ROCm defaults, cuda for CUDA defaults)"
 	@echo "  VLLM_SR_ACCELERATOR - runtime PyTorch build of the router image: cpu, rocm or cuda (default from VLLM_SR_PLATFORM)"
-	@echo "  VLLM_SR_TARGETARCH - target image architecture (default: host-native, amd64 for ROCm and CUDA)"
-	@echo "  VLLM_SR_BUILDPLATFORM - Docker build platform (default: host-native, linux/amd64 for ROCm and CUDA)"
+	@echo "  VLLM_SR_TARGETARCH - target image architecture (default: host-native, amd64 for ROCm)"
+	@echo "  VLLM_SR_BUILDPLATFORM - Docker build platform (default: host-native, linux/amd64 for ROCm)"
 	@echo "  VLLM_SR_ROUTER_IMAGE - router runtime image override (defaults to VLLM_SR_ROUTER_IMAGE_DEFAULT)"
 	@echo "  VLLM_SR_ENVOY_IMAGE - envoy runtime image override (defaults to VLLM_SR_ENVOY_IMAGE_DEFAULT)"
 	@echo "  VLLM_SR_DASHBOARD_IMAGE - dashboard runtime image override (defaults to VLLM_SR_DASHBOARD_IMAGE_DEFAULT)"
@@ -291,12 +291,6 @@ VLLM_SR_ROUTER_IMAGE := $(VLLM_SR_ROUTER_IMAGE_CUDA)
 endif
 ifeq ($(origin VLLM_SR_ACCELERATOR),file)
 VLLM_SR_ACCELERATOR := cuda
-endif
-ifeq ($(origin VLLM_SR_TARGETARCH),file)
-VLLM_SR_TARGETARCH := amd64
-endif
-ifeq ($(origin VLLM_SR_BUILDPLATFORM),file)
-VLLM_SR_BUILDPLATFORM := linux/amd64
 endif
 endif
 

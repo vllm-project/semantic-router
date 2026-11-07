@@ -26,7 +26,7 @@ DEFINITIONS = {
     "operator-bundle": ("deploy/operator", "deploy/operator/bundle/Dockerfile", DUAL),
     "vllm-sr": (".", ROUTER_DOCKERFILE, DUAL),
     "vllm-sr-riscv64": (".", ATTACHED_DOCKERFILE, ["linux/riscv64"]),
-    "vllm-sr-cuda": (".", ROUTER_DOCKERFILE, ["linux/amd64"]),
+    "vllm-sr-cuda": (".", ROUTER_DOCKERFILE, DUAL),
     "vllm-sr-rocm": (".", ROUTER_DOCKERFILE, ["linux/amd64"]),
 }
 # Router images are one Dockerfile target per accelerator: (target, accelerator).
