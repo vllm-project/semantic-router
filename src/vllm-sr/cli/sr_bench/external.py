@@ -20,11 +20,13 @@ from .harness_worker import (
     frozen_terminal_image,
     validate_terminal_compose,
 )
-from .setup import harness_paths, scicode_test_path, validate_tau3_text_assets
+from .router_flow_gpqa import BENCHMARK
+from .setup import PACKAGES, harness_paths, scicode_test_path, validate_tau3_text_assets
 from .target_contracts import resolve_auxiliary_target
 from .transport import CallFailure
 
 HARNESSES = {
+    BENCHMARK: ("GPQA_EVALSCOPE", "evalscope"),
     "tau3": ("TAU3", "tau2"),
     "livecodebench": ("LCB", "lcb_runner"),
     "scicode": ("SCICODE", "inspect_evals"),
@@ -99,14 +101,21 @@ def _preflight_harness(benchmark, config):
         [
             str(interpreter),
             "-c",
-            "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec(sys.argv[1]) else 1)",
+            "import importlib.metadata,importlib.util,sys; "
+            "sys.exit(0 if importlib.util.find_spec(sys.argv[1]) and "
+            "(not sys.argv[2] or importlib.metadata.version(sys.argv[1]) == sys.argv[2]) else 1)",
             module,
+            PACKAGES[benchmark].get("version", ""),
         ],
         capture_output=True,
         timeout=20,
         check=False,
     )
     if module_check.returncode:
+        if version := PACKAGES[benchmark].get("version"):
+            raise ValueError(
+                f"{benchmark} requires {module}=={version} in its optional harness"
+            )
         raise ValueError(f"{benchmark} optional harness dependencies are unavailable")
     if benchmark in {"livecodebench", "scicode"}:
         image = config.get("sandbox_image", "")

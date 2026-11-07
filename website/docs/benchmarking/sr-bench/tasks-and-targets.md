@@ -137,6 +137,31 @@ complete browsing or human exposure history, or absence of upstream contaminatio
 Reports retain that limitation and identify explicit retest families; these
 options do not introduce a new unseen-only scoring aggregate.
 
+## Router Flow GPQA diagnostic
+
+The opt-in `router-flow-gpqa-evalscope` adapter reuses the maintained Router Flow
+GPQA smoke prompts and EvalScope 1.8.1 grader through a separate pinned harness.
+It is distinct from the published `gpqa-diamond` adapter. The Dashboard can
+discover it without having its harness or native data installed; discovery
+does not imply readiness.
+
+An operator runs `vllm-sr benchmark setup --benchmark
+router-flow-gpqa-evalscope --install` on the worker, then uses the
+[local Router Flow exporter](https://github.com/vllm-project/semantic-router/tree/main/bench/router_flow/real_eval#evalscope-derived-sr-bench-smoke-diagnostic)
+with an authorized native source snapshot. It emits inline cases for the
+normal plan/run commands, rather than automatically downloading or selecting
+another GPQA dataset. The default selection is the first 20 native cases with
+seed 42; smaller limits are labeled custom smoke subsets.
+
+The frozen manifest carries its source revision and digest, suite digest,
+choice order and generation settings. Keep it with the report. For a managed
+worker, the operator must also register the targets and matching benchmark
+options in its store, as with other optional harnesses.
+
+This diagnostic retains sr-bench's streaming, final-only extraction, no-retry
+behavior and output-limit failures. It does not establish unchanged EvalScope
+parity, an unseen holdout or authority to retire the native runner.
+
 ## Register targets
 
 Register operator-owned targets for Dashboard:

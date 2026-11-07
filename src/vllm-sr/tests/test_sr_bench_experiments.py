@@ -92,6 +92,7 @@ def test_candidate_inherits_exact_protocol_without_mutating_baseline(tmp_path, s
     baseline = record(store)
     store.status(baseline["id"], status)
     baseline = store.get(baseline["id"])
+    baseline["manifest"]["limitations"] = ["This fixture is not an unseen holdout."]
     original = copy.deepcopy(baseline)
     target = {
         **manifest(True)["targets"][0],
@@ -99,9 +100,18 @@ def test_candidate_inherits_exact_protocol_without_mutating_baseline(tmp_path, s
         "max_inference_calls": 1,
     }
     candidate = plan(candidate_manifest(baseline, [target]))
-    for key in ("cases", "sampling", "limits", "profile", "cost_policy", "case_sha256"):
+    for key in (
+        "cases",
+        "sampling",
+        "limits",
+        "profile",
+        "cost_policy",
+        "case_sha256",
+        "limitations",
+    ):
         assert candidate[key] == baseline["manifest"][key]
     assert candidate["baseline_run_id"] == baseline["id"]
+    candidate["limitations"].append("Candidate-only note.")
     assert baseline == original
     with pytest.raises(ValueError, match="MoM"):
         candidate_manifest(baseline, manifest()["targets"])

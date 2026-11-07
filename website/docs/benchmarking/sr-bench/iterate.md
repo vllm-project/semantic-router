@@ -18,7 +18,8 @@ loop, experiments, and the read-only replay and comparison APIs.
    Update the registered MoM target's `config_hash` to the verified active hash;
    existing runs keep their frozen target definitions.
 4. Derive a candidate plan from the saved baseline. It preserves the exact tasks,
-   sampling, grader options and limits while selecting registered MoM targets.
+   sampling, grader options, limits and baseline disclosures while selecting
+   registered MoM targets. Both live and preview plans retain those disclosures.
    Preview those tasks, then inspect server-qualified replay options. Eligible
    replay reuses saved answers; other routes require live evaluation.
 5. Evaluate promising candidates live on the same dev tasks and compare paired
