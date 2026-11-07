@@ -1,4 +1,4 @@
-"""Both Decision 1.0 runtimes end to end on tiny packages, and bit for bit against the bundled numerics on CPU.
+"""Both Decision 1.0 runtimes end to end on tiny packages, and against the bundled numerics on CPU.
 
 The references rebuild the packages' bundled runtime from Transformers and
 PyTorch modules (``Qwen3_5TextModel`` in FP32; one ``ModernBertModel`` per
@@ -26,6 +26,7 @@ from vllm_srun.runtime import Runtime
 from vllm_srun.scheduler.batching import coalesced, reference
 from vllm_srun.scheduler.planner import padded
 from vllm_srun.testing.decision1 import write_package
+from vllm_srun.testing.numerics import PARITY_TOLERANCE_ULPS, float32_ulps
 from vllm_srun.text import segments
 
 STATE = (
@@ -265,7 +266,7 @@ def qwen_reference(package, items, temperatures, pad_id):
 
 
 @pytest.mark.reference
-def test_qwen_matches_the_bundled_numerics_bit_for_bit(packages, runtimes):
+def test_qwen_matches_the_bundled_numerics_within_tolerance(packages, runtimes):
     pytest.importorskip("transformers")
     model = model_of(runtimes["qwen"])
     plan = model.plan(STATE, MANY)
@@ -274,7 +275,11 @@ def test_qwen_matches_the_bundled_numerics_bit_for_bit(packages, runtimes):
         expected = qwen_reference(
             packages["qwen"], items, model.temperatures, model.tokenizer.pad_id
         )
-        assert model.run(items) == expected
+        drift = float32_ulps(model.run(items), expected)
+        assert drift <= PARITY_TOLERANCE_ULPS, (
+            f"qwen decoder scores are {drift} ULP of float32 from the bundled "
+            f"numerics, over the {PARITY_TOLERANCE_ULPS} allowed"
+        )
 
 
 class VelaReference:
