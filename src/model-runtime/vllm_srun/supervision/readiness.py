@@ -141,7 +141,8 @@ def golden_check(
     the response's comparable values (``LoadedModel.golden_values``) and
     ``compare(surface, values, reference, tolerance)`` checks them against the
     reference recorded for this device class (``LoadedModel.golden_compare``).
-    Prefer ``reference_key`` when recorded, otherwise the device-class reference.
+    Use the most specific recorded reference: ``reference_key``, then the key
+    with its last ``:`` field dropped, and so on, then the device-class one.
     The device class still selects the tolerance: ``CPU_TOLERANCE`` on CPUs
     and ``GPU_TOLERANCE`` on GPUs. Never try another reference after a mismatch.
     Both runs are validated against the reference; on classes other than NPU,
@@ -149,6 +150,8 @@ def golden_check(
     """
     result = GoldenResult(status="unverified")
     tolerance = CPU_TOLERANCE if device_class == "cpu" else GPU_TOLERANCE
+    fields = reference_key.split(":") if reference_key else []
+    reference_keys = [":".join(fields[:n]) for n in range(len(fields), 1, -1)]
     for golden in goldens:
         surface, body = golden["surface"], golden["body"]
         first = run(surface, body)
@@ -168,10 +171,8 @@ def golden_check(
                 status="failed", detail="golden answers are not deterministic"
             )
         expected = golden.get("expected") or {}
-        selected = (
-            reference_key
-            if reference_key is not None and reference_key in expected
-            else device_class
+        selected = next(
+            (key for key in reference_keys if key in expected), device_class
         )
         reference = expected.get(selected)
         # The npu class's two runs drift independently, so both are checked

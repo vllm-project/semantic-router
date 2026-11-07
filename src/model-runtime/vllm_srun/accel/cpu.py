@@ -15,6 +15,7 @@ forward took 25 ms instead of 13 ms on 16 cores. One thread, one team.
 
 from __future__ import annotations
 
+import functools
 import os
 import platform
 import threading
@@ -85,6 +86,25 @@ def native_bf16() -> bool:
     return any(getattr(torch.cpu, probe, lambda: False)() for probe in probes)
 
 
+@functools.cache
+def cpu_vendor() -> str | None:
+    """The x86 vendor, ``intel`` or ``amd``; None when unknown.
+
+    Hosts with the same instruction set and BF16 support still differ in their
+    FP32 GEMM results by vendor: an AVX-512 Xeon and an AVX-512 Ryzen give the
+    same BF16 products but different FP32 ones (#5273).
+    """
+    try:
+        with open("/proc/cpuinfo", encoding="utf-8") as cpuinfo:
+            for line in cpuinfo:
+                if line.startswith("vendor_id"):
+                    vendor = line.split(":", 1)[1].strip()
+                    return {"GenuineIntel": "intel", "AuthenticAMD": "amd"}.get(vendor)
+    except OSError:
+        pass
+    return None
+
+
 def device_thread() -> ThreadPoolExecutor:
     """The process's single CPU device thread."""
     global _EXECUTOR  # noqa: PLW0603 - one executor per process, created on first use
@@ -141,7 +161,9 @@ class CPUAccelerator(Accelerator):
             return None
         capability = torch.backends.cpu.get_cpu_capability().lower().replace(" ", "_")
         bf16 = "bf16_native" if device.bf16 else "bf16_emulated"
-        return f"cpu:{device.arch}:{capability}:{bf16}"
+        key = f"cpu:{device.arch}:{capability}:{bf16}"
+        vendor = cpu_vendor()
+        return f"{key}:{vendor}" if vendor else key
 
     def kernels(self, device: DeviceInfo) -> KernelSet:
         kernels = reference_kernels("cpu")

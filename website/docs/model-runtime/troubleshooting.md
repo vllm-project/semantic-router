@@ -153,13 +153,14 @@ serving.
 
 `GET /v1/models` shows each model's self-check under `golden`. `matched`
 means its answers equal the released answers for that kind of device.
-`golden.reference` identifies the recorded reference that was checked. When a
-hardware reference is recorded, it takes precedence over the device-class
-reference: for example `cpu:x86_64:avx2:bf16_emulated` or `cuda:sm_89`. Other
-hardware keeps using the existing `cpu`, `rocm` or `cuda` reference when available.
-CPU keys use PyTorch's selected instruction set and native or emulated BF16
-capability. A mismatching selected reference still fails startup; the runtime
-does not try another reference or relax the tolerance.
+`golden.reference` identifies the recorded reference that was checked. The most
+specific recorded hardware reference takes precedence over the device-class
+reference: for example `cpu:x86_64:avx512:bf16_native:intel`, then
+`cpu:x86_64:avx512:bf16_native`, or `cuda:sm_89`. Other hardware keeps using the
+existing `cpu`, `rocm` or `cuda` reference when available. CPU keys use
+PyTorch's selected instruction set, native or emulated BF16 capability and, on
+x86, the vendor. A mismatching selected reference still fails startup; the
+runtime does not try another reference or relax the tolerance.
 
 `unverified` means the model serves, but the runtime can't vouch for that:
 

@@ -234,19 +234,45 @@ def test_unrecorded_hardware_uses_only_its_legacy_device_class():
     assert result.status == "matched" and result.reference == "cuda:sm_89"
 
 
+def test_the_most_specific_recorded_reference_wins():
+    golden = decisions_golden(
+        {
+            "cpu": answers(0.5),
+            "cpu:x86_64:avx512:bf16_native": answers(0.6),
+            "cpu:x86_64:avx512:bf16_native:intel": answers(0.7),
+        }
+    )
+    for key, value, selected in (
+        (
+            "cpu:x86_64:avx512:bf16_native:intel",
+            0.7,
+            "cpu:x86_64:avx512:bf16_native:intel",
+        ),
+        ("cpu:x86_64:avx512:bf16_native:amd", 0.6, "cpu:x86_64:avx512:bf16_native"),
+        ("cpu:x86_64:avx2:bf16_emulated:amd", 0.5, "cpu"),
+    ):
+        result = golden_check(
+            answers_of(answers(value)), decisions, [golden], "cpu", key
+        )
+        assert result.status == "matched" and result.reference == selected
+
+
+@pytest.mark.parametrize("vendor", [None, "amd"])
 @pytest.mark.parametrize("capability", ["AVX2", "AVX512", "NO AVX"])
 @pytest.mark.parametrize("bf16", [False, True])
 def test_accelerator_selects_the_cpu_instruction_set_reference(
-    monkeypatch, capability, bf16
+    monkeypatch, capability, bf16, vendor
 ):
+    from vllm_srun.accel import cpu
     from vllm_srun.accel.cpu import CPUAccelerator
     from vllm_srun.accel.cuda import CUDAAccelerator
 
     monkeypatch.setattr(torch.backends.cpu, "get_cpu_capability", lambda: capability)
+    monkeypatch.setattr(cpu, "cpu_vendor", lambda: vendor)
     device = DeviceInfo("cpu", None, "host", arch="x86_64", bf16=bf16)
-    assert (
-        CPUAccelerator().golden_reference(device)
-        == f"cpu:x86_64:{capability.lower().replace(' ', '_')}:{'bf16_native' if bf16 else 'bf16_emulated'}"
+    key = f"cpu:x86_64:{capability.lower().replace(' ', '_')}:{'bf16_native' if bf16 else 'bf16_emulated'}"
+    assert CPUAccelerator().golden_reference(device) == (
+        f"{key}:{vendor}" if vendor else key
     )
     assert (
         CUDAAccelerator().golden_reference(DeviceInfo("cuda", 0, "L4", arch="sm_89"))
