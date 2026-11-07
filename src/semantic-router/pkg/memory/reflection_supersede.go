@@ -403,10 +403,29 @@ func restatesOriginal(
 	if !sharesWord {
 		return false
 	}
+	if onlyModifiesNewNouns(clause, originalContentWords) &&
+		!slices.ContainsFunc(anchorPairs(clause), func(pair wordPair) bool { return originalPairs[pair] }) {
+		return false
+	}
 	if slices.ContainsFunc(clause, func(word string) bool { return secondPersonWords[word] }) {
 		return true
 	}
 	return slices.ContainsFunc(anchorPairs(clause), func(pair wordPair) bool { return originalPairs[pair] })
+}
+
+// Shared place words followed by a new content word can name a different fact,
+// unless the place word follows a destination preposition.
+func onlyModifiesNewNouns(clause []string, originalContentWords map[string]bool) bool {
+	for i, word := range clause {
+		if !isContentWord(word) || !originalContentWords[word] {
+			continue
+		}
+		if (i > 0 && destinationWords[clause[i-1]]) ||
+			i+1 == len(clause) || !isContentWord(clause[i+1]) || originalContentWords[clause[i+1]] {
+			return false
+		}
+	}
+	return true
 }
 
 // namesAnotherSubject accepts an explicit name or "your <subject>" only when

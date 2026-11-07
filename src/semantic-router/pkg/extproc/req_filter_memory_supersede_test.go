@@ -236,6 +236,76 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 			superseded: []string{"I live in Boston"},
 		},
 		{
+			name: "a corrected residence keeps a second-person dog fact sharing the city's name",
+			turns: []storedMemoryTurn{
+				{user: "I live in Boston.", assistant: "You have a Boston terrier."},
+				denver,
+			},
+			query:      "Where do I live now, and what do you know about my dog?",
+			injected:   []string{"Denver", "You have a Boston terrier."},
+			superseded: []string{"I live in Boston", "You live in Boston"},
+		},
+		{
+			name: "a corrected residence keeps an owned dog sharing the city's name",
+			turns: []storedMemoryTurn{
+				{user: "I live in Boston.", assistant: "You live in Boston. You own a Boston terrier."},
+				denver,
+			},
+			query:      "Where do I live now, and what breed is my dog?",
+			injected:   []string{"Denver", "You own a Boston terrier."},
+			superseded: []string{"I live in Boston", "You live in Boston"},
+		},
+		{
+			name: "a corrected residence keeps a counted dog fact sharing the city's name",
+			turns: []storedMemoryTurn{
+				{user: "I live in Boston.", assistant: "You live in Boston. You have two Boston terriers."},
+				denver,
+			},
+			query:      "Where do I live now, and what breed are my dogs?",
+			injected:   []string{"Denver", "You have two Boston terriers."},
+			superseded: []string{"I live in Boston", "You live in Boston"},
+		},
+		{
+			name: "a corrected dog breed drops a second-person restatement",
+			turns: []storedMemoryTurn{
+				{user: "I have a Boston terrier.", assistant: "You have a Boston terrier."},
+				{user: "I changed my dog from a Boston terrier to a beagle.", assistant: "Your dog is now a beagle."},
+			},
+			query:      "What breed is my dog now?",
+			injected:   []string{"beagle"},
+			superseded: []string{"You have a Boston terrier.", "I have a Boston terrier."},
+		},
+		{
+			name: "a corrected residence drops the old city called home",
+			turns: []storedMemoryTurn{
+				{user: "I live in Boston.", assistant: "You call Boston your home."},
+				denver,
+			},
+			query:      "Where do I live now?",
+			injected:   []string{"Denver"},
+			superseded: []string{"I live in Boston", "You call Boston your home."},
+		},
+		{
+			name: "a corrected residence drops the previous move",
+			turns: []storedMemoryTurn{
+				{user: "I live in Boston.", assistant: "You moved to Boston last year."},
+				denver,
+			},
+			query:      "Where do I live now?",
+			injected:   []string{"Denver"},
+			superseded: []string{"I live in Boston", "You moved to Boston last year."},
+		},
+		{
+			name: "a corrected residence drops the old city area",
+			turns: []storedMemoryTurn{
+				{user: "I live in Boston.", assistant: "You live in the Boston area now."},
+				denver,
+			},
+			query:      "Where do I live now?",
+			injected:   []string{"Denver"},
+			superseded: []string{"I live in Boston", "You live in the Boston area now."},
+		},
+		{
 			name:       "a job change keeps another person's matching job",
 			turns:      []storedMemoryTurn{nurseWithSister, paramedic},
 			query:      "What is my job now, and what does my sister do?",
