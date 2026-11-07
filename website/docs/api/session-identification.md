@@ -25,6 +25,8 @@ still routes, but protection does not retain a model.
 An agent harness that delegates work to subagents can also name each agent.
 Set `identity.headers.agent` to the header that carries that name, such as
 `x-claude-code-agent-id`, which Claude Code sends on subagent requests only.
+For Codex CLI, set `session: session-id` and `agent: thread-id`. Codex sends
+both on every request; on a root thread the two values are equal.
 Protection then holds each named agent on its own model inside the session,
 and requests without the header keep the session or conversation key. The
 agent header is optional, has no default, and is never required.

@@ -20,14 +20,13 @@ func TestPollConfigFileChangesAcrossAtomicReplacement(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		pollConfigFileChanges(ctx, path, ticks, func() { changes <- struct{}{} })
+		pollConfigFileChanges(ctx, path, newConfigFileBaseline(path), ticks, func() { changes <- struct{}{} })
 	}()
 	defer func() {
 		cancel()
 		<-done
 	}()
 
-	// The first tick cannot be received until the initial file is sampled.
 	ticks <- time.Now()
 	if err := os.WriteFile(path, []byte("after!"), 0o600); err != nil {
 		t.Fatal(err)
@@ -54,7 +53,7 @@ func TestPollConfigFileChangesWhenSourceAppears(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		pollConfigFileChanges(ctx, path, ticks, func() { changes <- struct{}{} })
+		pollConfigFileChanges(ctx, path, newConfigFileBaseline(path), ticks, func() { changes <- struct{}{} })
 	}()
 	defer func() {
 		cancel()
@@ -65,6 +64,33 @@ func TestPollConfigFileChangesWhenSourceAppears(t *testing.T) {
 	if err := os.WriteFile(path, []byte("created"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	ticks <- time.Now()
+	waitForPolledConfigChange(t, changes)
+}
+
+func TestPollConfigFileChangesSinceItsBaseline(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "router.yaml")
+	if err := os.WriteFile(path, []byte("before"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	baseline := newConfigFileBaseline(path)
+	if err := os.WriteFile(path, []byte("written before polling began"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	ticks := make(chan time.Time)
+	changes := make(chan struct{}, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		pollConfigFileChanges(ctx, path, baseline, ticks, func() { changes <- struct{}{} })
+	}()
+	defer func() {
+		cancel()
+		<-done
+	}()
+
 	ticks <- time.Now()
 	waitForPolledConfigChange(t, changes)
 }

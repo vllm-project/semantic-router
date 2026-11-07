@@ -202,6 +202,21 @@ helm install vsr oci://ghcr.io/vllm-project/charts/semantic-router \
 
 仅当由已认证的上游过滤器（Agent Router（原 Envoy AI Gateway）、ext_authz、路由级过滤器等）负责按信任依据设置或剥离该请求头时，才应启用此开关。促成该开关的 AI Gateway 互操作模式背景见 [issue #1808](https://github.com/vllm-project/semantic-router/issues/1808)。
 
+### 调试头
+
+`global.router.headers.debug` 决定谁可以用 `x-vsr-debug: true` 打开调试响应头。调试头会列出请求命中的信号规则和防护规则，所以默认值 `none` 会忽略所有客户端发来的该头。`any` 对所有客户端生效，用于开发和测试。`authenticated` 只对 `debug_principals` 里的用户和组生效，以你的认证组件设置的身份头为准。
+
+```yaml
+global:
+  router:
+    headers:
+      debug: authenticated
+      debug_principals:
+        groups: [platform-sre]
+```
+
+它覆盖哪些头，见 [VSR 路由头](../../troubleshooting/vsr-headers#who-may-turn-on-the-debug-headers)。
+
 ### 路由回放
 
 ```yaml
