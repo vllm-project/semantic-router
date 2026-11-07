@@ -48,8 +48,9 @@ uv run python ft_linear_lora.py --mode train --model bert-base-uncased
 ```
 
 `classifier_model_fine_tuning_lora/` has its own `pyproject.toml` and `uv.lock`, so
-`uv sync --locked` gives the same environment on every machine. The other tasks
-use their own requirements files until they get a project of their own.
+`uv sync --locked` gives the same environment on every machine. The
+[training setup table](../README.md#environment-setup) lists which other tasks
+already have a lock.
 
 Use `--help` as the source of truth for script options; do not copy output from
 an old training run into this README.

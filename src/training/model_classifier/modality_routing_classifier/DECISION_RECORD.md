@@ -360,6 +360,8 @@ python evaluate_modality_candidate.py \
 
 - **Pinned environment:** `requirements-lock.txt` in this directory records the
   exact package versions used (torch 2.14.0, transformers 5.17.0, peft 0.21.0).
+  That hand-made pin was removed; reproduce the environment with `uv sync --locked`
+  from `uv.lock`.
 - **Seeds:** the trainer takes `--seed` (default 42) and, with the same seed,
   gives the same result twice. The reported numbers come from runs made before
   that option existed, so the commands above reproduce the setup and not the
