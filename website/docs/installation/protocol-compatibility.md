@@ -245,6 +245,13 @@ after a tool result, and `x-vsr-protocol-warnings` reports an `approximated`
 diagnostic for `messages[].role`. Messages backends receive the message in
 place either way.
 
+Claude Code's WebSearch tool sends Anthropic's server tool
+`web_search_20250305`, which only Anthropic's API runs. The Router refuses that
+request with `unsupported_tool` naming the tool type, and the agent sees a
+failed tool call. When the Router serves other models, deny the tool in Claude
+Code's settings with `"permissions": {"deny": ["WebSearch"]}` and give the
+agent a search MCP server instead.
+
 Reasoning content translated out of an Anthropic backend fails when the backend
 attaches a reasoning signature, which its thinking responses carry by default.
 A Chat Completions or Responses client then receives a typed

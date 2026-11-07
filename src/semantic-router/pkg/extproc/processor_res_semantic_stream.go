@@ -356,7 +356,10 @@ func (state *semanticResponseStreamState) item(index int) *semanticStreamItem {
 
 //nolint:cyclop // Response assembly validates every terminal stream invariant in one place.
 func (state *semanticResponseStreamState) response() (*llmprotocol.Response, error) {
-	if state == nil || state.failed != nil || !state.terminal {
+	if state != nil && state.failed != nil {
+		return nil, fmt.Errorf("semantic stream did not complete successfully: %w", state.failed)
+	}
+	if state == nil || !state.terminal {
 		return nil, fmt.Errorf("semantic stream did not complete successfully")
 	}
 	indices := append([]int(nil), state.order...)
@@ -443,10 +446,14 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 	r.calibrateTokenEstimator(ctx, usage.promptTokens)
 
 	if responseErr != nil {
-		logging.ComponentWarnEvent("extproc", "neutral_stream_reconstruction_skipped", map[string]interface{}{
+		fields := map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"error":      responseErr.Error(),
-		})
+		}
+		if streamErr != nil {
+			fields["cause"] = streamErr.Error()
+		}
+		logging.ComponentWarnEvent("extproc", "neutral_stream_reconstruction_skipped", fields)
 		r.recordUnscheduledResponseMemoryStore(ctx, "skipped", "stream_incomplete", true)
 		return
 	}
