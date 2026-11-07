@@ -50,8 +50,17 @@ test-grounded-fusion-bench: $(HARNESS_VENV_DEPS) ## Test the grounded fusion DRA
 test-hallucination-bench: $(HARNESS_VENV_DEPS) ## Test hallucination trajectory loading and scoring without models
 	@"$(AGENT_PYTHON)" -m pytest -q bench/hallucination -k "not real_tokenizer"
 
-test-reasoning-bench: bench-test-deps ## Test reasoning-mode config patches and Router accounting offline
+test-reasoning-bench: bench-test-deps test-sr-bench-legacy-reasoning ## Test native reasoning diagnostics, config patches and Router accounting offline
 	@"$(AGENT_PYTHON)" -m pytest -q bench/reasoning
+
+LEGACY_REASONING_HOME ?= $(CURDIR)/.agent-harness/legacy-reasoning
+
+test-sr-bench-legacy-reasoning: vllm-sr-install-cli ## Test the pinned native catalog through the real subprocess bridge and local HTTP
+	@"$(AGENT_PYTHON)" -m pip install --quiet uv==0.12.5
+	@PATH="$(AGENT_VENV)/bin:$$PATH" SR_BENCH_HOME="$(LEGACY_REASONING_HOME)" "$(AGENT_PYTHON)" -c \
+		'from cli.sr_bench.setup import setup; setup(benchmark="legacy-reasoning", install=True)'
+	@SR_BENCH_HOME="$(LEGACY_REASONING_HOME)" SR_BENCH_NATIVE_REASONING_TESTS=1 \
+		"$(AGENT_PYTHON)" -m pytest -q -s src/vllm-sr/tests/sr_bench_legacy_reasoning_native_checks.py
 
 test-router-flow-bench: $(HARNESS_VENV_DEPS) ## Test the Router Flow EvalScope helpers without a remote host
 	@"$(AGENT_PYTHON)" -m pytest -q bench/router_flow
@@ -61,4 +70,4 @@ test-agent-crew: bench-test-deps ## Test the agent crew harness against its stub
 
 test-bench-tools: test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew ## Test every registered bench/ research tool
 
-.PHONY: bench-test-deps test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-bench-tools
+.PHONY: bench-test-deps test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-sr-bench-legacy-reasoning test-router-flow-bench test-agent-crew test-bench-tools
