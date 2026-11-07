@@ -426,9 +426,12 @@ first, which the Router does not serve. Codex CLI 0.163.0 retries it for about
 six seconds at the start of every run before it sends the first turn over HTTP,
 and tries it again before later turns. A provider
 defined in `config.toml` uses HTTP from the start, since `supports_websockets`
-defaults to `false`:
+defaults to `false`. Set `model` to a Router entrypoint as well, such as
+`vllm-sr/auto`, since a name that matches no entrypoint is sent to a backend
+model of that name:
 
 ```toml
+model = "vllm-sr/auto"
 model_provider = "vllm-sr"
 
 [model_providers.vllm-sr]
