@@ -3,6 +3,10 @@ package config
 import (
 	"fmt"
 	"strings"
+
+	"golang.org/x/net/http/httpguts"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 func validateGlobalRouterLearningConfig(cfg *RouterConfig) error {
@@ -101,6 +105,9 @@ func validateRouterLearningProtectionConfig(cfg RouterLearningProtectionConfig) 
 	}
 	if cfg.Identity.Headers.Agent != nil && strings.TrimSpace(*cfg.Identity.Headers.Agent) == "" {
 		return fmt.Errorf("global.router.learning.protection.identity.headers.agent cannot be empty")
+	}
+	if err := validateProtectionRelease(cfg); err != nil {
+		return err
 	}
 
 	return validateProtectionTuning(
@@ -368,4 +375,45 @@ func anyTrue(values ...bool) bool {
 		}
 	}
 	return false
+}
+
+func validateProtectionRelease(cfg RouterLearningProtectionConfig) error {
+	const field = "global.router.learning.protection.release"
+	release := cfg.Release
+	if release.Header != nil {
+		header := strings.TrimSpace(*release.Header)
+		if header == "" {
+			return fmt.Errorf("%s.header cannot be empty", field)
+		}
+		if !httpguts.ValidHeaderFieldName(header) {
+			return fmt.Errorf("%s.header %q is not a valid header name", field, header)
+		}
+	}
+	header := release.EffectiveHeader()
+	if protectionReleaseHeaderReserved(header) {
+		return fmt.Errorf("%s.header %q is reserved; use an x- header the router can remove before the backend", field, header)
+	}
+	for _, identity := range []string{"session", "conversation", "agent"} {
+		if strings.EqualFold(header, cfg.HeaderName(identity)) {
+			return fmt.Errorf("%s.header %q must differ from identity header %s", field, header, identity)
+		}
+	}
+	if release.MinUserTurnsBetween != nil && *release.MinUserTurnsBetween < 0 {
+		return fmt.Errorf("%s.min_user_turns_between must be >= 0, got %d", field, *release.MinUserTurnsBetween)
+	}
+	return nil
+}
+
+// protectionReleaseHeaderReserved rejects names whose removal before the backend
+// would break a standard, credential, gateway or router control header.
+func protectionReleaseHeaderReserved(header string) bool {
+	if !strings.HasPrefix(header, "x-") || IsShadowCredentialHeader(header) || header == "x-request-id" {
+		return true
+	}
+	for _, prefix := range []string{"x-envoy-", "x-authz-", "x-forwarded-"} {
+		if strings.HasPrefix(header, prefix) {
+			return true
+		}
+	}
+	return strings.HasPrefix(header, "x-vsr-") && header != headers.VSRProtectionRelease
 }

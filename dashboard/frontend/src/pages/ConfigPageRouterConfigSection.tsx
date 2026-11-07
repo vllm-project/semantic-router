@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
+import ConfigSaveWarnings from '../components/ConfigSaveWarnings'
 import ProductIcon from '../components/ProductIcon'
+import { responseConfigWarnings, type RouterConfigWarning } from '../utils/configSaveWarnings'
 import styles from './ConfigPageRouterConfigSection.module.css'
 import ConfigPageLegacyCategoriesSection from './ConfigPageLegacyCategoriesSection'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
@@ -57,6 +59,7 @@ export default function ConfigPageRouterConfigSection({
   const [rawSaving, setRawSaving] = useState(false)
   const [rawError, setRawError] = useState<string | null>(null)
   const [rawDirty, setRawDirty] = useState(false)
+  const [saveWarnings, setSaveWarnings] = useState<RouterConfigWarning[]>([])
 
   useEffect(() => {
     if (editorMode === 'visual' && hash.startsWith('#global-section-')) {
@@ -160,6 +163,7 @@ export default function ConfigPageRouterConfigSection({
       return
     }
 
+    setSaveWarnings([])
     const response = await fetch('/api/router/config/global/update', {
       method: 'POST',
       headers: {
@@ -172,6 +176,7 @@ export default function ConfigPageRouterConfigSection({
       const errorText = await response.text()
       throw new Error(errorText || `HTTP ${response.status}: ${response.statusText}`)
     }
+    setSaveWarnings(await responseConfigWarnings(response))
 
     await refreshConfig()
     await loadRouterDefaults()
@@ -195,6 +200,7 @@ export default function ConfigPageRouterConfigSection({
   const handleSaveRawYaml = async () => {
     setRawSaving(true)
     setRawError(null)
+    setSaveWarnings([])
     try {
       const response = await fetch('/api/router/config/global/raw/update', {
         method: 'POST',
@@ -208,6 +214,7 @@ export default function ConfigPageRouterConfigSection({
         const message = await response.text()
         throw new Error(message || `HTTP ${response.status}: ${response.statusText}`)
       }
+      setSaveWarnings(await responseConfigWarnings(response))
 
       await refreshConfig()
       await loadRouterDefaults()
@@ -264,6 +271,7 @@ export default function ConfigPageRouterConfigSection({
             </div>
           </div>
         </header>
+        <ConfigSaveWarnings warnings={saveWarnings} />
 
         {editorMode === 'visual' ? (
           <div className={styles.visualWorkspace}>
@@ -325,7 +333,7 @@ export default function ConfigPageRouterConfigSection({
                             >
                               {card.sourceLabel}
                             </span>
-                            {!isReadonly ? (
+                            {!isReadonly && !card.deprecation ? (
                               <button
                                 type="button"
                                 className={styles.editButton}
@@ -337,6 +345,9 @@ export default function ConfigPageRouterConfigSection({
                             ) : null}
                           </div>
                         </div>
+                        {card.deprecation ? (
+                          <p className={styles.cardDescription}>{card.deprecation}</p>
+                        ) : null}
 
                         <div className={styles.summaryGrid}>
                           {card.summary.map((item) => (

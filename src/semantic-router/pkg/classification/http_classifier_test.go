@@ -92,7 +92,7 @@ func TestNewHTTPClassifierInference(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewHTTPClassifierInference(tt.externalCfg, tt.mapping)
+			_, err := NewHTTPClassifierInference(externalClassifyDeployment(tt.externalCfg, 0), tt.mapping)
 			if tt.expectError && err == nil {
 				t.Error("expected an error, got nil")
 			}
@@ -120,11 +120,11 @@ func TestNewHTTPClassifierInference_DefaultTimeout(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			inf, err := NewHTTPClassifierInference(&config.ExternalModelConfig{
+			inf, err := NewHTTPClassifierInference(externalClassifyDeployment(&config.ExternalModelConfig{
 				ModelEndpoint:  config.ClassifierVLLMEndpoint{Address: "127.0.0.1", Port: 8080},
 				ModelName:      "custom-classifier",
 				TimeoutSeconds: tt.timeoutSeconds,
-			}, testJailbreakMapping())
+			}, 0), testJailbreakMapping())
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -186,10 +186,10 @@ func TestHTTPClassifierInferenceConcurrentClassify(t *testing.T) {
 // local httptest.Server without going through address/port parsing.
 func newTestHTTPClassifierInference(t *testing.T, server *httptest.Server, mapping sequenceLabelMapping) *HTTPClassifierInference {
 	t.Helper()
-	inf, err := NewHTTPClassifierInference(&config.ExternalModelConfig{
+	inf, err := NewHTTPClassifierInference(externalClassifyDeployment(&config.ExternalModelConfig{
 		ModelEndpoint: endpointForTestServer(t, server),
 		ModelName:     "custom-classifier",
-	}, mapping)
+	}, 0), mapping)
 	if err != nil {
 		t.Fatalf("failed to construct inference: %v", err)
 	}

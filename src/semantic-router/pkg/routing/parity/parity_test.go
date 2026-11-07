@@ -1,9 +1,14 @@
 package parity
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"io"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -130,6 +135,55 @@ func TestUpstreamResponseReadsOnePartPerRead(t *testing.T) {
 	}
 	if (&Upstream{Status: 204}).Response().Body != nil {
 		t.Fatal("a fixture without a body has no body reader")
+	}
+}
+
+func TestGzipUpstreamFixtureSendsItsBodyEncoded(t *testing.T) {
+	const body = `{"ok":true}`
+	up := &Upstream{Status: 200, Body: body, Encoding: "gzip"}
+	resp := up.Response()
+	wire, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Header.Get("content-encoding") != "gzip" || resp.Header.Get("content-length") != strconv.Itoa(len(wire)) {
+		t.Fatalf("headers = %v for %d wire bytes", resp.Header, len(wire))
+	}
+	reader, err := gzip.NewReader(bytes.NewReader(wire))
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := io.ReadAll(reader)
+	if err != nil || string(decoded) != body {
+		t.Fatalf("decoded = %q, %v", decoded, err)
+	}
+	if again, _ := io.ReadAll(up.Response().Body); !bytes.Equal(again, wire) {
+		t.Fatal("the encoded fixture must be byte-stable")
+	}
+}
+
+func TestLoadCorpusRejectsAnUnsendableEncoding(t *testing.T) {
+	for name, upstream := range map[string]string{
+		"unknown coding": "status: 200\n    body: x\n    encoding: br",
+		"chunked gzip":   "status: 200\n    chunks: [x]\n    encoding: gzip",
+		"empty gzip":     "status: 204\n    encoding: gzip",
+		// encoding writes the Content-Encoding header itself; a second one
+		// would make the reply a stacked coding no gateway decodes.
+		"gzip with its own content-encoding": "status: 200\n    body: x\n    encoding: gzip\n    headers: [[Content-Encoding, gzip]]",
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			cases := "cases: []\nupstreams:\n  fixture:\n    " + upstream + "\n"
+			if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("version: v0.3\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "cases.yaml"), []byte(cases), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := LoadCorpus(dir); err == nil {
+				t.Fatal("LoadCorpus accepted an upstream it cannot send")
+			}
+		})
 	}
 }
 

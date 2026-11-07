@@ -17,9 +17,11 @@ import (
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
+const registryTestDocument = "Registry durability test document.\nThis content exists to verify file metadata survives restart."
+
 func init() {
 	pkgtestcases.Register("vectorstore-registry-restart-recovery", pkgtestcases.TestCase{
-		Description:         "Vector store and file metadata stored in Postgres survive a semantic-router pod restart",
+		Description:         "Vector store and file metadata stored in Postgres, and the file's bytes on the Router's data volume, survive a semantic-router pod restart",
 		Tags:                []string{"vectorstore", "registry", "functional", "postgres", "restart"},
 		MutatesClusterState: true,
 		Fn:                  testVectorStoreRegistryRestartRecovery,
@@ -115,7 +117,7 @@ func registryUploadFile(ctx context.Context, httpClient *http.Client, baseURL st
 	if err != nil {
 		return "", fmt.Errorf("create form file: %w", err)
 	}
-	if _, err := fw.Write([]byte("Registry durability test document.\nThis content exists to verify file metadata survives restart.")); err != nil {
+	if _, err = fw.Write([]byte(registryTestDocument)); err != nil {
 		return "", fmt.Errorf("write form file: %w", err)
 	}
 	if err := w.WriteField("purpose", "assistants"); err != nil {
@@ -209,9 +211,10 @@ func verifyRegistryEntriesAfterRestart(ctx context.Context, client *kubernetes.C
 		if err == nil {
 			if opts.SetDetails != nil {
 				opts.SetDetails(map[string]interface{}{
-					"store_id": storeID,
-					"file_id":  fileID,
-					"survived": true,
+					"store_id":         storeID,
+					"file_id":          fileID,
+					"survived":         true,
+					"content_survived": true,
 				})
 			}
 			return nil
@@ -236,7 +239,29 @@ func verifyRegistryOnce(ctx context.Context, client *kubernetes.Clientset, opts 
 	if err := verifyStoreExists(ctx, httpClient, baseURL, storeID, opts.Verbose); err != nil {
 		return err
 	}
-	return verifyFileExists(ctx, httpClient, baseURL, fileID, opts.Verbose)
+	if err := verifyFileExists(ctx, httpClient, baseURL, fileID, opts.Verbose); err != nil {
+		return err
+	}
+	return verifyFileContent(ctx, httpClient, baseURL, fileID, opts.Verbose)
+}
+
+// verifyFileContent reads the uploaded bytes back from the restarted Router,
+// which keeps them on its data volume's claim.
+func verifyFileContent(ctx context.Context, httpClient *http.Client, baseURL, fileID string, verbose bool) error {
+	resp, err := fixtures.DoGETRequest(ctx, httpClient, baseURL+"/api/v1/storage/files/"+fileID+"/content")
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("GET /api/v1/storage/files/%s/content returned %d: %s", fileID, resp.StatusCode, string(resp.Body))
+	}
+	if string(resp.Body) != registryTestDocument {
+		return fmt.Errorf("file %s content after restart = %q, want the uploaded %q", fileID, string(resp.Body), registryTestDocument)
+	}
+	if verbose {
+		fmt.Printf("[Test] File %s content survived restart (%d bytes)\n", fileID, len(resp.Body))
+	}
+	return nil
 }
 
 func verifyStoreExists(ctx context.Context, httpClient *http.Client, baseURL, storeID string, verbose bool) error {
