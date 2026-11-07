@@ -27,7 +27,7 @@ import {
   rowTree,
   SPAWN,
   toolRow,
-  srLines,
+  vsrLines,
   YES,
 } from './kit'
 
@@ -122,7 +122,7 @@ test('the compact line gives up its bound, then clips the command, as the row na
 
 test('a card on the narrowest row drops the caption and the score text before the meter', { options: { display: 'verbose' } }, async ($, on) => {
   engine(on, { review: 0.98, complexity: { score: 1.61, confidence: 0.8 } })
-  on('agent.spawn', (_, e) => ({ model: e.model ?? 'opus', agentId: 'agent-1' }))
+  on('agent.spawn', (_, e) => ({ model: e.model ?? e.parentModel, agentId: 'agent-1' }))
   on('classic.PermissionRequest', () => NO)
   on('tool.call', () => ({ result: { stdout: '' } }))
   await $.agent.spawn(SPAWN)
@@ -139,7 +139,7 @@ test('a card on the narrowest row drops the caption and the score text before th
 test('at 50 columns every kind falls back to the one-line form', { options: { display: 'verbose' } }, async ($, on) => {
   const reply: Reply = { complexity: { score: 0.09, confidence: 0.86 }, review: 0.2 }
   engine(on, reply)
-  on('agent.spawn', (_, e) => ({ model: e.model ?? 'opus', agentId: `agent-${e.tool_use_id}` }))
+  on('agent.spawn', (_, e) => ({ model: e.model ?? e.parentModel, agentId: `agent-${e.tool_use_id}` }))
   on('classic.PermissionRequest', () => NO)
   on('tool.call', () => ({ result: { stdout: '' } }))
   await $.agent.spawn({ ...SPAWN, tool_use_id: 'routed' })
@@ -162,7 +162,7 @@ test('at 50 columns every kind falls back to the one-line form', { options: { di
   for (const row of rows) {
     const { texts, cards } = await rowTree($, row)
     expect(cards).toEqual([])
-    seen.push(srLines(texts))
+    seen.push(vsrLines(texts))
   }
 
   expect(seen.map(lines => lines.length)).toEqual([1, 1, 1, 1, 1])
@@ -214,7 +214,7 @@ test('the pane is not opened at session start, and /vsr opens it', async ($, on)
 test('the tally counts each kind the session decided, and splits the held ones', async ($, on) => {
   const reply: Reply = { complexity: { score: 0.09, confidence: 0.86 } }
   engine(on, reply)
-  on('agent.spawn', (_, e) => ({ model: e.model ?? 'opus', agentId: `agent-${e.tool_use_id}` }))
+  on('agent.spawn', (_, e) => ({ model: e.model ?? e.parentModel, agentId: `agent-${e.tool_use_id}` }))
   let answer: typeof YES | typeof NO = NO
   on('classic.PermissionRequest', () => answer)
   on('tool.call', () => ({ result: { stdout: '' } }))
@@ -281,7 +281,7 @@ const readResult = () => ({
 
 async function severalApps($: Parameters<Parameters<typeof test>[1]>[0], on: Parameters<Parameters<typeof test>[1]>[1]) {
   engine(on, { complexity: { score: 0.09, confidence: 0.86 }, review: 0.2, pii: TICKET_SPANS, jailbreak: 0.99, feedback: { WRONG_ANSWER: 0.92, SAT: 0.08 } })
-  on('agent.spawn', (_, e) => ({ model: e.model ?? 'opus', agentId: 'agent-1' }))
+  on('agent.spawn', (_, e) => ({ model: e.model ?? e.parentModel, agentId: 'agent-1' }))
   on('tool.call', () => readResult())
   await $.agent.spawn(SPAWN)
   await $.tool.call({ tool: 'Read', file_path: '/repo/ticket.txt', tool_use_id: 'r1' })
@@ -372,9 +372,9 @@ test('at 50 columns the cards of every new kind fall back to the one-line form',
   const prompt = await rowTree($, { ...userRow('No, that is wrong.'), viewport: { columns: 50, rows: 30 } })
 
   expect(read.cards).toEqual([])
-  expect(srLines(read.texts).map(line => line.split(/ {2,}/)[1])).toEqual(['REDACTED', 'SHIELDED'])
+  expect(vsrLines(read.texts).map(line => line.split(/ {2,}/)[1])).toEqual(['REDACTED', 'SHIELDED'])
   expect(prompt.cards).toEqual([])
-  expect(srLines(prompt.texts)).toHaveLength(1)
+  expect(vsrLines(prompt.texts)).toHaveLength(1)
 })
 
 // What the pane draws under its logo.
@@ -494,7 +494,7 @@ test('the pane says when a token goes to a remote runtime over plain http', { op
 
 test('by default a route draws one plain line, with no card and no scores', async ($, on) => {
   engine(on, { complexity: { score: 0.09, confidence: 0.86 }, steps: { score: 0.17, confidence: 0.74 } })
-  on('agent.spawn', (_, e) => ({ model: e.model ?? 'opus', agentId: 'agent-1' }))
+  on('agent.spawn', (_, e) => ({ model: e.model ?? e.parentModel, agentId: 'agent-1' }))
   await $.agent.spawn(SPAWN)
 
   const { texts, cards } = await rowTree($, agentRow('call-1'))
@@ -518,7 +518,7 @@ test('by default an allowed command draws nothing under it, and a held one draws
 
 test('with display quiet a route draws nothing under its row', { options: { display: 'quiet' } }, async ($, on) => {
   engine(on, { complexity: { score: 0.09, confidence: 0.86 } })
-  on('agent.spawn', (_, e) => ({ model: e.model ?? 'opus', agentId: 'agent-1' }))
+  on('agent.spawn', (_, e) => ({ model: e.model ?? e.parentModel, agentId: 'agent-1' }))
   await $.agent.spawn(SPAWN)
 
   expect(await rowTexts($, agentRow('call-1'))).toEqual([ENGINE_ROW])

@@ -4,11 +4,12 @@ import type { Decision } from '../types'
 import { readOffline } from './lib/classify'
 import { describe, named } from './lib/describe'
 import { band, dashboard, type Elements, overview, rowView } from './lib/draw'
-import { type Answer, giveLabel, readLabels } from './lib/labels'
+import { type Answer, giveLabel, labelsFile, readLabels } from './lib/labels'
 import { markCalibrated, readCalibration } from './lib/log'
 import { BLOCKS_LOGO, loadLogo, type Logo, NO_LOGO, wordmark } from './lib/logo'
 import type { Display, Settings } from './lib/settings'
-import { readDecisions, stamp } from './lib/state'
+import { readDecisions } from './lib/state'
+import { stamp } from './lib/env'
 import { answerKey } from './lib/text'
 import { readSpend } from './router'
 
@@ -145,14 +146,12 @@ export function registerView(on: On, settings: Settings) {
     const elements = $.ui.resolve(e)
     const list = await readDecisions($)
     const given = await readLabels($)
-    const sessionModel = list.flatMap(d => (d.kind === 'route' && d.sessionModel ? [d.sessionModel] : [])).at(-1)
     const about = {
       settings,
       calibration: await readCalibration($),
       isOffline: await readOffline($),
       spend: await readSpend($),
       labeled: Object.keys(given).length,
-      ...(sessionModel ? { sessionModel } : {}),
     }
     if (list.length === 0) {
       const { Box, Text } = elements
@@ -166,7 +165,7 @@ export function registerView(on: On, settings: Settings) {
     }
     // Answers given here are labels /vsr:calibrate fits the thresholds to; with the log off nothing keeps them.
     const labeling =
-      settings.log.path === '' ? undefined : { given, answer: (d: Decision, answer: Answer) => void giveLabel($, settings.log, d, answer) }
+      (await labelsFile($, settings.log)) === undefined ? undefined : { given, answer: (d: Decision, answer: Answer) => void giveLabel($, settings.log, d, answer) }
     return dashboard(elements, logo, list, e.props.bodyColumns, (e.viewport?.rows ?? 24) - PANE_CHROME_ROWS, about, labeling)
   })
 }

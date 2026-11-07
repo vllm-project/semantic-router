@@ -4,6 +4,11 @@ import type { EngineInterface } from 'claude-code'
 import type { Runtime } from './settings'
 
 const HEALTH_TIMEOUT_MS = 3000
+
+// How long an app waits for an answer before it steps aside: a prompt or a spawn holds Claude up, so it waits less
+// than a tool's output or a finished answer.
+export const QUICK_ANSWER_MS = 1500
+export const ANSWER_MS = 3000
 // While the runtime is offline one request a minute goes through to see whether it is back.
 const RETRY_MS = 60_000
 
@@ -62,27 +67,39 @@ export async function classify<T>(
     if (started - (await read($, lastTry)) < RETRY_MS) return failed('classifier offline', true)
     await update($, lastTry, () => started)
   }
+  let response
   try {
-    const response = await Promise.race([
+    response = await Promise.race([
       $.http.fetch(runtime.url, { method: 'POST', headers: headersOf(runtime), body: JSON.stringify({ state, questions }) }),
       $.clock.sleep(timeoutMs).then(() => undefined),
     ])
-    if (response === undefined) {
-      // Slow or gone: /health tells, without holding this call up.
-      void checkRuntime($, runtime)
-      return await failed(`timeout after ${timeoutMs} ms`)
-    }
-    if (!response.ok) return await failed(`HTTP ${response.status}`)
-    const body: unknown = JSON.parse(response.text)
-    const answers = isRecord(body) ? body.answers : undefined
-    const spans = isRecord(body) && isRecord(body.spans) ? body.spans : {}
-    const value = isRecord(answers) ? parse({ answers, spans }) : undefined
-    if (value === undefined) return await failed('unexpected answer shape')
-    await markReachable($)
-    return { ok: true, value, latencyMs: (await $.clock.now()) - started }
   } catch (error) {
     await markOffline($, runtime)
     return await failed(String(error), true)
+  }
+  if (response === undefined) {
+    // Slow or gone: /health tells, without holding this call up.
+    void checkRuntime($, runtime)
+    return await failed(`timeout after ${timeoutMs} ms`)
+  }
+  if (!response.ok) return await failed(`HTTP ${response.status}`)
+  // Something answered: a body that is not the runtime's (a proxy's sign-in page) fails this question, it does not
+  // make the runtime offline.
+  const value = valueOf(response.text, parse)
+  if (value === undefined) return await failed('unexpected answer shape')
+  await markReachable($)
+  return { ok: true, value, latencyMs: (await $.clock.now()) - started }
+}
+
+// The parsed answer of a reply's text, or undefined for a text that is not JSON or not of the runtime's shape.
+function valueOf<T>(text: string, parse: (reply: Reply) => T | undefined): T | undefined {
+  try {
+    const body: unknown = JSON.parse(text)
+    const answers = isRecord(body) ? body.answers : undefined
+    const spans = isRecord(body) && isRecord(body.spans) ? body.spans : {}
+    return isRecord(answers) ? parse({ answers, spans }) : undefined
+  } catch {
+    return undefined
   }
 }
 

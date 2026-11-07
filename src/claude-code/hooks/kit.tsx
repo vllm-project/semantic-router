@@ -142,6 +142,8 @@ export function engine(on: On, reply: Reply) {
     if (reply.files) reply.files[e.path] = e.text
     return { value: undefined }
   })
+  // A file exists once the plugin wrote it, as on a disk that starts empty.
+  on('fs.exists', (_, e) => ({ value: reply.files !== undefined && e.path in reply.files }))
   on('ui.toast', (_, e) => {
     reply.toasts?.push(e.text)
     return { value: undefined }
@@ -251,7 +253,7 @@ export const bandRow = (bodyColumns = 100, maxRows = 10) =>
     props: { hasSurvey: false, isWorking: false, maxRows, bodyColumns, scroll: { offset: 0, bodyRows: maxRows }, view: {} },
   }) as const
 
-export const srLines = (lines: string[]) => lines.filter(text => text.startsWith(' vSR   '))
+export const vsrLines = (lines: string[]) => lines.filter(text => text.startsWith(' vSR   '))
 
 // The decision log as last written, one parsed line each.
 export const logLines = (reply: Reply) =>

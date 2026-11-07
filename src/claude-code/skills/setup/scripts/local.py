@@ -21,10 +21,18 @@ import runtime
 
 HOME = Path.home() / ".local/share/vsr"
 # Pinned so every install gets the runtime vSR was tested against; to bump, test a newer main commit and paste its full SHA.
+COMMIT = "579e0ca2a0b1b03580eada4213da84fe68db57c2"
 PACKAGE = (
     "vllm-srun @ git+https://github.com/vllm-project/semantic-router.git"
-    "@579e0ca2a0b1b03580eada4213da84fe68db57c2#subdirectory=src/model-runtime"
+    f"@{COMMIT}#subdirectory=src/model-runtime"
 )
+# That commit's lock of every runtime dependency but torch, compiled for Python 3.12; its
+# numpy needs 3.11 or later, so an older Python resolves the dependencies itself.
+LOCK = (
+    "https://raw.githubusercontent.com/vllm-project/semantic-router/"
+    f"{COMMIT}/src/model-runtime/requirements-lock.txt"
+)
+LOCKED_PYTHON = (3, 12)
 CPU_TORCH = "https://download.pytorch.org/whl/cpu"
 LABEL = "vsr-runtime"
 
@@ -64,8 +72,21 @@ def install_steps(venv: Path, device: str, python: str) -> list[list[str]]:
         else:
             steps.append([*pip, "torch>=2.4"])
     if not (venv / "bin/vllm-srun").exists():
-        steps.append([*pip, PACKAGE])
+        built_with = (
+            str(venv / "bin/python") if (venv / "bin/python").exists() else python
+        )
+        locked = ["-c", LOCK] if _at_least(built_with, LOCKED_PYTHON) else []
+        steps.append([*pip, *locked, PACKAGE])
     return steps
+
+
+def _at_least(python: str, version: tuple[int, int]) -> bool:
+    done = subprocess.run(
+        [python, "-c", f"import sys; sys.exit(sys.version_info < {version!r})"],
+        capture_output=True,
+        check=False,
+    )
+    return done.returncode == 0
 
 
 def run(steps: list[list[str]], dry_run: bool) -> int:
@@ -205,7 +226,7 @@ def main(argv: list[str]) -> int:
         one.add_argument("--venv", type=Path, default=HOME / "venv")
         one.add_argument("--model", default="vllm-sr/vela3-lite")
         one.add_argument(
-            "--device", default="cpu", choices=("cpu", "cuda", "rocm", "mps", "auto")
+            "--device", default="cpu", choices=("cpu", "cuda", "rocm", "auto")
         )
         one.add_argument("--port", type=int, default=8790)
         one.add_argument("--log", type=Path, default=HOME / "runtime.log")

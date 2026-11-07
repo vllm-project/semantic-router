@@ -75,6 +75,8 @@ In `/vsr`, each decision a score decided has buttons to say whether it was right
 Your answers are saved beside the decision log, and `/vsr:calibrate` fits the thresholds to them.
 Once subagents have run on a routed model, a `routing` row estimates what they cost against your
 session's model, at list price: for example `$0.15 for 1 subagent turn vs $6.00 on Opus · saved 98%`.
+It is an estimate. Haiku 5.5 is priced for prompts up to 100K tokens (longer ones cost five times as
+much, so their saving is overstated), and a model with no known price is left out.
 
 When the decision model cannot be reached, the tally says `classifier offline`, a toast says so
 once, and vSR steps aside: Claude works as it would without vSR, and vSR tries the model again every
@@ -96,17 +98,24 @@ how many reasoning steps it needs.
 
 vSR never changes the model or effort of your main conversation, and it picks a subagent's model only
 when the subagent starts, so no conversation's prompt cache is lost. Forks, teammates and calls that
-name a model are left alone.
+name a model are left alone. So is a subagent you resume: it keeps the model it ran on. A
+subagent routed to your session's own tier keeps your session's exact model (a pinned
+`claude-opus-4-8` stays itself).
 
 ## Guard
 
 Before a Bash command runs, vSR splits it into the commands it runs (at `&&`, `||`, `;`, a lone `&`
-and new lines; pipes, quotes, `$(...)`, comments and heredoc bodies are respected) and asks whether
-each needs a person's review. When the riskiest part scores 0.9 or more, Claude Code's permission
-dialog asks you, with the reason. Some commands are always held, whatever the score and even while
-the decision model is offline: recursive deletes of `/`, your home directory or a top-level system
-directory, `mkfs`, `dd` to a device, fork bombs, recursive permission changes on `/`, and scripts
-piped from `curl` or `wget` into a shell. A command of more than 12 parts is held too. The guard only
+and new lines; pipes, quotes including `$'...'`, `$(...)`, subshells, comments and heredoc bodies are
+respected) and asks about each part in turn whether it needs a person's review. When a part scores
+0.9 or more, Claude Code's permission dialog asks you, with the reason. A command is held too when a
+part could not be checked: it has more than 12 parts, or a part timed out or got an error answer. On
+a slow runtime that means more questions; vSR steps aside only while the decision model is offline.
+
+Some commands are always held, whatever the score and even while the decision model is offline:
+recursive deletes of `/`, your home directory or a top-level system directory, `mkfs`, `dd` to a
+device (not `/dev/null` and the like), fork bombs, recursive permission changes on `/`, and scripts
+from `curl` or `wget` run by a shell. These rules see through subshells, `{ ...; }` groups, `sudo`,
+`env`, `nohup` and similar wrappers, `bash -c` strings and every stage of a pipe. The guard only
 tightens: it never allows what Claude Code would ask about or refuse.
 
 ## Check
@@ -131,7 +140,8 @@ as unencrypted. A remote runtime's token is kept in Claude Code's secure storage
 
 Redact hides names, emails, phone numbers, card numbers, IP addresses, addresses, ID numbers and
 secrets (API keys, tokens, private keys, passwords in config files). On CPU it reads about the first
-4,000 characters of an output in its time, and says so when an output was longer. If Claude then
+4,000 characters of an output in its time, and says so when an output was longer. The output of a
+command that failed is hidden in too: Claude reads the error with the values replaced. If Claude then
 tries to write a file with a redact tag such as `[email]` in place of a real value, vSR refuses the
 write and tells Claude to change only the lines it needs.
 
@@ -147,6 +157,11 @@ skill writes them, and `/plugin configure vsr@vllm-sr` edits them. The ones you 
 | `router`, `escalate`, `redact`, `shield`, `guard` | on or off | on |
 | `check` | on or off | off |
 | `logo` | `auto`, `image`, `smooth`, `blocks`, `off` | `auto` |
+| `logPath` | an absolute path or one under `~/`; empty turns the log off | `~/.claude/vsr/decisions.jsonl` |
+
+A log path under `~/.claude/` follows `CLAUDE_CONFIG_DIR` when it is set. A relative path is refused
+(it would put every project's commands into each project), and a file of your own already at the
+path is left as it is rather than replaced by the log.
 
 The thresholds (the options titled "Advanced") are measured defaults. After a few hundred
 decisions, `/vsr:calibrate` asks you about the decisions closest to each threshold (skipping the
@@ -163,9 +178,10 @@ drawn in characters elsewhere (smooth wedge characters in terminals that draw th
   `/vsr:setup` to check and restart it; vSR picks it up within a minute of it answering again.
 - **`/vsr` still shows old settings after setup.** Run `/reload-plugins`; if the `classifier` and
   `apps` lines still differ, restart Claude Code.
-- **Reads feel slower.** On CPU, redact and shield add up to 3 s to a long `Read` or Bash output,
-  and guard about 0.25 s per command part. A GPU runtime is several times faster; you can also turn
-  off apps you do not need.
+- **Reads feel slower.** On an x86 CPU, redact and shield add up to 3 s to a long `Read` or Bash
+  output, and guard about 0.25 s per command part; an Apple Silicon CPU is several times slower, so
+  apps often step aside there and guard asks more often. A GPU runtime is several times faster; you
+  can also turn off apps you do not need.
 - **A subagent stayed on your model.** The router was not sure enough (`/vsr` shows its confidence),
   or `routerGoal` is `quality`.
 
@@ -202,7 +218,8 @@ drawn in characters elsewhere (smooth wedge characters in terminals that draw th
    rm -rf ~/.cache/huggingface/hub/models--vllm-sr--vela3-lite ~/.cache/huggingface/hub/models--vllm-sr--d3-lite
    ```
 
-4. Delete the decision log and your answers, if you do not want to keep them:
+4. Delete the decision log and your answers, if you do not want to keep them (under
+   `$CLAUDE_CONFIG_DIR/vsr` instead if you set `CLAUDE_CONFIG_DIR`):
 
    ```bash
    rm -rf ~/.claude/vsr

@@ -2,7 +2,8 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
 
 import type { Decision } from '../../types'
-import { fileOf } from './log'
+import { appOf } from './apps'
+import { fileOf, labelsFileOf, stamp } from './env'
 import type { Settings } from './settings'
 
 // What the person can say of a decision in the pane: a binary app's call was right or wrong; a route's model was
@@ -28,7 +29,7 @@ export async function readLabels($: EngineInterface): Promise<Readonly<Record<st
   return read($, given)
 }
 
-// Whether sr acted on a decision: the side of its line the score fell on.
+// Whether vSR acted on a decision: the side of its line the score fell on.
 const acted = (d: Decision) =>
   d.kind === 'guard' ? d.verdict === 'ask' : d.kind === 'check' ? d.verdict === 'unverified' : true
 
@@ -59,22 +60,32 @@ export function labelOf(d: Decision, answer: Answer): string {
   return acted(d) === (answer === 'right') ? 'yes' : 'no'
 }
 
-// Appends the label beside the decision log, where /vsr:calibrate reads it. Never throws.
+// The labels file, or undefined where no log is kept to label: the pane offers answers only where they are kept.
+export async function labelsFile($: EngineInterface, log: Settings['log']) {
+  const logFile = log.path === '' ? undefined : await fileOf($, log.path)
+  return logFile === undefined ? undefined : labelsFileOf(logFile)
+}
+
+// One label line, the shape /vsr:calibrate reads and writes too.
+async function lineOf($: EngineInterface, d: Decision, answer: Answer) {
+  return `${JSON.stringify({ id: d.id, app: appOf(d), label: labelOf(d, answer), at: await stamp($) })}\n`
+}
+
+// Writes run one after another, so two quick presses both land.
+let writes: Promise<void> = Promise.resolve()
+
+// Appends one line: a file that exists but cannot be read is left as it is rather than replaced by this line alone.
+async function append($: EngineInterface, file: string, line: string) {
+  const before = (await $.fs.exists(file)) ? await $.fs.read(file) : ''
+  await $.fs.write(file, `${before}${line}`)
+}
+
+// Marks the answer in the pane and appends the label beside the decision log, where /vsr:calibrate reads it. Never throws.
 export async function giveLabel($: EngineInterface, log: Settings['log'], d: Decision, answer: Answer) {
   await update($, given, labels => ({ ...labels, [d.id]: answer }))
-  if (log.path === '') return
-  try {
-    const logFile = await fileOf($, log.path)
-    if (logFile === undefined) return
-    const file = logFile.replace(/[^/]*$/, 'labels.jsonl')
-    let before = ''
-    try {
-      before = await $.fs.read(file)
-    } catch {
-      // No labels yet.
-    }
-    await $.fs.write(file, `${before}${JSON.stringify({ id: d.id, app: d.kind, label: labelOf(d, answer), at: new Date(await $.clock.now()).toISOString() })}\n`)
-  } catch {
-    // A label that cannot be written is still marked in the pane.
-  }
+  const file = await labelsFile($, log)
+  if (file === undefined) return
+  const line = await lineOf($, d, answer)
+  writes = writes.then(() => append($, file, line)).catch(() => undefined)
+  await writes
 }

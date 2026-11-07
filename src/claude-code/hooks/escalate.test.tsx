@@ -13,7 +13,7 @@ type Test = Parameters<Parameters<typeof test>[1]>[0]
 type Hooks = Parameters<Parameters<typeof test>[1]>[1]
 
 function subagents(on: Hooks) {
-  on('agent.spawn', (_, e) => ({ model: e.model ?? 'inherited', agentId: `agent-${e.tool_use_id}` }))
+  on('agent.spawn', (_, e) => ({ model: e.model ?? e.parentModel, agentId: `agent-${e.tool_use_id}` }))
   on('turn.step', async function* (_, e) {
     return { turnId: e.turnId, index: e.index, answer: '', toolUses: [] }
   })
@@ -95,7 +95,7 @@ test('an escalated subagent keeps a higher effort it would have had', { options:
 test('an escalated subagent still goes one step up when the classifier fails, to Opus at xhigh', async ($, on) => {
   const reply: Reply = { feedback: WRONG }
   engine(on, reply)
-  on('agent.spawn', (_, e) => ({ model: e.model ?? 'inherited', agentId: 'agent-call-1' }))
+  on('agent.spawn', (_, e) => ({ model: e.model ?? e.parentModel, agentId: 'agent-call-1' }))
   const efforts: unknown[] = []
   on('turn.step', async function* (_, e) {
     efforts.push(e.effort)
@@ -176,7 +176,7 @@ test('a classifier that fails escalates nothing and shows SKIPPED under the prom
   const started = await $.agent.spawn(SPAWN)
   const { texts, cards } = await rowTree($, userRow(PUSHBACK))
 
-  expect(started.model).toBe('inherited')
+  expect(started.model).toBe('opus')
   expect(reply.contexts).toEqual([undefined])
   expect(cards).toEqual([expect.objectContaining({ borderColor: 'inactive' })])
   expect(texts).toContain('○  SKIPPED  escalate skipped: classifier unavailable')

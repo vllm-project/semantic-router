@@ -17,16 +17,22 @@ export const APPS: Record<Section, { name: string; glyph: string; color: Color }
   off: { name: 'off', glyph: '○', color: 'inactive' },
 }
 
-export const SECTIONS: readonly Section[] = ['router', 'escalate', 'redact', 'shield', 'guard', 'check', 'off']
+// The looks of outcomes that are not an app's own: a kept subagent, an unverified answer, an allowed command.
+export const LOOKS = {
+  kept: { glyph: '≈', color: 'warning' },
+  unverified: { glyph: '!', color: 'warning' },
+  allowed: { glyph: '✓', color: 'success' },
+} as const satisfies Record<string, { glyph: string; color: Color }>
 
-export const sectionOf = (decision: Decision): Section => {
-  switch (decision.kind) {
-    case 'route':
-    case 'keep':
-      return 'router'
-    case 'unavailable':
-      return 'off'
-    default:
-      return decision.kind
-  }
+// In the order the surfaces list them.
+export const SECTIONS = Object.keys(APPS) as readonly Section[]
+export const APP_NAMES = SECTIONS.filter((section): section is App => section !== 'off')
+
+// The app a decision belongs to: a kept subagent is the router's, a skipped call its app's.
+export function appOf(d: Decision): App {
+  if (d.kind === 'route' || d.kind === 'keep') return 'router'
+  return d.kind === 'unavailable' ? d.app : d.kind
 }
+
+// Where a decision is listed: under its app, or with the skipped calls.
+export const sectionOf = (d: Decision): Section => (d.kind === 'unavailable' ? 'off' : appOf(d))

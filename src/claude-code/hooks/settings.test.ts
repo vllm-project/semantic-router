@@ -1,18 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
-import { DEFAULTS, parseSettings } from './lib/settings'
-
-test('no options parse to the defaults', () => {
-  expect(parseSettings({})).toEqual(DEFAULTS)
-  expect(DEFAULTS.thresholds).toEqual({
-    router: { easyBelow: 0.5, hardFrom: 1.5, minConfidence: 0.3, downgradeConfidence: 0.6, stepsLow: 0.5, stepsHigh: 1.2, stepsMinConfidence: 0.3 },
-    escalate: { feedback: 0.8, reask: 0.75 },
-    redact: { pii: 0.7 },
-    shield: { inject: 0.9 },
-    guard: { review: 0.9 },
-    check: { unsupported: 0.5 },
-  })
-})
+import { engine, paneText } from './kit'
+import { parseSettings } from './lib/settings'
 
 test('numbers are held to their ranges, and the hard line never under the easy one', () => {
   const settings = parseSettings({ guardReview: 3, redactPii: -1, routerEasyBelow: 1.2, routerHardFrom: 0.4, calibrateEvery: -5 })
@@ -35,21 +24,23 @@ test('the steps lines are held to 0 to 2, their confidence to 0 to 1, and the hi
     stepsMinConfidence: 0,
   })
   expect(parseSettings({ routerStepsLow: 1, routerStepsHigh: 0.4 }).thresholds.router).toMatchObject({ stepsLow: 1, stepsHigh: 1 })
-  expect(parseSettings({ routerStepsLow: 1.6 }).thresholds.router).toMatchObject({ stepsLow: 1.6, stepsHigh: 1.6 })
-  expect(parseSettings({ routerStepsHigh: 0.3 }).thresholds.router).toMatchObject({ stepsLow: 0.5, stepsHigh: 0.5 })
   expect(parseSettings({ routerStepsLow: 0.2, routerStepsHigh: 0.9 }).thresholds.router).toMatchObject({ stepsLow: 0.2, stepsHigh: 0.9 })
 })
 
-test('a steps line of the wrong kind takes its default', () => {
-  const { router } = parseSettings({ routerStepsLow: 'few', routerStepsHigh: null, routerStepsMinConfidence: Number.NaN }).thresholds
-
-  expect(router).toMatchObject({ stepsLow: 0.5, stepsHigh: 1.2, stepsMinConfidence: 0.3 })
+test('equal easy and hard lines are allowed, as the setup script allows them', () => {
+  expect(parseSettings({ routerEasyBelow: 1, routerHardFrom: 1 }).thresholds.router).toMatchObject({ easyBelow: 1, hardFrom: 1 })
 })
 
-test('a value of the wrong kind takes the default', () => {
-  const settings = parseSettings({ runtime: 'mainframe', runtimeUrl: '  ', guard: 'yes', shieldInject: 'high', runtimeToken: ' tok ' })
+test('the runtime URL and token are trimmed', () => {
+  expect(parseSettings({ runtime: 'remote', runtimeUrl: ' https://sr.example/v1/decisions ', runtimeToken: ' tok ' }).runtime).toEqual({
+    kind: 'remote',
+    url: 'https://sr.example/v1/decisions',
+    token: 'tok',
+  })
+})
 
-  expect(settings.runtime).toEqual({ kind: 'local-cpu', url: 'http://127.0.0.1:8790/v1/decisions', token: 'tok' })
-  expect(settings.apps.guard).toBe(true)
-  expect(settings.thresholds.shield.inject).toBe(0.9)
+test('the manifest defaults reach the hooks: check is off and the others are on', { options: {} }, async ($, on) => {
+  engine(on, {})
+
+  expect(await paneText($, /^apps/)).toBe('apps  router · escalate · redact · shield · guard · check off')
 })

@@ -70,10 +70,52 @@ def memory() -> dict:
             "availableGiB": round(int(values.get("MemAvailable", 0)) * 1024 / GIB, 1),
         }
     total = _run(["sysctl", "-n", "hw.memsize"])
+    available = vm_stat_available(_run(["vm_stat"]) or "")
     return {
         "totalGiB": round(int(total) / GIB, 1) if total else None,
-        "availableGiB": None,
+        "availableGiB": None if available is None else round(available / GIB, 1),
     }
+
+
+def vm_stat_available(text: str) -> int | None:
+    """Bytes macOS can hand out without swapping: free, inactive and speculative pages."""
+    size = re.search(r"page size of (\d+) bytes", text)
+    pages = dict(
+        re.findall(r"^Pages (free|inactive|speculative):\s+(\d+)\.", text, re.M)
+    )
+    if not size or "free" not in pages:
+        return None
+    return int(size.group(1)) * sum(int(n) for n in pages.values())
+
+
+def _whole(value: object) -> int | None:
+    try:
+        return int(str(value).strip())
+    except ValueError:
+        return None
+
+
+def nvidia_gpus(out: str) -> list[dict]:
+    """GPUs from nvidia-smi's CSV; one whose memory reads [N/A] or does not parse is left out."""
+    found = []
+    for line in out.splitlines():
+        # The name may hold commas; the two numbers never do.
+        parts = [part.strip() for part in line.rsplit(",", 2)]
+        if len(parts) != 3:
+            continue
+        name, total, used = parts[0], _whole(parts[1]), _whole(parts[2])
+        if total is None or used is None:
+            continue
+        found.append(
+            {
+                "vendor": "nvidia",
+                "device": "cuda",
+                "name": name,
+                "totalGiB": round(total / 1024, 1),
+                "freeGiB": round((total - used) / 1024, 1),
+            }
+        )
+    return found
 
 
 def gpus() -> list[dict]:
@@ -86,17 +128,7 @@ def gpus() -> list[dict]:
                 "--format=csv,noheader,nounits",
             ]
         )
-        for line in (out or "").splitlines():
-            name, total, used = [part.strip() for part in line.split(",")]
-            found.append(
-                {
-                    "vendor": "nvidia",
-                    "device": "cuda",
-                    "name": name,
-                    "totalGiB": round(int(total) / 1024, 1),
-                    "freeGiB": round((int(total) - int(used)) / 1024, 1),
-                }
-            )
+        found.extend(nvidia_gpus(out or ""))
     if shutil.which("rocm-smi"):
         out = _run(["rocm-smi", "--showproductname", "--showmeminfo", "vram", "--json"])
         try:
@@ -104,8 +136,12 @@ def gpus() -> list[dict]:
         except json.JSONDecodeError:
             cards = {}
         for card in cards.values():
-            total = int(card.get("VRAM Total Memory (B)", 0))
-            used = int(card.get("VRAM Total Used Memory (B)", 0))
+            if not isinstance(card, dict):
+                continue
+            total = _whole(card.get("VRAM Total Memory (B)"))
+            used = _whole(card.get("VRAM Total Used Memory (B)"))
+            if total is None or used is None:
+                continue
             found.append(
                 {
                     "vendor": "amd",
@@ -117,18 +153,7 @@ def gpus() -> list[dict]:
                     "freeGiB": round((total - used) / GIB, 1),
                 }
             )
-    if platform.system() == "Darwin" and platform.machine() == "arm64":
-        found.append(
-            {
-                "vendor": "apple",
-                "device": "mps",
-                "name": _run(["sysctl", "-n", "machdep.cpu.brand_string"])
-                or "Apple Silicon",
-                "totalGiB": None,
-                "freeGiB": None,
-                "unifiedMemory": True,
-            }
-        )
+    # The Apple GPU (mps) is left out: the pinned runtime cannot place vela3 on it (no BF16).
     return found
 
 
@@ -182,10 +207,10 @@ def port_open(url: str) -> bool:
 
 def configured(plugin_id: str | None) -> tuple[str, str | None]:
     """The runtime URL vSR runs with, and the `runtime` value saved under `plugin_id` (None when unsaved)."""
+    url = str(settings.options_for(plugin_id)["runtimeUrl"])
     if not plugin_id:
-        return runtime.DEFAULT_URL, None
+        return url, None
     saved = settings.load(settings.settings_path())[1]
-    url = str(settings.effective_options(saved, plugin_id)["runtimeUrl"])
     return url, settings.saved_options(saved, plugin_id).get("runtime")
 
 
@@ -208,10 +233,12 @@ def recommend(found: dict) -> dict:
     """Where the classifier should run, from what this machine has."""
     if found["runtime"]["ready"]:
         setting, why = keep_setting(found)
+        slow = runtime.slow_note(found["runtime"].get("questionMs"))
         return {
             "runtime": "existing",
             "setting": setting,
-            "why": f"a runtime already answers at {found['runtime']['url']}; {why}",
+            "why": f"a runtime already answers at {found['runtime']['url']}; {why}"
+            + (f"; {slow}" if slow else ""),
         }
     good_python = any(p["ok"] for p in found["pythons"])
     ram = found["memory"]["totalGiB"] or 0
@@ -230,10 +257,15 @@ def recommend(found: dict) -> dict:
                 "why": f"{gpu['name']} has {gpu['freeGiB']} GiB free",
             }
     if good_python and ram >= 4:
-        why = f"{os.cpu_count()} cores and {ram} GiB RAM run vela3-lite in 0.1 to 0.25 s per question"
-        if any(g["device"] == "mps" for g in found["gpus"]):
-            why += "; Apple GPU (mps) also works but is unmeasured"
-        elif any(g["device"] in ("cuda", "rocm") for g in found["gpus"]):
+        if found.get("os", {}).get("appleSilicon"):
+            why = (
+                f"{ram} GiB RAM fit vela3-lite, but an Apple Silicon CPU takes about 2 s per question, "
+                "several times an x86 CPU, so the apps will often step aside: a remote runtime is "
+                "recommended if you have one, since the runtime cannot use the Apple GPU (mps) yet"
+            )
+        else:
+            why = f"{os.cpu_count()} cores and {ram} GiB RAM run vela3-lite in 0.1 to 0.25 s per question (measured on x86 CPUs)"
+        if any(g["device"] in ("cuda", "rocm") for g in found["gpus"]):
             why += "; the GPU has too little free memory right now"
         return {
             "runtime": "local-cpu",
@@ -262,6 +294,8 @@ def detect(plugin_id: str | None) -> dict:
         "diskFreeGiB": round(shutil.disk_usage(Path.home()).free / GIB, 1),
         "savedRuntime": saved_runtime,
     }
+    if found["runtime"]["ready"]:
+        found["runtime"]["questionMs"] = runtime.time_question(url)
     found["recommendation"] = recommend(found)
     return found
 
@@ -292,6 +326,7 @@ def summary(found: dict) -> str:
         (
             f"ready, model {r['model']}"
             + (f" on {r['device']}" if r.get("device") else "")
+            + (f", {r['questionMs']} ms per question" if r.get("questionMs") else "")
         )
         if r["ready"]
         else (
@@ -301,7 +336,9 @@ def summary(found: dict) -> str:
         )
     )
     lines = [
-        f"machine   {o.get('name', o['system'])} · {o['arch']} · {found['cpus']} cores · {m['totalGiB']} GiB RAM ({m['availableGiB']} available) · {found['diskFreeGiB']} GiB disk free",
+        f"machine   {o.get('name', o['system'])} · {o['arch']} · {found['cpus']} cores · {m['totalGiB']} GiB RAM"
+        + (f" ({m['availableGiB']} available)" if m["availableGiB"] is not None else "")
+        + f" · {found['diskFreeGiB']} GiB disk free",
         f"gpu       {gpu}",
         f"python    {py}"
         + (

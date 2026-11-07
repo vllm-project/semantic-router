@@ -1,10 +1,10 @@
 import type { Tiers } from '../../types'
+import { DIFFICULTY_MAX } from './settings'
 
 export type Tone = 'fill' | 'rest' | 'rule' | 'hold'
 export type Segment = { text: string; tone: Tone }
 
 const CELLS = 24
-const DIFFICULTY_MAX = 2
 const EIGHTHS = ' ▏▎▍▌▋▊▉█'
 
 // Fills `cells` cells left to right in eighths. `cuts` put a glyph before the cell at each `at`, and the fill runs on across it.

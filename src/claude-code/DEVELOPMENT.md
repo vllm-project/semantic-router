@@ -8,10 +8,13 @@
 | `.claude-plugin/marketplace.json` | A one-plugin marketplace (`vllm-sr`) for installing from this folder. |
 | `hooks/register.ts` | The hooks module: every event is hooked here, and handed to one app module. |
 | `hooks/router.ts`, `escalate.ts`, `output.ts`, `guard.ts`, `check.ts` | The apps. `output.ts` holds redact, shield and the write-back refusal. |
+| `hooks/lib/shell.ts` | Bash read the way it runs: a command split into the commands it runs, and the fixed rules guard always holds. |
+| `hooks/lib/settings.ts`, `hooks/lib/apps.ts` | Options as the engine hands them over (defaults live only in `plugin.json`), and each app's name and look. |
+| `hooks/lib/state.ts`, `hooks/lib/log.ts`, `hooks/lib/labels.ts`, `hooks/lib/env.ts` | The session's decisions, the decision log, the answers given in `/vsr`, and where the log goes (`CLAUDE_CONFIG_DIR` aware). |
 | `hooks/view.tsx`, `hooks/lib/draw.tsx`, `hooks/lib/describe.ts` | What each decision shows: rows, the band, the `/vsr` pane. `describe.ts` is the one table of words. |
 | `hooks/lib/classify.ts` | The one way every app asks the runtime, with the offline circuit breaker. |
 | `hooks/*.test.ts(x)`, `hooks/kit.tsx` | Tests, run by `claude plugin test .` against the engine; the kit stubs the runtime. |
-| `skills/setup`, `skills/calibrate` | `/vsr:setup` and `/vsr:calibrate`, with their Python scripts and tests. |
+| `skills/setup`, `skills/calibrate` | `/vsr:setup` and `/vsr:calibrate`, with their Python scripts and tests. `skills/setup/scripts/settings.py` reads option types and defaults from `plugin.json`; `framing.py` copies the classifier questions from the hooks, and its test fails when the two drift. |
 | `types/index.d.ts` | The decision types and the `$.state` contract. |
 | `assets/` | The mark (`mark.png`), its 4-row block art for the demo (`mark.ansi`), the README screenshot. |
 | `tools/mark_art.py` | Draws the mark in characters into `hooks/lib/mark-art.ts`. |
@@ -47,5 +50,6 @@ first, so its edges stay straight.
 - The root `.claude-plugin/marketplace.json` lists this folder as `vsr`, so users install it with
   `claude plugin marketplace add vllm-project/semantic-router` and `claude plugin install vsr@vllm-sr`.
 - `tools/agent/domains.yaml` (`claude-code-plugin`) names the checks CI runs for this folder.
-- The setup installs `vllm-srun` from a pinned commit of this repository
-  (`skills/setup/scripts/local.py`); bump it with the runtime it was tested against.
+- The setup installs `vllm-srun` from a pinned commit of this repository (`COMMIT` in
+  `skills/setup/scripts/local.py`, with that commit's `requirements-lock.txt` as constraints on Python
+  3.12+); bump it with the runtime it was tested against.

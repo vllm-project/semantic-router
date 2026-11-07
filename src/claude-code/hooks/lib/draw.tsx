@@ -1,12 +1,12 @@
 import type { EngineInterface } from 'claude-code'
 
 import type { Calibration, Decision, Spend } from '../../types'
-import { APPS, type Color, type Section, SECTIONS, sectionOf } from './apps'
+import { APP_NAMES, APPS, type Color, type Section, SECTIONS, sectionOf } from './apps'
 import { type Body, type Described, describe, type Gauge, type TallyItem, tallyOf, tallyWidth } from './describe'
 import { ANSWERS, type Answer, answersFor } from './labels'
 import { BRAND, brand, type Logo, mark, markColumns, wordmark, wordmarkHeight } from './logo'
 import { holdMeter, type Segment, textWidth } from './meters'
-import { APP_NAMES, type Display, isCleartextRemote, type Settings } from './settings'
+import { type Display, isCleartextRemote, type Settings } from './settings'
 import { clip, fixed, modelName } from './text'
 
 export type Elements = ReturnType<EngineInterface['ui']['resolve']>
@@ -22,7 +22,7 @@ const COMPACT_RISK_CELLS = 12
 const MIN_FRAMED_COLUMNS = 24
 
 // The detail gives way before the headline does.
-function srLine(elements: Elements, { badge, color, headline, detail }: Described, columns: number) {
+function badgeLine(elements: Elements, { badge, color, headline, detail }: Described, columns: number) {
   const { Text } = elements
   const room = columns - `${BRAND}  ${badge}  `.length
   const head = clip(headline, Math.max(1, room))
@@ -168,10 +168,10 @@ function compactLine(elements: Elements, { subject, more = '' }: Described, scor
 function framedLine(elements: Elements, described: Described, columns: number) {
   const { Box } = elements
   const room = columns - CARD_CHROME
-  if (room < MIN_FRAMED_COLUMNS) return srLine(elements, described, columns)
+  if (room < MIN_FRAMED_COLUMNS) return badgeLine(elements, described, columns)
   return (
     <Box borderStyle="round" borderColor={described.color} borderDimColor paddingX={1} alignSelf="flex-start">
-      {srLine(elements, described, room)}
+      {badgeLine(elements, described, room)}
     </Box>
   )
 }
@@ -244,13 +244,14 @@ export function band(elements: Elements, list: readonly Decision[], columns: num
 }
 
 // What the pane's foot says of the setup: where the classifier runs, the apps on, the lines in force, the last calibration.
-// `spend` and `sessionModel` describe what routing cost against the session's model; `labeled`, the answers given this session.
-export type Overview = { settings: Settings; calibration: Calibration; isOffline: boolean; spend: Spend; sessionModel?: string; labeled: number }
+// `spend` is what routing cost against the session's model; `labeled`, the answers given this session.
+export type Overview = { settings: Settings; calibration: Calibration; isOffline: boolean; spend: Spend; labeled: number }
 
 const dollars = (value: number) => (value < 0.01 ? '<$0.01' : `$${value.toFixed(2)}`)
 
 // What routing came to: an estimate, at list price, of the same tokens on the session's model.
-function spendWords({ spend, sessionModel }: Overview) {
+function spendWords({ spend }: Overview) {
+  const { sessionModel } = spend
   if (spend.turns === 0 || sessionModel === undefined || spend.baseline === 0) return undefined
   const change = 1 - spend.actual / spend.baseline
   const verdict = change >= 0 ? `saved ${Math.round(change * 100)}%` : `cost ${Math.round(-change * 100)}% more`

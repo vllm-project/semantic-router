@@ -3,6 +3,9 @@ import type { EngineInterface } from 'claude-code'
 
 import type { App, Calibration, Decision, EffortFrom, Model, Outcome, Risk, Steps, Tag, Tiers } from '../../types'
 import { isRecord } from './classify'
+import { fileOf } from './env'
+import { appOf } from './apps'
+import { answersFor } from './labels'
 import { hide, secretsIn } from './redact'
 import type { Settings } from './settings'
 import { clip, oneLine } from './text'
@@ -36,6 +39,7 @@ export type Detail =
   | { why: string }
 
 // One line of the decision log, the calibration skill's only input. `score` is the number held against `threshold`; both null for `off`.
+// `learnable`: whether calibration learns from it (answersFor), so the log, the pane and the skill share one rule.
 export type LogLine = {
   id: string
   at: string
@@ -46,9 +50,10 @@ export type LogLine = {
   threshold: number | null
   subject: string
   detail: Detail
+  learnable: boolean
 }
 
-type Judged = Pick<LogLine, 'app' | 'verdict' | 'score' | 'threshold' | 'detail'> & { subject: string }
+type Judged = Pick<LogLine, 'verdict' | 'score' | 'threshold' | 'detail'> & { subject: string }
 
 // The tier line a routed level sits nearest: the one a calibration would move to route it otherwise.
 const nearestLine = (level: number, { easyBelow, hardFrom }: Tiers) =>
@@ -56,7 +61,6 @@ const nearestLine = (level: number, { easyBelow, hardFrom }: Tiers) =>
 
 const lines: { [K in Decision['kind']]: (decision: Extract<Decision, { kind: K }>) => Judged } = {
   route: d => ({
-    app: 'router',
     verdict: 'routed',
     score: d.level,
     threshold: nearestLine(d.level, d.tiers),
@@ -72,7 +76,6 @@ const lines: { [K in Decision['kind']]: (decision: Extract<Decision, { kind: K }
     },
   }),
   keep: d => ({
-    app: 'router',
     verdict: 'kept',
     score: d.confidence,
     threshold: d.minConfidence,
@@ -80,7 +83,6 @@ const lines: { [K in Decision['kind']]: (decision: Extract<Decision, { kind: K }
     detail: { level: d.level, confidence: d.confidence, model: d.model, effort: null, steps: null, effortFrom: null, escalated: null, reason: d.reason ?? 'unsure' },
   }),
   escalate: d => ({
-    app: 'escalate',
     verdict: 'escalated',
     score: d.signals[0].score,
     threshold: d.signals[0].threshold,
@@ -88,7 +90,6 @@ const lines: { [K in Decision['kind']]: (decision: Extract<Decision, { kind: K }
     detail: { feedback: d.feedback, reask: d.reask },
   }),
   redact: d => ({
-    app: 'redact',
     verdict: 'hidden',
     score: d.score,
     threshold: d.threshold,
@@ -96,7 +97,6 @@ const lines: { [K in Decision['kind']]: (decision: Extract<Decision, { kind: K }
     detail: { counts: d.counts, source: d.source },
   }),
   shield: d => ({
-    app: 'shield',
     verdict: 'shielded',
     score: d.score,
     threshold: d.threshold,
@@ -104,7 +104,6 @@ const lines: { [K in Decision['kind']]: (decision: Extract<Decision, { kind: K }
     detail: { source: d.source },
   }),
   guard: d => ({
-    app: 'guard',
     verdict: d.verdict === 'ask' ? 'held' : 'allowed',
     score: d.review,
     threshold: d.threshold,
@@ -120,14 +119,13 @@ const lines: { [K in Decision['kind']]: (decision: Extract<Decision, { kind: K }
     },
   }),
   check: d => ({
-    app: 'check',
     verdict: d.verdict,
     score: d.score,
     threshold: d.threshold,
     subject: d.prompt || 'the answer',
     detail: { files: d.files, commands: d.commands },
   }),
-  unavailable: d => ({ app: d.app, verdict: 'off', score: null, threshold: null, subject: d.subject, detail: { why: d.why } }),
+  unavailable: d => ({ verdict: 'off', score: null, threshold: null, subject: d.subject, detail: { why: d.why } }),
 }
 
 // A subject never carries what redact hides by rule.
@@ -135,7 +133,7 @@ const subjectOf = (text: string) => clip(oneLine(hide(text, secretsIn(text)).tex
 
 export function lineOf(decision: Decision, session: string): LogLine {
   const judged = (lines[decision.kind] as (decision: Decision) => Judged)(decision)
-  return { id: decision.id, at: decision.at, session, ...judged, subject: subjectOf(judged.subject) }
+  return { id: decision.id, at: decision.at, session, app: appOf(decision), ...judged, subject: subjectOf(judged.subject), learnable: answersFor(decision) !== undefined }
 }
 
 const isSame = (a: LogLine, b: LogLine) => a.id === b.id && a.app === b.app && a.session === b.session
@@ -155,11 +153,18 @@ async function sessionOf($: EngineInterface) {
   }
 }
 
-// The log file's path, a leading `~/` read as $HOME; none where HOME is unset.
-export async function fileOf($: EngineInterface, path: string) {
-  if (!path.startsWith('~/')) return path
-  const home = await $.env.get('HOME')
-  return home ? `${home.replace(/\/$/, '')}${path.slice(1)}` : undefined
+// Whether a file is this log's to write: absent, empty, or starting with a log line. Another file at the path is
+// left alone, not replaced by the log; asked once per file per session.
+const owned = new Map<string, Promise<boolean>>()
+
+async function isOwned($: EngineInterface, file: string) {
+  try {
+    if (!(await $.fs.exists(file))) return true
+    const first = (await $.fs.read(file)).split('\n', 1)[0]
+    return first === '' || isLine(JSON.parse(first))
+  } catch {
+    return false
+  }
 }
 
 // Keeps the newest lines the store takes: past its size limit, the older half goes until they fit.
@@ -198,7 +203,9 @@ async function flush($: EngineInterface, log: Settings['log']) {
   const all = await store($, batch.reduce((now, change) => change(now), linesIn(await $.store.get(LINES))))
   await remind($, log, all)
   const file = await fileOf($, log.path)
-  if (file !== undefined) await $.fs.write(file, all.map(line => `${JSON.stringify(line)}\n`).join(''))
+  if (file === undefined) return
+  if (!owned.has(file)) owned.set(file, isOwned($, file))
+  if (await owned.get(file)) await $.fs.write(file, all.map(line => `${JSON.stringify(line)}\n`).join(''))
 }
 
 function changeLog($: EngineInterface, log: Settings['log'], change: Change) {

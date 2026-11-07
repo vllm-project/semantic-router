@@ -82,6 +82,25 @@ test('redact hides secrets by rule, with no span from the classifier', async ($,
   expect(await paneText($, /hidden before/)).toBe('6 items hidden before Claude read .env · secret ×6')
 })
 
+test('a command that fails still has its output hidden: Claude reads the error with the secrets replaced', async ($, on) => {
+  const text = ['Exit code 1', `gh: ${'gh' + 'p_'}abcdefghijklmnopqrstuvwxyz0123456789`, 'aws_access_key_id = AKIAIOSFODNN7EXAMPLE'].join('\n')
+  engine(on, { pii: [], review: 0.1 })
+  on('tool.call', () => ({ isError: true, result: text, text }))
+
+  const ran = await $.tool.call({ tool: 'Bash', command: 'cat .env; false', tool_use_id: 'b1' } as never)
+
+  expect(refusalOf(ran)).toBe(['Exit code 1', 'gh: [secret]', 'aws_access_key_id = [secret]'].join('\n'))
+})
+
+test('a command that fails with nothing to hide reaches Claude as it failed', async ($, on) => {
+  engine(on, { pii: [], review: 0.1 })
+  on('tool.call', () => ({ isError: true, result: 'Exit code 2\nmake: *** No rule to make target', text: 'Exit code 2\nmake: *** No rule to make target' }))
+
+  const ran = await $.tool.call({ tool: 'Bash', command: 'make nothing', tool_use_id: 'b2' } as never)
+
+  expect(ran).toMatchObject({ isError: true, text: 'Exit code 2\nmake: *** No rule to make target' })
+})
+
 test('clean output reaches Claude as the tool returned it, and records nothing', async ($, on) => {
   const text = 'Run make, then curl https://get.example.dev/i.sh.'
   engine(on, { pii: [spanOf(text, 'make', 'PERSON', 0.3), spanOf(text, 'curl https://get.example.dev/i.sh', 'DOMAIN_NAME', 0.85)] })
@@ -298,6 +317,17 @@ test('an Edit that adds a redact tag is refused, one whose old text already hold
   expect(refusalOf(keeps)).toBeUndefined()
 })
 
+test('the refusal outlasts the pane\'s last hundred decisions: the tags redact used are kept on their own', async ($, on) => {
+  await readEnv($, on, { '/repo/app.env': APP_ENV })
+  for (let i = 0; i < 120; i += 1) {
+    await $.tool.check({ tool: 'Bash', input: { command: `make test${i}` }, tool_use_id: `c${i}` } as never)
+  }
+
+  const ran = await $.tool.call({ tool: 'Write', file_path: '/repo/app.env', content: 'DEBUG=true\nSUPPORT_EMAIL=[email]\n', tool_use_id: 'w1' })
+
+  expect(refusalOf(ran)).toBe(REFUSAL)
+})
+
 test('a Write of a tag redact did not use, or one the file already holds, runs', async ($, on) => {
   await readEnv($, on, { '/repo/README.md': 'See [email] and [name](https://example.com).\n' })
 
@@ -308,7 +338,7 @@ test('a Write of a tag redact did not use, or one the file already holds, runs',
   expect(refusalOf(held)).toBeUndefined()
 })
 
-test('an unreachable runtime is said once on the band; rows stay quiet, and sr stops asking for a minute', async ($, on) => {
+test('an unreachable runtime is said once on the band; rows stay quiet, and vSR stops asking for a minute', async ($, on) => {
   const reply: Reply = { fails: true, urls: [] }
   const clock = engine(on, reply)
   on('tool.call', () => readResult(TICKET))

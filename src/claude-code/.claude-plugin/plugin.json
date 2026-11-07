@@ -1,6 +1,6 @@
 {
   "name": "vsr",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "vSR runs a vLLM Semantic Router decision model (local CPU, local GPU or remote) inside Claude Code: routes subagents by difficulty, escalates when you push back, redacts personal data and secrets, shields against prompt injection, guards risky Bash commands, and checks answers against what Claude read.",
   "author": {
     "name": "Theo Hsiung"
@@ -170,7 +170,7 @@
     "routerGoal": {
       "type": "string",
       "title": "Router goal",
-      "description": "quality: never give a subagent a smaller model than the session's; only its effort changes. balanced: a smaller model only when the classifier is sure (the smaller-model confidence below). save: a smaller model whenever the classifier answers clearly enough to route.",
+      "description": "quality: never give a subagent a smaller model than the session's; one the router would make lighter keeps the session's model and effort. balanced: a smaller model only when the classifier is sure (the smaller-model confidence below). save: a smaller model whenever the classifier answers clearly enough to route.",
       "default": "balanced",
       "options": [
         "quality",

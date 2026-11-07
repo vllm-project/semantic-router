@@ -1,13 +1,23 @@
+import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Hook, PromptSubmitInput, TurnCompleteInput, TurnStartInput } from 'claude-code'
 
-import type { Signal } from '../types'
-import { classify, isRecord, numberAt, offlineOf, type Reply } from './lib/classify'
+import type { Escalation, Signal } from '../types'
+import { classify, isRecord, numberAt, offlineOf, QUICK_ANSWER_MS, type Reply } from './lib/classify'
 import type { Settings } from './lib/settings'
 import { fixed } from './lib/text'
-import { readEscalation, record, stamp, swapLastPrompt, updateEscalation } from './lib/state'
+import { record } from './lib/state'
+import { stamp } from './lib/env'
 
-// Past this the prompt goes on with no escalation (fail open).
-const ESCALATE_TIMEOUT_MS = 1500
+// The pushback the next subagent climbs for, until the turn it started ends.
+const escalation = atom({ plugin: 'vsr', key: 'escalation' } as const, null)
+// The prompt before this one, for the repeat question.
+const lastPrompt = atom({ plugin: 'vsr', key: 'lastPrompt' } as const, null)
+
+// Read by the router at a spawn: whether the user just pushed back.
+export async function readEscalation($: EngineInterface): Promise<Escalation | null> {
+  return read($, escalation)
+}
+
 // Prompts a person wrote: a notification, a peer's message or a trigger is no feedback.
 const PERSON_ORIGINS = new Set(['composer', 'bridge', 'sdk', 'unclassified'])
 
@@ -66,10 +76,11 @@ export async function escalatePrompt(
   settings: Settings,
 ) {
   if (!settings.apps.escalate || e.isMeta || e.command || e.text.trim() === '' || !PERSON_ORIGINS.has(e.origin.kind)) return next(e)
-  const prior = await swapLastPrompt($, e.text)
+  const prior = await read($, lastPrompt)
+  await update($, lastPrompt, () => e.text)
   const [feedback, repeat] = await Promise.all([
-    classify($, settings.runtime, e.text, { user_feedback: USER_FEEDBACK }, ESCALATE_TIMEOUT_MS, parseFeedback),
-    prior === null ? undefined : classify($, settings.runtime, { current: e.text, prior }, { reask: REASK }, ESCALATE_TIMEOUT_MS, parseReask),
+    classify($, settings.runtime, e.text, { user_feedback: USER_FEEDBACK }, QUICK_ANSWER_MS, parseFeedback),
+    prior === null ? undefined : classify($, settings.runtime, { current: e.text, prior }, { reask: REASK }, QUICK_ANSWER_MS, parseReask),
   ])
   const asked = repeat === undefined ? [feedback] : [feedback, repeat]
   const probabilities = feedback.ok ? feedback.value : null
@@ -77,14 +88,14 @@ export async function escalatePrompt(
   const signals = signalsOf(probabilities, reask, settings)
   const at = await stamp($)
   if (signals.length === 0) {
-    await updateEscalation($, () => null)
+    await update($, escalation, () => null)
     const failed = asked.find(one => !one.ok)
     if (failed !== undefined && !failed.ok) {
       await record($, settings.log, { kind: 'unavailable', app: 'escalate', id: at, at, prompt: e.text, subject: e.text, why: failed.why, ...offlineOf(failed) })
     }
     return next(e)
   }
-  await updateEscalation($, () => ({ prompt: e.text, signals, turnId: e.turnId }))
+  await update($, escalation, () => ({ prompt: e.text, signals, turnId: e.turnId }))
   const latencyMs = Math.max(...asked.map(one => one.latencyMs))
   await record($, settings.log, { kind: 'escalate', id: at, at, prompt: e.text, signals, feedback: probabilities, reask, latencyMs })
   const [first] = signals
@@ -94,13 +105,13 @@ export async function escalatePrompt(
 
 // The first main turn to start after a pushback is the one that answers it.
 export async function holdEscalation($: EngineInterface, e: TurnStartInput) {
-  const held = await readEscalation($)
+  const held = await read($, escalation)
   if (held !== null && held.turnId === undefined) {
-    await updateEscalation($, now => (now === null ? null : { ...now, turnId: e.turnId }))
+    await update($, escalation, now => (now === null ? null : { ...now, turnId: e.turnId }))
   }
 }
 
 export async function releaseEscalation($: EngineInterface, e: TurnCompleteInput) {
-  const held = await readEscalation($)
-  if (held !== null && held.turnId === e.turnId) await updateEscalation($, () => null)
+  const held = await read($, escalation)
+  if (held !== null && held.turnId === e.turnId) await update($, escalation, () => null)
 }

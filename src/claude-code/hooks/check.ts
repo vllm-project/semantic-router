@@ -1,16 +1,26 @@
-import type { EngineInterface, TurnCompleteInput, TurnStartInput } from 'claude-code'
+import { atom, read, update } from 'claude-code'
+import type { EngineInterface, ToolCallInput, ToolCallResult, TurnCompleteInput, TurnStartInput } from 'claude-code'
 
-import { classify, numberAt, offlineOf, type Reply } from './lib/classify'
+import type { TurnReads } from '../types'
+
+import { ANSWER_MS, classify, numberAt, offlineOf, type Reply } from './lib/classify'
 import type { Settings } from './lib/settings'
-import { EMPTY_TURN, readTurn, record, stamp, updateTurn } from './lib/state'
+import { record } from './lib/state'
+import { stamp } from './lib/env'
 import { firstChars } from './lib/text'
+import { outputOf, sourceOf } from './output'
 
-// Past this the turn ends with no check (fail open).
-const CHECK_TIMEOUT_MS = 3000
 const MIN_ANSWER_CHARS = 40
 const ANSWER_CHARS = 8000
 // Enough of the answer's end to find its last drawn block again.
 const TAIL_CHARS = 400
+// What check keeps of a turn's reads, in characters.
+const KEPT_CONTEXT_CHARS = 8000
+// The tools whose output an answer is checked against.
+const CHECKED = new Set(['Read', 'Bash'])
+
+const EMPTY_TURN: TurnReads = { prompt: '', files: 0, commands: 0, context: '' }
+const turnReads = atom({ plugin: 'vsr', key: 'turn' } as const, EMPTY_TURN)
 
 const HALLUCINATION = {
   hallucination: {
@@ -23,19 +33,34 @@ const HALLUCINATION = {
 const parseHallucination = ({ answers }: Reply) => numberAt(answers.hallucination, 'noul')
 
 export async function startTurnReads($: EngineInterface, e: TurnStartInput) {
-  await updateTurn($, () => ({ ...EMPTY_TURN, prompt: e.text }))
+  await update($, turnReads, () => ({ ...EMPTY_TURN, prompt: e.text }))
+}
+
+// Keeps what a main-loop Read or Bash gave Claude (after redact), for the check at the turn's end.
+export async function noteRead($: EngineInterface, e: ToolCallInput, ran: ToolCallResult, settings: Settings) {
+  const tool = String(e.tool)
+  if (!settings.apps.check || !CHECKED.has(tool) || e.agentId !== undefined) return
+  const fields = outputOf(tool, ran)?.fields.filter(field => field.trim() !== '') ?? []
+  if (fields.length === 0) return
+  const read = `${await sourceOf($, e)}:\n${fields.join('\n')}`
+  await update($, turnReads, turn => ({
+    ...turn,
+    files: turn.files + (tool === 'Read' ? 1 : 0),
+    commands: turn.commands + (tool === 'Bash' ? 1 : 0),
+    context: firstChars(turn.context === '' ? read : `${turn.context}\n\n${read}`, KEPT_CONTEXT_CHARS),
+  }))
 }
 
 // Checks a main-loop answer against what its turn read.
 export async function checkTurn($: EngineInterface, e: TurnCompleteInput, settings: Settings) {
   if (!settings.apps.check) return
-  const turn = await readTurn($)
-  await updateTurn($, () => EMPTY_TURN)
+  const turn = await read($, turnReads)
+  await update($, turnReads, () => EMPTY_TURN)
   const answer = e.answer.trim()
   if (e.reason !== 'answer' || turn.files + turn.commands === 0 || answer.length < MIN_ANSWER_CHARS) return
 
   const state = { context: turn.context, request: turn.prompt, answer: firstChars(answer, ANSWER_CHARS) }
-  const asked = await classify($, settings.runtime, state, HALLUCINATION, CHECK_TIMEOUT_MS, parseHallucination)
+  const asked = await classify($, settings.runtime, state, HALLUCINATION, ANSWER_MS, parseHallucination)
   const line = settings.thresholds.check.unsupported
   const at = await stamp($)
   const answerTail = answer.slice(-TAIL_CHARS)

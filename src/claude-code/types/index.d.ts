@@ -18,10 +18,10 @@ export type App = 'router' | 'escalate' | 'redact' | 'shield' | 'guard' | 'check
 // What a pushback looked like: the feedback the prompt gave, or a repeat of the prior prompt, and the line it crossed.
 export type Signal = { kind: 'wrong' | 'different' | 'repeat'; score: number; threshold: number }
 
-// The router's tier lines on the expected difficulty level (0 to 2): below the first easy, from the second on hard.
-// Dollars at list price over the routed subagents' turns.
-export type Spend = { actual: number; baseline: number; turns: number }
+// Dollars at list price over the routed subagents' turns, and the session model they were routed from.
+export type Spend = { actual: number; baseline: number; turns: number; sessionModel?: string }
 
+// The router's tier lines on the expected difficulty level (0 to 2): below the first easy, from the second on hard.
 export type Tiers = { easyBelow: number; hardFrom: number }
 
 // The tag a hidden piece of text is replaced with, without its brackets.
@@ -97,7 +97,8 @@ export type Decision =
       review: number
       threshold: number
       latencyMs: number
-      // The parts past the ones the guard checks one by one; a command with any is held whatever its score.
+      // The parts not checked: past the ones the guard checks one by one, or timed out or answered with an error
+      // while the runtime was up. A command with any is held whatever its score.
       unchecked?: number
       // The fixed rule that holds a catastrophic command whatever its score (`alwaysHeld`).
       rule?: string
@@ -173,6 +174,8 @@ declare module 'claude-code' {
       escalation: Escalation | null
       lastPrompt: string | null
       turn: TurnReads
+      // The tags redact put in place of values this session; a Write or Edit adding one back is refused.
+      hiddenTags: Tag[]
       // Set once the session's check of the runtime found it not answering; cleared by any answer.
       isOffline: boolean
       // When a request last went to a runtime known to be offline.
@@ -182,6 +185,8 @@ declare module 'claude-code' {
       labels: Record<string, 'right' | 'wrong' | 'too-low' | 'too-high'>
       // What routed subagents cost at list price, and what the same tokens would have cost on the session's model.
       spend: Spend
+      // The session model each routed subagent was routed from, by its agent id.
+      routedFrom: Record<string, string>
     }
   }
 }

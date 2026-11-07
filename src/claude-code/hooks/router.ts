@@ -2,14 +2,14 @@ import { atom, read, update } from 'claude-code'
 import type { AgentSpawnInput, EngineInterface, Hook, TurnCompleteInput, TurnStepInput } from 'claude-code'
 
 import type { Model, Spend, Steps, Tiers } from '../types'
-import { classify, numberAt, offlineOf, type Reply } from './lib/classify'
+import { classify, numberAt, offlineOf, QUICK_ANSWER_MS, type Reply } from './lib/classify'
 import { effortFor, type Picked, pickEffort, raised, type StepsLines } from './lib/effort'
 import type { Settings } from './lib/settings'
 import { costOf } from './lib/prices'
-import { readDecisions, readEscalation, record, stamp, updateDecision } from './lib/state'
+import { readEscalation } from './escalate'
+import { record, updateDecision } from './lib/state'
+import { stamp } from './lib/env'
 
-// Past this the spawn goes on as it would have without the plugin (fail open).
-const SPAWN_TIMEOUT_MS = 1500
 // Only these subagent types are routed: others (Explore, plugin agents) keep the model their definition picks.
 const ROUTED_TYPES = new Set(['general-purpose'])
 
@@ -41,22 +41,35 @@ function routeOf(score: number, { easyBelow, hardFrom }: Tiers): Route {
   return { model: 'opus', floor: true }
 }
 
-const RANK: Record<Model, number> = { haiku: 0, sonnet: 1, opus: 2 }
+// The models a subagent can be routed to, cheapest first.
+const MODELS: readonly Model[] = ['haiku', 'sonnet', 'opus']
+const RANK = Object.fromEntries(MODELS.map((model, rank) => [model, rank])) as Record<Model, number>
 
 // The model a subagent has when the router leaves it alone: the session's, by its id. A model above Opus
 // (Fable, say) ranks above every route, so `model` is undefined: the router never names it.
 function defaultOf(parentModel: string): { model: Model | undefined; rank: number } {
-  const model = (['haiku', 'sonnet', 'opus'] as const).find(name => parentModel.includes(name))
-  return model === undefined ? { model, rank: 3 } : { model, rank: RANK[model] }
+  const model = MODELS.find(name => parentModel.includes(name))
+  return model === undefined ? { model, rank: MODELS.length } : { model, rank: RANK[model] }
 }
+
+// What a subagent starts on: `model` undefined keeps the session's; `floor`, the effort never drops below its own.
+type Start = { model: Model | undefined; picked: Picked; floor: boolean }
 
 // After a pushback the next subagent climbs one step: never below the session's model, one effort level above
 // what it would have had, and only from Haiku, whose effort is fixed, to the next model.
-function escalatedRoute(alone: Model | undefined, fallback: ReturnType<typeof defaultOf>, steps: Steps | null, lines: StepsLines) {
+function escalatedRoute(alone: Model | undefined, fallback: ReturnType<typeof defaultOf>, steps: Steps | null, lines: StepsLines): Start {
   const base = alone !== undefined && RANK[alone] > fallback.rank ? alone : fallback.model
   const model = base === 'haiku' ? 'sonnet' : base
-  const picked: Picked = { effort: raised(pickEffort(model ?? 'opus', steps, lines).effort), from: 'escalated' }
-  return { model, picked }
+  return { model, picked: { effort: raised(pickEffort(model ?? 'opus', steps, lines).effort), from: 'escalated' }, floor: true }
+}
+
+// Why the router leaves a subagent on the session's model, or undefined to route it: unsure of the answer, or a
+// smaller model than the session's without the certainty that costs most when wrong (or the goal is quality).
+function keepReason(isSure: boolean, isSmaller: boolean, confidence: number, smallerLine: number, goal: Settings['routerGoal']) {
+  if (!isSure) return 'unsure'
+  if (!isSmaller) return undefined
+  if (goal === 'quality') return 'quality'
+  return confidence < smallerLine ? 'downgrade' : undefined
 }
 
 // A usable answer, or none: a missing or malformed steps answer is the same as no answer.
@@ -75,68 +88,77 @@ function parseAnswers({ answers }: Reply) {
 // The route each routed subagent runs on, by its agent id.
 const routes = new Map<string, { picked: Picked; floor: boolean }>()
 
+// The session model each routed subagent was routed from, by its agent id: what its spend is compared against.
+const routedFrom = atom({ plugin: 'vsr', key: 'routedFrom' } as const, {})
+
+// Starts a subagent on `start`. The model is named only off the session's tier: an alias of the same tier would swap
+// a pinned session model (claude-opus-4-8, say) for the alias's own.
+async function spawnOn(
+  $: EngineInterface,
+  e: AgentSpawnInput,
+  next: Parameters<Hook<'agent.spawn'>>[2],
+  start: Start,
+  fallback: ReturnType<typeof defaultOf>,
+) {
+  const isOwnTier = start.model === undefined || RANK[start.model] === fallback.rank
+  const result = await next(isOwnTier ? e : { ...e, model: start.model })
+  const { agentId } = result
+  if (agentId !== undefined) {
+    routes.set(agentId, { picked: start.picked, floor: start.floor })
+    await update($, routedFrom, now => ({ ...now, [agentId]: e.parentModel }))
+  }
+  return result
+}
+
 export async function routeSpawn(
   $: EngineInterface,
   e: AgentSpawnInput,
   next: Parameters<Hook<'agent.spawn'>>[2],
   settings: Settings,
 ) {
-  if (!settings.apps.router || e.fork || e.isTeammate || e.model !== undefined || !ROUTED_TYPES.has(e.subagentType)) {
-    return next(e)
-  }
+  // A resumed subagent keeps the model and effort it ran on: the engine refuses a new model for it.
+  const isLeftAlone = e.fork || e.isTeammate || e.resume !== undefined || e.model !== undefined || !ROUTED_TYPES.has(e.subagentType)
+  if (!settings.apps.router || isLeftAlone) return next(e)
   const { router } = settings.thresholds
   const lines = { low: router.stepsLow, high: router.stepsHigh, minConfidence: router.stepsMinConfidence }
   const tiers = { easyBelow: router.easyBelow, hardFrom: router.hardFrom }
   const fallback = defaultOf(e.parentModel)
   const isEscalated = (await readEscalation($)) !== null
-  const asked = await classify($, settings.runtime, e.prompt, { complexity: COMPLEXITY, steps: STEPS }, SPAWN_TIMEOUT_MS, parseAnswers)
-  const at = await stamp($)
-  const anchor = { id: e.tool_use_id, toolUseId: e.tool_use_id, at }
+  const asked = await classify($, settings.runtime, e.prompt, { complexity: COMPLEXITY, steps: STEPS }, QUICK_ANSWER_MS, parseAnswers)
+  const anchor = { id: e.tool_use_id, toolUseId: e.tool_use_id, at: await stamp($) }
   if (!asked.ok) {
     const why = isEscalated ? `${asked.why} · escalated, so one step up anyway` : asked.why
     await record($, settings.log, { kind: 'unavailable', app: 'router', ...anchor, subject: e.description, why, ...offlineOf(asked) })
-    if (!isEscalated) return next(e)
-    const up = escalatedRoute(undefined, fallback, null, lines)
-    const result = await next(up.model === undefined ? e : { ...e, model: up.model })
-    if (result.agentId) routes.set(result.agentId, { picked: up.picked, floor: true })
-    return result
+    return isEscalated ? spawnOn($, e, next, escalatedRoute(undefined, fallback, null, lines), fallback) : next(e)
   }
   const { complexity: { score, confidence }, steps } = asked.value
   const facts = { task: e.description, level: score, confidence, tiers, latencyMs: asked.latencyMs }
   const alone = routeOf(score, tiers)
   const isSure = confidence >= router.minConfidence
-  // A smaller model than the session's costs the most when the router is wrong, so it needs more certainty.
-  const isSmaller = RANK[alone.model] < fallback.rank
   const smallerLine = settings.routerGoal === 'save' ? router.minConfidence : Math.max(router.minConfidence, router.downgradeConfidence)
-  const reason = !isSure ? 'unsure' : !isSmaller ? undefined : settings.routerGoal === 'quality' ? 'quality' : confidence < smallerLine ? 'downgrade' : undefined
-  if (reason !== undefined && !isEscalated) {
+  const reason = isEscalated ? undefined : keepReason(isSure, RANK[alone.model] < fallback.rank, confidence, smallerLine, settings.routerGoal)
+  if (reason !== undefined) {
     const result = await next(e)
-    await record($, settings.log, {
-      kind: 'keep',
-      ...anchor,
-      id: result.agentId ?? e.tool_use_id,
-      model: result.model,
-      minConfidence: reason === 'downgrade' ? smallerLine : router.minConfidence,
-      reason,
-      ...facts,
-    })
+    if (result.deny !== undefined) return result
+    const minConfidence = reason === 'downgrade' ? smallerLine : router.minConfidence
+    await record($, settings.log, { kind: 'keep', ...anchor, id: result.agentId ?? e.tool_use_id, model: result.model, minConfidence, reason, ...facts })
     return result
   }
-  const up = isEscalated ? escalatedRoute(isSure ? alone.model : undefined, fallback, steps, lines) : undefined
-  const model = up ? up.model : alone.model
-  const floor = up ? true : alone.floor
-  const picked = up ? up.picked : pickEffort(alone.model, steps, lines)
-  const result = await next(model === undefined ? e : { ...e, model })
-  if (result.agentId) routes.set(result.agentId, { picked, floor })
+  const start = isEscalated
+    ? escalatedRoute(isSure ? alone.model : undefined, fallback, steps, lines)
+    : { model: alone.model, picked: pickEffort(alone.model, steps, lines), floor: alone.floor }
+  const result = await spawnOn($, e, next, start, fallback)
+  if (result.deny !== undefined) return result
   await record($, settings.log, {
     kind: 'route',
     ...anchor,
     id: result.agentId ?? e.tool_use_id,
     agentId: result.agentId,
-    model: model ?? result.model,
-    picked: picked.effort,
+    // The model it runs on, as the engine started it: a session setting can override the router's.
+    model: result.model,
+    picked: start.picked.effort,
     steps,
-    effortFrom: picked.from,
+    effortFrom: start.picked.from,
     ...facts,
     ...(isEscalated ? { escalated: { alone: isSure ? alone.model : 'default' } } : {}),
     sessionModel: e.parentModel,
@@ -155,12 +177,12 @@ export async function readSpend($: EngineInterface): Promise<Spend> {
 // A routed subagent's turn, priced at list price on the model that answered and on the session's model.
 export async function countSpend($: EngineInterface, e: TurnCompleteInput) {
   if (e.agentId === undefined || e.usage === undefined) return
-  const route = (await readDecisions($)).find(d => d.kind === 'route' && d.agentId === e.agentId)
-  if (route?.kind !== 'route' || route.sessionModel === undefined) return
+  const sessionModel = (await read($, routedFrom))[e.agentId]
+  if (sessionModel === undefined) return
   const actual = costOf(e.usage.model, e.usage)
-  const baseline = costOf(route.sessionModel, e.usage)
+  const baseline = costOf(sessionModel, e.usage)
   if (actual === undefined || baseline === undefined) return
-  await update($, spend, now => ({ actual: now.actual + actual, baseline: now.baseline + baseline, turns: now.turns + 1 }))
+  await update($, spend, now => ({ actual: now.actual + actual, baseline: now.baseline + baseline, turns: now.turns + 1, sessionModel }))
 }
 
 export async function* routeStep(

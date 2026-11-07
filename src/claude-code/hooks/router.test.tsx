@@ -24,7 +24,7 @@ const STEPS_QUESTION = {
 }
 
 function subagent(on: Parameters<typeof engine>[0]) {
-  on('agent.spawn', (_, e) => ({ model: e.model ?? 'opus', agentId: 'agent-1' }))
+  on('agent.spawn', (_, e) => ({ model: e.model ?? e.parentModel, agentId: 'agent-1' }))
   on('turn.step', async function* (_, e) {
     return { turnId: e.turnId, index: e.index, answer: '', toolUses: [] }
   })
@@ -334,7 +334,7 @@ test('an Agent row with a route draws a ROUTED card with the difficulty meter, a
 test('the ROUTED footnote says where the effort came from', { options: { display: 'verbose', routerGoal: 'save' } }, async ($, on) => {
   const reply: Reply = { complexity: { score: 1.61, confidence: 0.42 }, steps: { score: 1.33, confidence: 0.35 } }
   engine(on, reply)
-  on('agent.spawn', (_, e) => ({ model: e.model ?? 'opus', agentId: e.tool_use_id }))
+  on('agent.spawn', (_, e) => ({ model: e.model ?? e.parentModel, agentId: e.tool_use_id }))
   const noteOf = async (id: string) => (await rowTree($, agentRow(id))).texts.find(text => text.startsWith('confidence '))
   const spawn = (id: string) => $.agent.spawn({ ...SPAWN, tool_use_id: id, description: 'Fix a typo' })
 
@@ -405,4 +405,25 @@ test('an Agent row whose classifier failed draws a SKIPPED card of two lines and
   expect(texts).toContain('○  SKIPPED  router skipped: classifier unavailable')
   expect(texts).toContainEqual(expect.stringMatching(/HTTP 500/))
   expect(texts.filter(text => text.includes('▕'))).toEqual([])
+})
+
+test('a resumed subagent keeps the model and effort it ran on: nothing is asked and nothing is recorded', async ($, on) => {
+  const reply: Reply = { complexity: { score: 1.8, confidence: 0.95 }, steps: { score: 1.8, confidence: 0.95 }, bodies: [] }
+  engine(on, reply)
+  subagent(on)
+
+  const started = await $.agent.spawn({ ...SPAWN, resume: { agentId: 'agent-1' } } as never)
+
+  expect(started.model).toBe('opus')
+  expect(reply.bodies).toEqual([])
+  expect(await paneText($, /ROUTED|KEPT/)).toBeUndefined()
+})
+
+test('a route to the session\'s own tier names no model, so a pinned session model is kept', async ($, on) => {
+  engine(on, { complexity: { score: 1.8, confidence: 0.95 }, steps: { score: 1.8, confidence: 0.95 } })
+  subagent(on)
+
+  const started = await $.agent.spawn({ ...SPAWN, parentModel: 'claude-opus-4-8' })
+
+  expect(started.model).toBe('claude-opus-4-8')
 })

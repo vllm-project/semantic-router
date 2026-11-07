@@ -3,6 +3,7 @@ import { expect, test } from 'claude-code/testing'
 import {
   bandRow,
   engine,
+  HOME,
   LOG_FILE,
   logLines,
   paneLines,
@@ -53,6 +54,7 @@ test('every decision is one log line of the calibration shape, and a guard line 
     threshold: 0.9,
     subject: 'git push --force origin main',
     detail: { risk: 'destructive', riskProbability: 0.84, review: 0.98, parts: 1, outcome: null },
+    learnable: true,
   }
   expect(logLines(reply)).toEqual([held])
 
@@ -74,7 +76,7 @@ test('each app writes its own line: score, threshold, subject and detail', { opt
     files: {},
   }
   const clock = engine(on, reply)
-  on('agent.spawn', (_, e) => ({ model: e.model ?? 'opus', agentId: 'agent-1' }))
+  on('agent.spawn', (_, e) => ({ model: e.model ?? e.parentModel, agentId: 'agent-1' }))
   on('turn.step', async function* (_, e) {
     return { turnId: e.turnId, index: e.index, answer: '', toolUses: [] }
   })
@@ -91,7 +93,7 @@ test('each app writes its own line: score, threshold, subject and detail', { opt
   await check($, 'git status')
   await clock.advance(0)
 
-  const base = { at: AT, session: SESSION }
+  const base = { at: AT, session: SESSION, learnable: true }
   expect(logLines(reply)).toEqual([
     {
       ...base,
@@ -160,6 +162,7 @@ test('each app writes its own line: score, threshold, subject and detail', { opt
       score: null,
       threshold: null,
       subject: 'git status',
+      learnable: false,
       detail: { why: expect.stringMatching(/connection refused/) },
     },
   ])
@@ -179,7 +182,7 @@ test('a log subject never carries a secret the rules hide', async ($, on) => {
 test('a route line carries the steps answer and where the effort came from, a kept one carries neither', { options: { routerGoal: 'save' } }, async ($, on) => {
   const reply: Reply = { complexity: { score: 0.62, confidence: 0.39 }, steps: { score: 0.52, confidence: 0.23 }, files: {} }
   const clock = engine(on, reply)
-  on('agent.spawn', (_, e) => ({ model: e.model ?? 'opus', agentId: `agent-${e.tool_use_id}` }))
+  on('agent.spawn', (_, e) => ({ model: e.model ?? e.parentModel, agentId: `agent-${e.tool_use_id}` }))
   on('turn.step', async function* (_, e) {
     return { turnId: e.turnId, index: e.index, answer: '', toolUses: [] }
   })
@@ -216,6 +219,52 @@ test('a ~/ log path lands under HOME; with HOME unset the file is not written, t
 
   expect(reply.files).toEqual({})
   expect(await paneText($, /^calibrated/, 120)).toBe('calibrated  never · 1 decision since · log ~/.claude/vsr/decisions.jsonl')
+})
+
+test('with CLAUDE_CONFIG_DIR set, the default log goes into that config directory', async ($, on) => {
+  const reply: Reply = { review: 0.2, files: {}, env: { HOME, CLAUDE_CONFIG_DIR: '/tmp/cfg' } }
+  const clock = engine(on, reply)
+
+  await check($, 'ls')
+  await clock.advance(0)
+
+  expect(Object.keys(reply.files ?? {})).toEqual(['/tmp/cfg/vsr/decisions.jsonl'])
+})
+
+test('a relative log path is refused, so no project gets another\'s commands', { options: { logPath: 'logs/vsr.jsonl' } }, async ($, on) => {
+  const reply: Reply = { review: 0.2, files: {} }
+  const clock = engine(on, reply)
+
+  await check($, 'ls')
+  await clock.advance(0)
+
+  expect(reply.files).toEqual({})
+})
+
+test('a file of its own at the log path is left alone, not replaced by the log', async ($, on) => {
+  const reply: Reply = { review: 0.2, files: { [LOG_FILE]: 'my own notes\n' } }
+  const clock = engine(on, reply)
+  on('fs.read', () => ({ value: 'my own notes\n' }))
+
+  await check($, 'ls')
+  await clock.advance(0)
+
+  expect(reply.files).toEqual({ [LOG_FILE]: 'my own notes\n' })
+})
+
+test('each log line says whether calibration learns from it', async ($, on) => {
+  const reply: Reply = { review: 0.2, files: {} }
+  const clock = engine(on, reply)
+  on('classic.PermissionRequest', () => ({ decision: 'deny' }) as never)
+
+  await check($, 'ls')
+  await $.tool.check({ tool: 'Bash', input: { command: 'rm -rf ~' }, tool_use_id: 'r1' } as never)
+  await clock.advance(0)
+
+  expect(logLines(reply).map(line => [line.subject, line.learnable])).toEqual([
+    ['ls', true],
+    ['rm -rf ~', false],
+  ])
 })
 
 test('an empty log path writes no line and reminds of nothing', { options: { logPath: '', calibrateEvery: 1 } }, async ($, on) => {
@@ -318,7 +367,7 @@ test('the router, check and shield lines follow their options', {
 }, async ($, on) => {
   const reply: Reply = { complexity: { score: 0.09, confidence: 0.86 }, hallucination: 0.53, jailbreak: 0.82 }
   engine(on, reply)
-  on('agent.spawn', (_, e) => ({ model: e.model ?? 'inherited', agentId: 'agent-1' }))
+  on('agent.spawn', (_, e) => ({ model: e.model ?? e.parentModel, agentId: 'agent-1' }))
   on('tool.call', () => readResult('1. Write the tests.'))
 
   const started = await $.agent.spawn(SPAWN)
@@ -339,14 +388,14 @@ test('an app turned off asks the classifier nothing and records nothing', {
 }, async ($, on) => {
   const reply: Reply = { review: 0.98, complexity: { score: 0.09, confidence: 0.86 }, bodies: [], files: {} }
   const clock = engine(on, reply)
-  on('agent.spawn', (_, e) => ({ model: e.model ?? 'inherited', agentId: 'agent-1' }))
+  on('agent.spawn', (_, e) => ({ model: e.model ?? e.parentModel, agentId: 'agent-1' }))
 
   const verdict = await check($, 'git push --force origin main')
   const started = await $.agent.spawn(SPAWN)
   await clock.advance(0)
 
   expect(verdict.decision).toBe('allow')
-  expect(started.model).toBe('inherited')
+  expect(started.model).toBe('opus')
   expect(reply.bodies).toEqual([])
   expect(reply.files).toEqual({})
   expect(await paneText($, /No decisions/)).toBe('No decisions yet. Each one appears under the row it decided on.')
