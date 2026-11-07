@@ -254,16 +254,19 @@ Every check must pass. Header names are case-insensitive, so use `grep -i`.
 
    ```bash
    curl -s -D - -o answer.json http://127.0.0.1:8899/v1/chat/completions \
-     -H 'Content-Type: application/json' -H 'x-vsr-debug: true' \
+     -H 'Content-Type: application/json' \
      -d '{"model": "vllm-sr/auto", "max_tokens": 64,
           "messages": [{"role": "user", "content": "In one sentence, why does a Python function return None?"}]}' \
-     | grep -iE '^(HTTP|x-vsr-selected-(decision|model)|x-vsr-matched|server)'
+     | grep -iE '^(HTTP|x-vsr-selected-(decision|model)|server)'
    python3 -c 'import json; c = json.load(open("answer.json"))["choices"][0]; print(c["finish_reason"], repr(c["message"]["content"][:200]))'
    ```
 
    Pass: `HTTP/1.1 200 OK`, `x-vsr-selected-decision: code-route`,
-   `x-vsr-selected-model: MODEL`, `x-vsr-matched-keywords: code_request`, and
-   non-empty content. `server: envoy` appears only with `--gateway extproc`.
+   `x-vsr-selected-model: MODEL`, and non-empty content. `server: envoy`
+   appears only with `--gateway extproc`. The matched signals
+   (`x-vsr-matched-*`) are debug headers, sent only when
+   `global.router.headers.debug` allows the caller; step 3's `--trace` shows
+   each condition without them.
 5. **Probe**, the CLI's own end-to-end assertion:
 
    ```bash

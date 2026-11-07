@@ -106,7 +106,7 @@ jobs:
         if: always()
         with:
           overwrite: true
-          name: core-framework-evidence
+          name: core-framework-evidence-attempt-${{ github.run_attempt }}
           path: .agent-harness/core/
           include-hidden-files: true
           if-no-files-found: error

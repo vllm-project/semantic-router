@@ -3,12 +3,16 @@ package modelservice
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
 	"sync/atomic"
+	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
 )
 
@@ -34,9 +38,29 @@ type Client struct {
 
 // NewClient builds a client for unix:///path, http://host:port or https://host:port.
 func NewClient(endpoint string) (*Client, error) {
-	base, httpClient, err := newHTTPClient(endpoint)
+	return NewAttachedClient(endpoint, config.ModelDeployment{})
+}
+
+// NewAttachedClient builds a client for a runtime the Router attaches to,
+// through the deployment's connection block: its auth and headers on every
+// call, its tls for an https endpoint, and timeout_ms for each call.
+func NewAttachedClient(endpoint string, connection config.ModelDeployment) (*Client, error) {
+	var tlsConfig *tls.Config
+	if connection.TLS != nil {
+		var err error
+		if tlsConfig, err = connection.TLS.ClientConfig(); err != nil {
+			return nil, err
+		}
+	}
+	base, httpClient, err := newHTTPClient(endpoint, tlsConfig)
 	if err != nil {
 		return nil, err
+	}
+	if connection.Auth != nil || len(connection.Headers) > 0 {
+		httpClient.Transport = authorizingTransport{next: httpClient.Transport, authorize: connector.DeploymentAuthorizer(connection.Auth, connection.Headers)}
+	}
+	if connection.TimeoutMs > 0 {
+		httpClient.Timeout = time.Duration(connection.TimeoutMs) * time.Millisecond
 	}
 	httpClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	physical := budgetTransport{next: httpClient}
