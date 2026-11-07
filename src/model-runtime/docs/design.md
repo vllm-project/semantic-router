@@ -1130,9 +1130,17 @@ their tokens, and answers 429 at once, for a whole group or none of it. On
 CPU, workers of different models share the process's intra-op thread pool
 (`--threads`). On a GPU, each device call (load, warm-up, golden check, a
 batch) holds the device's lock (`GPUAccelerator.execute`), so the models of
-one GPU never launch work at once: a model captures a HIP / CUDA graph the
-second time it sees a shape, and a capture fails when another thread
-launches work on the device, whatever the capture mode.
+one GPU never launch work at once: a capture fails when another thread
+launches work on the device, whatever the capture mode. The native decoder
+normally captures a HIP / CUDA graph on a shape's second use. At three
+quarters of the graph-count or byte limit, ordinary shapes instead need
+eight sightings; first-use branch buckets keep their immediate-capture
+contract. The byte budget is fixed at the first capture from then-free
+memory, and caches smaller than four graphs have no count-based reserve.
+Candidate reuse evidence is bounded by recency; captured graphs are never
+evicted. Graph receipts separate lookups, misses and eager reasons; `full`
+counts rejected capture attempts, while other full-cache misses can still
+be counted as `warmup` or `pressure` before an attempt.
 
 A model whose batches need no device thread (`device_thread = False`, today
 an Omni ONNX bundle) runs them without the CPU's device thread (on

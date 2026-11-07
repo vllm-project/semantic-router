@@ -11,7 +11,7 @@ many        the public many-question request (``many_questions.py``) at 16, 64 a
 throughput  the first --throughput-count prompts in waves of C concurrent requests through the scheduler, each
             request alone in its released forwards and with the default engine arguments (rows of concurrent
             requests merged), two untimed passes then a timed one: requests/s, the mean wave latency and the
-            timed pass's graph captures / replays / eager forwards per C
+            timed pass's graph lookups / misses / captures / replays / eager forwards per C
 Every request is timed with the device synchronized around it.
 """
 
@@ -176,8 +176,8 @@ def main() -> int:
             if graphs is not None:
                 after = graphs.receipt()
                 per[str(concurrency)]["graphs"] = {
-                    key: after[key] - before.get(key, 0)
-                    for key in ("captures", "replays", "eager")
+                    key: after.get(key, 0) - before.get(key, 0)
+                    for key in ("lookups", "misses", "captures", "replays", "eager")
                 }
             print(
                 json.dumps(

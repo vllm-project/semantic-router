@@ -79,6 +79,52 @@ def test_close_releases_the_loaded_model():
     assert ref() is None
 
 
+def test_native_graph_stats_and_deltas_include_lookups_and_misses():
+    counters = {
+        "lookups": 20,
+        "misses": 9,
+        "captures": 3,
+        "replays": 14,
+        "eager": 6,
+        "cached": 3,
+        "candidates": 1,
+        "spent_bytes": 75,
+        "budget_bytes": 100,
+        "eager_reasons": {"warmup": 4, "pressure": 2},
+    }
+    model = Namespace(engine_model=Namespace(receipt=lambda: {"graphs": counters}))
+    side = bench.BenchmarkSide(model, "cpu", native=True)
+    before = side.graph_stats()
+    assert before == counters
+    counters.update(lookups=30, misses=13, captures=4, replays=21, eager=9)
+    assert bench.graph_delta(before, side.graph_stats()) == {
+        "lookups": 10,
+        "misses": 4,
+        "captures": 1,
+        "replays": 7,
+        "eager": 3,
+    }
+
+
+def test_encoder_receipts_without_lookup_counters_remain_compatible():
+    model = Namespace(
+        engine_model=Namespace(
+            receipt=lambda: {
+                "encoder_graphs": {"captures": 1, "replays": 2, "eager": 3}
+            }
+        )
+    )
+    side = bench.BenchmarkSide(model, "cpu", native=True)
+    assert side.graph_stats() == {
+        "lookups": 0,
+        "misses": 0,
+        "captures": 1,
+        "replays": 2,
+        "eager": 3,
+    }
+    assert bench.BenchmarkSide(model, "cpu").graph_stats() == {}
+
+
 def test_sequential_unloads_each_side_before_loading_the_next(monkeypatch):
     events = []
     active = []
@@ -132,14 +178,25 @@ def test_failed_measurement_still_releases_model(monkeypatch, failure):
             )
 
         def graph_stats(self):
-            return {"captures": self.calls if failure == "capture" else 0}
+            return {
+                "captures": self.calls if failure == "capture" else 0,
+                "cached": 3,
+                "spent_bytes": 75,
+                "budget_bytes": 100,
+                "eager_reasons": {"pressure": self.calls},
+            }
 
         def close(self):
             closed.append(True)
 
     monkeypatch.setattr(bench, "native", lambda args: Side())
-    with pytest.raises(SystemExit, match=r"error|captures"):
+    with pytest.raises(SystemExit, match=r"error|captures") as error:
         bench._load_and_time("native", Namespace(warmup_passes=0), [BODY])
+    if failure == "capture":
+        message = str(error.value)
+        assert "--warmup-passes" in message
+        assert '"spent_bytes": 75' in message and '"budget_bytes": 100' in message
+        assert '"pressure": 1' in message
     assert closed == [True]
 
 
