@@ -104,8 +104,40 @@ func (r *SemanticRouterReconciler) reconcilePVC(ctx context.Context, sr *vllmv1a
 	if err != nil && errors.IsNotFound(err) {
 		return r.Create(ctx, pvc)
 	}
+	if err != nil {
+		return err
+	}
 
-	return err
+	desiredStorage := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+	currentStorage := found.Spec.Resources.Requests[corev1.ResourceStorage]
+	if currentStorage.Cmp(desiredStorage) == 0 {
+		return nil
+	}
+	if currentStorage.Cmp(desiredStorage) > 0 {
+		return fmt.Errorf("cannot shrink PersistentVolumeClaim %s/%s from %s to %s; Kubernetes does not support PVC shrink",
+			found.Namespace, found.Name, currentStorage.String(), desiredStorage.String())
+	}
+
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := r.Get(ctx, types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, found); err != nil {
+			return err
+		}
+
+		currentStorage := found.Spec.Resources.Requests[corev1.ResourceStorage]
+		if currentStorage.Cmp(desiredStorage) == 0 {
+			return nil
+		}
+		if currentStorage.Cmp(desiredStorage) > 0 {
+			return fmt.Errorf("cannot shrink PersistentVolumeClaim %s/%s from %s to %s; Kubernetes does not support PVC shrink",
+				found.Namespace, found.Name, currentStorage.String(), desiredStorage.String())
+		}
+
+		if found.Spec.Resources.Requests == nil {
+			found.Spec.Resources.Requests = corev1.ResourceList{}
+		}
+		found.Spec.Resources.Requests[corev1.ResourceStorage] = desiredStorage.DeepCopy()
+		return r.Update(ctx, found)
+	})
 }
 
 func (r *SemanticRouterReconciler) reconcileDeployment(ctx context.Context, sr *vllmv1alpha1.SemanticRouter, gatewayMode string) error {
