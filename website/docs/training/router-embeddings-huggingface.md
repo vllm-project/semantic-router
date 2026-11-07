@@ -257,7 +257,7 @@ listeners:
 
 global:
   stores:
-    semantic_cache:
+    response_cache:
       enabled: false
   model_catalog:
     embeddings:
