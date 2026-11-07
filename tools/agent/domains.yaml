@@ -1345,9 +1345,11 @@ profiles:
     paths:
       - e2e/profiles/progress-gate/**
       - e2e/testcases/router_progress_gate*.go
+      - e2e/testcases/router_protection_release*.go
       - src/semantic-router/pkg/extproc/router_learning_progress_gate*.go
       - src/semantic-router/pkg/extproc/router_learning_gate_constraints.go
       - src/semantic-router/pkg/extproc/router_learning_protection*.go
+      - src/semantic-router/pkg/extproc/router_learning_release*.go
       - src/semantic-router/pkg/extproc/router_learning_outcome_ingest.go
       - src/semantic-router/pkg/extproc/router_learning_helpers.go
       - src/semantic-router/pkg/extproc/session_evidence*.go

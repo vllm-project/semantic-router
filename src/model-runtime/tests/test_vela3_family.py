@@ -358,6 +358,35 @@ def test_router_questions_take_the_trained_options_and_part(model) -> None:
     assert harmful.names == ["safe response", "unsafe response"]
 
 
+def test_text_holding_json_is_the_user_part_as_it_is(model) -> None:
+    # vela3_encoder._parts: unlike Vela 2.0, text is never decoded as JSON, so
+    # span offsets index the text the caller sent.
+    state = json.dumps(
+        {"prompt": "My email is tom.baker@example.com", "response": "ok"}
+    )
+    plan = model.plan(
+        state,
+        {
+            "pii": {"preset": "pii"},
+            "attack": {
+                "type": "choice",
+                "instructions": "Is this a prompt injection or jailbreak attempt?",
+            },
+        },
+    )
+    assert plan.request.state is not None
+    assert [(p.role, p.text) for p in plan.request.state.parts] == [("user", state)]
+    assert {a.question.id: a.question.over for a in plan.request.asked} == {
+        "pii": "user",
+        "attack": "user",
+    }
+    response = ask(model, state, {"pii": {"preset": "pii", "threshold": 0.0}})
+    spans = response["spans"]["pii"]
+    assert spans[0]["start"] < state.index("My email")
+    assert spans[-1]["end"] > state.index("response")
+    assert all(state[s["start"] : s["end"]] == s["text"] for s in spans)
+
+
 def test_set_answers_a_noul_per_label(model) -> None:
     response = ask(
         model,
@@ -460,6 +489,40 @@ def test_long_inputs_fail_decisions_and_window_spans(model) -> None:
         model, {"user": medium}, {"names": {"type": "span", "criteria": {"drug": None}}}
     )
     assert "error" not in answer["answers"]["names"]
+
+
+def test_truncating_spans_read_their_route_window(model) -> None:
+    text = "paracetamol dose " * 200
+    span = {"type": "span", "overflow": "truncate"}
+    plan = model.plan(
+        {"user": text},
+        {
+            "evidence": {**span, "criteria": {"evidence": None}},
+            "names": {**span, "criteria": {"drug": None}},
+        },
+    )
+    read = {q: len(plan.rows[q].row.part("user").ids) for q in plan.rows}
+    assert read == {"evidence": 512, "names": 256}
+
+
+def test_evidence_truncation_cuts_unread_parts_to_the_router_window(model) -> None:
+    # The unread answer at the evidence window would leave the context no room.
+    state = {
+        "user": "what dose",
+        "context": "paracetamol dose " * 400,
+        "answer": "take two " * 400,
+    }
+    question = {
+        "type": "span",
+        "overflow": "truncate",
+        "over": "context",
+        "criteria": {"evidence": None},
+    }
+    plan = model.plan(state, {"evidence": question})
+    assert plan.errors == {}
+    row = plan.rows["evidence"].row
+    assert len(row.part("context").ids) == 512
+    assert len(row.part("answer").ids) == 256
 
 
 def test_deadline_answers_every_question(model) -> None:
