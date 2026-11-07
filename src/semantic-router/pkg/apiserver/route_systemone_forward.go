@@ -72,30 +72,9 @@ func retainedSystemOneInvoker(snapshot *configsnapshot.Snapshot, router systemon
 	remote, _ := snapshot.Part(configsnapshot.ComponentUpstream).(*upstream.Set)
 	local := func(ctx context.Context, deployment string, body json.RawMessage) (int, []byte, error) {
 		if models == nil {
-			return localSystemOneAnswer(modelservice.SystemOneResult{}, modelservice.ErrUnavailable)
+			return modelservice.SystemOneAnswer(modelservice.SystemOneResult{}, modelservice.ErrUnavailable)
 		}
-		return localSystemOneAnswer(models.SystemOne(ctx, deployment, body))
+		return modelservice.SystemOneAnswer(models.SystemOne(ctx, deployment, body))
 	}
 	return systemone.ServingInvoker(snapshot.Config(), listener, router, local, remote)
-}
-
-// Runtime-style answers for a refusal that happened before any worker answered.
-var (
-	poolOverloadedAnswer = []byte(`{"error":{"code":"overloaded","message":"every worker of the deployment is busy"}}`)
-	poolNotReadyAnswer   = []byte(`{"error":{"code":"not_ready","message":"the deployment has no ready worker"}}`)
-)
-
-// localSystemOneAnswer gives a refusal of the replica pool (every worker full, or
-// none ready) the status and code a worker's own refusal has, 429 overloaded or
-// 503 not_ready, instead of an unspecified failure.
-func localSystemOneAnswer(result modelservice.SystemOneResult, err error) (int, []byte, error) {
-	if result.Status == 0 {
-		switch {
-		case errors.Is(err, modelservice.ErrOverloaded):
-			return http.StatusTooManyRequests, poolOverloadedAnswer, err
-		case errors.Is(err, modelservice.ErrUnavailable):
-			return http.StatusServiceUnavailable, poolNotReadyAnswer, err
-		}
-	}
-	return result.Status, result.Body, err
 }
