@@ -164,6 +164,17 @@ helm-ci-validate: helm-ci-setup $(HARNESS_VENV_DEPS)
 			exit 1; \
 		fi; \
 	done
+	@count=$$(grep -c 'name: HF_ENDPOINT' "$(HELM_TEMPLATE_OUTPUT)"); \
+	if [ "$$count" -ne 1 ]; then \
+		echo "Expected exactly one HF_ENDPOINT entry for the Router pod, found $$count"; \
+		exit 1; \
+	fi; \
+	echo "Model-download endpoint rendered exactly once"
+	@helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set modelDownload.hfEndpoint=https://model-mirror.example \
+		--namespace $(HELM_NAMESPACE) \
+		| grep -q 'value: "https://model-mirror.example"' \
+		|| { echo "modelDownload.hfEndpoint did not reach the Router pod env"; exit 1; }
 	@helm template backend-target-release $(HELM_CHART_PATH) \
 		-f "$(HELM_BACKEND_TARGET_VALUES)" \
 		--namespace $(HELM_NAMESPACE) > "$(HELM_BACKEND_TARGET_OUTPUT)"

@@ -81,6 +81,11 @@ vllm-sr serve --config config.yaml
 Keep tokens in the environment or an external secret manager. The CLI masks
 sensitive passthrough values in its logs.
 
+A Kubernetes deployment sets the same endpoint through the chart value
+`modelDownload.hfEndpoint`, or through the custom resource's `spec.env` for an
+Operator-managed Router; see
+[Kubernetes deployment](../installation/k8s/operator#model-download-without-direct-hub-access).
+
 For an offline deployment, download the required artifacts in advance and put
 them in the workspace model directory:
 
