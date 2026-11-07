@@ -573,6 +573,98 @@
      "type": "noul"
     }
    },
+   "npu": {
+    "difficulty": {
+     "confidence": 0.6818449684338312,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.20280531369865903,
+      "1": 0.7878966456225542,
+      "2": 0.009298040678786758
+     },
+     "score": 0.8064927269801277,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9948938529421235,
+     "probabilities": {
+      "code": 0.9965959019614158,
+      "math": 0.00286171207861819,
+      "other": 0.0005423859599659775
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.4790536350755315,
+     "probabilities": {
+      "blue": 0.06556930967053336,
+      "green": 0.3028845112018601,
+      "other": 0.6092902263066486,
+      "red": 0.022255952820957936
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.08118975847073079,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.3924027681350708,
+     "type": "noul"
+    }
+   },
+   "npu:Ascend950DT": {
+    "difficulty": {
+     "confidence": 0.6818449684338312,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.20280531369865903,
+      "1": 0.7878966456225542,
+      "2": 0.009298040678786758
+     },
+     "score": 0.8064927269801277,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9948938529421235,
+     "probabilities": {
+      "code": 0.9965959019614158,
+      "math": 0.00286171207861819,
+      "other": 0.0005423859599659775
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.4790536350755315,
+     "probabilities": {
+      "blue": 0.06556930967053336,
+      "green": 0.3028845112018601,
+      "other": 0.6092902263066486,
+      "red": 0.022255952820957936
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.08118975847073079,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.3924027681350708,
+     "type": "noul"
+    }
+   },
    "rocm": {
     "difficulty": {
      "confidence": 0.48985309907326846,
@@ -861,5 +953,194 @@
    }
   },
   "revision": "689b3af198baaf6f11110be38a9daa7188dfd8ad"
+ },
+ "vllm-sr/d3-ultra": {
+  "answers": {
+   "cpu": {
+    "difficulty": {
+     "confidence": 0.9836067513111463,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.010296204510335501,
+      "1": 0.9890711675407642,
+      "2": 0.0006326279489002924
+     },
+     "score": 0.9903364234385648,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9999966167988777,
+     "probabilities": {
+      "code": 0.9999977445325853,
+      "math": 8.578102860781003e-07,
+      "other": 1.397657128666678e-06
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.980225485762008,
+     "probabilities": {
+      "blue": 0.002347153757393838,
+      "green": 0.011171320216437452,
+      "other": 0.985169114321506,
+      "red": 0.0013124117046627041
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.003912507326819039,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.8951309452510132,
+     "type": "noul"
+    }
+   },
+   "cpu:x86_64:avx512:bf16_native": {
+    "difficulty": {
+     "confidence": 0.9836067513111463,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.010296204510335501,
+      "1": 0.9890711675407642,
+      "2": 0.0006326279489002924
+     },
+     "score": 0.9903364234385648,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9999966167988777,
+     "probabilities": {
+      "code": 0.9999977445325853,
+      "math": 8.578102860781003e-07,
+      "other": 1.397657128666678e-06
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.980225485762008,
+     "probabilities": {
+      "blue": 0.002347153757393838,
+      "green": 0.011171320216437452,
+      "other": 0.985169114321506,
+      "red": 0.0013124117046627041
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.003912507326819039,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.8951309452510132,
+     "type": "noul"
+    }
+   },
+   "rocm": {
+    "difficulty": {
+     "confidence": 0.9847374018440912,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.009575668566325492,
+      "1": 0.9898249345627275,
+      "2": 0.0005993968709470282
+     },
+     "score": 0.9910237283046215,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9999964781830859,
+     "probabilities": {
+      "code": 0.9999976521220574,
+      "math": 8.894017868714034e-07,
+      "other": 1.4584761557289168e-06
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.9785021720953542,
+     "probabilities": {
+      "blue": 0.0030960642679322913,
+      "green": 0.011609494491507392,
+      "other": 0.9838766290715156,
+      "red": 0.0014178121690446334
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.003510659308930588,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.8957476749382567,
+     "type": "noul"
+    }
+   },
+   "rocm:gfx942": {
+    "difficulty": {
+     "confidence": 0.9847374018440912,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.009575668566325492,
+      "1": 0.9898249345627275,
+      "2": 0.0005993968709470282
+     },
+     "score": 0.9910237283046215,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9999964781830859,
+     "probabilities": {
+      "code": 0.9999976521220574,
+      "math": 8.894017868714034e-07,
+      "other": 1.4584761557289168e-06
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.9785021720953542,
+     "probabilities": {
+      "blue": 0.0030960642679322913,
+      "green": 0.011609494491507392,
+      "other": 0.9838766290715156,
+      "red": 0.0014178121690446334
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.003510659308930588,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.8957476749382567,
+     "type": "noul"
+    }
+   }
+  },
+  "revision": "52ba9e7a00402f9560c7fba8c039608e7ddee7fb"
  }
 }

@@ -65,15 +65,17 @@ static_resources:
             virtual_hosts:
             - name: local_service
               domains: ["*"]
-              # Security: strip internal headers from client requests to prevent
-              # looper bypass, identity spoofing, and credential leakage.
+              # Internal and identity headers never reach a model backend. Envoy
+              # removes them from the request it sends upstream, after the HTTP
+              # filters ran; client-sent identity is removed at ingress below.
               request_headers_to_remove:
               - "x-vsr-looper-request"
               - "x-vsr-looper-secret"
               - "x-vsr-looper-decision"
               - "x-vsr-looper-iteration"
-              - "x-authz-user-id"
-              - "x-authz-user-groups"
+              {% for header in identity_headers %}
+              - {{ header | tojson }}
+              {% endfor %}
               routes:
               {% for model in models %}
               # Route for model: {{ model.name | tojson }}
@@ -143,6 +145,19 @@ static_resources:
                     substitution: "{{ models[0].path_prefix }}\\1"
                   {% endif %}
           http_filters:
+          {% if not listener.trust_identity_headers %}
+          # Only an authenticating proxy in front of a listener that sets
+          # identity.trust_headers may assert identity: the identity headers a
+          # client sends are removed before any filter or the Router reads them.
+          - name: strip-client-identity
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.header_mutation.v3.HeaderMutation
+              mutations:
+                request_mutations:
+                {% for header in identity_headers %}
+                - remove: {{ header | tojson }}
+                {% endfor %}
+          {% endif %}
           {% if listener.api_keys %}
           - name: envoy.filters.http.lua
             typed_config:

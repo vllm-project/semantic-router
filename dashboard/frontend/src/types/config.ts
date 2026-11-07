@@ -216,12 +216,18 @@ export interface MetadataSignal {
 export interface ClassifierSignal {
   name: string
   description?: string
-  type: 'local' | 'llm' | 'sequence_classifier'
+  /** The deployment that answers this rule; without one, its binding or the decision model does. */
+  deployment?: string
+  /** @deprecated Name a deployment instead. */
+  type?: 'local' | 'llm' | 'sequence_classifier'
+  /** @deprecated Name a deployment instead. */
   model?: string
+  /** @deprecated Name a deployment instead. */
   model_path?: string
   labels: string[]
   instructions?: string
   disable_rationale?: boolean
+  /** @deprecated Name a deployment instead. */
   use_cpu?: boolean
 }
 
@@ -285,6 +291,8 @@ export interface RuleComposer {
 
 export interface ComplexitySignal {
   name: string
+  /** The deployment that answers this rule; without one, its binding or the decision model does. */
+  deployment?: string
   threshold: number
   hard: ComplexityCandidates
   easy: ComplexityCandidates
@@ -323,11 +331,17 @@ export interface JailbreakSignal {
 export interface SafetySignal {
   name: string
   description?: string
+  /** The deployment that answers this rule; without one, its binding or the decision model does. */
+  deployment?: string
+  /** @deprecated Name a deployment instead. */
   model?: string
   labels?: string[]
   unsafe_labels?: string[]
   threshold: number
   hazard?: {
+    /** The deployment that scores the hazard categories. */
+    deployment?: string
+    /** @deprecated Name a deployment instead. */
     model?: string
     labels: string[]
     categories: string[]

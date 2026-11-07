@@ -23,6 +23,28 @@ class MainWorkflowContractTests(unittest.TestCase):
             workflow,
             "main push runs must remain per-commit so change classification cannot skip a commit",
         )
+        group = workflow["jobs"]["ci"]["concurrency"]["group"]
+        expression = group.removeprefix("${{").removesuffix("}}").strip()
+        for event, publish, expected in (
+            ("push", None, "main-7"),
+            ("workflow_dispatch", False, "main-7"),
+            ("workflow_dispatch", True, "main-publication"),
+        ):
+            with self.subTest(event=event, publish=publish):
+                python = (
+                    expression.replace("github.event_name", repr(event))
+                    .replace("inputs.publish", repr(publish))
+                    .replace("github.run_id", "'7'")
+                    .replace("&&", " and ")
+                    .replace("||", " or ")
+                )
+                actual = eval(
+                    python,
+                    {"__builtins__": {}},
+                    {"format": lambda text, value: text.replace("{0}", value)},
+                )
+                self.assertEqual(actual, expected)
+        self.assertTrue(workflow["jobs"]["ci"]["concurrency"]["cancel-in-progress"])
 
     def test_pypi_accepts_only_qualified_main_dispatch_or_stable_tag(self) -> None:
         workflow = yaml.safe_load(
@@ -77,7 +99,9 @@ class PullRequestGateContractTests(unittest.TestCase):
         )
         self.gate = self.workflow["jobs"]["pr-gate"]
 
-    def test_gates_evaluate_failed_or_cancelled_prerequisites(self) -> None:
+    def test_gates_reconcile_failures_but_stop_when_the_workflow_is_cancelled(
+        self,
+    ) -> None:
         for filename, job in (
             ("pr.yml", "pr-gate"),
             ("ci.yml", "gate"),
@@ -88,11 +112,29 @@ class PullRequestGateContractTests(unittest.TestCase):
                         encoding="utf-8"
                     )
                 )
-                self.assertEqual(
-                    workflow["jobs"][job]["if"],
-                    "always()",
-                    "skipping a required gate must not hide failed or cancelled prerequisites",
+                expression = (
+                    workflow["jobs"][job]["if"]
+                    .removeprefix("${{")
+                    .removesuffix("}}")
+                    .strip()
+                    .replace("!", "not ")
                 )
+                for cancelled in (False, True):
+                    for result in ("success", "failure", "skipped"):
+                        with self.subTest(cancelled=cancelled, prerequisite=result):
+                            allowed = eval(
+                                expression,
+                                {"__builtins__": {}},
+                                {
+                                    "always": lambda: True,
+                                    "cancelled": lambda cancelled=cancelled: cancelled,
+                                    "success": lambda result=result: result
+                                    == "success",
+                                    "failure": lambda result=result: result
+                                    == "failure",
+                                },
+                            )
+                            self.assertEqual(allowed, not cancelled)
         self.assertTrue(self.workflow["concurrency"]["cancel-in-progress"])
 
     def test_stable_gate_rejects_unsuccessful_shared_qualification(self) -> None:

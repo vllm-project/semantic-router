@@ -8,6 +8,9 @@ import (
 )
 
 func (OpenAIResponsesCodec) EncodeRequest(request llmprotocol.Request, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
+	if err := rejectReasoningContinuity(llmprotocol.OpenAIResponsesV1, llmprotocol.RequiredCapabilities(request)); err != nil {
+		return nil, nil, err
+	}
 	if envelope.CanReplay(llmprotocol.OpenAIResponsesV1, request.Generation, policy, false) {
 		return append([]byte(nil), envelope.Request...), nil, nil
 	}
@@ -31,6 +34,9 @@ func (OpenAIResponsesCodec) EncodeRequest(request llmprotocol.Request, envelope 
 			appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat,
 				"messages[].output_config.effort", "Responses cannot apply Anthropic per-message effort")
 		}
+	}
+	if hasParticipantNames(request) {
+		appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat, "messages[].name", "Responses has no participant names")
 	}
 	if len(request.ContextManagement) > 0 {
 		if err := appendLossy(&diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.OpenAIResponsesV1,
@@ -450,12 +456,22 @@ func encodeResponsesContent(contents []llmprotocol.Content, direction string) (j
 			if content.Data != "" {
 				imageURL = "data:" + content.MediaType + ";base64," + content.Data
 			}
-			parts = append(parts, responsesContentWire{Type: "input_image", ImageURL: imageURL, FileID: content.FileID, Detail: content.Detail})
+			// detail is required on input_image, and auto is the documented default.
+			detail := content.Detail
+			if detail == "" {
+				detail = "auto"
+			}
+			parts = append(parts, responsesContentWire{Type: "input_image", ImageURL: imageURL, FileID: content.FileID, Detail: detail})
 		case llmprotocol.ContentFile:
 			if direction != "input" {
 				return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "file_content_position", "Responses output messages cannot contain input files", nil)
 			}
-			parts = append(parts, responsesContentWire{Type: "input_file", FileURL: content.URL, FileID: content.FileID, FileData: content.Data, Filename: content.Filename, Detail: content.Detail})
+			fileData := ""
+			if content.Data != "" {
+				// Neutral content stores the MIME type separately from Base64 bytes.
+				fileData = "data:" + content.MediaType + ";base64," + content.Data
+			}
+			parts = append(parts, responsesContentWire{Type: "input_file", FileURL: content.URL, FileID: content.FileID, FileData: fileData, Filename: content.Filename, Detail: content.Detail})
 		default:
 			return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_content", "content cannot be encoded as Responses", nil)
 		}

@@ -6,6 +6,14 @@ description: Update a configuration that used the candle, ONNX Runtime or OpenVI
 
 # Migrate from the native bindings
 
+:::note
+The `legacy.yaml` example comes from an earlier release and keeps its model
+fields, such as a module `model_id` and a binding `contract` and `adapter`.
+`vllm-sr config migrate` rewrites those as well;
+[Migrate model resources](../installation/model-resource-migration.md) shows
+each earlier field next to the deployment-and-binding form that replaces it.
+:::
+
 Earlier releases ran models inside the router with three back ends: candle,
 ONNX Runtime (`ort`) and OpenVINO. Those in-process back ends are gone. Local
 routing models now run in the [model runtime](model-runtime/overview.md);
@@ -15,10 +23,10 @@ to select the CPU image explicitly. The [release note](release-notes/built-in-mo
 lists every breaking change of that release.
 
 **Review defaults as well as field migrations.** Features without an explicit
-model override use current defaults, including Vela 2.0 0.3B for common judgment
+model override use current defaults, including vela3-fast for common judgment
 tasks. A historical configuration that relied on Vela 1.0 defaults may therefore
 change answers even when its YAML still parses. Review
-[model and threshold choices](./choose-a-model.md#vela-20) and test representative
+[model and threshold choices](./choose-a-model.md#built-in-signals) and test representative
 requests before rollout; explicit specialist assignments remain available.
 
 You need to migrate if your configuration contains any of these:
@@ -86,7 +94,7 @@ or stored vectors to re-embed because their embedding model changed (see
 | a label map inside an older model's directory, such as `category_mapping_path: models/mom-domain-classifier/category_mapping.json` | removed: the router reads the labels of the model it runs |
 | `mlp.device` on the MLP selection algorithm | removed: the MLP selector runs in the router |
 | `grounding.nli_contradiction_penalty` of the fusion algorithm | `grounding.contradiction_penalty`: grounding now reads the hallucination detector |
-| a hallucination detector with `backend: endpoint`, `endpoint` and `model_id` | a `hallucination_detector` binding to that chat service; an endpoint whose path is not `/v1` has to be written by hand |
+| a hallucination detector with `backend: endpoint`, `endpoint` and `model_id` | an `openai_chat` deployment of that chat service and a `hallucination` binding to it; an endpoint whose path is not `/v1` has to be written by hand |
 
 ### Model names that changed
 
@@ -208,36 +216,43 @@ providers:
   defaults:
     model: answer-model
   models:
-  - name: answer-model
-    backend_refs:
-    - name: answer
-      endpoint: vllm:8000
-      provider: vllm
+    - name: answer-model
+      backend_refs:
+        - name: answer
+          endpoint: vllm:8000
+          provider: vllm
 routing:
   model_bindings:
-    embedding:
-      deployment: vela-embedding
-      contract: embedding.v1
-      adapter: mmbert
+    embedding: vela-embedding
 global:
   model_catalog:
     deployments:
-      vela-embedding:
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Embedding
+      Vela-1.0-Encoder-307M-Guard:
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Guard
+        revision: 087f9e401012df839c83717b746967ac7aebfa3e
         provider: model_runtime
-        device: rocm:0
+        device: cpu
+      Vela-1.0-Encoder-307M-Halu:
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Halu
+        revision: ca87531211e414ac21c641b2faa8b8e21619de8f
+        provider: model_runtime
+        device: cpu
       vela-domain:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain
         provider: model_runtime
         device: cuda:0
+      vela-embedding:
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Embedding
+        provider: model_runtime
+        device: rocm:0
     modules:
       prompt_guard:
         enabled: true
-        model_id: models/Vela-1.0-Encoder-307M-Guard
       hallucination_mitigation:
         enabled: true
-        detector:
-          model_id: models/Vela-1.0-Encoder-307M-Halu
+    bindings:
+      hallucination: Vela-1.0-Encoder-307M-Halu
+      jailbreak: Vela-1.0-Encoder-307M-Guard
   stores:
     response_cache:
       enabled: true
@@ -246,8 +261,10 @@ global:
 ```
 
 The response cache had no `embedding_model`, so it used MiniLM, the former
-default; it now names Vela Embedding. Running the command again on the
-migrated file changes nothing.
+default; it now names Vela Embedding. The guard and the hallucination detector,
+which a module `model_id` named, are now deployments named after their models
+and bound with `bindings.jailbreak` and `bindings.hallucination`. Running the
+command again on the migrated file changes nothing.
 
 ## Engine arguments
 
