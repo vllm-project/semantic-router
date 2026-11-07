@@ -394,7 +394,7 @@ test('a runtime that does not answer its health check toasts and draws the offli
   const { texts, props } = await rowTree($, bandRow())
 
   expect(reply.toasts).toEqual(['vSR: classifier not reachable at http://127.0.0.1:8790/v1/decisions · vSR steps aside until it answers · /vsr:setup'])
-  expect(texts[0]).toBe('vSR  ○ classifier offline')
+  expect(texts[0]).toBe(' vSR   ○ classifier offline')
   expect(props[texts.indexOf('○')]).toMatchObject({ color: 'inactive' })
   expect((await paneLines($)).filter(line => line.startsWith('classifier'))[0]).toContain('not answering')
 })
@@ -418,5 +418,5 @@ test('an answer from the classifier, a minute after it went offline, clears the 
 
   await check($, 'ls')
 
-  expect((await rowTree($, bandRow())).texts[0]).toBe('vSR  ✓ 1 allowed')
+  expect((await rowTree($, bandRow())).texts[0]).toBe(' vSR   ✓ 1 allowed')
 })

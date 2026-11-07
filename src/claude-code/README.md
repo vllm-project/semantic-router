@@ -44,7 +44,7 @@ installed into `~/.local/share/vsr`, without sudo.
 ## What you see
 
 vSR draws each decision under the row it is about, and keeps a one-line tally above the prompt. Its
-name shows in the mark's colours: v and R in yellow, S in blue.
+name shows as a capsule in the mark's colours: v white, S yellow, R blue.
 `/vsr` opens a pane with every decision of the session and the current setup.
 
 By default (`display: normal`) vSR only interrupts when it matters:

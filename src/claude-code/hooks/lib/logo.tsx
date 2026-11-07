@@ -126,13 +126,26 @@ export function mark(elements: Elements, logo: Logo, rows: MarkRows) {
 export const wordmarkHeight = (logo: Logo) => (logo.kind === 'off' ? 0 : WORDMARK_ROWS + 1)
 
 // The top of the pane: the mark, and the name beside it in the terminal's own text color.
-// The short name in the mark's colours: v and R in its yellow, S in its blue.
+// The short name as a capsule: v white, S in the mark's yellow, R in its blue, on a dark ground every theme shows.
+// BRAND is its text, for measuring; square ends, since rounded ones need a patched font.
+export const BRAND = ' vSR '
+const BRAND_GROUND = '#2d333f'
+const BRAND_LETTERS = [
+  ['v', '#ffffff'],
+  ['S', HUES.Y],
+  ['R', HUES.B],
+] as const
+
 export function brand({ Text }: Elements) {
   return (
-    <Text>
-      <Text color={HUES.Y}>v</Text>
-      <Text color={HUES.B}>S</Text>
-      <Text color={HUES.Y}>R</Text>
+    <Text backgroundColor={BRAND_GROUND} weight="bold">
+      <Text backgroundColor={BRAND_GROUND}> </Text>
+      {BRAND_LETTERS.map(([letter, color]) => (
+        <Text backgroundColor={BRAND_GROUND} color={color}>
+          {letter}
+        </Text>
+      ))}
+      <Text backgroundColor={BRAND_GROUND}> </Text>
     </Text>
   )
 }

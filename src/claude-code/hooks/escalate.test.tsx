@@ -161,7 +161,7 @@ test('the ESCALATED card is drawn under the prompt it judged, and no other', { o
 
   expect(cards).toEqual([expect.objectContaining({ borderStyle: 'round', borderColor: 'claude', paddingX: 1, width: 83 })])
   expect(texts).toContain('↑  ESCALATED  you pushed back · next subagent one step up')
-  expect(texts).toContain('vSR · escalate')
+  expect(texts).toContain(' vSR  · escalate')
   expect(texts).toContain(' WRONG ANSWER 0.92 ')
   expect(texts).toContain('told Claude to re-check its last answer')
   expect(other.cards).toEqual([])

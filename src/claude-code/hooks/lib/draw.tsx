@@ -4,7 +4,7 @@ import type { Calibration, Decision, Spend } from '../../types'
 import { APPS, type Color, type Section, SECTIONS, sectionOf } from './apps'
 import { type Body, type Described, describe, type Gauge, type TallyItem, tallyOf, tallyWidth } from './describe'
 import { ANSWERS, type Answer, answersFor } from './labels'
-import { brand, type Logo, mark, markColumns, wordmark, wordmarkHeight } from './logo'
+import { BRAND, brand, type Logo, mark, markColumns, wordmark, wordmarkHeight } from './logo'
 import { holdMeter, type Segment, textWidth } from './meters'
 import { APP_NAMES, type Display, isCleartextRemote, type Settings } from './settings'
 import { clip, fixed, modelName } from './text'
@@ -22,7 +22,7 @@ const COMPACT_RISK_CELLS = 12
 // The detail gives way before the headline does.
 function srLine(elements: Elements, { badge, color, headline, detail }: Described, columns: number) {
   const { Text } = elements
-  const room = columns - `vSR  ${badge}  `.length
+  const room = columns - `${BRAND}  ${badge}  `.length
   const head = clip(headline, Math.max(1, room))
   const roomLeft = room - head.length - 2
   return (
@@ -105,7 +105,7 @@ function card(
   const lead = one.glyph.length + 1 + badge.length + 2 + 1
   const tail = one.tail ?? ''
   const title = `${clip(one.title, Math.max(1, inner - lead - tail.length))}${tail}`
-  const label = `vSR · ${APPS[app].name}`
+  const label = `${BRAND} · ${APPS[app].name}`
   const tag = (
     <Text>
       {brand(elements)}
@@ -166,7 +166,7 @@ export function rowView(elements: Elements, logo: Logo, described: Described, co
   if (display === 'verbose' || described.weight === 'act') return inlineView(elements, logo, described, columns, narrow)
   if (display === 'quiet' || described.weight === 'quiet') return null
   // The plain words go first when the row is short: a cut word reads worse than none.
-  const fits = `vSR  ${described.badge}  ${described.line}`.length <= columns
+  const fits = `${BRAND}  ${described.badge}  ${described.line}`.length <= columns
   return srLine(elements, { ...described, headline: fits ? described.line : described.headline, detail: '' }, columns)
 }
 
@@ -197,7 +197,7 @@ function itemsWithin(items: readonly TallyItem[], columns: number, used: number)
   return kept
 }
 
-const BAND_LEAD = 'vSR  '
+const BAND_LEAD = `${BRAND}  `
 
 const OFFLINE: TallyItem = { glyph: APPS.off.glyph, color: APPS.off.color, text: 'classifier offline' }
 

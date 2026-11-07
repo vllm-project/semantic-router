@@ -166,8 +166,8 @@ test('at 50 columns every kind falls back to the one-line form', { options: { di
   }
 
   expect(seen.map(lines => lines.length)).toEqual([1, 1, 1, 1, 1])
-  expect(seen.map(([line]) => line.split(/ {2}/)[1])).toEqual(['ROUTED', 'KEPT', 'ALLOWED', 'DECLINED', 'SKIPPED'])
-  expect(seen[2][0]).toBe('vSR  ALLOWED  ran normally, not risky enough …')
+  expect(seen.map(([line]) => line.split(/ {2,}/)[1])).toEqual(['ROUTED', 'KEPT', 'ALLOWED', 'DECLINED', 'SKIPPED'])
+  expect(seen[2][0]).toBe(' vSR   ALLOWED  ran normally, not risky enoug…')
 })
 
 test('a folded group keeps its line and adds a card for the declined call and a compact line for the allowed one', { options: { display: 'verbose' } }, async ($, on) => {
@@ -288,13 +288,14 @@ async function severalApps($: Parameters<Parameters<typeof test>[1]>[0], on: Par
   await $.tool.check({ tool: 'Bash', input: { command: 'ls' } })
 }
 
-test('the band shows vSR in the mark\'s colours, then one item per app that decided, each glyph in its app colour', async ($, on) => {
+test('the band shows vSR as a capsule, v white, S yellow and R blue, then one item per app that decided, each glyph in its app colour', async ($, on) => {
   await severalApps($, on)
 
   const { texts, props } = await rowTree($, bandRow())
 
-  expect(texts[0]).toBe('vSR  ◆ 1 shielded  ▒ 2 hidden  ⇢ 1 routed  ✓ 1 allowed')
-  expect(['v', 'S', 'R'].map(letter => props[texts.indexOf(letter)]?.color)).toEqual(['#fdb618', '#32a3ff', '#fdb618'])
+  expect(texts[0]).toBe(' vSR   ◆ 1 shielded  ▒ 2 hidden  ⇢ 1 routed  ✓ 1 allowed')
+  expect(['v', 'S', 'R'].map(letter => props[texts.indexOf(letter)]?.color)).toEqual(['#ffffff', '#fdb618', '#32a3ff'])
+  expect(props[texts.indexOf('v')]).toMatchObject({ backgroundColor: '#2d333f' })
   expect(props[texts.indexOf('⇢')]).toMatchObject({ color: 'suggestion' })
   expect(props[texts.indexOf('▒')]).toMatchObject({ color: 'merged' })
   expect(props[texts.indexOf('◆')]).toMatchObject({ color: 'warning' })
@@ -303,9 +304,9 @@ test('the band shows vSR in the mark\'s colours, then one item per app that deci
 test('the band keeps to whole items within its columns', async ($, on) => {
   await severalApps($, on)
 
-  const { texts } = await rowTree($, bandRow(30))
+  const { texts } = await rowTree($, bandRow(32))
 
-  expect(texts[0]).toBe('vSR  ◆ 1 shielded  ▒ 2 hidden')
+  expect(texts[0]).toBe(' vSR   ◆ 1 shielded  ▒ 2 hidden')
 })
 
 test('the band leaves the engine its own row before any decision, and while a survey holds it', async ($, on) => {
@@ -352,7 +353,7 @@ test('at 50 columns the cards of every new kind fall back to the one-line form',
   const prompt = await rowTree($, { ...userRow('No, that is wrong.'), viewport: { columns: 50, rows: 30 } })
 
   expect(read.cards).toEqual([])
-  expect(srLines(read.texts).map(line => line.split(/ {2}/)[1])).toEqual(['REDACTED', 'SHIELDED'])
+  expect(srLines(read.texts).map(line => line.split(/ {2,}/)[1])).toEqual(['REDACTED', 'SHIELDED'])
   expect(prompt.cards).toEqual([])
   expect(srLines(prompt.texts)).toHaveLength(1)
 })
@@ -396,7 +397,7 @@ test('a card draws the V at its right, three rows of yellow and blue blocks besi
   for (const row of artText(3)) expect(texts).toContain(row)
   expect(colors).toContain(HUES.Y)
   expect(colors).toContain(HUES.B)
-  expect(texts).toContain('vSR · guard')
+  expect(texts).toContain(' vSR  · guard')
 })
 
 test('the pane opens with the V four rows high and the name beside it', async ($, on) => {
@@ -414,7 +415,7 @@ test('with the logo off, neither the cards nor the pane draw it', { options: { l
   const { texts, cards } = await rowTree($, toolRow(callOf('call-9', PUSH.command)))
   const lines = await paneLines($)
 
-  expect(texts).toContain('vSR · guard')
+  expect(texts).toContain(' vSR  · guard')
   expect(cards).toEqual([expect.objectContaining({ width: 76 })])
   expect([...texts, ...lines].filter(text => text.includes('▟') || text === LOGO_NAME)).toEqual([])
   expect(await imagesIn($, PANE)).toEqual([])
@@ -480,7 +481,7 @@ test('by default a route draws one plain line, with no card and no scores', asyn
   const { texts, cards } = await rowTree($, agentRow('call-1'))
 
   expect(cards).toEqual([])
-  expect(texts[1]).toBe('vSR  ROUTED  subagent → Haiku · easy task')
+  expect(texts[1]).toBe(' vSR   ROUTED  subagent → Haiku · easy task')
 })
 
 test('by default an allowed command draws nothing under it, and a held one draws its card', async ($, on) => {

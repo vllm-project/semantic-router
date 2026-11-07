@@ -250,7 +250,7 @@ export const bandRow = (bodyColumns = 100, maxRows = 10) =>
     props: { hasSurvey: false, isWorking: false, maxRows, bodyColumns, scroll: { offset: 0, bodyRows: maxRows }, view: {} },
   }) as const
 
-export const srLines = (lines: string[]) => lines.filter(text => text.startsWith('vSR  '))
+export const srLines = (lines: string[]) => lines.filter(text => text.startsWith(' vSR   '))
 
 // The decision log as last written, one parsed line each.
 export const logLines = (reply: Reply) =>

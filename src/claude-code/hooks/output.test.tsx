@@ -343,7 +343,7 @@ test('by default hidden data is one line, and the same kinds hidden from the sam
   const other = await rowTree($, toolRow(readCallOf('r3', '/repo/support/ticket-1043.txt')))
 
   expect(first.cards).toEqual([])
-  expect(first.texts[1]).toBe('vSR  REDACTED  4 items hidden: name, email, phone, card · support/ticket-1042.txt')
+  expect(first.texts[1]).toBe(' vSR   REDACTED  4 items hidden: name, email, phone, card · support/ticket-1042.txt')
   expect(again.texts).toEqual(['the engine row'])
-  expect(other.texts[1]).toBe('vSR  REDACTED  4 items hidden: name, email, phone, card · support/ticket-1043.txt')
+  expect(other.texts[1]).toBe(' vSR   REDACTED  4 items hidden: name, email, phone, card · support/ticket-1043.txt')
 })

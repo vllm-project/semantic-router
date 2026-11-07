@@ -298,7 +298,7 @@ test('a kept subagent says so in one line under its row, so the user sees the ro
   const { texts, cards } = await rowTree($, agentRow('call-1'))
 
   expect(cards).toEqual([])
-  expect(texts).toContain('vSR  KEPT  subagent stays on Opus 5.5 · classifier unsure · 0.10 < 0.30')
+  expect(texts).toContain(' vSR   KEPT  subagent stays on Opus 5.5 · classifier unsure · 0.10 < 0.30')
 })
 
 test('an Agent row with a route draws a ROUTED card with the difficulty meter, and the effort once known', { options: { display: 'verbose' } }, async ($, on) => {
@@ -366,7 +366,7 @@ test('the one-line form of a route keeps its effort, and gives up the detail bef
   const { texts, cards } = await rowTree($, agentRow('call-1', 55))
 
   expect(cards).toEqual([])
-  expect(texts).toContain('vSR  ROUTED  subagent → Haiku, medium effort')
+  expect(texts).toContain(' vSR   ROUTED  subagent → Haiku, medium effort')
 })
 
 test('a vague answer draws a KEPT card with the difficulty meter', { options: { display: 'verbose' } }, async ($, on) => {
