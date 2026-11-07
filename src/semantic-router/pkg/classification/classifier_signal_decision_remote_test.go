@@ -88,7 +88,7 @@ func TestSystemOneDeploymentAnswersSignalsAsAModelRuntimeOneDoes(t *testing.T) {
 	local, remote := newLocalDecider(), newFakeSystemOne()
 	classifier := systemOneTestClassifier(local, remote, 3000, 0)
 	results := newSignalResults()
-	classifier.evaluateDecisionModelSignals(context.Background(), results, &sync.Mutex{}, "refund my invoice", "refund my invoice", allDecisionRulesUsed(classifier))
+	classifier.evaluateDecisionModelSignals(context.Background(), results, &sync.Mutex{}, "refund my invoice", "refund my invoice", nil, allDecisionRulesUsed(classifier))
 
 	if remote.calls["hosted-d3"] != 1 || len(remote.requests["hosted-d3"].Questions) != 3 || remote.requests["hosted-d3"].State != "refund my invoice" {
 		t.Fatalf("one remote call with every question to hosted-d3, got %v %+v", remote.calls, remote.requests["hosted-d3"])
@@ -118,7 +118,7 @@ func TestSystemOneDeploymentFailuresLeaveItsSignalsUnknown(t *testing.T) {
 		classifier := systemOneTestClassifier(newLocalDecider(), remote, ruleTimeoutMs, deploymentTimeoutMs)
 		results := newSignalResults()
 		started := time.Now()
-		classifier.evaluateDecisionModelSignals(context.Background(), results, &sync.Mutex{}, "x", "x", allDecisionRulesUsed(classifier))
+		classifier.evaluateDecisionModelSignals(context.Background(), results, &sync.Mutex{}, "x", "x", nil, allDecisionRulesUsed(classifier))
 		return results, time.Since(started)
 	}
 	expectUnknown := func(results *SignalResults, reason string) {
