@@ -148,7 +148,8 @@ type VerifierResult struct {
 	// candidates and the verifier can score them independently.
 	Scores []CandidateScore `json:"scores,omitempty"`
 	// Usage accounts verifier compute (external model calls, etc.) so it can
-	// be folded into attempt/budget accounting.
+	// be folded into attempt/budget accounting. Unreported marks a subtotal
+	// when an external server omits some or all consumption.
 	Usage TokenUsage `json:"usage,omitempty"`
 	// LatencyMs is the verifier wall-clock time.
 	LatencyMs int64 `json:"latency_ms,omitempty"`
@@ -162,7 +163,9 @@ type Verifier interface {
 	Kind() VerifierKind
 	// Verify verifies the normalized candidates. It returns a typed
 	// VerifierResult or a *VerifierError with a stable failure code; policy
-	// maps the failure code to its on_error behavior.
+	// maps the failure code to its on_error behavior. Implementations may
+	// return a non-nil result with an error to preserve already paid usage;
+	// callers must account it but must not use it as an accepted verdict.
 	Verify(ctx context.Context, req *VerifierRequest) (*VerifierResult, error)
 }
 

@@ -45,3 +45,15 @@ func TestLooperReplayDiagnosticsProjectsContentFreeTrace(t *testing.T) {
 		t.Fatalf("projected attempt = %+v", attempt)
 	}
 }
+
+func TestLooperReplayDiagnosticsPreservesUnreportedVerifierUsage(t *testing.T) {
+	trace := looper.ExecutionTrace{
+		Version:      looper.ExecutionTraceVersion,
+		Attempts:     []looper.AttemptTrace{{Stage: "external_verifier", Usage: looper.TokenUsage{PromptTokens: 4, TotalTokens: 4, Unreported: true}}},
+		DroppedUsage: looper.TokenUsage{TotalTokens: 2, Unreported: true},
+	}
+	diagnostics := looperReplayDiagnostics(trace)
+	if !diagnostics.Attempts[0].Usage.Unreported || diagnostics.Attempts[0].Usage.TotalTokens != 4 || !diagnostics.DroppedUsage.Unreported {
+		t.Fatalf("unknown accounting lost: %+v", diagnostics)
+	}
+}
