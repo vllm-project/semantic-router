@@ -23,6 +23,11 @@ const LossyFieldToolResultError = "tool_result.is_error"
 // and Responses backends as user text.
 const LossyFieldSystemMessageRole = "messages[].role"
 
+// LossyFieldToolResultContent names images and files inside a tool result,
+// which Chat Completions tool messages cannot carry. Accepting the loss sends
+// them as a user message right after the tool results.
+const LossyFieldToolResultContent = "tool_result.content"
+
 // LossyFieldReasoningSignature names the signature an Anthropic backend puts
 // on its thinking, which Chat Completions and Responses clients cannot carry.
 const LossyFieldReasoningSignature = "reasoning.signature"
@@ -30,7 +35,7 @@ const LossyFieldReasoningSignature = "reasoning.signature"
 // OptInLossyFields lists the losses an operator may accept while every other
 // lossy translation keeps failing closed.
 func OptInLossyFields() []string {
-	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole, LossyFieldReasoningSignature}
+	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole, LossyFieldToolResultContent, LossyFieldReasoningSignature}
 }
 
 type MissingIDPolicy string

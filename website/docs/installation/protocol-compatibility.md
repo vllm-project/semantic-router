@@ -245,6 +245,15 @@ after a tool result, and `x-vsr-protocol-warnings` reports an `approximated`
 diagnostic for `messages[].role`. Messages backends receive the message in
 place either way.
 
+Chat Completions tool messages carry text only, so an image or file inside a
+tool result, such as the image a coding agent returns after reading an image
+file, fails toward a Chat backend with `tool_result_media`. Listing
+`tool_result.content` in `global.router.allow_lossy_translation` sends that
+content as one user message right after the run of tool results, keeps the
+text of each result in its tool message, and leaves a short text in a result
+that had none. `x-vsr-protocol-warnings` then reports an `approximated`
+diagnostic for `tool_result.content`. The backend model must accept images.
+
 Reasoning content translated out of an Anthropic backend fails when the backend
 attaches a reasoning signature, which its thinking responses carry by default.
 A Chat Completions or Responses client then receives a typed
@@ -333,9 +342,10 @@ schema, streaming, tools, or error translation.
   The Router then omits the flag, leaves the tool-result content unchanged,
   and reports the loss as `approximated` with field `tool_result.is_error` in
   `x-vsr-protocol-warnings` and in `llm_translation_lossy_total`. The list
-  also accepts `messages[].role` for system messages inside the conversation,
-  described above, and `reasoning.signature` (see the signed thinking note
-  above), and every other lossy translation still fails closed.
+  also accepts `messages[].role` for system messages inside the conversation
+  and `tool_result.content` for images and files in tool results, both
+  described above, `reasoning.signature` (see the signed thinking note above),
+  and every other lossy translation still fails closed.
 - The response keeps the client protocol's JSON or SSE shape. Provider
   transport errors and incomplete streams are translated separately from
   successful model responses.

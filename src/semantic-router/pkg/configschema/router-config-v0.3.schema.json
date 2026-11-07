@@ -1442,6 +1442,7 @@
             "enum": [
               "tool_result.is_error",
               "messages[].role",
+              "tool_result.content",
               "reasoning.signature"
             ]
           },
