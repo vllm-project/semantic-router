@@ -500,6 +500,9 @@ func HasImageCandidatesInRules(rules []ComplexityRule) bool {
 
 type ComplexityRule struct {
 	Name string `yaml:"name"`
+	// Deployment names the deployment that scores the rule's difficulty
+	// question; it selects native scoring over the rule's example banks.
+	Deployment string `yaml:"deployment,omitempty"`
 	// PrototypeScoring applies to all local text/image hard/easy banks. Nil
 	// inherits the family config; a present object is a complete override.
 	PrototypeScoring *PrototypeScoringConfig `yaml:"prototype_scoring,omitempty"`
