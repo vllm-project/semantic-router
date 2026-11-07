@@ -62498,6 +62498,9 @@
                         }
                       }
                     },
+                    "instance_id": {
+                      "type": "string"
+                    },
                     "message": {
                       "type": "string"
                     },
@@ -62715,6 +62718,9 @@
                           "type": "string"
                         }
                       }
+                    },
+                    "instance_id": {
+                      "type": "string"
                     },
                     "message": {
                       "type": "string"
