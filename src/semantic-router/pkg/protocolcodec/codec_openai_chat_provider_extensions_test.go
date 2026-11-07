@@ -147,7 +147,7 @@ func TestOpenAIChatRequestRejectsLiteLLMProviderSpecificFields(t *testing.T) {
 
 func TestOpenAIChatResponseStillRejectsUnknownProviderFields(t *testing.T) {
 	body := strings.Replace(groqChatResponseFixture, `"x_groq"`, `"x_unknown":1,"x_groq"`, 1)
-	_, _, _, err := NewBuiltinEngine().DecodeResponse(llmprotocol.OpenAIChatV1, []byte(body))
+	_, _, _, err := conformanceEngine().DecodeResponse(llmprotocol.OpenAIChatV1, []byte(body))
 	assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json")
 }
 
@@ -222,9 +222,13 @@ func TestChatStreamTimingsStaysStrict(t *testing.T) {
 		"unrelated unknown field": `"surprise":{"a":1}`,
 	} {
 		t.Run(name, func(t *testing.T) {
+			policy := llmprotocol.DefaultPolicy()
+			if name == "unrelated unknown field" {
+				policy = conformancePolicy()
+			}
 			decoder := OpenAIChatCodec{}.NewDecoder(
 				llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
-				llmprotocol.DefaultPolicy(),
+				policy,
 			)
 			payload := []byte("data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"model\",\"choices\":[]," + extra + "}\n\n")
 			if _, _, err := decoder.Push(payload); err == nil {
@@ -313,9 +317,13 @@ func TestChatStreamPFieldStaysStrict(t *testing.T) {
 		"unrelated unknown field": `"surprise":{"a":1}`,
 	} {
 		t.Run(name, func(t *testing.T) {
+			policy := llmprotocol.DefaultPolicy()
+			if name == "unrelated unknown field" {
+				policy = conformancePolicy()
+			}
 			decoder := OpenAIChatCodec{}.NewDecoder(
 				llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
-				llmprotocol.DefaultPolicy(),
+				policy,
 			)
 			payload := []byte("data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"model\",\"choices\":[]," + extra + "}\n\n")
 			if _, _, err := decoder.Push(payload); err == nil {
@@ -372,7 +380,7 @@ func TestOpenAIChatResponseTimeInfoStaysStrict(t *testing.T) {
 
 	t.Run("unrelated unknown field", func(t *testing.T) {
 		body := strings.Replace(cerebrasChatResponseFixture, `"time_info"`, `"x_unknown":1,"time_info"`, 1)
-		_, _, _, err := NewBuiltinEngine().DecodeResponse(llmprotocol.OpenAIChatV1, []byte(body))
+		_, _, _, err := conformanceEngine().DecodeResponse(llmprotocol.OpenAIChatV1, []byte(body))
 		assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json")
 	})
 }
@@ -422,7 +430,7 @@ func TestChatStreamCerebrasTimeInfoStaysStrict(t *testing.T) {
 	t.Run("unrelated unknown field", func(t *testing.T) {
 		decoder := OpenAIChatCodec{}.NewDecoder(
 			llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
-			llmprotocol.DefaultPolicy(),
+			conformancePolicy(),
 		)
 		payload := []byte("data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"model\",\"choices\":[],\"surprise\":{\"a\":1}}\n\n")
 		if _, _, err := decoder.Push(payload); err == nil {

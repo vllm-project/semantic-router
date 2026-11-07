@@ -22,12 +22,12 @@ func (b *remoteSequenceBinding) Classify(ctx context.Context, text string) (task
 func (b *remoteSequenceBinding) Close() error      { return b.handle.Close() }
 func (*remoteSequenceBinding) ownsAdmission() bool { return true }
 
-func prepareRemoteSequence(models *classifierModelRuntime, spec config.ResolvedModelBinding, external *config.ExternalModelConfig, backend SequenceClassifierBackend) (*remoteSequenceBinding, error) {
+func prepareRemoteSequence(models *classifierModelRuntime, spec config.ResolvedModelBinding, backend SequenceClassifierBackend) (*remoteSequenceBinding, error) {
 	closer, ok := backend.(io.Closer)
 	if !ok {
 		return nil, fmt.Errorf("remote sequence backend has no lifecycle")
 	}
-	handle, err := remoteTaskBinding(context.Background(), models, spec, external, closer, backend.Classify, func(_ string, out tasks.LabelDistribution) error {
+	handle, err := remoteTaskBinding(context.Background(), models, spec, closer, backend.Classify, func(_ string, out tasks.LabelDistribution) error {
 		if len(out.Probabilities) == 0 {
 			return fmt.Errorf("missing label distribution")
 		}
@@ -55,8 +55,8 @@ func (b *remoteTokenBinding) ClassifyTokens(ctx context.Context, text string) (t
 func (b *remoteTokenBinding) Close() error      { return b.handle.Close() }
 func (*remoteTokenBinding) ownsAdmission() bool { return true }
 
-func prepareRemoteTokens(models *classifierModelRuntime, spec config.ResolvedModelBinding, external *config.ExternalModelConfig, backend *HTTPTokenClassifierInference) (*remoteTokenBinding, error) {
-	handle, err := remoteTaskBinding(context.Background(), models, spec, external, backend, backend.ClassifyTokens, func(text string, out tasks.TokenClassificationResult) error {
+func prepareRemoteTokens(models *classifierModelRuntime, spec config.ResolvedModelBinding, backend *HTTPTokenClassifierInference) (*remoteTokenBinding, error) {
+	handle, err := remoteTaskBinding(context.Background(), models, spec, backend, backend.ClassifyTokens, func(text string, out tasks.TokenClassificationResult) error {
 		for _, span := range out.Entities {
 			if span.Start < 0 || span.End > len(text) || span.Start >= span.End || text[span.Start:span.End] != span.Text {
 				return fmt.Errorf("invalid token span")
@@ -81,12 +81,12 @@ func (b *remoteScoreBinding) Score(ctx context.Context, text string) (float64, e
 }
 func (b *remoteScoreBinding) Close() error { return b.handle.Close() }
 
-func prepareRemoteScore(models *classifierModelRuntime, spec config.ResolvedModelBinding, external *config.ExternalModelConfig, backend ScoringBackend) (*remoteScoreBinding, error) {
+func prepareRemoteScore(models *classifierModelRuntime, spec config.ResolvedModelBinding, backend ScoringBackend) (*remoteScoreBinding, error) {
 	closer, ok := backend.(io.Closer)
 	if !ok {
 		return nil, fmt.Errorf("remote score backend has no lifecycle")
 	}
-	handle, err := remoteTaskBinding(context.Background(), models, spec, external, closer, func(ctx context.Context, text string) (tasks.ScoreResult, error) {
+	handle, err := remoteTaskBinding(context.Background(), models, spec, closer, func(ctx context.Context, text string) (tasks.ScoreResult, error) {
 		score, err := backend.Score(ctx, text)
 		return tasks.ScoreResult{Value: score}, err
 	}, func(_ string, result tasks.ScoreResult) error {

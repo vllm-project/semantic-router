@@ -33,8 +33,7 @@ func (c *Classifier) IsHallucinationDetectionEnabled() bool {
 	if c.models == nil {
 		return false
 	}
-	cfg := c.Config.HallucinationMitigation.HallucinationModel
-	_, err := c.models.localSpec("hallucination_detector", cfg.ModelID, "modernbert", config.RemoteClassifierContractTokenSpans, cfg.UseCPU)
+	_, err := c.models.localSpec("hallucination_detector", "modernbert", config.RemoteClassifierContractTokenSpans)
 	return err == nil
 }
 
@@ -47,7 +46,7 @@ func (c *Classifier) IsHallucinationDetectionEnabled() bool {
 func (c *Classifier) usesRemoteHallucinationDetector() bool {
 	if c.models != nil {
 		if spec, ok := c.models.plan.Lookup(c.models.recipe, "hallucination_detector"); ok {
-			return spec.Deployment.Provider == "http"
+			return remoteTask(spec)
 		}
 	}
 	return c.Config.HallucinationMitigation.HallucinationModel.NormalizedBackend() == config.HallucinationBackendEndpoint

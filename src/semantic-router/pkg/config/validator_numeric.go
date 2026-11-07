@@ -1,6 +1,9 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 type optionalNonNegativeIntField struct {
 	name  string
@@ -23,7 +26,13 @@ type optionalNonNegativeFloatField struct {
 
 func validateOptionalNonNegativeFloatFields(fields []optionalNonNegativeFloatField) error {
 	for _, field := range fields {
-		if field.value != nil && *field.value < 0 {
+		if field.value == nil {
+			continue
+		}
+		if math.IsNaN(*field.value) || math.IsInf(*field.value, 0) {
+			return fmt.Errorf("%s must be a finite number, got %v", field.name, *field.value)
+		}
+		if *field.value < 0 {
 			return fmt.Errorf("%s must be >= 0, got %v", field.name, *field.value)
 		}
 	}

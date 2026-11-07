@@ -40,6 +40,24 @@ type VectorStoreRuntime struct {
 // unbounded.
 const defaultDrainTimeout = 25 * time.Second
 
+// vectorStoreEmbeddingConfig is the part of cfg the vector store embeds with:
+// the shared embedding consumer and what it resolves through, the
+// deployments embeddings.default and embeddings.multimodal name included.
+// Recipe classifier and safety bindings require their signal declarations and
+// do not belong to this service's preparation scope.
+func vectorStoreEmbeddingConfig(cfg *config.RouterConfig) *config.RouterConfig {
+	embeddingConfig := &config.RouterConfig{VectorStore: cfg.VectorStore}
+	embeddingConfig.EmbeddingModels = cfg.EmbeddingModels
+	embeddingConfig.EmbeddingConfig = cfg.EmbeddingConfig
+	embeddingConfig.ModelDeployments = cfg.ModelDeployments
+	embeddingConfig.GlobalModelBindings = cfg.GlobalModelBindings
+	embeddingConfig.EmbeddingDeployment = cfg.EmbeddingDeployment
+	embeddingConfig.MultimodalEmbeddingDeployment = cfg.MultimodalEmbeddingDeployment
+	embeddingConfig.ExternalModels = cfg.ExternalModels
+	embeddingConfig.ModelAdmission = cfg.ModelAdmission
+	return embeddingConfig
+}
+
 // NewVectorStoreRuntime builds the vector store. Its embeddings come from the
 // model runtime processes of runtimes (nil: only an OpenAI-compatible endpoint
 // can serve them); the vector store holds its own lease on them until Shutdown.
@@ -54,16 +72,7 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig, runtimes *modelservice.Mana
 	success := false
 	// Ingestion outlives individual request generations and owns independent
 	// embedding references until all its workers have stopped.
-	embeddingConfig := &config.RouterConfig{VectorStore: cfg.VectorStore}
-	embeddingConfig.EmbeddingModels = cfg.EmbeddingModels
-	embeddingConfig.EmbeddingConfig = cfg.EmbeddingConfig
-	embeddingConfig.ModelDeployments = cfg.ModelDeployments
-	embeddingConfig.GlobalModelBindings = cfg.GlobalModelBindings
-	// Ingestion owns only the shared embedding consumer. Recipe classifier and
-	// safety bindings require their signal declarations and do not belong to
-	// this service's preparation scope.
-	embeddingConfig.ExternalModels = cfg.ExternalModels
-	embeddingConfig.ModelAdmission = cfg.ModelAdmission
+	embeddingConfig := vectorStoreEmbeddingConfig(cfg)
 	runtime := serving.New(nil, pool)
 	var lease *modelservice.Lease
 	if runtimes != nil {
