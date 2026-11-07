@@ -16,12 +16,12 @@
 # supporting CUDA up to 13.3 -- the 15 nvidia-* packages below are its CUDA runtime.)
 accelerate==1.15.0
 aiohappyeyeballs==2.7.1
-aiohttp==3.14.3
+aiohttp==3.14.4
 aiosignal==1.4.0
 annotated-doc==0.0.5
 anyio==4.15.1
 attrs==26.1.0
-certifi==2026.7.22
+certifi==2026.10.18
 charset-normalizer==3.5.1
 click==8.5.0
 cloudpickle==3.1.2
