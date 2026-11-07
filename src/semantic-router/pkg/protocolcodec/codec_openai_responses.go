@@ -267,7 +267,7 @@ func (OpenAIResponsesCodec) DecodeRequest(body []byte, policy llmprotocol.Policy
 	if err := decodeResponsesInput(wire.Input, &request, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
-	if err := decodeResponsesTools(wire.Tools, &request, policy); err != nil {
+	if err := decodeResponsesTools(wire.Tools, &request, policy, &diagnostics); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
 	if err := decodeResponsesRequestOptions(wire, &request, policy); err != nil {
@@ -373,7 +373,12 @@ func decodeResponsesInstructions(raw json.RawMessage, request *llmprotocol.Reque
 	return nil
 }
 
-func decodeResponsesTools(raw json.RawMessage, request *llmprotocol.Request, policy llmprotocol.Policy) error {
+func decodeResponsesTools(
+	raw json.RawMessage,
+	request *llmprotocol.Request,
+	policy llmprotocol.Policy,
+	diagnostics *llmprotocol.Diagnostics,
+) error {
 	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return nil
 	}
@@ -382,14 +387,19 @@ func decodeResponsesTools(raw json.RawMessage, request *llmprotocol.Request, pol
 		return err
 	}
 	for _, toolBody := range toolBodies {
-		if err := decodeResponsesTool(toolBody, request, policy); err != nil {
+		if err := decodeResponsesTool(toolBody, request, policy, diagnostics); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func decodeResponsesTool(body json.RawMessage, request *llmprotocol.Request, policy llmprotocol.Policy) error {
+func decodeResponsesTool(
+	body json.RawMessage,
+	request *llmprotocol.Request,
+	policy llmprotocol.Policy,
+	diagnostics *llmprotocol.Diagnostics,
+) error {
 	toolType, err := responsesToolDiscriminator(body)
 	if err != nil {
 		return err
@@ -401,22 +411,27 @@ func decodeResponsesTool(body json.RawMessage, request *llmprotocol.Request, pol
 		return decodeResponsesImageGenerationTool(body, request, policy)
 	}
 	if toolType == "custom" {
-		return decodeResponsesCustomTool(body, request, policy)
+		return decodeResponsesCustomTool(body, request, policy, diagnostics)
 	}
 	if toolType != "function" {
 		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool", "only function tools enter the model protocol", nil)
 	}
-	return decodeResponsesFunctionTool(body, request, policy)
+	return decodeResponsesFunctionTool(body, request, policy, diagnostics)
 }
 
-func decodeResponsesCustomTool(body json.RawMessage, request *llmprotocol.Request, policy llmprotocol.Policy) error {
+func decodeResponsesCustomTool(
+	body json.RawMessage,
+	request *llmprotocol.Request,
+	policy llmprotocol.Policy,
+	diagnostics *llmprotocol.Diagnostics,
+) error {
 	var wire responsesToolWire
 	if err := decodeWireValue(body, &wire, policy); err != nil {
 		return err
 	}
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
 		"tools.allowed_callers": wire.AllowedCallers,
-		"tools.defer_loading":   wire.DeferLoading,
+		"tools.defer_loading":   optInDeferLoading(wire.DeferLoading, policy, llmprotocol.OpenAIResponsesV1, diagnostics),
 	}); err != nil {
 		return err
 	}
@@ -469,6 +484,7 @@ func decodeResponsesFunctionTool(
 	body json.RawMessage,
 	request *llmprotocol.Request,
 	policy llmprotocol.Policy,
+	diagnostics *llmprotocol.Diagnostics,
 ) error {
 	var tool responsesToolWire
 	if err := decodeWireValue(body, &tool, policy); err != nil {
@@ -476,7 +492,7 @@ func decodeResponsesFunctionTool(
 	}
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
 		"tools.allowed_callers": tool.AllowedCallers,
-		"tools.defer_loading":   tool.DeferLoading,
+		"tools.defer_loading":   optInDeferLoading(tool.DeferLoading, policy, llmprotocol.OpenAIResponsesV1, diagnostics),
 		"tools.output_schema":   tool.OutputSchema,
 	}); err != nil {
 		return err

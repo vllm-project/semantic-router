@@ -201,6 +201,7 @@ instead of being silently dropped.
 | `min_p`, repetition penalty, and cache salt | Supported extensions | Not supported | Not supported |
 | Stop sequences | Supported | Not supported | Supported |
 | Native response or conversation state fields | Not supported | Supported | Not supported |
+| Deferred tool loading (`tools[].defer_loading`) | Not supported; opt-in sends tools in full | Not supported; opt-in sends tools in full | Not supported; opt-in sends tools in full |
 
 This table describes codec representation, not model capability. For example,
 an OpenAI-compatible server can accept the Chat request shape while rejecting
@@ -244,6 +245,18 @@ then joins the user turn right before it, or becomes a user turn of its own
 after a tool result, and `x-vsr-protocol-warnings` reports an `approximated`
 diagnostic for `messages[].role`. Messages backends receive the message in
 place either way.
+
+`tools[].defer_loading` asks the provider's tool search to load a tool on
+demand. The Messages format carries it, but the Router's protocol-neutral
+request has no field for it, so the Router rejects it at ingress with
+`unsupported_tools_defer_loading` whatever the backend format, Messages
+included. Claude Code sets it on its first call, retries
+without it, and then sends every tool definition on every call. Listing
+`tools.defer_loading` in `global.router.allow_lossy_translation` keeps tool
+search on: the Router sends each deferred tool in full, a `tool_reference`
+block in a tool result reaches the backend as the tool's name, and
+`x-vsr-protocol-warnings` reports a `dropped` diagnostic for
+`tools.defer_loading`.
 
 Reasoning content translated out of an Anthropic backend fails when the backend
 attaches a reasoning signature, which its thinking responses carry by default.
@@ -333,9 +346,10 @@ schema, streaming, tools, or error translation.
   The Router then omits the flag, leaves the tool-result content unchanged,
   and reports the loss as `approximated` with field `tool_result.is_error` in
   `x-vsr-protocol-warnings` and in `llm_translation_lossy_total`. The list
-  also accepts `messages[].role` for system messages inside the conversation,
-  described above, and `reasoning.signature` (see the signed thinking note
-  above), and every other lossy translation still fails closed.
+  also accepts `messages[].role` for system messages inside the conversation
+  and `tools.defer_loading` for deferred tool loading, both described above,
+  `reasoning.signature` (see the signed thinking note above), and every other
+  lossy translation still fails closed.
 - The response keeps the client protocol's JSON or SSE shape. Provider
   transport errors and incomplete streams are translated separately from
   successful model responses.
