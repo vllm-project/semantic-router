@@ -247,8 +247,10 @@ diagnostic for `messages[].role`. Messages backends receive the message in
 place either way.
 
 `tools[].defer_loading` asks the provider's tool search to load a tool on
-demand, which no backend format carries, so the Router rejects it for every
-backend, Messages included. Claude Code sets it on its first call, retries
+demand. The Messages format carries it, but the Router's protocol-neutral
+request has no field for it, so the Router rejects it at ingress with
+`unsupported_tools_defer_loading` whatever the backend format, Messages
+included. Claude Code sets it on its first call, retries
 without it, and then sends every tool definition on every call. Listing
 `tools.defer_loading` in `global.router.allow_lossy_translation` keeps tool
 search on: the Router sends each deferred tool in full, a `tool_reference`
