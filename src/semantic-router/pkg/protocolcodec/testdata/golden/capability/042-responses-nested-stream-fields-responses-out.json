@@ -238,6 +238,10 @@
         },
         "diagnostics": [
           {
+            "field": "output.status",
+            "action": "dropped"
+          },
+          {
             "field": "stream.logprobs",
             "action": "dropped"
           },
@@ -352,7 +356,13 @@
               "event": "error"
             }
           ]
-        }
+        },
+        "diagnostics": [
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
       }
     },
     {
@@ -460,7 +470,13 @@
               "event": "error"
             }
           ]
-        }
+        },
+        "diagnostics": [
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
       }
     },
     {
