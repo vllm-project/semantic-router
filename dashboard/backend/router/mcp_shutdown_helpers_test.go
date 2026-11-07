@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/mark3labs/mcp-go/server"
 
@@ -75,7 +74,7 @@ func connectHTTPMCPForShutdown(t *testing.T, dashboard *Server) (string, <-chan 
 	if err := dashboard.mcpManager.AddServer(serverConfig); err != nil {
 		t.Fatalf("add HTTP MCP server: %v", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), preconditionBudget)
 	defer cancel()
 	if err := dashboard.mcpManager.Connect(ctx, serverConfig.ID); err != nil {
 		t.Fatalf("connect HTTP MCP server: %v", err)
