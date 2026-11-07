@@ -3,10 +3,14 @@ package extproc
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"strings"
 	"testing"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/stretchr/testify/require"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 func TestImmediateJSONResponsesPreserveSupportedStatusCodes(t *testing.T) {
@@ -96,5 +100,58 @@ func TestErrorResponsesKeepBodyAndHTTPStatusConsistent(t *testing.T) {
 				require.NoError(t, response.ValidateAll())
 			})
 		}
+	}
+}
+
+func TestEncodeImmediateResponsePreservesCancellationAndTimeout(t *testing.T) {
+	router := &OpenAIRouter{}
+	formats := []llmprotocol.WireFormat{
+		llmprotocol.OpenAIChatV1,
+		llmprotocol.OpenAIResponsesV1,
+		llmprotocol.AnthropicMessagesV1,
+	}
+
+	for _, format := range formats {
+		t.Run(string(format)+"_timeout", func(t *testing.T) {
+			ctx := &RequestContext{
+				SourceFormat: format,
+				ImmediateProtocolError: llmprotocol.NewError(
+					llmprotocol.ErrorUpstreamTimeout,
+					"request_timeout",
+					"request timed out",
+					nil,
+				),
+			}
+			resp := router.createErrorResponse(http.StatusGatewayTimeout, "request timed out")
+			encoded := router.encodeImmediateResponseForClient(resp, ctx).GetImmediateResponse()
+			if got := int(encoded.GetStatus().GetCode()); got != http.StatusGatewayTimeout {
+				t.Fatalf("expected HTTP 504, got %d", got)
+			}
+			bodyStr := string(encoded.Body)
+			if !strings.Contains(bodyStr, "request_timeout") && !strings.Contains(bodyStr, "request timed out") {
+				t.Fatalf("expected timeout details in body, got: %s", bodyStr)
+			}
+		})
+
+		t.Run(string(format)+"_canceled", func(t *testing.T) {
+			ctx := &RequestContext{
+				SourceFormat: format,
+				ImmediateProtocolError: llmprotocol.NewError(
+					llmprotocol.ErrorInternal,
+					"request_canceled",
+					"request canceled",
+					nil,
+				),
+			}
+			resp := router.createErrorResponse(http.StatusInternalServerError, "request canceled")
+			encoded := router.encodeImmediateResponseForClient(resp, ctx).GetImmediateResponse()
+			if got := int(encoded.GetStatus().GetCode()); got != http.StatusInternalServerError {
+				t.Fatalf("expected HTTP 500, got %d", got)
+			}
+			bodyStr := string(encoded.Body)
+			if !strings.Contains(bodyStr, "request_canceled") && !strings.Contains(bodyStr, "request canceled") {
+				t.Fatalf("expected canceled details in body, got: %s", bodyStr)
+			}
+		})
 	}
 }
