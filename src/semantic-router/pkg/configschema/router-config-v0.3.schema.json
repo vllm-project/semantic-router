@@ -4017,6 +4017,9 @@
         },
         "include_history": {
           "type": "boolean"
+        },
+        "source": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

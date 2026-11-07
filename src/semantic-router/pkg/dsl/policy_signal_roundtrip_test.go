@@ -85,6 +85,41 @@ ROUTE "tool-route" {
 	}
 }
 
+func TestKeywordSourceRoundTrip(t *testing.T) {
+	input := `
+SIGNAL keyword "credentials" {
+  operator: "OR"
+  method: "regex"
+  case_sensitive: true
+  keywords: ["AKIA[0-9A-Z]{16}"]
+  source: "tool_result"
+}
+
+ROUTE "credential-route" {
+  PRIORITY 100
+  WHEN keyword("credentials")
+  MODEL "model-a"
+}`
+
+	cfg := mustCompilePolicyDSL(t, input)
+	if len(cfg.KeywordRules) != 1 || cfg.KeywordRules[0].Source != config.KeywordSourceToolResult {
+		t.Fatalf("keyword rules = %#v, want source %q", cfg.KeywordRules, config.KeywordSourceToolResult)
+	}
+
+	source, err := Decompile(cfg)
+	if err != nil {
+		t.Fatalf("decompile error: %v", err)
+	}
+	if !strings.Contains(source, `source: "tool_result"`) {
+		t.Fatalf("decompiled DSL missing keyword source:\n%s", source)
+	}
+
+	roundTrip := mustCompilePolicyDSL(t, source)
+	if len(roundTrip.KeywordRules) != 1 || roundTrip.KeywordRules[0].Source != config.KeywordSourceToolResult {
+		t.Fatalf("round-trip keyword rules = %#v, want source %q", roundTrip.KeywordRules, config.KeywordSourceToolResult)
+	}
+}
+
 func TestClassifierRationaleRoundTrip(t *testing.T) {
 	for _, disabled := range []bool{false, true} {
 		t.Run(fmt.Sprintf("disabled_%t", disabled), func(t *testing.T) {

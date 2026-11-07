@@ -59,6 +59,7 @@ var (
 		validatePromptGuardBackend,
 		validatePIIContracts,
 		ValidatePIIWindow,
+		validateKeywordContracts,
 		validateRuleOperatorContracts,
 		validateRoutingLocalNames,
 		validateLanguageContracts,

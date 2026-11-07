@@ -125,6 +125,14 @@ function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
           type: 'boolean',
           description: 'Also match earlier user messages, not just the latest one',
         },
+        {
+          key: 'source',
+          label: 'Source',
+          type: 'select',
+          options: ['tool_result'],
+          description:
+            'Match textual tool results instead of the user message; never the prompt or history. Regex rules only',
+        },
       ]
     case 'embedding':
       return [

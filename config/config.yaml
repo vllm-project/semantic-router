@@ -300,6 +300,18 @@ routing:
         keywords: ["local model only", "do not upload to cloud"]
         case_sensitive: false
         include_history: true
+      # source: tool_result matches each textual tool result in the request on
+      # its own and never the prompt or conversation history; it cannot be
+      # combined with include_history. Matched keywords are reported as the
+      # configured patterns, so a secret a tool read never reaches headers,
+      # logs or Router Replay. The full gitleaks-derived rule set is in
+      # fragments/signal/keyword/credentials.yaml.
+      - name: credential_cloud_keys
+        operator: OR
+        method: regex
+        keywords: ['\b((?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z2-7]{16})\b']
+        case_sensitive: true
+        source: tool_result
 
     embeddings:
       - name: technical_support

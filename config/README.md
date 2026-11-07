@@ -145,6 +145,11 @@ runtime dependency; they do not define routing behavior by themselves.
   empty. Set `source: tool_result` explicitly to scan textual tool-result
   content decoded from the request protocol; this source does not implicitly
   include the prompt or conversation history.
+- Keyword rules follow the same contract: `source: tool_result` matches each
+  textual tool result on its own and never the prompt or conversation
+  history, so it cannot be combined with `include_history`. Only
+  `method: regex` rules may select it. A request without tool results does
+  not match such a rule.
 - Router Learning lives under `global.router.learning`; it is separate from a
   decision's request-time base algorithm.
 - Router replay is disabled by default and can capture request or response

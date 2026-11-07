@@ -13,18 +13,29 @@ import (
 
 // evaluateKeywordSignal evaluates keyword rules against the current text only.
 func (c *Classifier) evaluateKeywordSignal(results *SignalResults, mu *sync.Mutex, text string) {
-	c.evaluateKeywordSignalWithHistory(results, mu, text, nil)
+	c.evaluateKeywordSignalWithSources(results, mu, text, nil, nil, false)
 }
 
-// evaluateKeywordSignalWithHistory evaluates keyword rules; rules that opted
-// into include_history also see the prior user messages.
-func (c *Classifier) evaluateKeywordSignalWithHistory(results *SignalResults, mu *sync.Mutex, text string, priorUserMessages []string) {
+// keywordEvaluationIncompleteCode marks a source: tool_result rule that did not
+// match while part of the request's tool-result content was not inspectable,
+// so a decision can treat the rule as unresolved instead of clean.
+const keywordEvaluationIncompleteCode = "keyword_evaluation_incomplete"
+
+// evaluateKeywordSignalWithSources evaluates keyword rules against the content
+// each rule's configuration selects: the current user message, the prior user
+// messages for include_history rules, or the textual tool results for
+// source: tool_result rules.
+func (c *Classifier) evaluateKeywordSignalWithSources(results *SignalResults, mu *sync.Mutex, text string, priorUserMessages []string, toolResultTexts []string, toolResultScanIncomplete bool) {
 	start := time.Now()
-	historyText := ""
+	input := KeywordMatchInput{CurrentText: text}
 	if len(priorUserMessages) > 0 && c.keywordClassifier.HasHistoryRules() {
-		historyText = keywordHistoryText(text, priorUserMessages)
+		input.HistoryText = keywordHistoryText(text, priorUserMessages)
 	}
-	matches, err := c.keywordClassifier.MatchAllWithHistory(text, historyText)
+	toolResultRules := c.keywordClassifier.ToolResultRuleNames()
+	if len(toolResultRules) > 0 {
+		input.ToolResultTexts = toolResultTexts
+	}
+	matches, err := c.keywordClassifier.MatchAllWithSources(input)
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()
 
@@ -48,6 +59,22 @@ func (c *Classifier) evaluateKeywordSignalWithHistory(results *SignalResults, mu
 
 	for _, match := range matches {
 		c.recordSignalMatch(config.SignalTypeKeyword, match.RuleName)
+	}
+
+	if toolResultScanIncomplete && len(toolResultRules) > 0 {
+		matched := make(map[string]struct{}, len(matches))
+		for _, match := range matches {
+			matched[match.RuleName] = struct{}{}
+		}
+		var unresolved []string
+		for _, name := range toolResultRules {
+			if _, ok := matched[name]; !ok {
+				unresolved = append(unresolved, name)
+			}
+		}
+		if len(unresolved) > 0 {
+			recordSignalRuleErrors(results, mu, config.SignalTypeKeyword, unresolved, keywordEvaluationIncompleteCode)
+		}
 	}
 
 	mu.Lock()
