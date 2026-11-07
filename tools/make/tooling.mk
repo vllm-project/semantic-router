@@ -59,6 +59,9 @@ test-router-flow-bench: $(HARNESS_VENV_DEPS) ## Test the Router Flow EvalScope h
 test-agent-crew: bench-test-deps ## Test the agent crew harness against its stub router
 	@"$(AGENT_PYTHON)" -m pytest -q bench/agent_crew
 
-test-bench-tools: test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew ## Test every registered bench/ research tool
+test-coding-agent-live: $(HARNESS_VENV_DEPS) ## Test the Claude Code lane's command, alias mapping and report without Harbor
+	@"$(AGENT_PYTHON)" -m pytest -q bench/coding_agent_live
 
-.PHONY: bench-test-deps test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-bench-tools
+test-bench-tools: test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-coding-agent-live ## Test every registered bench/ research tool
+
+.PHONY: bench-test-deps test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-coding-agent-live test-bench-tools
