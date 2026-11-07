@@ -138,7 +138,7 @@ export function registerView(on: On, settings: Settings) {
     const list = await readDecisions($)
     const isOffline = await readOffline($)
     if (e.props.hasSurvey || e.props.maxRows < 1 || (list.length === 0 && !isOffline)) return next(e)
-    return band($.ui.resolve(e), list, e.props.bodyColumns, isOffline)
+    return band($.ui.resolve(e), list, e.props.bodyColumns, isOffline, e.props.maxRows)
   }).catch(($, e, next) => next(e))
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {

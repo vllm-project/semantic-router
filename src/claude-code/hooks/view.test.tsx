@@ -301,10 +301,29 @@ test('the band shows vSR as a capsule, v white, S yellow and R blue, then one it
   expect(props[texts.indexOf('◆')]).toMatchObject({ color: 'warning' })
 })
 
+test('the band sits in a dim frame, so it reads apart from the reply above it', async ($, on) => {
+  await severalApps($, on)
+
+  const { texts, frames, cards } = await rowTree($, bandRow())
+
+  expect(cards).toEqual([])
+  expect(frames).toEqual([expect.objectContaining({ borderStyle: 'round', borderDimColor: true })])
+  expect(texts[0]).toBe(' vSR   ◆ 1 shielded  ▒ 2 hidden  ⇢ 1 routed  ✓ 1 allowed')
+})
+
+test('the band drops its frame where the engine leaves it one row', async ($, on) => {
+  await severalApps($, on)
+
+  const { texts, frames } = await rowTree($, bandRow(100, 1))
+
+  expect(frames).toEqual([])
+  expect(texts[0]).toBe(' vSR   ◆ 1 shielded  ▒ 2 hidden  ⇢ 1 routed  ✓ 1 allowed')
+})
+
 test('the band keeps to whole items within its columns', async ($, on) => {
   await severalApps($, on)
 
-  const { texts } = await rowTree($, bandRow(32))
+  const { texts } = await rowTree($, bandRow(36))
 
   expect(texts[0]).toBe(' vSR   ◆ 1 shielded  ▒ 2 hidden')
 })

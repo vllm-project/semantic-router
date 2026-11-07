@@ -217,15 +217,29 @@ const BAND_LEAD = `${BRAND}  `
 
 const OFFLINE: TallyItem = { glyph: APPS.off.glyph, color: APPS.off.color, text: 'classifier offline' }
 
-export function band(elements: Elements, list: readonly Decision[], columns: number, isOffline: boolean) {
-  const { Text } = elements
+// A frame takes the line above and below it.
+const FRAME_ROWS = 3
+
+// The tally above the prompt, in a dim frame so it reads apart from Claude's reply just above it; unframed where the
+// engine leaves fewer rows than a frame takes or the columns are too few.
+export function band(elements: Elements, list: readonly Decision[], columns: number, isOffline: boolean, maxRows = FRAME_ROWS) {
+  const { Box, Text } = elements
   const items = isOffline ? [OFFLINE, ...tallyOf(list)] : tallyOf(list)
-  return (
+  const isFramed = maxRows >= FRAME_ROWS && columns - CARD_CHROME >= MIN_FRAMED_COLUMNS
+  const room = isFramed ? columns - CARD_CHROME : columns
+  const line = (
     <Text wrap="truncate-end">
       {brand(elements)}
       {'  '}
-      {tallyText(elements, itemsWithin(items, columns, BAND_LEAD.length))}
+      {tallyText(elements, itemsWithin(items, room, BAND_LEAD.length))}
     </Text>
+  )
+  return isFramed ? (
+    <Box borderStyle="round" borderDimColor paddingX={1} alignSelf="flex-start">
+      {line}
+    </Box>
+  ) : (
+    line
   )
 }
 
