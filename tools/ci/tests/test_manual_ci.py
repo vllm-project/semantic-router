@@ -91,6 +91,8 @@ class FakeGitHub:
         }
         self.trusted_ancestor = TRUSTED
         self.merge_ancestor = BASE
+        self.compare_error = None
+        self.compare_ancestor = None
         self.commits = {}
         self.artifacts = []
         self.comments = []
@@ -130,7 +132,11 @@ class FakeGitHub:
         if endpoint.endswith("/actions/workflows/manual-ci.yml"):
             return {"id": 10}
         if "/compare/" in endpoint:
+            if self.compare_error is not None:
+                raise self.compare_error
             base = endpoint.split("/compare/")[1].split("...")[0]
+            if self.compare_ancestor is not None:
+                return {"merge_base_commit": {"sha": self.compare_ancestor}}
             if base == BASE:
                 return {"merge_base_commit": {"sha": self.merge_ancestor}}
             return {"merge_base_commit": {"sha": self.trusted_ancestor}}
@@ -563,6 +569,58 @@ class ManualCITests(unittest.TestCase):
             self.resolve(source=MERGE, base=BASE),
             {"authorized": True, "scopes": ["affected"], "full": False},
         )
+
+    def test_plan_without_base_sha_is_skipped_without_key_error(self):
+        new_main = "e" * 40
+        new_merge = "d" * 40
+        self.github.commits = {
+            new_merge: {"parents": [{"sha": new_main}, {"sha": HEAD}]},
+        }
+        self.github.base_ref["object"]["sha"] = new_main
+        self.github.pull["merge_commit_sha"] = new_merge
+        self.github.merge_parents = [{"sha": new_main}, {"sha": HEAD}]
+        del self.github.plan["base_sha"]
+        unsigned = {k: v for k, v in self.github.plan.items() if k != "plan_sha256"}
+        self.github.plan["plan_sha256"] = hashlib.sha256(
+            json.dumps(unsigned, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+
+        with self.assertRaisesRegex(manual_ci.ManualCIError, "No current PR CI plan"):
+            self.authorize()
+
+    def test_unrelated_planned_base_fails_authorization(self):
+        new_main = "e" * 40
+        new_merge = "d" * 40
+        self.github.commits = {
+            new_merge: {"parents": [{"sha": new_main}, {"sha": HEAD}]},
+        }
+        self.github.base_ref["object"]["sha"] = new_main
+        self.github.pull["merge_commit_sha"] = new_merge
+        self.github.merge_parents = [{"sha": new_main}, {"sha": HEAD}]
+        self.github.merge_ancestor = "f" * 40
+
+        with self.assertRaisesRegex(manual_ci.ManualCIError, "No current PR CI plan"):
+            self.authorize()
+
+    def test_main_contains_swallows_api_failure_and_answers_false(self):
+        new_main = "e" * 40
+        self.github.base_ref["object"]["sha"] = new_main
+        self.github.compare_error = manual_ci.ManualCIError(
+            "Comparison not found (HTTP 404).", http_status=404
+        )
+        self.assertFalse(manual_ci.main_contains(self.github, REPO, BASE))
+
+        new_main = "e" * 40
+        new_merge = "d" * 40
+        self.github.commits = {
+            new_merge: {"parents": [{"sha": new_main}, {"sha": HEAD}]},
+        }
+        self.github.base_ref["object"]["sha"] = new_main
+        self.github.pull["merge_commit_sha"] = new_merge
+        self.github.merge_parents = [{"sha": new_main}, {"sha": HEAD}]
+
+        with self.assertRaisesRegex(manual_ci.ManualCIError, "No current PR CI plan"):
+            self.authorize()
 
     def test_unrelated_merge_base_cannot_authorize(self):
         record = self.authorize()

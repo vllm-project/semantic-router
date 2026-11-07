@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from manual_ci import ManualCIError
 from pr_ci_status import (
     APP_ID,
     CAPABILITIES,
@@ -69,6 +70,7 @@ class Client:
         self.ready, self.missing_report, self.newer_run = True, False, False
         self.parents = [BASE, HEAD]
         self.main_sha, self.base_ancestor = BASE, BASE
+        self.compare_error = None
         self.refresh_report()
 
     def refresh_report(self):
@@ -109,6 +111,8 @@ class Client:
                 "object": {"type": "commit", "sha": self.main_sha},
             }
         if path.startswith(f"compare/{BASE}..."):
+            if self.compare_error is not None:
+                raise self.compare_error
             return {"merge_base_commit": {"sha": self.base_ancestor}}
         if path == "actions/runs/101":
             return copy.deepcopy(self.run)
@@ -432,6 +436,18 @@ class PRStatusTests(unittest.TestCase):
         client = Client()
         client.main_sha = "f" * 40
         client.base_ancestor = "e" * 40
+        result = reconcile(client, REPO, 101)
+        self.assertEqual(result["state"], "stale")
+        self.assertEqual(result["check"]["status"], "in_progress")
+        self.assertIn("Update the branch", result["comment"])
+
+    def test_unreachable_base_compare_api_error_marks_gate_stale(self):
+        client = Client()
+        client.main_sha = "f" * 40
+        client.compare_error = ManualCIError(
+            "Comparison not found (HTTP 404).", http_status=404
+        )
+        client.pull["merge_commit_sha"] = "d" * 40
         result = reconcile(client, REPO, 101)
         self.assertEqual(result["state"], "stale")
         self.assertEqual(result["check"]["status"], "in_progress")

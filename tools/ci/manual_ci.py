@@ -174,23 +174,28 @@ def timestamp(value: str) -> datetime:
 
 def main_contains(client, repo: str, base: str) -> bool:
     """A planned base remains trusted when main advances without rewriting it."""
-    base_ref = client.request(f"repos/{repo}/git/ref/heads/main")
-    if (
-        not isinstance(base_ref, dict)
-        or base_ref.get("ref") != "refs/heads/main"
-        or base_ref.get("object", {}).get("type") != "commit"
-    ):
+    if not isinstance(base, str) or not SHA.fullmatch(base):
         return False
-    current_main = base_ref.get("object", {}).get("sha")
-    if not isinstance(current_main, str) or not SHA.fullmatch(current_main):
+    try:
+        base_ref = client.request(f"repos/{repo}/git/ref/heads/main")
+        if (
+            not isinstance(base_ref, dict)
+            or base_ref.get("ref") != "refs/heads/main"
+            or base_ref.get("object", {}).get("type") != "commit"
+        ):
+            return False
+        current_main = base_ref.get("object", {}).get("sha")
+        if not isinstance(current_main, str) or not SHA.fullmatch(current_main):
+            return False
+        if current_main == base:
+            return True
+        comparison = client.request(f"repos/{repo}/compare/{base}...{current_main}")
+        return bool(
+            isinstance(comparison, dict)
+            and comparison.get("merge_base_commit", {}).get("sha") == base
+        )
+    except (ManualCIError, KeyError, TypeError, ValueError):
         return False
-    if current_main == base:
-        return True
-    comparison = client.request(f"repos/{repo}/compare/{base}...{current_main}")
-    return bool(
-        isinstance(comparison, dict)
-        and comparison.get("merge_base_commit", {}).get("sha") == base
-    )
 
 
 def source_identity(client, repo: str, number: int) -> dict:
@@ -347,10 +352,13 @@ def plan_for_run(client, repo: str, run: dict, identity: dict) -> dict | None:
             and plan.get("base_sha") == identity["base_sha"]
         ):
             return plan
+        base_sha = plan.get("base_sha")
         if (
             run.get("head_sha") == identity["head_sha"]
-            and plan.get("base_sha") != identity["base_sha"]
-            and main_contains(client, repo, plan["base_sha"])
+            and isinstance(base_sha, str)
+            and SHA.fullmatch(base_sha)
+            and base_sha != identity["base_sha"]
+            and main_contains(client, repo, base_sha)
         ):
             return plan
     return None
