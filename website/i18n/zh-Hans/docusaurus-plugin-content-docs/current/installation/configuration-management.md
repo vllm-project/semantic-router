@@ -79,6 +79,7 @@ vllm-sr serve --config config.yaml --replace-active-config
 | `restart_required` | 变更需要重启，例如 standalone listener 的新地址或端口。 |
 | `unsupported` | 变更需要当前网关模式缺少的能力；消息会指出具备该能力的 `--gateway` 模式。 |
 | `artifact_unavailable` | 变更所需的模型制品不可用。 |
+| `storage_unavailable` | Router 无法写入变更使用的本地目录；`path` 指出对应的设置。见 [Router 本地磁盘上的文件](storage-overview#router-local-files)。 |
 | `model_unavailable` | 变更所需的模型无法准备好。 |
 | `build_failed` | 路由流水线或上游层无法构建。 |
 | `warmup_failed` | 某个组件预热失败。 |

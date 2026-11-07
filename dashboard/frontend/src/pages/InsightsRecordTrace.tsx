@@ -195,7 +195,12 @@ function ToolResult({ message }: { message: InsightsTrajectoryMessage }) {
       </summary>
       <div className={styles.recordTraceToolBody}>
         {message.content ? (
-          <pre>{formatTracePayload(message.content)}</pre>
+          <>
+            <pre>{formatTracePayload(message.content)}</pre>
+            {message.content_truncated ? (
+              <span>Result truncated at the configured tool trace byte limit</span>
+            ) : null}
+          </>
         ) : (
           <span>
             {message.content_redacted
@@ -259,7 +264,8 @@ function buildRecordTraceFallback(record: InsightsRecord): InsightsTrajectoryMes
       case 'client_tool_result':
         messages.push({
           role: 'tool',
-          content: step.text,
+          content: step.output || step.text,
+          content_truncated: Boolean(step.output && step.truncated),
           tool_call_id: step.tool_call_id,
           tool_name: step.tool_name,
           status: step.status === 'failed' ? 'failed' : 'succeeded',
