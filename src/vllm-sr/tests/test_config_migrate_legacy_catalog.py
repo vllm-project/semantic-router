@@ -242,22 +242,16 @@ def test_migrate_config_data_turns_the_hallucination_endpoint_into_a_binding():
     migrated = migrate_config_data(legacy)
 
     catalog = migrated["global"]["model_catalog"]
-    # Legacy detectors are given a stable model_ref during migration, and the
-    # endpoint shorthand becomes the detector's http_chat binding.
+    # The endpoint shorthand becomes an openai_chat deployment the detector's
+    # binding names; migration adds no model_ref or external model.
     assert catalog["modules"]["hallucination_mitigation"]["detector"] == {
         "include_explanation": True,
-        "model_ref": "hallucination_detector",
     }
-    assert catalog["external"][0]["llm_endpoint"] == {
-        "address": "127.0.0.1",
-        "port": 8077,
-        "protocol": "http",
+    assert "external" not in catalog
+    assert catalog["deployments"]["hallucination-detector"] == {
+        "provider": "openai_chat",
+        "endpoint": "http://127.0.0.1:8077/v1",
+        "model": "KRLabsOrg/lettucedect-v2-qwen-2b",
+        "timeout_ms": 10000,
     }
-    assert (
-        catalog["external"][0]["llm_model_name"] == "KRLabsOrg/lettucedect-v2-qwen-2b"
-    )
-    assert catalog["bindings"]["hallucination_detector"] == {
-        "deployment": "hallucination-detector",
-        "contract": "token_spans.v1",
-        "adapter": "http_chat",
-    }
+    assert catalog["bindings"] == {"hallucination": "hallucination-detector"}

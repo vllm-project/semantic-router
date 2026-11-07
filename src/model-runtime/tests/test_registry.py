@@ -139,9 +139,17 @@ def test_every_family_has_a_table_and_lookups_cover_them():
         "task_heads",
         "vela2",
         "vela3",
+        "vela3_d3",
         "multimodal_embedding",
     }
     assert all(model.family == "decision2" for model in builtin.all_models("decision2"))
+    assert {model.repo_id for model in builtin.all_models("vela3_d3")} == {
+        "vllm-sr/vela3-lite",
+        "vllm-sr/vela3-mini",
+        "vllm-sr/vela3-flash",
+        "vllm-sr/vela3-turbo",
+    }
+    assert all(model.base is not None for model in builtin.all_models("vela3_d3"))
     assert {model.repo_id for model in builtin.all_models("decision3")} == {
         f"vllm-sr/{name}"
         for name in (

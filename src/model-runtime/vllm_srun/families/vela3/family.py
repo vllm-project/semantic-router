@@ -45,6 +45,7 @@ from ..vela2.encoder_layout import (
 from ..vela2.layout import Row, SchemaTooLongError, Tokens, fail_unscanned, read_parts
 from ..vela2.raw import RawRow
 from ..vela2.request import Plan as PartsPlan
+from ..vela3_shared import PRESETS, text
 from .answers import Answerer
 from .network import DECISION_BUDGET, Call, Networks, Output, Vela3Item
 from .package import (
@@ -57,11 +58,10 @@ from .package import (
     member_of_vision,
     verify,
 )
-from .request import DECISION, ROUTER, Asked, Read, Reader, text
+from .request import DECISION, ROUTER, Asked, Read, Reader
 from .routing import SPAN_BUDGET, SPAN_ROWS, Router
 
 QUESTION_TYPES = ("choice", "noul", "span")
-PRESETS = ("pii", "halu")
 TOKEN_CACHE = 8192
 # A question reads a part whole up to this many windows' worth of tokens by
 # default (``max_scan_tokens``); a request may set another budget. A question
@@ -333,6 +333,14 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
     def run(self, items: list[Vela3Item]) -> list[Output]:
         return self.networks.run(items)
 
+    def run_approximate(self, items: list[Vela3Item]) -> list[Output]:
+        """On a GPU, batches that merge requests share forwards between their equal calls.
+
+        A CPU gains no throughput from them and holds the dense masks of long
+        rows in host memory, so its forwards stay those of ``run``.
+        """
+        return self.networks.run(items, merged=self.engine_model.device.type != "cpu")
+
     # -- planning ------------------------------------------------------------
 
     def plan(
@@ -443,6 +451,7 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
             else:
                 key = ("span", question.id)
             groups.setdefault(key, []).append(entry)
+        turns: dict[tuple[str, int], int] = {}
         for key, members in groups.items():
             first = members[0]
             layout = self._layout_of(first)
@@ -478,7 +487,9 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
                 continue
             placed = Placed(row, layout, [])
             for adapter in adapters:
-                call = Call(adapter, budget_tokens, SPAN_ROWS)
+                turn = turns.get((adapter, budget_tokens), 0)
+                turns[adapter, budget_tokens] = turn + 1
+                call = Call(adapter, budget_tokens, SPAN_ROWS, turn)
                 placed.calls.append(
                     list(range(len(items), len(items) + len(sequences)))
                 )

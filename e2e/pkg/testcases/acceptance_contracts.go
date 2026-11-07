@@ -21,13 +21,15 @@ const (
 	minBaselineDecisionPriorityAccuracy     = 75.0
 	minBaselineDecisionFallbackAccuracy     = 85.0
 	minBaselineSequentialStressSuccessRate  = 95.0
-	minBaselineProgressiveStressOverallRate = 75.0
+	// Progressive stress requests wait out the gateway's deadline, so an
+	// unanswered request is a gateway or Router failure, not slow inference.
+	minBaselineProgressiveStressOverallRate = 100.0
 )
 
 var progressiveStressStageFloors = []progressiveStressFloor{
-	{qps: 10, minimum: 95.0},
-	{qps: 20, minimum: 85.0},
-	{qps: 50, minimum: 60.0},
+	{qps: 10, minimum: 100.0},
+	{qps: 20, minimum: 100.0},
+	{qps: 50, minimum: 100.0},
 }
 
 type acceptanceContract func(details map[string]interface{}) error

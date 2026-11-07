@@ -61,3 +61,17 @@ func TestStreamedBodyAndPromptCompressionMetricsUseBoundedLabels(t *testing.T) {
 		assertMetricHasNoLabels(t, collector, "request_id", "session_id", "trace_id", "prompt", "model", "endpoint")
 	}
 }
+
+func TestRoutingInputRemovalsCountWithoutText(t *testing.T) {
+	skipped := testutil.ToFloat64(routingInputRemovals.WithLabelValues(RoutingInputSkippedMessage))
+	stripped := testutil.ToFloat64(routingInputRemovals.WithLabelValues(RoutingInputStrippedBlock))
+	RecordRoutingInputRemovals(2, 3)
+	RecordRoutingInputRemovals(0, 0)
+	if got := testutil.ToFloat64(routingInputRemovals.WithLabelValues(RoutingInputSkippedMessage)); got != skipped+2 {
+		t.Fatalf("skipped messages = %v, want %v", got, skipped+2)
+	}
+	if got := testutil.ToFloat64(routingInputRemovals.WithLabelValues(RoutingInputStrippedBlock)); got != stripped+3 {
+		t.Fatalf("stripped blocks = %v, want %v", got, stripped+3)
+	}
+	assertMetricHasNoLabels(t, routingInputRemovals, "request_id", "session_id", "prompt", "recipe", "model")
+}
