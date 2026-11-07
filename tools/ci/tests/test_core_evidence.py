@@ -9,8 +9,10 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from run_core_tests import (
+    MODULE_NAME,
     collected_go_inventory,
     execute_tool_units,
+    failure_report,
     profile_exclusions,
     race_inventory,
     repository_go_tools,
@@ -318,6 +320,45 @@ class RequiredInventoryTests(unittest.TestCase):
             path.write_text("<testsuite/>")
             with self.assertRaisesRegex(ValueError, "empty"):
                 junit_cases(path)
+
+    def test_failure_report_names_the_tests_an_exited_binary_left_running(
+        self,
+    ) -> None:
+        cmd = MODULE_NAME + "/cmd"
+        codec = MODULE_NAME + "/pkg/protocolcodec"
+
+        def output(package: str, test: str | None, text: str) -> dict:
+            event = {"Package": package, "Action": "output", "Output": text}
+            return {**event, "Test": test} if test else event
+
+        events = [
+            {"Package": cmd, "Test": "TestBefore", "Action": "run"},
+            output(cmd, "TestBefore", "--- PASS: TestBefore (0.00s)\n"),
+            {"Package": cmd, "Test": "TestBefore", "Action": "pass"},
+            {"Package": cmd, "Test": "TestStartup", "Action": "run"},
+            output(cmd, "TestStartup", "=== RUN   TestStartup\n"),
+            {"Package": cmd, "Test": "TestStartup/standalone", "Action": "run"},
+            output(cmd, "TestStartup/standalone", "=== RUN   TestStartup/standalone\n"),
+            output(cmd, None, f"FAIL\t{cmd}\t1.706s\n"),
+            {"Package": cmd, "Action": "fail", "Elapsed": 1.706},
+            *(
+                output(codec, "FuzzCodec", f"--- PASS: FuzzCodec/seed#{seed}\n")
+                for seed in range(100)
+            ),
+            {"Package": codec, "Action": "pass"},
+        ]
+        report = failure_report(events)
+        self.assertIn(
+            "=== ./cmd failed; its test binary exited while running "
+            "TestStartup, TestStartup/standalone\n",
+            report,
+        )
+        self.assertIn(
+            f"=== RUN   TestStartup/standalone\nFAIL\t{cmd}\t1.706s\n", report
+        )
+        self.assertNotIn("TestBefore", report)
+        self.assertNotIn("FuzzCodec", report)
+        self.assertEqual(failure_report(events[-101:]), "")
 
 
 if __name__ == "__main__":

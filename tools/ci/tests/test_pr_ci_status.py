@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from manual_ci import ManualCIError
 from pr_ci_status import (
     APP_ID,
     CAPABILITIES,
@@ -70,6 +71,8 @@ class Client:
         self.checks, self.comments, self.writes = [], [], []
         self.ready, self.missing_report, self.newer_run = True, False, False
         self.parents = [BASE, HEAD]
+        self.main_sha, self.base_ancestor = BASE, BASE
+        self.compare_error = None
         self.refresh_report()
 
     def refresh_report(self):
@@ -104,6 +107,15 @@ class Client:
         prefix = f"repos/{REPO}/"
         self.assert_prefix(endpoint, prefix)
         path = endpoint[len(prefix) :]
+        if path == "git/ref/heads/main":
+            return {
+                "ref": "refs/heads/main",
+                "object": {"type": "commit", "sha": self.main_sha},
+            }
+        if path.startswith(f"compare/{BASE}..."):
+            if self.compare_error is not None:
+                raise self.compare_error
+            return {"merge_base_commit": {"sha": self.base_ancestor}}
         if path == "actions/runs/101":
             return copy.deepcopy(self.run)
         if path == "actions/workflows/pr.yml":
@@ -424,11 +436,49 @@ class PRStatusTests(unittest.TestCase):
 
     def test_changed_base_stays_pending_and_requests_branch_update(self):
         client = Client()
-        client.pull["merge_commit_sha"] = "f" * 40
+        client.main_sha = "f" * 40
+        client.base_ancestor = "e" * 40
         result = reconcile(client, REPO, 101)
         self.assertEqual(result["state"], "stale")
         self.assertEqual(result["check"]["status"], "in_progress")
         self.assertIn("Update the branch", result["comment"])
+
+    def test_unreachable_base_compare_api_error_marks_gate_stale(self):
+        client = Client()
+        client.main_sha = "f" * 40
+        client.compare_error = ManualCIError(
+            "Comparison not found (HTTP 404).", http_status=404
+        )
+        client.pull["merge_commit_sha"] = "d" * 40
+        result = reconcile(client, REPO, 101)
+        self.assertEqual(result["state"], "stale")
+        self.assertEqual(result["check"]["status"], "in_progress")
+        self.assertIn("Update the branch", result["comment"])
+
+    def test_advanced_main_with_unchanged_head_does_not_mark_gate_stale(self):
+        client = Client()
+        client.main_sha = "f" * 40
+        client.base_ancestor = BASE
+        client.pull["merge_commit_sha"] = "d" * 40
+        result = reconcile(client, REPO, 101)
+        self.assertEqual(result["state"], "awaiting-approval")
+        self.assertEqual(result["check"]["status"], "in_progress")
+        self.assertNotIn("Update the branch", result["comment"])
+
+    def test_advanced_main_with_passed_verdict_publishes_success(self):
+        client = Client()
+        client.main_sha = "f" * 40
+        client.base_ancestor = BASE
+        client.pull["merge_commit_sha"] = "d" * 40
+        client.plan.update(
+            expected_verification_ids=["quality", "e2e.dashboard"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        result = reconcile(client, REPO, 101)
+        self.assertEqual(result["state"], "success")
+        self.assertEqual(result["check"]["conclusion"], "success")
 
     def test_late_event_reads_current_attempt_before_publishing(self):
         client = Client()
@@ -648,6 +698,10 @@ class DiagnosticClient(Client):
         self.mutate_on_final = None
         self.run_reads = {}
         self.live_base = BASE
+
+    def advance_main_unrelated(self):
+        self.live_base = "d" * 40
+        self.base_ancestor = "f" * 40
 
     @staticmethod
     def check(identity, external, conclusion, suite):
@@ -879,9 +933,19 @@ class DiagnosticTests(unittest.TestCase):
         self.assertIn("source_changed", result["reason_codes"])
         self.assertFalse(result["evidence"]["snapshot_current"])
 
-    def test_old_base_preserves_raw_competition_but_no_readiness(self):
+    def test_ancestor_base_preserves_current_competition(self):
         client = DiagnosticClient()
         client.live_base = "d" * 40
+        result = self.diagnose(client)
+        self.assertEqual(result["state"], "competing_required")
+        self.assertTrue(result["evidence"]["competition"])
+        self.assertTrue(result["evidence"]["current_source"])
+        self.assertTrue(result["evidence"]["snapshot_current"])
+        self.assertNotIn("source_stale", result["reason_codes"])
+
+    def test_unrelated_base_preserves_raw_competition_but_no_readiness(self):
+        client = DiagnosticClient()
+        client.advance_main_unrelated()
         result = self.diagnose(client)
         self.assertEqual(result["state"], "stale_blockers")
         self.assertTrue(result["evidence"]["competition"])
@@ -966,7 +1030,7 @@ class DiagnosticTests(unittest.TestCase):
             lambda c: c.run.update(status="in_progress"),
             lambda c: c.native_run.update(run_attempt=2),
             lambda c: setattr(c, "newer_run", True),
-            lambda c: setattr(c, "live_base", "d" * 40),
+            lambda c: c.advance_main_unrelated(),
             lambda c: c.checks[0].update(conclusion="failure"),
         ):
             with self.subTest(mutate=mutate):

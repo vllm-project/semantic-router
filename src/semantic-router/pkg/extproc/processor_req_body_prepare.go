@@ -34,7 +34,8 @@ func (r *OpenAIRouter) extractRequestSignalSnapshot(
 		ctx.SemanticRequest.Generation++
 	}
 	captureOriginalContextHistory(ctx)
-	snapshot := extractSemanticRequestSignals(ctx.SemanticRequest)
+	snapshot := extractSemanticRequestSignalsWith(ctx.SemanticRequest, r.routingInputSelector())
+	ctx.RoutingInput = snapshot.RoutingInput
 	captureOriginalRequestDemand(ctx, ctx.SemanticRequest, snapshot)
 	if snapshot.Stream {
 		logging.ComponentDebugEvent("extproc", "stream_parameter_detected", map[string]interface{}{
@@ -214,6 +215,7 @@ func applyRequestContextEstimate(snapshot *requestSignalSnapshot, ctx *RequestCo
 	ctx.VSRContextTextBytes = snapshot.ContextTextBytes
 	ctx.VSRContextEquivalentBytes = snapshot.ContextEquivalentBytes
 	ctx.VSRContextHasNonText = snapshot.ContextHasNonText
+	ctx.VSRContextReserveTokens = snapshot.ContextReserveTokens
 }
 
 func (r *OpenAIRouter) applyCacheChecks(
