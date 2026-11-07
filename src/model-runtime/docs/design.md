@@ -783,7 +783,9 @@ costs its budget, not its length, and fails the questions that read it whole
 with `scan_budget_exceeded`; the other questions read its first tokens, which
 are all any truncation keeps of a part they do not read. A question with
 `overflow: truncate` reads only a part's first `limits.truncate_tokens` (one
-input on a CPU, its row one forward over what fits). The model's answer to a
+input on a CPU, its row one forward over what fits), and a Vela 3.0 evidence
+span question its route's 32,768-token window of the parts it reads, the
+others still cut to the router's. The model's answer to a
 question depends on the questions beside it in a sequence, so questions of
 both kinds share their rows as before unless a row has to be read in windows;
 only then does each kind get rows of its own. The router truncates its
@@ -1231,7 +1233,7 @@ Section 13.4.
 | --- | --- | --- |
 | `cpu` | validated | pure-torch references, FP32; on x86, encoder linears through oneDNN's pre-packed FP32 kernel (weights reordered once at load, batch-invariant, within 3.3e-6 of `F.linear`) |
 | `rocm` | validated (MI300X, MI325X) | BF16 autocast, FLA gated delta, causal-conv1d, exact-shape HIP graphs, bit-exact fused Triton element-wise kernels (gfx942) |
-| `cuda` | validated (H200, A100, Tesla T4; Vela 2.0 0.3B@32 p50 known regression on H200; `docs/records/cuda-*.md`) | the same kernel slots; fused kernels without bit-exact evidence stay off the exact profile (`cuda-fused-kernels.md`); on Ampere and newer with Triton, a consenting family may use them under `max_speed` (Decision 2.0; `cuda-fused-approximate.md`) |
+| `cuda` | validated (H200, A100, Tesla T4; Vela 2.0 0.3B@32 p50 known regression on H200; `docs/records/cuda-*.md`) | the same kernel slots; fused kernels without bit-exact evidence stay off the exact profile (`cuda-fused-kernels.md`); on Ampere and newer with Triton, a consenting family may use them under `max_speed` (Decision 2.0; `cuda-fused-approximate.md`); fused gated-delta prep (`gdn_prep`) needs FLA but does not require causal-conv1d to be installed; optional causal-conv1d is approximate on CUDA, so exact-only/non-consenting models use torch reference even when it is installed; [convolution evidence and released-runtime impact](records/cuda-causal-conv1d-exactness.md); [A/B model comparison](records/cuda-gdn-prep-without-causal-conv1d.md) |
 | `xpu`, `mps` | built-in plugins, **unvalidated** | pure-torch references |
 
 Intel hardware that used the OpenVINO provider runs on CPU, on `xpu`, or
