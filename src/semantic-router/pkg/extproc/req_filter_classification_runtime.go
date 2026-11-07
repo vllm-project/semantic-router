@@ -28,6 +28,7 @@ var selectionMethodByAlgorithmType = map[string]selection.SelectionMethod{
 	"multi_factor":  selection.MethodMultiFactor,
 	"random":        selection.MethodRandom,
 	"mlp":           selection.MethodMLP,
+	"hiershrink":    selection.MethodHierShrink,
 	"prompt":        selection.MethodPrompt,
 	"decision":      selection.MethodDecision,
 }

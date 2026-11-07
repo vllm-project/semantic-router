@@ -24,7 +24,7 @@ func TestEmbeddingModelsNeededJudgmentConsumersDoNotLoadEmbedding(t *testing.T) 
 }
 
 func TestEmbeddingModelsNeededUsesMLRequest(t *testing.T) {
-	for _, algorithm := range []string{"knn", "kmeans", "svm", "mlp"} {
+	for _, algorithm := range []string{"knn", "kmeans", "svm", "mlp", "hiershrink"} {
 		t.Run(algorithm, func(t *testing.T) {
 			cfg := &RouterConfig{Entrypoints: []EntrypointMapping{{ModelNames: []string{"auto"}, Recipe: DefaultRecipeName}}}
 			cfg.Decisions = []Decision{{Algorithm: &AlgorithmConfig{Type: algorithm}}}
@@ -61,6 +61,7 @@ func TestEmbeddingModelsNeededMLDefaultsAndInactiveConfig(t *testing.T) {
 		{name: "KMeans artifact only", algorithm: "kmeans", ml: MLSelectionConfig{ModelType: "qwen3", KMeans: MLKMeansConfig{PretrainedPath: "kmeans.json"}}, want: map[string]bool{"qwen3": true}},
 		{name: "SVM artifact only", algorithm: "svm", ml: MLSelectionConfig{ModelType: "qwen3", SVM: MLSVMConfig{PretrainedPath: "svm.json"}}, want: map[string]bool{"qwen3": true}},
 		{name: "MLP artifact only", algorithm: "mlp", ml: MLSelectionConfig{ModelType: "qwen3", MLP: MLMLPConfig{PretrainedPath: "mlp.json"}}, want: map[string]bool{"qwen3": true}},
+		{name: "HierShrink artifact only", algorithm: "hiershrink", ml: MLSelectionConfig{ModelType: "qwen3", HierShrink: MLHierShrinkConfig{PretrainedPath: "hiershrink.json"}}, want: map[string]bool{"qwen3": true}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

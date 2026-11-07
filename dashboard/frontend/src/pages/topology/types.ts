@@ -201,6 +201,7 @@ export interface AlgorithmConfig {
   kmeans?: GenericAlgorithmConfig
   svm?: GenericAlgorithmConfig
   mlp?: GenericAlgorithmConfig
+  hiershrink?: GenericAlgorithmConfig
   multi_factor?: GenericAlgorithmConfig
   prompt?: GenericAlgorithmConfig
 }
