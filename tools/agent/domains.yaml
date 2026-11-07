@@ -749,7 +749,8 @@ domains:
       - src/semantic-router/pkg/routerreplay/store/*postgres*
       - src/semantic-router/pkg/postgres/**
     checks: []
-    verifications: [storage]
+    # harness-tools pins each package's storage tests (tools/ci/tests/test_storage_inventory.py)
+    verifications: [storage, harness-tools]
 
   soak-tools:
     owner: e2e
