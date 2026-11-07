@@ -423,6 +423,9 @@ func refreshInputTotal(usage *llmprotocol.Usage) {
 
 func mergeTokenCount(existing, incoming llmprotocol.TokenCount) (llmprotocol.TokenCount, error) {
 	if incoming.Value == nil {
+		if existing.Value == nil && existing.Provenance == "" {
+			return incoming, nil
+		}
 		return existing, nil
 	}
 	if existing.Value != nil && *existing.Value > *incoming.Value {

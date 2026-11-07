@@ -401,10 +401,15 @@ func decodeResponsesUsage(wire responsesUsageWire) (llmprotocol.Usage, error) {
 	}
 	outputReasoning, outputOther := splitOutputUsage(wire.OutputTokens, reasoning, llmprotocol.UsageAuthoritative)
 	usage := llmprotocol.Usage{
-		State:         llmprotocol.UsageAvailable,
-		InputUncached: unknownCount(), InputCacheRead: unknownCount(), InputCacheWrite: unknownCount(),
-		OutputReasoning: outputReasoning, OutputOther: outputOther,
-		InputTotal: authoritative(wire.InputTokens), OutputTotal: authoritative(wire.OutputTokens), Total: authoritative(wire.TotalTokens),
+		State:           llmprotocol.UsageAvailable,
+		InputUncached:   unknownCount(),
+		InputCacheRead:  unknownCount(),
+		InputCacheWrite: unknownCount(),
+		OutputReasoning: outputReasoning,
+		OutputOther:     outputOther,
+		InputTotal:      authoritative(wire.InputTokens),
+		OutputTotal:     authoritative(wire.OutputTokens),
+		Total:           authoritative(wire.TotalTokens),
 	}
 	if wire.InputTokensDetails != nil {
 		details := wire.InputTokensDetails

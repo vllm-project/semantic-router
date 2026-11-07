@@ -477,6 +477,7 @@ func (r *OpenAIRouter) reportSemanticStreamingUsage(
 	if ctx == nil {
 		return
 	}
+	recordProviderPromptCacheUsage(ctx.RequestModel, usage)
 	recordSessionTurnOutcome(ctx, usage, r.sessionTurnPricing(ctx.RequestModel))
 	if usage.invalid {
 		r.updateRouterReplayUsageCost(ctx, r.buildReplayUsageCost(ctx, usage))
