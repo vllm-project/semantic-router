@@ -1,0 +1,34 @@
+diff --git a/src/model-runtime/vllm_srun/accel/cuda.py b/src/model-runtime/vllm_srun/accel/cuda.py
+index 3684c38b7..7f37597dd 100644
+--- a/src/model-runtime/vllm_srun/accel/cuda.py
++++ b/src/model-runtime/vllm_srun/accel/cuda.py
+@@ -7 +7,4 @@ order, not CUDA's, so they differ from the eager ops by rounding
+-(``docs/records/cuda-fused-approximate.md``).
++(``docs/records/cuda-fused-approximate.md``). causal-conv1d is approximate here
++too: on CUDA it differs from the reference convolution by a BF16 ulp, so the
++exact kernels keep the reference and only a consenting family takes it, with
++the fused gated-delta prep (``gdn_prep``) that reproduces it.
+@@ -11,0 +15 @@ from __future__ import annotations
++from dataclasses import replace
+@@ -21,0 +26,3 @@ MIN_FUSED_CAPABILITY = 80
++# The CUDA image's causal-conv1d wheel has GPU code from Turing (7.5) up; an
++# older GPU would fail its first convolution, so it keeps the reference one.
++MIN_CAUSAL_CONV1D_CAPABILITY = 75
+@@ -40,0 +48,8 @@ class CUDAAccelerator(GPUAccelerator):
++        known = capability.isdigit()
++        kernels.available["causal_conv1d"] = [
++            replace(kernel, exact=False) if kernel.source == "causal-conv1d" else kernel
++            for kernel in kernels.available.get("causal_conv1d", [])
++            if kernel.source != "causal-conv1d"
++            or not known
++            or int(capability) >= MIN_CAUSAL_CONV1D_CAPABILITY
++        ]
+@@ -42 +57 @@ class CUDAAccelerator(GPUAccelerator):
+-            not capability.isdigit()
++            not known
+@@ -52 +67,4 @@ class CUDAAccelerator(GPUAccelerator):
+-            kernels.select("causal_conv1d").source == "causal-conv1d"
++            any(
++                kernel.source == "causal-conv1d"
++                for kernel in kernels.available["causal_conv1d"]
++            )

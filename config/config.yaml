@@ -2135,7 +2135,9 @@ global:
     # call flag that OpenAI Chat and Responses backends cannot carry, and
     # messages[].role sends Anthropic system messages inside the conversation to
     # those backends as user text, for chat templates that accept a system
-    # message only first. Empty keeps every lossy translation failing closed.
+    # message only first. reasoning.signature drops the signature an Anthropic
+    # backend puts on its thinking, which Chat and Responses clients cannot
+    # carry. Empty keeps every lossy translation failing closed.
     allow_lossy_translation: []
     # Tool name and description limits in UTF-8 bytes. 0 keeps the default
     # (256 and 16384). Maximums are 1024 and 1048576.
@@ -2565,7 +2567,7 @@ global:
       embedding_dimension: 384
       ingestion_workers: 4
       ingestion_drain_timeout_seconds: 25
-      supported_formats: [.txt, .md, .json, .csv, .html, .pdf]
+      supported_formats: [.txt, .md, .json, .csv, .html]
       milvus:
         connection:
           host: milvus
