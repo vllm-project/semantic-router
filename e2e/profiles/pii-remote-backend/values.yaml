@@ -72,38 +72,28 @@ config:
       strategy: priority
     model_catalog:
       kbs: []
-      external:
-        - name: e2e-pii-spans
-          model_role: classification
-          llm_endpoint:
-            address: mock-pii-spans.default.svc.cluster.local
-            port: 8000
-            protocol: http
-          llm_model_name: pii-spans-service
-          llm_timeout_seconds: 5
+      deployments:
+        # A classify deployment answers the PII signal with token_spans.v1:
+        # the signal decides the contract, the provider how it is asked.
+        e2e-pii-spans:
+          provider: classify
+          endpoint: http://mock-pii-spans.default.svc.cluster.local:8000
+          model: pii-spans-service
+          timeout_ms: 5000
+      # The model runtime serves no PII model: every span comes from the
+      # remote deployment.
+      bindings:
+        pii: e2e-pii-spans
       modules:
         classifier:
           domain:
-            model_ref: ""
-            model_id: ""
+            enabled: false
             category_mapping_path: ""
           pii:
-            # No local model: model_id is empty, so the model runtime serves
-            # no PII model and every span comes from the backend below.
-            model_ref: ""
-            model_id: ""
             # The mapping is still required: it is what the token_spans
             # decoder resolves provider labels against, and a label outside
             # it is a rejected response rather than a silent pass.
             pii_mapping_path: /app/models/pii-remote-backend/pii_type_mapping.json
-            # contract may be omitted: PII reads exactly one, so there is
-            # nothing to guess. It is stated here because this profile exists
-            # to exercise it.
-            backend:
-              protocol: http_classify
-              contract: token_spans.v1
-              model: e2e-pii-spans
-              deadline_ms: 5000
             # A rejected response, or a declared truncation, is not a clean
             # "no PII" result: block matches the rule as classification_error
             # so the request fails closed.
@@ -112,7 +102,7 @@ config:
           enabled: false
 
 # The router requires a pii_type_mapping.json on disk even for a remote
-# backend (IsPIIEnabled/LoadPIIMapping do not special-case it), and the
+# deployment (IsPIIEnabled/LoadPIIMapping do not special-case it), and the
 # token_spans decoder needs it to resolve labels. This profile never runs
 # local inference, so a minimal stand-in mapping from the ConfigMap in
 # pii-mapping-configmap.yaml, applied as a prerequisite, is enough; no need

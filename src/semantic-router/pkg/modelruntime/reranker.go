@@ -19,14 +19,26 @@ type PairScorer interface {
 }
 
 // PrepareRerankers prepares only enabled, request-reachable RAG consumers on
-// the generation's runtime and releases candidate references on failure.
+// the generation's runtime (a model_runtime deployment) or a rerank
+// deployment's API, and releases candidate references on failure.
 func PrepareRerankers(ctx context.Context, cfg *config.RouterConfig, runtime *serving.Runtime) (map[config.RecipeName]PairScorer, error) {
 	return prepareRerankers(ctx, cfg, func(ctx context.Context, spec config.ResolvedModelBinding) (PairScorer, error) {
+		if spec.Deployment.Provider == config.RerankProvider {
+			return newRemoteReranker(spec)
+		}
 		return runtime.Relevance(ctx, spec)
 	})
 }
 
+// PairScorerReportsInputUsage reports whether a scorer reports each pair's
+// token usage, which a model_runtime reranker does and a rerank API does not.
+func PairScorerReportsInputUsage(scorer PairScorer) bool {
+	reporter, ok := scorer.(interface{ ReportsInputUsage() bool })
+	return !ok || reporter.ReportsInputUsage()
+}
+
 func prepareRerankers(ctx context.Context, cfg *config.RouterConfig, load func(context.Context, config.ResolvedModelBinding) (PairScorer, error)) (map[config.RecipeName]PairScorer, error) {
+	cfg = config.WithModelResources(cfg)
 	plan, err := config.CompileModelBindings(cfg)
 	if err != nil {
 		return nil, err
