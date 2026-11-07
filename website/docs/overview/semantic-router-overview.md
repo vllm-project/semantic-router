@@ -70,6 +70,8 @@ and evolve the physical pool behind a stable public entrypoint.
 1. A harness sends a request using OpenAI Chat Completions, OpenAI Responses, or
    Anthropic Messages.
 2. The standalone frontend, or an ExtProc gateway, presents it to the Router.
+   With ExtProc, Envoy forwards the request; without ExtProc, the standalone
+   frontend presents it directly.
 3. The requested model resolves to an entrypoint and its recipe.
 4. The Router extracts relevant signals and computes projections.
 5. Decisions enforce constraints and choose an eligible candidate set.
