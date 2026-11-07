@@ -102,6 +102,16 @@ def build_recipe_patch_suggestions(findings: list[dict[str, Any]]) -> dict[str, 
                     finding=item,
                 )
             )
+        elif finding_type == "default_model":
+            suggestion = patch_suggestion(
+                f"/routing/decisions/{decision}/modelRefs",
+                "reorder",
+                item.get("recommendation", ""),
+                value=item.get("evidence", {}).get("recommended_model"),
+                finding=item,
+            )
+            suggestion["recipe"] = item.get("evidence", {}).get("recipe", "")
+            suggestions.append(suggestion)
         elif finding_type in {"underpowered_model", "model_overuse"}:
             suggestions.append(
                 patch_suggestion(
@@ -159,7 +169,9 @@ def apply_recipe_suggestion(
     path = parse_decision_patch_path(str(suggestion.get("path") or ""))
     if path is None:
         return candidate
-    decision = find_recipe_decision(candidate, path.decision)
+    decision = find_recipe_decision(
+        candidate, path.decision, str(suggestion.get("recipe") or "")
+    )
     if decision is None:
         return candidate
     adaptations = decision.setdefault("adaptations", {})
@@ -201,6 +213,21 @@ def apply_decision_patch(
         apply_adaptation_candidate_set_patch(adaptations, action, suggestion)
     elif path.endswith("protection", "mode"):
         apply_protection_mode_patch(adaptations, action, suggestion)
+    elif path.endswith("modelRefs") and action == "reorder":
+        apply_model_refs_reorder_patch(decision, suggestion)
+
+
+def apply_model_refs_reorder_patch(
+    decision: dict[str, Any], suggestion: dict[str, Any]
+) -> None:
+    """Move the recommended model to the front of modelRefs, keeping the rest in order."""
+    model = str(suggestion.get("value") or "")
+    refs = decision.get("modelRefs")
+    if not model or not isinstance(refs, list):
+        return
+    first = [ref for ref in refs if isinstance(ref, dict) and ref.get("model") == model]
+    if first:
+        decision["modelRefs"] = first + [ref for ref in refs if ref not in first]
 
 
 def apply_priority_patch(decision: dict[str, Any], action: str) -> None:
@@ -255,9 +282,21 @@ def apply_protection_mode_patch(
 
 
 def find_recipe_decision(
-    recipe: dict[str, Any], decision_name: str
+    recipe: dict[str, Any], decision_name: str, recipe_name: str = ""
 ) -> dict[str, Any] | None:
-    routing = recipe.get("routing")
+    """A decision from recipes[recipe_name].routing when that recipe exists,
+    else from top-level routing, which the router serves as the default recipe."""
+    scope = next(
+        (
+            item
+            for item in recipe.get("recipes") or []
+            if isinstance(item, dict)
+            and recipe_name
+            and item.get("name") == recipe_name
+        ),
+        recipe,
+    )
+    routing = scope.get("routing")
     if not isinstance(routing, dict):
         return None
     decisions = routing.get("decisions")
