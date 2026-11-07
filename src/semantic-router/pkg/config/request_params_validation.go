@@ -1,10 +1,19 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+)
 
 func ValidateRequestParamsPluginConfig(cfg *RequestParamsPluginConfig) error {
 	if cfg == nil {
 		return nil
+	}
+	for _, field := range cfg.BlockedParams {
+		if err := llmprotocol.ValidateBlockableRequestField(field); err != nil {
+			return err
+		}
 	}
 	if cfg.DefaultMaxTokens != nil {
 		if err := cfg.DefaultMaxTokens.Validate(); err != nil {

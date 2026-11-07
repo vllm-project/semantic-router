@@ -122,7 +122,7 @@ decisions:
     plugins:
       - type: "request_params"
         configuration:
-          blocked_params: ["logprobs"]
+          blocked_params: ["temperature"]
           max_tokens_limit: 256
           max_n: 1
           strip_unknown: true

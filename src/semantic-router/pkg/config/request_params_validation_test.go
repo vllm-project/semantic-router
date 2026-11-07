@@ -87,3 +87,39 @@ func TestRequestParamsRejectsNonPositiveLimits(t *testing.T) {
 		}
 	}
 }
+
+func TestRequestParamsValidatesBlockedParams(t *testing.T) {
+	template := `routing:
+  decisions:
+    - name: bounded
+      plugins:
+        - type: request_params
+          configuration:
+            %s
+`
+	validConfigs := []string{
+		"blocked_params: [temperature, top_p]",
+		"blocked_params: [verbosity, stream_options, user, truncation]",
+		"blocked_params: [previous_response_id, conversation, auto_store]",
+		"blocked_params: [reasoning.summary, reasoning.display]",
+	}
+	for _, field := range validConfigs {
+		if _, err := ParseRoutingYAMLBytes([]byte(fmt.Sprintf(template, field))); err != nil {
+			t.Errorf("rejected valid blocked_params %s: %v", field, err)
+		}
+	}
+
+	invalidConfigs := []string{
+		"blocked_params: [logprobs]",
+		"blocked_params: [top_logprobs]",
+		"blocked_params: [model]",
+		"blocked_params: [messages]",
+		"blocked_params: ['']",
+		"blocked_params: [unknown_param]",
+	}
+	for _, field := range invalidConfigs {
+		if _, err := ParseRoutingYAMLBytes([]byte(fmt.Sprintf(template, field))); err == nil {
+			t.Errorf("accepted invalid blocked_params: %s", field)
+		}
+	}
+}

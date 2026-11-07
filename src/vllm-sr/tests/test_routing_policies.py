@@ -112,6 +112,37 @@ def test_request_params_default_is_optional_and_discoverable(value):
     ]
 
 
+@pytest.mark.parametrize(
+    "params",
+    [
+        ["temperature", "top_p"],
+        ["verbosity", "stream_options", "user", "truncation"],
+        ["previous_response_id", "conversation", "auto_store"],
+        ["reasoning.summary", "reasoning.display"],
+    ],
+)
+def test_request_params_blocked_params_accepts_valid_fields(params):
+    cfg = RequestParamsPluginConfig(blocked_params=params)
+    assert cfg.blocked_params == params
+
+
+@pytest.mark.parametrize(
+    "invalid_param",
+    [
+        "logprobs",
+        "top_logprobs",
+        "model",
+        "messages",
+        "",
+        "   ",
+        "unknown_field",
+    ],
+)
+def test_request_params_blocked_params_rejects_invalid_fields(invalid_param):
+    with pytest.raises(ValidationError):
+        RequestParamsPluginConfig(blocked_params=[invalid_param])
+
+
 def _request_params_config(value, *, named=True):
     routing = {
         "decisions": [
