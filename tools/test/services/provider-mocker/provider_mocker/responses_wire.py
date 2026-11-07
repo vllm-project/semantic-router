@@ -76,7 +76,9 @@ def build_responses_image_generation_response(body: dict[str, Any]) -> dict[str,
     }
 
 
-def generate_responses_image_generation_stream(body: dict[str, Any]) -> Iterator[str]:
+def generate_responses_image_generation_stream(
+    body: dict[str, Any], complete: bool = True
+) -> Iterator[str]:
     response_id = "resp_image_mock_" + uuid.uuid4().hex
     item_id = "ig_mock_" + uuid.uuid4().hex
     result = FIXTURE_PNG
@@ -153,6 +155,8 @@ def generate_responses_image_generation_stream(body: dict[str, Any]) -> Iterator
         ),
     ]
     for sequence, (event, payload) in enumerate(events):
+        if not complete and event == "response.image_generation_call.completed":
+            return
         yield responses_sse(event, {"sequence_number": sequence, **payload})
 
 
@@ -439,7 +443,9 @@ def build_responses_custom_tool_response(body: dict[str, Any]) -> dict[str, Any]
     }
 
 
-def generate_responses_custom_tool_stream(body: dict[str, Any]) -> Iterator[str]:
+def generate_responses_custom_tool_stream(
+    body: dict[str, Any], complete: bool = True
+) -> Iterator[str]:
     response = build_responses_custom_tool_response(body)
     item = response["output"][0]
     in_progress_response = responses_in_progress_resource(response)
@@ -467,6 +473,8 @@ def generate_responses_custom_tool_stream(body: dict[str, Any]) -> Iterator[str]
         ("response.completed", {"response": response}),
     ]
     for sequence, (event, payload) in enumerate(events):
+        if not complete and event == "response.custom_tool_call_input.done":
+            return
         yield responses_sse(event, {"sequence_number": sequence, **payload})
 
 
@@ -491,7 +499,9 @@ def build_responses_tool_response(body: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def generate_responses_tool_stream(body: dict[str, Any]) -> Iterator[str]:
+def generate_responses_tool_stream(
+    body: dict[str, Any], complete: bool = True
+) -> Iterator[str]:
     response = build_responses_tool_response(body)
     item = response["output"][0]
     in_progress_response = responses_in_progress_resource(response)
@@ -532,4 +542,6 @@ def generate_responses_tool_stream(body: dict[str, Any]) -> Iterator[str]:
         ("response.completed", {"response": response}),
     ]
     for sequence, (event, payload) in enumerate(events):
+        if not complete and event == "response.function_call_arguments.done":
+            return
         yield responses_sse(event, {"sequence_number": sequence, **payload})

@@ -3,6 +3,7 @@
 import os
 from asyncio import sleep as sleep_for_fixture
 from dataclasses import dataclass
+from typing import Any
 
 SCENARIOS = {"default", "memory", "looper", "hallucination", "toolcall", "cli"}
 
@@ -13,6 +14,7 @@ class Settings:
     model: str = "openai/gpt-oss-20b"
     shadow_control: bool = False
     expected_authorization: str | None = None
+    fault_schedule: Any = None
 
     @classmethod
     def from_env(cls):
@@ -24,6 +26,7 @@ class Settings:
             model=os.getenv("PROVIDER_MOCKER_MODEL", "openai/gpt-oss-20b"),
             shadow_control=os.getenv("PROVIDER_MOCKER_SHADOW_CONTROL") == "true",
             expected_authorization=os.getenv("PROVIDER_MOCKER_EXPECT_AUTHORIZATION"),
+            fault_schedule=os.getenv("PROVIDER_MOCKER_FAULT_SCHEDULE"),
         )
 
 
