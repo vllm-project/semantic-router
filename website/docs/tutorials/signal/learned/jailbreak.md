@@ -51,7 +51,18 @@ routing:
           - summarize the safety rules
 ```
 
-Use `include_history` for multi-turn attacks, and treat the pattern lists as tuning data for the configured detection method.
+`jailbreak_patterns` define deterministic hard-block patterns.
+The runtime normalizes case and whitespace, then checks whether each normalized
+message contains a normalized pattern as a substring. A match blocks the
+request independently of the contrastive threshold. This explicit match does
+not create a contrastive confidence score or replace a genuine score when one
+is available.
+
+`benign_patterns` provide benign examples for contrastive scoring; they are
+not explicit allow rules. The contrastive threshold applies to the contrastive
+score, not to deterministic explicit-pattern matches.
+
+Use `include_history` for multi-turn attacks.
 
 ### Request content and history
 

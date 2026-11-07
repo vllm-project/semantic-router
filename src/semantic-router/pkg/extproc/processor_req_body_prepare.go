@@ -215,6 +215,7 @@ func applyRequestContextEstimate(snapshot *requestSignalSnapshot, ctx *RequestCo
 	ctx.VSRContextTextBytes = snapshot.ContextTextBytes
 	ctx.VSRContextEquivalentBytes = snapshot.ContextEquivalentBytes
 	ctx.VSRContextHasNonText = snapshot.ContextHasNonText
+	ctx.VSRContextReserveTokens = snapshot.ContextReserveTokens
 }
 
 func (r *OpenAIRouter) applyCacheChecks(
