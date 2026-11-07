@@ -118,6 +118,12 @@ def test_observability_services_carry_the_policy(monkeypatch, tmp_path):
         "_run_service_start",
         lambda cmd, _service: commands.append(cmd) or (0, "", ""),
     )
+    monkeypatch.setattr(
+        container_support_services,
+        "rekey_grafana_admin",
+        lambda *_args, **_kwargs: (0, "", ""),
+    )
+    monkeypatch.delenv("GF_SECURITY_ADMIN_PASSWORD", raising=False)
     layout = resolve_runtime_stack()
 
     container_support_services.container_start_jaeger(stack_layout=layout)
