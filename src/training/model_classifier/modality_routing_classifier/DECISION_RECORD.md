@@ -23,15 +23,29 @@ not build them.
 - **Candidate:** DistilBERT (66M parameters), trained by distillation from the
   production mmBERT-32K model.
 - **Headline result:** on the original labels the candidate scores 96.31%
-  against 97.10% for a clean mmBERT baseline. The gap is small and not
-  statistically significant (p = 0.31).
-- **The catch:** a blind re-judgement of the labels (§11) disagrees with 7.4%
-  of them, almost all in the `BOTH` class. Whether the candidate is "as good
-  as" or "worse than" the baseline depends on what `BOTH` is supposed to mean.
-- **Decision needed:** should `BOTH` mean "the user asks for visuals" or
-  "visuals would clearly help"? Raised with adaamko in the #3198 thread.
-- **Still open:** latency (#3856), controls (#3857), the accuracy tolerance
-  (§9), and a human check of the re-judged labels (§11.5).
+  against 97.10% for a clean mmBERT baseline. That gap is not statistically
+  significant (p = 0.31). On the operative, judged labels it is (p = 0.007),
+  and the human spot-check barely moves it (p = 0.011, §11.5).
+- **The catch, now resolved:** a blind re-judgement of the labels (§11)
+  disagreed with 7.4% of them, almost all in the `BOTH` class. adaamko ruled
+  in the #3198 thread: `BOTH` means the user explicitly asked for visuals, not
+  that visuals would help (§11.4). That is the strict column throughout this
+  record, and it is now the operative one.
+- **Consequence, stated because he asked us to:** under that ruling the
+  student-vs-teacher gap becomes significant. The ruling was made on routing
+  grounds (§11.4), not to get a particular answer, and would have been the
+  same ruling if it had gone the other way.
+- **Human spot-check done (§11.5):** one reviewer labelled 100 test rows
+  blind. On the rows where the judge and the original disagreed, the human
+  sided with the judge 45 times and with the original 7 times. Estimated
+  error: about 7.8% for the judge's labels, about 12.8% for the originals.
+  Applying the human's 100 corrections on top of the judge's labels and
+  recomputing the student-vs-teacher test gives p = 0.011, still significant,
+  against p = 0.007 before the correction (§11.3). One reviewer on a sample
+  of 100, so still not final: a second labeller is being asked for in the
+  #3198 thread, and validation is still to check.
+- **Still open otherwise:** latency (#3856), controls (#3857), the accuracy
+  tolerance itself (§9).
 
 ## 1. Task contract
 
@@ -43,11 +57,14 @@ not build them.
   router tasks with a label that exists for every request. Model-choice
   routing does not have that, because "which model would have succeeded" is
   never observed.
-- **Caveat found later (§11):** the label exists, but for `BOTH` it is a
-  policy choice, not a fact about the prompt. Does "How do I tile a floor?"
-  need images? About 7% of labels change under a blind re-judgement, almost
-  all of them `BOTH` becoming `AR`. Read every accuracy number here with that
-  in mind.
+- **Caveat found later, now resolved (§11.4):** the label exists, but for
+  `BOTH` it was a policy choice, not a fact about the prompt. Does "How do I
+  tile a floor?" need images? adaamko ruled: no. `BOTH` is a capability
+  requirement the router acts on, so it means the user explicitly asked for
+  visuals, not that visuals would help. About 7% of labels change under a
+  blind re-judgement against that rule, almost all of them `BOTH` becoming
+  `AR`. Read every accuracy number here with that in mind, and see §11.4 for
+  why it was decided that way rather than picked to flatter a result.
 
 ## 2. Baselines
 
@@ -164,11 +181,17 @@ Two baselines are reported. The reason is in §4.
 - **Accuracy:** 96.31%. **Weighted F1:** 0.9634.
 - **Against the baselines:** 0.79 points below the clean baseline and 0.53
   points below the published baseline.
-- **Is the gap real?** Not on the original labels.
-  - The two models differ in correctness on 24 rows.
-  - The clean baseline is right on 15 of them and the candidate on 9.
-  - Exact McNemar test, two-sided: p = 0.31.
-  - Under the stricter re-judged labels the gap becomes significant (§11.3).
+- **Is the gap real?** Not on the original labels, but yes on the labels now
+  adopted as operative (§11.4).
+  - On the original labels: the two models differ in correctness on 24 rows,
+    the clean baseline right on 15 and the candidate on 9, exact McNemar
+    two-sided p = 0.31. Noise.
+  - On the judged, strict labels, which is the policy adaamko ruled for in
+    the #3198 thread: 19 against 5, p = **0.007**. Significant (§11.3).
+  - **Recomputed on the human-corrected labels (§11.5): 18 against 5,
+    p = 0.011.** Still significant, and close to the uncorrected p = 0.007.
+    One reviewer on 100 of 759 rows, so this still isn't the final word; a
+    second labeller is being asked for in the #3198 thread.
   - **Training seed noise is not measured.** Each model was trained once,
     before the trainer had a `--seed` option. A gap of 0.79 points is about 6
     rows, and the McNemar test only covers which test rows were sampled, not
@@ -439,20 +462,25 @@ itself waits on #3856's run format.
 
 ## 9. Tolerance and graduation gate
 
-**Status: `TODO`.** adaamko left the tolerance number open for reviewers
-("happy to have the tolerance itself be part of the decision record review").
-It is not invented here.
+**Status: `TODO` for the number itself.** adaamko left the tolerance number
+open for reviewers ("happy to have the tolerance itself be part of the
+decision record review"). It is not invented here. What is now settled is
+which label set the tolerance gets set against: the judged, strict labels
+(§11.4), not the original ones.
 
 What reviewers have to work with:
 
-- **Accuracy gap:** the candidate is 0.79 points below the clean baseline
-  (96.31% against 97.10%). Not significant on the original labels (p = 0.31,
-  §3).
+- **Accuracy gap:** the candidate is 0.79 points below the clean baseline on
+  the original labels (96.31% against 97.10%), not significant there
+  (p = 0.31, §3). On the judged, strict labels, the operative ones, the same
+  comparison is significant (p = 0.007, §11.3), and stays significant after
+  the human correction (p = 0.011, §11.5).
 - **Agreement:** 96.44% with the clean baseline.
 - **Direction of the errors:** the candidate over-predicts `BOTH` (§3, §7). It
   is not simply weaker everywhere.
-- **Label policy first:** the label audit (§11) shows the significance of the
-  gap depends on what `BOTH` means. Settle that before setting any tolerance.
+- **Human check:** done on 100 test rows (§11.5), with the p-value recomputed
+  on the correction. It has one reviewer, so the tolerance should not be set
+  from it alone until a second labeller confirms.
 
 Choices for whoever sets the tolerance:
 
@@ -465,12 +493,14 @@ Choices for whoever sets the tolerance:
 
 The candidate does not move forward if any of these hold:
 
-- Its accuracy against the clean baseline falls outside the tolerance from §9.
+- Its accuracy against the clean baseline, scored on the judged strict labels
+  (§11.4), falls outside the tolerance from §9.
 - No meaningful p99 win is measured once §5 lands.
 - Once §8 lands, it does not clearly beat the controls (lexical, majority
   class, prior-matched random), judged per class and not only on accuracy.
-- The `BOTH` policy (§11.4) has been decided and the comparison rerun, and the
-  candidate only passes under one of the two policies.
+- The human spot-check (§11.5) puts the judge's error near 7.8%. Any tolerance
+  has to be wide enough to absorb a label error of that size, or the check
+  is not meaningful.
 
 ## 11. Label audit
 
@@ -493,8 +523,15 @@ All in `label_audit/`:
 
 - `RUBRIC.md` (rubric hash `75a64835`).
 - `judge_labels.py` with subcommands `next`, `save`, `status`, `report`,
-  `sheet`, `api`.
+  `sheet`, `export-judged`, `api`.
 - `checkpoint.jsonl`: append-only, one record per judged row.
+- `judged_test.jsonl` and `judged_validation.jsonl`: every row with the
+  original `label`/`label_name` kept untouched, plus `judged_label_name` (the
+  operative, strict label), `judged_label_name_inclusive` (the rejected
+  policy, kept for transparency), and the judge's confidence/`vh`/tags.
+  Written by `judge_labels.py export-judged`, so the original label is a
+  second column anyone can diff, per adaamko's instruction in §11.4, rather
+  than something overwritten and taken on trust.
 - `dataset_sha256.json`: pins each split by hash, so judgments cannot be
   joined to a re-exported dataset. This applies to every `--data-dir`: a custom
   checkpoint gets its own manifest beside it, and judgments that exist without a
@@ -554,6 +591,10 @@ What stands out:
 
 ### 11.2 The models scored against the judged labels (test)
 
+The "judge, strict" column is the operative one (§11.4); "inclusive" is the
+policy adaamko rejected, kept here only so the choice is checkable, not taken
+on trust.
+
 | Model | Original labels | Judge, strict | Judge, inclusive |
 |---|---|---|---|
 | published_baseline | 96.84% | 91.70% | 93.54% |
@@ -581,15 +622,21 @@ Exact McNemar test on paired correctness, candidate against clean baseline:
 | Original | 15 | 9 | 0.31 |
 | Judged, strict | 19 | 5 | **0.007** |
 | Judged, inclusive | 16 | 8 | 0.15 |
+| Judged, strict, human-corrected | 18 | 5 | **0.011** |
 
 - Original labels: the gap is noise.
-- Strict labels: the gap is significant.
-- Inclusive labels: the gap is noise again.
-- **The verdict depends on the `BOTH` policy**, and the data does not settle
-  that. I would not claim "the student matches the teacher" or "the student is
-  worse" until it is decided.
+- Strict labels, the operative ones (§11.4): the gap is significant.
+- Inclusive labels, the rejected policy: the gap is noise again.
+- Strict labels after applying the one-reviewer human correction (§11.5): one
+  fewer row favours the clean baseline, and the gap is still significant.
+- **The verdict depends on the `BOTH` policy**, which is now decided (§11.4):
+  strict. So the operative claim is that the candidate is measurably worse
+  than the clean baseline, not that the two are indistinguishable. That
+  claim rests on the judged labels, which one human reviewer has checked on
+  100 test rows and the p-value recomputed against (§11.5). A second
+  labeller is still being asked for.
 
-To reproduce the tables in §11.2 and §11.3:
+To reproduce the tables in §11.2 and §11.3, and the human-corrected row:
 
 ```bash
 cd label_audit
@@ -597,19 +644,60 @@ python judge_labels.py report --split test \
   --eval-report ../modality_candidate_eval_report.json \
   --preds scx_finetuned=predictions/scx_finetuned.json \
   --preds lfm25_lora=predictions/lfm25_lora.json \
-  --compare clean_baseline,candidate --compare clean_baseline,scx_finetuned
+  --compare clean_baseline,candidate --compare clean_baseline,scx_finetuned \
+  --human human_review.tsv
 ```
 
-### 11.4 Decision needed: what should `BOTH` mean?
+### 11.4 Decided: `BOTH` means the user explicitly asks for visuals
 
-- **Option A, strict:** `BOTH` only when the user asks for visuals.
-- **Option B, inclusive:** `BOTH` also when visuals would clearly help.
-- The answer probably depends on what the downstream text and image pipeline
-  can act on. That is a question for whoever owns routing behaviour.
-- It is raised with adaamko in the #3198 thread.
-- Until it is decided:
-  - Report both the strict and the inclusive numbers.
-  - Do not set the §9 tolerance from original-label accuracy alone.
+adaamko ruled on this in the #3198 thread. Quoting the reasoning in full,
+because it is the kind of decision a later reader needs to be able to check,
+not just the outcome:
+
+> `BOTH` should mean the user asks for visuals, not "visuals would help."
+> Two reasons.
+>
+> First, the label has to track a capability requirement, not a preference.
+> `AR` / `DIFFUSION` / `BOTH` decide which model can serve the request at
+> all. "How do I install a dimmer switch?" is served correctly by a text
+> model. A diagram would be nice, but nothing breaks without one, so routing
+> it to a diffusion-capable path is a cost with no correctness gain. "Show
+> me a diagram of the wiring" cannot be served by a text model. That's the
+> line the router needs, and "would benefit" puts a preference on the same
+> axis as a requirement.
+>
+> Second, reproducibility. "Asks for visuals" is checkable from the text by
+> a second judge or a human. "Would clearly help" is a judgement about the
+> reader, and the numbers show it: the disagreement is one-directional and
+> concentrated exactly in that class. A label a second annotator can't
+> reproduce is a label the tolerance number can't be set against.
+
+So: `BOTH` is **explicitly requests visual output**. The how-tos in §11.1's
+confusion breakdown move to `AR`, which they already do under the strict
+column used throughout this record.
+
+What this record does as a result, each one his explicit instruction:
+
+- **Adopts strict, not inclusive, as the operative label set** for every
+  table above. Inclusive stays in the tables as the rejected alternative,
+  not deleted, so the choice is checkable.
+- **Keeps the original label as a second column, not overwritten.**
+  `judge_labels.py export-judged` writes `judged_test.jsonl` and
+  `judged_validation.jsonl` with `label_name` (original) and
+  `judged_label_name` (strict, operative) side by side. See "Where the files
+  are" above.
+- **States the consequence rather than hiding it:** under this policy the
+  student-vs-teacher comparison in §3/§9 becomes significant (p = 0.007),
+  where it was noise under the original labels. That is reported as a fact
+  about the ruling's effect, not as the reason the ruling was made. The
+  ruling is justified on routing grounds, in the quote above, and would have
+  been made the same way if it had come out the other direction.
+- **Human check done, p-value recomputed, not yet a settled gate.** His
+  ruling asked for the spot-check before the number goes anywhere. It is
+  done (§11.5), with one reviewer, and the p-value is recomputed on the
+  correction (0.011, against 0.007 before it). Everything in §3 and §9 that
+  depends on the judged labels should still be read as provisional until a
+  second labeller confirms it.
 
 ### 11.5 Limits of this audit (read before citing it)
 
@@ -625,11 +713,16 @@ python judge_labels.py report --split test \
 - **Clipped text.** The judge saw rows cut at 400 characters (106 test rows and
   87 validation rows are tagged `truncated`). Those judgments reflect what was
   visible.
-- **No human check yet.**
-  - `label_audit/human_review.tsv` is a blinded sheet of 100 test rows: 56
-    where the judge disagreed with the original label, and 44 where it agreed.
-  - Fill it in, then run `judge_labels.py report --human <file>` to estimate
-    the judge's own error rate.
+- **Human check: done for test, one reviewer.** adaamko's ruling in §11.4
+  asked for it before the number goes anywhere. `label_audit/human_review.tsv`
+  holds 100 blind test rows (56 disagreements, 44 agreements), labelled by one
+  reviewer. Run `judge_labels.py report --split test --human
+  human_review.tsv` to reproduce the estimate: the judge's error is about
+  7.8% and the originals' about 12.8%.
+  - Done: the p-value is recomputed on the human-corrected labels (§11.3):
+    0.011, against 0.007 before the correction.
+  - Not done: a second labeller on the same 100 rows (being asked for in the
+    #3198 thread) and the validation split's spot-check.
 - **The API mode is untested.** `judge_labels.py api` should reproduce the audit
   with an independent model, but it has not been run against the real API (no
   key was available).
