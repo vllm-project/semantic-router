@@ -91,7 +91,7 @@ func chatRequestDiagnostics(request llmprotocol.Request, policy llmprotocol.Poli
 
 func encodeChatBaseRequest(request llmprotocol.Request) chatRequestWire {
 	wire := chatRequestWire{
-		Model: request.Model, Stream: request.Stream, Metadata: request.Metadata,
+		Model: request.Model, Stream: request.Stream, Metadata: encodeWireMetadata(request.Metadata),
 		Store: request.Store, User: request.EndUserID,
 		ParallelToolCalls: request.ParallelToolCalls, CandidateCount: request.CandidateCount,
 		Temperature: request.Sampling.Temperature, TopP: request.Sampling.TopP,
