@@ -168,7 +168,7 @@ func TestNamedDeploymentAdmissionAndCanonicalRoundTrip(t *testing.T) {
 		t.Fatal("deployment lost during canonical round trip")
 	}
 	recipes := canonicalRecipesFromRouterConfig(cfg)
-	if len(recipes) != 2 || recipes[0].Routing.ModelBindings["pii_classifier"].Head != "pii-head" {
+	if len(recipes) != 2 || recipes[0].Routing.ModelBindings[BindingKey("pii_classifier")].Head != "pii-head" {
 		t.Fatal("recipe binding lost during export")
 	}
 	scoped := cfg.ConfigForRecipe(&cfg.Recipes[0])

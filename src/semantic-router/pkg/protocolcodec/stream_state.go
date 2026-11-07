@@ -13,6 +13,7 @@ type streamState struct {
 	policy                llmprotocol.Policy
 	providerID            string
 	providerModel         string
+	streamModel           string // the model PreferProviderModel fixed at the first event
 	sequence              uint64
 	events                int
 	wireFrames            int
@@ -156,11 +157,30 @@ func (state *streamState) prepareEvent(event llmprotocol.Event) (llmprotocol.Eve
 	if event.ResponseID == "" {
 		event.ResponseID = state.context.ResponseID
 	}
-	if state.context.PublicModel != "" {
-		event.Model = state.context.PublicModel
+	if model := state.publicModel(event.Model); model != "" {
+		event.Model = model
 	}
 	state.ensureCollections()
 	return state.prepareLifecycleEvent(event)
+}
+
+// publicModel is the model the stream's events carry. A decoder knows the
+// provider's model once the provider names it, and an encoder receives it on
+// the decoded events. With PreferProviderModel the first event fixes it, so a
+// provider that names its model late leaves the whole stream on PublicModel.
+func (state *streamState) publicModel(eventModel string) string {
+	if !state.context.PreferProviderModel {
+		return state.context.PublicModel
+	}
+	if state.streamModel == "" {
+		for _, model := range []string{state.providerModel, eventModel, state.context.PublicModel} {
+			if model != "" {
+				state.streamModel = model
+				break
+			}
+		}
+	}
+	return state.streamModel
 }
 
 func validStreamEventType(eventType llmprotocol.EventType) bool {

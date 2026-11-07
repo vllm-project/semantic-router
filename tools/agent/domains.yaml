@@ -441,6 +441,25 @@ domains:
     checks: [make vllm-sr-test]
     verifications: [cli-unit]
 
+  # The Router loads every titled YAML block of these pages and checks what it
+  # resolves to (src/semantic-router/pkg/config/model_catalog_docs_test.go);
+  # the CLI validates them (src/vllm-sr/tests/test_docs_model_catalog_examples.py);
+  # their translations show the same blocks.
+  model-catalog-docs:
+    owner: router-core
+    documentation_check: true
+    paths:
+      - website/docs/installation/choose-a-model-for-a-signal.md
+      - website/docs/installation/model-catalog.md
+      - website/docs/installation/model-resource-migration.md
+      - website/docs/model-runtime/migrate.md
+      - website/i18n/*/docusaurus-plugin-content-docs/current/installation/choose-a-model-for-a-signal.md
+      - website/i18n/*/docusaurus-plugin-content-docs/current/installation/model-catalog.md
+      - website/i18n/*/docusaurus-plugin-content-docs/current/installation/model-resource-migration.md
+      - website/i18n/*/docusaurus-plugin-content-docs/current/model-runtime/migrate.md
+    checks: [make test-semantic-router, make vllm-sr-test]
+    verifications: [core, cli-unit]
+
   model-runtime:
     owner: model-runtime
     paths:
@@ -1326,9 +1345,11 @@ profiles:
     paths:
       - e2e/profiles/progress-gate/**
       - e2e/testcases/router_progress_gate*.go
+      - e2e/testcases/router_protection_release*.go
       - src/semantic-router/pkg/extproc/router_learning_progress_gate*.go
       - src/semantic-router/pkg/extproc/router_learning_gate_constraints.go
       - src/semantic-router/pkg/extproc/router_learning_protection*.go
+      - src/semantic-router/pkg/extproc/router_learning_release*.go
       - src/semantic-router/pkg/extproc/router_learning_outcome_ingest.go
       - src/semantic-router/pkg/extproc/router_learning_helpers.go
       - src/semantic-router/pkg/extproc/session_evidence*.go

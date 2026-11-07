@@ -150,6 +150,11 @@ func TestSystemOneDeploymentRoutesChatAndPreview(t *testing.T) {
 	opts := routing.DefaultOptions
 	opts.ExecutesFallback = true
 	engine := routing.NewEngine(router, opts)
+	// Each case asks about its own text: the generation caches an answer to
+	// the same question about the same text.
+	message := func(choice string) string {
+		return "Our app has returned 500 errors since the 09:00 deploy. Case " + choice + "."
+	}
 	route := func(choice string) (string, time.Duration) {
 		t.Helper()
 		gateway.choice.Store(choice)
@@ -165,7 +170,7 @@ func TestSystemOneDeploymentRoutesChatAndPreview(t *testing.T) {
 		defer cancel()
 		started := time.Now()
 		plan, planErr := engine.Plan(ctx, &routing.Request{Header: header, Body: []byte(
-			`{"model":"vllm-sr/auto","messages":[{"role":"user","content":"Our app has returned 500 errors since the 09:00 deploy."}]}`)})
+			`{"model":"vllm-sr/auto","messages":[{"role":"user","content":"` + message(choice) + `"}]}`)})
 		if planErr != nil {
 			t.Fatalf("%s: plan: %v", choice, planErr)
 		}
@@ -186,6 +191,10 @@ func TestSystemOneDeploymentRoutesChatAndPreview(t *testing.T) {
 	if got, _ := route("billing"); got != "fast" {
 		t.Fatalf("a billing answer falls to fast, got %q", got)
 	}
+	repeated := gateway.asked.Load()
+	if got, _ := route("billing"); got != "fast" || gateway.asked.Load() != repeated {
+		t.Fatalf("a repeated request routes on the cached answer without asking again: %q, asked %d more", got, gateway.asked.Load()-repeated)
+	}
 	if got, _ := route("unavailable"); got != "fast" {
 		t.Fatalf("an unavailable API leaves the signal unknown and the request routed, got %q", got)
 	}
@@ -195,7 +204,7 @@ func TestSystemOneDeploymentRoutesChatAndPreview(t *testing.T) {
 
 	gateway.choice.Store("engineering")
 	asked := gateway.asked.Load()
-	preview, err := router.ClassificationService.ClassifyIntentForEval(context.Background(), services.IntentRequest{Text: "Our app has returned 500 errors since the 09:00 deploy."})
+	preview, err := router.ClassificationService.ClassifyIntentForEval(context.Background(), services.IntentRequest{Text: message("preview")})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -71,6 +71,7 @@ type LearningProtectionDiagnostics struct {
 	SwitchMargin    float64                      `json:"switch_margin,omitempty"`
 	StabilityWeight float64                      `json:"stability_weight,omitempty"`
 	Rescue          *LearningRescueDiagnostics   `json:"rescue,omitempty"`
+	Release         *LearningReleaseDiagnostics  `json:"release,omitempty"`
 
 	Algorithm                     string                            `json:"algorithm,omitempty"`
 	BaseMethod                    string                            `json:"base_method,omitempty"`
@@ -137,6 +138,16 @@ type LearningIdentityPart struct {
 
 type LearningRescueDiagnostics struct {
 	Active bool `json:"active"`
+}
+
+// LearningReleaseDiagnostics records a client request to release the
+// protection hold and whether protection honored it.
+type LearningReleaseDiagnostics struct {
+	Honored       bool   `json:"honored"`
+	Reason        string `json:"reason,omitempty"`
+	Header        string `json:"header,omitempty"`
+	PreviousModel string `json:"previous_model,omitempty"`
+	SelectedModel string `json:"selected_model,omitempty"`
 }
 
 // LearningCandidateTrace captures the protection score decomposition for one

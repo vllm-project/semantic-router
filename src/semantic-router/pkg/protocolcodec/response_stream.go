@@ -31,6 +31,8 @@ func (engine *Engine) EncodeResponseStream(
 		return nil, nil, encodeResponseStreamErr
 	}
 	diagnostics := projectReasoningContinuity(context.Source, format, pair.buffered.Capabilities(), &response)
+	diagnostics = appendDiagnostics(diagnostics,
+		projectReasoningSignature(engine.policy, context.Source, format, pair.buffered.Capabilities(), &response), engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.RequireCapabilities(
 		format,
 		pair.buffered.Capabilities(),

@@ -66,10 +66,10 @@ These fields are easy to confuse:
 - backend-ref `provider` supplies provider-specific authentication and path
   defaults. It does not prove that the endpoint implements an API format.
 
-For every backend format, `base_url` names the complete upstream API root. Its
-path is retained and the protocol operation suffix is appended exactly once;
-the protocol's default `/v1` base path is used only when the URL has no path.
-`chat_path` applies only to Chat Completions.
+For every backend format, a full URL in `endpoint` names the complete upstream
+API root. Its path is retained and the protocol operation suffix is appended
+exactly once; the protocol's default `/v1` base path is used only when the URL
+has no path. `chat_path` applies only to Chat Completions.
 
 With `--gateway extproc`, the generated Envoy cluster for an HTTPS backend
 verifies both the server
@@ -187,7 +187,7 @@ instead of being silently dropped.
 | Text verbosity (`low`, `medium`, `high`) | Supported | Supported | Not forwarded; reported as `dropped` |
 | Strict JSON Schema output | Supported | Supported | Supported |
 | Buffered and streaming responses | Supported | Supported | Supported |
-| Reasoning content and effort | Supported, except signed thinking blocks | Supported, except signed thinking blocks | Supported |
+| Reasoning content and effort | Supported, signed thinking blocks only with an opt-in | Supported, signed thinking blocks only with an opt-in | Supported |
 | Reasoning summary requests (`reasoning.summary`) | Not forwarded; reported as `dropped` | Supported; reported as `dropped` if the provider uses `chat_template_kwargs` for reasoning controls | Not forwarded; reported as `dropped` |
 | JSON object mode without a schema | Supported | Supported | Not supported |
 | Audio input | Supported | Not supported | Not supported |
@@ -206,6 +206,10 @@ This table describes codec representation, not model capability. For example,
 an OpenAI-compatible server can accept the Chat request shape while rejecting
 images or tools for a particular model. Qualify the actual endpoint and model
 revision before adding them to a routing pool.
+
+Responses requires a detail level on every input image. An image that arrives
+without one, as every Messages image and tool-result image does, reaches a
+Responses backend with `detail: auto`, the Responses default.
 
 When translating Chat history to an Anthropic Messages backend, empty text
 blocks are omitted. An assistant's `content: ""` beside `tool_calls` therefore
@@ -248,7 +252,11 @@ A Chat Completions or Responses client then receives a typed
 failure arrives mid-stream, after the response headers and any earlier deltas,
 because the signature reaches the encoder only with the reasoning delta.
 Same-format traffic, including Messages clients reading an Anthropic backend, is
-unaffected.
+unaffected. Listing `reasoning.signature` in
+`global.router.allow_lossy_translation` lets these responses through: the Router
+drops the signature, keeps the reasoning text, and reports the loss as
+`approximated`. The signature cannot come back on later turns, so use it with
+backends that do not need it, such as vLLM.
 
 A Responses client can still use `previous_response_id` with a Chat
 Completions or Messages backend. The Router retrieves and materializes the
@@ -276,10 +284,10 @@ providers:
       api_format: anthropic
       backend_refs:
         - name: anthropic-primary
-          base_url: https://api.anthropic.com
+          endpoint: https://api.anthropic.com
           provider: anthropic
-          api_key_env: ANTHROPIC_API_KEY
-          extra_headers:
+          auth: {api_key_env: ANTHROPIC_API_KEY}
+          headers:
             anthropic-version: "2023-06-01"
           weight: 100
 ```
@@ -326,7 +334,8 @@ schema, streaming, tools, or error translation.
   and reports the loss as `approximated` with field `tool_result.is_error` in
   `x-vsr-protocol-warnings` and in `llm_translation_lossy_total`. The list
   also accepts `messages[].role` for system messages inside the conversation,
-  described above, and every other lossy translation still fails closed.
+  described above, and `reasoning.signature` (see the signed thinking note
+  above), and every other lossy translation still fails closed.
 - The response keeps the client protocol's JSON or SSE shape. Provider
   transport errors and incomplete streams are translated separately from
   successful model responses.

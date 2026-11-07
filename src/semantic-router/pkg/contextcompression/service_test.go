@@ -301,6 +301,69 @@ func TestServiceRecoverableCompressionStoresOriginal(t *testing.T) {
 	}
 }
 
+func TestServiceEmptyScopeRecoverableDoesNotStore(t *testing.T) {
+	original := strings.Repeat("large recoverable context ", 300)
+	for _, tc := range []struct {
+		name  string
+		scope string
+	}{
+		{name: "empty", scope: ""},
+		{name: "whitespace", scope: "   "},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := map[string]interface{}{
+				"messages": []interface{}{
+					map[string]interface{}{"role": "user", "content": "question"},
+					map[string]interface{}{"role": "tool", "tool_call_id": "call", "content": original},
+				},
+			}
+			store := &testRecoveryStore{}
+			result := NewService().Apply(context.Background(), Request{
+				Scope:    tc.scope,
+				Request:  ParseRequestIR(body, Provenance{}),
+				Recovery: store,
+				Policy: Policy{
+					Mode: ModeAlways,
+					Targets: Targets{
+						ToolOutputs: TargetPolicy{
+							Mode:         TargetRecoverable,
+							MinTokens:    10,
+							TargetTokens: 30,
+						},
+					},
+					Recovery: RecoveryPolicy{
+						Enabled:            true,
+						TTL:                time.Minute,
+						MaxBytesPerRequest: len(original) + 1,
+					},
+					FailureMode: FailureClosed,
+				},
+				TokenCounter: HeuristicTokenCounter{},
+			})
+			if result.Failure != nil {
+				t.Fatalf("empty-scope recoverable Apply() failed: %#v", result)
+			}
+			if len(result.RecoveryKeys) != 0 {
+				t.Fatalf("empty-scope recoverable issued recovery keys: %#v", result)
+			}
+			if len(store.entries) != 0 {
+				t.Fatalf("empty-scope recoverable wrote recovery store: %#v", store.entries)
+			}
+			encoded, _ := json.Marshal(body)
+			if strings.Contains(string(encoded), RetrieveToolName) {
+				t.Fatal("empty-scope recoverable injected recovery marker")
+			}
+			if !result.Applied {
+				t.Fatal("empty-scope recoverable did not fall back to compression")
+			}
+			content := body["messages"].([]interface{})[1].(map[string]interface{})["content"].(string)
+			if content == original {
+				t.Fatal("empty-scope recoverable left original uncompressed")
+			}
+		})
+	}
+}
+
 func TestServiceRecoverableCompressionPreservesJSON(t *testing.T) {
 	original := `{"status":"failed","logs":"` +
 		strings.Repeat("irrelevant logs ", 400) +

@@ -61,8 +61,8 @@ func TestParseYAMLBytesParsesModelCatalogAdmission(t *testing.T) {
 	}
 
 	exported := canonicalModelCatalogFromRouterConfig(cfg)
-	if got := exported.Admission["prompt_guard"]; got != want {
-		t.Fatalf("exported admission = %+v, want %+v", got, want)
+	if got := exported.Admission["jailbreak"]; got != want {
+		t.Fatalf("exported admission = %+v, want %+v under the signal type", got, want)
 	}
 }
 

@@ -97,6 +97,10 @@
             "action": "dropped"
           },
           {
+            "field": "output.async",
+            "action": "dropped"
+          },
+          {
             "field": "output.caller",
             "action": "dropped"
           },

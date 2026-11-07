@@ -13,8 +13,8 @@ type Classifier struct {
 }
 
 type BertModel struct {
-	ModelID   string  `yaml:"model_id"`
-	Threshold float32 `yaml:"threshold"`
+	ModelID   string  `yaml:"model_id,omitempty"`
+	Threshold float32 `yaml:"threshold,omitempty"`
 	UseCPU    bool    `yaml:"use_cpu"`
 }
 
@@ -26,8 +26,8 @@ type CategoryModel struct {
 	// Enabled turns category classification on or off explicitly. Nil keeps the
 	// historical behaviour of running whenever a model is configured.
 	Enabled   *bool   `yaml:"enabled,omitempty"`
-	ModelID   string  `yaml:"model_id"`
-	Threshold float32 `yaml:"threshold"`
+	ModelID   string  `yaml:"model_id,omitempty"`
+	Threshold float32 `yaml:"threshold,omitempty"`
 	UseCPU    bool    `yaml:"use_cpu"`
 	// Backend attaches a named remote classifier. Its absence preserves local
 	// category inference exactly as before.
@@ -45,8 +45,8 @@ type PIIModel struct {
 	// Enabled turns PII classification on or off explicitly. Nil keeps the
 	// historical behaviour of running whenever a model is configured.
 	Enabled        *bool   `yaml:"enabled,omitempty"`
-	ModelID        string  `yaml:"model_id"`
-	Threshold      float32 `yaml:"threshold"`
+	ModelID        string  `yaml:"model_id,omitempty"`
+	Threshold      float32 `yaml:"threshold,omitempty"`
 	UseCPU         bool    `yaml:"use_cpu"`
 	PIIMappingPath string  `yaml:"pii_mapping_path"`
 	// Backend attaches a named remote token classifier speaking token_spans.v1.
@@ -134,7 +134,7 @@ type MCPCategoryModel struct {
 	Env              map[string]string `yaml:"env,omitempty"`
 	URL              string            `yaml:"url,omitempty"`
 	ToolName         string            `yaml:"tool_name,omitempty"`
-	Threshold        float32           `yaml:"threshold"`
+	Threshold        float32           `yaml:"threshold,omitempty"`
 	TimeoutSeconds   int               `yaml:"timeout_seconds,omitempty"`
 	MaxResponseBytes int64             `yaml:"max_response_bytes,omitempty"`
 }
@@ -175,8 +175,8 @@ type PromptGuardConfig struct {
 	Backend              *RemoteClassifierBackend  `yaml:"backend,omitempty"`
 	Window               *SequenceHeadWindowConfig `yaml:"window,omitempty"`
 	Enabled              bool                      `yaml:"enabled"`
-	ModelID              string                    `yaml:"model_id"`
-	Threshold            float32                   `yaml:"threshold"`
+	ModelID              string                    `yaml:"model_id,omitempty"`
+	Threshold            float32                   `yaml:"threshold,omitempty"`
 	UseCPU               bool                      `yaml:"use_cpu"`
 	JailbreakMappingPath string                    `yaml:"jailbreak_mapping_path"`
 	PositiveLabels       []string                  `yaml:"positive_labels,omitempty"`
@@ -196,8 +196,8 @@ type FeedbackDetectorConfig struct {
 	// with 512-token forwards during owned preparation.
 	MaxSequenceLength   int     `yaml:"max_sequence_length,omitempty"`
 	Enabled             bool    `yaml:"enabled"`
-	ModelID             string  `yaml:"model_id"`
-	Threshold           float32 `yaml:"threshold"`
+	ModelID             string  `yaml:"model_id,omitempty"`
+	Threshold           float32 `yaml:"threshold,omitempty"`
 	UseCPU              bool    `yaml:"use_cpu"`
 	FeedbackMappingPath string  `yaml:"feedback_mapping_path"`
 }
@@ -319,12 +319,15 @@ type HallucinationMitigationConfig struct {
 }
 
 type FactCheckModelConfig struct {
+	// Enabled turns the fact-check classifier on or off explicitly. Nil keeps
+	// it on wherever a signal or hallucination mitigation reads it.
+	Enabled *bool `yaml:"enabled,omitempty"`
 	// MaxSequenceLength bounds a complete text with Window, otherwise one
 	// inference. Implicit local Vela zero/nil resolves to a 32K document scan
 	// with 512-token forwards during owned preparation.
 	MaxSequenceLength int     `yaml:"max_sequence_length,omitempty"`
-	ModelID           string  `yaml:"model_id"`
-	Threshold         float32 `yaml:"threshold"`
+	ModelID           string  `yaml:"model_id,omitempty"`
+	Threshold         float32 `yaml:"threshold,omitempty"`
 	UseCPU            bool    `yaml:"use_cpu"`
 }
 
@@ -334,8 +337,8 @@ type HallucinationModelConfig struct {
 	// derives from its binding's external model; it is not configurable.
 	Endpoint           string  `yaml:"-"`
 	IncludeExplanation bool    `yaml:"include_explanation,omitempty"`
-	ModelID            string  `yaml:"model_id"`
-	Threshold          float32 `yaml:"threshold"`
+	ModelID            string  `yaml:"model_id,omitempty"`
+	Threshold          float32 `yaml:"threshold,omitempty"`
 	UseCPU             bool    `yaml:"use_cpu"`
 	MinSpanLength      int     `yaml:"min_span_length,omitempty"`
 	MinSpanConfidence  float32 `yaml:"min_span_confidence,omitempty"`
@@ -543,3 +546,6 @@ func (m CategoryModel) Active() bool { return moduleActive(m.Enabled) }
 
 // Active reports whether PII classification was explicitly disabled.
 func (m PIIModel) Active() bool { return moduleActive(m.Enabled) }
+
+// Active reports whether the fact-check classifier was explicitly disabled.
+func (m FactCheckModelConfig) Active() bool { return moduleActive(m.Enabled) }

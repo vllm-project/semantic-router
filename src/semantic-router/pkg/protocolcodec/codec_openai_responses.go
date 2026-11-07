@@ -131,6 +131,7 @@ type responsesItemWire struct {
 	Name             string          `json:"name,omitempty"`
 	CallID           string          `json:"call_id,omitempty"`
 	Caller           json.RawMessage `json:"caller,omitempty"`
+	Async            json.RawMessage `json:"async,omitempty"`
 	Namespace        string          `json:"namespace,omitempty"`
 	Arguments        string          `json:"arguments,omitempty"`
 	Input            string          `json:"input,omitempty"`
