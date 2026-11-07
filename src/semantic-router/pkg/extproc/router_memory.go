@@ -118,6 +118,13 @@ func isMemoryEnabled(cfg *config.RouterConfig) bool {
 // createMemoryStore creates a memory store based on configuration.
 // Switches on cfg.Memory.Backend: "valkey" creates a ValkeyStore, "milvus" (or empty) creates a MilvusStore.
 func createMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (memory.Store, error) {
+	return createMemoryStoreWithContext(context.Background(), cfg, sets...)
+}
+
+func createMemoryStoreWithContext(ctx context.Context, cfg *config.RouterConfig, sets ...*embedding.Set) (memory.Store, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	bound, bindErr := bindMemoryEmbedding(cfg, sets...)
 	if bindErr != nil {
 		return nil, bindErr
@@ -133,11 +140,11 @@ func createMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (memory
 
 	switch backend {
 	case "valkey":
-		store, err = createValkeyMemoryStore(cfg, sets...)
+		store, err = createValkeyMemoryStoreWithContext(ctx, cfg, sets...)
 	case "milvus":
-		store, err = createMilvusMemoryStore(cfg, sets...)
+		store, err = createMilvusMemoryStoreWithContext(ctx, cfg, sets...)
 	case "qdrant":
-		store, err = createQdrantMemoryStore(cfg, sets...)
+		store, err = createQdrantMemoryStoreWithContext(ctx, cfg, sets...)
 	default:
 		return nil, fmt.Errorf("unsupported memory backend: %q (supported: milvus, valkey, qdrant)", backend)
 	}
@@ -147,19 +154,23 @@ func createMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (memory
 	}
 
 	// Optionally wrap with Redis hot cache
-	result := wrapWithRedisCache(store, cfg, backend)
+	result := wrapWithRedisCacheContext(ctx, store, cfg, backend)
 	return result, nil
 }
 
 // wrapWithRedisCache optionally wraps a memory store with a Redis hot cache.
 // Returns the original store if caching is not configured or connection fails.
 func wrapWithRedisCache(store memory.Store, cfg *config.RouterConfig, backend string) memory.Store {
+	return wrapWithRedisCacheContext(context.Background(), store, cfg, backend)
+}
+
+func wrapWithRedisCacheContext(ctx context.Context, store memory.Store, cfg *config.RouterConfig, backend string) memory.Store {
 	rc := cfg.Memory.RedisCache
 	if rc == nil || !rc.Enabled || rc.Address == "" {
 		return store
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	cacheCfg := &memory.RedisCacheConfig{
@@ -179,6 +190,10 @@ func wrapWithRedisCache(store memory.Store, cfg *config.RouterConfig, backend st
 
 // createMilvusMemoryStore creates a MilvusStore backend.
 func createMilvusMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (memory.Store, error) {
+	return createMilvusMemoryStoreWithContext(context.Background(), cfg, sets...)
+}
+
+func createMilvusMemoryStoreWithContext(ctx context.Context, cfg *config.RouterConfig, sets ...*embedding.Set) (memory.Store, error) {
 	milvusAddress := cfg.Memory.Milvus.Address
 	if milvusAddress == "" {
 		milvusAddress = "localhost:19530"
@@ -212,7 +227,7 @@ func createMilvusMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 
 	logging.Infof("Memory: connecting to Milvus at %s, collection=%s, embedding=%s", milvusAddress, collectionName, embeddingConfig.Model)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	milvusClient, err := milvuslifecycle.ConnectGRPC(ctx, milvusAddress, 0)
@@ -230,12 +245,13 @@ func createMilvusMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 		return nil, fmt.Errorf("milvus connection is not healthy")
 	}
 
-	store, err := memory.NewMilvusStore(memory.MilvusStoreOptions{
-		Client:          milvusClient,
-		CollectionName:  collectionName,
-		Config:          cfg.Memory,
-		Enabled:         true,
-		EmbeddingConfig: embeddingConfig,
+	store, err := memory.NewMilvusStoreWithContext(ctx, memory.MilvusStoreOptions{
+		Client:             milvusClient,
+		CollectionName:     collectionName,
+		Config:             cfg.Memory,
+		Enabled:            true,
+		EmbeddingConfig:    embeddingConfig,
+		CloseClientOnClose: true,
 	})
 	if err != nil {
 		_ = milvusClient.Close()
@@ -250,6 +266,10 @@ func createMilvusMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 
 // createQdrantMemoryStore creates a QdrantStore backend.
 func createQdrantMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (memory.Store, error) {
+	return createQdrantMemoryStoreWithContext(context.Background(), cfg, sets...)
+}
+
+func createQdrantMemoryStoreWithContext(ctx context.Context, cfg *config.RouterConfig, sets ...*embedding.Set) (memory.Store, error) {
 	qc := cfg.Memory.Qdrant
 	if qc == nil {
 		return nil, fmt.Errorf("memory.qdrant configuration is required when backend is 'qdrant'")
@@ -304,14 +324,14 @@ func createQdrantMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 		return nil, fmt.Errorf("failed to create qdrant client: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 	defer cancel()
 	if _, connErr := client.ListCollections(ctx); connErr != nil {
 		_ = client.Close()
 		return nil, fmt.Errorf("qdrant connection check failed: %w", connErr)
 	}
 
-	store, err := memory.NewQdrantStore(memory.QdrantStoreOptions{
+	store, err := memory.NewQdrantStoreWithContext(ctx, memory.QdrantStoreOptions{
 		Client:          client,
 		Config:          cfg.Memory,
 		QdrantConfig:    qc,

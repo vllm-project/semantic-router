@@ -39,7 +39,7 @@ func (r *OpenAIRouter) InspectPluginBinding(binding pluginruntime.Binding, plugi
 			add("context_recovery", r.CompressionRecovery != nil)
 		}
 	case *config.MemoryPluginConfig:
-		add("memory_store", r.MemoryStore != nil)
+		add("memory_store", r.getMemoryStore() != nil)
 	case *config.RouterReplayPluginConfig:
 		add("replay_store", r.ReplayRecorder != nil || r.ReplayRecorders[config.RoutingDecisionKey(binding.Recipe, binding.Decision)] != nil)
 	case *config.HallucinationPluginConfig:

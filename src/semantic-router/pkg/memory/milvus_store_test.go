@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -31,6 +33,7 @@ type MockMilvusClient struct {
 	DeleteCallCount      int
 	QueryCallCount       int
 	CapturedSchema       *entity.Schema // Captures schema passed to CreateCollection
+	CloseCallCount       atomic.Int32
 }
 
 func (m *MockMilvusClient) Search(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
@@ -49,7 +52,10 @@ func (m *MockMilvusClient) HasCollection(ctx context.Context, coll string) (bool
 }
 
 // Stub out other required methods to satisfy client.Client interface
-func (m *MockMilvusClient) Close() error { return nil }
+func (m *MockMilvusClient) Close() error {
+	m.CloseCallCount.Add(1)
+	return nil
+}
 
 func (m *MockMilvusClient) CheckHealth(context.Context) (*entity.MilvusState, error) { return nil, nil }
 func (m *MockMilvusClient) UsingDatabase(context.Context, string) error              { return nil }
@@ -1243,4 +1249,88 @@ func TestMilvusStore_Retrieve_ProjectScopeWidensPastLegacyCandidates(t *testing.
 			assert.Equal(t, tt.wantEfs, gotEfs)
 		})
 	}
+}
+
+func TestNewMilvusStoreWithContextCancelsCollectionSetup(t *testing.T) {
+	mockClient := &MockMilvusClient{}
+	setupStarted := make(chan struct{})
+	mockClient.HasCollectionFunc = func(ctx context.Context, _ string) (bool, error) {
+		close(setupStarted)
+		<-ctx.Done()
+		return false, ctx.Err()
+	}
+
+	embeddingConfig := &EmbeddingConfig{
+		Provider: memoryTestEmbeddingProvider(),
+		Model:    EmbeddingModelQwen3,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	type constructorResult struct {
+		store *MilvusStore
+		err   error
+	}
+	result := make(chan constructorResult, 1)
+	go func() {
+		store, err := NewMilvusStoreWithContext(ctx, MilvusStoreOptions{
+			Client:          mockClient,
+			CollectionName:  "cancelled_setup",
+			Config:          DefaultMemoryConfig(),
+			Enabled:         true,
+			EmbeddingConfig: embeddingConfig,
+		})
+		result <- constructorResult{store: store, err: err}
+	}()
+
+	select {
+	case <-setupStarted:
+		cancel()
+	case <-time.After(time.Second):
+		t.Fatal("Milvus collection setup did not start")
+	}
+
+	select {
+	case got := <-result:
+		require.Nil(t, got.store)
+		require.Error(t, got.err)
+		assert.ErrorIs(t, got.err, context.Canceled)
+	case <-time.After(time.Second):
+		t.Fatal("Milvus collection setup did not stop after cancellation")
+	}
+}
+
+func TestMilvusStoreCloseOwnedClientOnce(t *testing.T) {
+	mockClient := &MockMilvusClient{}
+	embeddingConfig := &EmbeddingConfig{
+		Provider: memoryTestEmbeddingProvider(),
+		Model:    EmbeddingModelQwen3,
+	}
+	store, err := NewMilvusStore(MilvusStoreOptions{
+		Client:             mockClient,
+		CollectionName:     "owned_client",
+		Config:             DefaultMemoryConfig(),
+		Enabled:            true,
+		EmbeddingConfig:    embeddingConfig,
+		CloseClientOnClose: true,
+	})
+	require.NoError(t, err)
+
+	const closers = 16
+	errs := make(chan error, closers)
+	var wg sync.WaitGroup
+	for range closers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs <- store.Close()
+		}()
+	}
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		require.NoError(t, err)
+	}
+	assert.Equal(t, int32(1), mockClient.CloseCallCount.Load())
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
@@ -28,6 +29,9 @@ type MilvusStore struct {
 	maxRetries      int
 	retryBaseDelay  time.Duration
 	embeddingConfig EmbeddingConfig // Unified embedding configuration
+	closeClient     func() error
+	closeOnce       sync.Once
+	closeErr        error
 }
 
 // MilvusStoreOptions contains configuration for creating a MilvusStore
@@ -37,17 +41,27 @@ type MilvusStore struct {
 //	Config is the memory configuration
 //	Enabled controls whether the store is active
 //	EmbeddingConfig is the unified embedding configuration (optional, defaults to mmbert/768)
+//	CloseClientOnClose transfers client ownership to a successfully constructed store
 type MilvusStoreOptions struct {
-	Client          client.Client
-	CollectionName  string
-	Config          config.MemoryConfig
-	Enabled         bool
-	EmbeddingConfig *EmbeddingConfig // Optional: if nil, derived from Config.Embedding
+	Client             client.Client
+	CollectionName     string
+	Config             config.MemoryConfig
+	Enabled            bool
+	EmbeddingConfig    *EmbeddingConfig // Optional: if nil, derived from Config.Embedding
+	CloseClientOnClose bool
 }
 
 // NewMilvusStore creates a new MilvusStore instance
-
 func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
+	return NewMilvusStoreWithContext(context.Background(), options)
+}
+
+// NewMilvusStoreWithContext creates a Milvus store whose collection
+// initialization is bounded by ctx as well as the 30-second startup timeout.
+func NewMilvusStoreWithContext(ctx context.Context, options MilvusStoreOptions) (*MilvusStore, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if !options.Enabled {
 		logging.ComponentDebugEvent("memory", "milvus_store_init_skipped", map[string]interface{}{
 			"reason":  "disabled",
@@ -99,9 +113,12 @@ func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 		retryBaseDelay:  DefaultRetryBaseDelay * time.Millisecond,
 		embeddingConfig: embeddingCfg,
 	}
+	if options.CloseClientOnClose {
+		store.closeClient = options.Client.Close
+	}
 
 	// Auto-create collection if it doesn't exist
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	if err := store.ensureCollection(ctx); err != nil {
 		return nil, fmt.Errorf("failed to ensure collection exists: %w", err)
@@ -143,9 +160,15 @@ func (m *MilvusStore) CheckConnection(ctx context.Context) error {
 }
 
 func (m *MilvusStore) Close() error {
-	// Note: We don't close the client here as it might be shared
-	// The caller is responsible for managing the client lifecycle
-	return nil
+	if m == nil {
+		return nil
+	}
+	m.closeOnce.Do(func() {
+		if m.closeClient != nil {
+			m.closeErr = m.closeClient()
+		}
+	})
+	return m.closeErr
 }
 
 func isTransientError(err error) bool {

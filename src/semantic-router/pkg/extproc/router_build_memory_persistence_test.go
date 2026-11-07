@@ -25,11 +25,12 @@ func TestCreateMemoryPersistenceRunnerReturnsNilWithoutConfig(t *testing.T) {
 	assert.Nil(t, createMemoryPersistenceRunner(&config.RouterConfig{}, memoryPersistenceExtractor()))
 }
 
-// An unreachable backend leaves createMemoryRuntime with a nil extractor while
-// enablement still reads true, and every write would be suppressed as
-// "no_extractor". No workers or queue storage may be allocated for that.
-func TestCreateMemoryPersistenceRunnerReturnsNilWithoutExtractor(t *testing.T) {
-	assert.Nil(t, createMemoryPersistenceRunner(memoryPersistenceConfig(config.MemoryPersistenceConfig{}), nil))
+// An unreachable backend leaves createMemoryRuntime with a nil extractor, but
+// the generation still needs a runner ready for writes after recovery.
+func TestCreateMemoryPersistenceRunnerStartsWhileBackendReconnects(t *testing.T) {
+	runner := createMemoryPersistenceRunner(memoryPersistenceConfig(config.MemoryPersistenceConfig{}), nil)
+	require.NotNil(t, runner)
+	require.NoError(t, runner.RetireAndWait(time.Second))
 }
 
 func TestCreateMemoryPersistenceRunnerRunsWorkOnUnsetBounds(t *testing.T) {
