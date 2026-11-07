@@ -303,7 +303,33 @@ func (c *Compiler) compileShadowDispatchPluginConfig(fields map[string]Value) co
 	if v, ok := getBoolField(fields, "tls_skip_verify"); ok {
 		cfg.TLSSkipVerify = v
 	}
+	if v, ok := getStringArrayField(fields, "arms"); ok {
+		cfg.Arms = v
+	}
+	if raw, ok := fields["budget"]; ok {
+		cfg.Budget = c.compileShadowBudgetConfig(raw)
+	}
 	cfg.ForwardHeaders = stringArrayValue(fields["forward_headers"])
+	return cfg
+}
+
+// compileShadowBudgetConfig reads the per-request aggregate budget. A malformed
+// budget is rejected instead of compiling to a zero budget, because zero means
+// "unlimited" on every dimension.
+func (c *Compiler) compileShadowBudgetConfig(raw Value) config.ShadowDispatchBudgetConfig {
+	var cfg config.ShadowDispatchBudgetConfig
+	obj, ok := raw.(ObjectValue)
+	if !ok {
+		c.addError(Position{}, "shadow_dispatch.budget must be an object")
+		return cfg
+	}
+	payload, err := config.NewStructuredPayload(fieldsToMap(obj.Fields))
+	if err == nil {
+		err = payload.DecodeIntoStrict(&cfg)
+	}
+	if err != nil {
+		c.addError(Position{}, "invalid shadow_dispatch.budget: %v", err)
+	}
 	return cfg
 }
 
