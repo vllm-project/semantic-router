@@ -2,7 +2,14 @@ import React, { memo, useCallback, useState } from 'react'
 import { Handle, Position, type NodeProps, type NodeTypes } from 'reactflow'
 
 import styles from './ExpressionBuilder.module.css'
-import { DRAG_MIME, decodeDrag, type RuleNode } from './ExpressionBuilderSupport'
+import {
+  DRAG_MIME,
+  decodeDrag,
+  leafMetaBadges,
+  newRuleNodeId,
+  type RuleLeaf,
+  type RuleNode,
+} from './ExpressionBuilderSupport'
 import type { FlowNodeData } from './ExpressionBuilderFlow'
 
 interface GateShapeProps {
@@ -99,21 +106,27 @@ export const BUILDER_TEMPLATES: BuilderTemplate[] = [
     name: 'AND Gate',
     op: 'AND',
     desc: OPERATOR_META.AND.description,
-    build: () => ({ operator: 'AND', conditions: [] }),
+    build: () => ({ id: newRuleNodeId(), operator: 'AND', conditions: [] }),
   },
   {
     name: 'OR Gate',
     op: 'OR',
     desc: OPERATOR_META.OR.description,
-    build: () => ({ operator: 'OR', conditions: [] }),
+    build: () => ({ id: newRuleNodeId(), operator: 'OR', conditions: [] }),
   },
   {
     name: 'NOT Gate',
     op: 'NOT',
     desc: OPERATOR_META.NOT.description,
-    build: () => ({ operator: 'NOT', conditions: [] as unknown as [RuleNode] }),
+    build: () => ({ id: newRuleNodeId(), operator: 'NOT', conditions: [] as unknown as [RuleNode] }),
   },
 ]
+
+function issueClass(issue: FlowNodeData['issue']): string {
+  if (issue === 'error') return styles.rfNodeError
+  if (issue === 'warning') return styles.rfNodeWarning
+  return ''
+}
 
 const OperatorNodeComponent = memo<NodeProps<FlowNodeData>>(({ data, selected }) => {
   const [dragOver, setDragOver] = useState(false)
@@ -166,7 +179,7 @@ const OperatorNodeComponent = memo<NodeProps<FlowNodeData>>(({ data, selected })
   return (
     <div className={styles.rfOperatorWrapper}>
       <div
-        className={`${styles.rfGateNode} ${selected ? styles.rfGateSelected : ''} ${dragOver ? styles.rfGateDragOver : ''}`}
+        className={`${styles.rfGateNode} ${selected ? styles.rfGateSelected : ''} ${dragOver ? styles.rfGateDragOver : ''} ${issueClass(data.issue)}`}
         onDoubleClick={handleDoubleClick}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -210,17 +223,21 @@ const SignalNodeComponent = memo<NodeProps<FlowNodeData>>(({ data, selected }) =
     [data]
   )
 
-  const node = data.ruleNode as { signalType: string; signalName: string }
+  const node = data.ruleNode as RuleLeaf
+  const badges = leafMetaBadges(node)
 
   return (
     <div
-      className={`${styles.rfSignalNode} ${selected ? styles.rfNodeSelected : ''}`}
+      className={`${styles.rfSignalNode} ${selected ? styles.rfNodeSelected : ''} ${issueClass(data.issue)}`}
       onDoubleClick={handleDoubleClick}
-      title={`${node.signalType}("${node.signalName}")\nDouble-click to edit`}
+      title={`${node.signalType}("${node.signalName}")${badges.length ? ` ${badges.join(', ')}` : ''}\nDouble-click to edit`}
     >
       <Handle type="target" position={Position.Top} className={styles.rfHandle} />
-      <span className={styles.rfSignalType}>{node.signalType}</span>
+      <span className={styles.rfSignalType}>{node.signalType || '?'}</span>
       <span className={styles.rfSignalName}>{node.signalName}</span>
+      {badges.map((badge) => (
+        <span key={badge} className={styles.rfSignalMeta}>{badge}</span>
+      ))}
     </div>
   )
 })

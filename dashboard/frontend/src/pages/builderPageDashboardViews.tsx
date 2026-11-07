@@ -3,6 +3,7 @@ import React, { useId } from 'react'
 import type { BoolExprNode, EditorMode } from '@/types/dsl'
 import { useDSLStore } from '@/stores/dslStore'
 import { formatRoutingMetadataValue } from '@/components/routingMetadataDisplay'
+import { serializeBoolExpr } from '@/lib/dslMutations'
 
 import styles from './BuilderPage.module.css'
 import { ModelIcon, PluginIcon, RouteIcon, SignalIcon } from './builderPageFormPrimitives'
@@ -93,25 +94,7 @@ interface DashboardViewProps {
 /** Serialize a BoolExprNode into a short readable string */
 function boolExprToText(node: BoolExprNode | null, maxLen = 60): string {
   if (!node) return '(always)'
-  const serialize = (n: BoolExprNode): string => {
-    switch (n.type) {
-      case 'signal_ref':
-        return `${n.signalType}("${n.signalName}")`
-      case 'not':
-        return `NOT ${serialize(n.expr)}`
-      case 'and': {
-        const l = serialize(n.left),
-          r = serialize(n.right)
-        return `${l} AND ${r}`
-      }
-      case 'or': {
-        const l = serialize(n.left),
-          r = serialize(n.right)
-        return `(${l} OR ${r})`
-      }
-    }
-  }
-  const text = serialize(node)
+  const text = serializeBoolExpr(node)
   return text.length > maxLen ? text.slice(0, maxLen - 3) + '...' : text
 }
 

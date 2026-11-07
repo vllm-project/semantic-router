@@ -1,6 +1,10 @@
 import React, { useCallback, useMemo, useState } from "react";
 
 import ExpressionBuilder from "@/components/ExpressionBuilder";
+import {
+  blockingRuleIssues,
+  type RuleIssue,
+} from "@/lib/decisionRuleIssues";
 import type { DSLFieldObject } from "@/types/dsl";
 import {
   ALGORITHM_DESCRIPTIONS,
@@ -51,9 +55,16 @@ const AddRouteForm: React.FC<{
   );
   const [plugins, setPlugins] = useState<RoutePluginInput[]>([]);
 
+  // An unparsable raw draft never reaches whenExpr, and an invalid tree
+  // serializes to WHEN text the compiler rejects, so either blocks creation.
+  const [whenBlocked, setWhenBlocked] = useState<string | null>(null);
+  const handleWhenIssues = useCallback((issues: RuleIssue[]) => {
+    setWhenBlocked(blockingRuleIssues(issues)[0]?.message ?? null);
+  }, []);
+
   const handleSubmit = useCallback(() => {
     const n = name.trim().replace(/\s+/g, "_");
-    if (!n) return;
+    if (!n || whenBlocked) return;
     onAdd(n, {
       description: description.trim() || undefined,
       priority,
@@ -64,6 +75,7 @@ const AddRouteForm: React.FC<{
     });
   }, [
     name,
+    whenBlocked,
     description,
     priority,
     whenExpr,
@@ -151,7 +163,8 @@ const AddRouteForm: React.FC<{
           <button
             className={styles.toolbarBtnPrimary}
             onClick={handleSubmit}
-            disabled={!name.trim()}
+            disabled={!name.trim() || Boolean(whenBlocked)}
+            title={whenBlocked ?? undefined}
           >
             Create
           </button>
@@ -235,6 +248,7 @@ const AddRouteForm: React.FC<{
             value={whenExpr}
             onChange={setWhenExpr}
             availableSignals={availableSignals}
+            onIssuesChange={handleWhenIssues}
           />
         </div>
       </div>

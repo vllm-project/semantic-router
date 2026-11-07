@@ -108,7 +108,7 @@ func validateDecisionLeafNode(
 			node.Name,
 		)
 	}
-	if node.OnError != "" && node.OnError != "no_match" && node.OnError != "match" {
+	if node.OnError != "" && node.OnError != RuleOnErrorNoMatch && node.OnError != RuleOnErrorMatch {
 		return fmt.Errorf(
 			"decision '%s': condition %s(%q) on_error must be no_match or match",
 			decisionName,

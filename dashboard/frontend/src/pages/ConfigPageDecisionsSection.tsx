@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import styles from './ConfigPage.module.css'
 import decisionStyles from './ConfigPageDecisionsSection.module.css'
@@ -10,13 +10,19 @@ import { DataTable } from '../components/DataTable'
 import type { FieldConfig } from '../components/EditModal'
 import type { ViewSection } from '../components/ViewModal'
 import { getAlgorithmFieldSchema, getPluginFieldSchema } from '../lib/dslSchemas'
+import type { RuleIssue } from '../lib/decisionRuleAst'
+import { decisionRuleSignalDescriptors } from '../lib/decisionRuleSignals'
 import type {
   ConfigData,
   DecisionConfig,
   DecisionFormState,
   NormalizedModel,
 } from './configPageSupport'
-import { getReasoningFamiliesMap, mergeDecisionForSave } from './configPageSupport'
+import {
+  getReasoningFamiliesMap,
+  mergeDecisionForSave,
+  replaceDecisionByName,
+} from './configPageSupport'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 import { cloneConfigData } from './configPageCanonicalization'
 import ConfigPageDecisionPluginsEditor from './ConfigPageDecisionPluginsEditor'
@@ -88,6 +94,18 @@ export default function ConfigPageDecisionsSection({
     setDecisionDeleteError(null)
   }, [selectedScopeId])
   const decisions = scopedConfig?.decisions || []
+  // The picker offers the selected scope's signals only: a named recipe never
+  // sees the root profile's declarations.
+  const ruleSignals = useMemo(
+    () =>
+      decisionRuleSignalDescriptors({
+        signals: scopedConfig?.signals ?? scopedConfig?.routing?.signals,
+        projections: scopedConfig?.projections ?? scopedConfig?.routing?.projections,
+      }),
+    [scopedConfig],
+  )
+  // The open editor's latest issues, including an incomplete raw expression.
+  const rulesIssuesRef = useRef<RuleIssue[]>([])
 
   const filteredDecisions = decisions.filter(
     (decision) =>
@@ -299,6 +317,7 @@ export default function ConfigPageDecisionsSection({
   }
 
   const openDecisionEditor = (mode: 'add' | 'edit', decision?: DecisionRow) => {
+    rulesIssuesRef.current = []
     const defaultForm: DecisionFormState = {
       name: '',
       description: '',
@@ -347,6 +366,7 @@ export default function ConfigPageDecisionsSection({
             },
             rules: JSON.parse(JSON.stringify(decision.rules || {})),
             modelRefs: (decision.modelRefs || []).map((ref) => ({
+              ...ref,
               model: ref.model,
               use_reasoning:
                 !!ref.use_reasoning ||
@@ -413,6 +433,10 @@ export default function ConfigPageDecisionsSection({
           <ConfigPageDecisionRulesEditor
             value={(value as DecisionFormState['rules']) || {}}
             onChange={(nextValue) => onChange(nextValue)}
+            availableSignals={ruleSignals}
+            onIssuesChange={(issues) => {
+              rulesIssuesRef.current = issues
+            }}
           />
         ),
       },
@@ -565,7 +589,7 @@ export default function ConfigPageDecisionsSection({
 
       const priority = Number.isFinite(formData.priority) ? formData.priority : 0
 
-      const rules = decisionRulesForSave(formData.rules)
+      const rules = decisionRulesForSave(formData.rules, rulesIssuesRef.current)
       const modelRefs = decisionModelRefsForSave(formData.modelRefs)
       const plugins = decisionPluginsForSave(formData.plugins)
       const action = configuredObject(formData.action)
@@ -621,11 +645,12 @@ export default function ConfigPageDecisionsSection({
       const newConfig: ConfigData = cloneConfigData(scopedConfig)
       newConfig.decisions = [...(newConfig.decisions || [])]
 
-      if (mode === 'edit' && decision) {
-        removeDecisionByName(newConfig, decision.name)
+      // An edit keeps the decision's position; only a new decision is appended.
+      if (mode !== 'edit' || !decision || !replaceDecisionByName(newConfig, decision.name, newDecision)) {
+        newConfig.decisions.push(newDecision)
       }
-
-      newConfig.decisions.push(newDecision)
+      // applyScopedConfig replaces only the selected scope's routing, so
+      // sibling recipes and entrypoints are written back unchanged.
       await saveConfig(applyScopedConfig(newConfig))
     }
 
