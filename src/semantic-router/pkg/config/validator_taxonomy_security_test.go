@@ -42,3 +42,12 @@ global:
 		t.Fatalf("expected absolute KB path rejection, got %v", err)
 	}
 }
+
+func TestHostAbsoluteTreatsAPOSIXLeadingSlashAsAbsolute(t *testing.T) {
+	if !hostAbsolute("/dev") {
+		t.Fatal("hostAbsolute(/dev) = false, want true on every GOOS")
+	}
+	if hostAbsolute("knowledge_bases/private") {
+		t.Fatal("hostAbsolute(knowledge_bases/private) = true, want false")
+	}
+}
