@@ -221,9 +221,10 @@ export async function rowTree($: Test, target: object) {
   const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'terminal', viewport: { columns: 100, rows: 30 }, ...target } as never)
   const texts = (await ui.findAll({ type: 'Text' })).map(row => row.text ?? '')
   const props = (await ui.findAll({ type: 'Text' })).map(row => row.props as Props)
-  const cards = (await ui.findAll({ type: 'Box' })).filter(row => row.props.borderStyle !== undefined)
+  const boxes = (await ui.findAll({ type: 'Box' })).map(row => row.props as Props).filter(box => box.borderStyle !== undefined)
   await ui.unmount()
-  return { texts, props, cards: cards.map(card => card.props as Props) }
+  // A card has a bright border; a frame, the dim one around the one-line form.
+  return { texts, props, cards: boxes.filter(box => !box.borderDimColor), frames: boxes.filter(box => box.borderDimColor) }
 }
 
 export const rowTexts = async ($: Test, target: object) => (await rowTree($, target)).texts

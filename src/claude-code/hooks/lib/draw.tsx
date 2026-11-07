@@ -18,6 +18,8 @@ const MAX_CARD_WIDTH = 76
 // A card's frame and padding take this many columns from its width.
 const CARD_CHROME = 4
 const COMPACT_RISK_CELLS = 12
+// Below this many columns inside a frame, the one-line form goes unframed.
+const MIN_FRAMED_COLUMNS = 24
 
 // The detail gives way before the headline does.
 function srLine(elements: Elements, { badge, color, headline, detail }: Described, columns: number) {
@@ -161,18 +163,32 @@ function compactLine(elements: Elements, { subject, more = '' }: Described, scor
   )
 }
 
+// The one-line form in a dim frame of its colour, so it stands apart from Claude's words around it; unframed where
+// the row is too narrow for one.
+function framedLine(elements: Elements, described: Described, columns: number) {
+  const { Box } = elements
+  const room = columns - CARD_CHROME
+  if (room < MIN_FRAMED_COLUMNS) return srLine(elements, described, columns)
+  return (
+    <Box borderStyle="round" borderColor={described.color} borderDimColor paddingX={1} alignSelf="flex-start">
+      {srLine(elements, described, room)}
+    </Box>
+  )
+}
+
 // What a row shows of a decision under `display`: the full card or line, the one-line form, or nothing.
 export function rowView(elements: Elements, logo: Logo, described: Described, columns: number, narrow: Described, display: Display) {
   if (display === 'verbose' || described.weight === 'act') return inlineView(elements, logo, described, columns, narrow)
   if (display === 'quiet' || described.weight === 'quiet') return null
   // The plain words go first when the row is short: a cut word reads worse than none.
-  const fits = `${BRAND}  ${described.badge}  ${described.line}`.length <= columns
-  return srLine(elements, { ...described, headline: fits ? described.line : described.headline, detail: '' }, columns)
+  const room = columns - CARD_CHROME >= MIN_FRAMED_COLUMNS ? columns - CARD_CHROME : columns
+  const fits = `${BRAND}  ${described.badge}  ${described.line}`.length <= room
+  return framedLine(elements, { ...described, headline: fits ? described.line : described.headline, detail: '' }, columns)
 }
 
 // A card for a decision worth noticing, a compact line for an allowed command, the one-line form where the row is narrow.
 export function inlineView(elements: Elements, logo: Logo, described: Described, columns: number, narrow: Described = described) {
-  if (columns < MIN_CARD_COLUMNS) return srLine(elements, narrow, columns)
+  if (columns < MIN_CARD_COLUMNS) return framedLine(elements, narrow, columns)
   const { inline } = described
   return inline.kind === 'card'
     ? card(elements, logo, described, inline, columns)

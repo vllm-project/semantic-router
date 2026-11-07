@@ -55,7 +55,8 @@ By default (`display: normal`) vSR only interrupts when it matters:
   - `SHIELDED`: a file or page tried to instruct Claude; Claude was told to treat it as data.
   - `UNVERIFIED`: the answer claims things that what Claude read does not back. Look twice.
   - `REDACTED` with a note on unchecked characters: a long output was only partly checked in time.
-- **One line** when vSR changed something, or the router decided on a subagent:
+- **One line in a dim frame**, set apart from Claude's reply, when vSR changed something, or the
+  router decided on a subagent:
   - `ROUTED`: the subagent's model and effort, and how hard the task looked.
   - `KEPT`: the subagent stays on your session's model, and why (the router was not sure enough, or
     `routerGoal` is `quality`).

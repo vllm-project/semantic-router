@@ -167,7 +167,7 @@ test('at 50 columns every kind falls back to the one-line form', { options: { di
 
   expect(seen.map(lines => lines.length)).toEqual([1, 1, 1, 1, 1])
   expect(seen.map(([line]) => line.split(/ {2,}/)[1])).toEqual(['ROUTED', 'KEPT', 'ALLOWED', 'DECLINED', 'SKIPPED'])
-  expect(seen[2][0]).toBe(' vSR   ALLOWED  ran normally, not risky enoug…')
+  expect(seen[2][0]).toBe(' vSR   ALLOWED  ran normally, not risky e…')
 })
 
 test('a folded group keeps its line and adds a card for the declined call and a compact line for the allowed one', { options: { display: 'verbose' } }, async ($, on) => {
