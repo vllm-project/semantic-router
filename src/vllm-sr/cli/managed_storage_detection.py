@@ -215,16 +215,7 @@ def _response_cache_milvus_connection_host(config: Mapping[str, Any]) -> str | N
 
 
 def _response_cache_mapping(stores: Mapping[str, Any]) -> object:
-    canonical = stores.get("response_cache")
-    legacy = stores.get("semantic_cache")
-    if canonical is not None:
-        if legacy is not None:
-            log.warning(
-                "Ignoring deprecated global.stores.semantic_cache because "
-                "global.stores.response_cache is configured"
-            )
-        return canonical
-    return legacy
+    return stores.get("response_cache")
 
 
 def effective_service_backend(

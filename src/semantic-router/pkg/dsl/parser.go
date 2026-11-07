@@ -456,8 +456,8 @@ func rawToRoute(r *rawRouteDecl) *RouteDecl {
 			}
 		case item.CandidateFor != nil:
 			route.CandidateIterations = append(route.CandidateIterations, rawToCandidateIteration(item.CandidateFor))
-		case item.Emit != nil:
-			route.Emits = append(route.Emits, rawToEmitDecl(item.Emit))
+		case item.Retention != nil:
+			route.Retention = rawToRetentionDecl(item.Retention)
 		}
 	}
 
@@ -496,12 +496,10 @@ func rawToPluginRef(r *rawPluginRef) *PluginRef {
 // underscore form. Only known inline types are normalized; template names pass
 // through unchanged so "PLUGIN my-template system_prompt {}" keeps its name.
 var knownInlinePluginAliases = map[string]string{
-	"semantic-cache":  "response_cache",
 	"response-cache":  "response_cache",
 	"system-prompt":   "system_prompt",
 	"header-mutation": "header_mutation",
 	"router-replay":   "router_replay",
-	"shadow-dispatch": "shadow_dispatch",
 	"fast-response":   "fast_response",
 	"request-params":  "request_params",
 }

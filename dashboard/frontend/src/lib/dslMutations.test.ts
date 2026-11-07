@@ -97,10 +97,10 @@ describe('Builder mutations of blocks whose headers contain DSL strings', () => 
       }),
     ).toContain('ROUTE "coding help" {\n  PRIORITY 2')
     expect(
-      updatePlugin('PLUGIN "team cache" semantic_cache {\n}\n', 'team cache', 'semantic_cache', {
+      updatePlugin('PLUGIN "team cache" response_cache {\n}\n', 'team cache', 'response_cache', {
         enabled: true,
       }),
-    ).toBe('PLUGIN "team cache" semantic_cache {\n  enabled: true\n}\n')
+    ).toBe('PLUGIN "team cache" response_cache {\n  enabled: true\n}\n')
   })
 
   it('quotes route plugin references whose names need quotes', () => {
@@ -110,13 +110,13 @@ describe('Builder mutations of blocks whose headers contain DSL strings', () => 
       plugins: [
         { name: 'team cache' },
         { name: 'team guard', fields: { enabled: true } },
-        { name: 'semantic_cache' },
+        { name: 'response_cache' },
       ],
     })
 
     expect(updated).toContain('  PLUGIN "team cache"\n')
     expect(updated).toContain('  PLUGIN "team guard" {\n    enabled: true\n  }\n')
-    expect(updated).toContain('  PLUGIN semantic_cache\n')
+    expect(updated).toContain('  PLUGIN response_cache\n')
   })
 
   it('writes names that are DSL identifiers without quotes', () => {

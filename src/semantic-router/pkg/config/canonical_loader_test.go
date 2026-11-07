@@ -371,7 +371,7 @@ global:
       max_bytes: 4096
       timeout_sec: 12
   stores:
-    semantic_cache:
+    response_cache:
       enabled: false
   model_catalog:
     embeddings:

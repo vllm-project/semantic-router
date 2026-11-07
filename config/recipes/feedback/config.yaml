@@ -363,8 +363,10 @@ routing:
         - type: response_cache
           configuration:
             enabled: true
-            similarity_threshold: 0.86
             ttl_seconds: 1800
+            semantic:
+              match:
+                recall: {top_k: 3, min_similarity: 0.86}
     - name: feedback_default
       description: Everything else, including requests the decision model cannot answer, stays on the
         low-cost default lane.

@@ -160,7 +160,7 @@ SIGNAL keyword factual { keywords: ["verify"] }
 ROUTE factual_route {
   WHEN keyword("factual")
   MODEL model
-  PLUGIN semantic_cache { enabled: true, similarity_threshold: 0.9, ttl_seconds: 900 }
+  PLUGIN response_cache { enabled: true, ttl_seconds: 900, semantic: { match: { recall: { top_k: 3, min_similarity: 0.9 } } } }
   PLUGIN response_guard {
     rules: [{ when: { type: "keyword", name: "factual" }, action: "annotate", details: true }]
     on_unknown: "none"
@@ -174,7 +174,7 @@ ROUTE factual_route {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"ttl_seconds: 900", `on_unknown: "none"`, "details: true"} {
+	for _, expected := range []string{"ttl_seconds: 900", "min_similarity: 0.9", `on_unknown: "none"`, "details: true"} {
 		if !strings.Contains(text, expected) {
 			t.Fatalf("decompiled DSL is missing %q:\n%s", expected, text)
 		}

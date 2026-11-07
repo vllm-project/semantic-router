@@ -19,20 +19,20 @@ function field(record: Partial<InsightsRecord>, label = 'Guardrails') {
 }
 
 describe('recorded plugin evidence', () => {
-  it('shows response detections independently of request plugin flags', () => {
+  it('shows detections independently of plugin flags', () => {
     const html = field({
-      response_jailbreak_detected: true,
-      response_jailbreak_type: 'unsafe',
-      response_jailbreak_score_available: true,
-      response_jailbreak_confidence: 0,
+      jailbreak_detected: true,
+      jailbreak_type: 'unsafe',
+      jailbreak_score_available: true,
+      jailbreak_confidence: 0,
     })
-    expect(html).toContain('Response jailbreak: unsafe')
+    expect(html).toContain('Request jailbreak: unsafe')
     expect(html).toContain('0.0%')
     expect(html).not.toMatch(/Clean|Disabled/)
   })
 
   it('does not invent a score for unmarked historical detections', () => {
-    const html = field({ response_jailbreak_detected: true, response_jailbreak_confidence: 1 })
+    const html = field({ jailbreak_detected: true, jailbreak_confidence: 1 })
     expect(html).toContain('Score unavailable')
     expect(html).not.toContain('100.0%')
   })

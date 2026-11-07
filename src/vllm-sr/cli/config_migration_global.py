@@ -34,11 +34,13 @@ _DIRECT_SERVICE_KEYS = {
     "authz",
     "ratelimit",
 }
-_DIRECT_STORE_KEYS = {
-    "semantic_cache",
-    "response_cache",
-    "memory",
-    "vector_store",
+# The flat runtime blocks of the stores, by the store each is written as; the
+# flat semantic_cache block is the response_cache store.
+_STORE_KEYS = {
+    "semantic_cache": "response_cache",
+    "response_cache": "response_cache",
+    "memory": "memory",
+    "vector_store": "vector_store",
 }
 _DIRECT_INTEGRATION_KEYS = {"tools", "looper"}
 
@@ -167,8 +169,8 @@ def _place_runtime_block(
     if key in _DIRECT_SERVICE_KEYS:
         services.setdefault(key, deepcopy(value))
         return True
-    if key in _DIRECT_STORE_KEYS:
-        stores.setdefault(key, deepcopy(value))
+    if key in _STORE_KEYS:
+        stores.setdefault(_STORE_KEYS[key], deepcopy(value))
         return True
     if key in _DIRECT_INTEGRATION_KEYS:
         integrations.setdefault(key, deepcopy(value))

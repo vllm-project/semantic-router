@@ -24,7 +24,7 @@ const (
 
 // Fetch a bounded set so a rejected polarity candidate does not hide a valid
 // nearby response. This does not widen the caller's similarity threshold.
-const qdrantSemanticCandidateLimit = uint64(5)
+const qdrantSemanticCandidateLimit = 5
 
 type QdrantCache struct {
 	embeddingProvider   embedding.Provider
@@ -368,12 +368,18 @@ func (c *QdrantCache) FindSimilarWithThreshold(model, query string, threshold fl
 	return result.ResponseBody, result.Found, err
 }
 
-// LookupSimilarWithThreshold returns response data and similarity atomically.
+// LookupSimilarWithThreshold returns the most similar entry within threshold.
 func (c *QdrantCache) LookupSimilarWithThreshold(ctx context.Context, model, query string, threshold float32) (LookupResult, error) {
+	return bestSimilar(c.LookupSimilar(ctx, model, query, SimilarityBounds{MinSimilarity: threshold, TopK: 1}))
+}
+
+// LookupSimilar returns the entries most similar to query, with their
+// responses, from one query.
+func (c *QdrantCache) LookupSimilar(ctx context.Context, model, query string, bounds SimilarityBounds) (SimilarEntries, error) {
 	start := time.Now()
 
 	if !c.enabled {
-		return LookupResult{}, nil
+		return SimilarEntries{}, nil
 	}
 	if ctx == nil {
 		ctx = context.Background()
@@ -382,8 +388,9 @@ func (c *QdrantCache) LookupSimilarWithThreshold(ctx context.Context, model, que
 	emb, err := c.getEmbedding(ctx, query)
 	if err != nil {
 		metrics.RecordCacheOperation("qdrant", "find_similar", "error", time.Since(start).Seconds())
-		return LookupResult{}, fmt.Errorf("failed to generate embedding: %w", err)
+		return SimilarEntries{}, fmt.Errorf("failed to generate embedding: %w", err)
 	}
+	threshold := bounds.MinSimilarity
 
 	now := time.Now().Unix()
 	filter := &qdrant.Filter{
@@ -410,7 +417,7 @@ func (c *QdrantCache) LookupSimilarWithThreshold(ctx context.Context, model, que
 	queryPoints := &qdrant.QueryPoints{
 		CollectionName: c.collectionName,
 		Query:          qdrant.NewQueryDense(emb),
-		Limit:          qdrant.PtrOf(qdrantSemanticCandidateLimit),
+		Limit:          qdrant.PtrOf(uint64(bounds.fetch(qdrantSemanticCandidateLimit))), //nolint:gosec // fetch is at least the positive candidate limit
 		ScoreThreshold: &threshold,
 		WithPayload:    qdrant.NewWithPayload(true),
 		Filter:         filter,
@@ -425,53 +432,49 @@ func (c *QdrantCache) LookupSimilarWithThreshold(ctx context.Context, model, que
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("qdrant", "find_similar", "error", time.Since(start).Seconds())
 		if contextErr := contextErrorOnFailure(ctx, err); contextErr != nil {
-			return LookupResult{}, contextErr
+			return SimilarEntries{}, contextErr
 		}
-		return LookupResult{}, nil
+		return SimilarEntries{}, nil
 	}
 
 	if len(scored) == 0 {
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("qdrant", "find_similar", "miss", time.Since(start).Seconds())
-		return LookupResult{}, nil
+		return SimilarEntries{}, nil
 	}
 
 	var queryBuffer [64]string
 	queryTokens := tokenizeForPolarity(query, queryBuffer[:0])
-	bestSimilarity := float32(0)
-	haveScore := false
-	var selected *qdrant.ScoredPoint
+	ranked := similarHits{bounds: bounds}
 	for _, candidate := range scored {
 		if candidate == nil || math.IsNaN(float64(candidate.Score)) || math.IsInf(float64(candidate.Score), 0) {
 			continue
 		}
-		if !haveScore || candidate.Score > bestSimilarity {
-			bestSimilarity, haveScore = candidate.Score, true
-		}
-		if candidate.Score < threshold || !semanticCandidateMatchesPolarity(queryTokens, candidate.Payload["query"].GetStringValue()) {
+		ranked.saw(candidate.Score)
+		cachedQuery := candidate.Payload["query"].GetStringValue()
+		if candidate.Score < threshold || !semanticCandidateMatchesPolarity(queryTokens, cachedQuery) {
 			continue
 		}
 		responseBody := candidate.Payload["response_body"].GetStringValue()
 		if responseBody == "" || responseBody == pendingResponseMarker {
 			continue
 		}
-		if selected == nil || candidate.Score > selected.Score {
-			selected = candidate
-		}
+		storedAt, expiresAt := parseQdrantPayloadTiming(candidate.Payload)
+		result := lookupResultFromTimestamps([]byte(responseBody), candidate.Score, storedAt, expiresAt)
+		result.Query = cachedQuery
+		result.NegationGuard = negationGuardOutcomeFor(queryTokens, cachedQuery)
+		ranked.add(result)
 	}
-	if selected != nil {
-		responseBody := selected.Payload["response_body"].GetStringValue()
+	entries := ranked.entries()
+	if len(entries.Hits) > 0 {
 		atomic.AddInt64(&c.hitCount, 1)
-		logging.Debugf("QdrantCache: CACHE HIT similarity=%.4f threshold=%.4f response_size=%d", selected.Score, threshold, len(responseBody))
+		logging.Debugf("QdrantCache: CACHE HIT %d entries, best similarity=%.4f threshold=%.4f", len(entries.Hits), entries.Hits[0].Similarity, threshold)
 		metrics.RecordCacheOperation("qdrant", "find_similar", "hit", time.Since(start).Seconds())
-		storedAt, expiresAt := parseQdrantPayloadTiming(selected.Payload)
-		result := lookupResultFromTimestamps([]byte(responseBody), selected.Score, storedAt, expiresAt)
-		result.NegationGuard = negationGuardOutcomeFor(queryTokens, selected.Payload["query"].GetStringValue())
-		return result, nil
+		return entries, nil
 	}
 	atomic.AddInt64(&c.missCount, 1)
 	metrics.RecordCacheOperation("qdrant", "find_similar", "miss", time.Since(start).Seconds())
-	return LookupResult{Similarity: bestSimilarity}, nil
+	return entries, nil
 }
 
 func (c *QdrantCache) GetStats() CacheStats {

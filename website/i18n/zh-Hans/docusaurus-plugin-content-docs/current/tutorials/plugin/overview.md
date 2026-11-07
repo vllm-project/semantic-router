@@ -59,8 +59,7 @@ routing:
 | `tools` | 允许、阻止或移除工具和工具历史；由决策模型过滤或添加请求所需的工具 | `select` 需要决策模型；`add` 需要工具目录 | [工具](./tools) |
 | `response_cache` | 复用兼容的先前响应 | `global.stores.response_cache` | [响应缓存](./response-cache) |
 | `context` | 检索文档和记忆，在预算内压缩请求，并在响应后写入记忆 | RAG 后端、`global.stores.memory`、相关性判断所用的 decision model | [Context](./context) |
-| `router_replay` | 覆盖单条路由的回放采集 | `global.services.router_replay` | [路由回放](./router-replay) |
-| `shadow_dispatch` | 在采样流量上观察次要模型，且不触碰线上响应 | 用于结果采集的回放记录（`router_replay`） | [Shadow Dispatch](./shadow-dispatch) |
+| `router_replay` | 覆盖单条路由的回放采集，并把抽样副本影子发送到候选模型 | `global.services.router_replay` | [路由回放](./router-replay) |
 | `response_guard` | 按检查回答所用的信号拦截或标注回答 | 其规则读取的响应阶段信号 | [响应守卫](./response-guard) |
 
 [内容安全](./content-safety) 打包了三个受支持插件，而不是额外的插件类型。

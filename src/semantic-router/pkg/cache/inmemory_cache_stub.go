@@ -84,10 +84,12 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 
 // LookupSimilarWithThreshold returns a request-scoped miss in stub builds.
 func (c *InMemoryCache) LookupSimilarWithThreshold(_ context.Context, model string, query string, threshold float32) (LookupResult, error) {
-	if !c.enabled {
-		return LookupResult{}, nil
-	}
 	return LookupResult{}, nil
+}
+
+// LookupSimilar returns a request-scoped miss in stub builds.
+func (c *InMemoryCache) LookupSimilar(_ context.Context, model string, query string, bounds SimilarityBounds) (SimilarEntries, error) {
+	return SimilarEntries{}, nil
 }
 
 // Close releases all resources

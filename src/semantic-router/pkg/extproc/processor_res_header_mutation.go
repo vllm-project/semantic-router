@@ -343,16 +343,16 @@ func buildResponseHeaderMutation(
 	return builder.mutation()
 }
 
-// addRetentionDirectiveHeaders emits the matched decision's EMIT retention
-// directive to the response as x-vsr-retention-* headers so operators can
-// observe the router's retention intent at the wire (issue #2009). Per the v0.4
-// contract (#2200) these are demoted to the x-vsr-debug surface: the directive's
-// runtime effects are applied internally, so the headers are observability only.
-// Only fields the directive explicitly set are emitted, mirroring the tri-state
-// semantics of config.RetentionDirective; an unset field is omitted rather than
-// sent as a default.
+// addRetentionDirectiveHeaders emits the matched decision's retention to the
+// response as x-vsr-retention-* headers so operators can observe the router's
+// retention intent at the wire (issue #2009). Per the v0.4 contract (#2200)
+// these are demoted to the x-vsr-debug surface: the retention's runtime effects
+// are applied internally, so the headers are observability only. Only fields
+// the decision explicitly set are emitted, mirroring the tri-state semantics
+// of config.DecisionRetention; an unset field is omitted rather than sent as a
+// default.
 func addRetentionDirectiveHeaders(builder *responseHeaderMutationBuilder, ctx *RequestContext) {
-	r := ctx.EmittedRetention
+	r := ctx.Retention
 	if r == nil {
 		return
 	}

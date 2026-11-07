@@ -44,13 +44,13 @@ func (s *spyCache) AddPendingRequest(_ string, _ string, query string, _ []byte,
 	return nil
 }
 
-func (s *spyCache) LookupSimilarWithThreshold(_ context.Context, _ string, query string, _ float32) (cache.LookupResult, error) {
+func (s *spyCache) LookupSimilar(_ context.Context, _ string, query string, _ cache.SimilarityBounds) (cache.SimilarEntries, error) {
 	s.findCalled = true
 	s.findQuery = query
 	if s.shouldHit {
-		return cache.LookupResult{ResponseBody: s.hitResponse, Found: true}, nil
+		return similarEntries(cache.LookupResult{ResponseBody: s.hitResponse, Found: true}, query), nil
 	}
-	return cache.LookupResult{}, nil
+	return cache.SimilarEntries{}, nil
 }
 
 // --- Core cache bypass tests: prove decisionWillPersonalize works ---

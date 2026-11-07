@@ -372,11 +372,6 @@ type RequestContext struct {
 	// trusted-facts gate and its selection) recorded before Replay created
 	// its record; startRouterReplay appends them.
 	pendingToolsOutcomes []routerreplay.Outcome
-
-	// ShadowDispatchPluginConfig is the per-decision shadow_dispatch plugin
-	// configuration, or nil when the selected decision declares none.
-	ShadowDispatchPluginConfig *config.ShadowDispatchPluginConfig
-
 	// Looper context
 	LooperRequest   bool                  // True only for a request-graph hop: in process, or token-authenticated
 	Hop             *routing.Hop          // The routing context of a hop served in process
@@ -466,11 +461,11 @@ type RequestContext struct {
 	// Protocol codecs never read or mutate admission state.
 	RateLimitCtx *ratelimit.Context
 
-	// EmittedRetention is a deep-clone snapshot of the retention directive
-	// emitted by the matched Decision. The clone owns its own pointer fields
-	// so that any later mutation does not poison the read-only config tree.
-	// nil means the matched decision had no EMIT retention block.
-	EmittedRetention *config.RetentionDirective
+	// Retention is a deep-clone snapshot of the matched Decision's retention
+	// attribute. The clone owns its own pointer fields so that any later
+	// mutation does not poison the read-only config tree. nil means the
+	// matched decision declares no retention.
+	Retention *config.DecisionRetention
 }
 
 // embeddingContext returns the request-scoped context for outbound embedding

@@ -70,9 +70,24 @@ plugins:
 
 启用请求控制时，配置的请求头接受已授权指令。`max-age` 限制读取新鲜度，`ttl` 限制写入寿命；调用方 TTL 值会被限制到 `max_ttl_seconds`。
 
+### 语义复用 {#semantic-reuse}
+
+语义层通过 `semantic.match` 中的 [match 块](./overview#match-block) 查找请求可以复用的缓存请求。不写时使用响应缓存的默认值，即只做召回：
+
+```yaml
+semantic:
+  match:
+    recall: {method: embedding, top_k: 3, min_similarity: 0.8}
+    judge:  {preset: same_request, min_score: 0.9}   # 可选
+```
+
+- `recall` 向缓存存储召回与请求最相似的缓存请求，最多 `top_k` 个，相似度（余弦）不低于 `min_similarity`。只有召回时，复用最相似的一个。
+- `judge`（可选）在一次调用中向决策模型询问 `same_request` 问题（请求与每个召回的请求），复用得分不低于 `min_score` 的最佳一个，从而拒绝嵌入相近但问的是另一件事（例如相反问题）的缓存请求。judge 失败时，`on_error: skip`（默认）复用召回结果，`on_error: fail` 不复用。
+- 未匹配任何 decision 的请求按默认 `top_k` 和存储的 `similarity_threshold` 召回。
+
 ## 迁移 {#migration}
 
-`semantic-cache`、`semantic_cache` 和 `response-cache` 作为已弃用别名被接受，并规范化为 `response_cache`。同样，`global.stores.semantic_cache` 会被读取为 `global.stores.response_cache` 的已弃用别名。不要在同一文档中同时配置两种拼写。导出、控制面板保存和 DSL 反编译始终发出规范名称。
+插件类型为 `response_cache`，存储为 `global.stores.response_cache`。仍写 `semantic-cache`、`semantic_cache`、`response-cache` 插件类型、`global.stores.semantic_cache`、扁平的 `similarity_threshold` 或 `semantic.similarity_threshold`、`allow_request_controls` 和 `control_header` 的配置会加载失败，并给出指明字段的一行错误；`vllm-sr config migrate` 把阈值写为 `semantic.match.recall.min_similarity`，把请求控制字段写入 `request_controls`。
 
 来自模型运行时的嵌入（包括 Vela Embedding）更换模型、分词器、向量表示大小或推理设置后，会使用独立的缓存空间。租户命名空间和显式缓存版本保持不变；旧条目按原有过期时间保留，也可显式清理。升级模型后的首次请求会缓存未命中，使用相同向量表示重启则可复用兼容缓存。语义缓存需要本地分词器窗口，因此 Router 会拒绝为其使用[远程嵌入端点](../../model-runtime/guides/embeddings#use-an-external-embedding-service)。
 

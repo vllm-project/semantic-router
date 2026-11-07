@@ -69,10 +69,10 @@ routing:
             enabled: false
             system_prompt: You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice.
             mode: replace
-        - type: semantic-cache
+        - type: response_cache
           configuration:
             enabled: false
-            similarity_threshold: 0.92
+            semantic: {match: {recall: {top_k: 3, min_similarity: 0.92}}}
     - name: biology
       description: Route biology queries
       priority: 10
@@ -141,10 +141,10 @@ routing:
             enabled: false
             system_prompt: You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics.
             mode: replace
-        - type: semantic-cache
+        - type: response_cache
           configuration:
             enabled: false
-            similarity_threshold: 0.75
+            semantic: {match: {recall: {top_k: 3, min_similarity: 0.75}}}
     - name: health
       description: Route health and medical queries
       priority: 10
@@ -162,10 +162,10 @@ routing:
             enabled: false
             system_prompt: You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies.
             mode: replace
-        - type: semantic-cache
+        - type: response_cache
           configuration:
             enabled: false
-            similarity_threshold: 0.95
+            semantic: {match: {recall: {top_k: 3, min_similarity: 0.95}}}
     - name: economics
       description: Route economics queries
       priority: 10
@@ -338,7 +338,7 @@ global:
           service_version: v0.1.0
           deployment_environment: development
   stores:
-    semantic_cache:
+    response_cache:
       enabled: false
       backend_type: memory
       similarity_threshold: 0.8

@@ -71,7 +71,7 @@ config:
           - type: response_cache
             configuration:
               enabled: true
-              similarity_threshold: 0.8
+              semantic: {match: {recall: {top_k: 3, min_similarity: 0.8}}}
       - name: biology_decision
         description: Biology and life sciences questions
         priority: 10
@@ -142,7 +142,7 @@ config:
           - type: response_cache
             configuration:
               enabled: true
-              similarity_threshold: 0.8
+              semantic: {match: {recall: {top_k: 3, min_similarity: 0.8}}}
       - name: economics_decision
         description: Economics and financial topics
         priority: 10
@@ -285,7 +285,7 @@ config:
           - type: response_cache
             configuration:
               enabled: true
-              similarity_threshold: 0.75
+              semantic: {match: {recall: {top_k: 3, min_similarity: 0.75}}}
     signals:
       keywords:
         - name: thinking

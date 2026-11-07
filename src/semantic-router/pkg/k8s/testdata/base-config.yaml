@@ -38,7 +38,7 @@ global:
           service_version: v0.1.0
           deployment_environment: development
   stores:
-    semantic_cache:
+    response_cache:
       enabled: true
       backend_type: memory
       similarity_threshold: 0.8

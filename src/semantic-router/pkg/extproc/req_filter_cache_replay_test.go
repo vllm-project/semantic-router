@@ -20,11 +20,11 @@ type replayIdentityCache struct {
 	partition string
 }
 
-func (c *replayIdentityCache) LookupSimilarWithThreshold(
-	_ context.Context, partition, _ string, _ float32,
-) (cache.LookupResult, error) {
+func (c *replayIdentityCache) LookupSimilar(
+	_ context.Context, partition, query string, _ cache.SimilarityBounds,
+) (cache.SimilarEntries, error) {
 	c.partition = partition
-	return cache.LookupResult{Found: true, ResponseBody: c.exactResponse, Similarity: 1}, nil
+	return similarEntries(cache.LookupResult{Found: true, ResponseBody: c.exactResponse, Similarity: 1}, query), nil
 }
 
 func (c *replayIdentityCache) FindExact(

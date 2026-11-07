@@ -13,7 +13,6 @@ from cli.models import (
     SystemPromptPluginConfig,
     HeaderMutationPluginConfig,
     RouterReplayPluginConfig,
-    ShadowDispatchPluginConfig,
     ContextPluginConfig,
 )
 from cli.terminal import (
@@ -276,7 +275,6 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
         PluginType.SYSTEM_PROMPT.value: SystemPromptPluginConfig,
         PluginType.HEADER_MUTATION.value: HeaderMutationPluginConfig,
         PluginType.ROUTER_REPLAY.value: RouterReplayPluginConfig,
-        PluginType.SHADOW_DISPATCH.value: ShadowDispatchPluginConfig,
         PluginType.CONTEXT.value: ContextPluginConfig,
         PluginType.TOOLS.value: ToolsPluginConfig,
         PluginType.PROMPT_CACHE.value: PromptCachePluginConfig,

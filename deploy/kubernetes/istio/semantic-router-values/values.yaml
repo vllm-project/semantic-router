@@ -77,7 +77,7 @@ config:
           - type: response_cache
             configuration:
               enabled: false
-              similarity_threshold: 0.92
+              semantic: {match: {recall: {top_k: 3, min_similarity: 0.92}}}
       - name: biology
         description: Route biology queries
         priority: 10
@@ -149,7 +149,7 @@ config:
           - type: response_cache
             configuration:
               enabled: false
-              similarity_threshold: 0.75
+              semantic: {match: {recall: {top_k: 3, min_similarity: 0.75}}}
       - name: health
         description: Route health and medical queries
         priority: 10
@@ -170,7 +170,7 @@ config:
           - type: response_cache
             configuration:
               enabled: false
-              similarity_threshold: 0.95
+              semantic: {match: {recall: {top_k: 3, min_similarity: 0.95}}}
       - name: economics
         description: Route economics queries
         priority: 10

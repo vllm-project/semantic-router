@@ -18,6 +18,9 @@ var RemovedPluginTypes = map[string]string{
 	"rag":                 "a rag source of the decision's context plugin",
 	"memory":              "a memory source of the decision's context plugin",
 	"context_compression": "the compress block and budget of the decision's context plugin",
+	"shadow_dispatch":     "a shadow block in the decision's router_replay plugin",
+	"semantic-cache":      DecisionPluginResponseCache,
+	"semantic_cache":      DecisionPluginResponseCache,
 }
 
 // pluginForms are the plugin forms that ran their own detectors or read their

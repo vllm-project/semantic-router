@@ -13,7 +13,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("retention-directive", pkgtestcases.TestCase{
-		Description: "Verify EMIT retention directives surface as x-vsr-retention-* response headers (issue #2009)",
+		Description: "Verify a decision's retention surfaces as x-vsr-retention-* response headers (issue #2009)",
 		Tags:        []string{"kubernetes", "routing", "retention", "headers"},
 		Fn:          testRetentionDirective,
 	})
@@ -21,15 +21,15 @@ func init() {
 
 // retentionProbeKeyword is the sentinel token wired into the kubernetes
 // profile's retention_probe_decision (see e2e/profiles/ai-gateway/values.yaml).
-// A prompt containing it deterministically routes to that decision, which emits
+// A prompt containing it deterministically routes to that decision, which declares
 //
-//	retention { ttl_turns: 0, keep_current_model: true, prefer_prefix_retention: true }
+//	retention: {ttl_turns: 0, keep_current_model: true, prefer_prefix_retention: true}
 //
 // so the router must mirror those fields onto the response as x-vsr-retention-*
 // headers.
 const retentionProbeKeyword = "__RETENTION_PROBE__"
 
-// testRetentionDirective asserts the response-header half of the EMIT retention
+// testRetentionDirective asserts the response-header half of the retention
 // contract end-to-end: every explicitly-set field is emitted, an explicit
 // ttl_turns: 0 is preserved (tri-state regression guard), and an unset field
 // (drop) is omitted.

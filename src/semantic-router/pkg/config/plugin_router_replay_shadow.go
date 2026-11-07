@@ -49,34 +49,34 @@ func CredentialCarrierHeaders() []string {
 }
 
 const (
-	defaultShadowDispatchSampleRate       = 1.0
-	defaultShadowDispatchMaxConcurrency   = 2
-	defaultShadowDispatchMaxQueueDepth    = 8
-	defaultShadowDispatchTimeoutSeconds   = 30
-	defaultShadowDispatchMaxResponseBytes = 1 << 20
-	defaultShadowDispatchMaxCaptureBytes  = 4096
-	// maxShadowDispatchRetries keeps the total resource use of one shadow
+	defaultShadowSampleRate       = 1.0
+	defaultShadowMaxConcurrency   = 2
+	defaultShadowMaxQueueDepth    = 8
+	defaultShadowTimeoutSeconds   = 30
+	defaultShadowMaxResponseBytes = 1 << 20
+	defaultShadowMaxCaptureBytes  = 4096
+	// maxShadowRetries keeps the total resource use of one shadow
 	// observation bounded even when an operator asks for retries.
-	maxShadowDispatchRetries = 3
+	maxShadowRetries = 3
 )
 
-// DefaultShadowDispatchPluginConfig returns the bounds applied when a
-// shadow_dispatch plugin omits a field. Enabled and Model have no default:
-// an operator must opt in and name the shadow model explicitly.
-func DefaultShadowDispatchPluginConfig() ShadowDispatchPluginConfig {
-	return ShadowDispatchPluginConfig{
-		MaxConcurrency:   defaultShadowDispatchMaxConcurrency,
-		MaxQueueDepth:    defaultShadowDispatchMaxQueueDepth,
-		TimeoutSeconds:   defaultShadowDispatchTimeoutSeconds,
-		MaxResponseBytes: defaultShadowDispatchMaxResponseBytes,
-		MaxCaptureBytes:  defaultShadowDispatchMaxCaptureBytes,
+// DefaultRouterReplayShadowConfig returns the bounds applied when a shadow
+// omits a field. Model has no default: an operator names the shadow model
+// explicitly.
+func DefaultRouterReplayShadowConfig() RouterReplayShadowConfig {
+	return RouterReplayShadowConfig{
+		MaxConcurrency:   defaultShadowMaxConcurrency,
+		MaxQueueDepth:    defaultShadowMaxQueueDepth,
+		TimeoutSeconds:   defaultShadowTimeoutSeconds,
+		MaxResponseBytes: defaultShadowMaxResponseBytes,
+		MaxCaptureBytes:  defaultShadowMaxCaptureBytes,
 	}
 }
 
 // WithDefaults returns a copy with every zero bound replaced by its default.
 // SampleRate is left as declared; use EffectiveSampleRate to read it.
-func (c ShadowDispatchPluginConfig) WithDefaults() ShadowDispatchPluginConfig {
-	defaults := DefaultShadowDispatchPluginConfig()
+func (c RouterReplayShadowConfig) WithDefaults() RouterReplayShadowConfig {
+	defaults := DefaultRouterReplayShadowConfig()
 	if c.MaxConcurrency <= 0 {
 		c.MaxConcurrency = defaults.MaxConcurrency
 	}
@@ -99,7 +99,7 @@ func (c ShadowDispatchPluginConfig) WithDefaults() ShadowDispatchPluginConfig {
 // ForwardsHeader reports whether a decision header mutation with this name is
 // allowlisted for the shadow copy. Matching is case-insensitive. An empty
 // allowlist forwards nothing.
-func (c *ShadowDispatchPluginConfig) ForwardsHeader(name string) bool {
+func (c *RouterReplayShadowConfig) ForwardsHeader(name string) bool {
 	if c == nil {
 		return false
 	}
@@ -113,23 +113,23 @@ func (c *ShadowDispatchPluginConfig) ForwardsHeader(name string) bool {
 }
 
 // EffectiveSampleRate returns the declared sample rate, or 1.0 when omitted.
-func (c *ShadowDispatchPluginConfig) EffectiveSampleRate() float64 {
+func (c *RouterReplayShadowConfig) EffectiveSampleRate() float64 {
 	if c == nil || c.SampleRate == nil {
-		return defaultShadowDispatchSampleRate
+		return defaultShadowSampleRate
 	}
 	return *c.SampleRate
 }
 
-// Validate checks the payload in isolation. Both the config loader and the
+// Validate checks the shadow in isolation. Both the config loader and the
 // Kubernetes converter use it so the two admission paths agree. The
 // referenced model is checked against the model catalog separately because
 // the payload has no access to the router configuration.
-func (c *ShadowDispatchPluginConfig) Validate() error {
+func (c *RouterReplayShadowConfig) Validate() error {
 	if c == nil {
 		return nil
 	}
-	if c.Enabled && strings.TrimSpace(c.Model) == "" {
-		return fmt.Errorf("model is required when enabled")
+	if strings.TrimSpace(c.Model) == "" {
+		return fmt.Errorf("model is required")
 	}
 	if c.SampleRate != nil && (*c.SampleRate < 0 || *c.SampleRate > 1) {
 		return fmt.Errorf("sample_rate must be between 0 and 1")
@@ -149,8 +149,8 @@ func (c *ShadowDispatchPluginConfig) Validate() error {
 			return fmt.Errorf("%s cannot be negative", bound.name)
 		}
 	}
-	if c.MaxRetries > maxShadowDispatchRetries {
-		return fmt.Errorf("max_retries cannot exceed %d", maxShadowDispatchRetries)
+	if c.MaxRetries > maxShadowRetries {
+		return fmt.Errorf("max_retries cannot exceed %d", maxShadowRetries)
 	}
 	return validateShadowForwardHeaders(c.ForwardHeaders)
 }
@@ -174,42 +174,30 @@ func validateShadowForwardHeaders(names []string) error {
 	return nil
 }
 
-func validateShadowDispatchPlugin(
-	decisionName string,
-	index int,
-	pluginType string,
-	typed *ShadowDispatchPluginConfig,
-) error {
-	if err := typed.Validate(); err != nil {
-		return fmt.Errorf("decision %q plugins[%d] (%s): %w", decisionName, index, pluginType, err)
-	}
-	return nil
-}
-
-// validateDecisionShadowDispatchPlugin checks that an enabled shadow model
-// resolves to a configured backend, so a shadow copy can never leave the
-// router's trust boundary toward an unknown endpoint. The shadow model may
-// also appear in modelRefs: the runtime skips a shadow whenever the primary
-// dispatch already selected that same model.
-func validateDecisionShadowDispatchPlugin(cfg *RouterConfig, decision *Decision) error {
+// validateDecisionReplayShadow checks that a decision's shadow model resolves
+// to a configured backend, so a shadow copy can never leave the router's
+// trust boundary toward an unknown endpoint, and that the decision dispatches
+// to one model. The shadow model may also appear in modelRefs: the runtime
+// skips a shadow whenever the primary dispatch already selected that model.
+func validateDecisionReplayShadow(cfg *RouterConfig, decision *Decision) error {
 	if cfg == nil || decision == nil {
 		return nil
 	}
-	shadow := decision.GetShadowDispatchConfig()
-	if shadow == nil || !shadow.Enabled {
+	replay := decision.GetRouterReplayConfig()
+	if replay == nil || replay.Shadow == nil {
 		return nil
 	}
 	if decision.Algorithm != nil && IsExecutorAlgorithmType(decision.Algorithm.Type) {
 		return fmt.Errorf(
-			"decision %q: shadow_dispatch is not supported on executor algorithm %q; the shadow hook runs only on single-model provider dispatch",
+			"decision %q: router_replay shadow is not supported on executor algorithm %q; the shadow runs only on single-model provider dispatch",
 			decision.Name,
 			decision.Algorithm.Type,
 		)
 	}
-	model := strings.TrimSpace(shadow.Model)
+	model := strings.TrimSpace(replay.Shadow.Model)
 	if len(cfg.GetEndpointsForModel(model)) == 0 {
 		return fmt.Errorf(
-			"decision %q: shadow_dispatch model %q has no configured backend",
+			"decision %q: router_replay shadow model %q has no configured backend",
 			decision.Name,
 			model,
 		)

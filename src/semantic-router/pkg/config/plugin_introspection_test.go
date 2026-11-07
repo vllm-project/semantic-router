@@ -69,8 +69,6 @@ func TestDecisionPluginActivationMatchesEveryRuntimeGetter(t *testing.T) {
 					want = decision.GetRequestParamsConfig() != nil
 				case *PromptCachePluginConfig:
 					want = decision.GetPromptCacheConfig().Enabled
-				case *ShadowDispatchPluginConfig:
-					want = decision.GetShadowDispatchConfig().Enabled
 				case *MaskingPluginConfig:
 					want = decision.GetMaskingConfig().Enabled
 				default:

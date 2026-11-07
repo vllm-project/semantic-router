@@ -42,10 +42,7 @@ function extractGlobalPlugins(config: ConfigData): GlobalPluginConfig[] {
   const piiModel =
     config.global?.model_catalog?.modules?.classifier?.pii || config.classifier?.pii_model
   const responseCache =
-    config.global?.stores?.response_cache ||
-    config.global?.stores?.semantic_cache ||
-    config.response_cache ||
-    config.semantic_cache
+    config.global?.stores?.response_cache || config.response_cache || config.semantic_cache
   const promptGuardModel = promptGuard?.model_id || promptGuard?.model_ref
   const piiModelRef = piiModel?.model_id || piiModel?.model_ref
 

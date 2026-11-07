@@ -175,17 +175,15 @@ config:
                   capture_request_body: true
                   capture_response_body: true
                   max_body_bytes: 65536
-              - type: shadow_dispatch
-                configuration:
-                  enabled: true
-                  model: openai/shadow-candidate
-                  sample_rate: 1.0
-                  max_concurrency: 2
-                  max_queue_depth: 8
-                  timeout_seconds: 20
-                  max_response_bytes: 1048576
-                  max_retries: 0
-                  capture_response_body: false
+                  shadow:
+                    model: openai/shadow-candidate
+                    sample_rate: 1.0
+                    max_concurrency: 2
+                    max_queue_depth: 8
+                    timeout_seconds: 20
+                    max_response_bytes: 1048576
+                    max_retries: 0
+                    capture_response_body: false
     - name: shadow-judge
       routing:
         strategy: priority
@@ -207,18 +205,16 @@ config:
                   capture_request_body: true
                   capture_response_body: true
                   max_body_bytes: 65536
-              - type: shadow_dispatch
-                configuration:
-                  enabled: true
-                  model: openai/shadow-candidate
-                  sample_rate: 1.0
-                  max_concurrency: 2
-                  max_queue_depth: 8
-                  timeout_seconds: 20
-                  max_response_bytes: 1048576
-                  max_retries: 0
-                  capture_response_body: true
-                  max_capture_bytes: 4096
+                  shadow:
+                    model: openai/shadow-candidate
+                    sample_rate: 1.0
+                    max_concurrency: 2
+                    max_queue_depth: 8
+                    timeout_seconds: 20
+                    max_response_bytes: 1048576
+                    max_retries: 0
+                    capture_response_body: true
+                    max_capture_bytes: 4096
     - name: shadow-timeout
       routing:
         strategy: priority
@@ -240,17 +236,15 @@ config:
                   capture_request_body: false
                   capture_response_body: true
                   max_body_bytes: 65536
-              - type: shadow_dispatch
-                configuration:
-                  enabled: true
-                  model: openai/shadow-timeout
-                  sample_rate: 1.0
-                  max_concurrency: 1
-                  max_queue_depth: 1
-                  timeout_seconds: 5
-                  max_response_bytes: 1048576
-                  max_retries: 0
-                  capture_response_body: false
+                  shadow:
+                    model: openai/shadow-timeout
+                    sample_rate: 1.0
+                    max_concurrency: 1
+                    max_queue_depth: 1
+                    timeout_seconds: 5
+                    max_response_bytes: 1048576
+                    max_retries: 0
+                    capture_response_body: false
     - name: shadow-malformed
       routing:
         strategy: priority
@@ -272,17 +266,15 @@ config:
                   capture_request_body: false
                   capture_response_body: true
                   max_body_bytes: 65536
-              - type: shadow_dispatch
-                configuration:
-                  enabled: true
-                  model: openai/shadow-malformed
-                  sample_rate: 1.0
-                  max_concurrency: 1
-                  max_queue_depth: 1
-                  timeout_seconds: 5
-                  max_response_bytes: 1048576
-                  max_retries: 0
-                  capture_response_body: false
+                  shadow:
+                    model: openai/shadow-malformed
+                    sample_rate: 1.0
+                    max_concurrency: 1
+                    max_queue_depth: 1
+                    timeout_seconds: 5
+                    max_response_bytes: 1048576
+                    max_retries: 0
+                    capture_response_body: false
     - name: shadow-queue
       routing:
         strategy: priority
@@ -304,17 +296,15 @@ config:
                   capture_request_body: false
                   capture_response_body: true
                   max_body_bytes: 65536
-              - type: shadow_dispatch
-                configuration:
-                  enabled: true
-                  model: openai/shadow-queue
-                  sample_rate: 1.0
-                  max_concurrency: 1
-                  max_queue_depth: 1
-                  timeout_seconds: 30
-                  max_response_bytes: 1048576
-                  max_retries: 0
-                  capture_response_body: false
+                  shadow:
+                    model: openai/shadow-queue
+                    sample_rate: 1.0
+                    max_concurrency: 1
+                    max_queue_depth: 1
+                    timeout_seconds: 30
+                    max_response_bytes: 1048576
+                    max_retries: 0
+                    capture_response_body: false
     - name: shadow-down
       routing:
         strategy: priority
@@ -336,17 +326,15 @@ config:
                   capture_request_body: false
                   capture_response_body: true
                   max_body_bytes: 65536
-              - type: shadow_dispatch
-                configuration:
-                  enabled: true
-                  model: openai/shadow-unreachable
-                  sample_rate: 1.0
-                  max_concurrency: 2
-                  max_queue_depth: 8
-                  timeout_seconds: 5
-                  max_response_bytes: 1048576
-                  max_retries: 0
-                  capture_response_body: false
+                  shadow:
+                    model: openai/shadow-unreachable
+                    sample_rate: 1.0
+                    max_concurrency: 2
+                    max_queue_depth: 8
+                    timeout_seconds: 5
+                    max_response_bytes: 1048576
+                    max_retries: 0
+                    capture_response_body: false
   global:
     router:
       strategy: priority

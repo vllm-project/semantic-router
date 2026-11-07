@@ -1,12 +1,14 @@
-# Retention Directives
+# Retention
 
 ## Overview
 
-A retention directive adds bounded state-handling instructions to a matched
-decision. It can skip a response-cache write, shorten that write's lifetime,
+A decision's `retention` attribute adds bounded state-handling instructions to
+the decision. It can skip a response-cache write, shorten that write's lifetime,
 keep the current model for a session, or emit a prefix-retention hint.
 
-Retention is an `emits` directive, not a signal, algorithm, or plugin.
+Retention is a decision attribute, not a signal, algorithm, or plugin. It
+replaces the `emits` list, whose only kind was retention; a configuration that
+still writes `emits` fails to load, and `vllm-sr config migrate` rewrites it.
 
 ## Key Advantages
 
@@ -47,10 +49,8 @@ routing:
             name: restricted_pii
       modelRefs:
         - model: private-model
-      emits:
-        - kind: retention
-          retention:
-            drop: true
+      retention:
+        drop: true
 ```
 
 The equivalent DSL is:
@@ -60,7 +60,7 @@ ROUTE sensitive-turn {
   PRIORITY 200
   WHEN pii("restricted_pii")
   MODEL "private-model"
-  EMIT retention {
+  RETENTION {
     drop: true
   }
 }

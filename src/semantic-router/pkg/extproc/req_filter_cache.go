@@ -12,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/match"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
@@ -211,7 +212,9 @@ func responseCacheIdentity(ctx *RequestContext, model string) cache.CacheIdentit
 	}
 }
 
-// performCacheLookup searches for a cached response matching the request query.
+// performCacheLookup serves the semantic tier: the decision's semantic.match
+// recalls the cached requests most similar to this one and, when it writes a
+// judge, keeps those that ask the same thing. The first kept entry is served.
 // Returns the cached response and true on cache hit, or nil and false on miss/error/skip.
 func (r *OpenAIRouter) performCacheLookup(
 	ctx *RequestContext, categoryName, requestModel string, cacheEnabled bool,
@@ -220,12 +223,17 @@ func (r *OpenAIRouter) performCacheLookup(
 	if cacheQuery == "" || !r.cacheBackendEnabled() || !cacheEnabled {
 		return nil, false
 	}
-
-	threshold := r.Config.GetCacheSimilarityThreshold()
-	if ctx.VSRSelectedDecision != nil {
-		threshold = r.Config.GetCacheSimilarityThresholdForDecisionObject(ctx.VSRSelectedDecision)
+	service := r.responseCacheService()
+	if service == nil {
+		return nil, false
 	}
 
+	block := r.Config.ResponseCacheMatch(ctx.VSRSelectedDecision)
+	recall := config.MatchResponseCache.Effective(block).Recall
+	threshold := 0.0
+	if recall != nil && recall.MinSimilarity != nil {
+		threshold = *recall.MinSimilarity
+	}
 	logging.Infof("handleCaching: Performing cache lookup - model=%s, query=%s, threshold=%.2f",
 		requestModel, logging.ContentDescriptor(ctx.RequestQuery), threshold)
 
@@ -241,28 +249,29 @@ func (r *OpenAIRouter) performCacheLookup(
 	if lookupContext == nil {
 		lookupContext = context.Background()
 	}
-	service := r.responseCacheService()
-	if service == nil {
-		return nil, false
-	}
-	maxAge := responseCacheMaxAgeDuration(ctx)
-	lookupResult, cacheErr := service.LookupSemantic(lookupContext, cache.SemanticLookup{
-		Identity:  identity,
-		Threshold: threshold,
-		MaxAge:    maxAge,
-	})
+	index := &responseCacheIndex{service: service, identity: identity, maxAge: responseCacheMaxAgeDuration(ctx)}
+	matched, cacheErr := r.matcher().Match(lookupContext, config.MatchResponseCache, block, match.Input{Request: cacheQuery, Index: index})
+	lookupResult := index.served(matched, cacheErr)
+	service.RecordSemantic(identity, lookupResult, cacheErr, startTime)
 	cachedResponse := lookupResult.ResponseBody
 	found := lookupResult.Found
 	lookupDuration := time.Since(startTime)
 	lookupTime := lookupDuration.Milliseconds()
 
-	logging.Infof("FindSimilarWithThreshold returned: found=%v, error=%v, lookupTime=%dms", found, cacheErr, lookupTime)
+	logging.Infof("response cache semantic match: found=%v, recalled=%d, error=%v, lookupTime=%dms", found, len(index.recalled), cacheErr, lookupTime)
 
 	tracing.SetSpanAttributes(span,
 		attribute.Bool(tracing.AttrCacheHit, found),
 		attribute.Int64(tracing.AttrCacheLookupTimeMs, lookupTime),
 		attribute.String(tracing.AttrDecisionName, categoryName),
-		attribute.Float64("cache.threshold", float64(threshold)))
+		attribute.Float64("cache.threshold", threshold),
+		attribute.Int("cache.recalled", len(index.recalled)))
+	if judge, judged := judgeStage(matched); judged {
+		tracing.SetSpanAttributes(span,
+			attribute.String("cache.judge.preset", judge.Method),
+			attribute.String("cache.judge.outcome", judge.Outcome),
+			attribute.Int("cache.judge.kept", judge.Kept))
+	}
 
 	if cacheErr != nil {
 		logging.Errorf("Error searching cache: %v", cacheErr)

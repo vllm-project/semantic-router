@@ -17,7 +17,8 @@ var errBenchmarkCallLimit = errors.New("the selected route cannot enforce the re
 // Only these transformations are known not to dispatch auxiliary generative
 // calls. Unknown plugins and future algorithms fail closed for cost proof.
 func (r *OpenAIRouter) benchmarkUsageScopeKnown(ctx *RequestContext, allowLooper bool) bool {
-	if r == nil || r.Config == nil || ctx == nil || ctx.SkipProcessing || r.Config.Memory.Enabled || ctx.ShadowDispatchPluginConfig != nil {
+	if r == nil || r.Config == nil || ctx == nil || ctx.SkipProcessing || r.Config.Memory.Enabled ||
+		(ctx.RouterReplayPluginConfig != nil && ctx.RouterReplayPluginConfig.Shadow != nil) {
 		return false
 	}
 	decision := ctx.VSRSelectedDecision
@@ -44,7 +45,14 @@ func (r *OpenAIRouter) benchmarkUsageScopeKnown(ctx *RequestContext, allowLooper
 	}
 	for _, plugin := range decision.Plugins {
 		switch config.NormalizeDecisionPluginType(plugin.Type) {
-		case config.DecisionPluginSystemPrompt, config.DecisionPluginHeaderMutation, config.DecisionPluginRequestParams, config.DecisionPluginRouterReplay, config.DecisionPluginResponseCache:
+		case config.DecisionPluginSystemPrompt, config.DecisionPluginHeaderMutation, config.DecisionPluginRequestParams, config.DecisionPluginRouterReplay:
+		case config.DecisionPluginResponseCache:
+			// A same_request judge asks the decision model about cached requests.
+			plugin := decision.GetResponseCacheConfig()
+			if plugin != nil && plugin.Enabled && plugin.Mode != config.ResponseCacheModeExact &&
+				config.MatchResponseCache.Effective(plugin.SemanticMatch()).Judge != nil {
+				return false
+			}
 		case config.DecisionPluginContext:
 			// Only compression that asks no model keeps the receipt's accounting.
 			plugin := decision.GetContextConfig()

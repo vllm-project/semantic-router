@@ -5,54 +5,18 @@ import (
 	"strings"
 )
 
-// validateSemanticCacheContracts validates the semantic-cache similarity
-// threshold wherever it can be configured: the global semantic_cache block and
-// each decision's semantic-cache plugin.
+// validateGlobalSemanticCacheContracts validates the store's similarity
+// threshold, which bounds recall for requests that match no decision. A
+// decision's response_cache plugin bounds its own recall in semantic.match.
 //
-// The threshold is a cosine similarity, which is bounded by [0.0, 1.0]. A value
-// outside that range is silently accepted today and reaches the runtime
-// unchanged (GetCacheSimilarityThreshold / GetCacheSimilarityThresholdForDecision
-// do not clamp it). A threshold > 1.0 can never be reached by any similarity, so
-// the cache never hits despite enabled: true — caching is silently disabled.
-// This mirrors the bound the RAG plugin already enforces
-// (validateRAGSimilarityThreshold).
-func validateSemanticCacheContracts(cfg *RouterConfig) error {
-	if err := validateGlobalSemanticCacheContracts(cfg); err != nil {
-		return err
-	}
-	return validateDecisionSemanticCacheContracts(cfg)
-}
-
+// The threshold is a cosine similarity, which is bounded by [0.0, 1.0]. A
+// threshold > 1.0 can never be reached by any similarity, so the cache would
+// never hit despite enabled: true.
 func validateGlobalSemanticCacheContracts(cfg *RouterConfig) error {
 	if cfg == nil {
 		return nil
 	}
-	if err := validateCacheThreshold(cfg.SemanticCache.SimilarityThreshold, "global semantic_cache"); err != nil {
-		return err
-	}
-	return nil
-}
-
-func validateDecisionSemanticCacheContracts(cfg *RouterConfig) error {
-	if cfg == nil {
-		return nil
-	}
-	decisions := cfg.Decisions
-	for i := range decisions {
-		decision := &decisions[i]
-		pluginCfg := decision.GetResponseCacheConfig()
-		if pluginCfg == nil {
-			continue
-		}
-		scope := fmt.Sprintf("decision %q response_cache plugin", decision.Name)
-		if err := validateCacheMode(pluginCfg.Mode, scope); err != nil {
-			return err
-		}
-		if err := validateCacheThreshold(pluginCfg.EffectiveSimilarityThreshold(), scope); err != nil {
-			return err
-		}
-	}
-	return nil
+	return validateCacheThreshold(cfg.SemanticCache.SimilarityThreshold, "global.stores.response_cache")
 }
 
 func validateCacheMode(mode string, scope string) error {

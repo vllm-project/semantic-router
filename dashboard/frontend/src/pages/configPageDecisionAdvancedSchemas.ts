@@ -123,7 +123,8 @@ const DECISION_FALLBACK_OVERRIDES: FieldSchema[] = [
     key: 'enabled',
     label: 'Enabled',
     type: 'boolean',
-    description: "Turns cross-model fallback on or off for this decision; unset keeps the recipe's.",
+    description:
+      "Turns cross-model fallback on or off for this decision; unset keeps the recipe's.",
   },
   {
     key: 'max_attempts',
@@ -261,33 +262,23 @@ const DECISION_DECLARATIVE_OVERRIDES: FieldSchema[] = [
     ],
   },
   {
-    key: 'emits',
-    label: 'Emits',
-    type: 'object[]',
-    itemLabel: 'Directive',
-    itemLabelKey: 'kind',
+    key: 'retention',
+    label: 'Retention',
+    type: 'object',
     fields: [
-      { key: 'kind', label: 'Kind', type: 'select', options: ['retention'], required: true },
+      { key: 'drop', label: 'Drop', type: 'boolean' },
+      { key: 'ttl_turns', label: 'TTL Turns', type: 'number', min: 0 },
+      { key: 'keep_current_model', label: 'Keep Current Model', type: 'boolean' },
       {
-        key: 'retention',
-        label: 'Retention',
-        type: 'object',
-        fields: [
-          { key: 'drop', label: 'Drop', type: 'boolean' },
-          { key: 'ttl_turns', label: 'TTL Turns', type: 'number', min: 0 },
-          { key: 'keep_current_model', label: 'Keep Current Model', type: 'boolean' },
-          {
-            key: 'prefer_prefix_retention',
-            label: 'Prefer Prefix Retention',
-            type: 'boolean',
-          },
-        ],
+        key: 'prefer_prefix_retention',
+        label: 'Prefer Prefix Retention',
+        type: 'boolean',
       },
     ],
   },
   { key: 'annotations', label: 'Annotations', type: 'key-value' },
 ]
-const declarativeKeys = new Set(['candidateIterations', 'emits', 'annotations'])
+const declarativeKeys = new Set(['candidateIterations', 'retention', 'annotations'])
 export const DECISION_DECLARATIVE_SCHEMA = mergeRouterFieldSchemas(
   routerConfigFieldsForRef('#/$defs/Decision').filter((field) => declarativeKeys.has(field.key)),
   DECISION_DECLARATIVE_OVERRIDES,

@@ -1,0 +1,24 @@
+# global.stores.semantic_cache is global.stores.response_cache.
+version: v0.3
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+routing:
+  decisions:
+    - name: faq
+      priority: 100
+      rules: {operator: AND, conditions: []}
+      modelRefs: [{model: general}]
+      plugins:
+        - type: response_cache
+          configuration:
+            enabled: true
+            mode: exact
+global:
+  stores:
+    semantic_cache:
+      enabled: true
+      backend_type: memory
+      ttl_seconds: 600

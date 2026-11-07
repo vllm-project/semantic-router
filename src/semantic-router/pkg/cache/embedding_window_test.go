@@ -22,10 +22,10 @@ var _ = Describe("Semantic cache embedding window", func() {
 		})).To(Succeed())
 	}
 	lookup := func(query string) bool {
-		result, err := adapter.LookupSemantic(context.Background(), SemanticLookup{
-			Identity:  CacheIdentity{Partition: CachePartition{RequestModel: "model"}, SemanticQuery: query},
-			Threshold: 0.8,
-		})
+		result, err := semanticHit(adapter.LookupSemantic(context.Background(), SemanticLookup{
+			Identity: CacheIdentity{Partition: CachePartition{RequestModel: "model"}, SemanticQuery: query},
+			Bounds:   atThreshold(0.8),
+		}))
 		Expect(err).NotTo(HaveOccurred())
 		return result.Found
 	}

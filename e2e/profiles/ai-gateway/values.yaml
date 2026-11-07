@@ -66,12 +66,10 @@ config:
           - model: base-model
             lora_name: general-expert
             use_reasoning: false
-        emits:
-          - kind: retention
-            retention:
-              ttl_turns: 0
-              keep_current_model: true
-              prefer_prefix_retention: true
+        retention:
+          ttl_turns: 0
+          keep_current_model: true
+          prefer_prefix_retention: true
       - name: looper_metrics_probe_decision
         description: "Deterministic keyword-gated looper route used by the looper-latency-token-headers E2E to assert x-vsr-looper-latency-ms and x-vsr-looper-*-tokens response headers (issue #2694)."
         priority: 610
@@ -245,7 +243,7 @@ config:
             configuration:
               enabled: true
               scope: global
-              similarity_threshold: 0.8
+              semantic: {match: {recall: {top_k: 3, min_similarity: 0.8}}}
       - &biology_decision
         name: biology_decision
         description: Biology and life sciences questions
@@ -321,7 +319,7 @@ config:
             configuration:
               enabled: true
               scope: global
-              similarity_threshold: 0.8
+              semantic: {match: {recall: {top_k: 3, min_similarity: 0.8}}}
       - &economics_decision
         name: economics_decision
         description: Economics and financial topics
@@ -575,7 +573,7 @@ config:
             configuration:
               enabled: true
               scope: global
-              similarity_threshold: 0.75
+              semantic: {match: {recall: {top_k: 3, min_similarity: 0.75}}}
     signals:
       keywords:
         - name: thinking

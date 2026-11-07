@@ -17,7 +17,7 @@ describe('updateRoute', () => {
   PLUGIN system_prompt {
     system_prompt: "Answer with TIER 9 { details }"
   }
-  EMIT retention {
+  RETENTION {
     ttl_turns: 4 # keep short
   }
 }
@@ -48,7 +48,7 @@ describe('updateRoute', () => {
   FOR candidate IN ["model-b" (weight = 1)] {
     MODEL candidate
   }
-  EMIT retention {
+  RETENTION {
     ttl_turns: 4 # keep short
   }
 }

@@ -69,7 +69,6 @@ class TestPluginTypeValidation:
             PluginType.RESPONSE_GUARD.value,
             PluginType.TOOLS.value,
             PluginType.PROMPT_CACHE.value,
-            PluginType.SHADOW_DISPATCH.value,
         ]
 
         for plugin_type in valid_types:
@@ -80,10 +79,9 @@ class TestPluginTypeValidation:
     @pytest.mark.parametrize(
         "alias", ["semantic-cache", "semantic_cache", "response-cache"]
     )
-    def test_response_cache_aliases_export_canonical(self, alias):
-        with pytest.warns(DeprecationWarning):
-            plugin = PluginConfig(type=alias, configuration={"enabled": True})
-        assert plugin.model_dump()["type"] == "response_cache"
+    def test_response_cache_aliases_are_no_plugin_types(self, alias):
+        with pytest.raises(PydanticValidationError, match="Input should be.*enum"):
+            PluginConfig(type=alias, configuration={"enabled": True})
 
     def test_invalid_plugin_type(self):
         """Test that invalid plugin types are rejected."""
@@ -374,8 +372,8 @@ providers:
         finally:
             os.unlink(temp_path)
 
-    def test_invalid_semantic_cache_config(self):
-        """Test that invalid semantic-cache configuration is caught."""
+    def test_invalid_response_cache_config(self):
+        """Test that invalid response_cache configuration is caught."""
         config_yaml = """
 version: v0.1
 listeners:
@@ -402,10 +400,10 @@ decisions:
     modelRefs:
       - model: "test_model"
     plugins:
-      - type: "semantic-cache"
+      - type: "response_cache"
         configuration:
           enabled: "yes"  # Should be bool
-          similarity_threshold: 1.5  # Should be 0.0-1.0
+          ttl_seconds: -1  # Should be >= 0
 providers:
   models:
     - name: "test_model"
@@ -443,10 +441,10 @@ decisions:
     modelRefs:
       - model: "test_model"
     plugins:
-      - type: "semantic-cache"
+      - type: "response_cache"
         configuration:
           # Missing required 'enabled' field
-          similarity_threshold: 0.8
+          ttl_seconds: 60
 providers:
   models:
     - name: "test_model"

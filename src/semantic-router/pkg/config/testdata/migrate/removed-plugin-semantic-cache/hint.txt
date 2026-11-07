@@ -1,0 +1,1 @@
+routing.decisions[faq].plugins[0]: removed_plugin_type: plugin semantic-cache is removed; run `vllm-sr config migrate` (type: response_cache)

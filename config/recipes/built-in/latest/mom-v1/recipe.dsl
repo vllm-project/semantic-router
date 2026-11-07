@@ -708,7 +708,7 @@ RECIPE vault (description = "Keep private traffic inside the assigned deployment
     PLUGIN response_cache {
       enabled: false
     }
-    EMIT retention {
+    RETENTION {
       drop: true
     }
   }
@@ -737,7 +737,7 @@ RECIPE vault (description = "Keep private traffic inside the assigned deployment
     PLUGIN response_cache {
       enabled: false
     }
-    EMIT retention {
+    RETENTION {
       drop: true
     }
   }
@@ -765,7 +765,7 @@ RECIPE vault (description = "Keep private traffic inside the assigned deployment
     PLUGIN response_cache {
       enabled: false
     }
-    EMIT retention {
+    RETENTION {
       drop: true
     }
   }

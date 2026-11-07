@@ -485,8 +485,8 @@ func (c *ValkeyCache) FindSimilar(model string, query string) ([]byte, bool, err
 }
 
 // buildKNNSearchCmd constructs the FT.SEARCH command for a KNN vector similarity query.
-func (c *ValkeyCache) buildKNNSearchCmd(model string, embeddingBytes []byte) []string {
-	knnQuery := partitionedKNNQuery(model, c.config.Search.TopK, c.config.Index.VectorField.Name)
+func (c *ValkeyCache) buildKNNSearchCmd(model string, embeddingBytes []byte, topK int) []string {
+	knnQuery := partitionedKNNQuery(model, topK, c.config.Index.VectorField.Name)
 
 	cmd := []string{
 		"FT.SEARCH", c.indexName, knnQuery,
@@ -509,12 +509,18 @@ func (c *ValkeyCache) FindSimilarWithThreshold(model string, query string, thres
 	return result.ResponseBody, result.Found, err
 }
 
-// LookupSimilarWithThreshold returns response data and similarity atomically.
+// LookupSimilarWithThreshold returns the most similar entry within threshold.
 func (c *ValkeyCache) LookupSimilarWithThreshold(ctx context.Context, model string, query string, threshold float32) (LookupResult, error) {
+	return bestSimilar(c.LookupSimilar(ctx, model, query, SimilarityBounds{MinSimilarity: threshold, TopK: 1}))
+}
+
+// LookupSimilar returns the entries most similar to query, with their
+// responses, from one search.
+func (c *ValkeyCache) LookupSimilar(ctx context.Context, model string, query string, bounds SimilarityBounds) (SimilarEntries, error) {
 	start := time.Now()
 
 	if !c.enabled {
-		return LookupResult{}, nil
+		return SimilarEntries{}, nil
 	}
 	if ctx == nil {
 		ctx = context.Background()
@@ -523,11 +529,11 @@ func (c *ValkeyCache) LookupSimilarWithThreshold(ctx context.Context, model stri
 	queryEmbedding, err := c.getEmbedding(ctx, query)
 	if err != nil {
 		metrics.RecordCacheOperation("valkey", "find_similar", "error", time.Since(start).Seconds())
-		return LookupResult{}, fmt.Errorf("failed to generate embedding: %w", err)
+		return SimilarEntries{}, fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
 	embeddingBytes := floatsToBytes(queryEmbedding)
-	searchCmd := c.buildKNNSearchCmd(model, embeddingBytes)
+	searchCmd := c.buildKNNSearchCmd(model, embeddingBytes, bounds.fetch(c.config.Search.TopK))
 
 	var searchResult any
 	if c.searchFn != nil {
@@ -536,57 +542,48 @@ func (c *ValkeyCache) LookupSimilarWithThreshold(ctx context.Context, model stri
 		searchResult, err = c.client.CustomCommand(ctx, searchCmd)
 	}
 	if err != nil {
-		logging.Debugf("ValkeyCache.FindSimilarWithThreshold: search failed: %v", err)
+		logging.Debugf("ValkeyCache.LookupSimilar: search failed: %v", err)
 		c.recordCacheMiss("error", time.Since(start))
 		if contextErr := contextErrorOnFailure(ctx, err); contextErr != nil {
-			return LookupResult{}, contextErr
+			return SimilarEntries{}, contextErr
 		}
-		return LookupResult{}, nil
+		return SimilarEntries{}, nil
 	}
 
 	if err := ctxErr(ctx); err != nil {
-		return LookupResult{}, err
+		return SimilarEntries{}, err
 	}
 	var queryBuffer [32]string
 	queryTokens := tokenizeForPolarity(query, queryBuffer[:0])
-	match, similarity := selectValkeyPolarityMatch(searchResult, queryTokens, threshold, c.config.Index.VectorField.MetricType)
-	if match == nil {
-		logging.Debugf("ValkeyCache.FindSimilarWithThreshold: no eligible candidate at similarity %.4f and threshold %.4f",
-			similarity, threshold)
+	entries := selectValkeyPolarityMatches(searchResult, queryTokens, bounds, c.config.Index.VectorField.MetricType)
+	if len(entries.Hits) == 0 {
+		logging.Debugf("ValkeyCache.LookupSimilar: no eligible candidate at similarity %.4f and threshold %.4f",
+			entries.Closest, bounds.MinSimilarity)
 		logging.LogEvent("cache_miss", map[string]interface{}{
 			"backend":         "valkey",
-			"best_similarity": similarity,
-			"threshold":       threshold,
+			"best_similarity": entries.Closest,
+			"threshold":       bounds.MinSimilarity,
 			"model":           model,
 			"index":           c.indexName,
 		})
 		c.recordCacheMiss("miss", time.Since(start))
 		// The rejected candidate's score belongs to this lookup; see the
 		// in-memory backend for the full rationale.
-		return LookupResult{Similarity: similarity}, nil
-	}
-
-	responseBody := extractResponseBody(match)
-	if responseBody == nil {
-		c.recordCacheMiss("error", time.Since(start))
-		return LookupResult{Similarity: similarity}, nil
+		return entries, nil
 	}
 
 	atomic.AddInt64(&c.hitCount, 1)
-	logging.Debugf("ValkeyCache.FindSimilarWithThreshold: cache hit - similarity=%.4f, response_size=%d bytes",
-		similarity, len(responseBody))
+	logging.Debugf("ValkeyCache.LookupSimilar: cache hit - %d entries, best similarity=%.4f",
+		len(entries.Hits), entries.Hits[0].Similarity)
 	logging.LogEvent("cache_hit", map[string]interface{}{
 		"backend":    "valkey",
-		"similarity": similarity,
-		"threshold":  threshold,
+		"similarity": entries.Hits[0].Similarity,
+		"threshold":  bounds.MinSimilarity,
 		"model":      model,
 		"index":      c.indexName,
 	})
 	metrics.RecordCacheOperation("valkey", "find_similar", "hit", time.Since(start).Seconds())
-	storedAt, expiresAt := valkeyTiming(match)
-	result := lookupResultFromTimestamps(responseBody, similarity, storedAt, expiresAt)
-	result.NegationGuard = negationGuardOutcomeFor(queryTokens, match.query)
-	return result, nil
+	return entries, nil
 }
 
 func valkeyTiming(match *searchMatch) (time.Time, time.Time) {

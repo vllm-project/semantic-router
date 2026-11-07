@@ -136,7 +136,7 @@ func (d *shadowDispatcher) connectorFor(job *shadowJob, target *shadowTarget) (*
 	return client, "", nil
 }
 
-func shadowConnectorOptions(cfg config.ShadowDispatchPluginConfig) connector.Options {
+func shadowConnectorOptions(cfg config.RouterReplayShadowConfig) connector.Options {
 	options := connector.Options{
 		AttemptTimeout:   time.Duration(cfg.TimeoutSeconds) * time.Second,
 		MaxRetries:       cfg.MaxRetries,

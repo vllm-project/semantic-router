@@ -52,7 +52,7 @@ func (c *Compiler) compileRoute(r *RouteDecl) config.Decision {
 		}
 	}
 
-	c.compileRouteEmits(r, &decision)
+	c.compileRouteRetention(r, &decision)
 	return decision
 }
 
@@ -68,24 +68,6 @@ func (c *Compiler) compileRouteRules(r *RouteDecl) config.RuleCombination {
 		}
 	}
 	return rules
-}
-
-func (c *Compiler) compileRouteEmits(r *RouteDecl, decision *config.Decision) {
-	seenEmitKinds := make(map[string]bool, len(r.Emits))
-	for _, e := range r.Emits {
-		if e == nil {
-			continue
-		}
-		if seenEmitKinds[e.Kind] {
-			c.addError(e.Pos, "ROUTE %s EMIT: duplicate EMIT kind %q in the same route. Each kind may appear at most once", r.Name, e.Kind)
-			continue
-		}
-		seenEmitKinds[e.Kind] = true
-		if !c.validateEmitForCompile(r, e) {
-			continue
-		}
-		decision.Emits = append(decision.Emits, compileEmitDecl(e))
-	}
 }
 
 func (c *Compiler) appendModelRef(decision *config.Decision, m *ModelRef) {

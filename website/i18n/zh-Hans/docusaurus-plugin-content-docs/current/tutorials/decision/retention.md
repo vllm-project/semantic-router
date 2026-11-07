@@ -6,13 +6,13 @@ translation:
   outdated: false
 ---
 
-# 保留指令
+# 保留
 
 ## 概览
 
-保留指令为匹配的决策添加有界的状态处理说明。它可以跳过响应缓存写入、缩短该写入的存活时间、在会话中保持当前模型，或发出前缀保留提示。
+决策的 `retention` 属性为该决策添加有界的状态处理说明。它可以跳过响应缓存写入、缩短该写入的存活时间、在会话中保持当前模型，或发出前缀保留提示。
 
-保留是 `emits` 指令，不是信号、算法或插件。
+保留是决策属性，不是信号、算法或插件。它取代了只有 retention 一种类型的 `emits` 列表；仍写 `emits` 的配置会加载失败，`vllm-sr config migrate` 会改写它。
 
 ## 主要优势
 
@@ -50,10 +50,8 @@ routing:
             name: restricted_pii
       modelRefs:
         - model: private-model
-      emits:
-        - kind: retention
-          retention:
-            drop: true
+      retention:
+        drop: true
 ```
 
 等价 DSL 是：
@@ -63,7 +61,7 @@ ROUTE sensitive-turn {
   PRIORITY 200
   WHEN pii("restricted_pii")
   MODEL "private-model"
-  EMIT retention {
+  RETENTION {
     drop: true
   }
 }

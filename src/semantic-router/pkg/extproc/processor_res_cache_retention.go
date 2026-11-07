@@ -10,13 +10,13 @@ import (
 
 // retentionDropReason is the canonical skip-reason value used in metrics, log
 // and trace attributes when a cache write is skipped because the matched
-// decision declared `EMIT retention { drop: true }`. Sharing the same key
+// decision declared `retention: {drop: true}`. Sharing the same key
 // (tracing.AttrCacheWriteSkippedReason) with other skip causes lets operators
 // query a single attribute to see why a cache write was skipped.
 const retentionDropReason = "retention.drop"
 
 // ShouldSkipCacheWrite reports whether the cache write must be skipped for
-// the given request context, based solely on the emitted retention directive.
+// the given request context, based solely on the decision's retention.
 // The boolean indicates skip; the string is the canonical reason for
 // metrics/log/trace observability.
 //
@@ -40,8 +40,8 @@ func ShouldSkipCacheWrite(ctx *RequestContext) (bool, string) {
 // writes: response caches, memory extraction, and retained Responses objects.
 // It does not delete existing objects or disable explicit history reads.
 func retentionDropsResponseContent(ctx *RequestContext) bool {
-	return ctx != nil && ctx.EmittedRetention != nil &&
-		ctx.EmittedRetention.Drop != nil && *ctx.EmittedRetention.Drop
+	return ctx != nil && ctx.Retention != nil &&
+		ctx.Retention.Drop != nil && *ctx.Retention.Drop
 }
 
 // retentionDefaultSecondsPerTurn approximates one conversation turn as this many
@@ -49,14 +49,14 @@ func retentionDropsResponseContent(ctx *RequestContext) bool {
 // seconds-based semantic-cache expiry. A configurable knob is follow-up work.
 const retentionDefaultSecondsPerTurn = 60
 
-// retentionTTLOverrideSeconds converts an emitted retention `ttl_turns` into a
+// retentionTTLOverrideSeconds converts a decision's retention `ttl_turns` into a
 // per-entry cache TTL in seconds. Only a positive ttl_turns produces an override
 // (nil and zero fall through); returns (seconds, true) only when one applies.
 func retentionTTLOverrideSeconds(ctx *RequestContext) (int, bool) {
-	if ctx == nil || ctx.EmittedRetention == nil || ctx.EmittedRetention.TTLTurns == nil {
+	if ctx == nil || ctx.Retention == nil || ctx.Retention.TTLTurns == nil {
 		return 0, false
 	}
-	turns := *ctx.EmittedRetention.TTLTurns
+	turns := *ctx.Retention.TTLTurns
 	if turns <= 0 {
 		return 0, false
 	}
@@ -64,7 +64,7 @@ func retentionTTLOverrideSeconds(ctx *RequestContext) (int, bool) {
 }
 
 // applyRetentionTTLOverride returns the cache-write TTL (seconds) to use,
-// preferring an emitted retention `ttl_turns` override over the decision/global
+// preferring the decision's retention `ttl_turns` override over the decision/global
 // default. Callers compute the base TTL (GetCacheTTLSecondsForDecision) first
 // and pass it here. This runs only after the drop gate (ShouldSkipCacheWrite);
 // drop and ttl_turns are mutually exclusive by validation.
@@ -75,8 +75,8 @@ func applyRetentionTTLOverride(base int, ctx *RequestContext) int {
 	return base
 }
 
-// observeRetentionDirective records every declared field of the emitted
-// retention directive to log + trace. It is invoked once per matched decision
+// observeDecisionRetention records every declared field of the decision's
+// retention to log + trace. It is invoked once per matched decision
 // (right after the deep clone in applyDecisionResultToContext). Fields that
 // are nil are not recorded — preserving the tri-state (unset vs explicit zero)
 // semantics of the schema.
@@ -84,11 +84,11 @@ func applyRetentionTTLOverride(base int, ctx *RequestContext) int {
 // This records every declared field for audit (DSL → AST → config → ctx →
 // log/trace) regardless of which fields the runtime consumes, complementing the
 // x-vsr-retention-* response headers so operators can verify wiring end-to-end.
-func observeRetentionDirective(ctx *RequestContext) {
-	if ctx == nil || ctx.EmittedRetention == nil {
+func observeDecisionRetention(ctx *RequestContext) {
+	if ctx == nil || ctx.Retention == nil {
 		return
 	}
-	r := ctx.EmittedRetention
+	r := ctx.Retention
 	span := trace.SpanFromContext(ctx.TraceContext)
 	fields := map[string]interface{}{"request_id": ctx.RequestID}
 	if ctx.VSRSelectedDecisionName != "" {
@@ -138,31 +138,25 @@ func logRetentionSkip(ctx *RequestContext, reason string) {
 	})
 }
 
-// applyEmittedRetention extracts the first `retention` EmitDirective from the
-// matched decision and stores a deep clone on the request context. The clone
-// is required because EmitDirective.Retention holds tri-state pointers; a
-// shallow copy would alias the read-only config tree and any downstream
-// mutation could poison configuration shared by other in-flight requests.
+// applyDecisionRetention stores a deep clone of the matched decision's
+// retention on the request context. The clone is required because the
+// retention holds tri-state pointers; a shallow copy would alias the
+// read-only config tree and any downstream mutation could poison
+// configuration shared by other in-flight requests.
 //
-// Returns the cloned directive (nil if the decision did not emit retention).
-func applyEmittedRetention(decision *config.Decision, ctx *RequestContext) *config.RetentionDirective {
-	if decision == nil || ctx == nil {
+// Returns the clone (nil if the decision declares no retention).
+func applyDecisionRetention(decision *config.Decision, ctx *RequestContext) *config.DecisionRetention {
+	if decision == nil || ctx == nil || decision.Retention == nil {
 		return nil
 	}
-	for _, e := range decision.Emits {
-		if e.Kind != "retention" || e.Retention == nil {
-			continue
-		}
-		clone := &config.RetentionDirective{
-			Drop:                  cloneBoolPtr(e.Retention.Drop),
-			TTLTurns:              cloneIntPtr(e.Retention.TTLTurns),
-			KeepCurrentModel:      cloneBoolPtr(e.Retention.KeepCurrentModel),
-			PreferPrefixRetention: cloneBoolPtr(e.Retention.PreferPrefixRetention),
-		}
-		ctx.EmittedRetention = clone
-		return clone
+	retention := decision.Retention
+	ctx.Retention = &config.DecisionRetention{
+		Drop:                  cloneBoolPtr(retention.Drop),
+		TTLTurns:              cloneIntPtr(retention.TTLTurns),
+		KeepCurrentModel:      cloneBoolPtr(retention.KeepCurrentModel),
+		PreferPrefixRetention: cloneBoolPtr(retention.PreferPrefixRetention),
 	}
-	return nil
+	return ctx.Retention
 }
 
 func cloneBoolPtr(p *bool) *bool {

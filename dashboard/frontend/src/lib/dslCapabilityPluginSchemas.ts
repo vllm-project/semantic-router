@@ -1,5 +1,5 @@
 import { X_VSR_CACHE_CONTROL } from '../generated/vsrHeaders'
-import { contextPluginFields } from './dslContextPluginSchemas'
+import { contextPluginFields, matchField } from './dslContextPluginSchemas'
 import type { FieldSchema } from './dslSchemas'
 
 const promptCacheFields: FieldSchema[] = [
@@ -30,32 +30,6 @@ const additionalCapabilityPluginFields = new Map<string, FieldSchema[]>([
 // structure ratchet live in this table so that function never grows.
 const CAPABILITY_PLUGIN_FIELD_SCHEMAS: Record<string, FieldSchema[]> = {
   context: contextPluginFields,
-  shadow_dispatch: [
-    { key: 'enabled', label: 'Enabled', type: 'boolean' },
-    { key: 'model', label: 'Shadow Model', type: 'string', placeholder: 'candidate-model' },
-    { key: 'sample_rate', label: 'Sample Rate', type: 'number', placeholder: '0.05' },
-    { key: 'max_concurrency', label: 'Max Concurrency', type: 'number', placeholder: '2' },
-    { key: 'max_queue_depth', label: 'Max Queue Depth', type: 'number', placeholder: '8' },
-    { key: 'timeout_seconds', label: 'Timeout Seconds', type: 'number', placeholder: '30' },
-    {
-      key: 'max_response_bytes',
-      label: 'Max Response Bytes',
-      type: 'number',
-      placeholder: '1048576',
-    },
-    { key: 'max_retries', label: 'Max Retries', type: 'number', placeholder: '0' },
-    { key: 'capture_response_body', label: 'Capture Response Body', type: 'boolean' },
-    { key: 'max_capture_bytes', label: 'Max Capture Bytes', type: 'number', placeholder: '4096' },
-    { key: 'tls_skip_verify', label: 'Skip TLS Verification', type: 'boolean' },
-    {
-      key: 'forward_headers',
-      label: 'Forwarded Decision Headers',
-      type: 'string[]',
-      placeholder: 'x-tenant',
-      description:
-        'Decision header mutations the shadow copy may carry; credential headers are never forwarded',
-    },
-  ],
 }
 
 export function resolveCapabilityPluginFieldSchema(pluginType: string): FieldSchema[] | null {
@@ -68,9 +42,6 @@ export function resolveCapabilityPluginFieldSchema(pluginType: string): FieldSch
 export function getCapabilityPluginFieldSchema(pluginType: string): FieldSchema[] | null {
   switch (pluginType) {
     case 'response_cache':
-    case 'response-cache':
-    case 'semantic_cache':
-    case 'semantic-cache':
       return [
         { key: 'enabled', label: 'Enabled', type: 'boolean' },
         {
@@ -85,20 +56,13 @@ export function getCapabilityPluginFieldSchema(pluginType: string): FieldSchema[
           type: 'select',
           options: ['user', 'team', 'tenant', 'global'],
         },
+        { key: 'ttl_seconds', label: 'TTL Seconds', type: 'number', placeholder: '3600' },
         {
           key: 'semantic',
-          label: 'Semantic Lookup',
+          label: 'Semantic Reuse',
           type: 'object',
-          fields: [
-            {
-              key: 'similarity_threshold',
-              label: 'Similarity Threshold',
-              type: 'number',
-              placeholder: '0.95',
-            },
-          ],
+          fields: [matchField(['embedding'], 'same_request')],
         },
-        { key: 'ttl_seconds', label: 'TTL Seconds', type: 'number', placeholder: '3600' },
         {
           key: 'request_controls',
           label: 'Request Controls',

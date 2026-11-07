@@ -51,7 +51,7 @@ func recordResponseHeaderFacts(ctx *RequestContext) {
 	}
 	ctx.RouterReplayID = "replay-1"
 	ctx.RequestCost, ctx.RequestCostCurrency, ctx.RequestCostPriced = 0.000054, "USD", true
-	ctx.EmittedRetention = &config.RetentionDirective{Drop: &drop, TTLTurns: &turns, KeepCurrentModel: &keep, PreferPrefixRetention: &prefer}
+	ctx.Retention = &config.DecisionRetention{Drop: &drop, TTLTurns: &turns, KeepCurrentModel: &keep, PreferPrefixRetention: &prefer}
 	ctx.VSRSelectedCategory = "math"
 	ctx.ModalityClassification = &ModalityClassificationResult{Modality: ModalityAR, Method: "classifier"}
 	ctx.VSRReasoningMode = "on"

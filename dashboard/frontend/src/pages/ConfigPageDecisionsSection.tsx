@@ -278,13 +278,13 @@ export default function ConfigPageDecisionsSection({
           fullWidth: true,
         },
         {
-          label: 'Iterations, Emits & Annotations',
+          label: 'Iterations, Retention & Annotations',
           value: (
             <ConfigPageSchemaFieldsEditor
               schema={DECISION_DECLARATIVE_SCHEMA}
               value={{
                 candidateIterations: decision.candidateIterations || [],
-                emits: decision.emits || [],
+                retention: decision.retention || {},
                 annotations: decision.annotations || {},
               }}
               readOnly
@@ -342,7 +342,7 @@ export default function ConfigPageDecisionsSection({
             fallback: decision.fallback || {},
             declarative: {
               candidateIterations: decision.candidateIterations || [],
-              emits: decision.emits || [],
+              retention: decision.retention || {},
               annotations: decision.annotations || {},
             },
             rules: JSON.parse(JSON.stringify(decision.rules || {})),
@@ -606,9 +606,12 @@ export default function ConfigPageDecisionsSection({
         candidateIterations: Array.isArray(declarative.candidateIterations)
           ? (declarative.candidateIterations as Array<Record<string, unknown>>)
           : undefined,
-        emits: Array.isArray(declarative.emits)
-          ? (declarative.emits as Array<Record<string, unknown>>)
-          : undefined,
+        retention:
+          declarative.retention &&
+          typeof declarative.retention === 'object' &&
+          Object.keys(declarative.retention).length > 0
+            ? (declarative.retention as Record<string, unknown>)
+            : undefined,
         annotations:
           declarative.annotations && typeof declarative.annotations === 'object'
             ? (declarative.annotations as Record<string, unknown>)

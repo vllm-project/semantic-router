@@ -10,11 +10,6 @@ const (
 	ResponseCacheModeSemantic          = "semantic"
 	ResponseCacheModeExact             = "exact"
 	ResponseCacheModeExactThenSemantic = "exact_then_semantic"
-
-	// Deprecated compatibility names.
-	SemanticCacheModeSemantic          = ResponseCacheModeSemantic
-	SemanticCacheModeExact             = ResponseCacheModeExact
-	SemanticCacheModeExactThenSemantic = ResponseCacheModeExactThenSemantic
 )
 
 // DecisionPlugin represents a plugin configuration for a decision.
@@ -27,9 +22,13 @@ type DecisionPlugin struct {
 	Configuration *StructuredPayload `yaml:"configuration,omitempty" json:"configuration,omitempty" jsonschema:"required"`
 }
 
-// ResponseCacheSemanticConfig controls the semantic lookup tier.
+// ResponseCacheSemanticConfig controls the semantic tier: a request reuses
+// the answer of a cached request that asks the same thing.
 type ResponseCacheSemanticConfig struct {
-	SimilarityThreshold *float32 `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"`
+	// Match finds the cached requests a request may reuse: recall bounds
+	// their similarity, and an optional same_request judge confirms them.
+	// Without one the response cache's default recall runs.
+	Match *MatchConfig `json:"match,omitempty" yaml:"match,omitempty"`
 }
 
 // ResponseCacheRequestControlsConfig authorizes bounded request-level cache directives.
@@ -57,42 +56,29 @@ type ResponseCachePluginConfig struct {
 	Enabled         bool                                `json:"enabled" yaml:"enabled"`
 	Mode            string                              `json:"mode,omitempty" yaml:"mode,omitempty"`
 	Scope           string                              `json:"scope,omitempty" yaml:"scope,omitempty"`
+	TTLSeconds      *int                                `json:"ttl_seconds,omitempty" yaml:"ttl_seconds,omitempty"`
 	Semantic        *ResponseCacheSemanticConfig        `json:"semantic,omitempty" yaml:"semantic,omitempty"`
 	RequestControls *ResponseCacheRequestControlsConfig `json:"request_controls,omitempty" yaml:"request_controls,omitempty"`
 	Personalized    *ResponseCachePersonalizedConfig    `json:"personalized,omitempty" yaml:"personalized,omitempty"`
 	Revision        *ResponseCacheRevisionConfig        `json:"revision,omitempty" yaml:"revision,omitempty"`
-	// Deprecated flat compatibility fields. New config should use semantic and
-	// request_controls.
-	AllowRequestControls bool     `json:"allow_request_controls,omitempty" yaml:"allow_request_controls,omitempty"`
-	ControlHeader        string   `json:"control_header,omitempty" yaml:"control_header,omitempty"`
-	SimilarityThreshold  *float32 `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"`
-	TTLSeconds           *int     `json:"ttl_seconds,omitempty" yaml:"ttl_seconds,omitempty"`
 }
 
-// SemanticCachePluginConfig is retained for source compatibility.
-type SemanticCachePluginConfig = ResponseCachePluginConfig
-
-func (c *ResponseCachePluginConfig) EffectiveSimilarityThreshold() *float32 {
-	if c == nil {
+// SemanticMatch is the match block the semantic tier runs as written; nil
+// runs the response cache's default.
+func (c *ResponseCachePluginConfig) SemanticMatch() *MatchConfig {
+	if c == nil || c.Semantic == nil {
 		return nil
 	}
-	if c.Semantic != nil && c.Semantic.SimilarityThreshold != nil {
-		return c.Semantic.SimilarityThreshold
-	}
-	return c.SimilarityThreshold
+	return c.Semantic.Match
 }
 
+// EffectiveRequestControls are the request-level cache directives the plugin
+// allows; none without request_controls.
 func (c *ResponseCachePluginConfig) EffectiveRequestControls() ResponseCacheRequestControlsConfig {
-	if c == nil {
+	if c == nil || c.RequestControls == nil {
 		return ResponseCacheRequestControlsConfig{}
 	}
-	if c.RequestControls != nil {
-		return *c.RequestControls
-	}
-	return ResponseCacheRequestControlsConfig{
-		Enabled: c.AllowRequestControls,
-		Header:  c.ControlHeader,
-	}
+	return *c.RequestControls
 }
 
 // FastResponsePluginConfig represents configuration for fast_response plugin.
@@ -194,20 +180,22 @@ type RouterReplayPluginConfig struct {
 	// oldest steps are dropped and ToolTrace.StepsTruncated is set so callers
 	// can see that a cap was applied. 0 means no limit.
 	MaxToolTraceSteps int `json:"max_tool_trace_steps,omitempty" yaml:"max_tool_trace_steps,omitempty"`
+	// Shadow sends a sampled copy of the decision's requests to a shadow
+	// model, whose outcome the replay record keeps. It runs while the
+	// decision records replays.
+	Shadow *RouterReplayShadowConfig `json:"shadow,omitempty" yaml:"shadow,omitempty"`
 }
 
-// ShadowDispatchPluginConfig represents configuration for the shadow_dispatch
-// plugin. A shadow dispatch sends a bounded, sampled copy of the approved
-// provider-bound request to a secondary configured model after the primary
-// dispatch has been finalized. The primary response never waits on, or
-// changes because of, the shadow call.
-type ShadowDispatchPluginConfig struct {
-	Enabled bool `json:"enabled" yaml:"enabled"`
+// RouterReplayShadowConfig is router_replay's shadow: a bounded, sampled copy
+// of the approved provider-bound request, sent to a secondary configured
+// model after the primary dispatch has been finalized. The primary response
+// never waits on, or changes because of, the shadow call.
+type RouterReplayShadowConfig struct {
 	// Model is the configured logical model that receives the shadow copy.
 	Model string `json:"model" yaml:"model"`
 	// SampleRate is the fraction of eligible requests that are shadowed, in
 	// [0, 1]. nil means every eligible request; 0 disables dispatch while
-	// keeping the plugin declared.
+	// keeping the shadow declared.
 	SampleRate *float64 `json:"sample_rate,omitempty" yaml:"sample_rate,omitempty"`
 	// MaxConcurrency bounds in-flight shadow calls for this decision.
 	MaxConcurrency int `json:"max_concurrency,omitempty" yaml:"max_concurrency,omitempty"`
@@ -271,13 +259,6 @@ func (d *Decision) GetResponseCacheConfig() *ResponseCachePluginConfig {
 	return decodeDecisionPlugin(d, DecisionPluginResponseCache, result)
 }
 
-// GetSemanticCacheConfig is retained for source compatibility.
-//
-// Deprecated: use GetResponseCacheConfig.
-func (d *Decision) GetSemanticCacheConfig() *SemanticCachePluginConfig {
-	return d.GetResponseCacheConfig()
-}
-
 // GetSystemPromptConfig returns the system_prompt plugin configuration.
 func (d *Decision) GetSystemPromptConfig() *SystemPromptPluginConfig {
 	result := &SystemPromptPluginConfig{}
@@ -294,12 +275,6 @@ func (d *Decision) GetHeaderMutationConfig() *HeaderMutationPluginConfig {
 func (d *Decision) GetRouterReplayConfig() *RouterReplayPluginConfig {
 	result := &RouterReplayPluginConfig{}
 	return decodeDecisionPlugin(d, "router_replay", result)
-}
-
-// GetShadowDispatchConfig returns the shadow_dispatch plugin configuration.
-func (d *Decision) GetShadowDispatchConfig() *ShadowDispatchPluginConfig {
-	result := &ShadowDispatchPluginConfig{}
-	return decodeDecisionPlugin(d, DecisionPluginShadowDispatch, result)
 }
 
 // GetFastResponseConfig returns the fast_response plugin configuration.

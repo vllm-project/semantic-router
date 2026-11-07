@@ -227,13 +227,14 @@ def test_native_rejects_ignored_chat_controls(native_document, control):
     assert validate_native_execution(UserConfig.model_validate(native_document))
 
 
-@pytest.mark.parametrize("field", ["candidateIterations", "emits"])
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("candidateIterations", [{"variable": "model"}]), ("retention", {"drop": True})],
+)
 def test_native_rejects_chat_directives_before_pydantic_drops_them(
-    native_document, field
+    native_document, field, value
 ):
-    native_document["recipes"][0]["routing"]["decisions"][0][field] = [
-        {"kind": "retention"}
-    ]
+    native_document["recipes"][0]["routing"]["decisions"][0][field] = value
     with pytest.raises(ValidationError, match="unsupported for native execution"):
         UserConfig.model_validate(native_document)
 

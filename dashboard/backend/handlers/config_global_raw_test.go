@@ -158,7 +158,7 @@ global:
 
 	rawUpdate := `
 stores:
-  semantic_cache:
+  response_cache:
     enabled: true
     backend_type: memory
 router:
@@ -179,7 +179,7 @@ router:
 		t.Fatalf("read updated config: %v", err)
 	}
 	updated := string(updatedData)
-	if !strings.Contains(updated, "semantic_cache:") || !strings.Contains(updated, "clear_route_cache: true") {
+	if !strings.Contains(updated, "response_cache:") || !strings.Contains(updated, "clear_route_cache: true") {
 		t.Fatalf("raw global save did not persist the new block, got:\n%s", updated)
 	}
 }

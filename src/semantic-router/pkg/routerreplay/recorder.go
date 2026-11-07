@@ -534,16 +534,6 @@ func appendGuardrailLogFields(fields map[string]interface{}, r RoutingRecord) {
 			fields["jailbreak_confidence"] = r.JailbreakConfidence
 		}
 	}
-	if r.ResponseJailbreakDetected {
-		fields["response_jailbreak_detected"] = r.ResponseJailbreakDetected
-		fields["response_jailbreak_type"] = r.ResponseJailbreakType
-		fields["response_jailbreak_score_available"] = r.ResponseJailbreakScoreAvailable
-		if r.ResponseJailbreakDecision != nil {
-			fields["response_jailbreak_decision"] = r.ResponseJailbreakDecision
-		} else if r.ResponseJailbreakScoreAvailable {
-			fields["response_jailbreak_confidence"] = r.ResponseJailbreakConfidence
-		}
-	}
 	if r.PIIDetected {
 		fields["pii_detected"] = r.PIIDetected
 		fields["pii_entities"] = r.PIIEntities

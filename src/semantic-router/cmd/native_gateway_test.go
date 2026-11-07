@@ -63,7 +63,7 @@ providers:
           provider: vllm
 global:
   stores:
-    semantic_cache:
+    response_cache:
       enabled: false
 routing:
   modelCards:

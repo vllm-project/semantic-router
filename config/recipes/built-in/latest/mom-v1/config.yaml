@@ -1356,10 +1356,8 @@ recipes:
       - type: response_cache
         configuration:
           enabled: false
-      emits:
-      - kind: retention
-        retention:
-          drop: true
+      retention:
+        drop: true
     - name: sensitive
       description: Use the stronger approved private pool for personal data, content
         risks, and responsible assistance.
@@ -1414,10 +1412,8 @@ recipes:
       - type: response_cache
         configuration:
           enabled: false
-      emits:
-      - kind: retention
-        retention:
-          drop: true
+      retention:
+        drop: true
     - name: private
       description: Serve ordinary private requests from the approved model pool.
       priority: 10
@@ -1459,7 +1455,5 @@ recipes:
       - type: response_cache
         configuration:
           enabled: false
-      emits:
-      - kind: retention
-        retention:
-          drop: true
+      retention:
+        drop: true

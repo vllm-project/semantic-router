@@ -372,21 +372,17 @@ func (c *RouterConfig) IsCacheEnabledForDecisionObject(decision *Decision) bool 
 	return false
 }
 
-// GetCacheSimilarityThresholdForDecision returns the effective cache similarity threshold for a decision
-func (c *RouterConfig) GetCacheSimilarityThresholdForDecision(decisionName string) float32 {
-	return c.GetCacheSimilarityThresholdForDecisionObject(c.GetDecisionByName(decisionName))
-}
-
-// GetCacheSimilarityThreshold resolves the threshold from a scoped decision.
-func (c *RouterConfig) GetCacheSimilarityThresholdForDecisionObject(decision *Decision) float32 {
+// ResponseCacheMatch is the match block a request's semantic lookup runs: its
+// decision's semantic.match, nil for the response cache's default; or, for a
+// request that matched no decision, the default recall bounded by the store's
+// similarity threshold.
+func (c *RouterConfig) ResponseCacheMatch(decision *Decision) *MatchConfig {
 	if decision != nil {
-		config := decision.GetResponseCacheConfig()
-		if config != nil && config.EffectiveSimilarityThreshold() != nil {
-			return *config.EffectiveSimilarityThreshold()
-		}
+		return decision.GetResponseCacheConfig().SemanticMatch()
 	}
-	// Route policy does not cascade the backend's global threshold.
-	return 0.8
+	block := MatchResponseCache.Default()
+	block.Recall.MinSimilarity = matchBound(float64(c.GetCacheSimilarityThreshold()))
+	return &block
 }
 
 // GetCacheTTLSecondsForDecision returns the effective TTL for a decision

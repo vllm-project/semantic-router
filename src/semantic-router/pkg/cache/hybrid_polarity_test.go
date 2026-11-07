@@ -78,7 +78,7 @@ func TestHybridPolarityLookupAndService(t *testing.T) {
 					service := NewResponseCacheService(NewLegacyBackendAdapter(hybrid, HybridCacheType), ResponseCacheServiceOptions{L1MaxEntries: -1})
 					identity := CacheIdentity{Partition: CachePartition{RequestModel: "tenant-a", Protocol: "openai:body"}, SemanticQuery: query}
 					expectedModel = service.ResolveIdentity(identity).SemanticPartitionKey()
-					result, err := service.LookupSemantic(context.Background(), SemanticLookup{Identity: identity, Threshold: 0.8})
+					result, err := semanticHit(service.LookupSemantic(context.Background(), SemanticLookup{Identity: identity, Bounds: atThreshold(0.8)}))
 					require.NoError(t, err)
 					require.Equal(t, tc.wantResponse != "", result.Found)
 					require.Equal(t, tc.wantResponse, string(result.ResponseBody))

@@ -335,13 +335,12 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 func (r *OpenAIRouter) applyDecisionResultToContext(result *decision.DecisionResult, ctx *RequestContext) string {
 	ctx.VSRSelectedDecision = result.Decision
 	ctx.RouterReplayPluginConfig = r.effectiveReplayConfigForRequest(ctx, result.Decision)
-	ctx.ShadowDispatchPluginConfig = result.Decision.GetShadowDispatchConfig()
 
-	// Snapshot the retention directive emitted by this decision (deep clone)
-	// and observe every declared field via log + trace. Both helpers are
-	// no-ops when the decision did not emit a retention block.
-	applyEmittedRetention(result.Decision, ctx)
-	observeRetentionDirective(ctx)
+	// Snapshot the decision's retention attribute (deep clone) and observe
+	// every declared field via log + trace. Both helpers are no-ops when the
+	// decision declares no retention.
+	applyDecisionRetention(result.Decision, ctx)
+	observeDecisionRetention(ctx)
 
 	categoryName := extractDecisionCategory(result.MatchedRules)
 	ctx.VSRSelectedCategory = categoryName

@@ -59,8 +59,7 @@ routing:
 | `response_cache` | Reuse compatible prior responses | `global.stores.response_cache` | [Response Cache](./response-cache) |
 | `prompt_cache` | Insert Anthropic prompt-cache breakpoints on instructions and tools | None | [Prompt Cache](./prompt-cache) |
 | `context` | Retrieve documents and memories, compress the request within a budget, and store memories after the response | A RAG backend, `global.stores.memory`, the decision model for the relevance judge | [Context](./context) |
-| `router_replay` | Override replay capture for one route | `global.services.router_replay` | [Router Replay](./router-replay) |
-| `shadow_dispatch` | Observe a secondary model on sampled traffic without touching the live response | Replay record for outcome capture (`router_replay`) | [Shadow Dispatch](./shadow-dispatch) |
+| `router_replay` | Override replay capture for one route, and shadow a sampled copy to a candidate model | `global.services.router_replay` | [Router Replay](./router-replay) |
 | `response_guard` | Block or annotate an answer on the signals it is checked with | The response-stage signals its rules read | [Response Guard](./response-guard) |
 
 [Content Safety](./content-safety) bundles three supported

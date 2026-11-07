@@ -22,8 +22,8 @@ func (c *closeTrackingCache) AddEntry(context.Context, string, string, string, [
 	return nil
 }
 
-func (c *closeTrackingCache) LookupSimilarWithThreshold(context.Context, string, string, float32) (cache.LookupResult, error) {
-	return cache.LookupResult{}, nil
+func (c *closeTrackingCache) LookupSimilar(context.Context, string, string, cache.SimilarityBounds) (cache.SimilarEntries, error) {
+	return cache.SimilarEntries{}, nil
 }
 
 func (c *closeTrackingCache) Close() error {

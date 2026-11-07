@@ -63,14 +63,11 @@ function outcomeEvidence(outcomes: InsightsOutcome[]) {
 function guardrails(record: InsightsRecord) {
   const responses = responseOutcomes(record, 'jailbreak')
   const requestObserved = record.jailbreak_detected || record.jailbreak_score_available
-  const responseObserved =
-    record.response_jailbreak_detected || record.response_jailbreak_score_available
   if (
     !record.guardrails_enabled &&
     !record.jailbreak_enabled &&
     !record.pii_enabled &&
     !requestObserved &&
-    !responseObserved &&
     !record.pii_detected &&
     !responses.length
   )
@@ -92,21 +89,6 @@ function guardrails(record: InsightsRecord) {
           <span>Response jailbreak</span>
           {outcomeEvidence(responses)}
         </div>
-      ) : responseObserved ? (
-        <span
-          className={record.response_jailbreak_detected ? styles.alertDanger : styles.costSubtle}
-        >
-          Response jailbreak:{' '}
-          {record.response_jailbreak_detected
-            ? record.response_jailbreak_type || 'detected'
-            : 'Not detected'}{' '}
-          (
-          {riskScore(
-            record.response_jailbreak_confidence,
-            record.response_jailbreak_score_available,
-          )}
-          )
-        </span>
       ) : null}
       {record.pii_detected ? (
         <span className={record.pii_blocked ? styles.alertDanger : styles.alertWarn}>
@@ -120,7 +102,6 @@ function guardrails(record: InsightsRecord) {
       !record.jailbreak_enabled &&
       !record.pii_enabled &&
       !requestObserved &&
-      !responseObserved &&
       !record.pii_detected &&
       !responses.length ? (
         <span>Enabled; no detection result recorded</span>

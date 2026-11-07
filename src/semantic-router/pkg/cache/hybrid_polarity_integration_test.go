@@ -53,13 +53,13 @@ func TestHybridSemanticPolarityStorageIntegration(t *testing.T) {
 	require.NoError(t, service.StoreSemantic(ctx, CacheWrite{
 		Identity: identity, RequestID: "opposite", RequestBody: []byte(`{}`), ResponseBody: []byte("DISABLE_ANSWER"), TTL: TTL(time.Minute),
 	}))
-	control, err := service.LookupSemantic(ctx, SemanticLookup{Identity: identity, Threshold: 0.8})
+	control, err := semanticHit(service.LookupSemantic(ctx, SemanticLookup{Identity: identity, Bounds: atThreshold(0.8)}))
 	require.NoError(t, err)
 	require.True(t, control.Found)
 	require.Equal(t, "DISABLE_ANSWER", string(control.ResponseBody))
 
 	identity.SemanticQuery = query
-	miss, err := service.LookupSemantic(ctx, SemanticLookup{Identity: identity, Threshold: 0.8})
+	miss, err := semanticHit(service.LookupSemantic(ctx, SemanticLookup{Identity: identity, Bounds: atThreshold(0.8)}))
 	require.NoError(t, err)
 	require.False(t, miss.Found, "opposite-polarity response escaped HNSW or Milvus filtering")
 
@@ -68,7 +68,7 @@ func TestHybridSemanticPolarityStorageIntegration(t *testing.T) {
 	// still reach Milvus's model-scoped, polarity-checked fallback.
 	partition := service.ResolveIdentity(identity).SemanticPartitionKey()
 	require.NoError(t, cache.milvusCache.AddEntry(ctx, "valid", partition, paraphrase, []byte(`{}`), []byte("ENABLE_ANSWER"), 60))
-	hit, err := service.LookupSemantic(ctx, SemanticLookup{Identity: identity, Threshold: 0.8})
+	hit, err := semanticHit(service.LookupSemantic(ctx, SemanticLookup{Identity: identity, Bounds: atThreshold(0.8)}))
 	require.NoError(t, err)
 	require.True(t, hit.Found)
 	require.Equal(t, "ENABLE_ANSWER", string(hit.ResponseBody))
@@ -77,7 +77,7 @@ func TestHybridSemanticPolarityStorageIntegration(t *testing.T) {
 	require.False(t, hit.ExpiresAt.IsZero())
 
 	identity.Partition.RequestModel = "tenant-b"
-	other, err := service.LookupSemantic(ctx, SemanticLookup{Identity: identity, Threshold: 0.8})
+	other, err := semanticHit(service.LookupSemantic(ctx, SemanticLookup{Identity: identity, Bounds: atThreshold(0.8)}))
 	require.NoError(t, err)
 	require.False(t, other.Found, "fallback must retain exact model partition isolation")
 }

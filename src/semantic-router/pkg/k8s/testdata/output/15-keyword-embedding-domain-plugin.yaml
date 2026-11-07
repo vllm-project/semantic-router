@@ -85,7 +85,7 @@ routing:
           use_reasoning: false
       plugins:
         - type: system_prompt
-        - type: semantic-cache
+        - type: response_cache
         - type: header_mutation
     - name: confidential_business
       description: Confidential business analysis
@@ -103,7 +103,7 @@ routing:
         - model: qwen-2.5-72b
           use_reasoning: false
       plugins:
-        - type: semantic-cache
+        - type: response_cache
         - type: header_mutation
     - name: general_business
       description: General business and economics queries
@@ -119,7 +119,7 @@ routing:
         - model: qwen-2.5-72b
           use_reasoning: false
       plugins:
-        - type: semantic-cache
+        - type: response_cache
 global:
   router:
     config_source: kubernetes
@@ -195,8 +195,13 @@ global:
       store_backend: ""
   stores:
     response_cache:
-      enabled: false
-      ttl_seconds: 0
+      backend_type: memory
+      enabled: true
+      similarity_threshold: 0.8
+      max_entries: 1000
+      ttl_seconds: 3600
+      eviction_policy: fifo
+      embedding_model: mmbert
     memory:
       default_retrieval_limit: 0
   integrations:

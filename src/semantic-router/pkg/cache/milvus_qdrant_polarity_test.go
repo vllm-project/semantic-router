@@ -215,7 +215,7 @@ func TestRemoteVectorCachePolarityThroughService(t *testing.T) {
 				adapter := NewLegacyBackendAdapter(cache, backend).WithEmbeddingProvider(cacheTestEmbeddingProvider())
 				service := NewResponseCacheService(adapter, ResponseCacheServiceOptions{L1MaxEntries: -1})
 				expectedPartition = service.ResolveIdentity(identity).SemanticPartitionKey()
-				result, err := service.LookupSemantic(context.Background(), SemanticLookup{Identity: identity, Threshold: .8})
+				result, err := semanticHit(service.LookupSemantic(context.Background(), SemanticLookup{Identity: identity, Bounds: atThreshold(.8)}))
 				require.NoError(t, err)
 				assert.Equal(t, fallback, result.Found)
 				stats := cache.GetStats()
@@ -286,7 +286,7 @@ func TestMilvusTypedEntryMissingResponse(t *testing.T) {
 func TestMilvusNamedSemanticFieldsRequested(t *testing.T) {
 	fake := &namedMilvusClient{}
 	c := &MilvusCache{enabled: true, client: fake, config: milvusCacheTestConfig("Strong")}
-	_, err := c.milvusSearchSimilarVectors(context.Background(), "tenant-a", []float32{1})
+	_, err := c.milvusSearchSimilarVectors(context.Background(), "tenant-a", []float32{1}, 1)
 	require.NoError(t, err)
 	assert.Contains(t, fake.fields, "query")
 	assert.Contains(t, fake.fields, "response_body")

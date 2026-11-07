@@ -22,9 +22,9 @@ func (b *discoveryFreshnessBackend) FindExact(context.Context, string, string) (
 	return b.result, nil
 }
 
-func (b *discoveryFreshnessBackend) LookupSimilarWithThreshold(context.Context, string, string, float32) (cache.LookupResult, error) {
+func (b *discoveryFreshnessBackend) LookupSimilar(_ context.Context, _ string, query string, _ cache.SimilarityBounds) (cache.SimilarEntries, error) {
 	b.semanticCalls++
-	return b.result, nil
+	return similarEntries(b.result, query), nil
 }
 
 func TestDiscoveryCacheRequestFreshness(t *testing.T) {

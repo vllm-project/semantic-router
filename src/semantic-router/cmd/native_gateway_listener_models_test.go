@@ -67,7 +67,7 @@ global:
     skip_processing:
       enabled: true
   stores:
-    semantic_cache:
+    response_cache:
       enabled: false
 routing:
   modelCards:

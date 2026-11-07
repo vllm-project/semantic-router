@@ -226,9 +226,9 @@ test('usage leads with compact metrics while scores and independent status cards
   const writes = await setup(page, {
     ...record,
     signals: { ...record.signals, future_signal: ['future_rule_v1'] },
-    response_jailbreak_detected: true,
-    response_jailbreak_score_available: true,
-    response_jailbreak_confidence: 0,
+    jailbreak_detected: true,
+    jailbreak_score_available: true,
+    jailbreak_confidence: 0,
     hallucination_enabled: true,
     hallucination_score_available: false,
     outcomes: [
@@ -264,7 +264,7 @@ test('usage leads with compact metrics while scores and independent status cards
   const plugins = page.getByRole('region', { name: 'Plugin Status', exact: true })
   await expect(signals.getByText('Recorded matches only.', { exact: false })).toBeVisible()
   await expect(signals.getByTitle('future_rule_v1', { exact: true })).toBeVisible()
-  await expect(plugins.getByText('Response jailbreak:', { exact: false })).toContainText('0.0%')
+  await expect(plugins.getByText('Request jailbreak:', { exact: false })).toContainText('0.0%')
   const outcomeSummary = plugins
     .locator('summary')
     .filter({ hasText: '1 unavailable · 1 not applicable' })

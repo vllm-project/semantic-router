@@ -55,10 +55,8 @@ routing:
           outputs:
             - type: model
               value: candidate
-      emits:
-        - kind: retention
-          retention:
-            ttl_turns: 4
+      retention:
+        ttl_turns: 4
 `
 
 test('keeps route settings outside the form when a Builder route is saved', async ({ page }) => {

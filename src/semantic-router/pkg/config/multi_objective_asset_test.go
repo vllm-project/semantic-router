@@ -139,7 +139,7 @@ func assertMultiObjectiveEfficiencyRecipes(t *testing.T, cfg *RouterConfig) {
 			"cost-first decision "+decision.Name,
 		)
 	}
-	if !multiObjectiveDecision(t, cost, "unified_cost_first_route").HasPlugin(DecisionPluginSemanticCache) {
+	if !multiObjectiveDecision(t, cost, "unified_cost_first_route").HasPlugin(DecisionPluginResponseCache) {
 		t.Fatal("cost-first direct route must reuse semantically equivalent answers")
 	}
 }

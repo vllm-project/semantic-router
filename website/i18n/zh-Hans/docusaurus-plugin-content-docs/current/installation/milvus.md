@@ -115,7 +115,8 @@ routing:
           configuration:
             enabled: true
             semantic:
-              similarity_threshold: 0.86
+              match:
+                recall: {top_k: 3, min_similarity: 0.86}
 ```
 
 在发布前运行配置校验：

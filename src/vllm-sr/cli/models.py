@@ -4,7 +4,6 @@ import json
 import math
 import posixpath
 import re
-import warnings
 from datetime import date, datetime
 from enum import Enum
 from typing import Annotated, Any, Dict, List, Literal, Optional
@@ -596,7 +595,16 @@ PluginType = Enum(
 
 
 class ResponseCacheSemanticConfig(BaseModel):
-    similarity_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    """The semantic tier: its match block finds the cached requests a request
+    may reuse.
+
+    Mirrors the Go-side `config.ResponseCacheSemanticConfig`; the Go side is
+    authoritative for the match block.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    match: Optional[Dict[str, Any]] = None
 
 
 class ResponseCacheRequestControlsConfig(BaseModel):
@@ -622,42 +630,18 @@ class ResponseCacheRevisionConfig(BaseModel):
 class ResponseCachePluginConfig(BaseModel):
     """Configuration for response_cache plugin."""
 
+    model_config = ConfigDict(extra="forbid")
+
     enabled: bool
     mode: Literal["semantic", "exact", "exact_then_semantic"] = "semantic"
     scope: Literal["user", "team", "tenant", "global"] = "user"
+    ttl_seconds: Optional[int] = Field(
+        default=None, ge=0, description="TTL in seconds (must be >= 0, default: None)"
+    )
     semantic: Optional[ResponseCacheSemanticConfig] = None
     request_controls: Optional[ResponseCacheRequestControlsConfig] = None
     personalized: Optional[ResponseCachePersonalizedConfig] = None
     revision: Optional[ResponseCacheRevisionConfig] = None
-    # Deprecated flat compatibility fields.
-    allow_request_controls: bool = False
-    control_header: Optional[str] = None
-    similarity_threshold: Optional[float] = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description="Similarity threshold (0.0-1.0, default: None)",
-    )
-    ttl_seconds: Optional[int] = Field(
-        default=None, ge=0, description="TTL in seconds (must be >= 0, default: None)"
-    )
-
-    @model_validator(mode="after")
-    def validate_compatibility_fields(self):
-        if self.semantic is not None and self.similarity_threshold is not None:
-            raise ValueError(
-                "semantic.similarity_threshold conflicts with similarity_threshold"
-            )
-        if self.request_controls is not None and (
-            self.allow_request_controls or self.control_header is not None
-        ):
-            raise ValueError(
-                "request_controls conflicts with deprecated request-control fields"
-            )
-        return self
-
-
-SemanticCachePluginConfig = ResponseCachePluginConfig
 
 
 CompressionTokenLimit = Literal["auto"] | int
@@ -1074,11 +1058,12 @@ class RouterReplayPluginConfig(BaseModel):
     max_body_bytes: Optional[int] = Field(default=None, ge=0)
     max_tool_trace_bytes: Optional[int] = Field(default=None, ge=0)
     max_tool_trace_steps: Optional[int] = Field(default=None, ge=0)
+    shadow: Optional["RouterReplayShadowConfig"] = None
 
 
 # Headers that carry a credential on the primary path. A shadow copy never
-# carries them and shadow_dispatch.forward_headers may not list them. Keep in
-# step with the Router's shadowCredentialHeaders in pkg/config.
+# carries them and router_replay shadow.forward_headers may not list them.
+# Keep in step with the Router's shadowCredentialHeaders in pkg/config.
 SHADOW_CREDENTIAL_HEADERS = frozenset(
     {
         "authorization",
@@ -1098,22 +1083,18 @@ SHADOW_CREDENTIAL_HEADERS = frozenset(
 )
 
 
-class ShadowDispatchPluginConfig(BaseModel):
-    """Configuration for shadow_dispatch plugin.
+class RouterReplayShadowConfig(BaseModel):
+    """router_replay's shadow block.
 
     Sends a bounded, sampled copy of the approved request to a secondary
-    configured model after the primary dispatch is finalized. The primary
-    response never waits on or changes because of the shadow call.
+    configured model after the primary dispatch is finalized, and records its
+    outcome in the replay record. The primary response never waits on or
+    changes because of the shadow call.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    # Required, matching the Go decoder: an omitted flag must not silently
-    # validate as enabled here and decode as disabled in the router.
-    enabled: bool
-    model: Optional[str] = Field(
-        default=None, description="Configured logical model receiving the shadow copy"
-    )
+    model: str = Field(description="Configured logical model receiving the shadow copy")
     sample_rate: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     max_concurrency: int = Field(default=2, ge=0)
     max_queue_depth: int = Field(default=8, ge=0)
@@ -1139,25 +1120,27 @@ class ShadowDispatchPluginConfig(BaseModel):
         for name in names:
             stripped = name.strip()
             if not stripped:
-                raise ValueError(
-                    "shadow_dispatch forward_headers entries cannot be empty"
-                )
+                raise ValueError("shadow forward_headers entries cannot be empty")
             if stripped.startswith(":"):
                 raise ValueError(
-                    f"shadow_dispatch forward_headers cannot include pseudo-header {stripped!r}"
+                    f"shadow forward_headers cannot include pseudo-header {stripped!r}"
                 )
             if stripped.lower() in SHADOW_CREDENTIAL_HEADERS:
                 raise ValueError(
-                    "shadow_dispatch forward_headers cannot include credential header "
+                    "shadow forward_headers cannot include credential header "
                     f"{stripped!r}"
                 )
         return names
 
-    @model_validator(mode="after")
-    def require_model_when_enabled(self):
-        if self.enabled and not (self.model or "").strip():
-            raise ValueError("shadow_dispatch model is required when enabled")
-        return self
+    @field_validator("model")
+    @classmethod
+    def require_model(cls, model: str) -> str:
+        if not model.strip():
+            raise ValueError("shadow model is required")
+        return model
+
+
+RouterReplayPluginConfig.model_rebuild()
 
 
 class PluginConfig(BaseModel):
@@ -1169,23 +1152,6 @@ class PluginConfig(BaseModel):
 
     type: PluginType
     configuration: Dict[str, Any]
-
-    @model_validator(mode="before")
-    @classmethod
-    def normalize_response_cache_aliases(cls, value):
-        if isinstance(value, dict) and value.get("type") in {
-            "semantic-cache",
-            "semantic_cache",
-            "response-cache",
-        }:
-            warnings.warn(
-                f"plugin type {value.get('type')!r} is deprecated; use 'response_cache'",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            value = dict(value)
-            value["type"] = PluginType.RESPONSE_CACHE.value
-        return value
 
     def model_dump(self, **kwargs):
         """Override model_dump to serialize PluginType enum as string value."""
@@ -1436,6 +1402,30 @@ def _conditions_reference_signal(conditions, signal_type):
     return False
 
 
+class DecisionRetention(BaseModel):
+    """What the Router keeps of a decision's answers.
+
+    Mirrors the Go-side `config.DecisionRetention`: drop suppresses response
+    cache, memory and Responses-object writes; ttl_turns bounds cache entries;
+    keep_current_model and prefer_prefix_retention are retention hints.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    drop: Optional[StrictBool] = None
+    ttl_turns: Optional[int] = Field(default=None, ge=0)
+    keep_current_model: Optional[StrictBool] = None
+    prefer_prefix_retention: Optional[StrictBool] = None
+
+    @model_validator(mode="after")
+    def reject_drop_with_ttl(self):
+        if self.drop and self.ttl_turns:
+            raise ValueError(
+                f"retention: drop=true conflicts with ttl_turns={self.ttl_turns}"
+            )
+        return self
+
+
 class DecisionAction(BaseModel):
     """Explicit action a matched decision applies instead of candidate ranking."""
 
@@ -1601,6 +1591,7 @@ class Decision(BaseModel):
     reliability: Optional[DecisionReliability] = None
     fallback: Optional[FallbackOverride] = None
     plugins: Optional[List[PluginConfig]] = []
+    retention: Optional[DecisionRetention] = None
     annotations: Optional[Dict[str, Any]] = None
 
     @model_validator(mode="before")
@@ -1616,10 +1607,10 @@ class Decision(BaseModel):
             isinstance(escalate, dict)
             and algorithm.get("type") == "escalate"
             and escalate.get("stages")
-            and (data.get("candidateIterations") or data.get("emits"))
+            and (data.get("candidateIterations") or data.get("retention"))
         ):
             raise ValueError(
-                "candidateIterations and emits are unsupported for native execution"
+                "candidateIterations and retention are unsupported for native execution"
             )
         return data
 

@@ -107,26 +107,26 @@ func assertSearchEnforcesUserScope(t *testing.T, useHNSW bool) {
 	}
 
 	// Bob (different scope), IDENTICAL embedding → must NOT match Alice.
-	if search := c.runFindSimilarEmbeddingSearch(emb, model, bobQ, 0.8, bobScope); search.bestIndex != -1 {
-		t.Fatalf("cross-tenant leak: bob matched alice's entry (idx=%d)", search.bestIndex)
+	if search := c.runFindSimilarEmbeddingSearch(emb, model, bobQ, atThreshold(0.8), bobScope); len(search.hits) != 0 {
+		t.Fatalf("cross-tenant leak: bob matched alice's entry (idx=%d)", search.hits[0].index)
 	}
 
 	// Alice (same scope), same embedding → must match and return her response.
-	search := c.runFindSimilarEmbeddingSearch(emb, model, aliceQ, 0.8, aliceScope)
-	if search.bestIndex != 0 {
-		t.Fatalf("same-user lookup must hit, got idx=%d", search.bestIndex)
+	search := c.runFindSimilarEmbeddingSearch(emb, model, aliceQ, atThreshold(0.8), aliceScope)
+	if len(search.hits) != 1 || search.hits[0].index != 0 {
+		t.Fatalf("same-user lookup must hit entry 0, got %+v", search.hits)
 	}
-	if string(search.bestEntry.ResponseBody) != string(aliceResponse) {
-		t.Fatalf("same-user hit returned the wrong response body: %s", search.bestEntry.ResponseBody)
+	if string(search.hits[0].entry.ResponseBody) != string(aliceResponse) {
+		t.Fatalf("same-user hit returned the wrong response body: %s", search.hits[0].entry.ResponseBody)
 	}
 
 	// Anonymous (unscoped) lookup → must NOT match a scoped entry.
-	if search := c.runFindSimilarEmbeddingSearch(emb, model, base, 0.8, ""); search.bestIndex != -1 {
-		t.Fatalf("unscoped lookup must not match a scoped entry, idx=%d", search.bestIndex)
+	if search := c.runFindSimilarEmbeddingSearch(emb, model, base, atThreshold(0.8), ""); len(search.hits) != 0 {
+		t.Fatalf("unscoped lookup must not match a scoped entry, idx=%d", search.hits[0].index)
 	}
 
-	if search := c.runFindSimilarEmbeddingSearch(emb, "model-b", aliceQ, 0.8, aliceScope); search.bestIndex != -1 {
-		t.Fatalf("a different model partition must not match, idx=%d", search.bestIndex)
+	if search := c.runFindSimilarEmbeddingSearch(emb, "model-b", aliceQ, atThreshold(0.8), aliceScope); len(search.hits) != 0 {
+		t.Fatalf("a different model partition must not match, idx=%d", search.hits[0].index)
 	}
 }
 
@@ -169,12 +169,12 @@ func TestSearchSkipsPolarityMismatchForLowerValidCandidate(t *testing.T) {
 				c.hnswNeedsRebuild = true
 			}
 
-			search := c.runFindSimilarEmbeddingSearch(queryEmbedding, "", incoming, threshold, "")
-			if search.bestIndex != 1 {
-				t.Fatalf("expected valid lower-ranked candidate, got index %d", search.bestIndex)
+			search := c.runFindSimilarEmbeddingSearch(queryEmbedding, "", incoming, atThreshold(threshold), "")
+			if len(search.hits) != 1 || search.hits[0].index != 1 {
+				t.Fatalf("expected the valid lower-ranked candidate alone, got %+v", search.hits)
 			}
-			if string(search.bestEntry.ResponseBody) != "OFF-ANSWER" {
-				t.Fatalf("returned wrong cached response: %q", search.bestEntry.ResponseBody)
+			if string(search.hits[0].entry.ResponseBody) != "OFF-ANSWER" {
+				t.Fatalf("returned wrong cached response: %q", search.hits[0].entry.ResponseBody)
 			}
 			if !search.polarityRejected {
 				t.Fatal("expected higher-ranked polarity mismatch to be recorded")
@@ -214,8 +214,8 @@ func TestHNSWSearchFallsBackAfterPolarityRejections(t *testing.T) {
 	})
 	c.hnswNeedsRebuild = true
 
-	search := c.runFindSimilarEmbeddingSearch(queryEmbedding, "", incoming, threshold, "")
-	if search.bestIndex != 10 {
-		t.Fatalf("expected linear fallback to find valid candidate, got index %d", search.bestIndex)
+	search := c.runFindSimilarEmbeddingSearch(queryEmbedding, "", incoming, atThreshold(threshold), "")
+	if len(search.hits) != 1 || search.hits[0].index != 10 {
+		t.Fatalf("expected linear fallback to find the valid candidate, got %+v", search.hits)
 	}
 }

@@ -158,10 +158,6 @@ export interface InsightsRecord {
   jailbreak_type?: string
   jailbreak_confidence?: number | null
   jailbreak_score_available?: boolean
-  response_jailbreak_detected?: boolean
-  response_jailbreak_type?: string
-  response_jailbreak_confidence?: number | null
-  response_jailbreak_score_available?: boolean
   pii_detected?: boolean
   pii_entities?: string[]
   pii_blocked?: boolean

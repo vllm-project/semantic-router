@@ -88,7 +88,7 @@ global:
         embedding_config:
           model_type: gemma
   stores:
-    semantic_cache:
+    response_cache:
       embedding_model: bert
     memory:
       embedding_model: mmbert
@@ -97,7 +97,7 @@ global:
 				"global.model_catalog.embeddings.semantic.gemma_model_path",
 				"global.model_catalog.embeddings.semantic.bert_model_path",
 				"global.model_catalog.embeddings.semantic.embedding_config.model_type: gemma",
-				"global.stores.semantic_cache.embedding_model: bert",
+				"global.stores.response_cache.embedding_model: bert",
 				"Vela Embedding (mmbert) replaces the gemma and bert embedding models",
 			},
 		},

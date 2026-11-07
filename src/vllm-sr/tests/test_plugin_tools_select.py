@@ -218,10 +218,10 @@ decisions:
         configuration:
           enabled: true
           max_records: 100
-      - type: "semantic-cache"
+      - type: "response_cache"
         configuration:
           enabled: true
-          similarity_threshold: 0.9
+          semantic: {match: {recall: {top_k: 3, min_similarity: 0.9}}}
       - type: "system_prompt"
         configuration:
           enabled: true
@@ -253,7 +253,7 @@ providers:
             os.unlink(temp_path)
 
     def test_multiple_plugins_with_context(self):
-        """Test a context plugin alongside system_prompt, semantic-cache, and router_replay."""
+        """Test a context plugin alongside system_prompt, response_cache, and router_replay."""
         config_yaml = """
 version: v0.1
 listeners:
@@ -301,10 +301,10 @@ decisions:
                 timeout_seconds: 10
           injection:
             mode: "tool_role"
-      - type: "semantic-cache"
+      - type: "response_cache"
         configuration:
           enabled: true
-          similarity_threshold: 0.92
+          semantic: {match: {recall: {top_k: 3, min_similarity: 0.92}}}
       - type: "router_replay"
         configuration:
           enabled: true

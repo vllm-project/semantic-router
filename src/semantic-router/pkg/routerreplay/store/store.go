@@ -331,13 +331,6 @@ type Record struct {
 	JailbreakScoreAvailable bool                 `json:"jailbreak_score_available"`
 	JailbreakDecision       *tasks.LabelDecision `json:"jailbreak_decision,omitempty"`
 
-	// Response Jailbreak Detection Results
-	ResponseJailbreakDetected       bool                 `json:"response_jailbreak_detected,omitempty"`
-	ResponseJailbreakType           string               `json:"response_jailbreak_type,omitempty"`
-	ResponseJailbreakConfidence     float32              `json:"response_jailbreak_confidence,omitempty"`
-	ResponseJailbreakScoreAvailable bool                 `json:"response_jailbreak_score_available"`
-	ResponseJailbreakDecision       *tasks.LabelDecision `json:"response_jailbreak_decision,omitempty"`
-
 	// PII Detection Results
 	PIIDetected bool     `json:"pii_detected,omitempty"`
 	PIIEntities []string `json:"pii_entities,omitempty"`
@@ -578,7 +571,6 @@ func cloneRecord(record Record) Record {
 	cloned := record
 	cloned.SignalErrorMatches = cloneBoolMap(record.SignalErrorMatches)
 	cloned.JailbreakDecision = cloneLabelDecision(record.JailbreakDecision)
-	cloned.ResponseJailbreakDecision = cloneLabelDecision(record.ResponseJailbreakDecision)
 	cloned.RouteDiagnostics = cloneRouteDiagnostics(record.RouteDiagnostics)
 	cloned.Learning = cloneLearningDiagnostics(record.Learning)
 	cloned.Outcomes = cloneOutcomes(record.Outcomes)

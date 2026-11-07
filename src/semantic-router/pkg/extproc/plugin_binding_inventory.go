@@ -37,6 +37,9 @@ func (r *OpenAIRouter) InspectPluginBinding(binding pluginruntime.Binding, plugi
 		r.contextPluginDependencies(policy, add, unknown)
 	case *config.RouterReplayPluginConfig:
 		add("replay_store", r.ReplayRecorder != nil || r.ReplayRecorders[config.RoutingDecisionKey(binding.Recipe, binding.Decision)] != nil)
+		if policy.Shadow != nil {
+			add("shadow_dispatcher", r.ShadowDispatcher != nil)
+		}
 	case *config.ResponseGuardPluginConfig:
 		// The recipe's classifier asks the response-stage rules of the
 		// decision model or their deployments.
@@ -49,8 +52,6 @@ func (r *OpenAIRouter) InspectPluginBinding(binding pluginruntime.Binding, plugi
 				add("tool_catalog", r.toolCatalogs[spec.ToolsDBPath] != nil)
 			}
 		}
-	case *config.ShadowDispatchPluginConfig:
-		add("shadow_dispatcher", r.ShadowDispatcher != nil)
 	}
 	return result, nil
 }

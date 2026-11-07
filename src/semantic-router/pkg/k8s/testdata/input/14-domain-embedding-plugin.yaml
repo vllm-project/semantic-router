@@ -62,8 +62,8 @@ spec:
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a financial information assistant. Provide general financial education but remind users this is not professional financial advice."
-        - type: "semantic-cache"
+        - type: "response_cache"
           configuration:
             enabled: true
-            similarity_threshold: 0.92
+            semantic: {match: {recall: {top_k: 3, min_similarity: 0.92}}}
 

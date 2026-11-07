@@ -143,7 +143,7 @@ ROUTE feedback_need_clarification (description = "A request to explain an earlie
   MODEL "qwen/qwen3.5-rocm" (reasoning = false)
   PLUGIN response_cache {
     enabled: true
-    similarity_threshold: 0.86
+    semantic: { match: { recall: { min_similarity: 0.86, top_k: 3 } } }
     ttl_seconds: 1800
   }
 }

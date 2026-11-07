@@ -163,9 +163,7 @@ func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 		route.CandidateIterations = append(route.CandidateIterations, candidateIterationConfigToDecl(iter))
 	}
 
-	for _, e := range dec.Emits {
-		route.Emits = append(route.Emits, emitDirectiveToDecl(e))
-	}
+	route.Retention = retentionToDecl(dec.Retention)
 
 	return route
 }

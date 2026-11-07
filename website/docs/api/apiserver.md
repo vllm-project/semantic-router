@@ -429,7 +429,7 @@ it does not duplicate their state under a plugin-specific resource tree.
 | `context` | Preview a RAG source's context injection with `supplied_context`; `mode: probe` performs configured retrieval without the RAG result cache. Compression has its own preview under `/api/v1/plugins/context/compression` |
 | `tools` | Preview the tools policy; the decision model's tool selection requires explicit `mode: probe` |
 | `response_cache`, memory sources | Operate their resources under `/api/v1/storage` |
-| `router_replay`, `shadow_dispatch` | Inspect recorded outcomes under `/api/v1/observability/replays` |
+| `router_replay` | Inspect recorded outcomes under `/api/v1/observability/replays` |
 
 The guard, RAG, and tool previews require an explicit
 `binding: {"recipe":"<name>","decision":"<name>"}`. Their default `mode` is

@@ -189,7 +189,7 @@ global:
       tracing:
         enabled: false
   stores:
-    semantic_cache:
+    response_cache:
       enabled: false
 `
 	if catalog.Len() > 0 {

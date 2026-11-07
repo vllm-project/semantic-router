@@ -65,7 +65,7 @@ providers:
       backend_refs: [{endpoint: BACKEND, protocol: http, provider: vllm}]
 global:
   stores:
-    semantic_cache:
+    response_cache:
       enabled: false
   integrations:
     looper:

@@ -1,0 +1,29 @@
+# The response cache's flat threshold is the recall bound of semantic.match,
+# at the default recall depth, and its flat request-control fields are
+# request_controls.
+version: v0.3
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+routing:
+  decisions:
+    - name: faq
+      priority: 100
+      rules: {operator: AND, conditions: []}
+      modelRefs: [{model: general}]
+      plugins:
+        - type: response_cache
+          configuration:
+            enabled: true
+            mode: exact_then_semantic
+            ttl_seconds: 900
+            similarity_threshold: 0.92
+            allow_request_controls: true
+            control_header: x-team-cache
+global:
+  stores:
+    response_cache:
+      enabled: true
+      backend_type: memory

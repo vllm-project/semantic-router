@@ -221,6 +221,10 @@ const config: Config = {
             to: '/docs/next/tutorials/plugin/context',
           },
           {
+            from: '/docs/next/tutorials/plugin/shadow-dispatch',
+            to: '/docs/next/tutorials/plugin/router-replay',
+          },
+          {
             from: [
               '/docs/next/installation/runtime/embeddings',
               '/docs/next/tutorials/global/remote-embeddings',

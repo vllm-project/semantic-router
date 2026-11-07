@@ -35,11 +35,7 @@ func validateResponseCachePlugin(
 ) error {
 	scope := fmt.Sprintf("decision %q plugins[%d] (%s)", decisionName, index, pluginType)
 	checks := []func() error{
-		func() error { return validateResponseCacheCompatibilityFields(typed, scope) },
 		func() error { return validateCacheMode(typed.Mode, scope) },
-		func() error {
-			return validateCacheThreshold(typed.EffectiveSimilarityThreshold(), scope)
-		},
 		func() error { return validateResponseCacheScopeAndTTL(typed, scope) },
 		func() error { return validateResponseCacheControls(typed.EffectiveRequestControls(), scope) },
 		func() error { return validateResponseCachePersonalization(typed.Personalized, scope) },
@@ -48,20 +44,6 @@ func validateResponseCachePlugin(
 		if err := check(); err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-func validateResponseCacheCompatibilityFields(
-	typed *ResponseCachePluginConfig,
-	scope string,
-) error {
-	if typed.Semantic != nil && typed.SimilarityThreshold != nil {
-		return fmt.Errorf("%s: semantic.similarity_threshold conflicts with deprecated similarity_threshold", scope)
-	}
-	if typed.RequestControls != nil &&
-		(typed.AllowRequestControls || strings.TrimSpace(typed.ControlHeader) != "") {
-		return fmt.Errorf("%s: request_controls conflicts with deprecated request-control fields", scope)
 	}
 	return nil
 }

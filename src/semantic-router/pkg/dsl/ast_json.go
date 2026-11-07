@@ -129,24 +129,18 @@ type RouteDeclJSON struct {
 	Models      []*ModelRefJSON  `json:"models"`
 	Algorithm   *AlgoSpecJSON    `json:"algorithm,omitempty"`
 	Plugins     []*PluginRefJSON `json:"plugins"`
-	Emits       []*EmitDeclJSON  `json:"emits,omitempty"`
+	Retention   *RetentionJSON   `json:"retention,omitempty"`
 	Pos         Position         `json:"pos"`
 }
 
-// EmitDeclJSON is the JSON form of an EMIT directive on a route.
-type EmitDeclJSON struct {
-	Kind      string                  `json:"kind"`
-	Retention *RetentionDirectiveJSON `json:"retention,omitempty"`
-	Pos       Position                `json:"pos"`
-}
-
-// RetentionDirectiveJSON is the JSON form of RetentionDirective. All fields
+// RetentionJSON is the JSON form of a route's RETENTION block. All fields
 // are tri-state pointers to preserve "unset" vs explicit zero.
-type RetentionDirectiveJSON struct {
-	Drop                  *bool `json:"drop,omitempty"`
-	TTLTurns              *int  `json:"ttl_turns,omitempty"`
-	KeepCurrentModel      *bool `json:"keep_current_model,omitempty"`
-	PreferPrefixRetention *bool `json:"prefer_prefix_retention,omitempty"`
+type RetentionJSON struct {
+	Drop                  *bool    `json:"drop,omitempty"`
+	TTLTurns              *int     `json:"ttl_turns,omitempty"`
+	KeepCurrentModel      *bool    `json:"keep_current_model,omitempty"`
+	PreferPrefixRetention *bool    `json:"prefer_prefix_retention,omitempty"`
+	Pos                   Position `json:"pos"`
 }
 
 // ModelDeclJSON is the JSON form of ModelDecl.
@@ -442,35 +436,16 @@ func routeDeclToJSON(r *RouteDecl) *RouteDeclJSON {
 		}
 		rj.Plugins = append(rj.Plugins, pj)
 	}
-	for _, e := range r.Emits {
-		rj.Emits = append(rj.Emits, emitDeclToJSON(e))
-	}
-	return rj
-}
-
-func emitDeclToJSON(e *EmitDecl) *EmitDeclJSON {
-	if e == nil {
-		return nil
-	}
-	out := &EmitDeclJSON{
-		Kind: e.Kind,
-		Pos:  e.Pos,
-	}
-	if e.Retention != nil {
-		out.Retention = &RetentionDirectiveJSON{
-			Drop:                  clonePtrBoolDSL(e.Retention.Drop),
-			TTLTurns:              clonePtrIntDSL(e.Retention.TTLTurns),
-			KeepCurrentModel:      clonePtrBoolDSL(e.Retention.KeepCurrentModel),
-			PreferPrefixRetention: clonePtrBoolDSL(e.Retention.PreferPrefixRetention),
+	if retention := r.Retention; retention != nil {
+		rj.Retention = &RetentionJSON{
+			Drop:                  clonePtrBool(retention.Drop),
+			TTLTurns:              clonePtrInt(retention.TTLTurns),
+			KeepCurrentModel:      clonePtrBool(retention.KeepCurrentModel),
+			PreferPrefixRetention: clonePtrBool(retention.PreferPrefixRetention),
+			Pos:                   retention.Pos,
 		}
 	}
-	return out
-}
-
-// MarshalProgramJSON marshals a Program to JSON bytes.
-func MarshalProgramJSON(prog *Program) ([]byte, error) {
-	pj := ProgramToJSON(prog)
-	return json.Marshal(pj)
+	return rj
 }
 
 func (o JSONObject) MarshalJSON() ([]byte, error) {

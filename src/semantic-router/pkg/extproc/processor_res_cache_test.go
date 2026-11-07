@@ -92,15 +92,15 @@ func (m *mockStreamingCache) FindSimilarWithThreshold(
 	return nil, false, nil
 }
 
-func (m *mockStreamingCache) LookupSimilarWithThreshold(
+func (m *mockStreamingCache) LookupSimilar(
 	_ context.Context,
 	model string,
 	_ string,
-	_ float32,
-) (cache.LookupResult, error) {
+	_ cache.SimilarityBounds,
+) (cache.SimilarEntries, error) {
 	m.findSimilarCalled = true
 	m.findSimilarModel = model
-	return cache.LookupResult{}, nil
+	return cache.SimilarEntries{}, nil
 }
 
 func (m *mockStreamingCache) LastSimilarity() float32 { return 0 }

@@ -17,17 +17,13 @@ const (
 	DecisionAlgorithmRatings     = "ratings"
 	DecisionAlgorithmWorkflows   = "workflows"
 
-	DecisionPluginResponseCache = "response_cache"
-	// DecisionPluginSemanticCache is the deprecated public spelling retained
-	// for source compatibility. Runtime config is normalized to response_cache.
-	DecisionPluginSemanticCache  = "semantic-cache"
+	DecisionPluginResponseCache  = "response_cache"
 	DecisionPluginSystemPrompt   = "system_prompt"
 	DecisionPluginHeaderMutation = "header_mutation"
 	DecisionPluginRouterReplay   = "router_replay"
 	DecisionPluginFastResponse   = "fast_response"
 	DecisionPluginRequestParams  = "request_params"
 	DecisionPluginPromptCache    = "prompt_cache"
-	DecisionPluginShadowDispatch = "shadow_dispatch"
 )
 
 // SignalReferenceQualifier describes how a signal can add a third component

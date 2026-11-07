@@ -64,7 +64,7 @@ routing:
           use_reasoning: true
           reasoning_effort: high
       plugins:
-        - type: semantic-cache
+        - type: response_cache
     - name: general_tech
       description: General technical queries - use small model for efficiency
       priority: 50
@@ -154,8 +154,13 @@ global:
       store_backend: ""
   stores:
     response_cache:
-      enabled: false
-      ttl_seconds: 0
+      backend_type: memory
+      enabled: true
+      similarity_threshold: 0.8
+      max_entries: 1000
+      ttl_seconds: 3600
+      eviction_policy: fifo
+      embedding_model: mmbert
     memory:
       default_retrieval_limit: 0
   integrations:

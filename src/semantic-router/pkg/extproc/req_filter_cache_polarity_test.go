@@ -17,15 +17,15 @@ type polarityMissCache struct {
 	result cache.LookupResult
 }
 
-func (c *polarityMissCache) LookupSimilarWithThreshold(
+func (c *polarityMissCache) LookupSimilar(
 	_ context.Context,
 	_ string,
 	query string,
-	_ float32,
-) (cache.LookupResult, error) {
+	_ cache.SimilarityBounds,
+) (cache.SimilarEntries, error) {
 	c.findCalled = true
 	c.findQuery = query
-	return c.result, nil
+	return similarEntries(c.result, query), nil
 }
 
 func TestPolarityUnverifiedMissContinuesUpstream(t *testing.T) {

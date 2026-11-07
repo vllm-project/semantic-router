@@ -93,7 +93,6 @@ func assertReferenceCorePluginCoverage(t testingT, pluginsByType map[string][]ma
 	assertSliceUnionCoversStructFields(t, collectNestedSliceItems(t, guardConfigs, "rules", "plugins(response_guard).configuration"), reflect.TypeOf(ResponseGuardRule{}), "plugins(response_guard).configuration.rules")
 	assertPluginConfigCoverage(t, pluginsByType["masking"], reflect.TypeOf(MaskingPluginConfig{}), "masking")
 	assertPluginConfigCoverage(t, pluginsByType["router_replay"], reflect.TypeOf(RouterReplayPluginConfig{}), "router_replay")
-	assertPluginConfigCoverage(t, pluginsByType["shadow_dispatch"], reflect.TypeOf(ShadowDispatchPluginConfig{}), "shadow_dispatch")
 	assertPluginConfigCoverage(t, pluginsByType["request_params"], reflect.TypeOf(RequestParamsPluginConfig{}), "request_params")
 	assertPluginConfigCoverage(t, pluginsByType["tools"], reflect.TypeOf(ToolsPluginConfig{}), "tools")
 	assertPluginConfigCoverage(t, pluginsByType["prompt_cache"], reflect.TypeOf(PromptCachePluginConfig{}), "prompt_cache")

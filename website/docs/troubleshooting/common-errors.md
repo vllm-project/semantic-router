@@ -265,7 +265,8 @@ routing:
           configuration:
             enabled: true
             semantic:
-              similarity_threshold: 0.70
+              match:
+                recall: {top_k: 3, min_similarity: 0.70}
 ```
 
 Lower thresholds increase false-match risk. Evaluate answer equivalence before

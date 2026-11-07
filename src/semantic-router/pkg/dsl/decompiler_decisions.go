@@ -210,9 +210,7 @@ func (d *decompiler) decompileDecision(dec config.Decision) {
 	}
 	d.writeDecisionAlgorithm(dec)
 	d.writeDecisionPlugins(dec)
-	for _, e := range dec.Emits {
-		d.decompileEmit(e)
-	}
+	d.decompileRetention(dec.Retention)
 	d.write("}\n\n")
 }
 

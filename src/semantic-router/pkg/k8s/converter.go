@@ -366,11 +366,10 @@ func validatePluginConfiguration(pluginType string, rawConfig []byte) error {
 }
 
 var pluginConfigurationValidators = map[string]func([]byte) error{
-	"semantic-cache":  validateSemanticCachePluginConfig,
+	"response_cache":  validateResponseCachePluginConfig,
 	"system_prompt":   validateSystemPromptPluginConfig,
 	"header_mutation": validateHeaderMutationPluginConfig,
 	"router_replay":   validateRouterReplayPluginConfig,
-	"shadow_dispatch": validateShadowDispatchPluginConfig,
 }
 
 func decodePluginConfiguration(rawConfig []byte, target any) error {
@@ -379,10 +378,10 @@ func decodePluginConfiguration(rawConfig []byte, target any) error {
 	return decoder.Decode(target)
 }
 
-func validateSemanticCachePluginConfig(rawConfig []byte) error {
-	var cfg config.SemanticCachePluginConfig
+func validateResponseCachePluginConfig(rawConfig []byte) error {
+	var cfg config.ResponseCachePluginConfig
 	if err := decodePluginConfiguration(rawConfig, &cfg); err != nil {
-		return fmt.Errorf("failed to unmarshal semantic-cache config: %w", err)
+		return fmt.Errorf("failed to unmarshal response_cache config: %w", err)
 	}
 	return nil
 }
@@ -421,17 +420,6 @@ func validateHeaderMutationEntries(operation string, headers []config.HeaderPair
 	return nil
 }
 
-func validateShadowDispatchPluginConfig(rawConfig []byte) error {
-	var cfg config.ShadowDispatchPluginConfig
-	if err := decodePluginConfiguration(rawConfig, &cfg); err != nil {
-		return fmt.Errorf("failed to unmarshal shadow_dispatch config: %w", err)
-	}
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("shadow_dispatch %w", err)
-	}
-	return nil
-}
-
 func validateRouterReplayPluginConfig(rawConfig []byte) error {
 	var cfg config.RouterReplayPluginConfig
 	if err := decodePluginConfiguration(rawConfig, &cfg); err != nil {
@@ -442,6 +430,9 @@ func validateRouterReplayPluginConfig(rawConfig []byte) error {
 	}
 	if cfg.MaxBodyBytes < 0 {
 		return fmt.Errorf("router_replay max_body_bytes cannot be negative")
+	}
+	if err := cfg.Shadow.Validate(); err != nil {
+		return fmt.Errorf("router_replay shadow %w", err)
 	}
 	return nil
 }

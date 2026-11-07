@@ -461,9 +461,9 @@ SIGNAL hallucination ungrounded { description: "Claims the context does not supp
 }
 
 func TestCompilePluginTemplateWithOverride(t *testing.T) {
-	input := `PLUGIN default_cache semantic_cache {
+	input := `PLUGIN default_cache response_cache {
   enabled: true
-  similarity_threshold: 0.80
+  ttl_seconds: 600
 }
 
 SIGNAL domain test { description: "test" }
@@ -473,7 +473,7 @@ ROUTE test {
   WHEN domain("test")
   MODEL "m:1b"
   PLUGIN default_cache {
-    similarity_threshold: 0.95
+    ttl_seconds: 900
   }
 }`
 
@@ -740,9 +740,9 @@ SIGNAL context long_context {
 SIGNAL complexity code_complexity { labels: ["hard"] }
 
 # Plugins
-PLUGIN default_cache semantic_cache {
+PLUGIN default_cache response_cache {
   enabled: true
-  similarity_threshold: 0.80
+  ttl_seconds: 600
 }
 
 # Routes
@@ -1639,16 +1639,10 @@ func TestCompileAllPluginTypes(t *testing.T) {
 			verifyType: "router_replay",
 		},
 		{
-			name:       "shadow_dispatch",
-			pluginType: "shadow_dispatch",
-			body:       `enabled: true model: "candidate" sample_rate: 0.1 max_concurrency: 2 timeout_seconds: 20 forward_headers: ["x-tenant"]`,
-			verifyType: "shadow_dispatch",
-		},
-		{
-			name:       "shadow_dispatch_hyphen_alias",
-			pluginType: "shadow-dispatch",
-			body:       `enabled: true model: "candidate"`,
-			verifyType: "shadow_dispatch",
+			name:       "router_replay_shadow",
+			pluginType: "router_replay",
+			body:       `enabled: true shadow: { model: "candidate" sample_rate: 0.1 max_concurrency: 2 timeout_seconds: 20 forward_headers: ["x-tenant"] }`,
+			verifyType: "router_replay",
 		},
 		{
 			name:       "request_params",
@@ -2559,9 +2553,9 @@ ROUTE r {
 
 func TestPluginTemplateMergeSemantics(t *testing.T) {
 	input := `
-PLUGIN my_cache semantic_cache {
+PLUGIN my_cache response_cache {
   enabled: true
-  similarity_threshold: 0.80
+  ttl_seconds: 600
 }
 
 SIGNAL domain test { description: "test" }
@@ -2578,7 +2572,7 @@ ROUTE route_b {
   WHEN domain("test")
   MODEL "m:1b" (reasoning = false)
   PLUGIN my_cache {
-    similarity_threshold: 0.95
+    ttl_seconds: 900
   }
 }
 `

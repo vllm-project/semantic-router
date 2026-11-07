@@ -67,9 +67,9 @@ func TestHandleCachingWithoutBackendStillAppliesRequestControls(t *testing.T) {
 		ModelRefs: []config.ModelRef{{Model: "m"}},
 		Plugins: []config.DecisionPlugin{
 			{Type: config.DecisionPluginResponseCache, Configuration: config.MustStructuredPayload(map[string]interface{}{
-				"enabled":                true,
-				"scope":                  "global",
-				"allow_request_controls": true,
+				"enabled":          true,
+				"scope":            "global",
+				"request_controls": map[string]interface{}{"enabled": true},
 			})},
 		},
 	}

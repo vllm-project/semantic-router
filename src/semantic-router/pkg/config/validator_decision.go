@@ -25,7 +25,7 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 	if err := validateDecisionModelContracts(cfg); err != nil {
 		return err
 	}
-	if err := validateDecisionEmitContracts(cfg); err != nil {
+	if err := validateDecisionRetentionContracts(cfg); err != nil {
 		return err
 	}
 	reportAmbiguousConfidencePools(cfg)
@@ -343,12 +343,14 @@ func validateOneDecisionPluginContracts(
 			err = validateToolsPlugin(cfg, path, typed)
 		case *ContextPluginConfig:
 			err = validateContextPlugin(cfg, path, typed)
+		case *ResponseCachePluginConfig:
+			err = validateMatch(cfg, path+".semantic.match", typed.SemanticMatch(), MatchResponseCache)
 		}
 		if err != nil {
 			return err
 		}
 	}
-	if err := validateDecisionShadowDispatchPlugin(cfg, decision); err != nil {
+	if err := validateDecisionReplayShadow(cfg, decision); err != nil {
 		return err
 	}
 	warnCachedPersonalization(cfg, decision)

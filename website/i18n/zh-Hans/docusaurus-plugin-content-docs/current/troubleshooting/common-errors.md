@@ -236,7 +236,8 @@ routing:
           configuration:
             enabled: true
             semantic:
-              similarity_threshold: 0.70
+              match:
+                recall: {top_k: 3, min_similarity: 0.70}
 ```
 
 降低阈值会增加误匹配风险。上线前先评估答案是否等价，诊断后端时使用管理 API 的响应缓存统计和测试端点。

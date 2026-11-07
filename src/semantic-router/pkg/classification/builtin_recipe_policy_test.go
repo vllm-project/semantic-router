@@ -214,12 +214,7 @@ func TestBuiltinVaultDataControlsAreIndependentOfVerdict(t *testing.T) {
 			if context == nil || context.Enabled || cache == nil || cache.Enabled {
 				t.Fatal("every Vault verdict must disable memory and response caching")
 			}
-			drop := false
-			for _, emit := range route.Emits {
-				if emit.Kind == "retention" && emit.Retention != nil && emit.Retention.Drop != nil && *emit.Retention.Drop {
-					drop = true
-				}
-			}
+			drop := route.Retention != nil && route.Retention.Drop != nil && *route.Retention.Drop
 			if !drop || route.Adaptations.EffectiveMode() != config.DecisionAdaptationModeBypass {
 				t.Fatal("every Vault verdict must suppress content writes and adaptation")
 			}

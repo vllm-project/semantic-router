@@ -401,10 +401,9 @@ type ModelRef struct {
 
 // DecisionPlugin defines a plugin configuration for a decision
 type DecisionPlugin struct {
-	// Type is the plugin type. response_cache is canonical; semantic-cache,
-	// semantic_cache, and response-cache are deprecated aliases.
+	// Type is the plugin type.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=context;fast_response;header_mutation;masking;prompt_cache;request_params;response-cache;response_cache;response_guard;router_replay;semantic-cache;semantic_cache;shadow_dispatch;system_prompt;tools
+	// +kubebuilder:validation:Enum=context;fast_response;header_mutation;masking;prompt_cache;request_params;response_cache;response_guard;router_replay;system_prompt;tools
 	Type string `json:"type" yaml:"type"`
 
 	// Configuration is the plugin-specific configuration as a raw JSON object

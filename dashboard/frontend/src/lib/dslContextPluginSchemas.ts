@@ -1,7 +1,7 @@
 import { X_VSR_COMPRESSION_CONTROL } from '../generated/vsrHeaders'
 import type { FieldSchema } from './dslSchemaTypes'
 
-function matchField(recallMethods: string[], judgePreset: string): FieldSchema {
+export function matchField(recallMethods: string[], judgePreset: string): FieldSchema {
   return {
     key: 'match',
     label: 'Match',
@@ -61,7 +61,12 @@ const sourceFields: FieldSchema[] = [
     options: ['', 'skip', 'warn', 'block'],
   },
   { key: 'cache_results', label: 'Cache Results (rag)', type: 'boolean' },
-  { key: 'cache_ttl_seconds', label: 'Cache TTL Seconds (rag)', type: 'number', placeholder: '3600' },
+  {
+    key: 'cache_ttl_seconds',
+    label: 'Cache TTL Seconds (rag)',
+    type: 'number',
+    placeholder: '3600',
+  },
   {
     key: 'store',
     label: 'Store (memory)',
@@ -135,7 +140,8 @@ const compressFields: FieldSchema[] = [
   compressTargetsField,
   {
     ...matchField(['bm25'], 'relevance'),
-    description: 'Default: the relevance judge ranks the segments; recall bm25 ranks them lexically',
+    description:
+      'Default: the relevance judge ranks the segments; recall bm25 ranks them lexically',
   },
   {
     key: 'recovery',
@@ -166,7 +172,12 @@ const compressFields: FieldSchema[] = [
       { key: 'max_target_tokens', label: 'Maximum Target Tokens', type: 'number' },
     ],
   },
-  { key: 'failure_mode', label: 'Failure Mode', type: 'select', options: ['fail_open', 'fail_closed'] },
+  {
+    key: 'failure_mode',
+    label: 'Failure Mode',
+    type: 'select',
+    options: ['fail_open', 'fail_closed'],
+  },
 ]
 
 export const contextPluginFields: FieldSchema[] = [

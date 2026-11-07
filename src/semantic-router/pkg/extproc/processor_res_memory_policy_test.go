@@ -71,7 +71,7 @@ func TestResponseMemoryWritesHonorPolicyBeforeClientPreference(t *testing.T) {
 				ctx.VSRSelectedDecision = &config.Decision{Name: "memory-policy", Plugins: []config.DecisionPlugin{{Type: config.DecisionPluginContext, Configuration: payload}}}
 			}
 			if tc.drop != nil {
-				ctx.EmittedRetention = &config.RetentionDirective{Drop: tc.drop}
+				ctx.Retention = &config.DecisionRetention{Drop: tc.drop}
 			}
 			if tc.disable {
 				ctx.Headers[headers.DisableRouterMemory] = "true"

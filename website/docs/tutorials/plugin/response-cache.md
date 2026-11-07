@@ -58,6 +58,31 @@ lexical guard recognizes English negation cues; a German `nicht` or Chinese
 `不` can otherwise receive a cached answer to the opposite question. The
 `high-recall.yaml` fragment remains an explicit semantic-cache example.
 
+### Semantic reuse
+
+The semantic tier finds the cached requests a request may reuse with the
+[match block](./overview#match-block) in `semantic.match`. Without one it runs
+the response cache's default, which recalls only:
+
+```yaml
+semantic:
+  match:
+    recall: {method: embedding, top_k: 3, min_similarity: 0.8}
+    judge:  {preset: same_request, min_score: 0.9}   # optional
+```
+
+- `recall` asks the cache store for the cached requests most similar to the
+  request, at most `top_k`, each at least `min_similarity` similar (a cosine).
+  With recall alone, the most similar one is served.
+- `judge` (optional) asks the decision model the `same_request` question about
+  the request and each recalled request, in one call, and serves the best one
+  that scores at least `min_score`. It turns away a cached request that is
+  close in embedding space but asks something else, such as the opposite
+  question. When the judge fails, `on_error: skip` (the default) serves the
+  recall result and `on_error: fail` reuses nothing.
+- A request that matched no decision recalls with the default `top_k` and the
+  store's `similarity_threshold`.
+
 The exact tier is available with the in-memory, Redis, Valkey, Milvus, Qdrant,
 and hybrid cache backends. Anthropic client requests are replayed in the
 Anthropic response or SSE wire format.
@@ -82,12 +107,15 @@ cannot satisfy a `max-age` freshness bound in either tier.
 
 ## Migration
 
-`semantic-cache`, `semantic_cache`, and `response-cache` are accepted as
-deprecated aliases and normalize to `response_cache`. Likewise,
-`global.stores.semantic_cache` is read as a deprecated alias for
-`global.stores.response_cache`. Do not configure both spellings in the same
-document. Export, Dashboard saves, and DSL decompilation always emit the
-canonical names.
+The plugin type is `response_cache` and the store is
+`global.stores.response_cache`. A configuration that still writes the
+`semantic-cache`, `semantic_cache` or `response-cache` plugin types,
+`global.stores.semantic_cache`, the flat `similarity_threshold` or
+`semantic.similarity_threshold`, or `allow_request_controls` and
+`control_header` fails to load with a line that names the field;
+`vllm-sr config migrate` writes the threshold as
+`semantic.match.recall.min_similarity` and the request-control fields under
+`request_controls`.
 
 For embeddings from the model runtime, including Vela Embedding, changing the model,
 tokenizer, representation size, or inference settings starts a separate cache

@@ -326,7 +326,7 @@ export interface DecisionConfig {
   fallback?: Record<string, unknown>
   output_contract_spec?: Record<string, unknown>
   candidateIterations?: Array<Record<string, unknown>>
-  emits?: Array<Record<string, unknown>>
+  retention?: Record<string, unknown>
   tier?: number
   annotations?: Record<string, unknown>
   output_contract?: string

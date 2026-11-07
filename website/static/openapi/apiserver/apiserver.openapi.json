@@ -24245,83 +24245,6 @@
                           "response_body_truncated": {
                             "type": "boolean"
                           },
-                          "response_jailbreak_confidence": {
-                            "nullable": true,
-                            "type": "number"
-                          },
-                          "response_jailbreak_decision": {
-                            "nullable": true,
-                            "type": "object",
-                            "properties": {
-                              "categories": {
-                                "nullable": true,
-                                "type": "array",
-                                "items": {
-                                  "type": "string"
-                                }
-                              },
-                              "label": {
-                                "type": "string"
-                              },
-                              "score": {
-                                "nullable": true,
-                                "type": "object",
-                                "properties": {
-                                  "Value": {
-                                    "type": "number"
-                                  }
-                                },
-                                "required": [
-                                  "Value"
-                                ]
-                              },
-                              "score_semantics": {
-                                "nullable": true,
-                                "type": "object",
-                                "properties": {
-                                  "Calibrated": {
-                                    "type": "boolean"
-                                  },
-                                  "Direction": {
-                                    "type": "string"
-                                  },
-                                  "Maximum": {
-                                    "nullable": true,
-                                    "type": "number"
-                                  },
-                                  "Minimum": {
-                                    "nullable": true,
-                                    "type": "number"
-                                  },
-                                  "Unit": {
-                                    "type": "string"
-                                  }
-                                },
-                                "required": [
-                                  "Unit",
-                                  "Direction",
-                                  "Minimum",
-                                  "Maximum",
-                                  "Calibrated"
-                                ]
-                              },
-                              "source_label": {
-                                "type": "string"
-                              }
-                            },
-                            "required": [
-                              "label"
-                            ]
-                          },
-                          "response_jailbreak_detected": {
-                            "type": "boolean"
-                          },
-                          "response_jailbreak_score_available": {
-                            "type": "boolean"
-                          },
-                          "response_jailbreak_type": {
-                            "type": "string"
-                          },
                           "response_status": {
                             "type": "integer"
                           },
@@ -25214,7 +25137,6 @@
                           "confidence_score_available",
                           "lifecycle_state",
                           "jailbreak_score_available",
-                          "response_jailbreak_score_available",
                           "hallucination_score_available",
                           "confidence_score"
                         ]
@@ -25493,10 +25415,6 @@
         "x-vllm-sr-plugin-operations": [
           {
             "plugin": "router_replay",
-            "mode": "read"
-          },
-          {
-            "plugin": "shadow_dispatch",
             "mode": "read"
           }
         ],
@@ -26232,10 +26150,6 @@
           {
             "plugin": "router_replay",
             "mode": "read"
-          },
-          {
-            "plugin": "shadow_dispatch",
-            "mode": "read"
           }
         ],
         "x-vllm-sr-visibility": "primary"
@@ -26777,10 +26691,6 @@
           {
             "plugin": "router_replay",
             "mode": "read"
-          },
-          {
-            "plugin": "shadow_dispatch",
-            "mode": "read"
           }
         ],
         "x-vllm-sr-visibility": "primary"
@@ -27256,10 +27166,6 @@
           {
             "plugin": "router_replay",
             "mode": "read"
-          },
-          {
-            "plugin": "shadow_dispatch",
-            "mode": "read"
           }
         ],
         "x-vllm-sr-visibility": "primary"
@@ -27707,10 +27613,6 @@
         "x-vllm-sr-plugin-operations": [
           {
             "plugin": "router_replay",
-            "mode": "read"
-          },
-          {
-            "plugin": "shadow_dispatch",
             "mode": "read"
           }
         ],
@@ -29157,83 +29059,6 @@
                     "response_body_truncated": {
                       "type": "boolean"
                     },
-                    "response_jailbreak_confidence": {
-                      "nullable": true,
-                      "type": "number"
-                    },
-                    "response_jailbreak_decision": {
-                      "nullable": true,
-                      "type": "object",
-                      "properties": {
-                        "categories": {
-                          "nullable": true,
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          }
-                        },
-                        "label": {
-                          "type": "string"
-                        },
-                        "score": {
-                          "nullable": true,
-                          "type": "object",
-                          "properties": {
-                            "Value": {
-                              "type": "number"
-                            }
-                          },
-                          "required": [
-                            "Value"
-                          ]
-                        },
-                        "score_semantics": {
-                          "nullable": true,
-                          "type": "object",
-                          "properties": {
-                            "Calibrated": {
-                              "type": "boolean"
-                            },
-                            "Direction": {
-                              "type": "string"
-                            },
-                            "Maximum": {
-                              "nullable": true,
-                              "type": "number"
-                            },
-                            "Minimum": {
-                              "nullable": true,
-                              "type": "number"
-                            },
-                            "Unit": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "Unit",
-                            "Direction",
-                            "Minimum",
-                            "Maximum",
-                            "Calibrated"
-                          ]
-                        },
-                        "source_label": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "label"
-                      ]
-                    },
-                    "response_jailbreak_detected": {
-                      "type": "boolean"
-                    },
-                    "response_jailbreak_score_available": {
-                      "type": "boolean"
-                    },
-                    "response_jailbreak_type": {
-                      "type": "string"
-                    },
                     "response_status": {
                       "type": "integer"
                     },
@@ -30126,7 +29951,6 @@
                     "confidence_score_available",
                     "lifecycle_state",
                     "jailbreak_score_available",
-                    "response_jailbreak_score_available",
                     "hallucination_score_available",
                     "confidence_score"
                   ]
@@ -30374,10 +30198,6 @@
         "x-vllm-sr-plugin-operations": [
           {
             "plugin": "router_replay",
-            "mode": "read"
-          },
-          {
-            "plugin": "shadow_dispatch",
             "mode": "read"
           }
         ],

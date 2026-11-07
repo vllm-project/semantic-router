@@ -85,10 +85,10 @@ spec:
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a legal compliance assistant. Provide accurate information about regulations and compliance requirements. Always remind users to consult legal professionals for specific advice."
-        - type: "semantic-cache"
+        - type: "response_cache"
           configuration:
             enabled: true
-            similarity_threshold: 0.93
+            semantic: {match: {recall: {top_k: 3, min_similarity: 0.93}}}
         - type: "header_mutation"
           configuration:
             add:
@@ -114,10 +114,10 @@ spec:
           use_reasoning: true
           reasoning_effort: "medium"
       plugins:
-        - type: "semantic-cache"
+        - type: "response_cache"
           configuration:
             enabled: true
-            similarity_threshold: 0.90
+            semantic: {match: {recall: {top_k: 3, min_similarity: 0.90}}}
         - type: "header_mutation"
           configuration:
             add:
@@ -138,8 +138,8 @@ spec:
         - model: "qwen-2.5-72b"
           use_reasoning: false
       plugins:
-        - type: "semantic-cache"
+        - type: "response_cache"
           configuration:
             enabled: true
-            similarity_threshold: 0.85
+            semantic: {match: {recall: {top_k: 3, min_similarity: 0.85}}}
 

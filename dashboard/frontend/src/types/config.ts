@@ -438,7 +438,6 @@ export interface PluginConfig {
     | 'request_params'
     | 'response_guard'
     | 'prompt_cache'
-    | 'shadow_dispatch'
     | 'masking'
   configuration: Record<string, unknown>
 }

@@ -22,7 +22,8 @@ def test_bundled_schema_exposes_router_surface_catalog() -> None:
     assert "setup" not in document["properties"]
     assert "hallucination" in surface_types("signals")
     assert "multi_factor" in surface_types("algorithms")
-    assert "shadow_dispatch" in surface_types("plugins")
+    assert "router_replay" in surface_types("plugins")
+    assert "shadow_dispatch" not in surface_types("plugins")
     assert catalog["validation"]["endpoint"] == "/api/v1/config/validate"
 
 

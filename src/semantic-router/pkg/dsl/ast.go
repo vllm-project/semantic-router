@@ -150,16 +150,14 @@ type rawDecisionTreeItem struct {
 	Algorithm    *rawAlgoSpec         `parser:"| 'ALGORITHM' @@"`
 	Plugin       *rawPluginRef        `parser:"| 'PLUGIN' @@"`
 	CandidateFor *rawCandidateForDecl `parser:"| @@"`
-	Emit         *rawEmitDecl         `parser:"| @@"`
+	Retention    *rawRetentionDecl    `parser:"| @@"`
 }
 
-// rawEmitDecl: EMIT <kind> { fields... }. Currently only kind="retention" is
-// recognized by the validator, but the grammar accepts any identifier so the
-// validator can emit a friendly error rather than a parse error.
-type rawEmitDecl struct {
+// rawRetentionDecl: RETENTION { fields... }, the decision's retention. The
+// grammar accepts any field so the validator can name an unknown one.
+type rawRetentionDecl struct {
 	Pos    lexer.Position
-	Kind   string        `parser:"'EMIT' @Ident"`
-	Fields []*FieldEntry `parser:"'{' @@* '}'"`
+	Fields []*FieldEntry `parser:"'RETENTION' '{' @@* '}'"`
 }
 
 // rawModelDecl: MODEL <name> { fields... }
@@ -188,7 +186,7 @@ type rawRouteItem struct {
 	Description  *string              `parser:"| 'DESCRIPTION' @String"`
 	Action       *rawActionDecl       `parser:"| 'ACTION' @@"`
 	CandidateFor *rawCandidateForDecl `parser:"| @@"`
-	Emit         *rawEmitDecl         `parser:"| @@"`
+	Retention    *rawRetentionDecl    `parser:"| @@"`
 }
 
 // rawActionDecl: ACTION <type> <destination>, e.g. ACTION route "safe-model".
@@ -453,7 +451,7 @@ type RouteDecl struct {
 	Algorithm           *AlgoSpec
 	Plugins             []*PluginRef
 	CandidateIterations []*CandidateIterationDecl
-	Emits               []*EmitDecl
+	Retention           *RetentionDecl
 	Pos                 Position
 }
 
@@ -464,28 +462,20 @@ type ActionDecl struct {
 	Pos         Position
 }
 
-// EmitDecl is the resolved AST node for an EMIT block. The Retention pointer
-// is populated when Kind == "retention". Future Kind values (e.g. "log",
-// "metric") will add their own typed payload fields here.
-type EmitDecl struct {
-	Kind      string
-	Retention *RetentionDirective
-	// RawFields preserves the parsed EMIT payload for validation. The typed
-	// Retention field intentionally drops unknown or wrong-typed entries; the
-	// validator/compiler still need the raw entries so authoring mistakes are
-	// reported instead of being silently treated as an empty directive.
-	RawFields []*FieldEntry
-	Pos       Position
-}
-
-// RetentionDirective is the DSL-resolved form of an EMIT retention block.
+// RetentionDecl is the resolved AST node for a route's RETENTION block.
 // Pointer fields preserve tri-state semantics so we can tell "unset" apart
 // from "explicitly false / 0".
-type RetentionDirective struct {
+type RetentionDecl struct {
 	Drop                  *bool
 	TTLTurns              *int
 	KeepCurrentModel      *bool
 	PreferPrefixRetention *bool
+	// RawFields preserves the parsed payload for validation. The typed fields
+	// drop unknown or wrong-typed entries; the validator and compiler still
+	// need the raw entries so authoring mistakes are reported instead of being
+	// silently treated as an empty block.
+	RawFields []*FieldEntry
+	Pos       Position
 }
 
 // CandidateIterationDecl represents a bounded FOR ... IN block over candidate

@@ -1,5 +1,5 @@
 // When the Builder route form rewrites a ROUTE block, the header options and statements it
-// does not edit (on_unknown, TIER, ACTION, FOR, EMIT, ...) are carried over as written.
+// does not edit (on_unknown, TIER, ACTION, FOR, RETENTION, ...) are carried over as written.
 // If the existing block does not follow the route grammar, the form's block is written alone.
 
 // What updateRoute writes from the route form.
@@ -134,7 +134,7 @@ const STATEMENTS = new Map<string, Rule>([
   ['DESCRIPTION', (tokens, at) => token(tokens, at, 'string')],
   ['ACTION', (tokens, at) => token(tokens, token(tokens, at, 'ident'), 'string', 'ident')],
   ['FOR', candidateFor],
-  ['EMIT', (tokens, at) => group(tokens, token(tokens, at, 'ident'), '{')],
+  ['RETENTION', (tokens, at) => group(tokens, at, '{')],
 ])
 
 function sourceOf(block: string, tokens: Token[], from: number, to: number): string {

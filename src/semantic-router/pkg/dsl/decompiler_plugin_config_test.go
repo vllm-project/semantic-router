@@ -31,10 +31,13 @@ routing:
       modelRefs:
         - model: test-model
       plugins:
-        - type: semantic-cache
+        - type: response_cache
           configuration:
             enabled: true
-            similarity_threshold: 0.81
+            semantic:
+              match:
+                recall: {top_k: 3, min_similarity: 0.81}
+                judge: {preset: same_request, min_score: 0.9}
         - type: router_replay
           configuration:
             enabled: true
@@ -46,7 +49,8 @@ routing:
 
 	dslText := mustDecompileRoutingPluginConfigTest(t, cfg)
 	assertDecompiledPluginConfigContains(t, dslText, []string{
-		`similarity_threshold: 0.81`,
+		`min_similarity: 0.81`,
+		`preset: "same_request"`,
 		`enabled: true`,
 		`max_records: 1000`,
 		`capture_request_body: true`,
@@ -206,16 +210,17 @@ func mustCompileRoutingPluginConfigTest(t *testing.T, dslText string) *config.Ro
 func assertSemanticCachePluginRoundTrip(t *testing.T, decision config.Decision) {
 	t.Helper()
 
-	plugin := findDecisionPluginForTest(t, decision, "semantic-cache")
-	var pluginConfig config.SemanticCachePluginConfig
+	plugin := findDecisionPluginForTest(t, decision, "response_cache")
+	var pluginConfig config.ResponseCachePluginConfig
 	if err := config.UnmarshalPluginConfig(plugin.Configuration, &pluginConfig); err != nil {
-		t.Fatalf("semantic-cache decode error: %v", err)
+		t.Fatalf("response_cache decode error: %v", err)
 	}
 	if !pluginConfig.Enabled {
-		t.Fatalf("semantic-cache.enabled = false, want true")
+		t.Fatalf("response_cache.enabled = false, want true")
 	}
-	if pluginConfig.SimilarityThreshold == nil || *pluginConfig.SimilarityThreshold != 0.81 {
-		t.Fatalf("semantic-cache.similarity_threshold = %#v", pluginConfig.SimilarityThreshold)
+	match := pluginConfig.SemanticMatch()
+	if match == nil || match.Recall == nil || *match.Recall.MinSimilarity != 0.81 || match.Judge == nil || match.Judge.Preset != "same_request" {
+		t.Fatalf("response_cache.semantic.match = %#v", match)
 	}
 }
 

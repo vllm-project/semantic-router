@@ -411,12 +411,6 @@ const promoteLegacyGlobalBlocks = (cfg: ConfigData) => {
 
   const globalRoot = cfg.global as MutableRecord
   const rawConfig = cfg as MutableRecord
-  const stores = asRecord(globalRoot.stores)
-  if (stores?.semantic_cache !== undefined && stores.response_cache === undefined) {
-    stores.response_cache = cloneUnknown(stores.semantic_cache)
-    delete stores.semantic_cache
-  }
-
   const placeBlockIfMissing = (path: string[], value: unknown) => {
     if (value === undefined || value === null) {
       return

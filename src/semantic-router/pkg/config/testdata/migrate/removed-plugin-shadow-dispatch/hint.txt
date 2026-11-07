@@ -1,0 +1,1 @@
+routing.decisions[chat].plugins[1]: removed_plugin_type: plugin shadow_dispatch is removed; run `vllm-sr config migrate` (a shadow block in the decision's router_replay plugin)

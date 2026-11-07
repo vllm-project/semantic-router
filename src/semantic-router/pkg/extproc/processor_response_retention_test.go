@@ -35,7 +35,7 @@ func TestResponsesRetentionPolicyAcrossCompletionPaths(t *testing.T) {
 					router, ctx, responseStore, memoryStore, runner := responseRetentionTestContext(t, tc.store)
 					ctx.TargetFormat = backend
 					if tc.drop != nil {
-						ctx.EmittedRetention = &config.RetentionDirective{Drop: tc.drop}
+						ctx.Retention = &config.DecisionRetention{Drop: tc.drop}
 					}
 					completeRetentionTestResponse(t, router, ctx, path)
 					if err := runner.RetireAndWait(time.Second); err != nil {

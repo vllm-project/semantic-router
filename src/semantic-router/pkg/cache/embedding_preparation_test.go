@@ -66,7 +66,7 @@ func TestOwnedCacheKeepsTruncatedQueriesOutOfSemanticEntries(t *testing.T) {
 		if embedded := provider.calls > calls; embedded != stored {
 			t.Fatalf("%q: embedded for storage = %v, want %v", query, embedded, stored)
 		}
-		semantic, err := adapter.LookupSemantic(context.Background(), SemanticLookup{Identity: identity, Threshold: 0.5})
+		semantic, err := semanticHit(adapter.LookupSemantic(context.Background(), SemanticLookup{Identity: identity, Bounds: atThreshold(0.5)}))
 		if err != nil || semantic.Found != stored {
 			t.Fatalf("%q: semantic lookup %+v %v", query, semantic, err)
 		}
@@ -91,7 +91,7 @@ func TestOwnedCacheTruncationCheckFailureSkipsSemanticAndPreservesExact(t *testi
 	if err := adapter.StoreSemantic(context.Background(), write); err != nil {
 		t.Fatal(err)
 	}
-	semantic, err := adapter.LookupSemantic(context.Background(), SemanticLookup{Identity: identity})
+	semantic, err := semanticHit(adapter.LookupSemantic(context.Background(), SemanticLookup{Identity: identity, Bounds: atThreshold(0)}))
 	if err != nil || semantic.Found || provider.calls != 0 {
 		t.Fatalf("failed truncation check reached semantic inference: %+v %v calls=%d", semantic, err, provider.calls)
 	}

@@ -11,6 +11,11 @@ func (d *Decision) MatchJudges() []MatchJudge {
 	if plugin := d.GetContextConfig(); plugin != nil && plugin.Enabled {
 		judges = append(judges, plugin.MatchJudges()...)
 	}
+	if plugin := d.GetResponseCacheConfig(); plugin != nil && plugin.Enabled && plugin.Mode != ResponseCacheModeExact {
+		if judge := MatchResponseCache.Effective(plugin.SemanticMatch()).Judge; judge != nil {
+			judges = append(judges, *judge)
+		}
+	}
 	return judges
 }
 

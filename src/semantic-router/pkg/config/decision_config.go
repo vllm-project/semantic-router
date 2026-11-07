@@ -58,25 +58,17 @@ type Decision struct {
 	Fallback            *fallback.FallbackOverride `yaml:"fallback,omitempty" json:"fallback,omitempty"`
 	Plugins             []DecisionPlugin           `yaml:"plugins,omitempty"`
 	CandidateIterations []CandidateIterationConfig `yaml:"candidateIterations,omitempty"`
-	// Emits carries declarative side-effect directives produced by EMIT blocks
-	// inside the matching decision branch. The slice preserves DSL declaration
-	// order so round-trip decompilation stays stable.
-	Emits []EmitDirective `yaml:"emits,omitempty" json:"emits,omitempty"`
+	// Retention says what the Router keeps of the decision's answers.
+	Retention *DecisionRetention `yaml:"retention,omitempty" json:"retention,omitempty"`
 	// Annotations carries bounded, non-executable decision metadata for replay
-	// and transport projections. Executable behavior belongs in Emits or Plugins.
+	// and transport projections. Executable behavior belongs in Plugins or the
+	// decision's attributes.
 	Annotations map[string]interface{} `yaml:"annotations,omitempty" json:"annotations,omitempty"`
 }
 
-// EmitDirective is a tagged-union wrapper for declarative directives emitted
-// by a decision branch. The initial supported Kind is "retention".
-type EmitDirective struct {
-	Kind      string              `yaml:"kind" json:"kind"`
-	Retention *RetentionDirective `yaml:"retention,omitempty" json:"retention,omitempty"`
-}
-
-// RetentionDirective expresses keep / drop / prefer-retain semantics over the
-// Router-owned response content. All fields are tri-state pointers so we can
-// distinguish "unset" from an explicit zero value.
+// DecisionRetention expresses keep / drop / prefer-retain semantics over the
+// Router-owned response content of a decision. All fields are tri-state
+// pointers so we can distinguish "unset" from an explicit zero value.
 //
 // Runtime consumes Drop (response-cache, memory, and Responses-object write
 // suppression), TTLTurns (per-entry cache TTL override), and KeepCurrentModel
@@ -86,7 +78,7 @@ type EmitDirective struct {
 // header; its session-aware scoring bias and KV-cache eviction integration are
 // follow-up work. All set fields are also observed via log + trace attributes
 // and emitted as x-vsr-retention-* response headers (issues #1747, #2009).
-type RetentionDirective struct {
+type DecisionRetention struct {
 	Drop                  *bool `yaml:"drop,omitempty" json:"drop,omitempty"`
 	TTLTurns              *int  `yaml:"ttl_turns,omitempty" json:"ttl_turns,omitempty"`
 	KeepCurrentModel      *bool `yaml:"keep_current_model,omitempty" json:"keep_current_model,omitempty"`

@@ -22,7 +22,7 @@ func TestNativeConfigurationRejectsIgnoredChatControls(t *testing.T) {
 		{"iterations", func(_ *RoutingProfile, d *Decision) {
 			d.CandidateIterations = []CandidateIterationConfig{{Variable: "model"}}
 		}},
-		{"emits", func(_ *RoutingProfile, d *Decision) { d.Emits = []EmitDirective{{Kind: "retention"}} }},
+		{"retention", func(_ *RoutingProfile, d *Decision) { d.Retention = &DecisionRetention{} }},
 		{"weights", func(_ *RoutingProfile, d *Decision) { d.ModelRefs[0].Weight = 2 }},
 		{"reasoning", func(_ *RoutingProfile, d *Decision) { value := false; d.ModelRefs[0].UseReasoning = &value }},
 	} {

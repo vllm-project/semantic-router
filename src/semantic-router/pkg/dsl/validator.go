@@ -603,7 +603,7 @@ func (v *Validator) checkRouteConstraints(r *RouteDecl) {
 		v.checkCandidateIterationConstraints(r, iter, context)
 	}
 
-	v.checkRouteEmits(r)
+	v.checkRouteRetention(r)
 }
 
 func (v *Validator) checkAlgorithmConstraints(algo *AlgoSpec, parentContext string) {

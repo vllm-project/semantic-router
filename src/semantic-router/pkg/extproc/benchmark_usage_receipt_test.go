@@ -17,8 +17,13 @@ import (
 func TestBenchmarkUsageDirectProofAndCallLimit(t *testing.T) {
 	hash := strings.Repeat("a", 64)
 	router := &OpenAIRouter{Config: &config.RouterConfig{DocumentHash: hash}}
+	cacheJudge := config.MustStructuredPayload(map[string]interface{}{"enabled": true, "semantic": map[string]interface{}{"match": map[string]interface{}{
+		"recall": map[string]interface{}{"top_k": 3}, "judge": map[string]interface{}{"preset": "same_request"},
+	}}})
 	for _, tc := range []struct {
 		name, algorithm, plugin string
+		configuration           *config.StructuredPayload
+		shadow                  bool
 		cache                   bool
 		known                   bool
 	}{
@@ -27,7 +32,10 @@ func TestBenchmarkUsageDirectProofAndCallLimit(t *testing.T) {
 		{name: "random", algorithm: "random", known: true},
 		{name: "prompt helper", algorithm: "prompt"},
 		{name: "looper", algorithm: "fusion"},
-		{name: "shadow call", algorithm: "static", plugin: "shadow_dispatch"},
+		{name: "replay", algorithm: "static", plugin: "router_replay", known: true},
+		{name: "shadow call", algorithm: "static", plugin: "router_replay", shadow: true},
+		{name: "cache recall", algorithm: "static", plugin: "response_cache", known: true},
+		{name: "cache judge", algorithm: "static", plugin: "response_cache", configuration: cacheJudge},
 		{name: "memory", algorithm: "static", plugin: "memory"},
 		{name: "unknown future plugin", algorithm: "static", plugin: "future"},
 		{name: "cache hit", algorithm: "static", cache: true},
@@ -35,9 +43,12 @@ func TestBenchmarkUsageDirectProofAndCallLimit(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			d := &config.Decision{Algorithm: &config.AlgorithmConfig{Type: tc.algorithm}}
 			if tc.plugin != "" {
-				d.Plugins = []config.DecisionPlugin{{Type: tc.plugin}}
+				d.Plugins = []config.DecisionPlugin{{Type: tc.plugin, Configuration: tc.configuration}}
 			}
 			ctx := &RequestContext{Headers: map[string]string{headers.SRBenchExpectedConfigHash: hash, headers.SRBenchMaxInferenceCalls: "1"}, VSRSelectedDecision: d, VSRSelectedModel: "small", UpstreamStatusCode: 200, VSRCacheHit: tc.cache}
+			if tc.shadow {
+				ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true, Shadow: &config.RouterReplayShadowConfig{Model: "candidate"}}
+			}
 			mutation := &ext_proc.HeaderMutation{}
 			response := &ext_proc.ProcessingResponse{Response: &ext_proc.ProcessingResponse_ResponseHeaders{ResponseHeaders: &ext_proc.HeadersResponse{Response: &ext_proc.CommonResponse{HeaderMutation: mutation}}}}
 			router.bindBenchmarkConfigResponse(response, ctx)
@@ -96,11 +107,11 @@ func TestBenchmarkUsageLooperIncludesEveryCallAndFailsClosed(t *testing.T) {
 		t.Fatal("conflicting cache-write aliases marked complete")
 	}
 	resp.ExecutionTrace.Attempts[1].Usage = usage
-	ctx.VSRSelectedDecision.Plugins = []config.DecisionPlugin{{Type: "shadow_dispatch"}}
+	ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true, Shadow: &config.RouterReplayShadowConfig{Model: "candidate"}}
 	if read().Complete {
 		t.Fatal("untraced shadow calls omitted")
 	}
-	ctx.VSRSelectedDecision.Plugins = nil
+	ctx.RouterReplayPluginConfig = nil
 	resp.ExecutionTrace.Attempts = make([]looper.AttemptTrace, 100)
 	for i := range resp.ExecutionTrace.Attempts {
 		resp.ExecutionTrace.Attempts[i] = looper.AttemptTrace{Model: strings.Repeat("x", 256), Usage: usage}

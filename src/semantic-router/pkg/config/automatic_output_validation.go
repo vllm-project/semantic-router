@@ -7,8 +7,8 @@ func validateDecisionAutomaticOutput(decision Decision) error {
 	if params == nil || !params.DefaultMaxTokens.IsAuto() {
 		return nil
 	}
-	if shadow := decision.GetShadowDispatchConfig(); shadow != nil && shadow.Enabled {
-		return fmt.Errorf("decision %q: automatic output does not support shadow_dispatch", decision.Name)
+	if replay := decision.GetRouterReplayConfig(); replay != nil && replay.Shadow != nil {
+		return fmt.Errorf("decision %q: automatic output does not support a router_replay shadow", decision.Name)
 	}
 	if decision.Algorithm == nil {
 		return nil

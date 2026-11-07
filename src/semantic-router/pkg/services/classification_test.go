@@ -237,7 +237,7 @@ func TestBuildEvalResponse_ProjectionSignalsIncludedInUsedMatchedAndUnmatched(t 
 						Type: "remom",
 					},
 					Plugins: []config.DecisionPlugin{
-						{Type: "semantic_cache"},
+						{Type: "response_cache"},
 						{Type: "system_prompt"},
 					},
 					Rules: config.RuleCombination{

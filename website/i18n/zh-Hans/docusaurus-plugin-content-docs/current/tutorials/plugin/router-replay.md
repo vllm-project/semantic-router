@@ -97,6 +97,38 @@ routing:
         pii_types_allowed: []
 ```
 
+## 影子请求 {#shadow}
+
+`shadow` 块把 decision 已批准请求的一份有界、抽样的副本发给另一个模型，replay 记录保存它的结果，主响应既不等待它，也不因它改变。只有在该 decision 记录 replay 时影子请求才会运行。它取代了 `shadow_dispatch` 插件，`vllm-sr config migrate` 会把旧插件改写为这个块。
+
+```yaml
+plugins:
+  - type: router_replay
+    configuration:
+      enabled: true
+      shadow:
+        model: candidate-model
+        sample_rate: 0.05
+        max_concurrency: 2
+        max_queue_depth: 8
+        timeout_seconds: 30
+        max_response_bytes: 1048576
+        max_retries: 0
+        capture_response_body: false
+        max_capture_bytes: 4096
+        tls_skip_verify: false
+        forward_headers: []
+```
+
+- `model` 必填，必须在 `providers.models` 中有后端。
+- `sample_rate` 默认 `1.0`；`0` 保留声明但从不发送。
+- `max_concurrency`、`max_queue_depth`、`timeout_seconds`、`max_response_bytes`、`max_retries` 限定资源；超出队列的调用以 `queue_full` 丢弃。
+- `capture_response_body` 默认关闭，只保存大小、token 数和 SHA-256；打开后在结果中保存不超过 `max_capture_bytes` 的摘录。
+- `forward_headers` 只转发列出的 decision `header_mutation` 头；已知的凭据头不能列出。
+- 经 looper 执行的算法（ratings、confidence、fusion、ReMoM、workflows）在加载时拒绝 `shadow`。
+
+影子结果以 `source: shadow_dispatch` 追加到主请求的 replay 记录，指标为 `sr_shadow_dispatch_total`、`sr_shadow_dispatch_latency_seconds` 等。
+
 ## Looper 诊断 {#looper-diagnostics}
 
 Confidence Looper 记录包含版本化的 `route_diagnostics.looper` 对象。它包含有界的 attempt 元数据、token 和成本记账、延迟、处置原因码、tracing 启用时的 OpenTelemetry trace ID，以及 `final_attempt_ordinal`。Attempt 详情会从对查看者脱敏的响应中省略，仍可供具有回放-detail 权限的主体使用。

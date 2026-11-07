@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { resolveCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas'
+import { getCuratedPluginFieldSchema } from './dslPluginSchemas'
 
 describe('capability plugin field schemas', () => {
   it('exposes the complete context contract', () => {
@@ -27,10 +28,12 @@ describe('capability plugin field schemas', () => {
     expect(resolveCapabilityPluginFieldSchema('context_compression')).toBeNull()
   })
 
-  it('exposes the shadow dispatch bounds', () => {
-    const fields = resolveCapabilityPluginFieldSchema('shadow_dispatch')
-    expect(fields?.map((field) => field.key)).toEqual([
-      'enabled',
+  it('exposes the shadow bounds under router_replay', () => {
+    const shadow = getCuratedPluginFieldSchema('router_replay').find(
+      (field) => field.key === 'shadow',
+    )
+    expect(resolveCapabilityPluginFieldSchema('shadow_dispatch')).toBeNull()
+    expect(shadow?.fields?.map((field) => field.key)).toEqual([
       'model',
       'sample_rate',
       'max_concurrency',
@@ -51,12 +54,14 @@ describe('capability plugin field schemas', () => {
       'enabled',
       'mode',
       'scope',
-      'semantic',
       'ttl_seconds',
+      'semantic',
       'request_controls',
       'personalized',
       'revision',
     ])
+    const semantic = fields?.find((field) => field.key === 'semantic')
+    expect(semantic?.fields?.map((field) => field.key)).toEqual(['match'])
   })
 
   it('exposes the prompt cache marker contract', () => {

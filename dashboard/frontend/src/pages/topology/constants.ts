@@ -84,7 +84,6 @@ const PLUGIN_ICON_OVERRIDES: Partial<Record<PluginType, string>> = {
   response_guard: 'RG',
   tools: 'TL',
   prompt_cache: 'PC',
-  shadow_dispatch: 'SD',
   masking: 'MSK',
 }
 
@@ -105,7 +104,6 @@ const PLUGIN_COLOR_OVERRIDES: Partial<Record<PluginType, { background: string; b
     response_guard: { background: '#c05621', border: '#9c4221' },
     tools: { background: '#5a6c7d', border: '#3d4a59' },
     prompt_cache: { background: '#6b7280', border: '#4b5563' },
-    shadow_dispatch: { background: '#5b5f7a', border: '#3f4259' },
     masking: { background: '#4f6a7a', border: '#374d59' },
   }
 

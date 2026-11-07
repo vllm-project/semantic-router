@@ -1935,13 +1935,13 @@ api:
 				Expect(cfg.IsCacheEnabledForDecision("test")).To(BeFalse())
 			})
 
-			It("should return false when decision explicitly disables semantic-cache", func() {
+			It("should return false when decision explicitly disables response_cache", func() {
 				decision := Decision{
 					Name:      "test",
 					ModelRefs: []ModelRef{{Model: "test"}},
 					Plugins: []DecisionPlugin{
 						{
-							Type: "semantic-cache",
+							Type: "response_cache",
 							Configuration: MustStructuredPayload(map[string]interface{}{
 								"enabled": false,
 							}),
@@ -1961,13 +1961,13 @@ api:
 				Expect(cfg.IsCacheEnabledForDecision("test")).To(BeFalse())
 			})
 
-			It("should return true when decision explicitly enables semantic-cache", func() {
+			It("should return true when decision explicitly enables response_cache", func() {
 				decision := Decision{
 					Name:      "test",
 					ModelRefs: []ModelRef{{Model: "test"}},
 					Plugins: []DecisionPlugin{
 						{
-							Type: "semantic-cache",
+							Type: "response_cache",
 							Configuration: MustStructuredPayload(map[string]interface{}{
 								"enabled": true,
 							}),
@@ -1997,17 +1997,18 @@ api:
 				Expect(cfg.IsCacheEnabledForDecision("non_existent")).To(BeFalse())
 			})
 
-			It("should use decision-level similarity threshold when configured", func() {
-				threshold := float32(0.95)
+			It("should use the decision's semantic match when configured", func() {
 				decision := Decision{
 					Name:      "test",
 					ModelRefs: []ModelRef{{Model: "test"}},
 					Plugins: []DecisionPlugin{
 						{
-							Type: "semantic-cache",
+							Type: "response_cache",
 							Configuration: MustStructuredPayload(map[string]interface{}{
-								"enabled":              true,
-								"similarity_threshold": threshold,
+								"enabled": true,
+								"semantic": map[string]interface{}{"match": map[string]interface{}{
+									"recall": map[string]interface{}{"top_k": 3, "min_similarity": 0.95},
+								}},
 							}),
 						},
 					},
@@ -2024,8 +2025,10 @@ api:
 					},
 				}
 
-				// Should use decision-level threshold, not global
-				Expect(cfg.GetCacheSimilarityThresholdForDecision("test")).To(Equal(threshold))
+				// The decision's block bounds recall, not the store's threshold.
+				block := cfg.ResponseCacheMatch(cfg.GetDecisionByName("test"))
+				Expect(block).NotTo(BeNil())
+				Expect(*block.Recall.MinSimilarity).To(Equal(0.95))
 			})
 
 			It("should use decision-level TTL when configured", func() {
@@ -2035,7 +2038,7 @@ api:
 					ModelRefs: []ModelRef{{Model: "test"}},
 					Plugins: []DecisionPlugin{
 						{
-							Type: "semantic-cache",
+							Type: "response_cache",
 							Configuration: MustStructuredPayload(map[string]interface{}{
 								"enabled":     true,
 								"ttl_seconds": ttl,

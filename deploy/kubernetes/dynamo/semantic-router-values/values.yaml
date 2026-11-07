@@ -65,7 +65,7 @@ config:
           - type: response_cache
             configuration:
               enabled: true
-              similarity_threshold: 0.92
+              semantic: {match: {recall: {top_k: 3, min_similarity: 0.92}}}
           - type: system_prompt
             configuration:
               enabled: true
@@ -137,7 +137,7 @@ config:
           - type: response_cache
             configuration:
               enabled: true
-              similarity_threshold: 0.95
+              semantic: {match: {recall: {top_k: 3, min_similarity: 0.95}}}
           - type: system_prompt
             configuration:
               enabled: true
@@ -277,7 +277,7 @@ config:
           - type: response_cache
             configuration:
               enabled: true
-              similarity_threshold: 0.75
+              semantic: {match: {recall: {top_k: 3, min_similarity: 0.75}}}
           - type: system_prompt
             configuration:
               enabled: true

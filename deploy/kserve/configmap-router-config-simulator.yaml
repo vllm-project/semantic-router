@@ -80,7 +80,7 @@ data:
             - type: response_cache
               configuration:
                 enabled: true
-                similarity_threshold: 0.75
+                semantic: {match: {recall: {top_k: 3, min_similarity: 0.75}}}
       signals:
         domains:
           - name: business
