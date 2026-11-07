@@ -27,6 +27,7 @@ from community_lifecycle_policy import (
     plan_issue_kind,
     title_format_error,
 )
+from community_reviewers import desired_workgroup_reviewer
 
 # Requests the acceptance sweep leaves to every other workflow sharing the
 # repository's Actions token, whose hourly budget is about a thousand.
@@ -532,6 +533,10 @@ PULL_REQUEST_QUERY = """
       pullRequest(number: $number) {
         reviewDecision
         mergeStateStatus
+        reviewRequests(first: 100) {
+          nodes { requestedReviewer { ... on User { login } } }
+        }
+        latestReviews(first: 100) { nodes { author { login } } }
         closingIssuesReferences(first: 20) { nodes { number } }
         commits(last: 1) {
           nodes { commit { statusCheckRollup { state } } }
@@ -660,6 +665,71 @@ def sync_pull_request(
             method="PATCH",
             payload={"milestone": evaluation.milestone_number},
         )
+
+    if (
+        pull_request.get("state") == "open"
+        and not pull_request.get("draft")
+        and evaluation.valid
+    ):
+        request_workgroup_review(
+            client,
+            repo,
+            pull_request,
+            graph,
+            evaluation.owner_label,
+            current_workgroups,
+        )
+
+
+def request_workgroup_review(
+    client: GitHubClient,
+    repo: str,
+    pull_request: dict[str, Any],
+    graph: dict[str, Any],
+    owner_label: str | None,
+    previous_workgroups: set[str],
+) -> None:
+    """Request one stable Workgroup reviewer without repeating notifications."""
+
+    number = int(pull_request["number"])
+    author = (pull_request.get("user") or {}).get("login") or ""
+    reviewer = desired_workgroup_reviewer(owner_label, number, author)
+    requested_logins = {
+        requested_user["login"].casefold()
+        for node in (graph.get("reviewRequests") or {}).get("nodes") or []
+        if (requested_user := node.get("requestedReviewer"))
+        and requested_user.get("login")
+    }
+    for previous_owner in previous_workgroups - {owner_label}:
+        previous_reviewer = desired_workgroup_reviewer(previous_owner, number, author)
+        if (
+            previous_reviewer
+            and previous_reviewer != reviewer
+            and previous_reviewer.casefold() in requested_logins
+        ):
+            client.request(
+                f"repos/{repo}/pulls/{number}/requested_reviewers",
+                method="DELETE",
+                payload={"reviewers": [previous_reviewer]},
+            )
+
+    if not reviewer:
+        return
+    if reviewer.casefold() in requested_logins:
+        return
+    reviewed_logins = {
+        author["login"].casefold()
+        for node in (graph.get("latestReviews") or {}).get("nodes") or []
+        if (author := node.get("author")) and author.get("login")
+    }
+    if reviewer.casefold() in reviewed_logins:
+        return
+
+    client.request(
+        f"repos/{repo}/pulls/{number}/requested_reviewers",
+        method="POST",
+        payload={"reviewers": [reviewer]},
+    )
 
 
 def sync_pull_request_event(client: GitHubClient, event: dict[str, Any]) -> None:
