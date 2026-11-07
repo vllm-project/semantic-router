@@ -23,7 +23,7 @@ dev = ["pytest>=8,<10"]
 # Embedding generation for training and benchmarks. embeddings.py guards these
 # imports and the tests never generate embeddings, as in requirements-parity.txt.
 embeddings = [
-    "sentence-transformers>=2.2.0,<7",
+    "sentence-transformers>=6.2.0,<7",
     # requirements.txt leaves torch unbounded; the floor follows the other training areas.
     "torch>=2.2,<3",
 ]
