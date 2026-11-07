@@ -19,6 +19,8 @@ type topologySignalMapping struct {
 // convertRouterResponse converts Router API response to TestQueryResult.
 func convertRouterResponse(req TestQueryRequest, routerResp *RouterEvalResponse, configPath string) *TestQueryResult {
 	result := newTestQueryResult(req)
+	result.RequestedModel = routerResp.RequestedModel
+	result.Recipe = routerResp.Recipe
 	result.SignalErrorMatches = routerResp.SignalErrorMatches
 	result.EvalTrace = routerResp.EvalTrace
 	result.SignalErrors = routerResp.SignalErrors
@@ -161,18 +163,19 @@ func appendSignalGroupHighlights(result *TestQueryResult) {
 
 func applyRouterDecision(result *TestQueryResult, routerResp *RouterEvalResponse) {
 	if routerResp.DecisionResult != nil {
+		result.Algorithm = routerResp.DecisionResult.Algorithm
 		result.MatchedDecision = routerResp.DecisionResult.DecisionName
 		result.DecisionConfidence = routerResp.DecisionResult.Confidence
 		result.DecisionConfidenceAvailable = routerResp.DecisionResult.ConfidenceAvailable
-		result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("decision-%s", routerResp.DecisionResult.DecisionName))
 	}
 
-	if routerResp.RoutingDecision == "" {
+	if routerResp.RoutingDecision != "" {
+		result.MatchedDecision = routerResp.RoutingDecision
+	}
+	if result.MatchedDecision == "" || routerResp.DecisionError != "" {
 		return
 	}
-
-	result.MatchedDecision = routerResp.RoutingDecision
-	result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("decision-%s", routerResp.RoutingDecision))
+	result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("decision-%s", result.MatchedDecision))
 	if isSystemFallbackDecision(routerResp.RoutingDecision) {
 		result.IsFallbackDecision = true
 		result.FallbackReason = getFallbackReason(routerResp.RoutingDecision)
