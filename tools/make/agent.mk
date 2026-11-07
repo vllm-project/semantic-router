@@ -64,6 +64,7 @@ harness-check: $(HARNESS_BOOTSTRAP_DEPS) test-tiny-model ## Validate the domain 
 	@"$(AGENT_PYTHON)" tools/agent/scripts/sync_public_skill.py --check
 	@"$(AGENT_PYTHON)" tools/ci/validate_workflows.py
 	@"$(AGENT_PYTHON)" -m unittest discover -s tools/ci/tests -p "test_*.py"
+	@"$(AGENT_PYTHON)" tools/ci/check_harness_support.py
 	@"$(AGENT_PYTHON)" -m unittest discover -s tools/agent/scripts/tests -p "test_*.py"
 	@if command -v actionlint >/dev/null 2>&1; then \
 		actionlint -shellcheck=; \

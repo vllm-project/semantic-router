@@ -1,6 +1,7 @@
 package testcases
 
 import (
+	"bytes"
 	"encoding/json"
 	"io/fs"
 	"regexp"
@@ -9,13 +10,17 @@ import (
 )
 
 var agentClientCaptureLeaks = map[string]*regexp.Regexp{
-	"credential header": regexp.MustCompile(`(?i)"(authorization|x-api-key|api-key|cookie|x-claude-code-session-id)"\s*:`),
+	"credential header": regexp.MustCompile(`(?i)"(authorization|x-api-key|api-key|cookie)"\s*:`),
 	"secret":            regexp.MustCompile(`sk-[A-Za-z0-9_-]{8,}|(?i)bearer\s+[A-Za-z0-9._-]{8,}`),
 	"local path":        regexp.MustCompile(`/Users/|/home/|/private/|/var/folders/|[A-Za-z]:\\\\`),
 	"email address":     regexp.MustCompile(`[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`),
 	"IP address":        regexp.MustCompile(`\b(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}\b`),
 	"hostname":          regexp.MustCompile(`(?i)localhost|\.local\b|\.internal\b|\.corp\b|\.lan\b`),
 }
+
+// agentClientIdentityHeaderValues matches an identity header used as a JSON
+// key. The header name may appear only with a placeholder-* value.
+var agentClientIdentityHeaderValues = regexp.MustCompile(`(?i)"(x-claude-code-session-id|x-claude-code-agent-id|x-session-id|x-conversation-id|session-id|thread-id|x-openai-subagent)"\s*:\s*"([^"]*)"`)
 
 func TestAgentClientCapturesAreSanitized(t *testing.T) {
 	names, err := fs.Glob(agentClientCaptureFiles, "testdata/agent_clients/*.json")
@@ -33,6 +38,11 @@ func TestAgentClientCapturesAreSanitized(t *testing.T) {
 		for kind, pattern := range agentClientCaptureLeaks {
 			if match := pattern.Find(data); match != nil {
 				t.Errorf("%s contains a %s: %q", name, kind, match)
+			}
+		}
+		for _, match := range agentClientIdentityHeaderValues.FindAllSubmatch(data, -1) {
+			if !agentClientIdentityPlaceholder.Match(match[2]) {
+				t.Errorf("%s identity header %s has value %q; use a placeholder-* token", name, match[1], match[2])
 			}
 		}
 	}
@@ -197,5 +207,95 @@ func TestLinkAgentClientToolCallShapes(t *testing.T) {
 	}
 	if err := linkAgentClientToolCall(agentChatToolRefs, unpaired, call); err == nil {
 		t.Fatal("a result that answers another call was relinked")
+	}
+}
+
+func TestAgentClientIdentityHeadersFollowTheRecordedRequests(t *testing.T) {
+	captures, err := loadAgentClientCaptures()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, capture := range captures {
+		for _, request := range []string{agentClientTurn0, agentClientTurn1, agentClientSubagentRequest} {
+			headers, headerErr := agentClientRequestHeaders(capture, "replay-session", request)
+			if headerErr != nil {
+				t.Fatalf("%s %s: %v", capture.Name, request, headerErr)
+			}
+			if headers[agentClientTestSessionHeader] != "replay-session" {
+				t.Errorf("%s %s: correlation id = %q", capture.Name, request, headers[agentClientTestSessionHeader])
+			}
+			identity, identityErr := capture.identityHeaders(request)
+			if identityErr != nil {
+				t.Fatalf("%s %s: %v", capture.Name, request, identityErr)
+			}
+			for name, placeholder := range identity {
+				if headers[name] != placeholder {
+					t.Errorf("%s %s: header %s = %q, want %q", capture.Name, request, name, headers[name], placeholder)
+				}
+			}
+		}
+	}
+}
+
+func TestAgentClientIdentityAttachesPlaceholdersWithoutReplacingTheCorrelationID(t *testing.T) {
+	capture := agentClientCapture{
+		Name:   "example",
+		Client: "example",
+		Headers: map[string]string{
+			"user-agent":                 "example/1.0.0",
+			agentClientTestSessionHeader: "from-the-capture",
+		},
+		Identity: &agentClientIdentity{Headers: []agentClientIdentityHeader{{
+			Name:        "x-session-id",
+			Placeholder: "placeholder-session",
+			On:          []string{agentClientTurn0, agentClientSubagentRequest},
+		}, {
+			Name:        "x-claude-code-agent-id",
+			Placeholder: "placeholder-agent",
+			On:          []string{agentClientSubagentRequest},
+		}}},
+	}
+	parent, err := agentClientRequestHeaders(capture, "replay-session", agentClientTurn0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parent["x-session-id"] != "placeholder-session" || parent["x-claude-code-agent-id"] != "" {
+		t.Fatalf("parent headers = %#v", parent)
+	}
+	if parent[agentClientTestSessionHeader] != "replay-session" || parent["user-agent"] != "example/1.0.0" {
+		t.Fatalf("parent headers = %#v", parent)
+	}
+	child, err := agentClientRequestHeaders(capture, "replay-session", agentClientSubagentRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if child["x-session-id"] != "placeholder-session" || child["x-claude-code-agent-id"] != "placeholder-agent" {
+		t.Fatalf("subagent headers = %#v", child)
+	}
+	followUp, err := capture.identityHeaders(agentClientTurn1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(followUp) != 0 {
+		t.Fatalf("turn-1 identity = %#v", followUp)
+	}
+}
+
+func TestDecodeAgentClientCaptureRejectsRawIdentityValues(t *testing.T) {
+	raw := []byte(`{
+		"client": "example",
+		"version": "1.0.0",
+		"path": "/v1/chat/completions",
+		"identity": {"headers": [{"name": "x-session-id", "placeholder": "00000000-0000-4000-8000-000000000001", "on": ["turn-0"]}]},
+		"backends": {"openai.chat.v1": ["tools"]},
+		"turns": [{}, {}]
+	}`)
+	if _, err := decodeAgentClientCapture("example.json", raw); err == nil {
+		t.Fatal("a raw session id was accepted as an identity placeholder")
+	}
+	raw = bytes.ReplaceAll(raw, []byte("00000000-0000-4000-8000-000000000001"), []byte("placeholder-session"))
+	raw = bytes.ReplaceAll(raw, []byte(`"on": ["turn-0"]`), []byte(`"on": ["subagent"]`))
+	if _, err := decodeAgentClientCapture("example.json", raw); err == nil {
+		t.Fatal("a subagent header without a subagent request was accepted")
 	}
 }
