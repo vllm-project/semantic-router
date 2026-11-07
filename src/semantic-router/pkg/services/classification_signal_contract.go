@@ -41,6 +41,12 @@ func (s *ClassificationService) ClassifyIntentForEval(ctx context.Context, req I
 		return nil, ErrClassifierUnavailable
 	}
 
+	if req.Input != nil && req.Input.Type == "image" {
+		if err := classifier.ValidateImageClassification(); err != nil {
+			return nil, err
+		}
+	}
+
 	wantTrace := req.Options != nil && req.Options.Trace
 	input.requestFacts.Context = ctx
 	signals := classifier.EvaluateAllSignalsWithRequestFacts(

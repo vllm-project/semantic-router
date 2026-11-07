@@ -15,6 +15,7 @@ import (
 
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
@@ -127,7 +128,7 @@ func testEmbeddingSignalImageRouting(ctx context.Context, client *kubernetes.Cli
 			accuracy*100, minAccuracyThreshold*100, correctTests, totalTests)
 	}
 
-	return nil
+	return verifyTypedImageClassification(ctx, client, opts, testCases)
 }
 
 func loadEmbeddingSignalImageCases(filepath string) ([]EmbeddingSignalImageTestCase, error) {
@@ -346,4 +347,111 @@ func printEmbeddingSignalImageResults(results []EmbeddingSignalImageResult, tota
 			fmt.Printf("  - ERROR: %s - %s\n", result.Description, result.Error)
 		}
 	}
+}
+
+// verifyTypedImageClassification enters the public API with the same pinned
+// images and real prepared encoder as the routed-request acceptance cases.
+// All positive fixture rules must match, in order, with one isolated bad item.
+func verifyTypedImageClassification(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions, cases []EmbeddingSignalImageTestCase) error {
+	session, sessionErr := fixtures.OpenRouterAPISession(ctx, client, opts)
+	if sessionErr != nil {
+		return sessionErr
+	}
+	defer session.Close()
+	httpClient := session.HTTPClient(30 * time.Second)
+	inputs := []map[string]string{{"type": "image", "image_url": "https://example.invalid/must-not-fetch.png"}}
+	expected := []EmbeddingSignalImageTestCase{{}}
+	for _, testCase := range cases {
+		if !testCase.ExpectedMatch || testCase.ImageFile == "" {
+			continue
+		}
+		content, err := buildChatCompletionContent("", testCase.ImageFile)
+		if err != nil {
+			return err
+		}
+		parts, ok := content.([]map[string]interface{})
+		if !ok || len(parts) != 2 {
+			return fmt.Errorf("image fixture did not produce image content")
+		}
+		imageRef, ok := parts[1]["image_url"].(map[string]string)
+		if !ok {
+			return fmt.Errorf("image fixture did not produce image URL")
+		}
+		input := map[string]string{"type": "image", "image_url": imageRef["url"]}
+		body, err := json.Marshal(map[string]interface{}{"input": input})
+		if err != nil {
+			return err
+		}
+		single, err := postJSON(ctx, httpClient, http.MethodPost, session.URL("/api/v1/diagnostics/classify/intent"), body)
+		if err != nil {
+			return err
+		}
+		var document struct {
+			Classification struct {
+				Category string `json:"category"`
+			} `json:"classification"`
+			MatchedSignals struct {
+				Embeddings []string `json:"embeddings"`
+			} `json:"matched_signals"`
+		}
+		if single.StatusCode != http.StatusOK {
+			return fmt.Errorf("typed image intent status %d: %s", single.StatusCode, single.Body)
+		}
+		if err := json.Unmarshal(single.Body, &document); err != nil {
+			return err
+		}
+		if document.Classification.Category != testCase.ExpectedDecision || !slices.Contains(document.MatchedSignals.Embeddings, testCase.SignalName) {
+			return fmt.Errorf("typed image %q did not match decision %q and signal %q", testCase.Description, testCase.ExpectedDecision, testCase.SignalName)
+		}
+		inputs = append(inputs, input)
+		expected = append(expected, testCase)
+	}
+	if len(inputs) < 2 {
+		return fmt.Errorf("typed image API acceptance requires positive image fixtures")
+	}
+	body, err := json.Marshal(map[string]interface{}{"inputs": inputs})
+	if err != nil {
+		return err
+	}
+	batch, err := postJSON(ctx, httpClient, http.MethodPost, session.URL("/api/v1/diagnostics/classify/batch"), body)
+	if err != nil {
+		return err
+	}
+	var document struct {
+		TotalCount int `json:"total_count"`
+		Results    []struct {
+			Index    int    `json:"index"`
+			Category string `json:"category"`
+			Error    *struct {
+				Code string `json:"code"`
+			} `json:"error"`
+			MatchedSignals struct {
+				Embeddings []string `json:"embeddings"`
+			} `json:"matched_signals"`
+		} `json:"results"`
+	}
+	if batch.StatusCode != http.StatusOK {
+		return fmt.Errorf("typed image batch status %d: %s", batch.StatusCode, batch.Body)
+	}
+	if err := json.Unmarshal(batch.Body, &document); err != nil {
+		return err
+	}
+	if document.TotalCount != len(inputs) || len(document.Results) != len(inputs) {
+		return fmt.Errorf("typed image batch lost input positions")
+	}
+	for index, result := range document.Results {
+		if result.Index != index {
+			return fmt.Errorf("typed image batch reordered index %d as %d", index, result.Index)
+		}
+		if index == 0 {
+			if result.Error == nil || result.Error.Code != "INVALID_INPUT" {
+				return fmt.Errorf("typed image batch did not reject external URL")
+			}
+			continue
+		}
+		if result.Error != nil || result.Category != expected[index].ExpectedDecision || !slices.Contains(result.MatchedSignals.Embeddings, expected[index].SignalName) {
+			return fmt.Errorf("typed image batch item %d failed decision/signal acceptance", index)
+		}
+	}
+	return nil
 }

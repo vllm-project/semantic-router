@@ -11,6 +11,7 @@ import (
 
 // UnifiedBatchResponse represents the response from unified batch classification
 type UnifiedBatchResponse struct {
+	ItemErrors       []error                         `json:"-"`
 	IntentResults    []classification.IntentResult   `json:"intent_results"`
 	PIIResults       []classification.PIIResult      `json:"pii_results"`
 	SecurityResults  []classification.SecurityResult `json:"security_results"`
@@ -40,12 +41,13 @@ func (s *ClassificationService) ClassifyBatchUnifiedContext(ctx context.Context,
 	}
 
 	start := time.Now()
-	results, err := s.unifiedClassifier.ClassifyBatchContext(ctx, texts)
+	results, err := s.unifiedClassifier.ClassifyBatchPartialContext(ctx, texts)
 	if err != nil {
 		return nil, fmt.Errorf("unified batch classification failed: %w", err)
 	}
 
 	return &UnifiedBatchResponse{
+		ItemErrors:       results.ItemErrors,
 		IntentResults:    results.IntentResults,
 		PIIResults:       results.PIIResults,
 		SecurityResults:  results.SecurityResults,
@@ -61,6 +63,9 @@ func (s *ClassificationService) ClassifyPIIUnified(texts []string) ([]classifica
 		return nil, err
 	}
 
+	if err := errors.Join(results.ItemErrors...); err != nil {
+		return nil, err
+	}
 	return results.PIIResults, nil
 }
 
@@ -71,6 +76,9 @@ func (s *ClassificationService) ClassifySecurityUnified(texts []string) ([]class
 		return nil, err
 	}
 
+	if err := errors.Join(results.ItemErrors...); err != nil {
+		return nil, err
+	}
 	return results.SecurityResults, nil
 }
 

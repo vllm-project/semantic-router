@@ -93,6 +93,11 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 // resolveSignalInputWith applies routing_input through selector exactly as the
 // data plane does, so a preview scores the same text as live routing.
 func (req IntentRequest) resolveSignalInputWith(selector *routinginput.Selector) (intentSignalInput, error) {
+	var err error
+	req, err = req.withClassificationInput()
+	if err != nil {
+		return intentSignalInput{}, err
+	}
 	if req.PreviewContext != nil {
 		for _, identity := range []string{req.PreviewContext.SessionID, req.PreviewContext.ConversationID} {
 			if len(identity) > 1024 || strings.ContainsAny(identity, "\r\n\x00") {

@@ -193,6 +193,76 @@ Standalone classification, embedding, and similarity diagnostics return
 exceeded. The error retains the model's limit details; other inference failures
 remain server errors.
 
+### Typed intent and batch inputs
+
+`/api/v1/diagnostics/classify/intent` accepts an `input` in place of legacy
+`text` or `messages`. The variants are exact and cannot be combined:
+
+```json
+{"input":{"type":"text","text":"Explain this diagram."}}
+```
+
+```json
+{"input":{"type":"image","image_url":"data:image/png;base64,<base64-image>"}}
+```
+
+Images must be inline base64 data URIs with an allowed PNG, JPEG, GIF, or WebP
+MIME type. External URLs, filesystem paths, audio, unknown input fields, and mixed
+payload fields are rejected. Payload base64 is validated before inference;
+image decoding errors remain classification errors. The Router never fetches
+an image URL on this path. Image intent requires configured image-query
+embedding rules and an actually prepared image encoder in the selected recipe.
+A text-only model is not an image classifier, even when its provider exposes an
+image method. Unsupported combinations return `400 UNSUPPORTED_INPUT` before
+inference. Existing successful `text` and `messages` requests are unchanged.
+
+`/api/v1/diagnostics/classify/batch` accepts either legacy `texts` or typed
+`inputs`, never both, including when a supplied field is empty or null:
+
+```json
+{
+  "task_type": "intent",
+  "inputs": [
+    {"type": "text", "text": "Explain this diagram."},
+    {"type": "image", "image_url": "data:image/png;base64,<base64-image>"}
+  ]
+}
+```
+
+Typed `intent` items reuse single-input signal evaluation, including matched
+image signals. Typed `pii`, `security`, and `all` use the existing unified text
+classifier and reject image items with `UNSUPPORTED_INPUT`; they never send
+images to text-only heads. `task_type` defaults to `intent`. As with legacy
+batches, `all` runs all three text tasks and returns intent fields plus nested
+`pii` and `security` objects. Their confidence is `null` when scores are
+unavailable, and categorical security results retain their `decision` details.
+Legacy `texts` retain the existing successful response shape and text-head
+semantics; typed intent can therefore differ from legacy batch intent when the
+recipe uses signal-driven decisions.
+
+A valid batch returns `200` and exactly one result in each input position.
+Typed results additionally carry their zero-based `index`. An `error` object
+with `code` and `message` marks an unsuccessful item; its empty category and
+zero confidence are not a classification. Invalid, unsupported, failed,
+canceled, and expired items do not discard successful siblings. Error codes
+are `INVALID_INPUT`, `UNSUPPORTED_INPUT`, `CLASSIFICATION_ERROR`,
+`CLASSIFIER_UNAVAILABLE`, `CANCELED`, and `DEADLINE_EXCEEDED`. Statistics exclude
+unsuccessful items. Unscored intent successes carry `confidence_available: false`;
+their numeric zero confidence is not a measured score. Typed confidence averages
+and low-confidence counts exclude these unscored results; category counts retain
+them. Runtime errors do not echo input payloads.
+
+Malformed JSON, ambiguous/missing input envelopes, empty arrays, invalid task
+names, unknown recipes, and oversized batches are whole-request errors. Both
+input forms use the generation's configured `max_batch_size`; typed batches
+have a limit of 100 when that setting is absent or nonpositive. The existing
+10 MiB HTTP request-body limit also applies. All capability checks and item execution
+retain the same runtime generation across configuration replacement.
+
+Typed similarity inputs and image support in classifier heads are separate
+work; this contract does not change similarity, embedding dimensions, or
+routing policies.
+
 ## Diagnose a prepared model binding
 
 `GET /api/v1/diagnostics/models?recipe=<name>` lists the bindings actually

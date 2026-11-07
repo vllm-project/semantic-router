@@ -2,8 +2,10 @@ package classification
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,6 +39,7 @@ type UnifiedClassifierStats struct {
 
 // UnifiedBatchResults contains results from all classification tasks.
 type UnifiedBatchResults struct {
+	ItemErrors      []error          `json:"-"`
 	IntentResults   []IntentResult   `json:"intent_results"`
 	PIIResults      []PIIResult      `json:"pii_results"`
 	SecurityResults []SecurityResult `json:"security_results"`
@@ -84,6 +87,21 @@ func (uc *UnifiedClassifier) ClassifyBatch(texts []string) (*UnifiedBatchResults
 // ClassifyBatchContext returns an independent inference for every input. The
 // caller's generation lease owns the borrowed recipe classifier.
 func (uc *UnifiedClassifier) ClassifyBatchContext(ctx context.Context, texts []string) (*UnifiedBatchResults, error) {
+	results, err := uc.ClassifyBatchPartialContext(ctx, texts)
+	if err != nil {
+		return nil, err
+	}
+	for _, itemErr := range results.ItemErrors {
+		if itemErr != nil {
+			return nil, itemErr
+		}
+	}
+	return results, nil
+}
+
+// ClassifyBatchPartialContext preserves one ordered outcome per input. A failed
+// item does not discard successful siblings; setup failures remain batch errors.
+func (uc *UnifiedClassifier) ClassifyBatchPartialContext(ctx context.Context, texts []string) (*UnifiedBatchResults, error) {
 	if len(texts) == 0 {
 		return nil, fmt.Errorf("empty text batch")
 	}
@@ -103,6 +121,14 @@ func (uc *UnifiedClassifier) ClassifyBatchContext(ctx context.Context, texts []s
 	errs := make([]error, len(texts)*3)
 	modelservice.Fan(ctx, len(errs), func(task int) {
 		index := task / 3
+		if err := ctx.Err(); err != nil {
+			errs[task] = err
+			return
+		}
+		if strings.TrimSpace(texts[index]) == "" {
+			errs[task] = binding.ErrInvalidInput
+			return
+		}
 		switch task % 3 {
 		case 0:
 			results.IntentResults[index], errs[task] = uc.intent(ctx, texts[index])
@@ -112,10 +138,9 @@ func (uc *UnifiedClassifier) ClassifyBatchContext(ctx context.Context, texts []s
 			results.SecurityResults[index], errs[task] = uc.security(ctx, texts[index])
 		}
 	})
-	for _, err := range errs {
-		if err != nil {
-			return nil, err
-		}
+	results.ItemErrors = make([]error, len(texts))
+	for index := range texts {
+		results.ItemErrors[index] = errors.Join(errs[index*3 : index*3+3]...)
 	}
 	uc.updateStats(len(texts), time.Since(started))
 	return results, nil

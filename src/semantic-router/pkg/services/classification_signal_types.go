@@ -24,20 +24,21 @@ const (
 
 // IntentRequest represents a request for intent classification.
 type IntentRequest struct {
-	ExpectedConfigHash  string            `json:"-"`
-	Text                string            `json:"text,omitempty"`
-	Messages            []IntentMessage   `json:"messages,omitempty"`
-	Tools               []json.RawMessage `json:"tools,omitempty"`
-	Functions           []json.RawMessage `json:"functions,omitempty"`
-	ToolChoice          json.RawMessage   `json:"tool_choice,omitempty"`
-	FunctionCall        json.RawMessage   `json:"function_call,omitempty"`
-	ResponseFormat      json.RawMessage   `json:"response_format,omitempty"`
-	MaxTokens           json.RawMessage   `json:"max_tokens,omitempty"`
-	MaxCompletionTokens json.RawMessage   `json:"max_completion_tokens,omitempty"`
-	Model               string            `json:"model,omitempty"`
-	Metadata            map[string]string `json:"metadata,omitempty"`
-	Options             *IntentOptions    `json:"options,omitempty"`
-	PreviewContext      *PreviewContext   `json:"preview_context,omitempty"`
+	Input               *ClassificationInput `json:"input,omitempty"`
+	ExpectedConfigHash  string               `json:"-"`
+	Text                string               `json:"text,omitempty"`
+	Messages            []IntentMessage      `json:"messages,omitempty"`
+	Tools               []json.RawMessage    `json:"tools,omitempty"`
+	Functions           []json.RawMessage    `json:"functions,omitempty"`
+	ToolChoice          json.RawMessage      `json:"tool_choice,omitempty"`
+	FunctionCall        json.RawMessage      `json:"function_call,omitempty"`
+	ResponseFormat      json.RawMessage      `json:"response_format,omitempty"`
+	MaxTokens           json.RawMessage      `json:"max_tokens,omitempty"`
+	MaxCompletionTokens json.RawMessage      `json:"max_completion_tokens,omitempty"`
+	Model               string               `json:"model,omitempty"`
+	Metadata            map[string]string    `json:"metadata,omitempty"`
+	Options             *IntentOptions       `json:"options,omitempty"`
+	PreviewContext      *PreviewContext      `json:"preview_context,omitempty"`
 }
 
 // PreviewContext supplies routing identity, never credentials or a state update.
@@ -175,6 +176,9 @@ type EvalModelSelector interface {
 
 // IntentResponse represents the response from intent classification.
 type IntentResponse struct {
+	// Not serialized: batch classification must distinguish failed fallback
+	// inference from a successful unscored category without changing legacy JSON.
+	inferenceError         error
 	ProbabilitiesAvailable bool               `json:"probabilities_available"`
 	SignalErrorMatches     map[string]bool    `json:"signal_error_matches,omitempty"`
 	Classification         Classification     `json:"classification"`
