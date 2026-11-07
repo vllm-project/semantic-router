@@ -80,17 +80,41 @@ func joinNamespaceDescription(namespace, tool string) string {
 	return namespace + "\n\n" + tool
 }
 
-// rejectToolNamespaceCollisions fails closed: a shared flat name could not be
-// mapped back to one tool. Duplicates among plain tools keep the validator's error.
-func rejectToolNamespaceCollisions(tools []llmprotocol.Tool) error {
-	namespaced := make(map[string]bool, len(tools))
-	for _, tool := range tools {
-		wasNamespaced, seen := namespaced[tool.Name]
-		if seen && (wasNamespaced || tool.Namespace != "") {
-			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "tool_namespace_collision",
-				"namespaced tools flatten to the same name as another tool: "+tool.Name, nil)
+// flattenResponsesHistoryCall gives a history call the flat name its tool is
+// declared under, and claims that name so no different tool can share it.
+func flattenResponsesHistoryCall(item *responsesItemWire, request *llmprotocol.Request, policy llmprotocol.Policy) error {
+	if (item.Type != "function_call" && item.Type != "custom_tool_call") || strings.TrimSpace(item.Name) == "" {
+		return nil
+	}
+	flat := item.Name
+	if item.Namespace != "" {
+		// Flattening shortens long parts, so bound them as the client sent them.
+		if limit := policy.Limits.ToolNameBytes; limit > 0 && (len(item.Namespace) > limit || len(item.Name) > limit) {
+			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "tool_call_limit", "tool call namespace or name exceeds the configured limit", nil)
 		}
-		namespaced[tool.Name] = tool.Namespace != ""
+		flat = llmprotocol.FlattenToolName(item.Namespace, item.Name)
+		request.Generation++
+	}
+	if err := llmprotocol.ClaimToolName(request, flat, item.Namespace, item.Name); err != nil {
+		return err
+	}
+	item.Name = flat
+	return nil
+}
+
+// claimResponsesToolNames runs after the history calls are claimed, so a flat
+// name cannot stand for two declared tools or for a declared tool and a
+// different tool the history called. Duplicate plain tools share one origin and
+// keep the validator's error.
+func claimResponsesToolNames(request *llmprotocol.Request) error {
+	for _, tool := range request.Tools {
+		name := tool.Name
+		if tool.Namespace != "" {
+			name = tool.LocalName
+		}
+		if err := llmprotocol.ClaimToolName(request, tool.Name, tool.Namespace, name); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -3,6 +3,7 @@ package llmprotocol
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"maps"
 	"strings"
 )
 
@@ -60,6 +61,81 @@ func truncateToolNamePart(part string, limit int) string {
 type toolNamespaceOrigin struct {
 	namespace string
 	name      string
+}
+
+// ToolNameOrigins maps each tool name a request declares or calls to the
+// namespace and name its client sent; a plain name is its own origin. Flattening
+// is not injective: mcp__a with b__c and mcp__a__b with c both become
+// mcp__a__b__c, so a flat name may stand for only one origin.
+type ToolNameOrigins map[string]toolNamespaceOrigin
+
+// ClaimToolName records that the tool its client knows as namespace and name
+// reaches backends as flat. It fails closed when a different tool already holds
+// flat, because the model could not tell the two apart. An empty namespace
+// claims a plain name.
+func ClaimToolName(request *Request, flat, namespace, name string) error {
+	if request.ToolNameOrigins == nil {
+		request.ToolNameOrigins = make(ToolNameOrigins)
+	}
+	return request.ToolNameOrigins.claim(flat, toolNamespaceOrigin{namespace: namespace, name: name})
+}
+
+func (origins ToolNameOrigins) claim(flat string, origin toolNamespaceOrigin) error {
+	if held, seen := origins[flat]; seen && held != origin {
+		return NewError(ErrorInvalidRequest, "tool_namespace_collision",
+			"namespaced tools flatten to the same name as another tool: "+flat, nil)
+	}
+	origins[flat] = origin
+	return nil
+}
+
+// Flattened reports whether any name came from a namespace. Without one every
+// name is its own origin, so a decoded request need not keep them.
+func (origins ToolNameOrigins) Flattened() bool {
+	for _, origin := range origins {
+		if origin.namespace != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// ClaimHistoryToolNames claims the names of retained history for the request it
+// is prepended to, so a stored call cannot share a flat name with a different
+// tool the request declares or calls.
+func ClaimHistoryToolNames(request *Request, history Request) error {
+	if request.ToolNameOrigins == nil && history.ToolNameOrigins == nil {
+		return nil
+	}
+	merged := requestToolNameOrigins(*request)
+	for flat, origin := range requestToolNameOrigins(history) {
+		if err := merged.claim(flat, origin); err != nil {
+			return err
+		}
+	}
+	request.ToolNameOrigins = merged
+	return nil
+}
+
+// requestToolNameOrigins copies a request's origins. A request that flattened
+// nothing keeps none, so each of its names is its own origin.
+func requestToolNameOrigins(request Request) ToolNameOrigins {
+	origins := make(ToolNameOrigins, len(request.ToolNameOrigins))
+	if request.ToolNameOrigins != nil {
+		maps.Copy(origins, request.ToolNameOrigins)
+		return origins
+	}
+	for _, tool := range request.Tools {
+		origins[tool.Name] = toolNamespaceOrigin{name: tool.Name}
+	}
+	for _, message := range request.Messages {
+		for _, content := range message.Content {
+			if content.ToolCall != nil {
+				origins[content.ToolCall.Name] = toolNamespaceOrigin{name: content.ToolCall.Name}
+			}
+		}
+	}
+	return origins
 }
 
 // ToolNamespaces maps the flat names a request declared back to the namespace

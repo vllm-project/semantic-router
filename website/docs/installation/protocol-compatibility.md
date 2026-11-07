@@ -430,10 +430,13 @@ checked with Codex CLI 0.166.0 on Chat, Responses and Messages backends.
 - A flat name keeps to 64 characters of letters, digits, `_` and `-`. A longer
   name, or one with other characters, is shortened and made unique with a hash
   of the namespace and name; a call in a later turn maps to the same name.
-- A request in which two tools would get the same flat name fails with
-  `tool_namespace_collision`. A namespace inside a namespace, a hosted tool
-  inside a namespace, and a named `tool_choice` that selects a namespaced tool
-  by its own name are rejected.
+- A request in which two different tools would get the same flat name fails
+  with `tool_namespace_collision`, whether the tools are declared or called in
+  the input history or in history retained behind `previous_response_id`. For
+  example, `mcp__a` with `b__c` and `mcp__a__b` with `c` both flatten to
+  `mcp__a__b__c`. A namespace inside a namespace, a hosted tool inside a
+  namespace, and a named `tool_choice` that selects a namespaced tool by its
+  own name are rejected.
 - The model's calls reach Codex with `namespace` and the tool's own `name`,
   buffered and streamed. Calls in the input history, including history
   retained behind `previous_response_id`, are sent to the backend under the

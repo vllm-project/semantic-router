@@ -274,6 +274,10 @@ func (OpenAIResponsesCodec) DecodeRequest(body []byte, policy llmprotocol.Policy
 	if err := decodeResponsesRequestOptions(wire, &request, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
+	// Only a request that flattened a namespace keeps its tool name origins.
+	if !request.ToolNameOrigins.Flattened() {
+		request.ToolNameOrigins = nil
+	}
 	// Flattening a namespace advances request.Generation, which retires the replay
 	// claim on source bytes that still carry the namespace.
 	return request, requestEnvelope(llmprotocol.OpenAIResponsesV1, body, sourceGeneration, policy), diagnostics, nil
@@ -389,7 +393,7 @@ func decodeResponsesTools(raw json.RawMessage, request *llmprotocol.Request, pol
 			return err
 		}
 	}
-	return rejectToolNamespaceCollisions(request.Tools)
+	return claimResponsesToolNames(request)
 }
 
 func decodeResponsesTool(body json.RawMessage, request *llmprotocol.Request, policy llmprotocol.Policy) error {

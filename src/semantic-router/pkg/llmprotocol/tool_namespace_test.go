@@ -73,3 +73,52 @@ func TestToolNamespacesRestoreResponseWithoutMutatingTheDecodedCall(t *testing.T
 	require.Equal(t, "ns", response.Alternatives[0][0].Content[0].ToolCall.Namespace)
 	require.Equal(t, "ns__tool", call.Name)
 }
+
+func namespacedHistory(t *testing.T, namespace, name string) Request {
+	t.Helper()
+	flat := FlattenToolName(namespace, name)
+	history := Request{Messages: []Message{{Role: RoleAssistant, Content: []Content{{
+		Kind: ContentToolCall, ToolCall: &ToolCall{ID: "call_0", Name: flat},
+	}}}}}
+	require.NoError(t, ClaimToolName(&history, flat, namespace, name))
+	return history
+}
+
+// Retained history is decoded apart from the request it joins, so its calls are
+// checked against that request's names when it is prepended.
+func TestClaimHistoryToolNamesFailsClosedOnACollision(t *testing.T) {
+	namespaced := Request{Tools: []Tool{{Name: "mcp__a__b__c", Namespace: "mcp__a__b", LocalName: "c"}}}
+	require.NoError(t, ClaimToolName(&namespaced, "mcp__a__b__c", "mcp__a__b", "c"))
+	plain := Request{Tools: []Tool{{Name: "mcp__a__b__c"}}}
+	plainHistory := Request{Messages: []Message{{Role: RoleAssistant, Content: []Content{{
+		Kind: ContentToolCall, ToolCall: &ToolCall{ID: "call_0", Name: "mcp__a__b__c"},
+	}}}}}
+
+	for name, test := range map[string]struct {
+		request Request
+		history Request
+	}{
+		"namespaced history and namespaced tool": {namespaced, namespacedHistory(t, "mcp__a", "b__c")},
+		"namespaced history and plain tool":      {plain, namespacedHistory(t, "mcp__a", "b__c")},
+		"plain history and namespaced tool":      {namespaced, plainHistory},
+	} {
+		t.Run(name, func(t *testing.T) {
+			requireLLMProtocolErrorCode(t, ClaimHistoryToolNames(&test.request, test.history), "tool_namespace_collision")
+		})
+	}
+}
+
+func TestClaimHistoryToolNamesAcceptsTheSameTool(t *testing.T) {
+	request := Request{Tools: []Tool{{Name: "mcp__a__b__c", Namespace: "mcp__a__b", LocalName: "c"}}}
+	require.NoError(t, ClaimToolName(&request, "mcp__a__b__c", "mcp__a__b", "c"))
+	require.NoError(t, ClaimHistoryToolNames(&request, namespacedHistory(t, "mcp__a__b", "c")))
+
+	plain := Request{Tools: []Tool{{Name: "exec_command"}}}
+	require.NoError(t, ClaimHistoryToolNames(&plain, Request{Messages: []Message{{Role: RoleAssistant, Content: []Content{{
+		Kind: ContentToolCall, ToolCall: &ToolCall{ID: "call_0", Name: "exec_command"},
+	}}}}}))
+	require.Nil(t, plain.ToolNameOrigins, "plain names need no origins")
+
+	require.NoError(t, ClaimHistoryToolNames(&plain, namespacedHistory(t, "mcp__echo", "echo")))
+	require.True(t, plain.ToolNameOrigins.Flattened())
+}

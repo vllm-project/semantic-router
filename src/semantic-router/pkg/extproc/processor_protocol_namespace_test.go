@@ -250,7 +250,7 @@ func TestNamespacedRetainedCallFlattensOnContinuation(t *testing.T) {
 	}})
 	require.NoError(t, err)
 	var names []string
-	for _, message := range history {
+	for _, message := range history.Messages {
 		for _, content := range message.Content {
 			if content.ToolCall != nil {
 				names = append(names, content.ToolCall.Name)
@@ -258,4 +258,22 @@ func TestNamespacedRetainedCallFlattensOnContinuation(t *testing.T) {
 		}
 	}
 	require.Equal(t, []string{namespacedFlatToolName, namespacedFlatToolName}, names)
+}
+
+// A stored call to mcp__a/b__c flattens to the name the request declares for
+// mcp__a__b/c, so the continuation fails closed instead of merging the two.
+func TestNamespacedRetainedCallCollidingWithTheRequestFailsClosed(t *testing.T) {
+	request, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequestForMutation(llmprotocol.OpenAIResponsesV1, []byte(`{
+		"model":"m","previous_response_id":"resp_1","input":"next",
+		"tools":[{"type":"namespace","name":"mcp__a__b","tools":[{"type":"function","name":"c","parameters":{"type":"object"}}]}]
+	}`))
+	require.NoError(t, err)
+	var parsed responseapi.ResponseAPIResponse
+	require.NoError(t, json.Unmarshal([]byte(`{"output":[{"type":"function_call","id":"fc_1","call_id":"call_1","namespace":"mcp__a","name":"b__c","arguments":"{}"}]}`), &parsed))
+	ctx := &RequestContext{ResponseObjectState: &ResponseObjectState{
+		ConversationHistory: []*responseapi.StoredResponse{{Output: parsed.Output}},
+	}}
+
+	_, err = (&OpenAIRouter{}).materializeResponseObjectContext(&request, ctx)
+	assertResponseObjectStateError(t, err, llmprotocol.ErrorInvalidRequest, "tool_namespace_collision")
 }

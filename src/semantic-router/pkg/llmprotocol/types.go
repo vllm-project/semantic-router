@@ -311,6 +311,10 @@ type Request struct {
 	// PromptCacheKey is an OpenAI cache-routing hint. It never changes model
 	// output, but targets that cannot carry it must reject it, not drop it.
 	PromptCacheKey string
+	// ToolNameOrigins is decode state that no wire carries. A request that
+	// flattened a Responses namespace keeps where each tool name came from, so
+	// retained history prepended later is checked against the same names.
+	ToolNameOrigins ToolNameOrigins
 }
 
 type StopReason string

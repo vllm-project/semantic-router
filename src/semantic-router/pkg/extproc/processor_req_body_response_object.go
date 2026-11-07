@@ -52,10 +52,13 @@ func (r *OpenAIRouter) prependStoredResponseHistory(
 	if err != nil {
 		return false, fmt.Errorf("materialize retained Responses history: %w", err)
 	}
-	if len(history) == 0 {
+	if len(history.Messages) == 0 {
 		return false, nil
 	}
-	request.Messages = append(history, request.Messages...)
+	if err := llmprotocol.ClaimHistoryToolNames(request, history); err != nil {
+		return false, err
+	}
+	request.Messages = append(history.Messages, request.Messages...)
 	return true, nil
 }
 
@@ -75,29 +78,26 @@ func clearResponseObjectControls(request *llmprotocol.Request) bool {
 func materializeStoredResponseHistory(
 	engine *protocolcodec.Engine,
 	storedResponses []*responseapi.StoredResponse,
-) ([]llmprotocol.Message, error) {
+) (llmprotocol.Request, error) {
 	if engine == nil {
-		return nil, fmt.Errorf("protocol engine is unavailable")
+		return llmprotocol.Request{}, fmt.Errorf("protocol engine is unavailable")
 	}
 	items, err := storedResponseItems(storedResponses)
 	if err != nil {
-		return nil, err
+		return llmprotocol.Request{}, err
 	}
 	if len(items) == 0 {
-		return nil, nil
+		return llmprotocol.Request{}, nil
 	}
 	body, err := json.Marshal(struct {
 		Model string            `json:"model"`
 		Input []json.RawMessage `json:"input"`
 	}{Model: "retained-response-history", Input: items})
 	if err != nil {
-		return nil, err
+		return llmprotocol.Request{}, err
 	}
 	request, _, _, err := engine.DecodeRequestForMutation(llmprotocol.OpenAIResponsesV1, body)
-	if err != nil {
-		return nil, err
-	}
-	return request.Messages, nil
+	return request, err
 }
 
 func storedResponseItems(storedResponses []*responseapi.StoredResponse) ([]json.RawMessage, error) {

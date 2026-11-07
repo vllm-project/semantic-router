@@ -146,6 +146,49 @@ func TestResponsesNamespaceToolsFailClosed(t *testing.T) {
 	}
 }
 
+// mcp__a with b__c and mcp__a__b with c both flatten to mcp__a__b__c, so a
+// history call must not share a flat name with a different tool either.
+func TestResponsesNamespaceHistoryCallsFailClosedOnACollision(t *testing.T) {
+	call := func(id, kind, namespace, name string) string {
+		namespaceField := ""
+		if namespace != "" {
+			namespaceField = `"namespace":"` + namespace + `",`
+		}
+		if kind == "custom_tool_call" {
+			return `{"type":"custom_tool_call","call_id":"` + id + `",` + namespaceField + `"name":"` + name + `","input":"x"},` +
+				`{"type":"custom_tool_call_output","call_id":"` + id + `","output":"done"}`
+		}
+		return `{"type":"function_call","call_id":"` + id + `",` + namespaceField + `"name":"` + name + `","arguments":"{}"},` +
+			`{"type":"function_call_output","call_id":"` + id + `","output":"done"}`
+	}
+	declared := `[{"type":"namespace","name":"mcp__a__b","tools":[{"type":"function","name":"c","parameters":{"type":"object"}}]}]`
+	tests := []struct {
+		name  string
+		input string
+		tools string
+	}{
+		{"two history calls", call("call_1", "function_call", "mcp__a", "b__c") + "," + call("call_2", "function_call", "mcp__a__b", "c"), "[]"},
+		{"history call and declared tool", call("call_1", "function_call", "mcp__a", "b__c"), declared},
+		{"custom history call and declared tool", call("call_1", "custom_tool_call", "mcp__a", "b__c"), declared},
+		{"plain and namespaced history calls", call("call_1", "function_call", "", "mcp__a__b__c") + "," + call("call_2", "function_call", "mcp__a__b", "c"), "[]"},
+		{"namespaced history call and plain tool", call("call_1", "function_call", "mcp__a", "b__c"), `[{"type":"function","name":"mcp__a__b__c","parameters":{"type":"object"}}]`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, _, _, err := NewBuiltinEngine().DecodeRequestForMutation(llmprotocol.OpenAIResponsesV1, []byte(
+				`{"model":"m","input":[`+test.input+`],"tools":`+test.tools+`}`,
+			))
+			requireProtocolErrorCode(t, err, "tool_namespace_collision")
+		})
+	}
+
+	sameTool := decodeNamespaceRequest(t, `{"model":"m","input":[`+
+		call("call_1", "function_call", "mcp__a__b", "c")+","+call("call_2", "function_call", "mcp__a__b", "c")+
+		`],"tools":`+declared+`}`)
+	require.True(t, sameTool.ToolNameOrigins.Flattened(), "a namespaced request keeps its origins for retained history")
+	require.Nil(t, decodeNamespaceRequest(t, `{"model":"m","input":[`+call("call_1", "function_call", "", "tool")+`]}`).ToolNameOrigins)
+}
+
 func TestResponsesPlainDuplicateToolsKeepTheirOwnError(t *testing.T) {
 	function := `{"type":"function","name":"tool","parameters":{"type":"object"}}`
 	_, _, _, err := NewBuiltinEngine().DecodeRequestForMutation(
