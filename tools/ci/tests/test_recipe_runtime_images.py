@@ -16,9 +16,9 @@ args = sys.argv[1:]
 name = pathlib.Path(sys.argv[0]).name
 calls = pathlib.Path(os.environ['IMAGE_CONTRACT_CALLS'])
 prepared = calls.with_suffix('.prepared')
-if name == 'docker':
+if name in ('docker', 'podman'):
     with calls.open('a') as stream:
-        stream.write(json.dumps({'docker': args}) + '\n')
+        stream.write(json.dumps({name: args}) + '\n')
     if args[:2] == ['image', 'inspect']:
         sys.exit(0 if args[2] == os.environ['VLLM_SR_ROUTER_IMAGE'] else 1)
     if args[0] == 'pull':
@@ -26,8 +26,9 @@ if name == 'docker':
             sys.exit(37)
         prepared.write_text(args[1])
     elif args[:2] == ['run', '--rm']:
-        assert args[2] == prepared.read_text(), args
-        assert args[3:] == ['--version'], args
+        assert args[2:4] == ['--entrypoint', '/usr/local/bin/envoy'], args
+        assert args[4] == prepared.read_text(), args
+        assert args[5:] == ['--version'], args
         if os.environ.get('IMAGE_CONTRACT_SMOKE_FAILURE'):
             sys.exit(38)
     else:
@@ -58,27 +59,32 @@ class RecipeRuntimeImageTests(unittest.TestCase):
             "recipe-conformance-live-cpu-all",
         ):
             for override in (None, "example.test/envoy:pinned"):
-                with self.subTest(target=target, override=override):
-                    self.run_target(target, override=override)
+                for runtime in ("docker", "podman"):
+                    with self.subTest(
+                        target=target, override=override, runtime=runtime
+                    ):
+                        self.run_target(target, runtime=runtime, override=override)
 
     def test_unavailable_envoy_prevents_recipe_execution(self):
         for target in (
             "recipe-conformance-live-cpu",
             "recipe-conformance-live-cpu-all",
         ):
-            with self.subTest(target=target):
-                self.run_target(target, pull_failure=True)
+            for runtime in ("docker", "podman"):
+                with self.subTest(target=target, runtime=runtime):
+                    self.run_target(target, runtime=runtime, pull_failure=True)
 
     def test_unexecutable_envoy_prevents_recipe_execution(self):
         for target in (
             "recipe-conformance-live-cpu",
             "recipe-conformance-live-cpu-all",
         ):
-            with self.subTest(target=target):
-                self.run_target(target, smoke_failure=True)
+            for runtime in ("docker", "podman"):
+                with self.subTest(target=target, runtime=runtime):
+                    self.run_target(target, runtime=runtime, smoke_failure=True)
 
     def run_target(
-        self, target, *, override=None, pull_failure=False, smoke_failure=False
+        self, target, *, runtime, override=None, pull_failure=False, smoke_failure=False
     ):
         constants = ast.parse((ROOT / "src/vllm-sr/cli/consts.py").read_text())
         default_envoy = next(
@@ -95,7 +101,7 @@ class RecipeRuntimeImageTests(unittest.TestCase):
             root = Path(directory).resolve()
             binaries = root / "bin"
             binaries.mkdir()
-            for name in ("docker", "python3", "bash"):
+            for name in (runtime, "python3", "bash"):
                 executable = binaries / name
                 executable.write_text(f"#!{sys.executable}\n" + PROCESS_STUB)
                 executable.chmod(0o755)
@@ -127,7 +133,8 @@ class RecipeRuntimeImageTests(unittest.TestCase):
                 "--no-print-directory",
                 target,
                 "SHELL=/bin/sh",
-                "CONTAINER_RUNTIME=docker",
+                f"CONTAINER_RUNTIME={runtime}",
+                "IMAGE_REGISTRY=docker.io/",
                 "RECIPE_CONFORMANCE_PYTHON=python3",
                 "RECIPE_CONFORMANCE_RECIPES=balance,knowledge",
             ]
@@ -148,14 +155,25 @@ class RecipeRuntimeImageTests(unittest.TestCase):
             ]
             envoy = override or default_envoy
             expected = [
-                {"docker": ["image", "inspect", router]},
-                {"docker": ["image", "inspect", envoy]},
-                {"docker": ["pull", envoy]},
+                {runtime: ["image", "inspect", router]},
+                {runtime: ["image", "inspect", envoy]},
+                {runtime: ["pull", envoy]},
             ]
             if pull_failure:
                 self.assertNotEqual(result.returncode, 0)
             else:
-                expected.append({"docker": ["run", "--rm", envoy, "--version"]})
+                expected.append(
+                    {
+                        runtime: [
+                            "run",
+                            "--rm",
+                            "--entrypoint",
+                            "/usr/local/bin/envoy",
+                            envoy,
+                            "--version",
+                        ]
+                    }
+                )
                 if smoke_failure:
                     self.assertNotEqual(result.returncode, 0)
                 else:
