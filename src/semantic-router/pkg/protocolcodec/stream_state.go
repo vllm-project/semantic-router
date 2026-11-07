@@ -41,6 +41,9 @@ type streamState struct {
 	imageProgressSeen     map[int]map[llmprotocol.ImageGenerationStatus]bool
 	nextPartialImageIndex map[int]int64
 	reportedUnknownFields map[string]bool
+	// a tool call whose arguments ended before forming a JSON object; only a
+	// max_tokens stop explains one, which the terminal event decides
+	cutToolArguments bool
 }
 
 // appendStreamUnknownFields reports each unknown upstream member once per

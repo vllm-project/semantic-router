@@ -374,6 +374,12 @@ schema, streaming, tools, or error translation.
   backend sends `max_tokens: 4096` and reports `max_tokens` as `generated`.
   Thinking counts toward that limit. A positive integer in the decision's
   `request_params.default_max_tokens` replaces the 4096 for these requests.
+- When the output limit ends a streamed tool call inside its arguments, the
+  Router passes the partial call on with the limit stop, as the providers do:
+  `max_tokens` for Messages, `length` for Chat, and `incomplete` with
+  `max_output_tokens` for Responses. In every other case, arguments that are
+  not a JSON object end the stream with `invalid_stream_tool_arguments`. A cut
+  response is not cached, stored, or kept as the replay response body.
 - `x-vsr-client-protocol`, `x-vsr-upstream-protocol`, and
   `x-vsr-protocol-warnings` expose translation details when applicable. See
   [VSR routing headers](../troubleshooting/vsr-headers).

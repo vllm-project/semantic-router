@@ -295,28 +295,45 @@ func assertAnthropicCacheAccounting(t *testing.T, events []llmprotocol.Event) {
 	}
 }
 
-func TestStreamStateRequiresCompleteToolLifecycle(t *testing.T) {
-	state := newTestStreamState()
-	startTestStream(t, state)
-	if _, err := state.next(llmprotocol.Event{
-		Type: llmprotocol.EventOutputItemStarted, ItemIndex: 0, ItemID: "tool_item",
-		Role: llmprotocol.RoleAssistant, ToolCall: &llmprotocol.ToolCall{ID: "call_1", Name: "lookup"},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := state.next(llmprotocol.Event{
-		Type: llmprotocol.EventToolCallDelta, ItemIndex: 0,
-		ToolCall: &llmprotocol.ToolCall{ID: "call_1", Name: "lookup", Arguments: `{"query":`},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := state.next(llmprotocol.Event{Type: llmprotocol.EventOutputItemCompleted, ItemIndex: 0}); err == nil {
-		t.Fatal("incomplete streamed tool arguments were accepted")
+// An output limit can end a call inside its arguments. Only a max_tokens stop
+// explains that, and the stop arrives after the item ends.
+func TestStreamStateAcceptsCutToolArgumentsOnlyAtMaxTokens(t *testing.T) {
+	for _, stop := range []llmprotocol.StopReason{llmprotocol.StopToolCall, llmprotocol.StopEndTurn, llmprotocol.StopMaxTokens} {
+		t.Run(string(stop), func(t *testing.T) {
+			state := newTestStreamState()
+			startTestStream(t, state)
+			if _, err := state.next(llmprotocol.Event{
+				Type: llmprotocol.EventOutputItemStarted, ItemIndex: 0, ItemID: "tool_item",
+				Role: llmprotocol.RoleAssistant, ToolCall: &llmprotocol.ToolCall{ID: "call_1", Name: "lookup"},
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := state.next(llmprotocol.Event{
+				Type: llmprotocol.EventToolCallDelta, ItemIndex: 0,
+				ToolCall: &llmprotocol.ToolCall{ID: "call_1", Name: "lookup", Arguments: `{"query":`},
+			}); err != nil {
+				t.Fatal(err)
+			}
+			completed, err := state.next(llmprotocol.Event{Type: llmprotocol.EventOutputItemCompleted, ItemIndex: 0})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if completed.ToolCall == nil || completed.ToolCall.Arguments != `{"query":` {
+				t.Fatalf("completed tool call = %+v", completed.ToolCall)
+			}
+			_, err = state.next(llmprotocol.Event{Type: llmprotocol.EventResponseCompleted, StopReason: stop})
+			if stop == llmprotocol.StopMaxTokens && err != nil {
+				t.Fatalf("a call cut by max_tokens was refused: %v", err)
+			}
+			if stop != llmprotocol.StopMaxTokens && err == nil {
+				t.Fatalf("incomplete streamed tool arguments were accepted with stop %s", stop)
+			}
+		})
 	}
 }
 
 func TestStreamStateRejectsMalformedAndNonObjectToolArguments(t *testing.T) {
-	for _, arguments := range []string{`{`, `[]`, `true`, `null`, `{"query":1,"query":2}`} {
+	for _, arguments := range []string{`[]`, `true`, `null`, `{"query":1,"query":2}`, `{"query":1}}`, `{"query" 1`} {
 		t.Run(arguments, func(t *testing.T) {
 			state := newTestStreamState()
 			startTestStream(t, state)
