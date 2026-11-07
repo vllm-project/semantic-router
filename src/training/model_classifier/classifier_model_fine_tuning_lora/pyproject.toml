@@ -5,7 +5,7 @@ description = "Environment for the intent classifier LoRA scripts under src/trai
 requires-python = ">=3.10,<3.14"
 dependencies = [
     "accelerate>=0.28,<2",
-    "datasets>=2.19,<5",
+    "datasets>=2.19,<6",
     "numpy>=1.24,<3",
     "peft>=0.10,<1",
     "scikit-learn>=1.4,<2",
