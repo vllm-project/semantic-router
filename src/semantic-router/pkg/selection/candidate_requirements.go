@@ -83,28 +83,38 @@ func ValidateCandidateRequirements(requirements *config.CandidateRequirements, m
 		return nil
 	}
 	if CandidateRequirementsEnabled(requirements) && !demand.Known {
-		return fmt.Errorf("%w: request capability and budget facts are unavailable", ErrNoEligibleCandidates)
+		return NewEligibilityError(EligibilityReasonUnknownRequest, model,
+			fmt.Errorf("%w: request capability and budget facts are unavailable", ErrNoEligibleCandidates))
 	}
 	if requirements.Capabilities == config.CandidateCapabilitiesDeclared {
 		declared, known := llmprotocol.ModelCapabilities(params.Capabilities)
 		if !known || !declared.Contains(demand.ModelCapabilities) {
-			return fmt.Errorf("%w: model %q lacks declared request capabilities", ErrNoEligibleCandidates, model)
+			reason := EligibilityReasonUnsupportedCapability
+			if !known {
+				reason = EligibilityReasonMissingCapabilities
+			}
+			return NewEligibilityError(reason, model,
+				fmt.Errorf("%w: model %q lacks declared request capabilities", ErrNoEligibleCandidates, model))
 		}
 	}
 	if requirements.Context == config.CandidateContextKnownLimits {
 		if demand.InputTokens < 0 {
-			return fmt.Errorf("%w: request input estimate is invalid", ErrNoEligibleCandidates)
+			return NewEligibilityError(EligibilityReasonContextLimit, model,
+				fmt.Errorf("%w: request input estimate is invalid", ErrNoEligibleCandidates))
 		}
 		if params.ContextWindowSize <= 0 || params.MaxOutputTokens <= 0 {
-			return fmt.Errorf("%w: model %q lacks known context or output limits", ErrNoEligibleCandidates, model)
+			return NewEligibilityError(EligibilityReasonContextLimit, model,
+				fmt.Errorf("%w: model %q lacks known context or output limits", ErrNoEligibleCandidates, model))
 		}
 		if demand.MaxOutputTokens == nil {
-			return fmt.Errorf("%w: an explicit caller or request policy output limit is required", ErrNoEligibleCandidates)
+			return NewEligibilityError(EligibilityReasonContextLimit, model,
+				fmt.Errorf("%w: an explicit caller or request policy output limit is required", ErrNoEligibleCandidates))
 		}
 		reserve := 0
 		if demand.MaxOutputTokens != nil {
 			if *demand.MaxOutputTokens <= 0 || *demand.MaxOutputTokens > int64(params.MaxOutputTokens) {
-				return &RequestBudgetError{Code: "max_output_tokens_exceeded", Message: fmt.Sprintf("requested output token limit must be between 1 and %d for model %q", params.MaxOutputTokens, model)}
+				return NewEligibilityError(EligibilityReasonContextLimit, model,
+					&RequestBudgetError{Code: "max_output_tokens_exceeded", Message: fmt.Sprintf("requested output token limit must be between 1 and %d for model %q", params.MaxOutputTokens, model)})
 			}
 			if *demand.MaxOutputTokens > int64(math.MaxInt) {
 				reserve = math.MaxInt
@@ -113,7 +123,8 @@ func ValidateCandidateRequirements(requirements *config.CandidateRequirements, m
 			}
 		}
 		if llmprotocol.SaturatingTokenSum(demand.InputTokens, reserve) > params.ContextWindowSize {
-			return &RequestBudgetError{Code: "context_length_exceeded", Message: fmt.Sprintf("estimated input (%d tokens) plus requested output (%d tokens) exceeds the %d-token context window for model %q", demand.InputTokens, reserve, params.ContextWindowSize, model)}
+			return NewEligibilityError(EligibilityReasonContextLimit, model,
+				&RequestBudgetError{Code: "context_length_exceeded", Message: fmt.Sprintf("estimated input (%d tokens) plus requested output (%d tokens) exceeds the %d-token context window for model %q", demand.InputTokens, reserve, params.ContextWindowSize, model)})
 		}
 	}
 	return nil
@@ -121,7 +132,8 @@ func ValidateCandidateRequirements(requirements *config.CandidateRequirements, m
 
 func ValidateCandidateCodec(requirements *config.CandidateRequirements, model string, supported llmprotocol.CapabilitySet, demand CandidateDemand) error {
 	if requirements != nil && requirements.Capabilities == config.CandidateCapabilitiesDeclared && !supported.Contains(demand.Capabilities) {
-		return fmt.Errorf("%w: model %q codec cannot preserve the request", ErrNoEligibleCandidates, model)
+		return NewEligibilityError(EligibilityReasonUnsupportedProtocol, model,
+			fmt.Errorf("%w: model %q codec cannot preserve the request", ErrNoEligibleCandidates, model))
 	}
 	return nil
 }

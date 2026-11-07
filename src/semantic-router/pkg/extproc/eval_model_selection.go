@@ -65,7 +65,7 @@ func (r *OpenAIRouter) SelectModelForEval(
 	var excluded int
 	if strict {
 		var err error
-		eligibleModelRefs, err = r.eligibleDemandModelRefs(requirements, decision.ModelRefs, input.Demand)
+		eligibleModelRefs, err = r.eligibleDemandModelRefs(requirements, decision.ModelRefs, input.Demand, decision.Name)
 		if err != nil {
 			return evalSelectionUnavailable(err.Error())
 		}

@@ -37,11 +37,13 @@ func (r *OpenAIRouter) validateModelDemand(requirements *config.CandidateRequire
 	}
 	format, err := wireFormatForModel(r.Config.GetModelAPIFormat(model))
 	if err != nil {
-		return fmt.Errorf("%w: %w", selection.ErrNoEligibleCandidates, err)
+		return selection.NewEligibilityError(selection.EligibilityReasonUnsupportedProtocol, model,
+			fmt.Errorf("%w: %w", selection.ErrNoEligibleCandidates, err))
 	}
 	supported, ok := r.codecCapabilitiesForFormat(format)
 	if !ok {
-		return fmt.Errorf("%w: model %q has no request codec", selection.ErrNoEligibleCandidates, model)
+		return selection.NewEligibilityError(selection.EligibilityReasonUnsupportedProtocol, model,
+			fmt.Errorf("%w: model %q has no request codec", selection.ErrNoEligibleCandidates, model))
 	}
 	if err := selection.ValidateCandidateCodec(requirements, model, supported, demand); err != nil {
 		return err
@@ -50,8 +52,8 @@ func (r *OpenAIRouter) validateModelDemand(requirements *config.CandidateRequire
 	return requirementErr
 }
 
-func (r *OpenAIRouter) eligibleDemandModelRefs(requirements *config.CandidateRequirements, refs []config.ModelRef, demand selection.CandidateDemand) ([]config.ModelRef, error) {
-	return eligibleModelRefsByDemand(refs, func(ref config.ModelRef) error {
+func (r *OpenAIRouter) eligibleDemandModelRefs(requirements *config.CandidateRequirements, refs []config.ModelRef, demand selection.CandidateDemand, decisionName string) ([]config.ModelRef, error) {
+	return eligibleModelRefsByDemand(refs, decisionName, func(ref config.ModelRef) error {
 		return r.validateModelDemand(requirements, ref.Model, demand)
 	})
 }
@@ -60,12 +62,16 @@ func (r *OpenAIRouter) eligibleDemandModelRefs(requirements *config.CandidateReq
 // would actually receive. Anthropic-only controls can be safely projected for
 // one backend format and unsupported for another.
 func (r *OpenAIRouter) eligibleRequestModelRefs(requirements *config.CandidateRequirements, refs []config.ModelRef, request *llmprotocol.Request, decision *config.Decision) ([]config.ModelRef, error) {
-	return eligibleModelRefsByDemand(refs, func(ref config.ModelRef) error {
+	decisionName := ""
+	if decision != nil {
+		decisionName = decision.Name
+	}
+	return eligibleModelRefsByDemand(refs, decisionName, func(ref config.ModelRef) error {
 		return r.candidateCapabilityMismatch(ref, request, decision, requirements, nil)
 	})
 }
 
-func eligibleModelRefsByDemand(refs []config.ModelRef, admit func(config.ModelRef) error) ([]config.ModelRef, error) {
+func eligibleModelRefsByDemand(refs []config.ModelRef, decisionName string, admit func(config.ModelRef) error) ([]config.ModelRef, error) {
 	eligible := make([]config.ModelRef, 0, len(refs))
 	var budgetError *selection.RequestBudgetError
 	allBudgetErrors := true
@@ -76,6 +82,7 @@ func eligibleModelRefsByDemand(refs []config.ModelRef, admit func(config.ModelRe
 		if err := admit(ref); err == nil {
 			eligible = append(eligible, ref)
 		} else {
+			selection.RecordEligibilityExclusion(decisionName, selection.EligibilityReasonOf(err))
 			var candidateBudget *selection.RequestBudgetError
 			if errors.As(err, &candidateBudget) {
 				if budgetError == nil {
@@ -169,7 +176,7 @@ func (r *OpenAIRouter) validateDispatchRequirements(request *llmprotocol.Request
 func (r *OpenAIRouter) strictRouteActionDestination(decision *config.Decision, demand selection.CandidateDemand, requirements *config.CandidateRequirements) (string, error) {
 	refs := []config.ModelRef{{Model: strings.TrimSpace(decision.Action.Destination)}}
 	refs = append(refs, decision.ModelRefs...)
-	eligible, err := r.eligibleDemandModelRefs(requirements, refs, demand)
+	eligible, err := r.eligibleDemandModelRefs(requirements, refs, demand, decision.Name)
 	if err != nil {
 		return "", err
 	}

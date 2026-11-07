@@ -29,3 +29,16 @@ func TestModelSelectionDurationMetricContract(t *testing.T) {
 		t.Fatal("expected Prometheus metric family llm_model_selection_duration_seconds to be gathered")
 	}
 }
+
+func TestModelEligibilityExclusionMetricContract(t *testing.T) {
+	InitializeMetrics()
+	RecordEligibilityExclusion("contract-decision", EligibilityReasonUnsupportedCapability)
+
+	count, err := testutil.GatherAndCount(prometheus.DefaultGatherer, "llm_model_eligibility_exclusion_total")
+	if err != nil {
+		t.Fatalf("gather llm_model_eligibility_exclusion_total: %v", err)
+	}
+	if count == 0 {
+		t.Fatal("expected Prometheus metric family llm_model_eligibility_exclusion_total to be gathered")
+	}
+}

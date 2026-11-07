@@ -58,3 +58,15 @@ func RecordSelectionFallback(
 		reason,
 	).Inc()
 }
+
+// RecordEligibilityExclusion records one hard candidate exclusion. The reason
+// is intentionally bounded; model names and request content never enter labels.
+func RecordEligibilityExclusion(decision string, reason EligibilityReason) {
+	if !metricsEnabled {
+		return
+	}
+	ModelEligibilityExclusionTotal.WithLabelValues(
+		decision,
+		string(reason),
+	).Inc()
+}

@@ -33,6 +33,61 @@ var (
 	ErrNoEligibleCandidates = errors.New("selection policy rejected all candidates")
 )
 
+// EligibilityReason is a bounded, machine-readable explanation for excluding
+// a candidate from a request. Keep this vocabulary stable: it is used by
+// metrics and diagnostics and must not contain model names or request data.
+type EligibilityReason string
+
+const (
+	EligibilityReasonUnknownRequest        EligibilityReason = "unknown_request"
+	EligibilityReasonMissingCapabilities   EligibilityReason = "missing_model_capability"
+	EligibilityReasonUnsupportedCapability EligibilityReason = "unsupported_model_capability"
+	EligibilityReasonUnsupportedProtocol   EligibilityReason = "unsupported_protocol"
+	EligibilityReasonContextLimit          EligibilityReason = "context_limit"
+	EligibilityReasonNoCandidate           EligibilityReason = "no_eligible_candidate"
+)
+
+// EligibilityError preserves the existing ErrNoEligibleCandidates contract
+// while exposing a stable reason for callers that need structured diagnostics.
+type EligibilityError struct {
+	Reason EligibilityReason
+	Model  string
+	Cause  error
+}
+
+func (e *EligibilityError) Error() string {
+	if e == nil || e.Cause == nil {
+		return string(EligibilityReasonNoCandidate)
+	}
+	return e.Cause.Error()
+}
+
+func (e *EligibilityError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Cause
+}
+
+func (e *EligibilityError) Is(target error) bool {
+	return target == ErrNoEligibleCandidates || (e != nil && e.Cause != nil && errors.Is(e.Cause, target))
+}
+
+// NewEligibilityError annotates an existing rejection without changing its
+// human-readable text or errors.As/errors.Is behaviour.
+func NewEligibilityError(reason EligibilityReason, model string, cause error) error {
+	return &EligibilityError{Reason: reason, Model: model, Cause: cause}
+}
+
+// EligibilityReasonOf returns a bounded reason for metrics and diagnostics.
+func EligibilityReasonOf(err error) EligibilityReason {
+	var eligibilityErr *EligibilityError
+	if errors.As(err, &eligibilityErr) && eligibilityErr.Reason != "" {
+		return eligibilityErr.Reason
+	}
+	return EligibilityReasonNoCandidate
+}
+
 // ValidateSelectionResult checks the common public selector output contract.
 func ValidateSelectionResult(selCtx *SelectionContext, result *SelectionResult) error {
 	_, err := ResolveSelectionCandidate(selCtx, result)

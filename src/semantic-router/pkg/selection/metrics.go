@@ -134,6 +134,10 @@ var (
 	// Labels: method, dependency, type
 	ModelSelectionDependencyHealth *prometheus.GaugeVec
 
+	// ModelEligibilityExclusionTotal tracks hard candidate exclusions before
+	// ranking. Labels are bounded reason codes and decision names.
+	ModelEligibilityExclusionTotal *prometheus.CounterVec
+
 	metricsInitOnce sync.Once
 	metricsEnabled  bool
 )
@@ -208,6 +212,14 @@ func registerSelectionMetrics() {
 			Help: "External dependency reachability (1=healthy, 0=unreachable)",
 		},
 		[]string{"method", "dependency", "type"},
+	)
+
+	ModelEligibilityExclusionTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_model_eligibility_exclusion_total",
+			Help: "Total hard model eligibility exclusions by decision and reason",
+		},
+		[]string{"decision", "reason"},
 	)
 }
 
