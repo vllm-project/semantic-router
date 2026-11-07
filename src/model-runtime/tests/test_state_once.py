@@ -14,6 +14,7 @@ import json
 import random
 import shutil
 import time
+from dataclasses import replace
 
 import pytest
 import torch
@@ -482,6 +483,38 @@ def test_requests_share_a_branched_forward(runtimes, layout, png_url, monkeypatc
     assert max_gap([alone[id(item)] for item in items], together) < FP32_TOLERANCE
 
 
+@pytest.mark.parametrize("layout", LAYOUTS)
+def test_distinct_requests_with_one_state_encode_it_once(runtimes, layout, monkeypatch):
+    """Concurrent requests that arrive as separate calls and share a state text encode it once.
+
+    Each ``plan`` renders its own ``RequestState`` object, so grouping by
+    identity would encode the equal state twice (once per request).
+    """
+    model = model_of(runtimes, layout, "float32")
+    plans = [model.plan(STATE, QUESTIONS), model.plan(STATE, QUESTIONS)]
+    assert plans[0].items[0].state is not plans[1].items[0].state
+    alone = {}
+    for plan in plans:
+        for item, value in zip(plan.items, model.run(list(plan.items)), strict=True):
+            alone[id(item)] = value
+    items = [
+        item
+        for group in zip(*(plan.items for plan in plans), strict=True)
+        for item in group
+    ]
+    calls = []
+    branch = model.engine_model.branch
+
+    def counted(batch):
+        calls.append(len(batch.states))
+        return branch(batch)
+
+    monkeypatch.setattr(model.engine_model, "branch", counted)
+    together = model.run(items)
+    assert calls == [1]
+    assert max_gap([alone[id(item)] for item in items], together) < FP32_TOLERANCE
+
+
 def test_a_lone_question_runs_as_its_row(runtimes, png_url, monkeypatch):
     model = model_of(runtimes, "prefix_bidir", "float32")
     calls = []
@@ -541,6 +574,48 @@ def test_bf16_decisions_agree_on_many_requests(runtimes):
 
 
 # ------------------------------------------------------------------- requests
+
+
+def test_a_question_with_block_images_never_packs(runtimes, png_url):
+    """A composed question reads its state per row, so its packing key is None.
+
+    Its own images send it through ``_composed_rows``, which cannot share a
+    state encode however equal the text states: packing 3 such requests into
+    one batch made all three wait for the whole batch (review round 3), so
+    ``packing_key`` returns None whenever ``block_images`` is set.
+    """
+    model = model_of(runtimes, "prefix_bidir", "float32")
+    from vllm_srun.families.decision3 import images as img
+
+    text_plan = model.plan(STATE, QUESTIONS)
+    item = text_plan.items[0]
+    assert model.packing_key(item) == model._state_key(item.state)
+    # the same question carrying its own block images: composed, never packed
+    composed = replace(
+        item,
+        block_images=(
+            img.ProcessedImage(
+                pixel_values=torch.zeros(1), grid=(1, 1, 1), tokens=1, digest="t"
+            ),
+        ),
+    )
+    assert model.packing_key(composed) is None
+
+
+def test_calibration_states_are_content_distinct_at_every_size(runtimes):
+    """The burst calibration must time the no-sharing case for every row.
+
+    Content-keyed state grouping collapses equal states, so calibration rows
+    have to differ in content — including across sizes where a periodic
+    filler would repeat (a rotation of an 11-token filler cycle repeats every
+    11 rows).
+    """
+    model = model_of(runtimes, "prefix_bidir")
+    for rows, row_tokens in ((4, 256), (16, 1024), (32, 2048), (64, 4096)):
+        items = model.calibration_items(rows, row_tokens)
+        assert items is not None and len(items) == rows
+        keys = {model._state_key(item.state) for item in items}
+        assert len(keys) == rows, f"{rows} rows at {row_tokens} tokens"
 
 
 def test_the_state_counts_once_in_the_input_tokens(runtimes):
