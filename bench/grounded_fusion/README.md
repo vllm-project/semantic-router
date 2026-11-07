@@ -48,7 +48,10 @@ Two runners are available:
 - A router config whose hallucination detector serves context grounding.
 - A DRACO JSON export supplied through `DRACO_PATH` or `--draco-path`.
 - Ollama with the panel and judge models used by the command.
-- Python 3 with the benchmark dependencies.
+- Python 3.10+ with the benchmark dependencies and the local `vllm-sr` package.
+  The DRACO loader and rubric arithmetic share the CLI's stdlib-only kernel.
+  This requirement is specific to grounded fusion; the reasoning and Looper
+  distribution requirements are unchanged.
 
 The default local model set is:
 
@@ -59,7 +62,7 @@ Create a Python environment and install the benchmark package:
 
 ```bash
 python3 -m venv .venv-bench
-.venv-bench/bin/python -m pip install -e 'bench[dev]' PyYAML
+.venv-bench/bin/python -m pip install -e src/vllm-sr -e 'bench[dev]' PyYAML
 ```
 
 Pull the models required by the default commands:
@@ -70,6 +73,70 @@ ollama pull llama3.1:8b
 ollama pull gemma3:12b
 ollama pull qwen3:14b
 ```
+
+## sr-bench final-answer diagnostic
+
+`draco-routed-answer-v1` runs final-answer generation and rubric grading through
+sr-bench's call journal, limits and accounting. It is an opt-in diagnostic, not
+part of the published nine-benchmark score. Existing runners remain available;
+this path does not replace panel grading, grounding-trace assertions or
+cached-panel policy comparisons.
+
+Prepare an existing DRACO export on the worker host:
+
+```bash
+.venv-bench/bin/python -m cli.sr_bench.draco \
+  --source-path "$DRACO_PATH" --revision "$DRACO_REVISION" \
+  --source-partition "$DRACO_PARTITION" \
+  --domains Medicine,Law --seed 42 --max-samples 8 \
+  --store ./data/sr-bench > draco-dataset.json
+```
+
+The revision and partition describe the supplied upstream source, not a new
+holdout. Preparation preserves the legacy filter, shuffle and cap, and hashes
+the source bytes and selected cases. It requires local inputs; automatic
+download and Standard holdout preparation are unsupported.
+
+Use the returned dataset object in a normal sr-bench run manifest with
+`profile: quick` and `seed: 42`. Configure the subject target and a fixed
+single-model auxiliary target named `rubric-judge`, then supply:
+
+```json
+{
+  "benchmark_options": {
+    "draco-routed-answer-v1": {
+      "judge": "rubric-judge",
+      "grader_version": "draco-legacy-rubric-strict-v1",
+      "batch_size": 8
+    }
+  }
+}
+```
+
+Freeze the Router configuration, model identities and generation settings.
+The judge must support OpenAI-compatible SSE; `ollama_proxy.py` is buffered-only
+and is not a compatible judge endpoint for this path. Do not silently substitute
+thinking settings. Fusion requires explicit `capability_only` mode and an unset
+`max_inference_calls`: the Router's priced-call gate currently supports only a
+direct call limit of one. Keep the target's `kind: mom`; calling it a single
+model would misrepresent its child calls. Unknown usage and prices remain unknown.
+
+```bash
+vllm-sr benchmark plan --manifest draco-run.json --output draco-frozen.json
+vllm-sr benchmark --store ./data/sr-bench run --manifest draco-frozen.json
+vllm-sr benchmark --store ./data/sr-bench report RUN_ID
+```
+
+Reports retain signed totals, penalties and criterion verdicts. Valid grades
+keep the legacy normalized clamp to [0, 1], but invalid denominators and missing
+or malformed judge verdicts fail explicitly. The weighted aggregate is null
+until every planned case is graded; failed cases are neither zero nor dropped.
+Binary accuracy, Wilson intervals, the published score and binary-only
+compare/replay/regrade/training export are unavailable for this diagnostic.
+
+The committed fixture proves the execution and reporting contract against a
+controlled HTTP target. Population-quality claims and legacy retirement still
+require the real corpus, a pinned capable judge and owner-reviewed parity.
 
 ## Router-path smoke test
 

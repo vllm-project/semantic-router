@@ -179,6 +179,59 @@ corresponding `_ROOT` variables to override those locations. Exact source
 revisions and, for code or terminal tasks, digest-pinned sandbox images remain
 required. Preflight reports missing prerequisites before dispatch.
 
+## DRACO final-answer diagnostic
+
+The opt-in `draco-routed-answer-v1` adapter preserves the existing grounded-fusion
+rubric and runs subject and judge calls through the shared worker. It does not
+change the published benchmark suite or provide a cached-panel policy comparison.
+
+Prepare an existing DRACO JSON export locally on the worker host:
+
+```bash
+python -m cli.sr_bench.draco \
+  --source-path "$DRACO_PATH" --revision "$DRACO_REVISION" \
+  --source-partition "$DRACO_PARTITION" \
+  --domains Medicine,Law --seed 42 --max-samples 8 \
+  --store ./data/sr-bench > draco-dataset.json
+```
+
+The source revision and upstream partition are required. The output freezes
+source bytes, native task identities and the legacy domain filter, shuffle and
+cap. Use its dataset object in a run manifest with the same profile and seed.
+Only smoke/quick diagnostics are supported; missing inputs require local
+preparation, not an automatic download or an inferred holdout.
+
+Register a fixed single-model auxiliary judge and set these benchmark options:
+
+```json
+{
+  "draco-routed-answer-v1": {
+    "judge": "rubric-judge",
+    "grader_version": "draco-legacy-rubric-strict-v1",
+    "batch_size": 8
+  }
+}
+```
+
+Both endpoints must support OpenAI-compatible streaming. The legacy
+grounded-fusion Ollama proxy returns buffered JSON and cannot serve as this
+adapter's judge endpoint. Freeze generation settings rather than bypassing the
+transport's parameter policy. Each case needs one subject call plus one judge
+call per criterion batch; preflight rejects an insufficient call budget.
+
+For a Fusion subject, use `kind: mom`, `cost_policy: capability_only` and omit
+`max_inference_calls`. The Router's priced-call gate supports a direct call limit
+of one, not a Fusion bound. Do not relabel a compound route as a single model to
+obtain a price; missing child usage or prices must remain unknown.
+
+The adapter is registered in the trusted CLI initializer, including worker images
+that copy the CLI without distribution metadata. Python 3.10+ and the updated CLI
+are also required by the retained grounded-fusion commands that share its rubric
+kernel. Reasoning/Looper distribution requirements are unchanged.
+
+See [weighted diagnostic results](./results.md#weighted-rubric-diagnostics) before
+interpreting a run.
+
 ## Next
 
 - [Plan and run](./plan-and-run.md)

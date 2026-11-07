@@ -43,7 +43,7 @@ start-provider-mocker: provider-mocker-install ## Run the deterministic test bac
 bench-test-deps: $(HARNESS_VENV_DEPS) ## Install the bench package dependencies its reasoning and agent crew tests import
 	@"$(AGENT_PYTHON)" -m pip install --quiet -r bench/requirements.txt
 
-test-grounded-fusion-bench: $(HARNESS_VENV_DEPS) ## Test the grounded fusion DRACO loader, rubric judge and arm comparison offline
+test-grounded-fusion-bench: $(HARNESS_VENV_DEPS) vllm-sr-install-cli ## Test the grounded fusion DRACO loader, rubric judge and arm comparison offline
 	@"$(AGENT_PYTHON)" -m pytest -q bench/grounded_fusion
 
 # The real-tokenizer case downloads a Hugging Face tokenizer, so it stays a manual run.
