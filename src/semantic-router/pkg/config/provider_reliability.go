@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -9,18 +10,21 @@ import (
 const (
 	ProviderLBPolicyRoundRobin   = "round_robin"
 	ProviderLBPolicyLeastRequest = "least_request"
+	// ProviderLBPolicyLoadAware prefers the replica whose serving engine
+	// reports the least load and falls back to least_request without fresh
+	// telemetry for every replica.
+	ProviderLBPolicyLoadAware = "load_aware"
 )
 
+// SupportedProviderLBPolicies is the canonical inventory used by validation
+// and the generated configuration contract.
+func SupportedProviderLBPolicies() []string {
+	return []string{ProviderLBPolicyRoundRobin, ProviderLBPolicyLeastRequest, ProviderLBPolicyLoadAware}
+}
+
 func validateProviderReliability(modelName string, reliability ProviderReliability) error {
-	switch strings.TrimSpace(reliability.LBPolicy) {
-	case "", ProviderLBPolicyRoundRobin, ProviderLBPolicyLeastRequest:
-	default:
-		return fmt.Errorf(
-			"providers.models[%s].reliability.lb_policy must be %q or %q",
-			modelName,
-			ProviderLBPolicyRoundRobin,
-			ProviderLBPolicyLeastRequest,
-		)
+	if policy := strings.TrimSpace(reliability.LBPolicy); policy != "" && !slices.Contains(SupportedProviderLBPolicies(), policy) {
+		return fmt.Errorf("providers.models[%s].reliability.lb_policy must be one of %s", modelName, strings.Join(SupportedProviderLBPolicies(), ", "))
 	}
 	if err := validateProviderRetry(modelName, reliability); err != nil {
 		return err

@@ -139,7 +139,7 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	}
 	serverOpts := []extproc.ServerOption{
 		extproc.WithConfigHistoryLimit(opts.configHistoryLimit), extproc.WithGatewayMode(opts.gateway),
-		extproc.WithConfigParts(upstreamPart(opts.gateway)),
+		extproc.WithConfigParts(backendTelemetryPart(), upstreamPart(opts.gateway)),
 	}
 	stopProgress := reportModelDeploymentProgress(startupWriter, modelservice.DefaultManager())
 	routerServer, err = extproc.NewServer(opts.configPath, opts.port, opts.secure, opts.certPath, runtimeRegistry,

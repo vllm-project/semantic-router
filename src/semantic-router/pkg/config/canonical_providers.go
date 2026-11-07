@@ -118,6 +118,13 @@ type CanonicalBackendRef struct {
 	Auth *DeploymentAuth `yaml:"auth,omitempty"`
 	// Headers are non-secret headers sent with every request.
 	Headers map[string]string `yaml:"headers,omitempty"`
+	// Engine names the serving engine behind this backend (vllm, sglang,
+	// atom or tensorrt-llm) so the Router can read its load metrics. An
+	// empty engine leaves the backend without telemetry.
+	Engine string `yaml:"engine,omitempty"`
+	// Metrics overrides where the engine exposes its metrics. It requires
+	// Engine.
+	Metrics *CanonicalBackendMetrics `yaml:"metrics,omitempty"`
 }
 
 func canonicalProviderDefaults(providers CanonicalProviders) CanonicalProviderDefaults {

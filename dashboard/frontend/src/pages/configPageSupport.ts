@@ -1,3 +1,13 @@
+import type { BackendEngine, ProviderLBPolicy } from '../generated/routerConfigContract'
+export { BACKEND_ENGINES, PROVIDER_LB_POLICIES } from '../generated/routerConfigContract'
+export type { BackendEngine, ProviderLBPolicy } from '../generated/routerConfigContract'
+
+export const PROVIDER_LB_POLICY_LABELS: Record<ProviderLBPolicy, string> = {
+  round_robin: 'Round robin',
+  least_request: 'Least requests',
+  load_aware: 'Least engine load',
+}
+
 import type { Endpoint } from '../components/EndpointsEditor'
 import bundledCatalog from '../modelCatalogMetadata'
 import type {
@@ -121,7 +131,7 @@ export interface ModelPricing {
 }
 
 export interface ProviderReliability {
-  lb_policy?: string
+  lb_policy?: ProviderLBPolicy
   retry_count?: number
   retry_on?: string
   consecutive_5xx?: number
@@ -190,6 +200,13 @@ export interface BackendRefEntry {
   api_key_env?: string
   auth?: BackendRefAuth
   headers?: Record<string, string>
+  engine?: BackendEngine
+  metrics?: BackendMetrics
+}
+
+export interface BackendMetrics {
+  port?: number
+  path?: string
 }
 
 export interface ModelReasoningConfig {

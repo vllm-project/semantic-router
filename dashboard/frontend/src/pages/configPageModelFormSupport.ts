@@ -1,4 +1,7 @@
+import { BACKEND_ENGINES, PROVIDER_LB_POLICIES } from './configPageSupport'
 import type {
+  BackendEngine,
+  BackendMetrics,
   BackendRefAuth,
   BackendRefEntry,
   ConfigData,
@@ -8,6 +11,7 @@ import type {
   ModelReasoningConfig,
   NormalizedModel,
   ProviderReliability,
+  ProviderLBPolicy,
 } from './configPageSupport'
 
 export function normalizeModelLoras(value: unknown): LoRAAdapter[] {
@@ -91,8 +95,31 @@ export function normalizeModelBackendRefs(value: unknown): BackendRefEntry[] {
         normalized.api_key = entry.api_key.trim()
       if (typeof entry.api_key_env === 'string' && entry.api_key_env.trim())
         normalized.api_key_env = entry.api_key_env.trim()
+      const engine = normalizeBackendEngine(entry.engine)
+      if (engine) normalized.engine = engine
+      const metrics = normalizeBackendMetrics(entry.metrics)
+      if (metrics) normalized.metrics = metrics
       return normalized
     })
+}
+
+function normalizeBackendEngine(value: unknown): BackendEngine | undefined {
+  const engine = typeof value === 'string' ? value.trim() : ''
+  return (BACKEND_ENGINES as readonly string[]).includes(engine)
+    ? (engine as BackendEngine)
+    : undefined
+}
+
+// Metrics are carried through edits unchanged so a model save never drops a
+// custom metrics port or path the editor does not show.
+function normalizeBackendMetrics(value: unknown): BackendMetrics | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const raw = value as Record<string, unknown>
+  const metrics: BackendMetrics = {}
+  if (typeof raw.port === 'number' && Number.isInteger(raw.port) && raw.port > 0)
+    metrics.port = raw.port
+  if (typeof raw.path === 'string' && raw.path.trim()) metrics.path = raw.path.trim()
+  return Object.keys(metrics).length > 0 ? metrics : undefined
 }
 
 export function normalizeEvaluationRecords(value: unknown): EvaluationRecordConfig[] {
@@ -305,7 +332,6 @@ export function normalizeModelReliability(value: unknown): ProviderReliability |
   const source = value as Record<string, unknown>
   const normalized: ProviderReliability = {}
   const stringFields = [
-    'lb_policy',
     'retry_on',
     'base_ejection_time',
     'health_check_path',
@@ -328,6 +354,10 @@ export function normalizeModelReliability(value: unknown): ProviderReliability |
     'retry_budget_min_concurrency',
   ] as const
 
+  const policy = typeof source.lb_policy === 'string' ? source.lb_policy.trim() : ''
+  if ((PROVIDER_LB_POLICIES as readonly string[]).includes(policy)) {
+    normalized.lb_policy = policy as ProviderLBPolicy
+  }
   for (const field of stringFields) {
     if (typeof source[field] === 'string' && source[field].trim()) {
       normalized[field] = source[field].trim()

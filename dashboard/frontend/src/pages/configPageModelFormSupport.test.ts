@@ -11,7 +11,17 @@ import {
   normalizeModelPricing,
   normalizeModelReliability,
 } from './configPageModelFormSupport'
+import { BACKEND_ENGINES, PROVIDER_LB_POLICIES } from './configPageSupport'
 import { newModelFormData } from './configPageModelsSectionSupport'
+
+it('derives backend engines and load-balancing options from the generated contract', () => {
+  expect(BACKEND_ENGINES).toEqual(
+    ROUTER_CONFIG_SCHEMA.$defs.CanonicalBackendRef.properties.engine.enum.filter(Boolean),
+  )
+  expect(PROVIDER_LB_POLICIES).toEqual(
+    ROUTER_CONFIG_SCHEMA.$defs.ProviderReliability.properties.lb_policy.enum.filter(Boolean),
+  )
+})
 
 describe('model form backend targets', () => {
   it('keeps every canonical API format in the public dashboard config type', () => {
@@ -50,6 +60,8 @@ describe('model form backend targets', () => {
       api_key_env: 'PROVIDER_API_KEY',
       auth: { header: 'x-api-key', prefix: '', api_key_env: 'PROVIDER_API_KEY' },
       headers: { 'X-Org': 'acme' },
+      engine: 'tensorrt-llm',
+      metrics: { port: 8002, path: '/v2/metrics' },
     } as const
 
     expect(normalizeModelBackendRefs([backend])).toEqual([backend])
@@ -58,6 +70,41 @@ describe('model form backend targets', () => {
     expect(Object.keys(backend).sort()).toEqual(
       Object.keys(ROUTER_CONFIG_SCHEMA.$defs.CanonicalBackendRef.properties).sort(),
     )
+  })
+
+  it('keeps backend telemetry metrics through a model save', () => {
+    const payload = buildProviderModelPayload('qwen3-8b', {
+      backend_refs: [
+        {
+          name: 'gpu-a',
+          endpoint: '10.0.0.1:8000',
+          engine: 'vllm',
+          metrics: { port: 9100, path: '/custom-metrics' },
+        },
+      ],
+    })
+
+    expect(payload.backend_refs).toEqual([
+      {
+        name: 'gpu-a',
+        endpoint: '10.0.0.1:8000',
+        engine: 'vllm',
+        metrics: { port: 9100, path: '/custom-metrics' },
+      },
+    ])
+  })
+
+  it('keeps only load-balancing policies accepted by the generated contract', () => {
+    for (const policy of PROVIDER_LB_POLICIES) {
+      expect(normalizeModelReliability({ lb_policy: policy })).toEqual({ lb_policy: policy })
+    }
+    expect(normalizeModelReliability({ lb_policy: 'RING_HASH' })).toBeUndefined()
+  })
+
+  it('drops an unknown engine and an empty metrics block', () => {
+    expect(
+      normalizeModelBackendRefs([{ name: 'gpu-a', engine: 'triton', metrics: { port: 0 } }]),
+    ).toEqual([{ name: 'gpu-a' }])
   })
 
   it('preserves an explicitly empty authentication prefix through the model payload', () => {

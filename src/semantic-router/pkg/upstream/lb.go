@@ -49,12 +49,15 @@ func newHostSet(hosts []*endpoint) *hostSet {
 }
 
 type balancer interface {
-	pick(set *hostSet) *endpoint
+	pick(set *hostSet, telemetry TelemetryReader) *endpoint
 }
 
-func newBalancer(policy LBPolicy, rnd Rand) balancer {
-	if policy == LBLeastRequest {
-		return &leastRequest{rnd: rnd, choices: leastRequestChoices, schedule: edfCache{seed: rnd.Uint64()}}
+func newBalancer(cluster string, policy LBPolicy, rnd Rand) balancer {
+	switch policy {
+	case LBLeastRequest:
+		return newLeastRequest(rnd)
+	case LBLoadAware:
+		return &loadAware{cluster: cluster, rnd: rnd, fallback: newLeastRequest(rnd)}
 	}
 	b := &roundRobin{schedule: edfCache{seed: rnd.Uint64()}}
 	b.next.Store(rnd.Uint64())
@@ -69,7 +72,7 @@ type roundRobin struct {
 	schedule edfCache
 }
 
-func (b *roundRobin) pick(set *hostSet) *endpoint {
+func (b *roundRobin) pick(set *hostSet, _ TelemetryReader) *endpoint {
 	switch n := len(set.hosts); {
 	case n == 0:
 		return nil
@@ -79,6 +82,10 @@ func (b *roundRobin) pick(set *hostSet) *endpoint {
 		return set.hosts[(b.next.Add(1)-1)%uint64(n)]
 	}
 	return b.schedule.pick(set, configuredWeight)
+}
+
+func newLeastRequest(rnd Rand) *leastRequest {
+	return &leastRequest{rnd: rnd, choices: leastRequestChoices, schedule: edfCache{seed: rnd.Uint64()}}
 }
 
 // leastRequestChoices is the choice_count the Envoy template configures.
@@ -94,7 +101,7 @@ type leastRequest struct {
 	schedule edfCache
 }
 
-func (b *leastRequest) pick(set *hostSet) *endpoint {
+func (b *leastRequest) pick(set *hostSet, _ TelemetryReader) *endpoint {
 	switch n := len(set.hosts); {
 	case n == 0:
 		return nil

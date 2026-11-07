@@ -9,6 +9,7 @@ import (
 
 	"golang.org/x/net/http/httpguts"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/backendtelemetry"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
@@ -28,6 +29,15 @@ type Options struct {
 	Rand Rand
 	// Clock drives health checks and outlier sweeps; nil uses real time.
 	Clock Clock
+	// Telemetry belongs to this Set, not its reusable clusters. Calls pinned
+	// to an older Set keep their reader; the new Set uses this one. Nil makes
+	// load-aware clusters balance as least-request.
+	Telemetry TelemetryReader
+}
+
+// TelemetryReader returns a replica's load observation while it is fresh.
+type TelemetryReader interface {
+	Fresh(backendtelemetry.Identity) (backendtelemetry.Observation, bool)
 }
 
 // Set serves every cluster of one topology. It is safe for concurrent use.
@@ -40,6 +50,7 @@ type Set struct {
 	shared    *shared
 	rnd       Rand
 	clock     Clock
+	telemetry TelemetryReader
 
 	abort  context.Context
 	cancel context.CancelFunc
@@ -61,6 +72,7 @@ func New(topology Topology, opts Options) (*Set, error) {
 		clusters:  make(map[string]*cluster, len(topology.Clusters)),
 		listeners: make(map[string]Policy, len(topology.Listeners)),
 		drained:   make(chan struct{}),
+		telemetry: opts.Telemetry,
 	}
 	s.abort, s.cancel = context.WithCancel(context.Background())
 	for i, listener := range topology.Listeners {
@@ -164,7 +176,7 @@ func (s *Set) Do(ctx context.Context, req *Request) (*Response, error) {
 	}
 	policy := s.policy(req, c)
 	callCtx, endCall := s.callContext(ctx, policy.Timeouts.Total)
-	cl := &call{req: req, cluster: c, defaultRoute: defaultRoute, policy: policy, rnd: s.rnd, clock: s.clock}
+	cl := &call{req: req, cluster: c, defaultRoute: defaultRoute, policy: policy, rnd: s.rnd, clock: s.clock, telemetry: s.telemetry}
 	done := func() {
 		endCall()
 		s.exit()
@@ -299,7 +311,7 @@ func (c *ClusterSpec) validate() error {
 	if len(c.Endpoints) == 0 {
 		return fmt.Errorf("has no endpoints")
 	}
-	if c.LBPolicy != LBRoundRobin && c.LBPolicy != LBLeastRequest {
+	if c.LBPolicy != LBRoundRobin && c.LBPolicy != LBLeastRequest && c.LBPolicy != LBLoadAware {
 		return fmt.Errorf("unknown lb policy %q", c.LBPolicy)
 	}
 	for _, h := range c.RouteHeaders {

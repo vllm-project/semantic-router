@@ -539,6 +539,53 @@ routing:
     assert cluster["circuit_breakers"]["thresholds"][0]["max_requests"] == 4096
 
 
+def test_load_aware_policy_renders_least_request_for_envoy(tmp_path, monkeypatch):
+    """Envoy has no engine telemetry, so load_aware balances as least_request."""
+    rendered = _render_envoy_config(
+        tmp_path,
+        monkeypatch,
+        """
+version: v0.3
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+providers:
+  defaults:
+    model: test-model
+  models:
+    - name: test-model
+      reliability:
+        lb_policy: load_aware
+      backend_refs:
+        - endpoint: 10.0.0.1:8000
+          provider: vllm
+          engine: vllm
+        - endpoint: 10.0.0.2:8000
+          provider: vllm
+          engine: vllm
+routing:
+  modelCards:
+    - name: test-model
+  decisions:
+    - name: default-route
+      description: default route
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: test-model
+""",
+        extproc_host="localhost",
+        router_api_host="localhost",
+    )
+
+    cluster = _cluster_by_name(rendered, "model_test_2dmodel_cluster")
+    assert cluster["lb_policy"] == "LEAST_REQUEST"
+    assert cluster["least_request_lb_config"]["choice_count"] == 2
+
+
 def test_backend_ref_domain_with_path_produces_correct_envoy_cluster_and_route(
     tmp_path, monkeypatch
 ):
