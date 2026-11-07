@@ -1,0 +1,117 @@
+import { atom, read, update } from 'claude-code'
+import type { EngineInterface } from 'claude-code'
+
+import type { Runtime } from './settings'
+
+const HEALTH_TIMEOUT_MS = 3000
+// While the runtime is offline one request a minute goes through to see whether it is back.
+const RETRY_MS = 60_000
+
+const isOffline = atom({ plugin: 'vsr', key: 'isOffline' } as const, false)
+// When a request last went to a runtime known to be offline.
+const lastTry = atom({ plugin: 'vsr', key: 'offlineTry' } as const, 0)
+
+export const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+export const numberAt = (value: unknown, key: string): number | undefined => {
+  const found = isRecord(value) ? value[key] : undefined
+  return typeof found === 'number' ? found : undefined
+}
+
+// A `choice` answer's probability for one key.
+export const probabilityOf = (answer: unknown, key: string) =>
+  isRecord(answer) ? numberAt(answer.probabilities, key) : undefined
+
+// Marks a skipped app's record when the runtime was offline, so its row stays quiet and the band speaks for it.
+export const offlineOf = (result: Classified<unknown>) => (!result.ok && result.offline ? { offline: true as const } : {})
+
+// The runtime's whole reply: `answers` per question, and `spans` for span questions.
+export type Reply = { answers: Record<string, unknown>; spans: Record<string, unknown> }
+
+// `offline`: the runtime could not be reached, or was skipped as offline; the band says so once, the rows do not.
+export type Classified<T> =
+  | { ok: true; value: T; latencyMs: number }
+  | { ok: false; why: string; latencyMs: number; offline?: true }
+
+// A plain prompt, or the fields of a `pair` or `grounded` state.
+export type State = string | Record<string, string>
+
+export const headersOf = (runtime: Runtime): Record<string, string> => ({
+  'content-type': 'application/json',
+  ...(runtime.token === '' ? {} : { authorization: `Bearer ${runtime.token}` }),
+})
+
+// The one way every application asks the Router: POST, race a timeout, parse. Never throws.
+export async function classify<T>(
+  $: EngineInterface,
+  runtime: Runtime,
+  state: State,
+  questions: Record<string, unknown>,
+  timeoutMs: number,
+  parse: (reply: Reply) => T | undefined,
+): Promise<Classified<T>> {
+  const started = await $.clock.now()
+  const failed = async (why: string, offline = false) => ({
+    ok: false as const,
+    why,
+    latencyMs: (await $.clock.now()) - started,
+    ...(offline ? { offline: true as const } : {}),
+  })
+  if (await read($, isOffline)) {
+    if (started - (await read($, lastTry)) < RETRY_MS) return failed('classifier offline', true)
+    await update($, lastTry, () => started)
+  }
+  try {
+    const response = await Promise.race([
+      $.http.fetch(runtime.url, { method: 'POST', headers: headersOf(runtime), body: JSON.stringify({ state, questions }) }),
+      $.clock.sleep(timeoutMs).then(() => undefined),
+    ])
+    if (response === undefined) {
+      // Slow or gone: /health tells, without holding this call up.
+      void checkRuntime($, runtime)
+      return await failed(`timeout after ${timeoutMs} ms`)
+    }
+    if (!response.ok) return await failed(`HTTP ${response.status}`)
+    const body: unknown = JSON.parse(response.text)
+    const answers = isRecord(body) ? body.answers : undefined
+    const spans = isRecord(body) && isRecord(body.spans) ? body.spans : {}
+    const value = isRecord(answers) ? parse({ answers, spans }) : undefined
+    if (value === undefined) return await failed('unexpected answer shape')
+    await markReachable($)
+    return { ok: true, value, latencyMs: (await $.clock.now()) - started }
+  } catch (error) {
+    await markOffline($, runtime)
+    return await failed(String(error), true)
+  }
+}
+
+// Read while drawing, it redraws the band when the runtime goes offline or comes back.
+export async function readOffline($: EngineInterface): Promise<boolean> {
+  return read($, isOffline)
+}
+
+async function markReachable($: EngineInterface) {
+  if (await read($, isOffline)) await update($, isOffline, () => false)
+}
+
+// The runtime's base URL (its `/v1/decisions` left off) and `/health` after it.
+export const healthUrlOf = (url: string) => `${url.replace(/\/v1\/decisions\/?$/, '').replace(/\/$/, '')}/health`
+
+// Offline from now: requests are skipped for a minute at a time, and a toast says so once.
+async function markOffline($: EngineInterface, runtime: Runtime) {
+  const now = await $.clock.now()
+  await update($, lastTry, () => now)
+  if (await read($, isOffline)) return
+  await update($, isOffline, () => true)
+  $.ui.toast(`vSR: classifier not reachable at ${runtime.url} · vSR steps aside until it answers · /vsr:setup`)
+}
+
+// Asks the runtime's `/health` once; one that does not answer in time is offline.
+export async function checkRuntime($: EngineInterface, runtime: Runtime) {
+  const answered = await Promise.race([
+    $.http.fetch(healthUrlOf(runtime.url), { headers: headersOf(runtime) }).then(response => response.ok, () => false),
+    $.clock.sleep(HEALTH_TIMEOUT_MS).then(() => false),
+  ])
+  return answered ? markReachable($) : markOffline($, runtime)
+}

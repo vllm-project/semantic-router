@@ -196,6 +196,17 @@ domains:
         - src/semantic-router/pkg/config/canonical_global.go
         - src/semantic-router/pkg/modeldownload/**
 
+  claude-code-plugin:
+    owner: developer-experience
+    documentation_check: true
+    paths:
+      - .claude-plugin/**
+      - src/claude-code/**
+    checks:
+      - python3 -m unittest discover -s src/claude-code/skills/setup/scripts
+      - python3 -m unittest discover -s src/claude-code/skills/calibrate/scripts
+    verifications: []
+
   vela-omni-artifacts:
     owner: model-runtime
     paths:
