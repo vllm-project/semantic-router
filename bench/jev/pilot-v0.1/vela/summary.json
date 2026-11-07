@@ -1,0 +1,24 @@
+{
+  "schema": "vela-pilot-summary.v1",
+  "protocol_version": "pilot-v0.1",
+  "records": 6,
+  "contract_valid": 6,
+  "inference_failures": 0,
+  "primary_cases": 5,
+  "primary_correct": 4,
+  "primary_accuracy": 0.8,
+  "diagnostic": [
+    {
+      "id": "pilot-006",
+      "native_choice": "computer science",
+      "expected": null,
+      "top1_probability": 0.907543420791626
+    }
+  ],
+  "latency_p50_ms": 15.95245802309364,
+  "latency_p95_ms": 17.581958003574982,
+  "input_sha256": "671c09f62dc9fc9b864efe54b0adfef0ec666f309f74b776dcec3d6d8cdd2ef6",
+  "question_sha256": "33f7ef7c4826df98a4bc23c2e0fc2302ea3ab61e18b8b45d0515e51e64f69738",
+  "protocol_sha256": "d54fbe14b70ee8e2224dbd36bc51adc2dd1f1d337ffe05353ab30f6dcc509af7",
+  "shared_protocol_frozen": false
+}
