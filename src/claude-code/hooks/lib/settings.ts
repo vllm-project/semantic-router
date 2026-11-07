@@ -22,8 +22,8 @@ export const LOGO_MODES = ['auto', 'image', 'smooth', 'blocks', 'off'] as const
 
 // What the router may do with a subagent's model: never use a smaller one than the session's (quality), use one
 // only when the classifier is sure (balanced), or whenever it answers clearly enough to route at all (save).
-// How much each decision shows where it happens: `normal` a card for what needs a look, a line for what sr changed,
-// nothing for what went as it would have; `quiet` only the cards; `verbose` a card or line for every decision.
+// How much each decision shows where it happens: `normal` a card for what needs a look, a line for what vSR changed
+// or what the router decided, nothing for what went as it would have; `quiet` only the cards; `verbose` a card or line for every decision.
 export const DISPLAYS = ['normal', 'quiet', 'verbose'] as const
 export type Display = (typeof DISPLAYS)[number]
 

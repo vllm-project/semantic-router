@@ -126,6 +126,17 @@ export function mark(elements: Elements, logo: Logo, rows: MarkRows) {
 export const wordmarkHeight = (logo: Logo) => (logo.kind === 'off' ? 0 : WORDMARK_ROWS + 1)
 
 // The top of the pane: the mark, and the name beside it in the terminal's own text color.
+// The short name in the mark's colours: v and R in its yellow, S in its blue.
+export function brand({ Text }: Elements) {
+  return (
+    <Text>
+      <Text color={HUES.Y}>v</Text>
+      <Text color={HUES.B}>S</Text>
+      <Text color={HUES.Y}>R</Text>
+    </Text>
+  )
+}
+
 export function wordmark(elements: Elements, logo: Logo) {
   if (logo.kind === 'off') return null
   const { Box, Text } = elements

@@ -318,7 +318,7 @@ function weightOf(d: Decision): Weight {
     case 'redact':
       return d.unread ? 'act' : 'notice'
     case 'keep':
-      return 'quiet'
+      return 'notice'
     default:
       return 'notice'
   }
@@ -330,6 +330,10 @@ function briefOf(d: Decision, described: Omit<Described, 'weight' | 'brief' | 'l
       return d.escalated ? 'you pushed back' : taskWord(d.level, d.tiers)
     case 'escalate':
       return 'Claude re-checks its last answer'
+    case 'keep':
+      return d.reason === 'quality'
+        ? 'routing goal is quality'
+        : `${d.reason === 'downgrade' ? 'too unsure to go lighter' : 'classifier unsure'} · ${fixed(d.confidence)} < ${fixed(d.minConfidence)}`
     case 'redact':
       return TAGS.filter(tag => d.counts[tag]).join(', ')
     case 'unavailable':

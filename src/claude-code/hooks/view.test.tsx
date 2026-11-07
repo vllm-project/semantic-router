@@ -288,13 +288,13 @@ async function severalApps($: Parameters<Parameters<typeof test>[1]>[0], on: Par
   await $.tool.check({ tool: 'Bash', input: { command: 'ls' } })
 }
 
-test('the band shows a dim sr, then one item per app that decided, each glyph in its app colour', async ($, on) => {
+test('the band shows vSR in the mark\'s colours, then one item per app that decided, each glyph in its app colour', async ($, on) => {
   await severalApps($, on)
 
   const { texts, props } = await rowTree($, bandRow())
 
   expect(texts[0]).toBe('vSR  ◆ 1 shielded  ▒ 2 hidden  ⇢ 1 routed  ✓ 1 allowed')
-  expect(props[texts.indexOf('vSR')]).toMatchObject({ dimColor: true })
+  expect(['v', 'S', 'R'].map(letter => props[texts.indexOf(letter)]?.color)).toEqual(['#fdb618', '#32a3ff', '#fdb618'])
   expect(props[texts.indexOf('⇢')]).toMatchObject({ color: 'suggestion' })
   expect(props[texts.indexOf('▒')]).toMatchObject({ color: 'merged' })
   expect(props[texts.indexOf('◆')]).toMatchObject({ color: 'warning' })

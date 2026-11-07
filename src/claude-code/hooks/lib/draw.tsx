@@ -4,7 +4,7 @@ import type { Calibration, Decision, Spend } from '../../types'
 import { APPS, type Color, type Section, SECTIONS, sectionOf } from './apps'
 import { type Body, type Described, describe, type Gauge, type TallyItem, tallyOf, tallyWidth } from './describe'
 import { ANSWERS, type Answer, answersFor } from './labels'
-import { type Logo, mark, markColumns, wordmark, wordmarkHeight } from './logo'
+import { brand, type Logo, mark, markColumns, wordmark, wordmarkHeight } from './logo'
 import { holdMeter, type Segment, textWidth } from './meters'
 import { APP_NAMES, type Display, isCleartextRemote, type Settings } from './settings'
 import { clip, fixed, modelName } from './text'
@@ -20,13 +20,14 @@ const CARD_CHROME = 4
 const COMPACT_RISK_CELLS = 12
 
 // The detail gives way before the headline does.
-function srLine({ Text }: Elements, { badge, color, headline, detail }: Described, columns: number) {
+function srLine(elements: Elements, { badge, color, headline, detail }: Described, columns: number) {
+  const { Text } = elements
   const room = columns - `vSR  ${badge}  `.length
   const head = clip(headline, Math.max(1, room))
   const roomLeft = room - head.length - 2
   return (
     <Text>
-      <Text dimColor>vSR</Text>
+      {brand(elements)}
       {' '}
       <Text backgroundColor={color} color="inverseText">{` ${badge} `}</Text>
       {` ${head}`}
@@ -105,7 +106,12 @@ function card(
   const tail = one.tail ?? ''
   const title = `${clip(one.title, Math.max(1, inner - lead - tail.length))}${tail}`
   const label = `vSR · ${APPS[app].name}`
-  const tag = <Text dimColor>{label}</Text>
+  const tag = (
+    <Text>
+      {brand(elements)}
+      <Text dimColor>{` · ${APPS[app].name}`}</Text>
+    </Text>
+  )
   const tagRoom = label.length + 2
   const isHeaderTagged = lead + title.length + tagRoom <= inner
   const isNoteTagged = !isHeaderTagged && one.note.length + tagRoom <= inner
@@ -200,7 +206,7 @@ export function band(elements: Elements, list: readonly Decision[], columns: num
   const items = isOffline ? [OFFLINE, ...tallyOf(list)] : tallyOf(list)
   return (
     <Text wrap="truncate-end">
-      <Text dimColor>{BAND_LEAD.trimEnd()}</Text>
+      {brand(elements)}
       {'  '}
       {tallyText(elements, itemsWithin(items, columns, BAND_LEAD.length))}
     </Text>

@@ -43,7 +43,8 @@ installed into `~/.local/share/vsr`, without sudo.
 
 ## What you see
 
-vSR draws each decision under the row it is about, and keeps a one-line tally above the prompt.
+vSR draws each decision under the row it is about, and keeps a one-line tally above the prompt. Its
+name shows in the mark's colours: v and R in yellow, S in blue.
 `/vsr` opens a pane with every decision of the session and the current setup.
 
 By default (`display: normal`) vSR only interrupts when it matters:
@@ -54,14 +55,16 @@ By default (`display: normal`) vSR only interrupts when it matters:
   - `SHIELDED`: a file or page tried to instruct Claude; Claude was told to treat it as data.
   - `UNVERIFIED`: the answer claims things that what Claude read does not back. Look twice.
   - `REDACTED` with a note on unchecked characters: a long output was only partly checked in time.
-- **One line** when vSR changed something you may want to know:
+- **One line** when vSR changed something, or the router decided on a subagent:
   - `ROUTED`: the subagent's model and effort, and how hard the task looked.
+  - `KEPT`: the subagent stays on your session's model, and why (the router was not sure enough, or
+    `routerGoal` is `quality`).
   - `REDACTED`: what kinds of data were hidden from a file or command. The same kinds hidden from the same file again are not repeated.
   - `ESCALATED`: you pushed back; Claude re-checks and the next subagent goes one step up.
   - `PARTIAL`: an output was read only in part, and the rest went to Claude unchecked.
   - `SKIPPED`: an app could not get an answer for this call, and Claude went on without it.
-- **Nothing** when all went as it would have without vSR: an allowed command, a grounded answer, a
-  subagent kept on its model. These are counted in the tally and listed in `/vsr`.
+- **Nothing** when all went as it would have without vSR: an allowed command or a grounded answer.
+  These are counted in the tally and listed in `/vsr`.
 
 `display: quiet` shows only the cards; `display: verbose` shows every decision with its scores.
 

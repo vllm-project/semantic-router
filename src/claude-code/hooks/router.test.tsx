@@ -290,6 +290,17 @@ test('a vague answer keeps the subagent on its default and shows KEPT', async ($
   expect(await paneText($, /stays on/)).toBe('subagent stays on Opus 5.5 · classifier unsure · confidence 0.10 < 0.30')
 })
 
+test('a kept subagent says so in one line under its row, so the user sees the router answered', async ($, on) => {
+  engine(on, { complexity: { score: 1, confidence: 0.1 } })
+  on('agent.spawn', () => ({ model: 'claude-opus-5-5', agentId: 'agent-2' }))
+  await $.agent.spawn(SPAWN)
+
+  const { texts, cards } = await rowTree($, agentRow('call-1'))
+
+  expect(cards).toEqual([])
+  expect(texts).toContain('vSR  KEPT  subagent stays on Opus 5.5 · classifier unsure · 0.10 < 0.30')
+})
+
 test('an Agent row with a route draws a ROUTED card with the difficulty meter, and the effort once known', { options: { display: 'verbose' } }, async ($, on) => {
   engine(on, { complexity: { score: 0.26, confidence: 0.61 }, steps: { score: 0.17, confidence: 0.74 } })
   subagent(on)
