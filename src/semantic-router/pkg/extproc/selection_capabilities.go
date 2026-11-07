@@ -57,7 +57,7 @@ func (r *OpenAIRouter) candidateCapabilityMismatch(ref config.ModelRef, request 
 		return err
 	}
 	preview := *request
-	if decision != nil && !preserveExplicitAnthropicReasoning(&preview, format) {
+	if decision != nil && !preserveExplicitAnthropicReasoningOff(&preview, format) {
 		if format != llmprotocol.OpenAIChatV1 {
 			if family := r.getModelReasoningFamily(ref.Model); family != nil {
 				exact := *decision
