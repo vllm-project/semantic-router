@@ -251,7 +251,7 @@ test('the tally colours each glyph in its app colour and leaves out what did not
   expect(tally).toBe('✓ 1 allowed')
 })
 
-test('the tally and the newest decisions fit the rows the pane is given', async ($, on) => {
+test('the tally and the newest decisions fit the rows the pane is given', { options: { check: true } }, async ($, on) => {
   engine(on, { review: 0.2 })
   for (const n of [1, 2, 3, 4, 5, 6, 7, 8]) await $.tool.check({ tool: 'Bash', input: { command: `git push origin b${n}` } })
 

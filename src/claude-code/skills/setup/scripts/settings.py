@@ -39,6 +39,8 @@ OPTIONS: dict[str, tuple[str, object]] = {
     "runtimeUrl": ("string", "http://127.0.0.1:8790/v1/decisions"),
     "runtimeToken": ("secret", ""),
     **dict.fromkeys(APPS, ("bool", True)),
+    # Off by default: on a CPU runtime a long answer outlasts its 3 s limit.
+    "check": ("bool", False),
     "routerEasyBelow": ("number", 0.5),
     "routerHardFrom": ("number", 1.5),
     "routerMinConfidence": ("number", 0.3),

@@ -21,7 +21,7 @@ async function turnThatReads($: Test, answer: string, reads = 1) {
   await $.turn.complete({ turnId: 't1', answer, reason: 'answer', durationMs: 1, isAborted: false })
 }
 
-test('an answer that keeps to what the turn read is GROUNDED, judged against the redacted reads', async ($, on) => {
+test('an answer that keeps to what the turn read is GROUNDED, judged against the redacted reads', { options: { check: true } }, async ($, on) => {
   const reply: Reply = { hallucination: 0.05, pii: [NAME], bodies: [] }
   engine(on, reply)
   on('tool.call', () => readResult(TICKET))
@@ -39,7 +39,7 @@ test('an answer that keeps to what the turn read is GROUNDED, judged against the
   )
 })
 
-test('an answer with claims the reads do not back is UNVERIFIED', async ($, on) => {
+test('an answer with claims the reads do not back is UNVERIFIED', { options: { check: true } }, async ($, on) => {
   engine(on, { hallucination: 0.53 })
   on('tool.call', () => readResult(TICKET))
 
@@ -49,7 +49,7 @@ test('an answer with claims the reads do not back is UNVERIFIED', async ($, on) 
   expect(await paneText($, /not backed/, 120)).toContain('unsupported 0.53 ≥ 0.50 · checked against 2 files read this turn')
 })
 
-test('the check card is drawn under the last block of the answer it judged, and no other block', async ($, on) => {
+test('the check card is drawn under the last block of the answer it judged, and no other block', { options: { check: true } }, async ($, on) => {
   engine(on, { hallucination: 0.53 })
   on('tool.call', () => readResult(TICKET))
   await turnThatReads($, INVENTED)
@@ -65,7 +65,7 @@ test('the check card is drawn under the last block of the answer it judged, and 
   expect(first.cards).toEqual([])
 })
 
-test('a grounded answer draws a GROUNDED card with its meter in the success colour', { options: { display: 'verbose' } }, async ($, on) => {
+test('a grounded answer draws a GROUNDED card with its meter in the success colour', { options: { display: 'verbose', check: true } }, async ($, on) => {
   engine(on, { hallucination: 0.05 })
   on('tool.call', () => readResult(TICKET))
   await turnThatReads($, FAITHFUL)
@@ -89,7 +89,7 @@ test('a turn that read nothing, or answered in a few words, is not checked', asy
   expect(reply.bodies?.filter(body => body.questions.hallucination)).toEqual([])
 })
 
-test('check fails open: with no answer from the classifier the turn ends as it would and shows SKIPPED', { options: { display: 'verbose' } }, async ($, on) => {
+test('check fails open: with no answer from the classifier the turn ends as it would and shows SKIPPED', { options: { display: 'verbose', check: true } }, async ($, on) => {
   const reply: Reply = {}
   engine(on, reply)
   on('tool.call', () => readResult(TICKET))
@@ -102,7 +102,19 @@ test('check fails open: with no answer from the classifier the turn ends as it w
   expect(await paneText($, /GROUNDED|UNVERIFIED/)).toBeUndefined()
 })
 
-test('by default a grounded answer draws nothing under it, and an unbacked one draws its card', async ($, on) => {
+test('check is off unless turned on: a turn that read files asks nothing about its answer', async ($, on) => {
+  const reply: Reply = { hallucination: 0.9, bodies: [] }
+  engine(on, reply)
+  on('tool.call', () => readResult('1. Write the tests.'))
+
+  await $.turn.start({ turnId: 't1', text: 'Summarize ticket.txt.' })
+  await $.tool.call({ tool: 'Read', file_path: '/repo/ticket.txt', tool_use_id: 'r1' })
+  await $.turn.complete({ turnId: 't1', answer: 'The ticket asks for tests first, then the fix, then a release note.', reason: 'answer', durationMs: 1, isAborted: false })
+
+  expect(reply.bodies?.filter(body => JSON.stringify(body).includes('hallucination'))).toEqual([])
+})
+
+test('by default a grounded answer draws nothing under it, and an unbacked one draws its card', { options: { check: true } }, async ($, on) => {
   const reply: Reply = { hallucination: 0.05 }
   engine(on, reply)
   on('tool.call', () => readResult(TICKET))

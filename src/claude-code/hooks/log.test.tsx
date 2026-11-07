@@ -62,7 +62,7 @@ test('every decision is one log line of the calibration shape, and a guard line 
   expect(logLines(reply)).toEqual([{ ...held, detail: { ...held.detail, outcome: 'approved' } }])
 })
 
-test('each app writes its own line: score, threshold, subject and detail', async ($, on) => {
+test('each app writes its own line: score, threshold, subject and detail', { options: { check: true } }, async ($, on) => {
   const reply: Reply = {
     complexity: { score: 0.09, confidence: 0.86 },
     steps: { score: 0.17, confidence: 0.74 },
@@ -314,7 +314,7 @@ test('a guard allows a review of 0.85 at the default line', async ($, on) => {
 })
 
 test('the router, check and shield lines follow their options', {
-  options: { routerEasyBelow: 0.05, routerHardFrom: 0.08, checkUnsupported: 0.6, shieldInject: 0.8 },
+  options: { routerEasyBelow: 0.05, routerHardFrom: 0.08, checkUnsupported: 0.6, shieldInject: 0.8, check: true },
 }, async ($, on) => {
   const reply: Reply = { complexity: { score: 0.09, confidence: 0.86 }, hallucination: 0.53, jailbreak: 0.82 }
   engine(on, reply)
@@ -350,7 +350,7 @@ test('an app turned off asks the classifier nothing and records nothing', {
   expect(reply.bodies).toEqual([])
   expect(reply.files).toEqual({})
   expect(await paneText($, /No decisions/)).toBe('No decisions yet. Each one appears under the row it decided on.')
-  expect(await paneText($, /^apps/)).toBe('apps  escalate · redact · shield · check · router off · guard off')
+  expect(await paneText($, /^apps/)).toBe('apps  escalate · redact · shield · router off · guard off · check off')
 })
 
 test('a runtime token rides every request as a bearer header', { options: { runtimeToken: 'tok-123' } }, async ($, on) => {

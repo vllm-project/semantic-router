@@ -10,7 +10,7 @@ questions while Claude works. The answers decide six things:
 | redact | Hides personal data and secrets in `Read` and Bash output before Claude reads them. |
 | shield | Warns Claude when a file or web page tries to give it instructions. |
 | guard | Holds a risky Bash command for you to confirm, part by part. |
-| check | Marks an answer that is not backed by what Claude read that turn. |
+| check | Marks an answer that is not backed by what Claude read that turn. Off by default: see [Check](#check). |
 
 Requests still go to Claude as usual; the decision model only decides. It runs on your CPU or GPU,
 or on a runtime you host elsewhere.
@@ -33,8 +33,8 @@ Then, in a Claude Code session:
 ```
 
 The setup looks at your machine, then offers a recommended setup: it installs and starts the
-decision model on this machine (GPU if you have one, else CPU), turns on all six apps with the
-measured defaults, shows you the settings it will write, and checks each app against the model. A
+decision model on this machine (GPU if you have one, else CPU), turns on five apps with the measured
+defaults (check stays off, see [Check](#check)), shows you the settings it will write, and checks each app against the model. A
 custom setup lets you pick the runtime (including a remote one), the apps and the thresholds. When
 it is done, run `/reload-plugins` and then `/vsr`.
 
@@ -109,6 +109,17 @@ directory, `mkfs`, `dd` to a device, fork bombs, recursive permission changes on
 piped from `curl` or `wget` into a shell. A command of more than 12 parts is held too. The guard only
 tightens: it never allows what Claude Code would ask about or refuse.
 
+## Check
+
+Check is off by default because it is slow without a GPU. When a turn ends, it gives the decision
+model up to 8,000 characters of what Claude read and 8,000 of Claude's answer. A CPU runtime reads
+about 0.35 to 0.6 ms per character, so a long answer takes 5 to 10 s. That is past check's 3 s limit,
+so check would mostly show `SKIPPED`. It never holds Claude up, though: past the limit it steps aside.
+
+Turn it on when the decision model runs on a GPU, on this machine or behind a remote runtime's API
+(`/vsr:setup`, Custom, then pick check), or with `/plugin configure vsr@vllm-sr`. A GPU runtime is
+several times faster than a CPU one.
+
 ## Privacy
 
 With a local runtime nothing leaves your machine for vSR's decisions. With a remote runtime,
@@ -133,7 +144,8 @@ skill writes them, and `/plugin configure vsr@vllm-sr` edits them. The ones you 
 | --- | --- | --- |
 | `display` | `normal`, `quiet`, `verbose` | `normal` |
 | `routerGoal` | `quality`, `balanced`, `save` | `balanced` |
-| `router`, `escalate`, `redact`, `shield`, `guard`, `check` | on or off | on |
+| `router`, `escalate`, `redact`, `shield`, `guard` | on or off | on |
+| `check` | on or off | off |
 | `logo` | `auto`, `image`, `smooth`, `blocks`, `off` | `auto` |
 
 The thresholds (the options titled "Advanced") are measured defaults. After a few hundred

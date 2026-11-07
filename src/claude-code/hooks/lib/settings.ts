@@ -62,7 +62,8 @@ export const APP_NAMES: readonly App[] = ['router', 'escalate', 'redact', 'shiel
 // The manifest's defaults, for a field the engine hands over unset or of the wrong type.
 export const DEFAULTS: Settings = {
   runtime: { kind: 'local-cpu', url: 'http://127.0.0.1:8790/v1/decisions', token: '' },
-  apps: { router: true, escalate: true, redact: true, shield: true, guard: true, check: true },
+  // check is off by default: on a CPU runtime a long answer outlasts its time limit.
+  apps: { router: true, escalate: true, redact: true, shield: true, guard: true, check: false },
   thresholds: {
     // Below 0.5 the subagent is easy, below 1.5 multi-step, from it on hard; below 0.3 confidence it keeps its default.
     // Its steps (0 to 2): below 0.5 a few, below 1.2 several, from it on many; below 0.3 confidence the band's default effort.

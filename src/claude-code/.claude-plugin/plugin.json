@@ -1,6 +1,6 @@
 {
   "name": "vsr",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "vSR runs a vLLM Semantic Router decision model (local CPU, local GPU or remote) inside Claude Code: routes subagents by difficulty, escalates when you push back, redacts personal data and secrets, shields against prompt injection, guards risky Bash commands, and checks answers against what Claude read.",
   "author": {
     "name": "Theo Hsiung"
@@ -75,8 +75,8 @@
     "check": {
       "type": "boolean",
       "title": "App: check",
-      "description": "Checks an answer against the files and command output Claude read that turn. Off: no classifier call, no card.",
-      "default": true
+      "description": "Checks an answer against the files and command output Claude read that turn. Off by default: on a CPU runtime a long answer outlasts its 3 s limit, so turn it on with a GPU or remote runtime. Off: no classifier call, no card.",
+      "default": false
     },
     "routerEasyBelow": {
       "type": "number",

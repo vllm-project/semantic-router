@@ -17,10 +17,10 @@ Settings go under `pluginConfigs["<plugin id>"].options` in the user's `~/.claud
 2. **Look first.** Run `python3 ${CLAUDE_SKILL_DIR}/scripts/detect.py --id <id>` and show its six lines (machine, GPU, Python, vllm-srun, runtime, suggestion). It installs nothing. When a runtime already answers, the runtime line names the device it runs on when the runtime reports one, and the suggestion line carries `keep runtime=<value>`, the value that keeping it saves, with the reason in parentheses. Done when the user has seen what this machine has and what detect suggests.
 
 3. **Recommended or custom.** Ask one AskUserQuestion:
-   - **Recommended setup (Recommended)**: in the description, say what it does on this machine, from detect's suggestion: keep the runtime that already answers (`existing`), or install and run vela3-lite on this machine's GPU (`local-gpu`) or CPU (`local-cpu`). All six apps on, default thresholds. The user still sees the settings change before anything is written.
+   - **Recommended setup (Recommended)**: in the description, say what it does on this machine, from detect's suggestion: keep the runtime that already answers (`existing`), or install and run vela3-lite on this machine's GPU (`local-gpu`) or CPU (`local-cpu`). Five apps on and check off (on a CPU runtime a long answer outlasts its 3 s limit; say it can be turned on later with a GPU or remote runtime), default thresholds. The user still sees the settings change before anything is written.
    - **Custom**: the user picks where the classifier runs, which apps run, and the thresholds.
 
-   When detect suggests `remote`, this machine cannot run the classifier, so skip the question and go on as Custom. Done when the user picked one. For Recommended, take detect's suggestion as the step 5 branch, then go to step 8 with all six apps on and no threshold changes. For Custom, go to step 4.
+   When detect suggests `remote`, this machine cannot run the classifier, so skip the question and go on as Custom. Done when the user picked one. For Recommended, take detect's suggestion as the step 5 branch, then go to step 8 with the five apps on, check off, and no threshold changes. For Custom, go to step 4.
 
 4. **Where the classifier runs.** Custom only. Ask one AskUserQuestion. Put detect's suggestion first, marked "(Recommended)", with its reason as the description:
    - **Keep the running one**, only when detect found a ready runtime: it stays as it is.
@@ -37,8 +37,8 @@ Settings go under `pluginConfigs["<plugin id>"].options` in the user's `~/.claud
 
    Done when `runtime.py health --url <url>` prints `ready` (with `--token-file` when the runtime needs a token), the user confirmed any `warning:`, and the one decision call came back without an error.
 
-6. **Apps.** Custom only. Ask one AskUserQuestion call with two multiSelect questions, saying all six are recommended, with one line per option:
-   - Question "Which subagent and prompt apps?": **router** (picks Haiku, Sonnet or Opus for each general-purpose subagent by difficulty, and its starting effort by how many steps it needs; two questions in one request per subagent), **escalate** (after you push back, the next subagent goes to Opus and Claude re-checks; one or two questions per prompt), **check** (marks an answer its reads do not back; one question per answer that read files).
+6. **Apps.** Custom only. Ask one AskUserQuestion call with two multiSelect questions, saying the five apps other than check are recommended, and check only with a GPU or remote runtime, with one line per option:
+   - Question "Which subagent and prompt apps?": **router** (picks Haiku, Sonnet or Opus for each general-purpose subagent by difficulty, and its starting effort by how many steps it needs; two questions in one request per subagent), **escalate** (after you push back, the next subagent goes to Opus and Claude re-checks; one or two questions per prompt), **check** (marks an answer its reads do not back; one question per answer that read files; off by default, since on a CPU runtime a long answer outlasts its 3 s limit, so offer it on only with a GPU or remote runtime).
    - Question "Which read and command apps?": **redact** (hides personal data and secrets in Read and Bash output; one question on every Read and Bash output), **shield** (warns Claude when a file or page tries to give it instructions; one question on every Read and WebFetch), **guard** (asks you before risky Bash commands; one question per chained part of each command).
 
    Add to the question text: each question costs about 0.1 to 0.2 s on CPU, less on a GPU, and redact and shield run on every Read. Done when every app is on or off.
