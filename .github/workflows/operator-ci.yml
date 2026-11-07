@@ -324,6 +324,79 @@ jobs:
                   enabled: false
           EOF
 
+      - name: Create discovery recovery SemanticRouter CR
+        run: |
+          cat <<EOF | kubectl apply -f -
+          apiVersion: vllm.ai/v1alpha1
+          kind: SemanticRouter
+          metadata:
+            name: discovery-recovery
+            namespace: semantic-router-test
+          spec:
+            replicas: 0
+            vllmEndpoints:
+              - name: discovery-backend
+                model: discovery-recovery-model
+                backend:
+                  type: llamastack
+                  discoveryLabels:
+                    app: discovery-recovery
+          EOF
+
+      - name: Verify unavailable discovery is fail-closed
+        run: |
+          for i in {1..30}; do
+            if kubectl get configmap discovery-recovery-config -n semantic-router-test >/dev/null 2>&1; then
+              echo "ConfigMap was published before the discovered Service existed"
+              kubectl get configmap discovery-recovery-config -n semantic-router-test -o yaml
+              exit 1
+            fi
+            discovery_reason=$(kubectl get semanticrouter discovery-recovery -n semantic-router-test -o jsonpath='{.status.conditions[?(@.type=="Degraded")].reason}' 2>/dev/null || true)
+            if [ "$discovery_reason" = "BackendDiscoveryFailed" ]; then
+              break
+            fi
+            sleep 2
+          done
+          if [ "$discovery_reason" != "BackendDiscoveryFailed" ]; then
+            echo "SemanticRouter did not report BackendDiscoveryFailed"
+            kubectl get semanticrouter discovery-recovery -n semantic-router-test -o yaml || true
+            exit 1
+          fi
+
+      - name: Restore discovered Service and verify config recovery
+        run: |
+          cat <<EOF | kubectl apply -f -
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: discovery-backend
+            namespace: semantic-router-test
+            labels:
+              app: discovery-recovery
+          spec:
+            ports:
+              - name: http
+                port: 8000
+                targetPort: 8000
+            selector:
+              app: discovery-recovery
+          EOF
+
+          for i in {1..60}; do
+            if kubectl get configmap discovery-recovery-config -n semantic-router-test >/dev/null 2>&1; then
+              recovery_config=$(kubectl get configmap discovery-recovery-config -n semantic-router-test -o jsonpath='{.data.config\.yaml}')
+              if echo "$recovery_config" | grep -q "discovery-recovery-model" &&
+                echo "$recovery_config" | grep -q "discovery-backend.semantic-router-test.svc.cluster.local"; then
+                exit 0
+              fi
+            fi
+            sleep 2
+          done
+          echo "SemanticRouter did not republish config after discovery recovered"
+          kubectl get semanticrouter discovery-recovery -n semantic-router-test -o yaml || true
+          kubectl get configmap discovery-recovery-config -n semantic-router-test -o yaml || true
+          exit 1
+
       - name: Wait for SemanticRouter deployment to be created
         run: |
           echo "Waiting for deployment to be created..."

@@ -18,6 +18,8 @@ package controllers
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -211,4 +213,40 @@ func (r *SemanticRouterReconciler) reconcileOwnedResources(
 	}
 
 	return nil
+}
+
+func (r *SemanticRouterReconciler) updateBackendDiscoveryStatus(
+	ctx context.Context,
+	sr *vllmv1alpha1.SemanticRouter,
+	discoveryErr *backendDiscoveryError,
+) error {
+	names := discoveryErr.DependencyNames()
+	message := fmt.Sprintf("Backend discovery failed for: %s", strings.Join(names, ", "))
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		current := &vllmv1alpha1.SemanticRouter{}
+		if err := r.Get(ctx, client.ObjectKeyFromObject(sr), current); err != nil {
+			return err
+		}
+
+		condition := meta.FindStatusCondition(current.Status.Conditions, typeDegradedSemanticRouter)
+		if condition != nil &&
+			condition.ObservedGeneration == current.Generation &&
+			condition.Status == metav1.ConditionTrue &&
+			condition.Reason == "BackendDiscoveryFailed" &&
+			condition.Message == message &&
+			current.Status.Phase == "Degraded" {
+			return nil
+		}
+
+		current.Status.ObservedGeneration = current.Generation
+		current.Status.Phase = "Degraded"
+		meta.SetStatusCondition(&current.Status.Conditions, metav1.Condition{
+			ObservedGeneration: current.Generation,
+			Type:               typeDegradedSemanticRouter,
+			Status:             metav1.ConditionTrue,
+			Reason:             "BackendDiscoveryFailed",
+			Message:            message,
+		})
+		return r.Status().Update(ctx, current)
+	})
 }

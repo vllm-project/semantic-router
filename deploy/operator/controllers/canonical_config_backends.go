@@ -19,7 +19,7 @@ func (r *SemanticRouterReconciler) applyDiscoveredBackends(ctx context.Context, 
 		return fmt.Errorf("failed to generate vLLM endpoints config: %w", err)
 	}
 	if len(discoveredModels) == 0 {
-		return nil
+		return fmt.Errorf("no backend models discovered from %d declared vLLM endpoint(s)", len(sr.Spec.VLLMEndpoints))
 	}
 
 	modelNames := make([]string, 0, len(discoveredModels))
