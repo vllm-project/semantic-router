@@ -55,39 +55,34 @@ func validateSafetyClassifier(cfg *RouterConfig, consumer string, rule Classifie
 	if err := validateClassifierLabels(rule); err != nil {
 		return err
 	}
-	if decl, bound := cfg.ModelBindings[consumer]; bound {
-		deployment, exists := cfg.ModelDeployments[decl.Deployment]
-		if !exists {
-			return fmt.Errorf("unknown safety deployment %q", decl.Deployment)
+	resolved, ok, err := cfg.ResolveTask(consumer)
+	if IsDeferredModelError(err) {
+		if local.InputLimit() <= 0 {
+			return fmt.Errorf("max_sequence_length must be positive")
 		}
-		deployment = deployment.WithDefaults()
-		if err := deployment.validate(cfg); err != nil {
-			return err
+		return local.ValidateWindow()
+	}
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("no deployment answers %s: declare a decision model or bind the rule to a deployment", consumer)
+	}
+	if remoteTaskProvider(resolved.Deployment) {
+		if local.Window != nil {
+			return fmt.Errorf("remote safety head cannot use local token windows")
 		}
-		if err := validateTaskModelBinding(consumer, decl, deployment); err != nil {
-			return err
-		}
-		if err := validateSafetyModelBinding(cfg.SafetyRules, consumer, decl, deployment); err != nil {
-			return err
-		}
-		// Bindings replace only this recipe consumer. Keep inline label/policy
-		// declarations and validate the actual endpoint or local input budget.
-		if deployment.Provider == "http" {
-			if rule.Model == "" && local.Window != nil {
-				return fmt.Errorf("remote safety head cannot use local token windows")
-			}
-			rule.Model = deployment.ExternalModel
+		if legacy := resolved.Deployment.LegacyExternal(); legacy != nil {
+			rule.Model = legacy.Name
 			return validateSequenceClassifierSignal(cfg, rule)
 		}
-		local.ModelID, local.MaxSequenceLength = deployment.ServedModel(decl.Deployment), deployment.Input.MaxTokens
-		if rule.Model != "" {
-			local.Window = nil
+		if len(rule.Labels) < 2 {
+			return fmt.Errorf("a remote safety head needs at least two labels")
 		}
-	} else if rule.Model != "" {
-		return validateSequenceClassifierSignal(cfg, rule)
+		return nil
 	}
-	if local.ModelID == "" {
-		return fmt.Errorf("built-in safety head requires a model_id or model_ref in global.model_catalog.modules.safety")
+	if resolved.Explicit() && !resolved.Deployment.Translated() {
+		local.MaxSequenceLength = resolved.Deployment.Input.MaxTokens
 	}
 	if local.InputLimit() <= 0 {
 		return fmt.Errorf("max_sequence_length must be positive")

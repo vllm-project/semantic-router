@@ -14,7 +14,7 @@ is_mtpe: true
 
 ## 打开它 {#turn-it-on}
 
-写一个重排器部署、绑成 `rag.reranker`（它读相关性分，`relevance_scores.v1`），再让路由的 RAG 插件选择加入 `rerank`：
+写一个重排器部署，并在路由 RAG 插件的 `rerank` 块里指定它：
 
 ```yaml
 global:
@@ -28,13 +28,6 @@ global:
           max_tokens: 4096
           overflow: reject
 routing:
-  model_bindings:
-    rag.reranker:
-      deployment: document-ranker
-      contract: relevance_scores.v1
-      pair_scorer:
-        layer: 22
-        dimension: 768
   decisions:
     - name: answer-from-docs
       priority: 100
@@ -52,11 +45,14 @@ routing:
               vector_store_id: vs-your-documents
             top_k: 10
             rerank:
+              deployment: document-ranker
               top_k: 3
+              layer: 22
+              dimension: 768
             on_failure: block
 ```
 
-`top_k` 取回十个候选，`rerank.top_k` 留最好的三个。`pair_scorer` 选模型大小：完整的 22 层、768 维最准；3、6、11 层和更小的维度更快。
+`top_k` 取回十个候选，`rerank.top_k` 留最好的三个。`layer` 和 `dimension` 选模型大小：完整的 22 层、768 维最准；3、6、11 层和更小的维度更快。远程重排器是 `rerank` 部署，Router 向它的 `<endpoint>/rerank` 发送请求；见[模型目录参考](../../installation/model-catalog.md#deployments)。
 
 输入上限管的是请求加一篇文档合起来的长度。超限的配对直接拒，绝不截短，请求何去何从看插件的 `on_failure`。
 

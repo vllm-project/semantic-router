@@ -24,8 +24,8 @@ func TestGlobalModelBindingsKeepServiceAndRecipeOverridesIsolated(t *testing.T) 
 		t.Fatalf("service = %+v", service)
 	}
 	for _, name := range []RecipeName{"support", "coding"} {
-		spec, ok := plan.Lookup(name, "embedding")
-		if !ok || spec.Recipe != name {
+		spec, found := plan.Lookup(name, "embedding")
+		if !found || spec.Recipe != name {
 			t.Fatalf("scope %s = %+v", name, spec)
 		}
 		want := global
@@ -36,15 +36,15 @@ func TestGlobalModelBindingsKeepServiceAndRecipeOverridesIsolated(t *testing.T) 
 			t.Fatalf("scope %s borrowed another binding: %+v", name, spec)
 		}
 	}
-	if _, ok := plan.Lookup("foreign", "embedding"); ok {
+	if _, foreign := plan.Lookup("foreign", "embedding"); foreign {
 		t.Fatal("global catalog allowed foreign recipe lookup")
 	}
-	if _, ok := cfg.Recipes[0].Profile.ModelBindings["embedding"]; ok {
+	if _, mutated := cfg.Recipes[0].Profile.ModelBindings["embedding"]; mutated {
 		t.Fatal("compilation mutated authoring config")
 	}
-	projected, err := ProjectRecipeModelBindings(cfg.ConfigForRecipe(&cfg.Recipes[0]), plan, "support")
-	if err != nil || projected.ModelBindings["embedding"] != global {
-		t.Fatalf("projection = %+v, %v", projected, err)
+	resolved, ok, err := cfg.ConfigForRecipe(&cfg.Recipes[0]).ResolveTask("embedding")
+	if err != nil || !ok || resolved.Name != global.Deployment || resolved.Source != ResolvedByGlobalBinding {
+		t.Fatalf("support's embedding resolves to %+v, %v, %v", resolved, ok, err)
 	}
 	encoded, err := yaml.Marshal(CanonicalConfigFromRouterConfig(cfg))
 	if err != nil {
