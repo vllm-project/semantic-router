@@ -198,7 +198,7 @@ func (s *InMemoryStore) List(ctx context.Context, opts ListOptions) (*ListResult
 	}, nil
 }
 
-// Get retrieves a memory by ID.
+// Get retrieves an independent copy of a memory by ID.
 func (s *InMemoryStore) Get(ctx context.Context, id string) (*Memory, error) {
 	if !s.enabled {
 		return nil, fmt.Errorf("store not enabled")
@@ -212,7 +212,13 @@ func (s *InMemoryStore) Get(ctx context.Context, id string) (*Memory, error) {
 		return nil, fmt.Errorf("memory not found: %s", id)
 	}
 
-	return mem, nil
+	return cloneMemory(mem), nil
+}
+
+func cloneMemory(mem *Memory) *Memory {
+	cloned := *mem
+	cloned.Embedding = append([]float32(nil), mem.Embedding...)
+	return &cloned
 }
 
 // Update modifies an existing memory.

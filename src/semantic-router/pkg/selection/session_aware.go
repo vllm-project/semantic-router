@@ -202,7 +202,8 @@ func (s *SessionAwareSelector) Select(ctx context.Context, selCtx *SelectionCont
 	timeout := secondsDuration(s.config.IdleTimeoutSeconds)
 	idleExpired := session.idleExpired(timeout)
 	trace.IdleExpired = idleExpired
-	continuityReset := idleExpired || driftDetected
+	trace.ExplicitRelease = session.ReleaseHonored
+	continuityReset := idleExpired || driftDetected || session.ReleaseHonored
 	if reason := s.sessionHardLockReason(session, continuityReset); reason != "" {
 		return s.forceCurrent(selCtx, base, current, reason, trace)
 	}

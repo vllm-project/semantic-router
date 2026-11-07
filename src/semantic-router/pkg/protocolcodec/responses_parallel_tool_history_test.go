@@ -39,21 +39,27 @@ func TestResponsesParallelToolHistoryBecomesOneChatAssistantTurn(t *testing.T) {
 }
 
 func TestResponsesToolHistoryPreservesMessageBoundaries(t *testing.T) {
-	for _, separator := range []string{
-		`{"role":"user","content":"next"}`,
-		`{"role":"assistant","content":[{"type":"output_text","text":"next"}]}`,
-		`{"type":"reasoning","summary":[{"type":"summary_text","text":"next"}]}`,
+	for _, tc := range []struct {
+		separator string
+		// Assistant text or reasoning starts the next turn, so the call after
+		// it joins that turn. A user message is a turn of its own.
+		callBTurn int
+	}{
+		{`{"role":"user","content":"next"}`, 2},
+		{`{"role":"assistant","content":[{"type":"output_text","text":"next"}]}`, 1},
+		{`{"type":"reasoning","summary":[{"type":"summary_text","text":"next"}]}`, 1},
 	} {
-		t.Run(separator, func(t *testing.T) {
+		t.Run(tc.separator, func(t *testing.T) {
 			messages := projectResponsesHistoryToChat(t, `[
-				{"type":"function_call","call_id":"a","name":"lookup","arguments":"{}"},`+separator+`,
+				{"type":"function_call","call_id":"a","name":"lookup","arguments":"{}"},`+tc.separator+`,
 				{"type":"function_call","call_id":"b","name":"lookup","arguments":"{}"},
 				{"type":"function_call_output","call_id":"a","output":"one"},
 				{"type":"function_call_output","call_id":"b","output":"two"}
 			]`)
 			// Projection must not repair non-adjacent histories by moving calls
 			// across conversational content, even if a provider rejects that history.
-			if len(messages) != 5 || len(messages[0].ToolCalls) != 1 || len(messages[2].ToolCalls) != 1 {
+			if len(messages) != tc.callBTurn+3 || len(messages[0].ToolCalls) != 1 || messages[0].ToolCalls[0].ID != "a" ||
+				len(messages[tc.callBTurn].ToolCalls) != 1 || messages[tc.callBTurn].ToolCalls[0].ID != "b" {
 				t.Fatalf("merged across message boundary: %+v", messages)
 			}
 		})

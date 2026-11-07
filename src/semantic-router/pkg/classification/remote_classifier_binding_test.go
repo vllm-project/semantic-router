@@ -30,16 +30,15 @@ func TestRemoteAliasesShareAdmissionAndDrainBeforeClose(t *testing.T) {
 	defer func() { unblock(); server.Close() }()
 	models := standaloneModelRuntime()
 	external := config.ExternalModelConfig{Name: "alias-one", ModelName: "same-model", ModelEndpoint: endpointForTestServer(t, server)}
-	backendCfg := &config.RemoteClassifierBackend{Model: external.Name, Contract: config.RemoteClassifierContractLabelDistribution, Protocol: config.RemoteClassifierProtocolHTTPClassify}
-	spec := models.remoteSpec("domain_classifier", backendCfg)
+	spec := remoteSpecFor([]*classifierModelRuntime{models}, "domain_classifier", externalClassifyDeployment(&external, 0), config.RemoteClassifierProtocolHTTPClassify, config.RemoteClassifierContractLabelDistribution)
 	spec.Admission = config.AdmissionConfig{MaxConcurrency: 1, OnOverflow: "shed"}
 	makeBackend := func(external config.ExternalModelConfig, spec config.ResolvedModelBinding, timeout time.Duration) *remoteSequenceBinding {
 		t.Helper()
-		transport, err := newHTTPClassifierInference(&external, newDeclaredLabelMapping([]string{"yes", "no"}), timeout)
+		transport, err := newHTTPClassifierInference(externalClassifyDeployment(&external, timeout), newDeclaredLabelMapping([]string{"yes", "no"}))
 		if err != nil {
 			t.Fatal(err)
 		}
-		bound, err := prepareRemoteSequence(models, spec, &external, transport)
+		bound, err := prepareRemoteSequence(models, spec, transport)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -77,7 +77,8 @@ func TestValidatePublicGenerationEndpoints(t *testing.T) {
 		{method: "POST", path: "/v1/responses"},
 		{method: "POST", path: "/v1/messages"},
 		{method: "GET", path: "/v1/messages", status: typev3.StatusCode_MethodNotAllowed},
-		{method: "POST", path: "/v1/messages/count_tokens", status: typev3.StatusCode_NotFound},
+		{method: "POST", path: "/v1/messages/count_tokens"},
+		{method: "GET", path: "/v1/messages/count_tokens", status: typev3.StatusCode_MethodNotAllowed},
 	}
 	for _, test := range tests {
 		t.Run(test.method+" "+test.path, func(t *testing.T) {
