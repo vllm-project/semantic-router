@@ -61,6 +61,11 @@ type RequestContextEstimate struct {
 	HasNonText          bool
 	TokenFloor          int
 	EquivalentBytes     int
+	// ReserveTokens is the part of TokenFloor that is conservative reserve
+	// rather than a prose-rate count, defined as in llmprotocol.InputEstimate:
+	// structured bytes beyond the text rate, image reserves, and audio, video
+	// and file payloads. A refusal rests on TokenFloor less ReserveTokens.
+	ReserveTokens int
 }
 
 type requestContextAccumulator struct {
@@ -73,6 +78,7 @@ type requestContextAccumulator struct {
 	framingTokens       int
 	outputTokenReserve  int
 	hasNonText          bool
+	mediaBytes          int
 }
 
 // EstimateOpenAIRequestContext estimates the context represented by an
@@ -193,7 +199,7 @@ func (estimate *requestContextAccumulator) addOpenAIToolResultContent(content gj
 				return true
 			}
 		}
-		estimate.addStructuredJSON(part)
+		estimate.addPart(part)
 		return true
 	})
 }
@@ -239,7 +245,7 @@ func (estimate *requestContextAccumulator) addOpenAIContentPart(part gjson.Resul
 	default:
 		// Unknown structured content still consumes prompt context. Count its
 		// exact raw representation instead of silently dropping it.
-		estimate.addStructuredJSON(part)
+		estimate.addPart(part)
 	}
 }
 
@@ -331,7 +337,7 @@ func (estimate *requestContextAccumulator) addAnthropicContentBlock(block gjson.
 		estimate.addTextResult(block.Get("tool_use_id"))
 		estimate.addAnthropicToolResultContent(block.Get("content"))
 	default:
-		estimate.addStructuredJSON(block)
+		estimate.addPart(block)
 	}
 }
 
@@ -355,7 +361,7 @@ func (estimate *requestContextAccumulator) addAnthropicToolResultContent(content
 			estimate.addImage()
 			return true
 		}
-		estimate.addStructuredJSON(block)
+		estimate.addPart(block)
 		return true
 	})
 }
@@ -474,6 +480,26 @@ func (estimate *requestContextAccumulator) addStructuredJSON(value gjson.Result)
 	estimate.addStructuredBytes(len(raw))
 }
 
+// addPart counts a content part that is neither text nor an image. Audio,
+// video and file payloads are media: their bytes count as structured data,
+// and all of them as reserve.
+func (estimate *requestContextAccumulator) addPart(part gjson.Result) {
+	before := estimate.structuredBytes
+	estimate.addStructuredJSON(part)
+	if part.IsObject() && isContextMediaType(part) {
+		estimate.mediaBytes = saturatingAddContextEstimate(estimate.mediaBytes, estimate.structuredBytes-before)
+	}
+}
+
+func isContextMediaType(value gjson.Result) bool {
+	switch strings.ToLower(strings.TrimSpace(value.Get("type").String())) {
+	case "audio", "input_audio", "video", "video_url", "input_video", "file", "input_file", "document":
+		return true
+	default:
+		return false
+	}
+}
+
 func (estimate *requestContextAccumulator) addTextBytes(count int) {
 	estimate.textBytes = saturatingAddContextEstimate(estimate.textBytes, count)
 }
@@ -513,6 +539,12 @@ func (estimate requestContextAccumulator) result() RequestContextEstimate {
 	tokenFloor = saturatingAddContextEstimate(tokenFloor, imageTokens)
 	tokenFloor = saturatingAddContextEstimate(tokenFloor, estimate.framingTokens)
 	tokenFloor = saturatingAddContextEstimate(tokenFloor, estimate.outputTokenReserve)
+	withoutReserves := saturatingAddContextEstimate(textTokens, ceilContextEstimateDivision(
+		estimate.structuredBytes-estimate.mediaBytes,
+		RequestContextBytesPerToken,
+	))
+	withoutReserves = saturatingAddContextEstimate(withoutReserves, estimate.framingTokens)
+	withoutReserves = saturatingAddContextEstimate(withoutReserves, estimate.outputTokenReserve)
 	return RequestContextEstimate{
 		TextBytes:           estimate.textBytes,
 		StructuredBytes:     estimate.structuredBytes,
@@ -525,6 +557,7 @@ func (estimate requestContextAccumulator) result() RequestContextEstimate {
 		HasNonText:          estimate.hasNonText,
 		TokenFloor:          tokenFloor,
 		EquivalentBytes:     saturatingMultiplyContextEstimate(tokenFloor, RequestContextBytesPerToken),
+		ReserveTokens:       max(0, tokenFloor-withoutReserves),
 	}
 }
 
