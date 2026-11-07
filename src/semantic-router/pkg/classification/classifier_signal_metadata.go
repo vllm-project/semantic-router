@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routinginput"
 )
 
 // RequestFacts carries untrusted request-envelope facts used by signal
@@ -19,6 +20,10 @@ type RequestFacts struct {
 	// JailbreakInput, when present, supplies role-scoped Guard content separately
 	// from the general routing text. Nil preserves flat-text classifier callers.
 	JailbreakInput *JailbreakInput
+
+	// RoutingInput is what routing_input removed from the routing text. The
+	// safety signals still scan the removed text.
+	RoutingInput routinginput.Outcome
 
 	// ContextTokenFloor and the related scalar fields carry the content-free,
 	// request-envelope estimate used by the context signal. They account for

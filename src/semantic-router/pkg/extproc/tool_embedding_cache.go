@@ -23,6 +23,9 @@ func newToolEmbedderForConfig(cfg *config.RouterConfig, provider embedding.Provi
 		modelType = cfg.EmbeddingModels.EmbeddingConfig.ModelType
 		targetDim = cfg.EmbeddingModels.EmbeddingConfig.TargetDimension
 		remoteIdentity = cfg.EmbeddingModels.Endpoint.BaseURL + "\x00" + cfg.EmbeddingModels.Endpoint.Model
+		if deployment, ok := config.WithModelResources(cfg).ModelDeployments[cfg.EmbeddingDeployment]; ok && deployment.Provider == config.OpenAIEmbeddingsProvider {
+			remoteIdentity = deployment.Endpoint + "\x00" + deployment.Model
+		}
 	}
 	return newCachedToolEmbedder(provider, modelType, targetDim, remoteIdentity)
 }

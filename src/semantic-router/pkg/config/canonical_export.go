@@ -11,6 +11,12 @@ import (
 // CanonicalConfigFromRouterConfig exports the canonical v0.3 config surface
 // from the internal runtime config.
 func CanonicalConfigFromRouterConfig(cfg *RouterConfig) CanonicalConfig {
+	doc := exportedCanonicalConfig(cfg)
+	canonicalizeRuleBindings(&doc)
+	return doc
+}
+
+func exportedCanonicalConfig(cfg *RouterConfig) CanonicalConfig {
 	if cfg == nil {
 		return CanonicalConfig{Version: CanonicalConfigVersion}
 	}
@@ -37,7 +43,7 @@ func CanonicalConfigFromRouterConfig(cfg *RouterConfig) CanonicalConfig {
 // by K8s CRD reconciliation. Dynamic routing state is expected to come from the
 // CRDs, so the routing block, entrypoints, and recipes are left empty.
 func CanonicalStaticConfigFromRouterConfig(cfg *RouterConfig) CanonicalConfig {
-	canonical := CanonicalConfigFromRouterConfig(cfg)
+	canonical := exportedCanonicalConfig(cfg)
 	canonical.Routing = CanonicalRouting{}
 	canonical.Entrypoints = nil
 	canonical.Recipes = nil
@@ -53,7 +59,7 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 	}
 
 	return CanonicalRouting{
-		ModelBindings:         cloneModelMap(cfg.ModelBindings),
+		ModelBindings:         publicBindings(cfg.ModelBindings),
 		CandidateRequirements: cfg.CandidateRequirements.Clone(),
 		ModelCards:            routingModelsFromRouterConfig(cfg),
 		Signals:               canonicalSignalsFromSignals(cfg.RoutingProfileSignals()),
@@ -313,6 +319,10 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			ModelSelection: cfg.ModelSelection,
 			Learning:       cfg.RouterLearning,
 			Fallback:       cfg.RoutingDefaults.Fallback.Clone(),
+
+			AllowLossyTranslation: cfg.AllowLossyTranslation,
+			RoutingInput:          cfg.RoutingInput,
+			Headers:               cfg.Headers,
 		},
 		Services: CanonicalServiceGlobal{
 			API:           cfg.API,
@@ -342,54 +352,40 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 }
 
 func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCatalog {
-	categoryModel := cfg.CategoryModel
-
+	bindings := publicBindings(cfg.GlobalModelBindings)
+	if embedding, ok := bindings["embedding"]; ok && embedding.OnlyDeployment() && embedding.Deployment == cfg.EmbeddingDeployment {
+		delete(bindings, "embedding")
+	}
 	return CanonicalModelCatalog{
-		Deployments: cloneModelMap(cfg.ModelDeployments),
-		Bindings:    cloneModelMap(cfg.GlobalModelBindings),
+		Deployments: canonicalDeployments(cfg.ModelDeployments),
+		Bindings:    bindings,
 		Embeddings: CanonicalEmbeddingModels{
-			Semantic: cfg.EmbeddingModels,
+			Default:    cfg.EmbeddingDeployment,
+			Multimodal: cfg.MultimodalEmbeddingDeployment,
+			Semantic:   cfg.EmbeddingModels,
 		},
 		System:          canonicalSystemModelsFromRouterConfig(cfg),
 		External:        append([]ExternalModelConfig(nil), cfg.ExternalModels...),
 		KBs:             append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
-		Admission:       cloneAdmissionMap(cfg.ModelAdmission),
+		Admission:       publicAdmission(cfg.ModelAdmission),
 		SignalTimeoutMs: cfg.ModelSignalTimeoutMs,
 		Modules: CanonicalModelModules{
 			Safety:            cfg.SafetyModels,
 			PromptCompression: cfg.PromptCompression,
-			PromptGuard: CanonicalPromptGuardModule{
-				PromptGuardConfig: cfg.PromptGuard,
-				ModelRef:          "prompt_guard",
-			},
+			PromptGuard:       CanonicalPromptGuardModule{PromptGuardConfig: cfg.PromptGuard},
 			Classifier: CanonicalClassifierModule{
-				Domain: CanonicalCategoryModule{
-					CategoryModel: categoryModel,
-					ModelRef:      "domain_classifier",
-				},
-				MCP: cfg.MCPCategoryModel,
-				PII: CanonicalPIIModule{
-					PIIModel: cfg.PIIModel,
-					ModelRef: "pii_classifier",
-				},
+				Domain:     CanonicalCategoryModule{CategoryModel: cfg.CategoryModel},
+				MCP:        cfg.MCPCategoryModel,
+				PII:        CanonicalPIIModule{PIIModel: cfg.PIIModel},
 				Preference: cfg.PreferenceModel.WithDefaults(),
 			},
 			Complexity: cfg.ComplexityModel.WithDefaults(),
 			HallucinationMitigation: CanonicalHallucinationModule{
-				Enabled: cfg.HallucinationMitigation.Enabled,
-				FactCheck: CanonicalFactCheckModule{
-					FactCheckModelConfig: cfg.HallucinationMitigation.FactCheckModel,
-					ModelRef:             "fact_check_classifier",
-				},
-				Detector: CanonicalHallucinationDetector{
-					HallucinationModelConfig: cfg.HallucinationMitigation.HallucinationModel,
-					ModelRef:                 "hallucination_detector",
-				},
+				Enabled:   cfg.HallucinationMitigation.Enabled,
+				FactCheck: CanonicalFactCheckModule{FactCheckModelConfig: cfg.HallucinationMitigation.FactCheckModel},
+				Detector:  CanonicalHallucinationDetector{HallucinationModelConfig: cfg.HallucinationMitigation.HallucinationModel},
 			},
-			FeedbackDetector: CanonicalFeedbackDetectorModule{
-				FeedbackDetectorConfig: cfg.FeedbackDetector,
-				ModelRef:               "feedback_detector",
-			},
+			FeedbackDetector: CanonicalFeedbackDetectorModule{FeedbackDetectorConfig: cfg.FeedbackDetector},
 			ModalityDetector: cfg.ModalityDetector,
 		},
 	}
@@ -471,6 +467,9 @@ func canonicalProviderModelFromRuntime(
 ) CanonicalProviderModel {
 	if authored := cloneCanonicalProviderModel(params.AuthoredModel); authored != nil {
 		authored.Name = name
+		for i := range authored.BackendRefs {
+			authored.BackendRefs[i] = authored.BackendRefs[i].canonicalConnection()
+		}
 		return *authored
 	}
 	providerModel := CanonicalProviderModel{
@@ -573,20 +572,20 @@ func canonicalProviderBackendRefs(
 func canonicalBackendRefFromRuntime(modelName string, endpoint VLLMEndpoint, fallbackAPIKey string, profile ProviderProfile) CanonicalBackendRef {
 	ref := CanonicalBackendRef{
 		// Import adds exactly one model namespace; remove only that generated prefix.
-		Name:                strings.TrimPrefix(endpoint.Name, modelName+"_"),
-		Protocol:            endpoint.Protocol,
-		Weight:              endpoint.Weight,
-		Provider:            profile.Type,
-		BaseURL:             profile.BaseURL,
-		AuthHeader:          profile.AuthHeader,
-		APIVersion:          profile.APIVersion,
-		ChatPath:            profile.ChatPath,
-		OpenAICompatGateway: profile.OpenAICompatGateway,
-		APIKey:              endpoint.APIKey,
+		Name:       strings.TrimPrefix(endpoint.Name, modelName+"_"),
+		Protocol:   endpoint.Protocol,
+		Weight:     endpoint.Weight,
+		Provider:   profile.Type,
+		APIVersion: profile.APIVersion,
+		ChatPath:   profile.ChatPath,
+		APIKey:     endpoint.APIKey,
 	}
-	if profile.AuthPrefixSet || profile.AuthPrefix != "" {
-		prefix := profile.AuthPrefix
-		ref.AuthPrefix = &prefix
+	if profile.AuthHeader != "" || profile.AuthPrefixSet || profile.AuthPrefix != "" {
+		ref.Auth = &DeploymentAuth{Header: profile.AuthHeader}
+		if profile.AuthPrefixSet || profile.AuthPrefix != "" {
+			prefix := profile.AuthPrefix
+			ref.Auth.Prefix = &prefix
+		}
 	}
 	if ref.Provider == "" {
 		ref.Provider = endpoint.Type
@@ -597,11 +596,18 @@ func canonicalBackendRefFromRuntime(modelName string, endpoint VLLMEndpoint, fal
 			ref.Endpoint = fmt.Sprintf("%s:%d", endpoint.Address, endpoint.Port)
 		}
 	}
+	if profile.BaseURL != "" {
+		ref.Endpoint, ref.Protocol = profile.BaseURL, ""
+	}
 	if ref.APIKey == "" {
 		ref.APIKey = fallbackAPIKey
 	}
+	if ref.APIKey != "" && ref.Auth != nil {
+		// A key the configuration wrote inline stays where it was written.
+		ref.AuthHeader, ref.AuthPrefix, ref.Auth = ref.Auth.Header, ref.Auth.Prefix, nil
+	}
 	if len(profile.ExtraHeaders) > 0 {
-		ref.ExtraHeaders = copyStringMap(profile.ExtraHeaders)
+		ref.Headers = copyStringMap(profile.ExtraHeaders)
 	}
 	return ref
 }
@@ -653,26 +659,12 @@ func normalizedConfigSource(source ConfigSource) ConfigSource {
 	return source
 }
 
-// canonicalSystemModelsFromRouterConfig writes the decision model, unless it
-// is the default, and only the system lines that bind a module to another
-// model than the decision model does, so the document still follows it.
+// canonicalSystemModelsFromRouterConfig writes the decision model; modules
+// follow it by name, or the bindings name their deployments.
 func canonicalSystemModelsFromRouterConfig(cfg *RouterConfig) CanonicalSystemModels {
-	system := CanonicalSystemModels{
-		Safety:                cfg.SafetyModels.Safety.ModelID,
-		Hazard:                cfg.SafetyModels.Hazard.ModelID,
-		PromptGuard:           cfg.PromptGuard.ModelID,
-		DomainClassifier:      cfg.CategoryModel.ModelID,
-		PIIClassifier:         cfg.PIIModel.ModelID,
-		FactCheckClassifier:   cfg.HallucinationMitigation.FactCheckModel.ModelID,
-		HallucinationDetector: cfg.HallucinationMitigation.HallucinationModel.ModelID,
-		FeedbackDetector:      cfg.FeedbackDetector.ModelID,
+	name := cfg.DecisionModel
+	if name == "" {
+		name = DefaultDecisionDeployment
 	}
-	spec := cfg.DecisionModelSpec()
-	system.DecisionModel = DecisionModelBinding{Deployment: spec.Name}
-	for _, line := range systemLines {
-		if value := line.value(&system); *value == *line.value(&spec.System) {
-			*value = ""
-		}
-	}
-	return system
+	return CanonicalSystemModels{DecisionModel: DecisionModelBinding{Deployment: name}}
 }

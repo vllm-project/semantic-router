@@ -136,7 +136,7 @@ def config_env_references(config_path: Path | str | None) -> set[str]:
     if config_path is None:
         return set()
     try:
-        document = yaml.safe_load(Path(config_path).read_text())
+        document = yaml.safe_load(Path(config_path).read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError):
         return set()
 
@@ -169,7 +169,7 @@ def required_config_env_references(config_path: Path | str | None) -> set[str]:
     if config_path is None:
         return set()
     try:
-        document = yaml.safe_load(Path(config_path).read_text())
+        document = yaml.safe_load(Path(config_path).read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError):
         return set()
 
@@ -420,7 +420,7 @@ def _resolve_effective_config_document(
     materialize_local_runtime: bool = True,
     bootstrap_kb: bool = True,
 ) -> tuple[dict[str, object], bool]:
-    with config_path.open() as handle:
+    with config_path.open(encoding="utf-8") as handle:
         config = yaml.safe_load(handle) or {}
 
     if package_activation:

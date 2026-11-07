@@ -10,7 +10,9 @@ turn, the user turn's images and videos, ``State:`` and the state. Each
 question block holds the rest: the blank line after the state (with any token
 that merges the state's last characters into it), the question, its coded
 options and the generation prompt. The split depends on the state alone, and
-the reference implementation splits its rows the same way.
+the reference implementation splits its rows the same way. A ``header-v1``
+package's question list (``prompt.header_block``) opens the state block of a
+text-only request, so its questions still branch from one state.
 
 A request's state block is tokenized and encoded once and every question
 branches from it (``EngineModel.branch``): the images and videos go through
@@ -44,7 +46,7 @@ from ...errors import (
 )
 from ...plugins.base import BranchBatch, Expired, ForwardBatch, ImageInputs, VideoInputs
 from ...plugins.decisions import RequestPlan
-from ...systemone import read_question, track_rate, valid_state
+from ...systemone import QUESTION_TYPES, read_question, track_rate, valid_state
 from . import composed, prompt
 from . import videos as vid
 from .family import (
@@ -58,10 +60,12 @@ from .family import (
 
 
 class _Counted:
-    """A readout's code count, shaped like an item for ``_probabilities`` (it reads ``len(keys)``)."""
+    """A readout's code count and temperature, shaped like an item for ``_probabilities`` (it reads ``len(keys)``
+    and ``temperature``)."""
 
-    def __init__(self, count: int) -> None:
+    def __init__(self, count: int, temperature: float | None = None) -> None:
         self.keys = range(count)
+        self.temperature = temperature
 
 
 # A lone question gains nothing from branching; it runs as a row under the same mask (fewer kernels per layer)
@@ -96,27 +100,26 @@ class StateOnceModel(Decision3Model):
             raise ValueError("state must be text, an object, or an array")
         images = len(media.images) if media else 0
         videos = len(media.videos) if media else 0
-        head = prompt.state_block(state, images, videos)
-        errors: dict[str, dict[str, Any]] = {}
+        read, errors = self._read(questions)
+        head = prompt.state_block(state, images, videos, self._header(read, media))
         rendered: list[tuple[str, str, list[str], list[Any], str]] = []
-        for question_id, question in questions.items():
-            kind = question.get("type") if isinstance(question, dict) else None
-            try:
-                kind, instructions, keys, texts, descriptions = self._question(question)
-                text = prompt.question_block(instructions, texts, self.codes)
-                whole = head + text
-                if media and (
-                    whole.count(prompt.IMAGE_TOKEN) != images
-                    or whole.count(prompt.VIDEO_TOKEN) != videos
-                ):
-                    raise QuestionError(
+        for question_id, kind, instructions, keys, texts, descriptions in read:
+            text = prompt.question_block(instructions, texts, self.codes)
+            whole = head + text
+            if media and (
+                whole.count(prompt.IMAGE_TOKEN) != images
+                or whole.count(prompt.VIDEO_TOKEN) != videos
+            ):
+                errors[question_id] = question_error(
+                    kind,
+                    QuestionError(
                         INVALID_QUESTION,
                         "the state or question contains a literal image or video placeholder token",
-                    )
-            except QuestionError as exc:
-                errors[question_id] = question_error(kind, exc)
+                    ),
+                )
                 continue
             rendered.append((question_id, kind, keys, descriptions, text))
+        temperature = self.request_temperature(len(rendered))
         # One call for the state and every question: the tokenizer releases the GIL for a batch.
         encodings = self.tokenizer.encode_batch(
             [head, *(entry[-1] for entry in rendered)], add_special_tokens=False
@@ -153,6 +156,7 @@ class StateOnceModel(Decision3Model):
                     media,
                     shared,
                     share + len(ids),
+                    temperature=temperature,
                 )
             )
         return self._within_request_cap(
@@ -197,6 +201,7 @@ class StateOnceModel(Decision3Model):
         images: list[Any],
         videos: list[Any] | None,
         assets: dict[str, Any],
+        decisions: int | None = None,
     ) -> RequestPlan[Item]:
         """A request with ``assets`` (System One references) and Box questions (``composed``).
 
@@ -206,9 +211,17 @@ class StateOnceModel(Decision3Model):
         markers in the same forward); questions with their own images run as
         rows of their own (``_composed_rows``): the same mask, the state read
         again for each, so their answers never depend on other questions.
+        ``decisions``, the request's Choice, Yes / No and Score questions (by
+        default those of ``questions``), sets their temperature.
         """
         if not valid_state(state):
             raise ValueError("state must be text, an object, or an array")
+        if decisions is None:
+            decisions = sum(
+                isinstance(question, dict) and question.get("type") in QUESTION_TYPES
+                for question in questions.values()
+            )
+        temperature = self.request_temperature(decisions)
         refs = composed.check_references(list(assets))
         hoisted, uses = composed.hoist_state(state, refs, len(images))
         front = list(images) + [assets[ref] for ref in uses]
@@ -318,6 +331,7 @@ class StateOnceModel(Decision3Model):
                     readouts=readouts,
                     block_images=block_images,
                     at=at,
+                    temperature=temperature if kind in QUESTION_TYPES else None,
                 )
             )
         # The request cap counts the request's state once and each question's own block once; a video Box or track
@@ -393,6 +407,10 @@ class StateOnceModel(Decision3Model):
             list(request.images or []),
             list(request.videos or []),
             assets,
+            decisions=sum(
+                isinstance(question, dict) and question.get("type") in QUESTION_TYPES
+                for question in request.questions.values()
+            ),
         )
         if not refused:
             return plan
@@ -748,16 +766,14 @@ class StateOnceModel(Decision3Model):
 
     def _readout_values(self, items: list[Item], hidden: torch.Tensor) -> list[Any]:
         """Per item: its options' probabilities, or one distribution per readout (a Box), from its rows of ``hidden``."""
-        counts = []
+        readouts: list[_Counted] = []
         for item in items:
-            counts += (
-                [count for _, count in item.readouts]
+            readouts += (
+                [_Counted(count, item.temperature) for _, count in item.readouts]
                 if item.readouts
-                else [len(item.keys)]
+                else [_Counted(len(item.keys), item.temperature)]
             )
-        flat = self._probabilities(
-            cast(list[Item], [_Counted(count) for count in counts]), hidden
-        )
+        flat = self._probabilities(cast(list[Item], readouts), hidden)
         out, at = [], 0
         for item in items:
             n = len(item.readouts) if item.readouts else 1

@@ -193,6 +193,22 @@ def _kb_source_spec(
     return kb_name, source, source_path
 
 
+def _config_relative_kb_sources(config: dict[str, object]) -> list[tuple[str, str]]:
+    return [
+        (spec[0], spec[2])
+        for spec in map(_kb_source_spec, _configured_knowledge_bases(config))
+        if spec is not None
+    ]
+
+
+def validate_kb_sources(config: dict[str, object], config_path: Path) -> None:
+    """Resolve each config-relative KB source from the config that declares it."""
+    for _, source_path in _config_relative_kb_sources(config):
+        # Reuse runtime path validation with the authored config as its origin,
+        # never a temporary validation file or the proposed output directory.
+        _resolve_kb_source_root(config_path, source_path)
+
+
 def validate_kb_source_output_location(
     config: dict[str, object], config_path: Path, output: Path
 ) -> None:
@@ -201,20 +217,14 @@ def validate_kb_source_output_location(
     KB source paths intentionally cannot be rebased through absolute paths or
     dot segments. Moving a config requires an explicit asset-copy workflow.
     """
-    for kb_config in _configured_knowledge_bases(config):
-        spec = _kb_source_spec(kb_config)
-        if spec is None:
-            continue
-        kb_name, _, source_path = spec
-        # Reuse runtime path validation with the authored config as its origin,
-        # never a temporary validation file or the proposed output directory.
-        _resolve_kb_source_root(config_path, source_path)
-        if output.parent.resolve() != config_path.parent.resolve():
-            raise ValueError(
-                f"Knowledge base '{kb_name}' uses config-relative source.path "
-                f"'{source_path}'; --output must be in the same directory as "
-                "--config. Relocate the config and its assets explicitly first."
-            )
+    sources = _config_relative_kb_sources(config)
+    if sources and output.parent.resolve() != config_path.parent.resolve():
+        kb_name, source_path = sources[0]
+        raise ValueError(
+            f"Knowledge base '{kb_name}' uses config-relative source.path "
+            f"'{source_path}'; --output must be in the same directory as "
+            "--config. Relocate the config and its assets explicitly first."
+        )
 
 
 def _runtime_kb_relative_path(source_path: str, kb_name: str) -> str:
