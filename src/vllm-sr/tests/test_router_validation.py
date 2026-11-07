@@ -184,6 +184,24 @@ def test_a_running_router_refusal_and_warnings(tmp_path):
     )
     assert not refused.valid and refused.error == "method is required"
 
+    diagnostic = validate_with_endpoint(
+        config,
+        _Client(
+            RouterResponse(
+                payload={
+                    "valid": False,
+                    "errors": [
+                        {
+                            "code": "CONFIG_VALIDATION_ERROR",
+                            "message": "method is required",
+                        }
+                    ],
+                }
+            )
+        ),
+    )
+    assert not diagnostic.valid and diagnostic.error == "method is required"
+
     valid = validate_with_endpoint(
         config,
         _Client(
