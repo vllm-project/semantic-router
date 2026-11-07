@@ -364,6 +364,12 @@ type RequestContext struct {
 	VSRDecisionDiagnostics   decision.EvaluationDiagnostics
 	VSRProjectionTrace       *projectiontrace.Trace
 
+	// VSRContextReserveTokens is the reserve part of VSRContextTokenCount
+	// (llmprotocol.InputEstimate.ReserveTokens). Refusals rest on the count
+	// without it; once a decision needs that count, the Router drops the
+	// reserve from VSRContextTokenCount for the rest of the request.
+	VSRContextReserveTokens int
+
 	// Hallucination mitigation tracking
 	FactCheckNeeded             bool     // Result of fact-check classification
 	FactCheckConfidence         float32  // Confidence score of fact-check classification

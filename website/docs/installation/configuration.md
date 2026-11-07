@@ -397,7 +397,9 @@ candidate_requirements:
 `capabilities: declared` requires the assigned model to declare support for the
 request's task, including tools and image input, as well as a compatible provider
 protocol. `context: known_limits` checks estimated input demand plus the effective
-output reserve against declared model limits. The request must supply an output
+output reserve against declared model limits, and refuses a request only when it
+does not fit even without the input estimate's reserves for structured data and
+media. The request must supply an output
 bound, or its decision must configure `request_params.default_max_tokens` as a
 positive integer or `auto` (see below).
 That default applies only when the caller omits the bound; `max_tokens_limit` then

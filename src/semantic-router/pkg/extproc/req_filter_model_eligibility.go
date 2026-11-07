@@ -37,9 +37,16 @@ func (r *OpenAIRouter) contextEligibleDecisionModelRefs(
 	refs []config.ModelRef,
 	decisionName string,
 	contextTokens int,
+	minimum int,
 	ctx *RequestContext,
 ) ([]config.ModelRef, error) {
 	eligible, excluded := r.contextEligibleModelRefs(refs, contextTokens)
+	if excluded > 0 {
+		if fallback, fallbackExcluded, ok := r.reserveFallbackModelRefs(refs, eligible, contextTokensWithoutReserves(ctx, contextTokens), minimum, ctx); ok {
+			dropContextReserves(ctx, decisionName)
+			eligible, excluded, contextTokens = fallback, fallbackExcluded, ctx.VSRContextTokenCount
+		}
+	}
 	if len(eligible) == 0 && excluded > 0 {
 		return nil, fmt.Errorf(
 			"%w: decision %q requires %d request tokens but every configured candidate has a smaller context window",
@@ -59,6 +66,102 @@ func (r *OpenAIRouter) contextEligibleDecisionModelRefs(
 		})
 	}
 	return eligible, nil
+}
+
+// The estimate keeps conservative reserves (llmprotocol.InputEstimate
+// ReserveTokens) so that candidates are chosen safely, but a reserve is no
+// evidence that a request does not fit. A refusal rests on the estimate
+// without reserves, and when a decision has to fall back to that count, the
+// request continues with it.
+func contextTokensWithoutReserves(ctx *RequestContext, contextTokens int) int {
+	return max(0, contextTokens-ctx.VSRContextReserveTokens)
+}
+
+// reserveFallbackModelRefs is the window filter's fallback, shared by routing
+// and eval: when the conservative count leaves fewer capable candidates than
+// the decision needs, it returns the refs the count without reserves admits,
+// provided they hold more capable candidates.
+func (r *OpenAIRouter) reserveFallbackModelRefs(
+	refs, eligible []config.ModelRef,
+	withoutReserves, minimum int,
+	ctx *RequestContext,
+) ([]config.ModelRef, int, bool) {
+	usable := r.capableModelRefCount(eligible, ctx)
+	if usable >= minimum {
+		return nil, 0, false
+	}
+	fallback, excluded := r.contextEligibleModelRefs(refs, withoutReserves)
+	if r.capableModelRefCount(fallback, ctx) <= usable {
+		return nil, 0, false
+	}
+	return fallback, excluded, true
+}
+
+// capableModelRefCount counts the distinct candidates, as the minimum check
+// counts them, that also declare what the request needs on the request the
+// capability filter checks, so the fallback does not keep a model that
+// filter drops while excluding one that would serve.
+func (r *OpenAIRouter) capableModelRefCount(refs []config.ModelRef, ctx *RequestContext) int {
+	request, err := r.selectionCapabilityRequest(ctx)
+	if err != nil || request == nil {
+		return distinctModelRefCount(refs)
+	}
+	requirements := r.candidateRequirements(ctx)
+	capable := make([]config.ModelRef, 0, len(refs))
+	for _, ref := range refs {
+		if r.candidateCapabilityMismatch(ref, request, ctx.VSRSelectedDecision, requirements, ctx.AutomaticCandidateDemands, contextReservesCounted(ctx)) == nil {
+			capable = append(capable, ref)
+		}
+	}
+	return distinctModelRefCount(capable)
+}
+
+// distinctModelRefCount counts candidates by model and LoRA.
+func distinctModelRefCount(refs []config.ModelRef) int {
+	seen := make(map[string]struct{}, len(refs))
+	for _, ref := range refs {
+		if model := strings.TrimSpace(ref.Model); model != "" {
+			seen[model+"\x00"+strings.TrimSpace(ref.LoRAName)] = struct{}{}
+		}
+	}
+	return len(seen)
+}
+
+// contextReservesCounted reports whether checks after the window filter still
+// count the estimate's reserves, which they do until a fallback drops them.
+func contextReservesCounted(ctx *RequestContext) bool {
+	return ctx != nil && ctx.VSRContextReserveTokens > 0
+}
+
+// candidateSelectionDemand is the demand live selection scores candidates on.
+// It counts reserves exactly when the eligibility filters still do, so
+// selection and preview rank on the count the filters used.
+func candidateSelectionDemand(ctx *RequestContext, decision *config.Decision) selection.CandidateDemand {
+	demand, _ := selection.EffectiveCandidateDemand(ctx.SemanticRequest, decision)
+	if !contextReservesCounted(ctx) {
+		demand = demand.WithoutReserves()
+	}
+	return demand
+}
+
+// minimumContextCandidates is how many candidates a decision needs to keep
+// before the window filter falls back to the count without reserves.
+func minimumContextCandidates(decision *config.Decision) int {
+	if decision != nil && decision.Algorithm != nil && decision.Algorithm.MinimumCandidates > 1 {
+		return decision.Algorithm.MinimumCandidates
+	}
+	return 1
+}
+
+func dropContextReserves(ctx *RequestContext, decisionName string) {
+	logging.ComponentEvent("extproc", "context_reserves_dropped", map[string]interface{}{
+		"request_id":     ctx.RequestID,
+		"decision":       decisionName,
+		"context_tokens": ctx.VSRContextTokenCount,
+		"reserve_tokens": ctx.VSRContextReserveTokens,
+	})
+	ctx.VSRContextTokenCount = contextTokensWithoutReserves(ctx, ctx.VSRContextTokenCount)
+	ctx.VSRContextReserveTokens = 0
 }
 
 func (r *OpenAIRouter) modelRefExceedsContextWindow(ref config.ModelRef, contextTokens int) bool {
@@ -93,7 +196,7 @@ func (r *OpenAIRouter) decisionRouteActionDestination(
 	}
 	if requirements := r.candidateRequirements(ctx); selection.CandidateRequirementsEnabled(requirements) {
 		refs := append([]config.ModelRef{{Model: destination}}, decision.ModelRefs...)
-		eligible, err := r.eligibleRequestModelRefs(requirements, refs, ctx.SemanticRequest, decision)
+		eligible, err := r.eligibleRequestModelRefs(requirements, refs, ctx.SemanticRequest, decision, 1, ctx)
 		if err != nil {
 			return "", false, err
 		}
@@ -118,6 +221,15 @@ func (r *OpenAIRouter) decisionRouteActionDestination(
 		})
 		return eligible[0].Model, true, nil
 	}
+	withoutReserves := contextTokensWithoutReserves(ctx, ctx.VSRContextTokenCount)
+	if !r.modelNameExceedsContextWindow(destination, withoutReserves) {
+		dropContextReserves(ctx, decision.Name)
+		return destination, true, nil
+	}
+	if eligible, _ := r.contextEligibleModelRefs(decision.ModelRefs, withoutReserves); len(eligible) > 0 {
+		dropContextReserves(ctx, decision.Name)
+		return eligible[0].Model, true, nil
+	}
 	return "", false, fmt.Errorf(
 		"%w: route action destination %q and every candidate of decision %q have a smaller context window than the %d request tokens",
 		errNoContextEligibleDecisionModel,
@@ -136,15 +248,8 @@ func validateMinimumEligibleDecisionModels(
 		decision.Algorithm.MinimumCandidates <= 0 {
 		return nil
 	}
-	seen := make(map[string]struct{}, len(eligible))
-	for _, ref := range eligible {
-		model := strings.TrimSpace(ref.Model)
-		if model == "" {
-			continue
-		}
-		seen[model+"\x00"+strings.TrimSpace(ref.LoRAName)] = struct{}{}
-	}
-	if len(seen) >= decision.Algorithm.MinimumCandidates {
+	count := distinctModelRefCount(eligible)
+	if count >= decision.Algorithm.MinimumCandidates {
 		return nil
 	}
 	return fmt.Errorf(
@@ -153,7 +258,7 @@ func validateMinimumEligibleDecisionModels(
 		decision.Name,
 		decision.Algorithm.MinimumCandidates,
 		contextTokens,
-		len(seen),
+		count,
 	)
 }
 
