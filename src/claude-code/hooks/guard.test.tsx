@@ -53,7 +53,7 @@ test('a classifier that fails leaves the permission flow alone and shows SKIPPED
 
   expect(verdict).toEqual(BOTTOM)
   expect(await paneText($, /SKIPPED/)).toBe(' SKIPPED  git push --force origin main')
-  expect(await paneText($, /classifier unavailable/)).toMatch(/^guard skipped: classifier unavailable · .*connection refused$/)
+  expect(await paneText($, /ran unchecked/)).toBe('command ran unchecked · could not reach the decision model (connection refused) · /vsr:setup checks it')
 })
 
 test('a classifier that never answers is given up on after the timeout, and the command held', async ($, on) => {
@@ -62,7 +62,7 @@ test('a classifier that never answers is given up on after the timeout, and the 
   const pending = $.tool.check({ tool: 'Bash', input: { command: 'ls' } })
   await clock.advance(3000)
 
-  expect(await pending).toMatchObject({ decision: 'ask', reason: 'vSR guard: could not check 1 of 1 step (timeout after 3000 ms). Confirm before it runs.' })
+  expect(await pending).toMatchObject({ decision: 'ask', reason: 'vSR guard: could not check 1 of 1 step: the decision model took over 3 s. Confirm before it runs.' })
   expect(await paneText($, /HELD/)).toBe(' HELD  ls')
 })
 
@@ -462,7 +462,7 @@ test('a classifier that answers with an error holds the command, and says why', 
   const verdict = await $.tool.check({ tool: 'Bash', input: { command: 'git push --force origin main' } })
 
   expect(verdict.decision).toBe('ask')
-  expect(verdict.reason).toBe('vSR guard: could not check 1 of 1 step (HTTP 500). Confirm before it runs.')
+  expect(verdict.reason).toBe('vSR guard: could not check 1 of 1 step: the decision model answered with an error (HTTP 500). Confirm before it runs.')
   expect(await paneText($, /HELD/)).toBe(' HELD  git push --force origin main')
   expect(await paneText($, /waiting for you/)).toContain('1 of 1 step not checked · no step was scored')
 })

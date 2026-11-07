@@ -44,7 +44,7 @@ test('a prompt that says the last answer was wrong tells Claude to re-check it, 
   expect(reply.contexts).toEqual([[NOTE]])
   expect(await paneText($, /ESCALATED/, 100)).toBe(` ESCALATED  ${PUSHBACK}`)
   expect(await paneText($, /subagent → Opus/, 120)).toBe(
-    'subagent → Opus, xhigh effort · multi-step task · difficulty 0.90 of 2 · confidence 0.80 · steps 0.20 · one level up → xhigh · escalated, router alone would pick Sonnet',
+    'subagent → Opus, xhigh effort · multi-step task · difficulty 0.90 of 2 · confidence 0.80 · reasoning steps 0.20 · one level up → xhigh · escalated, router alone would pick Sonnet',
   )
   const { texts } = await rowTree($, agentRow('call-1'))
   expect(texts).toContain('⇢  ROUTED  subagent → Opus · xhigh effort')
@@ -149,7 +149,7 @@ test('a prompt that repeats the one before escalates on the repeat alone', { opt
     prior: FIRST,
   })
   const { texts } = await rowTree($, userRow('Summarize TASKS.md again, in a subagent.'))
-  expect(texts).toContain(' REPEAT 0.83 ')
+  expect(texts).toContain('asked again 0.83')
 })
 
 test('the ESCALATED card is drawn under the prompt it judged, and no other', { options: { display: 'verbose' } }, async ($, on) => {
@@ -159,10 +159,10 @@ test('the ESCALATED card is drawn under the prompt it judged, and no other', { o
   const { texts, cards } = await rowTree($, userRow(PUSHBACK))
   const other = await rowTree($, userRow(THANKS))
 
-  expect(cards).toEqual([expect.objectContaining({ borderStyle: 'round', borderColor: 'claude', paddingX: 1, width: 83 })])
+  expect(cards).toEqual([expect.objectContaining({ borderStyle: 'round', borderColor: 'claude', paddingX: 1, width: 76 })])
   expect(texts).toContain('↑  ESCALATED  you pushed back · next subagent one step up')
   expect(texts).toContain(' vSR  · escalate')
-  expect(texts).toContain(' WRONG ANSWER 0.92 ')
+  expect(texts).toContain('said it was wrong 0.92')
   expect(texts).toContain('told Claude to re-check its last answer')
   expect(other.cards).toEqual([])
 })
@@ -179,5 +179,5 @@ test('a classifier that fails escalates nothing and shows SKIPPED under the prom
   expect(started.model).toBe('opus')
   expect(reply.contexts).toEqual([undefined])
   expect(cards).toEqual([expect.objectContaining({ borderColor: 'inactive' })])
-  expect(texts).toContain('○  SKIPPED  escalate skipped: classifier unavailable')
+  expect(texts).toContain('○  SKIPPED  pushback not checked')
 })

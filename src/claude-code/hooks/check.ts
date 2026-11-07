@@ -3,7 +3,7 @@ import type { EngineInterface, ToolCallInput, ToolCallResult, TurnCompleteInput,
 
 import type { TurnReads } from '../types'
 
-import { ANSWER_MS, classify, numberAt, offlineOf, type Reply } from './lib/classify'
+import { ANSWER_MS, classify, numberAt, failureOf, type Reply } from './lib/classify'
 import type { Settings } from './lib/settings'
 import { record } from './lib/state'
 import { stamp } from './lib/env'
@@ -65,7 +65,7 @@ export async function checkTurn($: EngineInterface, e: TurnCompleteInput, settin
   const at = await stamp($)
   const answerTail = answer.slice(-TAIL_CHARS)
   if (!asked.ok) {
-    await record($, settings.log, { kind: 'unavailable', app: 'check', id: e.turnId, at, answerTail, subject: turn.prompt || 'the answer', why: asked.why, ...offlineOf(asked) })
+    await record($, settings.log, { kind: 'unavailable', app: 'check', id: e.turnId, at, answerTail, subject: turn.prompt || 'the answer', why: asked.why, ...failureOf(asked) })
     return
   }
   await record($, settings.log, {

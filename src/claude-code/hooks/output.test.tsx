@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { bandRow, callOf, engine, groupRow, paneText, readCallOf, type Reply, rowTree, type Span, toolRow } from './kit'
+import { bandRow, callOf, engine, groupRow, paneLines, paneText, readCallOf, type Reply, rowTree, type Span, toolRow } from './kit'
 import { pieceSize } from './output'
 
 const TICKET_PATH = '/repo/support/ticket-1042.txt'
@@ -139,8 +139,12 @@ test('redact fails open: a classifier that does not answer leaves the output as 
   const ran = await pending
 
   expect(contentOf(ran)).toBe(TICKET)
-  expect(await paneText($, /redact skipped/)).toBe('redact skipped: classifier unavailable · timeout after 1500 ms')
-  expect(await paneText($, /shield skipped/)).toBe('shield skipped: classifier unavailable · timeout after 1500 ms')
+  expect(await paneText($, /unchecked for personal data/, 200)).toBe(
+    'support/ticket-1042.txt went to Claude unchecked for personal data · the decision model took over 1.5 s · /vsr:setup checks it',
+  )
+  expect(await paneText($, /unchecked for instructions/, 200)).toBe(
+    'support/ticket-1042.txt went to Claude unchecked for instructions · the decision model took over 1.5 s · /vsr:setup checks it',
+  )
 })
 
 test('redact that fails still hides secrets found by rule', async ($, on) => {
@@ -150,7 +154,9 @@ test('redact that fails still hides secrets found by rule', async ($, on) => {
   const ran = await $.tool.call({ tool: 'Read', file_path: '/repo/notes.txt', tool_use_id: 'r1' })
 
   expect(contentOf(ran)).toBe('API_TOKEN=[secret]')
-  expect(await paneText($, /redact skipped/)).toMatch(/connection refused/)
+  expect((await paneLines($)).find(line => line.includes('unchecked for personal data'))).toBe(
+    'notes.txt went to Claude unchecked for personal data · could not reach the decision model (connection refused) · /vsr:setup checks it',
+  )
 })
 
 test('shield tells Claude to treat an output as data at 0.99, framed by where it came from', async ($, on) => {
@@ -188,9 +194,9 @@ test('a Bash call gets its guard line and a REDACTED card, and its output is not
   expect(ran.context ?? []).toEqual([])
   expect(cards.map(card => card.borderColor)).toEqual(['merged'])
   expect(texts).toContain('▒  REDACTED  1 item hidden from the output of cat a.txt')
-  expect(texts).toContain(' email ×1 ')
+  expect(texts).toContain('email ×1')
   expect(texts.some(text => /SHIELDED/.test(text))).toBe(false)
-  expect(texts.filter(text => /^✓ allowed \S/.test(text))).toEqual(['✓ allowed cat a.txt  risk ▕█▎░░░░░░░░░┃░▏ 0.10 < 0.90'])
+  expect(texts.filter(text => /^› allowed \S/.test(text))).toEqual(['› allowed cat a.txt  risk ▕█▎░░░░░░░░░┃░▏ 0.10 < 0.90'])
 })
 
 test('a folded group adds the cards of the reads it hides', { options: { display: 'verbose' } }, async ($, on) => {
@@ -202,7 +208,7 @@ test('a folded group adds the cards of the reads it hides', { options: { display
 
   expect(cards).toEqual([expect.objectContaining({ borderColor: 'merged' })])
   expect(texts).toContain('▒  REDACTED  4 items hidden before Claude read support/ticket-1042.txt')
-  expect(texts).toContain(' name ×1 ')
+  expect(texts).toContain('name ×1')
 })
 
 test('redact places spans by code point, so text after an emoji or an accent is hidden exactly', async ($, on) => {
@@ -259,7 +265,7 @@ test('an output read only in part with nothing found shows PARTIAL, not a clean 
 
   expect(await paneText($, /PARTIAL/)).toBe(' PARTIAL  app.log')
   expect(await paneText($, /characters/, 120)).toBe(
-    'redact read the first 1,953 of 18,953 characters · the rest went to Claude unchecked · timeout after 1500 ms',
+    'redact read the first 1,953 of 18,953 characters · the rest went to Claude unchecked · the decision model took over 1.5 s',
   )
 })
 
@@ -350,7 +356,7 @@ test('an unreachable runtime is said once on the band; rows stay quiet, and vSR 
   const band = (await rowTree($, bandRow())).texts[0]
 
   expect(cards).toEqual([])
-  expect(band).toContain('○ classifier offline')
+  expect(band).toContain('○ model offline · guard, redact, shield not checking')
   expect(reply.urls?.length).toBe(asked)
 
   reply.fails = false

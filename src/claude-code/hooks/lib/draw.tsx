@@ -1,10 +1,10 @@
 import type { EngineInterface } from 'claude-code'
 
-import type { Calibration, Decision, Spend } from '../../types'
-import { APP_NAMES, APPS, type Color, type Section, SECTIONS, sectionOf } from './apps'
+import type { App, Calibration, Decision, Spend } from '../../types'
+import { APP_NAMES, APPS, type Color, LOOKS, type Section, SECTIONS, sectionOf } from './apps'
 import { type Body, type Described, describe, type Gauge, type TallyItem, tallyOf, tallyWidth } from './describe'
 import { ANSWERS, type Answer, answersFor } from './labels'
-import { BRAND, brand, type Logo, mark, markColumns, wordmark, wordmarkHeight } from './logo'
+import { BRAND, brand, type Logo, wordmark, wordmarkHeight } from './logo'
 import { holdMeter, type Segment, textWidth } from './meters'
 import { type Display, isCleartextRemote, type Settings } from './settings'
 import { clip, fixed, modelName } from './text'
@@ -68,7 +68,7 @@ function chipsLine({ Text }: Elements, chips: string[], color: Color, room: numb
   const shown: string[] = []
   let used = 0
   for (const [index, chip] of chips.entries()) {
-    const width = chip.length + 2 + (shown.length > 0 ? 1 : 0)
+    const width = chip.length + (shown.length > 0 ? ' · '.length : 0)
     const rest = chips.length - index - 1
     if (used + width + (rest > 0 ? ` +${rest}`.length : 0) > room && shown.length > 0) break
     shown.push(chip)
@@ -77,10 +77,7 @@ function chipsLine({ Text }: Elements, chips: string[], color: Color, room: numb
   const hidden = chips.length - shown.length
   return (
     <Text>
-      {shown.flatMap((chip, index) => [
-        index === 0 ? '' : ' ',
-        <Text backgroundColor={color} color="inverseText">{` ${chip} `}</Text>,
-      ])}
+      {shown.flatMap((chip, index) => [index === 0 ? '' : <Text dimColor>{' · '}</Text>, <Text color={color}>{chip}</Text>])}
       {hidden > 0 ? <Text dimColor>{` +${hidden}`}</Text> : null}
     </Text>
   )
@@ -90,20 +87,17 @@ function bodyLine(elements: Elements, body: Body, color: Color, room: number) {
   return body.kind === 'gauge' ? meterLine(elements, body.gauge, room) : chipsLine(elements, body.chips, color, room)
 }
 
-// The logo's mark stands at the right of the card, as tall as its lines. The app tag goes at the right of the
-// header, else of the footnote, wherever it fits without clipping either; else it is left out.
+// The app tag goes at the right of the header, else of the footnote, wherever it fits without clipping either;
+// else it is left out. The logo's mark is drawn once, at the top of the pane, not on each card.
 function card(
   elements: Elements,
-  logo: Logo,
   { app, badge }: Described,
   one: Extract<Described['inline'], { kind: 'card' }>,
   columns: number,
 ) {
   const { Box, Text } = elements
-  const rows = one.body ? 3 : 2
-  const markRoom = markColumns(logo, rows) === 0 ? 0 : markColumns(logo, rows) + 1
-  const width = Math.min(columns - CARD_CHROME, MAX_CARD_WIDTH + markRoom)
-  const inner = width - CARD_CHROME - markRoom
+  const width = Math.min(columns - CARD_CHROME, MAX_CARD_WIDTH)
+  const inner = width - CARD_CHROME
   const lead = one.glyph.length + 1 + badge.length + 2 + 1
   const tail = one.tail ?? ''
   const title = `${clip(one.title, Math.max(1, inner - lead - tail.length))}${tail}`
@@ -135,12 +129,11 @@ function card(
           {isNoteTagged ? tag : null}
         </Box>
       </Box>
-      {mark(elements, logo, rows)}
     </Box>
   )
 }
 
-const COMPACT_LEAD = '✓ allowed '
+const COMPACT_LEAD = `${LOOKS.allowed.glyph} allowed `
 
 function compactLine(elements: Elements, { subject, more = '' }: Described, score: number, threshold: number, columns: number) {
   const { Text } = elements
@@ -152,7 +145,7 @@ function compactLine(elements: Elements, { subject, more = '' }: Described, scor
   const part = clip(subject, Math.max(1, spare))
   return (
     <Text>
-      <Text color="success">{COMPACT_LEAD}</Text>
+      <Text color={LOOKS.allowed.color}>{COMPACT_LEAD}</Text>
       {`${part}${more}  `}
       <Text dimColor>risk ▕</Text>
       {meterCells(elements, segments, 'success')}
@@ -177,8 +170,8 @@ function framedLine(elements: Elements, described: Described, columns: number) {
 }
 
 // What a row shows of a decision under `display`: the full card or line, the one-line form, or nothing.
-export function rowView(elements: Elements, logo: Logo, described: Described, columns: number, narrow: Described, display: Display) {
-  if (display === 'verbose' || described.weight === 'act') return inlineView(elements, logo, described, columns, narrow)
+export function rowView(elements: Elements, described: Described, columns: number, narrow: Described, display: Display) {
+  if (display === 'verbose' || described.weight === 'act') return inlineView(elements, described, columns, narrow)
   if (display === 'quiet' || described.weight === 'quiet') return null
   // The plain words go first when the row is short: a cut word reads worse than none.
   const room = columns - CARD_CHROME >= MIN_FRAMED_COLUMNS ? columns - CARD_CHROME : columns
@@ -187,11 +180,11 @@ export function rowView(elements: Elements, logo: Logo, described: Described, co
 }
 
 // A card for a decision worth noticing, a compact line for an allowed command, the one-line form where the row is narrow.
-export function inlineView(elements: Elements, logo: Logo, described: Described, columns: number, narrow: Described = described) {
+export function inlineView(elements: Elements, described: Described, columns: number, narrow: Described = described) {
   if (columns < MIN_CARD_COLUMNS) return framedLine(elements, narrow, columns)
   const { inline } = described
   return inline.kind === 'card'
-    ? card(elements, logo, described, inline, columns)
+    ? card(elements, described, inline, columns)
     : compactLine(elements, described, inline.score, inline.threshold, columns)
 }
 
@@ -215,16 +208,28 @@ function itemsWithin(items: readonly TallyItem[], columns: number, used: number)
 
 const BAND_LEAD = `${BRAND}  `
 
-const OFFLINE: TallyItem = { glyph: APPS.off.glyph, color: APPS.off.color, text: 'classifier offline' }
+// Offline the decision model's checks step aside, so the band says which: only guard's fixed rules still hold.
+const offlineItem = (checking: readonly App[]): TallyItem => ({
+  glyph: APPS.off.glyph,
+  color: 'warning',
+  text: `model offline${checking.length > 0 ? ` · ${checking.join(', ')} not checking` : ''}`,
+})
 
 // A frame takes the line above and below it.
 const FRAME_ROWS = 3
 
 // The tally above the prompt, in a dim frame so it reads apart from Claude's reply just above it; unframed where the
 // engine leaves fewer rows than a frame takes or the columns are too few.
-export function band(elements: Elements, list: readonly Decision[], columns: number, isOffline: boolean, maxRows = FRAME_ROWS) {
+export function band(
+  elements: Elements,
+  list: readonly Decision[],
+  columns: number,
+  isOffline: boolean,
+  maxRows = FRAME_ROWS,
+  checking: readonly App[] = [],
+) {
   const { Box, Text } = elements
-  const items = isOffline ? [OFFLINE, ...tallyOf(list)] : tallyOf(list)
+  const items = isOffline ? [offlineItem(checking), ...tallyOf(list)] : tallyOf(list)
   const isFramed = maxRows >= FRAME_ROWS && columns - CARD_CHROME >= MIN_FRAMED_COLUMNS
   const room = isFramed ? columns - CARD_CHROME : columns
   const line = (
@@ -269,17 +274,20 @@ function overviewRows(about: Overview) {
   const since = `${calibration.since} ${calibration.since === 1 ? 'decision' : 'decisions'} since`
   return [
     ...(routing === undefined ? [] : [['routing', routing] as const]),
-    ['classifier', `${runtime.kind} · ${runtime.url}${tokenWords(runtime)}${isOffline ? ' · not answering' : ''}`],
+    ['model', `${runtime.kind} · ${runtime.url}${tokenWords(runtime)}${isOffline ? ' · not answering' : ''}`],
     ['apps', [...on, ...off.map(app => `${app} off`)].join(' · ')],
     [
-      'lines',
+      'router',
+      `easy below ${fixed(t.router.easyBelow)}, hard from ${fixed(t.router.hardFrom)} (of 2), sure from ${fixed(t.router.minConfidence)} · reasoning steps few below ${fixed(t.router.stepsLow)}, many from ${fixed(t.router.stepsHigh)}`,
+    ],
+    [
+      'thresholds',
       [
-        `router ${fixed(t.router.easyBelow)} / ${fixed(t.router.hardFrom)}, confidence ${fixed(t.router.minConfidence)}, steps ${fixed(t.router.stepsLow)} / ${fixed(t.router.stepsHigh)}, confidence ${fixed(t.router.stepsMinConfidence)}`,
-        `escalate ${fixed(t.escalate.feedback)}, reask ${fixed(t.escalate.reask)}`,
-        `redact ${fixed(t.redact.pii)}`,
-        `shield ${fixed(t.shield.inject)}`,
-        `guard ${fixed(t.guard.review)}`,
-        `check ${fixed(t.check.unsupported)}`,
+        `guard holds at ${fixed(t.guard.review)}`,
+        `check flags at ${fixed(t.check.unsupported)}`,
+        `shield warns at ${fixed(t.shield.inject)}`,
+        `redact hides at ${fixed(t.redact.pii)}`,
+        `escalate at ${fixed(t.escalate.feedback)}`,
       ].join(' · '),
     ],
     ['calibrated', log.path === '' ? 'log off' : `${calibration.at ?? 'never'} · ${since}${labeled > 0 ? ` · ${labeled} answered here` : ''} · log ${log.path}`],
@@ -328,6 +336,9 @@ function fitSections(sections: { section: Section; entries: Entry[] }[], budget:
   return sections.map(({ section, entries }, index) => ({ section, count: entries.length, entries: entries.slice(0, shown[index]) }))
 }
 
+// Said once above the answers, so a person knows what answering does.
+const ANSWER_HINT = 'Answers tune the thresholds when you run /vsr:calibrate.'
+
 export function dashboard(
   elements: Elements,
   logo: Logo,
@@ -340,6 +351,7 @@ export function dashboard(
   const { Box, Button, Text } = elements
   const tally = tallyOf(list)
   const tallyRows = Math.max(1, Math.ceil(tallyWidth(tally) / columns))
+  const hint = labeling !== undefined && list.some(decision => answersFor(decision) !== undefined)
   const sections = SECTIONS.flatMap(section => {
     const entries = list
       .filter(decision => sectionOf(decision) === section)
@@ -356,10 +368,11 @@ export function dashboard(
     <Box flexDirection="column">
       {wordmark(elements, logo)}
       <Text>{tallyText(elements, tally)}</Text>
-      {fitSections(sections, rows - wordmarkHeight(logo) - tallyRows - overviewHeight(about, columns)).map(({ section, count, entries }) => (
+      {hint ? <Text dimColor>{ANSWER_HINT}</Text> : null}
+      {fitSections(sections, rows - wordmarkHeight(logo) - tallyRows - (hint ? Math.ceil(ANSWER_HINT.length / columns) : 0) - overviewHeight(about, columns)).map(({ section, count, entries }) => (
         <Box flexDirection="column">
           <Text color={APPS[section].color} weight="bold">{`${APPS[section].glyph} ${APPS[section].name} · ${count}`}</Text>
-          {entries.map(({ decision, described: { badge, color, subject, more = '' }, second }) => {
+          {entries.map(({ decision, described: { badge, color, subject, more = '', headline, detail } }) => {
             const kind = labeling ? answersFor(decision) : undefined
             return (
               <Box flexDirection="column">
@@ -367,7 +380,10 @@ export function dashboard(
                   <Text backgroundColor={color} color="inverseText">{` ${badge} `}</Text>
                   {` ${clip(subject, Math.max(1, columns - badge.length - 3 - more.length))}${more}`}
                 </Text>
-                <Text dimColor>{second}</Text>
+                <Text>
+                  {headline}
+                  {detail === '' ? null : <Text dimColor>{` · ${detail}`}</Text>}
+                </Text>
                 {labeling && kind ? (
                   <Box flexDirection="row" gap={1}>
                     {ANSWERS[kind].map(({ answer, label }) => {

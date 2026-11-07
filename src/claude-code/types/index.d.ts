@@ -81,6 +81,8 @@ export type Decision =
       why: string
       // Set when the runtime could not be reached: the band says so once, and no row repeats it.
       offline?: true
+      // Set when the request was cancelled with its call (the user pressed Esc): nothing went unchecked, so it is not kept.
+      cancelled?: true
       // Set when the classifier answered but read only the first `chars` of an output of `of` characters.
       read?: { chars: number; of: number }
     }

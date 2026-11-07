@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, ToolCallInput, ToolCallResult } from 'claude-code'
 
 import type { Tag } from '../types'
-import { ANSWER_MS, type Classified, classify, isRecord, offlineOf, probabilityOf, type Reply } from './lib/classify'
+import { ANSWER_MS, type Classified, classify, isRecord, failureOf, probabilityOf, type Reply } from './lib/classify'
 import { addCounts, type Found, hide, PII_QUESTIONS, parsePii, piiIn, secretsIn, type Span } from './lib/redact'
 import { remoteHostOf, type Settings } from './lib/settings'
 import { record } from './lib/state'
@@ -99,7 +99,7 @@ async function readInPieces<T>(
     const state = frame(text.slice(read, end))
     const asked = await classify($, settings.runtime, state, questions, budgetMs - spent, parse)
     if (!asked.ok) {
-      if (read === 0) return { ok: false, why: asked.why, latencyMs: (await $.clock.now()) - started, ...offlineOf(asked) }
+      if (read === 0) return { ok: false, why: asked.why, latencyMs: (await $.clock.now()) - started, ...failureOf(asked) }
       stopped = asked.why
       break
     }
@@ -123,7 +123,8 @@ export function outputOf(tool: string, ran: ToolCallResult): Output | undefined 
   // An errored call's text is what Claude reads as its error, and a failing command prints too (`cat .env; false`).
   // Its rewrite goes back as a refusal, which Claude reads in the result's place.
   if (ran.isError === true) {
-    if (!REDACTED.has(tool) || typeof ran.text !== 'string') return undefined
+    // Only a command that ran and failed; a refusal or an interrupted call printed nothing of the tool's.
+    if (tool !== 'Bash' || typeof ran.text !== 'string' || !/^Exit code \d/.test(ran.text)) return undefined
     return { fields: [ran.text], rewritten: ([text], notes) => ({ deny: [text, ...notes].join('\n\n') }) }
   }
   const result: unknown = ran.result
@@ -188,7 +189,7 @@ async function redactOutput($: EngineInterface, settings: Settings, call: Call, 
   const hidden = pii.ok ? hideSpans(secrets.map(one => one.text), spans) : secrets.map(one => ({ text: one.text, counts: {} }))
   const counts: Partial<Record<Tag, number>> = addCounts(...secrets.map(one => one.counts), ...hidden.map(one => one.counts))
   if (!pii.ok) {
-    await record($, settings.log, { kind: 'unavailable', app: 'redact', id: `${call.toolUseId}:redact-off`, ...call, subject: call.source, why: pii.why, ...offlineOf(pii) })
+    await record($, settings.log, { kind: 'unavailable', app: 'redact', id: `${call.toolUseId}:redact-off`, ...call, subject: call.source, why: pii.why, ...failureOf(pii) })
   }
   return { fields: hidden.map(one => one.text), counts, spans, pii, length: joined.length }
 }
@@ -248,7 +249,7 @@ export async function inspectOutput($: EngineInterface, e: ToolCallInput, ran: T
   }
   if (shielded !== undefined && !shielded.injection.ok) {
     const { why } = shielded.injection
-    await record($, settings.log, { kind: 'unavailable', app: 'shield', id: `${call.toolUseId}:shield`, ...call, subject: source, why, ...offlineOf(shielded.injection) })
+    await record($, settings.log, { kind: 'unavailable', app: 'shield', id: `${call.toolUseId}:shield`, ...call, subject: source, why, ...failureOf(shielded.injection) })
   } else if (shielded?.note !== undefined && shielded.injection.ok && shielded.score !== undefined) {
     const { latencyMs } = shielded.injection
     await record($, settings.log, { kind: 'shield', id: `${call.toolUseId}:shield`, ...call, score: shielded.score, threshold: settings.thresholds.shield.inject, latencyMs })

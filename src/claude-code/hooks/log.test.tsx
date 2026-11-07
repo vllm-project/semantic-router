@@ -377,7 +377,7 @@ test('the router, check and shield lines follow their options', {
 
   expect(started.model).toBe('opus')
   expect(await paneText($, /subagent →/, 120)).toBe(
-    'subagent → Opus · hard task · difficulty 0.09 of 2 · confidence 0.86 · steps unavailable → default high',
+    'subagent → Opus · hard task · difficulty 0.09 of 2 · confidence 0.86 · reasoning steps unavailable → default high',
   )
   expect(ran.context).toHaveLength(1)
   expect(await paneText($, /answer matches/, 120)).toContain('unsupported 0.53 < 0.60')
@@ -399,7 +399,7 @@ test('an app turned off asks the classifier nothing and records nothing', {
   expect(reply.bodies).toEqual([])
   expect(reply.files).toEqual({})
   expect(await paneText($, /No decisions/)).toBe('No decisions yet. Each one appears under the row it decided on.')
-  expect(await paneText($, /^apps/)).toBe('apps  escalate · redact · shield · router off · guard off · check off')
+  expect(await paneText($, /^apps/)).toBe('apps  shield · redact · escalate · guard off · check off · router off')
 })
 
 test('a runtime token rides every request as a bearer header', { options: { runtimeToken: 'tok-123' } }, async ($, on) => {
@@ -431,7 +431,7 @@ test('requests go to the configured runtime URL, and its health check to the sam
   await check($, 'ls')
 
   expect(reply.urls).toEqual(['https://sr.example.com/api/health', 'https://sr.example.com/api/v1/decisions'])
-  expect(await paneText($, /^classifier/, 120)).toBe('classifier  remote · https://sr.example.com/api/v1/decisions')
+  expect(await paneText($, /^model/, 120)).toBe('model  remote · https://sr.example.com/api/v1/decisions')
 })
 
 test('a runtime that does not answer its health check toasts and draws the offline band', async ($, on) => {
@@ -442,10 +442,10 @@ test('a runtime that does not answer its health check toasts and draws the offli
   await clock.advance(0)
   const { texts, props } = await rowTree($, bandRow())
 
-  expect(reply.toasts).toEqual(['vSR: classifier not reachable at http://127.0.0.1:8790/v1/decisions · vSR steps aside until it answers · /vsr:setup'])
-  expect(texts[0]).toBe(' vSR   ○ classifier offline')
-  expect(props[texts.indexOf('○')]).toMatchObject({ color: 'inactive' })
-  expect((await paneLines($)).filter(line => line.startsWith('classifier'))[0]).toContain('not answering')
+  expect(reply.toasts).toEqual(["vSR: the decision model is not answering at http://127.0.0.1:8790/v1/decisions · vSR's checks step aside until it does; guard's fixed rules still hold · /vsr:setup"])
+  expect(texts[0]).toBe(' vSR   ○ model offline · guard, redact, shield not checking')
+  expect(props[texts.indexOf('○')]).toMatchObject({ color: 'warning' })
+  expect((await paneLines($)).filter(line => line.startsWith('model'))[0]).toContain('not answering')
 })
 
 test('a runtime that answers its health check leaves the band and the toasts alone', async ($, on) => {
@@ -467,5 +467,5 @@ test('an answer from the classifier, a minute after it went offline, clears the 
 
   await check($, 'ls')
 
-  expect((await rowTree($, bandRow())).texts[0]).toBe(' vSR   ✓ 1 allowed')
+  expect((await rowTree($, bandRow())).texts[0]).toBe(' vSR   › 1 allowed')
 })

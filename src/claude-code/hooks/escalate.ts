@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Hook, PromptSubmitInput, TurnCompleteInput, TurnStartInput } from 'claude-code'
 
 import type { Escalation, Signal } from '../types'
-import { classify, isRecord, numberAt, offlineOf, QUICK_ANSWER_MS, type Reply } from './lib/classify'
+import { classify, isRecord, numberAt, failureOf, QUICK_ANSWER_MS, type Reply } from './lib/classify'
 import type { Settings } from './lib/settings'
 import { fixed } from './lib/text'
 import { record } from './lib/state'
@@ -91,7 +91,7 @@ export async function escalatePrompt(
     await update($, escalation, () => null)
     const failed = asked.find(one => !one.ok)
     if (failed !== undefined && !failed.ok) {
-      await record($, settings.log, { kind: 'unavailable', app: 'escalate', id: at, at, prompt: e.text, subject: e.text, why: failed.why, ...offlineOf(failed) })
+      await record($, settings.log, { kind: 'unavailable', app: 'escalate', id: at, at, prompt: e.text, subject: e.text, why: failed.why, ...failureOf(failed) })
     }
     return next(e)
   }

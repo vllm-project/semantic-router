@@ -58,9 +58,9 @@ test('the check card is drawn under the last block of the answer it judged, and 
   const first = await rowTree($, assistantRow('The account was locked after five failed attempts.', true))
 
   expect(last.texts[0]).toBe(ENGINE_ROW)
-  expect(last.cards).toEqual([expect.objectContaining({ borderStyle: 'round', borderColor: 'warning', width: 83 })])
+  expect(last.cards).toEqual([expect.objectContaining({ borderStyle: 'round', borderColor: 'warning', width: 76 })])
   expect(last.texts).toContain('!  UNVERIFIED  some claims are not backed by what Claude read')
-  expect(last.texts).toContain('unsupported ▕████████████┃▊░░░░░░░░░░░▏  0.53  line 0.50')
+  expect(last.texts).toContain('unsupported ▕████████████┃▊░░░░░░░░░░░▏  0.53  flags at 0.50')
   expect(last.texts).toContain('look twice before you rely on it')
   expect(first.cards).toEqual([])
 })
@@ -98,7 +98,7 @@ test('check fails open: with no answer from the classifier the turn ends as it w
   await turnThatReads($, INVENTED)
   const { texts } = await rowTree($, assistantRow('A refund of $40 was issued to the customer.'))
 
-  expect(texts).toContain('○  SKIPPED  check skipped: classifier unavailable')
+  expect(texts).toContain('○  SKIPPED  answer not checked')
   expect(await paneText($, /GROUNDED|UNVERIFIED/)).toBeUndefined()
 })
 

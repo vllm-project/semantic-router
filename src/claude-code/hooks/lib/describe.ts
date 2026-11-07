@@ -33,6 +33,16 @@ export type Described = {
   inline: Inline
 }
 
+// What a skipped call let through, in the words of what it would have done.
+const SKIPPED: Record<App, (subject: string) => string> = {
+  guard: () => 'command ran unchecked',
+  check: () => 'answer not checked',
+  shield: subject => `${subject} went to Claude unchecked for instructions`,
+  redact: subject => `${subject} went to Claude unchecked for personal data`,
+  router: () => 'subagent started without routing',
+  escalate: () => 'pushback not checked',
+}
+
 type Look = Omit<Described, 'weight' | 'brief' | 'line'>
 type Kind<D extends Decision> = {
   look: (d: D) => Look
@@ -58,7 +68,7 @@ const difficultyGauge = (value: number, tiers: Tiers, fill: Color): Body => ({
 })
 
 // `word` names the line: the guard's holds a command, the shield's only warns.
-const riskGauge = (label: string, value: number, line: number, word = 'hold line'): Body => ({
+const riskGauge = (label: string, value: number, line: number, word = 'holds at'): Body => ({
   kind: 'gauge',
   gauge: {
     lead: `${label} ▕`,
@@ -76,7 +86,7 @@ const unsupportedGauge = (value: number, line: number, fill: Color): Body => ({
     close: '▏',
     segments: holdMeter(value, line),
     fill,
-    fits: [[fixed(value), `  line ${fixed(line)}`], [fixed(value), '']],
+    fits: [[fixed(value), `  flags at ${fixed(line)}`], [fixed(value), '']],
   },
 })
 
@@ -89,7 +99,7 @@ const reviewScore = (d: Extract<Decision, { kind: 'guard' }>) =>
 const stepsMore = (parts: number) =>
   parts > 1 ? ` (+${parts - 1} ${parts === 2 ? 'step' : 'steps'})` : undefined
 
-const SIGNAL_WORDS: Record<Signal['kind'], string> = { wrong: 'wrong answer', different: 'want different', repeat: 'repeat' }
+const SIGNAL_WORDS: Record<Signal['kind'], string> = { wrong: 'said it was wrong', different: 'asked for something else', repeat: 'asked again' }
 
 const signalText = (signal: Signal) => `${SIGNAL_WORDS[signal.kind]} ${fixed(signal.score)}`
 
@@ -110,15 +120,15 @@ function effortNote(d: Extract<Decision, { kind: 'route' }>) {
   const steps = d.steps === null ? '' : fixed(d.steps.score)
   switch (d.effortFrom) {
     case 'haiku':
-      return `${steps === '' ? '' : `steps ${steps} · `}Haiku runs at ${d.picked}`
+      return `${steps === '' ? '' : `reasoning steps ${steps} · `}Haiku runs at ${d.picked}`
     case 'steps':
-      return `steps ${steps} → ${d.picked}`
+      return `reasoning steps ${steps} → ${d.picked}`
     case 'unsure':
-      return `steps ${d.steps === null ? 'unavailable' : `unsure (${fixed(d.steps.confidence)})`} → default ${d.picked}`
+      return `reasoning steps ${d.steps === null ? 'unavailable' : `unsure (${fixed(d.steps.confidence)})`} → default ${d.picked}`
     case 'floor':
-      return `${steps === '' ? '' : `steps ${steps} · `}keeps its own ${d.effort} effort`
+      return `${steps === '' ? '' : `reasoning steps ${steps} · `}keeps its own ${d.effort} effort`
     case 'escalated':
-      return `${steps === '' ? '' : `steps ${steps} · `}one level up → ${d.picked}`
+      return `${steps === '' ? '' : `reasoning steps ${steps} · `}one level up → ${d.picked}`
   }
 }
 
@@ -135,7 +145,7 @@ const KINDS: { [K in Decision['kind']]: Kind<Extract<Decision, { kind: K }>> } =
       return {
         app: 'router',
         badge: 'ROUTED',
-        color: 'success',
+        color: APPS.router.color,
         headline: `subagent → ${modelName(d.model)}${d.effort ? `, ${d.effort} effort` : ''}`,
         detail: `${taskWord(d.level, d.tiers)} · difficulty ${fixed(d.level)} of 2 · confidence ${fixed(d.confidence)} · ${effortNote(d)}${alone ? ` · escalated, router alone would ${alone}` : ''}`,
         subject: oneLine(d.task),
@@ -145,7 +155,7 @@ const KINDS: { [K in Decision['kind']]: Kind<Extract<Decision, { kind: K }>> } =
           color: APPS.router.color,
           title,
           body: difficultyGauge(d.level, d.tiers, APPS.router.color),
-          note: alone ? `escalated: you pushed back · router alone would ${alone}` : `confidence ${fixed(d.confidence)} · ${effortNote(d)} · ${oneLine(d.task)}`,
+          note: alone ? `escalated: you pushed back · router alone would ${alone}` : `${effortNote(d)} · ${oneLine(d.task)}`,
         },
       }
     },
@@ -159,11 +169,11 @@ const KINDS: { [K in Decision['kind']]: Kind<Extract<Decision, { kind: K }>> } =
           ? 'the routing goal is quality: never a smaller model'
           : d.reason === 'downgrade'
             ? `not sure enough for a smaller model · confidence ${fixed(d.confidence)} < ${fixed(d.minConfidence)}`
-            : `classifier unsure · confidence ${fixed(d.confidence)} < ${fixed(d.minConfidence)}`
+            : `model unsure · confidence ${fixed(d.confidence)} < ${fixed(d.minConfidence)}`
       return {
         app: 'router',
         badge: 'KEPT',
-        color: 'warning',
+        color: LOOKS.kept.color,
         headline: `subagent stays on ${modelName(d.model)}`,
         detail: note,
         subject: oneLine(d.task),
@@ -171,16 +181,14 @@ const KINDS: { [K in Decision['kind']]: Kind<Extract<Decision, { kind: K }>> } =
           kind: 'card',
           ...LOOKS.kept,
           title: `subagent stays on ${modelName(d.model)}`,
-          body: difficultyGauge(d.level, d.tiers, 'warning'),
+          body: difficultyGauge(d.level, d.tiers, LOOKS.kept.color),
           note,
         },
       }
     },
     weight: 'notice',
     brief: d =>
-      d.reason === 'quality'
-        ? 'routing goal is quality'
-        : `${d.reason === 'downgrade' ? 'too unsure to go lighter' : 'classifier unsure'} · ${fixed(d.confidence)} < ${fixed(d.minConfidence)}`,
+      d.reason === 'quality' ? 'routing goal is quality' : d.reason === 'downgrade' ? 'not sure enough for a smaller model' : 'model unsure',
   },
   guard: {
     look: d => {
@@ -236,7 +244,7 @@ const KINDS: { [K in Decision['kind']]: Kind<Extract<Decision, { kind: K }>> } =
           glyph: APPS.escalate.glyph,
           color: APPS.escalate.color,
           title: headline,
-          body: { kind: 'chips', chips: d.signals.map(signal => signalText(signal).toUpperCase()) },
+          body: { kind: 'chips', chips: d.signals.map(signalText) },
           note: 'told Claude to re-check its last answer',
         },
       }
@@ -288,7 +296,7 @@ const KINDS: { [K in Decision['kind']]: Kind<Extract<Decision, { kind: K }>> } =
           glyph: APPS.shield.glyph,
           color: APPS.shield.color,
           title: headline,
-          body: riskGauge('inject', d.score, d.threshold, 'line'),
+          body: riskGauge('injection', d.score, d.threshold, 'warns at'),
           note: 'Claude was told to treat it as data, not instructions',
         },
       }
@@ -335,13 +343,13 @@ const KINDS: { [K in Decision['kind']]: Kind<Extract<Decision, { kind: K }>> } =
           inline: { kind: 'card', glyph: APPS.off.glyph, color: APPS.off.color, title: headline, note },
         }
       }
-      const headline = `${d.app} skipped: classifier unavailable`
+      const headline = SKIPPED[d.app](oneLine(d.subject))
       return {
         app: d.app,
         badge: 'SKIPPED',
         color: APPS.off.color,
         headline,
-        detail: d.why,
+        detail: `${d.why} · /vsr:setup checks it`,
         subject: oneLine(d.subject),
         inline: { kind: 'card', glyph: APPS.off.glyph, color: APPS.off.color, title: headline, note: d.why },
       }

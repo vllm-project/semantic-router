@@ -42,5 +42,5 @@ test('the runtime URL and token are trimmed', () => {
 test('the manifest defaults reach the hooks: check is off and the others are on', { options: {} }, async ($, on) => {
   engine(on, {})
 
-  expect(await paneText($, /^apps/)).toBe('apps  router · escalate · redact · shield · guard · check off')
+  expect(await paneText($, /^apps/)).toBe('apps  guard · shield · redact · router · escalate · check off')
 })

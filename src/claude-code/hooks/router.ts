@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { AgentSpawnInput, EngineInterface, Hook, TurnCompleteInput, TurnStepInput } from 'claude-code'
 
 import type { Model, Spend, Steps, Tiers } from '../types'
-import { classify, numberAt, offlineOf, QUICK_ANSWER_MS, type Reply } from './lib/classify'
+import { classify, numberAt, failureOf, QUICK_ANSWER_MS, type Reply } from './lib/classify'
 import { effortFor, type Picked, pickEffort, raised, type StepsLines } from './lib/effort'
 import type { Settings } from './lib/settings'
 import { costOf } from './lib/prices'
@@ -128,7 +128,7 @@ export async function routeSpawn(
   const anchor = { id: e.tool_use_id, toolUseId: e.tool_use_id, at: await stamp($) }
   if (!asked.ok) {
     const why = isEscalated ? `${asked.why} · escalated, so one step up anyway` : asked.why
-    await record($, settings.log, { kind: 'unavailable', app: 'router', ...anchor, subject: e.description, why, ...offlineOf(asked) })
+    await record($, settings.log, { kind: 'unavailable', app: 'router', ...anchor, subject: e.description, why, ...failureOf(asked) })
     return isEscalated ? spawnOn($, e, next, escalatedRoute(undefined, fallback, null, lines), fallback) : next(e)
   }
   const { complexity: { score, confidence }, steps } = asked.value

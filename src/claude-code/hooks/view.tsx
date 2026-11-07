@@ -12,6 +12,7 @@ import { readDecisions } from './lib/state'
 import { stamp } from './lib/env'
 import { answerKey } from './lib/text'
 import { readSpend } from './router'
+import type { App } from '../types'
 
 const PANE = 'vsr-decisions'
 const PANE_TITLE = 'vSR · decisions'
@@ -70,7 +71,7 @@ function under(elements: Elements, row: unknown, found: readonly Decision[], col
     if (one.kind === 'unavailable' && one.offline) return []
     const described = describe(one)
     if (view.display !== 'verbose' && described.weight === 'notice' && isRepeat(one, view.all)) return []
-    const drawn = rowView(elements, logo, described, columns, isNamed ? named(described) : described, view.display)
+    const drawn = rowView(elements, described, columns, isNamed ? named(described) : described, view.display)
     return drawn === null ? [] : [<Box paddingLeft={INLINE_INDENT}>{drawn}</Box>]
   })
   if (shown.length === 0) return row
@@ -89,6 +90,9 @@ export async function registerCommand($: EngineInterface) {
     argumentHint: '[calibrated]',
   })
 }
+
+// The apps that stop checking while the decision model is offline (guard's fixed rules still hold).
+const OFFLINE_APPS: readonly App[] = ['guard', 'redact', 'shield', 'check']
 
 export function registerView(on: On, settings: Settings) {
   // Blocks until the session start loads the logo; a reload starts over here.
@@ -139,7 +143,7 @@ export function registerView(on: On, settings: Settings) {
     const list = await readDecisions($)
     const isOffline = await readOffline($)
     if (e.props.hasSurvey || e.props.maxRows < 1 || (list.length === 0 && !isOffline)) return next(e)
-    return band($.ui.resolve(e), list, e.props.bodyColumns, isOffline, e.props.maxRows)
+    return band($.ui.resolve(e), list, e.props.bodyColumns, isOffline, e.props.maxRows, OFFLINE_APPS.filter(app => settings.apps[app]))
   }).catch(($, e, next) => next(e))
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {

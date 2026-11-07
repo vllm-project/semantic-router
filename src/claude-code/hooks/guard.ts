@@ -1,7 +1,7 @@
 import type { EngineInterface, Hook, ToolCallResult } from 'claude-code'
 
 import type { Decision, Outcome, Risk } from '../types'
-import { ANSWER_MS, type Classified, classify, isRecord, numberAt, type Reply } from './lib/classify'
+import { ANSWER_MS, type Classified, classify, failureOf, isRecord, numberAt, type Reply } from './lib/classify'
 import type { Settings } from './lib/settings'
 import { stamp } from './lib/env'
 import { alwaysHeld, firstOf, partsOf } from './lib/shell'
@@ -94,10 +94,10 @@ export async function guardCheck(
   const id = e.tool_use_id ?? at
 
   const judged: Judged[] = []
-  const failures: { part: string; why: string; offline?: true }[] = []
+  const failures: { part: string; why: string; offline?: true; cancelled?: true }[] = []
   for (const { part, result } of asked) {
     if (result.ok) judged.push({ part, ...result.value })
-    else failures.push({ part, why: result.why, ...(result.offline ? { offline: true as const } : {}) })
+    else failures.push({ part, why: result.why, ...failureOf(result) })
   }
   const scored = judged.reduce<Judged | undefined>(
     (top, one) => (top === undefined || one.review > top.review ? one : top),
@@ -110,6 +110,8 @@ export async function guardCheck(
   const isRisky = scored !== undefined && scored.review >= line
   // Offline (the circuit breaker open): vSR steps aside, and only the fixed rules and a score already over the
   // line hold. A part that timed out or got an error answer while the runtime is up was not checked: held.
+  // Cancelled with the call (the user pressed Esc): nothing will run, so nothing is held or recorded.
+  if (failures.length > 0 && failures.every(failure => failure.cancelled) && !ruled && !isRisky) return next(e)
   const isOffline = failures.length > 0 && failures.every(failure => failure.offline)
   if (isOffline && !ruled && !isRisky) {
     await record($, settings.log, {
@@ -157,7 +159,7 @@ export async function guardCheck(
     : isRisky
     ? `vSR guard: "${clip(oneLine(riskiest.part), REASON_PART_WIDTH)}" ${RISK_WORDS[riskiest.risk]} (risk score ${fixed(riskiest.review)} ≥ ${fixed(line)}). Confirm before it runs.`
     : notChecked > 0
-    ? `vSR guard: could not check ${unchecked} of ${parts.length} ${steps} (${failures[0].why}). Confirm before it runs.`
+    ? `vSR guard: could not check ${unchecked} of ${parts.length} ${steps}: ${failures[0].why}. Confirm before it runs.`
     : `vSR guard: ${parts.length} commands in one call, more than the ${MAX_PARTS} it checks one at a time. Confirm before it runs.`
   return { decision: 'ask', reason }
 }

@@ -18,8 +18,9 @@ export async function readDecisions($: EngineInterface): Promise<readonly Decisi
   return read($, decisions)
 }
 
-// Every decision is also a line of the decision log.
+// Every decision is also a line of the decision log. A call the user cancelled is not one: nothing went unchecked.
 export async function record($: EngineInterface, log: Settings['log'], decision: Decision) {
+  if (decision.kind === 'unavailable' && decision.cancelled) return
   await update($, decisions, list => [...list, decision].slice(-KEPT_DECISIONS))
   await logDecision($, log, decision)
 }

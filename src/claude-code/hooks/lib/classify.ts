@@ -29,7 +29,9 @@ export const probabilityOf = (answer: unknown, key: string) =>
   isRecord(answer) ? numberAt(answer.probabilities, key) : undefined
 
 // Marks a skipped app's record when the runtime was offline, so its row stays quiet and the band speaks for it.
-export const offlineOf = (result: Classified<unknown>) => (!result.ok && result.offline ? { offline: true as const } : {})
+// Why a failed question failed, for its record: the runtime offline, or the request cancelled with its call.
+export const failureOf = (result: Classified<unknown>) =>
+  result.ok ? {} : { ...(result.offline ? { offline: true as const } : {}), ...(result.cancelled ? { cancelled: true as const } : {}) }
 
 // The runtime's whole reply: `answers` per question, and `spans` for span questions.
 export type Reply = { answers: Record<string, unknown>; spans: Record<string, unknown> }
@@ -37,7 +39,7 @@ export type Reply = { answers: Record<string, unknown>; spans: Record<string, un
 // `offline`: the runtime could not be reached, or was skipped as offline; the band says so once, the rows do not.
 export type Classified<T> =
   | { ok: true; value: T; latencyMs: number }
-  | { ok: false; why: string; latencyMs: number; offline?: true }
+  | { ok: false; why: string; latencyMs: number; offline?: true; cancelled?: true }
 
 // A plain prompt, or the fields of a `pair` or `grounded` state.
 export type State = string | Record<string, string>
@@ -57,14 +59,15 @@ export async function classify<T>(
   parse: (reply: Reply) => T | undefined,
 ): Promise<Classified<T>> {
   const started = await $.clock.now()
-  const failed = async (why: string, offline = false) => ({
+  const failed = async (why: string, offline = false, cancelled = false) => ({
     ok: false as const,
     why,
     latencyMs: (await $.clock.now()) - started,
     ...(offline ? { offline: true as const } : {}),
+    ...(cancelled ? { cancelled: true as const } : {}),
   })
   if (await read($, isOffline)) {
-    if (started - (await read($, lastTry)) < RETRY_MS) return failed('classifier offline', true)
+    if (started - (await read($, lastTry)) < RETRY_MS) return failed('the decision model is offline', true)
     await update($, lastTry, () => started)
   }
   let response
@@ -74,22 +77,28 @@ export async function classify<T>(
       $.clock.sleep(timeoutMs).then(() => undefined),
     ])
   } catch (error) {
+    // A request cancelled with its call (the user pressed Esc) says nothing about the runtime: only a fetch that
+    // could not connect makes it offline.
+    if (isCancelled(error)) return await failed('the request was cancelled', false, true)
     await markOffline($, runtime)
-    return await failed(String(error), true)
+    return await failed(`could not reach the decision model (${String(error).split(': ').pop()})`, true)
   }
   if (response === undefined) {
     // Slow or gone: /health tells, without holding this call up.
     void checkRuntime($, runtime)
-    return await failed(`timeout after ${timeoutMs} ms`)
+    return await failed(`the decision model took over ${timeoutMs / 1000} s`)
   }
-  if (!response.ok) return await failed(`HTTP ${response.status}`)
+  if (!response.ok) return await failed(`the decision model answered with an error (HTTP ${response.status})`)
   // Something answered: a body that is not the runtime's (a proxy's sign-in page) fails this question, it does not
   // make the runtime offline.
   const value = valueOf(response.text, parse)
-  if (value === undefined) return await failed('unexpected answer shape')
+  if (value === undefined) return await failed('the decision model gave an answer vSR could not read')
   await markReachable($)
   return { ok: true, value, latencyMs: (await $.clock.now()) - started }
 }
+
+const isCancelled = (error: unknown) =>
+  (error instanceof Error && error.name === 'AbortError') || /\boperation was aborted\b|\baborted\b/i.test(String(error))
 
 // The parsed answer of a reply's text, or undefined for a text that is not JSON or not of the runtime's shape.
 function valueOf<T>(text: string, parse: (reply: Reply) => T | undefined): T | undefined {
@@ -121,7 +130,7 @@ async function markOffline($: EngineInterface, runtime: Runtime) {
   await update($, lastTry, () => now)
   if (await read($, isOffline)) return
   await update($, isOffline, () => true)
-  $.ui.toast(`vSR: classifier not reachable at ${runtime.url} · vSR steps aside until it answers · /vsr:setup`)
+  $.ui.toast(`vSR: the decision model is not answering at ${runtime.url} · vSR's checks step aside until it does; guard's fixed rules still hold · /vsr:setup`)
 }
 
 // Asks the runtime's `/health` once; one that does not answer in time is offline.

@@ -1,7 +1,9 @@
 # vSR: vLLM Semantic Router in Claude Code
 
-vSR runs a small vLLM Semantic Router decision model (vela3-lite) next to Claude Code and asks it short
-questions while Claude works. The answers decide six things:
+vSR gives Claude Code's subagents a cheaper model when their task is easy, holds risky Bash commands
+for you to confirm, and hides personal data and secrets before Claude reads them. A small decision
+model from the vLLM Semantic Router project (vela3-lite, about 2.3 GB of RAM) makes these calls on
+your machine or on a runtime you host; your requests still go to Claude as usual. It does six things:
 
 | App | What it does |
 | --- | --- |
@@ -11,9 +13,6 @@ questions while Claude works. The answers decide six things:
 | shield | Warns Claude when a file or web page tries to give it instructions. |
 | guard | Holds a risky Bash command for you to confirm, part by part. |
 | check | Marks an answer that is not backed by what Claude read that turn. Off by default: see [Check](#check). |
-
-Requests still go to Claude as usual; the decision model only decides. It runs on your CPU or GPU,
-or on a runtime you host elsewhere.
 
 ![vSR in Claude Code](assets/screenshot.png)
 
@@ -44,9 +43,7 @@ installed into `~/.local/share/vsr`, without sudo.
 ## What you see
 
 vSR draws each decision under the row it is about, and keeps a one-line tally, in a dim frame,
-above the prompt. Its
-name shows as a capsule in the mark's colours: v white, S yellow, R blue.
-`/vsr` opens a pane with every decision of the session and the current setup.
+above the prompt. `/vsr` opens a pane with every decision of the session and the current setup.
 
 By default (`display: normal`) vSR only interrupts when it matters:
 
@@ -64,7 +61,8 @@ By default (`display: normal`) vSR only interrupts when it matters:
   - `REDACTED`: what kinds of data were hidden from a file or command. The same kinds hidden from the same file again are not repeated.
   - `ESCALATED`: you pushed back; Claude re-checks and the next subagent goes one step up.
   - `PARTIAL`: an output was read only in part, and the rest went to Claude unchecked.
-  - `SKIPPED`: an app could not get an answer for this call, and Claude went on without it.
+  - `SKIPPED`: an app got no answer in time, and the line says what went unchecked (for example
+    `ticket.txt went to Claude unchecked for personal data`); Claude went on without it.
 - **Nothing** when all went as it would have without vSR: an allowed command or a grounded answer.
   These are counted in the tally and listed in `/vsr`.
 
@@ -78,9 +76,9 @@ session's model, at list price: for example `$0.15 for 1 subagent turn vs $6.00 
 It is an estimate. Haiku 5.5 is priced for prompts up to 100K tokens (longer ones cost five times as
 much, so their saving is overstated), and a model with no known price is left out.
 
-When the decision model cannot be reached, the tally says `classifier offline`, a toast says so
-once, and vSR steps aside: Claude works as it would without vSR, and vSR tries the model again every
-minute. Its rows stay quiet meanwhile.
+When the decision model cannot be reached, the tally says `model offline` and which checks stopped,
+a toast says so once, and vSR steps aside: Claude works as it would without vSR (guard's fixed rules
+still hold), and vSR tries the model again every minute.
 
 ## How the router decides
 
@@ -168,16 +166,16 @@ decisions, `/vsr:calibrate` asks you about the decisions closest to each thresho
 ones you already answered in `/vsr`) and fits the thresholds to your answers, moving each at most
 0.15 per run. vSR reminds you when it is time.
 
-The logo is the vLLM Semantic Router V: a picture in kitty, Ghostty and iTerm2 3.5 or later, and
-drawn in characters elsewhere (smooth wedge characters in terminals that draw them, such as VS Code
+The logo, the vLLM Semantic Router V, sits at the top of the `/vsr` pane: a picture in kitty, Ghostty
+and iTerm2 3.5 or later, and drawn in characters elsewhere (smooth wedge characters in terminals that draw them, such as VS Code
 1.108 or later and GNOME Terminal; plain blocks in the rest).
 
 ## Troubleshooting
 
-- **The tally says `classifier offline`.** The runtime is not answering at the URL `/vsr` shows. Run
+- **The tally says `model offline`.** The runtime is not answering at the URL `/vsr` shows. Run
   `/vsr:setup` to check and restart it; vSR picks it up within a minute of it answering again.
-- **`/vsr` still shows old settings after setup.** Run `/reload-plugins`; if the `classifier` and
-  `apps` lines still differ, restart Claude Code.
+- **`/vsr` still shows old settings after setup.** Run `/reload-plugins`; if the `model` and
+  `apps` rows still differ, restart Claude Code.
 - **Reads feel slower.** On an x86 CPU, redact and shield add up to 3 s to a long `Read` or Bash
   output, and guard about 0.25 s per command part; an Apple Silicon CPU is several times slower, so
   apps often step aside there and guard asks more often. A GPU runtime is several times faster; you

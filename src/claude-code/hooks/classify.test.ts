@@ -18,6 +18,6 @@ test('a 200 answer whose body is not JSON is a failed question, not an offline r
 
   const verdict = await $.tool.check({ tool: 'Bash', input: { command: 'ls' } })
 
-  expect(verdict).toMatchObject({ decision: 'ask', reason: 'vSR guard: could not check 1 of 1 step (unexpected answer shape). Confirm before it runs.' })
+  expect(verdict).toMatchObject({ decision: 'ask', reason: 'vSR guard: could not check 1 of 1 step: the decision model gave an answer vSR could not read. Confirm before it runs.' })
   expect(reply.toasts).toEqual([])
 })
