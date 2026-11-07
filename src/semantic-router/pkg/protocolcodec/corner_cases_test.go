@@ -46,6 +46,19 @@ func TestBufferedWireContractsRejectNonObjectDocuments(t *testing.T) {
 	}
 }
 
+func TestOpenAIResponsesConversationIDIsBounded(t *testing.T) {
+	policy := llmprotocol.DefaultPolicy()
+	policy.Limits.IdentifierBytes = 8
+	engine, err := NewEngine(NewBuiltinRegistry(), policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, _, err = engine.DecodeRequest(llmprotocol.OpenAIResponsesV1,
+		[]byte(`{"model":"m","input":"hello","conversation":"conversation-too-long"}`))
+	assertProtocolError(t, err, llmprotocol.ErrorInvalidRequest, "conversation_id_limit")
+}
+
 func TestRequestTranslationRejectsTargetsThatRequireConversationMessages(t *testing.T) {
 	engine := NewBuiltinEngine()
 	body := []byte(`{"model":"provider-model","input":[]}`)
