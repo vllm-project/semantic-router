@@ -125,9 +125,15 @@ For a Model with a family, the decision's choice replaces the client's: the
 backend receives reasoning off when `use_reasoning` is false, even if the
 client asked for thinking, and the decision's or the family's effort when it is
 true, whatever effort the client sent. This holds on Chat, Responses and
-Messages backends alike. One exception: an Anthropic client that turns thinking
-off explicitly keeps it off on a Chat or Responses backend. A pass-through
-Model keeps the client's reasoning fields as sent.
+Messages backends alike, with two exceptions. An Anthropic client that turns
+thinking off explicitly keeps it off on a Chat or Responses backend. And a
+`reasoning_mode` family on a Responses backend gets its mode only through the
+`chat_template_kwargs` reasoning transport, the default for compatible
+providers: the Responses request has no field for a named mode, so behind a
+provider with any other transport the Router removes the client's reasoning
+fields, sends no control, and the backend runs the model's default mode
+whatever `use_reasoning` says. A pass-through Model keeps the client's
+reasoning fields as sent.
 
 On an `api_format: anthropic` backend, `enabled` thinking needs a
 `budget_tokens` value. When the client sent none, an `enabled` mode reaches the
