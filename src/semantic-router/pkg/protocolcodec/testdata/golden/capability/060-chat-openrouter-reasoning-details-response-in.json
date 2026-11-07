@@ -1,0 +1,144 @@
+{
+  "operation": "response",
+  "cases": [
+    {
+      "name": "openrouter_nvidia_recorded_tool_turn",
+      "body": {
+        "id": "gen-openrouter-1",
+        "object": "chat.completion",
+        "created": 100,
+        "model": "nvidia/nemotron-3-ultra-550b-a55b",
+        "provider": "Nvidia",
+        "system_fingerprint": null,
+        "service_tier": null,
+        "choices": [
+          {
+            "index": 0,
+            "logprobs": null,
+            "finish_reason": "tool_calls",
+            "native_finish_reason": "tool_calls",
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "refusal": null,
+              "reasoning": "The user is asking for the current weather in Paris and wants me to use the tool. I need to call the get_weather function with city set to \"Paris\". Let me do that.",
+              "tool_calls": [
+                {
+                  "type": "function",
+                  "index": 0,
+                  "id": "call_1",
+                  "function": {
+                    "name": "get_weather",
+                    "arguments": "{\"city\":\"Paris\"}"
+                  }
+                }
+              ],
+              "reasoning_details": [
+                {
+                  "type": "reasoning.text",
+                  "text": "The user is asking for the current weather in Paris and wants me to use the tool. I need to call the get_weather function with city set to \"Paris\". Let me do that.",
+                  "format": "unknown",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 282,
+          "completion_tokens": 65,
+          "total_tokens": 347,
+          "cost": 0,
+          "is_byok": false,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": 0,
+            "audio_tokens": 0,
+            "video_tokens": 0
+          },
+          "cost_details": {
+            "upstream_inference_cost": 0,
+            "upstream_inference_prompt_cost": 0,
+            "upstream_inference_completions_cost": 0
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 41,
+            "image_tokens": 0,
+            "audio_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "openrouter_all_detail_variants",
+      "body": {
+        "id": "gen-openrouter-1",
+        "object": "chat.completion",
+        "created": 100,
+        "model": "anthropic/claude-sonnet",
+        "provider": "Anthropic",
+        "choices": [
+          {
+            "index": 0,
+            "finish_reason": "tool_calls",
+            "native_finish_reason": "tool_use",
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "reasoning": "Plan the lookup. Use the tool.",
+              "reasoning_details": [
+                {
+                  "type": "reasoning.summary",
+                  "summary": "Plan the lookup.",
+                  "id": null,
+                  "format": "openai-responses-v1",
+                  "index": 0
+                },
+                {
+                  "type": "reasoning.text",
+                  "text": " Use the tool.",
+                  "signature": "c2lnbmF0dXJl",
+                  "id": null,
+                  "format": "anthropic-claude-v1",
+                  "index": 1
+                },
+                {
+                  "type": "reasoning.encrypted",
+                  "data": "c2lnbmF0dXJl",
+                  "id": "rs_1",
+                  "format": "openai-responses-v1",
+                  "index": 2
+                },
+                {
+                  "type": "reasoning.server_tool_call",
+                  "tool_name": "openrouter:web_search",
+                  "arguments": "{\"query\":\"Paris weather\"}",
+                  "result": "{\"status\":\"ok\"}",
+                  "tool_call_id": null,
+                  "id": "srvtool_1",
+                  "format": "unknown",
+                  "index": 3
+                }
+              ],
+              "tool_calls": [
+                {
+                  "id": "call_9",
+                  "type": "function",
+                  "function": {
+                    "name": "get_weather",
+                    "arguments": "{\"city\":\"Paris\"}"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 20,
+          "completion_tokens": 30,
+          "total_tokens": 50
+        }
+      }
+    }
+  ]
+}

@@ -17,6 +17,22 @@ func (c *Classifier) SetDecisionDecider(decider modelservice.Decider) {
 	c.decisionDecider = decider
 }
 
+// SetSystemOneDecider replaces the remote System One clients used by decision
+// signals to systemone deployments (tests and embedders).
+func (c *Classifier) SetSystemOneDecider(remote modelservice.Remote) {
+	c.systemOneDecider = remote
+}
+
+func (c *Classifier) systemOne() modelservice.Remote {
+	if c.systemOneDecider != nil {
+		return c.systemOneDecider
+	}
+	if c.models != nil {
+		return c.models.systemOne
+	}
+	return nil
+}
+
 func (c *Classifier) decider() modelservice.Decider {
 	if c.decisionDecider != nil {
 		return c.decisionDecider
@@ -84,12 +100,15 @@ func (c *Classifier) evaluateDecisionDeployment(
 		question.Truncate = true
 		request.Questions = append(request.Questions, question)
 	}
-	callCtx, cancel := decisionCallContext(ctx, rules)
+	remote := c.Config.IsSystemOneDeployment(deployment)
+	callCtx, cancel := decisionCallContext(ctx, rules, remote, c.Config.ModelDeployments[deployment].CallTimeout())
 	defer cancel()
 	started := time.Now()
 	var response modelservice.Response
 	var err error
-	if card, ok := c.decisionTaskCard(deployment); ok {
+	if remote {
+		response, err = askSystemOneDeployment(callCtx, c.systemOne(), deployment, request)
+	} else if card, ok := c.decisionTaskCard(deployment); ok {
 		response, err = modelservice.ExecuteQuestions(callCtx, c.decider(), deployment, card, request)
 	} else if c.models != nil && c.models.runtime != nil && c.models.runtime.Services() != nil {
 		err = modelservice.ErrUnavailable
@@ -126,19 +145,39 @@ func (c *Classifier) evaluateDecisionDeployment(
 	}
 }
 
+// askSystemOneDeployment asks a systemone deployment's remote API. Without
+// its client the questions stay unknown.
+func askSystemOneDeployment(ctx context.Context, remote modelservice.Remote, deployment string, request modelservice.Request) (modelservice.Response, error) {
+	if remote == nil {
+		return modelservice.Response{}, modelservice.ErrUnavailable
+	}
+	card, ok := remote.Card(deployment)
+	if !ok {
+		return modelservice.Response{}, modelservice.ErrUnknownDeployment
+	}
+	return modelservice.ExecuteQuestions(ctx, remote, deployment, card, request)
+}
+
 // decisionCallContext bounds a deployment's call by the shortest timeout its
-// rules set. Questions to the decision model that set none join the built-in
-// signals' call, so they take its deadline rather than the default timeout.
+// rules set. Questions to a model_runtime decision model that set none join
+// the built-in signals' call, so they take its deadline rather than the
+// default timeout. Questions to a systemone deployment travel with the
+// built-in signals that ask it too, but a rule without a timeout takes the
+// deployment's own, else the default: the remote API's latency is its own.
 // Once the stage sends a call, its questions wait for it as long as its
 // latest caller does: a timeout bounds the wait for the other askers, never
 // an answer of a call the stage waits for anyway (modelservice.Bundle).
-func decisionCallContext(ctx context.Context, rules []config.DecisionSignalRule) (context.Context, context.CancelFunc) {
+func decisionCallContext(ctx context.Context, rules []config.DecisionSignalRule, remote bool, deploymentTimeout time.Duration) (context.Context, context.CancelFunc) {
 	var timeout time.Duration
 	for _, rule := range rules {
-		if rule.Deployment == "" && rule.TimeoutMs == 0 {
+		if rule.Deployment == "" && rule.TimeoutMs == 0 && !remote {
 			continue
 		}
-		if t := rule.EffectiveTimeout(); timeout == 0 || t < timeout {
+		t := rule.EffectiveTimeout()
+		if remote && rule.TimeoutMs == 0 && deploymentTimeout > 0 {
+			t = deploymentTimeout
+		}
+		if timeout == 0 || t < timeout {
 			timeout = t
 		}
 	}

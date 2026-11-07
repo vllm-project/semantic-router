@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import threading
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
+from types import SimpleNamespace
 
 import pytest
 import torch
+from vllm_srun.accel import gpu
 from vllm_srun.accel.cuda import CUDAAccelerator
 from vllm_srun.accel.rocm import ROCmAccelerator
 from vllm_srun.plugins.base import DeviceInfo
@@ -109,3 +111,120 @@ def test_device_work_on_a_second_gpu_launches_there():
 
     assert accelerator.execute(gpu1, work) == 1
     assert torch.cuda.current_device() == 0
+
+
+class FakeCache:
+    """The torch.cuda allocator counters, with empty_cache freeing ``releasable`` bytes."""
+
+    def __init__(self, monkeypatch, releasable: bool = True, integrated: bool = True):
+        self.reserved = self.allocated = 1 << 30
+        self.releasable = releasable
+        self.emptied = 0
+        monkeypatch.setattr(gpu, "_IDLE_FLOOR", {})
+        monkeypatch.setattr(gpu, "_INTEGRATED", {})
+        monkeypatch.setattr(
+            torch.cuda,
+            "get_device_properties",
+            lambda index: SimpleNamespace(is_integrated=integrated),
+        )
+        monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+        monkeypatch.setattr(torch.cuda, "device", lambda target: nullcontext())
+        monkeypatch.setattr(torch.cuda, "memory_stats", self.memory_stats)
+        monkeypatch.setattr(torch.cuda, "empty_cache", self.empty_cache)
+
+    def memory_stats(self, index: int) -> dict[str, int]:
+        return {
+            "reserved_bytes.all.current": self.reserved,
+            "allocated_bytes.all.current": self.allocated,
+        }
+
+    def empty_cache(self) -> None:
+        self.emptied += 1
+        if self.releasable:
+            self.reserved = self.allocated
+
+    def forward(self, peak: int) -> int:
+        """Device work whose transient tensors leave ``peak`` bytes cached."""
+        self.reserved += peak
+        return 7
+
+
+def test_device_work_returns_a_long_forwards_idle_cache(monkeypatch):
+    cache = FakeCache(monkeypatch)
+    accelerator = CUDAAccelerator()
+    device = DeviceInfo("cuda", 0, "gpu0")
+    assert accelerator.execute(device, lambda: cache.forward(512 << 20)) == 7
+    assert cache.emptied == 0
+    assert accelerator.execute(device, lambda: cache.forward(3 << 30)) == 7
+    assert cache.emptied == 1
+    assert cache.reserved == cache.allocated
+
+
+def test_device_work_on_a_discrete_gpu_keeps_its_cache(monkeypatch):
+    cache = FakeCache(monkeypatch, integrated=False)
+    device = DeviceInfo("cuda", 0, "gpu0")
+    assert CUDAAccelerator().execute(device, lambda: cache.forward(3 << 30)) == 7
+    assert cache.emptied == 0
+
+
+def test_device_work_does_not_release_on_every_call_for_slack_the_cache_keeps(
+    monkeypatch,
+):
+    cache = FakeCache(monkeypatch, releasable=False)
+    accelerator = CUDAAccelerator()
+    device = DeviceInfo("cuda", 0, "gpu0")
+    accelerator.execute(device, lambda: cache.forward(3 << 30))
+    for _ in range(3):
+        accelerator.execute(device, lambda: None)
+    assert cache.emptied == 1
+    accelerator.execute(device, lambda: cache.forward(3 << 30))
+    assert cache.emptied == 2
+
+
+def test_device_work_releases_the_cache_after_running_out_of_memory(monkeypatch):
+    cache = FakeCache(monkeypatch)
+    accelerator = CUDAAccelerator()
+    device = DeviceInfo("cuda", 0, "gpu0")
+
+    def forward():
+        cache.forward(3 << 30)
+        raise torch.OutOfMemoryError("CUDA out of memory")
+
+    with pytest.raises(torch.OutOfMemoryError):
+        accelerator.execute(device, forward)
+    assert cache.emptied == 1
+
+
+def test_a_failed_release_never_replaces_the_device_works_result(monkeypatch):
+    cache = FakeCache(monkeypatch)
+
+    def broken() -> None:
+        raise RuntimeError("CUDA error: an illegal memory access was encountered")
+
+    monkeypatch.setattr(torch.cuda, "empty_cache", broken)
+    device = DeviceInfo("cuda", 0, "gpu0")
+    assert CUDAAccelerator().execute(device, lambda: cache.forward(3 << 30)) == 7
+
+
+@pytest.mark.gpu
+def test_device_work_releases_a_long_forwards_peak_only_on_an_integrated_gpu():
+    if not torch.cuda.is_available():
+        pytest.skip("needs a GPU")
+    accelerator = ROCmAccelerator() if torch.version.hip else CUDAAccelerator()
+    device = DeviceInfo(accelerator.name, 0, "gpu0")
+    torch.cuda.empty_cache()
+    gpu._IDLE_FLOOR.pop(0, None)
+    baseline = torch.cuda.memory_reserved(0)
+
+    def forward() -> None:
+        transient = torch.empty(3 << 30, dtype=torch.uint8, device="cuda:0")
+        transient.fill_(1)
+        torch.cuda.synchronize(0)
+
+    accelerator.execute(device, forward)
+    kept = torch.cuda.memory_reserved(0) - baseline
+    torch.cuda.empty_cache()
+    if torch.cuda.get_device_properties(0).is_integrated:
+        assert kept < gpu.RELEASE_IDLE_BYTES
+    else:
+        assert kept >= 3 << 30

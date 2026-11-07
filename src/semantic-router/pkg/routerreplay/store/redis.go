@@ -310,6 +310,15 @@ func (r *RedisStore) AttachResponse(ctx context.Context, id string, body string,
 	})
 }
 
+// AttachPrompt stores the prompt of a record written without it.
+func (r *RedisStore) AttachPrompt(ctx context.Context, id string, prompt string, truncated bool) error {
+	return r.updateRecord(ctx, id, func(record *Record) bool {
+		record.Prompt = prompt
+		record.PromptTruncated = truncated
+		return true
+	})
+}
+
 // AppendOutcome links post-route feedback to a record.
 func (r *RedisStore) AppendOutcome(ctx context.Context, id string, outcome Outcome) error {
 	return r.updateRecord(ctx, id, func(record *Record) bool {
@@ -333,6 +342,7 @@ func (r *RedisStore) UpdateHallucinationStatus(ctx context.Context, id string, d
 // UpdateUsageCost updates token usage and pricing-derived cost fields for a record.
 func (r *RedisStore) UpdateUsageCost(ctx context.Context, id string, usage UsageCost) error {
 	return r.updateRecord(ctx, id, func(record *Record) bool {
+		record.ProviderCache = cloneProviderCacheAccounting(usage.ProviderCache)
 		record.PromptTokens = cloneIntPtr(usage.PromptTokens)
 		record.CachedPromptTokens = cloneIntPtr(usage.CachedPromptTokens)
 		record.CacheWriteTokens = cloneIntPtr(usage.CacheWriteTokens)

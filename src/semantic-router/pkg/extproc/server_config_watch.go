@@ -29,55 +29,67 @@ type configFileReloadLoop struct {
 	last    time.Time
 }
 
-// watchConfigAndReload watches the active config source and reloads the router on changes.
-func (s *Server) watchConfigAndReload(ctx context.Context) {
+// prepareConfigWatch starts observing the active config source and returns
+// the loop that reloads the router on its changes. The server calls it before
+// it reports serving: a change written as soon as the server is ready must
+// find the watch in place.
+func (s *Server) prepareConfigWatch() func(context.Context) {
 	if s.usesKubernetesConfigSource() {
 		// The controller calls ActivateKubernetesConfig directly and waits for
 		// acknowledgement. A best-effort broadcast cannot establish readiness.
-		<-ctx.Done()
-		return
+		return func(ctx context.Context) { <-ctx.Done() }
 	}
 
-	s.watchFileConfigAndReload(ctx)
-}
-
-func (s *Server) watchFileConfigAndReload(ctx context.Context) {
 	watcher, cfgDir, ok := newConfigFileWatcher(s.configPath)
 	if !ok {
-		s.pollFileConfigAndReload(ctx)
-		return
+		return s.prepareFileConfigPoll()
 	}
-	defer func() {
-		_ = watcher.Close()
-	}()
-
 	loop := configFileReloadLoop{
 		server:  s,
 		watcher: watcher,
 		cfgFile: s.configPath,
 		cfgDir:  cfgDir,
 	}
-	loop.run(ctx)
+	return func(ctx context.Context) {
+		defer func() {
+			_ = watcher.Close()
+		}()
+		loop.run(ctx)
+	}
 }
 
-// pollFileConfigAndReload preserves file-backed reloads when the host has
+// prepareFileConfigPoll preserves file-backed reloads when the host has
 // exhausted its inotify instances or the watched directory cannot be added.
-func (s *Server) pollFileConfigAndReload(ctx context.Context) {
+func (s *Server) prepareFileConfigPoll() func(context.Context) {
 	logging.ComponentEvent("extproc", "config_watcher_polling_fallback", map[string]interface{}{
 		"file":        s.configPath,
 		"interval_ms": int(configReloadPollInterval / time.Millisecond),
 	})
-	loop := configFileReloadLoop{server: s, cfgFile: s.configPath}
-	ticker := time.NewTicker(configReloadPollInterval)
-	defer ticker.Stop()
-	pollConfigFileChanges(ctx, s.configPath, ticker.C, func() {
-		loop.scheduleReload(ctx, fsnotify.Event{Name: s.configPath, Op: fsnotify.Write})
-	})
+	baseline := newConfigFileBaseline(s.configPath)
+	return func(ctx context.Context) {
+		loop := configFileReloadLoop{server: s, cfgFile: s.configPath}
+		ticker := time.NewTicker(configReloadPollInterval)
+		defer ticker.Stop()
+		pollConfigFileChanges(ctx, s.configPath, baseline, ticker.C, func() {
+			loop.scheduleReload(ctx, fsnotify.Event{Name: s.configPath, Op: fsnotify.Write})
+		})
+	}
 }
 
-func pollConfigFileChanges(ctx context.Context, cfgFile string, ticks <-chan time.Time, onChange func()) {
-	previous, err := configFileHash(cfgFile)
-	haveBaseline := err == nil
+// configFileBaseline is the config file's content hash when polling began;
+// ok is false when the file could not be read then.
+type configFileBaseline struct {
+	hash [sha256.Size]byte
+	ok   bool
+}
+
+func newConfigFileBaseline(cfgFile string) configFileBaseline {
+	hash, err := configFileHash(cfgFile)
+	return configFileBaseline{hash: hash, ok: err == nil}
+}
+
+func pollConfigFileChanges(ctx context.Context, cfgFile string, baseline configFileBaseline, ticks <-chan time.Time, onChange func()) {
+	previous, haveBaseline := baseline.hash, baseline.ok
 	for {
 		select {
 		case <-ctx.Done():
