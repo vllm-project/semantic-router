@@ -209,6 +209,49 @@ Router recovery or session retirement. The `stateful-heavy` schedule labels
 prompt phases and does not send Responses API state. Retry and provider-state
 controls that require unsupported behavior are rejected.
 
+### Native cache report compatibility
+
+The top-level `cache_probe_compatibility` projection uses
+`cache-probe-compatibility-v1`. Its `router` and optional `baseline` summaries
+provide the field names consumed by the retained branch-image and GA tools,
+including repeat count, prompt identity, endpoint/model settings, status counts
+and cache thresholds. The native `stable_prefix_sha256` is the original 16-character
+digest; `stable_prefix_full_sha256` preserves the full digest alongside it.
+Each arm's `turns` uses the native row field names and retains the call ID,
+transport status and existing provider observation.
+
+For complete, qualified observations, the two nested cached-token paths and the
+DeepSeek hit field reproduce the native token totals, reporting states,
+source counts and threshold decisions. Repeated aliases and SSE snapshots still
+count once. Raw input/output counts are projected independently, so a missing
+completion count does not erase a reported prompt count. A missing count remains
+null, and contradictory count aliases cannot supply a total. A cache-bearing
+snapshot and final usage with different prompt totals cannot supply a ratio.
+
+Every planned repeat stays present, including an unstarted baseline. Unknown
+HTTP status, usage, latency and model names remain null rather than adopting the
+native runner's zero or empty-string defaults. `response_model` requires an actual
+provider model field; a requested model or selected-model header does not fill it.
+The configured `model`, observed `response_model`, and `selected_model` remain
+separate. Latency and requests-per-second describe this streaming execution,
+not the buffered native run or a cache-performance comparison.
+
+The projection carries `validation_failures` for incomplete execution, unknown
+or unqualified cache usage, missing model/config/session evidence and failed
+frozen thresholds. Both legacy readers consume those failures before their
+numeric fallbacks, so null values cannot become a passing zero-cache result.
+The projection status is `complete`, `incomplete` or `unsupported`; `complete`
+does not certify full release readiness. The readers still apply their own
+thresholds and require the remaining release artifacts.
+
+The optional ref/image fields are explicitly caller-declared through
+`evidence_identity_source: declared`. The per-call config hash and session
+evidence remain distinct; these declarations do not prove which image served a
+request. Root `usage.cached_tokens` remains unqualified compatibility evidence.
+Null nested cache fields, unsupported response formats and transport/accounting/
+budget failures retain their existing strict handling. This projection does not
+retire either the original probe or its release-report consumers.
+
 ## Scripted agent-task diagnostics
 
 `agent-task-chat-v1` declares `token-coverage-v1`. A task's credit is the native

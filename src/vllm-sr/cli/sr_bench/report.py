@@ -13,7 +13,7 @@ from itertools import pairwise
 from statistics import fmean, mean
 from typing import Any
 
-from . import VERSION
+from . import VERSION, cache_probe_compatibility
 from .accounting import cache_neutral_cost, correction_metadata, effective_calls
 from .contracts import BENCHMARK_WEIGHTS, STATELESS, planned_cells
 from .failures import first_saved_failure
@@ -1513,7 +1513,7 @@ def make_report(store, run_id):
         datetime.fromisoformat(run["updated_at"])
         - datetime.fromisoformat(run["created_at"])
     ).total_seconds()
-    return {
+    report: dict[str, Any] = {
         "version": VERSION,
         "run_id": run_id,
         "status": run["status"],
@@ -1572,6 +1572,23 @@ def make_report(store, run_id):
             "seed": manifest["seed"],
         },
     }
+    cache_case_ids: set[str] = {
+        case["id"]
+        for case in manifest["cases"]
+        if frozen_result_kind(manifest=manifest, benchmark=case["benchmark"])
+        == CACHE_OBSERVATION_RESULT
+    }
+    if cache_case_ids:
+        report["cache_probe_compatibility"] = cache_probe_compatibility.project(
+            run=run,
+            benchmarks=benchmarks,
+            calls={
+                call["id"]: store.call(run_id=run_id, call_id=call["id"])
+                for call in calls
+                if call["case_id"] in cache_case_ids and call["role"] == "subject"
+            },
+        )
+    return report
 
 
 def _comparison_protocol(baseline, candidate):

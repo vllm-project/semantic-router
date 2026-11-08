@@ -21,6 +21,7 @@ BENCHMARK_ID: str = "cache-token-probe-v1"
 PROBE_VERSION: str = "cache-token-probe-native-v1"
 MAX_REPEATS: int = DEFAULT_LIMITS["max_calls_per_case"]
 MAX_TARGETS: int = 2
+MAX_EVIDENCE_ID_CHARS: int = 256
 SOURCE_REVISION: str = "a6d23eaff862a9d24dc10ccb778ad0618a839ef7"
 SOURCE_SHA256: str = "796dc62f51d28f90665d79fb43f6d3a2f02d08f9a9007d7a564d6a65b1da8e7d"
 SOURCE_URL: str = (
@@ -167,8 +168,22 @@ def preflight(
     if not isinstance(options, dict):
         raise ValueError("benchmark_options must be an object")
     config = options.setdefault(BENCHMARK_ID, {})
-    if not isinstance(config, dict) or set(config) - {"probe_version", "thresholds"}:
-        raise ValueError("Cache probe options support probe_version and thresholds")
+    if not isinstance(config, dict) or set(config) - {
+        "probe_version",
+        "thresholds",
+        "evidence_ref",
+        "evidence_image_tag",
+    }:
+        raise ValueError("Cache probe options contain an unsupported field")
+    for key in ("evidence_ref", "evidence_image_tag"):
+        if key in config and (
+            not isinstance(config[key], str)
+            or not config[key]
+            or len(config[key]) > MAX_EVIDENCE_ID_CHARS
+            or not config[key].isprintable()
+            or config[key].strip() != config[key]
+        ):
+            raise ValueError(f"Cache probe {key} must be a nonempty bounded identifier")
     if config.setdefault("probe_version", PROBE_VERSION) != PROBE_VERSION:
         raise ValueError("Cache probe version differs from the installed adapter")
     thresholds = config.get("thresholds", {})
