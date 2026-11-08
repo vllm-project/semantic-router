@@ -69,7 +69,7 @@ When the final result is still unknown, `rules.on_unknown` chooses `no_match`,
 `match`, or `fail_request`. If omitted, existing generic-classifier
 `on_error` and prompt-guard `on_error` behavior is retained, and the router
 warns at startup about classifier conditions that set neither. Applied policies
-appear in the `x-vsr-applied-unknown-policy` response header and the
+appear in the `on_unknown` member of `x-vsr-trace` and the
 `llm_decision_unknown_total{decision, policy}` metric. The `fail_request` 503
 carries the code [`decision_unresolved`](../../api/router.md#routing-errors),
 and the Router's log line for it names the fix.

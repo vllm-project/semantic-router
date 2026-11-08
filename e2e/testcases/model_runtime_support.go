@@ -200,10 +200,10 @@ func (s *modelRuntimeSession) chat(ctx context.Context, text string) (*localChat
 	return response, nil
 }
 
-// headerItems splits a comma-separated x-vsr header into its entries.
-func headerItems(headers http.Header, name string) map[string]bool {
+// signalItems is the set of rules of one signal type the trace lists.
+func signalItems(headers http.Header, signalType string) map[string]bool {
 	items := map[string]bool{}
-	for _, item := range strings.Split(headers.Get(name), ",") {
+	for _, item := range strings.Split(matchedSignals(headers, signalType), ",") {
 		if item = strings.TrimSpace(item); item != "" {
 			items[item] = true
 		}

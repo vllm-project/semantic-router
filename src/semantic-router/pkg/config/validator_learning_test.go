@@ -181,8 +181,8 @@ global:
 	if cfg.RouterLearning.Protection.EffectiveScope() != RouterLearningScopeConversation {
 		t.Fatalf("expected default conversation scope, got %q", cfg.RouterLearning.Protection.EffectiveScope())
 	}
-	if got := cfg.RouterLearning.Protection.HeaderName("session"); got != routerLearningDefaultSessionHeader {
-		t.Fatalf("expected default session header %q, got %q", routerLearningDefaultSessionHeader, got)
+	if got := cfg.RouterLearning.Protection.HeaderName("session"); got != "" {
+		t.Fatalf("expected protection to key on the pinned session id by default, got header %q", got)
 	}
 	if got := cfg.RouterLearning.Protection.HeaderName("conversation"); got != routerLearningDefaultConversationHeader {
 		t.Fatalf("expected default conversation header %q, got %q", routerLearningDefaultConversationHeader, got)
@@ -773,7 +773,7 @@ func TestRouterLearningProtectionAgentHeaderIsOptional(t *testing.T) {
 	}
 	empty := " "
 	cfg.Identity.Headers.Agent = &empty
-	err := validateRouterLearningProtectionConfig(cfg)
+	err := validateRouterLearningProtectionConfig(cfg, RouterHeadersConfig{}.SessionIDHeaderNames())
 	if err == nil || !strings.Contains(err.Error(), "identity.headers.agent cannot be empty") {
 		t.Fatalf("expected empty agent header to be rejected, got %v", err)
 	}

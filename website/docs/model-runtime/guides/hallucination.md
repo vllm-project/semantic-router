@@ -103,8 +103,8 @@ curl -s localhost:8100/v1/classify -H 'content-type: application/json' -d '{
 
 The result lists the unsupported `spans` of the answer, here the height, with
 their character offsets in the answer. Through the router, a matched
-hallucination rule adds the hallucination warning headers and
-`x-vsr-matched-hallucination`.
+hallucination rule adds the `hallucination` code to `x-vsr-warnings` and
+`hallucination:<name>` to the `signals` member of `x-vsr-trace`.
 
 Earlier releases could add an NLI explanation per span. That explainer is
 retired; see [Migrate](model-runtime/migrate.md#features-that-were-retired).

@@ -92,7 +92,7 @@ curl --fail-with-body "$GATEWAY_URL/v1/chat/completions" \
 ```
 
 Use `model: llama3-8b` or `model: phi4-mini` to verify explicit model routing.
-The selected alias must match the `x-selected-model` header match in the
+The selected alias must match the `x-vsr-route-model` header match in the
 corresponding `HTTPRoute`.
 
 ## Diagnose failures

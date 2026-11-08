@@ -10,7 +10,6 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -109,7 +108,6 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 			resp.GetImmediateResponse().GetBody(),
 			true,
 		)
-		addRouterReplayHeaderToImmediateResponse(resp, ctx.RouterReplayID)
 		return requestDecisionState{}, resp
 	}
 	metrics.RecordModelRequest(selectedModel)
@@ -133,15 +131,14 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 }
 
 // respondDecisionUnresolved builds the fail_request 503 and finalizes the
-// replay record as failed, matching the looper-failure path.
+// replay record as failed, matching the looper-failure path. Its trace names
+// the unknown policies the decisions applied.
 func (r *OpenAIRouter) respondDecisionUnresolved(
 	ctx *RequestContext,
 	originalModel string,
 	decisionErr error,
 ) *ext_proc.ProcessingResponse {
-	resp := r.respondRoutingRejected(ctx, originalModel, decisionErr, routingFailureDecisionUnresolved, "decision_unresolved")
-	addImmediateResponseHeader(resp, headers.VSRAppliedUnknownPolicy, appliedUnknownPolicyHeader(ctx))
-	return resp
+	return r.respondRoutingRejected(ctx, originalModel, decisionErr, routingFailureDecisionUnresolved, "decision_unresolved")
 }
 
 // respondSelectionRejected preserves an explicit fail-closed selection policy
@@ -197,7 +194,6 @@ func (r *OpenAIRouter) respondRoutingRejected(
 	// Failed, not aborted: the router itself rejected the request with a
 	// terminal response; aborted is reserved for streams that end early.
 	r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, terminalReason)
-	addRouterReplayHeaderToImmediateResponse(resp, ctx.RouterReplayID)
 	return resp
 }
 

@@ -18,7 +18,7 @@ const (
 var surfaceOrder = []Surface{SurfacePublic, SurfaceDebug, SurfaceControl, SurfaceInternal}
 
 // MarkdownReference renders the registry as a Markdown table, by surface and
-// then by name.
+// then by name, followed by the members of x-vsr-trace in priority order.
 func MarkdownReference() string {
 	rows := Registry()
 	slices.SortFunc(rows, func(a, b Header) int {
@@ -33,6 +33,12 @@ func MarkdownReference() string {
 	for _, header := range rows {
 		fmt.Fprintf(&out, "| `%s` | %s | %s | %s | %s | %s | %s |\n",
 			header.Name, header.Direction, header.Surface, header.Sensitivity, header.Owner, header.Version, header.Doc)
+	}
+	fmt.Fprintf(&out, "\nThe members of `%s`, highest priority first:\n\n", VSRTrace)
+	out.WriteString("| Member | Owner | Description |\n")
+	out.WriteString("| --- | --- | --- |\n")
+	for _, member := range traceMembers {
+		fmt.Fprintf(&out, "| `%s` | %s | %s |\n", member.Key, member.Owner, member.Doc)
 	}
 	return out.String()
 }
@@ -55,7 +61,8 @@ func EmbedReference(page []byte) ([]byte, error) {
 }
 
 // TypeScriptConstants renders the registry as the Dashboard's header-name
-// constants, X_VSR_SELECTED_MODEL for x-vsr-selected-model.
+// constants, X_VSR_SELECTED_MODEL for x-vsr-selected-model, and the trace
+// member keys, TRACE_SIGNALS for signals.
 func TypeScriptConstants() string {
 	rows := Registry()
 	slices.SortFunc(rows, func(a, b Header) int { return strings.Compare(a.Name, b.Name) })
@@ -66,5 +73,14 @@ func TypeScriptConstants() string {
 		identifier := strings.ToUpper(strings.ReplaceAll(header.Name, "-", "_"))
 		fmt.Fprintf(&out, "\n/** %s Surface: %s. */\nexport const %s = '%s'\n", header.Doc, header.Surface, identifier, header.Name)
 	}
+	out.WriteString("\n// The members of x-vsr-trace, from src/semantic-router/pkg/headers/trace.go.\n")
+	for _, member := range traceMembers {
+		fmt.Fprintf(&out, "\n/** %s */\nexport const TRACE_%s = '%s'\n", member.Doc, strings.ToUpper(member.Key), member.Key)
+	}
+	fmt.Fprintf(&out, "\n/** Trace members, highest priority first. */\nexport const TRACE_MEMBERS = [\n")
+	for _, member := range traceMembers {
+		fmt.Fprintf(&out, "  TRACE_%s,\n", strings.ToUpper(member.Key))
+	}
+	out.WriteString("] as const\n")
 	return out.String()
 }

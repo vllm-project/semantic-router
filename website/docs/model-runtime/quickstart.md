@@ -218,7 +218,8 @@ curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \
 ```
 
 `x-vsr-selected-decision` names the route, and
-`x-vsr-matched-decision-model` lists the `systemone` signals that matched. If the
+the `signals` member of `x-vsr-trace` lists the `systemone` signals that
+matched. If the
 runtime restarts later, the signal is unknown until the model is back and
 `on_unknown: no_match` sends requests to `default-route` meanwhile.
 

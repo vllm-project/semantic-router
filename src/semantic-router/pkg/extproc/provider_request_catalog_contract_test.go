@@ -296,13 +296,13 @@ func TestSameNamedLoRAUsesTheSelectedBaseProvider(t *testing.T) {
 	common := response.GetRequestBody().GetResponse()
 	require.NotNil(t, common)
 	emitted := headerValuesByName(common.GetHeaderMutation().GetSetHeaders())
-	require.Equal(t, "base-b", emitted[headers.SelectedModel], "Envoy must select the owning base route")
+	require.Equal(t, "base-b", emitted[headers.VSRRouteModel], "Envoy must select the owning base route")
 	require.Equal(t, "/v1/responses", emitted[":path"], "wire protocol must come from the owning base")
 	require.Equal(t, "Bearer base-b-secret", emitted["Authorization"], "credential must come from the owning base")
 
-	// Model the local Envoy route table: x-selected-model selects the configured
+	// Model the local Envoy route table: x-vsr-route-model selects the configured
 	// physical model key, while the body keeps the adapter identity for vLLM.
-	routeModel := emitted[headers.SelectedModel]
+	routeModel := emitted[headers.VSRRouteModel]
 	params, found := cfg.ModelConfig[routeModel]
 	require.True(t, found, "route header must name a configured provider model")
 	require.Len(t, params.PreferredEndpoints, 1)

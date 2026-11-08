@@ -111,7 +111,7 @@ recipes:
           description: Detect jailbreak content in the model's own output.
 ```
 
-响应方向规则只使用序列分类器：`method: contrastive`、模式列表与 `include_history` 是请求阶段设置，在其上会被拒绝。匹配、分数与失败报告在与请求方向规则相同的 `jailbreak:<name>` 键下。路由回放将观察记录为每条响应方向规则一条结果，包含判定（`detected`、`not_detected` 或 `unavailable`）、它阈值化的分数或失败码，以及守卫应用的动作；使用 `x-vsr-debug` 时，`x-vsr-matched-jailbreak` 请求头在请求规则之后携带匹配的响应规则。
+响应方向规则只使用序列分类器：`method: contrastive`、模式列表与 `include_history` 是请求阶段设置，在其上会被拒绝。匹配、分数与失败报告在与请求方向规则相同的 `jailbreak:<name>` 键下。路由回放将观察记录为每条响应方向规则一条结果，包含判定（`detected`、`not_detected` 或 `unavailable`）、它阈值化的分数或失败码，以及守卫应用的动作；使用 `x-vsr-debug` 时，`x-vsr-trace` 的 `signals` 成员在请求规则之后携带匹配的响应规则。
 
 响应方向规则不是决策输入。决策在请求路由时、模型回答前选定，因此在规则中或通过投影直接读取该规则的决策会在配置加载时被拒绝。观察由请求所选决策的 [`response_guard`](../../plugin/response-guard) 读取，其规则按名称引用它并对其应用动作。规则从请求解析到的配方读取，因此在一个入口配方上声明的规则只对该入口的响应打分。阈值由规则拥有。声明该规则就足以为本配方供给 jailbreak 信号：即使没有决策规则读取 jailbreak 信号，它的模型及标签映射也会为响应阶段加载。
 

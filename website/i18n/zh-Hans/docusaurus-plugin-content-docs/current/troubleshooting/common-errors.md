@@ -216,7 +216,7 @@ global:
 
 ### 缓存命中异常偏少
 
-先确认决策启用了 `response_cache` 插件，并检查 `x-vsr-cache-hit` 或回放诊断。若嵌入正常但近似重复仍未命中，可在代表性流量上测试更低的相似度阈值：
+先确认决策启用了 `response_cache` 插件，并检查 `x-vsr-response-path`（命中时为 `cache`）或回放诊断。若嵌入正常但近似重复仍未命中，可在代表性流量上测试更低的相似度阈值：
 
 ```yaml
 global:

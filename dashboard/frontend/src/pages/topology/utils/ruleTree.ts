@@ -1,7 +1,7 @@
 import { RuleCombination, RuleCondition, RuleNode, SignalType } from '../types'
 import {
   formatRoutingMetadataValue,
-  matchedSignalHeader,
+  matchedSignalKey,
 } from '../../../components/routingMetadataDisplay'
 
 export interface RulePreviewLine {
@@ -34,8 +34,8 @@ export function collectRuleSignalTypes(rule: RuleCombination): SignalType[] {
 }
 
 function formatRuleCondition(node: RuleCondition): string {
-  const type = formatRoutingMetadataValue(matchedSignalHeader('signal-type'), node.type)
-  const name = formatRoutingMetadataValue(matchedSignalHeader(node.type), node.name)
+  const type = formatRoutingMetadataValue(matchedSignalKey('signal_type'), node.type)
+  const name = formatRoutingMetadataValue(matchedSignalKey(node.type), node.name)
   return `${type}: ${name}`
 }
 

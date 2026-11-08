@@ -191,7 +191,7 @@ rejected on it. Matches, scores and failures are reported under the same
 observation as one outcome per response-direction rule, with the verdict
 (`detected`, `not_detected` or `unavailable`), the score it thresholded or the
 failure code, and the action the guard applied; with `x-vsr-debug`, the
-`x-vsr-matched-jailbreak` header carries the matched response rules after the
+`signals` member of `x-vsr-trace` carries the matched response rules after the
 request ones.
 
 A response-direction rule is not a decision input. Decisions are selected while

@@ -373,6 +373,6 @@ recipes:
 
 模型加载中、过载或响应超过 `timeout_ms` 时，信号为未知。decision 的 `rules.on_unknown` 或条件的 `on_error: match | no_match` 决定如何处理未知答案。输入兼容的问题可以共享批处理；不同输入状态、后续选模阶段或响应阶段可能需要额外的调用和前向计算。当其他调用方仍需要结果时，共享调用可以继续执行。截止时间会结束当前调用方的等待，但不保证立即停止已经开始的模型前向计算。
 
-按部署的扫描预算截取只会缩短规则读取的内容，不会缩短发送给所选 Chat 后端的请求。匹配的 System One 规则会列在 `x-vsr-matched-decision-model` 响应头中。
+按部署的扫描预算截取只会缩短规则读取的内容，不会缩短发送给所选 Chat 后端的请求。匹配的 System One 规则会以 `systemone:<name>` 列在 `x-vsr-trace` 的 `signals` 成员中。
 
 关于模型、规模、硬件的选择，以及如何在自己的 GPU 服务器上运行模型，请参阅 [Decision 模型指南](/model-runtime/guides/decisions.md)。

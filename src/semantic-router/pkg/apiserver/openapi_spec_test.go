@@ -124,7 +124,7 @@ func TestOpenAPISpecPublishesInvocationParameters(t *testing.T) {
 		}
 	}
 	requireOpenAPIParameter(t, eval.Parameters, "trace", "query", false, "boolean")
-	requireOpenAPIParameter(t, eval.Parameters, "x-sr-bench-expected-config-hash", "header", false, "string")
+	requireOpenAPIParameter(t, eval.Parameters, "x-vsr-bench-expected-config-hash", "header", false, "string")
 	if _, ok := eval.Responses["200"].Headers["x-vsr-config-hash"]; !ok {
 		t.Fatal("Preview snapshot receipt is undocumented")
 	}

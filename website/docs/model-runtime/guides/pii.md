@@ -111,8 +111,8 @@ curl -s localhost:8100/v1/classify -H 'content-type: application/json' \
 ```
 
 Each span has its `label`, `start` and `end` (in characters, end exclusive),
-the `text` and its `probability`. Through the router, `x-vsr-matched-pii`
-lists the PII rules that matched.
+the `text` and its `probability`. Through the router, the `signals` member of
+`x-vsr-trace` lists the PII rules that matched, as `pii:<name>`.
 
 On Vela 2.0, ask the ready-made question on `/v1/decisions`; the spans are in
 `spans.pii`:

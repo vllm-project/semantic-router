@@ -58,7 +58,7 @@ func testProtocolCodecPromptCacheKeyAnthropic(ctx context.Context, client *kuber
 			if err != nil {
 				return fmt.Errorf("%s stream=%t response: %w", api.name, stream, err)
 			}
-			if warnings := result.Headers.Get("x-vsr-protocol-warnings"); !hasProtocolFieldDiagnostic(warnings, "dropped", "prompt_cache_key") {
+			if warnings := result.Headers.Get(warningsHeader); !hasProtocolFieldDiagnostic(warnings, "dropped", "prompt_cache_key") {
 				return fmt.Errorf("%s stream=%t omitted prompt_cache_key without a dropped warning: %q", api.name, stream, warnings)
 			}
 			if err := verifyProviderSimulatorRequest(ctx, provider, sessionID, "anthropic.messages.v1", marker); err != nil {

@@ -18,42 +18,38 @@ const (
 	// This header is case-insensitive when read from incoming requests.
 	RequestID = "x-request-id"
 
-	// XSessionID allows clients to pin a stable session identifier for Chat Completions
-	// when router-derived session IDs are insufficient.
-	XSessionID = "x-session-id"
+	// VSRSessionID pins the session a request belongs to. When it is absent,
+	// the Router reads global.router.headers.session_id_headers in order.
+	VSRSessionID = "x-vsr-session-id"
+
+	// XSessionID and XClaudeCodeSessionID are the client-facing session
+	// headers session_id_headers accepts by default; Claude Code sends the
+	// latter on every /v1/messages request of a conversation.
+	XSessionID           = "x-session-id"
+	XClaudeCodeSessionID = "x-claude-code-session-id"
 
 	// XConversationID is the default header Router Learning protection reads a
 	// stable conversation identifier from.
 	XConversationID = "x-conversation-id"
 
-	// XClaudeCodeSessionID is the per-conversation UUID the Claude Code CLI
-	// emits on every /v1/messages request belonging to the same chat thread.
-	// The router mirrors this into RequestContext.SessionID with priority
-	// below x-session-id (operator/SDK override) but above metadata.user_id
-	// and the message-fingerprint fallbacks. See the session identification API
-	// documentation for the full priority order.
-	XClaudeCodeSessionID = "x-claude-code-session-id"
+	// VSRMemory set to MemoryOff keeps Router-managed memory out of the
+	// request, for applications whose SDK already manages memory (Mem0,
+	// LangMem or LangGraph), so memory is never injected twice.
+	VSRMemory = "x-vsr-memory"
+	MemoryOff = "off"
 
-	// DisableRouterMemory allows clients to opt-out of router-managed memory injection.
-	// This prevents "silent double injection" when applications use SDK-managed memory
-	// systems like Mem0, LangMem or LangGraph.
-	// Value: "true" to disable router memory, any other value or absence enables it.
-	// Example use case: App with Mem0 sends this header to prevent duplicate memory injection.
-	DisableRouterMemory = "x-disable-router-memory"
-
-	// SelectedModel indicates the model that was selected by the router for processing.
-	// This header is set during the routing decision phase.
-	SelectedModel = "x-selected-model"
+	// VSRRouteModel is the route key: the model whose route the gateway sends
+	// the provider request on. The Router sets it; a client's value is dropped.
+	VSRRouteModel = "x-vsr-route-model"
 
 	// VSRSkipProcessing opts the request out of all router processing when
 	// global.router.skip_processing.enabled is true. Value: "true" (case-insensitive).
 	// See https://github.com/vllm-project/semantic-router/issues/1808.
 	VSRSkipProcessing = "x-vsr-skip-processing"
 
-	// VSRDebug opts a request into verbose/debug response headers. Value: "true"
-	// (case-insensitive). When set, headers that the v0.4 contract otherwise
-	// omits or demotes to replay are emitted inline for that request — the
-	// debug/replay-mode trigger for the v0.4 header surface. See issue #2216.
+	// VSRDebug set to "true" (case-insensitive) asks for VSRTrace on the
+	// response. The Router honors it only for a caller that
+	// global.router.headers.debug allows.
 	VSRDebug = "x-vsr-debug"
 
 	// VSRProtectionRelease asks router-learning protection for a fresh
@@ -70,117 +66,16 @@ const (
 	VSRCompressionControl = "x-vsr-compression-control"
 )
 
-// VSR Decision Tracking Headers
-// These headers are added to successful responses (HTTP 200-299) to track
-// Vector Semantic Router decision-making information for debugging and monitoring.
-// Headers are only added when the request is successful and did not hit the cache.
+// The public response headers. Every routed response carries the ones that
+// apply to it, including cache hits and fast responses.
 const (
-	// VSRSelectedCategory indicates the category selected by VSR during domain classification.
-	// This comes from the domain classifier (MMLU categories).
-	// Example values: "math", "business", "biology", "computer science"
-	VSRSelectedCategory = "x-vsr-selected-category"
-
-	// VSRSelectedRecipe identifies the isolated routing profile selected by the
-	// inbound virtual model. Concrete backend model requests omit this header.
-	VSRSelectedRecipe = "x-vsr-selected-recipe"
-
-	// VSRSelectedDecision indicates the decision selected by VSR during decision evaluation.
-	// This is the final routing decision made by the DecisionEngine. It is
-	// omitted when no decision matched and the request went to the default model.
-	// Example values: "math_decision", "business_decision", "thinking_decision"
-	VSRSelectedDecision = "x-vsr-selected-decision"
-
-	// VSRAppliedUnknownPolicy lists decisions whose terminal unknown result was
-	// resolved by rules.on_unknown, as comma-separated decision=policy pairs.
-	// Example value: "guarded=no_match,strict=fail_request"
-	VSRAppliedUnknownPolicy = "x-vsr-applied-unknown-policy"
-
-	// VSRDecisionRanking names the matched decision the selected one beat and
-	// the comparison that settled it. Debug surface only (#3658).
-	VSRDecisionRanking = "x-vsr-decision-ranking"
-
-	// VSRSelectedConfidence indicates the confidence score of the selected decision.
-	// Value: decimal between 0.0 and 1.0 (e.g., "0.75")
-	VSRSelectedConfidence = "x-vsr-selected-confidence"
-
-	// VSRSelectedReasoning indicates whether reasoning mode was determined to be used.
-	// Values: "on" (reasoning enabled) or "off" (reasoning disabled)
-	VSRSelectedReasoning = "x-vsr-selected-reasoning"
-
-	// VSRSelectedModality lists the output kinds of the selected decision's
-	// output contract, such as "image" or "text,image".
-	VSRSelectedModality = "x-vsr-selected-modality"
-
-	// VSRSelectedModel indicates the model selected by VSR for processing the request.
-	// Example values: "deepseek-v31", "phi4", "gpt-4"
-	VSRSelectedModel = "x-vsr-selected-model"
-
-	// VSREffectiveInputTokens is the selected backend's rendered input size for
-	// the finalized automatic-output dispatch, including its chat template.
-	VSREffectiveInputTokens = "x-vsr-effective-input-tokens" // #nosec G101 -- public header name, not a credential
-
-	// VSREffectiveMaxOutputTokens is the resolved output token limit sent to the
-	// selected backend for that automatic-output dispatch, including reasoning.
-	VSREffectiveMaxOutputTokens = "x-vsr-effective-max-output-tokens" // #nosec G101 -- public header name, not a credential
-
-	// VSRSelectedAlgorithm indicates the algorithm, a selector or an executor,
-	// used after the routing decision matched. Example values: "static",
-	// "multi_factor", "systemone", "escalate", "fusion", "workflows".
-	VSRSelectedAlgorithm = "x-vsr-selected-algorithm"
-
-	// VSRRoutingLatencyMs is the time the router spent choosing the model for
-	// this request, in milliseconds with microsecond precision. Example: "0.412"
-	VSRRoutingLatencyMs = "x-vsr-routing-latency-ms"
-
-	// VSRCost is the response's usage priced with the served model's configured
-	// pricing. Buffered responses only; omitted when the model has no pricing.
-	VSRCost = "x-vsr-cost"
-
-	// VSRCostCurrency is the currency of VSRCost. Example: "USD"
-	VSRCostCurrency = "x-vsr-cost-currency"
-
-	// VSRSessionPhase indicates the Router Learning protection phase.
-	// Example values: "user_turn", "tool_loop", "provider_state"
-	VSRSessionPhase = "x-vsr-session-phase"
-
-	// VSRLearningMethods names Router Learning methods summarized by the
-	// companion learning headers. Full diagnostics live in Router Replay.
-	// Example: "adaptation" or "adaptation,protection"
-	VSRLearningMethods = "x-vsr-learning-methods"
-
-	// VSRLearningActions contains method-keyed compact learning decisions.
-	// Example: "adaptation=propose_switch,protection=allow_switch"
-	VSRLearningActions = "x-vsr-learning-actions"
-
-	// VSRLearningScopes contains method-keyed identity scopes.
-	// Example: "protection=conversation"
-	VSRLearningScopes = "x-vsr-learning-scopes"
-
-	// VSRLearningReasons contains method-keyed machine-readable reasons.
-	// Example: "adaptation=sampled_win,protection=switch_allowed"
-	VSRLearningReasons = "x-vsr-learning-reasons"
-
-	// VSRFallbackAttempts indicates the number of candidate attempts during execution fallback.
-	VSRFallbackAttempts = "x-vsr-fallback-attempts"
-
-	// VSRInjectedSystemPrompt indicates whether a system prompt was injected into the request.
-	// Values: "true" or "false"
-	VSRInjectedSystemPrompt = "x-vsr-injected-system-prompt"
-
-	VSRPromptCacheAction    = "x-vsr-prompt-cache-action"
-	VSRPromptCacheReason    = "x-vsr-prompt-cache-reason"
-	VSRPromptCacheInserted  = "x-vsr-prompt-cache-inserted"
-	VSRPromptCachePreserved = "x-vsr-prompt-cache-preserved"
-
-	// --- v0.4 keystone response-contract headers (issue #2203) ---
-	// These two headers are emitted on every VSR-processed response and form
-	// the foundation of the v0.4 header contract: schema-version stamps the
-	// contract revision and response-path names how the response was produced.
-	// Everything else in the contract keys off response-path.
-
 	// VSRSchemaVersion stamps the response-header contract revision so clients
 	// know which contract they are parsing. Value: SchemaVersionValue.
 	VSRSchemaVersion = "x-vsr-schema-version"
+
+	// SchemaVersionValue is the current response-header contract revision:
+	// the public set, x-vsr-warnings and x-vsr-trace.
+	SchemaVersionValue = "3"
 
 	// VSRResponsePath names the final path that produced the response.
 	// Value is one of the ResponsePath* constants below.
@@ -197,175 +92,52 @@ const (
 	ResponsePathError           = "error"            // router-side error response
 	ResponsePathFallback        = "fallback"         // produced by upstream error fallback
 
-	// SchemaVersionValue is the current response-header contract revision
-	// emitted in VSRSchemaVersion. v0.4 is contract revision "2".
-	SchemaVersionValue = "2"
+	// VSRSelectedRecipe identifies the isolated routing profile selected by the
+	// inbound virtual model. Concrete backend model requests omit this header.
+	VSRSelectedRecipe = "x-vsr-selected-recipe"
 
-	// VSRCacheHit indicates that the response was served from cache.
-	// Value: "true"
-	VSRCacheHit = "x-vsr-cache-hit"
+	// VSRSelectedDecision is the decision the decision engine selected. It is
+	// omitted when no decision matched and the request went to the default model.
+	VSRSelectedDecision = "x-vsr-selected-decision"
 
-	// VSRCacheSimilarity is the similarity score of the response-cache lookup.
-	VSRCacheSimilarity = "x-vsr-cache-similarity"
-
-	// Retention directive headers expose the matched decision's EMIT retention
-	// block to the inference pool / operators (issue #2009). They are emitted
-	// only on successful, non-cache-hit responses, and only for the fields the
-	// directive explicitly set (tri-state). They let the pool observe the
-	// router's KV/cache retention intent at the wire; the router itself also
-	// consumes drop (cache-write skip) and ttl_turns (per-entry cache TTL).
-	VSRRetentionDrop             = "x-vsr-retention-drop"
-	VSRRetentionTTLTurns         = "x-vsr-retention-ttl-turns"
-	VSRRetentionKeepCurrentModel = "x-vsr-retention-keep-current-model"
-	VSRRetentionPreferPrefix     = "x-vsr-retention-prefer-prefix"
-
-	// VSRKVTransferStatus reports whether the upstream backend applied cross-model
-	// KV reuse for this response. Emitted by the vLLM KVConnector plugin on the
-	// target pod; consumed by extproc for metrics and registry updates (issue #2976).
-	// Values: KVTransferStatusApplied, KVTransferStatusFallbackReprefill, or
-	// KVTransferStatusUnsupported. Absent ⇒ treat as unsupported (safe default).
-	VSRKVTransferStatus = "x-vsr-kv-transfer-status"
-
-	// KVTransferStatus* are valid values for VSRKVTransferStatus.
-	KVTransferStatusApplied           = "applied"
-	KVTransferStatusFallbackReprefill = "fallback_reprefill"
-	KVTransferStatusUnsupported       = "unsupported"
+	// VSRSelectedModel is the model alias the Router selected.
+	VSRSelectedModel = "x-vsr-selected-model"
 
 	// RouterReplayID carries the identifier for a captured replay record.
 	// Value: opaque replay token
 	RouterReplayID = "x-vsr-replay-id"
+
+	// VSRWarnings lists, as an RFC 8941 list, the warnings about the response:
+	// the codes of the response_guard rules that annotated the answer, in rule
+	// order, then the protocol translation losses. Detail stays in the replay
+	// record.
+	VSRWarnings = "x-vsr-warnings"
+
+	// VSRCost is the response's usage priced with the served model's configured
+	// pricing. Buffered responses only; omitted when the model has no pricing.
+	VSRCost = "x-vsr-cost"
+
+	// VSRCostCurrency is the currency of VSRCost. Example: "USD"
+	VSRCostCurrency = "x-vsr-cost-currency"
 )
 
-// VSR Signal Tracking Headers
-// These headers track which signals were matched during request evaluation.
-// They provide visibility into the signal-driven decision process.
+// Warning codes in VSRWarnings: a response_guard rule over a hallucination
+// signal (unverified_factual when the answer could not be checked), over a
+// response-stage jailbreak signal, or over any other signal; a protocol
+// translation loss, with its action, reason and field; and the marker of
+// warnings left out to keep the header bounded, with their count.
 const (
-	// VSRMatchedKeywords contains comma-separated list of matched keyword rule names.
-	// Example: "code_keywords,urgent_keywords"
-	VSRMatchedKeywords = "x-vsr-matched-keywords"
-
-	// VSRMatchedDomains contains comma-separated list of matched domain rule names.
-	// Example: "computer science,mathematics"
-	VSRMatchedDomains = "x-vsr-matched-domains"
-
-	// VSRMatchedFactCheck contains the fact-check signal result.
-	// Values: "needs_fact_check" or "no_fact_check_needed"
-	VSRMatchedFactCheck = "x-vsr-matched-fact-check"
-
-	// VSRMatchedUserFeedback contains comma-separated list of matched user feedback signals.
-	// Example: "need_clarification,wrong_answer"
-	VSRMatchedUserFeedback = "x-vsr-matched-user-feedback"
-
-	// VSRMatchedTurnRelation contains comma-separated list of matched
-	// turn_relation rules and their rule:label references.
-	VSRMatchedTurnRelation = "x-vsr-matched-turn-relation"
-
-	// VSRMatchedLanguage contains comma-separated list of matched language signals.
-	// Example: "en,zh,es"
-	VSRMatchedLanguage = "x-vsr-matched-language"
-
-	// VSRMatchedContext contains comma-separated list of matched context rule names.
-	// Example: "low_token_count,high_token_count"
-	VSRMatchedContext = "x-vsr-matched-context"
-
-	// VSRContextTokenCount contains the actual token count for the request.
-	// Example: "1500"
-	//nolint:gosec
-	VSRContextTokenCount = "x-vsr-context-token-count"
-
-	// VSRMatchedComplexity contains comma-separated list of matched complexity rules with difficulty levels.
-	// Example: "code_complexity:hard,math_complexity:easy"
-	VSRMatchedComplexity = "x-vsr-matched-complexity"
-
-	// VSRMatchedModality contains comma-separated list of matched modality
-	// rules and their rule:label references.
-	// Example: "wants_image,output:text_image"
-	VSRMatchedModality = "x-vsr-matched-modality"
-
-	// VSRMatchedAuthz contains comma-separated list of matched authz rule names.
-	// Example: "premium_tier,admin_tier"
-	VSRMatchedAuthz = "x-vsr-matched-authz"
-
-	// VSRMatchedJailbreak contains comma-separated list of matched jailbreak rule names.
-	// Example: "jailbreak_detected,strict_jailbreak"
-	VSRMatchedJailbreak = "x-vsr-matched-jailbreak"
-
-	// VSRMatchedSafety contains matched content safety rule names.
-	VSRMatchedSafety = "x-vsr-matched-safety"
-
-	// VSRMatchedHallucination contains comma-separated list of matched
-	// hallucination rule names. Written in the response body phase, once the
-	// model's answer has been checked against its grounding context.
-	VSRMatchedHallucination = "x-vsr-matched-hallucination"
-
-	// VSRMatchedPII contains comma-separated list of matched PII rule names.
-	// Example: "pii_strict,pii_moderate"
-	VSRMatchedPII = "x-vsr-matched-pii"
-
-	// VSRMatchedConversation contains comma-separated list of matched conversation-shape signal names.
-	VSRMatchedConversation = "x-vsr-matched-conversation"
-
-	// VSRMatchedInputModality contains comma-separated list of matched
-	// structural input-modality signal names.
-	// Example: "image_input,audio_input"
-	VSRMatchedInputModality = "x-vsr-matched-input-modality"
-
-	// VSRMatchedDecisionModel contains comma-separated list of matched systemone
-	// rules: rule names, "rule:choice" for choice questions and "rule:label"
-	// for set and span labels.
-	// Example: "needs_reasoning,request_kind:code"
-	VSRMatchedDecisionModel = "x-vsr-matched-decision-model"
-
-	// VSRMatchedProjection contains comma-separated list of matched projection outputs.
-	// Example: "balance_medium,verification_required"
-	VSRMatchedProjection = "x-vsr-matched-projections"
-
-	// VSRFastResponse indicates that the response was generated by the fast_response plugin
-	// without hitting an upstream model.
-	// Value: "true"
-	VSRFastResponse = "x-vsr-fast-response"
+	WarningHallucination     = "hallucination"
+	WarningUnverifiedFactual = "unverified_factual"
+	WarningJailbreak         = "response_jailbreak"
+	WarningGuard             = "response_guard"
+	WarningProtocol          = "protocol"
+	WarningTruncated         = "truncated"
 )
 
-// VSR Protocol Markers and Translation Warnings
-// These headers are emitted on every non-cache-hit response (including 4xx
-// and 5xx) so clients can always tell which translation cell handled the
-// call and what was lost during translation.
-const (
-	// VSRClientProtocol describes the wire format of the inbound request
-	// as seen by the router (e.g. "openai", "anthropic"). Defaults to
-	// "openai" when no other protocol was detected.
-	VSRClientProtocol = "x-vsr-client-protocol"
-
-	// VSRUpstreamProtocol describes the wire format of the outbound
-	// request sent to the upstream backend. Defaults to "openai" when no
-	// explicit APIFormat was resolved.
-	VSRUpstreamProtocol = "x-vsr-upstream-protocol"
-
-	// VSRProtocolWarnings carries a structured, comma-separated list
-	// of translation observations emitted by the inbound parser during
-	// a lossy translation. Each entry is "severity;reason;field".
-	// Absent when no warnings were produced.
-	VSRProtocolWarnings = "x-vsr-protocol-warnings"
-)
-
-// Response Warnings Header (v0.4)
-// VSRResponseWarnings carries, comma-separated, the codes of the selected
-// decision's response_guard rules that annotated the answer (#2204, #2200).
-// The per-warning detail (hallucination spans, jailbreak type/confidence)
-// stays in the replay record, recoverable via x-vsr-replay-id. Absent when no
-// rule annotated.
-const (
-	VSRResponseWarnings = "x-vsr-response-warnings"
-
-	// Warning codes carried, in rule order, in the VSRResponseWarnings value:
-	// a rule over a hallucination signal (unverified_factual when the answer
-	// could not be checked), over a response-stage jailbreak signal, or over
-	// any other signal.
-	ResponseWarningHallucination     = "hallucination"
-	ResponseWarningUnverifiedFactual = "unverified_factual"
-	ResponseWarningJailbreak         = "response_jailbreak"
-	ResponseWarningGuard             = "response_guard"
-)
+// VSRTrace is the one debug header: an RFC 8941 dictionary of the routing
+// details (TraceMembers) for a caller global.router.headers.debug allows.
+const VSRTrace = "x-vsr-trace"
 
 // Auth Backend Injected Headers
 // These headers are set by the external authorization service (Authorino, Envoy Gateway JWT,
@@ -457,17 +229,6 @@ const (
 	VSRSystemOneBackend = "x-vsr-systemone-backend"
 )
 
-// Retired Looper hop headers. Looper hops run in process with their context
-// typed, so nothing reads these; the Router still drops them from client
-// requests so that no client can pose as a hop.
-const (
-	VSRLooperRequest   = "x-vsr-looper-request"
-	VSRLooperIteration = "x-vsr-looper-iteration"
-	VSRLooperDecision  = "x-vsr-looper-decision"
-	VSRFusionDepth     = "x-vsr-fusion-depth"
-	VSRLooperSecret    = "x-vsr-looper-secret" // #nosec G101 -- header name, not a credential
-)
-
 // VSR Cross-Model KV Transfer Request Headers (issue #2976)
 // Injected by the KVTransfer Coordinator on upstream dispatch when a model switch
 // is eligible for cross-model KV reuse. Consumed by the vLLM KVConnector plugin
@@ -487,47 +248,4 @@ const (
 	// VSRKVMapperID names the published ridge-mapper artifact for the source→target pair.
 	// Example: "qwen3-14b-32b-v1"
 	VSRKVMapperID = "x-vsr-kv-mapper-id"
-)
-
-// Looper Response Headers
-// These headers are added to responses when looper mode is used.
-const (
-	// VSRLooperModel indicates the final model used by the looper.
-	// Value: model name (e.g., "qwen-max")
-	VSRLooperModel = "x-vsr-looper-model"
-
-	// VSRLooperModelsUsed contains the comma-separated list of models that were called.
-	// Value: "qwen-flash,qwen-max" (example)
-	VSRLooperModelsUsed = "x-vsr-looper-models-used"
-
-	// VSRLooperIterations indicates the total number of model calls made.
-	// Value: "2", "3", etc.
-	VSRLooperIterations = "x-vsr-looper-iterations"
-
-	// VSRLooperAlgorithm indicates the algorithm used by the looper.
-	// Value: "escalate", "fusion", "remom", "ratings", "workflows"
-	VSRLooperAlgorithm = "x-vsr-looper-algorithm"
-
-	// VSRLooperLatencyMs indicates the wall-clock latency, in milliseconds,
-	// of the full looper execution (all model calls plus algorithm overhead).
-	// Value: "842" (example)
-	VSRLooperLatencyMs = "x-vsr-looper-latency-ms"
-
-	// VSRLooperPromptTokens indicates the aggregate prompt token count
-	// across all model calls made during looper execution.
-	// Value: "512" (example)
-	//nolint:gosec
-	VSRLooperPromptTokens = "x-vsr-looper-prompt-tokens"
-
-	// VSRLooperCompletionTokens indicates the aggregate completion token
-	// count across all model calls made during looper execution.
-	// Value: "256" (example)
-	//nolint:gosec
-	VSRLooperCompletionTokens = "x-vsr-looper-completion-tokens"
-
-	// VSRLooperTotalTokens indicates the aggregate total token count across
-	// all model calls made during looper execution.
-	// Value: "768" (example)
-	//nolint:gosec
-	VSRLooperTotalTokens = "x-vsr-looper-total-tokens"
 )

@@ -710,8 +710,8 @@ def test_route_probe_emits_routing_receipt_and_uses_secret_from_environment(
     response.headers = {
         "x-vsr-selected-recipe": "balanced",
         "x-vsr-selected-decision": "coding",
-        "x-vsr-selected-algorithm": "multi_factor",
         "x-vsr-selected-model": "qwen",
+        "x-vsr-trace": "confidence=0.91, algorithm=multi_factor",
     }
     response.json.return_value = {
         "model": "Qwen/Qwen3.8-Flash-Next",
@@ -751,6 +751,10 @@ def test_route_probe_emits_routing_receipt_and_uses_secret_from_environment(
     receipt = json.loads(result.output)
     assert receipt["passed"] is True
     assert receipt["response"]["routing"]["x-vsr-selected-model"] == "qwen"
+    assert receipt["response"]["routing"]["trace"] == {
+        "confidence": "0.91",
+        "algorithm": "multi_factor",
+    }
     assert "probe-secret" not in result.output
     assert post.call_args.kwargs["headers"]["Authorization"] == "Bearer probe-secret"
     assert post.call_args.kwargs["json"]["max_completion_tokens"] == 8192

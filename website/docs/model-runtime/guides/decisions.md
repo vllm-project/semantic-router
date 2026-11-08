@@ -218,5 +218,5 @@ compatible questions within a routing stage. See
 
 Ask the model the same question directly with `/v1/decisions`; see the
 [Quickstart](model-runtime/quickstart.md#3-send-a-request). Through the router,
-`x-vsr-matched-decision-model` lists the `systemone` signals that matched and
-`x-vsr-selected-model` the model the selector chose.
+the `signals` member of `x-vsr-trace` lists the `systemone` signals that matched
+and `x-vsr-selected-model` names the model the selector chose.

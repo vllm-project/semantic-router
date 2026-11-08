@@ -74,11 +74,11 @@ ROUTE sensitive-turn {
 | `drop: true` | Skips the response-cache write for the matched decision | It does not prevent a cache read earlier in the same request |
 | `ttl_turns` | Overrides the response-cache entry lifetime using the Router's turn-to-time mapping | It is a cache TTL hint, not durable conversation retention |
 | `keep_current_model: true` | Forces the model-switch gate to stay on the known current model | It has no effect when session/current-model identity is unavailable |
-| `prefer_prefix_retention: true` | Emits `x-vsr-retention-prefer-prefix` for the inference pool | The Router does not itself manage a provider's KV-cache eviction |
+| `prefer_prefix_retention: true` | Reported as `prefer_prefix` in the `retention` member of `x-vsr-trace` | The Router does not itself manage a provider's KV-cache eviction |
 
 `drop: true` and a positive `ttl_turns` cannot be set together. A decision can
-emit only one retention directive. Explicit values are exposed through bounded
-`x-vsr-retention-*` response headers and routing diagnostics.
+emit only one retention directive. Explicit values are reported in the
+`retention` member of `x-vsr-trace` and in routing diagnostics.
 
 ## Data and Security
 

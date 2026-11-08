@@ -84,10 +84,10 @@ type Decision struct {
 // suppression), TTLTurns (per-entry cache TTL override), and KeepCurrentModel
 // (model-switch-gate forced stay). Drop does not delete existing objects or
 // disable explicit history reads, telemetry, or backend-side persistence.
-// PreferPrefixRetention is emitted to the pool as an x-vsr-retention-prefer-prefix
-// header; its session-aware scoring bias and KV-cache eviction integration are
-// follow-up work. All set fields are also observed via log + trace attributes
-// and emitted as x-vsr-retention-* response headers (issues #1747, #2009).
+// PreferPrefixRetention is only reported; its session-aware scoring bias and
+// KV-cache eviction integration are follow-up work. All set fields are also
+// observed via log + trace attributes and reported in the retention member of
+// x-vsr-trace (issues #1747, #2009).
 type DecisionRetention struct {
 	Drop                  *bool `yaml:"drop,omitempty" json:"drop,omitempty"`
 	TTLTurns              *int  `yaml:"ttl_turns,omitempty" json:"ttl_turns,omitempty"`

@@ -91,7 +91,7 @@ relative priorities explicitly.
 A model error yields an unknown signal. `rules.on_unknown: fail_request`
 returns HTTP 503 when the decision remains unknown. A scored unsafe request
 selects the configured handling route. Diagnostics expose matched rule names in
-`x-vsr-matched-safety`, the classification result, dashboard and replay record.
+the `signals` member of `x-vsr-trace`, the classification result, dashboard and replay record.
 
 See [shared model configuration](../../../model-runtime/guides/safety)
 for native context budgets, remote deployments and failure policies, and the

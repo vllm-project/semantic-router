@@ -9,26 +9,19 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
-var looperInternalContextHeaders = []string{
-	headers.VSRInternalAuth,
-	headers.VSRLooperRequest,
-	headers.VSRLooperIteration,
-	headers.VSRLooperDecision,
-	headers.VSRLooperSecret,
-	headers.VSRFusionDepth,
-	headers.VSRSelectedRecipe,
-}
+var droppedClientHeaders = headers.DroppedFromClients()
 
 // markLooperHop makes a request a Looper hop only when the Router serves it
-// in process, with its routing context typed. Internal context headers a
-// request carries are never believed: they are dropped, so they influence
-// neither routing nor plugins, and the request is an ordinary one.
+// in process, with its routing context typed. The Router's own headers a
+// client request carries, its internal context among them, are never
+// believed: they are dropped, so they influence neither routing nor plugins,
+// and the request is an ordinary one.
 func markLooperHop(ctx *RequestContext) {
 	if ctx == nil {
 		return
 	}
 	ctx.LooperRequest = ctx.Hop != nil
-	for _, header := range looperInternalContextHeaders {
+	for _, header := range droppedClientHeaders {
 		removeHeaderValueCI(ctx, header)
 	}
 }
@@ -45,10 +38,11 @@ func removeHeaderValueCI(ctx *RequestContext, canonical string) {
 }
 
 // providerBoundRemovals are the request headers removed before a request
-// reaches a provider: the Looper's internal context and every header the
-// registry keeps from providers, such as the Router's control headers.
+// reaches a provider: the Router's own headers a client supplied and every
+// header the registry keeps from providers, such as the Router's control
+// headers.
 func providerBoundRemovals() []string {
-	removals := slices.Clone(looperInternalContextHeaders)
+	removals := slices.Clone(droppedClientHeaders)
 	for _, name := range headers.KeptFromProviders() {
 		if !slices.Contains(removals, name) {
 			removals = append(removals, name)

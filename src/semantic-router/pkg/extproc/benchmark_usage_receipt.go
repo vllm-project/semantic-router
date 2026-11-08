@@ -67,7 +67,7 @@ func (r *OpenAIRouter) benchmarkUsageScopeKnown(ctx *RequestContext, allowLooper
 }
 
 func (r *OpenAIRouter) benchmarkCallLimitCheck(ctx *RequestContext) error {
-	if headerValueCI(ctx, headers.SRBenchMaxInferenceCalls) != "" && !r.benchmarkUsageScopeKnown(ctx, false) {
+	if headerValueCI(ctx, headers.VSRBenchMaxInferenceCalls) != "" && !r.benchmarkUsageScopeKnown(ctx, false) {
 		return errBenchmarkCallLimit
 	}
 	return nil

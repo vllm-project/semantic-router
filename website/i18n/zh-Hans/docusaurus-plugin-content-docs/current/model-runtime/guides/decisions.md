@@ -116,4 +116,4 @@ Decision 2.0 是默认家族：Kai-0.6B 在 CPU 上跑，大的尺寸在 GPU 上
 
 ## 验一下 {#check-it}
 
-用 `/v1/decisions` 直接问模型同一个问题；见[快速上手](model-runtime/quickstart.md#3-send-a-request)。经过 router 时，`x-vsr-matched-decision-model` 列出匹配上的决策信号，`x-vsr-selected-model` 是选择器挑中的模型。
+用 `/v1/decisions` 直接问模型同一个问题；见[快速上手](model-runtime/quickstart.md#3-send-a-request)。经过 router 时，`x-vsr-trace` 的 `signals` 成员列出匹配上的 `systemone` 信号，`x-vsr-selected-model` 是选择器挑中的模型。

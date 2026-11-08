@@ -32,7 +32,7 @@ func TestWireRecordsThroughAPassThroughGateway(t *testing.T) {
 	target, _ := url.Parse(backendServer.URL)
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.Header.Set("x-selected-model", "model-a")
+		r.Header.Set("x-vsr-route-model", "model-a")
 		proxy.ServeHTTP(w, r)
 	}))
 	defer gateway.Close()

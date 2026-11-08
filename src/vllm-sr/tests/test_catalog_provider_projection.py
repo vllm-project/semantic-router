@@ -46,7 +46,7 @@ def _model_route(rendered_config, model_name):
     for route in routes:
         headers = route.get("match", {}).get("headers", [])
         if any(
-            header.get("name") == "x-selected-model"
+            header.get("name") == "x-vsr-route-model"
             and header.get("string_match", {}).get("exact") == model_name
             for header in headers
         ):

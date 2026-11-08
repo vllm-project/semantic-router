@@ -5,13 +5,11 @@ import (
 	"errors"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -62,13 +60,19 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	r.calibrateTokenEstimator(ctx, usage.promptTokens)
 
 	r.updateKVAddressRegistry(ctx)
-	r.updateResponseCache(ctx, r.cacheableClientResponse(clientBody, rewriteClientBody, *semanticResponse, ctx))
+	cacheable := r.cacheableClientResponse(clientBody, rewriteClientBody, *semanticResponse, ctx)
 
 	blocked, finalBody, headerOptions := r.finalizeResponsePolicy(ctx, semanticResponse, clientBody)
-	lateWarning, hasLateDiagnostics := recordBufferedProtocolDiagnostics(ctx, diagnosticsBeforeBody)
+	warnings, hasBufferedWarnings := bufferedWarnings(ctx)
 	if blocked != nil {
 		return blocked
 	}
+	// The cache keeps the answer the client receives: the guard passed it, and
+	// a rule with details wrote its note into it.
+	if !bytes.Equal(finalBody, clientBody) {
+		cacheable = finalBody
+	}
+	r.updateResponseCache(ctx, cacheable)
 
 	response := buildResponseBodyContinueResponse(nil, nil)
 	if len(headerOptions) > 0 {
@@ -76,8 +80,8 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 			SetHeaders: headerOptions,
 		}
 	}
-	if hasLateDiagnostics {
-		setResponseBodyHeaderOverwrite(response, headers.VSRProtocolWarnings, lateWarning)
+	if hasBufferedWarnings {
+		setResponseBodyHeaderOverwrite(response, headers.VSRWarnings, warnings)
 	}
 	if (rewriteClientBody || !bytes.Equal(finalBody, clientBody)) && response.GetResponseBody().GetResponse().GetBodyMutation() == nil {
 		setResponseBodyMutation(response, finalBody)
@@ -159,7 +163,7 @@ func (r *OpenAIRouter) prepareResponsePolicy(
 	// is recorded before a block returns, so a blocked response leaves the same
 	// evidence in Router Replay as a delivered one.
 	recordPrimaryOutputDigest(ctx, semanticResponse)
-	ctx.ResponseGuard = r.runResponseGuard(ctx, semanticAssistantContent(semanticResponse), false)
+	ctx.ResponseGuard = r.runResponseGuard(ctx, semanticAssistantContent(semanticResponse))
 	logResponseGuard(ctx, ctx.ResponseGuard)
 	if rule := ctx.ResponseGuard.blocking(); rule != nil {
 		return &responsePolicyPlan{
@@ -197,16 +201,6 @@ func (r *OpenAIRouter) prepareResponsePolicy(
 	}
 }
 
-// observeResponseGuard reads the selected decision's response_guard over a
-// streamed answer and records what it read in Router Replay, as the buffered
-// path does. A streamed answer exists as a whole for the first time when its
-// bytes are already with the client, so nothing the guard decides is
-// applied, and the record says so.
-func (r *OpenAIRouter) observeResponseGuard(ctx *RequestContext, assistantContent string) {
-	ctx.ResponseGuard = r.runResponseGuard(ctx, assistantContent, true)
-	r.recordRouterReplayResponseGuard(ctx)
-}
-
 func (r *OpenAIRouter) applySemanticResponseWarnings(
 	ctx *RequestContext,
 	semanticResponse *llmprotocol.Response,
@@ -214,10 +208,7 @@ func (r *OpenAIRouter) applySemanticResponseWarnings(
 ) (*ext_proc.ProcessingResponse, []byte) {
 	response := buildResponseBodyContinueResponse(nil, nil)
 	changed := r.applyResponseGuardNotes(ctx.ResponseGuard, semanticResponse)
-	if codes := ctx.ResponseGuard.warnings(); len(codes) > 0 {
-		setResponseWarningsHeader(response, codes)
-	}
-	addResponseStageSignalHeaders(ctx, response)
+	addResponseStageTrace(ctx, response)
 	if !changed {
 		return response, originalBody
 	}
@@ -239,37 +230,17 @@ func (r *OpenAIRouter) applySemanticResponseWarnings(
 	return response, encoded
 }
 
-// addResponseStageSignalHeaders writes the response-stage matches the guard
-// read in the body phase: x-vsr-matched-jailbreak and
-// x-vsr-matched-systemone are rewritten with them after the request-stage
-// ones, and x-vsr-matched-hallucination is written once the answer has been
-// checked. The response headers phase wrote the request-stage matches before
-// the body existed, so the debug headers would otherwise never show a
-// response-stage match. Same gate as the request-stage signal headers: only
-// when debug is requested.
-func addResponseStageSignalHeaders(ctx *RequestContext, response *ext_proc.ProcessingResponse) {
-	if ctx == nil || !debugHeadersRequested(ctx) {
+// addResponseStageTrace rewrites x-vsr-trace once the guard has read the
+// answer, so it carries the guard's outcome and its signals the
+// response-stage matches: the response headers phase wrote the trace before
+// the body existed. Only for a caller allowed the debug headers.
+func addResponseStageTrace(ctx *RequestContext, response *ext_proc.ProcessingResponse) {
+	if ctx.ResponseGuard == nil {
 		return
 	}
-	observed := ctx.ResponseGuard.observed()
-	if observed == nil {
-		return
+	if trace := responseTrace(ctx); trace != "" {
+		setResponseBodyHeaderOverwrite(response, headers.VSRTrace, trace)
 	}
-	if matched := observed.Reported[config.SignalTypeJailbreak]; len(matched) > 0 {
-		setResponseBodyHeader(response, headers.VSRMatchedJailbreak, strings.Join(append(slices.Clone(ctx.VSRMatchedJailbreak), matched...), ","))
-	}
-	if matched := observed.Reported[config.SignalTypeHallucination]; len(matched) > 0 {
-		setResponseBodyHeader(response, headers.VSRMatchedHallucination, strings.Join(matched, ","))
-	}
-	if matched := observed.Reported[config.SignalTypeSystemOne]; len(matched) > 0 {
-		setResponseBodyHeader(response, headers.VSRMatchedDecisionModel, strings.Join(append(slices.Clone(ctx.VSRMatchedDecisionModel), matched...), ","))
-	}
-}
-
-// setResponseWarningsHeader writes the consolidated x-vsr-response-warnings header
-// (comma-separated codes) onto the response, merging with any existing mutation.
-func setResponseWarningsHeader(response *ext_proc.ProcessingResponse, codes []string) {
-	setResponseBodyHeader(response, headers.VSRResponseWarnings, strings.Join(codes, ","))
 }
 
 // addResponseCostHeaders reports the priced cost of a buffered response. A

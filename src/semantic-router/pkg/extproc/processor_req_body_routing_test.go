@@ -523,7 +523,7 @@ func TestHandleAutoModelRoutingEmitsSelectedModelAndEncodedBody(t *testing.T) {
 	}
 	common := response.GetRequestBody().GetResponse()
 	headersByName := headerValuesByName(common.GetHeaderMutation().GetSetHeaders())
-	if got := headersByName[headers.SelectedModel]; got != "qwen14b-dev" {
+	if got := headersByName[headers.VSRRouteModel]; got != "qwen14b-dev" {
 		t.Fatalf("selected model header = %q", got)
 	}
 	var body map[string]any
@@ -676,7 +676,7 @@ func TestProviderDispatchHonorsRouteCachePolicyAcrossRequestPaths(t *testing.T) 
 					t.Fatalf("expected provider dispatch, got %v", response)
 				}
 				values := headerValuesByName(common.GetHeaderMutation().GetSetHeaders())
-				if values[headers.SelectedModel] != "worker" || values[":path"] != "/v1/chat/completions" {
+				if values[headers.VSRRouteModel] != "worker" || values[":path"] != "/v1/chat/completions" {
 					t.Fatalf("provider routing headers = %v", values)
 				}
 				if common.GetClearRouteCache() != clear {

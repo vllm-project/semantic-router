@@ -96,7 +96,7 @@ They avoid them by **not overlapping** rather than by arbitration. Semantic Rout
 Two operational rules follow from that shape:
 
 - **Deploy and verify llm-d independently before adding Semantic Router**, and use one supported llm-d release rather than mixing copied manifests.
-- **Make the final decision visible.** The Router writes `x-vsr-selected-model` as its receipt and `x-selected-model` as the value a gateway matches on; `vllm-sr route probe --expect-selected-model` asserts the receipt. Read the decision from those rather than inferring it after the fact.
+- **Make the final decision visible.** The Router writes `x-vsr-selected-model` as its receipt and `x-vsr-route-model` as the value a gateway matches on; `vllm-sr route probe --expect-selected-model` asserts the receipt. Read the decision from those rather than inferring it after the fact.
 
 See [Integrate with llm-d](installation/k8s/llm-d) for the shared deployment and decision rules.
 

@@ -342,8 +342,9 @@ interop pattern that motivates this gate lives in
 ### Debug Headers
 
 `global.router.headers.debug` decides who may turn on the debug response
-headers with `x-vsr-debug: true`. They name the signal and guard rules a
-request matched, so the default, `none`, ignores the header from every client.
+header, `x-vsr-trace`, with `x-vsr-debug: true`. It names the signal and guard
+rules a request matched, so the default, `none`, ignores the request header
+from every client.
 `any` honors it from every client, for development and tests. `authenticated`
 honors it only from the users and groups in `debug_principals`, as the identity
 headers your authenticator sets assert them.
@@ -357,8 +358,8 @@ global:
         groups: [platform-sre]
 ```
 
-See [VSR routing headers](../../troubleshooting/vsr-headers#who-may-turn-on-the-debug-headers)
-for the headers it covers.
+See [VSR routing headers](../../troubleshooting/vsr-headers#the-trace) for
+what the trace carries.
 
 ### Router Replay
 

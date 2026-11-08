@@ -42,13 +42,13 @@ func assertBlockedWith(t *testing.T, plan *responsePolicyPlan, message string) {
 	}
 }
 
-func assertDelivered(t *testing.T, plan *responsePolicyPlan, warnings string) {
+func assertDelivered(t *testing.T, ctx *RequestContext, plan *responsePolicyPlan, warnings string) {
 	t.Helper()
 	if plan.blocked != nil {
 		t.Fatalf("the answer was blocked: %+v", plan.blocked)
 	}
-	if got := bodyPhaseHeader(plan.response, headers.VSRResponseWarnings); got != warnings {
-		t.Fatalf("%s = %q, want %q", headers.VSRResponseWarnings, got, warnings)
+	if got, _ := formatWarnings(ctx.ResponseGuard.warnings(), nil); got != warnings {
+		t.Fatalf("%s = %q, want %q", headers.VSRWarnings, got, warnings)
 	}
 }
 
@@ -59,7 +59,7 @@ func TestResponseGuardActionsOnAResponseJailbreak(t *testing.T) {
 		warnings string
 	}{
 		{config.ResponseGuardBlock, true, ""},
-		{config.ResponseGuardAnnotate, false, headers.ResponseWarningJailbreak},
+		{config.ResponseGuardAnnotate, false, headers.WarningJailbreak},
 		{config.ResponseGuardNone, false, ""},
 	} {
 		t.Run(tc.action, func(t *testing.T) {
@@ -70,7 +70,7 @@ func TestResponseGuardActionsOnAResponseJailbreak(t *testing.T) {
 			if tc.blocked {
 				assertBlockedWith(t, plan, "jailbreak content detected")
 			} else {
-				assertDelivered(t, plan, tc.warnings)
+				assertDelivered(t, ctx, plan, tc.warnings)
 			}
 			if matched, _ := ctx.ResponseGuard.jailbreakFinding(); !matched {
 				t.Fatal("the guard did not record the detection it acted on")
@@ -82,7 +82,7 @@ func TestResponseGuardActionsOnAResponseJailbreak(t *testing.T) {
 func TestResponseGuardCleanAnswerPasses(t *testing.T) {
 	router, ctx := newResponseStageRouter(t, newJailbreakDecider(0.01), "", config.ResponseGuardBlock)
 
-	assertDelivered(t, guardAnswer(t, router, ctx, "The speed of light is about 299,792 km/s."), "")
+	assertDelivered(t, ctx, guardAnswer(t, router, ctx, "The speed of light is about 299,792 km/s."), "")
 	if rule := ctx.ResponseGuard.rules[0]; rule.state.String() != "false" || rule.action != "" {
 		t.Fatalf("rule = %+v, want not matched with no action", rule)
 	}
@@ -111,7 +111,7 @@ func TestResponseGuardAnnotatesAnUngroundedAnswerWithDetails(t *testing.T) {
 	router, ctx := newHallucinationSignalRouter(t, server, groundedGuard(config.ResponseGuardAnnotate, true, ""))
 	response := hallucinationAssistantResponse(hallucinationAnswer)
 
-	assertDelivered(t, guardResponse(t, router, ctx, response), headers.ResponseWarningHallucination)
+	assertDelivered(t, ctx, guardResponse(t, router, ctx, response), headers.WarningHallucination)
 	if text := semanticAssistantContent(response); !strings.Contains(text, "[Hallucination Warning]") || !strings.Contains(text, "450 meters") {
 		t.Fatalf("answer = %s, want the note naming the unsupported span", text)
 	}
@@ -122,7 +122,7 @@ func TestResponseGuardAnnotationWithoutDetailsKeepsTheBody(t *testing.T) {
 	router, ctx := newHallucinationSignalRouter(t, server, groundedGuard(config.ResponseGuardAnnotate, false, ""))
 	response := hallucinationAssistantResponse(hallucinationAnswer)
 
-	assertDelivered(t, guardResponse(t, router, ctx, response), headers.ResponseWarningHallucination)
+	assertDelivered(t, ctx, guardResponse(t, router, ctx, response), headers.WarningHallucination)
 	if text := semanticAssistantContent(response); text != hallucinationAnswer {
 		t.Fatalf("answer = %s, want it unchanged without details", text)
 	}
@@ -135,7 +135,7 @@ func TestResponseGuardEvaluatesResponseSignalsOnlyWhenARuleNeedsThem(t *testing.
 	router, ctx := newHallucinationSignalRouter(t, server, groundedGuard(config.ResponseGuardBlock, false, config.ResponseGuardBlock))
 	router.applySignalResultsToContext(ctx, &classification.SignalResults{MatchedKeywordRules: []string{responseStageProbeKeyword}})
 
-	assertDelivered(t, guardAnswer(t, router, ctx, hallucinationAnswer), "")
+	assertDelivered(t, ctx, guardAnswer(t, router, ctx, hallucinationAnswer), "")
 	if calls.Load() != 0 {
 		t.Fatalf("the detector ran %d times for a request that needs no fact checking", calls.Load())
 	}
@@ -155,10 +155,10 @@ func TestResponseGuardOnUnknown(t *testing.T) {
 		blocked   bool
 		warnings  string
 	}{
-		{"failed detector annotates by default", true, true, "", false, headers.ResponseWarningUnverifiedFactual},
+		{"failed detector annotates by default", true, true, "", false, headers.WarningUnverifiedFactual},
 		{"failed detector blocks under block", true, true, config.ResponseGuardBlock, true, ""},
 		{"failed detector passes under none", true, true, config.ResponseGuardNone, false, ""},
-		{"missing context annotates", false, false, config.ResponseGuardAnnotate, false, headers.ResponseWarningUnverifiedFactual},
+		{"missing context annotates", false, false, config.ResponseGuardAnnotate, false, headers.WarningUnverifiedFactual},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			server, calls := newHallucinationDecider([]string{"450 meters"}, tc.fail)
@@ -172,7 +172,7 @@ func TestResponseGuardOnUnknown(t *testing.T) {
 			if tc.blocked {
 				assertBlockedWith(t, plan, "not supported by its grounding context")
 			} else {
-				assertDelivered(t, plan, tc.warnings)
+				assertDelivered(t, ctx, plan, tc.warnings)
 			}
 			if !tc.context && calls.Load() != 0 {
 				t.Fatalf("the detector was asked about an answer with no context to check it against (%d calls)", calls.Load())
@@ -227,7 +227,7 @@ func TestResponseGuardOverARequestStageSignal(t *testing.T) {
 		When: config.RuleNode{Type: config.SignalTypeKeyword, Name: responseStageProbeKeyword}, Action: config.ResponseGuardAnnotate,
 	}}})}
 
-	assertDelivered(t, guardAnswer(t, router, ctx, unsafeAnswer), headers.ResponseWarningGuard)
+	assertDelivered(t, ctx, guardAnswer(t, router, ctx, unsafeAnswer), headers.WarningGuard)
 	if observed := ctx.ResponseGuard.observed(); len(observed.Values)+len(observed.Errors) != 0 {
 		t.Fatal("a guard that reads no response-stage rule scanned the answer")
 	}
@@ -259,7 +259,7 @@ func TestResponseGuardRecordsAFailedScanAsUnavailable(t *testing.T) {
 	router, ctx := newResponseStageRouter(t, newFailingDecider(), config.ResponseGuardNone, config.ResponseGuardBlock)
 	recorder := startResponseStageReplay(t, router, ctx)
 
-	assertDelivered(t, guardAnswer(t, router, ctx, unsafeAnswer), "")
+	assertDelivered(t, ctx, guardAnswer(t, router, ctx, unsafeAnswer), "")
 	router.recordRouterReplayResponseGuard(ctx)
 
 	signal := outcomeFor(t, replayOutcomes(t, recorder, ctx.RouterReplayID), responseStageSignalKey, "")
@@ -268,21 +268,22 @@ func TestResponseGuardRecordsAFailedScanAsUnavailable(t *testing.T) {
 	}
 }
 
-// The response headers phase writes x-vsr-matched-jailbreak before the body
-// is checked, so the body phase rewrites it with the response-stage matches
-// after the request-stage ones, under the same debug gate.
-func TestResponseGuardMatchedHeaderIncludesResponseRules(t *testing.T) {
+// The response headers phase writes the trace before the body is checked, so
+// the body phase rewrites it with the response-stage matches after the
+// request-stage ones, under the same debug gate.
+func TestResponseGuardTraceIncludesResponseRules(t *testing.T) {
 	router, ctx := newResponseStageRouter(t, newJailbreakDecider(0.95), "", config.ResponseGuardAnnotate)
 	ctx.Headers[headers.VSRDebug] = "true"
 	ctx.VSRMatchedJailbreak = []string{"prompt_injection"}
 
 	plan := guardAnswer(t, router, ctx, unsafeAnswer)
 
-	if got := bodyPhaseHeader(plan.response, headers.VSRMatchedJailbreak); got != "prompt_injection,"+responseStageRuleName {
-		t.Fatalf("%s = %q, want the request-stage match followed by the response-stage one", headers.VSRMatchedJailbreak, got)
+	signals := traceMembersOf(t, bodyPhaseHeader(plan.response, headers.VSRTrace))[headers.TraceSignals]
+	if want := `"jailbreak:prompt_injection" "jailbreak:` + responseStageRuleName + `"`; !strings.Contains(signals, want) {
+		t.Fatalf("signals = %s, want the request-stage match followed by the response-stage one", signals)
 	}
 	delete(ctx.Headers, headers.VSRDebug)
-	if got := bodyPhaseHeader(guardAnswer(t, router, ctx, unsafeAnswer).response, headers.VSRMatchedJailbreak); got != "" {
-		t.Fatalf("%s = %q without %s, want it withheld like the request-stage ones", headers.VSRMatchedJailbreak, got, headers.VSRDebug)
+	if got := bodyPhaseHeader(guardAnswer(t, router, ctx, unsafeAnswer).response, headers.VSRTrace); got != "" {
+		t.Fatalf("%s = %q without %s, want it withheld", headers.VSRTrace, got, headers.VSRDebug)
 	}
 }

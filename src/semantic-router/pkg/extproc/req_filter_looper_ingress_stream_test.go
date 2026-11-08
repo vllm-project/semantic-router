@@ -112,9 +112,10 @@ func TestLooperIngressPreservesClientResponseContract(t *testing.T) {
 					}
 					if format != llmprotocol.OpenAIChatV1 {
 						require.NotContains(t, body, `"fusion"`)
-						warning := immediateHeaderValue(response, headers.VSRProtocolWarnings)
+						appendRoutedResponseHeaders(response, ctx)
+						warning := immediateHeaderValue(response, headers.VSRWarnings)
 						if trace {
-							require.Contains(t, warning, "dropped;router_extension_unsupported_protocol;fusion")
+							require.Contains(t, warning, `protocol;action=dropped;reason="router_extension_unsupported_protocol";field="fusion"`)
 						} else {
 							require.NotContains(t, warning, "router_extension")
 						}

@@ -259,7 +259,7 @@ serving the valid answer. It does not truncate trace JSON or answer text.
 
 OpenAI Responses and Anthropic Messages responses omit this Chat-specific
 extension. Both an unsupported target protocol and a size-based omission emit a
-`x-vsr-protocol-warnings` response header with action `dropped`, field `flow`,
+`x-vsr-warnings` response header with action `dropped`, field `flow`,
 and reason `router_extension_unsupported_protocol` or
 `router_extension_size_limit`. The warning also accompanies immediate Looper
 responses. Required answer content remains subject to the normal protocol

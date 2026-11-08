@@ -16,6 +16,7 @@ import unittest
 from pathlib import Path
 
 import yaml
+from cli.vsr_trace import TRACE_HEADER, parse_trace
 from cli_test_base import CLITestBase
 from mock_upstream import PROVIDER_MOCKER_PORT, MockUpstreamMixin
 from runtime_http import write_fixture
@@ -116,8 +117,8 @@ class TestServeManagedModelRuntime(MockUpstreamMixin, ServeSessionMixin, CLITest
         route["modelRefs"] = copy.deepcopy(default_route["modelRefs"])
         config["recipes"][0]["signals"] = {"systemone": [signal]}
         config["recipes"][0]["decisions"].insert(0, route)
-        config["global"]["model_catalog"]["deployments"] = deployments
-        # The route check reads x-vsr-matched-decision-model, a debug header.
+        config["global"].setdefault("model_catalog", {})["deployments"] = deployments
+        # The route check reads the systemone signals in x-vsr-trace, a debug header.
         config["global"].setdefault("router", {})["headers"] = {"debug": "any"}
         config_path.write_text(
             yaml.safe_dump(config, sort_keys=False), encoding="utf-8"
@@ -138,7 +139,12 @@ class TestServeManagedModelRuntime(MockUpstreamMixin, ServeSessionMixin, CLITest
                 content="Plan a three-step proof that there are infinitely many primes.",
             )
             selected = headers.get("x-vsr-selected-decision", "")
-            matched = headers.get("x-vsr-matched-decision-model", "")
+            signals = parse_trace(headers.get(TRACE_HEADER)).get("signals")
+            matched = ",".join(
+                item.removeprefix("systemone:")
+                for item in (signals.items if signals else [])
+                if item.startswith("systemone:")
+            )
             if selected == route["name"]:
                 return selected, matched
             time.sleep(2)

@@ -16,8 +16,7 @@ import (
 const Placeholder = "<volatile>"
 
 // volatileHeaders change on every run without changing behavior: trace
-// context, generated identifiers and clocks. Measured latencies are matched
-// by suffix in VolatileHeader.
+// context, generated identifiers and clocks.
 var volatileHeaders = map[string]bool{
 	"date":                           true,
 	"traceparent":                    true,
@@ -29,7 +28,7 @@ var volatileHeaders = map[string]bool{
 // VolatileHeader reports whether a header's value is normalized away.
 func VolatileHeader(name string) bool {
 	name = strings.ToLower(name)
-	return volatileHeaders[name] || strings.HasSuffix(name, "-latency-ms")
+	return volatileHeaders[name]
 }
 
 // volatileJSONFields are body fields that carry the clock.

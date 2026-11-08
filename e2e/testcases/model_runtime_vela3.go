@@ -128,7 +128,7 @@ func checkModelRuntimeVela3Case(
 		return "", err
 	}
 	want := vela3Matches(signals, answered)
-	matched := headerItems(response.Headers, "x-vsr-matched-decision-model")
+	matched := signalItems(response.Headers, "systemone")
 	var got []string
 	for item := range matched {
 		name, _, _ := strings.Cut(item, ":")

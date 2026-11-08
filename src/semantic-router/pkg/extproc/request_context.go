@@ -39,14 +39,15 @@ const (
 	// SessionProvenanceResponseAPI: SessionID came from server-retained
 	// Response API state (ResponseObjectState.SessionTrackingID) — trusted.
 	SessionProvenanceResponseAPI SessionProvenance = "response_api"
-	// SessionProvenanceHeader: SessionID came from the client-supplied
-	// x-session-id header — trusted only because it is scoped inside
-	// AuthenticatedPrincipal's hard namespace by callers that need
-	// trust (a header alone is never authentication).
+	// SessionProvenanceHeader: SessionID came from x-vsr-session-id or a
+	// header global.router.headers.session_id_headers accepts — trusted
+	// only because it is scoped inside AuthenticatedPrincipal's hard
+	// namespace by callers that need trust (a header alone is never
+	// authentication).
 	SessionProvenanceHeader SessionProvenance = "header"
-	// SessionProvenanceAnthropicPromptCache: SessionID came from Anthropic
-	// transport/body signals (x-claude-code-session-id or
-	// metadata.user_id) — client-influenced, not trusted for sticky state.
+	// SessionProvenanceAnthropicPromptCache: SessionID came from the
+	// Anthropic body's metadata.user_id — client-influenced, not trusted for
+	// sticky state.
 	SessionProvenanceAnthropicPromptCache SessionProvenance = "anthropic_prompt_cache"
 	// SessionProvenanceMessageHash: SessionID is a derived fingerprint of
 	// message content/structure — a heuristic grouping signal, not an
@@ -64,6 +65,14 @@ type RequestContext struct {
 	learningPreview           *routerLearningPreviewSnapshot // Request-local, read-only selection state; never used by generation.
 	AutomaticCandidateDemands map[string]selection.CandidateDemand
 	BenchmarkModelUsage       string // Router-owned bounded accounting receipt; never copied from client or cache.
+	// BenchmarkConfigHash is the runtime document hash a config-bound
+	// evaluation request was admitted on, and BenchmarkInferenceCalls the
+	// provider calls its receipt counts; both ride in x-vsr-trace.
+	BenchmarkConfigHash     string
+	BenchmarkInferenceCalls int
+	// protocolDiagnosticsReported counts the ProtocolDiagnostics an
+	// x-vsr-warnings header already carried, which metrics counted.
+	protocolDiagnosticsReported int
 
 	// ConfigVersion is the version of the configuration snapshot that serves
 	// the request; 0 when the router serves without the lifecycle.
@@ -168,6 +177,10 @@ type RequestContext struct {
 	// could influence or collide, not an explicit session declaration. See
 	// ResolveStickyToolIdentity in sticky_tool_identity.go.
 	SessionProvenance SessionProvenance
+	// SessionIDHeader names the header that pinned SessionID, when one did,
+	// of the sessionIDHeaders the Router reads in order.
+	SessionIDHeader  string
+	sessionIDHeaders []string
 	// AuthenticatedPrincipal is the trusted gateway-authenticated user ID
 	// (from the configured authz header, via authHeaderUserID) — never a
 	// client-supplied or derived value. Empty when the request carries no
@@ -308,7 +321,10 @@ type RequestContext struct {
 	ResponseStage classification.ResponseInput
 	// ResponseGuard is what the selected decision's response_guard made of
 	// the answer, nil until it ran.
-	ResponseGuard          *responseGuardRun
+	ResponseGuard *responseGuardRun
+	// ResponseGuardHold is the streamed answer the Router holds until the
+	// guard has read all of it, nil for an answer it does not hold.
+	ResponseGuardHold      *responseGuardHold
 	VSRDecisionDiagnostics decision.EvaluationDiagnostics
 	VSRProjectionTrace     *projectiontrace.Trace
 
@@ -374,6 +390,11 @@ type RequestContext struct {
 	Hop             *routing.Hop          // The routing context of a hop served in process
 	LooperIteration int                   // The iteration number if this is a looper request
 	LooperLogprobs  *looperLogprobOptions // Native Chat evidence requested by an authenticated internal hop
+	// LooperTrace is what the Looper's execution reports in x-vsr-trace.
+	LooperTrace *looperTrace
+	// ToolsSelection is what the tools plugin's selection did, for
+	// x-vsr-trace.
+	ToolsSelection *toolsSelection
 
 	// ListenerModels, when set, are the only request models the listener the
 	// client request arrived on accepts.

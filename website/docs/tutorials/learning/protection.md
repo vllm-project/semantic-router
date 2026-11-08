@@ -166,7 +166,7 @@ A release is honored only when all of these hold:
   `release_observe_only`.
 
 A refused release keeps the current hold and reports its reason in
-`x-vsr-protocol-warnings`. It does not use up the interval. An honored release
+`x-vsr-warnings`. It does not use up the interval. An honored release
 skips the held-model shortcut and rescue. With the progress gate enabled, the
 gate's evidence, cooldown and oscillation rules do not suppress it; the
 interval replaces them, and the gate trace records `bypassed_by_release`. Hard
@@ -362,10 +362,7 @@ adaptations:
 ## Diagnostics
 
 ```http
-x-vsr-learning-methods: protection
-x-vsr-learning-actions: protection=hold_current
-x-vsr-learning-scopes: protection=conversation
-x-vsr-learning-reasons: protection=cache_cost_high
+x-vsr-trace: session_phase=user_turn, learning=(protection;action=hold_current;scope=conversation;reason=cache_cost_high)
 ```
 
 Client UIs should translate raw actions into user-facing text. For example,

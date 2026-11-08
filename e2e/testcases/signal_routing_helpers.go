@@ -48,9 +48,9 @@ type SignalRoutingResult struct {
 type signalRoutingConfig struct {
 	// TestDataPath is the JSON file of SignalRoutingCase entries.
 	TestDataPath string
-	// MatchedHeader is the response header carrying the matched rule name
-	// (e.g. "x-vsr-matched-keywords", "x-vsr-matched-language").
-	MatchedHeader string
+	// SignalType is the type whose matched rules the trace lists, such as
+	// "keyword" or "language".
+	SignalType string
 	// TargetDecision is the decision this signal's rule routes to; used to
 	// check negative cases without pinning the exact fallback decision.
 	TargetDecision string
@@ -162,7 +162,7 @@ func testSingleSignalRouting(ctx context.Context, testCase SignalRoutingCase, lo
 
 	decision := response.Headers.Get("x-vsr-selected-decision")
 	result.ActualDecision = decision
-	result.ActualMatchedSignal = response.Headers.Get(cfg.MatchedHeader)
+	result.ActualMatchedSignal = matchedSignals(response.Headers, cfg.SignalType)
 
 	if testCase.ShouldMatch {
 		result.DecisionCorrect = result.ActualDecision == testCase.ExpectedDecision

@@ -51,7 +51,7 @@ config:
                     action: block
                 on_unknown: block
         - name: response_jailbreak_warn
-          description: Warns via x-vsr-response-warnings when the guardrail flags LLM output
+          description: Warns via x-vsr-warnings when the guardrail flags LLM output
           priority: 200
           rules:
             operator: OR

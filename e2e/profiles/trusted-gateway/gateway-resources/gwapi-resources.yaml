@@ -68,7 +68,7 @@ spec:
     - matches:
         - headers:
             - type: Exact
-              name: x-selected-model
+              name: x-vsr-route-model
               value: static-model
       backendRefs:
         - name: static-backend

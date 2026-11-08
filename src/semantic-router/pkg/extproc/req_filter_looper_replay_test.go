@@ -52,6 +52,7 @@ func TestHandleLooperExecutionFailureIsVisibleAndTerminalInReplay(t *testing.T) 
 	if err != nil {
 		t.Fatalf("handleLooperExecution: %v", err)
 	}
+	appendRoutedResponseHeaders(response, ctx)
 	if got := response.GetImmediateResponse().GetStatus().GetCode(); got != typev3.StatusCode_InternalServerError {
 		t.Fatalf("looper failure status = %v, want %v", got, typev3.StatusCode_InternalServerError)
 	}
@@ -119,6 +120,7 @@ func TestHandleEscalatePartialFailurePersistsAccountingWithoutCandidateBody(t *t
 	if err != nil {
 		t.Fatalf("handleLooperExecution: %v", err)
 	}
+	appendRoutedResponseHeaders(response, ctx)
 	record, found := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
 	assertConfidencePartialFailureReplay(t, response, record, found, ctx.RouterReplayID)
 }
@@ -251,6 +253,7 @@ func TestHandleLooperExecutionRecordsFinalModelInReplay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handleLooperExecution: %v", err)
 	}
+	appendRoutedResponseHeaders(response, ctx)
 	record, found := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
 	assertFinalLooperReplay(t, response, ctx, record, found)
 }
@@ -341,7 +344,7 @@ func TestLooperHopReplayUsesRecipeScopedDuplicateDecision(t *testing.T) {
 	if !ctx.LooperRequest {
 		t.Fatal("an in-process hop is a Looper request")
 	}
-	for _, internalHeader := range looperInternalContextHeaders {
+	for _, internalHeader := range droppedClientHeaders {
 		if removed := headerResponse.GetRequestHeaders().Response.HeaderMutation.RemoveHeaders; !slices.Contains(removed, internalHeader) {
 			t.Fatalf("request header mutation retained internal header %q", internalHeader)
 		}
@@ -358,7 +361,7 @@ func TestLooperHopReplayUsesRecipeScopedDuplicateDecision(t *testing.T) {
 	if response == nil || response.GetRequestBody() == nil {
 		t.Fatal("expected looper internal continue response")
 	}
-	for _, internalHeader := range looperInternalContextHeaders {
+	for _, internalHeader := range droppedClientHeaders {
 		if removed := response.GetRequestBody().Response.HeaderMutation.RemoveHeaders; !slices.Contains(removed, internalHeader) {
 			t.Fatalf("physical backend dispatch retained internal header %q", internalHeader)
 		}
@@ -406,8 +409,8 @@ func TestSpoofedLooperContextCannotExecuteRecipePlugins(t *testing.T) {
 	requestHeaders := newRequestHeaders("POST", "/v1/chat/completions")
 	requestHeaders.RequestHeaders.Headers.Headers = append(
 		requestHeaders.RequestHeaders.Headers.Headers,
-		&core.HeaderValue{Key: headers.VSRLooperRequest, Value: "true"},
-		&core.HeaderValue{Key: headers.VSRLooperDecision, Value: "shared-route"},
+		&core.HeaderValue{Key: headers.VSRRouteModel, Value: "forged-route"},
+		&core.HeaderValue{Key: headers.VSRInternalAuth, Value: "forged"},
 		&core.HeaderValue{Key: headers.VSRSelectedRecipe, Value: "second-recipe"},
 	)
 	headerResponse, err := router.handleRequestHeaders(requestHeaders, ctx)
@@ -420,7 +423,7 @@ func TestSpoofedLooperContextCannotExecuteRecipePlugins(t *testing.T) {
 	if got := ctx.Routing.SelectedRecipe(); got != nil {
 		t.Fatalf("spoofed recipe hydrated routing context: %+v", got)
 	}
-	for _, internalHeader := range looperInternalContextHeaders {
+	for _, internalHeader := range droppedClientHeaders {
 		if removed := headerResponse.GetRequestHeaders().Response.HeaderMutation.RemoveHeaders; !slices.Contains(removed, internalHeader) {
 			t.Fatalf("request header mutation retained internal header %q", internalHeader)
 		}

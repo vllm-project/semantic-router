@@ -25,7 +25,7 @@ func init() {
 func testEventRouting(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	return runSignalRoutingTest(ctx, client, opts, signalRoutingConfig{
 		TestDataPath:   "e2e/testcases/testdata/event_routing_cases.json",
-		MatchedHeader:  "x-vsr-matched-keywords",
+		SignalType:     "keyword",
 		TargetDecision: targetEventDecision,
 		ResultsTitle:   "EVENT ROUTING TEST RESULTS",
 		LogLabel:       "Event",

@@ -92,7 +92,7 @@ own tool results:
 
 A guard rule that reads an unavailable rule takes the guard's `on_unknown`, and
 annotates with `unverified_factual` rather than `hallucination`. With
-`x-vsr-debug`, the `x-vsr-matched-hallucination` header carries the rules that
+`x-vsr-debug`, the `signals` member of `x-vsr-trace` carries the rules that
 matched.
 
 A streamed answer is checked once the stream ends and recorded with

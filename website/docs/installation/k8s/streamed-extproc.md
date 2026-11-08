@@ -24,7 +24,7 @@ Later chunks or trailers cannot resume routing or invoke request-body plugins.
 For streamed Chat Completions responses, immediate responses keep OpenAI-compatible behavior:
 
 - looper algorithms return `Content-Type: text/event-stream` when the original request has `"stream": true`;
-- looper responses include `x-vsr-looper-*` headers such as `x-vsr-looper-model`, `x-vsr-looper-models-used`, `x-vsr-looper-iterations`, and `x-vsr-looper-algorithm`;
+- looper responses report the models called, the algorithm and the iterations in the `looper` member of `x-vsr-trace`;
 - non-streaming immediate responses, including many `fast_response` blocks, return a complete JSON response immediately;
 - Response API requests are translated back through the Response API layer, so looper execution is forced to non-streaming internally for those requests.
 
@@ -123,7 +123,7 @@ A complete Kubernetes example is available in `deploy/kubernetes/streaming/aigw-
 
 ## Raw Envoy
 
-If a raw Envoy route table or backend depends on Semantic Router's request headers, as the configuration `vllm-sr serve` generates does, use `request_body_mode: BUFFERED` or the `FULL_DUPLEX_STREAMED` configuration described below. In `STREAMED` mode, Envoy passes the request headers on as soon as Semantic Router answers them. A body that arrives after that answer can still be rewritten, but Envoy no longer applies [header mutations](https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/ext_proc/v3/external_processor.proto#envoy-v3-api-field-service-ext-proc-v3-commonresponse-header-mutation) to that request. Semantic Router sets the provider credential, the provider request path and the `x-selected-model` routing header at end-of-stream, so such a request reaches Envoy's default route with its original path and the client's own `Authorization` header. Whether a request is affected depends on how long its body takes to arrive, so the failures are intermittent. With `request_body_mode: FULL_DUPLEX_STREAMED`, `request_trailer_mode: SEND` and `global.router.streamed_body` enabled, Envoy applies these header changes, because Semantic Router holds its reply to the request headers until the body is routed. Keep that filter's `failure_mode_allow` at its default, `false`: while the reply is held, a failed ExtProc stream would otherwise let Envoy forward the request with the client's original headers.
+If a raw Envoy route table or backend depends on Semantic Router's request headers, as the configuration `vllm-sr serve` generates does, use `request_body_mode: BUFFERED` or the `FULL_DUPLEX_STREAMED` configuration described below. In `STREAMED` mode, Envoy passes the request headers on as soon as Semantic Router answers them. A body that arrives after that answer can still be rewritten, but Envoy no longer applies [header mutations](https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/ext_proc/v3/external_processor.proto#envoy-v3-api-field-service-ext-proc-v3-commonresponse-header-mutation) to that request. Semantic Router sets the provider credential, the provider request path and the `x-vsr-route-model` routing header at end-of-stream, so such a request reaches Envoy's default route with its original path and the client's own `Authorization` header. Whether a request is affected depends on how long its body takes to arrive, so the failures are intermittent. With `request_body_mode: FULL_DUPLEX_STREAMED`, `request_trailer_mode: SEND` and `global.router.streamed_body` enabled, Envoy applies these header changes, because Semantic Router holds its reply to the request headers until the body is routed. Keep that filter's `failure_mode_allow` at its default, `false`: while the reply is held, a failed ExtProc stream would otherwise let Envoy forward the request with the client's original headers.
 
 The Agent Router example above routes on `x-ai-eg-model`, which Semantic Router does not set, so its routing does not depend on these header changes.
 
@@ -167,7 +167,7 @@ spec:
 
 agentgateway does not support a separate `Streamed` request-body mode. Use `FullDuplexStreamed` for streamed request bodies and enable `global.router.streamed_body` in Semantic Router.
 
-To route on `x-selected-model` or another header Semantic Router sets, add `phase: PreRouting` under `traffic`: in the default `PostRouting` phase, agentgateway selects the route before ExtProc runs.
+To route on `x-vsr-route-model` or another header Semantic Router sets, add `phase: PreRouting` under `traffic`: in the default `PostRouting` phase, agentgateway selects the route before ExtProc runs.
 
 Semantic Router detects the negotiated ExtProc body mode. With
 `FullDuplexStreamed`, it buffers intermediate request chunks without emitting
@@ -232,7 +232,7 @@ Look for:
 
 - `HTTP/1.1 200 OK`;
 - `content-type: text/event-stream`;
-- `x-vsr-looper-algorithm: confidence`, `ratings`, or `remom`;
+- `x-vsr-response-path: looper`;
 - SSE events beginning with `data: {"id":"chatcmpl-...","object":"chat.completion.chunk"...}`;
 - final `data: [DONE]`.
 
@@ -285,7 +285,7 @@ With `request_body_mode: STREAMED` or `requestBodyMode: FullDuplexStreamed`, Sem
 
 3. Send a large or chunked request with `"model": "vllm-sr/auto"` and verify it routes normally.
 
-4. Send a streamed Chat Completions request with `"stream": true` that matches a looper decision and verify SSE output plus `x-vsr-looper-*` headers.
+4. Send a streamed Chat Completions request with `"stream": true` that matches a looper decision and verify SSE output plus, for a caller `global.router.headers.debug` allows, the `looper` member of `x-vsr-trace`.
 
 5. Send a request that matches a `fast_response` decision and verify the backend model is not called.
 

@@ -347,11 +347,11 @@ supported Chat paths are `/openai/v1/chat/completions` and the deployment
 route. The Router accepts Copilot's `reasoning.summary` on Responses
 turns. It forwards the setting to a Responses backend. With a Chat Completions
 or Messages backend, the turn still runs, but the summary request is dropped
-and reported in `x-vsr-protocol-warnings`.
+and reported in `x-vsr-warnings`.
 
 Protocol translation is limited to fields the router supports. When a request
-crosses protocols, inspect `x-vsr-client-protocol`,
-`x-vsr-upstream-protocol`, and any `x-vsr-protocol-warnings` response header.
+crosses protocols, inspect the `client_protocol` and `upstream_protocol`
+members of `x-vsr-trace` and any `x-vsr-warnings` response header.
 
 Chat Completions accepts OpenRouter's `reasoning_details` on assistant messages
 and streaming deltas. Text, summary, encrypted, and server tool call blocks keep
@@ -371,7 +371,7 @@ identifier remain separate; the Router does not infer their identity.
 
 Only Chat Completions carries these blocks. A Responses or Messages client of a
 Chat backend still gets the reply: the Router drops the blocks and keeps the
-reasoning text. A buffered reply reports the drop in `x-vsr-protocol-warnings`
+reasoning text. A buffered reply reports the drop in `x-vsr-warnings`
 as `dropped;...;reasoning_details`. A stream has already sent its headers when
 the drop is found, so the drop is recorded only in the
 `llm_translation_lossy_total` metric and a `translation_lossy` debug log event;
@@ -405,7 +405,7 @@ decision, or request content:
 | `no_route` | 400 | `invalid_request_error` | No decision matched, and no default model applies. A recipe entrypoint falls back to `providers.defaults.model` when it is configured. Looper entrypoints follow the same recipe rules; their names do not select an algorithm. |
 | `context_length_exceeded` | 400 or 422 | `invalid_request_error` | The request does not fit the models that could serve it, even without the estimate's reserves for structured data and media: 400 from the [request budget check](#request-budget-errors), 422 from the models' `context_window_size`. |
 | `max_output_tokens_exceeded` | 400 | `invalid_request_error` | The requested output exceeds the configured model limit. See [request budget errors](#request-budget-errors). |
-| `decision_unresolved` | 503 | `server_error` | A decision could not be evaluated because a signal it needs was unavailable, and its `rules.on_unknown` is `fail_request`. `x-vsr-applied-unknown-policy` names the decision. |
+| `decision_unresolved` | 503 | `server_error` | A decision could not be evaluated because a signal it needs was unavailable, and its `rules.on_unknown` is `fail_request`. The `on_unknown` member of `x-vsr-trace` names the decision. |
 | `no_eligible_model` | 503 | `server_error` | The selection policy rejected every candidate model of the matched decision. |
 | `image_route_required` | 400 | `invalid_request_error` | An [Images API](#images-api) request reached no decision whose output is an image. |
 | `image_generation_forbidden` | 400 | `invalid_request_error` | The matched decision answers with a generated image, and the request's `tool_choice` is `none`. |

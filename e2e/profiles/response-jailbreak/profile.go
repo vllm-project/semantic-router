@@ -2,8 +2,9 @@
 // response-direction jailbreak signal and the response_guard that acts on it. It
 // deploys the router with its jailbreak rule answered by provider-mocker's
 // System One fixture, then verifies that jailbreak content the model emits at
-// the end of a long answer is still caught in the buffered response and
-// reported through the selected decision's configured action.
+// the end of a long answer is still caught, in a buffered response and in a
+// streamed one, and reported through the selected decision's configured
+// action.
 package responsejailbreak
 
 import (
@@ -72,6 +73,8 @@ func (p *Profile) GetTestCases() []string {
 		"response-jailbreak-window-block",
 		"response-jailbreak-window-warning",
 		"response-jailbreak-streaming-passthrough",
+		"response-jailbreak-streaming-block",
+		"response-jailbreak-streaming-pass",
 	}
 }
 

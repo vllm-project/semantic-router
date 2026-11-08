@@ -26,6 +26,13 @@ const verdictLabels: Record<string, string> = {
   not_applicable: 'Not applicable',
 }
 
+// How a streamed answer reached the client: held until the guard read it, or
+// as it streamed, before the guard read it.
+const streamLabels: Record<string, string> = {
+  buffered: 'Stream held for the guard',
+  unbuffered: 'Streamed before the check',
+}
+
 function outcomeEvidence(outcomes: InsightsOutcome[]) {
   const counts = new Map<string, number>()
   for (const outcome of outcomes) {
@@ -49,10 +56,13 @@ function outcomeEvidence(outcomes: InsightsOutcome[]) {
               ? `Score: ${finite(outcome.score) ? outcome.score.toFixed(4) : outcome.score === undefined ? '0.0000' : 'Not recorded'}${outcome.metadata.score_kind ? ` (${outcome.metadata.score_kind})` : ''}`
               : 'Score unavailable'}
           </span>
-          {outcome.metadata?.enforcement === 'not_enforced_streaming' ? (
-            <span className={styles.costSubtle}>Not enforced for streaming</span>
-          ) : outcome.metadata?.action ? (
+          {outcome.metadata?.action ? (
             <span className={styles.costSubtle}>Action: {outcome.metadata.action}</span>
+          ) : null}
+          {outcome.metadata?.stream ? (
+            <span className={styles.costSubtle}>
+              {streamLabels[outcome.metadata.stream] ?? outcome.metadata.stream}
+            </span>
           ) : null}
         </div>
       ))}

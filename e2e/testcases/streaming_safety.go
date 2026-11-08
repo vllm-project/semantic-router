@@ -99,8 +99,8 @@ func validateStreamingSafetyResponse(headers http.Header, body []byte, decision,
 		return fmt.Errorf("expected decision %q, got %q", decision, got)
 	}
 	blocked := refusal != ""
-	if (headers.Get("x-vsr-fast-response") == "true") != blocked {
-		return fmt.Errorf("unexpected fast-response header for decision %q", decision)
+	if (headers.Get(responsePathHeader) == "fast_response") != blocked {
+		return fmt.Errorf("unexpected response path %q for decision %q", headers.Get(responsePathHeader), decision)
 	}
 	text, err := decodeStructuredChatText(body)
 	if err != nil {

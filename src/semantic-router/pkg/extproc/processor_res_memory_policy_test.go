@@ -75,7 +75,7 @@ func TestResponseMemoryWritesHonorPolicyBeforeClientPreference(t *testing.T) {
 				ctx.Retention = &config.DecisionRetention{Drop: tc.drop}
 			}
 			if tc.disable {
-				ctx.Headers[headers.DisableRouterMemory] = "true"
+				ctx.Headers[headers.VSRMemory] = headers.MemoryOff
 			}
 			router.scheduleResponseMemoryStoreText(ctx, "The conference itinerary includes a morning meeting and an afternoon workshop.")
 			if err := runner.RetireAndWait(time.Second); err != nil {

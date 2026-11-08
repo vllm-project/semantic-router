@@ -106,7 +106,7 @@ recipes:
 
 
 def _model_route(rendered_config, model_name):
-    """Find the route entry whose x-selected-model header matches *model_name*."""
+    """Find the route entry whose x-vsr-route-model header matches *model_name*."""
     listener = rendered_config["static_resources"]["listeners"][0]
     hcm = listener["filter_chains"][0]["filters"][0]["typed_config"]
     routes = hcm["route_config"]["virtual_hosts"][0]["routes"]
@@ -114,7 +114,7 @@ def _model_route(rendered_config, model_name):
         headers = route.get("match", {}).get("headers", [])
         for h in headers:
             if (
-                h.get("name") == "x-selected-model"
+                h.get("name") == "x-vsr-route-model"
                 and h.get("string_match", {}).get("exact") == model_name
             ):
                 return route
@@ -122,7 +122,7 @@ def _model_route(rendered_config, model_name):
 
 
 def _default_route(rendered_config):
-    """Find the fallback route without an x-selected-model header match."""
+    """Find the fallback route without an x-vsr-route-model header match."""
     listener = rendered_config["static_resources"]["listeners"][0]
     hcm = listener["filter_chains"][0]["filters"][0]["typed_config"]
     routes = hcm["route_config"]["virtual_hosts"][0]["routes"]

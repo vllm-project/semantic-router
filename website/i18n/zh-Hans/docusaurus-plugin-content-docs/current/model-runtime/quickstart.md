@@ -182,7 +182,7 @@ curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \
   | grep -i '^x-vsr-'
 ```
 
-`x-vsr-selected-decision` 给出路由名称，`x-vsr-matched-decision-model` 列出匹配的决策信号。
+`x-vsr-selected-decision` 给出路由名称，`x-vsr-trace` 的 `signals` 成员列出匹配的 `systemone` 信号。
 如果运行时之后重启，在模型恢复之前该信号为未知，`on_unknown: no_match` 会在此期间把请求送到 `default-route`。
 
 Engine 与 Router 共享同一个受管理实例。若要接入独立运营的 worker，明确配置

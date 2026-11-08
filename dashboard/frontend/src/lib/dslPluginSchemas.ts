@@ -81,7 +81,7 @@ function getResponseGuardPluginFieldSchema(): FieldSchema[] {
           required: true,
           options: ['block', 'annotate', 'none'],
           description:
-            'Refuse the answer with 403, deliver it with x-vsr-response-warnings, or only record it',
+            'Refuse the answer with 403, deliver it with x-vsr-warnings, or only record it',
         },
         {
           key: 'details',

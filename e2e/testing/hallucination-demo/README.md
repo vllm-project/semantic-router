@@ -15,7 +15,7 @@ make e2e-test E2E_PROFILE=hallucination
 
 That profile deploys an OpenAI-compatible mock LLM and endpoint-backed mock
 detector, sends a fact-checkable request with tool context, and verifies the
-`x-vsr-response-warnings: hallucination` response header. Its configuration is
+`x-vsr-warnings: hallucination` response header. Its configuration is
 in [`../../profiles/hallucination/values.yaml`](../../profiles/hallucination/values.yaml).
 
 ## Local fixture components

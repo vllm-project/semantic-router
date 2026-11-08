@@ -11,10 +11,7 @@ import React from 'react'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { DataTable, type Column } from '../components/DataTable'
 import type { FieldConfig } from '../components/EditModal'
-import {
-  formatRoutingMetadataValue,
-  matchedSignalHeader,
-} from '../components/routingMetadataDisplay'
+import { formatRoutingMetadataValue, matchedSignalKey } from '../components/routingMetadataDisplay'
 import RoutingScopeSelector from '../components/RoutingScopeSelector'
 import TableHeader from '../components/TableHeader'
 import type { ViewSection } from '../components/ViewModal'
@@ -261,7 +258,7 @@ export default function ConfigPageSignalsSection({
       sortable: true,
       render: (signal) => (
         <span style={{ fontWeight: 600 }}>
-          {formatRoutingMetadataValue(matchedSignalHeader(signal.canonicalType), signal.name)}
+          {formatRoutingMetadataValue(matchedSignalKey(signal.canonicalType), signal.name)}
         </span>
       ),
     },

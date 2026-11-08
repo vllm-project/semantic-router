@@ -24,15 +24,13 @@ describe('formatRoutingMetadataValue', () => {
     ['unified_privacy_pii_strict', 'Privacy PII Strict'],
     ['needs_fact_check', 'Needs Fact Check'],
   ])('humanizes signal %s', (identifier, expected) => {
-    expect(formatRoutingMetadataValue('x-vsr-matched-domains', identifier)).toBe(expected)
+    expect(formatRoutingMetadataValue('signal:domain', identifier)).toBe(expected)
   })
 
   it('expands language codes and preserves model identifiers', () => {
-    expect(formatRoutingMetadataValue('x-vsr-matched-language', 'zh')).toBe('Chinese')
-    expect(formatRoutingMetadataValue('x-vsr-matched-Language', 'de')).toBe('German')
-    expect(formatRoutingMetadataValue('x-vsr-selected-algorithm', 'multi_factor')).toBe(
-      'Multi-Factor',
-    )
+    expect(formatRoutingMetadataValue('signal:language', 'zh')).toBe('Chinese')
+    expect(formatRoutingMetadataValue('signal:Language', 'de')).toBe('German')
+    expect(formatRoutingMetadataValue('trace:algorithm', 'multi_factor')).toBe('Multi-Factor')
     expect(formatRoutingMetadataValue('x-vsr-selected-model', 'local/qwen3.5-122b-frontier')).toBe(
       'local/qwen3.5-122b-frontier',
     )
@@ -63,14 +61,12 @@ describe('formatRoutingMetadataValue', () => {
       )
     }
     for (const signal of signals) {
-      expect(formatRoutingMetadataValue(`x-vsr-matched-${signal.type}`, signal.name)).not.toMatch(
+      expect(formatRoutingMetadataValue(`signal:${signal.type}`, signal.name)).not.toMatch(
         /unified_|_/,
       )
     }
     for (const projection of projections) {
-      expect(formatRoutingMetadataValue('x-vsr-matched-projections', projection)).not.toMatch(
-        /unified_|_/,
-      )
+      expect(formatRoutingMetadataValue('signal:projection', projection)).not.toMatch(/unified_|_/)
     }
   })
 })

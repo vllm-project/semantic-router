@@ -213,8 +213,8 @@ func runMaskingRawRequest(
 	if path == "/v1/messages" {
 		request.Header.Set("anthropic-version", "2023-06-01")
 	}
-	// v0.4 demotes the selected-decision header behind x-vsr-debug (#2205);
-	// opt in so the assertions can prove the masking decision was selected.
+	// Opt in to x-vsr-trace, so a failing assertion shows how the request was
+	// routed beside the selected decision.
 	request.Header.Set("x-vsr-debug", "true")
 	response, err := session.HTTPClient(45 * time.Second).Do(request)
 	if err != nil {

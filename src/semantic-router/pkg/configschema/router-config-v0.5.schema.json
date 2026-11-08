@@ -5699,6 +5699,12 @@
         },
         "debug_principals": {
           "$ref": "#/$defs/DebugPrincipals"
+        },
+        "session_id_headers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,

@@ -24,7 +24,7 @@ type Request struct {
 	Header http.Header
 	// Body is the complete request body. Every attempt sends it again.
 	Body []byte
-	// RouteKey selects the cluster (the x-selected-model value). An empty key,
+	// RouteKey selects the cluster (the x-vsr-route-model value). An empty key,
 	// or one no cluster serves, takes the default route.
 	RouteKey string
 	// ExactRoute rejects an unknown route key instead of using the default

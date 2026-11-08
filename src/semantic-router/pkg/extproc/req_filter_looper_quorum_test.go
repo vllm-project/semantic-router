@@ -129,6 +129,7 @@ func TestHandleServedFallbackPersistsOutcomeAndRoutingFacts(t *testing.T) {
 
 	response, err := router.handleLooperExecution(context.Background(), request, decision, requestContext)
 	require.NoError(t, err)
+	appendRoutedResponseHeaders(response, requestContext)
 	require.Equal(t, typev3.StatusCode_OK, response.GetImmediateResponse().GetStatus().GetCode())
 
 	// The fallback target answered, so it must be the advertised selected model
@@ -177,6 +178,7 @@ func TestHandleFallbackEncodeFailurePersistsFailedReplay(t *testing.T) {
 
 	response, err := router.handleLooperExecution(context.Background(), request, decision, requestContext)
 	require.NoError(t, err)
+	appendRoutedResponseHeaders(response, requestContext)
 	require.Equal(t, typev3.StatusCode_BadGateway, response.GetImmediateResponse().GetStatus().GetCode())
 
 	require.NotEmpty(t, requestContext.RouterReplayID, "a failed encode must still create a Replay record")
@@ -411,6 +413,7 @@ func TestHandleStreamingFallbackThroughExtProc(t *testing.T) {
 
 	response, err := router.handleLooperExecution(context.Background(), request, decision, requestContext)
 	require.NoError(t, err)
+	appendRoutedResponseHeaders(response, requestContext)
 	immediate := response.GetImmediateResponse()
 	require.NotNil(t, immediate)
 	require.Equal(t, typev3.StatusCode_OK, immediate.GetStatus().GetCode())

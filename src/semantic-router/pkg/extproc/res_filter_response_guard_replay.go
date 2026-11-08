@@ -15,10 +15,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
-// responseGuardStreamingNotEnforced is the enforcement a streamed answer
-// gets: none. It exists as a whole for the first time when its bytes are
-// already with the client, so nothing the guard decided was applied.
-const responseGuardStreamingNotEnforced = "not_enforced_streaming"
+// How a streamed answer reached the client, as its guard outcomes record it:
+// held until the guard had read all of it, or as it arrived.
+const (
+	responseGuardStreamBuffered   = "buffered"
+	responseGuardStreamUnbuffered = "unbuffered"
+)
 
 // recordRouterReplayResponseGuard appends what the selected decision's
 // response_guard read and did to the replay record. The record is written
@@ -29,17 +31,47 @@ const responseGuardStreamingNotEnforced = "not_enforced_streaming"
 // score or the failure code), and one per guard rule it read (matched,
 // not_matched or unknown, with the action the rule applied).
 func (r *OpenAIRouter) recordRouterReplayResponseGuard(ctx *RequestContext) {
-	if ctx == nil || ctx.ResponseGuard == nil || ctx.RouterReplayID == "" {
+	if ctx == nil || ctx.ResponseGuard == nil {
 		return
 	}
-	recorder := ctx.RouterReplayRecorder
-	if recorder == nil {
-		recorder = r.ReplayRecorder
-	}
+	recorder := r.responseGuardReplayRecorder(ctx)
 	if recorder == nil {
 		return
 	}
-	for _, outcome := range ctx.ResponseGuard.replayOutcomes(ctx, time.Now().UTC()) {
+	appendResponseGuardOutcomes(ctx, recorder, ctx.ResponseGuard.replayOutcomes(ctx, time.Now().UTC()))
+	r.updateRouterReplayHallucinationStatus(ctx, recorder)
+}
+
+// recordRouterReplayUnreadAnswer records a held stream the guard never read,
+// with what became of it: over_limit, refused unread, or incomplete, which
+// sent the client only the stream's failure.
+func (r *OpenAIRouter) recordRouterReplayUnreadAnswer(ctx *RequestContext, outcome string) {
+	recorder := r.responseGuardReplayRecorder(ctx)
+	if recorder == nil {
+		return
+	}
+	unread := guardReplayOutcome(ctx, config.DecisionPluginResponseGuard, false, time.Now().UTC())
+	unread.Verdict, unread.Reason = "unread", outcome
+	if outcome == responseGuardOverLimit {
+		unread.Metadata["action"] = config.ResponseGuardBlock
+	}
+	appendResponseGuardOutcomes(ctx, recorder, []routerreplay.Outcome{unread})
+}
+
+// responseGuardReplayRecorder is the recorder of the request's replay record,
+// or nil when it has none.
+func (r *OpenAIRouter) responseGuardReplayRecorder(ctx *RequestContext) *routerreplay.Recorder {
+	if ctx == nil || ctx.RouterReplayID == "" {
+		return nil
+	}
+	if ctx.RouterReplayRecorder != nil {
+		return ctx.RouterReplayRecorder
+	}
+	return r.ReplayRecorder
+}
+
+func appendResponseGuardOutcomes(ctx *RequestContext, recorder *routerreplay.Recorder, outcomes []routerreplay.Outcome) {
+	for _, outcome := range outcomes {
 		if err := recorder.AppendOutcome(ctx.RouterReplayID, outcome); err != nil {
 			logging.ComponentErrorEvent("extproc", "router_replay_response_guard_outcome_failed", map[string]interface{}{
 				"request_id": ctx.RequestID,
@@ -49,7 +81,6 @@ func (r *OpenAIRouter) recordRouterReplayResponseGuard(ctx *RequestContext) {
 			})
 		}
 	}
-	r.updateRouterReplayHallucinationStatus(ctx, recorder)
 }
 
 func (run *responseGuardRun) replayOutcomes(ctx *RequestContext, now time.Time) []routerreplay.Outcome {
@@ -61,7 +92,7 @@ func (run *responseGuardRun) replayOutcomes(ctx *RequestContext, now time.Time) 
 		outcome.Verdict = "not_detected"
 		outcome.Metadata["signal"] = signalType
 		outcome.Metadata["stage"] = config.SystemOneStageResponse
-		if action := run.signalAction(signalType); action != "" && !run.streamed {
+		if action := run.signalAction(signalType); action != "" {
 			outcome.Metadata["action"] = action
 		}
 		code, failed := observed.Errors[key]
@@ -84,7 +115,7 @@ func (run *responseGuardRun) replayOutcomes(ctx *RequestContext, now time.Time) 
 		outcome.TargetRef = fmt.Sprintf("rules[%d]", i)
 		outcome.Verdict = ruleOutcomeName(rule.state)
 		outcome.Metadata["warnings"] = strings.Join(rule.codes, ",")
-		if rule.action != "" && !run.streamed {
+		if rule.action != "" {
 			outcome.Metadata["action"] = rule.action
 		}
 		outcomes = append(outcomes, outcome)
@@ -115,12 +146,22 @@ func observedRuleKeys(observed *classification.ResponseSignal) []string {
 }
 
 func (run *responseGuardRun) replayOutcome(ctx *RequestContext, target string, now time.Time) routerreplay.Outcome {
+	return guardReplayOutcome(ctx, target, run.live, now)
+}
+
+// guardReplayOutcome is an outcome of the guard on the request's answer,
+// with how a streamed answer reached the client: live for one it received as
+// it streamed.
+func guardReplayOutcome(ctx *RequestContext, target string, live bool, now time.Time) routerreplay.Outcome {
 	outcome := routerreplay.Outcome{Timestamp: now, Source: "router", Target: target, Metadata: map[string]string{}}
 	if ctx.VSRSelectedDecisionName != "" {
 		outcome.Metadata["decision"] = ctx.VSRSelectedDecisionName
 	}
-	if run.streamed {
-		outcome.Metadata["enforcement"] = responseGuardStreamingNotEnforced
+	switch {
+	case ctx.ResponseGuardHold != nil:
+		outcome.Metadata["stream"] = responseGuardStreamBuffered
+	case live:
+		outcome.Metadata["stream"] = responseGuardStreamUnbuffered
 	}
 	return outcome
 }
@@ -128,8 +169,8 @@ func (run *responseGuardRun) replayOutcome(ctx *RequestContext, target string, n
 // signalCodes are the warning codes of a rule that reads a signal type; a
 // rule that reads any other response-stage type writes the guard's code.
 var signalCodes = map[string][]string{
-	config.SignalTypeJailbreak:     {headers.ResponseWarningJailbreak},
-	config.SignalTypeHallucination: {headers.ResponseWarningHallucination, headers.ResponseWarningUnverifiedFactual},
+	config.SignalTypeJailbreak:     {headers.WarningJailbreak},
+	config.SignalTypeHallucination: {headers.WarningHallucination, headers.WarningUnverifiedFactual},
 }
 
 // signalAction is the action of the first guard rule that read a signal of
@@ -137,7 +178,7 @@ var signalCodes = map[string][]string{
 func (run *responseGuardRun) signalAction(signalType string) string {
 	codes, ok := signalCodes[signalType]
 	if !ok {
-		codes = []string{headers.ResponseWarningGuard}
+		codes = []string{headers.WarningGuard}
 	}
 	for _, rule := range run.rules {
 		if rule.action != "" && slices.ContainsFunc(rule.codes, func(code string) bool { return slices.Contains(codes, code) }) {

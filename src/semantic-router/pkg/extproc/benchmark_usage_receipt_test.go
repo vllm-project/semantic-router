@@ -6,8 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
@@ -45,21 +43,13 @@ func TestBenchmarkUsageDirectProofAndCallLimit(t *testing.T) {
 			if tc.plugin != "" {
 				d.Plugins = []config.DecisionPlugin{{Type: tc.plugin, Configuration: tc.configuration}}
 			}
-			ctx := &RequestContext{Headers: map[string]string{headers.SRBenchExpectedConfigHash: hash, headers.SRBenchMaxInferenceCalls: "1"}, VSRSelectedDecision: d, VSRSelectedModel: "small", UpstreamStatusCode: 200, VSRCacheHit: tc.cache}
+			ctx := &RequestContext{Headers: map[string]string{headers.VSRBenchExpectedConfigHash: hash, headers.VSRBenchMaxInferenceCalls: "1"}, BenchmarkConfigHash: hash, VSRSelectedDecision: d, VSRSelectedModel: "small", UpstreamStatusCode: 200, VSRCacheHit: tc.cache}
 			if tc.shadow {
 				ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true, Shadow: &config.RouterReplayShadowConfig{Model: "candidate"}}
 			}
-			mutation := &ext_proc.HeaderMutation{}
-			response := &ext_proc.ProcessingResponse{Response: &ext_proc.ProcessingResponse_ResponseHeaders{ResponseHeaders: &ext_proc.HeadersResponse{Response: &ext_proc.CommonResponse{HeaderMutation: mutation}}}}
-			router.bindBenchmarkConfigResponse(response, ctx)
-			count := ""
-			for _, option := range mutation.SetHeaders {
-				if option.Header.Key == headers.VSRInferenceCallCount {
-					count = string(option.Header.RawValue)
-				}
-			}
-			if (count == "1") != tc.known {
-				t.Fatalf("unsafe call proof=%q", count)
+			router.recordBenchmarkInferenceCall(ctx, true)
+			if (ctx.BenchmarkInferenceCalls == 1) != tc.known {
+				t.Fatalf("unsafe call proof=%d", ctx.BenchmarkInferenceCalls)
 			}
 			if !tc.cache && (router.benchmarkCallLimitCheck(ctx) == nil) != tc.known {
 				t.Fatal("call precondition mismatch")
@@ -123,7 +113,7 @@ func TestBenchmarkUsageLooperIncludesEveryCallAndFailsClosed(t *testing.T) {
 
 func TestBenchmarkCallLimitStopsBeforeSystemOneSelection(t *testing.T) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{}}
-	ctx := &RequestContext{Headers: map[string]string{headers.SRBenchMaxInferenceCalls: "1"}}
+	ctx := &RequestContext{Headers: map[string]string{headers.VSRBenchMaxInferenceCalls: "1"}}
 	selected := &config.Decision{Name: "paid_selector", Algorithm: &config.AlgorithmConfig{Type: "systemone"}}
 	// No selector/client is initialized: reaching model selection would fail.
 	_, _, _, model, err := router.finalizeDecisionEvaluation(&decision.DecisionResult{Decision: selected}, "vllm-sr/auto", "query", ctx)

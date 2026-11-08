@@ -36,7 +36,7 @@ func TestReviewBufferedPolicyBodyRewriteReportsCacheWarningOnce(t *testing.T) {
 		t.Fatalf("response-policy body rewrite did not run: %q", got)
 	}
 	warning := protocolDiagnosticsHeader(common.GetHeaderMutation())
-	if got := strings.Count(warning, ";usage.cache"); got != 1 {
+	if got := strings.Count(warning, `field="usage.cache`); got != 1 {
 		t.Fatalf("usage.cache appears %d times after body rewrite: %q", got, warning)
 	}
 	if got := testutil.ToFloat64(counter) - before; got != 1 {
@@ -64,7 +64,7 @@ func TestReviewDecoratedTransportErrorReportsLateDiagnostic(t *testing.T) {
 		t.Fatalf("transport error was not translated: %+v", response)
 	}
 	warning := protocolDiagnosticsHeader(common.GetHeaderMutation())
-	if got := strings.Count(warning, ";error.innererror"); got != 1 {
+	if got := strings.Count(warning, `field="error.innererror"`); got != 1 {
 		t.Fatalf("error.innererror appears %d times in warning header: %q", got, warning)
 	}
 	if got := testutil.ToFloat64(counter) - before; got != 1 {
@@ -78,11 +78,11 @@ func TestReviewWarningHeaderEncodesControlBytes(t *testing.T) {
 		Reason: "vendor extension",
 		Field:  "vendor\x00\x1f\x7f;%",
 	}}
-	value, included := formatProtocolDiagnostics(diagnostics)
+	value, included := formatWarnings(nil, diagnostics)
 	if included != 1 {
 		t.Fatalf("included %d diagnostics, want 1", included)
 	}
-	for _, escaped := range []string{"%00", "%1F", "%7F", "%3B", "%25"} {
+	for _, escaped := range []string{"%00", "%1F", "%7F", "%25"} {
 		if !strings.Contains(value, escaped) {
 			t.Errorf("warning header does not encode %s: %q", escaped, value)
 		}
@@ -109,13 +109,13 @@ func TestReviewBufferedDiagnosticTruncationCountsOnlyReportedEntries(t *testing.
 	}
 	counter := metrics.TranslationLossyTotal.WithLabelValues("anthropic", "openai", "dropped", reason)
 	before := testutil.ToFloat64(counter)
-	warning, ok := recordBufferedProtocolDiagnostics(ctx, 0)
+	warning, ok := bufferedWarnings(ctx)
 	if !ok {
 		t.Fatal("buffered diagnostics were not reported")
 	}
-	formatted, included := formatProtocolDiagnostics(ctx.ProtocolDiagnostics)
+	formatted, included := formatWarnings(nil, ctx.ProtocolDiagnostics)
 	if included == 0 || included >= len(ctx.ProtocolDiagnostics) || warning != formatted ||
-		!strings.Contains(warning, "diagnostics_truncated") {
+		!strings.Contains(warning, "truncated;count=") {
 		t.Fatalf("warning was not bounded: included=%d warning=%q", included, warning)
 	}
 	if got := testutil.ToFloat64(counter) - before; got != float64(included) {

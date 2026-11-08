@@ -643,7 +643,7 @@ func appendRoutingHeaders(headersOut *[]*core.HeaderValueOption, model string) {
 		return
 	}
 	*headersOut = append(*headersOut, &core.HeaderValueOption{Header: &core.HeaderValue{
-		Key: headers.SelectedModel, RawValue: []byte(model),
+		Key: headers.VSRRouteModel, RawValue: []byte(model),
 	}})
 }
 

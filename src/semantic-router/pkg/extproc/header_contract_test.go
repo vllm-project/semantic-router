@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"maps"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -81,14 +82,24 @@ func recordResponseHeaderFacts(ctx *RequestContext) {
 	ctx.VSRContextTokenCount = 1500
 }
 
+// immediateHeaders finishes a response the Router answers itself at the reply
+// boundary, as processor_phase does, and returns the headers it carries.
+func immediateHeaders(response *ext_proc.ProcessingResponse, ctx *RequestContext) []*core.HeaderValueOption {
+	appendConfigVersionToImmediateResponse(response, ctx)
+	appendRoutedResponseHeaders(response, ctx)
+	return response.GetImmediateResponse().GetHeaders().GetSetHeaders()
+}
+
 // responseHeaderPaths are the ways the Router answers a client, each with the
-// headers it writes; debug marks the paths that have debug headers to write.
+// headers it writes; debug marks the paths that have a trace to write and
+// routing the ones that report the routing facts.
 var responseHeaderPaths = []struct {
-	name  string
-	debug bool
-	write func(t *testing.T, router *OpenAIRouter, ctx *RequestContext) []*core.HeaderValueOption
+	name    string
+	debug   bool
+	routing bool
+	write   func(t *testing.T, router *OpenAIRouter, ctx *RequestContext) []*core.HeaderValueOption
 }{
-	{name: "provider response", debug: true, write: func(t *testing.T, router *OpenAIRouter, ctx *RequestContext) []*core.HeaderValueOption {
+	{name: "provider response", debug: true, routing: true, write: func(t *testing.T, router *OpenAIRouter, ctx *RequestContext) []*core.HeaderValueOption {
 		response, err := router.handleResponseHeaders(&ext_proc.ProcessingRequest_ResponseHeaders{
 			ResponseHeaders: &ext_proc.HttpHeaders{Headers: &core.HeaderMap{Headers: []*core.HeaderValue{
 				{Key: ":status", Value: "200"},
@@ -103,38 +114,44 @@ var responseHeaderPaths = []struct {
 	{name: "response body", debug: true, write: func(_ *testing.T, _ *OpenAIRouter, ctx *RequestContext) []*core.HeaderValueOption {
 		response := &ext_proc.ProcessingResponse{Response: &ext_proc.ProcessingResponse_ResponseBody{ResponseBody: &ext_proc.BodyResponse{}}}
 		addResponseCostHeaders(ctx, response)
-		setResponseWarningsHeader(response, []string{headers.ResponseWarningHallucination})
-		addResponseStageSignalHeaders(ctx, response)
+		if warnings, ok := bufferedWarnings(ctx); ok {
+			setResponseBodyHeaderOverwrite(response, headers.VSRWarnings, warnings)
+		}
+		addResponseStageTrace(ctx, response)
 		return response.GetResponseBody().GetResponse().GetHeaderMutation().GetSetHeaders()
 	}},
-	{name: "cache hit", debug: true, write: func(_ *testing.T, _ *OpenAIRouter, ctx *RequestContext) []*core.HeaderValueOption {
-		category, keywords, similarity := cacheDetailForSurface(ctx, ctx.VSRSelectedCategory)
-		response := httputil.CreateCacheHitResponseWithBody([]byte(`{}`), "application/json", category, ctx.VSRSelectedDecisionName, keywords, similarity)
-		appendRecipeHeaderToImmediateResponse(response, ctx)
-		appendConfigVersionToImmediateResponse(response, ctx)
-		return response.GetImmediateResponse().GetHeaders().GetSetHeaders()
+	{name: "cache hit", debug: true, routing: true, write: func(_ *testing.T, _ *OpenAIRouter, ctx *RequestContext) []*core.HeaderValueOption {
+		return immediateHeaders(httputil.CreateCacheHitResponseWithBody([]byte(`{}`), "application/json"), ctx)
 	}},
-	{name: "fast response", write: func(_ *testing.T, _ *OpenAIRouter, ctx *RequestContext) []*core.HeaderValueOption {
-		response := httputil.CreateFastResponseWithBody([]byte(`{}`), "application/json", ctx.VSRSelectedDecisionName)
-		appendRecipeHeaderToImmediateResponse(response, ctx)
-		appendConfigVersionToImmediateResponse(response, ctx)
-		return response.GetImmediateResponse().GetHeaders().GetSetHeaders()
+	{name: "fast response", debug: true, routing: true, write: func(_ *testing.T, _ *OpenAIRouter, ctx *RequestContext) []*core.HeaderValueOption {
+		return immediateHeaders(httputil.CreateFastResponseWithBody([]byte(`{}`), "application/json"), ctx)
 	}},
-	{name: "looper", debug: true, write: func(_ *testing.T, _ *OpenAIRouter, ctx *RequestContext) []*core.HeaderValueOption {
-		return buildLooperResponseHeaders(looperResponseWithLatencyAndUsage(), ctx)
+	{name: "looper", debug: true, routing: true, write: func(_ *testing.T, _ *OpenAIRouter, ctx *RequestContext) []*core.HeaderValueOption {
+		ctx.LooperTrace = newLooperTrace(looperResponseWithLatencyAndUsage())
+		response := &ext_proc.ProcessingResponse{Response: &ext_proc.ProcessingResponse_ImmediateResponse{ImmediateResponse: &ext_proc.ImmediateResponse{
+			Headers: &ext_proc.HeaderMutation{SetHeaders: buildLooperResponseHeaders("application/json")},
+		}}}
+		return immediateHeaders(response, ctx)
 	}},
-	{name: "rate limited", write: func(_ *testing.T, router *OpenAIRouter, _ *RequestContext) []*core.HeaderValueOption {
-		response := router.createRateLimitResponse(&ratelimit.Decision{Limit: 10, ResetAt: time.Unix(1_700_000_000, 0)})
-		return response.GetImmediateResponse().GetHeaders().GetSetHeaders()
+	{name: "rate limited", debug: true, routing: true, write: func(_ *testing.T, router *OpenAIRouter, ctx *RequestContext) []*core.HeaderValueOption {
+		return immediateHeaders(router.createRateLimitResponse(&ratelimit.Decision{Limit: 10, ResetAt: time.Unix(1_700_000_000, 0)}), ctx)
 	}},
-	{name: "error", write: func(_ *testing.T, router *OpenAIRouter, _ *RequestContext) []*core.HeaderValueOption {
-		return router.createErrorResponse(503, "unavailable").GetImmediateResponse().GetHeaders().GetSetHeaders()
+	{name: "error", debug: true, routing: true, write: func(_ *testing.T, router *OpenAIRouter, ctx *RequestContext) []*core.HeaderValueOption {
+		return immediateHeaders(router.createErrorResponse(503, "unavailable"), ctx)
 	}},
 }
 
-// Every path writes only public headers, plus debug headers when the caller
-// is allowed them, and never an internal or secret one. Each debug emitter
-// asks debugHeadersRequested, so whether a caller is allowed them is what it
+// publicSet is the default surface of a routed response, beside the external
+// contracts the Router keeps, such as x-request-id and x-ratelimit-*.
+var publicSet = []string{
+	headers.VSRSchemaVersion, headers.VSRConfigVersion, headers.VSRResponsePath, headers.VSRSelectedRecipe,
+	headers.VSRSelectedDecision, headers.VSRSelectedModel, headers.RouterReplayID, headers.VSRWarnings,
+	headers.VSRCost, headers.VSRCostCurrency,
+}
+
+// Every path writes only public headers, plus the trace when the caller is
+// allowed the debug headers, and never an internal or secret one. The trace
+// asks debugHeadersRequested, so whether a caller is allowed it is what it
 // reports once handleRequestHeaders has applied global.router.headers.debug.
 func TestResponseHeadersStayOnTheirRegisteredSurfaces(t *testing.T) {
 	allowAny := &config.RouterConfig{}
@@ -173,13 +190,119 @@ func TestResponseHeadersStayOnTheirRegisteredSurfaces(t *testing.T) {
 						t.Errorf("%s: debug header %s reached a caller not allowed the debug headers", path.name, name)
 					case header.Surface == headers.SurfaceDebug:
 						wroteDebug = true
+					case strings.HasPrefix(name, headers.VSRPrefix) && !slices.Contains(publicSet, name):
+						t.Errorf("%s: %s is not in the public set of a routed response", path.name, name)
 					}
 				}
 				if tt.debug && path.debug && !wroteDebug {
-					t.Errorf("%s wrote no debug header for a caller allowed them", path.name)
+					t.Errorf("%s wrote no trace for a caller allowed it", path.name)
 				}
 			}
 		})
+	}
+}
+
+// Cache hits and fast responses report the same routing facts as any routed
+// response, and the trace to a caller allowed it.
+func TestEveryRoutedResponseCarriesThePublicRoutingFacts(t *testing.T) {
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	router.Config.Headers.Debug = config.DebugHeadersAny
+	for _, path := range responseHeaderPaths {
+		if !path.routing {
+			continue
+		}
+		ctx := debugRequestContext()
+		recordResponseHeaderFacts(ctx)
+		written := headerValuesByName(path.write(t, router, ctx))
+		for name, want := range map[string]string{
+			headers.VSRSchemaVersion:    headers.SchemaVersionValue,
+			headers.VSRConfigVersion:    "7",
+			headers.VSRSelectedRecipe:   "support",
+			headers.VSRSelectedDecision: "escalate-extreme",
+			headers.VSRSelectedModel:    "reasoning-model",
+			headers.RouterReplayID:      "replay-1",
+		} {
+			if got := written[name]; got != want {
+				t.Errorf("%s: %s = %q, want %q", path.name, name, got, want)
+			}
+		}
+		if written[headers.VSRWarnings] == "" || written[headers.VSRTrace] == "" {
+			t.Errorf("%s: warnings %q, trace %q; want both", path.name, written[headers.VSRWarnings], written[headers.VSRTrace])
+		}
+	}
+}
+
+// A fast response answers for the decision whose plugin produced it, so the
+// public set names that decision.
+func TestFastResponseNamesTheDecisionThatAnswered(t *testing.T) {
+	payload, err := config.NewStructuredPayload(config.FastResponsePluginConfig{Message: "blocked"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	decision := &config.Decision{
+		Name:    "block_on_classifier_error",
+		Plugins: []config.DecisionPlugin{{Type: config.DecisionPluginFastResponse, Configuration: payload}},
+	}
+	ctx := immediateResponseContext(t, llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, false)
+	ctx.VSRSelectedDecision = decision
+	response := (&OpenAIRouter{}).handleFastResponse(ctx, decision.Name)
+	written := headerValuesByName(immediateHeaders(response, ctx))
+	if written[headers.VSRResponsePath] != headers.ResponsePathFastResponse || written[headers.VSRSelectedDecision] != decision.Name {
+		t.Fatalf("fast response path %q, decision %q; want %q, %q",
+			written[headers.VSRResponsePath], written[headers.VSRSelectedDecision], headers.ResponsePathFastResponse, decision.Name)
+	}
+}
+
+// A provider cannot write the Router's headers: the response mutation
+// removes every x-vsr- header the provider sent before the Router sets its
+// own.
+func TestProviderSentRouterHeadersNeverReachTheClient(t *testing.T) {
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	ctx := &RequestContext{Headers: map[string]string{}, VSRSelectedModel: "model-a"}
+	response, err := router.handleResponseHeaders(&ext_proc.ProcessingRequest_ResponseHeaders{
+		ResponseHeaders: &ext_proc.HttpHeaders{Headers: &core.HeaderMap{Headers: []*core.HeaderValue{
+			{Key: ":status", Value: "200"},
+			{Key: "X-VSR-Selected-Model", Value: "forged"},
+			{Key: headers.VSRTrace, Value: "algorithm=forged"},
+			{Key: headers.VSRUpstreamHost, Value: "10.0.0.1:8000"},
+		}}},
+	}, ctx)
+	if err != nil {
+		t.Fatalf("handleResponseHeaders() error = %v", err)
+	}
+	mutation := response.GetResponseHeaders().GetResponse().GetHeaderMutation()
+	for _, name := range []string{headers.VSRSelectedModel, headers.VSRTrace, headers.VSRUpstreamHost} {
+		if !slices.Contains(mutation.GetRemoveHeaders(), name) {
+			t.Errorf("the provider's %s reaches the client", name)
+		}
+	}
+	if got := headerValuesByName(mutation.GetSetHeaders())[headers.VSRSelectedModel]; got != "model-a" {
+		t.Errorf("x-vsr-selected-model = %q, want the Router's model-a", got)
+	}
+}
+
+// A client may send only the Router's control headers. Any other x-vsr-
+// header it sends, the route key, internal authentication and KV hints among
+// them, is dropped before anything reads it and never reaches a provider.
+func TestClientSentRouterHeadersAreDropped(t *testing.T) {
+	router, _ := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	sent := map[string]string{}
+	for _, name := range headers.DroppedFromClients() {
+		sent[name] = "client-" + name
+	}
+	ctx := &RequestContext{Headers: map[string]string{}}
+	response, err := router.handleRequestHeaders(headerContractRequest(sent), ctx)
+	if err != nil {
+		t.Fatalf("handleRequestHeaders() error = %v", err)
+	}
+	removed := response.GetRequestHeaders().GetResponse().GetHeaderMutation().GetRemoveHeaders()
+	for name := range sent {
+		if headerValueCI(ctx, name) != "" {
+			t.Errorf("the Router kept the client's %s", name)
+		}
+		if !slices.Contains(removed, name) {
+			t.Errorf("the client's %s reaches the provider", name)
+		}
 	}
 }
 
@@ -193,7 +316,7 @@ func TestProviderBoundRequestsCarryNoHeaderKeptFromProviders(t *testing.T) {
 	for _, name := range headers.KeptFromProviders() {
 		// A config-bound evaluation request is refused unless these match the
 		// active configuration; benchmark_config_binding_test covers their removal.
-		if name == headers.SRBenchExpectedConfigHash || name == headers.SRBenchMaxInferenceCalls {
+		if name == headers.VSRBenchExpectedConfigHash || name == headers.VSRBenchMaxInferenceCalls {
 			continue
 		}
 		kept[name] = "client-" + name

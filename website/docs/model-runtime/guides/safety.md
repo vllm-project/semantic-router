@@ -136,5 +136,5 @@ With `fail_request`, a request that could not be checked is refused.
 
 ## Check it
 
-Through the router, `x-vsr-matched-jailbreak` and `x-vsr-matched-safety` list
-the rules that matched.
+Through the router, the `signals` member of `x-vsr-trace` lists the rules that
+matched, as `jailbreak:<name>` and `safety:<name>`.

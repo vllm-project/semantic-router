@@ -36,7 +36,7 @@ type ResponseGuardPluginConfig struct {
 
 // ResponseGuardRule is one condition on an answer and what happens to an
 // answer that meets it: block answers with the Router's 403 error, annotate
-// adds a code to x-vsr-response-warnings and none only records the outcome.
+// adds a code to x-vsr-warnings and none only records the outcome.
 type ResponseGuardRule struct {
 	When   RuleNode `json:"when" yaml:"when"`
 	Action string   `json:"action" yaml:"action" jsonschema:"enum=block,enum=annotate,enum=none"`
@@ -75,6 +75,24 @@ func (c *ResponseGuardPluginConfig) EffectiveOnUnknown() string {
 		return ResponseGuardAnnotate
 	}
 	return c.OnUnknown
+}
+
+// Enforces reports whether the guard can refuse or rewrite an answer: a rule
+// that blocks or writes a note, or on_unknown: block. The Router holds a
+// streamed answer of such a guard until the guard has read all of it.
+func (c *ResponseGuardPluginConfig) Enforces() bool {
+	if c == nil {
+		return false
+	}
+	if c.EffectiveOnUnknown() == ResponseGuardBlock {
+		return true
+	}
+	for _, rule := range c.Rules {
+		if rule.Action == ResponseGuardBlock || (rule.Action == ResponseGuardAnnotate && rule.Details) {
+			return true
+		}
+	}
+	return false
 }
 
 // validateResponseGuardPlugin checks a guard's shape: its rules, their

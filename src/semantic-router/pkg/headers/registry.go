@@ -113,6 +113,23 @@ func KeptFromProviders() []string {
 	return names
 }
 
+// DroppedFromClients are the Router's own headers no client may supply:
+// every registered x-vsr- header that is not a control header, the route
+// key, the internal authentication and the KV hints among them. The Router
+// never believes a client's value of one, and removes it from the
+// provider-bound request before it sets its own. The authenticator's outputs
+// are left out: its gateway credential is trusted like the identity headers,
+// whose client copies the gateway in front strips.
+func DroppedFromClients() []string {
+	var names []string
+	for _, header := range registry {
+		if strings.HasPrefix(header.Name, VSRPrefix) && header.Surface != SurfaceControl && header.Owner != "authz" {
+			names = append(names, header.Name)
+		}
+	}
+	return names
+}
+
 // RouterOwned reports whether the Router or Envoy owns a header, which a
 // decision's header_mutation therefore may not write: every header in the
 // x-vsr- and x-envoy- namespaces, and every internal or secret header the
@@ -136,33 +153,19 @@ var registryByName = func() map[string]Header {
 
 var registry = []Header{
 	// The response contract.
-	{VSRSchemaVersion, ToClient, SurfacePublic, SensitivityNone, "response_contract", "v0.4", "Response-header contract revision; currently `2`."},
+	{VSRSchemaVersion, ToClient, SurfacePublic, SensitivityNone, "response_contract", "v0.4", "Response-header contract revision; currently `3`."},
 	{VSRResponsePath, ToClient, SurfacePublic, SensitivityNone, "response_contract", "v0.4", "How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `image_generation`, `blocked`, `rate_limited`, `error` or `fallback`."},
 	{VSRConfigVersion, ToClient, SurfacePublic, SensitivityNone, "config", "v0.5", "Version of the configuration snapshot that served the request."},
-	{VSRConfigHash, ToClient, SurfacePublic, SensitivityNone, "config", "v0.4", "SHA-256 of the active runtime document, on routing previews, configuration activations and config-bound evaluation requests."},
+	{VSRConfigHash, ToClient, SurfacePublic, SensitivityNone, "config", "v0.4", "SHA-256 of the active runtime document, on routing previews and configuration activations."},
+	{VSRWarnings, ToClient, SurfacePublic, SensitivityNone, "response_contract", "v0.5", "Warnings about the response, as an RFC 8941 list: the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`."},
 
 	// Final routing facts.
 	{VSRSelectedRecipe, ToClient, SurfacePublic, SensitivityNone, "routing", "v0.4", "Recipe the effective entrypoint selected; omitted for concrete backend models."},
 	{VSRSelectedDecision, ToClient, SurfacePublic, SensitivityNone, "routing", "v0.1", "Decision the decision engine selected; omitted when no decision matched."},
-	{VSRSelectedConfidence, ToClient, SurfacePublic, SensitivityNone, "routing", "v0.2", "Model-derived score of the selected decision, such as `0.9100`."},
-	{VSRSelectedAlgorithm, ToClient, SurfacePublic, SensitivityNone, "routing", "v0.4", "Model-selection algorithm used after the decision matched, such as `static`."},
 	{VSRSelectedModel, ToClient, SurfacePublic, SensitivityNone, "routing", "v0.1", "Model alias the Router selected."},
-	{VSRRoutingLatencyMs, ToClient, SurfacePublic, SensitivityNone, "routing", "v0.4", "Time spent choosing the model, in milliseconds, such as `0.412`."},
-	{VSRAppliedUnknownPolicy, ToClient, SurfacePublic, SensitivityNone, "routing", "v0.4", "Decisions whose unknown result `rules.on_unknown` resolved, as `decision=policy` pairs; also on the `fail_request` 503."},
-	{VSRFallbackAttempts, ToClient, SurfacePublic, SensitivityNone, "fallback", "v0.4", "Attempts cross-model fallback made, the primary included, when a fallback candidate served the response."},
 	{RouterReplayID, ToClient, SurfacePublic, SensitivityNone, "router_replay", "v0.2", "Router Replay record id, when the record was persisted."},
-	{VSREffectiveInputTokens, ToClient, SurfacePublic, SensitivityNone, "automatic_output", "v0.4", "Rendered input tokens of the final automatic-output dispatch, chat template included."},
-	{VSREffectiveMaxOutputTokens, ToClient, SurfacePublic, SensitivityNone, "automatic_output", "v0.4", "Output token limit of the final automatic-output dispatch, reasoning included."},
 	{VSRCost, ToClient, SurfacePublic, SensitivityNone, "cost", "v0.4", "Usage priced with the served model's configured pricing; buffered responses only."},
 	{VSRCostCurrency, ToClient, SurfacePublic, SensitivityNone, "cost", "v0.4", "Currency of `x-vsr-cost`, from `pricing.currency`."},
-	{VSRCacheHit, ToClient, SurfacePublic, SensitivityNone, "response_cache", "v0.1", "`true` when the response cache served the response."},
-	{VSRFastResponse, ToClient, SurfacePublic, SensitivityNone, "fast_response", "v0.2", "`true` when the `fast_response` plugin answered without a provider call."},
-	{VSRClientProtocol, ToClient, SurfacePublic, SensitivityNone, "protocol", "v0.4", "Client wire protocol, such as `anthropic`; on cross-protocol responses and with the debug headers."},
-	{VSRUpstreamProtocol, ToClient, SurfacePublic, SensitivityNone, "protocol", "v0.4", "Provider wire protocol; on cross-protocol responses and with the debug headers."},
-	{VSRProtocolWarnings, ToClient, SurfacePublic, SensitivityNone, "protocol", "v0.4", "Protocol translation warnings, as comma-separated `severity;reason;field` entries."},
-	{VSRResponseWarnings, ToClient, SurfacePublic, SensitivityNone, "response_guard", "v0.4", "Codes of the `response_guard` rules that annotated the answer, in rule order: `hallucination`, `unverified_factual`, `response_jailbreak` or `response_guard`."},
-	{VSRModelUsage, ToClient, SurfacePublic, SensitivityNone, "benchmark", "v0.4", "Per-model usage receipt of a config-bound evaluation request."},
-	{VSRInferenceCallCount, ToClient, SurfacePublic, SensitivityNone, "benchmark", "v0.4", "Provider calls a config-bound evaluation request made."},
 	{RateLimitLimit, ToClient, SurfacePublic, SensitivityNone, "rate_limit", "v0.2", "Limit of the rate-limit window that rejected the request."},
 	{RateLimitRemaining, ToClient, SurfacePublic, SensitivityNone, "rate_limit", "v0.2", "Requests left in that window."},
 	{RateLimitReset, ToClient, SurfacePublic, SensitivityNone, "rate_limit", "v0.2", "Unix time the window resets at."},
@@ -171,84 +174,31 @@ var registry = []Header{
 	{EnvoyUpstreamServiceTime, ToClient, SurfacePublic, SensitivityNone, "gateway_parity", "v0.5", "Envoy's upstream time on responses in Envoy mode; gateway-parity checks ignore its value."},
 	{EnvoyOverloaded, ToClient, SurfacePublic, SensitivityNone, "upstream", "v0.5", "`true` on the 503 a full circuit breaker returns, as Envoy sets it."},
 
-	// Intermediate decision details.
-	{VSRSelectedCategory, ToClient, SurfaceDebug, SensitivityNone, "classification", "v0.1", "Domain category the classifier chose, such as `math`."},
-	{VSRSelectedReasoning, ToClient, SurfaceDebug, SensitivityNone, "classification", "v0.1", "Reasoning mode chosen for the request: `on` or `off`."},
-	{VSRSelectedModality, ToClient, SurfaceDebug, SensitivityNone, "routing", "v0.2", "Output kinds of the selected decision's output contract, such as `image` or `text,image`; omitted for a decision that declares none."},
-	{VSRDecisionRanking, ToClient, SurfaceDebug, SensitivityNone, "routing", "v0.5", "The matched decision the selected one beat, and the comparison that settled it."},
-	{VSRSessionPhase, ToClient, SurfaceDebug, SensitivityNone, "router_learning", "v0.3", "Protection phase: `user_turn`, `tool_loop` or `provider_state`."},
-	{VSRLearningMethods, ToClient, SurfaceDebug, SensitivityNone, "router_learning", "v0.4", "Router Learning methods the learning headers summarize, such as `adaptation,protection`."},
-	{VSRLearningActions, ToClient, SurfaceDebug, SensitivityNone, "router_learning", "v0.4", "Learning action per method, such as `adaptation=propose_switch`."},
-	{VSRLearningScopes, ToClient, SurfaceDebug, SensitivityNone, "router_learning", "v0.4", "Identity scope per method, such as `protection=conversation`."},
-	{VSRLearningReasons, ToClient, SurfaceDebug, SensitivityNone, "router_learning", "v0.4", "Reason per method, such as `adaptation=sampled_win`."},
-	{VSRInjectedSystemPrompt, ToClient, SurfaceDebug, SensitivityNone, "system_prompt", "v0.1", "Whether a `system_prompt` plugin injected text into the request."},
-	{VSRPromptCacheAction, ToClient, SurfaceDebug, SensitivityNone, "prompt_cache", "v0.4", "Outcome of the `prompt_cache` plugin: `inserted`, `preserved`, `skipped` or `rejected`."},
-	{VSRPromptCacheReason, ToClient, SurfaceDebug, SensitivityNone, "prompt_cache", "v0.4", "Reason for an outcome other than `inserted`: `caller_markers`, `no_eligible_target` or `unsupported_target`."},
-	{VSRPromptCacheInserted, ToClient, SurfaceDebug, SensitivityNone, "prompt_cache", "v0.4", "Cache markers the Router inserted, at most `2`."},
-	{VSRPromptCachePreserved, ToClient, SurfaceDebug, SensitivityNone, "prompt_cache", "v0.4", "Cache markers the caller supplied."},
-	{VSRCacheSimilarity, ToClient, SurfaceDebug, SensitivityNone, "response_cache", "v0.3", "Similarity score of the response-cache lookup."},
-	{VSRRetentionDrop, ToClient, SurfaceDebug, SensitivityNone, "retention", "v0.4", "Whether the matched decision's retention directive keeps the response out of the response cache."},
-	{VSRRetentionTTLTurns, ToClient, SurfaceDebug, SensitivityNone, "retention", "v0.4", "Retention lifetime the directive sets, in conversation turns."},
-	{VSRRetentionKeepCurrentModel, ToClient, SurfaceDebug, SensitivityNone, "retention", "v0.4", "Whether the directive asks later routing to keep the current model."},
-	{VSRRetentionPreferPrefix, ToClient, SurfaceDebug, SensitivityNone, "retention", "v0.4", "Whether the directive prefers prefix retention."},
-
-	// Matched signals.
-	{VSRMatchedKeywords, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.1", "Matched `keyword` rules, comma-separated."},
-	{VSRMatchedDomains, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.1", "Matched `domain` rules."},
-	{VSRMatchedFactCheck, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.1", "Matched `fact_check` rules."},
-	{VSRMatchedUserFeedback, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.1", "Matched `user_feedback` rules, and `rule:option` for a rule without labels."},
-	{VSRMatchedTurnRelation, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.5", "Matched `turn_relation` rules, and `rule:option` for a rule without labels."},
-	{VSRMatchedLanguage, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.2", "Matched `language` rules."},
-	{VSRMatchedContext, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.2", "Matched `context` rules."},
-	{VSRContextTokenCount, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.2", "Token count the `context` signal measured."},
-	{VSRMatchedComplexity, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.2", "Matched `complexity` rules, and `rule:option` for a rule without labels, such as `task_difficulty:hard`."},
-	{VSRMatchedModality, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.3", "Matched `modality` rules, and `rule:option` for a rule without labels."},
-	{VSRMatchedAuthz, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.2", "Matched `authz` rules."},
-	{VSRMatchedJailbreak, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.2", "Matched `jailbreak` rules, of the request and of the response."},
-	{VSRMatchedSafety, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.4", "Matched content `safety` rules."},
-	{VSRMatchedHallucination, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.4", "Matched `hallucination` rules, once the answer is checked."},
-	{VSRMatchedPII, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.2", "Matched `pii` rules."},
-	{VSRMatchedConversation, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.3", "Matched `conversation` rules."},
-	{VSRMatchedInputModality, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.4", "Matched `input_modality` rules."},
-	{VSRMatchedDecisionModel, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.5", "Matched `systemone` rules, and `rule:option` for a choice rule without labels."},
-	{VSRMatchedProjection, ToClient, SurfaceDebug, SensitivityNone, "signals", "v0.3", "Matched projection outputs."},
-
-	// The Looper's execution trace.
-	{VSRLooperModel, ToClient, SurfaceDebug, SensitivityNone, "looper", "v0.2", "Final model of the Looper."},
-	{VSRLooperModelsUsed, ToClient, SurfaceDebug, SensitivityNone, "looper", "v0.2", "Models the Looper called, comma-separated."},
-	{VSRLooperIterations, ToClient, SurfaceDebug, SensitivityNone, "looper", "v0.2", "Model calls the Looper made."},
-	{VSRLooperAlgorithm, ToClient, SurfaceDebug, SensitivityNone, "looper", "v0.2", "Executor algorithm, such as `escalate`."},
-	{VSRLooperLatencyMs, ToClient, SurfaceDebug, SensitivityNone, "looper", "v0.4", "Looper wall-clock latency, in milliseconds."},
-	{VSRLooperPromptTokens, ToClient, SurfaceDebug, SensitivityNone, "looper", "v0.4", "Prompt tokens across the Looper's calls."},
-	{VSRLooperCompletionTokens, ToClient, SurfaceDebug, SensitivityNone, "looper", "v0.4", "Completion tokens across the Looper's calls."},
-	{VSRLooperTotalTokens, ToClient, SurfaceDebug, SensitivityNone, "looper", "v0.4", "Total tokens across the Looper's calls."},
+	// The routing details.
+	{VSRTrace, ToClient, SurfaceDebug, SensitivityNone, "debug_headers", "v0.5", "Routing details as an RFC 8941 dictionary of at most 4 KB, for a caller `global.router.headers.debug` allows; the members follow this table."},
 
 	// Client controls.
-	{XSessionID, FromClient | ToProvider, SurfaceControl, SensitivityNone, "session", "v0.3", "Client session id; Router Learning `scope: session` protects it, and providers receive it."},
+	{VSRSessionID, FromClient, SurfaceControl, SensitivityNone, "session", "v0.5", "Session id the client pins; without it the Router reads the headers `global.router.headers.session_id_headers` names, in order."},
+	{XSessionID, FromClient | ToProvider, SurfaceControl, SensitivityNone, "session", "v0.3", "Client session id `session_id_headers` accepts by default; providers receive it."},
+	{XClaudeCodeSessionID, FromClient | ToProvider, SurfaceControl, SensitivityNone, "session", "v0.3", "Conversation id Claude Code sends, which `session_id_headers` accepts by default after `x-session-id`; providers receive it."},
 	{XConversationID, FromClient | ToProvider, SurfaceControl, SensitivityNone, "router_learning", "v0.4", "Client conversation id; Router Learning `scope: conversation` protects it, and providers receive it."},
-	{XClaudeCodeSessionID, FromClient | ToProvider, SurfaceControl, SensitivityNone, "session", "v0.3", "Conversation id Claude Code sends; `x-session-id` takes precedence, and providers receive it."},
-	{DisableRouterMemory, FromClient, SurfaceControl, SensitivityNone, "memory", "v0.3", "`true` keeps Router-managed memory out of the request."},
+	{VSRMemory, FromClient, SurfaceControl, SensitivityNone, "memory", "v0.5", "`off` keeps Router-managed memory out of the request."},
 	{VSRSkipProcessing, FromClient, SurfaceControl, SensitivityNone, "skip_processing", "v0.3", "`true` opts the request out of Router processing when `global.router.skip_processing.enabled` is set."},
-	{VSRDebug, FromClient, SurfaceControl, SensitivityNone, "debug_headers", "v0.4", "`true` asks for the debug headers on the response; honored only for a caller `global.router.headers.debug` allows."},
+	{VSRDebug, FromClient, SurfaceControl, SensitivityNone, "debug_headers", "v0.4", "`true` asks for `x-vsr-trace` on the response; honored only for a caller `global.router.headers.debug` allows."},
 	{VSRCacheControl, FromClient, SurfaceControl, SensitivityNone, "response_cache", "v0.4", "Response-cache directives for the request, when the plugin's `request_controls` allow them."},
 	{VSRCompressionControl, FromClient, SurfaceControl, SensitivityNone, "context", "v0.4", "Context-compression directives for the request, when the plugin's `request_controls` allow them."},
 	{VSRProtectionRelease, FromClient, SurfaceControl, SensitivityNone, "router_learning", "v0.5", "Any non-empty value asks router-learning protection for a fresh decision on the request's protection key; `global.router.learning.protection.release.header` can rename it."},
-	{SRBenchExpectedConfigHash, FromClient, SurfaceControl, SensitivityNone, "benchmark", "v0.4", "Configuration hash an evaluation request requires; another active configuration fails it with 412."},
-	{SRBenchMaxInferenceCalls, FromClient, SurfaceControl, SensitivityNone, "benchmark", "v0.4", "Provider-call limit of an evaluation request; only `1` is supported."},
+	{VSRBenchExpectedConfigHash, FromClient, SurfaceControl, SensitivityNone, "benchmark", "v0.5", "Configuration hash an evaluation request requires; another active configuration fails it with 412."},
+	{VSRBenchMaxInferenceCalls, FromClient, SurfaceControl, SensitivityNone, "benchmark", "v0.5", "Provider-call limit of an evaluation request; only `1` is supported."},
 
 	// Routing and transport internals.
-	{SelectedModel, FromClient | ToProvider, SurfaceInternal, SensitivityNone, "routing", "v0.1", "Route key: the model whose route the gateway sends the provider request on; the Router replaces or drops a client's value."},
+	{VSRRouteModel, FromClient | ToProvider, SurfaceInternal, SensitivityNone, "routing", "v0.5", "Route key: the model whose route the gateway sends the provider request on; the Router drops a client's value and sets its own."},
 	{VSRUpstreamHost, FromProvider, SurfaceInternal, SensitivityNone, "kv_transfer", "v0.5", "Endpoint Envoy reports on the provider response for KV registry writes; removed before the client."},
 	{VSRKVSourcePod, ToProvider, SurfaceInternal, SensitivityNone, "kv_transfer", "v0.4", "Address of the pod that holds the source model's KV cache."},
 	{VSRKVCacheID, ToProvider, SurfaceInternal, SensitivityNone, "kv_transfer", "v0.4", "Opaque id of the source KV block."},
 	{VSRKVMapperID, ToProvider, SurfaceInternal, SensitivityNone, "kv_transfer", "v0.4", "Mapper artifact for the source and target model pair."},
-	{VSRKVTransferStatus, FromProvider, SurfaceInternal, SensitivityNone, "kv_transfer", "v0.4", "KV reuse outcome the target pod reports: `applied`, `fallback_reprefill` or `unsupported`."},
 	{VSRSystemOneBackend, FromClient | ToProvider, SurfaceInternal, SensitivityNone, "systemone", "v0.5", "Marks a System One request one Router forwards to another, which refuses to forward it again."},
 	{VSROutcomeSource, FromClient, SurfaceInternal, SensitivityNone, "router_learning", "v0.4", "Outcome provenance a trusted control plane attests to the management API."},
-	{VSRLooperRequest, FromClient, SurfaceInternal, SensitivityNone, "looper", "v0.2", "Retired Looper hop header; the Router drops it from every request."},
-	{VSRLooperIteration, FromClient, SurfaceInternal, SensitivityNone, "looper", "v0.2", "Retired Looper hop header; the Router drops it from every request."},
-	{VSRLooperDecision, FromClient, SurfaceInternal, SensitivityNone, "looper", "v0.2", "Retired Looper hop header; the Router drops it from every request."},
-	{VSRFusionDepth, FromClient, SurfaceInternal, SensitivityNone, "looper", "v0.4", "Retired Looper hop header; the Router drops it from every request."},
 	{XForwardedFor, FromClient | ToProvider, SurfaceInternal, SensitivityNone, "native_gateway", "v0.5", "Client address chain; the native gateway's access log records it, and providers receive it."},
 	{XForwardedProto, FromClient | ToProvider, SurfaceInternal, SensitivityNone, "native_gateway", "v0.5", "Scheme of the client connection; the native gateway sets it when absent, as Envoy does."},
 	{EnvoyUpstreamRqTimeoutMs, FromClient | ToProvider, SurfaceInternal, SensitivityNone, "reliability", "v0.5", "Route timeout the Router sets from the decision's `reliability` block."},
@@ -286,8 +236,7 @@ var registry = []Header{
 	{UserMiniMaxKey, FromClient, SurfaceInternal, SensitivitySecret, "authz", "v0.3", "Per-user MiniMax key the authenticator injects."},
 	{UserCloudflareWorkersAIKey, FromClient, SurfaceInternal, SensitivitySecret, "authz", "v0.4", "Per-user Cloudflare Workers AI token the authenticator injects."},
 	{VSRGatewayCredential, FromClient, SurfaceInternal, SensitivitySecret, "authz", "v0.5", "Dedicated credential the authenticator attaches for a trusted upstream gateway; only a backend marked `trusted_gateway` receives its value, under its own auth header, and `gateway_credential.header` names another header."},
-	{VSRInternalAuth, FromClient, SurfaceInternal, SensitivitySecret, "looper", "v0.4", "In-process request authentication; the Router drops it from every request."},
-	{VSRLooperSecret, FromClient, SurfaceInternal, SensitivitySecret, "looper", "v0.3", "Retired Looper hop secret; the Router drops it from every request."},
+	{VSRInternalAuth, FromClient, SurfaceInternal, SensitivitySecret, "looper", "v0.4", "In-process request authentication; the Router drops it from every client request."},
 	{Authorization, FromClient | ToProvider, SurfaceInternal, SensitivitySecret, "credentials", "v0.1", "Bearer credential: a client's key for the Router, and the provider credential the Router sets."},
 	{APIKey, FromClient | ToProvider, SurfaceInternal, SensitivitySecret, "credentials", "v0.2", "Azure OpenAI key: a client's authenticates to the Router and is removed, and the Router sets the provider's."},
 	{XAPIKey, ToProvider, SurfaceInternal, SensitivitySecret, "credentials", "v0.2", "Provider credential of Anthropic-style APIs."},

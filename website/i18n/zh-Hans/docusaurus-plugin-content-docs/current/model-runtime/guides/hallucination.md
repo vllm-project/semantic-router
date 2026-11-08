@@ -93,6 +93,6 @@ curl -s localhost:8100/v1/classify -H 'content-type: application/json' -d '{
 }'
 ```
 
-结果列出答案里没有支撑的 `spans`——这里是高度——带它们在答案里的字符偏移。经过 router 时，响应带着幻觉警告头和 `x-vsr-matched-hallucination`。
+结果列出答案里没有支撑的 `spans`——这里是高度——带它们在答案里的字符偏移。经过 router 时，匹配的幻觉规则会在 `x-vsr-warnings` 中加入 `hallucination` 警告码，并在 `x-vsr-trace` 的 `signals` 成员中加入 `hallucination:<name>`。
 
 早先的版本能给每个片段附一段 NLI 解释。那个解释器已退役；见[迁移](model-runtime/migrate.md#features-that-were-retired)。

@@ -16,7 +16,7 @@ func validateGlobalRouterLearningConfig(cfg *RouterConfig) error {
 	if err := validateRouterLearningAdaptationConfig(cfg.RouterLearning.Adaptation); err != nil {
 		return err
 	}
-	if err := validateRouterLearningProtectionConfig(cfg.RouterLearning.Protection); err != nil {
+	if err := validateRouterLearningProtectionConfig(cfg.RouterLearning.Protection, cfg.Headers.SessionIDHeaderNames()); err != nil {
 		return err
 	}
 	return validateRouterLearningStateStoreConfig(cfg.RouterLearning.StateStore)
@@ -89,7 +89,7 @@ func validateRouterLearningAdaptationConfig(cfg RouterLearningAdaptationConfig) 
 	return nil
 }
 
-func validateRouterLearningProtectionConfig(cfg RouterLearningProtectionConfig) error {
+func validateRouterLearningProtectionConfig(cfg RouterLearningProtectionConfig, sessionHeaders []string) error {
 	if err := validateProtectionScope(
 		"global.router.learning.protection.scope",
 		cfg.Scope,
@@ -106,7 +106,7 @@ func validateRouterLearningProtectionConfig(cfg RouterLearningProtectionConfig) 
 	if cfg.Identity.Headers.Agent != nil && strings.TrimSpace(*cfg.Identity.Headers.Agent) == "" {
 		return fmt.Errorf("global.router.learning.protection.identity.headers.agent cannot be empty")
 	}
-	if err := validateProtectionRelease(cfg); err != nil {
+	if err := validateProtectionRelease(cfg, sessionHeaders); err != nil {
 		return err
 	}
 
@@ -327,7 +327,10 @@ func isLookupTableConfigConfigured(cfg LookupTableConfig) bool {
 		len(cfg.RemainingTurnPriors) > 0
 }
 
-func validateProtectionRelease(cfg RouterLearningProtectionConfig) error {
+// validateProtectionRelease checks the release header against the headers
+// protection reads identity from; sessionHeaders carry the session id when
+// identity.headers.session names none.
+func validateProtectionRelease(cfg RouterLearningProtectionConfig, sessionHeaders []string) error {
 	const field = "global.router.learning.protection.release"
 	release := cfg.Release
 	if release.Header != nil {
@@ -344,8 +347,14 @@ func validateProtectionRelease(cfg RouterLearningProtectionConfig) error {
 		return fmt.Errorf("%s.header %q is reserved; use an x- header the router can remove before the backend", field, header)
 	}
 	for _, identity := range []string{"session", "conversation", "agent"} {
-		if strings.EqualFold(header, cfg.HeaderName(identity)) {
-			return fmt.Errorf("%s.header %q must differ from identity header %s", field, header, identity)
+		names := []string{cfg.HeaderName(identity)}
+		if identity == "session" && names[0] == "" {
+			names = sessionHeaders
+		}
+		for _, name := range names {
+			if strings.EqualFold(header, name) {
+				return fmt.Errorf("%s.header %q must differ from identity header %s", field, header, identity)
+			}
 		}
 	}
 	if release.MinUserTurnsBetween != nil && *release.MinUserTurnsBetween < 0 {

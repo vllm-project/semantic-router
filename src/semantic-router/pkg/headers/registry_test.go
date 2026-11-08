@@ -96,6 +96,25 @@ func TestRegistrySurfacesAgreeWithDirections(t *testing.T) {
 	}
 }
 
+func TestClientsMaySupplyOnlyTheRouterControlHeaders(t *testing.T) {
+	dropped := DroppedFromClients()
+	for _, name := range []string{VSRRouteModel, VSRInternalAuth, VSRKVSourcePod, VSRTrace, VSRSelectedRecipe} {
+		if !slices.Contains(dropped, name) {
+			t.Errorf("DroppedFromClients() leaves out %s", name)
+		}
+	}
+	for _, name := range dropped {
+		if header, _ := Lookup(name); header.Surface == SurfaceControl || !strings.HasPrefix(name, VSRPrefix) {
+			t.Errorf("DroppedFromClients() drops %s, which clients may send", name)
+		}
+	}
+	// The authenticator sets the gateway credential, so the Router reads it,
+	// and no provider ever receives the header.
+	if slices.Contains(dropped, VSRGatewayCredential) || !slices.Contains(KeptFromProviders(), VSRGatewayCredential) {
+		t.Errorf("%s must reach the Router and never a provider", VSRGatewayCredential)
+	}
+}
+
 func TestLookupIgnoresLetterCase(t *testing.T) {
 	header, ok := Lookup(" X-VSR-Debug ")
 	if !ok || header.Name != VSRDebug {

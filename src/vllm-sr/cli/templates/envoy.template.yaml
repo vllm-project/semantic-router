@@ -65,14 +65,10 @@ static_resources:
             virtual_hosts:
             - name: local_service
               domains: ["*"]
-              # Internal and identity headers never reach a model backend. Envoy
-              # removes them from the request it sends upstream, after the HTTP
-              # filters ran; client-sent identity is removed at ingress below.
+              # Identity headers never reach a model backend. Envoy removes them
+              # from the request it sends upstream, after the HTTP filters ran;
+              # client-sent identity is removed at ingress below.
               request_headers_to_remove:
-              - "x-vsr-looper-request"
-              - "x-vsr-looper-secret"
-              - "x-vsr-looper-decision"
-              - "x-vsr-looper-iteration"
               {% for header in identity_headers %}
               - {{ header | tojson }}
               {% endfor %}
@@ -85,7 +81,7 @@ static_resources:
               - match:
                   prefix: "/"
                   headers:
-                  - name: x-selected-model
+                  - name: x-vsr-route-model
                     string_match:
                       exact: {{ model.name | tojson }}
                 {% if model.route_request_headers %}
@@ -107,10 +103,10 @@ static_resources:
                   host_rewrite_literal: "{{ model.endpoints[0].host_authority }}"
                   {% endif %}
                   # ext_proc has already resolved the complete provider path for
-                  # requests carrying x-selected-model, so this route must not
+                  # requests carrying x-vsr-route-model, so this route must not
                   # prefix it a second time.
               {% endfor %}
-              # Default route (no x-selected-model header)
+              # Default route (no x-vsr-route-model header)
               - match:
                   prefix: "/"
                 {% if models and models[0].route_request_headers %}

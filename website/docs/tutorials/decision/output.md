@@ -124,8 +124,8 @@ an image.
 - A Chat Completions or Anthropic Messages client cannot receive an image: the
   Router refuses its request with `unsupported_capability` before it calls a
   model. A request whose `tool_choice` is `none` is refused too.
-- `x-vsr-selected-modality` names the output kinds of the selected decision on
-  a debug response.
+- The `modality` member of `x-vsr-trace` names the output kinds of the
+  selected decision on a debug response.
 
 ## Image Input
 

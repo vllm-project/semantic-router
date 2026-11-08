@@ -1,283 +1,129 @@
 import {
-  X_VSR_CACHE_HIT,
-  X_VSR_CONTEXT_TOKEN_COUNT,
-  X_VSR_EFFECTIVE_INPUT_TOKENS,
-  X_VSR_EFFECTIVE_MAX_OUTPUT_TOKENS,
-  X_VSR_FAST_RESPONSE,
-  X_VSR_LEARNING_ACTIONS,
-  X_VSR_LEARNING_METHODS,
-  X_VSR_LEARNING_REASONS,
-  X_VSR_LEARNING_SCOPES,
-  X_VSR_LOOPER_ALGORITHM,
-  X_VSR_LOOPER_COMPLETION_TOKENS,
-  X_VSR_LOOPER_ITERATIONS,
-  X_VSR_LOOPER_LATENCY_MS,
-  X_VSR_LOOPER_MODEL,
-  X_VSR_LOOPER_MODELS_USED,
-  X_VSR_LOOPER_PROMPT_TOKENS,
-  X_VSR_LOOPER_TOTAL_TOKENS,
-  X_VSR_MATCHED_AUTHZ,
-  X_VSR_MATCHED_COMPLEXITY,
-  X_VSR_MATCHED_CONTEXT,
-  X_VSR_MATCHED_CONVERSATION,
-  X_VSR_MATCHED_DECISION_MODEL,
-  X_VSR_MATCHED_DOMAINS,
-  X_VSR_MATCHED_FACT_CHECK,
-  X_VSR_MATCHED_HALLUCINATION,
-  X_VSR_MATCHED_INPUT_MODALITY,
-  X_VSR_MATCHED_JAILBREAK,
-  X_VSR_MATCHED_KEYWORDS,
-  X_VSR_MATCHED_LANGUAGE,
-  X_VSR_MATCHED_MODALITY,
-  X_VSR_MATCHED_PII,
-  X_VSR_MATCHED_PROJECTIONS,
-  X_VSR_MATCHED_TURN_RELATION,
-  X_VSR_MATCHED_SAFETY,
-  X_VSR_MATCHED_USER_FEEDBACK,
+  TRACE_ALGORITHM,
+  TRACE_CACHE_SIMILARITY,
+  TRACE_CONFIDENCE,
+  TRACE_CONTEXT_TOKENS,
+  TRACE_EFFECTIVE_INPUT_TOKENS,
+  TRACE_EFFECTIVE_MAX_OUTPUT_TOKENS,
+  TRACE_FALLBACK_ATTEMPTS,
+  TRACE_LOOPER,
+  TRACE_MODALITY,
+  TRACE_REASONING,
+  TRACE_RETENTION,
+  TRACE_ROUTING_LATENCY_MS,
+  TRACE_TRUNCATED,
   X_VSR_RESPONSE_PATH,
-  X_VSR_RESPONSE_WARNINGS,
-  X_VSR_RETENTION_DROP,
-  X_VSR_RETENTION_KEEP_CURRENT_MODEL,
-  X_VSR_RETENTION_PREFER_PREFIX,
-  X_VSR_RETENTION_TTL_TURNS,
-  X_VSR_ROUTING_LATENCY_MS,
-  X_VSR_SELECTED_ALGORITHM,
-  X_VSR_SELECTED_CONFIDENCE,
   X_VSR_SELECTED_DECISION,
-  X_VSR_SELECTED_MODALITY,
   X_VSR_SELECTED_MODEL,
-  X_VSR_SELECTED_REASONING,
   X_VSR_SELECTED_RECIPE,
+  X_VSR_WARNINGS,
 } from '../generated/vsrHeaders'
 import styles from './HeaderDisplay.module.css'
 import ProductIcon from './ProductIcon'
-import { formatLearningHeaderValue, isLearningHeader } from './headerLearningDisplay'
+import {
+  formatLearningHeaderValue,
+  isLearningHeader,
+  LEARNING_ACTIONS,
+  LEARNING_METHODS,
+  LEARNING_REASONS,
+  LEARNING_SCOPES,
+} from './headerLearningDisplay'
 import { PLAYGROUND_LATENCY_MS, PLAYGROUND_TTFT_MS } from './playgroundTimingHeaders'
-import { formatRoutingMetadataValue, MATCHED_SIGNAL_HEADER_PREFIX } from './routingMetadataDisplay'
+import {
+  formatRoutingMetadataValue,
+  MATCHED_SIGNAL_KEY_PREFIX,
+  matchedSignalKey,
+  traceKey,
+} from './routingMetadataDisplay'
 
 interface HeaderDisplayProps {
   headers: Record<string, string>
 }
 
-// Header metadata for display
-const HEADER_INFO: Record<
-  string,
-  { label: string; type: 'info' | 'success' | 'warning' | 'danger' }
-> = {
+const ALGORITHM = traceKey(TRACE_ALGORITHM)
+const LOOPER_ALGORITHM = traceKey(`${TRACE_LOOPER}.algorithm`)
+const LOOPER_MODEL = traceKey(`${TRACE_LOOPER}.model`)
+const LOOPER_MODELS = traceKey(`${TRACE_LOOPER}.models`)
+const LOOPER_LATENCY_MS = traceKey(`${TRACE_LOOPER}.latency_ms`)
+const ROUTING_LATENCY_MS = traceKey(TRACE_ROUTING_LATENCY_MS)
+
+type HeaderType = 'info' | 'success' | 'warning' | 'danger'
+
+const SIGNAL_INFO: Record<string, { label: string; type: HeaderType }> = {
+  keyword: { label: 'Keywords', type: 'info' },
+  domain: { label: 'Domain', type: 'info' },
+  fact_check: { label: 'Fact Check Signal', type: 'info' },
+  user_feedback: { label: 'User Feedback', type: 'info' },
+  turn_relation: { label: 'Turn Relation', type: 'info' },
+  language: { label: 'Language', type: 'info' },
+  context: { label: 'Context', type: 'info' },
+  complexity: { label: 'Complexity', type: 'info' },
+  modality: { label: 'Modality', type: 'info' },
+  authz: { label: 'Authz', type: 'info' },
+  jailbreak: { label: 'Jailbreak Signal', type: 'danger' },
+  safety: { label: 'Safety Signal', type: 'warning' },
+  hallucination: { label: 'Hallucination Signal', type: 'warning' },
+  pii: { label: 'PII Signal', type: 'warning' },
+  conversation: { label: 'Conversation Signal', type: 'info' },
+  metadata: { label: 'Metadata Signal', type: 'info' },
+  input_modality: { label: 'Input Modality Signal', type: 'info' },
+  systemone: { label: 'System One Answers', type: 'info' },
+  projection: { label: 'Projection', type: 'info' },
+}
+
+// What each display entry shows: the public headers, and the details of the
+// trace a debug response carries.
+const HEADER_INFO: Record<string, { label: string; type: HeaderType }> = {
   // Response outcome. The schema version is intentionally not user-facing.
-  [X_VSR_RESPONSE_PATH]: {
-    label: 'Response Path',
-    type: 'info',
-  },
-  [X_VSR_SELECTED_MODEL]: {
-    label: 'Model',
-    type: 'info',
-  },
-  [X_VSR_EFFECTIVE_INPUT_TOKENS]: {
-    label: 'Rendered input tokens',
-    type: 'info',
-  },
-  [X_VSR_EFFECTIVE_MAX_OUTPUT_TOKENS]: {
-    label: 'Output token limit',
-    type: 'info',
-  },
-  [X_VSR_SELECTED_ALGORITHM]: {
-    label: 'Algorithm',
-    type: 'info',
-  },
-  [X_VSR_SELECTED_DECISION]: {
-    label: 'Decision',
-    type: 'info',
-  },
-  [X_VSR_SELECTED_RECIPE]: {
-    label: 'Recipe',
-    type: 'info',
-  },
-  [X_VSR_SELECTED_CONFIDENCE]: {
-    label: 'Decision Confidence',
-    type: 'info',
-  },
-  [X_VSR_SELECTED_MODALITY]: {
-    label: 'Output',
-    type: 'info',
-  },
-  [X_VSR_CACHE_HIT]: {
-    label: 'Cache',
-    type: 'success',
-  },
-  [X_VSR_SELECTED_REASONING]: {
-    label: 'Reasoning',
-    type: 'info',
-  },
-  [X_VSR_LEARNING_METHODS]: {
-    label: 'Learning',
-    type: 'info',
-  },
-  [X_VSR_LEARNING_ACTIONS]: {
-    label: 'Learning Action',
-    type: 'info',
-  },
-  [X_VSR_LEARNING_SCOPES]: {
-    label: 'Learning Scope',
-    type: 'info',
-  },
-  [X_VSR_LEARNING_REASONS]: {
-    label: 'Learning Reason',
-    type: 'info',
-  },
-  [X_VSR_FAST_RESPONSE]: {
-    label: 'Fast Response',
-    type: 'success',
-  },
-  [X_VSR_RESPONSE_WARNINGS]: {
-    label: 'Response Warnings',
-    type: 'warning',
-  },
-  [X_VSR_MATCHED_KEYWORDS]: {
-    label: 'Keywords',
-    type: 'info',
-  },
-  [X_VSR_MATCHED_DOMAINS]: {
-    label: 'Domain',
-    type: 'info',
-  },
-  [X_VSR_MATCHED_FACT_CHECK]: {
-    label: 'Fact Check Signal',
-    type: 'info',
-  },
-  [X_VSR_MATCHED_USER_FEEDBACK]: {
-    label: 'User Feedback',
-    type: 'info',
-  },
-  [X_VSR_MATCHED_TURN_RELATION]: {
-    label: 'Turn Relation',
-    type: 'info',
-  },
-  [X_VSR_MATCHED_LANGUAGE]: {
-    label: 'Language',
-    type: 'info',
-  },
-  [X_VSR_MATCHED_CONTEXT]: {
-    label: 'Context',
-    type: 'info',
-  },
-  [X_VSR_CONTEXT_TOKEN_COUNT]: {
-    label: 'Context Count',
-    type: 'info',
-  },
-  [X_VSR_MATCHED_COMPLEXITY]: {
-    label: 'Complexity',
-    type: 'info',
-  },
-  [X_VSR_MATCHED_MODALITY]: {
-    label: 'Modality',
-    type: 'info',
-  },
-  [X_VSR_MATCHED_AUTHZ]: {
-    label: 'Authz',
-    type: 'info',
-  },
-  [X_VSR_MATCHED_JAILBREAK]: {
-    label: 'Jailbreak Signal',
-    type: 'danger',
-  },
-  [X_VSR_MATCHED_SAFETY]: {
-    label: 'Safety Signal',
-    type: 'warning',
-  },
-  [X_VSR_MATCHED_HALLUCINATION]: {
-    label: 'Hallucination Signal',
-    type: 'warning',
-  },
-  [X_VSR_MATCHED_PII]: {
-    label: 'PII Signal',
-    type: 'warning',
-  },
-  [X_VSR_MATCHED_CONVERSATION]: {
-    label: 'Conversation Signal',
-    type: 'info',
-  },
-  [X_VSR_MATCHED_INPUT_MODALITY]: {
-    label: 'Input Modality Signal',
-    type: 'info',
-  },
-  [X_VSR_MATCHED_DECISION_MODEL]: {
-    label: 'System One Answers',
-    type: 'info',
-  },
-  [X_VSR_MATCHED_PROJECTIONS]: {
-    label: 'Projection',
-    type: 'info',
-  },
-  // Looper headers
-  [X_VSR_LOOPER_MODEL]: {
-    label: 'Final Model',
-    type: 'info',
-  },
-  [X_VSR_LOOPER_MODELS_USED]: {
-    label: 'Collaborative Models',
-    type: 'success',
-  },
-  [X_VSR_LOOPER_ITERATIONS]: {
-    label: 'Iterations',
-    type: 'info',
-  },
-  [X_VSR_LOOPER_ALGORITHM]: {
-    label: 'Algorithm',
-    type: 'info',
-  },
-  [X_VSR_LOOPER_LATENCY_MS]: {
-    label: 'Looper latency',
-    type: 'info',
-  },
-  [X_VSR_LOOPER_PROMPT_TOKENS]: {
-    label: 'Looper Prompt Tokens',
-    type: 'info',
-  },
-  [X_VSR_LOOPER_COMPLETION_TOKENS]: {
+  [X_VSR_RESPONSE_PATH]: { label: 'Response Path', type: 'info' },
+  [X_VSR_SELECTED_MODEL]: { label: 'Model', type: 'info' },
+  [traceKey(TRACE_EFFECTIVE_INPUT_TOKENS)]: { label: 'Rendered input tokens', type: 'info' },
+  [traceKey(TRACE_EFFECTIVE_MAX_OUTPUT_TOKENS)]: { label: 'Output token limit', type: 'info' },
+  [ALGORITHM]: { label: 'Algorithm', type: 'info' },
+  [X_VSR_SELECTED_DECISION]: { label: 'Decision', type: 'info' },
+  [X_VSR_SELECTED_RECIPE]: { label: 'Recipe', type: 'info' },
+  [traceKey(TRACE_CONFIDENCE)]: { label: 'Decision Confidence', type: 'info' },
+  [traceKey(TRACE_MODALITY)]: { label: 'Output', type: 'info' },
+  [traceKey(TRACE_CACHE_SIMILARITY)]: { label: 'Cache Similarity', type: 'success' },
+  [traceKey(TRACE_REASONING)]: { label: 'Reasoning', type: 'info' },
+  [traceKey(TRACE_FALLBACK_ATTEMPTS)]: { label: 'Fallback Attempts', type: 'info' },
+  [LEARNING_METHODS]: { label: 'Learning', type: 'info' },
+  [LEARNING_ACTIONS]: { label: 'Learning Action', type: 'info' },
+  [LEARNING_SCOPES]: { label: 'Learning Scope', type: 'info' },
+  [LEARNING_REASONS]: { label: 'Learning Reason', type: 'info' },
+  [X_VSR_WARNINGS]: { label: 'Warnings', type: 'warning' },
+  ...Object.fromEntries(
+    Object.entries(SIGNAL_INFO).map(([signalType, info]) => [matchedSignalKey(signalType), info]),
+  ),
+  [traceKey(TRACE_CONTEXT_TOKENS)]: { label: 'Context Count', type: 'info' },
+  // The Looper's execution
+  [LOOPER_MODEL]: { label: 'Final Model', type: 'info' },
+  [LOOPER_MODELS]: { label: 'Collaborative Models', type: 'success' },
+  [traceKey(`${TRACE_LOOPER}.iterations`)]: { label: 'Iterations', type: 'info' },
+  [LOOPER_ALGORITHM]: { label: 'Algorithm', type: 'info' },
+  [LOOPER_LATENCY_MS]: { label: 'Looper latency', type: 'info' },
+  [traceKey(`${TRACE_LOOPER}.prompt_tokens`)]: { label: 'Looper Prompt Tokens', type: 'info' },
+  [traceKey(`${TRACE_LOOPER}.completion_tokens`)]: {
     label: 'Looper Completion Tokens',
     type: 'info',
   },
-  [X_VSR_LOOPER_TOTAL_TOKENS]: {
-    label: 'Looper Total Tokens',
-    type: 'info',
-  },
-  [X_VSR_ROUTING_LATENCY_MS]: {
-    label: 'Routing Latency',
-    type: 'info',
-  },
-  [PLAYGROUND_LATENCY_MS]: {
-    label: 'Latency',
-    type: 'info',
-  },
-  [PLAYGROUND_TTFT_MS]: {
-    label: 'TTFT',
-    type: 'info',
-  },
-  // Retention directive headers (issue #2009)
-  [X_VSR_RETENTION_DROP]: {
-    label: 'Retention: Drop',
-    type: 'warning',
-  },
-  [X_VSR_RETENTION_TTL_TURNS]: {
-    label: 'Retention TTL (turns)',
-    type: 'info',
-  },
-  [X_VSR_RETENTION_KEEP_CURRENT_MODEL]: {
+  [traceKey(`${TRACE_LOOPER}.total_tokens`)]: { label: 'Looper Total Tokens', type: 'info' },
+  [ROUTING_LATENCY_MS]: { label: 'Routing Latency', type: 'info' },
+  [PLAYGROUND_LATENCY_MS]: { label: 'Latency', type: 'info' },
+  [PLAYGROUND_TTFT_MS]: { label: 'TTFT', type: 'info' },
+  // The matched decision's retention directive (issue #2009)
+  [traceKey(`${TRACE_RETENTION}.drop`)]: { label: 'Retention: Drop', type: 'warning' },
+  [traceKey(`${TRACE_RETENTION}.ttl_turns`)]: { label: 'Retention TTL (turns)', type: 'info' },
+  [traceKey(`${TRACE_RETENTION}.keep_current_model`)]: {
     label: 'Keep Current Model',
     type: 'info',
   },
-  [X_VSR_RETENTION_PREFER_PREFIX]: {
-    label: 'Prefer Prefix',
-    type: 'info',
-  },
+  [traceKey(`${TRACE_RETENTION}.prefer_prefix`)]: { label: 'Prefer Prefix', type: 'info' },
+  [traceKey(TRACE_TRUNCATED)]: { label: 'Trace Truncated', type: 'warning' },
 }
 
 function shouldSummarizeHeaderValue(key: string, values: string[]): boolean {
-  return (
-    values.length > 1 &&
-    (key.startsWith(MATCHED_SIGNAL_HEADER_PREFIX) || key === X_VSR_LOOPER_MODELS_USED)
-  )
+  return values.length > 1 && (key.startsWith(MATCHED_SIGNAL_KEY_PREFIX) || key === LOOPER_MODELS)
 }
 
 function summarizeHeaderValue(key: string, rawValue: string): string {
@@ -299,26 +145,19 @@ function summarizeHeaderValue(key: string, rawValue: string): string {
 }
 
 function routingHeaderPriority(key: string): number {
-  if (key.startsWith(MATCHED_SIGNAL_HEADER_PREFIX)) return 0
+  if (key.startsWith(MATCHED_SIGNAL_KEY_PREFIX)) return 0
   if (key === X_VSR_SELECTED_DECISION) return 1
-  if (key === X_VSR_SELECTED_ALGORITHM || key === X_VSR_LOOPER_ALGORITHM) return 2
-  if (
-    key === X_VSR_SELECTED_MODEL ||
-    key === X_VSR_LOOPER_MODEL ||
-    key === X_VSR_LOOPER_MODELS_USED
-  )
-    return 3
+  if (key === ALGORITHM || key === LOOPER_ALGORITHM) return 2
+  if (key === X_VSR_SELECTED_MODEL || key === LOOPER_MODEL || key === LOOPER_MODELS) return 3
   if (key === X_VSR_RESPONSE_PATH) return 4
   return 5
 }
 
 const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
   // Filter to only show headers that exist
-  const hasSelectedAlgorithm = Boolean(headers[X_VSR_SELECTED_ALGORITHM])
+  const hasSelectedAlgorithm = Boolean(headers[ALGORITHM])
   const displayHeaders = Object.entries(headers)
-    .filter(
-      ([key]) => key in HEADER_INFO && !(hasSelectedAlgorithm && key === X_VSR_LOOPER_ALGORITHM),
-    )
+    .filter(([key]) => key in HEADER_INFO && !(hasSelectedAlgorithm && key === LOOPER_ALGORITHM))
     .sort(
       ([leftKey], [rightKey]) => routingHeaderPriority(leftKey) - routingHeaderPriority(rightKey),
     )
@@ -329,16 +168,16 @@ const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
 
   const primaryKeys = [
     X_VSR_SELECTED_DECISION,
-    X_VSR_SELECTED_ALGORITHM,
-    X_VSR_LOOPER_ALGORITHM,
+    ALGORITHM,
+    LOOPER_ALGORITHM,
     X_VSR_SELECTED_MODEL,
-    X_VSR_LOOPER_MODEL,
+    LOOPER_MODEL,
   ]
   const performanceKeys = [
-    X_VSR_ROUTING_LATENCY_MS,
+    ROUTING_LATENCY_MS,
     PLAYGROUND_LATENCY_MS,
     PLAYGROUND_TTFT_MS,
-    X_VSR_LOOPER_LATENCY_MS,
+    LOOPER_LATENCY_MS,
   ]
   const primaryHeaders = displayHeaders.filter(([key]) => primaryKeys.includes(key))
   const performanceHeaders = displayHeaders.filter(([key]) => performanceKeys.includes(key))
@@ -349,7 +188,7 @@ const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
   const renderHeader = ([key, value]: [string, string]) => {
     const info = HEADER_INFO[key]
     const displayValue = summarizeHeaderValue(key, value)
-    const unit = key.endsWith('-ms') ? ' ms' : ''
+    const unit = key.endsWith('-ms') || key.endsWith('_ms') ? ' ms' : ''
     return (
       <div
         key={key}

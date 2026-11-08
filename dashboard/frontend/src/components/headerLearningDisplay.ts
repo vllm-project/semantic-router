@@ -1,9 +1,12 @@
-import {
-  X_VSR_LEARNING_ACTIONS,
-  X_VSR_LEARNING_METHODS,
-  X_VSR_LEARNING_REASONS,
-  X_VSR_LEARNING_SCOPES,
-} from '../generated/vsrHeaders'
+import { TRACE_LEARNING } from '../generated/vsrHeaders'
+import { traceKey } from './routingMetadataDisplay'
+
+// The display entries of the trace's learning member: the methods, and each
+// method's action, scope and reason as method=value pairs.
+export const LEARNING_METHODS = traceKey(`${TRACE_LEARNING}.methods`)
+export const LEARNING_ACTIONS = traceKey(`${TRACE_LEARNING}.actions`)
+export const LEARNING_SCOPES = traceKey(`${TRACE_LEARNING}.scopes`)
+export const LEARNING_REASONS = traceKey(`${TRACE_LEARNING}.reasons`)
 
 const LEARNING_METHOD_LABELS: Record<string, string> = {
   adaptation: 'adaptation',
@@ -46,15 +49,15 @@ const LEARNING_REASON_LABELS: Record<string, string> = {
 }
 
 const HUMANIZED_VALUE_BY_HEADER: Record<string, Record<string, string>> = {
-  [X_VSR_LEARNING_ACTIONS]: LEARNING_ACTION_LABELS,
-  [X_VSR_LEARNING_REASONS]: LEARNING_REASON_LABELS,
+  [LEARNING_ACTIONS]: LEARNING_ACTION_LABELS,
+  [LEARNING_REASONS]: LEARNING_REASON_LABELS,
 }
 
 const LEARNING_HEADERS: string[] = [
-  X_VSR_LEARNING_METHODS,
-  X_VSR_LEARNING_ACTIONS,
-  X_VSR_LEARNING_SCOPES,
-  X_VSR_LEARNING_REASONS,
+  LEARNING_METHODS,
+  LEARNING_ACTIONS,
+  LEARNING_SCOPES,
+  LEARNING_REASONS,
 ]
 
 function splitHeaderList(rawValue: string): string[] {
@@ -98,7 +101,7 @@ export function isLearningHeader(key: string): boolean {
 }
 
 export function formatLearningHeaderValue(key: string, rawValue: string): string {
-  if (key === X_VSR_LEARNING_METHODS) {
+  if (key === LEARNING_METHODS) {
     return formatLearningMethods(rawValue)
   }
   if (isLearningHeader(key)) {

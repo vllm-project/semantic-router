@@ -54,7 +54,7 @@ Valkey, Milvus, Qdrant and hybrid caches. It does not cover cue-less,
 word-order-only or non-English changes.
 
 Rejections are logged as `cache_negation_reject`, count as misses, and still
-surface the rejected score on `x-vsr-cache-similarity`. Remote and hybrid
+surface the rejected score as `cache_similarity` in `x-vsr-trace`. Remote and hybrid
 backends reject candidates without an original query and continue checking the
 bounded fetched candidate set. The same check also applies to hybrid's Milvus
 fallback.

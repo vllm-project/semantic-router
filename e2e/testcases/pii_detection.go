@@ -145,13 +145,13 @@ func testSinglePIIDetection(ctx context.Context, testCase PIITestCase, localPort
 		return result
 	}
 
-	fastResponse := response.Headers.Get("x-vsr-fast-response")
-	selectedDecision := response.Headers.Get("x-vsr-selected-decision")
-	matchedPII := response.Headers.Get("x-vsr-matched-pii")
-	legacyPIIViolation := response.Headers.Get("x-vsr-pii-violation")
-	result.ActuallyBlocked = fastResponse == "true" || legacyPIIViolation == "true"
-	_ = selectedDecision
-	_ = matchedPII
+	// A PII rule blocks with a fast_response decision, which the response
+	// names; its matched rule is in the trace, not on the default surface.
+	result.ActuallyBlocked = response.Headers.Get(responsePathHeader) == "fast_response"
+	if result.ActuallyBlocked && response.Headers.Get("x-vsr-selected-decision") == "" {
+		result.Error = "the fast response names no selected decision"
+		return result
+	}
 
 	if result.ActuallyBlocked {
 		bodyStr := string(response.Body)

@@ -82,7 +82,7 @@ curl -s localhost:8100/v1/classify -H 'content-type: application/json' \
   -d '{"input": ["What is the derivative of x squared?", "Fix this segfault in my C code."]}'
 ```
 
-每条结果带最可能的 `label` 和按 `labels` 顺序排的全部 `probabilities`。经过 router 的话，发请求时带 `x-vsr-debug: true` 头：`x-vsr-matched-domains` 列出匹配上的领域，`x-vsr-selected-decision` 点名走了哪条路由。
+每条结果带最可能的 `label` 和按 `labels` 顺序排的全部 `probabilities`。经过 router 的话，发请求时带 `x-vsr-debug: true` 头：`x-vsr-trace` 的 `signals` 成员以 `domain:<name>` 列出匹配上的领域，`x-vsr-selected-decision` 点名走了哪条路由。
 
 ## 用自己的分类器 {#use-your-own-classifier}
 

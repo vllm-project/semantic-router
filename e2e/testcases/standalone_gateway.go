@@ -222,8 +222,8 @@ func testStandaloneFallback(ctx context.Context, client *kubernetes.Clientset, o
 	if reply.echo["mock"] != "provider-mocker" || reply.echo["model"] != standaloneFallbackModel {
 		return fmt.Errorf("the answer came from model %v, want the fallback %q", reply.echo["model"], standaloneFallbackModel)
 	}
-	if reply.headers.Get("x-vsr-fallback-attempts") == "" {
-		return fmt.Errorf("the response does not report the fallback attempts")
+	if path := reply.headers.Get(responsePathHeader); path != "fallback" {
+		return fmt.Errorf("the response path is %q, want fallback", path)
 	}
 	return nil
 }

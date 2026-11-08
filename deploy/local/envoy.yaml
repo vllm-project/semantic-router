@@ -35,20 +35,16 @@ static_resources:
                   upstream_cluster: "%UPSTREAM_CLUSTER%"
                   upstream_local_address: "%UPSTREAM_LOCAL_ADDRESS%"
                   request_id: "%REQ(X-REQUEST-ID)%"
-                  selected_model: "%REQ(X-SELECTED-MODEL)%"
+                  selected_model: "%REQ(X-VSR-ROUTE-MODEL)%"
           route_config:
             name: local_route
             virtual_hosts:
             - name: local_service
               domains: ["*"]
-              # Internal and identity headers never reach the backend. Envoy
-              # removes them from the request it sends upstream, after the HTTP
-              # filters ran; client-sent identity is removed at ingress below.
+              # Identity headers never reach the backend. Envoy removes them from
+              # the request it sends upstream, after the HTTP filters ran;
+              # client-sent identity is removed at ingress below.
               request_headers_to_remove:
-              - "x-vsr-looper-request"
-              - "x-vsr-looper-secret"
-              - "x-vsr-looper-decision"
-              - "x-vsr-looper-iteration"
               - "x-authz-user-id"
               - "x-authz-user-groups"
               - "x-authz-team-id"
@@ -60,7 +56,7 @@ static_resources:
                   value: "%UPSTREAM_HOST%"
                 append_action: OVERWRITE_IF_EXISTS_OR_ADD
               routes:
-              # ExtProc emits the x-selected-model routing signal; this local-only
+              # ExtProc emits the x-vsr-route-model routing signal; this local-only
               # fixture deliberately has one upstream and needs no model inventory.
               - match:
                   prefix: "/"

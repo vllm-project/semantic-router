@@ -140,8 +140,9 @@ curl -s -D - http://localhost:8899/v1/chat/completions \
 
 `vllm-sr/auto` lets the Router choose. The response headers say what it chose:
 `x-vsr-selected-decision` names the route and `x-vsr-selected-model` the
-model; with `x-vsr-debug: true`, the `x-vsr-matched-*` headers list the
-signals that matched. See [Router headers](../troubleshooting/vsr-headers).
+model; with `x-vsr-debug: true`, and when `global.router.headers.debug` allows
+the caller, the `signals` member of `x-vsr-trace` lists the signals that
+matched. See [Router headers](../troubleshooting/vsr-headers).
 
 ## Operate the stack
 

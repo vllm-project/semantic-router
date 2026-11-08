@@ -3,6 +3,7 @@ package extproc
 import (
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
@@ -21,7 +22,9 @@ func TestProtocolMarkerNamesUsePublicWireTokens(t *testing.T) {
 	}
 }
 
-func TestProtocolMarkersDescribeEveryCrossProtocolCell(t *testing.T) {
+// The trace names both wire protocols of every cell, the same-protocol ones
+// included, so a debug caller always sees which translation handled the call.
+func TestTraceNamesBothProtocolsOfEveryCell(t *testing.T) {
 	formats := []llmprotocol.WireFormat{
 		llmprotocol.OpenAIChatV1,
 		llmprotocol.OpenAIResponsesV1,
@@ -29,17 +32,11 @@ func TestProtocolMarkersDescribeEveryCrossProtocolCell(t *testing.T) {
 	}
 	for _, source := range formats {
 		for _, target := range formats {
-			builder := newResponseHeaderMutationBuilder()
-			builder.addProtocolMarkers(&RequestContext{SourceFormat: source, TargetFormat: target})
-			mutation := builder.mutation()
-			if source == target {
-				if mutation != nil {
-					t.Fatalf("same-format %s emitted protocol markers", source)
-				}
-				continue
-			}
-			if mutation == nil || len(mutation.SetHeaders) != 2 {
-				t.Fatalf("cross-format %s -> %s did not emit both protocol markers", source, target)
+			ctx := debugRequestContext()
+			ctx.SourceFormat, ctx.TargetFormat = source, target
+			trace := traceMembersOf(t, responseTrace(ctx))
+			if trace[headers.TraceClientProtocol] != normalizeProtocol(string(source)) || trace[headers.TraceUpstreamProtocol] != normalizeProtocol(string(target)) {
+				t.Fatalf("%s -> %s: trace = %v", source, target, trace)
 			}
 		}
 	}

@@ -1,5 +1,5 @@
 # Checks an answer against its grounding context when the prompt needs fact
-# checking, and delivers an unsupported one with x-vsr-response-warnings and a
+# checking, and delivers an unsupported one with x-vsr-warnings and a
 # note naming the unsupported spans. Reads the fact_check rule
 # needs_fact_check and the hallucination rule ungrounded_claims.
 plugin:

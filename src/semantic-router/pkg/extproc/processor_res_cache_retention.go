@@ -83,7 +83,7 @@ func applyRetentionTTLOverride(base int, ctx *RequestContext) int {
 //
 // This records every declared field for audit (DSL → AST → config → ctx →
 // log/trace) regardless of which fields the runtime consumes, complementing the
-// x-vsr-retention-* response headers so operators can verify wiring end-to-end.
+// retention member of x-vsr-trace so operators can verify wiring end-to-end.
 func observeDecisionRetention(ctx *RequestContext) {
 	if ctx == nil || ctx.Retention == nil {
 		return

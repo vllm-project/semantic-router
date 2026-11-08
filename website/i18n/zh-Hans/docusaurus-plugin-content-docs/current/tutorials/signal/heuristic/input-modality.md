@@ -71,7 +71,7 @@ recipes:
 
 ## 可观测性 {#observability}
 
-匹配规则暴露在 `x-vsr-matched-input-modality` 响应头、classify/eval 响应的 `input_modality` 字段、router-回放记录，以及标准的每信号 Prometheus 指标（`llm_signal_match_total{signal_type="input_modality"}`）中。
+匹配规则以 `input_modality:<name>` 暴露在 `x-vsr-trace` 的 `signals` 成员、classify/eval 响应的 `input_modality` 字段、router-回放记录，以及标准的每信号 Prometheus 指标（`llm_signal_match_total{signal_type="input_modality"}`）中。
 
 ## 相关信号 {#related-signals}
 

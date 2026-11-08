@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
@@ -73,7 +74,7 @@ func (r *OpenAIRouter) retrieveMemorySource(
 // routes and models turned off.
 func (r *OpenAIRouter) memoryOptOut(ctx *RequestContext) (string, string, bool) {
 	switch {
-	case ctx.Headers[headers.DisableRouterMemory] == "true":
+	case strings.EqualFold(strings.TrimSpace(headerValueCI(ctx, headers.VSRMemory)), headers.MemoryOff):
 		return "policy_blocked", "request_opt_out", true
 	case r.isMemoryDisabledForRoute(ctx.Headers[":path"]):
 		return "policy_blocked", "route_config", true
@@ -284,6 +285,7 @@ func (r *OpenAIRouter) handleFastResponse(ctx *RequestContext, decisionName stri
 
 	logging.Infof("[FastResponse] Decision '%s' has fast_response plugin, returning immediate response", decisionName)
 	metrics.RecordPluginExecution("fast_response", requestDecisionStateKey(ctx), "executed", 0)
+	ctx.VSRSelectedDecisionName = decisionName
 
 	body, contentType, _, err := r.encodeSyntheticTextResponse(
 		ctx,
@@ -298,10 +300,8 @@ func (r *OpenAIRouter) handleFastResponse(ctx *RequestContext, decisionName stri
 		})
 		return r.createErrorResponse(500, "Fast response could not be encoded")
 	}
-	response := httputil.CreateFastResponseWithBody(body, contentType, decisionName)
 	ctx.ImmediateResponseEncoded = true
-	appendRecipeHeaderToImmediateResponse(response, ctx)
-	return response
+	return httputil.CreateFastResponseWithBody(body, contentType)
 }
 
 // isMemoryDisabledForRoute checks if memory is disabled for the given route path.

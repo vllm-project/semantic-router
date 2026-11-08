@@ -482,9 +482,9 @@ func buildNonStreamingCacheBody(cachedResponse []byte) []byte {
 	return marshaledBody
 }
 
-// KeystoneHeaderOptions returns the v0.4 keystone header options
+// KeystoneHeaderOptions returns the keystone header options
 // (x-vsr-schema-version + x-vsr-response-path) for an immediate response on the
-// given response path. See issue #2203.
+// given response path.
 func KeystoneHeaderOptions(path string) []*core.HeaderValueOption {
 	return []*core.HeaderValueOption{
 		{Header: &core.HeaderValue{Key: headers.VSRSchemaVersion, RawValue: []byte(headers.SchemaVersionValue)}},
@@ -492,14 +492,10 @@ func KeystoneHeaderOptions(path string) []*core.HeaderValueOption {
 	}
 }
 
-// CreateCacheHitResponse creates an immediate response from cache.
-//
-// content-type, the cache-hit marker and the final routing fact (selected
-// decision) ride on the default surface. The intermediate category,
-// cache-similarity and matched-keyword headers are demoted off the default
-// surface (#2205): each is emitted only when non-empty, so the caller demotes
-// them by passing empty values unless the request opted into x-vsr-debug.
-func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category string, decisionName string, matchedKeywords []string, similarity ...float32) *ext_proc.ProcessingResponse {
+// CreateCacheHitResponse creates an immediate response from cache, with its
+// content-type and the keystone headers of the cache path. The Router adds
+// the rest of the public set.
+func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool) *ext_proc.ProcessingResponse {
 	var responseBody []byte
 	var contentType string
 
@@ -515,71 +511,7 @@ func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category st
 		responseBody = buildNonStreamingCacheBody(cachedResponse)
 	}
 
-	setHeaders := []*core.HeaderValueOption{
-		{
-			Header: &core.HeaderValue{
-				Key:      "content-type",
-				RawValue: []byte(contentType),
-			},
-		},
-		{
-			Header: &core.HeaderValue{
-				Key:      headers.VSRCacheHit,
-				RawValue: []byte("true"),
-			},
-		},
-		{
-			Header: &core.HeaderValue{
-				Key:      headers.VSRSelectedDecision,
-				RawValue: []byte(decisionName),
-			},
-		},
-	}
-
-	// Demoted intermediate detail (#2205): emitted only when non-empty.
-	if category != "" {
-		setHeaders = append(setHeaders, &core.HeaderValueOption{
-			Header: &core.HeaderValue{
-				Key:      headers.VSRSelectedCategory,
-				RawValue: []byte(category),
-			},
-		})
-	}
-	if len(similarity) > 0 && similarity[0] > 0 {
-		setHeaders = append(setHeaders, &core.HeaderValueOption{
-			Header: &core.HeaderValue{
-				Key:      headers.VSRCacheSimilarity,
-				RawValue: []byte(fmt.Sprintf("%.4f", similarity[0])),
-			},
-		})
-	}
-	if len(matchedKeywords) > 0 {
-		setHeaders = append(setHeaders, &core.HeaderValueOption{
-			Header: &core.HeaderValue{
-				Key:      headers.VSRMatchedKeywords,
-				RawValue: []byte(strings.Join(matchedKeywords, ",")),
-			},
-		})
-	}
-
-	// v0.4 keystone headers: this is the semantic-cache path (#2203).
-	setHeaders = append(setHeaders, KeystoneHeaderOptions(headers.ResponsePathCache)...)
-
-	immediateResponse := &ext_proc.ImmediateResponse{
-		Status: &typev3.HttpStatus{
-			Code: typev3.StatusCode_OK,
-		},
-		Headers: &ext_proc.HeaderMutation{
-			SetHeaders: setHeaders,
-		},
-		Body: responseBody,
-	}
-
-	return &ext_proc.ProcessingResponse{
-		Response: &ext_proc.ProcessingResponse_ImmediateResponse{
-			ImmediateResponse: immediateResponse,
-		},
-	}
+	return CreateCacheHitResponseWithBody(responseBody, contentType)
 }
 
 // buildStreamingFastBody converts a message into SSE chunks for the fast_response plugin.
@@ -675,105 +607,31 @@ func buildNonStreamingFastBody(message string, unixTimeStep int64) []byte {
 // fast_response plugin. It supports both streaming (SSE) and non-streaming (JSON)
 // formats based on the original request's "stream" flag.
 // The response is returned as 200 OK with finish_reason "stop".
-func CreateFastResponse(message string, isStreaming bool, decisionName string) *ext_proc.ProcessingResponse {
+func CreateFastResponse(message string, isStreaming bool) *ext_proc.ProcessingResponse {
 	unixTimeStep := time.Now().Unix()
-	var responseBody []byte
-	var contentType string
-
 	if isStreaming {
-		contentType = "text/event-stream"
-		responseBody = buildStreamingFastBody(message, unixTimeStep)
-	} else {
-		contentType = "application/json"
-		responseBody = buildNonStreamingFastBody(message, unixTimeStep)
+		return CreateFastResponseWithBody(buildStreamingFastBody(message, unixTimeStep), "text/event-stream")
 	}
-
-	setHeaders := []*core.HeaderValueOption{
-		{
-			Header: &core.HeaderValue{
-				Key:      "content-type",
-				RawValue: []byte(contentType),
-			},
-		},
-		{
-			Header: &core.HeaderValue{
-				Key:      headers.VSRSelectedDecision,
-				RawValue: []byte(decisionName),
-			},
-		},
-		{
-			Header: &core.HeaderValue{
-				Key:      headers.VSRFastResponse,
-				RawValue: []byte("true"),
-			},
-		},
-	}
-
-	// v0.4 keystone headers: this is the fast_response plugin path (#2203).
-	setHeaders = append(setHeaders, KeystoneHeaderOptions(headers.ResponsePathFastResponse)...)
-
-	immediateResponse := &ext_proc.ImmediateResponse{
-		Status: &typev3.HttpStatus{
-			Code: typev3.StatusCode_OK,
-		},
-		Headers: &ext_proc.HeaderMutation{
-			SetHeaders: setHeaders,
-		},
-		Body: responseBody,
-	}
-
-	return &ext_proc.ProcessingResponse{
-		Response: &ext_proc.ProcessingResponse_ImmediateResponse{
-			ImmediateResponse: immediateResponse,
-		},
-	}
+	return CreateFastResponseWithBody(buildNonStreamingFastBody(message, unixTimeStep), "application/json")
 }
 
 // CreateFastResponseWithBody wraps a public response already encoded by the
-// protocol layer. This transport helper never parses or rewrites its body.
-func CreateFastResponseWithBody(
-	responseBody []byte,
-	contentType string,
-	decisionName string,
-) *ext_proc.ProcessingResponse {
+// protocol layer, with its content-type and the keystone headers of the
+// fast_response path. This transport helper never parses or rewrites its body.
+func CreateFastResponseWithBody(responseBody []byte, contentType string) *ext_proc.ProcessingResponse {
 	setHeaders := []*core.HeaderValueOption{
 		{Header: &core.HeaderValue{Key: "content-type", RawValue: []byte(contentType)}},
-		{Header: &core.HeaderValue{Key: headers.VSRSelectedDecision, RawValue: []byte(decisionName)}},
-		{Header: &core.HeaderValue{Key: headers.VSRFastResponse, RawValue: []byte("true")}},
 	}
 	setHeaders = append(setHeaders, KeystoneHeaderOptions(headers.ResponsePathFastResponse)...)
 	return createImmediateOK(responseBody, setHeaders)
 }
 
-// CreateCacheHitResponseWithBody wraps a cached public response already encoded
-// by the protocol layer.
-func CreateCacheHitResponseWithBody(
-	responseBody []byte,
-	contentType string,
-	category string,
-	decisionName string,
-	matchedKeywords []string,
-	similarity ...float32,
-) *ext_proc.ProcessingResponse {
+// CreateCacheHitResponseWithBody wraps a cached public response already
+// encoded by the protocol layer, with its content-type and the keystone
+// headers of the cache path.
+func CreateCacheHitResponseWithBody(responseBody []byte, contentType string) *ext_proc.ProcessingResponse {
 	setHeaders := []*core.HeaderValueOption{
 		{Header: &core.HeaderValue{Key: "content-type", RawValue: []byte(contentType)}},
-		{Header: &core.HeaderValue{Key: headers.VSRCacheHit, RawValue: []byte("true")}},
-		{Header: &core.HeaderValue{Key: headers.VSRSelectedDecision, RawValue: []byte(decisionName)}},
-	}
-	if category != "" {
-		setHeaders = append(setHeaders, &core.HeaderValueOption{
-			Header: &core.HeaderValue{Key: headers.VSRSelectedCategory, RawValue: []byte(category)},
-		})
-	}
-	if len(similarity) > 0 && similarity[0] > 0 {
-		setHeaders = append(setHeaders, &core.HeaderValueOption{
-			Header: &core.HeaderValue{Key: headers.VSRCacheSimilarity, RawValue: []byte(fmt.Sprintf("%.4f", similarity[0]))},
-		})
-	}
-	if len(matchedKeywords) > 0 {
-		setHeaders = append(setHeaders, &core.HeaderValueOption{
-			Header: &core.HeaderValue{Key: headers.VSRMatchedKeywords, RawValue: []byte(strings.Join(matchedKeywords, ","))},
-		})
 	}
 	setHeaders = append(setHeaders, KeystoneHeaderOptions(headers.ResponsePathCache)...)
 	return createImmediateOK(responseBody, setHeaders)

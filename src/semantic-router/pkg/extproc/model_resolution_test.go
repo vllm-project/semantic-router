@@ -77,7 +77,7 @@ func selectedModelHeader(resp *ext_proc.ProcessingResponse) (string, bool) {
 		return "", false
 	}
 	for _, h := range body.GetResponse().GetHeaderMutation().GetSetHeaders() {
-		if h.GetHeader().GetKey() == headers.SelectedModel {
+		if h.GetHeader().GetKey() == headers.VSRRouteModel {
 			return string(h.GetHeader().GetRawValue()), true
 		}
 	}
@@ -110,7 +110,7 @@ func TestSpecifiedKnownModelRoutes(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, resp.GetImmediateResponse(), "known model should not be rejected")
 	model, ok := selectedModelHeader(resp)
-	require.True(t, ok, "known model should set x-selected-model header")
+	require.True(t, ok, "known model should set the route key")
 	assert.Equal(t, "known-model", model)
 }
 

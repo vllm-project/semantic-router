@@ -204,7 +204,7 @@ helm install vsr oci://ghcr.io/vllm-project/charts/semantic-router \
 
 ### 调试头
 
-`global.router.headers.debug` 决定谁可以用 `x-vsr-debug: true` 打开调试响应头。调试头会列出请求命中的信号规则和防护规则，所以默认值 `none` 会忽略所有客户端发来的该头。`any` 对所有客户端生效，用于开发和测试。`authenticated` 只对 `debug_principals` 里的用户和组生效，以你的认证组件设置的身份头为准。
+`global.router.headers.debug` 决定谁可以用 `x-vsr-debug: true` 打开调试响应头 `x-vsr-trace`。它会列出请求命中的信号规则和防护规则，所以默认值 `none` 会忽略所有客户端发来的该请求头。`any` 对所有客户端生效，用于开发和测试。`authenticated` 只对 `debug_principals` 里的用户和组生效，以你的认证组件设置的身份头为准。
 
 ```yaml
 global:
@@ -215,7 +215,7 @@ global:
         groups: [platform-sre]
 ```
 
-它覆盖哪些头，见 [VSR 路由头](../../troubleshooting/vsr-headers#who-may-turn-on-the-debug-headers)。
+追踪头包含哪些内容，见 [VSR 路由头](../../troubleshooting/vsr-headers#the-trace)。
 
 ### 路由回放
 

@@ -67,7 +67,7 @@ recipes:
 
 `safety-capable-model` 换成 `providers.models` 里一个后端能恰当处理内容风险的别名。信号命中也可能包含一个危机中求助的人；它不意味恶意，也不该导向一刀切的拒绝。该拒绝时才用按类别细分的决策。Safety 信号只出分；消费它的决策选应对策略。提示词攻击的决策和内容风险的决策放在一起排，相对优先级要显式定。
 
-模型出错，信号未知。`rules.on_unknown: fail_request` 会在决策持续未知时返回 HTTP 503。打了分的不安全请求选中配好的处理路由。诊断在 `x-vsr-matched-safety`、dashboard 和回放记录里给出命中的规则名和分类结果。
+模型出错，信号未知。`rules.on_unknown: fail_request` 会在决策持续未知时返回 HTTP 503。打了分的不安全请求选中配好的处理路由。诊断在 `x-vsr-trace` 的 `signals` 成员、dashboard 和回放记录里给出命中的规则名和分类结果。
 
 本地上下文预算、远程部署和失败策略见[共享模型配置](../../../model-runtime/guides/safety.md)，按类别细分的策略见[完整 HTTP 示例](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/safety/content-safety.yaml)。
 

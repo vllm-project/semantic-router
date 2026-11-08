@@ -118,6 +118,8 @@ recipes:
 global:
   router:
     strategy: priority
+    headers:
+      debug: any
   services:
     api:
       batch_classification:

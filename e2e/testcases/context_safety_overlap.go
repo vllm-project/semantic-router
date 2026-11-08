@@ -57,7 +57,7 @@ func testContextSafetyOverlap(ctx context.Context, client *kubernetes.Clientset,
 
 	decision := strings.TrimSuffix(strings.TrimSpace(response.Headers.Get("x-vsr-selected-decision")), "_decision")
 	responsePath := response.Headers.Get("x-vsr-response-path")
-	fastResponse := response.Headers.Get("x-vsr-fast-response") == "true"
+	fastResponse := responsePath == "fast_response"
 	guardDecision := decision == "block_jailbreak" || decision == "block_pii"
 
 	if opts.SetDetails != nil {

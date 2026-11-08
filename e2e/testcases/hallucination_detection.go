@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -16,22 +17,15 @@ import (
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
-// responseWarningsHeader is the consolidated response-quality warnings header
-// (v0.4). It carries the "hallucination" code when the detector flags the
-// response. Kept as a literal to match the e2e convention of not importing the
-// router module for header names.
-const responseWarningsHeader = "x-vsr-response-warnings"
-
+// hallucinationWarningCode is the x-vsr-warnings code of a response the
+// detector flags.
 const hallucinationWarningCode = "hallucination"
 
-// hallucinationMatchedHeader names, under x-vsr-debug, the hallucination rules
-// that matched once the answer was checked; hallucinationRuleName is the rule
-// the profile declares, so a warning that arrives without it came from the
-// plugin classifying the answer itself rather than from the signal.
-const (
-	hallucinationMatchedHeader = "x-vsr-matched-hallucination"
-	hallucinationRuleName      = "ungrounded_claims"
-)
+// hallucinationRuleName is the rule the profile declares. The trace's
+// signals name it once the answer was checked, so a warning that arrives
+// without it came from the plugin classifying the answer itself rather than
+// from the signal.
+const hallucinationRuleName = "ungrounded_claims"
 
 func init() {
 	pkgtestcases.Register("hallucination-detection", pkgtestcases.TestCase{
@@ -56,7 +50,7 @@ type HallucinationResult struct {
 	Question            string
 	SelectedDecision    string
 	WarningsHeader      string
-	MatchedHeader       string
+	MatchedSignals      string
 	HallucinationWarned bool
 	RuleMatched         bool
 	Error               string
@@ -112,9 +106,9 @@ func testHallucinationDetection(ctx context.Context, client *kubernetes.Clientse
 			}
 			detail := result.Error
 			if detail == "" {
-				detail = fmt.Sprintf("no %q warning from rule %q (decision=%q, warnings=%q, %s=%q)",
+				detail = fmt.Sprintf("no %q warning from rule %q (decision=%q, warnings=%q, hallucination signals=%q)",
 					hallucinationWarningCode, hallucinationRuleName, result.SelectedDecision, result.WarningsHeader,
-					hallucinationMatchedHeader, result.MatchedHeader)
+					result.MatchedSignals)
 			}
 			failures = append(failures, fmt.Sprintf("%s: %s", result.Description, detail))
 		}
@@ -159,12 +153,12 @@ func testSingleHallucinationDetection(ctx context.Context, testCase Hallucinatio
 	}
 
 	result.SelectedDecision = response.Headers.Get("x-vsr-selected-decision")
-	result.WarningsHeader = response.Headers.Get(responseWarningsHeader)
-	result.MatchedHeader = response.Headers.Get(hallucinationMatchedHeader)
-	result.RuleMatched = headerListContains(result.MatchedHeader, hallucinationRuleName)
+	result.WarningsHeader = response.Headers.Get(warningsHeader)
+	result.MatchedSignals = matchedSignals(response.Headers, "hallucination")
+	result.RuleMatched = headerListContains(result.MatchedSignals, hallucinationRuleName)
 	// The warning counts only when the declared rule produced it: the plugin
 	// enforces on the signal, it does not classify the answer itself.
-	result.HallucinationWarned = headerListContains(result.WarningsHeader, hallucinationWarningCode) && result.RuleMatched
+	result.HallucinationWarned = slices.Contains(responseWarnings(response.Headers), hallucinationWarningCode) && result.RuleMatched
 
 	if verbose {
 		if result.HallucinationWarned {

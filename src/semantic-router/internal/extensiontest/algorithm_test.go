@@ -113,7 +113,7 @@ func TestARegisteredAlgorithmChoosesTheCandidate(t *testing.T) {
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.Copy(io.Discard, r.Body)
 		mu.Lock()
-		selected = r.Header.Get("X-Selected-Model")
+		selected = r.Header.Get("X-Vsr-Route-Model")
 		mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, completion)

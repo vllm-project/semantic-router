@@ -85,6 +85,25 @@ semantic:
 - `judge` 在一次调用中向决策模型询问 `same_request` 问题（请求与每个召回的请求，各占批量请求中的一项），复用得分不低于 `min_score` 的最佳一个，从而拒绝嵌入相近但问的是另一件事（例如相反问题）的缓存请求：被 judge 否决的召回请求就是未命中。judge 失败时，`on_error: skip`（默认）复用召回结果，`on_error: fail` 不复用。
 - 只写 `recall` 的块复用最相似的缓存请求，不询问任何模型。
 
+### 配合响应守卫 {#with-a-response-guard}
+
+在同时配置了 [`response_guard`](./response-guard.md) 的决策上，缓存只保存守卫放行的回答：被拦截的回答，以及只在 `x-vsr-warnings` 中被标记的回答，都不会存入缓存，因为缓存命中不携带守卫的响应头；带守卫说明的回答会连同说明一起存入。命中无需调用模型即可应答，因此守卫不会对它运行：
+
+- 精确命中是同一个请求，守卫对它的判定仍然成立。
+- 语义命中返回守卫为先前一个相似请求放行的回答。守卫中依赖请求本身的条件（例如 `keyword` 或 `fact_check` 条件）不会针对新请求求值，这些条件本应触发的规则对它不生效：为一个无需事实核查的请求放行的回答，会未经检查地返回给一个需要事实核查的相似请求。在这一点重要的场景下，请为该决策的缓存使用 `mode: exact`。
+
+修改决策的守卫会让它的缓存重新开始，因为守卫的配置是缓存键的一部分。修改守卫读取的信号（例如越狱规则的 `predicate`）不会改变缓存键：在配置重载后仍保留条目的存储（例如 Redis）会继续返回旧值下放行的回答，直到它们过期。这类修改之后，请在每个守卫读取该信号的决策的 `response_cache` 配置中为 `revision.policy_revision` 设置新值。`revision` 中的每个值都是缓存键的一部分：
+
+```yaml
+plugins:
+  - type: response_cache
+    configuration:
+      enabled: true
+      mode: exact
+      revision:
+        policy_revision: guard-2
+```
+
 ## 迁移 {#migration}
 
 插件类型为 `response_cache`，存储为 `global.stores.response_cache`。仍写 `semantic-cache`、`semantic_cache`、`response-cache` 插件类型、`global.stores.semantic_cache`、扁平的 `similarity_threshold` 或 `semantic.similarity_threshold`、`allow_request_controls` 和 `control_header` 的配置会加载失败，并给出指明字段的一行错误；`vllm-sr config migrate` 把阈值写为 `semantic.match.recall.min_similarity`，把请求控制字段写入 `request_controls`。

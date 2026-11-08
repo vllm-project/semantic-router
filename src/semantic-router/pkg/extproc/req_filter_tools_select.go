@@ -235,8 +235,13 @@ func addCatalogTools(request *llmprotocol.Request, catalog map[string]llmprotoco
 }
 
 // recordToolsSelection counts the selection, logs it and adds it to the
-// request's replay record: names and scores only, never the request.
+// request's replay record and trace: names and scores only, never the
+// request.
 func (r *OpenAIRouter) recordToolsSelection(ctx *RequestContext, selection *toolsSelection) {
+	if ctx != nil {
+		recorded := *selection
+		ctx.ToolsSelection = &recorded
+	}
 	decision := requestDecisionStateKey(ctx)
 	metrics.RecordPluginExecution(config.DecisionPluginTools, decision, selection.outcome, selection.latency.Seconds())
 	metadata := map[string]string{
@@ -268,6 +273,12 @@ func (r *OpenAIRouter) recordToolsSelection(ctx *RequestContext, selection *tool
 		Reason:    selection.reason,
 		Metadata:  metadata,
 	})
+}
+
+// formatMilliseconds keeps sub-millisecond precision, which whole
+// milliseconds would report as 0.
+func formatMilliseconds(d time.Duration) string {
+	return strconv.FormatFloat(float64(d)/float64(time.Millisecond), 'f', 3, 64)
 }
 
 func requestID(ctx *RequestContext) string {

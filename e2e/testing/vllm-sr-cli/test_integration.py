@@ -114,7 +114,7 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
                 if skip_processing:
                     request_headers["x-vsr-skip-processing"] = "true"
                 if selected_model_header:
-                    request_headers["x-selected-model"] = model
+                    request_headers["x-vsr-route-model"] = model
                 self._send_mock_chat_completion(
                     mock_container,
                     request_path=request_path,

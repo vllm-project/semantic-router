@@ -130,9 +130,9 @@ func (r *OpenAIRouter) handleLooperExecution(
 
 	// The looper's final model must land on the request context before the
 	// response headers are built. Runtime model selection has already put a
-	// preliminary panel candidate in VSRSelectedModel, and appendLooperRoutingFacts
-	// prefers that value, so building headers first would advertise a panel model
-	// as the responder even when a fallback target produced the answer.
+	// preliminary panel candidate in VSRSelectedModel, which the public headers
+	// report, so building headers first would advertise a panel model as the
+	// responder even when a fallback target produced the answer.
 	reqCtx.RequestModel = resp.Model
 	reqCtx.VSRSelectedModel = resp.Model
 	reqCtx.VSRSelectionMethod = resp.AlgorithmType
@@ -164,13 +164,11 @@ func (r *OpenAIRouter) handleLooperExecution(
 			},
 		), nil
 	}
+	// Replay starts inside the recorder, so its ID only exists now; the reply
+	// boundary adds it to the already-built response.
 	r.recordSuccessfulLooperExecution(
 		resp, request.Model, decision, reqCtx, semanticResponse, clientBody,
 	)
-	// Replay starts inside the recorder, so its ID only exists now. Attach it to
-	// the already-built immediate response, as the failure path does, otherwise a
-	// successful looper response omits the header for the record just created.
-	addRouterReplayHeaderToImmediateResponse(response, reqCtx.RouterReplayID)
 	return response, nil
 }
 

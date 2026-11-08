@@ -57,7 +57,7 @@ Each rule is an inclusive token band: it matches when
 - Setting `min_tokens` equal to `max_tokens` is an exact-match band for that
   one token count.
 - Every matching rule is reported, in configuration order. Overlapping bands
-  are allowed and both names appear in `x-vsr-matched-context`.
+  are allowed and both appear in the `signals` member of `x-vsr-trace` as `context:<name>`.
 - Gaps and overlaps between bands are logged as warnings when the config
   loads. Requests inside a gap match no context rule.
 - Validation rejects a rule with neither limit, unparsable, negative, or

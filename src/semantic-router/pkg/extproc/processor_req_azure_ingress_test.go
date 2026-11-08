@@ -151,7 +151,7 @@ func TestAzureDeploymentChatRoutesTheDeploymentModel(t *testing.T) {
 			dispatch := stream.Responses[1].GetRequestBody().GetResponse()
 			require.NotNil(t, dispatch, "request was not dispatched: %v", stream.Responses[1].GetImmediateResponse())
 			emitted := headerValuesByName(dispatch.GetHeaderMutation().GetSetHeaders())
-			assert.Equal(t, "worker", emitted[headers.SelectedModel])
+			assert.Equal(t, "worker", emitted[headers.VSRRouteModel])
 			assert.Equal(t, "/v1/chat/completions", emitted[":path"])
 			var wire struct {
 				Model string `json:"model"`
@@ -199,7 +199,7 @@ func TestAzureResponsesAndV1ChatDispatch(t *testing.T) {
 			dispatch := stream.Responses[1].GetRequestBody().GetResponse()
 			require.NotNil(t, dispatch, "request was not dispatched: %v", stream.Responses[1].GetImmediateResponse())
 			emitted := headerValuesByName(dispatch.GetHeaderMutation().GetSetHeaders())
-			assert.Equal(t, "worker", emitted[headers.SelectedModel])
+			assert.Equal(t, "worker", emitted[headers.VSRRouteModel])
 			assert.Equal(t, "/v1/chat/completions", emitted[":path"])
 			var wire struct {
 				Model    string            `json:"model"`

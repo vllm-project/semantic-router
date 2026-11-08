@@ -19,7 +19,7 @@ A remote hallucination check (a `hallucination` binding to a `systemone`
 deployment in `global.model_catalog.bindings`) is exercised by the
 Kubernetes E2E `hallucination` profile (`e2e/profiles/hallucination/values.yaml`). That profile asks the
 System One fixture of the shared `tools/test/services/provider-mocker` image and asserts the
-`x-vsr-response-warnings: hallucination` header. Run it with
+`x-vsr-warnings: hallucination` header. Run it with
 `make e2e-test E2E_PROFILE=hallucination`.
 `config.remote-embedding-smoke.yaml` is a manual local smoke config for validating
 `global.model_catalog.embeddings.semantic.embedding_config.backend: openai_compatible`

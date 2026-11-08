@@ -59,7 +59,7 @@ curl -s localhost:8080/startup-status
 2. 按 `reason` 查看 `vsr_model_runtime_unknown_answers_total`。`timeout` 表示答案晚于信号的
    `timeout_ms`：调大它，或改用更小的模型或 GPU。`unavailable` 表示运行时未就绪或不可达。
    `overloaded` 表示它的队列已满。
-3. 打开调试并发送同样的文本，读取 `x-vsr-matched-*` 响应头：
+3. 打开调试并发送同样的文本，读取 `x-vsr-trace` 的 `signals` 成员；Router 只把它发给 `global.router.headers.debug` 允许的调用方：
 
    ```bash
    curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \

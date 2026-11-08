@@ -58,7 +58,7 @@ recipes:
 - 两个上限都可选，但至少要设一个。缺少 `min_tokens` 表示 0。
 - 省略 `max_tokens` 使该档开口向上。所有大于等于 `min_tokens` 的请求都匹配，没有上限。把开口档放在最后，这样超出最大有界档的溢出仍带有上下文信号。
 - 将 `min_tokens` 设成与 `max_tokens` 相等，即该 token 数的精确匹配档。
-- 每条匹配规则都会按配置顺序报告。允许重叠档，两个名称都会出现在 `x-vsr-matched-context` 中。
+- 每条匹配规则都会按配置顺序报告。允许重叠档，两个名称都会以 `context:<name>` 出现在 `x-vsr-trace` 的 `signals` 成员中。
 - 档之间的空隙与重叠会在配置加载时记为警告。落在空隙中的请求不匹配任何上下文规则。
 - 校验会拒绝既无上限、无法解析、负数或过大的值，以及 `min_tokens` 大于 `max_tokens` 的规则。Router、`vllm-sr` CLI 与控制面板使用同一套规则，因此通过 `vllm-sr config validate` 的档也会在 Router 中加载。
 

@@ -165,8 +165,8 @@ func testSingleClassification(ctx context.Context, question, expectedCategory, l
 		return result
 	}
 	req.Header.Set("Content-Type", "application/json")
-	// v0.4 demotes the intermediate decision/signal headers behind x-vsr-debug
-	// (#2205); opt in so the routing assertions below can read them.
+	// The classification details ride in x-vsr-trace, behind x-vsr-debug; opt
+	// in so the routing assertions below can read them.
 	req.Header.Set("x-vsr-debug", "true")
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
@@ -210,8 +210,8 @@ func testSingleClassification(ctx context.Context, question, expectedCategory, l
 	}
 
 	// Extract VSR headers
-	result.ActualCategory = resp.Header.Get("x-vsr-selected-category")
-	result.ActualReasoning = resp.Header.Get("x-vsr-selected-reasoning")
+	result.ActualCategory = traceValue(resp.Header, "category")
+	result.ActualReasoning = traceValue(resp.Header, "reasoning")
 
 	// Check if classification is correct (only compare category, not reasoning)
 	result.Correct = (result.ActualCategory == expectedCategory)

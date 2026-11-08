@@ -58,7 +58,7 @@ func TestValidateProtectionReleaseConfig(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := RouterLearningProtectionConfig{Release: tc.release}
 			cfg.Identity.Headers.Agent = tc.agent
-			err := validateRouterLearningProtectionConfig(cfg)
+			err := validateRouterLearningProtectionConfig(cfg, RouterHeadersConfig{}.SessionIDHeaderNames())
 			if tc.wantErr == "" {
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)

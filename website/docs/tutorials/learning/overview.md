@@ -146,13 +146,11 @@ whether exploration or switching is safe now.
 
 ## Header And Replay
 
-The `x-vsr-learning-*` header family is intentionally compact:
+The `learning` member of `x-vsr-trace` is intentionally compact: each method
+with its `action`, `scope` and `reason`.
 
 ```http
-x-vsr-learning-methods: adaptation,protection
-x-vsr-learning-actions: adaptation=propose_switch,protection=allow_switch
-x-vsr-learning-scopes: protection=conversation
-x-vsr-learning-reasons: adaptation=sampled_win,protection=switch_allowed
+x-vsr-trace: learning=(adaptation;action=propose_switch;reason=sampled_win protection;action=allow_switch;scope=conversation;reason=switch_allowed)
 ```
 
 When Router Replay is enabled, detailed fields such as base model, proposal

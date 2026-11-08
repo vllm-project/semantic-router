@@ -123,15 +123,15 @@ func checkDecisionRuntimeSetSpan(ctx context.Context, session *modelRuntimeSessi
 		rule, _, _ := strings.Cut(label, ":")
 		ruleMatched[rule] = ruleMatched[rule] || expected[label]
 	}
-	matched := headerItems(response.Headers, "x-vsr-matched-decision-model")
+	matched := signalItems(response.Headers, "systemone")
 	for rule, want := range ruleMatched {
 		if matched[rule] != want {
-			return "", fmt.Errorf("x-vsr-matched-decision-model %v: %s matched=%v, the runtime's answer says %v", matched, rule, matched[rule], want)
+			return "", fmt.Errorf("systemone signals %v: %s matched=%v, the runtime's answer says %v", matched, rule, matched[rule], want)
 		}
 	}
 	for item := range matched {
 		if strings.HasPrefix(item, "topics:") || strings.HasPrefix(item, "names:") {
-			return "", fmt.Errorf("x-vsr-matched-decision-model lists the label reference %s of a rule it names", item)
+			return "", fmt.Errorf("the systemone signals list the label reference %s of a rule it names", item)
 		}
 	}
 	var labels []string

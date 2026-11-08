@@ -285,23 +285,23 @@ func assertToolSelectionFastResponse(tc toolSelectionE2ECase, h http.Header) err
 	if tc.ExpectFastResponse == nil {
 		return nil
 	}
-	fr := h.Get("x-vsr-fast-response") == "true"
+	fr := h.Get(responsePathHeader) == "fast_response"
 	if fr == *tc.ExpectFastResponse {
 		return nil
 	}
-	return fmt.Errorf("x-vsr-fast-response: want %v got %v", *tc.ExpectFastResponse, fr)
+	return fmt.Errorf("fast_response path: want %v got %v", *tc.ExpectFastResponse, fr)
 }
 
 func logToolSelectionHeaders(decision string, h http.Header) {
-	fmt.Printf("  decision=%q fast=%q\n", decision, h.Get("x-vsr-fast-response"))
+	fmt.Printf("  decision=%q path=%q\n", decision, h.Get(responsePathHeader))
 }
 
 func summarizeToolHeaders(h http.Header) string {
 	var b strings.Builder
 	for _, k := range []string{
 		"x-vsr-selected-decision",
-		"x-vsr-fast-response",
-		"x-vsr-injected-system-prompt",
+		responsePathHeader,
+		traceHeader,
 	} {
 		fmt.Fprintf(&b, "%s=%q ", k, h.Get(k))
 	}

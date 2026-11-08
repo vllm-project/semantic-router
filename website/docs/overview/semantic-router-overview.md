@@ -117,7 +117,7 @@ agent harness
 | Layer | What it owns | Examples |
 | --- | --- | --- |
 | **AI Gateway** | Client ingress, provider translation, credentials, rate limits, and traffic policy. | [Agent Router (formerly Envoy AI Gateway)](../installation/k8s/ai-gateway), [LiteLLM](https://docs.litellm.ai/docs/simple_proxy), [agentgateway](../installation/k8s/agentgateway) |
-| **Semantic Router** | Logical model or model pool selection from request intent and policy, through recipes and decisions. The choice is written to `x-selected-model`. | vLLM Semantic Router |
+| **Semantic Router** | Logical model or model pool selection from request intent and policy, through recipes and decisions. The choice is written to `x-vsr-route-model`. | vLLM Semantic Router |
 | **Inference Router** | Healthy replica or endpoint selection inside the selected pool. | [llm-d](../installation/k8s/llm-d), [vLLM Router](https://github.com/vllm-project/router), [AIBrix gateway](../installation/k8s/aibrix) |
 
 Agent Router and agentgateway call Semantic Router through ExtProc.

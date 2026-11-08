@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 
+	"go.opentelemetry.io/otel/attribute"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
@@ -11,6 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
 
 // responseConditions reads a guard's rule trees over one answer and reports
@@ -27,9 +30,10 @@ type responseConditions interface {
 type responseGuardRun struct {
 	conditions responseConditions
 	rules      []responseGuardRuleRun
-	// streamed marks an answer whose bytes were with the client before it
-	// existed as a whole: the rules were read, and nothing was applied.
-	streamed bool
+	// live marks an answer the client received as it streamed, under a guard
+	// that neither blocks nor writes notes: the guard read it once the stream
+	// ended, after the response headers had left.
+	live bool
 }
 
 // responseGuardRuleRun is one rule's outcome. Action is what the rule does
@@ -46,9 +50,8 @@ type responseGuardRuleRun struct {
 // runResponseGuard reads the selected decision's response_guard rules over
 // answer, in order, until one blocks, and returns nil when the decision has no
 // guard. Without the recipe's classifier no response-stage rule can be read,
-// so every rule is unknown. A streamed answer is read the same way, and
-// nothing of it is applied.
-func (r *OpenAIRouter) runResponseGuard(ctx *RequestContext, answer string, streamed bool) *responseGuardRun {
+// so every rule is unknown.
+func (r *OpenAIRouter) runResponseGuard(ctx *RequestContext, answer string) *responseGuardRun {
 	if ctx == nil || ctx.VSRSelectedDecision == nil {
 		return nil
 	}
@@ -56,7 +59,7 @@ func (r *OpenAIRouter) runResponseGuard(ctx *RequestContext, answer string, stre
 	if guard == nil {
 		return nil
 	}
-	run := &responseGuardRun{streamed: streamed}
+	run := &responseGuardRun{}
 	classifier := r.classifierForRequest(ctx)
 	if classifier != nil {
 		run.conditions = classifier.NewResponseConditions(selectionRequestContext(ctx), ctx.RoutedSignals, ctx.responseInput(answer))
@@ -87,6 +90,7 @@ func (r *OpenAIRouter) runResponseGuard(ctx *RequestContext, answer string, stre
 	if slices.ContainsFunc(run.rules, func(rule responseGuardRuleRun) bool { return rule.state == decision.RuleUnknown }) {
 		metrics.RecordPluginError(config.DecisionPluginResponseGuard, "signal_unavailable")
 	}
+	traceResponseGuard(ctx, run.outcome())
 	return run
 }
 
@@ -120,7 +124,7 @@ func (ctx *RequestContext) responseInput(answer string) classification.ResponseI
 }
 
 // responseGuardCodes are the codes an annotating rule adds to
-// x-vsr-response-warnings, one per response-stage signal type the rule reads:
+// x-vsr-warnings, one per response-stage signal type the rule reads:
 // hallucination (unverified_factual when the answer could not be checked),
 // response_jailbreak, and response_guard for any other rule.
 func responseGuardCodes(cfg *config.RouterConfig, when config.RuleNode, state decision.RuleState) []string {
@@ -137,14 +141,14 @@ func responseGuardCodes(cfg *config.RouterConfig, when config.RuleNode, state de
 		if cfg.SignalStageOf(signalType, node.Name) != config.SignalStageResponse {
 			return
 		}
-		code := headers.ResponseWarningGuard
+		code := headers.WarningGuard
 		switch {
 		case signalType == config.SignalTypeHallucination && state == decision.RuleUnknown:
-			code = headers.ResponseWarningUnverifiedFactual
+			code = headers.WarningUnverifiedFactual
 		case signalType == config.SignalTypeHallucination:
-			code = headers.ResponseWarningHallucination
+			code = headers.WarningHallucination
 		case signalType == config.SignalTypeJailbreak:
-			code = headers.ResponseWarningJailbreak
+			code = headers.WarningJailbreak
 		}
 		if !slices.Contains(codes, code) {
 			codes = append(codes, code)
@@ -152,7 +156,7 @@ func responseGuardCodes(cfg *config.RouterConfig, when config.RuleNode, state de
 	}
 	walk(&when)
 	if len(codes) == 0 {
-		codes = []string{headers.ResponseWarningGuard}
+		codes = []string{headers.WarningGuard}
 	}
 	return codes
 }
@@ -183,7 +187,7 @@ func ruleOutcomeName(state decision.RuleState) string {
 
 // blocking is the rule that blocks the answer, or nil.
 func (run *responseGuardRun) blocking() *responseGuardRuleRun {
-	if run == nil || run.streamed {
+	if run == nil {
 		return nil
 	}
 	for i := range run.rules {
@@ -197,7 +201,7 @@ func (run *responseGuardRun) blocking() *responseGuardRuleRun {
 // warnings are the codes the annotating rules add, in rule order.
 func (run *responseGuardRun) warnings() []string {
 	var codes []string
-	if run == nil || run.streamed {
+	if run == nil {
 		return nil
 	}
 	for _, rule := range run.rules {
@@ -217,7 +221,7 @@ func (run *responseGuardRun) warnings() []string {
 // head of the answer.
 func (run *responseGuardRun) notedCodes() []string {
 	var codes []string
-	if run == nil || run.streamed {
+	if run == nil {
 		return nil
 	}
 	for _, rule := range run.rules {
@@ -233,10 +237,26 @@ func (run *responseGuardRun) notedCodes() []string {
 	return codes
 }
 
+// cacheSkipReason is why the response cache must not keep the answer: the
+// guard blocked it, or flagged it with a warning that rides only on the
+// response headers, which a cache hit does not reproduce. It is "" for an
+// answer the guard passed or whose every warning is a note in it.
+func (run *responseGuardRun) cacheSkipReason() string {
+	if run == nil {
+		return ""
+	}
+	if run.blocking() != nil {
+		return "response_guard_blocked"
+	}
+	noted := run.notedCodes()
+	if slices.ContainsFunc(run.warnings(), func(code string) bool { return !slices.Contains(noted, code) }) {
+		return "response_guard_annotated"
+	}
+	return ""
+}
+
 func (run *responseGuardRun) outcome() string {
 	switch {
-	case run.streamed:
-		return "not_enforced_streaming"
 	case run.blocking() != nil:
 		return "blocked"
 	case len(run.warnings()) > 0:
@@ -269,7 +289,7 @@ func (run *responseGuardRun) jailbreakFinding() (matched, unverified bool) {
 		return false, false
 	}
 	for _, rule := range run.rules {
-		if rule.state == decision.RuleUnknown && rule.action != config.ResponseGuardNone && slices.Contains(rule.codes, headers.ResponseWarningJailbreak) {
+		if rule.state == decision.RuleUnknown && rule.action != config.ResponseGuardNone && slices.Contains(rule.codes, headers.WarningJailbreak) {
 			return false, true
 		}
 	}
@@ -281,9 +301,9 @@ func (run *responseGuardRun) jailbreakFinding() (matched, unverified bool) {
 // down hands an attacker a probe for when it is.
 func responseGuardBlockMessage(rule *responseGuardRuleRun) string {
 	switch {
-	case slices.Contains(rule.codes, headers.ResponseWarningJailbreak):
+	case slices.Contains(rule.codes, headers.WarningJailbreak):
 		return "Response blocked: jailbreak content detected in LLM output"
-	case slices.Contains(rule.codes, headers.ResponseWarningHallucination), slices.Contains(rule.codes, headers.ResponseWarningUnverifiedFactual):
+	case slices.Contains(rule.codes, headers.WarningHallucination), slices.Contains(rule.codes, headers.WarningUnverifiedFactual):
 		return "Response blocked: the answer is not supported by its grounding context"
 	}
 	return "Response blocked by the response guard"
@@ -293,11 +313,11 @@ func responseGuardBlockMessage(rule *responseGuardRuleRun) string {
 // head of the answer.
 func (run *responseGuardRun) responseGuardNote(code string) string {
 	switch code {
-	case headers.ResponseWarningHallucination:
+	case headers.WarningHallucination:
 		return hallucinationWarningText(run.observed())
-	case headers.ResponseWarningUnverifiedFactual:
+	case headers.WarningUnverifiedFactual:
 		return "[Unverified Response] This response contains factual claims that could not be verified due to missing context."
-	case headers.ResponseWarningJailbreak:
+	case headers.WarningJailbreak:
 		return "[Safety Warning] This response may contain content that tries to get around safety rules."
 	}
 	return "[Response Warning] A response check flagged this response."
@@ -315,6 +335,14 @@ func (r *OpenAIRouter) applyResponseGuardNotes(run *responseGuardRun, response *
 		notes[i] = run.responseGuardNote(code)
 	}
 	return prependSemanticAssistantText(response, strings.Join(notes, "\n\n"))
+}
+
+// traceResponseGuard records on the request span what became of the answer
+// and whether the Router held a streamed answer for the guard.
+func traceResponseGuard(ctx *RequestContext, outcome string) {
+	tracing.SetSpanAttributes(ctx.RequestSpan,
+		attribute.String(tracing.AttrResponseGuardOutcome, outcome),
+		attribute.Bool(tracing.AttrResponseGuardBuffered, ctx.ResponseGuardHold != nil))
 }
 
 // logResponseGuard says what the guard did with an answer it acted on.

@@ -24,7 +24,7 @@ const overreachType = "test_overreach"
 // refusedHeaders would re-route the request behind Envoy (the route key),
 // relabel it as the Router, or break its framing.
 var refusedHeaders = []string{
-	"x-selected-model", "x-vsr-selected-decision", "x-envoy-original-path", "connection", "host", "content-length",
+	"x-vsr-route-model", "x-vsr-selected-decision", "x-envoy-original-path", "connection", "host", "content-length",
 }
 
 // overreachPlugin tries to write the headers the Router owns.
@@ -96,7 +96,7 @@ func TestAPluginCannotWriteTheRoutersHeadersInEitherMode(t *testing.T) {
 			t.Fatalf("plan = %+v, %v", plan, err)
 		}
 		forwarded := plan.Call.Request.Header
-		if plan.Call.Route != "m" || forwarded.Get("x-selected-model") != "m" ||
+		if plan.Call.Route != "m" || forwarded.Get("x-vsr-route-model") != "m" ||
 			forwarded.Get("x-envoy-original-path") != "" || forwarded.Get("x-overreach-refused") != want {
 			t.Fatalf("Envoy would route %q with %+v", plan.Call.Route, forwarded)
 		}
@@ -137,7 +137,7 @@ func TestAPluginCannotWriteTheRoutersHeadersInEitherMode(t *testing.T) {
 		}
 		_, _ = io.Copy(io.Discard, resp.Body)
 		_ = resp.Body.Close()
-		if upstreamSaw.Get("X-Selected-Model") != "m" || upstreamSaw.Get("X-Envoy-Original-Path") != "" ||
+		if upstreamSaw.Get("X-Vsr-Route-Model") != "m" || upstreamSaw.Get("X-Envoy-Original-Path") != "" ||
 			upstreamSaw.Get("X-Overreach-Refused") != want {
 			t.Fatalf("the backend saw %v", upstreamSaw)
 		}

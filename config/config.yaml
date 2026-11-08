@@ -1094,7 +1094,7 @@ recipes:
         plugins:
           # Answers to prompts that need fact checking are checked against
           # their grounding context; an unsupported one is delivered with
-          # x-vsr-response-warnings and a note naming the unsupported spans.
+          # x-vsr-warnings and a note naming the unsupported spans.
           - type: response_guard
             configuration:
               rules:
@@ -2118,16 +2118,19 @@ global:
       timeout_sec: 15
     skip_processing:
       enabled: false
-    # Who may turn on the debug response headers with x-vsr-debug: true. They
-    # name the signal and guard rules a request matched, so keep them from
-    # untrusted clients: none (the default), any client, or authenticated: only
-    # the users and groups below, as the identity headers assert them.
+    # Who may turn on x-vsr-trace with x-vsr-debug: true. It names the signal
+    # and guard rules a request matched, so keep it from untrusted clients:
+    # none (the default), any client, or authenticated: only the users and
+    # groups below, as the identity headers assert them.
     headers:
       debug: authenticated
       debug_principals:
         users: [oncall-bot]
         groups: [platform-sre]
-    # Protocol losses to translate with an x-vsr-protocol-warnings entry instead
+      # Client headers a request pins its session with when it carries no
+      # x-vsr-session-id, in order. These are the defaults.
+      session_id_headers: [x-session-id, x-claude-code-session-id]
+    # Protocol losses to translate with an x-vsr-warnings protocol entry instead
     # of rejecting them. tool_result.is_error omits the Anthropic failed tool
     # call flag that OpenAI Chat and Responses backends cannot carry, and
     # messages[].role sends Anthropic system messages inside the conversation to
@@ -2162,6 +2165,7 @@ global:
         scope: conversation
         identity:
           headers:
+            # Unset, protection keys on the session id the request pins.
             session: x-session-id
             conversation: x-conversation-id
             # Optional: holds each named agent (a delegated subagent) on its own

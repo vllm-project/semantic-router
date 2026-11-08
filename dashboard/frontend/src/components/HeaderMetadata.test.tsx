@@ -3,26 +3,28 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import HeaderDisplay from './HeaderDisplay'
+import { expandRoutingHeaders } from './vsrTrace'
 
-const routingHeaders = {
-  'x-vsr-schema-version': '2',
+const publicHeaders = {
+  'x-vsr-schema-version': '3',
   'x-vsr-response-path': 'upstream',
   'x-vsr-selected-model': 'qwen/qwen3.5-rocm',
   'x-vsr-selected-decision': 'complex-specialist',
-  'x-vsr-selected-algorithm': 'systemone',
-  'x-vsr-matched-domains': 'computer science',
 }
+
+const routingTrace = 'algorithm=systemone, signals=("domain:computer science")'
+
+const render = (trace: string, extra: Record<string, string> = {}) =>
+  renderToStaticMarkup(
+    createElement(HeaderDisplay, {
+      headers: expandRoutingHeaders({ ...publicHeaders, ...extra, 'x-vsr-trace': trace }),
+    }),
+  )
 
 describe('chat routing metadata', () => {
   it('labels native dispatch limits separately from consumed token usage', () => {
-    const markup = renderToStaticMarkup(
-      createElement(HeaderDisplay, {
-        headers: {
-          ...routingHeaders,
-          'x-vsr-effective-input-tokens': '512',
-          'x-vsr-effective-max-output-tokens': '261632',
-        },
-      }),
+    const markup = render(
+      `${routingTrace}, effective_input_tokens=512, effective_max_output_tokens=261632`,
     )
 
     expect(markup).toContain('Rendered input tokens')
@@ -32,7 +34,7 @@ describe('chat routing metadata', () => {
   })
 
   it('keeps the primary route compact and puts supporting metadata behind details', () => {
-    const markup = renderToStaticMarkup(createElement(HeaderDisplay, { headers: routingHeaders }))
+    const markup = render(routingTrace)
 
     expect(markup).not.toContain('Schema Version')
     expect(markup.indexOf('Decision')).toBeLessThan(markup.indexOf('Algorithm'))
@@ -42,26 +44,17 @@ describe('chat routing metadata', () => {
     expect(markup.indexOf('Domain')).toBeLessThan(markup.indexOf('Response Path'))
   })
 
-  it('uses the looper algorithm when the primary header is empty', () => {
-    const headers = {
-      ...routingHeaders,
-      'x-vsr-selected-algorithm': '',
-      'x-vsr-looper-algorithm': 'confidence',
-    }
-    const markup = renderToStaticMarkup(createElement(HeaderDisplay, { headers }))
+  it('uses the looper algorithm when the trace names no selection algorithm', () => {
+    const markup = render('looper=("a" "b");algorithm=confidence;iterations=2')
 
     expect(markup).toContain('Confidence')
   })
 
   it('renders internal decision and signal identifiers as human-friendly labels', () => {
-    const headers = {
-      ...routingHeaders,
-      'x-vsr-selected-decision': 'unified_frontier_verified_answer',
-      'x-vsr-matched-domains': 'unified_frontier_workflow_intent',
-      'x-vsr-matched-fact-check': 'needs_fact_check',
-      'x-vsr-matched-complexity': 'unified_frontier_complexity:medium',
-    }
-    const markup = renderToStaticMarkup(createElement(HeaderDisplay, { headers }))
+    const markup = render(
+      'algorithm=systemone, signals=("domain:unified_frontier_workflow_intent" "fact_check:needs_fact_check" "complexity:unified_frontier_complexity:medium")',
+      { 'x-vsr-selected-decision': 'unified_frontier_verified_answer' },
+    )
 
     expect(markup).toContain('Frontier Verified Answer')
     expect(markup).toContain('Frontier Workflow Intent')
@@ -69,42 +62,51 @@ describe('chat routing metadata', () => {
     expect(markup).toContain('Frontier Complexity: Medium')
     expect(markup).not.toContain('unified_frontier_')
   })
+
+  it('shows the warnings and a truncated trace', () => {
+    const markup = render(`${routingTrace}, truncated`, {
+      'x-vsr-warnings': 'hallucination, protocol;action=dropped;reason="x";field="y"',
+    })
+
+    expect(markup).toContain('Warnings')
+    expect(markup).toContain('hallucination, protocol')
+    expect(markup).toContain('Trace Truncated')
+  })
+
+  it('shows the output kinds of the selected decision', () => {
+    const markup = render(`${routingTrace}, modality=(text image)`)
+
+    expect(markup).toContain('Output')
+    expect(markup).toContain('text, image')
+  })
+
+  it('shows a matched metadata signal', () => {
+    const markup = render('algorithm=static, signals=("metadata:enterprise_tenant")')
+
+    expect(markup).toContain('Metadata Signal')
+    expect(markup).toContain('Enterprise Tenant')
+  })
 })
 
-describe('System One routing headers', () => {
+describe('System One routing details', () => {
   it('labels the decision model answers, recipe, confidence and routing latency', () => {
-    const markup = renderToStaticMarkup(
-      createElement(HeaderDisplay, {
-        headers: {
-          ...routingHeaders,
-          'x-vsr-matched-decision-model': 'task:stem,difficulty,needs:deliberation',
-          'x-vsr-selected-recipe': 'default',
-          'x-vsr-selected-confidence': '0.91',
-          'x-vsr-routing-latency-ms': '61',
-        },
-      }),
+    const markup = render(
+      'confidence=0.91, algorithm=systemone, routing_latency_ms=61.0, signals=("systemone:task:stem" "systemone:difficulty" "systemone:needs:deliberation")',
+      { 'x-vsr-selected-recipe': 'default' },
     )
 
     expect(markup).toContain('System One Answers')
     expect(markup).toContain('Recipe')
     expect(markup).toContain('Decision Confidence')
     expect(markup).toContain('Routing Latency')
-    expect(markup).toContain('61')
+    expect(markup).toContain('61.0')
   })
 })
 
-describe('looper latency and token usage headers (#2694)', () => {
-  const looperMetricsHeaders = {
-    ...routingHeaders,
-    'x-vsr-looper-latency-ms': '842',
-    'x-vsr-looper-prompt-tokens': '512',
-    'x-vsr-looper-completion-tokens': '256',
-    'x-vsr-looper-total-tokens': '768',
-  }
-
+describe('looper latency and token usage (#2694)', () => {
   it('renders looper latency and token usage in HeaderDisplay', () => {
-    const markup = renderToStaticMarkup(
-      createElement(HeaderDisplay, { headers: looperMetricsHeaders }),
+    const markup = render(
+      'algorithm=escalate, looper=("a" "b");algorithm=escalate;model="b";iterations=2;latency_ms=842;prompt_tokens=512;completion_tokens=256;total_tokens=768',
     )
 
     expect(markup).toContain('842')

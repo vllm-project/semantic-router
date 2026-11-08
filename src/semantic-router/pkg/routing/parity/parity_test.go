@@ -40,14 +40,14 @@ func TestNormalizeBodyRewritesOnlyClockNumbers(t *testing.T) {
 
 func TestNormalizeMutationSortsRemovalsAndHidesVolatileValues(t *testing.T) {
 	in := &routing.HeaderMutation{
-		Set:    []routing.HeaderOption{{Name: "x-vsr-routing-latency-ms", Value: "1.2"}, {Name: "x-a", Value: "1"}},
+		Set:    []routing.HeaderOption{{Name: "x-vsr-replay-id", Value: "replay-1"}, {Name: "x-a", Value: "1"}},
 		Remove: []string{"b", "a"},
 	}
 	out := NormalizeMutation(in)
 	if out.Set[0].Value != Placeholder || out.Set[1].Value != "1" || out.Remove[0] != "a" {
 		t.Fatalf("normalized = %+v", out)
 	}
-	if in.Remove[0] != "b" || in.Set[0].Value != "1.2" {
+	if in.Remove[0] != "b" || in.Set[0].Value != "replay-1" {
 		t.Fatal("NormalizeMutation must not modify its input")
 	}
 	if !VolatileHeader("TraceParent") || VolatileHeader("x-vsr-selected-model") {
@@ -206,7 +206,7 @@ func (s *echoSession) RequestBody(body []byte, _ bool) (*routing.Effect, error) 
 }
 
 func (s *echoSession) ResponseHeaders(routing.Header, bool) (*routing.Effect, error) {
-	return &routing.Effect{Header: &routing.HeaderMutation{Set: []routing.HeaderOption{{Name: "x-vsr-routing-latency-ms", Value: "3.1"}}}}, nil
+	return &routing.Effect{Header: &routing.HeaderMutation{Set: []routing.HeaderOption{{Name: "x-vsr-replay-id", Value: "replay-1"}}}}, nil
 }
 
 func (s *echoSession) ResponseBody(body []byte, _ bool) (*routing.Effect, error) {
@@ -233,7 +233,7 @@ func TestRecorderRecordsPhasesCallAndResponse(t *testing.T) {
 	if len(record.Phases) != 4 || record.Phases[3].Phase != routing.PhaseResponseBody {
 		t.Fatalf("phases = %+v", record.Phases)
 	}
-	if string(record.Response.Body) != `{"created":0,"ok":true}` || record.Response.Header.Get("x-vsr-routing-latency-ms") != Placeholder {
+	if string(record.Response.Body) != `{"created":0,"ok":true}` || record.Response.Header.Get("x-vsr-replay-id") != Placeholder {
 		t.Fatalf("response not normalized: %+v", record.Response)
 	}
 	missing := NewRecorder(echoProcessor{}, routing.DefaultOptions).Run(context.Background(), Case{Name: "no-fixture", Request: c.Request})

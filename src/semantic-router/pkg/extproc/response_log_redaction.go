@@ -33,14 +33,15 @@ var sensitiveHeaderKeys = map[string]bool{
 }
 
 // isSensitiveHeaderKey reports whether a header's value should be redacted from
-// logs. It matches the explicit credential headers above and, defensively, any
+// logs. It matches every header the registry marks secret, the bring-your-own
+// keys among them, the explicit credential headers above and, defensively, any
 // header whose name carries a credential by convention (a "*-key" suffix or a
 // name containing "api-key", "token", "secret", or "credential") so custom
 // provider auth headers and the gateway credential header are covered without
 // enumerating every one.
 func isSensitiveHeaderKey(key string) bool {
 	k := strings.ToLower(strings.TrimSpace(key))
-	if sensitiveHeaderKeys[k] {
+	if header, ok := headers.Lookup(k); sensitiveHeaderKeys[k] || ok && header.Sensitivity == headers.SensitivitySecret {
 		return true
 	}
 	return strings.HasSuffix(k, "-key") ||

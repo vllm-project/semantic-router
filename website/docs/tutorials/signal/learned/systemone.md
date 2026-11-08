@@ -501,8 +501,8 @@ does not guarantee that an active model forward stops immediately.
 
 Truncating to the deployment's scan budget shortens only what the rule reads;
 it does not shorten the request sent to the selected Chat backend. Matched
-System One rules are listed in the `x-vsr-matched-decision-model` response
-header.
+System One rules are listed as `systemone:<name>` in the `signals` member of
+`x-vsr-trace`.
 
 To choose a model, size and hardware, or to run the model on your own GPU
 server, see [Decision models](../../../model-runtime/guides/decisions.md).

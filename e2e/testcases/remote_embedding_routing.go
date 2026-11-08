@@ -94,7 +94,7 @@ func testRemoteEmbeddingRouting(
 		if chatErr != nil {
 			return fmt.Errorf("%s: %w", testCase.Name, chatErr)
 		}
-		if response.Get("x-vsr-cache-hit") == "true" {
+		if response.Get(responsePathHeader) == "cache" {
 			return fmt.Errorf("%s: a first request hit the response cache", testCase.Name)
 		}
 		decision := response.Get("x-vsr-selected-decision")
@@ -114,10 +114,10 @@ func testRemoteEmbeddingRouting(
 	if err != nil {
 		return fmt.Errorf("paraphrased billing request: %w", err)
 	}
-	if paraphrase.Get("x-vsr-cache-hit") != "true" || paraphrase.Get("x-vsr-selected-decision") != "billing-route" {
+	if paraphrase.Get(responsePathHeader) != "cache" || paraphrase.Get("x-vsr-selected-decision") != "billing-route" {
 		return fmt.Errorf(
-			"paraphrased billing request: expected a billing-route response cache hit, got x-vsr-cache-hit=%q decision=%q",
-			paraphrase.Get("x-vsr-cache-hit"),
+			"paraphrased billing request: expected a billing-route response cache hit, got x-vsr-response-path=%q decision=%q",
+			paraphrase.Get(responsePathHeader),
 			paraphrase.Get("x-vsr-selected-decision"),
 		)
 	}
@@ -127,10 +127,10 @@ func testRemoteEmbeddingRouting(
 	if err != nil {
 		return fmt.Errorf("rejected billing request: %w", err)
 	}
-	if rejected.Get("x-vsr-cache-hit") == "true" || rejected.Get("x-vsr-selected-decision") != "billing-route" {
+	if rejected.Get(responsePathHeader) == "cache" || rejected.Get("x-vsr-selected-decision") != "billing-route" {
 		return fmt.Errorf(
-			"rejected billing request: expected a billing-route miss once same_request rejects the recalled answer, got x-vsr-cache-hit=%q decision=%q",
-			rejected.Get("x-vsr-cache-hit"),
+			"rejected billing request: expected a billing-route miss once same_request rejects the recalled answer, got x-vsr-response-path=%q decision=%q",
+			rejected.Get(responsePathHeader),
 			rejected.Get("x-vsr-selected-decision"),
 		)
 	}
@@ -144,7 +144,7 @@ func testRemoteEmbeddingRouting(
 			"routing_cases":    len(cases),
 			"routing_passed":   len(cases),
 			"decisions":        results,
-			"cache_similarity": paraphrase.Get("x-vsr-cache-similarity"),
+			"cache_similarity": traceValue(paraphrase, "cache_similarity"),
 		})
 	}
 

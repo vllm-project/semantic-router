@@ -129,8 +129,8 @@ curl -s -D - http://localhost:8899/v1/chat/completions \
 ```
 
 `vllm-sr/auto` 让 Router 来选择。响应头说明它选了什么：`x-vsr-selected-decision` 是路由，
-`x-vsr-selected-model` 是模型；带上 `x-vsr-debug: true` 时，`x-vsr-matched-*` 响应头列出
-命中的信号。见 [Router 响应头](../troubleshooting/vsr-headers)。
+`x-vsr-selected-model` 是模型；带上 `x-vsr-debug: true`，并且 `global.router.headers.debug`
+允许该调用方时，`x-vsr-trace` 的 `signals` 成员列出命中的信号。见 [Router 响应头](../troubleshooting/vsr-headers)。
 
 ## 运维这个栈
 

@@ -93,7 +93,7 @@ Router 自身的 Serving Engine 也会在任务模型的副本间分发请求。
 运维时遵循两条规则：
 
 - **先独立部署和验证 llm-d，再加入 Semantic Router**；使用一个受支持的 llm-d 版本，不混用不同版本的清单。
-- **让最终决策可见。** Router 将 `x-vsr-selected-model` 作为回执，将 `x-selected-model` 作为网关匹配值；`vllm-sr route probe --expect-selected-model` 用于断言回执。应读取这些值，而不是事后推测决策。
+- **让最终决策可见。** Router 将 `x-vsr-selected-model` 作为回执，将 `x-vsr-route-model` 作为网关匹配值；`vllm-sr route probe --expect-selected-model` 用于断言回执。应读取这些值，而不是事后推测决策。
 
 部署与决策规则见[集成 llm-d](installation/k8s/llm-d)。
 

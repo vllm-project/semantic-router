@@ -244,7 +244,7 @@ separately and leave automatic creation disabled.
 ### Cache hits are unexpectedly rare
 
 First confirm that the decision enables the `response_cache` plugin and inspect
-`x-vsr-cache-hit` or replay diagnostics. If embeddings are healthy but near
+`x-vsr-response-path` (`cache` on a hit) or replay diagnostics. If embeddings are healthy but near
 duplicates miss, test a lower similarity threshold on representative traffic:
 
 ```yaml

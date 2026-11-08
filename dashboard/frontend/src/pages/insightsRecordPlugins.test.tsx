@@ -43,7 +43,7 @@ describe('recorded plugin evidence', () => {
     expect(html).not.toMatch(/Clean|Not detected/)
   })
 
-  it('preserves mixed response outcomes, measured zero and lack of streaming enforcement', () => {
+  it('preserves mixed response outcomes, measured zero and how a streamed answer was delivered', () => {
     const html = field({
       outcomes: [
         {
@@ -55,14 +55,20 @@ describe('recorded plugin evidence', () => {
             signal: 'jailbreak',
             stage: 'response',
             score_available: 'false',
-            enforcement: 'not_enforced_streaming',
+            action: 'block',
+            stream: 'buffered',
           },
         },
         {
           source: 'router',
           target: 'jailbreak:guard_b',
           verdict: 'not_detected',
-          metadata: { signal: 'jailbreak', stage: 'response', score_available: 'true' },
+          metadata: {
+            signal: 'jailbreak',
+            stage: 'response',
+            score_available: 'true',
+            stream: 'unbuffered',
+          },
         },
         {
           source: 'user',
@@ -75,7 +81,9 @@ describe('recorded plugin evidence', () => {
     expect(html).toContain('1 unavailable · 1 not detected')
     expect(html).toContain('classifier_failed')
     expect(html).toContain('Score: 0.0000')
-    expect(html).toContain('Not enforced for streaming')
+    expect(html).toContain('Action: block')
+    expect(html).toContain('Stream held for the guard')
+    expect(html).toContain('Streamed before the check')
     expect(html).not.toContain('ignored-feedback')
     expect(html).not.toContain('open=""')
   })

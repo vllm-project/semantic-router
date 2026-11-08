@@ -142,7 +142,7 @@ func TestLooperProviderDispatchReevaluatesOntoSelectedRoute(t *testing.T) {
 		t.Fatal("Looper provider dispatch did not clear the fallback route cache")
 	}
 	setHeaders := headerValuesByName(common.GetHeaderMutation().GetSetHeaders())
-	if got := setHeaders[headers.SelectedModel]; got != model {
+	if got := setHeaders[headers.VSRRouteModel]; got != model {
 		t.Fatalf("selected model header = %q, want %q", got, model)
 	}
 	if got := setHeaders[":path"]; got != "/v1/chat/completions" {

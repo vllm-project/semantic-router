@@ -2,7 +2,7 @@ import React, { useId } from 'react'
 
 import type { BoolExprNode, EditorMode } from '@/types/dsl'
 import { useDSLStore } from '@/stores/dslStore'
-import { formatRoutingMetadataValue, matchedSignalHeader } from '@/components/routingMetadataDisplay'
+import { formatRoutingMetadataValue, matchedSignalKey } from '@/components/routingMetadataDisplay'
 import { X_VSR_SELECTED_DECISION } from '@/generated/vsrHeaders'
 
 import styles from './BuilderPage.module.css'
@@ -450,10 +450,7 @@ const EntityListView: React.FC<EntityListViewProps> = ({
                 {kind === 'route'
                   ? formatRoutingMetadataValue(X_VSR_SELECTED_DECISION, item.name)
                   : kind === 'signal'
-                    ? formatRoutingMetadataValue(
-                        matchedSignalHeader(item.type.replace('_', '-')),
-                        item.name,
-                      )
+                    ? formatRoutingMetadataValue(matchedSignalKey(item.type), item.name)
                     : item.name}
               </span>
             </div>

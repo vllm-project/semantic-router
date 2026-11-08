@@ -93,8 +93,8 @@ the classify/eval APIs.
 
 ## Observability
 
-Matched rules are exposed in the `x-vsr-matched-input-modality` response
-header, the `input_modality` field of classify/eval responses, router-replay
+Matched rules are exposed as `input_modality:<name>` in the `signals` member
+of `x-vsr-trace`, the `input_modality` field of classify/eval responses, router-replay
 records, and the standard per-signal Prometheus metrics
 (`llm_signal_match_total{signal_type="input_modality"}`).
 

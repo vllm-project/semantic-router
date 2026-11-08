@@ -1,63 +1,23 @@
 import {
   X_CONVERSATION_ID,
-  X_SESSION_ID,
-  X_VSR_CACHE_HIT,
-  X_VSR_CONTEXT_TOKEN_COUNT,
+  X_VSR_COST,
+  X_VSR_COST_CURRENCY,
   X_VSR_DEBUG,
-  X_VSR_EFFECTIVE_INPUT_TOKENS,
-  X_VSR_EFFECTIVE_MAX_OUTPUT_TOKENS,
-  X_VSR_FAST_RESPONSE,
-  X_VSR_LEARNING_ACTIONS,
-  X_VSR_LEARNING_METHODS,
-  X_VSR_LEARNING_REASONS,
-  X_VSR_LEARNING_SCOPES,
-  X_VSR_LOOPER_ALGORITHM,
-  X_VSR_LOOPER_COMPLETION_TOKENS,
-  X_VSR_LOOPER_ITERATIONS,
-  X_VSR_LOOPER_LATENCY_MS,
-  X_VSR_LOOPER_MODEL,
-  X_VSR_LOOPER_MODELS_USED,
-  X_VSR_LOOPER_PROMPT_TOKENS,
-  X_VSR_LOOPER_TOTAL_TOKENS,
-  X_VSR_MATCHED_AUTHZ,
-  X_VSR_MATCHED_COMPLEXITY,
-  X_VSR_MATCHED_CONTEXT,
-  X_VSR_MATCHED_CONVERSATION,
-  X_VSR_MATCHED_DECISION_MODEL,
-  X_VSR_MATCHED_DOMAINS,
-  X_VSR_MATCHED_FACT_CHECK,
-  X_VSR_MATCHED_HALLUCINATION,
-  X_VSR_MATCHED_INPUT_MODALITY,
-  X_VSR_MATCHED_JAILBREAK,
-  X_VSR_MATCHED_KEYWORDS,
-  X_VSR_MATCHED_LANGUAGE,
-  X_VSR_MATCHED_MODALITY,
-  X_VSR_MATCHED_PII,
-  X_VSR_MATCHED_PROJECTIONS,
-  X_VSR_MATCHED_TURN_RELATION,
-  X_VSR_MATCHED_SAFETY,
-  X_VSR_MATCHED_USER_FEEDBACK,
   X_VSR_REPLAY_ID,
   X_VSR_RESPONSE_PATH,
-  X_VSR_RESPONSE_WARNINGS,
-  X_VSR_RETENTION_DROP,
-  X_VSR_RETENTION_KEEP_CURRENT_MODEL,
-  X_VSR_RETENTION_PREFER_PREFIX,
-  X_VSR_RETENTION_TTL_TURNS,
-  X_VSR_ROUTING_LATENCY_MS,
   X_VSR_SCHEMA_VERSION,
-  X_VSR_SELECTED_ALGORITHM,
-  X_VSR_SELECTED_CONFIDENCE,
   X_VSR_SELECTED_DECISION,
-  X_VSR_SELECTED_MODALITY,
   X_VSR_SELECTED_MODEL,
-  X_VSR_SELECTED_REASONING,
   X_VSR_SELECTED_RECIPE,
+  X_VSR_SESSION_ID,
+  X_VSR_TRACE,
+  X_VSR_WARNINGS,
 } from '../generated/vsrHeaders'
 import type { Message } from './ChatComponentTypes'
 import { buildPlaygroundUserContent, type PlaygroundAttachment } from './playgroundFileAttachments'
 import { extractTextToolCalls, normalizeToolCallArguments } from './chatToolCallSupport'
 import { serializeToolResultForModel } from '../tools/toolResultSupport'
+import { expandRoutingHeaders } from './vsrTrace'
 
 export interface OutboundChatMessage {
   role: string
@@ -84,64 +44,24 @@ export const assertPlaygroundRequestSize = (request: Record<string, unknown>): v
 
 export const buildPlaygroundRequestHeaders = (conversationId: string): Record<string, string> => ({
   'Content-Type': 'application/json',
-  [X_SESSION_ID]: conversationId,
+  [X_VSR_SESSION_ID]: conversationId,
   [X_CONVERSATION_ID]: conversationId,
   [X_VSR_DEBUG]: 'true',
 })
 
+// The public set of a routed response, and the trace of a caller the Router
+// allows the debug headers.
 const RESPONSE_HEADER_KEYS = [
-  // v0.4 keystone headers (#2203)
   X_VSR_SCHEMA_VERSION,
   X_VSR_RESPONSE_PATH,
-  X_VSR_SELECTED_MODEL,
-  X_VSR_EFFECTIVE_INPUT_TOKENS,
-  X_VSR_EFFECTIVE_MAX_OUTPUT_TOKENS,
-  X_VSR_SELECTED_ALGORITHM,
-  X_VSR_SELECTED_DECISION,
   X_VSR_SELECTED_RECIPE,
-  X_VSR_SELECTED_CONFIDENCE,
-  X_VSR_SELECTED_MODALITY,
+  X_VSR_SELECTED_DECISION,
+  X_VSR_SELECTED_MODEL,
   X_VSR_REPLAY_ID,
-  X_VSR_CACHE_HIT,
-  X_VSR_SELECTED_REASONING,
-  X_VSR_LEARNING_METHODS,
-  X_VSR_LEARNING_ACTIONS,
-  X_VSR_LEARNING_SCOPES,
-  X_VSR_LEARNING_REASONS,
-  X_VSR_FAST_RESPONSE,
-  X_VSR_RESPONSE_WARNINGS,
-  X_VSR_MATCHED_KEYWORDS,
-  X_VSR_MATCHED_DOMAINS,
-  X_VSR_MATCHED_FACT_CHECK,
-  X_VSR_MATCHED_USER_FEEDBACK,
-  X_VSR_MATCHED_TURN_RELATION,
-  X_VSR_MATCHED_LANGUAGE,
-  X_VSR_MATCHED_CONTEXT,
-  X_VSR_CONTEXT_TOKEN_COUNT,
-  X_VSR_MATCHED_COMPLEXITY,
-  X_VSR_MATCHED_MODALITY,
-  X_VSR_MATCHED_AUTHZ,
-  X_VSR_MATCHED_JAILBREAK,
-  X_VSR_MATCHED_SAFETY,
-  X_VSR_MATCHED_HALLUCINATION,
-  X_VSR_MATCHED_PII,
-  X_VSR_MATCHED_CONVERSATION,
-  X_VSR_MATCHED_INPUT_MODALITY,
-  X_VSR_MATCHED_DECISION_MODEL,
-  X_VSR_MATCHED_PROJECTIONS,
-  X_VSR_LOOPER_MODEL,
-  X_VSR_LOOPER_MODELS_USED,
-  X_VSR_LOOPER_ITERATIONS,
-  X_VSR_LOOPER_ALGORITHM,
-  X_VSR_LOOPER_LATENCY_MS,
-  X_VSR_LOOPER_PROMPT_TOKENS,
-  X_VSR_LOOPER_COMPLETION_TOKENS,
-  X_VSR_LOOPER_TOTAL_TOKENS,
-  X_VSR_ROUTING_LATENCY_MS,
-  X_VSR_RETENTION_DROP,
-  X_VSR_RETENTION_TTL_TURNS,
-  X_VSR_RETENTION_KEEP_CURRENT_MODEL,
-  X_VSR_RETENTION_PREFER_PREFIX,
+  X_VSR_WARNINGS,
+  X_VSR_COST,
+  X_VSR_COST_CURRENCY,
+  X_VSR_TRACE,
 ] as const
 
 export const buildChatMessages = (
@@ -263,6 +183,8 @@ export const buildExactChatRequestBody = (
   return result
 }
 
+// collectResponseHeaders returns the display entries of a routed response:
+// its public headers, and the details of its trace.
 export const collectResponseHeaders = (response: Response): Record<string, string> => {
   const headers: Record<string, string> = {}
 
@@ -273,5 +195,5 @@ export const collectResponseHeaders = (response: Response): Record<string, strin
     }
   })
 
-  return headers
+  return expandRoutingHeaders(headers)
 }

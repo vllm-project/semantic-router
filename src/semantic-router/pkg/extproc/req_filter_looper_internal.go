@@ -6,7 +6,6 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -122,7 +121,6 @@ func (r *OpenAIRouter) buildLooperBackendDispatchResponse(
 		common.HeaderMutation.RemoveHeaders,
 		providerBoundRemovals()...,
 	)
-	setHeaderValue(common.HeaderMutation, headers.VSRSelectedModel, modelName)
 	return r.finalizeProviderDispatchResponse(dispatch, response, ctx)
 }
 

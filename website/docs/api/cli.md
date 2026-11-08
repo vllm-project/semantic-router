@@ -1379,7 +1379,7 @@ Probe a real route and assert complete assistant delivery for expected 2xx.
 | `--max-completion-tokens INTEGER RANGE` | Completion token budget, including reasoning; omitted uses the backend default.  [x&gt;=1] |
 | `--timeout FLOAT` | [default: 120.0] |
 | `--target TEXT` | Deployment target used for URL resolution. |
-| `--debug / --no-debug` | Ask for the debug response headers. The Router sends them only when global.router.headers.debug allows this caller.  [default: debug] |
+| `--debug / --no-debug` | Ask for x-vsr-trace. The Router sends it only when global.router.headers.debug allows this caller.  [default: debug] |
 | `--expect-status INTEGER` | [default: OK] |
 | `--expect-recipe TEXT` | — |
 | `--expect-decision TEXT` | — |

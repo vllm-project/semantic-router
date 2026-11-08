@@ -136,7 +136,7 @@ curl -sS http://localhost:8899/v1/messages \
   }'
 ```
 
-协议转换仅限于 Router 支持的字段。请求跨协议时，检查 `x-vsr-client-protocol`、`x-vsr-upstream-protocol` 以及任何 `x-vsr-protocol-warnings` 响应头。
+协议转换仅限于 Router 支持的字段。请求跨协议时，检查 `x-vsr-trace` 的 `client_protocol` 和 `upstream_protocol` 成员以及任何 `x-vsr-warnings` 响应头。
 
 ### Images API {#images-api}
 
@@ -171,7 +171,7 @@ API 不支持流式输出。未到达图像决策的请求（没有匹配任何�
 
 deployment Chat 路径从 URL 读取模型名；Responses 和 v1 Chat 路径从请求体读取模型名。监听器配置 `api_keys` 时，Router 用客户端的 `api-key` 验证请求，并在转发给 provider 前移除该请求头。
 
-GitHub Copilot CLI 使用 Azure 模式时，设置 `COPILOT_PROVIDER_TYPE=azure`、指向监听器的 `COPILOT_PROVIDER_BASE_URL`，以及作为 Router 模型名的 `COPILOT_PROVIDER_WIRE_MODEL`。设置 `COPILOT_PROVIDER_WIRE_API=responses` 后，CLI 使用 `/openai/v1/responses`；设置 `COPILOT_PROVIDER_AZURE_API_VERSION` 后使用 `/openai/responses`。Router 接受 Responses 请求中的 `reasoning.summary`：对 Responses 后端会转发该设置；对 Chat Completions 或 Messages 后端仍会处理请求，但丢弃摘要设置并在 `x-vsr-protocol-warnings` 中说明。
+GitHub Copilot CLI 使用 Azure 模式时，设置 `COPILOT_PROVIDER_TYPE=azure`、指向监听器的 `COPILOT_PROVIDER_BASE_URL`，以及作为 Router 模型名的 `COPILOT_PROVIDER_WIRE_MODEL`。设置 `COPILOT_PROVIDER_WIRE_API=responses` 后，CLI 使用 `/openai/v1/responses`；设置 `COPILOT_PROVIDER_AZURE_API_VERSION` 后使用 `/openai/responses`。Router 接受 Responses 请求中的 `reasoning.summary`：对 Responses 后端会转发该设置；对 Chat Completions 或 Messages 后端仍会处理请求，但丢弃摘要设置并在 `x-vsr-warnings` 中说明。
 
 Chat Completions 支持 assistant 消息及流式 delta 中的 OpenRouter
 `reasoning_details`。文本、摘要、加密和服务端工具调用块在响应及下一轮 Chat
@@ -186,7 +186,7 @@ Router 自行生成的 Chat 流（例如缓存重放）使用 `reasoning_content
 
 只有 Chat Completions 能承载这些块。Responses 或 Messages 客户端使用 Chat 后端时
 仍会得到响应：Router 丢弃这些块并保留推理文本。缓冲响应在
-`x-vsr-protocol-warnings` 中以 `dropped;...;reasoning_details` 报告丢弃。流式响应
+`x-vsr-warnings` 中以 `dropped;...;reasoning_details` 报告丢弃。流式响应
 在发现丢弃时已发出响应头，因此丢弃只记录在 `llm_translation_lossy_total` 指标和
 `translation_lossy` 调试日志事件中，流本身不携带提示。
 
@@ -211,7 +211,7 @@ Router 无法路由某个请求时，会直接应答该请求，不调用任何�
 | `no_route` | 400 | `invalid_request_error` | 没有决策匹配，且没有可用的默认模型。配方入口会回退到已配置的 `providers.defaults.model`；Looper 入口遵循同样的配方规则，名称本身不会选择算法。 |
 | `context_length_exceeded` | 400 或 422 | `invalid_request_error` | 请求超出了可服务它的模型的容量：400 来自[请求预算检查](#request-budget-errors)，422 来自模型的 `context_window_size`。 |
 | `max_output_tokens_exceeded` | 400 | `invalid_request_error` | 请求的输出超过了配置的模型上限。见[请求预算错误](#request-budget-errors)。 |
-| `decision_unresolved` | 503 | `server_error` | 某个决策所需的信号不可用，导致该决策无法评估，且其 `rules.on_unknown` 为 `fail_request`。`x-vsr-applied-unknown-policy` 会给出该决策。 |
+| `decision_unresolved` | 503 | `server_error` | 某个决策所需的信号不可用，导致该决策无法评估，且其 `rules.on_unknown` 为 `fail_request`。`x-vsr-trace` 的 `on_unknown` 成员会给出该决策。 |
 | `no_eligible_model` | 503 | `server_error` | 选择策略拒绝了匹配决策的所有候选模型。 |
 | `image_route_required` | 400 | `invalid_request_error` | [Images API](#images-api) 请求未到达任何输出为图像的决策。 |
 | `image_generation_forbidden` | 400 | `invalid_request_error` | 匹配的决策以生成的图像应答，而请求的 `tool_choice` 为 `none`。 |

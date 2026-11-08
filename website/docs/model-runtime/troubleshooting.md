@@ -66,8 +66,9 @@ The model is probably not ready yet, or its answers arrive too late.
    means the answer came after the signal's `timeout_ms`; raise it, or use a
    smaller model or a GPU. `unavailable` means the runtime was not ready or
    not reachable. `overloaded` means its queue was full.
-3. Send the same text with debugging on and read the
-   `x-vsr-matched-*` headers:
+3. Send the same text with debugging on and read the `signals` member of
+   `x-vsr-trace`, which the Router sends only to a caller
+   `global.router.headers.debug` allows:
 
    ```bash
    curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \

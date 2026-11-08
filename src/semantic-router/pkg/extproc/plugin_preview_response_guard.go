@@ -72,7 +72,7 @@ func (r *OpenAIRouter) PreviewResponseGuard(ctx context.Context, input pluginrun
 	}
 	request.ResponseStage = classification.ResponseInput{Request: input.Question}
 	request.RAGRetrievedContext = input.Context
-	run := r.runResponseGuard(request, input.Response, false)
+	run := r.runResponseGuard(request, input.Response)
 	if blocking := run.blocking(); blocking != nil {
 		result.Action = config.ResponseGuardBlock
 	} else if result.Warnings = run.warnings(); len(result.Warnings) > 0 {

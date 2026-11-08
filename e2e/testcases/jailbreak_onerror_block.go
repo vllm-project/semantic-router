@@ -47,9 +47,9 @@ func testJailbreakOnErrorBlock(ctx context.Context, client *kubernetes.Clientset
 		return fmt.Errorf("chat completion request failed: %w", err)
 	}
 
-	fastResponse := response.Headers.Get("x-vsr-fast-response")
+	responsePath := response.Headers.Get(responsePathHeader)
 	selectedDecision := response.Headers.Get("x-vsr-selected-decision")
-	blocked := fastResponse == "true"
+	blocked := responsePath == "fast_response"
 
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
@@ -67,8 +67,8 @@ func testJailbreakOnErrorBlock(ctx context.Context, client *kubernetes.Clientset
 	if !blocked {
 		return fmt.Errorf(
 			"expected the request to be blocked (fail-closed jailbreak signal against an unreachable deployment), "+
-				"but x-vsr-fast-response=%q selected_decision=%q status=%d",
-			fastResponse, selectedDecision, response.StatusCode,
+				"but x-vsr-response-path=%q selected_decision=%q status=%d",
+			responsePath, selectedDecision, response.StatusCode,
 		)
 	}
 	if selectedDecision != "block_on_classifier_error" {

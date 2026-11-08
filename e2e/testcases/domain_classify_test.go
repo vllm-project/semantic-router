@@ -43,7 +43,7 @@ func TestDomainClassificationUsesIsolatedUpstreamPrediction(t *testing.T) {
 				}
 				w.Header().Set("x-vsr-selected-recipe", surface.recipe)
 				w.Header().Set("x-vsr-response-path", surface.path)
-				w.Header().Set("x-vsr-selected-category", "biology")
+				w.Header().Set("x-vsr-trace", `category="biology"`)
 				fmt.Fprint(w, `{}`)
 			}))
 			defer server.Close()

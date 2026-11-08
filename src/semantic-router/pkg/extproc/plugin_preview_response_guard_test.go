@@ -61,7 +61,7 @@ func TestResponseGuardPreviewChecksTheAnswerAgainstTheContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Action != config.ResponseGuardAnnotate || len(result.Warnings) != 1 || result.Warnings[0] != headers.ResponseWarningHallucination || calls.Load() != 1 {
+	if result.Action != config.ResponseGuardAnnotate || len(result.Warnings) != 1 || result.Warnings[0] != headers.WarningHallucination || calls.Load() != 1 {
 		t.Fatalf("grounded probe = %+v (calls=%d), want an annotation over the hallucination", result, calls.Load())
 	}
 	if len(result.Signals) != 1 || len(result.Signals[0].UnsupportedSpans) != 1 || result.Signals[0].UnsupportedSpans[0] != "450 meters" {

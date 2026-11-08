@@ -233,7 +233,7 @@ func (b *looperBackend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	call := looperCall{
-		Route: r.Header.Get("X-Selected-Model"), Model: req.Model, Body: canonicalJSON(raw),
+		Route: r.Header.Get("X-Vsr-Route-Model"), Model: req.Model, Body: canonicalJSON(raw),
 		askedGzip: acceptsGzip(strings.Join(r.Header.Values("Accept-Encoding"), ", ")),
 	}
 	for name, values := range r.Header {

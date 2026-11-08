@@ -105,7 +105,7 @@ func (r *PluginResponse) Mutations() []HeaderMutation { return slices.Clone(r.mu
 var routerHeaders = []string{
 	"connection", "keep-alive", "proxy-connection", "proxy-authenticate", "proxy-authorization",
 	"te", "trailer", "transfer-encoding", "upgrade", "expect", "host", "content-length",
-	headers.SelectedModel,
+	headers.VSRRouteModel,
 }
 
 // routerNamespaces hold the Router's own facts and controls and Envoy's,

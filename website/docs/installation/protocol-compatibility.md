@@ -118,7 +118,7 @@ providers:
   another format receives the translated reply without the field.
 - Each such field is reported as a `dropped` diagnostic. It is counted in
   `llm_translation_lossy_total` and logged at debug level, and buffered
-  replies list it in `x-vsr-protocol-warnings`.
+  replies list it in `x-vsr-warnings`.
 - Fields the Router models are still validated: their types and values, the
   usage totals, the rule that a streamed usage counter never decreases, and
   the rule that no counter is negative. A field the Router does not model
@@ -233,7 +233,7 @@ request error. A `context_management` edit of `clear_thinking_20251015` with
 `keep: all` has no effect and is omitted for these backends; edits that would
 change history are rejected. Anthropic `cache_control` boundaries are omitted
 when the selected backend uses Responses, which cannot represent them. The
-prompt and tool result still dispatch, and `x-vsr-protocol-warnings` reports a
+prompt and tool result still dispatch, and `x-vsr-warnings` reports a
 `dropped` diagnostic for `cache_control`. A `system` message inside `messages`,
 such as the environment section and the file change notices Claude Code
 inserts during a session, reaches these backends as a system message in the
@@ -243,7 +243,7 @@ served with such a template, add `messages[].role` to
 `global.router.allow_lossy_translation`, described under
 [Validation and failure behavior](#validation-and-failure-behavior). The text
 then joins the user turn right before it, or becomes a user turn of its own
-after a tool result, and `x-vsr-protocol-warnings` reports an `approximated`
+after a tool result, and `x-vsr-warnings` reports an `approximated`
 diagnostic for `messages[].role`. Messages backends receive the message in
 place either way.
 
@@ -253,7 +253,7 @@ agent that reads a PDF returns it as a document in a tool result, and every
 later call of the session resends it. Listing `content.file` in
 `global.router.allow_lossy_translation` sends each file to such a model as a
 short note saying it was not sent, so the agent can read the file another
-way, and `x-vsr-protocol-warnings` reports a `dropped` diagnostic for
+way, and `x-vsr-warnings` reports a `dropped` diagnostic for
 `content.file`. A model that declares `file_input`, or declares no
 capabilities, still receives the file.
 
@@ -281,7 +281,7 @@ input, tool results, and call IDs through Chat or Responses backends, including
 buffered and streaming responses. A Messages backend rejects them with
 `unsupported_capability`. Responses `text.verbosity` maps to the Chat
 `verbosity` field. Messages has no equivalent, so the Router drops this output
-detail hint and reports `text.verbosity` in `x-vsr-protocol-warnings`.
+detail hint and reports `text.verbosity` in `x-vsr-warnings`.
 
 ## Configure a backend format
 
@@ -344,7 +344,7 @@ schema, streaming, tools, or error translation.
 
   The Router then omits the flag, leaves the tool-result content unchanged,
   and reports the loss as `approximated` with field `tool_result.is_error` in
-  `x-vsr-protocol-warnings` and in `llm_translation_lossy_total`. The list
+  `x-vsr-warnings` and in `llm_translation_lossy_total`. The list
   also accepts `messages[].role` for system messages inside the conversation
   and `content.file` for files a model cannot read, both described above,
   `reasoning.signature` (see the signed thinking note above), and every other
@@ -376,8 +376,8 @@ schema, streaming, tools, or error translation.
   backend sends `max_tokens: 4096` and reports `max_tokens` as `generated`.
   Thinking counts toward that limit. A positive integer in the decision's
   `request_params.default_max_tokens` replaces the 4096 for these requests.
-- `x-vsr-client-protocol`, `x-vsr-upstream-protocol`, and
-  `x-vsr-protocol-warnings` expose translation details when applicable. See
+- `x-vsr-warnings` and the `client_protocol` and `upstream_protocol` members of
+  `x-vsr-trace` expose translation details when applicable. See
   [VSR routing headers](../troubleshooting/vsr-headers).
   Diagnostics discovered after streaming headers have been sent are recorded
   in translation-warning metrics and structured debug logs; they cannot be
@@ -404,7 +404,7 @@ The Router handles them as follows:
 | Omitted `max_output_tokens` | Codex CLI sends no output limit, so a route to an `anthropic` backend gets `max_tokens: 4096` as described above. A reasoning model can spend all of it before it answers, which Codex CLI reports as `Incomplete response returned, reason: max_output_tokens`. Set a positive integer `request_params.default_max_tokens` on the decisions that send Codex CLI to an `anthropic` backend. |
 
 Each accepted but unforwarded field appears as a `dropped` entry in
-`x-vsr-protocol-warnings`.
+`x-vsr-warnings`.
 
 In Responses output, `usage.input_tokens_details.cache_write_tokens` is omitted
 when the backend does not report a cache-write count. Reported zero and positive
@@ -421,7 +421,7 @@ no call, can end its own turn the same way, which ends the Codex run.
 Codex can also request reasoning summaries. The Router forwards
 `reasoning.summary` to a Responses backend. A Chat Completions or Messages
 backend cannot request a summary, so the Router accepts the turn and reports
-the dropped setting in `x-vsr-protocol-warnings`. Multi-agent namespace tools
+the dropped setting in `x-vsr-warnings`. Multi-agent namespace tools
 and hosted web search remain unsupported; disable those in the Codex
 `config.toml` that points at the Router. These settings were checked with
 Codex CLI 0.156.1:

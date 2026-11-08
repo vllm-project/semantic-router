@@ -172,7 +172,6 @@ func (r *OpenAIRouter) recordLooperFailure(
 		r.attachRouterReplayResponse(ctx, immediate.Body, false)
 	}
 	r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, reason)
-	addRouterReplayHeaderToImmediateResponse(response, ctx.RouterReplayID)
 	return response
 }
 

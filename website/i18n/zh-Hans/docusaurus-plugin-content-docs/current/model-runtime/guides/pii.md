@@ -106,4 +106,4 @@ curl -s localhost:8100/v1/classify -H 'content-type: application/json' \
   -d '{"input": ["Hi, I am Tom Baker, write to tom.baker@example.com."]}'
 ```
 
-每个片段带 `label`、`start` 和 `end`（按字符，尾巴不含）、`text` 和 `probability`。经过 router 时，`x-vsr-matched-pii` 列出匹配上的 PII 规则。
+每个片段带 `label`、`start` 和 `end`（按字符，尾巴不含）、`text` 和 `probability`。经过 router 时，`x-vsr-trace` 的 `signals` 成员以 `pii:<name>` 列出匹配上的 PII 规则。

@@ -69,8 +69,8 @@ global:
 ## Check it
 
 Through the router, send a request with the `x-vsr-debug: true` header:
-`x-vsr-matched-domains` lists the domains that matched and
-`x-vsr-selected-decision` names the route.
+the `signals` member of `x-vsr-trace` lists the domains that matched, as
+`domain:<name>`, and `x-vsr-selected-decision` names the route.
 
 ## Use your own labels
 

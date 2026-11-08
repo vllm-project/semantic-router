@@ -243,7 +243,7 @@ number. `priority` may be omitted, and two decisions that both match at the
 same priority are separated by confidence - which `score.v1` never reports, so
 the comparison falls through to the decisions' names in alphabetical order.
 Renaming a decision would then change which model a request reaches. Send
-`x-vsr-debug: true` and `x-vsr-decision-ranking` names the decision that lost
+`x-vsr-debug: true` and the `ranking` member of `x-vsr-trace` names the decision that lost
 and ends in `decision name ordering` when that is what settled it.
 
 A remote score reports no confidence. A score just short of `hard_above` is the

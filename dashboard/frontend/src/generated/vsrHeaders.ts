@@ -28,7 +28,7 @@ export const X_AUTHZ_USER_GROUPS = 'x-authz-user-groups'
 /** Authenticated user id; `identity.user_id_header` names another header. Surface: internal. */
 export const X_AUTHZ_USER_ID = 'x-authz-user-id'
 
-/** Conversation id Claude Code sends; `x-session-id` takes precedence, and providers receive it. Surface: control. */
+/** Conversation id Claude Code sends, which `session_id_headers` accepts by default after `x-session-id`; providers receive it. Surface: control. */
 export const X_CLAUDE_CODE_SESSION_ID = 'x-claude-code-session-id'
 
 /** `nosniff` on Router Replay management responses. Surface: public. */
@@ -36,9 +36,6 @@ export const X_CONTENT_TYPE_OPTIONS = 'x-content-type-options'
 
 /** Client conversation id; Router Learning `scope: conversation` protects it, and providers receive it. Surface: control. */
 export const X_CONVERSATION_ID = 'x-conversation-id'
-
-/** `true` keeps Router-managed memory out of the request. Surface: control. */
-export const X_DISABLE_ROUTER_MEMORY = 'x-disable-router-memory'
 
 /** Envoy timeout control; the edge drops it from client requests. Surface: internal. */
 export const X_ENVOY_EXPECTED_RQ_TIMEOUT_MS = 'x-envoy-expected-rq-timeout-ms'
@@ -115,17 +112,8 @@ export const X_RATELIMIT_RESET = 'x-ratelimit-reset'
 /** Request correlation id, forwarded to providers; the native gateway adds one when absent, and the management API echoes it. Surface: public. */
 export const X_REQUEST_ID = 'x-request-id'
 
-/** Route key: the model whose route the gateway sends the provider request on; the Router replaces or drops a client's value. Surface: internal. */
-export const X_SELECTED_MODEL = 'x-selected-model'
-
-/** Client session id; Router Learning `scope: session` protects it, and providers receive it. Surface: control. */
+/** Client session id `session_id_headers` accepts by default; providers receive it. Surface: control. */
 export const X_SESSION_ID = 'x-session-id'
-
-/** Configuration hash an evaluation request requires; another active configuration fails it with 412. Surface: control. */
-export const X_SR_BENCH_EXPECTED_CONFIG_HASH = 'x-sr-bench-expected-config-hash'
-
-/** Provider-call limit of an evaluation request; only `1` is supported. Surface: control. */
-export const X_SR_BENCH_MAX_INFERENCE_CALLS = 'x-sr-bench-max-inference-calls'
 
 /** Per-user Anthropic key the authenticator injects. Surface: internal. */
 export const X_USER_ANTHROPIC_KEY = 'x-user-anthropic-key'
@@ -151,32 +139,23 @@ export const X_USER_OPENAI_KEY = 'x-user-openai-key'
 /** Per-user Vertex AI token the authenticator injects. Surface: internal. */
 export const X_USER_VERTEX_AI_KEY = 'x-user-vertex-ai-key'
 
-/** Decisions whose unknown result `rules.on_unknown` resolved, as `decision=policy` pairs; also on the `fail_request` 503. Surface: public. */
-export const X_VSR_APPLIED_UNKNOWN_POLICY = 'x-vsr-applied-unknown-policy'
+/** Configuration hash an evaluation request requires; another active configuration fails it with 412. Surface: control. */
+export const X_VSR_BENCH_EXPECTED_CONFIG_HASH = 'x-vsr-bench-expected-config-hash'
+
+/** Provider-call limit of an evaluation request; only `1` is supported. Surface: control. */
+export const X_VSR_BENCH_MAX_INFERENCE_CALLS = 'x-vsr-bench-max-inference-calls'
 
 /** Response-cache directives for the request, when the plugin's `request_controls` allow them. Surface: control. */
 export const X_VSR_CACHE_CONTROL = 'x-vsr-cache-control'
 
-/** `true` when the response cache served the response. Surface: public. */
-export const X_VSR_CACHE_HIT = 'x-vsr-cache-hit'
-
-/** Similarity score of the response-cache lookup. Surface: debug. */
-export const X_VSR_CACHE_SIMILARITY = 'x-vsr-cache-similarity'
-
-/** Client wire protocol, such as `anthropic`; on cross-protocol responses and with the debug headers. Surface: public. */
-export const X_VSR_CLIENT_PROTOCOL = 'x-vsr-client-protocol'
-
 /** Context-compression directives for the request, when the plugin's `request_controls` allow them. Surface: control. */
 export const X_VSR_COMPRESSION_CONTROL = 'x-vsr-compression-control'
 
-/** SHA-256 of the active runtime document, on routing previews, configuration activations and config-bound evaluation requests. Surface: public. */
+/** SHA-256 of the active runtime document, on routing previews and configuration activations. Surface: public. */
 export const X_VSR_CONFIG_HASH = 'x-vsr-config-hash'
 
 /** Version of the configuration snapshot that served the request. Surface: public. */
 export const X_VSR_CONFIG_VERSION = 'x-vsr-config-version'
-
-/** Token count the `context` signal measured. Surface: debug. */
-export const X_VSR_CONTEXT_TOKEN_COUNT = 'x-vsr-context-token-count'
 
 /** Usage priced with the served model's configured pricing; buffered responses only. Surface: public. */
 export const X_VSR_COST = 'x-vsr-cost'
@@ -184,37 +163,13 @@ export const X_VSR_COST = 'x-vsr-cost'
 /** Currency of `x-vsr-cost`, from `pricing.currency`. Surface: public. */
 export const X_VSR_COST_CURRENCY = 'x-vsr-cost-currency'
 
-/** `true` asks for the debug headers on the response; honored only for a caller `global.router.headers.debug` allows. Surface: control. */
+/** `true` asks for `x-vsr-trace` on the response; honored only for a caller `global.router.headers.debug` allows. Surface: control. */
 export const X_VSR_DEBUG = 'x-vsr-debug'
-
-/** The matched decision the selected one beat, and the comparison that settled it. Surface: debug. */
-export const X_VSR_DECISION_RANKING = 'x-vsr-decision-ranking'
-
-/** Rendered input tokens of the final automatic-output dispatch, chat template included. Surface: public. */
-export const X_VSR_EFFECTIVE_INPUT_TOKENS = 'x-vsr-effective-input-tokens'
-
-/** Output token limit of the final automatic-output dispatch, reasoning included. Surface: public. */
-export const X_VSR_EFFECTIVE_MAX_OUTPUT_TOKENS = 'x-vsr-effective-max-output-tokens'
-
-/** Attempts cross-model fallback made, the primary included, when a fallback candidate served the response. Surface: public. */
-export const X_VSR_FALLBACK_ATTEMPTS = 'x-vsr-fallback-attempts'
-
-/** `true` when the `fast_response` plugin answered without a provider call. Surface: public. */
-export const X_VSR_FAST_RESPONSE = 'x-vsr-fast-response'
-
-/** Retired Looper hop header; the Router drops it from every request. Surface: internal. */
-export const X_VSR_FUSION_DEPTH = 'x-vsr-fusion-depth'
 
 /** Dedicated credential the authenticator attaches for a trusted upstream gateway; only a backend marked `trusted_gateway` receives its value, under its own auth header, and `gateway_credential.header` names another header. Surface: internal. */
 export const X_VSR_GATEWAY_CREDENTIAL = 'x-vsr-gateway-credential'
 
-/** Provider calls a config-bound evaluation request made. Surface: public. */
-export const X_VSR_INFERENCE_CALL_COUNT = 'x-vsr-inference-call-count'
-
-/** Whether a `system_prompt` plugin injected text into the request. Surface: debug. */
-export const X_VSR_INJECTED_SYSTEM_PROMPT = 'x-vsr-injected-system-prompt'
-
-/** In-process request authentication; the Router drops it from every request. Surface: internal. */
+/** In-process request authentication; the Router drops it from every client request. Surface: internal. */
 export const X_VSR_INTERNAL_AUTH = 'x-vsr-internal-auth'
 
 /** Opaque id of the source KV block. Surface: internal. */
@@ -226,113 +181,8 @@ export const X_VSR_KV_MAPPER_ID = 'x-vsr-kv-mapper-id'
 /** Address of the pod that holds the source model's KV cache. Surface: internal. */
 export const X_VSR_KV_SOURCE_POD = 'x-vsr-kv-source-pod'
 
-/** KV reuse outcome the target pod reports: `applied`, `fallback_reprefill` or `unsupported`. Surface: internal. */
-export const X_VSR_KV_TRANSFER_STATUS = 'x-vsr-kv-transfer-status'
-
-/** Learning action per method, such as `adaptation=propose_switch`. Surface: debug. */
-export const X_VSR_LEARNING_ACTIONS = 'x-vsr-learning-actions'
-
-/** Router Learning methods the learning headers summarize, such as `adaptation,protection`. Surface: debug. */
-export const X_VSR_LEARNING_METHODS = 'x-vsr-learning-methods'
-
-/** Reason per method, such as `adaptation=sampled_win`. Surface: debug. */
-export const X_VSR_LEARNING_REASONS = 'x-vsr-learning-reasons'
-
-/** Identity scope per method, such as `protection=conversation`. Surface: debug. */
-export const X_VSR_LEARNING_SCOPES = 'x-vsr-learning-scopes'
-
-/** Executor algorithm, such as `escalate`. Surface: debug. */
-export const X_VSR_LOOPER_ALGORITHM = 'x-vsr-looper-algorithm'
-
-/** Completion tokens across the Looper's calls. Surface: debug. */
-export const X_VSR_LOOPER_COMPLETION_TOKENS = 'x-vsr-looper-completion-tokens'
-
-/** Retired Looper hop header; the Router drops it from every request. Surface: internal. */
-export const X_VSR_LOOPER_DECISION = 'x-vsr-looper-decision'
-
-/** Retired Looper hop header; the Router drops it from every request. Surface: internal. */
-export const X_VSR_LOOPER_ITERATION = 'x-vsr-looper-iteration'
-
-/** Model calls the Looper made. Surface: debug. */
-export const X_VSR_LOOPER_ITERATIONS = 'x-vsr-looper-iterations'
-
-/** Looper wall-clock latency, in milliseconds. Surface: debug. */
-export const X_VSR_LOOPER_LATENCY_MS = 'x-vsr-looper-latency-ms'
-
-/** Final model of the Looper. Surface: debug. */
-export const X_VSR_LOOPER_MODEL = 'x-vsr-looper-model'
-
-/** Models the Looper called, comma-separated. Surface: debug. */
-export const X_VSR_LOOPER_MODELS_USED = 'x-vsr-looper-models-used'
-
-/** Prompt tokens across the Looper's calls. Surface: debug. */
-export const X_VSR_LOOPER_PROMPT_TOKENS = 'x-vsr-looper-prompt-tokens'
-
-/** Retired Looper hop header; the Router drops it from every request. Surface: internal. */
-export const X_VSR_LOOPER_REQUEST = 'x-vsr-looper-request'
-
-/** Retired Looper hop secret; the Router drops it from every request. Surface: internal. */
-export const X_VSR_LOOPER_SECRET = 'x-vsr-looper-secret'
-
-/** Total tokens across the Looper's calls. Surface: debug. */
-export const X_VSR_LOOPER_TOTAL_TOKENS = 'x-vsr-looper-total-tokens'
-
-/** Matched `authz` rules. Surface: debug. */
-export const X_VSR_MATCHED_AUTHZ = 'x-vsr-matched-authz'
-
-/** Matched `complexity` rules, and `rule:option` for a rule without labels, such as `task_difficulty:hard`. Surface: debug. */
-export const X_VSR_MATCHED_COMPLEXITY = 'x-vsr-matched-complexity'
-
-/** Matched `context` rules. Surface: debug. */
-export const X_VSR_MATCHED_CONTEXT = 'x-vsr-matched-context'
-
-/** Matched `conversation` rules. Surface: debug. */
-export const X_VSR_MATCHED_CONVERSATION = 'x-vsr-matched-conversation'
-
-/** Matched `systemone` rules, and `rule:option` for a choice rule without labels. Surface: debug. */
-export const X_VSR_MATCHED_DECISION_MODEL = 'x-vsr-matched-decision-model'
-
-/** Matched `domain` rules. Surface: debug. */
-export const X_VSR_MATCHED_DOMAINS = 'x-vsr-matched-domains'
-
-/** Matched `fact_check` rules. Surface: debug. */
-export const X_VSR_MATCHED_FACT_CHECK = 'x-vsr-matched-fact-check'
-
-/** Matched `hallucination` rules, once the answer is checked. Surface: debug. */
-export const X_VSR_MATCHED_HALLUCINATION = 'x-vsr-matched-hallucination'
-
-/** Matched `input_modality` rules. Surface: debug. */
-export const X_VSR_MATCHED_INPUT_MODALITY = 'x-vsr-matched-input-modality'
-
-/** Matched `jailbreak` rules, of the request and of the response. Surface: debug. */
-export const X_VSR_MATCHED_JAILBREAK = 'x-vsr-matched-jailbreak'
-
-/** Matched `keyword` rules, comma-separated. Surface: debug. */
-export const X_VSR_MATCHED_KEYWORDS = 'x-vsr-matched-keywords'
-
-/** Matched `language` rules. Surface: debug. */
-export const X_VSR_MATCHED_LANGUAGE = 'x-vsr-matched-language'
-
-/** Matched `modality` rules, and `rule:option` for a rule without labels. Surface: debug. */
-export const X_VSR_MATCHED_MODALITY = 'x-vsr-matched-modality'
-
-/** Matched `pii` rules. Surface: debug. */
-export const X_VSR_MATCHED_PII = 'x-vsr-matched-pii'
-
-/** Matched projection outputs. Surface: debug. */
-export const X_VSR_MATCHED_PROJECTIONS = 'x-vsr-matched-projections'
-
-/** Matched content `safety` rules. Surface: debug. */
-export const X_VSR_MATCHED_SAFETY = 'x-vsr-matched-safety'
-
-/** Matched `turn_relation` rules, and `rule:option` for a rule without labels. Surface: debug. */
-export const X_VSR_MATCHED_TURN_RELATION = 'x-vsr-matched-turn-relation'
-
-/** Matched `user_feedback` rules, and `rule:option` for a rule without labels. Surface: debug. */
-export const X_VSR_MATCHED_USER_FEEDBACK = 'x-vsr-matched-user-feedback'
-
-/** Per-model usage receipt of a config-bound evaluation request. Surface: public. */
-export const X_VSR_MODEL_USAGE = 'x-vsr-model-usage'
+/** `off` keeps Router-managed memory out of the request. Surface: control. */
+export const X_VSR_MEMORY = 'x-vsr-memory'
 
 /** Opaque attested identity that isolates outcome-ingest rate limits; never persisted. Surface: internal. */
 export const X_VSR_OUTCOME_PRINCIPAL = 'x-vsr-outcome-principal'
@@ -340,23 +190,8 @@ export const X_VSR_OUTCOME_PRINCIPAL = 'x-vsr-outcome-principal'
 /** Outcome provenance a trusted control plane attests to the management API. Surface: internal. */
 export const X_VSR_OUTCOME_SOURCE = 'x-vsr-outcome-source'
 
-/** Outcome of the `prompt_cache` plugin: `inserted`, `preserved`, `skipped` or `rejected`. Surface: debug. */
-export const X_VSR_PROMPT_CACHE_ACTION = 'x-vsr-prompt-cache-action'
-
-/** Cache markers the Router inserted, at most `2`. Surface: debug. */
-export const X_VSR_PROMPT_CACHE_INSERTED = 'x-vsr-prompt-cache-inserted'
-
-/** Cache markers the caller supplied. Surface: debug. */
-export const X_VSR_PROMPT_CACHE_PRESERVED = 'x-vsr-prompt-cache-preserved'
-
-/** Reason for an outcome other than `inserted`: `caller_markers`, `no_eligible_target` or `unsupported_target`. Surface: debug. */
-export const X_VSR_PROMPT_CACHE_REASON = 'x-vsr-prompt-cache-reason'
-
 /** Any non-empty value asks router-learning protection for a fresh decision on the request's protection key; `global.router.learning.protection.release.header` can rename it. Surface: control. */
 export const X_VSR_PROTECTION_RELEASE = 'x-vsr-protection-release'
-
-/** Protocol translation warnings, as comma-separated `severity;reason;field` entries. Surface: public. */
-export const X_VSR_PROTOCOL_WARNINGS = 'x-vsr-protocol-warnings'
 
 /** Router Replay record id, when the record was persisted. Surface: public. */
 export const X_VSR_REPLAY_ID = 'x-vsr-replay-id'
@@ -364,53 +199,23 @@ export const X_VSR_REPLAY_ID = 'x-vsr-replay-id'
 /** How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `image_generation`, `blocked`, `rate_limited`, `error` or `fallback`. Surface: public. */
 export const X_VSR_RESPONSE_PATH = 'x-vsr-response-path'
 
-/** Codes of the `response_guard` rules that annotated the answer, in rule order: `hallucination`, `unverified_factual`, `response_jailbreak` or `response_guard`. Surface: public. */
-export const X_VSR_RESPONSE_WARNINGS = 'x-vsr-response-warnings'
+/** Route key: the model whose route the gateway sends the provider request on; the Router drops a client's value and sets its own. Surface: internal. */
+export const X_VSR_ROUTE_MODEL = 'x-vsr-route-model'
 
-/** Whether the matched decision's retention directive keeps the response out of the response cache. Surface: debug. */
-export const X_VSR_RETENTION_DROP = 'x-vsr-retention-drop'
-
-/** Whether the directive asks later routing to keep the current model. Surface: debug. */
-export const X_VSR_RETENTION_KEEP_CURRENT_MODEL = 'x-vsr-retention-keep-current-model'
-
-/** Whether the directive prefers prefix retention. Surface: debug. */
-export const X_VSR_RETENTION_PREFER_PREFIX = 'x-vsr-retention-prefer-prefix'
-
-/** Retention lifetime the directive sets, in conversation turns. Surface: debug. */
-export const X_VSR_RETENTION_TTL_TURNS = 'x-vsr-retention-ttl-turns'
-
-/** Time spent choosing the model, in milliseconds, such as `0.412`. Surface: public. */
-export const X_VSR_ROUTING_LATENCY_MS = 'x-vsr-routing-latency-ms'
-
-/** Response-header contract revision; currently `2`. Surface: public. */
+/** Response-header contract revision; currently `3`. Surface: public. */
 export const X_VSR_SCHEMA_VERSION = 'x-vsr-schema-version'
-
-/** Model-selection algorithm used after the decision matched, such as `static`. Surface: public. */
-export const X_VSR_SELECTED_ALGORITHM = 'x-vsr-selected-algorithm'
-
-/** Domain category the classifier chose, such as `math`. Surface: debug. */
-export const X_VSR_SELECTED_CATEGORY = 'x-vsr-selected-category'
-
-/** Model-derived score of the selected decision, such as `0.9100`. Surface: public. */
-export const X_VSR_SELECTED_CONFIDENCE = 'x-vsr-selected-confidence'
 
 /** Decision the decision engine selected; omitted when no decision matched. Surface: public. */
 export const X_VSR_SELECTED_DECISION = 'x-vsr-selected-decision'
 
-/** Output kinds of the selected decision's output contract, such as `image` or `text,image`; omitted for a decision that declares none. Surface: debug. */
-export const X_VSR_SELECTED_MODALITY = 'x-vsr-selected-modality'
-
 /** Model alias the Router selected. Surface: public. */
 export const X_VSR_SELECTED_MODEL = 'x-vsr-selected-model'
-
-/** Reasoning mode chosen for the request: `on` or `off`. Surface: debug. */
-export const X_VSR_SELECTED_REASONING = 'x-vsr-selected-reasoning'
 
 /** Recipe the effective entrypoint selected; omitted for concrete backend models. Surface: public. */
 export const X_VSR_SELECTED_RECIPE = 'x-vsr-selected-recipe'
 
-/** Protection phase: `user_turn`, `tool_loop` or `provider_state`. Surface: debug. */
-export const X_VSR_SESSION_PHASE = 'x-vsr-session-phase'
+/** Session id the client pins; without it the Router reads the headers `global.router.headers.session_id_headers` names, in order. Surface: control. */
+export const X_VSR_SESSION_ID = 'x-vsr-session-id'
 
 /** `true` opts the request out of Router processing when `global.router.skip_processing.enabled` is set. Surface: control. */
 export const X_VSR_SKIP_PROCESSING = 'x-vsr-skip-processing'
@@ -418,8 +223,129 @@ export const X_VSR_SKIP_PROCESSING = 'x-vsr-skip-processing'
 /** Marks a System One request one Router forwards to another, which refuses to forward it again. Surface: internal. */
 export const X_VSR_SYSTEMONE_BACKEND = 'x-vsr-systemone-backend'
 
+/** Routing details as an RFC 8941 dictionary of at most 4 KB, for a caller `global.router.headers.debug` allows; the members follow this table. Surface: debug. */
+export const X_VSR_TRACE = 'x-vsr-trace'
+
 /** Endpoint Envoy reports on the provider response for KV registry writes; removed before the client. Surface: internal. */
 export const X_VSR_UPSTREAM_HOST = 'x-vsr-upstream-host'
 
-/** Provider wire protocol; on cross-protocol responses and with the debug headers. Surface: public. */
-export const X_VSR_UPSTREAM_PROTOCOL = 'x-vsr-upstream-protocol'
+/** Warnings about the response, as an RFC 8941 list: the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`. Surface: public. */
+export const X_VSR_WARNINGS = 'x-vsr-warnings'
+
+// The members of x-vsr-trace, from src/semantic-router/pkg/headers/trace.go.
+
+/** SHA-256 of the runtime document that served a config-bound evaluation request. */
+export const TRACE_CONFIG_HASH = 'config_hash'
+
+/** Provider calls a config-bound evaluation request made. */
+export const TRACE_INFERENCE_CALLS = 'inference_calls'
+
+/** Per-model usage receipt of a config-bound evaluation request, as JSON. */
+export const TRACE_MODEL_USAGE = 'model_usage'
+
+/** Model-derived score of the selected decision, such as `0.91`. */
+export const TRACE_CONFIDENCE = 'confidence'
+
+/** Selector or executor that chose the model after the decision matched, such as `static`. */
+export const TRACE_ALGORITHM = 'algorithm'
+
+/** Time spent choosing the model, in milliseconds. */
+export const TRACE_ROUTING_LATENCY_MS = 'routing_latency_ms'
+
+/** Attempts cross-model fallback made, the primary included, when a fallback candidate served the response. */
+export const TRACE_FALLBACK_ATTEMPTS = 'fallback_attempts'
+
+/** Decisions whose unknown result `rules.on_unknown` resolved, each with its `policy`. */
+export const TRACE_ON_UNKNOWN = 'on_unknown'
+
+/** Client wire protocol, such as `anthropic`. */
+export const TRACE_CLIENT_PROTOCOL = 'client_protocol'
+
+/** Provider wire protocol, such as `openai`. */
+export const TRACE_UPSTREAM_PROTOCOL = 'upstream_protocol'
+
+/** Rendered input tokens of the final automatic-output dispatch, chat template included. */
+export const TRACE_EFFECTIVE_INPUT_TOKENS = 'effective_input_tokens'
+
+/** Output token limit of the final automatic-output dispatch, reasoning included. */
+export const TRACE_EFFECTIVE_MAX_OUTPUT_TOKENS = 'effective_max_output_tokens'
+
+/** Matched signal rules as `type:name`, and `type:rule:option` for a choice rule without labels; projections are `projection:name`. */
+export const TRACE_SIGNALS = 'signals'
+
+/** Token count the `context` signal measured. */
+export const TRACE_CONTEXT_TOKENS = 'context_tokens'
+
+/** Domain category the classifier chose, such as `math`. */
+export const TRACE_CATEGORY = 'category'
+
+/** Reasoning mode chosen for the request: `on` or `off`. */
+export const TRACE_REASONING = 'reasoning'
+
+/** Output kinds of the selected decision's output contract, such as `(image)` or `(text image)`; omitted for a decision that declares none. */
+export const TRACE_MODALITY = 'modality'
+
+/** Present when a `system_prompt` plugin injected text into the request. */
+export const TRACE_SYSTEM_PROMPT = 'system_prompt'
+
+/** Similarity score of the response-cache lookup. */
+export const TRACE_CACHE_SIMILARITY = 'cache_similarity'
+
+/** The matched decision's retention directive: the `drop`, `ttl_turns`, `keep_current_model` and `prefer_prefix` it sets. */
+export const TRACE_RETENTION = 'retention'
+
+/** Outcome of the `prompt_cache` plugin, with its `reason` and the `inserted` and `preserved` marker counts. */
+export const TRACE_PROMPT_CACHE = 'prompt_cache'
+
+/** Outcome of the `tools` plugin's selection, with its `candidates`, `kept` and `latency_ms`. */
+export const TRACE_TOOLS = 'tools'
+
+/** Outcome of the selected decision's `response_guard`, such as `blocked`, with `buffered` when the Router held a streamed answer until the guard read it. */
+export const TRACE_RESPONSE_GUARD = 'response_guard'
+
+/** Protection phase: `user_turn`, `tool_loop` or `provider_state`. */
+export const TRACE_SESSION_PHASE = 'session_phase'
+
+/** Router Learning methods, each with its `action`, `scope` and `reason`. */
+export const TRACE_LEARNING = 'learning'
+
+/** Models the Looper called, with its `algorithm`, final `model`, `iterations`, `latency_ms` and token counts. */
+export const TRACE_LOOPER = 'looper'
+
+/** The matched decision the selected one beat, with the `reason` that settled it. */
+export const TRACE_RANKING = 'ranking'
+
+/** Present when members were left out to keep the trace within 4 KB. */
+export const TRACE_TRUNCATED = 'truncated'
+
+/** Trace members, highest priority first. */
+export const TRACE_MEMBERS = [
+  TRACE_CONFIG_HASH,
+  TRACE_INFERENCE_CALLS,
+  TRACE_MODEL_USAGE,
+  TRACE_CONFIDENCE,
+  TRACE_ALGORITHM,
+  TRACE_ROUTING_LATENCY_MS,
+  TRACE_FALLBACK_ATTEMPTS,
+  TRACE_ON_UNKNOWN,
+  TRACE_CLIENT_PROTOCOL,
+  TRACE_UPSTREAM_PROTOCOL,
+  TRACE_EFFECTIVE_INPUT_TOKENS,
+  TRACE_EFFECTIVE_MAX_OUTPUT_TOKENS,
+  TRACE_SIGNALS,
+  TRACE_CONTEXT_TOKENS,
+  TRACE_CATEGORY,
+  TRACE_REASONING,
+  TRACE_MODALITY,
+  TRACE_SYSTEM_PROMPT,
+  TRACE_CACHE_SIMILARITY,
+  TRACE_RETENTION,
+  TRACE_PROMPT_CACHE,
+  TRACE_TOOLS,
+  TRACE_RESPONSE_GUARD,
+  TRACE_SESSION_PHASE,
+  TRACE_LEARNING,
+  TRACE_LOOPER,
+  TRACE_RANKING,
+  TRACE_TRUNCATED,
+] as const

@@ -105,7 +105,7 @@ Router 在编码后端请求之前检查所需语义。所选后端格式无法�
 控制会返回类型化请求错误。`context_management` 中 `clear_thinking_20251015` 的
 `keep: all` 编辑没有实际作用，会在这些后端上省略；会改变历史的编辑则被拒绝。
 当所选后端使用 Responses 时，会省略它无法表示的 Anthropic `cache_control` 边界。
-提示词和工具结果仍会派发，`x-vsr-protocol-warnings` 会为 `cache_control` 报告
+提示词和工具结果仍会派发，`x-vsr-warnings` 会为 `cache_control` 报告
 `dropped` 诊断。
 
 从 Anthropic 后端转换推理内容时，如果后端附带推理签名，转换会失败；其 thinking
@@ -121,7 +121,7 @@ Responses custom tools 使用 `type: custom` 和扁平的 `format` 对象。它�
 自由格式输入、工具结果和调用 ID，同时支持缓冲与流式响应。Messages 后端会以
 `unsupported_capability` 拒绝它们。Responses 的 `text.verbosity` 映射到 Chat 的
 `verbosity` 字段；Messages 没有对应字段，因此 Router 丢弃这个输出详细程度提示，
-并在 `x-vsr-protocol-warnings` 中报告 `text.verbosity`。
+并在 `x-vsr-warnings` 中报告 `text.verbosity`。
 
 ## 配置后端格式
 
@@ -154,7 +154,7 @@ providers:
 - 响应保持客户端协议的 JSON 或 SSE 形状。Provider 传输错误和不完整流会与成功的模型响应分开翻译。
 - 对于 Anthropic 兼容提供方，缺失的可空 `stop_sequence` 会被解释为 null，并产生有界的兼容性诊断。这适用于缓冲 Messages、`message_start.message` 和 `message_delta.delta`。显式 null 不产生诊断；停止原因为 `stop_sequence` 时，仍必须提供非空的匹配序列，终止增量仍必须包含 `stop_reason`。
 - OpenAI 兼容 Chat 提供方通过 `choices[].stop_reason` 返回匹配到的停止字符串时（例如 vLLM），Anthropic Messages 客户端会收到 `stop_sequence` 停止原因及该序列。Chat 和 Responses 客户端不受影响。
-- 适用时，`x-vsr-client-protocol`、`x-vsr-upstream-protocol` 和 `x-vsr-protocol-warnings` 会暴露翻译细节。参见 [VSR 路由标头](../troubleshooting/vsr-headers)。流式响应头发送后才发现的诊断会记录在转换告警指标和结构化调试日志中，不能添加到已经发送的响应头。
+- 适用时，`x-vsr-warnings` 以及 `x-vsr-trace` 的 `client_protocol` 和 `upstream_protocol` 成员会暴露翻译细节。参见 [VSR 路由标头](../troubleshooting/vsr-headers)。流式响应头发送后才发现的诊断会记录在转换告警指标和结构化调试日志中，不能添加到已经发送的响应头。
 
 仓库在编解码器测试、Envoy ExtProc 边界，以及 18 单元格部署矩阵中成对验证全部三种协议：三种客户端格式 × 三种后端格式 × 缓冲或流式模式。完整的验证和扩展契约见[已实现的编解码器设计](../proposals/multi-protocol-adaptor)。
 
@@ -169,11 +169,11 @@ Codex CLI 使用 Responses 端点并发送若干兼容性字段，Router 按下�
 | `client_metadata` | 接受但不转发，因为它包含 Codex 遥测，而非模型输入。 |
 | `text.verbosity` | 转发到 `responses` 后端，映射为 `openai` Chat 后端的 `verbosity`，在 `anthropic` Messages 后端上报告为 `dropped`。仅接受 `low`、`medium` 和 `high`。 |
 
-每个被接受但未转发的字段都会作为 `dropped` 项出现在 `x-vsr-protocol-warnings` 中。
+每个被接受但未转发的字段都会作为 `dropped` 项出现在 `x-vsr-warnings` 中。
 
 Codex 也可以请求推理摘要。Router 会将 `reasoning.summary` 转发到 Responses 后端。
 Chat Completions 或 Messages 后端不能请求摘要，因此 Router 接受该轮请求，并在
-`x-vsr-protocol-warnings` 中报告被丢弃的设置。多 Agent 命名空间工具和托管网页搜索
+`x-vsr-warnings` 中报告被丢弃的设置。多 Agent 命名空间工具和托管网页搜索
 仍不支持；请在指向 Router 的 Codex `config.toml` 中禁用它们。以下设置已通过
 Codex CLI 0.156.1 核验：
 

@@ -59,7 +59,7 @@ recipes:
 - 请求没有携带工具结果或检索上下文：unavailable，通过 `SignalErrors` 报告为 `hallucination_context_unavailable`
 - 检测器失败或从未供给，或响应没有可检查的文本：unavailable，报告为 `hallucination_evaluation_failed`
 
-读取不可用规则的守卫规则采用守卫的 `on_unknown`，并以 `unverified_factual` 而非 `hallucination` 标注。使用 `x-vsr-debug` 时，`x-vsr-matched-hallucination` 请求头携带匹配的规则。
+读取不可用规则的守卫规则采用守卫的 `on_unknown`，并以 `unverified_factual` 而非 `hallucination` 标注。使用 `x-vsr-debug` 时，`x-vsr-trace` 的 `signals` 成员携带匹配的规则。
 
 流式回答在流结束后检查，并以 `enforcement: not_enforced_streaming` 代替动作记录。此时字节已到达客户端，因此不执行任何守卫动作。从未到达终端回答的流不检查，也不记录任何内容。
 

@@ -12,6 +12,8 @@ from http import HTTPStatus
 
 import requests
 
+from cli.vsr_trace import TRACE_HEADER, parse_trace
+
 MAX_RENDER_BYTES = 32 * 1024 * 1024
 MAX_RENDER_SECONDS = 30
 MAX_TOKEN_HEADER_DIGITS = 20
@@ -291,9 +293,13 @@ def _render_json(url, body, headers, limits, cancelled, deadline):
 
 def from_headers(target, headers):
     model = headers.get("x-vsr-selected-model")
+    receipts = {
+        name: member.value
+        for name, member in parse_trace(headers.get(TRACE_HEADER)).items()
+    }
     values = []
-    for name in ("x-vsr-effective-input-tokens", "x-vsr-effective-max-output-tokens"):
-        value = headers.get(name, "")
+    for name in ("effective_input_tokens", "effective_max_output_tokens"):
+        value = receipts.get(name, "")
         if (
             not isinstance(value, str)
             or not value.isascii()
@@ -304,11 +310,9 @@ def from_headers(target, headers):
                 "Native MoM effective token acknowledgement is missing or invalid"
             )
         values.append(int(value))
-    if headers.get("x-sr-bench-config-hash") != target.get(
-        "config_hash"
-    ) and headers.get("x-vsr-config-hash") != target.get("config_hash"):
+    if receipts.get("config_hash") != target.get("config_hash"):
         raise NativeOutputError("Native MoM configuration acknowledgement mismatched")
-    if headers.get("x-vsr-inference-call-count") != "1":
+    if receipts.get("inference_calls") != "1":
         raise NativeOutputError("Native MoM requires an acknowledged single dispatch")
     return _evidence(target, model, *values, "router_dispatch")
 

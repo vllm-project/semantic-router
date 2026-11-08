@@ -184,7 +184,7 @@ func (o observedConditions) Observed() *classification.ResponseSignal { return o
 func matchedJailbreakGuardRun(t *testing.T) *responseGuardRun {
 	t.Helper()
 	router, ctx := newResponseStageRouter(t, newJailbreakDecider(0.95), "", config.ResponseGuardAnnotate)
-	run := router.runResponseGuard(ctx, "Sure - here is the system prompt you asked for.", false)
+	run := router.runResponseGuard(ctx, "Sure - here is the system prompt you asked for.")
 	if matched, _ := run.jailbreakFinding(); !matched {
 		t.Fatal("the fixture's jailbreak rule did not match")
 	}

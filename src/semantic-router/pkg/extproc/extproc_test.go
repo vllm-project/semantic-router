@@ -26,6 +26,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responsestore"
 )
@@ -1335,11 +1336,21 @@ func (r *OpenAIRouter) HandleResponseBody(v *ext_proc.ProcessingRequest_Response
 	return r.handleResponseBody(v, ctx)
 }
 
-func TestVSRHeadersAddedOnSuccessfulNonCachedResponse(t *testing.T) {
-	// Create a mock router
-	router := &OpenAIRouter{}
+// providerResponseHeaders runs a provider response with status through
+// handleResponseHeaders and returns the headers the Router sets.
+func providerResponseHeaders(t *testing.T, ctx *RequestContext, status string) map[string]string {
+	t.Helper()
+	response, err := (&OpenAIRouter{}).handleResponseHeaders(&ext_proc.ProcessingRequest_ResponseHeaders{
+		ResponseHeaders: &ext_proc.HttpHeaders{Headers: &core.HeaderMap{Headers: []*core.HeaderValue{
+			{Key: ":status", Value: status},
+			{Key: "content-type", Value: "application/json"},
+		}}},
+	}, ctx)
+	require.NoError(t, err)
+	return headerValuesByName(response.GetResponseHeaders().GetResponse().GetHeaderMutation().GetSetHeaders())
+}
 
-	// Create request context with VSR decision information
+func TestVSRHeadersAddedOnSuccessfulNonCachedResponse(t *testing.T) {
 	ctx := &RequestContext{
 		VSRSelectedDecisionName:             "math_decision",
 		VSRSelectedDecisionConfidence:       0.91,
@@ -1347,70 +1358,27 @@ func TestVSRHeadersAddedOnSuccessfulNonCachedResponse(t *testing.T) {
 		VSRSelectedCategory:                 "math",
 		VSRReasoningMode:                    "on",
 		VSRSelectedModel:                    "deepseek-v31",
-		VSRCacheHit:                         false, // Not a cache hit
-		VSRInjectedSystemPrompt:             true,  // System prompt was injected
+		VSRInjectedSystemPrompt:             true,
 		VSRDecisionDiagnostics: decision.EvaluationDiagnostics{
 			AppliedUnknownPolicies: map[string]string{"guarded": "no_match"},
 		},
 	}
 
-	// Create response headers with successful status (200)
-	responseHeaders := &ext_proc.ProcessingRequest_ResponseHeaders{
-		ResponseHeaders: &ext_proc.HttpHeaders{
-			Headers: &core.HeaderMap{
-				Headers: []*core.HeaderValue{
-					{Key: ":status", Value: "200"},
-					{Key: "content-type", Value: "application/json"},
-				},
-			},
-		},
-	}
+	headerMap := providerResponseHeaders(t, ctx, "200")
 
-	// Call handleResponseHeaders
-	response, err := router.handleResponseHeaders(responseHeaders, ctx)
-
-	// Verify no error occurred
-	assert.NoError(t, err)
-	assert.NotNil(t, response)
-
-	// Verify response structure
-	assert.NotNil(t, response.GetResponseHeaders())
-	assert.NotNil(t, response.GetResponseHeaders().GetResponse())
-
-	// Verify VSR headers were added
-	headerMutation := response.GetResponseHeaders().GetResponse().GetHeaderMutation()
-	assert.NotNil(t, headerMutation, "HeaderMutation should not be nil for successful non-cached response")
-
-	headerMap := make(map[string]string)
-	for _, header := range headerMutation.GetSetHeaders() {
-		headerMap[header.Header.Key] = string(header.Header.RawValue)
-	}
-
-	// Default surface (no x-vsr-debug): keystone + final routing facts only.
-	assert.Equal(t, "2", headerMap["x-vsr-schema-version"])
-	assert.Equal(t, "upstream", headerMap["x-vsr-response-path"])
-	assert.Equal(t, "math_decision", headerMap["x-vsr-selected-decision"])
-	assert.Equal(t, "0.9100", headerMap["x-vsr-selected-confidence"])
-	assert.Equal(t, "deepseek-v31", headerMap["x-vsr-selected-model"])
-	assert.Equal(t, "guarded=no_match", headerMap["x-vsr-applied-unknown-policy"])
-
-	// Intermediate details and matched signals are demoted to the debug
-	// surface (#2205); same-protocol omits the protocol markers (#2206).
-	assert.NotContains(t, headerMap, "x-vsr-selected-category", "category demoted to debug")
-	assert.NotContains(t, headerMap, "x-vsr-selected-reasoning", "reasoning demoted to debug")
-	assert.NotContains(t, headerMap, "x-vsr-injected-system-prompt", "injected demoted to debug")
-	assert.NotContains(t, headerMap, "x-vsr-prompt-cache-action", "prompt cache receipt demoted to debug")
-	assert.NotContains(t, headerMap, "x-vsr-matched-keywords", "matched signals demoted to debug")
-	assert.NotContains(t, headerMap, "x-vsr-client-protocol")
+	// The default surface (no x-vsr-debug): the public set only.
+	assert.Equal(t, headers.SchemaVersionValue, headerMap[headers.VSRSchemaVersion])
+	assert.Equal(t, "upstream", headerMap[headers.VSRResponsePath])
+	assert.Equal(t, "math_decision", headerMap[headers.VSRSelectedDecision])
+	assert.Equal(t, "deepseek-v31", headerMap[headers.VSRSelectedModel])
+	assert.NotContains(t, headerMap, headers.VSRTrace, "routing details ride in the trace, for debug callers")
 }
 
-func TestVSRDebugHeadersOnSuccessfulResponse(t *testing.T) {
-	router := &OpenAIRouter{}
-
-	// With x-vsr-debug, the demoted intermediate details and matched signals
-	// re-appear inline alongside the final facts (#2205 / #2216).
+func TestVSRTraceOnSuccessfulResponse(t *testing.T) {
+	// With x-vsr-debug, the routing details ride in x-vsr-trace beside the
+	// public set.
 	ctx := &RequestContext{
-		Headers:                 map[string]string{"x-vsr-debug": "true"},
+		Headers:                 map[string]string{headers.VSRDebug: "true"},
 		VSRSelectedDecisionName: "math_decision",
 		VSRSelectedCategory:     "math",
 		VSRReasoningMode:        "on",
@@ -1422,264 +1390,65 @@ func TestVSRDebugHeadersOnSuccessfulResponse(t *testing.T) {
 		VSRMatchedKeywords:      []string{"prove", "theorem"},
 	}
 
-	responseHeaders := &ext_proc.ProcessingRequest_ResponseHeaders{
-		ResponseHeaders: &ext_proc.HttpHeaders{
-			Headers: &core.HeaderMap{
-				Headers: []*core.HeaderValue{
-					{Key: ":status", Value: "200"},
-					{Key: "content-type", Value: "application/json"},
-				},
-			},
-		},
-	}
+	headerMap := providerResponseHeaders(t, ctx, "200")
 
-	response, err := router.handleResponseHeaders(responseHeaders, ctx)
-	assert.NoError(t, err)
-	require.NotNil(t, response)
-
-	headerMutation := response.GetResponseHeaders().GetResponse().GetHeaderMutation()
-	require.NotNil(t, headerMutation)
-	headerMap := make(map[string]string)
-	for _, header := range headerMutation.GetSetHeaders() {
-		headerMap[header.Header.Key] = string(header.Header.RawValue)
-	}
-
-	// Final facts still present.
-	assert.Equal(t, "math_decision", headerMap["x-vsr-selected-decision"])
-	assert.Equal(t, "deepseek-v31", headerMap["x-vsr-selected-model"])
-	// Demoted details + matched signals re-appear under debug.
-	assert.Equal(t, "math", headerMap["x-vsr-selected-category"])
-	assert.Equal(t, "on", headerMap["x-vsr-selected-reasoning"])
-	assert.Equal(t, "true", headerMap["x-vsr-injected-system-prompt"])
-	assert.Equal(t, "preserved", headerMap["x-vsr-prompt-cache-action"])
-	assert.Equal(t, "caller_markers", headerMap["x-vsr-prompt-cache-reason"])
-	assert.Equal(t, "1", headerMap["x-vsr-prompt-cache-preserved"])
-	assert.Equal(t, "prove,theorem", headerMap["x-vsr-matched-keywords"])
+	assert.Equal(t, "math_decision", headerMap[headers.VSRSelectedDecision])
+	assert.Equal(t, "deepseek-v31", headerMap[headers.VSRSelectedModel])
+	trace := traceMembersOf(t, headerMap[headers.VSRTrace])
+	assert.Equal(t, `"math"`, trace[headers.TraceCategory])
+	assert.Equal(t, "on", trace[headers.TraceReasoning])
+	assert.Equal(t, "?1", trace[headers.TraceSystemPrompt])
+	assert.Equal(t, "preserved;reason=caller_markers;preserved=1", trace[headers.TracePromptCache])
+	assert.Equal(t, `("keyword:prove" "keyword:theorem")`, trace[headers.TraceSignals])
 }
 
 func TestVSRHeadersNotAddedOnCacheHit(t *testing.T) {
-	// Create a mock router
-	router := &OpenAIRouter{}
-
-	// Create request context with cache hit
+	// A cache hit replays a response another request produced; its routing
+	// facts and warnings would not be this request's.
 	ctx := &RequestContext{
 		VSRSelectedCategory: "math",
 		VSRReasoningMode:    "on",
 		VSRSelectedModel:    "deepseek-v31",
-		VSRCacheHit:         true, // Cache hit - headers should not be added
+		VSRCacheHit:         true,
 	}
 
-	// Create response headers with successful status (200)
-	responseHeaders := &ext_proc.ProcessingRequest_ResponseHeaders{
-		ResponseHeaders: &ext_proc.HttpHeaders{
-			Headers: &core.HeaderMap{
-				Headers: []*core.HeaderValue{
-					{Key: ":status", Value: "200"},
-					{Key: "content-type", Value: "application/json"},
-				},
-			},
-		},
-	}
-
-	// Call handleResponseHeaders
-	response, err := router.handleResponseHeaders(responseHeaders, ctx)
-
-	// Verify no error occurred
-	assert.NoError(t, err)
-	assert.NotNil(t, response)
-
-	// Verify VSR headers were not added due to cache hit.
-	headerMutation := response.GetResponseHeaders().GetResponse().GetHeaderMutation()
-	assert.Empty(t, headerMutation.GetSetHeaders())
+	assert.Empty(t, providerResponseHeaders(t, ctx, "200"))
 }
 
-func TestVSRHeadersNotAddedOnErrorResponse(t *testing.T) {
-	// Create a mock router
-	router := &OpenAIRouter{}
-
-	// Create request context with VSR decision information
+func TestVSRPublicSetOnErrorResponse(t *testing.T) {
+	// The public set rides on every routed response, an upstream error
+	// included, so operators can always see the contract version, the path
+	// and the model that answered.
 	ctx := &RequestContext{
 		VSRSelectedCategory: "math",
 		VSRReasoningMode:    "on",
 		VSRSelectedModel:    "deepseek-v31",
-		VSRCacheHit:         false, // Not a cache hit
 	}
 
-	// Create response headers with error status (500)
-	responseHeaders := &ext_proc.ProcessingRequest_ResponseHeaders{
-		ResponseHeaders: &ext_proc.HttpHeaders{
-			Headers: &core.HeaderMap{
-				Headers: []*core.HeaderValue{
-					{Key: ":status", Value: "500"},
-					{Key: "content-type", Value: "application/json"},
-				},
-			},
-		},
-	}
+	headerMap := providerResponseHeaders(t, ctx, "500")
 
-	// Call handleResponseHeaders
-	response, err := router.handleResponseHeaders(responseHeaders, ctx)
-
-	// Verify no error occurred
-	assert.NoError(t, err)
-	assert.NotNil(t, response)
-
-	// Decision/signal headers are NOT added on error responses, but the v0.4
-	// keystone headers (x-vsr-schema-version + x-vsr-response-path) ride on
-	// every non-cache-hit response — success or error — so operators can always
-	// see the contract version and response path. The error here is an
-	// upstream-returned 500, so response-path is "upstream". The client/upstream
-	// protocol markers are omitted because this is a same-protocol response
-	// (#2206). See processor_res_header_mutation.go (issues #2203, #2206).
-	headerMutation := response.GetResponseHeaders().GetResponse().GetHeaderMutation()
-	require.NotNil(t, headerMutation, "HeaderMutation should carry keystone headers even on error")
-	setHeaders := headerMutation.GetSetHeaders()
-	assert.Len(t, setHeaders, 2, "Error response should have only the 2 keystone headers")
-	headerMap := make(map[string]string)
-	for _, header := range setHeaders {
-		headerMap[header.Header.Key] = string(header.Header.RawValue)
-	}
-	assert.Equal(t, "2", headerMap["x-vsr-schema-version"])
-	assert.Equal(t, "upstream", headerMap["x-vsr-response-path"])
-	assert.NotContains(t, headerMap, "x-vsr-client-protocol", "same-protocol response omits protocol markers")
-	assert.NotContains(t, headerMap, "x-vsr-upstream-protocol")
-	assert.NotContains(t, headerMap, "x-vsr-selected-category", "decision headers must not appear on error")
-	assert.NotContains(t, headerMap, "x-vsr-selected-model", "decision headers must not appear on error")
+	assert.Equal(t, map[string]string{
+		headers.VSRSchemaVersion: headers.SchemaVersionValue,
+		headers.VSRResponsePath:  "upstream",
+		headers.VSRSelectedModel: "deepseek-v31",
+	}, headerMap)
 }
 
-func TestVSRHeadersPartialInformation(t *testing.T) {
-	// Create a mock router
-	router := &OpenAIRouter{}
-
-	// Create request context with partial VSR information. The intermediate
-	// detail headers are demoted to x-vsr-debug (#2205), so request debug to
-	// exercise them and verify empty fields (here: reasoning mode) are omitted.
+func TestVSRTraceOmitsUnsetDetails(t *testing.T) {
+	// Empty fields stay out of the trace, the reasoning mode and an
+	// uninjected system prompt among them.
 	ctx := &RequestContext{
-		Headers:                 map[string]string{"x-vsr-debug": "true"},
+		Headers:                 map[string]string{headers.VSRDebug: "true"},
 		VSRSelectedCategory:     "math",
-		VSRReasoningMode:        "", // Empty reasoning mode
 		VSRSelectedModel:        "deepseek-v31",
-		VSRCacheHit:             false,
-		VSRInjectedSystemPrompt: false, // No system prompt injected
+		VSRInjectedSystemPrompt: false,
 	}
 
-	// Create response headers with successful status (200)
-	responseHeaders := &ext_proc.ProcessingRequest_ResponseHeaders{
-		ResponseHeaders: &ext_proc.HttpHeaders{
-			Headers: &core.HeaderMap{
-				Headers: []*core.HeaderValue{
-					{Key: ":status", Value: "200"},
-					{Key: "content-type", Value: "application/json"},
-				},
-			},
-		},
-	}
+	trace := traceMembersOf(t, providerResponseHeaders(t, ctx, "200")[headers.VSRTrace])
 
-	// Call handleResponseHeaders
-	response, err := router.handleResponseHeaders(responseHeaders, ctx)
-
-	// Verify no error occurred
-	assert.NoError(t, err)
-	assert.NotNil(t, response)
-
-	// Verify only non-empty headers were added
-	headerMutation := response.GetResponseHeaders().GetResponse().GetHeaderMutation()
-	assert.NotNil(t, headerMutation)
-
-	headerMap := make(map[string]string)
-	for _, header := range headerMutation.GetSetHeaders() {
-		headerMap[header.Header.Key] = string(header.Header.RawValue)
-	}
-
-	// Keystone + final routing facts ride on the default surface.
-	assert.Equal(t, "2", headerMap["x-vsr-schema-version"])
-	assert.Equal(t, "upstream", headerMap["x-vsr-response-path"])
-	assert.Equal(t, "deepseek-v31", headerMap["x-vsr-selected-model"])
-	// Demoted decision details are present because the request asked for debug
-	// headers (#2205)...
-	assert.Equal(t, "math", headerMap["x-vsr-selected-category"])
-	assert.Equal(t, "false", headerMap["x-vsr-injected-system-prompt"])
-	// ...but empty fields stay omitted even under debug.
-	assert.NotContains(t, headerMap, "x-vsr-selected-reasoning", "Empty reasoning mode should not be added")
-}
-
-func TestVSRInjectedSystemPromptHeader(t *testing.T) {
-	router := &OpenAIRouter{}
-
-	// x-vsr-injected-system-prompt is demoted to the debug surface (#2205), so
-	// both cases request debug headers to exercise the emitted true/false value.
-
-	// Test case 1: System prompt was injected
-	t.Run("SystemPromptInjected", func(t *testing.T) {
-		ctx := &RequestContext{
-			Headers:                 map[string]string{"x-vsr-debug": "true"},
-			VSRSelectedCategory:     "coding",
-			VSRReasoningMode:        "on",
-			VSRSelectedModel:        "gpt-4",
-			VSRCacheHit:             false,
-			VSRInjectedSystemPrompt: true,
-		}
-
-		responseHeaders := &ext_proc.ProcessingRequest_ResponseHeaders{
-			ResponseHeaders: &ext_proc.HttpHeaders{
-				Headers: &core.HeaderMap{
-					Headers: []*core.HeaderValue{
-						{Key: ":status", Value: "200"},
-					},
-				},
-			},
-		}
-
-		response, err := router.handleResponseHeaders(responseHeaders, ctx)
-		assert.NoError(t, err)
-		assert.NotNil(t, response)
-
-		headerMutation := response.GetResponseHeaders().GetResponse().GetHeaderMutation()
-		assert.NotNil(t, headerMutation)
-
-		headerMap := make(map[string]string)
-		for _, header := range headerMutation.GetSetHeaders() {
-			headerMap[header.Header.Key] = string(header.Header.RawValue)
-		}
-
-		assert.Equal(t, "true", headerMap["x-vsr-injected-system-prompt"])
-	})
-
-	// Test case 2: System prompt was not injected
-	t.Run("SystemPromptNotInjected", func(t *testing.T) {
-		ctx := &RequestContext{
-			Headers:                 map[string]string{"x-vsr-debug": "true"},
-			VSRSelectedCategory:     "coding",
-			VSRReasoningMode:        "on",
-			VSRSelectedModel:        "gpt-4",
-			VSRCacheHit:             false,
-			VSRInjectedSystemPrompt: false,
-		}
-
-		responseHeaders := &ext_proc.ProcessingRequest_ResponseHeaders{
-			ResponseHeaders: &ext_proc.HttpHeaders{
-				Headers: &core.HeaderMap{
-					Headers: []*core.HeaderValue{
-						{Key: ":status", Value: "200"},
-					},
-				},
-			},
-		}
-
-		response, err := router.handleResponseHeaders(responseHeaders, ctx)
-		assert.NoError(t, err)
-		assert.NotNil(t, response)
-
-		headerMutation := response.GetResponseHeaders().GetResponse().GetHeaderMutation()
-		assert.NotNil(t, headerMutation)
-
-		headerMap := make(map[string]string)
-		for _, header := range headerMutation.GetSetHeaders() {
-			headerMap[header.Header.Key] = string(header.Header.RawValue)
-		}
-
-		assert.Equal(t, "false", headerMap["x-vsr-injected-system-prompt"])
-	})
+	assert.Equal(t, `"math"`, trace[headers.TraceCategory])
+	assert.NotContains(t, trace, headers.TraceReasoning)
+	assert.NotContains(t, trace, headers.TraceSystemPrompt)
 }
 
 // TestModelReasoningFamily tests the new family-based configuration approach

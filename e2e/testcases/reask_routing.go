@@ -23,7 +23,7 @@ func init() {
 func testReaskRouting(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	return runSignalRoutingTest(ctx, client, opts, signalRoutingConfig{
 		TestDataPath:   "e2e/testcases/testdata/reask_routing_cases.json",
-		MatchedHeader:  "x-vsr-matched-turn-relation",
+		SignalType:     "turn_relation",
 		TargetDecision: targetReaskDecision,
 		ResultsTitle:   "REASK ROUTING TEST RESULTS",
 		LogLabel:       "Reask",

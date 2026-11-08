@@ -26,7 +26,7 @@ Semantic Router 是 Envoy External Processor。在缓冲模式下，网关在一
 对于流式 Chat Completions 响应，立即响应保持 OpenAI 兼容行为：
 
 - 当原始请求带有 `"stream": true` 时，looper 算法返回 `Content-Type: text/event-stream`；
-- looper 响应包含 `x-vsr-looper-*` 头，例如 `x-vsr-looper-model`、`x-vsr-looper-models-used`、`x-vsr-looper-iterations` 和 `x-vsr-looper-algorithm`；
+- looper 响应在 `x-vsr-trace` 的 `looper` 成员中报告调用的模型、算法和迭代次数；
 - 非流式立即响应（包括许多 `fast_response` 块）立即返回完整 JSON 响应；
 - Response API 请求会经 Response API 层回译，因此这些请求的 looper 执行在内部强制为非流式。
 
@@ -186,7 +186,7 @@ curl -N -i http://localhost:8080/v1/chat/completions \
 
 - `HTTP/1.1 200 OK`；
 - `content-type: text/event-stream`；
-- `x-vsr-looper-algorithm: confidence`、`ratings` 或 `remom`；
+- `x-vsr-response-path: looper`；
 - 以 `data: {"id":"chatcmpl-...","object":"chat.completion.chunk"...}` 开头的 SSE 事件；
 - 最后的 `data: [DONE]`。
 
@@ -239,7 +239,7 @@ recipes:
 
 3. 发送带 `"model": "vllm-sr/auto"` 的大型或分片请求，并验证其正常路由。
 
-4. 发送匹配 looper 决策且带 `"stream": true` 的流式 Chat Completions 请求，并验证 SSE 输出以及 `x-vsr-looper-*` 头。
+4. 发送匹配 looper 决策且带 `"stream": true` 的流式 Chat Completions 请求，并验证 SSE 输出，以及对 `global.router.headers.debug` 允许的调用方返回的 `x-vsr-trace` 的 `looper` 成员。
 
 5. 发送匹配 `fast_response` 决策的请求，并验证未调用后端模型。
 

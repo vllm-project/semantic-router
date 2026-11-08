@@ -112,7 +112,7 @@ API：图像 API（`api_format: images`）上的模型返回图像，Responses A
   其请求按提示词路由，并且必须到达输出为图像的决策；否则会在调用任何模型之前收到 `image_route_required`。
 - Chat Completions 或 Anthropic Messages 客户端无法接收图像：Router 会在调用模型之前以 `unsupported_capability`
   拒绝其请求。`tool_choice` 为 `none` 的请求同样会被拒绝。
-- 在调试响应中，`x-vsr-selected-modality` 给出所选决策的输出类型。
+- 在调试响应中，`x-vsr-trace` 的 `modality` 成员给出所选决策的输出类型。
 
 ## 图像输入
 

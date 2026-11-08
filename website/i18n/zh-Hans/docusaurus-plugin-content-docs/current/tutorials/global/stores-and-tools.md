@@ -53,7 +53,7 @@ global:
 
 双编码器相似度可能无法区分 *“turn on dark mode”* 和 *“turn off dark mode”*：相反含义的查询常常超过 `similarity_threshold`，而真正的改写可能低于它，因此提高阈值不能可靠地避免误命中。所有缓存后端都会在返回语义候选前执行词面防护：对词面接近的英文问题，检查否定线索和已知反义词替换。它不需要模型、没有任何设置，在内存、Redis、Valkey、Milvus、Qdrant 和混合缓存中始终运行；不覆盖缺少词面线索、仅词序变化或非英文的含义变化。
 
-拒绝会记录为 `cache_negation_reject`，计入未命中，被拒绝的分数仍通过 `x-vsr-cache-similarity` 提供。远端和混合缓存会拒绝缺少原始问题的候选，并继续检查有数量上限的已检索候选。混合缓存回退到 Milvus 时同样执行该检查。
+拒绝会记录为 `cache_negation_reject`，计入未命中，被拒绝的分数仍作为 `x-vsr-trace` 的 `cache_similarity` 提供。远端和混合缓存会拒绝缺少原始问题的候选，并继续检查有数量上限的已检索候选。混合缓存回退到 Milvus 时同样执行该检查。
 
 早期版本用 `polarity_guard` 配置它，内存后端还可选 NLI 层（`nli`、`lexical+nli`）。NLI 模型已退役，路由器会拒绝 `polarity_guard`；`vllm-sr config migrate` 会移除它。
 

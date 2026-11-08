@@ -46,7 +46,7 @@ def _model_routes(rendered):
         header["string_match"]["exact"]: route["route"]["cluster"]
         for route in _routes(rendered)
         for header in route["match"].get("headers", [])
-        if header["name"] == "x-selected-model"
+        if header["name"] == "x-vsr-route-model"
     }
 
 

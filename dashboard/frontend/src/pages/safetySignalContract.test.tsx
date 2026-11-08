@@ -80,10 +80,10 @@ describe('content safety signal Dashboard contract', () => {
   it('preserves and reveals safety matches from real response headers', () => {
     const headers = collectResponseHeaders(
       new Response(null, {
-        headers: { 'x-vsr-matched-safety': signal.name, 'x-unrelated': 'hidden' },
+        headers: { 'x-vsr-trace': `signals=("safety:${signal.name}")`, 'x-unrelated': 'hidden' },
       }),
     )
-    expect(headers).toEqual({ 'x-vsr-matched-safety': signal.name })
+    expect(headers).toEqual({ 'signal:safety': signal.name })
     const markup = renderToStaticMarkup(createElement(HeaderDisplay, { headers }))
     expect(markup).toContain('Safety Signal')
     expect(markup).toContain('Unsafe Content')
