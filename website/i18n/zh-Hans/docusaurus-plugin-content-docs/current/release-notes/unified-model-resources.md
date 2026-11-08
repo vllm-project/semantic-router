@@ -8,6 +8,10 @@ translation:
 
 # 发布说明：Router 询问的模型统一在一个目录中 {#release-note-one-catalog-for-the-models-the-router-asks}
 
+:::note
+本说明记录的是一个较早的版本。自 v0.5 起，由决策模型回答每个信号，嵌入只用于召回，`classify` 和 `rerank` 提供方已移除，`openai_chat` 只用于记忆查询改写；见[迁移到 v0.5](../installation/migrate-to-v0-5)。
+:::
+
 Router 询问的每个模型（其信号、embedding 和重排序背后的模型）现在都在 `global.model_catalog.deployments` 下按名称声明一次。用到模型的地方都只写这个名称。`provider` 指明 Router 与每个部署通信所用的 API：`model_runtime`、`systemone`、`classify`、`openai_chat`、`openai_embeddings` 或 `rerank`。
 
 ```yaml

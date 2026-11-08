@@ -75,5 +75,5 @@ recipes:
 
 ## 相关信号 {#related-signals}
 
-- [`modality`](../learned/modality.md) — 预期输出模态（`text`、`image`、`text_image`）。
+- [`modality`](../application/modality.md) — 预期输出模态（`text`、`image`、`text_image`）。
 - [`conversation`](conversation.md) — 请求形态事实，例如消息数量、工具定义与工具循环。

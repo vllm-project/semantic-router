@@ -144,7 +144,7 @@ risky material, or refuse harmful assistance.
 Assign Vault's other decisions to backends that meet your privacy requirements;
 the recipe cannot establish their physical location or provider retention.
 
-Vault's prompt guard and PII judgments read the whole conversation up to the
+Vault's jailbreak and PII judgments read the whole conversation up to the
 decision model's scan budget, and its questions read the start of the latest
 message. An unanswered judgment or an input past the budget fails closed:
 Preview returns HTTP 503 with signal errors and no selected model. A larger

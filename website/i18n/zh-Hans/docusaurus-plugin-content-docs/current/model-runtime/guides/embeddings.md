@@ -19,7 +19,7 @@ is_mtpe: true
 
 ## 打开它 {#turn-it-on}
 
-启用一个做召回的功能就够了：Vela Embedding 由 router 跑在 CPU 上。`global.model_catalog.embeddings.default` 指定做嵌入的部署，写法和 `system.decision_model` 指定决策模型的部署一样；不改的话就是预先声明的 `vela-embedding`。只有响应缓存、记忆或向量库用它召回时它才启动；没有召回的配置从不启动它。
+启用一个做召回的功能就够了：Vela Embedding 由 router 跑在 CPU 上。`global.model_catalog.embeddings.default` 指定做嵌入的部署，写法和 `system.decision_model` 指定决策模型的部署一样；不改的话就是预先声明的 `vela-embedding`。只有响应缓存、记忆或向量库用它召回时它才启动；没有召回的配置从不启动它。没有任何决策读取嵌入：要按图片内容路由，向决策模型提出一个读取图片的问题（[媒体输入](../../system-one/concepts#media-inputs)）。
 
 ## 选它跑在哪 {#choose-where-it-runs}
 
@@ -65,7 +65,7 @@ global:
         dimension: 384
 ```
 
-没有 `embedding` 块的库用 `embeddings.default` 做嵌入。Router 加载配置时逐个检查部署：必须已声明、能嵌入文本，且给得出库索引的维度，即块里的 `dimension` 或持久化后端向量字段的维度。
+没有 `embedding` 块的库用 `embeddings.default` 做嵌入。Router 加载配置时逐个检查部署：必须已声明、能嵌入文本，且给得出库索引的维度，即块里的 `dimension` 或持久化后端向量字段的维度。[图像和音频](./multimodal.md)介绍 Omni 模型，它们还能在模型运行时上嵌入图像和音频。
 
 ## 用外部嵌入服务 {#use-an-external-embedding-service}
 

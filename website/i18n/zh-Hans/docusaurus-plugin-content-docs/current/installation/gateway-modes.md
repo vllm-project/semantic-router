@@ -5,7 +5,7 @@ description: 选择客户端流量从哪里进入 Router：standalone 直接服�
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/gateway-modes.md"
-  outdated: true
+  outdated: false
 ---
 
 # Gateway 模式
@@ -119,7 +119,9 @@ listeners:
 ```
 
 - `trust_headers` 保留 `x-authz-*` header（`x-authz-user-id`、`x-authz-user-groups`、`x-authz-team-id`、
-  `x-authz-tenant-id`）以及 `global.services.authz.identity` 指定的名称。
+  `x-authz-tenant-id`）以及 `global.services.authz.identity` 指定的名称。standalone Router 还会保留
+  `global.services.authz.delegated_credential` 的 header，Chat 和 System One 请求都一样；无论如何，`--gateway extproc`
+  listener 都会删除客户端发送的副本。
 - `trusted_peers`（CIDR）只在连接的对端地址属于其中某个网络时才保留它们；Router 不会为此读取 `X-Forwarded-For`。
   为空时，信任 header 的 listener 信任所有对端。只有 standalone 模式检查对端：`--gateway extproc` 拒绝
   `trusted_peers`，这时请只保留 `trust_headers`，并放在会删除客户端身份 header 的代理之后。
@@ -161,7 +163,7 @@ standalone 模式中支持；在那之前它们同样需要 Envoy。
 虚拟机提供 Metal 或 GPU 计算。在那里使用 `--platform rocm` 或 `--platform cuda` 会以明确的错误信息失败。通过宿主机使用
 GPU 的支持见 [#4636](https://github.com/vllm-project/semantic-router/issues/4636)。
 
-- **在 CPU 上运行轻松：** 307M 的 Vela 任务模型（领域、PII、越狱与安全防护、embedding、重排）、Vela Omni Nano，以及
+- **在 CPU 上运行轻松：** 默认决策模型 vela3-fast（加载后约 7 GB）、307M 的 Vela embedding 模型、Vela Omni Nano，以及
   Decision 2.0 的 Kai-0.6B 和 Eos-0.8B 决策模型。
 - **更大的模型：** 在 CPU 上每个参数约需 4 字节，因此 2B 的决策模型约需 8 GB。请把 Docker 虚拟机的内存（Docker
   Desktop：Settings、Resources）调到高于配置中各模型所需，或选用更小的模型。参见[选择模型](../model-runtime/choose-a-model)。

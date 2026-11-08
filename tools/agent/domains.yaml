@@ -173,8 +173,9 @@ domains:
     verifications: [core]
 
   # The Router's tests read these pages and files: the config tests load every
-  # YAML example (src/semantic-router/pkg/config/docs_examples_test.go), and
-  # the header registry tests check the generated header reference
+  # YAML example (src/semantic-router/pkg/config/docs_examples_test.go and,
+  # for the agent skill, agent_skill_examples_test.go), and the header
+  # registry tests check the generated header reference
   # (src/semantic-router/pkg/headers).
   router-checked-docs:
     owner: router-core
@@ -185,7 +186,21 @@ domains:
       - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/installation/storage-overview.md
       - website/docs/troubleshooting/vsr-headers.md
       - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/troubleshooting/vsr-headers.md
+      - website/docs/system-one/**
+      - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/system-one/**
+      - website/docs/tutorials/signal/overview.md
+      - website/docs/tutorials/signal/systemone.md
+      - website/docs/tutorials/signal/application/**
+      - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/tutorials/signal/overview.md
+      - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/tutorials/signal/systemone.md
+      - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/tutorials/signal/application/**
+      - website/docs/installation/migrate-to-v0-5.md
+      - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/installation/migrate-to-v0-5.md
+      - website/docs/installation/runtime/external.md
+      - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/installation/runtime/external.md
+      - website/docs/training/router-embeddings-huggingface.md
       - tools/docker/riscv64/standalone.yaml
+      - tools/agent/skills/vllm-sr-agent-operations/**
     checks: [make test-semantic-router]
     verifications: [core]
 
@@ -268,7 +283,6 @@ domains:
       - tools/dev/local-up-router.sh
       - tools/test/smoke/**
       - tools/test/soak/**
-      - tools/test/services/mcp-classifier-server/**
     checks: [make harness-check]
     verifications: [core]
 
@@ -399,19 +413,22 @@ domains:
     verifications: [cli-unit]
 
   # The CLI unit suite checks the snippets of these pages, and that their
-  # translations show the same snippets (src/vllm-sr/tests/test_docs_model_runtime.py).
+  # translations show the same snippets (src/vllm-sr/tests/test_docs_model_runtime.py),
+  # and the agent skill's command lines (src/vllm-sr/tests/test_agent_skill.py).
   # Not part of vllm-sr-cli, whose match publishes the CLI on main.
   cli-checked-docs:
     owner: vllm-sr-cli
     documentation_check: true
     paths:
+      - tools/agent/skills/vllm-sr-agent-operations/**
+      - install.sh
       - website/docs/model-runtime/**
       - website/docs/tutorials/global/model-runtime.md
-      - website/docs/tutorials/signal/learned/systemone.md
+      - website/docs/tutorials/signal/systemone.md
       - website/docs/tutorials/algorithm/selection/systemone.md
       - website/i18n/*/docusaurus-plugin-content-docs/current/model-runtime/**
       - website/i18n/*/docusaurus-plugin-content-docs/current/tutorials/global/model-runtime.md
-      - website/i18n/*/docusaurus-plugin-content-docs/current/tutorials/signal/learned/systemone.md
+      - website/i18n/*/docusaurus-plugin-content-docs/current/tutorials/signal/systemone.md
       - website/i18n/*/docusaurus-plugin-content-docs/current/tutorials/algorithm/selection/systemone.md
     checks: [make vllm-sr-test]
     verifications: [cli-unit]

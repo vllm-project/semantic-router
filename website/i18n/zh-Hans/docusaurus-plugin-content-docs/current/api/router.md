@@ -238,14 +238,17 @@ Router 会以 `WARN` 级别记录每一次此类失败，带上请求的 `x-requ
 
 路由回放记录路由决策和所选请求生命周期数据。它适用于调试、评测和路由学习，但读取记录本身不会改变路由。
 
-除非启用该服务，否则回放默认关闭：
+除非 `router_replay` 插件启用它，否则回放默认关闭：
 
 ```yaml
 global:
   services:
     router_replay:
-      enabled: true
       store_backend: memory
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
 ```
 
 内存后端适合本地检查。记录必须在进程重启后保留时，使用已配置的持久后端，并按所捕获数据设置合适的保留期。

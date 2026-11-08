@@ -94,7 +94,7 @@ routing:
             hallucination_action: header
 ```
 
-提案不要求一种检测器架构或一家模型供应商。当前的 [`response_guard`](../tutorials/plugin/response-guard) 与[幻觉信号](../tutorials/signal/learned/hallucination)文档仍是实际已实现行为的事实来源。
+提案不要求一种检测器架构或一家模型供应商。当前的 [`response_guard`](../tutorials/plugin/response-guard) 与[幻觉信号](../tutorials/signal/application/hallucination)文档仍是实际已实现行为的事实来源。
 
 ## 评估 {#evaluation}
 

@@ -575,18 +575,12 @@ for i in {1..60}; do
         fi
     fi
 
-    # Show init container progress
-    INIT_STATUS=$(oc get pods -l app=semantic-router -n "$NAMESPACE" -o jsonpath='{.items[0].status.initContainerStatuses[0].state.running}' 2>/dev/null || echo "")
-    if [ -n "$INIT_STATUS" ]; then
-        echo "  Initializing... (downloading models)"
-    else
-        echo "  Waiting for pod... ($i/60)"
-    fi
+    echo "  Waiting for pod... ($i/60)"
 
     if [ "$i" -eq 12 ]; then
         echo ""
-        echo "  Quick status (init logs):"
-        oc logs -l app=semantic-router -n "$NAMESPACE" -c model-downloader --tail=15 2>/dev/null || true
+        echo "  Quick status (router logs; the model runtime downloads its models at startup):"
+        oc logs -l app=semantic-router -n "$NAMESPACE" -c semantic-router --tail=15 2>/dev/null || true
         echo ""
     fi
 
@@ -600,7 +594,6 @@ if ! oc get pods -l app=semantic-router -n "$NAMESPACE" -o jsonpath='{.items[0].
     echo -e "${YELLOW}Warning: Pod may not be fully ready yet${NC}"
     echo "  Check status with: oc get pods -l app=semantic-router -n $NAMESPACE"
     echo "  View logs with: oc logs -l app=semantic-router -c semantic-router -n $NAMESPACE"
-    echo "  Init logs with: oc logs -l app=semantic-router -c model-downloader -n $NAMESPACE --tail=30"
 fi
 
 echo ""

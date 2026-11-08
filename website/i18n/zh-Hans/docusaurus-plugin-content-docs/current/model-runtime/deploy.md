@@ -26,7 +26,7 @@ vllm-sr serve --config config.yaml
 
 ## 内置功能不用配任何东西 {#built-in-features-need-no-configuration}
 
-打开内置功能时（比如 `domain` 信号或语义缓存），router 已经知道该用哪个模型。判断类任务共用决策模型；embedding 和重排序用各自的部署（[为信号选择模型](../installation/choose-a-model-for-a-signal.md)）。想自己挑 CPU 或 GPU 放置，就按下面的说明配置部署的 `device` 或 `replicas`。
+打开内置功能时（比如 `domain` 信号或语义缓存），router 已经知道该用哪个模型。判断类任务共用决策模型；embedding 用自己的部署（[为信号选择模型](../installation/choose-a-model-for-a-signal.md)）。想自己挑 CPU 或 GPU 放置，就按下面的说明配置部署的 `device` 或 `replicas`。
 
 已启用的信号或功能解析到的部署、以及已发布原生授权指向的部署才会加载。Engine 模式还会加载决策模型；Router 模式下，决策模型等有东西解析到它时才加载。其他声明不会起 worker。
 

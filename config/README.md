@@ -58,9 +58,9 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
-The [Vela model guide](../website/docs/tutorials/global/vela-models.md) explains
-the built-in model defaults, explicit older models, and opt-in long-context
-deployment settings. Model migration preserves the existing input budgets.
+[Choose a deployment](../website/docs/system-one/deployments.md) explains the
+built-in decision model, the other sizes and remote System One APIs, and what
+the Router checks at load.
 
 `src/semantic-router/pkg/configschema/router-config-v0.5.schema.json` is the one
 checked-in schema generated from the Go configuration types and routing
@@ -76,10 +76,11 @@ Fragments show one capability in its owning section. They are not complete
 deployments and may rely on model or service definitions from a base config.
 
 - `config/fragments/signal/`: request and response facts used by decisions.
-  Heuristic and learned signal guides live under
-  `tutorials/signal/heuristic/` and `tutorials/signal/learned/`.
+  The guide of the `systemone` primitive is `tutorials/signal/systemone.md`;
+  application and heuristic signal guides live under
+  `tutorials/signal/application/` and `tutorials/signal/heuristic/`.
 - `config/fragments/decision/`: `single`, `and`, `or`, `not`, and nested
-  boolean rule shapes. Classifier-backed rules may resolve a terminal
+  boolean rule shapes. Rules on model-judged signals may resolve a terminal
   `Unknown` result with `on_unknown: no_match|match|fail_request`.
 - `config/fragments/algorithm/`: per-decision model selection and bounded
   multi-model execution policies.
@@ -143,10 +144,22 @@ runtime dependency; they do not define routing behavior by themselves.
   portable while making its candidate-pool cardinality executable as soon as
   an Entrypoint assigns Models. Request-time context filtering cannot silently
   reduce the eligible pool below that contract.
-- PII rules keep the legacy prompt/history scope when `source` is omitted or
-  empty. Set `source: tool_result` explicitly to scan textual tool-result
-  content decoded from the request protocol; this source does not implicitly
-  include the prompt or conversation history.
+- A PII rule reads the current user turn. `input.history: true` adds the
+  earlier user turns, and `input.tool_results: true` the request's textual
+  tool results.
+- The decision model answers the application signals (domain, PII, jailbreak,
+  complexity and the others) as System One questions. A rule's `deployment`, a
+  recipe's `model_bindings` or `global.model_catalog.bindings` names another
+  deployment from `global.model_catalog.deployments`, such as a remote System
+  One API.
+- A complexity rule answers `easy`, `medium` or `hard`, and a decision
+  condition names the level it routes on with `label`.
+- A PII rule needs a deployment that answers span questions, or the
+  configuration fails to load with `span_required`. When the rule's model gives
+  no answer, its `on_unknown` decides: `no_match` (the default) or `match`.
+  Text the model could not read counts as personal data.
+- A remote deployment caps one upstream response with
+  `limits.max_response_bytes`.
 - Router Learning lives under `global.router.learning`; it is separate from a
   decision's request-time base algorithm.
 - Router replay is disabled by default and can capture request or response

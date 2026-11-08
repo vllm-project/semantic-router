@@ -184,22 +184,21 @@ global:
           overflow: window
 ```
 
-对于 prompt guard 和 safety 信号，如果原生模型因单次输入过长而拒绝处理，路由器会以有限并发
-重试覆盖全文的重叠窗口，取各窗口的最高风险，并要求每个窗口确认已完整读取输入。
-未完成的扫描仍是未确定状态；扫描预算和截止时间继续生效。直接调用 `/v1/decisions` 时，
-仍遵循模型本身的输入长度限制。
+安全问题（jailbreak、safety、PII、hallucination，以及带 `coverage: full` 的 `systemone`
+规则）会整读输入，上限是模型的扫描预算或部署的 `input.max_tokens`（带 `overflow: window`）。
+超出部分，或没赶上信号截止时间的扫描，就是没读到的内容，`jailbreak` 或 `pii` 规则会把它算作匹配。
+直接调用 `/v1/decisions` 时，仍遵循模型本身的输入长度限制。
 
 模型没有完整读取的内容会让越狱或 PII 规则匹配：在 `reject` 下超过模型 `max_tokens`
-的输入、超过其上限的输入、被截断的输入，或未能在信号截止时间内扫描完的输入。无论
-`on_error` 如何设置，匹配的类型都是 `unscanned`，并给出原因（`input_limit`、`scan_budget`
-或 `deadline`），因此填充提示词无法让攻击或个人数据绕过检查。在模块上设置
-`on_unscanned: allow` 可让这类内容改为遵循 `on_error`。其他信号报告原因，并遵循各自的
-`on_error`（[参考](model-runtime/reference.md#long-inputs)）。
+的输入、超过其上限的输入、被截断的输入，或未能在信号截止时间内扫描完的输入。匹配的类型是
+`unscanned`，并给出原因（`input_limit`、`scan_budget` 或 `deadline`），因此填充提示词无法让攻击或个人数据绕过检查。
+带 `coverage: full` 的 `systemone` 规则用 `on_unscanned` 决定这类内容的含义；其他信号报告原因，并按失败的信号处理
+（[参考](model-runtime/reference.md#long-inputs)）。
 
 ## 请求在等待慢模型 {#a-request-waits-on-a-slow-model}
 
 在信号截止时间前没有返回的模型运行时信号会按其策略处理，因此一个慢模型不会让整个请求失败：
-路由类信号遵循 `on_error`，安全类信号按未扫描处理。截止时间是请求的截止时间减去剩余时间的十分之一，
+路由类信号按失败的信号处理（设置了 `rules.on_unknown` 时为 `Unknown`；否则不匹配，或遵循 `systemone` 条件的 `on_error`），安全类信号按未扫描处理。截止时间是请求的截止时间减去剩余时间的十分之一，
 已部署服务的请求没有路由器可见的截止时间，则为 45 秒；设置 `global.model_catalog.signal_timeout_ms`
 可以缩短它。在 CPU 上，Vela 2.0 0.3B 用四个核每秒约读取 1,000 个 token，因此长请求可能无法在截止时间内完成安全扫描。
 

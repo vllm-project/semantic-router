@@ -36,11 +36,14 @@ global:
         enabled: true
   stores:
     response_cache:
-      enabled: true
       backend_type: memory
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
 ```
 
-Global configuration has five groups:
+Global configuration has six groups:
 
 | Group | Owns | Guide |
 |---|---|---|

@@ -10,6 +10,7 @@ import {
   GENERATED_CATALOG_START,
   replaceGeneratedCatalog,
   renderConfigurationCatalog,
+  signalTutorialType,
 } from './configuration-catalog.mjs'
 
 test('extracts the first sentence from the Overview prose', () => {
@@ -45,15 +46,31 @@ test('requires exactly one Overview section', () => {
 test('rejects missing and ambiguous tutorial matches', () => {
   const root = mkdtempSync(join(tmpdir(), 'configuration-catalog-'))
   mkdirSync(join(root, 'heuristic'), { recursive: true })
-  mkdirSync(join(root, 'learned'), { recursive: true })
+  mkdirSync(join(root, 'application'), { recursive: true })
 
   assert.throws(() => findSingleTutorial(root, 'keyword'), /No tutorial named keyword\.md/)
 
   writeFileSync(join(root, 'heuristic', 'keyword.md'), '# Keyword\n')
   assert.equal(findSingleTutorial(root, 'keyword'), join(root, 'heuristic', 'keyword.md'))
 
-  writeFileSync(join(root, 'learned', 'keyword.md'), '# Duplicate\n')
+  writeFileSync(join(root, 'application', 'keyword.md'), '# Duplicate\n')
   assert.throws(() => findSingleTutorial(root, 'keyword'), /Ambiguous tutorial for keyword/)
+})
+
+test('types a signal by the layer its tutorial lives in', () => {
+  const root = join(tmpdir(), 'signal')
+
+  assert.equal(signalTutorialType(root, join(root, 'systemone.md')), 'primitive signal')
+  assert.equal(signalTutorialType(root, join(root, 'application', 'pii.md')), 'application signal')
+  assert.equal(signalTutorialType(root, join(root, 'heuristic', 'keyword.md')), 'heuristic signal')
+  assert.throws(
+    () => signalTutorialType(root, join(root, 'learned', 'pii.md')),
+    /must be signal\/systemone\.md or live directly under signal\/application or signal\/heuristic/,
+  )
+  assert.throws(
+    () => signalTutorialType(root, join(root, 'pii.md')),
+    /must be signal\/systemone\.md/,
+  )
 })
 
 test('replaces only the marked generated catalog block', () => {

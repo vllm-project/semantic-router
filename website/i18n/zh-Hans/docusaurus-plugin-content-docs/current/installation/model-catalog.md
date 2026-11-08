@@ -33,7 +33,7 @@ translation:
 | `primary` | CPU 上的 `vllm-sr/vela3-fast` | `system.decision_model` |
 | `vela-embedding` | Vela 1.0 Embedding | `embeddings.default` |
 
-Embedding 只用于召回：响应缓存、记忆或向量库用 `vela-embedding` 召回时它才启动，决策从不使用它。
+嵌入只用于召回：响应缓存、记忆或向量库用 `vela-embedding` 召回时它才启动，决策从不使用它（见[嵌入](../model-runtime/guides/embeddings.md)）。
 
 ## 字段参考 {#field-reference}
 
@@ -93,7 +93,7 @@ global:
 | --- | --- | --- |
 | `endpoint` | API 的完整 URL，包括路径前缀。Router 在其后追加操作路径（`/chat/completions`、`/embeddings`）；systemone 的 endpoint 就是提交问题的 URL。挂接的运行时可以使用 `unix:///abs/path.sock` | `http` 或 `https`；不得包含凭据或片段标识（fragment） |
 | `model` | 远程 API 用来回答的模型；在挂接的运行时上是它提供服务的模型 | `systemone`、`openai_chat`、`openai_embeddings` 必填 |
-| `auth` | `header`（默认 `Authorization`）、`prefix`（默认 `Bearer`；`""` 表示发送不带前缀的密钥），以及 `api_key_env` 和 `api_key_file`（绝对路径，每次调用时读取，因此轮换后的密钥会生效）二者之一 | 密钥从不写在配置中 |
+| `auth` | `header`（默认 `Authorization`）、`prefix`（默认 `Bearer`；`""` 表示发送不带前缀的密钥），以及 `api_key_env` 和 `api_key_file`（绝对路径，每次调用时读取，因此轮换后的密钥会生效）二者之一；或 `credential: delegated`：为客户端请求发起的每次调用都携带身份验证器为该用户签发的凭据（[安全加固](security-hardening#delegate-the-users-credential-to-an-upstream)） | 密钥从不写在配置中；`credential: delegated` 不带密钥，且不适用于 `model_runtime` |
 | `headers` | 其他非机密请求头 | 拒绝 `Authorization`、`Proxy-Authorization`、`X-Api-Key`、`Api-Key`、`Ocp-Apim-Subscription-Key`、`Cookie` 以及 `auth` 所用的请求头 |
 | `timeout_ms` | 单次尝试的时限 | systemone ≤ 60000；其他 ≤ 300000 |
 | `max_retries` | 首次尝试之后的传输层重试次数，不超出调用方的截止时间 | 0–10；挂接的运行时不支持 |
@@ -119,25 +119,25 @@ recipes:
       domain: d3-remote
 ```
 
-绑定键是应用信号类型：`domain`、`fact_check`、`user_feedback`、`jailbreak`、`safety`、`pii`、`hallucination`、`refusal`、`turn_relation`、`complexity` 和 `modality`。绑定回答该类型中未指定部署的规则；规则写 `deployment:` 可改用其他部署。`recipes[].signals.systemone[]` 规则和决策的 `algorithm.systemone` 也写 `deployment:`。`jailbreak`、`pii` 和 `hallucination` 绑定同时指定该类型插件模块的模型。
+绑定键是应用信号类型：`domain`、`fact_check`、`user_feedback`、`jailbreak`、`safety`、`pii`、`hallucination`、`refusal`、`turn_relation`、`complexity` 和 `modality`。绑定回答该类型中未指定部署的规则；规则写 `deployment:` 可改用其他部署。`recipes[].signals.systemone[]` 规则和决策的 `algorithm.systemone` 也写 `deployment:`。`jailbreak`、`pii` 和 `hallucination` 绑定同时决定 `response_guard` 和 `masking` 背后的模型，这两个插件读取这些信号的规则。
 
-绑定也可以写成对象，用于选择多头 `model_runtime` 部署的某个头：`pii: {deployment: local-vela, head: pii}`。工作点通过 `operating_point` 固定在部署上。
+绑定只写部署名称（`pii: primary`）。
 
 每个信号的解析顺序：规则的 `deployment`，然后是配方的绑定，然后是全局绑定，问题类信号最后使用 `system.decision_model`。Embedding 不回答任何信号：召回用 `embeddings.default` 做 embedding，库或 RAG 源的 `embedding` 块指定了部署时则用那个部署。
 
 ## 阈值 {#thresholds}
 
-规则未写出的 predicate 来自回答的模型：`vela3-fast` 或 Vela 2.0 各尺寸校准的阈值；其他模型（本地或 `systemone`）没有校准值，使用 0.5（加载时警告指明该规则的 `uncalibrated_preset`）。你写出的 `predicate` 按原值使用。插件模块以同样方式保留各自的模块阈值，远程分类器沿用 Vela 1.0 的默认值。
+规则未写出的 predicate 来自回答的模型：`vela3-fast` 或 Vela 2.0 各尺寸校准的阈值；其他模型（本地或 `systemone`）没有校准值，使用 0.5（加载时警告指明该规则的 `uncalibrated_preset`）。你写出的 `predicate` 按原值使用。
 
 ## 准入 {#admission}
 
-`global.model_catalog.admission` 限制并发调用数。键可以是部署名称，表示该部署的所有使用者共享的闸门；也可以是保留自有模型的插件模块的信号类型（`jailbreak`、`pii`、`hallucination`），表示该模块的闸门。
+`global.model_catalog.admission` 限制并发调用数。键是已声明部署的名称，该闸门由这个部署的所有使用者共享。
 
 ```yaml
 global:
   model_catalog:
     admission:
-      jailbreak: {max_concurrency: 4, max_queue: 64, queue_timeout_ms: 250, on_overflow: shed}
+      local-vela: {max_concurrency: 4, max_queue: 64, queue_timeout_ms: 250, on_overflow: shed}
       d3-remote: {max_concurrency: 16}
 ```
 
@@ -248,4 +248,4 @@ global:
         auth: {api_key_env: VSR_APP_KEY}
 ```
 
-`providers.models` 仍是一个独立的概念：回答用户、由路由在其中做选择的模型。共享的只有连接形式（`endpoint`、`auth`、`headers`）。后端从 `auth.api_key_env` 读取密钥。部署（包括决策模型）永远不是路由目标，也从不出现在 `/v1/models` 中。原生 System One API 只在部署的 `public_name` 下，或通过指向它的原生别名（如 `native-d3`）为它作答。
+`providers.models` 仍是一个独立的概念：回答用户、由路由在其中做选择的模型。共享的只有连接形式（`endpoint`、`auth`、`headers`）。后端从 `auth.api_key_env` 读取密钥，或用 `auth.credential: delegated` 使用发起请求的用户的凭据。部署（包括决策模型）永远不是路由目标，也从不出现在 `/v1/models` 中。原生 System One API 只在部署的 `public_name` 下，或通过指向它的原生别名（如 `native-d3`）为它作答。

@@ -164,9 +164,7 @@ restore procedures for the persistent volume.
 global:
   stores:
     response_cache:
-      enabled: true
       backend_type: qdrant
-      similarity_threshold: 0.90
       ttl_seconds: 7200
       qdrant:
         host: qdrant                   # Service name or hostname
@@ -176,13 +174,19 @@ global:
         connect_timeout: 10
 ```
 
+The store holds the backend; a
+[`response_cache` plugin](../tutorials/plugin/response-cache) turns caching on
+and sets the recall's `min_similarity`.
+
 ### Agentic Memory
+
+A [`context` plugin](../tutorials/plugin/context#memory-sources) with a
+`memory` source reads and writes this store.
 
 ```yaml
 global:
   stores:
     memory:
-      enabled: true
       backend: qdrant
       qdrant:
         host: qdrant
@@ -228,15 +232,19 @@ the configured embedding model.
 global:
   services:
     router_replay:
-      enabled: true
       store_backend: qdrant
       qdrant:
         host: qdrant
         port: 6334
         collection_name: router_replay
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
 ```
 
-This enables the router-wide replay policy. Add a route-local `router_replay`
+The `router_replay` plugin in `global.plugins` enables the router-wide replay
+policy. Add a route-local `router_replay`
 plugin only when a decision needs to override capture or retention behavior;
 see the [Router Replay plugin](../tutorials/plugin/router-replay).
 

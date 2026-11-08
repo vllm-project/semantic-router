@@ -105,7 +105,7 @@ routing:
 
 The proposal does not require one detector architecture or one model vendor. The
 current [`response_guard`](../tutorials/plugin/response-guard) and
-[hallucination signal](../tutorials/signal/learned/hallucination) documentation
+[hallucination signal](../tutorials/signal/application/hallucination) documentation
 remains the source of truth for behavior that is actually implemented.
 
 ## Evaluation

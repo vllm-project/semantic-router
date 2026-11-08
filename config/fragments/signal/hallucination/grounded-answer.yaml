@@ -2,8 +2,8 @@
 #
 # Checks the model's answer against the grounding context the request carried
 # (tool results or retrieved context), so it is only available after the model
-# has answered. The hallucination plugin of the decision selected for the
-# request enforces on it; decision rules cannot read it.
+# has answered. A response_guard plugin of the decision selected for the
+# request acts on it; decision rules cannot read it.
 recipes:
   - name: default
     signals:

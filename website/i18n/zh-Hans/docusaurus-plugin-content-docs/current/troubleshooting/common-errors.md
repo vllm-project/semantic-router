@@ -164,7 +164,6 @@ Milvus 示例：
 global:
   stores:
     response_cache:
-      enabled: true
       backend_type: milvus
       milvus:
         connection:
@@ -180,7 +179,6 @@ Qdrant 示例：
 global:
   stores:
     response_cache:
-      enabled: true
       backend_type: qdrant
       qdrant:
         host: qdrant
@@ -203,7 +201,6 @@ Redis 和 Valkey 使用 `development.auto_create_index`；Milvus 使用 `develop
 global:
   stores:
     response_cache:
-      enabled: true
       backend_type: redis
       redis:
         # 从运行时示例补充连接、索引和搜索设置。
@@ -216,16 +213,20 @@ global:
 
 ### 缓存命中异常偏少
 
-先确认决策启用了 `response_cache` 插件，并检查 `x-vsr-response-path`（命中时为 `cache`）或回放诊断。若嵌入正常但近似重复仍未命中，可在代表性流量上测试更低的相似度阈值：
+先确认该请求启用了 `response_cache` 插件（在 `global.plugins` 或决策的插件中），并检查 `x-vsr-response-path`（命中时为 `cache`）或回放诊断。若嵌入正常但近似重复仍未命中，可在代表性流量上测试更低的 `min_similarity`：
 
 ```yaml
 global:
-  stores:
-    response_cache:
-      similarity_threshold: 0.75
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        semantic:
+          match:
+            recall: {top_k: 1, min_similarity: 0.75}
 ```
 
-按决策覆盖应写在插件配置中：
+决策自己的插件会为该决策覆盖它：
 
 ```yaml
 recipes:
@@ -268,13 +269,9 @@ global:
 
 ## PII 路由意外匹配
 
-启用调试日志后，匹配的 PII 规则会包含被拒绝的实体类型：
+预览该请求（`POST /api/v1/routing/preview?trace=true`），或由 `global.router.headers.debug` 允许的调用方带 `x-vsr-debug: true` 发送它：`x-vsr-trace` 的 `signals` 成员会列出匹配的 `pii` 规则。
 
-```text
-[Signal Computation] PII rule "<name>" matched: denied_entities=[<types>]
-```
-
-若该类型按策略应被允许，把它加入该信号的允许名单。若检测器产生低置信度误报，评估更高阈值：
+若该标签按策略应被允许，把它加入规则的 `ignore_labels`。若模型产生低置信度误报，评估更高的 `predicate`：
 
 ```yaml
 recipes:
@@ -282,25 +279,19 @@ recipes:
     signals:
       pii:
         - name: pii-policy
-          threshold: 0.90
-          pii_types_allowed:
-            - GPE
-            - ORGANIZATION
+          predicate: {gte: 0.90}
+          ignore_labels:
+            - DATE_TIME
+            - LOCATION
 ```
 
 更改隐私阈值会改变漏报风险。请用带标签的数据集验证，而不是几条手写提示词。
 
 ## 越狱路由意外匹配
 
-对比分类器匹配使用以下开头的调试消息：
+用回放、路由预览，或由 `global.router.headers.debug` 允许的调用方带 `x-vsr-debug: true` 发送的请求，检查匹配的信号（`x-vsr-trace` 的 `signals` 成员）和所选决策。
 
-```text
-[Signal Computation] Contrastive jailbreak rule "<name>" matched
-```
-
-其他越狱分类器不会发出这句原文。用回放或带 `x-vsr-debug: true` 的请求检查匹配信号和所选决策。
-
-要减少误报，对受影响信号评估更高阈值：
+要减少误报，对受影响的规则评估更高的 `predicate`：
 
 ```yaml
 recipes:
@@ -308,57 +299,10 @@ recipes:
     signals:
       jailbreak:
         - name: jailbreak-standard
-          threshold: 0.85
+          predicate: {gte: 0.95}
 ```
 
-若某条路由不应依赖越狱检测，从该路由中去掉该条件。全局关闭分类器会改变所有使用它的决策。
-
-## MCP 类别分类器无法启动
-
-这些错误表示传输配置不完整：
-
-```text
-command is required for stdio transport
-URL is required for HTTP transport
-```
-
-使用一种传输，并在应由 MCP 负责类别分类时禁用本地领域分类器。
-
-Stdio 示例：
-
-```yaml
-global:
-  model_catalog:
-    modules:
-      classifier:
-        domain:
-          enabled: false
-        mcp:
-          enabled: true
-          transport_type: stdio
-          command: /app/bin/category-server
-          tool_name: classify_text
-```
-
-可执行文件及其全部参数必须存在于 Router 运行时内。
-
-Streamable HTTP 示例：
-
-```yaml
-global:
-  model_catalog:
-    modules:
-      classifier:
-        domain:
-          enabled: false
-        mcp:
-          enabled: true
-          transport_type: streamable-http
-          url: http://mcp-server:8080/mcp
-          tool_name: classify_text
-```
-
-从 Router 网络测试该 URL。若服务器暴露的是另一个工具名，精确设置 `tool_name`，或省略它以允许发现已识别的分类工具。
+若某条路由不应依赖越狱检测，从该路由中去掉该条件。修改该规则会改变所有读取它的决策。
 
 ## 提供方后端没有地址
 
@@ -389,7 +333,7 @@ providers:
 
 端到端检查见[容器连通性](./container-connectivity)。
 
-## 分类器或嵌入模型无法加载
+## 决策模型或嵌入模型无法加载
 
 每个模型都运行在[模型运行时](../model-runtime/overview.md)中。模型无法加载时，依赖它的功能返回未知结果，运行时会记录原因。查看 Router 的 `vsr_model_runtime_ready{deployment="..."}` 指标和 Router 日志，或直接询问你自己运行的运行时：
 
@@ -411,20 +355,20 @@ docker buildx imagetools inspect <registry>/<image>:<tag>
 
 若标签是多平台索引，固定其索引摘要，而不是某一架构的子清单。若是单平台，使用发布了所需架构的发行版，或通过已批准的流水线构建并发布镜像。不要把未固定的 `latest` 标签当作长期不可变替代方案。
 
-## 分类置信度过低
+## 领域置信度过低
 
-若请求在领域分类后频繁回退，先确认已加载的模型和类别映射，再改阈值。然后在带标签流量上评估更低的值：
+若请求在领域分类后频繁回退，先确认由哪个模型回答 `domains` 规则，再修改它们的 `predicate`：没有写 `predicate` 的规则使用回答模型的校准阈值（vela3-fast 上为 0.41），否则为 0.5 并给出 `uncalibrated_preset` 警告。然后在带标签流量上评估更低的值：
 
 ```yaml
-global:
-  model_catalog:
-    modules:
-      classifier:
-        domain:
-          threshold: 0.50
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: math
+          predicate: {gte: 0.30}
 ```
 
-降低阈值可能增加错误领域路由。请按所选工作点报告各类别的精确率和召回率。
+降低 predicate 可能增加错误领域路由。请按所选工作点报告各领域的精确率和召回率。
 
 ## 诊断命令
 

@@ -36,16 +36,26 @@ Use these blocks when:
 global:
   stores:
     response_cache:
-      enabled: true
       backend_type: memory
-      similarity_threshold: 0.8
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        semantic:
+          match:
+            recall: {top_k: 1, min_similarity: 0.8}
 ```
+
+The store holds the cache backend. A
+[`response_cache` plugin](../plugin/response-cache) turns caching on: in
+`global.plugins` for every request, or in a decision's plugins for that
+decision's requests.
 
 #### Negation guard
 
 Bi-encoder similarity cannot tell *"turn on dark mode"* from *"turn off dark
-mode"*: opposite-meaning queries often score above `similarity_threshold`
-while genuine paraphrases score below it, so raising the threshold does not
+mode"*: opposite-meaning queries often score above the recall's
+`min_similarity` while genuine paraphrases score below it, so raising the threshold does not
 reliably prevent false hits. Every cache backend applies a lexical guard
 before it serves a semantic candidate: it catches negation cues and known
 antonym swaps in near-identical English token sets. It needs no model, has no
@@ -66,6 +76,19 @@ the router refuses `polarity_guard`; `vllm-sr config migrate` removes it.
 ### Memory
 
 The memory store supports three backends: `milvus` (default), `valkey`, and `qdrant`.
+A [`context` plugin](../plugin/context#memory-sources) with a `memory` source
+reads and writes it, in `global.plugins` for every request or in a decision's
+plugins for that decision's requests:
+
+```yaml
+global:
+  plugins:
+    - type: context
+      configuration:
+        enabled: true
+        sources:
+          - type: memory
+```
 
 **Milvus backend** (default):
 
@@ -73,7 +96,6 @@ The memory store supports three backends: `milvus` (default), `valkey`, and `qdr
 global:
   stores:
     memory:
-      enabled: true
       milvus:
         address: milvus:19530
         collection: agentic_memory
@@ -86,7 +108,6 @@ global:
 global:
   stores:
     memory:
-      enabled: true
       backend: valkey
       valkey:
         host: valkey
@@ -103,7 +124,6 @@ global:
 global:
   stores:
     memory:
-      enabled: true
       backend: qdrant
       qdrant:
         host: qdrant

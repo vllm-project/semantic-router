@@ -19,9 +19,9 @@ translation:
 这些本地绑定已经由[模型运行时](model-runtime/overview.md)替代；显式配置的外部服务仍单独调用。
 设备由 deployment 和启动时的平台选择决定。该版本的全部破坏性变更见[发布说明](release-notes/built-in-model-runtime.md)。
 
-**升级后请重新验证路由结果。** 未指定模型的判断任务现在使用默认 Vela 2.0 部署；
-这不保证与旧 Vela 1.0 专用模型得出相同结果。检查[默认模型与任务绑定](choose-a-model.md)，
-用自己的请求验证阈值和准确度。
+**升级后请重新验证路由结果。** 每个路由信号现在都询问决策模型，除非你另行选择，否则为 vela3-fast；
+依赖 Vela 1.0 分类器的历史配置即使迁移顺利，答案也会变化。检查[默认模型与阈值](choose-a-model.md#built-in-signals)，
+用自己的请求验证阈值和准确度。[迁移到 v0.5](../installation/migrate-to-v0-5) 介绍了当前版本的配置变化。
 
 如果你的配置包含以下任何一项，就需要迁移：
 
@@ -79,26 +79,17 @@ Changes to review
 | `global.router.model_selection.ml` 以及训练得到的 `knn`、`kmeans`、`svm` 和 `mlp` 选择器 | 移除：由不需要训练模型的 `systemone` 选择器替代 |
 | 模块上的 `variant`、`model_type`、`use_modernbert`、`use_mmbert_32k` | 移除：运行时从模型读取架构 |
 | 旧模型目录中的标签映射，例如 `category_mapping_path: models/mom-domain-classifier/category_mapping.json` | 移除：路由器读取所运行模型的标签 |
-| fusion 算法的 `grounding.nli_contradiction_penalty` | `grounding.contradiction_penalty`：grounding 现在读取幻觉检测器 |
-| 使用 `backend: endpoint`、`endpoint` 和 `model_id` 的幻觉检测器 | 该聊天服务的 `openai_chat` 部署，以及指向它的 `hallucination` 绑定；路径不是 `/v1` 的 endpoint 需要手动编写 |
+| fusion 算法的 `grounding.nli_contradiction_penalty` | `grounding.contradiction_penalty`：grounding 现在读取幻觉问题 |
+| 使用 `backend: endpoint`、`endpoint` 和 `model_id` 的幻觉检测器 | 移除：`hallucination` 信号询问支持 span 的 System One 部署 |
 
 ### 更名的模型 {#model-names-that-changed}
 
-较旧的任务模型由同一任务的 Vela 1.0 模型替代。替代模型使用相同的标签名，
-因此你的信号规则和路由条件仍匹配原来匹配的内容。
+Router 不再运行任务分类器：早期版本中的领域、PII、越狱、事实核查、反馈、模态或幻觉模型，无论是 `mom-domain-classifier` 这样的旧名称还是 Vela 1.0 任务模型，都由[决策模型](../system-one/overview)替代，由它提出该信号的问题。它的标签就是你的规则已经在用的标签。embedding 模型按下表替换：
 
 | 旧模型 | 新模型 | 变化 |
 | --- | --- | --- |
-| `mom-domain-classifier`、`mmbert32k-intent-*` 及其别名 | `Vela-1.0-Encoder-307M-Domain` | 相同的 14 个领域 |
-| `mom-pii-classifier`、`mom-mmbert-pii-detector`、`mmbert32k-pii-*` | `Vela-1.0-Encoder-307M-PII` | 相同的 17 种 PII 类型 |
-| `mom-jailbreak-classifier`、`mmbert32k-jailbreak-*` | `Vela-1.0-Encoder-307M-Guard` | 相同的 `benign` / `jailbreak` 标签 |
-| `mom-halugate-sentinel`、`mmbert32k-factcheck-*` | `Vela-1.0-Encoder-307M-FactCheck` | 相同的标签 |
-| `mom-feedback-detector`、`mmbert32k-feedback-*` | `Vela-1.0-Encoder-307M-Feedback` | 新增 `NO_FEEDBACK`，用于不含反馈的消息 |
-| `mmbert32k-modality-router-merged` | `Vela-1.0-Encoder-307M-Modality` | 相同的 `AR` / `DIFFUSION` / `BOTH` 标签 |
-| `mom-halugate-detector`、LettuceDetect v1 和 v2 | `Vela-1.0-Encoder-307M-Halu` | 相同的输入；仍返回回答中的片段 |
 | `mmbert-embed-32k-2d-matryoshka` | `Vela-1.0-Encoder-307M-Embedding` | **重新向量化**已存储的向量 |
 | EmbeddingGemma（`mom-embedding-flash`）、MiniLM（`mom-embedding-light`） | `Vela-1.0-Encoder-307M-Embedding`，或 OpenAI 兼容的 embedding 端点 | **重新向量化**已存储的向量 |
-| `multi-modal-embed-small` / `-large` | `Vela-1.0-Omni-Nano` / `-Mini` | **重新向量化**已存储的向量 |
 | Qwen3-Embedding-0.6B（`mom-embedding-pro`） | 不变 | |
 
 ### 已退役的功能 {#features-that-were-retired}

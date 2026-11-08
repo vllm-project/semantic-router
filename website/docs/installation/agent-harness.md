@@ -194,8 +194,8 @@ decides much of a call's latency and cost, and three things lose it.
 - **A model change.** A prompt cache belongs to one model, so a switch in the
   middle of a run computes the whole context again on the new model. Keep each
   run on one model as described above. The
-  [hybrid selector](../tutorials/algorithm/selection/hybrid) also favors the
-  model that served the session's previous turn.
+  [multi_factor selector](../tutorials/algorithm/selection/multi-factor#cache-affinity)
+  also favors the model that served the session's previous turn.
 - **A replica change.** Each replica keeps its own prefix cache, and a model's
   `lb_policy` (`round_robin` or `least_request`, see
   [model configuration](model-configuration#tune-timeouts-retries-and-endpoint-health))

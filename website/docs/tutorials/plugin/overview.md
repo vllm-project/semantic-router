@@ -62,6 +62,7 @@ recipes:
 | `context` | Retrieve documents and memories, compress the request within a budget, and store memories after the response | A RAG backend, `global.stores.memory`, the decision model for the relevance judge | [Context](./context) |
 | `router_replay` | Override replay capture for one route, and shadow a sampled copy to a candidate model | `global.services.router_replay` | [Router Replay](./router-replay) |
 | `response_guard` | Block or annotate an answer on the signals it is checked with | The response-stage signals its rules read | [Response Guard](./response-guard) |
+| `masking` | Replace the personal data a named `pii` rule finds in the provider-bound request with placeholders | A `pii` rule on a deployment that answers span questions | [Masking](./masking) |
 
 [Content Safety](./content-safety) bundles three supported
 plugins, not an additional plugin type.

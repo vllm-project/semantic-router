@@ -143,7 +143,7 @@ recipes:
 ```
 
 A named deployment must use `provider: model_runtime`, or `provider: systemone`
-for a [remote System One API](../../signal/learned/systemone.md#ask-a-remote-system-one-model);
+for a [remote System One API](../../../system-one/deployments#remote-system-one-apis);
 a selector without its own `timeout_ms` then takes the deployment's. The
 decision needs 2–255
 different `modelRefs`, and `candidates` may describe only those models; a
@@ -154,5 +154,5 @@ model is reported in the `x-vsr-selected-model` response header. Routing
 Preview asks the System One model the same question and reports its choice as
 the selected model, without calling a backend.
 
-See [Decision models](../../../model-runtime/guides/decisions.md) to choose a
-model and where it runs.
+See [Choose a deployment](../../../system-one/deployments) to choose a model
+and where it runs.

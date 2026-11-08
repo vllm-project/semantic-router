@@ -8,12 +8,13 @@ OpenShift Routes for inference and the Router API.
 Use the simulator mode for a CPU-only integration check. Use a real
 `LLMInferenceService` only after its model-serving requirements are satisfied.
 
-The default internal models are Vela Domain, PII and Guard, with immutable
-download revisions. Embeddings come from the `vela-embedding` deployment that
+The Router's decision model, vela3-fast, answers its routing signals; the model
+runtime downloads it at an immutable revision when the Router starts.
+Embeddings come from the `vela-embedding` deployment that
 `global.model_catalog.embeddings.default` names.
-Model upgrades preserve the bounded input policies; see the
-[Vela model guide](../../website/docs/tutorials/global/vela-models.md) before
-opting into whole-document inference.
+Model upgrades preserve the bounded input policies; see
+[Choose a deployment](../../website/docs/system-one/deployments.md) before
+changing the decision model.
 
 New deployments request a 20 GiB model volume for the native and ONNX runtime
 artifacts. Training intermediates are excluded from preloading. Existing PVCs
@@ -111,8 +112,8 @@ scenario-specific smoke checks used by this example.
 
 - Backend not discovered: compare the `LLMInferenceService`, predictor Service,
   and namespace selected by `deploy.sh`.
-- Router init container fails: inspect model-download logs, credentials, PVC,
-  and egress policy.
+- Router never becomes ready: the model runtime downloads the decision model
+  at startup; inspect the router logs, the cache PVC and egress to Hugging Face.
 - No Route response: inspect Route admission, Service endpoints, and Envoy logs.
 - Wrong selected model: compare the served-model name, rendered Router config,
   and request model.
@@ -121,7 +122,7 @@ scenario-specific smoke checks used by this example.
 oc describe llminferenceservice <name> --namespace my-project
 oc get endpoints --namespace my-project
 oc logs --namespace my-project \
-  -l app=semantic-router -c model-downloader
+  -l app=semantic-router -c semantic-router
 ```
 
 ## Remove the example

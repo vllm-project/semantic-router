@@ -18,7 +18,7 @@ Because every wire format (Chat Completions, Responses, Anthropic Messages) is d
 
 ## Configuration
 
-Masking masks what a [pii rule](../signal/learned/pii) detects. Declare the
+Masking masks what a [pii rule](../signal/application/pii) detects. Declare the
 rule under `recipes[].signals.pii` and name it in the plugin under
 `recipes[].decisions[].plugins`:
 
@@ -49,7 +49,7 @@ recipes:
 | Field | Meaning |
 |---|---|
 | `enabled` | Turns masking on for this decision. |
-| `signal` | The pii rule whose detections are masked: its detector, its `threshold`, and the types its `pii_types_allowed` lets through, which are not masked. No decision has to read the rule. |
+| `signal` | The pii rule whose detections are masked: its deployment, its `predicate`, and the labels its `ignore_labels` lets through, which are not masked. No decision has to read the rule. |
 | `entity_types` | An **include list** of PII labels (`PERSON`, `EMAIL_ADDRESS`, `PHONE_NUMBER`, `US_SSN`, `CREDIT_CARD`, `LOCATION`, `IP_ADDRESS`, `DATE_TIME`, `US_DRIVER_LICENSE`, `US_PASSPORT`, `IBAN_CODE`): only these types are masked. Empty means every type the rule detects is masked. Any other label is rejected at config load. |
 | `placeholders` | Maps a PII label to a template. The template must contain `{index}`; a template without it would collapse distinct values onto one placeholder, so it is rejected at config load. Types absent from the map get the default `[TYPE_n]` shape. |
 

@@ -251,7 +251,7 @@ Fusion 用量会聚合完整面板成本和每次成功的裁判响应。上报�
 
 > 依据衡量的是忠实度/一致性，不是真值。在没有权威来源时，它可以下调支持最少的响应权重，但不能证明正确性。**硬丢弃**相互一致性最低的响应（`filter` 策略）在有争议的事实问题上会明显*损害*效果 — 三个模型可能一起自信地出错，而单独异议者是对的 — 因此默认是 `weight`。该默认背后的评测见 `bench/grounded_fusion/FINDINGS.md`。
 
-需要在 `global` 幻觉缓解下配置幻觉检测器（以及 `panel`/跨模型路径所需的 NLI 模型）。如果后端不可用，`on_error: skip` 会回退到普通 Fusion。
+依据评分询问决策模型的[幻觉](../../signal/application/hallucination)问题，需要支持 span 的部署。如果它不可用，`on_error: skip` 会回退到普通 Fusion。
 
 ```yaml
 algorithm:

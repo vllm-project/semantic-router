@@ -1,5 +1,12 @@
 # Release note: one catalog for the models the Router asks
 
+:::note
+This note records an earlier release. Since v0.5 the decision model answers
+every signal, embeddings serve recall only, the `classify` and `rerank`
+providers are removed, and `openai_chat` serves only the memory query
+rewrite; see [Migrate to v0.5](../installation/migrate-to-v0-5).
+:::
+
 Every model the Router asks, the models behind its signals, embeddings and
 reranking, is now declared once, by name, under
 `global.model_catalog.deployments`. Everything that uses a model writes that

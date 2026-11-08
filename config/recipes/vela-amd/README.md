@@ -38,7 +38,7 @@ qualified through 32K.
   chunks, asks the decision model which are relevant and injects the best two
   before calling `vela-default`. Recall uses `min_similarity: 0` and keeps up
   to `top_k` candidates for the judge.
-- `observe` combines the configured learned signals and calls the same backend.
+- `observe` combines the configured application signals and calls the same backend.
   Requests without a matching decision also use the configured default backend.
 
 The jailbreak rule detects prompt attacks; the safety rule detects unsafe
@@ -154,8 +154,7 @@ and the single generation backend determines answer capabilities.
 
 ## References
 
-- [Vela models](https://vllm-sr.ai/docs/tutorials/global/vela-models)
-- [AMD installation](https://vllm-sr.ai/docs/installation/amd-rocm)
-- [Embedding runtime](https://vllm-sr.ai/docs/installation/runtime/embeddings)
-- [In-process model bindings](https://vllm-sr.ai/docs/installation/runtime/in-process)
+- [System One: choose a deployment](https://vllm-sr.ai/docs/next/system-one/deployments)
+- [AMD installation](https://vllm-sr.ai/docs/next/installation/amd-rocm)
+- [Embeddings](https://vllm-sr.ai/docs/next/model-runtime/guides/embeddings)
 - [Recipe authoring and conformance](../CONFORMANCE.md)

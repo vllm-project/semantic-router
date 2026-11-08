@@ -228,6 +228,7 @@ config.yaml` runs the same checks.
 | A deployment that cannot answer the questions a rule asks, such as an `openai_embeddings` deployment named by a `domains` rule | The rule, the deployment and the providers that can answer it |
 | A key written inline, such as `auth.api_key` or an `Authorization` header | That keys come from `api_key_env` or `api_key_file` |
 | A `pii` or `hallucination` rule on a deployment without spans | `span_required`; a masking plugin that needs those spans is refused as well |
+| A question of a type its deployment does not answer, such as a `score` rule or judge on vela3-fast | `question_type_unsupported` for a rule, naming the question, the deployment and the types it answers; a judge or selector names them too |
 
 The Router refuses a configuration written in the earlier forms, with one
 line for each field that names `vllm-sr config migrate`.

@@ -24,7 +24,9 @@ the CPU. `global.model_catalog.embeddings.default` names the deployment that
 embeds, the way `system.decision_model` names the decision model's: the
 pre-declared `vela-embedding` unless you change it. The deployment starts only
 when the response cache, memory or a vector store recalls with it; a
-configuration without recall never starts it.
+configuration without recall never starts it. No decision reads embeddings: to
+route on what an image shows, ask the decision model a question that reads it
+([media inputs](../../system-one/concepts#media-inputs)).
 
 ## Choose where it runs
 
@@ -84,6 +86,8 @@ A store without an `embedding` block embeds with `embeddings.default`. The
 Router checks every deployment when it loads the configuration: it must be
 declared and embed text, and it must answer with the width of the store's
 index, the block's `dimension` or the vector field of a persistent backend.
+[Images and audio](./multimodal.md) covers the Omni models, which also embed
+images and audio on the model runtime.
 
 ## Use an external embedding service
 

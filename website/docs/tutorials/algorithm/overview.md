@@ -112,9 +112,13 @@ Every executor reads two shared settings beside its type:
   `escalate` takes `last_attempt` (serve the last judged answer when none is
   accepted) or `fail`.
 
-`global.integrations.looper.endpoint` is deprecated and ignored, because
-executor calls no longer loop back through the gateway. Remove it, or run
-`vllm-sr config migrate`.
+The Router makes an executor's model calls in process, so
+`global.integrations.looper.endpoint` is refused at load, and
+`vllm-sr config migrate` drops it. A Looper algorithm's public name is an
+entrypoint whose `model_names` name a recipe with a decision that runs it.
+`global.integrations.looper.<algorithm>.model_names` is refused at load, and
+migrate writes those names as such an entrypoint, for a copy of the default
+recipe with only its decisions of that algorithm.
 
 | Type | Status | Goal | Guide |
 |---|---|---|---|
@@ -176,8 +180,8 @@ trained artifacts it no longer uses.
   from the new decision's candidates; opaque provider state stays bound to the
   model that created it. Portable turns may select a new eligible candidate;
   observe and bypass modes do not enforce the protection decision.
-- Candidate model names must resolve through `providers.models` and
-  `providers.models` in a complete config.
+- Candidate model names must resolve through `providers.models` in a complete
+  config.
 - Latency and load observations are local to a Router process; they are not a
   cluster-wide scheduler.
 - Executors share request content with their configured workers. Apply

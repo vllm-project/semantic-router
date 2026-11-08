@@ -135,8 +135,8 @@ assertions to establish that the intended branch ran.
 
 | Exact case and implementation | Selecting profile | Effective assertions and negative controls | Value, limitation and recommendation |
 | --- | --- | --- | --- |
-| [mcp-fallback-behavior](https://github.com/vllm-project/semantic-router/blob/1c629c80b383d7e53e01f266430d0fa41c5d9bf6/e2e/testcases/mcp_fallback_behavior.go#L20) | Retired; formerly unreachable | Five normal requests use shared HTTP/category/model/reasoning checks, but one success suffices. Failure/timeout simulation fields are unused; fallback/recovery counts are advisory; an empty fixture set passes. | Retired without claiming fallback/recovery qualification. [Direct MCP transport tests](../../../src/semantic-router/pkg/mcp/tool_transport_test.go) assert tool errors and missing-tool rejection; no fabricated server disruption remains. |
-| [mcp-http-classification](https://github.com/vllm-project/semantic-router/blob/1c629c80b383d7e53e01f266430d0fa41c5d9bf6/e2e/testcases/mcp_http_classification.go#L20) | Retired; formerly unreachable | One of eight requests must satisfy shared HTTP/category and optional model/reasoning assertions. Configured minimum confidence is not validated. | Retired. [Direct HTTP transport tests](../../../src/semantic-router/pkg/mcp/tool_transport_test.go) execute capability discovery and actual tool calls, requiring exact payload fields and errors. Classifier behavior remains in module tests; server metadata is not claimed to select Router models. |
+| [mcp-fallback-behavior](https://github.com/vllm-project/semantic-router/blob/1c629c80b383d7e53e01f266430d0fa41c5d9bf6/e2e/testcases/mcp_fallback_behavior.go#L20) | Retired; formerly unreachable | Five normal requests use shared HTTP/category/model/reasoning checks, but one success suffices. Failure/timeout simulation fields are unused; fallback/recovery counts are advisory; an empty fixture set passes. | Retired without claiming fallback/recovery qualification. The Router no longer calls MCP servers, so no fabricated server disruption or transport test remains. |
+| [mcp-http-classification](https://github.com/vllm-project/semantic-router/blob/1c629c80b383d7e53e01f266430d0fa41c5d9bf6/e2e/testcases/mcp_http_classification.go#L20) | Retired; formerly unreachable | One of eight requests must satisfy shared HTTP/category and optional model/reasoning assertions. Configured minimum confidence is not validated. | Retired. The Router no longer calls MCP servers: the decision model answers domain rules, so neither the MCP classification path nor its transport tests remain. |
 
 ## Review boundaries
 
@@ -146,8 +146,8 @@ and their checked-in JSON fixtures. Model-runtime rows follow
 [random-weight runtime fixture](../../../e2e/profiles/model-runtime/runtime_with_fixtures.py).
 Deployment rows follow [Kubernetes helpers](../../../e2e/pkg/helpers/kubernetes.go)
 and [production request helpers](../../../e2e/testcases/production_stack_request_helpers.go).
-Retired MCP rows link to pinned historical implementations; the current
-[transport tests](../../../src/semantic-router/pkg/mcp/tool_transport_test.go) own their preserved boundary.
+Retired MCP rows link to pinned historical implementations; the Router no longer
+calls MCP servers, so no current test owns that boundary.
 
 This is a source-level oracle audit, not a claim that these deployment/model
 profiles were executed locally. It complements the canonical 80-case review and

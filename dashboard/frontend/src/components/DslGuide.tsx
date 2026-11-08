@@ -181,9 +181,6 @@ ROUTE ai_route (description = "AI-related requests") {
   }
 
   PLUGIN replay
-}
-
-# ============================================
 }`
 
 const MODEL_SNIPPET = `MODEL "qwen2.5:3b" {

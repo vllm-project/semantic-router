@@ -136,6 +136,21 @@ function guideLink(repoRoot, path) {
   return `../${docPath}`
 }
 
+// The primitive's tutorial is signal/systemone.md; every other signal's lives
+// in the directory of its layer.
+export function signalTutorialType(tutorialRoot, tutorial) {
+  const parts = asPosix(relative(tutorialRoot, tutorial)).split('/')
+  if (parts.length === 1 && parts[0] === 'systemone.md') {
+    return 'primitive signal'
+  }
+  if (parts.length === 2 && ['application', 'heuristic'].includes(parts[0])) {
+    return `${parts[0]} signal`
+  }
+  throw new Error(
+    `Signal tutorial ${tutorial} must be signal/systemone.md or live directly under signal/application or signal/heuristic`,
+  )
+}
+
 function signalEntries(repoRoot) {
   const fragmentRoot = join(repoRoot, 'config', 'fragments', 'signal')
   const tutorialRoot = join(repoRoot, 'website', 'docs', 'tutorials', 'signal')
@@ -146,17 +161,10 @@ function signalEntries(repoRoot) {
       const fragmentDirectory = join(fragmentRoot, family)
       requireYamlFamily(fragmentDirectory, `Signal family ${family}`)
       const tutorial = findSingleTutorial(tutorialRoot, family)
-      const tutorialParts = asPosix(relative(tutorialRoot, tutorial)).split('/')
-      const tutorialType = tutorialParts[0]
-      if (tutorialParts.length !== 2 || !['heuristic', 'learned'].includes(tutorialType)) {
-        throw new Error(
-          `Signal tutorial ${tutorial} must live directly under signal/heuristic or signal/learned`,
-        )
-      }
 
       return {
         family,
-        type: `${tutorialType} signal`,
+        type: signalTutorialType(tutorialRoot, tutorial),
         goal: tutorialGoal(tutorial),
         fragmentPath: `config/fragments/signal/${family}/`,
         fragmentKind: 'directory',

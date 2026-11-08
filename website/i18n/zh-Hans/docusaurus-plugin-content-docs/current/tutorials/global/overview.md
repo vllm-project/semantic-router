@@ -36,11 +36,14 @@ global:
         enabled: true
   stores:
     response_cache:
-      enabled: true
       backend_type: memory
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
 ```
 
-全局配置有五组：
+全局配置有六组：
 
 | 组 | 负责 | 指南 |
 |---|---|---|

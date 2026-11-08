@@ -234,8 +234,8 @@ its decision model reads long inputs slowly on a CPU.
 
 ### Policy and deployment scope
 
-Live evaluation uses routing Preview. It runs the configured router classifiers
-and embeddings, evaluates decisions and the model selector, and returns the
+Live evaluation uses routing Preview. It asks the decision model the configured
+signals' questions, evaluates decisions and the model selector, and returns the
 trace without calling a backend LLM. The default `--scope deployment` checks
 both policy evidence and the expected selection result against the actual
 assigned models. It does not certify backend answer quality or multi-model
@@ -270,7 +270,7 @@ For deployment qualification, bind the intended recipe entrypoints and real
 model metadata, then run deployment scope and backend execution checks. Input
 capacity includes retained messages and media plus the effective output limit.
 The router's neutral token estimate is not an exact tokenizer or media bound.
-Router-classifier input limits are separate: an inference or HTTP failure fails
+Decision-model input limits are separate: an inference or HTTP failure fails
 both scopes and cannot be reclassified as a successful capacity rejection.
 
 CI publishes coverage in the job summary and uploads the consolidated

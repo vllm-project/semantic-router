@@ -52,7 +52,7 @@ for assets, Box, track and long context.
 In Router mode, publish an `entrypoints` item with `api: systemone` and grant
 its name in `listeners[].systemone.models`. The Chat default `vllm-sr/auto`
 does not automatically publish a native entrypoint. Follow the
-[System One cascade guide](../tutorials/algorithm/native/cascade.md) to connect
+[System One escalate guide](../tutorials/algorithm/looper/escalate.md#on-system-one) to connect
 local deployments or remote Engine and compatible System One services.
 
 ```bash
@@ -108,6 +108,11 @@ passes the declared acceptance rule, the request returns `503` with
 `systemone_unresolved`. Exhausting the shared physical-call limit returns
 `503`; exhausting its deadline returns `504`. Both budget errors use
 `systemone_budget_exhausted` and include the reason and `model_calls` count.
+A model whose auth is `credential: delegated` answers `401`
+(`delegated_credential_missing`) when the request carries no delegated
+credential, before the call, as a request the Dashboard forwards does, and `403`
+(`delegated_router_call_refused`) when no client request is behind the call,
+as for an operator's routing diagnostic.
 Failed candidates never become empty successful answers. Direct model requests
 keep their existing native API contract and do not run the escalation.
 
@@ -464,14 +469,17 @@ Router Replay records routing decisions and selected request lifecycle data.
 It is useful for debugging, evaluation, and Router Learning, but it does not
 change routing merely because a record is read.
 
-Replay is disabled unless the service is enabled:
+Replay is disabled unless a `router_replay` plugin enables it:
 
 ```yaml
 global:
   services:
     router_replay:
-      enabled: true
       store_backend: memory
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
 ```
 
 The in-memory backend is suitable for local inspection. Use a configured

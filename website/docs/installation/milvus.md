@@ -63,16 +63,16 @@ chart version and review its values rather than copying development defaults.
 
 ## Configure response cache
 
-Use the canonical `response_cache` key. `semantic_cache` is a deprecated input
-alias retained only for migration compatibility.
+Use the `response_cache` key. A configuration that still writes
+`semantic_cache` fails to load; `vllm-sr config migrate` renames it. The store
+holds the backend, and a [`response_cache` plugin](../tutorials/plugin/response-cache)
+turns caching on and sets the recall's `min_similarity`.
 
 ```yaml
 global:
   stores:
     response_cache:
-      enabled: true
       backend_type: milvus
-      similarity_threshold: 0.86
       max_entries: 50000
       ttl_seconds: 7200
       milvus:

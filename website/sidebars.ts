@@ -59,6 +59,21 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'System One',
+      collapsed: false,
+      link: { type: 'doc', id: 'system-one/overview' },
+      items: [
+        'system-one/concepts',
+        'system-one/api',
+        'system-one/deployments',
+        'system-one/router',
+        'system-one/custom-questions',
+        'system-one/performance',
+        'system-one/reference',
+      ],
+    },
+    {
+      type: 'category',
       label: 'Capabilities',
       collapsed: false,
       items: [
@@ -80,6 +95,24 @@ const sidebars: SidebarsConfig = {
           label: 'Signals',
           items: [
             'tutorials/signal/overview',
+            'tutorials/signal/systemone',
+            {
+              type: 'category',
+              label: 'Application',
+              items: [
+                'tutorials/signal/application/domain',
+                'tutorials/signal/application/fact-check',
+                'tutorials/signal/application/user-feedback',
+                'tutorials/signal/application/jailbreak',
+                'tutorials/signal/application/safety',
+                'tutorials/signal/application/pii',
+                'tutorials/signal/application/hallucination',
+                'tutorials/signal/application/refusal',
+                'tutorials/signal/application/turn-relation',
+                'tutorials/signal/application/complexity',
+                'tutorials/signal/application/modality',
+              ],
+            },
             {
               type: 'category',
               label: 'Heuristic',
@@ -91,24 +124,6 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/heuristic/keyword',
                 'tutorials/signal/heuristic/language',
                 'tutorials/signal/heuristic/metadata',
-              ],
-            },
-            {
-              type: 'category',
-              label: 'Learned',
-              items: [
-                'tutorials/signal/learned/systemone',
-                'tutorials/signal/learned/complexity',
-                'tutorials/signal/learned/domain',
-                'tutorials/signal/learned/modality',
-                'tutorials/signal/learned/fact-check',
-                'tutorials/signal/learned/hallucination',
-                'tutorials/signal/learned/jailbreak',
-                'tutorials/signal/learned/safety',
-                'tutorials/signal/learned/pii',
-                'tutorials/signal/learned/refusal',
-                'tutorials/signal/learned/turn-relation',
-                'tutorials/signal/learned/user-feedback',
               ],
             },
           ],
@@ -225,7 +240,6 @@ const sidebars: SidebarsConfig = {
           items: [
             'tutorials/global/api-and-observability',
             'tutorials/global/stores-and-tools',
-            'tutorials/global/vela-models',
             'tutorials/global/model-runtime',
           ],
         },
@@ -239,19 +253,8 @@ const sidebars: SidebarsConfig = {
       items: [
         'model-runtime/quickstart',
         'model-runtime/choose-a-model',
-        {
-          type: 'category',
-          label: 'Model Runtime Guides',
-          items: [
-            'model-runtime/guides/classify',
-            'model-runtime/guides/pii',
-            'model-runtime/guides/safety',
-            'model-runtime/guides/hallucination',
-            'model-runtime/guides/embeddings',
-            'model-runtime/guides/multimodal',
-            'model-runtime/guides/decisions',
-          ],
-        },
+        'model-runtime/guides/embeddings',
+        'model-runtime/guides/multimodal',
         'model-runtime/deploy',
         'model-runtime/engine-args',
         'installation/runtime/external',
@@ -399,6 +402,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'installation/k8s/operator-operations',
             'installation/upgrade-rollback',
+            'installation/migrate-to-v0-5',
           ],
         },
       ],
@@ -416,6 +420,7 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Routing & Selection',
           items: [
+            'proposals/decision-model-first-class',
             'proposals/decision-ranking-semantics',
             'proposals/batch-and-capacity-aware-routing',
             'proposals/router-learning-memory-and-adaptations',
@@ -476,7 +481,6 @@ const sidebars: SidebarsConfig = {
           collapsed: false,
           items: [
             'training/training-overview',
-            'training/model-catalog',
           ],
         },
         {
@@ -484,16 +488,7 @@ const sidebars: SidebarsConfig = {
           label: 'Embedding Models',
           items: [
             'training/mmbert-32k-models',
-            'training/multimodal-embeddings',
             'training/router-embeddings-huggingface',
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Classifier Models',
-          items: [
-            'training/classifier-models',
-            'training/mmbert-safety-classifier',
           ],
         },
         {

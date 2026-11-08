@@ -131,5 +131,5 @@ an image.
 
 Routing on what a request's images show is a `systemone` question with
 `input.image: true`, answered by a decision model that reads images. See
-[System One](../signal/learned/systemone) for the question fields and the
+[System One](../signal/systemone) for the question fields and the
 models that answer image questions.

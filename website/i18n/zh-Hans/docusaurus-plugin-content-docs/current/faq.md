@@ -48,7 +48,7 @@ vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine
 两种模式都可以用具体模型 ID 直接推理。Router 模式还可以显式声明
 `api: systemone` 入口，并在 listener 中授权其 `vllm-sr/auto` 名称，运行原生 escalate。
 默认 Chat 入口不会隐式开启原生路由。配置和请求示例见
-[System One 级联指南（英文）](https://vllm-sr.ai/docs/tutorials/algorithm/native/cascade)和
+[System One escalate 指南](tutorials/algorithm/looper/escalate#on-system-one)和
 [快速开始](model-runtime/quickstart)。
 
 ## 如何与 Agent Harness 配合？ {#how-does-it-work-with-an-agent-harness}
@@ -83,7 +83,7 @@ llm-d 不应决定业务策略，Semantic Router 也不负责选择 Pod。项目
 
 [llm-d 集成指南](installation/k8s/llm-d)在部署上下文中解释了这个边界。
 
-Router 自身的 Serving Engine 也会在任务模型的副本间分发请求。这些运行时副本池
+Router 自身的 Serving Engine 也会在它所调用模型（决策模型和嵌入模型）的副本间分发请求。这些运行时副本池
 与外部 Chat 后端的 llm-d 调度相互独立。
 
 ## 如何避免与 llm-d 的决策冲突？ {#how-do-we-avoid-conflicts-with-llm-d}

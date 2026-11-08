@@ -125,17 +125,17 @@ python result_to_config.py \
   --api-format openai
 ```
 
-The generator creates a v0.3 document with:
+The generator creates a v0.5 document with:
 
 - the highest average evaluated model as `providers.defaults.model`
 - one provider binding and model card for each evaluated logical model
 - one domain signal per observed MMLU-Pro category
 - ranked `model_scores` for each category
 - an empty `recipes[].decisions` list
-- sparse defaults for response cache, tools, embeddings, prompt guard, and
-  classifiers
+- a global semantic response cache, with its store, that embeds with the
+  `vela-embedding` deployment
 
-The generated document has this top-level shape. Lists and module bodies are
+The generated document has this top-level shape. Lists and bodies are
 abbreviated here; inspect `config.eval.yaml` for the evaluated models, scores,
 and category signals.
 
@@ -152,13 +152,11 @@ recipes:
       domains: []
     decisions: []
 global:
+  plugins: []
   stores:
     response_cache: {}
   model_catalog:
     embeddings: {}
-    modules:
-      prompt_guard: {}
-      classifier: {}
 ```
 
 Direct and CoT result directories for the same base model are collapsed into
@@ -212,4 +210,3 @@ See [Benchmarking](../benchmarking/overview) for the available suites.
 
 - [`src/training/model_eval`](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_eval)
 - [Model training overview](./training-overview)
-- [Current model catalog](./model-catalog)

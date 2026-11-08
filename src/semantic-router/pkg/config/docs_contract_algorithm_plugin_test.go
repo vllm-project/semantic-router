@@ -24,6 +24,16 @@ var algorithmTutorialBuckets = map[string]string{
 var retiredAlgorithmTutorialDocs = []string{
 	repoRel("website", "docs", "tutorials", "algorithm", "selection.md"),
 	repoRel("website", "docs", "tutorials", "algorithm", "looper.md"),
+	repoRel("website", "docs", "tutorials", "algorithm", "native"),
+	repoRel("website", "docs", "tutorials", "algorithm", "looper", "confidence.md"),
+	repoRel("website", "docs", "tutorials", "algorithm", "selection", "automix.md"),
+	repoRel("website", "docs", "tutorials", "algorithm", "selection", "hybrid.md"),
+	repoRel("website", "docs", "tutorials", "algorithm", "selection", "kmeans.md"),
+	repoRel("website", "docs", "tutorials", "algorithm", "selection", "knn.md"),
+	repoRel("website", "docs", "tutorials", "algorithm", "selection", "mlp.md"),
+	repoRel("website", "docs", "tutorials", "algorithm", "selection", "prompt.md"),
+	repoRel("website", "docs", "tutorials", "algorithm", "selection", "router-dc.md"),
+	repoRel("website", "docs", "tutorials", "algorithm", "selection", "svm.md"),
 }
 
 var pluginTutorialBuckets = map[string]string{

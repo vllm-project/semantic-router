@@ -131,13 +131,18 @@ spec:
 
 ## 配置 Router
 
-将 Valkey 记忆后端添加到你的 `config.yaml`：
+将 Valkey 记忆后端添加到你的 `config.yaml`。带 `memory` 源的 `context` 插件负责读写它：像这里一样写在 `global.plugins` 中对每个请求生效，或写在决策的插件中（参见[按决策的记忆源](#per-decision-memory-source)）。
 
 ```yaml
 global:
+  plugins:
+    - type: context
+      configuration:
+        enabled: true
+        sources:
+          - type: memory
   stores:
     memory:
-      enabled: true
       backend: valkey
       auto_store: true
       valkey:
@@ -189,7 +194,6 @@ global:
 global:
   stores:
     memory:
-      enabled: true
       backend: valkey
       valkey:
         host: valkey.example.internal

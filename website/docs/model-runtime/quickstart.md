@@ -126,8 +126,8 @@ explicit public model ID; it answers a failed question in place, where
 `/v1/systemone` answers the request as a whole, as System One does. Native
 discovery uses `/v1/systemone/models`; `/v1/models` remains Chat discovery, and
 in Engine mode it also lists the System One models as `models: [{name,
-description, release_date}]`. The worker's classify, embeddings, rerank and
-bundle APIs are separate; see the [task guides](./guides/classify.md).
+description, release_date}]`. The worker's other APIs are separate; see the
+[HTTP API reference](./reference.md#http-api).
 Compressed bodies, multipart image uploads, assets, Box, track and long
 context are in
 [System One compatibility](./reference.md#system-one-compatibility).
@@ -230,8 +230,8 @@ operated worker instead, use an explicit `endpoint` and `model`; the
 ## Next steps
 
 - [Choose a model, size and hardware](model-runtime/choose-a-model.md)
-- Turn on a built-in feature: [classify requests](./guides/classify.md),
-  [detect PII](./guides/pii.md), [stop prompt attacks](./guides/safety.md),
-  [use embeddings](./guides/embeddings.md)
+- Turn on a built-in feature: [the application signals](../tutorials/signal/overview#application-signals),
+  [your own questions](../system-one/custom-questions),
+  [embeddings for recall](./guides/embeddings.md)
 - [Run it with the router](./deploy.md): GPUs, Kubernetes, sharing a runtime
 - [Troubleshooting](model-runtime/troubleshooting.md)

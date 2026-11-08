@@ -67,6 +67,7 @@ decisions:
   expected_algorithm: static
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   objective: 'Long context: an input of 200K tokens or more goes to long_context before any other lane, including an
     image or declared tools.'
@@ -155,6 +156,7 @@ decisions:
   expected_algorithm: static
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   objective: 'Vision: a request that carries an image goes to vision, whatever its effort, tools or task.'
   variants:
@@ -495,6 +497,7 @@ decisions:
   expected_algorithm: static
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   objective: 'Recovery: an earlier answer that the user says was wrong; the correction question and the user feedback
     judgment must agree.'
@@ -800,6 +803,7 @@ decisions:
   expected_algorithm: static
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   objective: 'Agentic: an active tool loop, a forced tool call, or declared tools the request needs, unless tool_choice
     is none.'
@@ -1055,6 +1059,7 @@ decisions:
   expected_algorithm: static
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   objective: 'Facts: an answer that depends on facts most people would look up, for a facts, analysis or writing task
     below maximum effort.'
@@ -1110,6 +1115,7 @@ decisions:
   expected_algorithm: systemone
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   objective: 'Frontier: research-level requests at maximum effort; the decision model chooses one of the assigned models.'
   variants:
@@ -1199,6 +1205,7 @@ decisions:
   expected_algorithm: static
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   objective: 'Code: a code task at medium or high effort.'
   variants:
@@ -1333,6 +1340,7 @@ decisions:
   expected_algorithm: multi_factor
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   objective: 'Hard: high effort, or a STEM problem rated multi-step, outside code and exact facts.'
   variants:
@@ -1548,6 +1556,7 @@ decisions:
   expected_algorithm: multi_factor
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   objective: 'Standard: medium effort outside code and exact facts.'
   variants:
@@ -1638,6 +1647,7 @@ decisions:
   expected_algorithm: static
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   objective: 'Fast: requests that need no reasoning, positively identified by the effort estimate.'
   variants:
@@ -2154,6 +2164,7 @@ decisions:
   expected_decision: fast
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: speed_over_240k_text_guard__text_at_first_over_240k_band
@@ -2482,6 +2493,7 @@ decisions:
   expected_decision: tools
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: speed_over_240k_text_guard__boundary_orchestration_tools_collision
@@ -2923,6 +2935,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: speed_heavy_workload__heavy_en
@@ -3143,6 +3156,7 @@ decisions:
   expected_decision: economy
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: cost_over_240k_text_guard__text_at_first_over_240k_band
@@ -3450,6 +3464,7 @@ decisions:
   expected_decision: tools
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: cost_over_240k_text_guard__boundary_orchestration_tools_collision
@@ -3768,6 +3783,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: cost_bounded_reasoning__reasoning_en
@@ -3909,6 +3925,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_text_tool_result_synthesis__ordinary_tool_result
@@ -4343,6 +4360,7 @@ decisions:
   expected_decision: simple
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_over_240k_text_guard__text_at_first_over_240k_band
@@ -4879,6 +4897,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_dynamic_workflow__tool_workstreams
@@ -4932,6 +4951,7 @@ decisions:
   expected_decision: simple
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_long_context_or_direct_reference__long_workflow_collision
@@ -4959,6 +4979,7 @@ decisions:
   expected_decision: agent
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_dynamic_workflow__flow_state_resume
@@ -4995,6 +5016,7 @@ decisions:
   expected_decision: simple
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_image_through_120k__image_understanding_contract
@@ -5023,6 +5045,7 @@ decisions:
   expected_decision: review
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_expert_fusion__competing_hypotheses
@@ -5046,6 +5069,7 @@ decisions:
   expected_decision: review
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_expert_fusion__semantic_panel
@@ -5070,6 +5094,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_expert_fusion__competing_hypotheses_zh
@@ -5104,6 +5129,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_long_image__image_within_triage_budget
@@ -5533,6 +5559,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_image__image_description_zh
@@ -5732,6 +5759,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_long_text__attack_context_priority_collision
@@ -5814,6 +5842,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_image__image_over_tools_collision
@@ -5888,6 +5917,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_v2_stakes_health
@@ -5909,6 +5939,7 @@ decisions:
   expected_decision: simple
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_v2_definition_health
@@ -5929,6 +5960,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_v2_stakes_law
@@ -5950,6 +5982,7 @@ decisions:
   expected_decision: simple
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_v2_definition_law
@@ -5971,6 +6004,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_v2_stakes_business
@@ -5992,6 +6026,7 @@ decisions:
   expected_decision: simple
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_v2_definition_business
@@ -6011,6 +6046,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_v2_stakes_economics
@@ -6032,6 +6068,7 @@ decisions:
   expected_decision: simple
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_v2_definition_economics
@@ -6053,6 +6090,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_v2_implicit_correction
@@ -6079,6 +6117,7 @@ decisions:
   expected_decision: simple
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_v2_satisfied_followup
@@ -6102,6 +6141,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_v2_single_model_hypotheses
@@ -6124,6 +6164,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v2_private_visibility_term
@@ -6145,6 +6186,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v2_private_ip_term
@@ -6170,6 +6212,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v2_harmful_action
@@ -6190,6 +6233,7 @@ decisions:
   expected_decision: fast
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: speed_v2_quoted_tool_instruction
@@ -6215,6 +6259,7 @@ decisions:
   expected_decision: economy
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: cost_v2_quoted_tool_instruction
@@ -6242,6 +6287,7 @@ decisions:
   expected_decision: review
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_v2_independent_visual_review
@@ -6273,6 +6319,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: cost_v2_repeated_correction
@@ -6307,6 +6354,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh01
@@ -6333,6 +6381,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh02
@@ -6358,6 +6407,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh03
@@ -6383,6 +6433,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh04
@@ -6408,6 +6459,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh05
@@ -6431,6 +6483,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh06
@@ -6456,6 +6509,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh07
@@ -6479,6 +6533,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh08
@@ -6504,6 +6559,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh09
@@ -6527,6 +6583,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh10
@@ -6553,6 +6610,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh11
@@ -6576,6 +6634,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh12
@@ -6601,6 +6660,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh13
@@ -6623,6 +6683,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh14
@@ -6648,6 +6709,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh15
@@ -6670,6 +6732,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh16
@@ -6970,6 +7033,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   objective: Personal action guidance combines a relevant domain with an operative request; harmful intent
     is not required.
@@ -7004,6 +7068,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   objective: An explanation or a quoted action request does not itself ask for personal action guidance.
   forbidden_signals:
@@ -7031,6 +7096,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   objective: A genuine personal action request can coexist with quoted material; consequential intent
     must distinguish it from quotation alone.
@@ -7058,6 +7124,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   objective: Personal wording for ordinary technical or household work does not establish consequential support.
   forbidden_signals:
@@ -7085,6 +7152,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   objective: Translating a personal action request does not ask for the quoted advice.
   forbidden_signals:
@@ -7103,6 +7171,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   objective: A detected nationality, religious or political attribute requires an explicit personal or individual-record
     context.
@@ -7137,6 +7206,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   objective: Language options and general group descriptions do not themselves associate an attribute with
     a person.
@@ -7179,6 +7249,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   objective: An ordinary possessive or a definition of a profile is not an individual attribute declaration.
   forbidden_signals:
@@ -7208,6 +7279,7 @@ decisions:
   - tools
   - context
   - response_cache
+  - router_replay
   plugin_match: exact
   objective: Quotation preserves the sensitivity of supplied contact details and personal names.
   expected_signals:
@@ -7242,6 +7314,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   expected_recipe: accuracy
   plugin_match: exact
   signal_match: contains
@@ -7263,6 +7336,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   expected_recipe: accuracy
   plugin_match: exact
   signal_match: contains
@@ -7284,6 +7358,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   expected_recipe: accuracy
   plugin_match: exact
   signal_match: contains
@@ -7306,6 +7381,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   expected_recipe: accuracy
   plugin_match: exact
   signal_match: contains

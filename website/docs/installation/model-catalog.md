@@ -36,7 +36,8 @@ to them:
 | `vela-embedding` | Vela 1.0 Embedding | `embeddings.default` |
 
 Embeddings serve recall only: `vela-embedding` starts when the response cache,
-memory or a vector store recalls with it, never for a decision.
+memory or a vector store recalls with it, never for a decision (see
+[Embeddings](../model-runtime/guides/embeddings.md)).
 
 ## Field reference
 
@@ -97,7 +98,7 @@ deployment with `endpoint`) and every remote provider.
 | --- | --- | --- |
 | `endpoint` | The full URL of the API, path prefix included. The Router appends the operation path (`/chat/completions`, `/embeddings`); a systemone endpoint is the URL questions are posted to. An attached runtime may use `unix:///abs/path.sock` | `http` or `https`; no credentials or fragment |
 | `model` | The model the remote API answers with; on an attached runtime, the served model | Required for `systemone`, `openai_chat`, `openai_embeddings` |
-| `auth` | `header` (default `Authorization`), `prefix` (default `Bearer`; `""` sends the bare key), and exactly one of `api_key_env` or `api_key_file` (an absolute path, read on each call so a rotated key applies) | A key is never written in the configuration |
+| `auth` | `header` (default `Authorization`), `prefix` (default `Bearer`; `""` sends the bare key), and exactly one of `api_key_env` or `api_key_file` (an absolute path, read on each call so a rotated key applies), or `credential: delegated`: each call made for a client request carries the credential the authenticator issued that user ([Security Hardening](security-hardening#delegate-the-users-credential-to-an-upstream)) | A key is never written in the configuration; `credential: delegated` takes no key, and not on `model_runtime` |
 | `headers` | Further non-secret headers | `Authorization`, `Proxy-Authorization`, `X-Api-Key`, `Api-Key`, `Ocp-Apim-Subscription-Key`, `Cookie` and the `auth` header are refused |
 | `timeout_ms` | Bound of one attempt | systemone ≤ 60000; others ≤ 300000 |
 | `max_retries` | Transport retries after the first attempt, within the caller's deadline | 0–10; not on an attached runtime |
@@ -130,11 +131,10 @@ Binding keys are the application signal types: `domain`, `fact_check`,
 its type that name no deployment; a rule writes `deployment:` to ask another.
 `recipes[].signals.systemone[]` rules and `algorithm.systemone` of a decision
 write `deployment:` too. The `jailbreak`, `pii` and `hallucination` bindings
-also name the model of the plugin module of that type.
+also choose the model behind `response_guard` and `masking`, which read those
+signals' rules.
 
-A binding can also be an object, to select a head of a multi-head
-`model_runtime` deployment: `pii: {deployment: local-vela, head: pii}`. An
-operating point is pinned on the deployment, with `operating_point`.
+A binding names a deployment and nothing else (`pii: primary`).
 
 Resolution, for every signal: the rule's `deployment`, then the recipe's
 binding, then the global binding, then `system.decision_model` for a
@@ -148,21 +148,18 @@ A rule's predicate you do not write comes from the model that answers: the
 threshold calibrated for `vela3-fast` or a Vela 2.0 size; 0.5 for any other
 model, local or `systemone`, which has none (the load warns
 `uncalibrated_preset`, naming the rule). A `predicate` you write is used as
-written. The plugin modules keep their module thresholds the same way, and a
-remote classifier keeps the Vela 1.0 defaults.
+written.
 
 ## Admission
 
-`global.model_catalog.admission` bounds concurrent calls. A key is a
-deployment name, for a gate the deployment's users share, or the signal type
-of a plugin module that keeps its own model (`jailbreak`, `pii`,
-`hallucination`), for that module's gate.
+`global.model_catalog.admission` bounds concurrent calls. A key is a declared
+deployment's name, and its gate is shared by every user of that deployment.
 
 ```yaml
 global:
   model_catalog:
     admission:
-      jailbreak: {max_concurrency: 4, max_queue: 64, queue_timeout_ms: 250, on_overflow: shed}
+      local-vela: {max_concurrency: 4, max_queue: 64, queue_timeout_ms: 250, on_overflow: shed}
       d3-remote: {max_concurrency: 16}
 ```
 
@@ -283,7 +280,8 @@ global:
 
 `providers.models` stays a separate concept: the models that answer users,
 which routing chooses among. Only the connection shape (`endpoint`, `auth`,
-`headers`) is shared. A backend reads its key from `auth.api_key_env`. A
+`headers`) is shared. A backend reads its key from `auth.api_key_env`, or
+takes the requesting user's with `auth.credential: delegated`. A
 deployment, the decision model included, is never a routing target and never
 appears in `/v1/models`. The native System One API answers for one only under
 its `public_name`, or through a native alias such as `native-d3` that names it.

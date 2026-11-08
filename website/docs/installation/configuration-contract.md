@@ -141,9 +141,9 @@ time. Kubernetes defers routing contracts until `IntelligentPool` and
 settings and validates routing references, recipe compatibility, and signal
 rules before activating the candidate. Deployment definitions are static;
 routing and recipe bindings are compiled only at the complete-config stage.
-PII and Prompt Guard backend settings, error policies, and window geometry are
-checked during static loading. Window provider and input-budget compatibility
-are checked for each recipe at the complete-config stage.
+Each recipe's signal rules are checked against the deployments they resolve to
+(question types, span capability, input modalities) at the complete-config
+stage.
 Invalid candidates report `ValidationFailed` on the CRDs and leave the active
 configuration in place.
 

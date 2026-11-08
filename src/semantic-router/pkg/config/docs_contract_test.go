@@ -33,7 +33,7 @@ var configContractRequiredDocs = []docNeedles{
 			"exhaustive canonical reference config",
 			"`config/fragments/signal/`",
 			"`tutorials/signal/heuristic/`",
-			"`tutorials/signal/learned/`",
+			"`tutorials/signal/application/`",
 			"`config/fragments/decision/`",
 			"`config/fragments/algorithm/`",
 			"`config/fragments/plugin/`",
@@ -120,7 +120,7 @@ var configContractRequiredDocs = []docNeedles{
 			"providers:\n  defaults:",
 			"recipes:\n  - name: default",
 			"model_catalog:",
-			"modules:",
+			"embeddings:",
 		},
 	},
 	{
@@ -154,7 +154,7 @@ var configContractRequiredDocs = []docNeedles{
 			"endpoint: 10.0.0.1:8000",
 			"[config/config.yaml]",
 			"global:\n  stores:\n    response_cache:",
-			"global:\n  model_catalog:\n    modules:\n      classifier:",
+			"recipes:\n  - name: default\n    signals:\n      domains:",
 			"recipes:\n  - name: default\n    decisions:",
 		},
 	},
@@ -191,8 +191,8 @@ var configContractRequiredDocs = []docNeedles{
 		needles: []string{
 			"providers:\n  models:",
 			"backend_refs:",
-			"global:\n  model_catalog:\n    modules:\n      prompt_guard:",
-			"global:\n  model_catalog:\n    modules:\n      hallucination_mitigation:",
+			"recipes:\n  - name: default\n    signals:\n      fact_check:",
+			"plugins:\n  - type: response_guard",
 		},
 	},
 	{
@@ -231,14 +231,6 @@ var configContractRequiredDocs = []docNeedles{
 			"providers:\n    defaults:",
 		},
 	},
-	{
-		path: "tools/test/services/mcp-classifier-server/README.md",
-		needles: []string{
-			"providers:\n  defaults:",
-			"recipes:\n  - name: default",
-			"global:\n  model_catalog:\n    modules:\n      classifier:",
-		},
-	},
 }
 
 var configContractForbiddenDocs = []docNeedles{
@@ -254,14 +246,6 @@ var configContractForbiddenDocs = []docNeedles{
 			"global:\n  classifier:",
 			"global:\n  prompt_guard:",
 			"global:\n  modules:",
-		},
-	},
-	{
-		path: repoRel("website", "docs", "training", "ml-model-selection.md"),
-		needles: []string{
-			"config:\n  model_selection:",
-			"\nmodel_selection:\n",
-			"\nembedding_models:\n",
 		},
 	},
 	{
@@ -347,6 +331,7 @@ var configContractForbiddenDocs = []docNeedles{
 			"\nvllm_endpoints:\n",
 			"\nmodel_config:\n",
 			"\nhallucination_mitigation:\n",
+			"model_catalog:\n    modules:",
 		},
 	},
 	{
@@ -368,13 +353,6 @@ var configContractForbiddenDocs = []docNeedles{
 		path: "deploy/helm/README.md",
 		needles: []string{
 			"providers:\n    default_model:",
-		},
-	},
-	{
-		path: "tools/test/services/mcp-classifier-server/README.md",
-		needles: []string{
-			"\nclassifier:\n",
-			"categories: []",
 		},
 	},
 	{
@@ -414,10 +392,12 @@ var latestTutorialOverviewDocs = []docNeedles{
 		path: repoRel("website", "docs", "tutorials", "signal", "overview.md"),
 		needles: []string{
 			"Signals turn request facts into names",
+			"### The System One Primitive",
+			"### Application Signals",
 			"### Heuristic Signals",
-			"### Learned Signals",
+			"[System One](./systemone)",
 			"[Keyword](./heuristic/keyword)",
-			"[Domain](./learned/domain)",
+			"[Domain](./application/domain)",
 		},
 	},
 	{
@@ -480,7 +460,9 @@ var latestTutorialOverviewForbidden = []docNeedles{
 var latestTutorialSidebarRequired = []string{
 	"label: 'Signals'",
 	"label: 'Heuristic'",
-	"label: 'Learned'",
+	"label: 'Application'",
+	"label: 'System One'",
+	"'system-one/overview'",
 	"label: 'Decisions'",
 	"label: 'Algorithms'",
 	"label: 'Selectors'",

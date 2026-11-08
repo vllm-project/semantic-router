@@ -3,8 +3,9 @@
 ## Overview
 
 Use Router Replay to inspect requests in Dashboard Insights: the selected route,
-model, token usage, response, and tool trajectory. Configure storage and capture
-defaults in `global.services.router_replay`; use a decision's `router_replay`
+model, token usage, response, and tool trajectory. Configure storage in
+`global.services.router_replay`, and the switch and capture defaults in a
+`router_replay` plugin in `global.plugins`; use a decision's `router_replay`
 plugin to override only the capture fields that differ.
 
 ## What Problem Does It Solve?
@@ -36,19 +37,24 @@ you need durable history. Set retention for the data you intend to keep.
 global:
   services:
     router_replay:
-      enabled: true
       store_backend: postgres
-      capture_request_body: true
-      capture_response_body: true
-      capture_personal_data: false
-      capture_tool_results: false
-      max_records: 10000
-      max_body_bytes: 4096
-      max_tool_trace_bytes: 0
-      max_tool_trace_steps: 100
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
+        capture_request_body: true
+        capture_response_body: true
+        capture_personal_data: false
+        capture_tool_results: false
+        max_records: 10000
+        max_body_bytes: 4096
+        max_tool_trace_bytes: 0
+        max_tool_trace_steps: 100
 ```
 
-Absent service configuration leaves Replay disabled. Capture defaults are
+Without a `router_replay` plugin, Replay stays disabled. The plugin in
+`global.plugins` holds the shared capture defaults, and a decision's plugin
+overrides them field by field. Capture defaults are
 request and response bodies enabled, personal data enabled, tool results
 redacted, 10,000 records, 4,096 bytes per body, no per-field tool-trace byte
 limit, and 100 tool steps.
@@ -76,8 +82,9 @@ raw body may no longer be complete JSON; check its truncation flag. Tool traces
 have separate limits from raw request and response bodies.
 
 To opt one decision out of capture, use `configuration: {enabled: false}`.
-To change the deployment-wide default, set
-`global.services.router_replay.enabled: false`; a decision can still opt in.
+To change the deployment-wide default, set `enabled: false` on the
+`router_replay` plugin in `global.plugins`, or leave that plugin out; a
+decision can still opt in.
 
 Every omitted plugin field inherits its global capture default. Explicit
 `false` remains an override, and `max_tool_trace_bytes: 0` or
@@ -101,8 +108,8 @@ the record is written without the prompt, and the recipe's configured PII rules
 then read the latest user message alone. The prompt is added to the record once
 that read completes without finding personal data.
 
-When PII evidence is unavailable, classification fails, or the recipe has no
-PII detector configured, capture omits content conservatively. A PII signal is
+When PII evidence is unavailable, the `pii` rule's model gives no answer, or
+the recipe has no `pii` rule, capture omits content conservatively. A PII signal is
 optional; configuring one allows content capture for requests it identifies as
 free of personal data. For example:
 
@@ -112,7 +119,6 @@ recipes:
     signals:
       pii:
         - name: personal_data
-          pii_types_allowed: []
 ```
 
 ### Capture tool results for development and audit

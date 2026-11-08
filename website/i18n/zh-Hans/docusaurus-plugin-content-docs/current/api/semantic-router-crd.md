@@ -83,7 +83,7 @@ spec:
 Operator 始终渲染规范的 v0.5 Router 文档。其配置表面分为两部分：
 
 - `config.recipes`、`config.entrypoints`、`config.plugins` 和 `config.models` 透传规范的配方、入口点、`global.plugins` 和提供商模型的事实；`config.routing` 已移除并会被拒绝；
-- 类型化适配器字段如 `response_cache`、`tools`、`prompt_guard`、`classifier`、`complexity_rules`、`reasoning_effort`、`api` 和 `observability` 会被转换到规范的 provider 或 `global` 位置。
+- 类型化适配器字段如 `response_cache`、`complexity_rules`、`reasoning_effort`、`api`、`observability` 和 `streamed_body` 会被转换到规范的 provider 或 `global` 位置。
 
 不要假设本地 `config.yaml` 中的任意键可以直接放在 `spec.config` 下。在本地 YAML 与 Operator 之间迁移时，使用 CRD schema 和[配置工作流](../installation/configuration-workflows)。
 

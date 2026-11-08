@@ -404,7 +404,7 @@ Public mode-trace transport remains deferred to
 
 ## Grounding-Aware Synthesis
 
-By default the judge reads raw panel text with no grounding oracle. Grounding-aware synthesis scores each panel response for **faithfulness** *before* the judge runs, then uses those scores to guide synthesis toward the better-grounded responses. It makes **no extra LLM calls** — it uses the configured hallucination detector (the default decision deployment, or a specialist such as Vela Halu), which runs in the [model runtime](../../../model-runtime/guides/hallucination.md).
+By default the judge reads raw panel text with no grounding oracle. Grounding-aware synthesis scores each panel response for **faithfulness** *before* the judge runs, then uses those scores to guide synthesis toward the better-grounded responses. It makes **no extra LLM calls** — it asks the decision model's [hallucination](../../signal/application/hallucination) question, which needs a span-capable deployment.
 
 Reference selection (what each answer is scored against):
 
@@ -424,7 +424,7 @@ quorum check on the reduced judge input.
 
 > Grounding measures faithfulness/consistency, not truth. With no authoritative source it can down-weight the least-supported responses, not certify correctness. **Hard-dropping** the least mutually-consistent response (the `filter` policy) measurably *hurts* on contested factual questions — three models can be confidently wrong together while the lone dissenter is right — so the default is `weight`. See `bench/grounded_fusion/FINDINGS.md` for the evaluation behind this default.
 
-Requires the hallucination detector to be configured under `global` hallucination mitigation. If the backends are unavailable, `on_error: skip` falls back to plain Fusion.
+Grounding asks the decision model's [hallucination](../../signal/application/hallucination) question, which needs a span-capable deployment. If it is unavailable, `on_error: skip` falls back to plain Fusion.
 
 ```yaml
 algorithm:

@@ -82,8 +82,8 @@ semantic:
   `on_error: fail` reuses nothing.
 - A block that writes `recall` alone serves the most similar cached request
   and asks no model.
-- A request that matched no decision recalls with the default `top_k` and the
-  store's `similarity_threshold`.
+- A request that matched no decision runs the block of the `response_cache`
+  plugin in `global.plugins`.
 
 The exact tier is available with the in-memory, Redis, Valkey, Milvus, Qdrant,
 and hybrid cache backends. Anthropic client requests are replayed in the

@@ -186,22 +186,19 @@ Preview 不执行检索或生成。按配方和 [RAG 源](../tutorials/plugin/co
 
 ### 更长的输入 {#longer-inputs}
 
-在 ROCm 上，每个 Vela 任务模型最多读取 32,768 tokens。用 `input.max_tokens` 设置 deployment 接受的最长输入；短请求不会被填充到固定长度，因此仍然很快：
+在 ROCm 上，决策模型按它自己的输入上限读取：vela3-fast 每次决策 32,768 个 token，更大的 Vela 3.0 规格最多 262,144 个。短请求不会被填充到固定长度，因此仍然很快。要在 GPU 上运行决策模型，把 `primary` 声明在那里：
 
 ```yaml
 global:
   model_catalog:
     deployments:
-      domain-amd:
+      primary:
         provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain
+        artifact: vllm-sr/vela3-lite
         device: rocm:0
-        input:
-          max_tokens: 32768
-          overflow: truncate
 ```
 
-`truncate` 对前 32,768 个 token（含特殊 token）分类并报告已截断；`reject` 则对更长的输入让该信号保持未知。此限制只作用于分类器，不会缩短聊天请求，也不改变生成模型的上下文窗口。Guard 和 PII 用重叠窗口扫描长输入（`overflow: window`），见[提示词攻击与不安全内容](model-runtime/guides/safety.md)和[检测 PII](model-runtime/guides/pii.md)。
+越狱、安全、PII 和幻觉问题分窗口读取完整输入；其他问题读取能放进模型输入的部分。这个上限只作用于决策模型，不会缩短聊天请求，也不改变生成模型的上下文窗口。见[长输入](../system-one/performance#long-inputs)。
 
 早期版本在这里选择固定的 ONNX Runtime 计算图（`head: onnx/model_rocm_32k.onnx`）和 MIGraphX 编译缓存。`vllm-sr config migrate` 会移除这些设置，见[从原生绑定迁移](model-runtime/migrate.md)。
 

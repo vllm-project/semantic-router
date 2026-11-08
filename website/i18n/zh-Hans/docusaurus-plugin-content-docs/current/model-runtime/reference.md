@@ -143,7 +143,7 @@ Server-Timing: parse;dur=0.021, tokenize;dur=0.153, queue;dur=0.008, forward;dur
 
 唯一的字节限额是 `--max-request-bytes`，作用于整个请求。
 
-router 通过 Vela 2.0 用两种方式读长请求。路由问题（domain、fact check、feedback、modality、决策问题和决策模型选择器）截断。安全问题（prompt guard、safety、PII 和 hallucination）整读，上限是模型的扫描预算或部署的 `input.max_tokens`（带 `overflow: window`）。超出部分，或没赶上信号截止时间（`global.model_catalog.signal_timeout_ms`）的安全扫描，就是没读到的内容：越狱或 PII 规则把它匹配为 `unscanned`，除非其模块设了 `on_unscanned: allow`。
+router 通过 Vela 2.0 用两种方式读长请求。路由问题（domain、fact check、feedback、modality、决策问题和决策模型选择器）截断。安全问题（jailbreak、safety、PII 和 hallucination）整读，上限是模型的扫描预算或部署的 `input.max_tokens`（带 `overflow: window`）。超出部分，或没赶上信号截止时间（`global.model_catalog.signal_timeout_ms`）的安全扫描，就是没读到的内容：越狱或 PII 规则把它匹配为 `unscanned`。
 
 ### 分类 {#classify}
 
@@ -330,7 +330,7 @@ Set 把每个标签作为一个 Noul 答在 `<id>.<label>` 下，并在 `sets` �
 | `max_num_seqs`、`max_num_batched_tokens`、`batch_window_ms`、`dtype`、`enable_shared_context` | 部署 | 部署的[引擎参数](./engine-args.md)；没设的保持 runtime 默认值。 |
 | `input.max_tokens`、`input.overflow` | 部署 | 任务模型的输入上限。答问题的部署只收 `overflow: window` 加 `max_tokens`：它的那些问题把长的部分整读到的扫描预算（见[长输入](#long-inputs)）。这也包括默认决策模型、直接发布给 System One 的部署，以及本地 System One 别名的部署，不论监听器是否发布该别名。路由的 System One 入口不是一个部署。不属于这些情况的绑定部署仍保留任务模型的输入上限。 |
 | `signal_timeout_ms` | `global.model_catalog` | 请求的模型 runtime 信号的截止时间。默认取请求的截止时间扣掉剩余时间的十分之一（至少一秒）；router 看不到截止时间的受服务请求取 45 秒。还在跑的信号按它的政策收尾：路由信号走 `on_error`，安全信号按未扫描处理。 |
-| `on_unscanned` | `modules.prompt_guard`、`modules.classifier.pii` | `block`（默认）：模型没整读的内容，规则匹配为 `unscanned`。`allow`：跟随 `on_error`。 |
+| `on_unscanned` | `recipes[].signals.systemone[]` | 在 `coverage: full` 下，一个没能读完整个输入的答案意味着什么：`match`、`no_match` 或 `unknown`（默认）。`jailbreak` 和 `pii` 规则把模型没整读的内容计为匹配。 |
 | `process` | 部署 | 同名的托管部署共用一个进程。 |
 | `endpoint`、`model` | 部署 | 挂到你自己跑的 runtime；`model` 是所服务模型的 ID。[连接块](../installation/model-catalog.md#connection-block)另有 `auth`、`headers`、`timeout_ms` 和 `tls`。 |
 | `bindings.<type>`、`recipes[].model_bindings.<type>` | `global.model_catalog`、配方 | 一个信号类型使用的部署：写部署名，或写 `{deployment, head}` 以选择头。 |

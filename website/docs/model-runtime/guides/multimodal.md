@@ -10,7 +10,7 @@ image can be compared with a text description ("a photograph of a passport
 page") or with example images. The model runtime serves it. The router embeds
 text only, for recall: it can name an Omni deployment as a store's
 `embedding.deployment`, and a decision about what an image shows asks a
-[systemone](tutorials/signal/learned/systemone.md) question that reads it
+[systemone](tutorials/signal/systemone.md) question that reads it
 (`input.image`) of a deployment that accepts images.
 
 | Model | Size | Vector | Text limit | Use when |

@@ -131,8 +131,8 @@ recipes:
             timeout_ms: 1000
 ```
 
-命名部署必须使用 `provider: model_runtime`，或在使用[远程 System One API](../../signal/learned/systemone.md#ask-a-remote-system-one-model) 时使用 `provider: systemone`；未设置自身 `timeout_ms` 的选择器使用部署的值。decision 需要 2–255 个不同的 `modelRefs`，`candidates` 只能描述这些模型；没有在其中提供描述的模型会使用自身配置的描述。
+命名部署必须使用 `provider: model_runtime`，或在使用[远程 System One API](../../../system-one/deployments#remote-system-one-apis) 时使用 `provider: systemone`；未设置自身 `timeout_ms` 的选择器使用部署的值。decision 需要 2–255 个不同的 `modelRefs`，`candidates` 只能描述这些模型；没有在其中提供描述的模型会使用自身配置的描述。
 
 模型未就绪、响应超时、过载或返回无效答案时，Router 会记录选模回退，并使用第一个 `modelRef`。选中的模型会在 `x-vsr-selected-model` 响应头中返回。Routing Preview 会向 System One 模型提出同样的问题并展示它选择的模型，但不会调用后端。
 
-关于选择模型及其运行位置，请参阅 [Decision 模型指南](/model-runtime/guides/decisions.md)。
+关于选择模型及其运行位置，请参阅[选择部署](../../../system-one/deployments)。

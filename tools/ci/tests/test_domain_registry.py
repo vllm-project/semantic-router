@@ -217,10 +217,10 @@ class DomainRegistryTests(unittest.TestCase):
         translated = "website/i18n/zh-Hans/docusaurus-plugin-content-docs/current"
         for path in (
             "website/docs/model-runtime/reference.md",
-            "website/docs/model-runtime/guides/pii.md",
-            "website/docs/tutorials/signal/learned/systemone.md",
+            "website/docs/model-runtime/guides/embeddings.md",
+            "website/docs/tutorials/signal/systemone.md",
             f"{translated}/model-runtime/deploy.md",
-            f"{translated}/model-runtime/guides/decisions.md",
+            f"{translated}/model-runtime/guides/embeddings.md",
             f"{translated}/tutorials/algorithm/selection/systemone.md",
         ):
             with self.subTest(path=path):
@@ -289,17 +289,25 @@ class DomainRegistryTests(unittest.TestCase):
                 self.assertIn("published-model-tests", result.domains)
                 self.assertIn("platform.models-cpu", result.selected_jobs)
 
-    def test_skill_only_changes_keep_the_lightweight_gate(self) -> None:
+    def test_skill_changes_run_the_skill_checks_without_the_generated_contracts(
+        self,
+    ) -> None:
         domains = matching_domains(
             (
                 "tools/agent/skills/vllm-sr-agent-operations/references/configuration-loop.md",
                 "website/static/install/agent/vllm-sr/references/configuration-loop.md",
             )
         )
-        self.assertIn("make harness-check", commands_for_domains(domains, "checks"))
-        self.assertNotIn(
-            "make generated-contract-check", commands_for_domains(domains, "checks")
-        )
+        checks = commands_for_domains(domains, "checks")
+        # The mirror sync, the Router loading the skill's YAML, and the CLI
+        # parsing its command lines.
+        for command in (
+            "make harness-check",
+            "make test-semantic-router",
+            "make vllm-sr-test",
+        ):
+            self.assertIn(command, checks)
+        self.assertNotIn("make generated-contract-check", checks)
 
     def test_relocated_tools_retain_unit_check_ownership(self) -> None:
         cases = {

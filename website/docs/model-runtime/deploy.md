@@ -35,7 +35,7 @@ workers run.
 
 When you turn on a built-in feature, such as a `domain` signal or the semantic
 cache, the router already knows which model it needs. Judgment tasks share the
-decision model; embeddings and the reranker use their own deployments
+decision model; embeddings use their own deployment
 ([Choose a model for a signal](../installation/choose-a-model-for-a-signal.md)).
 To choose CPU or GPU placement, configure the deployment's `device` or
 `replicas` as described below.

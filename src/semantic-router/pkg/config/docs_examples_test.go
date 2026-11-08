@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -13,10 +14,42 @@ import (
 // a path of the router-checked-docs domain, so editing it runs this test in
 // PR CI. A block titled values.yaml holds Helm chart values; the Helm gate
 // renders those (deploy/helm/test_data_volume.py).
-var routerCheckedDocPages = []string{
+var routerCheckedDocPages = slices.Concat([]string{
 	repoRel("website", "docs", "installation", "protocol-compatibility.md"),
 	repoRel("website", "docs", "installation", "storage-overview.md"),
 	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "installation", "storage-overview.md"),
+	repoRel("website", "docs", "training", "router-embeddings-huggingface.md"),
+}, bothLocales(
+	repoRel("system-one", "overview.md"),
+	repoRel("system-one", "deployments.md"),
+	repoRel("system-one", "router.md"),
+	repoRel("system-one", "custom-questions.md"),
+	repoRel("tutorials", "signal", "overview.md"),
+	repoRel("tutorials", "signal", "systemone.md"),
+	repoRel("tutorials", "signal", "application", "complexity.md"),
+	repoRel("tutorials", "signal", "application", "domain.md"),
+	repoRel("tutorials", "signal", "application", "fact-check.md"),
+	repoRel("tutorials", "signal", "application", "hallucination.md"),
+	repoRel("tutorials", "signal", "application", "jailbreak.md"),
+	repoRel("tutorials", "signal", "application", "modality.md"),
+	repoRel("tutorials", "signal", "application", "pii.md"),
+	repoRel("tutorials", "signal", "application", "refusal.md"),
+	repoRel("tutorials", "signal", "application", "safety.md"),
+	repoRel("tutorials", "signal", "application", "turn-relation.md"),
+	repoRel("tutorials", "signal", "application", "user-feedback.md"),
+	repoRel("installation", "migrate-to-v0-5.md"),
+	repoRel("installation", "runtime", "external.md"),
+))
+
+// bothLocales is each English docs page and its zh-Hans translation.
+func bothLocales(pages ...string) []string {
+	var paths []string
+	for _, page := range pages {
+		paths = append(paths,
+			repoRel("website", "docs", page),
+			repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", page))
+	}
+	return paths
 }
 
 var routerCheckedConfigFiles = []string{
@@ -32,6 +65,12 @@ type docFence struct {
 
 func (f docFence) helmValues() bool {
 	return strings.Contains(f.info, `title="values.yaml"`)
+}
+
+// removedForm marks an example of a form the Router no longer reads, as
+// "```yaml removed": the migration guide's before-migration examples.
+func (f docFence) removedForm() bool {
+	return slices.Contains(strings.Fields(f.info), "removed")
 }
 
 // docFences returns the fenced blocks of a Markdown page, with a fence's own
@@ -96,9 +135,39 @@ func exampleSetsRemovedBackendRefField(body string) bool {
 	return false
 }
 
-// Every YAML example on a checked page loads with the Router's parser. An
-// example of a removed setting must be followed by a text block holding the
-// exact message the Router returns for it.
+// checkYAMLExamples loads every YAML example of a page with the Router's
+// parser, except the blocks skip names, and returns how many it checked. An
+// example of a removed setting, or one marked removed, must be followed by a
+// text block holding the exact message the Router returns for it.
+func checkYAMLExamples(t *testing.T, page string, content []byte, skip func(docFence) bool) int {
+	t.Helper()
+	fences := docFences(string(content))
+	checked := 0
+	for index, fence := range fences {
+		if fence.lang != "yaml" || skip(fence) {
+			continue
+		}
+		checked++
+		_, parseErr := ParseYAMLBytes(docExampleDocument(t, fence.body))
+		if !exampleSetsRemovedBackendRefField(fence.body) && !fence.removedForm() {
+			if parseErr != nil {
+				t.Errorf("%s:%d: example does not load: %v\n%s", page, fence.line, parseErr, fence.body)
+			}
+			continue
+		}
+		if index+1 >= len(fences) || fences[index+1].lang != "text" {
+			t.Errorf("%s:%d: a removed-setting example must be followed by the message it gets", page, fence.line)
+			continue
+		}
+		want := strings.TrimSpace(fences[index+1].body)
+		if parseErr == nil || parseErr.Error() != want {
+			t.Errorf("%s:%d: example error = %v, the page shows %q", page, fence.line, parseErr, want)
+		}
+	}
+	return checked
+}
+
+// Every YAML example on a checked page loads with the Router's parser.
 func TestDocYAMLExamplesLoad(t *testing.T) {
 	for _, page := range routerCheckedDocPages {
 		t.Run(page, func(t *testing.T) {
@@ -106,30 +175,7 @@ func TestDocYAMLExamplesLoad(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			fences := docFences(string(content))
-			checked := 0
-			for index, fence := range fences {
-				if fence.lang != "yaml" || fence.helmValues() {
-					continue
-				}
-				checked++
-				_, parseErr := ParseYAMLBytes(docExampleDocument(t, fence.body))
-				if !exampleSetsRemovedBackendRefField(fence.body) {
-					if parseErr != nil {
-						t.Errorf("%s:%d: example does not load: %v\n%s", page, fence.line, parseErr, fence.body)
-					}
-					continue
-				}
-				if index+1 >= len(fences) || fences[index+1].lang != "text" {
-					t.Errorf("%s:%d: a removed-setting example must be followed by the message it gets", page, fence.line)
-					continue
-				}
-				want := strings.TrimSpace(fences[index+1].body)
-				if parseErr == nil || parseErr.Error() != want {
-					t.Errorf("%s:%d: example error = %v, the page shows %q", page, fence.line, parseErr, want)
-				}
-			}
-			if checked == 0 {
+			if checkYAMLExamples(t, page, content, docFence.helmValues) == 0 {
 				t.Fatalf("%s has no YAML examples to check", page)
 			}
 		})

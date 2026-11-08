@@ -62,8 +62,8 @@ recipes:
 每个 `rules` 节点要么是叶子（`type` 和 `name`），要么是组合（`operator` 和 `conditions`）。运算符必须是 `AND`、`OR` 或 `NOT`；大小写和周围空白会被归一化，带条件的节点省略运算符时表示 `AND`。`NOT` 严格一元，恰好接受一个子条件；把 `NOT` 套在 `OR` 或 `AND` 外包一层即可得到 NOR 或 NAND。配置校验会拒绝任何其他运算符、子条件为零或多个的 `NOT`、同时混用叶子和组合字段的节点，以及除根 `AND`（显式的全匹配形式）之外任何没有子节点的组合。错误会点名决策和节点路径，例如
 `decision "billing": rules.conditions[1]: NOT requires exactly one child condition, got 2`。
 
-分类器失败会评估为 `Unknown`，而不是 `False`。`NOT Unknown` 仍是 `Unknown`；`False AND Unknown` 是 `False`，`True OR Unknown` 是 `True`。
-当最终结果仍未知时，`rules.on_unknown` 选择 `no_match`、`match` 或 `fail_request`。如果省略，会保留现有通用分类器 `on_error` 和提示防护 `on_error` 行为，并且路由器会在启动时警告既未设置这些项的分类器条件。已应用的策略出现在 `x-vsr-trace` 的 `on_unknown` 成员和 `llm_decision_unknown_total{decision, policy}` 指标中。`fail_request` 的 503 带有原因码 [`decision_unresolved`](../../api/router.md#routing-errors)，Router 为它记录的日志会点名修复方式。
+设置了 `rules.on_unknown` 时，失败或超时作答的信号会评估为 `Unknown`，而不是 `False`。`NOT Unknown` 仍是 `Unknown`；`False AND Unknown` 是 `False`，`True OR Unknown` 是 `True`。
+当最终结果仍未知时，`rules.on_unknown` 选择 `no_match`、`match` 或 `fail_request`。如果省略，失败信号的条件评估为 `False`；`systemone` 条件可以设置自己的 `on_error`（`match` 或 `no_match`），两者都未设置时，路由器会在启动时对该 `systemone` 条件发出警告。已应用的策略出现在 `x-vsr-trace` 的 `on_unknown` 成员和 `llm_decision_unknown_total{decision, policy}` 指标中。`fail_request` 的 503 带有原因码 [`decision_unresolved`](../../api/router.md#routing-errors)，Router 为它记录的日志会点名修复方式。
 
 决策匹配与以下内容保持分离：
 

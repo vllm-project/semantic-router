@@ -117,7 +117,7 @@ global:
         model: keywords
 ```
 
-自定义分类器信号随后就能把 `ticket-topics` 写成自己的 `deployment` 并读它的标签；见[分类请求](./guides/classify.md#use-your-own-classifier)。router 会把规则和模型在 `/v1/models` 里报告的标签对一遍。部署用 `device` 点名你的加速器，方式一样；router 只查格式，名字没有对应插件，runtime 拒绝并列出它有的一些。
+读取你的模型任务的功能随后就能把 `ticket-topics` 写成自己的 `deployment`：对能回答决策问题的模型，是一条 systemone 规则（见[编写自定义问题](../system-one/custom-questions)）。部署用 `device` 点名你的加速器，方式一样；router 只查格式，名字没有对应插件，runtime 拒绝并列出它有的一些。
 
 ## 插件的规矩 {#rules-for-plugins}
 

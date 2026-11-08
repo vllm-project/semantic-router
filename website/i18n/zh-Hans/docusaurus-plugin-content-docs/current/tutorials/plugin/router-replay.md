@@ -12,7 +12,7 @@ translation:
 
 `router_replay` 是一个路由局部插件，用于覆盖单条路由的回放/调试采集。
 
-`global.services.router_replay` 定义共享存储、保留策略、启用状态和采集默认值。decision 的 `router_replay` 插件只覆盖明确填写的采集字段；省略的字段继承全局默认值。回放不设置配方级默认值。详见[回放 API 和隐私控制](../../api/router#router-replay)。
+`global.services.router_replay` 定义共享存储和保留策略；`global.plugins` 中的 `router_replay` 插件定义启用状态和采集默认值。decision 的 `router_replay` 插件只覆盖明确填写的采集字段；省略的字段继承全局默认值。回放不设置配方级默认值。详见[回放 API 和隐私控制](../../api/router#router-replay)。
 
 全部五个内置 MoM 配方（包括 Vault）默认启用 PostgreSQL 回放。`vllm-sr serve` 会管理 PostgreSQL 及持久卷。通用的 `memory` 存储会在配置重载或路由器重启时丢失记录；其他部署方式可在[共享回放服务](../learning/memory-and-replay#configuration)中配置 PostgreSQL 或 Redis。
 
@@ -40,18 +40,21 @@ translation:
 global:
   services:
     router_replay:
-      enabled: true
       store_backend: postgres
-      capture_request_body: true
-      capture_response_body: true
-      capture_personal_data: false
-      max_records: 10000
-      max_body_bytes: 4096
-      max_tool_trace_bytes: 0
-      max_tool_trace_steps: 100
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
+        capture_request_body: true
+        capture_response_body: true
+        capture_personal_data: false
+        max_records: 10000
+        max_body_bytes: 4096
+        max_tool_trace_bytes: 0
+        max_tool_trace_steps: 100
 ```
 
-未配置服务时回放默认关闭。内置采集默认值为：请求和响应正文开启、个人数据采集开启、最多 10,000 条记录、每个正文 4,096 字节、工具轨迹单字段字节数不限、最多 100 个工具步骤。存储、保留时间和异步写入属于全局服务设置。
+没有 `router_replay` 插件时回放保持关闭。`global.plugins` 中的插件提供共享采集默认值，决策的插件会逐字段覆盖它们。内置采集默认值为：请求和响应正文开启、个人数据采集开启、最多 10,000 条记录、每个正文 4,096 字节、工具轨迹单字段字节数不限、最多 100 个工具步骤。存储、保留时间和异步写入属于全局服务设置。
 
 ### decision 覆盖
 
@@ -87,7 +90,7 @@ plugins:
 
 在全局或 decision 插件中设置 `capture_personal_data: false`。检测到个人数据时，回放保留路由、模型、信号及检测到的 PII 类型等元数据，但不保存请求和响应正文、提示词、工具定义或工具轨迹。提示词在路由之后检查，请求不会等待这一步：除非某个路由 decision 已用 PII 信号读过它，回放记录先不含提示词写入，再由配方已配置的 PII 规则单独读取最新一条用户消息；读取完成且未发现个人数据后，提示词才会补进该记录。
 
-没有配置 PII 检测器、证据不可用或分类失败时，也会保守地省略内容；无需为了此设置强制配置 PII 信号。配置检测器后，确认没有个人数据的请求可以采集内容，例如：
+配方没有 `pii` 规则、证据不可用或 `pii` 规则的模型没有给出答案时，也会保守地省略内容；无需为了此设置强制配置 PII 信号。配置 `pii` 规则后，确认没有个人数据的请求可以采集内容，例如：
 
 ```yaml
 recipes:
@@ -95,7 +98,6 @@ recipes:
     signals:
       pii:
         - name: personal_data
-          pii_types_allowed: []
 ```
 
 ## 影子请求 {#shadow}

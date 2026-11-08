@@ -432,8 +432,8 @@ it does not duplicate their state under a plugin-specific resource tree.
 
 The guard, RAG, and tool previews require an explicit
 `binding: {"recipe":"<name>","decision":"<name>"}`. Their default `mode` is
-`preview`; they do not automatically escalate to a probe. A probe may invoke a
-configured local or remote classifier, embedding service, or retrieval backend.
+`preview`; they do not automatically escalate to a probe. A probe may invoke the
+decision model, an embedding deployment, or a retrieval backend.
 RAG previews require `data.read`, tool-policy previews require `config.read`,
 and guard probes require `classify.invoke`. These operations never execute a
 selected tool or generate a provider response. Returned

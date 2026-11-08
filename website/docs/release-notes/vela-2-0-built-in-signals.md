@@ -2,10 +2,12 @@
 
 :::note
 This note records an earlier release and keeps its original examples. Their
-system lines and `modality_detector.classifier.model_path` are removed: the
-Router refuses them, and `vllm-sr config migrate` rewrites them.
-[Migrate model resources](../installation/model-resource-migration) shows the
-current form of each.
+system lines, modules and `modality_detector.classifier.model_path` are
+removed forms: they fail at load with a one-line hint, and
+`vllm-sr config migrate` rewrites them.
+[Migrate to v0.5](../installation/migrate-to-v0-5) shows the current form of
+each, and [Migrate model resources](../installation/model-resource-migration)
+covers the model fields.
 :::
 
 Vela 2.0 is public on Hugging Face:

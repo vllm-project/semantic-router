@@ -72,47 +72,33 @@ reach a routable interface without an explicit `bind` change. The switch is read
 once at startup, so changing it requires a Router restart. See
 [API and Observability](../tutorials/global/api-and-observability).
 
-The models the Router asks, the ones that answer signals, embed text and
-rerank documents, are deployments under `global.model_catalog.deployments`. The
-decision model answers every question-style signal by default, in the
+The models the Router asks, the decision model that answers signals and the
+embedding model that recall uses, are deployments under
+`global.model_catalog.deployments`. The decision model answers every
+question-style signal by default, in the
 [model runtime](model-runtime/overview.md). A binding
 (`global.model_catalog.bindings.<signal>`, or a recipe's
 `recipes[].model_bindings.<signal>`) or a rule's own `deployment` names another
-deployment, such as a remote `classify` service for domain, PII or complexity.
+deployment, such as a larger local model or a remote System One API.
 [Choose a model for a signal](choose-a-model-for-a-signal.md) explains the rule,
 and the [model catalog reference](model-catalog.md) lists every deployment
 field. The earlier `variant`, `use_modernbert` and `use_mmbert_32k` selectors
 are gone; `vllm-sr config migrate` removes them.
 
-PII rules default to the legacy prompt and optional history scope. To inspect
-textual tool results, opt in per rule with `source: tool_result`; the router
-uses the neutral protocol representation, so the same rule applies to the
-supported chat, responses, and messages wire formats. Tool-result scope does
-not implicitly include the prompt or conversation history, and unsupported
-source values fail configuration validation.
+A `pii` rule reads the current user turn. `input.history: true` adds the
+earlier user turns, and `input.tool_results: true` the request's textual tool
+results; the router uses the neutral protocol representation, so the same rule
+applies to the supported chat, responses, and messages wire formats. The rule
+needs a deployment that answers span questions, or the configuration fails to
+load with `span_required`; the default decision model, vela3-fast, returns
+spans. When the rule's model gives no answer, its `on_unknown` decides:
+`no_match` (the default) or `match`. Text the model could not read counts as
+personal data.
 
-A complexity rule names a remote scorer with its `deployment`: a `classify`
-deployment that returns one score, which each rule turns into a verdict
-through its own `hard_above`/`easy_below` boundaries (or
-`hard_below`/`easy_above` for a score that falls as difficulty rises). One
-score drives every complexity rule, so the rules of a recipe name the
-same scorer. `threshold` remains the symmetric shorthand for the local signed
-margin. A remote score reports no confidence, so decisions gated on those
-rules rank on the engine's structural default; the Router warns at startup.
-The remote call is visible through `llm_remote_connector_*` and
-`llm_complexity_*` metrics, and a scorer failure is recorded on every
-complexity rule's signal errors rather than dropped.
-
-A remote PII classifier is a `classify` deployment that `pii` is bound to. It
-returns entity spans as code-point offsets into the exact request string it
-was sent, and every label it returns must exist in the configured
-`pii_mapping_path`; a response the span contract rejects is a failure rather
-than a clean "no PII" result.
-`global.model_catalog.modules.classifier.pii.on_error` selects what such a
-failure, or a provider-declared `truncated_at`, does to the rule that consumed
-it: `allow` (the default) treats the content as not matching, `block` matches
-it as `classification_error`. Spans returned before a declared truncation
-still count under both policies.
+A `complexity` rule asks the decision model how difficult the request is to
+answer well, `easy`, `medium` or `hard`, and a condition names the level it
+routes on with `label`, such as
+`{type: complexity, name: difficulty, label: hard}`.
 
 The [Routing Pipeline](../overview/signal-driven-decisions) explains the design.
 Capability pages under **Capabilities** document each signal, projection,
@@ -133,24 +119,24 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | Family and type | Use it to | Reusable fragment | Guide |
 | --- | --- | --- | --- |
 | `authz` — heuristic signal | `authz` turns identity and policy bindings into reusable routing inputs under `recipes[].signals.role_bindings`. | [`config/fragments/signal/authz/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/authz/) | [Guide](../tutorials/signal/heuristic/authz) |
-| `complexity` — learned signal | `complexity` estimates whether a request is `easy`, `medium`, or `hard` by comparing it with configured example sets. | [`config/fragments/signal/complexity/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/complexity/) | [Guide](../tutorials/signal/learned/complexity) |
+| `complexity` — application signal | `complexity` rates how difficult a request is to answer well: easy, medium or hard. | [`config/fragments/signal/complexity/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/complexity/) | [Guide](../tutorials/signal/application/complexity) |
 | `context` — heuristic signal | `context` detects requests that need a larger effective context window. | [`config/fragments/signal/context/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/context/) | [Guide](../tutorials/signal/heuristic/context) |
 | `conversation` — heuristic signal | `conversation` routes on chat structure and protocol facts, such as message count, developer instructions, available tools, explicit tool-use constraints, or an active tool loop. | [`config/fragments/signal/conversation/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/conversation/) | [Guide](../tutorials/signal/heuristic/conversation) |
-| `domain` — learned signal | `domain` classifies the request topic family. | [`config/fragments/signal/domain/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/domain/) | [Guide](../tutorials/signal/learned/domain) |
-| `fact-check` — learned signal | `fact-check` decides whether a prompt should be treated as evidence-sensitive traffic. | [`config/fragments/signal/fact-check/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/fact-check/) | [Guide](../tutorials/signal/learned/fact-check) |
-| `hallucination` — learned signal | `hallucination` checks the model's answer against the grounding context the request carried, such as tool results or retrieved documents, and reports the claims that context does not support. | [`config/fragments/signal/hallucination/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/hallucination/) | [Guide](../tutorials/signal/learned/hallucination) |
+| `domain` — application signal | `domains` routes on the request's subject area, one of 14 that the decision model chooses. | [`config/fragments/signal/domain/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/domain/) | [Guide](../tutorials/signal/application/domain) |
+| `fact-check` — application signal | `fact_check` detects requests whose answer relies on factual claims that should be verified. | [`config/fragments/signal/fact-check/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/fact-check/) | [Guide](../tutorials/signal/application/fact-check) |
+| `hallucination` — application signal | `hallucination` finds the claims in the model's answer that its grounding context does not support. | [`config/fragments/signal/hallucination/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/hallucination/) | [Guide](../tutorials/signal/application/hallucination) |
 | `input-modality` — heuristic signal | `input_modality` deterministically matches which kinds of input — `text`, `image`, `audio`, or `video` — are present in the parsed request. | [`config/fragments/signal/input-modality/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/input-modality/) | [Guide](../tutorials/signal/heuristic/input-modality) |
-| `jailbreak` — learned signal | `jailbreak` detects prompt-injection and jailbreak attempts before the Router commits to a route. | [`config/fragments/signal/jailbreak/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/jailbreak/) | [Guide](../tutorials/signal/learned/jailbreak) |
+| `jailbreak` — application signal | `jailbreak` detects prompt-injection and jailbreak attempts, in the request before routing or in the model's answer. | [`config/fragments/signal/jailbreak/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/jailbreak/) | [Guide](../tutorials/signal/application/jailbreak) |
 | `keyword` — heuristic signal | `keyword` matches explicit words and phrases in the request. | [`config/fragments/signal/keyword/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/keyword/) | [Guide](../tutorials/signal/heuristic/keyword) |
 | `language` — heuristic signal | `language` detects the request language and exposes it as a routing signal. | [`config/fragments/signal/language/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/language/) | [Guide](../tutorials/signal/heuristic/language) |
 | `metadata` — heuristic signal | `metadata` matches bounded string values supplied by the caller in request metadata. | [`config/fragments/signal/metadata/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/metadata/) | [Guide](../tutorials/signal/heuristic/metadata) |
-| `modality` — learned signal | `modality` detects whether a request should stay in text generation, switch into image generation, or support both. | [`config/fragments/signal/modality/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/modality/) | [Guide](../tutorials/signal/learned/modality) |
-| `pii` — learned signal | `pii` detects sensitive personal data in requests. | [`config/fragments/signal/pii/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/pii/) | [Guide](../tutorials/signal/learned/pii) |
-| `refusal` — learned signal | `refusal` asks the decision model whether the model's answer declines the request. | [`config/fragments/signal/refusal/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/refusal/) | [Guide](../tutorials/signal/learned/refusal) |
-| `safety` — learned signal | The `safety` signal predicts content risks. | [`config/fragments/signal/safety/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/safety/) | [Guide](../tutorials/signal/learned/safety) |
-| `systemone` — learned signal | `systemone` asks a System One model a typed question about the request and turns the answer into a routing fact. | [`config/fragments/signal/systemone/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/systemone/) | [Guide](../tutorials/signal/learned/systemone) |
-| `turn-relation` — learned signal | `turn_relation` asks the decision model how the current user turn relates to the conversation before it: it `continue`s the current topic, `reask`s an earlier turn, `shift`s to an unrelated one, or `return`s to an earlier topic. | [`config/fragments/signal/turn-relation/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/turn-relation/) | [Guide](../tutorials/signal/learned/turn-relation) |
-| `user-feedback` — learned signal | `user-feedback` detects correction, dissatisfaction, or escalation feedback from the conversation. | [`config/fragments/signal/user-feedback/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/user-feedback/) | [Guide](../tutorials/signal/learned/user-feedback) |
+| `modality` — application signal | `modality` reads which output the request asks for: text, an image, text with an image, speech, audio or video. | [`config/fragments/signal/modality/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/modality/) | [Guide](../tutorials/signal/application/modality) |
+| `pii` — application signal | `pii` locates personal data in the request, with the exact characters of every span. | [`config/fragments/signal/pii/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/pii/) | [Guide](../tutorials/signal/application/pii) |
+| `refusal` — application signal | `refusal` asks the decision model whether the model's answer declines the request. | [`config/fragments/signal/refusal/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/refusal/) | [Guide](../tutorials/signal/application/refusal) |
+| `safety` — application signal | `safety` detects harmful content in the request or the model's answer, optionally in named harm categories. | [`config/fragments/signal/safety/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/safety/) | [Guide](../tutorials/signal/application/safety) |
+| `systemone` — primitive signal | `systemone` asks the decision model a typed question you write, and turns the answer into a routing fact. | [`config/fragments/signal/systemone/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/systemone/) | [Guide](../tutorials/signal/systemone) |
+| `turn-relation` — application signal | `turn_relation` asks the decision model how the current user turn relates to the conversation before it. | [`config/fragments/signal/turn-relation/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/turn-relation/) | [Guide](../tutorials/signal/application/turn-relation) |
+| `user-feedback` — application signal | `user_feedbacks` reads what the current user turn says about the previous answer. | [`config/fragments/signal/user-feedback/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/user-feedback/) | [Guide](../tutorials/signal/application/user-feedback) |
 
 ### Selectors
 
@@ -266,10 +252,11 @@ catalog, custom, reasoning, Provider, and replica combinations. The
 [Model and provider Day-0 guide](../community/model-provider-day-0-support.md)
 is for contributors adding reusable support to the repository catalog.
 
-Classifier backend failures remain `Unknown` while the complete boolean tree
-is evaluated. Set `rules.on_unknown` to `no_match`, `match`, or `fail_request`
-to resolve an undetermined terminal result. Omitting it preserves the existing
-classifier-family error behavior.
+With `rules.on_unknown` set, a signal that failed or answered late remains
+`Unknown` while the complete boolean tree is evaluated, and `no_match`,
+`match`, or `fail_request` resolves an undetermined terminal result. Without
+it, a failed signal's condition does not match; a `systemone` condition can
+set its own `on_error` (`match` or `no_match`).
 
 Requests for an entrypoint enter its recipe; `vllm-sr/auto`, unless the default
 entrypoint names others, enters the default recipe.
@@ -337,12 +324,11 @@ entrypoints:
 
 An entrypoint maps one or more public model aliases to a recipe. A recipe owns
 its signal, projection, decision, algorithm, plugin, cache, learning,
-and routing state. Providers, stores, and router-owned classifier assets may be
-shared without allowing policy state to cross recipe boundaries.
+and routing state. Providers, stores, and the model catalog's deployments may
+be shared without allowing policy state to cross recipe boundaries.
 
-Set `limits.max_response_bytes` on a remote classifier deployment, and
-`max_response_bytes` on the MCP classifier module, to cap one upstream
-classifier response.
+Set `limits.max_response_bytes` on a remote deployment to cap one upstream
+response.
 
 In the schema, `entrypoints[].model_names` lists the public aliases,
 `entrypoints[].recipe` selects a recipe, `entrypoints[].default` marks the

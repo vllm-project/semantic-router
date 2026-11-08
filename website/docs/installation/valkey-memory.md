@@ -137,13 +137,21 @@ workflow.
 
 ## Configure the Router
 
-Add the Valkey memory backend to your `config.yaml`:
+Add the Valkey memory backend to your `config.yaml`. A `context` plugin with a
+`memory` source reads and writes it: in `global.plugins` for every request, as
+here, or in a decision's plugins (see
+[Per-Decision Memory Source](#per-decision-memory-source)).
 
 ```yaml
 global:
+  plugins:
+    - type: context
+      configuration:
+        enabled: true
+        sources:
+          - type: memory
   stores:
     memory:
-      enabled: true
       backend: valkey
       auto_store: true
       valkey:
@@ -200,7 +208,6 @@ keep the password in an environment-backed secret:
 global:
   stores:
     memory:
-      enabled: true
       backend: valkey
       valkey:
         host: valkey.example.internal

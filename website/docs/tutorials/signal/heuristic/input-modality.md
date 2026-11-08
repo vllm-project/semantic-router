@@ -100,7 +100,7 @@ records, and the standard per-signal Prometheus metrics
 
 ## Related Signals
 
-- [`modality`](../learned/modality.md) — the intended output modality
+- [`modality`](../application/modality.md) — the intended output modality
   (`text`, `image`, `text_image`).
 - [`conversation`](conversation.md) — request-shape facts such as message
   counts, tool definitions, and tool loops.

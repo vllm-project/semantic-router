@@ -190,6 +190,17 @@ or `fail`. `fail` is a strict policy: the Router returns HTTP 503 and never
 substitutes the first configured candidate. Eval dry-runs report the selection
 as unavailable for the same request.
 
+## Cache affinity
+
+A provider's prompt cache belongs to one model, so switching models in the
+middle of a conversation recomputes its whole context. On a continuing
+conversation (a later turn, carried history, a `previous_response_id` or a
+`prompt_cache_key`), the weighted objective adds a bounded bonus to the
+candidate that served the session's earlier turns. The bonus is a
+tie-breaker: it grows with the share of the request the cache would reuse, and
+it never outweighs a clear quality, cost or SLO difference. Lexicographic
+priorities keep their order; the bonus applies only within the final band.
+
 ## Parameters
 
 | Parameter | Default | Meaning |

@@ -53,11 +53,11 @@ Provider 定价放在每个具体模型旁边，位于 `providers.models[].prici
 
 Router 范围的调试表面默认关闭。`global.services.observability.profiling` 提供 Go `pprof` 端点，并且仅在显式启用时提供；然后它绑定 `127.0.0.1:6060`，因此除非显式更改 `bind`，否则 profile 永远不会到达可路由接口。该开关在启动时读取一次，因此更改它需要重启 Router。参见 [API 与可观测性](../tutorials/global/api-and-observability)。
 
-Router 询问的模型（回答信号、嵌入文本和重排文档的模型）是 `global.model_catalog.deployments` 下的部署。默认由决策模型在[模型运行时](model-runtime/overview.md)中回答每个问题类信号。绑定（`global.model_catalog.bindings.<signal>`，或配方的 `recipes[].model_bindings.<signal>`）或规则自身的 `deployment` 可以指定其他部署，例如为 domain、PII 或 complexity 指定远程 `classify` 服务。[为信号选择模型](choose-a-model-for-a-signal.md)说明这条规则，[模型目录参考](model-catalog.md)列出部署的全部字段。早期的 `variant`、`use_modernbert` 和 `use_mmbert_32k` 选择器已移除；`vllm-sr config migrate` 会删除它们。
+Router 询问的模型（回答信号的决策模型和召回所用的嵌入模型）是 `global.model_catalog.deployments` 下的部署。默认由决策模型在[模型运行时](model-runtime/overview.md)中回答每个问题类信号。绑定（`global.model_catalog.bindings.<signal>`，或配方的 `recipes[].model_bindings.<signal>`）或规则自身的 `deployment` 可以指定其他部署，例如更大的本地模型或远程 System One API。[为信号选择模型](choose-a-model-for-a-signal.md)说明这条规则，[模型目录参考](model-catalog.md)列出部署的全部字段。早期的 `variant`、`use_modernbert` 和 `use_mmbert_32k` 选择器已移除；`vllm-sr config migrate` 会删除它们。
 
-复杂度规则用自己的 `deployment` 指定远程评分器：一个返回单个分数的 `classify` 部署，每条规则通过自己的 `hard_above`/`easy_below` 边界（或当分数随难度上升而下降时使用 `hard_below`/`easy_above`）将分数转换为判定。所有复杂度规则由同一个分数驱动，因此一个路由配置中的规则都指定同一个评分器。`threshold` 仍是本地带符号边距的对称简写。远程分数不报告置信度，因此由这些规则门控的决策按引擎的结构默认值排序；Router 会在启动时发出警告。远程调用通过 `llm_remote_connector_*` 和 `llm_complexity_*` 指标可见，评分器失败会记录在每条复杂度规则的信号错误上，而不是被丢弃。
+`pii` 规则读取当前用户轮次；`input.history: true` 加上更早的用户轮次，`input.tool_results: true` 加上请求的文本工具结果。Router 使用中立的协议表示，因此同一条规则适用于受支持的 chat、responses 和 messages 线格式。规则需要能回答 span 问题的部署，否则配置加载失败并报告 `span_required`；默认决策模型 vela3-fast 返回 span。规则的模型没有给出答案时，由它的 `on_unknown` 决定：`no_match`（默认）或 `match`。模型无法读取的文本计为个人数据。
 
-远程 PII 分类器是 `pii` 所绑定的 `classify` 部署。它将实体跨度作为它收到的精确请求字符串的码点偏移返回，并且它返回的每个标签都必须存在于配置的 `pii_mapping_path` 中；片段契约拒绝的响应是失败，而不是干净的“无 PII”结果。`global.model_catalog.modules.classifier.pii.on_error` 选择此类失败或 provider 声明的 `truncated_at` 对读取它的规则做什么：`allow`（默认）将内容视为不匹配，`block` 将其匹配为 `classification_error`。在声明截断之前返回的跨度在两种策略下都计入。
+`complexity` 规则询问决策模型回答好这个请求有多难：`easy`、`medium` 或 `hard`；条件用 `label` 指定它路由的级别，例如 `{type: complexity, name: difficulty, label: hard}`。
 
 [路由流水线](../overview/signal-driven-decisions)解释该设计。**能力**下的能力页面记录每个信号、投影、决策、算法、插件和全局块。
 
@@ -73,48 +73,44 @@ Router 询问的模型（回答信号、嵌入文本和重排文档的模型）�
 | 家族和类型 | 用于 | 可复用片段 | 指南 |
 | --- | --- | --- | --- |
 | `authz` — 启发式信号 | `authz` 将身份和策略绑定转换为 `recipes[].signals.role_bindings` 下可复用的路由输入。 | [`config/fragments/signal/authz/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/authz/) | [指南](../tutorials/signal/heuristic/authz) |
-| `complexity` — 学习型信号 | `complexity` 询问决策模型请求属于 `easy`、`medium` 还是 `hard`。 | [`config/fragments/signal/complexity/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/complexity/) | [指南](../tutorials/signal/learned/complexity) |
+| `complexity` — 应用信号 | `complexity` 评估一个请求要回答好有多难：easy、medium 或 hard。 | [`config/fragments/signal/complexity/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/complexity/) | [指南](../tutorials/signal/application/complexity) |
 | `context` — 启发式信号 | `context` 检测需要更大有效上下文窗口的请求。 | [`config/fragments/signal/context/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/context/) | [指南](../tutorials/signal/heuristic/context) |
 | `conversation` — 启发式信号 | `conversation` 按聊天结构和协议事实路由，例如消息数、开发者指令、可用工具、显式工具使用约束，或活动工具循环。 | [`config/fragments/signal/conversation/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/conversation/) | [指南](../tutorials/signal/heuristic/conversation) |
-| `domain` — 学习型信号 | `domain` 分类请求的主题家族。 | [`config/fragments/signal/domain/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/domain/) | [指南](../tutorials/signal/learned/domain) |
-| `fact-check` — 学习型信号 | `fact-check` 决定提示词是否应被视为对证据敏感的流量。 | [`config/fragments/signal/fact-check/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/fact-check/) | [指南](../tutorials/signal/learned/fact-check) |
-| `hallucination` — 学习型信号 | `hallucination` 对照请求携带的依据上下文（例如工具结果或检索到的文档）检查模型答案，并报告该上下文不支持的声明。 | [`config/fragments/signal/hallucination/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/hallucination/) | [指南](../tutorials/signal/learned/hallucination) |
+| `domain` — 应用信号 | `domains` 按请求所属的学科路由，学科由决策模型从 14 个中选出。 | [`config/fragments/signal/domain/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/domain/) | [指南](../tutorials/signal/application/domain) |
+| `fact-check` — 应用信号 | `fact_check` 识别答案依赖于需要核查的事实陈述的请求。 | [`config/fragments/signal/fact-check/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/fact-check/) | [指南](../tutorials/signal/application/fact-check) |
+| `hallucination` — 应用信号 | `hallucination` 找出模型答案中其依据上下文不支持的陈述。 | [`config/fragments/signal/hallucination/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/hallucination/) | [指南](../tutorials/signal/application/hallucination) |
 | `input-modality` — 启发式信号 | `input_modality` 确定性匹配解析后的请求中存在哪些输入种类——`text`、`image`、`audio` 或 `video`。 | [`config/fragments/signal/input-modality/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/input-modality/) | [指南](../tutorials/signal/heuristic/input-modality) |
-| `jailbreak` — 学习型信号 | `jailbreak` 在 Router 提交到路由之前检测提示词注入和越狱尝试。 | [`config/fragments/signal/jailbreak/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/jailbreak/) | [指南](../tutorials/signal/learned/jailbreak) |
+| `jailbreak` — 应用信号 | `jailbreak` 在路由之前的请求中、或在模型的答案中检测提示注入和越狱企图。 | [`config/fragments/signal/jailbreak/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/jailbreak/) | [指南](../tutorials/signal/application/jailbreak) |
 | `keyword` — 启发式信号 | `keyword` 匹配请求中的显式单词和短语。 | [`config/fragments/signal/keyword/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/keyword/) | [指南](../tutorials/signal/heuristic/keyword) |
 | `language` — 启发式信号 | `language` 检测请求语言，并将其作为路由信号暴露。 | [`config/fragments/signal/language/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/language/) | [指南](../tutorials/signal/heuristic/language) |
 | `metadata` — 启发式信号 | `metadata` 匹配调用方在请求元数据中提供的有界字符串值。 | [`config/fragments/signal/metadata/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/metadata/) | [指南](../tutorials/signal/heuristic/metadata) |
-| `modality` — 学习型信号 | `modality` 检测请求应停留在文本生成、切换到图像生成，还是同时支持两者。 | [`config/fragments/signal/modality/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/modality/) | [指南](../tutorials/signal/learned/modality) |
-| `pii` — 学习型信号 | `pii` 检测请求中的敏感个人数据。 | [`config/fragments/signal/pii/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/pii/) | [指南](../tutorials/signal/learned/pii) |
-| `refusal` — 学习型信号 | `refusal` 询问模型的回答是否拒绝了请求；由响应插件读取。 | [`config/fragments/signal/refusal/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/refusal/) | [指南](../tutorials/signal/learned/refusal) |
-| `turn-relation` — 学习型信号 | `turn_relation` 询问当前用户轮次与对话的关系：延续、重复提问、切换或回到某个话题。 | [`config/fragments/signal/turn-relation/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/turn-relation/) | [指南](../tutorials/signal/learned/turn-relation) |
-| `user-feedback` — 学习型信号 | `user-feedback` 从会话中检测纠正、不满或升级反馈。 | [`config/fragments/signal/user-feedback/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/user-feedback/) | [指南](../tutorials/signal/learned/user-feedback) |
+| `modality` — 应用信号 | `modality` 读取请求要求的输出：文本、图片、文本加图片、语音、音频或视频。 | [`config/fragments/signal/modality/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/modality/) | [指南](../tutorials/signal/application/modality) |
+| `pii` — 应用信号 | `pii` 定位请求中的个人数据，并给出每个 span 的确切字符。 | [`config/fragments/signal/pii/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/pii/) | [指南](../tutorials/signal/application/pii) |
+| `refusal` — 应用信号 | `refusal` 询问决策模型，模型的答案是否拒绝了请求。 | [`config/fragments/signal/refusal/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/refusal/) | [指南](../tutorials/signal/application/refusal) |
+| `safety` — 应用信号 | `safety` 检测请求或模型答案中的有害内容，可选地按指定的危害类别检测。 | [`config/fragments/signal/safety/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/safety/) | [指南](../tutorials/signal/application/safety) |
+| `systemone` — 原语信号 | `systemone` 向决策模型提出一个你编写的类型化问题，再把答案变成一个路由事实。 | [`config/fragments/signal/systemone/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/systemone/) | [指南](../tutorials/signal/systemone) |
+| `turn-relation` — 应用信号 | `turn_relation` 询问决策模型，当前用户轮次与之前的对话是什么关系。 | [`config/fragments/signal/turn-relation/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/turn-relation/) | [指南](../tutorials/signal/application/turn-relation) |
+| `user-feedback` — 应用信号 | `user_feedbacks` 读取当前用户轮次对上一个答案的反馈。 | [`config/fragments/signal/user-feedback/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/user-feedback/) | [指南](../tutorials/signal/application/user-feedback) |
 
-### 选择算法
-
-| 家族和类型 | 用于 | 可复用片段 | 指南 |
-| --- | --- | --- | --- |
-| `automix` — 选择算法 | `automix` 是一个实验性选择器，按配置的质量和成本，加上内部验证和升级估计，对候选模型排序。 | [`config/fragments/algorithm/selection/automix.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/automix.yaml) | [指南](../tutorials/algorithm/selection/automix) |
-| `hybrid` — 选择算法 | `hybrid` 将 Elo 评分、Router-DC 描述相似度、AutoMix 的单模型价值估计和成本组合成一个加权候选分数。 | [`config/fragments/algorithm/selection/hybrid.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/hybrid.yaml) | [指南](../tutorials/algorithm/selection/hybrid) |
-| `kmeans` — 选择算法 | `kmeans` 将请求发送到分配给其最近已学习聚类的模型。 | [`config/fragments/algorithm/selection/kmeans.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/kmeans.yaml) | [指南](../tutorials/algorithm/selection/kmeans) |
-| `knn` — 选择算法 | `knn` 从在最相似的已记录请求上表现良好的模型中选择候选。 | [`config/fragments/algorithm/selection/knn.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/knn.yaml) | [指南](../tutorials/algorithm/selection/knn) |
-| `latency-aware` — 选择算法 | `latency_aware` 使用观察到的 TTFT 和 TPOT 百分位对符合条件的候选排序，并选择相对延迟分数最低的候选。 | [`config/fragments/algorithm/selection/latency-aware.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/latency-aware.yaml) | [指南](../tutorials/algorithm/selection/latency-aware) |
-| `mlp` — 选择算法 | `mlp` 在 CPU 上运行已训练的神经分类器，将请求映射到候选模型。 | [`config/fragments/algorithm/selection/mlp.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/mlp.yaml) | [指南](../tutorials/algorithm/selection/mlp) |
-| `multi-factor` — 选择算法 | `multi_factor` 从质量、延迟、成本和负载中选择一个候选。 | [`config/fragments/algorithm/selection/multi-factor.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/multi-factor.yaml) | [指南](../tutorials/algorithm/selection/multi-factor) |
-| `prompt` — 选择算法 | `prompt` 使用具体的辅助模型，从匹配决策的 `modelRefs` 中恰好选择一个模型。 | [`config/fragments/algorithm/selection/prompt.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/prompt.yaml) | [指南](../tutorials/algorithm/selection/prompt) |
-| `router-dc` — 选择算法 | `router_dc` 嵌入请求和每个模型描述，然后选择语义相似度最强的候选。 | [`config/fragments/algorithm/selection/router-dc.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/router-dc.yaml) | [指南](../tutorials/algorithm/selection/router-dc) |
-| `static` — 选择算法 | `static` 提供确定性的模型选择，无需指标或已学习状态。 | [`config/fragments/algorithm/selection/static.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/static.yaml) | [指南](../tutorials/algorithm/selection/static) |
-| `svm` — 选择算法 | `svm` 使用已训练的线性或 RBF 支持向量分类器，将请求特征映射到候选模型。 | [`config/fragments/algorithm/selection/svm.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/svm.yaml) | [指南](../tutorials/algorithm/selection/svm) |
-
-### Looper 算法
+### 选择器
 
 | 家族和类型 | 用于 | 可复用片段 | 指南 |
 | --- | --- | --- | --- |
-| `confidence` — Looper 算法 | `confidence` 按顺序尝试候选模型，并在响应置信度达到配置阈值时停止。 | [`config/fragments/algorithm/looper/confidence.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/confidence.yaml) | [指南](../tutorials/algorithm/looper/confidence) |
-| `fusion` — Looper 算法 | `fusion` 让多个模型回答请求，并由评判模型合成一个最终答案。 | [`config/fragments/algorithm/looper/fusion.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/fusion.yaml) | [指南](../tutorials/algorithm/looper/fusion) |
-| `ratings` — Looper 算法 | `ratings` 调用每个候选模型，并为每个成功的模型返回一个 OpenAI 兼容 choice。`max_concurrent` 限制并行工作；它不限制执行的候选总数。 | [`config/fragments/algorithm/looper/ratings.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/ratings.yaml) | [指南](../tutorials/algorithm/looper/ratings) |
-| `remom` — Looper 算法 | `remom` 在有界轮次中运行多个候选模型，并将它们的响应合成为一个答案。 | [`config/fragments/algorithm/looper/remom.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/remom.yaml) | [指南](../tutorials/algorithm/looper/remom) |
-| `workflows` — Looper 算法 | `workflows` 在一个 OpenAI 兼容模型名称背后运行有界的多步 Router Flow。 | [`config/fragments/algorithm/looper/workflows.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/workflows.yaml) | [指南](../tutorials/algorithm/looper/workflows) |
+| `latency-aware` — 选择器 | 要选出最快的合格候选，只按延迟为 Multi Factor 设置权重。 | [`config/fragments/algorithm/selection/latency-aware.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/latency-aware.yaml) | [指南](../tutorials/algorithm/selection/latency-aware) |
+| `multi-factor` — 选择器 | `multi_factor` 从质量、延迟、成本和负载中选择一个候选。 | [`config/fragments/algorithm/selection/multi-factor.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/multi-factor.yaml) | [指南](../tutorials/algorithm/selection/multi-factor) |
+| `random` — 选择器 | `random` 从决策的合格候选中均匀随机选择一个模型。 | [`config/fragments/algorithm/selection/random.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/random.yaml) | [指南](../tutorials/algorithm/selection/random) |
+| `static` — 选择器 | `static` 提供确定性的模型选择，无需指标或已学习状态。 | [`config/fragments/algorithm/selection/static.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/static.yaml) | [指南](../tutorials/algorithm/selection/static) |
+| `systemone` — 选择器 | `systemone` 询问 System One 模型，路由决策的哪个 `modelRefs` 应该回答请求。 | [`config/fragments/algorithm/selection/systemone.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/systemone.yaml) | [指南](../tutorials/algorithm/selection/systemone) |
+
+### 执行器
+
+| 家族和类型 | 用于 | 可复用片段 | 指南 |
+| --- | --- | --- | --- |
+| `escalate` — 执行器 | `escalate` 按顺序逐个调用决策的候选，返回它接受的第一个答案。 | [`config/fragments/algorithm/looper/escalate.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/escalate.yaml) | [指南](../tutorials/algorithm/looper/escalate) |
+| `fusion` — 执行器 | `fusion` 让多个模型回答请求，并由评判模型合成一个最终答案。 | [`config/fragments/algorithm/looper/fusion.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/fusion.yaml) | [指南](../tutorials/algorithm/looper/fusion) |
+| `ratings` — 执行器 | `ratings` 调用每个候选模型，并为每个成功的模型返回一个 OpenAI 兼容 choice。`max_concurrent` 限制并行工作；它不限制执行的候选总数。 | [`config/fragments/algorithm/looper/ratings.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/ratings.yaml) | [指南](../tutorials/algorithm/looper/ratings) |
+| `remom` — 执行器 | `remom` 在有界轮次中运行多个候选模型，并将它们的响应合成为一个答案。 | [`config/fragments/algorithm/looper/remom.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/remom.yaml) | [指南](../tutorials/algorithm/looper/remom) |
+| `workflows` — 执行器 | `workflows` 在一个 OpenAI 兼容模型名称背后运行有界的多步 Router Flow。 | [`config/fragments/algorithm/looper/workflows.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/workflows.yaml) | [指南](../tutorials/algorithm/looper/workflows) |
 
 ### 插件与包
 
@@ -199,7 +195,7 @@ providers:
 
 `name` 仍是本地 Router 别名。私有或新发布的模型省略 `catalog`，并可选择在该别名下定义 Model Card 和推理契约。从[配置模型](model-configuration)开始，然后使用[模型配置模式](model-configuration-patterns)比较目录、自定义、推理、Provider 和副本组合。[模型与 provider Day-0 指南](../community/model-provider-day-0-support.md)面向向仓库目录添加可复用支持的贡献者。
 
-分类器后端失败在评估完整布尔树期间保持为 `Unknown`。将 `rules.on_unknown` 设置为 `no_match`、`match` 或 `fail_request`，以解析未确定的终端结果。省略它会保留现有的分类器家族错误行为。
+设置了 `rules.on_unknown` 时，失败或迟到的信号在评估完整布尔树期间保持为 `Unknown`，由 `no_match`、`match` 或 `fail_request` 解析未确定的终端结果。没有设置时，失败信号的条件不匹配；`systemone` 条件可以设置自己的 `on_error`（`match` 或 `no_match`）。
 
 入口点的请求进入其配方；`vllm-sr/auto`（除非默认入口点使用其他名称）进入默认配方。具体的 provider 模型名称是直接透传请求，并绕过配方信号、决策、路由插件、缓存、学习和会话路由。
 
@@ -249,9 +245,9 @@ entrypoints:
     recipe: private
 ```
 
-入口点将一个或多个公共模型别名映射到配方。配方拥有其信号、投影、决策、算法、插件、缓存、回放、学习和路由状态。Providers、存储和 Router 拥有的分类器资产可以共享，而不允许策略状态跨越配方边界。
+入口点将一个或多个公共模型别名映射到配方。配方拥有其信号、投影、决策、算法、插件、缓存、回放、学习和路由状态。Providers、存储和模型目录中的部署可以共享，而不允许策略状态跨越配方边界。
 
-在远程分类器部署上设置 `limits.max_response_bytes`，在 MCP 分类器模块上设置 `max_response_bytes`，以限制一次上游分类器响应。
+在远程部署上设置 `limits.max_response_bytes`，以限制一次上游响应。
 
 在 schema 中，`entrypoints[].model_names` 列出公共别名，`entrypoints[].recipe` 选择配方，`entrypoints[].default` 标记默认入口点，每个 `recipes[]` 条目包含该配方的策略。
 

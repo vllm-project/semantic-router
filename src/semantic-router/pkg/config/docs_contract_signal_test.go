@@ -1,48 +1,48 @@
 package config
 
 import (
-	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"testing"
 )
 
+// signalTutorialBuckets maps each signal family to the directory of its
+// tutorial under tutorials/signal: the layer it belongs to, or none for the
+// systemone primitive.
 var signalTutorialBuckets = map[string]string{
-	"safety":         "learned",
+	"safety":         "application",
 	"authz":          "heuristic",
-	"complexity":     "learned",
+	"complexity":     "application",
 	"context":        "heuristic",
 	"conversation":   "heuristic",
-	"domain":         "learned",
-	"fact-check":     "learned",
-	"hallucination":  "learned",
-	"jailbreak":      "learned",
+	"domain":         "application",
+	"fact-check":     "application",
+	"hallucination":  "application",
+	"jailbreak":      "application",
 	"keyword":        "heuristic",
 	"language":       "heuristic",
-	"modality":       "learned",
-	"pii":            "learned",
-	"user-feedback":  "learned",
+	"modality":       "application",
+	"pii":            "application",
+	"user-feedback":  "application",
 	"metadata":       "heuristic",
 	"input-modality": "heuristic",
-	"systemone":      "learned",
-	"refusal":        "learned",
-	"turn-relation":  "learned",
+	"systemone":      "",
+	"refusal":        "application",
+	"turn-relation":  "application",
 }
 
 var retiredSignalTutorialDocs = []string{
 	repoRel("website", "docs", "tutorials", "signal", "routing.md"),
 	repoRel("website", "docs", "tutorials", "signal", "safety.md"),
 	repoRel("website", "docs", "tutorials", "signal", "operational.md"),
-	repoRel("website", "docs", "tutorials", "signal", "learned", "classifier.md"),
-	repoRel("website", "docs", "tutorials", "signal", "learned", "embedding.md"),
-	repoRel("website", "docs", "tutorials", "signal", "learned", "kb.md"),
-	repoRel("website", "docs", "tutorials", "signal", "learned", "preference.md"),
-	repoRel("website", "docs", "tutorials", "signal", "learned", "reask.md"),
 	repoRel("website", "docs", "tutorials", "signal", "heuristic", "topic-continuity.md"),
 	repoRel("website", "docs", "tutorials", "signal", "heuristic", "action.md"),
 	repoRel("website", "docs", "tutorials", "signal", "heuristic", "event.md"),
 	repoRel("website", "docs", "tutorials", "signal", "heuristic", "structure.md"),
+	repoRel("website", "docs", "tutorials", "signal", "learned"),
+	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "tutorials", "signal", "learned"),
 }
 
 func assertSignalTutorialDocsMatchConfigHierarchy(t *testing.T, root string) {
@@ -86,7 +86,7 @@ func signalTutorialSidebarEntries() []string {
 	}
 	sort.Strings(families)
 	for _, family := range families {
-		entries = append(entries, fmt.Sprintf("'tutorials/signal/%s/%s'", signalTutorialBuckets[family], family))
+		entries = append(entries, "'"+path.Join("tutorials", "signal", signalTutorialBuckets[family], family)+"'")
 	}
 	return entries
 }

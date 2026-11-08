@@ -44,14 +44,21 @@ translation:
 global:
   stores:
     response_cache:
-      enabled: true
       backend_type: memory
-      similarity_threshold: 0.8
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        semantic:
+          match:
+            recall: {top_k: 1, min_similarity: 0.8}
 ```
+
+store 只提供缓存后端。[`response_cache` 插件](../plugin/response-cache)负责开启缓存：写在 `global.plugins` 中对每个请求生效，写在决策的插件中只对该决策的请求生效。
 
 #### 否定防护 {#negation-guard}
 
-双编码器相似度可能无法区分 *“turn on dark mode”* 和 *“turn off dark mode”*：相反含义的查询常常超过 `similarity_threshold`，而真正的改写可能低于它，因此提高阈值不能可靠地避免误命中。所有缓存后端都会在返回语义候选前执行词面防护：对词面接近的英文问题，检查否定线索和已知反义词替换。它不需要模型、没有任何设置，在内存、Redis、Valkey、Milvus、Qdrant 和混合缓存中始终运行；不覆盖缺少词面线索、仅词序变化或非英文的含义变化。
+双编码器相似度可能无法区分 *“turn on dark mode”* 和 *“turn off dark mode”*：相反含义的查询常常超过召回的 `min_similarity`，而真正的改写可能低于它，因此提高阈值不能可靠地避免误命中。所有缓存后端都会在返回语义候选前执行词面防护：对词面接近的英文问题，检查否定线索和已知反义词替换。它不需要模型、没有任何设置，在内存、Redis、Valkey、Milvus、Qdrant 和混合缓存中始终运行；不覆盖缺少词面线索、仅词序变化或非英文的含义变化。
 
 拒绝会记录为 `cache_negation_reject`，计入未命中，被拒绝的分数仍作为 `x-vsr-trace` 的 `cache_similarity` 提供。远端和混合缓存会拒绝缺少原始问题的候选，并继续检查有数量上限的已检索候选。混合缓存回退到 Milvus 时同样执行该检查。
 
@@ -59,7 +66,17 @@ global:
 
 ### 记忆 {#memory}
 
-记忆存储支持三种后端：`milvus`（默认）、`valkey` 和 `qdrant`。
+记忆存储支持三种后端：`milvus`（默认）、`valkey` 和 `qdrant`。带 `memory` 源的 [`context` 插件](../plugin/context#memory-sources)负责读写它：写在 `global.plugins` 中对每个请求生效，写在决策的插件中只对该决策的请求生效：
+
+```yaml
+global:
+  plugins:
+    - type: context
+      configuration:
+        enabled: true
+        sources:
+          - type: memory
+```
 
 **Milvus 后端**（默认）：
 
@@ -67,7 +84,6 @@ global:
 global:
   stores:
     memory:
-      enabled: true
       milvus:
         address: milvus:19530
         collection: agentic_memory
@@ -80,7 +96,6 @@ global:
 global:
   stores:
     memory:
-      enabled: true
       backend: valkey
       valkey:
         host: valkey
@@ -97,7 +112,6 @@ global:
 global:
   stores:
     memory:
-      enabled: true
       backend: qdrant
       qdrant:
         host: qdrant

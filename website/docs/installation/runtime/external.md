@@ -5,7 +5,7 @@ description: Connect a decision model, embedding model or chat model hosted outs
 
 Use a remote service when another server manages the model and its hardware.
 Declare it as a deployment whose `provider` is the API it speaks, then name that
-deployment where it is used. For models the router runs itself, see the
+deployment where a feature uses it. For models the Router runs itself, see the
 [model runtime](model-runtime/overview.md). The
 [model catalog reference](../model-catalog.md#connection-block) lists every
 connection field, and
@@ -14,43 +14,47 @@ each signal's deployment is named.
 
 ## Choose an API
 
-| Service | `provider` | Typical use |
+| Service | `provider` | Used by |
 | --- | --- | --- |
-| System One API | `systemone` | [System One questions](../../tutorials/signal/learned/systemone.md#ask-a-remote-system-one-model) and every built-in question-style signal |
-| OpenAI-compatible embedding API (`POST <endpoint>/embeddings`) | `openai_embeddings` | [Remote embeddings](../../model-runtime/guides/embeddings.md#use-an-external-embedding-service) |
+| System One API (`POST <endpoint>`) | `systemone` | Every System One question: the application signals, `systemone` rules, the System One selector, judges and checks. See [Remote System One APIs](../../system-one/deployments#remote-system-one-apis) |
+| OpenAI-compatible embedding API (`POST <endpoint>/embeddings`) | `openai_embeddings` | Recall only: the response cache, memory, RAG and vector stores, through `embeddings.default: {deployment}` or a store's `embedding` block. Its `capabilities` declare the `dimensions` and `modalities` of its vectors. See [Remote embeddings](../../model-runtime/guides/embeddings.md#use-an-external-embedding-service) |
 | Chat API (`POST <endpoint>/chat/completions`) | `openai_chat` | The memory query rewrite that `global.stores.memory.query_rewrite` names |
 
-A signal is answered by a decision model: a `model_runtime` or `systemone`
-deployment. No signal asks a classification or chat service.
+Every routing judgment is a System One question, so a remote decision model
+is a `systemone` deployment, and a type, a recipe or a rule binds to it the
+way it binds to a local one. No signal asks a classification or chat service.
+A remote model answers no span questions unless its card says so: keep `pii`
+and `hallucination` on a span-capable deployment, such as the local
+`primary`.
 
-## Connect a remote decision model
+## Connect a System One API
 
 Merge this fragment into your existing `config.yaml`. Replace the endpoint and
-model with your service's:
+the key's environment variable with your service's:
 
 ```yaml
 global:
   model_catalog:
     deployments:
-      d3-remote:
+      remote-decider:
         provider: systemone
         endpoint: https://systemone.example.com/v1/systemone
         model: vllm-sr/d3-ultra
-        auth: {api_key_env: SYSTEMONE_KEY}
-        timeout_ms: 5000
+        auth: {api_key_env: SYSTEMONE_API_KEY}
+        timeout_ms: 1500
         limits: {max_response_bytes: 1048576}
-recipes:
-  - name: default
-    model_bindings:
-      jailbreak: d3-remote
+    bindings:
+      jailbreak: remote-decider
+      domain: remote-decider
 ```
 
-`d3-remote` is the connection; the `jailbreak` binding makes it answer the
-recipe's jailbreak signal. Add a
-[jailbreak signal and decision](../../tutorials/signal/learned/jailbreak.md)
-to choose what happens when an attack is detected. To answer every
-question-style signal with it, name it in
-`global.model_catalog.system.decision_model`.
+`remote-decider` is the connection; the bindings make it answer the
+recipes' jailbreak and domain rules, while every other question keeps the
+decision model. A recipe's own `model_bindings` binds for that recipe only,
+and naming the deployment in `global.model_catalog.system.decision_model`
+makes it answer every question. Add a
+[jailbreak rule and decision](../../tutorials/signal/application/jailbreak)
+to choose what happens when an attack is detected.
 
 ## Test the connection
 
@@ -76,6 +80,12 @@ endpoint to check capacity.
   settings do not apply.
 - A `systemone` service that publishes no model card answers the question
   types and presets its deployment's `capabilities` declares.
-
-See [when a check cannot finish](../../model-runtime/guides/safety.md#when-a-check-cannot-finish)
-before using remote signals to enforce a guardrail.
+- A slow or failing service leaves its questions unknown; it never fails the
+  request by itself. Decide per rule what an unknown answer means:
+  `on_unknown` on `jailbreak` and `pii` rules, `rules.on_unknown` on a
+  decision.
+- A remote model has no calibrated thresholds. Its presets use 0.5, with an
+  `uncalibrated_preset` warning, until a rule writes its own `predicate`.
+- The parts of a request a question reads leave the host;
+  [what leaves the host](../../system-one/deployments#what-leaves-the-host)
+  lists them per signal.

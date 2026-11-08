@@ -112,16 +112,16 @@ python result_to_config.py \
   --api-format openai
 ```
 
-生成器创建带有以下内容的 v0.3 文档：
+生成器创建带有以下内容的 v0.5 文档：
 
 - 平均评测最高的模型作为 `providers.defaults.model`
 - 每个被评测逻辑模型的一个 provider 绑定和 Model Card
 - 每个观察到的 MMLU-Pro 类别的一个领域信号
 - 每个类别的排名 `model_scores`
 - 空的 `recipes[].decisions` 列表
-- 响应缓存、工具、嵌入、prompt guard 和分类器的稀疏默认值
+- 全局语义响应缓存及其存储，用 `vela-embedding` 部署做嵌入
 
-生成的文档具有此顶层形状。此处省略列表和模块体；检查 `config.eval.yaml` 以查看被评测模型、分数和类别信号。
+生成的文档具有此顶层形状。此处省略列表和各部分内容；检查 `config.eval.yaml` 以查看被评测模型、分数和类别信号。
 
 ```yaml
 version: v0.5
@@ -136,13 +136,11 @@ recipes:
       domains: []
     decisions: []
 global:
+  plugins: []
   stores:
     response_cache: {}
   model_catalog:
     embeddings: {}
-    modules:
-      prompt_guard: {}
-      classifier: {}
 ```
 
 同一基础模型的 Direct 和 CoT 结果目录会折叠为一个逻辑模型。对每个类别，生成器保留更高的观察准确率，并根据其内置类别映射设置 `use_reasoning`。评审该选择，而不是将其视为已学习的推理策略。
@@ -184,4 +182,3 @@ MMLU-Pro 生成器为被评测答案排名；它不测试完整 Router 数据路
 
 - [`src/training/model_eval`](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_eval)
 - [模型训练概览](./training-overview)
-- [当前模型目录](./model-catalog)

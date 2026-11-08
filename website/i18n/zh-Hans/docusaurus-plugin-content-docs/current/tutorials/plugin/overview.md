@@ -59,9 +59,11 @@ recipes:
 | `request_params` | 强制请求参数限制 | 无 | [请求参数](./request-params) |
 | `tools` | 允许、阻止或移除工具和工具历史；由决策模型过滤或添加请求所需的工具 | `select` 需要决策模型；`add` 需要工具目录 | [工具](./tools) |
 | `response_cache` | 复用兼容的先前响应 | `global.stores.response_cache` | [响应缓存](./response-cache) |
+| `prompt_cache` | 在指令和工具上插入 Anthropic 提示词缓存断点 | 无 | [提示词缓存](./prompt-cache) |
 | `context` | 检索文档和记忆，在预算内压缩请求，并在响应后写入记忆 | RAG 后端、`global.stores.memory`、相关性判断所用的 decision model | [Context](./context) |
 | `router_replay` | 覆盖单条路由的回放采集，并把抽样副本影子发送到候选模型 | `global.services.router_replay` | [路由回放](./router-replay) |
 | `response_guard` | 按检查回答所用的信号拦截或标注回答 | 其规则读取的响应阶段信号 | [响应守卫](./response-guard) |
+| `masking` | 把命名的 `pii` 规则在发往提供商的请求中找到的个人数据替换为占位符 | 绑定到能回答 span 问题的部署的 `pii` 规则 | [Masking](./masking) |
 
 [内容安全](./content-safety) 打包了三个受支持插件，而不是额外的插件类型。
 

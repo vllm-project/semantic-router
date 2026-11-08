@@ -16,18 +16,20 @@ each earlier field next to the deployment-and-binding form that replaces it.
 
 Earlier releases ran models inside the router with three back ends: candle,
 ONNX Runtime (`ort`) and OpenVINO. Those in-process back ends are gone. Local
-routing models now run in the [model runtime](model-runtime/overview.md);
-external classifier and embedding services retain their separate adapters.
+routing models now run in the [model runtime](model-runtime/overview.md), and
+remote ones are [System One APIs](../system-one/deployments#remote-system-one-apis)
+or embedding services.
 `vllm-sr serve --platform auto` detects the host or target; use `--platform cpu`
 to select the CPU image explicitly. The [release note](release-notes/built-in-model-runtime.md)
 lists every breaking change of that release.
 
-**Review defaults as well as field migrations.** Features without an explicit
-model override use current defaults, including vela3-fast for common judgment
-tasks. A historical configuration that relied on Vela 1.0 defaults may therefore
-change answers even when its YAML still parses. Review
-[model and threshold choices](./choose-a-model.md#built-in-signals) and test representative
-requests before rollout; explicit specialist assignments remain available.
+**Review defaults as well as field migrations.** Every routing signal now asks
+the decision model, vela3-fast unless you choose another. A historical
+configuration that relied on Vela 1.0 classifiers therefore changes answers
+even when it migrates cleanly. Review
+[model and threshold choices](./choose-a-model.md#built-in-signals) and test
+representative requests before rollout. [Migrate to v0.5](../installation/migrate-to-v0-5)
+covers the configuration changes of the current release.
 
 You need to migrate if your configuration contains any of these:
 
@@ -91,27 +93,22 @@ or stored vectors to re-embed because their embedding model changed (see
 | `global.router.model_selection.ml`, with the trained `knn`, `kmeans`, `svm` and `mlp` selectors | removed: the `systemone` selector, which needs no trained model, replaces them |
 | `variant`, `model_type`, `use_modernbert`, `use_mmbert_32k` on a module | removed: the runtime reads the architecture from the model |
 | a label map inside an older model's directory, such as `category_mapping_path: models/mom-domain-classifier/category_mapping.json` | removed: the router reads the labels of the model it runs |
-| `grounding.nli_contradiction_penalty` of the fusion algorithm | `grounding.contradiction_penalty`: grounding now reads the hallucination detector |
-| a hallucination detector with `backend: endpoint`, `endpoint` and `model_id` | an `openai_chat` deployment of that chat service and a `hallucination` binding to it; an endpoint whose path is not `/v1` has to be written by hand |
+| `grounding.nli_contradiction_penalty` of the fusion algorithm | `grounding.contradiction_penalty`: grounding now reads the hallucination question |
+| a hallucination detector with `backend: endpoint`, `endpoint` and `model_id` | removed: the `hallucination` signal asks a span-capable System One deployment |
 
 ### Model names that changed
 
-Older task models are replaced by the Vela 1.0 model for the same task. The
-replacements use the same label names, so your signal rules and route
-conditions keep matching what they matched before.
+The Router no longer runs task classifiers: a domain, PII, jailbreak,
+fact-check, feedback, modality or hallucination model of an earlier release,
+whether an older name such as `mom-domain-classifier` or a Vela 1.0 task
+model, is replaced by the [decision model](../system-one/overview), which
+asks that signal's question. Its labels are the ones your rules already use.
+Embedding models are replaced as follows:
 
 | Old model | New model | What changes |
 | --- | --- | --- |
-| `mom-domain-classifier`, `mmbert32k-intent-*` and their aliases | `Vela-1.0-Encoder-307M-Domain` | Same 14 domains |
-| `mom-pii-classifier`, `mom-mmbert-pii-detector`, `mmbert32k-pii-*` | `Vela-1.0-Encoder-307M-PII` | Same 17 PII types |
-| `mom-jailbreak-classifier`, `mmbert32k-jailbreak-*` | `Vela-1.0-Encoder-307M-Guard` | Same `benign` / `jailbreak` labels |
-| `mom-halugate-sentinel`, `mmbert32k-factcheck-*` | `Vela-1.0-Encoder-307M-FactCheck` | Same labels |
-| `mom-feedback-detector`, `mmbert32k-feedback-*` | `Vela-1.0-Encoder-307M-Feedback` | Adds `NO_FEEDBACK` for messages without feedback |
-| `mmbert32k-modality-router-merged` | `Vela-1.0-Encoder-307M-Modality` | Same `AR` / `DIFFUSION` / `BOTH` labels |
-| `mom-halugate-detector`, LettuceDetect v1 and v2 | `Vela-1.0-Encoder-307M-Halu` | Same inputs; answer spans as before |
 | `mmbert-embed-32k-2d-matryoshka` | `Vela-1.0-Encoder-307M-Embedding` | **Re-embed** stored vectors |
 | EmbeddingGemma (`mom-embedding-flash`), MiniLM (`mom-embedding-light`) | `Vela-1.0-Encoder-307M-Embedding`, or an OpenAI-compatible embedding endpoint | **Re-embed** stored vectors |
-| `multi-modal-embed-small` / `-large` | `Vela-1.0-Omni-Nano` / `-Mini` | **Re-embed** stored vectors |
 | Qwen3-Embedding-0.6B (`mom-embedding-pro`) | unchanged | |
 
 ### Features that were retired

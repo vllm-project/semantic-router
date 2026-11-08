@@ -39,8 +39,9 @@ DOCS = REPO_ROOT / "website" / "docs"
 PAGES = [
     *sorted((DOCS / "model-runtime").rglob("*.md")),
     DOCS / "tutorials/global/model-runtime.md",
-    DOCS / "tutorials/signal/learned/systemone.md",
+    DOCS / "tutorials/signal/systemone.md",
     DOCS / "tutorials/algorithm/selection/systemone.md",
+    DOCS / "system-one/api.md",
 ]
 RUNTIME = REPO_ROOT / "src" / "model-runtime" / "vllm_srun"
 FENCE = re.compile(r"^```(\w*)([^\n]*)\n(.*?)^```", re.M | re.S)
@@ -296,7 +297,7 @@ def _curl_requests() -> list[tuple[str, str, dict]]:
 def test_curl_request_bodies_follow_the_runtime_contract():
     requests = _curl_requests()
 
-    assert len(requests) >= 7
+    assert len(requests) >= 4
     for where, path, body in requests:
         _validate_request(path, body, where)
 

@@ -117,4 +117,4 @@ API：图像 API（`api_format: images`）上的模型返回图像，Responses A
 ## 图像输入
 
 根据请求中图像的内容进行路由，使用 `input.image: true` 的 `systemone` 问题，由能够读取图像的决策模型回答。
-问题字段以及能够回答图像问题的模型，请参阅 [System One](../signal/learned/systemone)。
+问题字段以及能够回答图像问题的模型，请参阅 [System One](../signal/systemone)。

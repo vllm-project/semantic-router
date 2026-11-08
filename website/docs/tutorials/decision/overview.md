@@ -63,12 +63,14 @@ anywhere except a root `AND`, which is the explicit match-all form. Errors name
 the decision and the node path, for example
 `decision "billing": rules.conditions[1]: NOT requires exactly one child condition, got 2`.
 
-Classifier failures evaluate as `Unknown`, not `False`. `NOT Unknown` remains
+With `rules.on_unknown` set, a signal that failed or answered late evaluates
+as `Unknown`, not `False`. `NOT Unknown` remains
 `Unknown`; `False AND Unknown` is `False`, and `True OR Unknown` is `True`.
 When the final result is still unknown, `rules.on_unknown` chooses `no_match`,
-`match`, or `fail_request`. If omitted, existing generic-classifier
-`on_error` and prompt-guard `on_error` behavior is retained, and the router
-warns at startup about classifier conditions that set neither. Applied policies
+`match`, or `fail_request`. If omitted, a failed signal's condition evaluates
+as `False`; a `systemone` condition can set its own `on_error` (`match` or
+`no_match`), and the router warns at startup about a `systemone` condition
+when neither is set. Applied policies
 appear in the `on_unknown` member of `x-vsr-trace` and the
 `llm_decision_unknown_total{decision, policy}` metric. The `fail_request` 503
 carries the code [`decision_unresolved`](../../api/router.md#routing-errors),

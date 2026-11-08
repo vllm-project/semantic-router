@@ -55,15 +55,13 @@ kubectl wait --for=condition=Ready pod \
 
 ## 配置响应缓存
 
-使用 canonical `response_cache` 键。`semantic_cache` 是仅保留用于迁移兼容性的已弃用输入别名。
+使用 `response_cache` 键。仍写 `semantic_cache` 的配置无法加载；`vllm-sr config migrate` 会将其改名。store 只提供后端，[`response_cache` 插件](../tutorials/plugin/response-cache)负责开启缓存并设置召回的 `min_similarity`。
 
 ```yaml
 global:
   stores:
     response_cache:
-      enabled: true
       backend_type: milvus
-      similarity_threshold: 0.86
       max_entries: 50000
       ttl_seconds: 7200
       milvus:

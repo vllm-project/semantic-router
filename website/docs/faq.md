@@ -48,7 +48,7 @@ Use a concrete model ID for direct inference in either mode. In Router mode,
 you can also publish an explicit `api: systemone` entrypoint and grant its
 `vllm-sr/auto` name on the listener to run a native escalation. The Chat default
 entrypoint does not implicitly enable native routing. See the
-[System One cascade guide](tutorials/algorithm/native/cascade) and
+[System One escalate guide](tutorials/algorithm/looper/escalate#on-system-one) and
 [Quickstart](model-runtime/quickstart) for configuration and requests.
 
 ## How does it work with an agent harness?
@@ -85,8 +85,8 @@ llm-d should not decide business policy, and Semantic Router is not meant to cho
 
 The [llm-d integration guide](installation/k8s/llm-d) states this boundary in its deployment context.
 
-The Router's own Serving Engine also dispatches requests among replicas of its
-task models. Those runtime pools are separate from an external Chat backend's
+The Router's own Serving Engine also dispatches requests among replicas of the
+models it consults (the decision model and the embedding model). Those runtime pools are separate from an external Chat backend's
 llm-d scheduling.
 
 ## How do we avoid conflicts with llm-d?

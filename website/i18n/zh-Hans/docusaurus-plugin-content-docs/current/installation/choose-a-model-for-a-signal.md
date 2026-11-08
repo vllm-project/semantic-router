@@ -198,5 +198,6 @@ Router 在加载配置时检查每个名称和每一处对应关系；不会静�
 | 部署无法回答规则提出的问题，例如 `domains` 规则指向一个 `openai_embeddings` 部署 | 该规则、该部署以及能回答它的 provider |
 | 在配置中直接写密钥，例如 `auth.api_key` 或 `Authorization` 请求头 | 密钥来自 `api_key_env` 或 `api_key_file` |
 | `pii` 或 `hallucination` 规则所在的部署不提供片段 | `span_required`；需要这些片段的 masking 插件同样被拒绝 |
+| 问题类型是其部署不回答的类型，例如 vela3-fast 上的 `score` 规则或评审 | 规则报 `question_type_unsupported`，并指出问题、部署及其能回答的类型；评审或选择器也会指出这些 |
 
 Router 拒绝用早期形式写的配置，每个字段给出一行错误并指明 `vllm-sr config migrate`。[迁移模型资源](model-resource-migration.md)将每种早期形式与本页的形式并列展示。

@@ -8,7 +8,7 @@ translation:
 
 # Escalate
 
-## 概览
+## 概览 {#overview}
 
 `escalate` 按顺序逐个调用决策的候选模型，返回第一个被接受的回答。它可以先用小模型或低成本模型作答，只有当第一个回答不够好时才为更强的模型付费。
 
@@ -17,28 +17,28 @@ translation:
 - **Chat**：用一项接受检查评判每个回答：按其 token 置信度、按决策模型的 `answer_check` 问题，或按 `refusal` 问题。
 - **System One**：每个阶段回答原始的类型化请求；在尝试下一阶段之前，原生接受规则会检查每个答案，完整响应原样返回。
 
-## 主要优势
+## 主要优势 {#key-advantages}
 
 - 从小到大或从便宜到昂贵逐级升级，而不是固定一个胜出者。
 - 让停止条件在每个决策上显式、可审查。
 - 用执行器的 `budget` 约束最坏情况：所有尝试共享一个截止时间和调用上限。
 - 保持 System One 答案完整：不会把原生答案转成 Chat 文本，也不会为缺失的答案编造置信度。
 
-## 它解决什么问题？
+## 它解决什么问题？ {#what-problem-does-it-solve}
 
 总是调用最强的模型，会在简单请求上花掉全部成本。Escalate 先尝试较便宜的候选，只有当其回答未通过显式检查时才继续，因此只在真正需要的请求上为更强的模型付费。该策略写在路由配置中，而不是应用代码里。
 
-## 何时使用
+## 何时使用 {#when-to-use}
 
 - 路由有大小或成本不同的候选，且较便宜的回答通常已经足够。
 - 你能说清楚什么样的回答可以接受：token 置信度、回答质量检查、拒答检查，或在 System One 上的原生答案概率。
 - 路由可以接受第一个回答被拒后第二次调用带来的额外延迟。
 
-## 配置
+## 配置 {#configuration}
 
 Escalate 的设置位于 `escalate` 块中。与每个执行器一样，它还读取与 `type` 并列的 `budget` 和 `on_error`。
 
-### 在 Chat 上
+### 在 Chat 上 {#on-chat}
 
 ```yaml
 recipes:
@@ -97,17 +97,17 @@ recipes:
 
 `budget` 约束整次运行：`max_calls` 限制候选调用（以及 `self_verify` 的额外调用）次数，且低于 Router 的单请求上限；`deadline` 限制它们的总耗时。耗尽预算的运行会失败。
 
-#### 尝试可观测性
+#### 尝试可观测性 {#attempt-observability}
 
 Escalate 执行会创建一个 `looper.execute` trace span，并为每次分派的候选或校验调用创建一个 `looper.attempt` 子 span。Router Replay 在 `route_diagnostics.looper` 下保存相应的、有界且不含内容的尝试记录，包括状态、阈值结果、token 用量、延迟和最终尝试序号。该结构从不包含提示词、响应、推理内容、端点 URL、凭据或原始错误。
 
 每次升级都会把请求发送给另一个候选模型。请确保每个候选都符合该路由的数据策略，并为最坏情况下的调用链设定延迟和成本上限。
 
-### 在 System One 上
+### 在 System One 上 {#on-system-one}
 
 以 `api: systemone` 发布的配方使用 `escalate.stages` 运行 escalate。本指南以 **Decision 2.0 Kai 0.6B → Vega 27B** 为例：Kai 回答原始请求；escalate 先检查该回答，再决定是否调用 Vega。它不会额外强制进行一次 Kai 分类调用，也不会在第一个回答之后重新运行配方。它支持 `choice`、`score` 和 `noul` 请求，并保持原始问题集合完整。
 
-#### 连接模型
+#### 连接模型 {#connect-the-models}
 
 模型别名是 `providers.models` 下的共享资源。本地别名引用模型运行时部署；远程别名引用具体的 Engine 或兼容的 System One 端点。每个别名只选择一种传输方式。
 
@@ -135,7 +135,7 @@ global:
 
 `provider_model_id` 是发送给远程端点的模型名。如果后端需要认证，在其 backend ref 上设置 `auth: {api_key_env: <VARIABLE>}`。凭据只留在该后端上。同一远程模型的副本放在其 `backend_refs` 中；不同的模型是不同的别名和阶段。
 
-#### 发布 auto 入口
+#### 发布 auto 入口 {#publish-an-auto-entrypoint}
 
 按 API 划分的入口将配方以 `vllm-sr/auto` 的名称提供。监听器必须显式允许这个原生名称。Chat 与 System One 的别名相互独立：发布此入口不会改变 Chat 的默认配方。
 
@@ -155,7 +155,7 @@ entrypoints:
 
 在把监听器暴露到受信任的开发环境之外前，请先为其添加客户端认证。若还要允许某个具体模型，把它的原生提供商别名加入 `systemone.models`。
 
-#### 定义阶段
+#### 定义阶段 {#define-the-stages}
 
 下面的片段接受 `choice`、`score` 和 `noul` 请求。只有当每个答案都通过其类型对应的门限时，Kai 才会提前结束。下面的阈值是 Decision 2.0 Kai → Vega 的一个冻结试点工作点，不是通用的推荐默认值，也不是准确率保证。[复现指南](https://github.com/vllm-project/semantic-router/tree/main/tools/calibration/systemone_auto)固定了该实验的模型和公开基准。请在独立的校准数据上为自己的工作负载选择阈值，并在评估前冻结。
 
@@ -205,7 +205,7 @@ Router 在接受响应之前会校验每个必需的答案。缺失的答案、�
 
 原生预算并不取代完整请求的 HTTP 服务器、代理和客户端超时。特别是，Dashboard 的运维诊断使用管理 API 两分钟的响应写入上限；对于更长的请求，请相应地配置完整的服务路径。
 
-#### 试用路由
+#### 试用路由 {#try-the-route}
 
 把模型、监听器、入口和配方片段合并到一个 `version: v0.3` 的配置文件中，连接 Vega Engine 端点，然后启动 Router：
 
@@ -239,7 +239,7 @@ curl -sS http://localhost:8801/v1/systemone \
 
 在 Dashboard 中，打开 **System One → Decision Playground**，然后在 **Automatic routes** 下选择 `vllm-sr/auto`。加载配方支持的示例或输入自己的问题，然后选择 **Run**。Dashboard 使用你已登录的管理权限，因此无需粘贴公开 API 密钥。**Decision Monitoring** 显示阶段结果、请求速率和延迟。这些描述的是实时执行；要衡量准确率，请另行评估带标签的请求。
 
-#### 添加路由信号
+#### 添加路由信号 {#add-routing-signals}
 
 原生信号检查完整的任务文档，包括其状态和问题。请求不提供 Chat 对话或受信任的身份信封。因此，引用 `authz`、`metadata`、`conversation`、`reask`、`user_feedback` 和 `input_modality`（包括通过投影引用）会导致配置校验失败。原生配方中也不能使用 KB 信号。
 
@@ -249,7 +249,7 @@ curl -sS http://localhost:8801/v1/systemone \
 
 一个配方可以包含多个决策，每个都有自己的阶段和预算。例如，一个关键词决策可以把提到申诉的请求用单个阶段直接发给 Vega，而默认决策尝试 Kai → Vega。只有被选中的决策会执行，其预算在选中后从共享的请求上限收紧。关键词会检查任务文档（包括问题文本），调用方可以有意触发它们。请把它们用作路由提示，而不是授权手段或更高准确率的承诺。
 
-#### 选择接受证据
+#### 选择接受证据 {#choose-acceptance-evidence}
 
 未校准的规则可以检查以下观测值：
 
@@ -263,7 +263,7 @@ curl -sS http://localhost:8801/v1/systemone \
 
 模型的高概率并不是经过测量的准确率保证。`quality.type: calibrated` 则引用 `evaluation.calibrations` 中的一个不可变资源，声明 `loss: bundle_error` 和显式的 `max_risk`。运行时必须同时校验该工件的哈希以及它对所部署模型、任务和到达人群的适用性。缺失或不兼容的工件绝不能悄悄变成未校准的通过。
 
-#### 使用独立认证的接受
+#### 使用独立认证的接受 {#use-independently-certified-acceptance}
 
 校准执行是一条实验性的、更窄的路径。目前它支持没有信号或投影的配方中的原生阶段。评审阶段和依赖模型的信号路径需要额外的推理溯源信息，才能使用认证的接受。未校准的阶段仍可使用完整的路由路径和可选的评审。
 
@@ -280,7 +280,7 @@ curl -sS http://localhost:8801/v1/systemone \
 
 Go 工件辅助函数是 `pkg/systemone` 中的 `CalibrationTaskSHA256`、`CalibrationPolicySHA256` 和 `CalibrationGateSHA256`。试点调参结果不是认证工件：即使在 96 个独立样本中零错误，在对多个分箱进行校正之前，95% 置信度下的风险上界也约为 3.1%。
 
-#### 添加可选的 LLM 评审
+#### 添加可选的 LLM 评审 {#add-an-optional-llm-judge}
 
 `kind: judge` 阶段调用一个声明的 OpenAI 兼容提供商别名，并从先前的原生尝试中选出一个完整响应。它保留该响应的原生答案概率；LLM 自报的置信度不会替代它们。声明 `generation.max_output_tokens` 以限制其输出。
 
@@ -304,7 +304,7 @@ stages:
 
 把 `reviewer` 加入决策的 `modelRefs`，用 `api_format: openai` 连接它，并增加该算法的预算以允许第三次调用。评审与原生阶段消耗同一个共享的请求截止时间和调用账本。其输出是从先前完整原生响应中做出的选择，而不是由 LLM 合成的替代答案。
 
-#### 衡量取舍
+#### 衡量取舍 {#measure-the-tradeoff}
 
 在相同的请求上比较直接使用 Kai、直接使用 Vega 和 escalate。在独立的校准数据上选择接受阈值，然后在评估前冻结完整配置。同时报告完整响应、未解决请求、升级率和测得的前端延迟。当请求分布变化时，阈值并不能保证固定的快速路径比例。
 
@@ -312,7 +312,7 @@ stages:
 
 离线重放有助于选择实验；它不能确定实时延迟或 GPU 成本。[校准工具](https://github.com/vllm-project/semantic-router/tree/main/tools/calibration/systemone_auto)包含一个固定的公开 JevBench 命令和独立的研究重放工具。
 
-### 从 confidence 和 cascade 迁移
+### 从 confidence 和 cascade 迁移 {#migrating-from-confidence-and-cascade}
 
 `escalate` 取代了 Looper `confidence` 算法和原生 `cascade`。`vllm-sr config migrate` 会改写这两者：
 

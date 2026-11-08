@@ -45,8 +45,6 @@ Decision 名称保持简短，例如 `simple`、`medium` 和 `reasoning`。处�
 
 测试回答恢复时，应包含之前的 assistant 回复：缺少这段历史时，Feedback 路由会跳过推理。直接修正指令、自包含的错误报告与 Feedback 命中应分开测试，并用调整语气、格式等普通修改请求作对照。协作路由需要区分多执行者授权、关于 Agent 的讨论以及仅使用一位独立执行者的请求。工作流负责内部阶段，用户不必说出每个阶段才能请求协作。
 
-检查多语言示例是否在原型压缩后仍被保留。规则级 `prototype_scoring` 配置随 Recipe 一起发布；省略时继承全局设置。使用 `enabled: false` 保留全部去重候选，并通过 `best_weight` 和 `top_m` 指定组合评分方式。替换基线前先测量实际效果。
-
 ## 校验并预览候选配方 {#validate-and-preview-the-candidate}
 
 编辑前先发现运行中的配置契约：
@@ -104,7 +102,7 @@ vllm-sr route probe \
 
 **检索。** 将[带 RAG 源的 context 插件](../tutorials/plugin/context#rag-sources)配置到有真实知识库的路径。先召回较多候选，再由该源的相关性判断保留最相关文档。检查文档标识、检索覆盖、排序、基于证据的回答和新增时延。Preview 选择插件，真实路由请求执行插件。先验证单模型路径，再考虑为多模型工作流的每个阶段添加检索。
 
-**风险处理。** [Guard](../tutorials/signal/learned/jailbreak) 检测提示词攻击；[Safety 和 Hazard](../tutorials/signal/learned/safety) 识别内容风险及类别。设计拒绝规则前，需要对照测试有害协助、求助和正常分析。PII 可以选择受限的模型池，但不会自动脱敏，也不能证明供应商的数据保留策略。
+**风险处理。** [Jailbreak](../tutorials/signal/application/jailbreak) 检测提示词攻击；[Safety](../tutorials/signal/application/safety) 识别内容风险及危害类别。设计拒绝规则前，需要对照测试有害协助、求助和正常分析。PII 可以选择受限的模型池，但不会自动脱敏，也不能证明供应商的数据保留策略。
 
 **Agent 连续性。** 配合稳定的 session 和 conversation 标识使用 [Router Learning protection](../tutorials/learning/protection)。测试完整工具循环、连续追问、明确纠错、后端失败、decision 变化和新对话。对比 `apply`、`observe` 和 `bypass`：观测到的保持模型建议与真正的 hold 不同。联合检查选中的后端、路由响应头、Replay API 和 Dashboard。在不同 recipe 中复用同一个 session ID，验证隔离性。保持策略不能保留已经不符合候选要求的模型。
 

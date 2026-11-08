@@ -73,7 +73,7 @@ its own typed request handler. A concrete native model ID bypasses recipe
 routing; an explicitly published native entrypoint enters its System One
 recipe. Concrete Chat backend IDs also bypass recipe signals, decisions, and
 plugins. Native recipes support a narrower set of signals and algorithms than
-Chat recipes; see the [cascade guide](../tutorials/algorithm/native/cascade.md).
+Chat recipes; see the [escalate guide](../tutorials/algorithm/looper/escalate.md#on-system-one).
 
 ### Keep public and worker APIs distinct
 
@@ -158,7 +158,7 @@ The recipe chooses between models; each deployment separately chooses among
 its replicas. An escalation first tries its fast stage, then advances only when
 its acceptance conditions require another answer. An optional LLM judge can
 select an intact earlier candidate or abstain; it cannot manufacture native
-probabilities. See [System One cascade](../tutorials/algorithm/native/cascade.md).
+probabilities. See [Escalate on System One](../tutorials/algorithm/looper/escalate.md#on-system-one).
 
 Native discovery distinguishes concrete models (`routing: false`) from
 published native recipes (`routing: true`). Both require an explicit listener

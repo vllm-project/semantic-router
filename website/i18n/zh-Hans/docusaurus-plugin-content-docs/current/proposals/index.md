@@ -16,6 +16,7 @@ translation:
 
 | 提案 | 创建日期 | 状态 | 范围 |
 | --- | --- | --- | --- |
+| [决策模型作为一等模型](./decision-model-first-class) | 2026-11-05 | 已实现 | 一族决策模型通过 System One 回答每个路由判断，信号、算法、插件、v0.5 配置和响应头都围绕它重建（[#5886](https://github.com/vllm-project/semantic-router/pull/5886)）。 |
 | [路由范围：逐查询与容量感知路由](./batch-and-capacity-aware-routing) | 2026-07-14 | 决策记录 | 保持语义路由逐查询，容量处理留在服务层。 |
 | [路由学习](./router-learning-memory-and-adaptations) | 2026-06-20 | 已实现 | 在线适配、路由保护和离线配方改进。 |
 | [提示词分类路由](./prompt-classification-routing) | 2025-10-08 | 提案 | 关键词、正则、嵌入和分类器信号融合。 |
