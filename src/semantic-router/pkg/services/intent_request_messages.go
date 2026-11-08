@@ -186,6 +186,7 @@ func requestFactsForIntent(
 		ContextTextBytes:       estimate.TextBytes,
 		ContextEquivalentBytes: estimate.EquivalentBytes,
 		ContextHasNonText:      estimate.HasNonText,
+		ContextReserveTokens:   estimate.ReserveTokens,
 	}
 }
 

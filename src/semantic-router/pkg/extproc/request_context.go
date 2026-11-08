@@ -150,6 +150,8 @@ type RequestContext struct {
 	BufferedRequestBody   bool // true when the data plane negotiated BUFFERED or BUFFERED_PARTIAL
 	// Arrival diagnostics, set at end of stream in STREAMED modes only.
 	StreamedBodyStats StreamedBodyStats
+	// A guard rejection ends the request even after its handler returns to the pool.
+	streamedBodyRejected bool
 
 	// Request header reply held until a full-duplex body is routed.
 	fullDuplexHold *fullDuplexHeaderHold
@@ -361,6 +363,12 @@ type RequestContext struct {
 	VSRHallucinationEvidence *ResponseHallucinationEvidence
 	VSRDecisionDiagnostics   decision.EvaluationDiagnostics
 	VSRProjectionTrace       *projectiontrace.Trace
+
+	// VSRContextReserveTokens is the reserve part of VSRContextTokenCount
+	// (llmprotocol.InputEstimate.ReserveTokens). Refusals rest on the count
+	// without it; once a decision needs that count, the Router drops the
+	// reserve from VSRContextTokenCount for the rest of the request.
+	VSRContextReserveTokens int
 
 	// Hallucination mitigation tracking
 	FactCheckNeeded             bool     // Result of fact-check classification

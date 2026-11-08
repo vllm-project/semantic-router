@@ -118,6 +118,7 @@ class PublicSkillTests(unittest.TestCase):
             {path.name for path in source_refs},
             {
                 "configuration-loop.md",
+                "http-configuration-plan.md",
                 "deployment-loop.md",
                 "route-verification.md",
                 "sr-bench.md",
