@@ -53,8 +53,13 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 	recordStreamingTTFT(ctx)
 	r.initializeSemanticResponseStream(ctx)
 	buffers := semanticStreamBuffers{}
-	if bridged, ok := r.bridgeBufferedResponsesBody(responseBody, ctx); ok {
-		responseBody, buffers.bridged = bridged, true
+	// Only a provider body that is not SSE can be a buffered answer, and only
+	// once it is complete: the bridge replaces the whole read with the events
+	// the client asked for.
+	if endOfStream && !ctx.UpstreamBodyStreamed {
+		if bridged, ok := r.bridgeBufferedResponsesBody(responseBody, ctx); ok {
+			responseBody, buffers.bridged = bridged, true
+		}
 	}
 	buffers.push(responseBody, ctx)
 	if endOfStream {
@@ -141,12 +146,11 @@ func (buffers *semanticStreamBuffers) recordError(ctx *RequestContext, err error
 // neutral response is decoded and re-emitted through the same encoder synthetic
 // producers and cache replay use.
 //
-// The bridge needs the whole object in one read. A provider body large enough
-// for the router's streamed read size to split still ends in stream_incomplete;
-// accumulating across reads would have to hold back pass-through until the
-// object parses.
+// It only applies to a body the provider did not send as SSE, and only once the
+// body is complete: the header phase keeps such an answer out of streamed reads
+// so the whole object arrives in the final read.
 func (r *OpenAIRouter) bridgeBufferedResponsesBody(body []byte, ctx *RequestContext) ([]byte, bool) {
-	if !isResponseAPIStreamRequest(ctx) ||
+	if !isResponseAPIStreamRequest(ctx) || ctx.UpstreamBodyStreamed ||
 		!bytes.HasPrefix(bytes.TrimSpace(body), []byte("{")) || !json.Valid(body) {
 		return nil, false
 	}
@@ -161,14 +165,17 @@ func (r *OpenAIRouter) bridgeBufferedResponsesBody(body []byte, ctx *RequestCont
 		return nil, false
 	}
 	source, target := responseWireFormats(ctx)
-	response, _, _, err := engine.DecodeResponse(source, body)
+	response, _, diagnostics, err := engine.DecodeResponse(source, body)
 	if err != nil {
 		return nil, false
 	}
-	frames, _, err := engine.EncodeResponseStream(target, response, responseStreamContext(ctx, source, target))
+	frames, encoded, err := engine.EncodeResponseStream(target, response, responseStreamContext(ctx, source, target))
 	if err != nil || len(frames) == 0 {
 		return nil, false
 	}
+	// The synthesized stream cannot report what decoding already stripped, so
+	// the buffered path's diagnostics are recorded here.
+	observeProtocolStream(ctx, nil, append(diagnostics, encoded...))
 	return frames, true
 }
 

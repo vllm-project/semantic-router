@@ -20,6 +20,7 @@ import (
 type responseHeaderOutcome struct {
 	statusCode   int
 	isSuccessful bool
+	bodyStreamed bool
 }
 
 func (r *OpenAIRouter) handleLooperResponseHeaders(
@@ -39,7 +40,9 @@ func (r *OpenAIRouter) handleLooperResponseHeaders(
 	if requiresClientResponseRewrite(ctx) || ctx.IsStreamingResponse {
 		mutation = &ext_proc.HeaderMutation{RemoveHeaders: []string{"content-length"}}
 	}
-	return buildResponseHeadersContinueResponse(mutation, ctx.IsStreamingResponse)
+	// Body mode follows the provider, not the client: a JSON answer forced into
+	// streamed reads is split by transport and cannot be bridged back.
+	return buildResponseHeadersContinueResponse(mutation, outcome.bodyStreamed)
 }
 
 func evaluateResponseHeaderOutcome(
@@ -53,7 +56,9 @@ func evaluateResponseHeaderOutcome(
 
 	outcome.statusCode = getStatusFromHeaders(v.ResponseHeaders.Headers)
 	outcome.isSuccessful = outcome.statusCode >= 200 && outcome.statusCode < 300
+	outcome.bodyStreamed = outcome.isSuccessful && isStreamingContentType(v.ResponseHeaders.Headers)
 	if ctx != nil {
+		ctx.UpstreamBodyStreamed = outcome.bodyStreamed
 		ctx.IsStreamingResponse = outcome.isSuccessful &&
 			(isStreamingContentType(v.ResponseHeaders.Headers) || isResponseAPIStreamRequest(ctx))
 	}

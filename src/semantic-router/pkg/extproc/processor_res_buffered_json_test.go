@@ -32,8 +32,11 @@ func TestBufferedResponsesAnswerReachesAStreamingClient(t *testing.T) {
 	if ctx.IsStreamingResponse != true {
 		t.Fatal("stream:true Responses request must keep streaming response mode")
 	}
-	if mode := headers.GetModeOverride().GetResponseBodyMode(); mode != http_ext.ProcessingMode_STREAMED {
-		t.Fatalf("forced streaming must keep its streamed body mode, got %v", mode)
+	if mode := headers.GetModeOverride().GetResponseBodyMode(); mode == http_ext.ProcessingMode_STREAMED {
+		t.Fatalf("a JSON provider body must be read whole, got %v", mode)
+	}
+	if got := ctx.UpstreamBodyStreamed; got {
+		t.Fatal("an application/json provider body is not a stream")
 	}
 	response, err := router.handleResponseBody(&ext_proc.ProcessingRequest_ResponseBody{
 		ResponseBody: &ext_proc.HttpBody{Body: []byte(body), EndOfStream: true},
@@ -50,6 +53,25 @@ func TestBufferedResponsesAnswerReachesAStreamingClient(t *testing.T) {
 	}
 	if strings.Contains(client, "stream_incomplete") {
 		t.Fatalf("a complete upstream answer must not be reported as incomplete: %q", client)
+	}
+}
+
+// A provider that does stream SSE can still have its bytes split anywhere,
+// including right at the nested response object of a terminal event. That read
+// is valid JSON with object "response", so only the request's own knowledge
+// that the body is SSE keeps the bridge away from it.
+func TestBridgeDoesNotRewriteNestedObjectOfAStreamingBody(t *testing.T) {
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{
+		SourceFormat: llmprotocol.OpenAIResponsesV1, TargetFormat: llmprotocol.OpenAIResponsesV1,
+		RequestModel: "public-model", TraceContext: context.Background(),
+		SemanticRequest:      &llmprotocol.Request{Generation: 1, Model: "public-model", Stream: true},
+		IsStreamingResponse:  true,
+		UpstreamBodyStreamed: true,
+	}
+	nested := `{"id":"resp_1","object":"response","status":"completed","output":[]}`
+	if bridged, ok := router.bridgeBufferedResponsesBody([]byte(nested), ctx); ok {
+		t.Fatalf("bridged a nested object out of a real SSE body: %q", bridged)
 	}
 }
 

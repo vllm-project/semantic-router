@@ -313,6 +313,7 @@ it remains valid when codec internals move.
 | [#3013](https://github.com/vllm-project/semantic-router/issues/3013) Responses clients never receive Chat SSE from an Anthropic backend | client/backend-independent 3×3 stream encoder matrix | Messages-backed Responses streaming profile |
 | [#2947](https://github.com/vllm-project/semantic-router/issues/2947) streamed cache accounting survives intermediate and terminal usage updates | cumulative usage-state tests plus Anthropic-to-every-target cache matrix | cached Messages stream through native backend profile |
 | [#5107](https://github.com/vllm-project/semantic-router/issues/5107) a Chat client of a Chat provider gets the same error event however the stream splits into body chunks | `TestChatUpstreamErrorEventDoesNotDependOnReadSplit`, `TestChatStreamFailureEndsItsBatch`, and `TestChatPublicStreamFilterDropsProviderErrorEvent` | `protocol-codec-vllm-stream-error` split markers |
+| [#5993](https://github.com/vllm-project/semantic-router/issues/5993) a provider that ignores `stream: true` still reaches the client as a completed Responses stream | `TestBufferedResponsesAnswerReachesAStreamingClient` and `TestBridgeDoesNotRewriteNestedObjectOfAStreamingBody` | buffered-response case queued in the response-api profile |
 
 Adding or fixing a protocol issue updates this ledger and the corresponding test in
 the same change. Closing an issue does not permit deleting its regression.

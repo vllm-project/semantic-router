@@ -59,5 +59,5 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 		headerMutation = mergeHeaderMutations(headerMutation,
 			&ext_proc.HeaderMutation{RemoveHeaders: []string{"content-length"}})
 	}
-	return buildResponseHeadersContinueResponse(headerMutation, ctx != nil && ctx.IsStreamingResponse), nil
+	return buildResponseHeadersContinueResponse(headerMutation, outcome.bodyStreamed), nil
 }
