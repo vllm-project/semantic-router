@@ -3427,10 +3427,7 @@ func TestDecompileOmitsLegacyStaticSections(t *testing.T) {
 			},
 		},
 		InlineModels: config.InlineModels{
-			EmbeddingModels: config.EmbeddingModels{
-				MmBertModelPath: "models/mmbert",
-				UseCPU:          true,
-			},
+			EmbeddingDeployment: config.EmbeddingDefaultDeployment,
 		},
 		SemanticCache: config.SemanticCache{Enabled: true, BackendType: "redis"},
 		Memory:        config.MemoryConfig{Enabled: true, AutoStore: true},

@@ -486,9 +486,6 @@
         },
         "multimodal": {
           "type": "string"
-        },
-        "semantic": {
-          "$ref": "#/$defs/EmbeddingModels"
         }
       },
       "additionalProperties": false,
@@ -695,15 +692,6 @@
           },
           "type": "object",
           "default": {
-            "omni-nano": {
-              "artifact": "vllm-sr/Vela-1.0-Omni-Nano",
-              "revision": "2ff2d66385dbdd661a560ec3e8bcb45a0527d92e",
-              "provider": "model_runtime",
-              "device": "cpu",
-              "input": {
-                "overflow": "truncate"
-              }
-            },
             "primary": {
               "artifact": "vllm-sr/vela3-fast",
               "revision": "7cbefd4b92b57234bd0ffb9872451e81abcdac79",
@@ -2394,52 +2382,13 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "EmbeddingEndpointConfig": {
+    "EmbeddingBinding": {
       "properties": {
-        "base_url": {
+        "deployment": {
           "type": "string"
         },
-        "model": {
-          "type": "string"
-        },
-        "api_key_env": {
-          "type": "string"
-        },
-        "timeout_seconds": {
+        "dimension": {
           "type": "integer"
-        },
-        "max_retries": {
-          "type": "integer"
-        },
-        "max_response_bytes": {
-          "type": "integer"
-        },
-        "dimensions": {
-          "type": "integer"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "EmbeddingModels": {
-      "properties": {
-        "qwen3_model_path": {
-          "type": "string"
-        },
-        "mmbert_model_path": {
-          "type": "string"
-        },
-        "multimodal_model_path": {
-          "type": "string"
-        },
-        "use_cpu": {
-          "type": "boolean"
-        },
-        "embedding_config": {
-          "$ref": "#/$defs/HNSWConfig"
-        },
-        "endpoint": {
-          "$ref": "#/$defs/EmbeddingEndpointConfig"
         }
       },
       "additionalProperties": false,
@@ -2902,42 +2851,6 @@
         },
         "header": {
           "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "HNSWConfig": {
-      "properties": {
-        "full_context": {
-          "type": "boolean"
-        },
-        "backend": {
-          "type": "string"
-        },
-        "model_type": {
-          "type": "string"
-        },
-        "preload_embeddings": {
-          "type": "boolean"
-        },
-        "target_dimension": {
-          "type": "integer"
-        },
-        "target_layer": {
-          "type": "integer"
-        },
-        "enable_soft_matching": {
-          "type": "boolean"
-        },
-        "top_k": {
-          "type": "integer"
-        },
-        "min_score_threshold": {
-          "type": "number"
-        },
-        "prototype_scoring": {
-          "$ref": "#/$defs/PrototypeScoringConfig"
         }
       },
       "additionalProperties": false,
@@ -3655,8 +3568,8 @@
         "redis_cache": {
           "$ref": "#/$defs/MemoryRedisCacheConfig"
         },
-        "embedding_model": {
-          "type": "string"
+        "embedding": {
+          "$ref": "#/$defs/EmbeddingBinding"
         },
         "default_retrieval_limit": {
           "type": "integer"
@@ -5012,30 +4925,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "PrototypeScoringConfig": {
-      "properties": {
-        "enabled": {
-          "type": "boolean"
-        },
-        "cluster_similarity_threshold": {
-          "type": "number"
-        },
-        "max_prototypes": {
-          "type": "integer"
-        },
-        "best_weight": {
-          "type": "number"
-        },
-        "top_m": {
-          "type": "integer"
-        },
-        "margin_threshold": {
-          "type": "number"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "ProviderPresentation": {
       "properties": {
         "logo": {
@@ -5692,8 +5581,8 @@
         "qdrant": {
           "$ref": "#/$defs/QdrantConfig"
         },
-        "embedding_model": {
-          "type": "string"
+        "embedding": {
+          "$ref": "#/$defs/EmbeddingBinding"
         }
       },
       "additionalProperties": false,
@@ -7209,11 +7098,8 @@
         "max_file_size_mb": {
           "type": "integer"
         },
-        "embedding_model": {
-          "type": "string"
-        },
-        "embedding_dimension": {
-          "type": "integer"
+        "embedding": {
+          "$ref": "#/$defs/EmbeddingBinding"
         },
         "ingestion_workers": {
           "type": "integer"

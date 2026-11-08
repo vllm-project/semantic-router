@@ -51,14 +51,9 @@ config:
         tracing:
           enabled: false
     stores:
-      response_cache:
-        embedding_model: mmbert
-      memory:
-        embedding_model: mmbert
       vector_store:
         enabled: true
         backend_type: memory
-        embedding_model: mmbert
         metadata_store: postgres
         metadata_postgres:
           host: postgres.default.svc.cluster.local

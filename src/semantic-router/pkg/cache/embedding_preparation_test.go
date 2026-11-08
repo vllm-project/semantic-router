@@ -22,7 +22,7 @@ func (p *preparedCacheProvider) EmbedWithOptions(ctx context.Context, text strin
 
 func TestOwnedCachePreparationChecksActualViewBeforePublication(t *testing.T) {
 	provider := &preparedCacheProvider{dimension: 128}
-	backend := NewInMemoryCache(InMemoryCacheOptions{Enabled: true, EmbeddingModel: "mmbert", EmbeddingProvider: provider})
+	backend := NewInMemoryCache(InMemoryCacheOptions{Enabled: true, EmbeddingDeployment: "vela-embedding", EmbeddingDimension: 256, EmbeddingLayer: 6, EmbeddingProvider: provider})
 	defer backend.Close()
 	if err := ValidateBackendEmbedding(context.Background(), backend); err == nil {
 		t.Fatal("mismatched vector accepted")
@@ -54,7 +54,7 @@ func (p *truncatingProvider) FitsInputWithOptions(_ context.Context, text string
 
 func TestOwnedCacheKeepsTruncatedQueriesOutOfSemanticEntries(t *testing.T) {
 	provider := &truncatingProvider{}
-	backend := NewInMemoryCache(InMemoryCacheOptions{Enabled: true, EmbeddingModel: "mmbert", EmbeddingProvider: provider, SimilarityThreshold: 0.5})
+	backend := NewInMemoryCache(InMemoryCacheOptions{Enabled: true, EmbeddingDeployment: "vela-embedding", EmbeddingDimension: 256, EmbeddingLayer: 6, EmbeddingProvider: provider, SimilarityThreshold: 0.5})
 	defer backend.Close()
 	adapter := NewLegacyBackendAdapter(backend, InMemoryCacheType).WithEmbeddingProvider(provider)
 	for query, stored := range map[string]bool{"short query": true, "a query the model reads only in part": false} {
@@ -80,7 +80,7 @@ func TestOwnedCacheKeepsTruncatedQueriesOutOfSemanticEntries(t *testing.T) {
 
 func TestOwnedCacheTruncationCheckFailureSkipsSemanticAndPreservesExact(t *testing.T) {
 	provider := &truncatingProvider{err: context.DeadlineExceeded}
-	backend := NewInMemoryCache(InMemoryCacheOptions{Enabled: true, EmbeddingModel: "qwen3", EmbeddingProvider: provider})
+	backend := NewInMemoryCache(InMemoryCacheOptions{Enabled: true, EmbeddingDeployment: "qwen3-embedding", EmbeddingProvider: provider})
 	defer backend.Close()
 	adapter := NewLegacyBackendAdapter(backend, InMemoryCacheType).WithEmbeddingProvider(provider)
 	identity := CacheIdentity{Partition: CachePartition{RequestModel: "model"}, ExactFingerprint: "exact", SemanticQuery: "query"}

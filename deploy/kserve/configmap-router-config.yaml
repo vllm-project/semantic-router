@@ -191,4 +191,3 @@ data:
           max_entries: 1000
           ttl_seconds: 3600
           eviction_policy: fifo
-          embedding_model: mmbert

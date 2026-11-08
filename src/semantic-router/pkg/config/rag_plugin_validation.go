@@ -94,6 +94,9 @@ func validateExternalAPIRAGBackend(c *ContextSource) error {
 	if apiConfig.MaxResponseBytes < 0 {
 		return fmt.Errorf("external API max_response_bytes must be non-negative")
 	}
+	if apiConfig.Embedding != nil && !apiConfig.EmbedsQuery() {
+		return fmt.Errorf("embedding: request format %s searches without a query vector; remove embedding", apiConfig.RequestFormat)
+	}
 	return nil
 }
 

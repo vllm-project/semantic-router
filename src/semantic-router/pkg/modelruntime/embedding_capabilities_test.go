@@ -10,32 +10,24 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
 
-type audioCapabilityProvider struct {
-	embedding.Provider
-	info embedding.ModelInfo
-}
-
-func (p audioCapabilityProvider) EmbeddingInfo() embedding.ModelInfo { return p.info }
-
-func TestOriginalAudioRequirementRejectsFeatureOnlyEncoder(t *testing.T) {
-	provider := audioCapabilityProvider{info: embedding.ModelInfo{Modalities: []string{"text", "audio"}}}
-	requirements := []config.EmbeddingRequirement{{Model: "multimodal", Consumer: "audio signal", Modality: "audio"}}
-	providers := map[string]embedding.Provider{"multimodal": provider}
-	base, err := embedding.NewFuncProvider("ort", 384, func(context.Context, string) ([]float32, error) {
-		t.Fatal("capability validation must precede inference")
-		return nil, nil
+// A consumer whose deployment has no prepared provider fails preparation; a
+// consumer that reads the full output is not probed.
+func TestPreparedEmbeddingsServeEveryConsumer(t *testing.T) {
+	calls := 0
+	provider, err := embedding.NewFuncProvider(config.EmbeddingBackendModelRuntime, 8, func(context.Context, string) ([]float32, error) {
+		calls++
+		return make([]float32, 8), nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	provider.Provider = base
-	providers["multimodal"] = provider
-	if err := validatePreparedEmbeddings(context.Background(), requirements, providers); !errors.Is(err, binding.ErrCapability) {
-		t.Fatalf("feature-only audio encoder accepted for original PCM: %v", err)
+	providers := map[string]embedding.Provider{config.EmbeddingDefaultDeployment: provider}
+	served := []config.EmbeddingRequirement{{Deployment: config.EmbeddingDefaultDeployment, Consumer: config.EmbeddingConsumerAPI}}
+	if err := validatePreparedEmbeddings(context.Background(), served, providers); err != nil || calls != 0 {
+		t.Fatalf("full-output consumer: %v, %d probes", err, calls)
 	}
-	provider.info.Audio = &binding.AudioCapability{MaxSeconds: 30, MaxChannels: 8}
-	providers["multimodal"] = provider
-	if err := validatePreparedEmbeddings(context.Background(), requirements, providers); err != nil {
-		t.Fatalf("original-PCM capability rejected: %v", err)
+	missing := []config.EmbeddingRequirement{served[0], {Deployment: "docs-embed", Consumer: config.EmbeddingConsumerRAG}}
+	if err := validatePreparedEmbeddings(context.Background(), missing, providers); !errors.Is(err, binding.ErrCapability) {
+		t.Fatalf("a consumer without its deployment's provider was accepted: %v", err)
 	}
 }

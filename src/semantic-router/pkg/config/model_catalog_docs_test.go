@@ -38,8 +38,8 @@ var allSignals = []string{
 // recipe:<name>/, to the deployment that answers it. "*" sets every
 // signal in allSignals.
 var docExampleResolutions = map[string]map[string]string{
-	"s1-defaults":         {"*": "primary", "embedding": "vela-embedding", "multimodal": "omni-nano"},
-	"s2-remote-systemone": {"*": "d3-remote", "embedding": "vela-embedding", "multimodal": "omni-nano"},
+	"s1-defaults":         {"*": "primary", "embedding": "vela-embedding", "multimodal": ""},
+	"s2-remote-systemone": {"*": "d3-remote", "embedding": "vela-embedding", "multimodal": ""},
 	"s3-mixed":            {"*": "d3-remote", "pii": "local-vela"},
 	"s4-type-and-rule-overrides": {
 		"*": "kai", "domain": "d3-remote", "systemone.needs_reasoning": "kai", "systemone.support_team": "d3-remote",
@@ -48,7 +48,7 @@ var docExampleResolutions = map[string]map[string]string{
 	"s5-rule-level": {
 		"domain.math": "primary", "domain.law": "kai", "safety.harmful": "d3-remote", "selector.pick-model": "kai", "domain": "primary",
 	},
-	"field-reference":      {"*": "primary", "pii": "primary", "embedding": "vela-embedding", "multimodal": "omni-nano"},
+	"field-reference":      {"*": "primary", "pii": "primary", "embedding": "vela-embedding", "multimodal": ""},
 	"r1-remote-embedding":  {"embedding": "remote-embed", "*": "primary"},
 	"r3-remote-judge":      {"jailbreak": "d3-judge", "hallucination": "d3-judge", "domain": "primary"},
 	"r4-systemone-gateway": {"*": "d3-gateway"},
@@ -140,20 +140,9 @@ func resolveDocKey(cfg *RouterConfig, key string) string {
 	}
 	switch {
 	case key == "embedding":
-		if resolved, ok, err := scoped.ResolveTask("embedding"); ok && err == nil {
-			return resolved.Name
-		}
-		name, _, err := scoped.EmbeddingModelDeployment(scoped.primaryEmbeddingModel())
-		if err != nil {
-			return "error: " + err.Error()
-		}
-		return name
+		return scoped.EmbeddingDeployment
 	case key == "multimodal":
-		name, _, err := scoped.EmbeddingModelDeployment("multimodal")
-		if err != nil {
-			return "error: " + err.Error()
-		}
-		return name
+		return scoped.MultimodalEmbeddingDeployment
 	case strings.HasPrefix(key, "systemone."):
 		for _, rule := range scoped.SystemOneRules {
 			if "systemone."+rule.Name == key {

@@ -97,22 +97,22 @@ global:
         ` + body + "\n"
 }
 
-func TestTaskBindingKeepsATaskInputUntilPublishedOnSystemOne(t *testing.T) {
+func TestEmbeddingDeploymentKeepsItsInputUntilPublishedOnSystemOne(t *testing.T) {
 	for _, input := range []string{
 		"input: {max_tokens: 512, overflow: truncate}",
 		"input: {max_tokens: 32768, overflow: reject}",
 	} {
-		if _, err := ParseYAMLBytes([]byte(taskBindingYAML(input, false))); err != nil {
-			t.Fatalf("task binding %s: %v", input, err)
+		if _, err := ParseYAMLBytes([]byte(embeddingDeploymentYAML(input, false))); err != nil {
+			t.Fatalf("embedding deployment %s: %v", input, err)
 		}
-		_, err := ParseYAMLBytes([]byte(taskBindingYAML(input, true)))
+		_, err := ParseYAMLBytes([]byte(embeddingDeploymentYAML(input, true)))
 		if err == nil || !strings.Contains(err.Error(), "never truncate") {
 			t.Fatalf("system one %s: %v", input, err)
 		}
 	}
 }
 
-func taskBindingYAML(input string, publish bool) string {
+func embeddingDeploymentYAML(input string, publish bool) string {
 	listener := ""
 	if publish {
 		listener = "\n    systemone: {models: [encoder-public]}"
@@ -144,7 +144,7 @@ global:
         device: cpu
         public_name: encoder-public
         ` + input + `
-    bindings:
-      embedding: {deployment: encoder, contract: embedding.v1}
+    embeddings:
+      default: encoder
 `
 }

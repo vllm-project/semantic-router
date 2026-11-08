@@ -66,7 +66,6 @@ global:
       similarity_threshold: 0.86
       max_entries: 50000
       ttl_seconds: 7200
-      embedding_model: mmbert
       milvus:
         connection:
           host: milvus.milvus.svc.cluster.local
@@ -95,7 +94,7 @@ global:
           auto_create_collection: true
 ```
 
-将 `dimension` 设置为 `embedding_model` 的输出维度。不匹配会导致插入或搜索失败。
+将 `dimension` 设置为缓存嵌入出的向量大小：用 `embeddings.default` 指定的 Vela Embedding 时是 768；库指定了别的部署时，就是它的 `embedding.dimension`。不匹配会导致插入或搜索失败。
 
 在可能读取或填充缓存的决策上启用路由插件：
 

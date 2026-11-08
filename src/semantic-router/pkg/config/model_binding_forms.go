@@ -17,8 +17,8 @@ import (
 
 // bindingConsumers maps a binding's signal-type key to the plugin module
 // that reads it besides the signal's rules. A key that is not listed names
-// its consumer itself: the other application signals, embedding and the
-// rule keys safety.<rule> and complexity.<rule>.
+// its consumer itself: the other application signals and the rule keys
+// safety.<rule> and complexity.<rule>.
 var bindingConsumers = map[string]string{
 	SignalTypeJailbreak:     "prompt_guard",
 	SignalTypePII:           "pii_classifier",
@@ -62,7 +62,7 @@ func knownBindingKey(key string) bool {
 		return true
 	}
 	switch key {
-	case "prompt_guard", "pii_classifier", "hallucination_detector", "embedding", bindingKeySystemOne:
+	case "prompt_guard", "pii_classifier", "hallucination_detector", bindingKeySystemOne:
 		return true
 	}
 	for _, prefix := range []string{"safety.", "complexity.", "systemone."} {

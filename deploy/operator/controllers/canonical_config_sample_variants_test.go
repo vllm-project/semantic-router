@@ -15,19 +15,13 @@ import (
 // These configuration families had dedicated deployment workers whose common
 // unconditional route did not observe their distinguishing configuration. Test
 // the actual CR -> canonical YAML -> router loader boundary without a cluster.
-func TestMMBertSampleSurvivesRouterConfigRoundTrip(t *testing.T) {
-	cfg := sampleRouterConfig(t, "vllm.ai_v1alpha1_semanticrouter_mmbert.yaml")
-	if cfg.MmBertModelPath != "models/Vela-1.0-Encoder-307M-Embedding" || !cfg.UseCPU {
-		t.Fatalf("sample embedding artifact/device changed: %+v", cfg.EmbeddingModels)
-	}
-	embedding := cfg.EmbeddingConfig
-	if embedding.ModelType != "mmbert" || embedding.TargetLayer != 6 || embedding.TargetDimension != 256 ||
-		!embedding.PreloadEmbeddings || embedding.EnableSoftMatching == nil || !*embedding.EnableSoftMatching ||
-		embedding.MinScoreThreshold != .5 {
-		t.Fatalf("sample embedding settings lost in translation: %+v", embedding)
+func TestEmbeddingSampleSurvivesRouterConfigRoundTrip(t *testing.T) {
+	cfg := sampleRouterConfig(t, "vllm.ai_v1alpha1_semanticrouter_embedding.yaml")
+	if deployment, dimension, _ := cfg.ResponseCacheEmbedding(); deployment != routerconfig.EmbeddingDefaultDeployment || dimension != 256 {
+		t.Fatalf("sample cache embedding lost in translation: %s at %d", deployment, dimension)
 	}
 	cache := cfg.SemanticCache
-	if !cache.Enabled || cache.BackendType != "memory" || cache.EmbeddingModel != "mmbert" ||
+	if !cache.Enabled || cache.BackendType != "memory" ||
 		cache.MaxEntries != 5000 || cache.TTLSeconds != 7200 || cache.EvictionPolicy != "lru" ||
 		cache.SimilarityThreshold == nil || *cache.SimilarityThreshold != .85 {
 		t.Fatalf("sample response cache settings lost in translation: %+v", cache)

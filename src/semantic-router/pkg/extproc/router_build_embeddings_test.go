@@ -27,8 +27,8 @@ func TestBuildRouterDoesNotLoadEmbeddingForIdleOrExactOnlyCache(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			cfg := &config.RouterConfig{}
 			cfg.SemanticCache.Enabled = true
-			cfg.SemanticCache.EmbeddingModel = "mmbert"
-			cfg.MmBertModelPath = "/not-installed/unused-cache-embedding"
+			cfg.EmbeddingDeployment = "unused-cache"
+			cfg.ModelDeployments = map[string]config.ModelDeployment{"unused-cache": {Provider: config.ModelRuntimeProvider, Artifact: "/not-installed/unused-cache-embedding"}}
 			cfg.Decisions = []config.Decision{{Name: "route"}}
 			if mode == "exact" {
 				cfg.Decisions[0].Plugins = []config.DecisionPlugin{{Type: "response_cache", Configuration: config.MustStructuredPayload(config.ResponseCachePluginConfig{Enabled: true, Mode: "exact"})}}
@@ -66,10 +66,10 @@ func TestBuildRouterOwnsGlobalEmbeddingAPIWithoutRoutingDemand(t *testing.T) {
 	defer endpoint.Close()
 	cfg := &config.RouterConfig{}
 	cfg.API.Embeddings.Enabled = true
-	cfg.EmbeddingConfig = config.HNSWConfig{ModelType: "bert", TargetDimension: 2}
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"global": {Provider: "http", ExternalModel: "global"}}
-	cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "global", Adapter: "openai_compatible", Contract: "embedding.v1"}}
-	cfg.ExternalModels = []config.ExternalModelConfig{{Name: "global", ModelName: "global", ModelEndpoint: config.ClassifierVLLMEndpoint{Address: endpoint.URL}}}
+	cfg.EmbeddingDeployment = "global"
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"global": {
+		Provider: config.OpenAIEmbeddingsProvider, Endpoint: endpoint.URL, Model: "global", Capabilities: &config.DeploymentCapabilities{Dimensions: 2},
+	}}
 	components, err := buildRouterComponents(cfg)
 	require.NoError(t, err)
 	router := components.buildRouter()

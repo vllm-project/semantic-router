@@ -38,7 +38,7 @@ type QdrantCache struct {
 	enabled             bool
 	hitCount            int64
 	missCount           int64
-	embeddingModel      string
+	embeddingDeployment string
 }
 
 type QdrantCacheOptions struct {
@@ -47,7 +47,7 @@ type QdrantCacheOptions struct {
 	TTLSeconds          int
 	Enabled             bool
 	Config              *config.QdrantConfig
-	EmbeddingModel      string
+	EmbeddingDeployment string
 }
 
 func NewQdrantCache(opts QdrantCacheOptions) (*QdrantCache, error) {
@@ -67,7 +67,6 @@ func NewQdrantCache(opts QdrantCacheOptions) (*QdrantCache, error) {
 	if collectionName == "" {
 		collectionName = "semantic_cache"
 	}
-	embeddingModel := normalizeEmbeddingModel(opts.EmbeddingModel)
 	// Exact-only Qdrant stores retain their existing sentinel schema. Semantic
 	// stores always use their prepared provider's actual output width.
 	dimension := exactOnlyQdrantDimension
@@ -97,8 +96,8 @@ func NewQdrantCache(opts QdrantCacheOptions) (*QdrantCache, error) {
 		similarityThreshold: opts.SimilarityThreshold,
 		ttlSeconds:          opts.TTLSeconds,
 		enabled:             true,
-		embeddingModel:      embeddingModel,
-		embeddingProvider:   embedding.WithOptions(opts.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, dimension, 0)),
+		embeddingDeployment: opts.EmbeddingDeployment,
+		embeddingProvider:   embedding.WithOptions(opts.EmbeddingProvider, embedding.Options{Dimension: dimension}),
 	}
 
 	if err := c.CheckConnection(context.Background()); err != nil {

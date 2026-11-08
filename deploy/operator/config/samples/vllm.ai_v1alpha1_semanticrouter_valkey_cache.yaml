@@ -38,26 +38,12 @@ spec:
 
   # Semantic router configuration
   config:
-    # Embedding models configuration
-    # Using Qwen3 for high-quality embeddings with 32K context support
-    embedding_models:
-      qwen3_model_path: "models/mom-embedding-pro"
-      use_cpu: true
-
-    # Legacy BERT model configuration (can be removed if using embedding_models)
-    bert_model:
-      model_id: models/mom-embedding-light
-      threshold: "0.6"
-      use_cpu: true
-
     # Semantic cache with Valkey backend
     response_cache:
       enabled: true
       backend_type: valkey
       similarity_threshold: "0.85"
       ttl_seconds: 3600
-      # Use Qwen3 embeddings for better semantic understanding
-      embedding_model: qwen3
 
       # Valkey configuration
       # NOTE: Update host to match your Valkey deployment namespace

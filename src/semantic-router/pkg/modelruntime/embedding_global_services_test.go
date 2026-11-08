@@ -12,7 +12,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 )
 
-func TestGlobalModuleDefaultDoesNotBorrowRecipeEmbedding(t *testing.T) {
+// The global services embed with embeddings.default; a recipe's RAG source
+// that names its own deployment does not lend it to them.
+func TestGlobalServicesEmbedWithTheDefaultDeployment(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var request struct {
 			Model string   `json:"model"`
@@ -33,11 +35,19 @@ func TestGlobalModuleDefaultDoesNotBorrowRecipeEmbedding(t *testing.T) {
 	}))
 	defer server.Close()
 	cfg := &config.RouterConfig{}
-	cfg.EmbeddingConfig = config.HNSWConfig{ModelType: "bert", Backend: config.EmbeddingBackendOpenAICompatible, TargetDimension: 2}
-	cfg.EmbeddingModels.Endpoint = config.EmbeddingEndpointConfig{BaseURL: server.URL, Model: "global-default", Dimensions: 2}
-	cfg.Memory.Enabled, cfg.Memory.EmbeddingModel, cfg.Memory.Milvus.Dimension = true, "bert", 2
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"recipe-only": {Provider: config.ModelRuntimeProvider, Device: "rocm:7", Artifact: "/not-installed/recipe-only"}}
-	cfg.ModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "recipe-only", Adapter: "mmbert", Contract: "embedding.v1"}}
+	cfg.EmbeddingDeployment = "global-default"
+	cfg.Memory.Enabled, cfg.Memory.Milvus.Dimension = true, 2
+	cfg.ModelDeployments = map[string]config.ModelDeployment{
+		"global-default": {Provider: config.OpenAIEmbeddingsProvider, Endpoint: server.URL, Model: "global-default", Capabilities: &config.DeploymentCapabilities{Dimensions: 2}},
+		"recipe-only":    {Provider: config.ModelRuntimeProvider, Device: "rocm:7", Artifact: "/not-installed/recipe-only"},
+	}
+	cfg.Decisions = []config.Decision{{Name: "docs", Plugins: []config.DecisionPlugin{{
+		Type: config.DecisionPluginContext,
+		Configuration: config.MustStructuredPayload(map[string]any{"enabled": true, "sources": []any{map[string]any{
+			"type": config.ContextSourceRAG, "backend": "milvus",
+			"backend_config": map[string]any{"collection": "docs", "embedding": map[string]any{"deployment": "recipe-only"}},
+		}}}),
+	}}}}
 	runtime := serving.New(nil, binding.NewPool())
 	services, err := PrepareOwnedGlobalServiceEmbeddings(context.Background(), cfg, runtime)
 	if err != nil {
@@ -49,13 +59,13 @@ func TestGlobalModuleDefaultDoesNotBorrowRecipeEmbedding(t *testing.T) {
 		t.Fatal(err)
 	}
 	if vector, err := provider.Embed(context.Background(), "hello"); err != nil || len(vector) != 2 {
-		t.Fatalf("global module default: %v / %v", vector, err)
+		t.Fatalf("global default: %v / %v", vector, err)
 	}
 	entries := runtime.PreparedBindings()
 	if len(entries) != 1 || entries[0].Identity.Recipe != string(config.GlobalModelScope) || entries[0].Capability.Provider != "http" {
 		t.Fatalf("wrong physical provider: %+v", entries)
 	}
-	if cfg.ModelBindings["embedding"].Deployment != "recipe-only" {
-		t.Fatal("global preparation mutated recipe")
+	if services.Has("recipe-only") {
+		t.Fatal("the global services prepared a recipe's RAG deployment")
 	}
 }

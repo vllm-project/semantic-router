@@ -41,16 +41,15 @@ func TestVectorStoreEmbedsWithTheEmbeddingsDefaultDeployment(t *testing.T) {
 	defer server.Close()
 
 	cfg := &config.RouterConfig{VectorStore: &config.VectorStoreConfig{
-		Enabled: true, BackendType: "memory", EmbeddingModel: "mmbert", EmbeddingDimension: 2,
+		Enabled: true, BackendType: "memory", Embedding: &config.EmbeddingBinding{Dimension: 2},
 		FileStorageDir: t.TempDir(), MetadataStore: "memory",
 	}}
-	cfg.EmbeddingConfig = config.HNSWConfig{TargetDimension: 2}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"remote-embed": {
 		Provider: config.OpenAIEmbeddingsProvider, Endpoint: server.URL, Model: "bge-m3",
 		Capabilities: &config.DeploymentCapabilities{Dimensions: 2},
 	}}
 	cfg.EmbeddingDeployment = "remote-embed"
-	if copied := vectorStoreEmbeddingConfig(cfg); !copied.UsesRemoteEmbeddings() || copied.EmbeddingDeployment != "remote-embed" {
+	if copied := vectorStoreEmbeddingConfig(cfg); copied.EmbeddingDeployment != "remote-embed" {
 		t.Fatalf("the vector store's configuration lost embeddings.default: %q", copied.EmbeddingDeployment)
 	}
 	runtime, err := NewVectorStoreRuntime(cfg, nil, nil)
@@ -77,18 +76,15 @@ func TestVectorStoreResolvesPreparedOmniWidthBeforeSelectingView(t *testing.T) {
 			t.Fatal("preparation ran inference")
 			return nil, nil
 		})
-		prepared := embedding.NewSet(map[string]embedding.Provider{"multimodal": provider}, "multimodal")
+		prepared := embedding.NewSet(map[string]embedding.Provider{"omni": provider}, "omni")
 		for _, requested := range []int{0, size} {
-			cfg := &config.VectorStoreConfig{EmbeddingModel: "multimodal", EmbeddingDimension: requested}
-			cfg.ApplyDefaults()
-			selected, err := prepareVectorStoreEmbedding(prepared, cfg)
-			if err != nil || cfg.EmbeddingDimension != size || selected.Dimension() != size {
+			selected, dimension, err := prepareVectorStoreEmbedding(prepared, "omni", requested)
+			if err != nil || dimension != size || selected.Dimension() != size {
 				t.Fatalf("size %d requested %d: %v", size, requested, err)
 			}
 		}
 		for _, requested := range []int{-1, 128} {
-			cfg := &config.VectorStoreConfig{EmbeddingModel: "multimodal", EmbeddingDimension: requested}
-			if _, err := prepareVectorStoreEmbedding(prepared, cfg); err == nil {
+			if _, _, err := prepareVectorStoreEmbedding(prepared, "omni", requested); err == nil {
 				t.Fatal("unchecked option view accepted an unsupported dimension")
 			}
 		}
@@ -116,9 +112,11 @@ func TestVectorStoreRuntimeUsesEndpointWidthForStorage(t *testing.T) {
 			}))
 			defer server.Close()
 			makeConfig := func(dimension int) *config.RouterConfig {
-				cfg := &config.RouterConfig{VectorStore: &config.VectorStoreConfig{Enabled: true, BackendType: "memory", EmbeddingModel: "bert", EmbeddingDimension: dimension, FileStorageDir: filepath.Join(t.TempDir(), "files"), MetadataStore: "memory"}}
-				cfg.EmbeddingConfig = config.HNSWConfig{Backend: config.EmbeddingBackendOpenAICompatible, ModelType: "bert", TargetDimension: size}
-				cfg.Endpoint = config.EmbeddingEndpointConfig{BaseURL: server.URL, Model: "prepared", Dimensions: size}
+				cfg := &config.RouterConfig{VectorStore: &config.VectorStoreConfig{Enabled: true, BackendType: "memory", Embedding: &config.EmbeddingBinding{Dimension: dimension}, FileStorageDir: filepath.Join(t.TempDir(), "files"), MetadataStore: "memory"}}
+				cfg.EmbeddingDeployment = "prepared"
+				cfg.ModelDeployments = map[string]config.ModelDeployment{"prepared": {
+					Provider: config.OpenAIEmbeddingsProvider, Endpoint: server.URL, Model: "prepared", Capabilities: &config.DeploymentCapabilities{Dimensions: size},
+				}}
 				return cfg
 			}
 			cfg := makeConfig(0)
@@ -131,7 +129,7 @@ func TestVectorStoreRuntimeUsesEndpointWidthForStorage(t *testing.T) {
 					t.Error(shutdownErr)
 				}
 			})
-			if cfg.VectorStore.EmbeddingDimension != size || runtime.Embedder.Dimension() != size {
+			if runtime.dimension != size || runtime.Embedder.Dimension() != size {
 				t.Fatalf("default width did not resolve to %d", size)
 			}
 			if _, createErr := runtime.Manager.CreateStore(context.Background(), vectorstore.CreateStoreRequest{Name: "actual-width"}); createErr != nil {
@@ -176,12 +174,11 @@ func TestVectorStoreRejectsStoresOfAnotherRepresentation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg := &config.VectorStoreConfig{EmbeddingModel: "mmbert", EmbeddingDimension: 3}
-	identity, err := resolveVectorStoreEmbeddingIdentity(runtimeIdentityProvider{Provider: provider, digest: strings.Repeat("a", 64)}, cfg)
+	identity, err := resolveVectorStoreEmbeddingIdentity(runtimeIdentityProvider{Provider: provider, digest: strings.Repeat("a", 64)}, config.EmbeddingDefaultDeployment, 3)
 	if err != nil || identity.Fingerprint == "" {
 		t.Fatalf("runtime embedding has no vector-store identity: %+v %v", identity, err)
 	}
-	upgraded, err := resolveVectorStoreEmbeddingIdentity(runtimeIdentityProvider{Provider: provider, digest: strings.Repeat("b", 64)}, cfg)
+	upgraded, err := resolveVectorStoreEmbeddingIdentity(runtimeIdentityProvider{Provider: provider, digest: strings.Repeat("b", 64)}, config.EmbeddingDefaultDeployment, 3)
 	if err != nil || upgraded.Fingerprint == identity.Fingerprint {
 		t.Fatalf("a changed model package kept the vector-store identity: %+v %v", upgraded, err)
 	}
@@ -241,11 +238,10 @@ func TestVectorStoreProvidersWithoutContentIdentityKeepTheirNamespace(t *testing
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, model := range []string{config.DefaultEmbeddingModel, "qwen3"} {
-			cfg := &config.VectorStoreConfig{EmbeddingModel: model, EmbeddingDimension: 3}
-			identity, err := resolveVectorStoreEmbeddingIdentity(provider, cfg)
+		for _, deployment := range []string{config.EmbeddingDefaultDeployment, "qwen3-embedding"} {
+			identity, err := resolveVectorStoreEmbeddingIdentity(provider, deployment, 3)
 			if err != nil || identity.Fingerprint != "" {
-				t.Fatalf("%s %s acquired a new namespace: %+v %v", backend, model, identity, err)
+				t.Fatalf("%s %s acquired a new namespace: %+v %v", backend, deployment, identity, err)
 			}
 		}
 	}

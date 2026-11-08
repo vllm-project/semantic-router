@@ -31,10 +31,10 @@ func embeddingAPIConfig(t *testing.T) *config.RouterConfig {
 	}))
 	t.Cleanup(server.Close)
 	cfg := &config.RouterConfig{}
-	cfg.EmbeddingConfig = config.HNSWConfig{ModelType: "bert", TargetDimension: 2}
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"global": {Provider: "http", ExternalModel: "global"}}
-	cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "global", Adapter: "openai_compatible", Contract: "embedding.v1"}}
-	cfg.ExternalModels = []config.ExternalModelConfig{{Name: "global", ModelName: "global", ModelEndpoint: config.ClassifierVLLMEndpoint{Address: server.URL}}}
+	cfg.EmbeddingDeployment = "global"
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"global": {
+		Provider: config.OpenAIEmbeddingsProvider, Endpoint: server.URL, Model: "global", Capabilities: &config.DeploymentCapabilities{Dimensions: 2},
+	}}
 	return cfg
 }
 
@@ -96,7 +96,7 @@ func TestEmbeddingAPIStandaloneLifecycleWithoutRoutingDemand(t *testing.T) {
 		t.Fatalf("retired handle remains callable: %v", callErr)
 	}
 	invalid := enabled
-	invalid.ExternalModels = nil
+	invalid.ModelDeployments = nil
 	if refreshErr := service.TryRefreshRuntimeConfig(&invalid); refreshErr == nil {
 		t.Fatal("invalid candidate was published")
 	}

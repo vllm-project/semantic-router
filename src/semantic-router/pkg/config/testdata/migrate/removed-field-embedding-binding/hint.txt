@@ -1,0 +1,1 @@
+routing.model_bindings.embedding: removed_field: the embedding binding is removed; run `vllm-sr config migrate` (global.model_catalog.embeddings.default; a RAG source's backend_config.embedding.deployment for a routing scope's own)

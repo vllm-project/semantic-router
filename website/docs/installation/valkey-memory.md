@@ -153,11 +153,10 @@ global:
         timeout: 10
         collection_prefix: "mem:"
         index_name: mem_idx
-        dimension: 256               # mmbert: 64, 128, 256, 512 or 768
+        dimension: 256               # Vela Embedding: 64, 128, 256, 512 or 768
         metric_type: COSINE           # COSINE, L2, or IP
         index_m: 16
         index_ef_construction: 256
-      embedding_model: mmbert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.40
       hybrid_search: true
@@ -186,7 +185,7 @@ check updated facts before relying on the example in production.
 | `timeout` | `10` | Connection timeout in seconds |
 | `collection_prefix` | `mem:` | Key prefix for HASH documents |
 | `index_name` | `mem_idx` | FT.CREATE index name |
-| `dimension` | derived | Embedding vector dimension; when omitted, `mmbert` uses 256 and the other embedding models their full width |
+| `dimension` | derived | Embedding vector dimension; when omitted, Vela Embedding uses 256, another deployment the store's `embedding.dimension` or its full width |
 | `metric_type` | `COSINE` | Distance metric: `COSINE`, `L2`, or `IP` |
 | `index_m` | `16` | HNSW M parameter (links per node) |
 | `index_ef_construction` | `256` | HNSW build-time search width |

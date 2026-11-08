@@ -173,10 +173,7 @@ describe('Vela defaults and explicit legacy models', () => {
         min_span_confidence: 0,
       },
     })
-    expect(DEFAULT_SECTIONS.embedding_models).toMatchObject({
-      multimodal_model_path: 'models/vela-1.0-omni-nano',
-      embedding_config: { target_dimension: 0 },
-    })
+    expect(DEFAULT_SECTIONS.embedding_models).toEqual({ default: 'vela-embedding' })
     expect(DEFAULT_SECTIONS.feedback_detector).not.toHaveProperty('max_sequence_length')
   })
 
@@ -273,11 +270,14 @@ describe('Vela defaults and explicit legacy models', () => {
     })
   })
 
-  it('leaves store widths to the embedding model and offers only runtime embedding models', () => {
+  it('leaves store widths to the embedding deployment and names deployments, not keywords', () => {
     // Vela Embedding serves 768, 512, 256, 128 and 64; an unset width takes the model's own.
     expect(DEFAULT_SECTIONS.memory).toMatchObject({ milvus: { collection: 'agentic_memory' } })
     expect((DEFAULT_SECTIONS.memory as { milvus: object }).milvus).not.toHaveProperty('dimension')
-    expect(DEFAULT_SECTIONS.vector_store).not.toHaveProperty('embedding_dimension')
+    for (const store of ['memory', 'response_cache', 'vector_store'] as const) {
+      expect(DEFAULT_SECTIONS[store]).not.toHaveProperty('embedding')
+      expect(DEFAULT_SECTIONS[store]).not.toHaveProperty('embedding_model')
+    }
 
     const cards = buildRouterSectionCards({
       config: null,
@@ -285,29 +285,15 @@ describe('Vela defaults and explicit legacy models', () => {
       routerDefaults: null,
     })
     const vectorStore = cards.find((card) => card.key === 'vector_store')
-    expect(
-      vectorStore?.editFields.find((field) => field.name === 'embedding_model')?.options,
-    ).toEqual(['mmbert', 'qwen3', 'multimodal'])
+    const names = vectorStore?.editFields.map((field) => field.name)
+    expect(names).toContain('embedding')
+    expect(names).not.toContain('embedding_model')
+    expect(names).not.toContain('embedding_dimension')
   })
 
-  it.each([false, true])(
-    'preserves the explicit old embedding and full_context=%s through editor save',
-    (fullContext) => {
-      const original = {
-        semantic: {
-          mmbert_model_path: 'models/mmbert-embed-32k-2d-matryoshka',
-          use_cpu: true,
-          embedding_config: {
-            backend: 'model_runtime',
-            model_type: 'mmbert',
-            target_dimension: 256,
-            target_layer: 6,
-            full_context: fullContext,
-          },
-        },
-      }
-      const saved = embeddingModelsPatch(embeddingModelsEditData(original))
-      expect(saved.embeddings).toMatchObject(original)
-    },
-  )
+  it('keeps the embeddings block through an untouched editor save', () => {
+    const original = { default: 'qwen3-embedding', multimodal: 'omni-nano' }
+    const saved = embeddingModelsPatch(embeddingModelsEditData(original))
+    expect(saved.embeddings).toEqual(original)
+  })
 })

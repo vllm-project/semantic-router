@@ -37,9 +37,9 @@ var _ = Describe("Semantic cache embedding window", func() {
 			SimilarityThreshold: 0.8,
 			MaxEntries:          100,
 			TTLSeconds:          300,
-			EmbeddingModel:      "qwen3",
+			EmbeddingDeployment: "qwen3-embedding",
 		})
-		adapter = NewLegacyBackendAdapter(backend, InMemoryCacheType).WithEmbeddingModel("qwen3").WithEmbeddingProvider(cacheTestEmbeddingProvider())
+		adapter = NewLegacyBackendAdapter(backend, InMemoryCacheType).WithEmbeddingDeployment("qwen3").WithEmbeddingProvider(cacheTestEmbeddingProvider())
 	})
 
 	It("does not serve one long prompt's response to another sharing its prefix", func() {

@@ -149,10 +149,10 @@ def test_bootstrap_metadata_preserves_typed_model_bindings(tmp_path: Path, owner
     document = build_bootstrap_config()
     binding = {
         "deployment": "shared",
-        "contract": "embedding.v1",
+        "contract": "token_spans.v1",
         "adapter": "mmbert",
     }
-    profile = {"model_bindings": {"embedding": binding}}
+    profile = {"model_bindings": {"pii": binding}}
     if owner == "default":
         document["routing"] = profile
     else:
@@ -162,7 +162,7 @@ def test_bootstrap_metadata_preserves_typed_model_bindings(tmp_path: Path, owner
             "deployments": {
                 "shared": {
                     "provider": "model_runtime",
-                    "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Embedding",
+                    "artifact": "vllm-sr/Vela-1.0-Encoder-307M-PII",
                 }
             }
         }
@@ -174,10 +174,7 @@ def test_bootstrap_metadata_preserves_typed_model_bindings(tmp_path: Path, owner
     parsed = parse_user_config(str(path), log_summary=False)
     parsed_profile = parsed.routing if owner == "default" else parsed.recipes[0].routing
 
-    assert (
-        parsed_profile.model_bindings["embedding"].model_dump(exclude_none=True)
-        == binding
-    )
+    assert parsed_profile.model_bindings["pii"].model_dump(exclude_none=True) == binding
     assert parsed.global_ == document["global"]
     assert parsed.setup == document["setup"]
     assert path.read_text() == original

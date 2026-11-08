@@ -107,7 +107,7 @@ func (c *RouterConfig) ruleDeployment(consumer string) string {
 
 // ResolveTask resolves the deployment that answers consumer in this scope
 // (see the order above). ok is false when nothing answers it: an unbound
-// embedding or reask, or no decision model.
+// reask, or no decision model.
 func (c *RouterConfig) ResolveTask(consumer string) (TaskResolution, bool, error) {
 	if c == nil {
 		return TaskResolution{}, false, nil
@@ -255,11 +255,9 @@ func providerAnswers(consumer string, deployment ModelDeployment, binding ModelB
 	consumer = ruleConsumer(consumer)
 	switch provider {
 	case ModelRuntimeProvider:
-		return builtInPurposeAnswers(name, consumer, deployment)
+		return builtInPurposeAnswers(name, deployment)
 	case SystemOneProvider:
 		switch {
-		case consumer == "embedding":
-			return fmt.Errorf("%s: a systemone deployment answers questions; embeddings need a model_runtime or openai_embeddings deployment", name)
 		case binding.Head != "" || binding.OperatingPoint != nil:
 			return fmt.Errorf("%s: a systemone deployment answers questions and serves no classify head", name)
 		case binding.Contract != "" && binding.Contract != DecisionTaskContract && binding.Contract != RemoteClassifierContractTokenSpans && binding.Contract != RemoteClassifierContractLabelDistribution:
@@ -268,7 +266,7 @@ func providerAnswers(consumer string, deployment ModelDeployment, binding ModelB
 		return nil
 	case ClassifyProvider:
 		switch {
-		case isApplicationConsumer(consumer) || consumer == "embedding":
+		case isApplicationConsumer(consumer):
 			return fmt.Errorf("%s: the classify API has no %s task; bind it to a model_runtime or systemone deployment", name, name)
 		case binding.Head != "":
 			return fmt.Errorf("%s: a remote classify deployment cannot select a local head", name)
@@ -280,10 +278,7 @@ func providerAnswers(consumer string, deployment ModelDeployment, binding ModelB
 		}
 		return fmt.Errorf("%s: an openai_chat deployment answers the jailbreak guard and the hallucination detector only", name)
 	case OpenAIEmbeddingsProvider:
-		if consumer == "embedding" {
-			return nil
-		}
-		return fmt.Errorf("%s: an openai_embeddings deployment serves embeddings only", name)
+		return fmt.Errorf("%s: an openai_embeddings deployment serves embeddings only; name it in global.model_catalog.embeddings.default or a store's embedding.deployment", name)
 	case LegacyHTTPProvider:
 		return nil
 	}
@@ -292,20 +287,14 @@ func providerAnswers(consumer string, deployment ModelDeployment, binding ModelB
 
 // builtInPurposeAnswers checks a model_runtime deployment of a built-in
 // model against what the consumer asks: an embedding model answers no
-// question, and only an embedding model serves embeddings. A model the
-// registry does not know is checked by its card when the runtime serves it.
-func builtInPurposeAnswers(name, consumer string, deployment ModelDeployment) error {
+// question. A model the registry does not know is checked by its card when
+// the runtime serves it.
+func builtInPurposeAnswers(name string, deployment ModelDeployment) error {
 	spec := registeredModel(deployment.Artifact)
 	if spec == nil || !deployment.Managed() {
 		return nil
 	}
-	embeds := spec.Purpose == PurposeEmbedding || spec.Purpose == PurposeSemanticSimilarity
-	switch {
-	case consumer == "embedding":
-		if !embeds {
-			return fmt.Errorf("%s: deployment runs %s, a %s model that serves no embeddings; name an embedding model in embeddings.default", name, spec.RepoID, spec.Purpose)
-		}
-	case embeds:
+	if spec.Purpose == PurposeEmbedding || spec.Purpose == PurposeSemanticSimilarity {
 		return fmt.Errorf("%s: deployment runs %s, a %s model that answers no question; bind a model that answers %s", name, spec.RepoID, spec.Purpose, name)
 	}
 	return nil
@@ -313,30 +302,9 @@ func builtInPurposeAnswers(name, consumer string, deployment ModelDeployment) er
 
 // scopeConsumers lists the consumers a scope's modules and rules may run.
 func (c *RouterConfig) scopeConsumers() []string {
-	consumers := append(c.implicitConsumers(), "embedding")
+	consumers := c.implicitConsumers()
 	sort.Strings(consumers)
 	return consumers
-}
-
-// validateTaskCapabilities checks, at load, that every consumer a scope runs
-// resolves to a deployment whose provider can answer it.
-func validateTaskCapabilities(scope RecipeName, scoped *RouterConfig) error {
-	for _, consumer := range scoped.scopeConsumers() {
-		if !TaskConsumerInUse(scoped, scope, consumer) {
-			continue
-		}
-		resolved, ok, err := scoped.resolveTask(consumer)
-		if err != nil {
-			continue
-		}
-		if !ok {
-			continue
-		}
-		if err := providerAnswers(consumer, resolved.Deployment, resolved.Binding); err != nil {
-			return fmt.Errorf("recipe %q: %w", scope, err)
-		}
-	}
-	return nil
 }
 
 // validateModelResolutionContracts checks, for every scope that may run
@@ -354,13 +322,7 @@ func validateModelResolutionContracts(cfg *RouterConfig) error {
 			}
 		}
 	}
-	for scope, scoped := range resolved.consumerScopes() {
-		if err := validateTaskCapabilities(scope, scoped); err != nil {
-			return err
-		}
-		if err := validateNonQuestionResources(scoped); err != nil {
-			return fmt.Errorf("recipe %q: %w", scope, err)
-		}
+	for _, scoped := range resolved.consumerScopes() {
 		if err := validateMaskingSpans(scoped); err != nil {
 			return err
 		}
@@ -421,27 +383,6 @@ func validateMaskingSpans(scoped *RouterConfig) error {
 			fmt.Sprintf("resolves to deployment %q, which cannot answer span questions; bind pii to a span-capable deployment (recipes[].model_bindings.pii or global.model_catalog.bindings.pii)", name)))
 	}
 	return errors.Join(failures...)
-}
-
-// validateNonQuestionResources checks that the deployments named where
-// embeddings and the multimodal embedding are used serve them.
-func validateNonQuestionResources(scoped *RouterConfig) error {
-	if name := scoped.EmbeddingDeployment; name != "" {
-		deployment := scoped.ModelDeployments[name]
-		if dimensions, target := deployment.DeclaredDimensions(), scoped.EmbeddingConfig.TargetDimension; deployment.Provider == OpenAIEmbeddingsProvider && dimensions > 0 && target > 0 && dimensions != target {
-			return fmt.Errorf("global.model_catalog.embeddings.default: deployment %q answers with %d dimensions (capabilities.dimensions), but embeddings.semantic.embedding_config.target_dimension asks for %d; make them match, or set target_dimension: 0 for the model's own", name, dimensions, target)
-		}
-	}
-	if name := scoped.MultimodalEmbeddingDeployment; name != "" {
-		deployment, ok := scoped.ModelDeployments[name]
-		if !ok {
-			return fmt.Errorf("global.model_catalog.embeddings.multimodal: unknown deployment %q; %s", name, declaredDeployments(scoped.ModelDeployments))
-		}
-		if err := providerAnswers("embedding", deployment.WithDefaults(), ModelBinding{Deployment: name}); err != nil {
-			return fmt.Errorf("global.model_catalog.embeddings.multimodal: %w", err)
-		}
-	}
-	return nil
 }
 
 // modelResolutionWarnings are the findings of model resolution that leave a

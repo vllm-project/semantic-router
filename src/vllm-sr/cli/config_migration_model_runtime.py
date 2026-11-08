@@ -13,7 +13,6 @@ import posixpath
 from typing import Any
 from urllib.parse import urlparse
 
-from cli.config_migration_embeddings import migrate_embedding_models
 from cli.config_migration_legacy_models import (
     Replacement,
     is_legacy_mapping,
@@ -82,7 +81,6 @@ def migrate_model_runtime_contract(
             _migrate_bindings(path, bindings, migrated, notes)
         _migrate_system_models(catalog, notes)
         _migrate_modules(catalog, notes)
-    migrate_embedding_models(canonical, notes)
     for path, signals in signal_maps(canonical):
         _migrate_signals(path, signals, notes)
     for path, decision in decisions(canonical):

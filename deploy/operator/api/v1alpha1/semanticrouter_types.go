@@ -328,9 +328,13 @@ type ConfigSpec struct {
 	// +kubebuilder:validation:Type=object
 	ModelAdmission *apiextensionsv1.JSON `json:"model_admission,omitempty" yaml:"model_admission,omitempty"`
 
-	// Embedding models configuration (qwen3, gemma, mmbert)
+	// EmbeddingModels is removed: an embedding model is a model deployment,
+	// and global.model_catalog.embeddings.default names the one stores embed
+	// with (vela-embedding by default). A resource that sets it is refused.
 	// +optional
-	EmbeddingModels *EmbeddingModelsConfig `json:"embedding_models,omitempty"`
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	EmbeddingModels *apiextensionsv1.JSON `json:"embedding_models,omitempty"`
 
 	// Response cache configuration.
 	// +optional
@@ -476,12 +480,16 @@ type SemanticCacheConfig struct {
 	// +optional
 	Qdrant *QdrantCacheConfig `json:"qdrant,omitempty"`
 
-	// EmbeddingModel specifies which embedding model to use for semantic similarity
-	// Options: "mmbert" (default), "bert", "qwen3", "gemma"
-	// +kubebuilder:default="mmbert"
-	// +kubebuilder:validation:Enum=bert;qwen3;gemma;mmbert
+	// EmbeddingModel is removed: embedding.deployment names the deployment
+	// semantic reuse embeds with, embeddings.default without one. A resource
+	// that sets it is refused.
 	// +optional
 	EmbeddingModel string `json:"embedding_model,omitempty"`
+
+	// Embedding names the deployment semantic reuse embeds with, and the
+	// width of its vectors.
+	// +optional
+	Embedding *EmbeddingBinding `json:"embedding,omitempty"`
 
 	// HNSW configuration for hybrid/in-memory backends
 	// +optional
@@ -1089,112 +1097,19 @@ type HNSWCacheConfig struct {
 	MaxMemoryEntries int `json:"max_memory_entries,omitempty"`
 }
 
-// EmbeddingModelsConfig defines configuration for embedding models
-type EmbeddingModelsConfig struct {
-	// Path to Qwen3-Embedding-0.6B model directory
-	// Qwen3 provides 32K context and high quality embeddings (1024 dimensions)
+// EmbeddingBinding names the deployment that embeds a store's vectors, and
+// their dimension.
+type EmbeddingBinding struct {
+	// Deployment is a global.model_catalog deployment; without it the store
+	// embeds with embeddings.default.
 	// +optional
-	Qwen3ModelPath string `json:"qwen3_model_path,omitempty"`
+	Deployment string `json:"deployment,omitempty"`
 
-	// Path to mmBERT 2D Matryoshka embedding model directory
-	// Supports layer early exit (3/6/11/22) and dimension reduction (64-768)
-	// +optional
-	MmBertModelPath string `json:"mmbert_model_path,omitempty"`
-
-	// Use CPU for inference (default: true)
-	// +kubebuilder:default=true
-	// +optional
-	UseCPU bool `json:"use_cpu,omitempty"`
-
-	// Embedding configuration for embedding-based classification
-	// +optional
-	EmbeddingConfig *HNSWEmbeddingConfig `json:"embedding_config,omitempty"`
-
-	// Endpoint configures an external embedding provider endpoint.
-	// The API key should be injected into the semantic router pod environment
-	// and referenced by APIKeyEnv rather than stored directly in the CR.
-	// +optional
-	Endpoint *EmbeddingEndpointConfig `json:"endpoint,omitempty"`
-}
-
-// HNSWEmbeddingConfig contains settings for embedding classification with HNSW indexing
-type HNSWEmbeddingConfig struct {
-	// Backend selects the embedding provider backend: the built-in model
-	// runtime (the default) or an external OpenAI-compatible endpoint.
-	// +kubebuilder:validation:Enum=model_runtime;openai_compatible
-	// +optional
-	Backend string `json:"backend,omitempty"`
-
-	// ModelType specifies which embedding model to use
-	// Options: "qwen3" (1024-dim, 32K context), "gemma" (768-dim, 8K context), "mmbert" (64-768-dim, multilingual), "remote" (external provider)
-	// +kubebuilder:validation:Enum=qwen3;gemma;mmbert;remote
-	// +optional
-	ModelType string `json:"model_type,omitempty"`
-
-	// PreloadEmbeddings enables precomputing candidate embeddings at startup
-	// +kubebuilder:default=true
-	// +optional
-	PreloadEmbeddings bool `json:"preload_embeddings,omitempty"`
-
-	// TargetDimension is the embedding dimension to use (default: 768)
-	// For mmBERT, supported local dimensions are 64, 128, 256, 512, 768.
-	// External providers may use other positive dimensions such as 1024, 1536, or 3072.
+	// Dimension is the width of the vectors: the deployment's own, or a
+	// narrower one its model serves.
 	// +kubebuilder:validation:Minimum=1
 	// +optional
-	TargetDimension int `json:"target_dimension,omitempty"`
-
-	// TargetLayer controls mmBERT early exit and is used only when ModelType is "mmbert".
-	// Lower layers reduce encoder work but may reduce quality; layer 22 uses the full encoder depth.
-	// Evaluate the latency and quality trade-off on representative deployment data.
-	// +kubebuilder:validation:Enum=3;6;11;22
-	// +optional
-	TargetLayer int `json:"target_layer,omitempty"`
-
-	// EnableSoftMatching allows below-threshold matches when no rule meets its threshold.
-	// +kubebuilder:default=false
-	// +optional
-	EnableSoftMatching bool `json:"enable_soft_matching,omitempty"`
-
-	// MinScoreThreshold for matching (0.0-1.0). Stored as string to avoid float precision issues.
-	// +kubebuilder:default="0.5"
-	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
-	// +optional
-	MinScoreThreshold string `json:"min_score_threshold,omitempty"`
-}
-
-// EmbeddingEndpointConfig defines an external OpenAI-compatible embedding endpoint.
-type EmbeddingEndpointConfig struct {
-	// BaseURL is the base URL for the embedding endpoint, typically ending in /v1.
-	// +optional
-	BaseURL string `json:"base_url,omitempty"`
-
-	// Model is the embedding model name sent to the external provider.
-	// +optional
-	Model string `json:"model,omitempty"`
-
-	// APIKeyEnv names the environment variable containing the provider API key.
-	// +optional
-	APIKeyEnv string `json:"api_key_env,omitempty"`
-
-	// TimeoutSeconds is the request timeout for embedding calls.
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	TimeoutSeconds int `json:"timeout_seconds,omitempty"`
-
-	// MaxRetries is the maximum number of retry attempts for embedding calls.
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	MaxRetries int `json:"max_retries,omitempty"`
-
-	// MaxResponseBytes caps the size of each embedding response body.
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	MaxResponseBytes int64 `json:"max_response_bytes,omitempty"`
-
-	// Dimensions requests a provider-side output dimension when supported.
-	// +kubebuilder:validation:Minimum=1
-	// +optional
-	Dimensions int `json:"dimensions,omitempty"`
+	Dimension int `json:"dimension,omitempty"`
 }
 
 // PrototypeScoringConfig overrides prototype-bank construction and scoring for

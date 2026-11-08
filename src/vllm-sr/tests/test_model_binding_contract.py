@@ -22,10 +22,11 @@ def binding_document():
         "version": "v0.3",
         "routing": {
             "model_bindings": {
-                "embedding": {
+                "jailbreak_classifier": {
                     "deployment": "shared",
-                    "contract": "embedding.v1",
+                    "contract": "label_scores.v1",
                     "adapter": "mmbert",
+                    "head": "jailbreak",
                 }
             }
         },
@@ -84,7 +85,7 @@ def test_model_bindings_survive_typed_and_schema_roundtrip():
 
 def test_model_binding_fields_are_strict():
     document = binding_document()
-    document["routing"]["model_bindings"]["embedding"]["deploymnt"] = "typo"
+    document["routing"]["model_bindings"]["jailbreak_classifier"]["deploymnt"] = "typo"
     assert validate_config_structure(document)
     with pytest.raises(ValidationError):
         UserConfig.model_validate(document)

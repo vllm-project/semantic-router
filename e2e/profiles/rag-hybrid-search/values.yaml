@@ -48,8 +48,8 @@ config:
         backend_type: llama_stack
         file_storage_dir: /tmp/vsr-data
         max_file_size_mb: 50
-        embedding_model: mmbert
-        embedding_dimension: 384
+        embedding:
+          dimension: 384
         ingestion_workers: 2
         ingestion_drain_timeout_seconds: 25
         supported_formats:
@@ -62,7 +62,4 @@ config:
           search_type: hybrid
       response_cache:
         enabled: false
-        embedding_model: mmbert
-      memory:
-        embedding_model: mmbert
     integrations: {}

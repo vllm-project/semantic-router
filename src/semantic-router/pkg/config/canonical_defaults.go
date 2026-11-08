@@ -127,58 +127,29 @@ func defaultCanonicalIntegrationGlobal() CanonicalIntegrationGlobal {
 
 // The deployments every configuration declares. Declaring one does not start
 // it: a deployment runs only when a consumer resolves to it.
-const (
-	EmbeddingDefaultDeployment    = "vela-embedding"
-	MultimodalEmbeddingDeployment = "omni-nano"
-)
+const EmbeddingDefaultDeployment = "vela-embedding"
 
 func defaultCanonicalModelCatalog() CanonicalModelCatalog {
-	catalog := CanonicalModelCatalog{
-		Embeddings: defaultCanonicalEmbeddingModels(),
-		System:     CanonicalSystemModels{DecisionModel: DecisionModelBinding{Deployment: DefaultDecisionDeployment}},
+	return CanonicalModelCatalog{
+		Deployments: DefaultModelDeployments(),
+		Embeddings:  CanonicalEmbeddingModels{Default: EmbeddingDefaultDeployment},
+		System:      CanonicalSystemModels{DecisionModel: DecisionModelBinding{Deployment: DefaultDecisionDeployment}},
 	}
-	catalog.Deployments = DefaultModelDeployments()
-	enabledSoftMatching := false
-	catalog.Embeddings.Semantic.EmbeddingConfig.EnableSoftMatching = &enabledSoftMatching
-	return catalog
 }
 
 // DefaultModelDeployments are the pre-declared deployments: primary, the
-// default decision model (vela3-fast); vela-embedding and omni-nano, the
-// default text and multimodal embedding models.
+// default decision model (vela3-fast), and vela-embedding, the embedding
+// model of recall. Embeddings longer than its input budget are truncated.
 func DefaultModelDeployments() map[string]ModelDeployment {
 	deployments := make(map[string]ModelDeployment)
 	if primary, err := ImplicitModelRuntimeDeployment(Vela3SignalModel, true); err == nil {
 		deployments[DefaultDecisionDeployment] = primary
 	}
-	embeddings := defaultCanonicalEmbeddingModels().Semantic
-	for name, model := range map[string]string{EmbeddingDefaultDeployment: embeddings.MmBertModelPath, MultimodalEmbeddingDeployment: embeddings.MultiModalModelPath} {
-		if deployment, err := ImplicitModelRuntimeDeployment(model, true); err == nil {
-			deployment.Input.Overflow = "truncate"
-			deployments[name] = deployment
-		}
+	if embedding, err := ImplicitModelRuntimeDeployment(VelaEmbeddingModel, true); err == nil {
+		embedding.Input.Overflow = "truncate"
+		deployments[EmbeddingDefaultDeployment] = embedding
 	}
 	return deployments
-}
-
-func defaultCanonicalEmbeddingModels() CanonicalEmbeddingModels {
-	return CanonicalEmbeddingModels{
-		Semantic: EmbeddingModels{
-			MmBertModelPath:     "models/Vela-1.0-Encoder-307M-Embedding",
-			MultiModalModelPath: "models/vela-1.0-omni-nano",
-			UseCPU:              true,
-			EmbeddingConfig: HNSWConfig{
-				// Keep representative routing samples; full 32K text is explicitly opt-in.
-				FullContext:       false,
-				ModelType:         "mmbert",
-				PreloadEmbeddings: true,
-				TargetDimension:   0,
-				TargetLayer:       22,
-				TopK:              canonicalIntPtr(0),
-				MinScoreThreshold: 0.5,
-			},
-		},
-	}
 }
 
 // DefaultGlobalConfig materializes canonical global defaults into the runtime RouterConfig.

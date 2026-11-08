@@ -297,7 +297,6 @@ func (s SkipProcessingConfig) IsEnabled() bool {
 
 // InlineModels captures built-in model families and prompt-processing settings.
 type InlineModels struct {
-	EmbeddingModels      `yaml:"embedding_models"`
 	PromptCompression    PromptCompressionConfig    `yaml:"prompt_compression"`
 	ModelAdmission       map[string]AdmissionConfig `yaml:"model_admission,omitempty"`
 	ModelSignalTimeoutMs int                        `yaml:"model_signal_timeout_ms,omitempty"`

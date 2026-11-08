@@ -189,14 +189,14 @@ func assertReferenceConfigSemanticCacheCoverage(t testingT, semanticCache map[st
 }
 
 type responseCacheStoreReference struct {
-	BackendType         string        `yaml:"backend_type,omitempty"`
-	Enabled             bool          `yaml:"enabled"`
-	SimilarityThreshold *float32      `yaml:"similarity_threshold,omitempty"`
-	MaxEntries          int           `yaml:"max_entries,omitempty"`
-	TTLSeconds          int           `yaml:"ttl_seconds,omitempty"`
-	EvictionPolicy      string        `yaml:"eviction_policy,omitempty"`
-	Milvus              *MilvusConfig `yaml:"milvus,omitempty"`
-	EmbeddingModel      string        `yaml:"embedding_model,omitempty"`
+	BackendType         string            `yaml:"backend_type,omitempty"`
+	Enabled             bool              `yaml:"enabled"`
+	SimilarityThreshold *float32          `yaml:"similarity_threshold,omitempty"`
+	MaxEntries          int               `yaml:"max_entries,omitempty"`
+	TTLSeconds          int               `yaml:"ttl_seconds,omitempty"`
+	EvictionPolicy      string            `yaml:"eviction_policy,omitempty"`
+	Milvus              *MilvusConfig     `yaml:"milvus,omitempty"`
+	Embedding           *EmbeddingBinding `yaml:"embedding,omitempty"`
 }
 
 func assertReferenceConfigMemoryCoverage(t testingT, memory map[string]interface{}) {
@@ -316,21 +316,6 @@ func referenceMapValues(node map[string]interface{}) []interface{} {
 
 func assertReferenceConfigEmbeddingCatalogCoverage(t testingT, embeddings map[string]interface{}) {
 	assertMapCoversStructFields(t, embeddings, reflect.TypeOf(CanonicalEmbeddingModels{}), "global.model_catalog.embeddings")
-	// endpoint is the deprecated way to name a remote embedding model: an
-	// openai_embeddings deployment in embeddings.default replaces it.
-	assertMapCoversStructFields(t, mustMapAt(t, embeddings, "semantic"), reflect.TypeOf(EmbeddingModels{}), "global.model_catalog.embeddings.semantic", "endpoint")
-	assertMapCoversStructFields(
-		t,
-		mustMapAt(t, embeddings, "semantic", "embedding_config"),
-		reflect.TypeOf(HNSWConfig{}),
-		"global.model_catalog.embeddings.semantic.embedding_config",
-	)
-	assertMapCoversStructFields(
-		t,
-		mustMapAt(t, embeddings, "semantic", "embedding_config", "prototype_scoring"),
-		reflect.TypeOf(PrototypeScoringConfig{}),
-		"global.model_catalog.embeddings.semantic.embedding_config.prototype_scoring",
-	)
 }
 
 func assertReferenceConfigModelModuleCoverage(t testingT, modules map[string]interface{}) {

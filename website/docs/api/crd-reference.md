@@ -148,7 +148,7 @@ _Appears in:_
 | `model_deployments` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelDeployments contains canonical global.model_catalog.deployments.<br />The router validates provider, device, precision and task compatibility.<br />A remote deployment (provider systemone, openai_embeddings, classify or<br />openai_chat) takes a connection block: endpoint, model, auth,<br />headers, timeout_ms, max_retries, tls, limits and capabilities. Its key<br />never goes in the resource: auth.api_key_env names a spec.env variable<br />that valueFrom.secretKeyRef fills from a Secret. The operator mounts no<br />Secret into the Pod, so auth.api_key_file is not available. |  | Type: object <br />Optional: \{\} <br /> |
 | `model_bindings` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelBindings contains canonical global.model_catalog.bindings: each key<br />is an application signal type whose rules share one answer (domain,<br />fact_check, user_feedback, jailbreak, safety, pii, hallucination,<br />refusal, turn_relation, complexity, modality), and each value names the<br />model_deployments entry that answers it. A rule<br />that asks its own question names its deployment on the rule. A signal no<br />binding names follows decision_model; routing.model_bindings binds in<br />the routing scope and wins over these. |  | Type: object <br />Optional: \{\} <br /> |
 | `model_admission` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelAdmission contains canonical global.model_catalog.admission budgets.<br />Keys name deployments or the router's existing admission consumers. |  | Type: object <br />Optional: \{\} <br /> |
-| `embedding_models` _[EmbeddingModelsConfig](#embeddingmodelsconfig)_ | Embedding models configuration (qwen3, gemma, mmbert) |  | Optional: \{\} <br /> |
+| `embedding_models` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | EmbeddingModels is removed: an embedding model is a model deployment,<br />and global.model_catalog.embeddings.default names the one stores embed<br />with (vela-embedding by default). A resource that sets it is refused. |  | Type: object <br />Optional: \{\} <br /> |
 | `response_cache` _[SemanticCacheConfig](#semanticcacheconfig)_ | Response cache configuration. |  | Optional: \{\} <br /> |
 | `semantic_cache` _[SemanticCacheConfig](#semanticcacheconfig)_ | SemanticCache is the deprecated response-cache field. |  | Optional: \{\} <br /> |
 | `prompt_guard` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | PromptGuard is removed: the decision model answers jailbreak rules, and<br />a threshold is a jailbreak rule's predicate. A resource that sets it is<br />refused. |  | Type: object <br />Optional: \{\} <br /> |
@@ -237,39 +237,19 @@ _Appears in:_
 | `retry_back_off_max` _string_ | RetryBackOffMax caps that wait (standalone mode only) |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
 | `retry_after_max` _string_ | RetryAfterMax honors a response's Retry-After up to this bound<br />(standalone mode only) |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
 
-#### EmbeddingEndpointConfig
+#### EmbeddingBinding
 
-EmbeddingEndpointConfig defines an external OpenAI-compatible embedding endpoint.
-
-_Appears in:_
-
-- [EmbeddingModelsConfig](#embeddingmodelsconfig)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `base_url` _string_ | BaseURL is the base URL for the embedding endpoint, typically ending in /v1. |  | Optional: \{\} <br /> |
-| `model` _string_ | Model is the embedding model name sent to the external provider. |  | Optional: \{\} <br /> |
-| `api_key_env` _string_ | APIKeyEnv names the environment variable containing the provider API key. |  | Optional: \{\} <br /> |
-| `timeout_seconds` _integer_ | TimeoutSeconds is the request timeout for embedding calls. |  | Minimum: 0 <br />Optional: \{\} <br /> |
-| `max_retries` _integer_ | MaxRetries is the maximum number of retry attempts for embedding calls. |  | Minimum: 0 <br />Optional: \{\} <br /> |
-| `max_response_bytes` _integer_ | MaxResponseBytes caps the size of each embedding response body. |  | Minimum: 0 <br />Optional: \{\} <br /> |
-| `dimensions` _integer_ | Dimensions requests a provider-side output dimension when supported. |  | Minimum: 1 <br />Optional: \{\} <br /> |
-
-#### EmbeddingModelsConfig
-
-EmbeddingModelsConfig defines configuration for embedding models
+EmbeddingBinding names the deployment that embeds a store's vectors, and
+their dimension.
 
 _Appears in:_
 
-- [ConfigSpec](#configspec)
+- [SemanticCacheConfig](#semanticcacheconfig)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `qwen3_model_path` _string_ | Path to Qwen3-Embedding-0.6B model directory<br />Qwen3 provides 32K context and high quality embeddings (1024 dimensions) |  | Optional: \{\} <br /> |
-| `mmbert_model_path` _string_ | Path to mmBERT 2D Matryoshka embedding model directory<br />Supports layer early exit (3/6/11/22) and dimension reduction (64-768) |  | Optional: \{\} <br /> |
-| `use_cpu` _boolean_ | Use CPU for inference (default: true) | true | Optional: \{\} <br /> |
-| `embedding_config` _[HNSWEmbeddingConfig](#hnswembeddingconfig)_ | Embedding configuration for embedding-based classification |  | Optional: \{\} <br /> |
-| `endpoint` _[EmbeddingEndpointConfig](#embeddingendpointconfig)_ | Endpoint configures an external embedding provider endpoint.<br />The API key should be injected into the semantic router pod environment<br />and referenced by APIKeyEnv rather than stored directly in the CR. |  | Optional: \{\} <br /> |
+| `deployment` _string_ | Deployment is a global.model_catalog deployment; without it the store<br />embeds with embeddings.default. |  | Optional: \{\} <br /> |
+| `dimension` _integer_ | Dimension is the width of the vectors: the deployment's own, or a<br />narrower one its model serves. |  | Minimum: 1 <br />Optional: \{\} <br /> |
 
 #### ExporterConfig
 
@@ -356,24 +336,6 @@ _Appears in:_
 | `hnsw_m` _integer_ | M is the number of bi-directional links per node | 16 | Minimum: 2 <br />Optional: \{\} <br /> |
 | `hnsw_ef_construction` _integer_ | EfConstruction is the size of dynamic candidate list during construction | 200 | Minimum: 1 <br />Optional: \{\} <br /> |
 | `max_memory_entries` _integer_ | MaxMemoryEntries limits in-memory entries for hybrid backend | 1000 | Minimum: 0 <br />Optional: \{\} <br /> |
-
-#### HNSWEmbeddingConfig
-
-HNSWEmbeddingConfig contains settings for embedding classification with HNSW indexing
-
-_Appears in:_
-
-- [EmbeddingModelsConfig](#embeddingmodelsconfig)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `backend` _string_ | Backend selects the embedding provider backend: the built-in model<br />runtime (the default) or an external OpenAI-compatible endpoint. |  | Enum: [model_runtime openai_compatible] <br />Optional: \{\} <br /> |
-| `model_type` _string_ | ModelType specifies which embedding model to use<br />Options: "qwen3" (1024-dim, 32K context), "gemma" (768-dim, 8K context), "mmbert" (64-768-dim, multilingual), "remote" (external provider) |  | Enum: [qwen3 gemma mmbert remote] <br />Optional: \{\} <br /> |
-| `preload_embeddings` _boolean_ | PreloadEmbeddings enables precomputing candidate embeddings at startup | true | Optional: \{\} <br /> |
-| `target_dimension` _integer_ | TargetDimension is the embedding dimension to use (default: 768)<br />For mmBERT, supported local dimensions are 64, 128, 256, 512, 768.<br />External providers may use other positive dimensions such as 1024, 1536, or 3072. |  | Minimum: 1 <br />Optional: \{\} <br /> |
-| `target_layer` _integer_ | TargetLayer controls mmBERT early exit and is used only when ModelType is "mmbert".<br />Lower layers reduce encoder work but may reduce quality; layer 22 uses the full encoder depth.<br />Evaluate the latency and quality trade-off on representative deployment data. |  | Enum: [3 6 11 22] <br />Optional: \{\} <br /> |
-| `enable_soft_matching` _boolean_ | EnableSoftMatching allows below-threshold matches when no rule meets its threshold. | false | Optional: \{\} <br /> |
-| `min_score_threshold` _string_ | MinScoreThreshold for matching (0.0-1.0). Stored as string to avoid float precision issues. | 0.5 | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 
 #### ImageSpec
 
@@ -1023,7 +985,8 @@ _Appears in:_
 | `valkey` _[ValkeyCacheConfig](#valkeycacheconfig)_ | Valkey configuration (required when backend_type is "valkey") |  | Optional: \{\} <br /> |
 | `milvus` _[MilvusCacheConfig](#milvuscacheconfig)_ | Milvus configuration (required when backend_type is "milvus") |  | Optional: \{\} <br /> |
 | `qdrant` _[QdrantCacheConfig](#qdrantcacheconfig)_ | Qdrant configuration (required when backend_type is "qdrant") |  | Optional: \{\} <br /> |
-| `embedding_model` _string_ | EmbeddingModel specifies which embedding model to use for semantic similarity<br />Options: "mmbert" (default), "bert", "qwen3", "gemma" | mmbert | Enum: [bert qwen3 gemma mmbert] <br />Optional: \{\} <br /> |
+| `embedding_model` _string_ | EmbeddingModel is removed: embedding.deployment names the deployment<br />semantic reuse embeds with, embeddings.default without one. A resource<br />that sets it is refused. |  | Optional: \{\} <br /> |
+| `embedding` _[EmbeddingBinding](#embeddingbinding)_ | Embedding names the deployment semantic reuse embeds with, and the<br />width of its vectors. |  | Optional: \{\} <br /> |
 | `hnsw` _[HNSWCacheConfig](#hnswcacheconfig)_ | HNSW configuration for hybrid/in-memory backends |  | Optional: \{\} <br /> |
 
 #### SemanticRouter

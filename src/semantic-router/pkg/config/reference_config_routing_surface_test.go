@@ -140,7 +140,8 @@ func assertReferenceContextSourceCoverage(t testingT, plugins []map[string]inter
 	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, matches, "judge", "sources(rag).match"), reflect.TypeOf(MatchJudge{}), "sources[type=rag].match.judge", "question")
 	ragByBackend := mapByStringField(t, ragSources, "backend", "rag")
 	assertMapCoversStructFields(t, mustMapAt(t, ragByBackend["milvus"], "backend_config"), reflect.TypeOf(MilvusRAGConfig{}), "rag.backend_config(milvus)")
-	assertMapCoversStructFields(t, mustMapAt(t, ragByBackend["external_api"], "backend_config"), reflect.TypeOf(ExternalAPIRAGConfig{}), "rag.backend_config(external_api)")
+	// The reference's custom request format searches without a query vector, so it takes no embedding.
+	assertMapCoversStructFields(t, mustMapAt(t, ragByBackend["external_api"], "backend_config"), reflect.TypeOf(ExternalAPIRAGConfig{}), "rag.backend_config(external_api)", "embedding")
 	assertMapCoversStructFields(t, mustMapAt(t, ragByBackend["mcp"], "backend_config"), reflect.TypeOf(MCPRAGConfig{}), "rag.backend_config(mcp)")
 	assertMapCoversStructFields(t, mustMapAt(t, ragByBackend["openai"], "backend_config"), reflect.TypeOf(OpenAIRAGConfig{}), "rag.backend_config(openai)")
 	assertMapCoversStructFields(t, mustMapAt(t, ragByBackend["vectorstore"], "backend_config"), reflect.TypeOf(VectorStoreRAGConfig{}), "rag.backend_config(vectorstore)")

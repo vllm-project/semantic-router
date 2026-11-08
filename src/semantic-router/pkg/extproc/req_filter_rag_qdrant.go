@@ -36,7 +36,7 @@ func (r *OpenAIRouter) recallFromQdrant(traceCtx context.Context, ctx *RequestCo
 	if contentField == "" {
 		contentField = "content"
 	}
-	queryEmbedding, err := r.ragQueryEmbedding(traceCtx, query, ctx)
+	queryEmbedding, err := r.ragQueryEmbedding(traceCtx, query, ctx, qdrantConfig.Embedding)
 	if err != nil {
 		logging.Errorf("Failed to generate embedding for Qdrant RAG query: %v", err)
 		return nil, fmt.Errorf("failed to generate embedding")

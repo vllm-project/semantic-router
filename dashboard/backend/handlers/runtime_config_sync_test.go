@@ -84,11 +84,6 @@ listeners:
     port: 8899
 global:
   model_catalog:
-    embeddings:
-      semantic:
-        use_cpu: true
-        embedding_config:
-          model_type: mmbert
     modules:
       classifier:
         domain:
@@ -121,8 +116,8 @@ global:
 	if err != nil {
 		t.Fatalf("read runtime config: %v", err)
 	}
-	if !contains(string(runtimeData), "use_cpu: false") || !contains(string(runtimeData), "use_cpu: true") {
-		t.Fatalf("expected ROCm classifier GPU defaults and preserved embedding placement, got:\n%s", string(runtimeData))
+	if !contains(string(runtimeData), "use_cpu: false") {
+		t.Fatalf("expected ROCm classifier GPU defaults, got:\n%s", string(runtimeData))
 	}
 
 	sourceData, err := os.ReadFile(configPath)

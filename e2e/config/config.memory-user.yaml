@@ -240,21 +240,7 @@ global:
         address: host.docker.internal:19530
         collection: memory_test_ci
         dimension: 768
-      embedding_model: mmbert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.10
     response_cache:
       enabled: false
-      embedding_model: mmbert
-    vector_store:
-      embedding_model: mmbert
-  model_catalog:
-    embeddings:
-      semantic:
-        qwen3_model_path: ""
-        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
-        multimodal_model_path: ""
-        use_cpu: true
-        embedding_config:
-          model_type: mmbert
-          target_dimension: 768

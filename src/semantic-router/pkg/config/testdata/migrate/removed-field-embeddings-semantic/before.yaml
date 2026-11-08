@@ -1,4 +1,6 @@
-# Deprecated: embeddings.semantic.endpoint.
+# embeddings.semantic's remote endpoint is an openai_embeddings deployment
+# that embeddings.default names; the response cache's fallback threshold
+# moves to the store.
 version: v0.3
 providers:
   defaults: {model: general}
@@ -21,7 +23,8 @@ global:
   model_catalog:
     embeddings:
       semantic:
-        embedding_config: {backend: openai_compatible, model_type: remote}
+        use_cpu: true
+        embedding_config: {backend: openai_compatible, model_type: remote, min_score_threshold: 0.7, target_layer: 22}
         endpoint:
           base_url: https://embed.example.com/v1
           model: BAAI/bge-m3
@@ -29,3 +32,7 @@ global:
           timeout_seconds: 5
           max_retries: 2
           dimensions: 1024
+  stores:
+    response_cache:
+      enabled: true
+      backend_type: memory

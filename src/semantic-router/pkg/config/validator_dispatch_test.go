@@ -47,9 +47,8 @@ func TestConfigLoadValidatesGlobalsForEverySource(t *testing.T) {
 		{"learning_ttl", `router: {learning: {state_store: {ttl_seconds: -1}}}`, "state_store.ttl_seconds"},
 		{"learning_strategy", `router: {learning: {adaptation: {strategy: unknown}}}`, "adaptation.strategy"},
 		{"retired_selector", `router: {model_selection: {method: elo}}`, "global.router.model_selection.method is removed"},
-		{"embedding_dimensions", remoteEmbeddingGlobal("dimensions: 64"), "must match embedding_config.target_dimension"},
-		{"embedding_retries", remoteEmbeddingGlobal("max_retries: -1"), "endpoint.max_retries"},
-		{"embedding_timeout", remoteEmbeddingGlobal("timeout_seconds: -1"), "endpoint.timeout_seconds"},
+		{"embedding_dimensions", remoteEmbeddingGlobal, "answers with 128 dimensions"},
+		{"embedding_deployment", `model_catalog: {embeddings: {default: missing}}`, `global.model_catalog.embeddings.default: unknown deployment "missing"`},
 		{"admission_overflow", `model_catalog: {admission: {primary: {max_concurrency: 1, on_overflow: drop}}}`, "on_overflow"},
 		{"admission_queue", `model_catalog: {admission: {primary: {max_concurrency: 1, max_queue: -1}}}`, "max_queue"},
 		{"deployment_provider", `model_catalog: {deployments: {encoder: {artifact: models/encoder, provider: unknown}}}`, "unsupported provider"},
@@ -136,16 +135,13 @@ func globalValidationDocument(t *testing.T, source ConfigSource, fragment string
 	return raw
 }
 
-func remoteEmbeddingGlobal(endpointField string) string {
-	return `model_catalog:
-  embeddings:
-    semantic:
-      embedding_config: {backend: openai_compatible, model_type: remote, target_dimension: 128}
-      endpoint:
-        base_url: http://127.0.0.1:8000/v1
-        model: test-embedding
-        ` + endpointField + "\n"
-}
+const remoteEmbeddingGlobal = `model_catalog:
+  deployments:
+    remote-embed: {provider: openai_embeddings, endpoint: "http://127.0.0.1:8000/v1", model: test-embedding, capabilities: {dimensions: 128}}
+stores:
+  memory:
+    embedding: {deployment: remote-embed, dimension: 64}
+`
 
 func TestKubernetesValidationDefersRoutingUntilCRDsAreMerged(t *testing.T) {
 	cases := []struct {

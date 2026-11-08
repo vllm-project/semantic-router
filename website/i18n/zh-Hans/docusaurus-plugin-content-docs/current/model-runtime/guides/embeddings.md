@@ -1,6 +1,6 @@
 ---
 title: 嵌入
-description: 用于语义路由、语义缓存、记忆、RAG、工具选择和知识库的嵌入。
+description: 用于召回的嵌入：响应缓存、记忆、RAG、向量库和嵌入 API。
 translation:
   source_commit: "439c22531380dfd51abf2ce33ce6dc4db87b1fb7"
   source_file: "docs/model-runtime/guides/embeddings.md"
@@ -10,33 +10,21 @@ is_mtpe: true
 
 # 嵌入 {#embeddings}
 
-嵌入把文本变成向量，router 就能比语义。一个嵌入模型供所有需要它的功能用：
+嵌入把文本变成向量，router 就能按语义召回。嵌入只用于召回，从不参与路由决策：
 
-- [语义缓存](../../tutorials/plugin/response-cache.md)：重复的问题从缓存里答；
-- [context 插件](../../tutorials/plugin/context.md)的记忆源和 RAG 源：找存着的事实和文档。
+- [响应缓存](../../tutorials/plugin/response-cache.md)：重复的问题从缓存里答；
+- [context 插件](../../tutorials/plugin/context.md)的记忆源和 RAG 源，以及向量库：找存着的事实和文档（`match.recall`）；
+- `/v1/embeddings`。
 
 默认模型是 Vela 1.0 Embedding，读得了 32,768 个 token；要快的话还能从更早的层取小向量：3、6、11、22 层，64、128、256、512 或 768 维。
 
 ## 打开它 {#turn-it-on}
 
-启用一个需要嵌入的功能就够了，Vela Embedding 由 router 跑在 CPU 上。要定路由用的向量大小：
-
-```yaml
-global:
-  model_catalog:
-    embeddings:
-      semantic:
-        embedding_config:
-          model_type: mmbert
-          target_layer: 22
-          target_dimension: 768
-```
-
-`mmbert` 指的是 Vela Embedding 这个槽位。Qwen3-Embedding-0.6B（1,024 维）用 `qwen3`，Vela Omni 用 `multimodal`（见[图像和音频](./multimodal.md)）。
+启用一个做召回的功能就够了：Vela Embedding 由 router 跑在 CPU 上。`global.model_catalog.embeddings.default` 指定嵌入文本的部署，不改的话就是预先声明的 `vela-embedding`。`embeddings.multimodal` 指定嵌入图像和音频的部署；不设就不开（见[图像和音频](./multimodal.md)）。
 
 ## 选它跑在哪 {#choose-where-it-runs}
 
-`global.model_catalog.embeddings.default` 指定嵌入文本的部署，不改的话就是预先声明的 `vela-embedding`。所有需要嵌入的服务（缓存、记忆、向量库、工具）都用它。想改它的设备或输入预算，就用同一个名字声明这个部署：
+所有召回功能（响应缓存、记忆、向量库、RAG 源和 `/v1/embeddings`）都用 `embeddings.default` 指定的部署做嵌入。想改它的设备或输入预算，就用同一个名字声明这个部署：
 
 ```yaml
 global:
@@ -53,7 +41,32 @@ global:
       default: vela-embedding
 ```
 
-不同功能可以读同一个模型的不同视图，比如语义缓存用第 6 层的 256 维向量、路由用第 22 层的 768 维向量。它们共用一个部署；每个视图自成一个向量空间，分开存。
+不同功能可以读同一个模型的不同视图，所以已有索引照样有效：用 Vela Embedding 时，记忆存 256 维向量，内存响应缓存存第 6 层的 256 维向量，向量库和 RAG 源用全部 768 维。它们共用一个部署；每个视图自成一个向量空间，分开存。
+
+## 用别的模型建的库 {#stores-indexed-with-another-model}
+
+向量由别的模型生成的库或集合，要在 `embedding` 块里写明那个模型的部署和向量的维度：`global.stores` 下的响应缓存、记忆和向量库，以及外部集合上 RAG 源的 `backend_config`：
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      omni-nano:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Omni-Nano
+        revision: 2ff2d66385dbdd661a560ec3e8bcb45a0527d92e
+        device: cpu
+        input: {overflow: truncate}
+  stores:
+    vector_store:
+      enabled: true
+      backend_type: memory
+      embedding:
+        deployment: omni-nano
+        dimension: 384
+```
+
+没有 `embedding` 块的库用 `embeddings.default` 做嵌入。Router 加载配置时逐个检查：部署必须已声明、能嵌入文本，且给得出这个维度；远程部署看它的 `capabilities.dimensions`。
 
 ## 用外部嵌入服务 {#use-an-external-embedding-service}
 

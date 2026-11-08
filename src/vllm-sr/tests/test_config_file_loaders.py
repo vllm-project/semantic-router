@@ -15,7 +15,6 @@ parser = importlib.import_module("cli.parser")
 utils = importlib.import_module("cli.utils")
 
 load_profile_values = config_translator.load_profile_values
-EmbeddingModelsConfig = models.EmbeddingModelsConfig
 ConfigParseError = parser.ConfigParseError
 load_config_file = parser.load_config_file
 parse_user_config = parser.parse_user_config
@@ -197,32 +196,6 @@ def test_parse_user_config_rejects_invalid_provider_pricing(
         parse_user_config(str(config_path))
 
 
-def test_embedding_models_config_accepts_remote_endpoint() -> None:
-    config = EmbeddingModelsConfig(
-        embedding_config={
-            "backend": "openai_compatible",
-            "model_type": "remote",
-            "target_dimension": 1024,
-        },
-        endpoint={
-            "base_url": "http://embedding-service:8000/v1",
-            "model": "BAAI/bge-m3",
-            "api_key_env": "EMBEDDING_API_KEY",
-            "timeout_seconds": 5,
-            "max_retries": 2,
-            "max_response_bytes": 16777216,
-            "dimensions": 1024,
-        },
-    )
-
-    dumped = config.model_dump(exclude_none=True)
-    assert dumped["embedding_config"]["backend"] == "openai_compatible"
-    assert dumped["embedding_config"]["model_type"] == "remote"
-    assert dumped["endpoint"]["base_url"] == "http://embedding-service:8000/v1"
-    assert dumped["endpoint"]["api_key_env"] == "EMBEDDING_API_KEY"
-    assert dumped["endpoint"]["max_response_bytes"] == 16777216
-
-
 def test_parse_user_config_accepts_decision_learning_controls(
     tmp_path: Path,
 ) -> None:
@@ -307,6 +280,37 @@ def test_parse_user_config_rejects_removed_decision_coordination(
 
     with pytest.raises(ConfigParseError, match="coordination"):
         parse_user_config(str(config_path))
+
+
+def test_parse_user_config_refuses_removed_embedding_forms(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_minimal_config(config_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["routing"]["model_bindings"] = {"embedding": {"deployment": "vela-embedding"}}
+    global_section = data.setdefault("global", {})
+    catalog = global_section.setdefault("model_catalog", {})
+    catalog["embeddings"] = {"semantic": {"use_cpu": True}}
+    catalog["admission"] = {"embedding:qwen3": {"max_concurrency": 1}}
+    global_section["stores"] = {
+        "memory": {"enabled": True, "embedding_model": "qwen3"},
+        "vector_store": {"enabled": True, "embedding_dimension": 384},
+    }
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ConfigParseError) as refused:
+        parse_user_config(str(config_path))
+
+    message = str(refused.value)
+    for line in (
+        "routing.model_bindings.embedding: removed_field: the embedding binding is removed",
+        "global.model_catalog.embeddings.semantic: removed_field: embeddings.semantic is removed",
+        "global.model_catalog.admission.embedding:qwen3: removed_field: "
+        "admission by embedding model keyword is removed",
+        "global.stores.memory.embedding_model: removed_field: embedding_model is removed",
+        "global.stores.vector_store.embedding_dimension: removed_field: "
+        "embedding_dimension is removed",
+    ):
+        assert line in message
 
 
 def test_parse_user_config_rejects_protection_candidate_set(tmp_path: Path) -> None:

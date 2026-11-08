@@ -673,7 +673,9 @@ class TestCLITargetRouting:
                 "decisions": [{"name": "route", "algorithm": {"type": "multi_factor"}}]
             },
             "global": {
-                "model_catalog": {"embeddings": {"semantic": {"use_cpu": True}}}
+                "model_catalog": {
+                    "modules": {"classifier": {"domain": {"use_cpu": True}}}
+                }
             },
         }
         config_path = tmp_path / "config.yaml"

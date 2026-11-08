@@ -253,12 +253,7 @@ describe('router defaults structured schemas', () => {
     const embeddingCards = buildRouterSectionCards({
       config: null,
       routerConfig: {
-        embedding_models: {
-          semantic: {
-            mmbert_model_path: 'models/mmbert-embed-32k-2d-matryoshka',
-            embedding_config: { backend: 'model_runtime', model_type: 'mmbert' },
-          },
-        },
+        embedding_models: { default: 'vela-embedding' },
       },
       routerDefaults: null,
     })
@@ -282,11 +277,10 @@ describe('router defaults structured schemas', () => {
         api_key_env: 'OPENAI_API_KEY',
         dimensions: 1536,
       },
-      embedding_config: { target_dimension: 1536 },
     }) as {
       model_catalog?: {
         deployments?: Record<string, Record<string, unknown>>
-        embeddings?: { default?: string; semantic?: Record<string, unknown> }
+        embeddings?: { default?: string }
       }
     }
     expect(embeddingPatch.model_catalog?.deployments?.['remote-embed']).toEqual(
@@ -299,12 +293,7 @@ describe('router defaults structured schemas', () => {
       }),
     )
     expect(embeddingPatch.model_catalog?.embeddings?.default).toBe('remote-embed')
-    expect(embeddingPatch.model_catalog?.embeddings?.semantic).toEqual(
-      expect.objectContaining({
-        embedding_config: expect.objectContaining({ backend: null, model_type: null }),
-        endpoint: null,
-      }),
-    )
+    expect(embeddingPatch.model_catalog?.embeddings).not.toHaveProperty('semantic')
   })
 
   it('surfaces canonical global capabilities while leaving KBs to the raw config', () => {

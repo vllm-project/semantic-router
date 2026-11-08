@@ -19,11 +19,8 @@ from cli.config_migration import migrate_config_data  # noqa: E402
 from cli.config_migration_notes import MigrationNotes  # noqa: E402
 from cli.model_runtime_retired import (  # noqa: E402
     REMOVED_DEPLOYMENT_FIELDS,
-    REMOVED_EMBEDDING_BACKENDS,
     REMOVED_MODULE_FIELDS,
     REMOVED_PROVIDERS,
-    RETIRED_EMBEDDING_PATHS,
-    RETIRED_EMBEDDING_TYPES,
     retired_model_fields,
 )
 from cli.parser import ConfigParseError, parse_user_config  # noqa: E402
@@ -66,16 +63,6 @@ def _legacy() -> dict:
         "global": {
             "model_catalog": {
                 "system": {"hallucination_explainer": "models/mom-halugate-explainer"},
-                "embeddings": {
-                    "semantic": {
-                        "gemma_model_path": "models/embeddinggemma-300m",
-                        "bert_model_path": "models/all-MiniLM-L12-v2",
-                        "embedding_config": {
-                            "backend": "OpenVINO",
-                            "model_type": "gemma",
-                        },
-                    }
-                },
                 "deployments": {
                     "candle-domain": {
                         "provider": "candle",
@@ -130,7 +117,6 @@ def _legacy() -> dict:
             "stores": {
                 "response_cache": {
                     "enabled": True,
-                    "embedding_model": "bert",
                     "polarity_guard": {"mode": "lexical"},
                 }
             },
@@ -156,11 +142,6 @@ def test_every_retired_setting_is_found_by_its_path():
             for field in fields
         ),
         f"{modules}.hallucination_mitigation.detector.backend: candle",
-        "global.model_catalog.embeddings.semantic.embedding_config.backend: OpenVINO",
-        "global.model_catalog.embeddings.semantic.gemma_model_path",
-        "global.model_catalog.embeddings.semantic.bert_model_path",
-        "global.model_catalog.embeddings.semantic.embedding_config.model_type: gemma",
-        "global.stores.response_cache.embedding_model: bert",
         "global.model_catalog.system.hallucination_explainer",
         "global.stores.response_cache.polarity_guard",
     ]
@@ -192,69 +173,20 @@ def test_migration_leaves_no_retired_setting():
     assert retired_model_fields(migrated) == []
 
 
-def test_empty_retired_embedding_paths_are_refused_until_migrated(tmp_path):
-    semantic = {"mmbert_model_path": "models/Vela-1.0-Encoder-307M-Embedding"}
-    document = {
-        "version": "v0.3",
-        "listeners": [],
-        "providers": {"defaults": {"model": "general"}},
-        "global": {
-            "model_catalog": {
-                "embeddings": {
-                    "semantic": {
-                        **semantic,
-                        **dict.fromkeys(RETIRED_EMBEDDING_PATHS, ""),
-                    }
-                }
-            }
-        },
-    }
-    path = tmp_path / "empty-paths.yaml"
-    path.write_text(yaml.safe_dump(document, sort_keys=False))
-
-    with pytest.raises(ConfigParseError) as refused:
-        parse_user_config(str(path), log_summary=False)
-
-    message = str(refused.value)
-    for field in RETIRED_EMBEDDING_PATHS:
-        assert f"global.model_catalog.embeddings.semantic.{field}" in message
-    assert f"vllm-sr config migrate --config {path}" in message
-
-    migrated = migrate_config_data(document, MigrationNotes())
-    assert migrated["global"]["model_catalog"]["embeddings"]["semantic"] == semantic
-    path.write_text(yaml.safe_dump(migrated, sort_keys=False))
-    parse_user_config(str(path), log_summary=False)
-
-
 def test_the_inventory_is_the_router_parsers():
     """The router's parser and the CLI refuse the same settings."""
     source = ROUTER_PARSER.read_text(encoding="utf-8")
     providers = re.search(
         r"removedModelProviders\s*=\s*map\[string\]bool\{(.*?)\}", source
     )
-    embedding = re.search(
-        r"removedEmbeddingBackends\s*=\s*map\[string\]bool\{(.*?)\}", source
-    )
     fields = re.search(r"removedDeploymentFields\s*=\s*\[\]string\{(.*?)\}", source)
-    retired_types = re.search(
-        r"retiredEmbeddingTypes\s*=\s*map\[string\]bool\{(.*?)\}", source
-    )
-    retired_paths = re.search(
-        r"removedEmbeddingPaths\s*=\s*\[\]string\{(.*?)\}", source
-    )
     modules = re.findall(r"\{\[\]string\{([^}]*)\}, \[\]string\{([^}]*)\}\}", source)
 
     def strings(text: str) -> tuple[str, ...]:
         return tuple(re.findall(r'"([^"]+)"', text))
 
     assert providers and set(strings(providers.group(1))) == REMOVED_PROVIDERS
-    assert embedding and set(strings(embedding.group(1))) == REMOVED_EMBEDDING_BACKENDS
     assert fields and strings(fields.group(1)) == REMOVED_DEPLOYMENT_FIELDS
-    assert (
-        retired_types
-        and set(strings(retired_types.group(1))) == RETIRED_EMBEDDING_TYPES
-    )
-    assert retired_paths and strings(retired_paths.group(1)) == RETIRED_EMBEDDING_PATHS
     assert tuple((strings(path), strings(names)) for path, names in modules) == (
         REMOVED_MODULE_FIELDS
     )

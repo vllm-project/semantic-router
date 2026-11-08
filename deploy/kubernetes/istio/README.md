@@ -110,7 +110,8 @@ kubectl logs deployment/semantic-router \
   `envoyfilter.yaml`.
 - backend timeout: probe the backend Service from inside the cluster and check
   model readiness.
-- Router startup delay: inspect the model-downloader init container and PVC.
+- Router startup delay: the model runtime downloads the decision model on the
+  first start; inspect the Router log.
 
 ## Cleanup
 

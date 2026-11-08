@@ -175,20 +175,17 @@ func TestHandleConfigPutRejectsNonCanonicalRequestFields(t *testing.T) {
 	}
 }
 
-func TestHandleConfigPatchRejectsInvalidRemoteEmbeddingProvider(t *testing.T) {
+func TestHandleConfigPatchRejectsAStoreDimensionItsDeploymentDoesNotServe(t *testing.T) {
 	configPath := writeDeployTestBaseConfig(t)
 	invalidCfg := minimalDeployTestConfig("new_route")
-	invalidCfg.InlineModels.EmbeddingModels = config.EmbeddingModels{
-		EmbeddingConfig: config.HNSWConfig{
-			Backend:         config.EmbeddingBackendOpenAICompatible,
-			ModelType:       config.EmbeddingModelTypeRemote,
-			TargetDimension: 768,
-		},
-		Endpoint: config.EmbeddingEndpointConfig{
-			BaseURL:    "embedding-service:8000/v1",
-			Dimensions: 1536,
-		},
+	if invalidCfg.ModelDeployments == nil {
+		invalidCfg.ModelDeployments = map[string]config.ModelDeployment{}
 	}
+	invalidCfg.ModelDeployments["remote-embed"] = config.ModelDeployment{
+		Provider: config.OpenAIEmbeddingsProvider, Endpoint: "http://embedding-service:8000/v1", Model: "e5",
+		Capabilities: &config.DeploymentCapabilities{Dimensions: 1536},
+	}
+	invalidCfg.Memory.Embedding = &config.EmbeddingBinding{Deployment: "remote-embed", Dimension: 768}
 	payloadYAML := mustMarshalCanonicalConfigYAML(t, invalidCfg)
 	body, err := json.Marshal(RouterConfigUpdateRequest{YAML: string(payloadYAML)})
 	if err != nil {
@@ -207,7 +204,7 @@ func TestHandleConfigPatchRejectsInvalidRemoteEmbeddingProvider(t *testing.T) {
 		t.Fatalf("expected 400 Bad Request, got %d: %s", rr.Code, rr.Body.String())
 	}
 	response := rr.Body.String()
-	for _, want := range []string{"CONFIG_VALIDATION_ERROR", "endpoint.base_url", "endpoint.model", "endpoint.dimensions"} {
+	for _, want := range []string{"CONFIG_VALIDATION_ERROR", "global.stores.memory.embedding.dimension", "answers with 1536 dimensions"} {
 		if !strings.Contains(response, want) {
 			t.Fatalf("expected response to contain %q, got: %s", want, response)
 		}

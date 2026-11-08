@@ -117,11 +117,7 @@ func buildConflictReconciler(t *testing.T, namespace string, objs ...client.Obje
 		staticConfig: &config.RouterConfig{
 			ConfigSource: config.ConfigSourceKubernetes,
 			InlineModels: config.InlineModels{
-				EmbeddingModels: config.EmbeddingModels{
-					EmbeddingConfig: config.HNSWConfig{
-						ModelType: "qwen3",
-					},
-				},
+				EmbeddingDeployment: config.EmbeddingDefaultDeployment,
 			},
 		},
 		onConfigUpdate: func(context.Context, *config.RouterConfig) error { return nil },

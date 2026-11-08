@@ -146,13 +146,12 @@ func TestOwnedImageCanonicalizesAcceptedDataURI(t *testing.T) {
 func TestEmbeddingAPIAutoMediaExplicitRecipeHTTP(t *testing.T) {
 	fp, _ := embedding.NewFuncProvider("synthetic", 2, func(context.Context, string) ([]float32, error) { return []float32{1, 0}, nil })
 	provider := &apiMediaProvider{FuncProvider: fp}
-	prepared := embedding.NewSet(map[string]embedding.Provider{"mmbert": provider}, "mmbert")
+	prepared := embedding.NewSet(map[string]embedding.Provider{"vision": provider}, "vision")
 	cfg := &config.RouterConfig{}
-	cfg.EmbeddingConfig.ModelType = "mmbert"
+	cfg.EmbeddingDeployment = "vision"
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"vision": {Provider: config.ModelRuntimeProvider, Device: "cpu", Artifact: t.TempDir()}}
-	cfg.ModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "vision", Contract: "embedding.v1", Adapter: "vela_omni"}}
-	// The generation owns an already prepared encoder; the API must select its
-	// actual capabilities without interpreting the legacy catalog alias.
+	// The generation owns an already prepared encoder; the API must select it
+	// by its actual capabilities.
 	classifiers, err := classification.BuildRecipeClassifiers(cfg, classification.RecipeRuntimeOptions{Embeddings: prepared})
 	if err != nil {
 		t.Fatal(err)
@@ -177,7 +176,7 @@ func TestEmbeddingAPIAutoMediaExplicitRecipeHTTP(t *testing.T) {
 		t.Fatalf("wrong recipe or results: %+v", response)
 	}
 	for _, result := range response.Embeddings {
-		if result.ModelUsed != "mmbert" || result.Dimension != 2 {
+		if result.ModelUsed != "vision" || result.Dimension != 2 {
 			t.Fatalf("lost scoped representation: %+v", result)
 		}
 	}

@@ -285,8 +285,3 @@ global:
       similarity_threshold: 0.8
       max_entries: 1000
       ttl_seconds: 3600
-      embedding_model: mmbert
-    memory:
-      embedding_model: mmbert
-    vector_store:
-      embedding_model: mmbert

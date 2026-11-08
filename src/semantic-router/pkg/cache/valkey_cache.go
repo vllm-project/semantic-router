@@ -33,7 +33,7 @@ type ValkeyCache struct {
 	missCount           int64
 	lastCleanupTime     *time.Time
 	mu                  sync.RWMutex
-	embeddingModel      string // "mmbert" (default), "qwen3" or "multimodal"
+	embeddingDeployment string
 }
 
 // ValkeyCacheOptions contains configuration parameters for Valkey cache initialization
@@ -43,7 +43,7 @@ type ValkeyCacheOptions struct {
 	TTLSeconds          int
 	Enabled             bool
 	Config              *routerconfig.ValkeyConfig
-	EmbeddingModel      string
+	EmbeddingDeployment string
 
 	// closeClient is a test seam for constructor cleanup.
 	closeClient func(*glide.Client)
@@ -109,8 +109,6 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 		return nil, fmt.Errorf("failed to create Valkey client: %w", err)
 	}
 
-	embeddingModel := normalizeEmbeddingModel(options.EmbeddingModel)
-
 	cache := &ValkeyCache{
 		client:              valkeyClient,
 		config:              valkeyConfig,
@@ -118,8 +116,8 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 		similarityThreshold: options.SimilarityThreshold,
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
-		embeddingModel:      embeddingModel,
-		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, semanticCacheEmbeddingDimension(valkeyConfig.Index.VectorField.Dimension, options.EmbeddingProvider), 0)),
+		embeddingDeployment: options.EmbeddingDeployment,
+		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, embedding.Options{Dimension: semanticCacheEmbeddingDimension(valkeyConfig.Index.VectorField.Dimension, options.EmbeddingProvider)}),
 	}
 
 	releaseClient := func() { valkeyClient.Close() }

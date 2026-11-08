@@ -344,14 +344,6 @@ export interface FilterState {
 
 // ============== Config Data (from API) ==============
 export interface ConfigData {
-  embedding_models?: {
-    mmbert_model_path?: string
-    use_cpu?: boolean
-    embedding_config?: {
-      top_k?: number
-      min_score_threshold?: number
-    }
-  }
   prompt_guard?: {
     enabled: boolean
     model_id?: string

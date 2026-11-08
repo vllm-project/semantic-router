@@ -153,16 +153,14 @@ type ClassificationOptions struct {
 
 // EmbeddingRequest represents a request for embedding generation
 type EmbeddingRequest struct {
-	Recipe          string   `json:"recipe,omitempty"`
-	Texts           []string `json:"texts,omitempty"`
-	Audios          []string `json:"audios,omitempty"`           // Inline base64 WAV, up to 30 seconds; original rate and channels preserved
-	Images          []string `json:"images,omitempty"`           // Inline base64 image data URIs (data:image/...;base64,...); encoded via the multi-modal model
-	Model           string   `json:"model,omitempty"`            // Prepared model alias; auto selects among the current recipe's providers
-	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 0 (default) selects the loaded model output; other values require model support
-	TargetLayer     int      `json:"target_layer,omitempty"`     // Target layer for early exit (mmbert only): 3, 6, 11, 22 (0=full)
-	QualityPriority float32  `json:"quality_priority,omitempty"` // 0.0-1.0, default 0.5 (only used when model="auto")
-	LatencyPriority float32  `json:"latency_priority,omitempty"` // 0.0-1.0, default 0.5 (only used when model="auto")
-	SequenceLength  int      `json:"sequence_length,omitempty"`  // Optional, auto-detected if not provided
+	Recipe         string   `json:"recipe,omitempty"`
+	Texts          []string `json:"texts,omitempty"`
+	Audios         []string `json:"audios,omitempty"`          // Inline base64 WAV, up to 30 seconds; original rate and channels preserved
+	Images         []string `json:"images,omitempty"`          // Inline base64 image data URIs (data:image/...;base64,...); encoded via the multi-modal model
+	Model          string   `json:"model,omitempty"`           // Embedding deployment; auto (default) is embeddings.default, or for media the deployment that embeds it
+	Dimension      int      `json:"dimension,omitempty"`       // Target dimension: 0 (default) selects the loaded model output; other values require model support
+	TargetLayer    int      `json:"target_layer,omitempty"`    // Target layer for early exit on a model with layer exits (Vela Embedding: 3, 6, 11, 22; 0=full)
+	SequenceLength int      `json:"sequence_length,omitempty"` // Optional, auto-detected if not provided
 }
 
 // EmbeddingResult represents a single embedding result
@@ -186,35 +184,31 @@ type EmbeddingResponse struct {
 
 // SimilarityRequest represents a request to calculate similarity between two texts
 type SimilarityRequest struct {
-	Recipe          string  `json:"recipe,omitempty"`
-	Text1           string  `json:"text1"`
-	Text2           string  `json:"text2"`
-	Model           string  `json:"model,omitempty"`            // Prepared model alias; auto selects among the current recipe's providers
-	Dimension       int     `json:"dimension,omitempty"`        // Target dimension: 0 (default) selects the loaded model output; other values require model support
-	TargetLayer     int     `json:"target_layer,omitempty"`     // Target layer for early exit (mmbert only): 3, 6, 11, 22 (0=full)
-	QualityPriority float32 `json:"quality_priority,omitempty"` // 0.0-1.0, only for "auto" model
-	LatencyPriority float32 `json:"latency_priority,omitempty"` // 0.0-1.0, only for "auto" model
+	Recipe      string `json:"recipe,omitempty"`
+	Text1       string `json:"text1"`
+	Text2       string `json:"text2"`
+	Model       string `json:"model,omitempty"`        // Embedding deployment; auto (default) is embeddings.default
+	Dimension   int    `json:"dimension,omitempty"`    // Target dimension: 0 (default) selects the loaded model output; other values require model support
+	TargetLayer int    `json:"target_layer,omitempty"` // Target layer for early exit on a model with layer exits (Vela Embedding: 3, 6, 11, 22; 0=full)
 }
 
 // SimilarityResponse represents the response of a similarity calculation
 type SimilarityResponse struct {
 	Recipe           string  `json:"recipe,omitempty"`
-	ModelUsed        string  `json:"model_used"`         // "qwen3", "gemma", or "unknown"
+	ModelUsed        string  `json:"model_used"`         // The embedding deployment
 	Similarity       float32 `json:"similarity"`         // Cosine similarity score (-1.0 to 1.0)
 	ProcessingTimeMs float32 `json:"processing_time_ms"` // Processing time in milliseconds
 }
 
 // BatchSimilarityRequest represents a request to find top-k similar candidates for a query
 type BatchSimilarityRequest struct {
-	Recipe          string   `json:"recipe,omitempty"`
-	Query           string   `json:"query"`                      // Query text
-	Candidates      []string `json:"candidates"`                 // Array of candidate texts
-	TopK            int      `json:"top_k,omitempty"`            // Max number of matches to return (0 = return all)
-	Model           string   `json:"model,omitempty"`            // Prepared model alias; auto selects among the current recipe's providers
-	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 0 (default) selects the loaded model output; other values require model support
-	TargetLayer     int      `json:"target_layer,omitempty"`     // Target layer for early exit (mmbert only): 3, 6, 11, 22 (0=full)
-	QualityPriority float32  `json:"quality_priority,omitempty"` // 0.0-1.0, only for "auto" model
-	LatencyPriority float32  `json:"latency_priority,omitempty"` // 0.0-1.0, only for "auto" model
+	Recipe      string   `json:"recipe,omitempty"`
+	Query       string   `json:"query"`                  // Query text
+	Candidates  []string `json:"candidates"`             // Array of candidate texts
+	TopK        int      `json:"top_k,omitempty"`        // Max number of matches to return (0 = return all)
+	Model       string   `json:"model,omitempty"`        // Embedding deployment; auto (default) is embeddings.default
+	Dimension   int      `json:"dimension,omitempty"`    // Target dimension: 0 (default) selects the loaded model output; other values require model support
+	TargetLayer int      `json:"target_layer,omitempty"` // Target layer for early exit on a model with layer exits (Vela Embedding: 3, 6, 11, 22; 0=full)
 }
 
 // BatchSimilarityMatch represents a single match in batch similarity matching

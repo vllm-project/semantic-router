@@ -25,6 +25,10 @@ const (
 // model of every built-in signal it answers.
 const Vela3SignalModel = "models/vela3-fast"
 
+// VelaEmbeddingModel is the registry path of Vela Embedding, the model of the
+// pre-declared vela-embedding deployment.
+const VelaEmbeddingModel = "models/Vela-1.0-Encoder-307M-Embedding"
+
 // Vela2SignalModel is the registry path of Vela 2.0 0.3B, the default model
 // before Vela 3.0.
 const Vela2SignalModel = "models/Vela-2.0-0.3B"
@@ -278,7 +282,7 @@ var DefaultModelRegistry = []ModelSpec{
 		Tags:                    []string{"vela", "feedback", "classification", "merged", "multilingual", "long-context"},
 	},
 	{
-		LocalPath:               "models/Vela-1.0-Encoder-307M-Embedding",
+		LocalPath:               VelaEmbeddingModel,
 		RepoID:                  "vllm-sr/Vela-1.0-Encoder-307M-Embedding",
 		Revision:                "1e57cebf5a7b7fec6e6973f05bbca97c5cca4436",
 		DownloadExcludePatterns: velaTrainingArtifactPatterns,

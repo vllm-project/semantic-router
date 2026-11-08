@@ -10,9 +10,6 @@ import (
 )
 
 func validateDecisionContracts(cfg *RouterConfig) error {
-	if err := validateClassifierContextLimits(cfg); err != nil {
-		return err
-	}
 	if err := validateMetadataContracts(cfg); err != nil {
 		return err
 	}

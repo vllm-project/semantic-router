@@ -1,0 +1,29 @@
+# A global embedding binding is embeddings.default; a routing scope's is the
+# deployment of the scope's RAG sources that embed their queries.
+version: v0.3
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+routing:
+  decisions:
+    - name: docs
+      priority: 100
+      rules: {operator: AND, conditions: []}
+      modelRefs: [{model: general}]
+      plugins:
+        - type: context
+          configuration:
+            enabled: true
+            sources:
+              - type: rag
+                backend: milvus
+                backend_config: {collection: docs, reuse_cache_connection: true, embedding: {deployment: docs-embed}}
+global:
+  model_catalog:
+    deployments:
+      shared-embed: {provider: openai_embeddings, endpoint: "https://embed.example.com/v1", model: BAAI/bge-m3}
+      docs-embed: {provider: openai_embeddings, endpoint: "https://docs-embed.example.com/v1", model: intfloat/e5-large-v2}
+    embeddings:
+      default: shared-embed

@@ -101,9 +101,6 @@ config:
         tracing: {enabled: false}
     stores:
       response_cache: {enabled: false}
-    model_catalog:
-      embeddings:
-        semantic: {mmbert_model_path: ""}
 resources:
   limits: {cpu: '2', memory: 4Gi}
   requests: {cpu: 500m, memory: 1Gi}

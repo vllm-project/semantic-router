@@ -35,4 +35,3 @@ global:
     response_cache:
       enabled: true
       backend_type: memory
-      embedding_model: mmbert

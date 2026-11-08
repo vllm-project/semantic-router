@@ -237,14 +237,9 @@ config:
         tracing:
           enabled: false
     stores:
-      response_cache:
-        embedding_model: mmbert
-      memory:
-        embedding_model: mmbert
       vector_store:
         enabled: true
         backend_type: memory
-        embedding_model: mmbert
     integrations: {}
 resources:
   limits:

@@ -19,10 +19,9 @@ func TestNamedSharedConsumersPrepareTheirGlobalEmbedding(t *testing.T) {
 			server := httptest.NewServer(fake.Handler())
 			defer server.Close()
 			cfg := &config.RouterConfig{}
-			cfg.EmbeddingConfig = config.HNSWConfig{ModelType: "mmbert", TargetDimension: 8, TargetLayer: 6}
+			cfg.EmbeddingDeployment = "global"
 			cfg.Memory.Milvus.Dimension = 8
 			cfg.ModelDeployments = map[string]config.ModelDeployment{"global": {Provider: config.ModelRuntimeProvider, Endpoint: server.URL}}
-			cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "global", Contract: "embedding.v1"}}
 			if consumer == "embedding API" {
 				cfg.API.Embeddings.Enabled = true
 			} else {

@@ -13,6 +13,7 @@ import (
 func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cache.CacheBackend, string, error) {
 	semanticCacheCfg := cfg.SemanticCache
 	storeNeeded, semanticNeeded := cfg.ResponseCacheDemand()
+	embeddingDeployment, embeddingDimension, embeddingLayer := cfg.ResponseCacheEmbedding()
 	cacheConfig := cache.CacheConfig{
 		BackendType:         cache.CacheBackendType(semanticCacheCfg.BackendType),
 		Enabled:             storeNeeded,
@@ -24,7 +25,9 @@ func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cach
 		Valkey:              semanticCacheCfg.Valkey,
 		Milvus:              semanticCacheCfg.Milvus,
 		Qdrant:              semanticCacheCfg.Qdrant,
-		EmbeddingModel:      detectSemanticCacheEmbeddingModel(cfg),
+		EmbeddingDeployment: embeddingDeployment,
+		EmbeddingDimension:  embeddingDimension,
+		EmbeddingLayer:      embeddingLayer,
 	}
 
 	if cacheConfig.BackendType == "" {
@@ -32,7 +35,7 @@ func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cach
 	}
 
 	if semanticNeeded && len(sets) > 0 && sets[0] != nil {
-		provider, err := sets[0].Get(cacheConfig.EmbeddingModel, 0, 0)
+		provider, err := sets[0].Get(cacheConfig.EmbeddingDeployment, 0, 0)
 		if err != nil {
 			return nil, "", fmt.Errorf("semantic cache embedding: %w", err)
 		}
@@ -73,10 +76,6 @@ func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cach
 	}
 
 	return semanticCache, identity, nil
-}
-
-func detectSemanticCacheEmbeddingModel(cfg *config.RouterConfig) string {
-	return config.SemanticCacheEmbeddingModel(cfg)
 }
 
 func createResponseAPIFilter(cfg *config.RouterConfig) *ResponseAPIFilter {

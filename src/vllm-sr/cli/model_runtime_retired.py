@@ -13,11 +13,6 @@ from __future__ import annotations
 from typing import Any
 
 REMOVED_PROVIDERS = frozenset({"candle", "ort", "openvino"})
-REMOVED_EMBEDDING_BACKENDS = frozenset({"candle", "openvino"})
-# EmbeddingGemma and MiniLM have no runtime family; Vela Embedding (mmbert)
-# replaces them. Their path keys are refused even when empty.
-RETIRED_EMBEDDING_TYPES = frozenset({"gemma", "bert"})
-RETIRED_EMBEDDING_PATHS = ("gemma_model_path", "bert_model_path")
 # A remote hallucination detector is a hallucination binding; the
 # `backend: endpoint` shorthand was desugared into one.
 REMOVED_DETECTOR_BACKENDS = frozenset({"candle", "endpoint"})
@@ -99,17 +94,6 @@ def retired_model_fields(data: dict[str, Any]) -> list[str]:
             ("endpoint",),
         )
     )
-    semantic = _mapping(_mapping(catalog.get("embeddings")).get("semantic"))
-    embedding_config = _mapping(semantic.get("embedding_config"))
-    backend = embedding_config.get("backend")
-    if (
-        isinstance(backend, str)
-        and backend.strip().lower() in REMOVED_EMBEDDING_BACKENDS
-    ):
-        removed.append(
-            f"global.model_catalog.embeddings.semantic.embedding_config.backend: {backend}"
-        )
-    removed.extend(_retired_embedding_models(root, semantic, embedding_config))
     removed.extend(
         _present(
             "global.model_catalog.system",
@@ -132,34 +116,6 @@ def retired_model_fields(data: dict[str, Any]) -> list[str]:
                 f"recipes[{index}].routing", _mapping(_mapping(recipe).get("routing"))
             )
         )
-    return removed
-
-
-def _retired_embedding_models(
-    root: dict[str, Any], semantic: dict[str, Any], embedding_config: dict[str, Any]
-) -> list[str]:
-    """Settings that select the retired gemma or bert embedding models, and
-    their path keys."""
-    removed = _present(
-        "global.model_catalog.embeddings.semantic", semantic, RETIRED_EMBEDDING_PATHS
-    )
-    selections = [
-        (
-            "global.model_catalog.embeddings.semantic.embedding_config.model_type",
-            embedding_config.get("model_type"),
-        )
-    ]
-    stores = _mapping(root.get("stores"))
-    selections += [
-        (
-            f"global.stores.{name}.embedding_model",
-            _mapping(stores[name]).get("embedding_model"),
-        )
-        for name in sorted(stores)
-    ]
-    for field, value in selections:
-        if isinstance(value, str) and value.strip().lower() in RETIRED_EMBEDDING_TYPES:
-            removed.append(f"{field}: {value}")
     return removed
 
 

@@ -355,6 +355,23 @@ func assertOperatorComplexityConfig(t *testing.T, rules []routerconfig.Complexit
 	}
 }
 
+func TestOperatorRefusesTheRemovedEmbeddingFields(t *testing.T) {
+	r := &SemanticRouterReconciler{}
+	canonical := &routerconfig.CanonicalConfig{Global: &routerconfig.CanonicalGlobal{}}
+	spec := vllmv1alpha1.ConfigSpec{EmbeddingModels: &apiextensionsv1.JSON{Raw: []byte(`{"mmbert_model_path":"models/x"}`)}}
+	if err := r.applyOperatorModelCatalog(canonical, spec); err == nil || !strings.Contains(err.Error(), "config.embedding_models is removed") {
+		t.Fatalf("embedding_models: %v", err)
+	}
+	for field, spec := range map[string]vllmv1alpha1.ConfigSpec{
+		"config.response_cache": {ResponseCache: &vllmv1alpha1.SemanticCacheConfig{EmbeddingModel: "qwen3"}},
+		"config.semantic_cache": {SemanticCache: &vllmv1alpha1.SemanticCacheConfig{EmbeddingModel: "qwen3"}},
+	} {
+		if _, err := operatorResponseCacheConfig(spec); err == nil || !strings.Contains(err.Error(), field+".embedding_model is removed") {
+			t.Fatalf("%s: %v", field, err)
+		}
+	}
+}
+
 // The modules and fields only the removed classifiers read are refused, not
 // dropped, so a resource that writes them learns why.
 func TestOperatorRefusesTheRemovedClassifierFields(t *testing.T) {

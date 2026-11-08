@@ -19,23 +19,26 @@ Audio of up to 30 seconds is accepted at its original sampling rate.
 
 ## Turn it on
 
-Select the multimodal embedding model. `embeddings.multimodal` names its
-deployment, the pre-declared `omni-nano` (Vela 1.0 Omni Nano) unless you
-change it:
+Declare the multimodal embedding deployment and name it in
+`embeddings.multimodal`; multimodal embedding is off until you do:
 
 ```yaml
 global:
   model_catalog:
+    deployments:
+      omni-nano:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Omni-Nano
+        revision: 2ff2d66385dbdd661a560ec3e8bcb45a0527d92e
+        device: cpu
+        input: {overflow: truncate}
     embeddings:
       multimodal: omni-nano
-      semantic:
-        embedding_config:
-          model_type: multimodal
 ```
 
 The router runs Omni on the CPU in the runtime. To use Mini, declare a
-`model_runtime` deployment of `vllm-sr/Vela-1.0-Omni-Mini` and name it in
-`embeddings.multimodal`. To route on what a request's image shows, ask a
+`model_runtime` deployment of `vllm-sr/Vela-1.0-Omni-Mini` instead. To route
+on what a request's image shows, ask a
 [systemone](tutorials/signal/learned/systemone.md) question that reads it
 (`input.image`) of a deployment that accepts images.
 

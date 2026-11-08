@@ -6,8 +6,8 @@ description: Each earlier way to choose a model for a signal, next to the deploy
 
 # Migrate model resources
 
-Earlier releases chose models with `external[]` models, embedding endpoints,
-binding objects and per-rule binding keys. These forms still load: the Router
+Earlier releases chose models with `external[]` models, binding objects and
+per-rule binding keys. These forms still load: the Router
 reads each as named deployments and bindings, uses the same models as before,
 and reports a `deprecated_model_field` warning for each field. This page is the only place
 the earlier forms appear; the rest of the documentation uses the second form of
@@ -47,6 +47,11 @@ fields stay as written and the output says which setting.
   hallucination rules; a module's threshold becomes the predicate of the
   rules that read it, and a binding of another model is keyed by the signal
   type.
+- Embedding model keywords (`mmbert`, `qwen3`, `multimodal`),
+  `embeddings.semantic` with its remote endpoint, embedding bindings and
+  admission by model keyword no longer load. `vllm-sr config migrate` writes
+  the deployment each one chose and names it where it is used; see
+  [Embeddings](../model-runtime/guides/embeddings.md).
 - Everything else resolves to the same models as before.
 
 When an earlier and a new form name the model for the same signal, the new
@@ -89,39 +94,6 @@ routing:
   signals:
     safety:
       - {name: harmful, deployment: kai, predicate: {gte: 0.5}}
-```
-
-## Remote embeddings
-
-```yaml title="migrate-embedding-endpoint-before"
-global:
-  model_catalog:
-    embeddings:
-      semantic:
-        embedding_config: {backend: openai_compatible, model_type: remote}
-        endpoint:
-          base_url: https://embedding.example.com/v1
-          model: BAAI/bge-m3
-          api_key_env: EMBEDDING_API_KEY
-          timeout_seconds: 5
-          max_retries: 2
-          dimensions: 1024
-```
-
-```yaml title="migrate-embedding-endpoint-after"
-global:
-  model_catalog:
-    deployments:
-      remote-embed:
-        provider: openai_embeddings
-        endpoint: https://embedding.example.com/v1
-        model: BAAI/bge-m3
-        auth: {api_key_env: EMBEDDING_API_KEY}
-        timeout_ms: 5000
-        max_retries: 2
-        capabilities: {dimensions: 1024}
-    embeddings:
-      default: remote-embed
 ```
 
 ## The memory rewrite model

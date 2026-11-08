@@ -1,5 +1,8 @@
 import type { EditFormData } from '../components/EditModal'
-import { EMBEDDING_MODELS_STRUCTURED_FIELDS } from './configPageEmbeddingStructuredSchema'
+import {
+  EMBEDDING_MODELS_STRUCTURED_FIELDS,
+  STORE_EMBEDDING_FIELD,
+} from './configPageEmbeddingStructuredSchema'
 import type { RouterSystemKey } from './configPageRouterSectionCatalog'
 import {
   boolean,
@@ -305,6 +308,7 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
     },
   },
   memory: {
+    embedding: STORE_EMBEDDING_FIELD,
     milvus: {
       label: 'Milvus Memory Store',
       description: 'Connection and collection settings for agentic memory.',
@@ -329,6 +333,7 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
     },
   },
   response_cache: {
+    embedding: STORE_EMBEDDING_FIELD,
     redis: {
       label: 'Redis Backend',
       description: 'Typed Redis connection, index, search, and lifecycle settings.',
@@ -341,6 +346,7 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
     },
   },
   vector_store: {
+    embedding: STORE_EMBEDDING_FIELD,
     supported_formats: {
       label: 'Supported Formats',
       description: 'File extensions accepted by ingestion.',

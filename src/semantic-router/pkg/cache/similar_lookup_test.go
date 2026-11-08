@@ -13,7 +13,7 @@ import (
 // similarity counts the entries it did not return.
 func TestInMemoryLookupReturnsTheTopKMostSimilarEntries(t *testing.T) {
 	for _, useHNSW := range []bool{false, true} {
-		c := NewInMemoryCache(InMemoryCacheOptions{Enabled: true, MaxEntries: 16, UseHNSW: useHNSW, EmbeddingModel: "mmbert"})
+		c := NewInMemoryCache(InMemoryCacheOptions{Enabled: true, MaxEntries: 16, UseHNSW: useHNSW, EmbeddingDeployment: "vela-embedding"})
 		c.entries = append(c.entries,
 			CacheEntry{RequestID: "a", Query: "what is the refund window", ResponseBody: []byte("A"), Embedding: []float32{0.95, 0.31}},
 			CacheEntry{RequestID: "b", Query: "how long can I return items", ResponseBody: []byte("B"), Embedding: []float32{0.99, 0.14}},

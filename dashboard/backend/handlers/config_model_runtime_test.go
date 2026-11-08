@@ -29,7 +29,6 @@ func TestUpdateConfigHandlerPreservesModelRuntimeDeclarations(t *testing.T) {
 		"model_bindings": map[string]interface{}{
 			"pii":       "local-decision",
 			"jailbreak": "local-decision",
-			"embedding": map[string]interface{}{"deployment": "local-embedding", "head": "onnx/model.onnx"},
 		},
 	}}}
 	payload, err := json.Marshal(body)
@@ -55,8 +54,7 @@ func TestUpdateConfigHandlerPreservesModelRuntimeDeclarations(t *testing.T) {
 	if budget.MaxConcurrency != 2 || budget.MaxQueue != 3 || budget.QueueTimeoutMs != 500 || budget.OnOverflow != "shed" {
 		t.Fatalf("admission changed: %#v", budget)
 	}
-	binding := saved.Recipes[0].Routing.ModelBindings["embedding"]
-	if binding.Deployment != "local-embedding" || binding.Head != "onnx/model.onnx" || binding.Contract != "" || binding.Adapter != "" {
+	if binding := saved.Recipes[0].Routing.ModelBindings["pii"]; binding.Deployment != "local-decision" {
 		t.Fatalf("binding changed: %#v", binding)
 	}
 	if len(saved.Routing.ModelBindings) != 0 {
@@ -82,8 +80,5 @@ func TestUpdateConfigHandlerPreservesModelRuntimeDeclarations(t *testing.T) {
 	recipeBindings := requireMapValue(t, requireMapValue(t, recipe, "routing"), "model_bindings")
 	if recipeBindings["jailbreak"] != "local-decision" || recipeBindings["pii"] != "local-decision" {
 		t.Fatalf("recipe binding is not written as its deployment name: %#v", recipeBindings)
-	}
-	if object := requireMapValue(t, recipeBindings, "embedding"); len(object) != 2 {
-		t.Fatalf("a binding with a head writes only its deployment and head: %#v", object)
 	}
 }

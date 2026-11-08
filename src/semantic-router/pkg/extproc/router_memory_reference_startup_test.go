@@ -161,7 +161,8 @@ func TestReferenceMemoryStoresUseAWidthVelaEmbeddingServes(t *testing.T) {
 	loaded, err := loadRouterConfig(writeReferenceConfigCopy(t, "", ""))
 	require.NoError(t, err)
 	require.True(t, loaded.Memory.Enabled)
-	require.Equal(t, string(memory.EmbeddingModelMMBERT), detectMemoryEmbeddingModel(loaded))
+	deployment, _ := loaded.MemoryEmbedding()
+	require.Equal(t, config.EmbeddingDefaultDeployment, deployment)
 	require.NotNil(t, loaded.Memory.Valkey)
 	require.NotNil(t, loaded.Memory.Qdrant)
 
@@ -169,7 +170,7 @@ func TestReferenceMemoryStoresUseAWidthVelaEmbeddingServes(t *testing.T) {
 		return nil, assert.AnError
 	})
 	require.NoError(t, err)
-	prepared := memory.EmbeddingConfig{Model: memory.EmbeddingModelMMBERT, Provider: servedViews{base, velaEmbeddingViews}}
+	prepared := memory.EmbeddingConfig{Deployment: "vela-embedding", Provider: servedViews{base, velaEmbeddingViews}}
 	for backend, configured := range map[string]int{
 		"milvus": loaded.Memory.Milvus.Dimension,
 		"valkey": loaded.Memory.Valkey.Dimension,
@@ -181,10 +182,10 @@ func TestReferenceMemoryStoresUseAWidthVelaEmbeddingServes(t *testing.T) {
 	}
 
 	var found bool
-	for _, requirement := range config.EmbeddingRequirements(loaded, string(memory.EmbeddingModelMMBERT), true) {
-		if requirement.Consumer == "memory" {
+	for _, requirement := range config.EmbeddingRequirements(loaded, true) {
+		if requirement.Consumer == config.EmbeddingConsumerMemory {
 			found = true
-			assert.Equal(t, string(memory.EmbeddingModelMMBERT), requirement.Model)
+			assert.Equal(t, config.EmbeddingDefaultDeployment, requirement.Deployment)
 			assert.Contains(t, velaEmbeddingViews, requirement.Dimension)
 		}
 	}

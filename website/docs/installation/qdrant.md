@@ -168,7 +168,6 @@ global:
       backend_type: qdrant
       similarity_threshold: 0.90
       ttl_seconds: 7200
-      embedding_model: mmbert
       qdrant:
         host: qdrant                   # Service name or hostname
         port: 6334
@@ -189,8 +188,7 @@ global:
         host: qdrant
         port: 6334
         collection: agentic_memory
-        dimension: 256               # mmbert: 64, 128, 256, 512 or 768
-      embedding_model: mmbert
+        dimension: 256               # Vela Embedding: 64, 128, 256, 512 or 768
       default_retrieval_limit: 5
       default_similarity_threshold: 0.30
 ```
@@ -211,8 +209,6 @@ global:
       enabled: true
       backend_type: qdrant
       file_storage_dir: /var/lib/vsr/data
-      embedding_model: multimodal
-      embedding_dimension: 384
       qdrant:
         host: qdrant
         port: 6334

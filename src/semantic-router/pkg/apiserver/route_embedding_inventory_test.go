@@ -51,10 +51,10 @@ func TestEmbeddingInventoryUsesActualGlobalAPIAndRefresh(t *testing.T) {
 	t.Cleanup(endpoint.Close)
 	cfg := &config.RouterConfig{}
 	cfg.API.Embeddings.Enabled = true
-	cfg.EmbeddingConfig = config.HNSWConfig{ModelType: "bert", TargetDimension: 2}
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"global": {Provider: "http", ExternalModel: "global"}}
-	cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "global", Adapter: "openai_compatible", Contract: "embedding.v1"}}
-	cfg.ExternalModels = []config.ExternalModelConfig{{Name: "global", ModelName: "global", ModelEndpoint: config.ClassifierVLLMEndpoint{Address: endpoint.URL}}}
+	cfg.EmbeddingDeployment = "global"
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"global": {
+		Provider: config.OpenAIEmbeddingsProvider, Endpoint: endpoint.URL, Model: "global", Capabilities: &config.DeploymentCapabilities{Dimensions: 2},
+	}}
 	service, err := services.NewClassificationServiceFromConfig(cfg)
 	if err != nil {
 		t.Fatal(err)

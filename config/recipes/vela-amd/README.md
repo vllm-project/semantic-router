@@ -20,7 +20,8 @@ revision.
 
 Every deployment is a `model_runtime` deployment: the Router starts the runtime
 and the runtime loads each pinned package on the GPU and chooses its kernels.
-Embedding uses layer 22 and dimension 768, with `full_context: true`.
+`global.model_catalog.embeddings.default` names the Embedding deployment, which
+embeds the vector store's documents and queries at dimension 768.
 
 ## Intended use
 

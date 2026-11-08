@@ -21,39 +21,23 @@ Vela 1.0 Omni 把文本、图像和音频嵌进同一个向量空间，所以图
 
 ## 打开它 {#turn-it-on}
 
-选多模态嵌入模型，加一个读图像的信号。`embeddings.multimodal` 指定它的部署，不改的话就是预先声明的 `omni-nano`（Vela 1.0 Omni Nano）：
+声明多模态嵌入部署，并在 `embeddings.multimodal` 中指定它；不指定，多模态嵌入就不开：
 
 ```yaml
 global:
   model_catalog:
+    deployments:
+      omni-nano:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Omni-Nano
+        revision: 2ff2d66385dbdd661a560ec3e8bcb45a0527d92e
+        device: cpu
+        input: {overflow: truncate}
     embeddings:
       multimodal: omni-nano
-      semantic:
-        embedding_config:
-          model_type: multimodal
-routing:
-  signals:
-    embeddings:
-      - name: identity_documents
-        threshold: 0.29
-        aggregation_method: max
-        query_modality: image
-        candidates:
-          - photograph of a passport page
-          - photograph of a driver's license or national ID card
-  decisions:
-    - name: private-images
-      priority: 200
-      rules:
-        operator: AND
-        conditions:
-          - type: embedding
-            name: identity_documents
-      modelRefs:
-        - model: private-vision-model
 ```
 
-Omni 由 router 在 runtime 里跑在 CPU 上。要用 Mini，就声明一个 `vllm-sr/Vela-1.0-Omni-Mini` 的 `model_runtime` 部署，并在 `embeddings.multimodal` 中指定它。[图像路由包](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/embedding/image-routing.yaml) 的阈值是按 Omni Nano 校准的；换 Mini 之后，在自己的图像上重测一遍。
+Omni 由 router 在 runtime 里跑在 CPU 上。要用 Mini，就改为声明一个 `vllm-sr/Vela-1.0-Omni-Mini` 的 `model_runtime` 部署。
 
 ## 验一下 {#check-it}
 

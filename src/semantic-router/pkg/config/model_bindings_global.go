@@ -64,18 +64,6 @@ func resolveGlobalModelBindings(cfg *RouterConfig) (map[string]ResolvedModelBind
 		}
 		resolved[name] = ResolvedModelBinding{Recipe: GlobalModelScope, Name: name, Binding: decl, Deployment: deployment, Admission: cfg.ModelAdmission[decl.Deployment]}
 	}
-	// The embedding endpoint a deprecated field declared kept the response
-	// cache's own embedding model.
-	if embedding, ok := resolved["embedding"]; ok && !embedding.Deployment.Translated() && cfg.NeedsSemanticResponseCache() {
-		model := SemanticCacheEmbeddingModel(cfg)
-		primary := strings.ToLower(strings.TrimSpace(cfg.EmbeddingConfig.ModelType))
-		if primary == "" {
-			primary = "qwen3"
-		}
-		if model != primary {
-			return nil, fmt.Errorf("global.stores.response_cache.embedding_model %q must match the global embedding model %q", model, primary)
-		}
-	}
 	return resolved, nil
 }
 

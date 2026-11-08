@@ -96,7 +96,7 @@ func (r *OpenAIRouter) recallFromExternalAPI(traceCtx context.Context, ctx *Requ
 	var requestBody []byte
 	switch apiConfig.RequestFormat {
 	case "pinecone", "weaviate":
-		requestBody, err = r.buildVectorSearchRequest(traceCtx, ctx, query, recall.TopK, apiConfig.RequestFormat)
+		requestBody, err = r.buildVectorSearchRequest(traceCtx, ctx, query, recall.TopK, apiConfig)
 	case "elasticsearch":
 		requestBody, err = buildElasticsearchRequest(query, recall.TopK)
 	case "custom":
@@ -121,12 +121,12 @@ func (r *OpenAIRouter) recallFromExternalAPI(traceCtx context.Context, ctx *Requ
 }
 
 // buildVectorSearchRequest embeds the query for the formats that search by vector.
-func (r *OpenAIRouter) buildVectorSearchRequest(traceCtx context.Context, ctx *RequestContext, query string, topK int, format string) ([]byte, error) {
-	queryEmbedding, err := r.ragQueryEmbedding(traceCtx, query, ctx)
+func (r *OpenAIRouter) buildVectorSearchRequest(traceCtx context.Context, ctx *RequestContext, query string, topK int, apiConfig *config.ExternalAPIRAGConfig) ([]byte, error) {
+	queryEmbedding, err := r.ragQueryEmbedding(traceCtx, query, ctx, apiConfig.Embedding)
 	if err != nil {
 		return nil, err
 	}
-	if format == "pinecone" {
+	if apiConfig.RequestFormat == "pinecone" {
 		return buildPineconeRequest(queryEmbedding, topK)
 	}
 	return buildWeaviateRequest(queryEmbedding, topK)

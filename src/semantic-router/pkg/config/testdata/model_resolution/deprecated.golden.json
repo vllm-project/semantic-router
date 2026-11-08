@@ -1,13 +1,4 @@
 {
-  "06-remote-embeddings.yaml": {
-    "signals": {
-      "default/systemone.billing": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
-    },
-    "started": [
-      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
-    ],
-    "deprecated_fields": 1
-  },
   "07-systemone-decision-model.yaml": {
     "signals": {
       "default/domain.math": "systemone https://systemone.example.com/v1/systemone vllm-sr/d3-ultra",

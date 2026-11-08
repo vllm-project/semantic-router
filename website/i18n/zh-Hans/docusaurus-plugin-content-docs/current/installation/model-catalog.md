@@ -27,13 +27,14 @@ translation:
 
 部署被分配了它无法回答的信号时，Router 在加载时拒绝该部署。
 
-有三个部署始终已声明，只有当某处解析到它们时才会启动：
+有两个部署始终已声明，只有当某处解析到它们时才会启动：
 
 | 名称 | 模型 | 默认用于 |
 | --- | --- | --- |
 | `primary` | CPU 上的 `vllm-sr/vela3-fast` | `system.decision_model` |
 | `vela-embedding` | Vela 1.0 Embedding | `embeddings.default` |
-| `omni-nano` | Vela 1.0 Omni Nano | `embeddings.multimodal` |
+
+在 `embeddings.multimodal` 指定一个你声明的部署（例如提供 Vela 1.0 Omni Nano 的部署）之前，多模态 embedding 不开启（见[图像和音频](../model-runtime/guides/multimodal.md)）。
 
 ## 字段参考 {#field-reference}
 
@@ -72,7 +73,7 @@ global:
     system:
       decision_model: {deployment: primary}
     bindings: {pii: primary}
-    embeddings: {default: vela-embedding, multimodal: omni-nano}
+    embeddings: {default: vela-embedding}  # multimodal: a declared deployment
 ```
 
 ### 托管 `model_runtime` 字段 {#managed-model_runtime-fields}
@@ -125,7 +126,7 @@ routing:
 
 绑定也可以写成对象，用于选择多头 `model_runtime` 部署的某个头：`pii: {deployment: local-vela, head: pii}`。工作点通过 `operating_point` 固定在部署上。
 
-每个信号的解析顺序：规则的 `deployment`，然后是配方的绑定，然后是全局绑定，问题类信号最后使用 `system.decision_model`。Embedding 通过 `embeddings.default` 解析，用自己模型做 embedding 的路由配置则通过它的 `model_bindings.embedding` 解析。
+每个信号的解析顺序：规则的 `deployment`，然后是配方的绑定，然后是全局绑定，问题类信号最后使用 `system.decision_model`。Embedding 不回答任何信号：召回用 `embeddings.default` 做 embedding，库或 RAG 源的 `embedding` 块指定了部署时则用那个部署。
 
 ## 阈值 {#thresholds}
 

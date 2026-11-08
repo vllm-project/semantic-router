@@ -22,6 +22,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
@@ -799,6 +800,13 @@ func (s *Server) EmbeddingRuntimeState() modelruntime.EmbeddingRuntimeState {
 
 func (r *OpenAIRouter) embeddingRuntimeState() modelruntime.EmbeddingRuntimeState {
 	state := modelruntime.EmbeddingState(r.Config, r.Embeddings)
+	// The default deployment is prepared by the consumers that recall with
+	// it: RAG queries above, else the response cache, else memory.
+	for _, set := range []*embedding.Set{r.cacheEmbeddings, r.serviceEmbeddings} {
+		if state.EmbeddingProvider == nil {
+			state.EmbeddingProvider = modelruntime.EmbeddingState(r.Config, set).EmbeddingProvider
+		}
+	}
 	state.AnyReady = state.AnyReady || r.serviceEmbeddings.Ready() || r.cacheEmbeddings.Ready() || r.RecipeClassifiers.HasAnyPreparedEmbeddings()
 	return state
 }

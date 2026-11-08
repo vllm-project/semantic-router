@@ -57,8 +57,8 @@ func TestRetrieveFromExternalAPIEmbedsTheQueryOnce(t *testing.T) {
 
 			embedder := &plainRAGEmbedder{}
 			router := &OpenAIRouter{Embeddings: embedding.NewSet(
-				map[string]embedding.Provider{config.RAGQueryEmbeddingModel: embedder},
-				config.RAGQueryEmbeddingModel,
+				map[string]embedding.Provider{config.EmbeddingDefaultDeployment: embedder},
+				config.EmbeddingDefaultDeployment,
 			)}
 			ragConfig := &config.ContextSource{
 				Type:          config.ContextSourceRAG,

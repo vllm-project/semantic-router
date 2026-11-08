@@ -123,9 +123,11 @@ routing:
           use_reasoning: false
 global:
   model_catalog:
-    embeddings:
-      semantic:
-        use_cpu: false
+    deployments:
+      vela-embedding:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Embedding
+        device: rocm:0
 `))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes() error = %v", err)
@@ -238,7 +240,7 @@ func TestBuildModelSpecsSkipsRouterOwnedDefaultsForAgentSmokeConfigs(t *testing.
 	}
 }
 
-func TestBuildModelSpecsDownloadsOnlyVelaEmbeddingForMemoryE2EConfigs(t *testing.T) {
+func TestBuildModelSpecsLeavesTheMemoryEmbeddingToTheRuntimeForMemoryE2EConfigs(t *testing.T) {
 	for _, relParts := range [][]string{
 		{"..", "..", "..", "..", "e2e", "config", "config.memory-user.yaml"},
 		{"..", "..", "..", "..", "e2e", "config", "config.memory-user-valkey.yaml"},
@@ -265,14 +267,10 @@ func TestBuildModelSpecsDownloadsOnlyVelaEmbeddingForMemoryE2EConfigs(t *testing
 			if err != nil {
 				t.Fatalf("BuildModelSpecs() error = %v", err)
 			}
-			if len(specs) != 1 {
-				t.Fatalf("BuildModelSpecs() returned %d specs, want only the memory embedding: %#v", len(specs), specs)
+			if len(specs) != 0 {
+				t.Fatalf("BuildModelSpecs() returned %d specs, want 0: %#v", len(specs), specs)
 			}
-			if specs[0].LocalPath != "models/Vela-1.0-Encoder-307M-Embedding" ||
-				specs[0].RepoID != "vllm-sr/Vela-1.0-Encoder-307M-Embedding" ||
-				specs[0].Revision == "" || specs[0].CheckONNX {
-				t.Fatalf("memory E2E must download the pinned native Vela embedding: %#v", specs[0])
-			}
+			assertRuntimeServed(t, cfg, specs, "models/Vela-1.0-Encoder-307M-Embedding")
 		})
 	}
 }

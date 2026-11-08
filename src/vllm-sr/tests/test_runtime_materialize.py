@@ -24,12 +24,7 @@ def _write_source(path: Path) -> bytes:
             },
             "global": {
                 "model_catalog": {
-                    "embeddings": {
-                        "semantic": {
-                            "use_cpu": True,
-                            "embedding_config": {"model_type": "mmbert"},
-                        }
-                    }
+                    "modules": {"classifier": {"domain": {"use_cpu": True}}}
                 }
             },
         },
@@ -37,6 +32,12 @@ def _write_source(path: Path) -> bytes:
     ).encode("utf-8")
     path.write_bytes(raw)
     return raw
+
+
+def _domain_use_cpu(realized: dict) -> bool:
+    return realized["global"]["model_catalog"]["modules"]["classifier"]["domain"][
+        "use_cpu"
+    ]
 
 
 def test_realize_runtime_config_applies_overrides_without_mutating_source(
@@ -54,9 +55,7 @@ def test_realize_runtime_config_applies_overrides_without_mutating_source(
     assert source.read_bytes() == original
     realized = yaml.safe_load(target.read_text(encoding="utf-8"))
     assert realized["routing"]["decisions"][0]["algorithm"]["type"] == "multi_factor"
-    assert (
-        realized["global"]["model_catalog"]["embeddings"]["semantic"]["use_cpu"] is True
-    )
+    assert _domain_use_cpu(realized) is False
     assert stat.S_IMODE(target.stat().st_mode) == 0o600
 
 
@@ -121,9 +120,7 @@ def test_runtime_materialize_module_uses_current_runtime_env(
     assert capsys.readouterr().out.strip() == str(target)
     realized = yaml.safe_load(target.read_text(encoding="utf-8"))
     assert realized["routing"]["decisions"][0]["algorithm"]["type"] == "multi_factor"
-    assert (
-        realized["global"]["model_catalog"]["embeddings"]["semantic"]["use_cpu"] is True
-    )
+    assert _domain_use_cpu(realized) is False
 
 
 def test_managed_materialization_realizes_empty_imported_listener(tmp_path: Path):
@@ -198,15 +195,8 @@ def test_runtime_materialize_keeps_authored_gpu_embedding_budget(
             "input": {"max_tokens": 128, "overflow": "reject"},
         }
     }
-    bindings = {
-        "embedding": {
-            "deployment": "gpu-embedding",
-            "contract": "embedding.v1",
-            "adapter": "mmbert",
-        }
-    }
     document["global"]["model_catalog"]["deployments"] = deployments
-    document["routing"]["model_bindings"] = bindings
+    document["global"]["model_catalog"]["embeddings"] = {"default": "gpu-embedding"}
     source.write_text(yaml.safe_dump(document), encoding="utf-8")
     original = source.read_bytes()
     target = tmp_path / "state" / "runtime-config.yaml"
@@ -215,7 +205,6 @@ def test_runtime_materialize_keeps_authored_gpu_embedding_budget(
 
     realized = yaml.safe_load(target.read_text())
     catalog = realized["global"]["model_catalog"]
-    assert catalog["embeddings"]["semantic"]["use_cpu"] is True
+    assert catalog["embeddings"] == {"default": "gpu-embedding"}
     assert catalog["deployments"] == deployments
-    assert realized["routing"]["model_bindings"] == bindings
     assert source.read_bytes() == original

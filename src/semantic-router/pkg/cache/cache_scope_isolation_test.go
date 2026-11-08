@@ -88,7 +88,7 @@ func assertSearchEnforcesUserScope(t *testing.T, useHNSW bool) {
 		MaxEntries:          100,
 		TTLSeconds:          0, // entries never expire in this test
 		UseHNSW:             useHNSW,
-		EmbeddingModel:      "mmbert",
+		EmbeddingDeployment: "vela-embedding",
 	})
 	defer c.Close()
 
@@ -147,7 +147,7 @@ func TestSearchSkipsPolarityMismatchForLowerValidCandidate(t *testing.T) {
 				MaxEntries:          16,
 				TTLSeconds:          0,
 				UseHNSW:             useHNSW,
-				EmbeddingModel:      "mmbert",
+				EmbeddingDeployment: "vela-embedding",
 			})
 			defer c.Close()
 
@@ -194,7 +194,7 @@ func TestHNSWSearchFallsBackAfterPolarityRejections(t *testing.T) {
 		TTLSeconds:          0,
 		UseHNSW:             true,
 		HNSWEfSearch:        10,
-		EmbeddingModel:      "mmbert",
+		EmbeddingDeployment: "vela-embedding",
 	})
 	defer c.Close()
 

@@ -73,10 +73,9 @@ Changes to review
 | `custom_ops_profile`、`compilation_cache_dir` | 移除：运行时自行选择内核 |
 | 计算图 `head`，例如 `onnx/model_fa.onnx` | 移除：运行时自行选择模型的计算图 |
 | `artifact: models/Vela-1.0-Encoder-307M-...` | `artifact: vllm-sr/Vela-1.0-Encoder-307M-...`，即 Hub 仓库 |
-| `embedding_config.backend: candle` 或 `openvino` | 移除 |
-| `gemma_model_path` 或 `bert_model_path`（即使为空） | 移除：运行时没有 EmbeddingGemma 或 MiniLM 系列，由 Vela Embedding（`mmbert_model_path`）替代 |
-| 响应缓存、记忆或向量存储上的 `embedding_model: bert` 或 `gemma`，或在 MiniLM 为默认值时未设置 `embedding_model` | `embedding_model: mmbert`（Vela Embedding）；重新向量化已存储的向量 |
-| 使用 `mmbert` 的存储上设置了 Vela Embedding 不提供的向量维度（例如 MiniLM 的 384） | 记忆使用 256，响应缓存和向量存储使用 768；按该维度重新创建集合或索引 |
+| `embeddings.semantic`，连同其中的 `embedding_config.backend: candle` 或 `openvino`，以及 `gemma_model_path` 或 `bert_model_path` | 移除：运行时没有 EmbeddingGemma 或 MiniLM 系列；`embeddings.default` 指定 embedding 部署，不改就是 Vela Embedding（见 [Embeddings](./guides/embeddings.md)） |
+| 响应缓存、记忆或向量存储上的 `embedding_model: bert` 或 `gemma` | 移除：存储改用 `embeddings.default` 向量化；重新向量化已存储的向量 |
+| 用 Vela Embedding 的存储上设置了它不提供的向量维度（例如 MiniLM 的 384） | 保留：记忆改为 256，响应缓存和向量存储改为 768，并按该维度重新创建集合或索引 |
 | `global.router.model_selection.ml` 以及训练得到的 `knn`、`kmeans`、`svm` 和 `mlp` 选择器 | 移除：由不需要训练模型的 `systemone` 选择器替代 |
 | 模块上的 `variant`、`model_type`、`use_modernbert`、`use_mmbert_32k` | 移除：运行时从模型读取架构 |
 | 旧模型目录中的标签映射，例如 `category_mapping_path: models/mom-domain-classifier/category_mapping.json` | 移除：路由器读取所运行模型的标签 |
@@ -186,9 +185,7 @@ providers:
         - name: answer
           endpoint: vllm:8000
           provider: vllm
-routing:
-  model_bindings:
-    embedding: vela-embedding
+routing: {}
 global:
   model_catalog:
     deployments:
@@ -204,10 +201,9 @@ global:
     response_cache:
       enabled: true
       backend_type: memory
-      embedding_model: mmbert
 ```
 
-响应缓存原本没有 `embedding_model`，因此使用的是此前的默认模型 MiniLM；现在它指定 Vela Embedding。
+响应缓存原本使用此前的默认模型 MiniLM；现在它用 `embeddings.default` 向量化，即文件在 AMD GPU 上声明的 `vela-embedding` 部署，它也取代了 embedding 绑定。
 原先由模块 `model_id` 指定的防护模型和幻觉检测器，现在是以各自模型命名的部署，并通过 `bindings.jailbreak` 和 `bindings.hallucination` 绑定。
 对迁移后的文件再次运行该命令不会做任何修改。
 
@@ -242,9 +238,8 @@ deployment 已设置的引擎参数会保留。命令行参数和请求选项也
 - **记忆：** 用旧模型存储的记忆不会返回。请重新添加需要保留的记忆。
 - **向量存储与 RAG：** 用新模型重新索引你的文档。Milvus、Qdrant 和混合 RAG 后端在原先使用
   MiniLM（384 维）的地方改用 Vela Embedding（768 维）对查询向量化，因此请用 Vela Embedding
-  重新向量化这些集合；迁移会为每个集合打印一条警告。
-- **Embedding 信号和知识库：** 它们的示例文本会在启动时重新向量化。请在你自己的流量上检查相似度阈值；
-  不同模型的分数不可直接比较。
+  重新向量化这些集合，或在 RAG 源的 `backend_config.embedding` 中指定为集合建索引的部署。
+  请在你自己的流量上检查相似度阈值；不同模型的分数不可直接比较。
 
 ## Kubernetes 与 Docker {#kubernetes-and-docker}
 
@@ -252,8 +247,6 @@ deployment 已设置的引擎参数会保留。命令行参数和请求选项也
 请删除仅为 candle、ONNX Runtime 或 OpenVINO 存在的环境变量、init 容器或卷。
 需要 GPU 时，运行 GPU 运行时并让路由器连接它；见[与路由器一起运行](model-runtime/deploy.md#on-kubernetes)。
 
-如果使用 operator 部署，请在升级前从 `SemanticRouter` 资源中删除 `embedding_models.gemma_model_path`。
-资源定义已不再包含该字段：kubectl 默认的严格校验会拒绝仍设置它的清单（`unknown field`），
-而升级前已存储的资源会丢失该字段，如同从未设置过：其路由器使用资源其余部分配置的 embedding 模型，
-例如通过 `mmbert_model_path` 配置的 Vela Embedding。
+如果使用 operator 部署，请在升级前从 `SemanticRouter` 资源中删除 `embedding_models`。
+operator 会拒绝仍设置它的资源；其路由器用 `embeddings.default` 向量化，除非资源的配置指定了别的部署，否则就是 Vela Embedding。
 请重新向量化由 EmbeddingGemma 存储的向量（见[更换 embedding 模型时重新向量化](#re-embed-when-the-embedding-model-changes)）。

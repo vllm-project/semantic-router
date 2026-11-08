@@ -24,7 +24,9 @@ type InMemoryCacheOptions struct {
 	UseHNSW             bool
 	HNSWM               int
 	HNSWEfConstruction  int
-	EmbeddingModel      string
+	EmbeddingDeployment string
+	EmbeddingDimension  int
+	EmbeddingLayer      int
 }
 
 // NewInMemoryCache creates a new in-memory cache instance

@@ -28,7 +28,7 @@ func (r *OpenAIRouter) recallFromMilvus(traceCtx context.Context, ctx *RequestCo
 	if milvusCache == nil {
 		return nil, fmt.Errorf("milvus connection not available (reuse_cache_connection=%v)", milvusConfig.ReuseCacheConnection)
 	}
-	queryEmbedding, err := r.ragQueryEmbedding(traceCtx, query, ctx)
+	queryEmbedding, err := r.ragQueryEmbedding(traceCtx, query, ctx, milvusConfig.Embedding)
 	if err != nil {
 		// Log full error internally but don't expose it to avoid information disclosure
 		logging.Errorf("Failed to generate embedding for RAG query: %v", err)

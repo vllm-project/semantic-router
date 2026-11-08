@@ -174,18 +174,10 @@ func createMilvusMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 		collectionName = "agentic_memory"
 	}
 
-	embeddingConfig := &memory.EmbeddingConfig{
-		Model:     memory.EmbeddingModelType(detectMemoryEmbeddingModel(cfg)),
-		Dimension: cfg.Memory.Milvus.Dimension,
+	embeddingConfig, err := memoryEmbeddingConfig(cfg, sets)
+	if err != nil {
+		return nil, err
 	}
-	if len(sets) > 0 && sets[0] != nil {
-		provider, err := sets[0].Get(string(embeddingConfig.Model), 0, 0)
-		if err != nil {
-			return nil, err
-		}
-		embeddingConfig.Provider = provider
-	}
-
 	dimension, err := memory.StorageDimension(cfg.Memory.Milvus.Dimension, *embeddingConfig)
 	if err != nil {
 		return nil, err
@@ -195,7 +187,7 @@ func createMilvusMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 	cfg = &copied
 	embeddingConfig.Dimension = dimension
 
-	logging.Infof("Memory: connecting to Milvus at %s, collection=%s, embedding=%s", milvusAddress, collectionName, embeddingConfig.Model)
+	logging.Infof("Memory: connecting to Milvus at %s, collection=%s, embedding=%s", milvusAddress, collectionName, embeddingConfig.Deployment)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -228,7 +220,7 @@ func createMilvusMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 	}
 
 	logging.Infof("Memory store initialized: backend=milvus, address=%s, collection=%s, embedding=%s",
-		milvusAddress, collectionName, embeddingConfig.Model)
+		milvusAddress, collectionName, embeddingConfig.Deployment)
 
 	return store, nil
 }
@@ -253,20 +245,10 @@ func createQdrantMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 		timeout = 10
 	}
 
-	embeddingModel := memory.EmbeddingModelType(detectMemoryEmbeddingModel(cfg))
-
-	embeddingConfig := &memory.EmbeddingConfig{
-		Model:     embeddingModel,
-		Dimension: qc.Dimension,
+	embeddingConfig, err := memoryEmbeddingConfig(cfg, sets)
+	if err != nil {
+		return nil, err
 	}
-	if len(sets) > 0 && sets[0] != nil {
-		provider, err := sets[0].Get(string(embeddingConfig.Model), 0, 0)
-		if err != nil {
-			return nil, err
-		}
-		embeddingConfig.Provider = provider
-	}
-
 	dimension, err := memory.StorageDimension(qc.Dimension, *embeddingConfig)
 	if err != nil {
 		return nil, err
@@ -277,7 +259,7 @@ func createQdrantMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 	embeddingConfig.Dimension = dimension
 
 	logging.Infof("Memory: connecting to Qdrant at %s:%d, collection=%s, embedding=%s",
-		host, port, qc.Collection, embeddingModel)
+		host, port, qc.Collection, embeddingConfig.Deployment)
 
 	client, err := qdrant.NewClient(&qdrant.Config{
 		Host:   host,
@@ -309,30 +291,22 @@ func createQdrantMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 	}
 
 	logging.Infof("Memory store initialized: backend=qdrant, address=%s:%d, collection=%s, embedding=%s",
-		host, port, qc.Collection, embeddingModel)
+		host, port, qc.Collection, embeddingConfig.Deployment)
 
 	return store, nil
 }
 
-func detectMemoryEmbeddingModel(cfg *config.RouterConfig) string {
-	embeddingModels := cfg.EmbeddingModels
-	embeddingModel := cfg.Memory.EmbeddingModel
-	if embeddingModel != "" {
-		return embeddingModel
+// memoryEmbeddingConfig is the deployment memory embeds with and the width of
+// its vectors, with that deployment's provider from the prepared set.
+func memoryEmbeddingConfig(cfg *config.RouterConfig, sets []*embedding.Set) (*memory.EmbeddingConfig, error) {
+	deployment, dimension := cfg.MemoryEmbedding()
+	embeddingConfig := &memory.EmbeddingConfig{Deployment: deployment, Dimension: dimension}
+	if len(sets) > 0 && sets[0] != nil {
+		provider, err := sets[0].Get(deployment, 0, 0)
+		if err != nil {
+			return nil, err
+		}
+		embeddingConfig.Provider = provider
 	}
-
-	switch {
-	case embeddingModels.MmBertModelPath != "":
-		logging.Infof("Memory: Auto-selected mmbert from embedding_models config")
-		return "mmbert"
-	case embeddingModels.MultiModalModelPath != "":
-		logging.Infof("Memory: Auto-selected multimodal from embedding_models config")
-		return "multimodal"
-	case embeddingModels.Qwen3ModelPath != "":
-		logging.Infof("Memory: Auto-selected qwen3 from embedding_models config")
-		return "qwen3"
-	default:
-		logging.Infof("Memory: No embedding model configured, using the built-in %s", config.DefaultEmbeddingModel)
-		return config.DefaultEmbeddingModel
-	}
+	return embeddingConfig, nil
 }

@@ -1519,6 +1519,12 @@ routing:
                   reuse_cache_connection: true
                   content_field: content
                   filter_expression: locale == "es"
+                  # The deployment that indexed the collection, and the width
+                  # of its vectors; without it, queries embed with
+                  # embeddings.default.
+                  embedding:
+                    deployment: vela-embedding
+                    dimension: 768
               - type: memory
 
     - name: admin_adaptive_route
@@ -2384,11 +2390,14 @@ global:
     response_cache:
       backend_type: milvus
       enabled: true
+      # Semantic reuse embeds with this deployment (default:
+      # embeddings.default) at the width of the vector field below.
+      embedding:
+        deployment: vela-embedding
       similarity_threshold: 0.86
       max_entries: 50000
       ttl_seconds: 7200
       eviction_policy: lru
-      embedding_model: mmbert
       milvus:
         connection:
           host: milvus
@@ -2430,6 +2439,10 @@ global:
       enabled: true
       backend: milvus
       auto_store: true
+      # Memories are embedded with this deployment (default:
+      # embeddings.default) at the backend's dimension.
+      embedding:
+        deployment: vela-embedding
       # The chat deployment that rewrites a query with its conversation
       # before memory search.
       query_rewrite:
@@ -2471,7 +2484,6 @@ global:
         db: 0
         key_prefix: "memory_cache:"
         password: ""
-      embedding_model: mmbert
       default_retrieval_limit: 10
       # Weighted hybrid scoring. The value predates Vela Embedding; check it on your own data.
       default_similarity_threshold: 0.40
@@ -2497,8 +2509,11 @@ global:
       backend_type: llama_stack
       file_storage_dir: /var/lib/vsr/data
       max_file_size_mb: 100
-      embedding_model: multimodal
-      embedding_dimension: 384
+      # The deployment documents and queries are embedded with, and the width
+      # of their vectors (default: embeddings.default at its full output).
+      embedding:
+        deployment: omni-nano
+        dimension: 384
       ingestion_workers: 4
       ingestion_drain_timeout_seconds: 25
       supported_formats: [.txt, .md, .json, .csv, .html]
@@ -2629,15 +2644,23 @@ global:
   model_catalog:
     # Every model the Router asks is a deployment, declared once by name;
     # provider names the API the Router speaks to it. Declaring a deployment
-    # does not start it: only deployments a signal, selector, embedding or
-    # reranker resolves to load. primary, vela-embedding and omni-nano are
-    # always declared; a deployment of the same name replaces one.
+    # does not start it: only deployments a signal, selector or embedding
+    # consumer resolves to load. primary and vela-embedding are always
+    # declared; a deployment of the same name replaces one.
     deployments:
       primary:
         provider: model_runtime
         public_name: decision-public
         artifact: vllm-sr/vela3-fast
         device: cpu
+      # Vela 1.0 Omni-Nano embeds text, images and audio for /v1/embeddings
+      # requests that send media (embeddings.multimodal).
+      omni-nano:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Omni-Nano
+        revision: 2ff2d66385dbdd661a560ec3e8bcb45a0527d92e
+        device: cpu
+        input: {overflow: truncate}
       # Decision 2.0 served by the built-in model runtime. The Router starts and
       # supervises it on a private Unix socket (managed: no endpoint).
       decision-kai:
@@ -2794,37 +2817,13 @@ global:
           max_response_bytes: 16777216
         capabilities:
           dimensions: 1024
-    # The deployments that embed text and images: embedding signals, the
-    # response cache, memory and the vector store. vela-embedding and
-    # omni-nano are the defaults.
+    # The deployments recall embeds with: default for every store and
+    # collection that names none of its own, and for /v1/embeddings (Vela
+    # Embedding, pre-declared as vela-embedding); multimodal, which has no
+    # default, for the images and audio a /v1/embeddings request sends.
     embeddings:
       default: vela-embedding
       multimodal: omni-nano
-      semantic:
-        qwen3_model_path: models/mom-embedding-pro
-        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
-        multimodal_model_path: models/vela-1.0-omni-nano
-        use_cpu: true
-        embedding_config:
-          full_context: false
-          # model_runtime embeds with the built-in model runtime. A remote
-          # model is an openai_embeddings deployment named in
-          # embeddings.default, such as remote-embedding above.
-          backend: model_runtime
-          model_type: mmbert
-          preload_embeddings: true
-          target_dimension: 0
-          target_layer: 22
-          enable_soft_matching: false
-          top_k: 0
-          min_score_threshold: 0.45
-          prototype_scoring:
-            enabled: true
-            cluster_similarity_threshold: 0.9
-            max_prototypes: 8
-            best_weight: 0.75
-            top_m: 2
-            margin_threshold: 0.0
     # The decision model answers every question-style signal and selector that
     # no rule deployment or binding names. The Router checks at load that the
     # deployment answers each one. Omission selects primary (vela3-fast).

@@ -378,10 +378,7 @@ func withImpliedContract(consumer string, decl ModelBinding, deployment ModelDep
 
 func impliedContract(consumer string) string {
 	consumer = ruleConsumer(consumer)
-	switch {
-	case consumer == "embedding":
-		return "embedding.v1"
-	case isApplicationConsumer(BindingKey(consumer)) || strings.HasPrefix(consumer, "systemone."):
+	if isApplicationConsumer(BindingKey(consumer)) || strings.HasPrefix(consumer, "systemone.") {
 		return DecisionTaskContract
 	}
 	return RemoteClassifierContractLabelDistribution
@@ -417,8 +414,6 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 		return fmt.Errorf("operating_point calibrated a generic classifier binding; classifier rules are systemone questions now")
 	}
 	switch {
-	case name == "embedding":
-		want = "embedding.v1"
 	case isApplicationConsumer(BindingKey(name)):
 		want = DecisionTaskContract
 	default:
@@ -433,7 +428,7 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 	if remoteTaskProvider(deployment) && decl.Head != "" {
 		return fmt.Errorf("remote task cannot bind a local head")
 	}
-	if remoteTaskProvider(deployment) && name != "embedding" && (deployment.Input.MaxTokens != 0 || deployment.Input.Overflow != "reject") {
+	if remoteTaskProvider(deployment) && (deployment.Input.MaxTokens != 0 || deployment.Input.Overflow != "reject") {
 		return fmt.Errorf("HTTP classifier adapters cannot enforce local tokenizer input budgets")
 	}
 	// Artifact-specific capacity is checked by the loaded provider. Config

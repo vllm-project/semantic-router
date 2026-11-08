@@ -77,47 +77,6 @@ global:
 			},
 		},
 		{
-			name: "the retired gemma and bert embedding models",
-			yaml: `
-global:
-  model_catalog:
-    embeddings:
-      semantic:
-        bert_model_path: models/all-MiniLM-L12-v2
-        gemma_model_path: models/embeddinggemma-300m
-        embedding_config:
-          model_type: gemma
-  stores:
-    response_cache:
-      embedding_model: bert
-    memory:
-      embedding_model: mmbert
-`,
-			want: []string{
-				"global.model_catalog.embeddings.semantic.gemma_model_path",
-				"global.model_catalog.embeddings.semantic.bert_model_path",
-				"global.model_catalog.embeddings.semantic.embedding_config.model_type: gemma",
-				"global.stores.response_cache.embedding_model: bert",
-				"Vela Embedding (mmbert) replaces the gemma and bert embedding models",
-			},
-		},
-		{
-			name: "the retired embedding path keys, even empty",
-			yaml: `
-global:
-  model_catalog:
-    embeddings:
-      semantic:
-        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
-        gemma_model_path: ""
-        bert_model_path: ""
-`,
-			want: []string{
-				"global.model_catalog.embeddings.semantic.gemma_model_path",
-				"global.model_catalog.embeddings.semantic.bert_model_path",
-			},
-		},
-		{
 			name: "NLI routing fields in routing and recipes",
 			yaml: `
 routing:
@@ -186,11 +145,10 @@ global:
         max_num_seqs: 64
         dtype: auto
     embeddings:
-      semantic:
-        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
+      default: vela-embedding
   stores:
     memory:
-      embedding_model: mmbert
+      embedding: {deployment: vela-embedding}
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -249,23 +207,5 @@ global:
 	}
 	if d.MaxModelLen == nil || *d.MaxModelLen != 32000 {
 		t.Fatalf("max_model_len = %v", d.MaxModelLen)
-	}
-}
-
-func TestParseRefusesAnEmptyRetiredEmbeddingPathWithTheMigratePointer(t *testing.T) {
-	for _, field := range removedEmbeddingPaths {
-		_, err := ParseYAMLBytes([]byte(`version: v0.3
-global:
-  model_catalog:
-    embeddings:
-      semantic:
-        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
-        ` + field + `: ""
-`))
-		if err == nil || strings.Contains(err.Error(), "unknown fields") ||
-			!strings.Contains(err.Error(), "global.model_catalog.embeddings.semantic."+field) ||
-			!strings.Contains(err.Error(), "vllm-sr config migrate") {
-			t.Fatalf("an empty %s must be refused by path with the migrate pointer, got %v", field, err)
-		}
 	}
 }

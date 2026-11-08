@@ -23,7 +23,7 @@ var (
 		validateExternalModelContracts,
 		validateGlobalSemanticCacheContracts,
 		validateGlobalMemoryContracts,
-		validateEmbeddingModelContracts,
+		validateEmbeddingStores,
 		validateModelSelectionConfig,
 		validateGlobalRouterLearningConfig,
 		validateLossyTranslationContracts,

@@ -52,7 +52,6 @@ func buildClassifier(cfg *config.RouterConfig, runtimeOptions ...RecipeRuntimeOp
 	classifier.models = models
 	classifier.embeddingSet = builder.embeddingSet
 	classifier.ownsEmbeddingSet = builder.ownsEmbeddingSet
-	classifier.embeddingProvider = builder.provider
 	transferred = true
 	return classifier, nil
 }

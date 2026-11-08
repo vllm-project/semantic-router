@@ -107,7 +107,7 @@ func TestModelRuntimeMigrationExampleIsWhatConfigMigrateWrites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	migrated, _, err := MigrateModelResources(data)
+	migrated, _, err := MigrateConfig(data)
 	if err != nil {
 		t.Fatal(err)
 	}

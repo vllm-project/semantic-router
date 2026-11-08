@@ -8,9 +8,9 @@ import type { RouterSystemKey } from './configPageRouterSectionCatalog'
 import type {
   APIConfig,
   AuthzConfig,
+  CanonicalEmbeddingCatalogConfig,
   CanonicalHallucinationModuleConfig,
   CanonicalSystemModels,
-  EmbeddingModelsConfig,
   FeedbackDetectorConfig,
   LooperConfig,
   MemoryConfig,
@@ -113,7 +113,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     backend_type: 'memory',
     file_storage_dir: '/var/lib/vsr/data',
     max_file_size_mb: 50,
-    embedding_model: 'mmbert',
     ingestion_workers: 2,
     ingestion_drain_timeout_seconds: 25,
     supported_formats: ['.txt', '.md', '.json', '.csv', '.html'],
@@ -162,21 +161,8 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     decision_model: { deployment: 'primary' },
   } satisfies CanonicalSystemModels,
   embedding_models: {
-    qwen3_model_path: '',
-    mmbert_model_path: 'models/Vela-1.0-Encoder-307M-Embedding',
-    multimodal_model_path: 'models/vela-1.0-omni-nano',
-    use_cpu: true,
-    embedding_config: {
-      backend: 'model_runtime',
-      model_type: 'mmbert',
-      preload_embeddings: true,
-      target_dimension: 0,
-      target_layer: 22,
-      enable_soft_matching: true,
-      top_k: 1,
-      min_score_threshold: 0.5,
-    },
-  } satisfies EmbeddingModelsConfig,
+    default: 'vela-embedding',
+  } satisfies CanonicalEmbeddingCatalogConfig,
   prompt_compression: {
     enabled: false,
     profile: 'default',
@@ -329,7 +315,7 @@ export const SECTION_META: Record<
     title: 'Embedding Models',
     eyebrow: 'Model Catalog',
     description:
-      'Local or remote semantic embedding provider settings shared by router-owned consumers.',
+      'The deployments that embed for match.recall and /v1/embeddings; decisions never use them.',
   },
   prompt_compression: {
     title: 'Prompt Compression',

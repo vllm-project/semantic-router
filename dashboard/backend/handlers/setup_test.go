@@ -419,13 +419,11 @@ func TestSetupActivateHandler(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected global.model_catalog.embeddings in activated config, got %#v", modelCatalog["embeddings"])
 	}
-	semantic, ok := embeddings["semantic"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected global.model_catalog.embeddings.semantic in activated config, got %#v", embeddings["semantic"])
+	if embeddings["default"] != "vela-embedding" {
+		t.Fatalf("expected embeddings.default vela-embedding, got %#v", embeddings["default"])
 	}
-	// Mirrors pkg/config/canonical_defaults global.model_catalog.embeddings.semantic.mmbert_model_path
-	if semantic["mmbert_model_path"] != "models/Vela-1.0-Encoder-307M-Embedding" {
-		t.Fatalf("expected explicit mmbert default path, got %#v", semantic["mmbert_model_path"])
+	if _, ok := embeddings["semantic"]; ok {
+		t.Fatalf("activated config kept removed embeddings.semantic: %#v", embeddings["semantic"])
 	}
 
 	if info, err := os.Stat(filepath.Join(tempDir, ".vllm-sr")); err != nil || !info.IsDir() {

@@ -93,11 +93,6 @@ config:
       # stores.response_cache. See the resources comment below.
       response_cache:
         enabled: false
-        embedding_model: mmbert
-      memory:
-        embedding_model: mmbert
-      vector_store:
-        embedding_model: mmbert
     integrations: {}
     model_catalog:
       deployments:

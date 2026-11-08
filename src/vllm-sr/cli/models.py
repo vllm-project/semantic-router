@@ -307,45 +307,6 @@ class ConversationRule(BaseModel):
     predicate: Optional[NumericPredicate] = None
 
 
-class PrototypeScoringConfig(BaseModel):
-    """Prototype-bank construction and scoring controls for embedding-backed signals."""
-
-    enabled: Optional[bool] = None
-    cluster_similarity_threshold: Optional[float] = None
-    max_prototypes: Optional[int] = None
-    best_weight: Optional[float] = None
-    top_m: Optional[int] = None
-    margin_threshold: Optional[float] = None
-
-
-class EmbeddingClassifierConfig(BaseModel):
-    """Embedding classifier tuning, including prototype-aware label scoring controls."""
-
-    model_config = ConfigDict(extra="allow")
-
-    backend: Optional[str] = None
-    model_type: Optional[str] = None
-    preload_embeddings: Optional[bool] = None
-    target_dimension: Optional[int] = None
-    target_layer: Optional[int] = None
-    enable_soft_matching: Optional[bool] = None
-    top_k: Optional[int] = None
-    min_score_threshold: Optional[float] = None
-    prototype_scoring: Optional[PrototypeScoringConfig] = None
-
-
-class EmbeddingEndpointConfig(BaseModel):
-    """External embedding provider endpoint configuration."""
-
-    base_url: Optional[str] = None
-    model: Optional[str] = None
-    api_key_env: Optional[str] = None
-    timeout_seconds: Optional[int] = Field(default=None, ge=0)
-    max_retries: Optional[int] = Field(default=None, ge=0)
-    max_response_bytes: Optional[int] = Field(default=None, ge=0)
-    dimensions: Optional[int] = Field(default=None, ge=1)
-
-
 class Subject(BaseModel):
     """RBAC subject (user or group) for role binding."""
 
@@ -2382,33 +2343,6 @@ class Recipe(BaseModel):
         if not normalized:
             raise ValueError("name must not be empty")
         return normalized
-
-
-class EmbeddingModelsConfig(BaseModel):
-    """Embedding models configuration for memory and semantic features."""
-
-    # Preserve advanced nested fields when users pass through custom config blocks.
-    model_config = ConfigDict(extra="allow")
-
-    qwen3_model_path: Optional[str] = Field(
-        None, description="Path to Qwen3-Embedding model"
-    )
-    mmbert_model_path: Optional[str] = Field(
-        None, description="Path to mmBERT 2D Matryoshka model"
-    )
-    multimodal_model_path: Optional[str] = Field(
-        None,
-        description="Path to multi-modal embedding model (text/image/audio)",
-    )
-    embedding_config: Optional[EmbeddingClassifierConfig] = Field(
-        default=None,
-        description="Embedding classifier tuning (model_type/target_dimension/top_k/prototype_scoring/etc.)",
-    )
-    endpoint: Optional[EmbeddingEndpointConfig] = Field(
-        default=None,
-        description="External OpenAI-compatible embedding provider endpoint",
-    )
-    use_cpu: bool = Field(True, description="Use CPU for inference")
 
 
 class UserConfig(BaseModel):

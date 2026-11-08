@@ -59,11 +59,7 @@ func (s *ClassificationAPIServer) acquireEmbeddingRuntime() (*config.RouterConfi
 func ownedEmbeddingOutput(ctx context.Context, set *embedding.Set, request EmbeddingRequest, text string) (EmbeddingResult, error) {
 	model := request.Model
 	if model == "auto" || model == "" {
-		var err error
-		model, err = set.Select(text, request.QualityPriority, request.LatencyPriority, request.Dimension)
-		if err != nil {
-			return EmbeddingResult{}, err
-		}
+		model = set.Primary()
 	}
 	provider, err := set.Get(model, request.Dimension, request.TargetLayer)
 	if err != nil {
@@ -160,7 +156,7 @@ func embeddingCosine(a, b []float32) (float32, error) {
 }
 
 func ownedBatchSimilarity(ctx context.Context, set *embedding.Set, request BatchSimilarityRequest) (BatchSimilarityResponse, error) {
-	req := EmbeddingRequest{Model: request.Model, Dimension: request.Dimension, TargetLayer: request.TargetLayer, QualityPriority: request.QualityPriority, LatencyPriority: request.LatencyPriority}
+	req := EmbeddingRequest{Model: request.Model, Dimension: request.Dimension, TargetLayer: request.TargetLayer}
 	start := time.Now()
 	query, err := ownedEmbeddingOutput(ctx, set, req, request.Query)
 	if err != nil {

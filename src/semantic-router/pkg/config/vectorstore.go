@@ -38,13 +38,9 @@ type VectorStoreConfig struct {
 	// Default: 50
 	MaxFileSizeMB int `json:"max_file_size_mb,omitempty" yaml:"max_file_size_mb,omitempty"`
 
-	// EmbeddingModel specifies the model for document embeddings.
-	// Options: "mmbert" (default), "qwen3", "multimodal"
-	EmbeddingModel string `json:"embedding_model,omitempty" yaml:"embedding_model,omitempty"`
-
-	// EmbeddingDimension is the dimensionality of the embedding vectors.
-	// Default: 0 (the prepared model's native output dimension).
-	EmbeddingDimension int `json:"embedding_dimension,omitempty" yaml:"embedding_dimension,omitempty"`
+	// Embedding names the deployment that embeds documents and queries, and
+	// the width of their vectors (default: the model's full output).
+	Embedding *EmbeddingBinding `json:"embedding,omitempty" yaml:"embedding,omitempty"`
 
 	// IngestionWorkers is the number of concurrent ingestion pipeline workers.
 	// Default: 2
@@ -333,9 +329,6 @@ func (c *VectorStoreConfig) ApplyDefaults() {
 	}
 	if c.MaxFileSizeMB <= 0 {
 		c.MaxFileSizeMB = 50
-	}
-	if c.EmbeddingModel == "" {
-		c.EmbeddingModel = DefaultEmbeddingModel
 	}
 	if c.IngestionWorkers <= 0 {
 		c.IngestionWorkers = 2

@@ -106,17 +106,17 @@ func TestEmbeddingIdentityIsolatesPersistentSemanticCacheWithoutDeletingLegacy(t
 }
 
 func TestCacheEmbeddingSettingsReflectActualBackend(t *testing.T) {
-	memory := NewInMemoryCache(InMemoryCacheOptions{EmbeddingModel: "mmbert"})
+	memory := NewInMemoryCache(InMemoryCacheOptions{EmbeddingDeployment: "vela-embedding", EmbeddingDimension: 256, EmbeddingLayer: 6})
 	settings, ok := LocalEmbeddingSettings(memory)
 	if !ok || settings.Layer != 6 || settings.Dimension != 256 {
 		t.Fatalf("inmemory actual settings: %#v %v", settings, ok)
 	}
-	persistent := &QdrantCache{embeddingModel: "mmbert", embeddingProvider: storagetest.Vectors{Size: 768}}
+	persistent := &QdrantCache{embeddingDeployment: "vela-embedding", embeddingProvider: storagetest.Vectors{Size: 768}}
 	settings, ok = LocalEmbeddingSettings(persistent)
 	if !ok || settings.Layer != 0 || settings.Dimension != 768 {
 		t.Fatalf("persistent actual settings: %#v %v", settings, ok)
 	}
-	if _, ok = LocalEmbeddingSettings(NewInMemoryCache(InMemoryCacheOptions{EmbeddingModel: "qwen3"})); ok {
-		t.Fatal("unsupported provider received guessed identity")
+	if _, ok = LocalEmbeddingSettings(NewInMemoryCache(InMemoryCacheOptions{})); ok {
+		t.Fatal("a cache without an embedding deployment received an identity")
 	}
 }

@@ -85,10 +85,9 @@ or stored vectors to re-embed because their embedding model changed (see
 | `custom_ops_profile`, `compilation_cache_dir` | removed: the runtime picks its own kernels |
 | a graph `head` such as `onnx/model_fa.onnx` | removed: the runtime picks the model's graphs |
 | `artifact: models/Vela-1.0-Encoder-307M-...` | `artifact: vllm-sr/Vela-1.0-Encoder-307M-...`, the Hub repository |
-| `embedding_config.backend: candle` or `openvino` | removed |
-| `gemma_model_path` or `bert_model_path`, even empty | removed: the runtime has no EmbeddingGemma or MiniLM family, and Vela Embedding (`mmbert_model_path`) replaces them |
-| `embedding_model: bert` or `gemma` on the response cache, memory or vector store, or no `embedding_model` where MiniLM was the default | `embedding_model: mmbert` (Vela Embedding); re-embed stored vectors |
-| a vector size Vela Embedding does not serve (such as MiniLM's 384) on a store that embeds with `mmbert` | 256 for memory, 768 for the response cache and the vector store; re-create the collection or index at that size |
+| `embeddings.semantic`, with its `embedding_config.backend: candle` or `openvino` and its `gemma_model_path` or `bert_model_path` | removed: the runtime has no EmbeddingGemma or MiniLM family; `embeddings.default` names the embedding deployment, Vela Embedding unless you change it (see [Embeddings](./guides/embeddings.md)) |
+| `embedding_model: bert` or `gemma` on the response cache, memory or vector store | removed: the store embeds with `embeddings.default`; re-embed stored vectors |
+| a vector size Vela Embedding does not serve (such as MiniLM's 384) on a store that embeds with it | kept: set 256 for memory, 768 for the response cache and the vector store, and re-create the collection or index at that size |
 | `global.router.model_selection.ml`, with the trained `knn`, `kmeans`, `svm` and `mlp` selectors | removed: the `systemone` selector, which needs no trained model, replaces them |
 | `variant`, `model_type`, `use_modernbert`, `use_mmbert_32k` on a module | removed: the runtime reads the architecture from the model |
 | a label map inside an older model's directory, such as `category_mapping_path: models/mom-domain-classifier/category_mapping.json` | removed: the router reads the labels of the model it runs |
@@ -207,9 +206,7 @@ providers:
         - name: answer
           endpoint: vllm:8000
           provider: vllm
-routing:
-  model_bindings:
-    embedding: vela-embedding
+routing: {}
 global:
   model_catalog:
     deployments:
@@ -225,11 +222,11 @@ global:
     response_cache:
       enabled: true
       backend_type: memory
-      embedding_model: mmbert
 ```
 
-The response cache had no `embedding_model`, so it used MiniLM, the former
-default; it now names Vela Embedding. The guard and the hallucination detector,
+The response cache used MiniLM, the former default; it now embeds with
+`embeddings.default`, the `vela-embedding` deployment the file declares on the
+AMD GPU, which also replaces the embedding binding. The guard and the hallucination detector,
 which a module `model_id` named, are now deployments named after their models
 and bound with `bindings.jailbreak` and `bindings.hallucination`. Running the
 command again on the migrated file changes nothing.
@@ -280,10 +277,9 @@ carry over:
 - **Vector stores and RAG:** re-index your documents with the new model.
   Milvus, Qdrant and hybrid RAG backends embed the query with Vela Embedding
   (768 dimensions) where they used MiniLM (384), so re-embed their collections
-  with Vela Embedding; the migration prints a warning for each one.
-- **Embedding signals and knowledge bases:** their example texts are embedded
-  again at startup. Check similarity thresholds on your own traffic; the
-  scores of a different model are not comparable.
+  with Vela Embedding, or name the deployment that indexed a collection in its
+  source's `backend_config.embedding`. Check similarity thresholds on your own
+  traffic; the scores of a different model are not comparable.
 
 ## Kubernetes and Docker
 
@@ -293,12 +289,9 @@ variables, init containers or volumes that existed only for candle, ONNX
 Runtime or OpenVINO. For GPUs, run a GPU runtime and attach to it; see
 [Run it with the router](./deploy.md#on-kubernetes).
 
-If you deploy with the operator, remove `embedding_models.gemma_model_path`
-from your `SemanticRouter` resources before you upgrade. The resource
-definition no longer has the field: kubectl's default strict validation
-refuses a manifest that still sets it (`unknown field`), and a resource stored
-before the upgrade loses the field, as if it had never been set: its router
-embeds with the model the rest of the resource configures, such as Vela
-Embedding through `mmbert_model_path`. Re-embed the vectors that EmbeddingGemma
-stored (see
+If you deploy with the operator, remove `embedding_models` from your
+`SemanticRouter` resources before you upgrade. The operator refuses a resource
+that still sets it; its router embeds with `embeddings.default`, Vela Embedding
+unless the resource's configuration names another deployment. Re-embed the
+vectors that EmbeddingGemma stored (see
 [Re-embed when the embedding model changes](#re-embed-when-the-embedding-model-changes)).

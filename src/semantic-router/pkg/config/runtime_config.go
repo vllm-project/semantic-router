@@ -197,7 +197,8 @@ type ResponseCacheStoreConfig struct {
 	Valkey              *ValkeyConfig `yaml:"valkey,omitempty"`
 	Milvus              *MilvusConfig `yaml:"milvus,omitempty"`
 	Qdrant              *QdrantConfig `yaml:"qdrant,omitempty"`
-	EmbeddingModel      string        `yaml:"embedding_model,omitempty"`
+	// Embedding names the deployment semantic reuse embeds with.
+	Embedding *EmbeddingBinding `yaml:"embedding,omitempty"`
 }
 
 // SemanticCache is retained for source compatibility.
@@ -217,16 +218,17 @@ type QdrantConfig struct {
 const DefaultMemorySimilarityThreshold float32 = 0.70
 
 type MemoryConfig struct {
-	Enabled                    bool                    `yaml:"enabled,omitempty"`
-	Backend                    string                  `yaml:"backend,omitempty"`
-	AutoStore                  bool                    `yaml:"auto_store,omitempty"`
-	DisabledRoutes             []string                `yaml:"disabled_routes,omitempty"`
-	DisabledModels             []string                `yaml:"disabled_models,omitempty"`
-	Milvus                     MemoryMilvusConfig      `yaml:"milvus,omitempty"`
-	Valkey                     *MemoryValkeyConfig     `yaml:"valkey,omitempty"`
-	Qdrant                     *MemoryQdrantConfig     `yaml:"qdrant,omitempty"`
-	RedisCache                 *MemoryRedisCacheConfig `yaml:"redis_cache,omitempty"`
-	EmbeddingModel             string                  `yaml:"embedding_model,omitempty"`
+	Enabled        bool                    `yaml:"enabled,omitempty"`
+	Backend        string                  `yaml:"backend,omitempty"`
+	AutoStore      bool                    `yaml:"auto_store,omitempty"`
+	DisabledRoutes []string                `yaml:"disabled_routes,omitempty"`
+	DisabledModels []string                `yaml:"disabled_models,omitempty"`
+	Milvus         MemoryMilvusConfig      `yaml:"milvus,omitempty"`
+	Valkey         *MemoryValkeyConfig     `yaml:"valkey,omitempty"`
+	Qdrant         *MemoryQdrantConfig     `yaml:"qdrant,omitempty"`
+	RedisCache     *MemoryRedisCacheConfig `yaml:"redis_cache,omitempty"`
+	// Embedding names the deployment memories are embedded with.
+	Embedding                  *EmbeddingBinding       `yaml:"embedding,omitempty"`
 	DefaultRetrievalLimit      int                     `yaml:"default_retrieval_limit"`
 	DefaultSimilarityThreshold float32                 `yaml:"default_similarity_threshold,omitempty"`
 	HybridSearch               bool                    `yaml:"hybrid_search,omitempty"`

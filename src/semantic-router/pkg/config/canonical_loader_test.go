@@ -374,12 +374,10 @@ global:
     response_cache:
       enabled: false
   model_catalog:
+    deployments:
+      remote-embed: {provider: openai_embeddings, endpoint: "http://embed:8000/v1", model: e5}
     embeddings:
-      semantic:
-        qwen3_model_path: models/mom-embedding-pro
-        use_cpu: true
-        embedding_config:
-          min_score_threshold: 0.6
+      default: remote-embed
     modules:
       prompt_compression:
         enabled: true
@@ -409,8 +407,8 @@ global:
 	if !cfg.PromptCompression.Enabled || cfg.PromptCompression.MaxTokens != 2048 {
 		t.Fatalf("expected the nested prompt_compression module, got %+v", cfg.PromptCompression)
 	}
-	if cfg.Qwen3ModelPath != "models/mom-embedding-pro" {
-		t.Fatalf("expected semantic embedding model override, got %q", cfg.Qwen3ModelPath)
+	if cfg.EmbeddingDeployment != "remote-embed" {
+		t.Fatalf("expected the embeddings.default override, got %q", cfg.EmbeddingDeployment)
 	}
 	if got := cfg.ModelConfig["qwen2.5:3b"].ReasoningFamily; got != "qwen3" {
 		t.Fatalf("expected provider model reasoning family, got %q", got)
@@ -457,11 +455,6 @@ global:
     memory:
       enabled: true
       auto_store: true
-  model_catalog:
-    embeddings:
-      semantic:
-        qwen3_model_path: models/mom-embedding-pro
-        use_cpu: true
 `)
 
 	cfg, err := ParseYAMLBytes(canonicalYAML)

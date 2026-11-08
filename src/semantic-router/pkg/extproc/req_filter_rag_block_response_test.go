@@ -54,8 +54,8 @@ func ragBlockDecision(endpoint string) config.Decision {
 
 func ragBlockEmbeddings() *embedding.Set {
 	return embedding.NewSet(
-		map[string]embedding.Provider{config.RAGQueryEmbeddingModel: &plainRAGEmbedder{}},
-		config.RAGQueryEmbeddingModel,
+		map[string]embedding.Provider{config.EmbeddingDefaultDeployment: &plainRAGEmbedder{}},
+		config.EmbeddingDefaultDeployment,
 	)
 }
 

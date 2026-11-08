@@ -1,73 +1,14 @@
 package config
 
 import (
-	"reflect"
 	"strings"
 	"testing"
-
-	"gopkg.in/yaml.v2"
 )
-
-func TestGlobalModelBindingsKeepServiceAndRecipeOverridesIsolated(t *testing.T) {
-	cfg := testDeploymentConfig()
-	global := ModelBinding{Deployment: "shared-encoder", Contract: "embedding.v1", Adapter: "mmbert", Head: "onnx/model.onnx"}
-	cfg.GlobalModelBindings = map[string]ModelBinding{"embedding": global}
-	local := global
-	local.Deployment = "other-encoder"
-	cfg.Recipes[1].Profile.ModelBindings["embedding"] = local
-	plan, err := CompileModelBindings(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	service, ok := plan.LookupGlobal("embedding")
-	if !ok || service.Recipe != GlobalModelScope || service.Binding != global {
-		t.Fatalf("service = %+v", service)
-	}
-	for _, name := range []RecipeName{"support", "coding"} {
-		spec, found := plan.Lookup(name, "embedding")
-		if !found || spec.Recipe != name {
-			t.Fatalf("scope %s = %+v", name, spec)
-		}
-		want := global
-		if name == "coding" {
-			want = local
-		}
-		if spec.Binding != want {
-			t.Fatalf("scope %s borrowed another binding: %+v", name, spec)
-		}
-	}
-	if _, foreign := plan.Lookup("foreign", "embedding"); foreign {
-		t.Fatal("global catalog allowed foreign recipe lookup")
-	}
-	if _, mutated := cfg.Recipes[0].Profile.ModelBindings["embedding"]; mutated {
-		t.Fatal("compilation mutated authoring config")
-	}
-	resolved, ok, err := cfg.ConfigForRecipe(&cfg.Recipes[0]).ResolveTask("embedding")
-	if err != nil || !ok || resolved.Name != global.Deployment || resolved.Source != ResolvedByGlobalBinding {
-		t.Fatalf("support's embedding resolves to %+v, %v, %v", resolved, ok, err)
-	}
-	encoded, err := yaml.Marshal(CanonicalConfigFromRouterConfig(cfg))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var document CanonicalConfig
-	if err := yaml.UnmarshalStrict(encoded, &document); err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(document.Global.ModelCatalog.Bindings, cfg.GlobalModelBindings) {
-		t.Fatal("global catalog was lost in export")
-	}
-	for _, recipe := range document.Recipes {
-		if recipe.Name == "support" && recipe.Routing.ModelBindings["embedding"].Deployment != "" {
-			t.Fatal("export expanded inherited bindings")
-		}
-	}
-}
 
 func TestGlobalModelBindingDeclarationsValidateBeforeProvisioning(t *testing.T) {
 	cfg := testDeploymentConfig()
-	cfg.GlobalModelBindings = map[string]ModelBinding{"embedding": {Deployment: "missing", Contract: "embedding.v1", Adapter: "mmbert"}}
-	if _, err := CompileModelBindings(cfg); err == nil || !strings.Contains(err.Error(), "global.model_catalog.bindings.embedding") {
+	cfg.GlobalModelBindings = map[string]ModelBinding{SignalTypePII: {Deployment: "missing"}}
+	if _, err := CompileModelBindings(cfg); err == nil || !strings.Contains(err.Error(), "global.model_catalog.bindings.pii") {
 		t.Fatalf("global declaration error = %v", err)
 	}
 }

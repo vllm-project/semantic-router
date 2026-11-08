@@ -25,14 +25,14 @@ Router 询问的每个模型都在 `global.model_catalog.deployments` 下按名�
 
 `recipes[].routing.model_bindings` 中的绑定只作用于该配方，并优先于同一信号类型的全局绑定。
 
-Embedding 不提问。它们在使用的地方指定：
+Embedding 不提问，也不回答任何信号；它们只用于召回。它们在使用的地方指定：
 
 | 资源 | 在哪里指定 | 默认值 |
 | --- | --- | --- |
 | Embedding | `global.model_catalog.embeddings.default` | `vela-embedding` |
-| 多模态 embedding | `global.model_catalog.embeddings.multimodal` | `omni-nano` |
+| 多模态 embedding | `global.model_catalog.embeddings.multimodal` | 不开启 |
 
-有三个部署始终已声明，只有当某处解析到其中一个时 Router 才会启动它：`primary`（CPU 上的 `vllm-sr/vela3-fast`，默认决策模型）、`vela-embedding`（Vela 1.0 Embedding）和 `omni-nano`（Vela 1.0 Omni Nano）。要更改其中一个，声明一个同名部署即可。
+有两个部署始终已声明，只有当某处解析到其中一个时 Router 才会启动它：`primary`（CPU 上的 `vllm-sr/vela3-fast`，默认决策模型）和 `vela-embedding`（Vela 1.0 Embedding）。要更改其中一个，声明一个同名部署即可。
 
 ## S1. 全部默认：什么都不写 {#s1-all-defaults-nothing-written}
 
@@ -49,7 +49,7 @@ global:
 | --- | --- |
 | 每个问题类信号和选择器 | `primary`（按名称） |
 | Embedding | `vela-embedding` |
-| 多模态 embedding | `omni-nano` |
+| 多模态 embedding | 不开启 |
 
 ## S2. 全部交给远程 System One 模型 {#s2-everything-on-a-remote-system-one-model}
 

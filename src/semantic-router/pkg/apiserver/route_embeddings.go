@@ -51,7 +51,6 @@ func classifyEmbeddingError(err error) (int, string, string) {
 
 const (
 	defaultEmbeddingDimension = 0
-	defaultEmbeddingPriority  = 0.5
 	// maxImagesPerRequest bounds images per request; each is a full SigLIP
 	// forward pass and the body-size cap alone admits very many minimal images.
 	maxImagesPerRequest = 8
@@ -60,15 +59,6 @@ const (
 
 // Shape validation is independent of the selected provider's capabilities.
 const invalidDimensionMessage = "dimension must be a nonnegative int32 supported by the selected model (got %d)"
-
-// validatePriority rejects a priority weight outside the documented [0.0, 1.0]
-// range; out-of-range values were previously accepted and passed to the model.
-func validatePriority(name string, value float32) (string, string, bool) {
-	if value < 0 || value > 1 {
-		return "INVALID_PARAMETER", fmt.Sprintf("%s must be between 0.0 and 1.0 (got %g)", name, value), false
-	}
-	return "", "", true
-}
 
 // handleEmbeddings handles embedding generation requests
 func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
@@ -150,10 +140,6 @@ func applyEmbeddingDefaults(req *EmbeddingRequest) {
 	if req.Dimension == 0 {
 		req.Dimension = defaultEmbeddingDimension
 	}
-	if req.QualityPriority == 0 && req.LatencyPriority == 0 {
-		req.QualityPriority = defaultEmbeddingPriority
-		req.LatencyPriority = defaultEmbeddingPriority
-	}
 }
 
 func validateEmbeddingRequest(req EmbeddingRequest, availableLayers []int) (string, string, bool) {
@@ -219,7 +205,7 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 		return
 	}
 	start := time.Now()
-	request := EmbeddingRequest{Model: req.Model, Dimension: req.Dimension, TargetLayer: req.TargetLayer, QualityPriority: req.QualityPriority, LatencyPriority: req.LatencyPriority}
+	request := EmbeddingRequest{Model: req.Model, Dimension: req.Dimension, TargetLayer: req.TargetLayer}
 	first, err := ownedEmbeddingOutput(r.Context(), prepared, request, req.Text1)
 	request.Model = first.ModelUsed
 	var score float32
@@ -257,10 +243,6 @@ func applySimilarityDefaults(req *SimilarityRequest) {
 	if req.Dimension == 0 {
 		req.Dimension = defaultEmbeddingDimension
 	}
-	if req.Model == "auto" && req.QualityPriority == 0 && req.LatencyPriority == 0 {
-		req.QualityPriority = defaultEmbeddingPriority
-		req.LatencyPriority = defaultEmbeddingPriority
-	}
 }
 
 func validateSimilarityRequest(req SimilarityRequest) (string, string, bool) {
@@ -269,12 +251,6 @@ func validateSimilarityRequest(req SimilarityRequest) (string, string, bool) {
 	}
 	if !isValidDimension(req.Dimension) {
 		return "INVALID_DIMENSION", fmt.Sprintf(invalidDimensionMessage, req.Dimension), false
-	}
-	if code, message, ok := validatePriority("quality_priority", req.QualityPriority); !ok {
-		return code, message, false
-	}
-	if code, message, ok := validatePriority("latency_priority", req.LatencyPriority); !ok {
-		return code, message, false
 	}
 	return "", "", true
 }
@@ -336,10 +312,6 @@ func applyBatchSimilarityDefaults(req *BatchSimilarityRequest) {
 	if req.TopK == 0 {
 		req.TopK = len(req.Candidates)
 	}
-	if req.Model == "auto" && req.QualityPriority == 0 && req.LatencyPriority == 0 {
-		req.QualityPriority = defaultEmbeddingPriority
-		req.LatencyPriority = defaultEmbeddingPriority
-	}
 }
 
 func validateBatchSimilarityRequest(req BatchSimilarityRequest) (string, string, bool) {
@@ -359,12 +331,6 @@ func validateBatchSimilarityRequest(req BatchSimilarityRequest) (string, string,
 	}
 	if !isValidDimension(req.Dimension) {
 		return "INVALID_DIMENSION", fmt.Sprintf(invalidDimensionMessage, req.Dimension), false
-	}
-	if code, message, ok := validatePriority("quality_priority", req.QualityPriority); !ok {
-		return code, message, false
-	}
-	if code, message, ok := validatePriority("latency_priority", req.LatencyPriority); !ok {
-		return code, message, false
 	}
 	return "", "", true
 }

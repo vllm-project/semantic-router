@@ -41,11 +41,6 @@ func checkBindingKeys(path string, bindings map[string]ModelBinding) ([]ConfigWa
 		case slices.Contains(SharedAnswerSignalTypes, key):
 		case IsDeprecatedBindingKey(key):
 			note = fmt.Sprintf("%s is deprecated; key the binding by its signal type: %s", key, BindingKey(key))
-		case key == "embedding" && path != "global.model_catalog.bindings":
-			// A routing profile that embeds with its own model binds it
-			// here; embeddings.default names everyone else's.
-		case key == "embedding":
-			note = "embedding asks no question; name its deployment in global.model_catalog.embeddings.default"
 		case strings.HasPrefix(key, "safety.") || strings.HasPrefix(key, "complexity."):
 			note = fmt.Sprintf("a binding for one rule is deprecated; set deployment on the rule (%s)", ruleDeploymentPath(key))
 		case strings.HasPrefix(key, "systemone."):
@@ -83,7 +78,7 @@ func ruleDeploymentPath(key string) string {
 // earlier releases, closest to an unknown key.
 func suggestKey(key string) string {
 	best, bestDistance := "", 4
-	candidates := append(slices.Clone(SharedAnswerSignalTypes), "embedding")
+	candidates := slices.Clone(SharedAnswerSignalTypes)
 	for consumer := range bindingKeyOfConsumer {
 		candidates = append(candidates, consumer)
 	}

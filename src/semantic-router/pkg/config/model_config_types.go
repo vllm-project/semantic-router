@@ -4,69 +4,6 @@ import (
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 )
 
-type EmbeddingModels struct {
-	Qwen3ModelPath      string                  `yaml:"qwen3_model_path"`
-	MmBertModelPath     string                  `yaml:"mmbert_model_path"`
-	MultiModalModelPath string                  `yaml:"multimodal_model_path,omitempty"`
-	UseCPU              bool                    `yaml:"use_cpu"`
-	EmbeddingConfig     HNSWConfig              `yaml:"embedding_config,omitempty"`
-	Endpoint            EmbeddingEndpointConfig `yaml:"endpoint,omitempty"`
-}
-
-func (e EmbeddingModels) MinSimilarityThreshold() float32 {
-	return e.EmbeddingConfig.WithDefaults().MinScoreThreshold
-}
-
-// HNSWConfig contains settings for optimizing embedding-backed classification.
-type HNSWConfig struct {
-	// FullContext sends complete routing text to mmBERT up to its model capacity.
-	// False retains bounded representative sampling for routing latency.
-	FullContext       bool   `yaml:"full_context,omitempty"`
-	Backend           string `yaml:"backend,omitempty"`
-	ModelType         string `yaml:"model_type,omitempty"`
-	PreloadEmbeddings bool   `yaml:"preload_embeddings"`
-	TargetDimension   int    `yaml:"target_dimension,omitempty"`
-	TargetLayer       int    `yaml:"target_layer,omitempty"`
-	// EnableSoftMatching allows below-threshold matches when no rule meets its
-	// threshold. This ranked fallback is opt-in; routing predicates default to
-	// the threshold declared by each rule.
-	EnableSoftMatching *bool `yaml:"enable_soft_matching,omitempty"`
-	// TopK limits emitted embedding matches only when positive. The default 0
-	// preserves all accepted predicates for projections and decision priority.
-	TopK              *int                   `yaml:"top_k,omitempty"`
-	MinScoreThreshold float32                `yaml:"min_score_threshold,omitempty"`
-	PrototypeScoring  PrototypeScoringConfig `yaml:"prototype_scoring,omitempty"`
-}
-
-func (c HNSWConfig) WithDefaults() HNSWConfig {
-	result := c
-	if result.Backend == "" {
-		result.Backend = EmbeddingBackendModelRuntime
-	}
-	if result.ModelType == "" {
-		if normalizeEmbeddingBackend(result.Backend) == EmbeddingBackendOpenAICompatible {
-			result.ModelType = EmbeddingModelTypeRemote
-		} else {
-			result.ModelType = EmbeddingModelTypeQwen3
-		}
-	}
-	// Zero selects the prepared model's native dimension. The provider validates
-	// explicit dimensions; a shared default must not resize another model.
-	if result.EnableSoftMatching == nil {
-		defaultEnabled := false
-		result.EnableSoftMatching = &defaultEnabled
-	}
-	if result.TopK == nil || *result.TopK < 0 {
-		defaultTopK := 0
-		result.TopK = &defaultTopK
-	}
-	if result.MinScoreThreshold <= 0 {
-		result.MinScoreThreshold = 0.5
-	}
-	result.PrototypeScoring = result.PrototypeScoring.WithDefaults()
-	return result
-}
-
 // PromptCompressionConfig controls NLP-based prompt compression before signal extraction.
 type PromptCompressionConfig struct {
 	Enabled        bool     `yaml:"enabled"`

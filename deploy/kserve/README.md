@@ -8,9 +8,9 @@ OpenShift Routes for inference and the Router API.
 Use the simulator mode for a CPU-only integration check. Use a real
 `LLMInferenceService` only after its model-serving requirements are satisfied.
 
-The default internal models are Vela Domain, PII and Embedding, with immutable
-download revisions. Existing explicit `--embedding-model mom-embedding-ultra`
-and `mmbert` options still select the older mmBERT embedding repository.
+The default internal models are Vela Domain, PII and Guard, with immutable
+download revisions. Embeddings come from the `vela-embedding` deployment that
+`global.model_catalog.embeddings.default` names.
 Model upgrades preserve the bounded input policies; see the
 [Vela model guide](../../website/docs/tutorials/global/vela-models.md) before
 opting into whole-document inference.
@@ -74,8 +74,7 @@ deploy/kserve/deploy.sh \
   --model granite32-8b
 ```
 
-Optional flags select the storage class, PVC sizes, embedding model, and
-classifier device. Keep the `--model` value aligned with Router model cards and
+Optional flags select the storage class, PVC sizes, and classifier device. Keep the `--model` value aligned with Router model cards and
 the backend's served-model name.
 
 Example KServe resources are under [`inference-examples/`](inference-examples/).

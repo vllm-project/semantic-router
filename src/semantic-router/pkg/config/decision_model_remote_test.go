@@ -173,8 +173,8 @@ func TestSystemOneDeploymentsTakeOnlyTheirOwnFields(t *testing.T) {
 			"    system:\n", "      local-d3: {provider: model_runtime, artifact: vllm-sr/vela3-fast, device: cpu, timeout_ms: 100}\n    system:\n",
 			"apply to an attached endpoint, not to a worker the Router starts",
 		},
-		"an embedding binding": {
-			"    system:\n", "    bindings:\n      embedding: hosted-d3\n    system:\n",
+		"the default embedding deployment": {
+			"    system:\n", "    embeddings:\n      default: hosted-d3\n    system:\n",
 			"embeddings need a model_runtime or openai_embeddings deployment",
 		},
 	} {

@@ -12,30 +12,28 @@ from cli.commands.runtime_support import (
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
-def test_resolve_effective_config_path_keeps_amd_embeddings_on_cpu(
+def _domain_on_cpu_config() -> dict:
+    return {
+        "version": "v0.3",
+        "global": {
+            "model_catalog": {"modules": {"classifier": {"domain": {"use_cpu": True}}}}
+        },
+    }
+
+
+def _domain_use_cpu(effective: dict) -> bool:
+    return effective["global"]["model_catalog"]["modules"]["classifier"]["domain"][
+        "use_cpu"
+    ]
+
+
+def test_resolve_effective_config_path_adds_no_embedding_settings_on_amd(
     tmp_path: Path, monkeypatch
 ):
     monkeypatch.delenv("VLLM_SR_ROCM_FORCE_GPU", raising=False)
     monkeypatch.delenv("VLLM_SR_ROCM_PRESERVE_CPU", raising=False)
     config_path = tmp_path / "config.yaml"
-    config_path.write_text(
-        yaml.safe_dump(
-            {
-                "version": "v0.3",
-                "global": {
-                    "model_catalog": {
-                        "embeddings": {
-                            "semantic": {
-                                "use_cpu": True,
-                                "embedding_config": {"model_type": "mmbert"},
-                            }
-                        },
-                    }
-                },
-            },
-            sort_keys=False,
-        )
-    )
+    config_path.write_text(yaml.safe_dump(_domain_on_cpu_config(), sort_keys=False))
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,
@@ -45,10 +43,8 @@ def test_resolve_effective_config_path_keeps_amd_embeddings_on_cpu(
     )
 
     effective = yaml.safe_load(effective_path.read_text())
-    assert (
-        effective["global"]["model_catalog"]["embeddings"]["semantic"]["use_cpu"]
-        is True
-    )
+    assert _domain_use_cpu(effective) is False
+    assert "embeddings" not in effective["global"]["model_catalog"]
 
 
 def test_resolve_effective_config_path_enables_nvidia_gpu_by_default(
@@ -57,24 +53,7 @@ def test_resolve_effective_config_path_enables_nvidia_gpu_by_default(
     monkeypatch.delenv("VLLM_SR_CUDA_FORCE_GPU", raising=False)
     monkeypatch.delenv("VLLM_SR_CUDA_PRESERVE_CPU", raising=False)
     config_path = tmp_path / "config.yaml"
-    config_path.write_text(
-        yaml.safe_dump(
-            {
-                "version": "v0.3",
-                "global": {
-                    "model_catalog": {
-                        "embeddings": {
-                            "semantic": {
-                                "use_cpu": True,
-                                "embedding_config": {"model_type": "mmbert"},
-                            }
-                        },
-                    }
-                },
-            },
-            sort_keys=False,
-        )
-    )
+    config_path.write_text(yaml.safe_dump(_domain_on_cpu_config(), sort_keys=False))
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,
@@ -84,10 +63,7 @@ def test_resolve_effective_config_path_enables_nvidia_gpu_by_default(
     )
 
     effective = yaml.safe_load(effective_path.read_text())
-    assert (
-        effective["global"]["model_catalog"]["embeddings"]["semantic"]["use_cpu"]
-        is False
-    )
+    assert _domain_use_cpu(effective) is False
 
 
 def test_resolve_effective_config_path_preserves_nvidia_use_cpu_when_requested(
@@ -96,24 +72,7 @@ def test_resolve_effective_config_path_preserves_nvidia_use_cpu_when_requested(
     monkeypatch.setenv("VLLM_SR_CUDA_PRESERVE_CPU", "1")
     monkeypatch.delenv("VLLM_SR_CUDA_FORCE_GPU", raising=False)
     config_path = tmp_path / "config.yaml"
-    config_path.write_text(
-        yaml.safe_dump(
-            {
-                "version": "v0.3",
-                "global": {
-                    "model_catalog": {
-                        "embeddings": {
-                            "semantic": {
-                                "use_cpu": True,
-                                "embedding_config": {"model_type": "mmbert"},
-                            }
-                        },
-                    }
-                },
-            },
-            sort_keys=False,
-        )
-    )
+    config_path.write_text(yaml.safe_dump(_domain_on_cpu_config(), sort_keys=False))
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,
@@ -123,10 +82,7 @@ def test_resolve_effective_config_path_preserves_nvidia_use_cpu_when_requested(
     )
 
     effective = yaml.safe_load(effective_path.read_text())
-    assert (
-        effective["global"]["model_catalog"]["embeddings"]["semantic"]["use_cpu"]
-        is True
-    )
+    assert _domain_use_cpu(effective) is True
 
 
 def test_resolve_effective_config_path_preserves_amd_use_cpu_when_requested(
@@ -135,24 +91,7 @@ def test_resolve_effective_config_path_preserves_amd_use_cpu_when_requested(
     monkeypatch.setenv("VLLM_SR_ROCM_PRESERVE_CPU", "1")
     monkeypatch.delenv("VLLM_SR_ROCM_FORCE_GPU", raising=False)
     config_path = tmp_path / "config.yaml"
-    config_path.write_text(
-        yaml.safe_dump(
-            {
-                "version": "v0.3",
-                "global": {
-                    "model_catalog": {
-                        "embeddings": {
-                            "semantic": {
-                                "use_cpu": True,
-                                "embedding_config": {"model_type": "mmbert"},
-                            }
-                        },
-                    }
-                },
-            },
-            sort_keys=False,
-        )
-    )
+    config_path.write_text(yaml.safe_dump(_domain_on_cpu_config(), sort_keys=False))
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,
@@ -162,10 +101,7 @@ def test_resolve_effective_config_path_preserves_amd_use_cpu_when_requested(
     )
 
     effective = yaml.safe_load(effective_path.read_text())
-    assert (
-        effective["global"]["model_catalog"]["embeddings"]["semantic"]["use_cpu"]
-        is True
-    )
+    assert _domain_use_cpu(effective) is True
 
 
 def test_resolve_effective_config_path_combines_algorithm_and_platform_overrides(
@@ -174,25 +110,9 @@ def test_resolve_effective_config_path_combines_algorithm_and_platform_overrides
     monkeypatch.delenv("VLLM_SR_ROCM_FORCE_GPU", raising=False)
     monkeypatch.delenv("VLLM_SR_ROCM_PRESERVE_CPU", raising=False)
     config_path = tmp_path / "config.yaml"
-    config_path.write_text(
-        yaml.safe_dump(
-            {
-                "version": "v0.3",
-                "routing": {"decisions": [{"name": "default"}]},
-                "global": {
-                    "model_catalog": {
-                        "embeddings": {
-                            "semantic": {
-                                "use_cpu": True,
-                                "embedding_config": {"model_type": "mmbert"},
-                            }
-                        }
-                    }
-                },
-            },
-            sort_keys=False,
-        )
-    )
+    config = _domain_on_cpu_config()
+    config["routing"] = {"decisions": [{"name": "default"}]}
+    config_path.write_text(yaml.safe_dump(config, sort_keys=False))
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,
@@ -204,13 +124,10 @@ def test_resolve_effective_config_path_combines_algorithm_and_platform_overrides
     assert effective_path == tmp_path / ".vllm-sr" / "runtime-config.yaml"
     effective = yaml.safe_load(effective_path.read_text())
     assert effective["routing"]["decisions"][0]["algorithm"]["type"] == "multi_factor"
-    assert (
-        effective["global"]["model_catalog"]["embeddings"]["semantic"]["use_cpu"]
-        is True
-    )
+    assert _domain_use_cpu(effective) is False
 
 
-def test_resolve_effective_config_path_injects_missing_amd_gpu_defaults_by_default(
+def test_resolve_effective_config_path_injects_no_amd_model_settings_by_default(
     tmp_path: Path, monkeypatch
 ):
     monkeypatch.delenv("VLLM_SR_ROCM_FORCE_GPU", raising=False)
@@ -264,13 +181,10 @@ def test_resolve_effective_config_path_injects_missing_amd_gpu_defaults_by_defau
     )
 
     effective = yaml.safe_load(effective_path.read_text())
-    model_catalog = effective["global"]["model_catalog"]
-    assert model_catalog["embeddings"]["semantic"]["use_cpu"] is True
-    assert "modules" not in model_catalog
-    assert "bert" not in model_catalog["embeddings"]
+    assert effective.get("global", {}).get("model_catalog", {}) == {}
 
 
-def test_resolve_effective_config_path_keeps_bert_deprecated_with_amd_gpu_default(
+def test_resolve_effective_config_path_keeps_a_recipe_catalog_with_amd_gpu_default(
     tmp_path: Path, monkeypatch
 ):
     monkeypatch.delenv("VLLM_SR_ROCM_FORCE_GPU", raising=False)
@@ -287,47 +201,31 @@ def test_resolve_effective_config_path_keeps_bert_deprecated_with_amd_gpu_defaul
     )
 
     effective = yaml.safe_load(effective_path.read_text())
-    model_catalog = effective.get("global", {}).get("model_catalog", {})
-    embeddings = model_catalog.get("embeddings", {})
-    assert "bert" not in embeddings
-    assert embeddings["semantic"]["use_cpu"] is True
+    source_catalog = yaml.safe_load(balance_recipe.read_text())["global"][
+        "model_catalog"
+    ]
+    model_catalog = effective["global"]["model_catalog"]
+    assert model_catalog.get("embeddings") == source_catalog.get("embeddings")
+    assert model_catalog["deployments"] == source_catalog["deployments"]
 
 
-@pytest.mark.parametrize(
-    ("platform", "configured", "expected"),
-    [
-        ("rocm", True, True),
-        ("rocm", False, False),
-        ("rocm", None, True),
-        ("cuda", True, False),
-        ("cuda", None, False),
-    ],
-)
-def test_effective_config_preserves_explicit_embedding_execution(
-    tmp_path: Path, monkeypatch, platform, configured, expected
+@pytest.mark.parametrize("platform", ["rocm", "cuda"])
+def test_effective_config_keeps_the_embedding_deployment_as_authored(
+    tmp_path: Path, monkeypatch, platform
 ):
     monkeypatch.setenv(f"VLLM_SR_{platform.upper()}_FORCE_GPU", "1")
-    semantic = {"embedding_config": {"model_type": "mmbert"}}
-    if configured is not None:
-        semantic["use_cpu"] = configured
     deployment = {
         "provider": "model_runtime",
         "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Embedding",
-        "device": "rocm:0",
+        "device": "cpu",
         "input": {"max_tokens": 128, "overflow": "reject"},
-    }
-    binding = {
-        "deployment": "gpu-embedding",
-        "contract": "embedding.v1",
-        "adapter": "mmbert",
     }
     source = {
         "version": "v0.3",
-        "routing": {"model_bindings": {"embedding": binding}},
         "global": {
             "model_catalog": {
-                "deployments": {"gpu-embedding": deployment},
-                "embeddings": {"semantic": semantic},
+                "deployments": {"cpu-embedding": deployment},
+                "embeddings": {"default": "cpu-embedding"},
             }
         },
     }
@@ -339,10 +237,9 @@ def test_effective_config_preserves_explicit_embedding_execution(
     )
     effective = yaml.safe_load(effective_path.read_text())
     catalog = effective["global"]["model_catalog"]
-    assert catalog["embeddings"]["semantic"]["use_cpu"] is expected
+    assert catalog["embeddings"] == {"default": "cpu-embedding"}
     assert "modules" not in catalog
-    assert catalog["deployments"] == {"gpu-embedding": deployment}
-    assert effective["routing"]["model_bindings"] == {"embedding": binding}
+    assert catalog["deployments"] == {"cpu-embedding": deployment}
     assert config_path.read_bytes() == original
 
 

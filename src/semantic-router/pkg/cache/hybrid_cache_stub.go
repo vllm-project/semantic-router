@@ -24,7 +24,7 @@ type HybridCacheOptions struct {
 	HNSWM                   int
 	HNSWEfConstruction      int
 	Milvus                  *config.MilvusConfig
-	EmbeddingModel          string
+	EmbeddingDeployment     string
 	MilvusConfigPath        string
 	DisableRebuildOnStartup bool
 }

@@ -78,25 +78,8 @@ func summarizeResolution(cfg *RouterConfig) resolutionSummary {
 		return summary
 	}
 	for recipe, scoped := range cfg.consumerScopes() {
-		for _, consumer := range scoped.scopeConsumers() {
-			if !TaskConsumerInUse(scoped, recipe, consumer) {
-				continue
-			}
-			key := string(recipe) + "/" + BindingKey(consumer)
-			resolved, ok, err := scoped.ResolveTask(consumer)
-			var deferred *DeferredModelError
-			switch {
-			case errors.As(err, &deferred):
-				summary.Signals[key] = "fails when it runs: " + deferred.Path
-			case err != nil:
-				summary.Signals[key] = "error: " + err.Error()
-			case !ok:
-				summary.Signals[key] = "none"
-			case resolved.Deployment.MissingLocalModel() != nil:
-				summary.Signals[key] = "fails when it runs: " + resolved.Deployment.LegacyModelPath()
-			default:
-				summary.Signals[key] = resolvedIdentity(resolved.Name, resolved.Deployment)
-			}
+		for _, requirement := range EmbeddingRequirements(scoped, false) {
+			summary.Signals[string(recipe)+"/embedding"] = resolvedIdentity(requirement.Deployment, cfg.ModelDeployments[requirement.Deployment])
 		}
 		for _, rule := range scoped.SystemOneRules {
 			name := scoped.SystemOneRuleDeployment(rule)

@@ -110,13 +110,14 @@ global:
         port: 6334
         collection: agentic_memory
         dimension: 256
-      embedding_model: mmbert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.30
 ```
 
-All three examples embed with `mmbert` (Vela Embedding), the default, so
-`dimension` is one of its sizes: 64, 128, 256, 512 or 768. With any other size
+All three examples embed with Vela Embedding, which `embeddings.default` names,
+so `dimension` is one of its sizes: 64, 128, 256, 512 or 768. A store indexed
+with another model names its deployment and dimension in an `embedding` block
+(see [Embeddings](../../model-runtime/guides/embeddings.md#stores-indexed-with-another-model)). With any other size
 the router logs `Failed to create memory store: … Memory will be disabled` and
 runs without memory. The Qdrant example's 0.30 threshold, on plain cosine
 scores, is a starting point, not a calibrated value. Check unrelated queries

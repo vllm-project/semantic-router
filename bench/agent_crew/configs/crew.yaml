@@ -125,12 +125,6 @@ global:
     response_cache:
       enabled: false        # a cache hit skips the model, so it has no cost to report
 
-  model_catalog:
-    embeddings:
-      semantic:
-        mmbert_model_path: ""
-        qwen3_model_path: ""
-        multimodal_model_path: ""
 entrypoints:
   - model_names: ["MoM"]
     recipe: default

@@ -146,25 +146,12 @@ global:
       max_entries: 1000
       ttl_seconds: 3600
       eviction_policy: fifo
-      embedding_model: mmbert
     memory:
       default_retrieval_limit: 0
   integrations:
     looper: {}
   model_catalog:
-    embeddings:
-      semantic:
-        qwen3_model_path: ""
-        mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
-        use_cpu: true
-        embedding_config:
-          model_type: mmbert
-          preload_embeddings: true
-          target_dimension: 768
-          target_layer: 22
-          enable_soft_matching: true
-          top_k: 1
-          min_score_threshold: 0.5
+    embeddings: {}
     system: {}
     modules:
       prompt_compression:

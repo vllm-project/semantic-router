@@ -1,12 +1,9 @@
 package modeldownload
 
 import (
-	"errors"
 	"fmt"
-	"path/filepath"
 	"slices"
 	"sort"
-	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -16,10 +13,6 @@ import (
 // validated by actual provider preparation, not by the download registry.
 func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 	cfg = config.WithModelResources(cfg)
-	plan, err := config.CompileModelBindings(cfg)
-	if err != nil {
-		return nil, err
-	}
 	inventory := &modelInventory{registry: cfg.MoMRegistry, specs: map[string]ModelSpec{}}
 	scopes := []*config.RouterConfig{}
 	defaultScope := *cfg.ModelConsumerScope()
@@ -27,7 +20,7 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 	defaultScope.SemanticCache.Enabled = false
 	defaultScope.Memory.Enabled = false
 	defaultScope.VectorStore = nil
-	if err := inventory.addScope(cfg.ConfigForGlobalModelServices(), plan); err != nil {
+	if err := inventory.addScope(cfg.ConfigForGlobalModelServices()); err != nil {
 		return nil, err
 	}
 
@@ -40,7 +33,7 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 		}
 	}
 	for _, scope := range scopes {
-		if err := inventory.addScope(scope, plan); err != nil {
+		if err := inventory.addScope(scope); err != nil {
 			return nil, err
 		}
 	}
@@ -61,132 +54,23 @@ type modelInventory struct {
 	specs    map[string]ModelSpec
 }
 
-func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBindingPlan) error {
-	primary := strings.ToLower(strings.TrimSpace(cfg.EmbeddingConfig.ModelType))
-	if primary == "" {
-		primary = "qwen3"
-	}
-	global := cfg.RoutingScope == config.GlobalModelScope
-	sharedServices := global
-	needed := config.EmbeddingModelsNeeded(cfg, primary, sharedServices)
+// addScope adds the model paths a scope names that the Router provisions.
+// The runtime downloads the models of model_runtime deployments, embedding
+// deployments included, at their pinned revisions.
+func (i *modelInventory) addScope(cfg *config.RouterConfig) error {
 	scoped := *cfg
 	scoped.Recipes, scoped.Entrypoints = nil, nil
-	paths := map[string]*string{"qwen3": &scoped.Qwen3ModelPath, "mmbert": &scoped.MmBertModelPath, "multimodal": &scoped.MultiModalModelPath}
-	explicitEmbedding, hasEmbedding := plan.Lookup(cfg.RoutingScope, "embedding")
-	if global {
-		explicitEmbedding, hasEmbedding = plan.LookupGlobal("embedding")
-	}
-	// A remote default embedding model serves every embedding model keyword,
-	// unless the scope binds a local model of its own.
-	remote := cfg.UsesRemoteEmbeddings() && (!hasEmbedding || explicitEmbedding.Deployment.Provider == config.OpenAIEmbeddingsProvider)
-	for model, path := range paths {
-		if !needed[model] || remote || (hasEmbedding && model == primary) {
-			*path = ""
-		}
-	}
-	if hasEmbedding {
-		scoped.EmbeddingConfig.Backend = config.EmbeddingBackendModelRuntime
-	}
-	// A remote default does not suppress an explicit local primary deployment.
-	active := map[string]bool{
-		"embedding": needed[primary],
-	}
 	required := ExtractRequiredFilesByModel(&scoped)
-	for path, files := range embeddingModelRequiredFiles(&scoped) {
-		required[path] = append(required[path], files...)
-	}
-	excludes := embeddingModelExcludePatterns(&scoped)
-	explicitPaths := map[string]bool{}
-	// Built-in module models run through implicit model_runtime deployments,
-	// and the runtime downloads them.
 	servedPaths := scoped.RuntimeServedModelPaths()
-	// The runtime downloads a runtime-provisioned catalog model (Vela Omni)
-	// itself; every other embedding model is provisioned as native weights.
-	for _, path := range paths {
-		if catalog := config.GetModelByPath(*path); *path != "" && catalog != nil && catalog.RuntimeProvisioned {
-			explicitPaths[config.ResolveModelPath(*path)] = true
-		}
-	}
-
-	for name := range active {
-		spec, ok := plan.Lookup(cfg.RoutingScope, name)
-		if global {
-			spec, ok = plan.LookupGlobal(name)
-		}
-		if !ok || !active[name] {
+	for _, path := range ExtractModelPaths(&scoped) {
+		if servedPaths[config.ResolveModelPath(path)] {
 			continue
 		}
-		// The runtime or the external service owns the model; only an
-		// explicit label map is the router's. The projected consumer names the
-		// runtime's artifact as its model, so it is not a module download.
-		if spec.Deployment.IsModelRuntime() {
-			explicitPaths[config.ResolveModelPath(spec.Deployment.Artifact)] = true
-		}
-		if spec.Binding.MappingPath != "" {
-			if err := i.addFile(spec.Binding.MappingPath, spec.Deployment.Artifact, spec.Deployment.Revision); err != nil {
-				return err
-			}
-		}
-	}
-	if hasEmbedding && needed[primary] && explicitEmbedding.Deployment.IsModelRuntime() {
-		explicitPaths[config.ResolveModelPath(explicitEmbedding.Deployment.Artifact)] = true
-	}
-	for _, path := range filterDisabledOptionalModelPaths(&scoped, ExtractModelPaths(&scoped)) {
-		if explicitPaths[config.ResolveModelPath(path)] || servedPaths[config.ResolveModelPath(path)] {
-			continue
-		}
-		if err := i.addDefault(ModelSpec{LocalPath: config.ResolveModelPath(path), RequiredFiles: append(slices.Clone(DefaultRequiredFiles), required[path]...), ExcludePatterns: excludes[config.ResolveModelPath(path)]}); err != nil {
-			return err
-		}
-	}
-	// A model path a deprecated module or rule field named is served from
-	// the directory the Router downloads it to.
-	for name, on := range active {
-		if !on {
-			continue
-		}
-		legacy := ""
-		resolved, ok, err := cfg.ResolveTask(name)
-		var deferred *config.DeferredModelError
-		switch {
-		case errors.As(err, &deferred):
-			legacy = deferred.Path
-		case err == nil && ok && resolved.Deployment.Translated():
-			legacy = resolved.Deployment.LegacyModelPath()
-		}
-		if legacy == "" {
-			continue
-		}
-		path := config.ResolveModelPath(legacy)
-		if explicitPaths[path] || servedPaths[path] {
-			continue
-		}
-		if err := i.addDefault(ModelSpec{LocalPath: path, RequiredFiles: append(slices.Clone(DefaultRequiredFiles), required[path]...), ExcludePatterns: excludes[path]}); err != nil {
+		if err := i.addDefault(ModelSpec{LocalPath: config.ResolveModelPath(path), RequiredFiles: append(slices.Clone(DefaultRequiredFiles), required[path]...)}); err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-func (i *modelInventory) addFile(path, artifact, revision string) error {
-	path = filepath.Clean(path)
-	root := ""
-	for candidate := range i.registry {
-		if relative, err := filepath.Rel(candidate, path); err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && len(candidate) > len(root) {
-			root = candidate
-		}
-	}
-	if root == "" {
-		return nil
-	}
-	file, err := filepath.Rel(root, path)
-	if err != nil {
-		return err
-	}
-	if filepath.Clean(root) != filepath.Clean(artifact) && !config.SameModelRepo(i.registry[root], artifact) {
-		revision = ""
-	}
-	return i.add(ModelSpec{LocalPath: root, Revision: revision, RequiredFiles: []string{file}, FilesOnly: true, CheckONNX: filepath.Ext(file) == ".onnx", Strict: true})
 }
 
 func (i *modelInventory) addDefault(spec ModelSpec) error {

@@ -28,6 +28,8 @@ type MilvusRAGConfig struct {
 	ReuseCacheConnection bool   `json:"reuse_cache_connection,omitempty" yaml:"reuse_cache_connection,omitempty"`
 	ContentField         string `json:"content_field,omitempty" yaml:"content_field,omitempty"`
 	FilterExpression     string `json:"filter_expression,omitempty" yaml:"filter_expression,omitempty"`
+	// Embedding names the deployment the collection was indexed with.
+	Embedding *EmbeddingBinding `json:"embedding,omitempty" yaml:"embedding,omitempty"`
 }
 
 // ExternalAPIRAGConfig represents configuration for external API-based RAG retrieval.
@@ -40,10 +42,19 @@ type ExternalAPIRAGConfig struct {
 	TimeoutSeconds   *int              `json:"timeout_seconds,omitempty" yaml:"timeout_seconds,omitempty"`
 	MaxResponseBytes int64             `json:"max_response_bytes,omitempty" yaml:"max_response_bytes,omitempty"`
 	Headers          map[string]string `json:"headers,omitempty" yaml:"headers,omitempty"`
+	// Embedding names the deployment the index was built with, for the
+	// request formats that search by a query vector.
+	Embedding *EmbeddingBinding `json:"embedding,omitempty" yaml:"embedding,omitempty"`
 }
 
 func (c *ExternalAPIRAGConfig) GetTimeout() time.Duration {
 	return ragTimeout(c.TimeoutSeconds, DefaultExternalRAGTimeoutSeconds)
+}
+
+// EmbedsQuery reports whether the request format searches by a query vector
+// the router computes.
+func (c *ExternalAPIRAGConfig) EmbedsQuery() bool {
+	return c.RequestFormat == "pinecone" || c.RequestFormat == "weaviate"
 }
 
 // MCPRAGConfig represents configuration for MCP-based RAG retrieval.
@@ -91,6 +102,8 @@ type QdrantRAGConfig struct {
 	Collection           string `json:"collection" yaml:"collection"`
 	ReuseCacheConnection bool   `json:"reuse_cache_connection,omitempty" yaml:"reuse_cache_connection,omitempty"`
 	ContentField         string `json:"content_field,omitempty" yaml:"content_field,omitempty"`
+	// Embedding names the deployment the collection was indexed with.
+	Embedding *EmbeddingBinding `json:"embedding,omitempty" yaml:"embedding,omitempty"`
 }
 
 func (c *ContextSource) MilvusBackendConfig() (*MilvusRAGConfig, error) {

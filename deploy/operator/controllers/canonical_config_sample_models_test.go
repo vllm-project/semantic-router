@@ -30,8 +30,9 @@ func TestDefaultOperatorSamplesSelectTheDefaultModel(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if cfg.MmBertModelPath != "models/Vela-1.0-Encoder-307M-Embedding" {
-				t.Fatalf("embedding artifact = %q", cfg.MmBertModelPath)
+			embedding := cfg.ModelDeployments[cfg.EmbeddingDeployment]
+			if cfg.EmbeddingDeployment != routerconfig.EmbeddingDefaultDeployment || embedding.Artifact != velaEmbedding.RepoID {
+				t.Fatalf("embedding deployment = %s %+v", cfg.EmbeddingDeployment, embedding)
 			}
 			for _, signalType := range []string{routerconfig.SignalTypeJailbreak, routerconfig.SignalTypePII} {
 				if deployment := applicationDeployment(t, cfg, signalType); deployment.Artifact != vela3Fast.RepoID {
@@ -42,7 +43,10 @@ func TestDefaultOperatorSamplesSelectTheDefaultModel(t *testing.T) {
 	}
 }
 
-var vela3Fast = routerconfig.GetModelByPath(routerconfig.Vela3SignalModel)
+var (
+	vela3Fast     = routerconfig.GetModelByPath(routerconfig.Vela3SignalModel)
+	velaEmbedding = routerconfig.GetModelByPath(routerconfig.VelaEmbeddingModel)
+)
 
 func applicationDeployment(t *testing.T, cfg *routerconfig.RouterConfig, signalType string) routerconfig.ModelDeployment {
 	t.Helper()
@@ -150,9 +154,8 @@ func TestOperatorCIUsesCanonicalVelaModels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defaults := routerconfig.DefaultGlobalConfig()
-	if cfg.MmBertModelPath != defaults.MmBertModelPath || cfg.EmbeddingConfig.ModelType != "mmbert" || !cfg.UseCPU {
-		t.Fatalf("CI embedding must use the canonical CPU model: %+v", cfg.EmbeddingModels)
+	if embedding := cfg.ModelDeployments[cfg.EmbeddingDeployment]; cfg.EmbeddingDeployment != routerconfig.EmbeddingDefaultDeployment || embedding.Device != "cpu" {
+		t.Fatalf("CI embedding must use the canonical CPU model: %s %+v", cfg.EmbeddingDeployment, embedding)
 	}
 	name, deployment, ok, err := cfg.DecisionModelDeployment()
 	if err != nil || !ok || name != routerconfig.DefaultDecisionDeployment || deployment.Device != "cpu" {

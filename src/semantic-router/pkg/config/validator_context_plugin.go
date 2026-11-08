@@ -88,6 +88,9 @@ func validateContextSource(cfg *RouterConfig, path string, source *ContextSource
 		if err := validateRAGSource(source); err != nil {
 			return fmt.Errorf("%s: %w", path, err)
 		}
+		if err := validateRAGQueryEmbeddings(cfg, path, source); err != nil {
+			return err
+		}
 	} else if err := validateMemorySource(path, source); err != nil {
 		return err
 	}

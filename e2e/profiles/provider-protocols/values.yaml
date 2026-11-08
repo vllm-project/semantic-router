@@ -173,11 +173,6 @@ config:
     stores:
       response_cache:
         enabled: false
-        embedding_model: mmbert
-      memory:
-        embedding_model: mmbert
-      vector_store:
-        embedding_model: mmbert
     integrations: {}
 resources:
   limits:

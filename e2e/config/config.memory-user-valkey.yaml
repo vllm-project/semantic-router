@@ -135,20 +135,6 @@ global:
         metric_type: COSINE
         index_m: 16
         index_ef_construction: 256
-      embedding_model: mmbert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.45
     response_cache:
-      embedding_model: mmbert
-    vector_store:
-      embedding_model: mmbert
-  model_catalog:
-    embeddings:
-      semantic:
-        qwen3_model_path: ""
-        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
-        multimodal_model_path: ""
-        use_cpu: true
-        embedding_config:
-          model_type: mmbert
-          target_dimension: 768

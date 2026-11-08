@@ -18,82 +18,7 @@ func loadLegacyRuntimeConfigForTest(configPath string) (*RouterConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
-
-	data, err = rewriteLegacyRuntimeConfigForTest(data)
-	if err != nil {
-		return nil, err
-	}
-
 	return parseLegacyRuntimeConfigForTest(data)
-}
-
-func rewriteLegacyRuntimeConfigForTest(data []byte) ([]byte, error) {
-	var raw map[string]interface{}
-	if err := yaml.Unmarshal(data, &raw); err != nil {
-		return nil, fmt.Errorf("failed to parse config file: %w", err)
-	}
-	if !migrateLegacyBertModelForTest(raw) {
-		return data, nil
-	}
-
-	rewrittenData, err := yaml.Marshal(raw)
-	if err != nil {
-		return nil, fmt.Errorf("failed to rewrite legacy bert_model config: %w", err)
-	}
-	return rewrittenData, nil
-}
-
-func migrateLegacyBertModelForTest(raw map[string]interface{}) bool {
-	legacyBert := nestedStringMap(raw["bert_model"])
-	if len(legacyBert) == 0 {
-		return false
-	}
-
-	embeddingModels := ensureLegacyEmbeddingModelsForTest(raw)
-	copyLegacyBertModelField(legacyBert, embeddingModels, "use_cpu", "use_cpu")
-	copyLegacyBertThresholdForTest(legacyBert, embeddingModels)
-	delete(raw, "bert_model")
-	return true
-}
-
-func ensureLegacyEmbeddingModelsForTest(raw map[string]interface{}) map[string]interface{} {
-	embeddingModels := nestedStringMap(raw["embedding_models"])
-	if len(embeddingModels) > 0 {
-		return embeddingModels
-	}
-
-	embeddingModels = map[string]interface{}{}
-	raw["embedding_models"] = embeddingModels
-	return embeddingModels
-}
-
-func copyLegacyBertModelField(
-	legacyBert map[string]interface{},
-	embeddingModels map[string]interface{},
-	legacyKey string,
-	embeddingKey string,
-) {
-	value, ok := legacyBert[legacyKey]
-	if !ok || embeddingModels[embeddingKey] != nil {
-		return
-	}
-	embeddingModels[embeddingKey] = value
-}
-
-func copyLegacyBertThresholdForTest(legacyBert map[string]interface{}, embeddingModels map[string]interface{}) {
-	threshold, ok := legacyBert["threshold"]
-	if !ok {
-		return
-	}
-
-	embeddingConfig := nestedStringMap(embeddingModels["embedding_config"])
-	if len(embeddingConfig) == 0 {
-		embeddingConfig = map[string]interface{}{}
-		embeddingModels["embedding_config"] = embeddingConfig
-	}
-	if embeddingConfig["min_score_threshold"] == nil {
-		embeddingConfig["min_score_threshold"] = threshold
-	}
 }
 
 func parseLegacyRuntimeConfigForTest(data []byte) (*RouterConfig, error) {
@@ -232,10 +157,6 @@ model_config:
 				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cfg).NotTo(BeNil())
-
-				// Verify migrated similarity embedding config
-				Expect(cfg.EmbeddingModels.MinSimilarityThreshold()).To(Equal(float32(0.8)))
-				Expect(cfg.EmbeddingModels.UseCPU).To(BeTrue())
 
 				// Verify categories
 				Expect(cfg.Categories).To(HaveLen(1))
@@ -446,8 +367,6 @@ semantic_cache:
 		Context("when semantic cache has no explicit threshold", func() {
 			BeforeEach(func() {
 				configContent := `
-bert_model:
-  threshold: 0.8
 semantic_cache:
   enabled: true
 `
@@ -455,12 +374,12 @@ semantic_cache:
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("should return the BERT model threshold", func() {
+			It("should return the default threshold", func() {
 				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				threshold := cfg.GetCacheSimilarityThreshold()
-				Expect(threshold).To(Equal(float32(0.8)))
+				Expect(threshold).To(Equal(float32(0.5)))
 			})
 		})
 	})
@@ -654,7 +573,6 @@ semantic_cache:
 
 			cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(cfg.EmbeddingModels.MinSimilarityThreshold()).To(Equal(float32(0.5)))
 			Expect(cfg.SemanticCache.MaxEntries).To(Equal(0))
 			Expect(cfg.SemanticCache.TTLSeconds).To(Equal(0))
 		})
@@ -1626,9 +1544,6 @@ semantic_cache:
 		Context("threshold fallback behavior", func() {
 			BeforeEach(func() {
 				configContent := `
-bert_model:
-  threshold: 0.75
-
 semantic_cache:
   enabled: true
   backend_type: "memory"
@@ -1639,15 +1554,14 @@ semantic_cache:
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("should fall back to BERT threshold when cache threshold not specified", func() {
+			It("should fall back to the default threshold when cache threshold not specified", func() {
 				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.SimilarityThreshold).To(BeNil())
 
-				// GetCacheSimilarityThreshold should return BERT threshold
 				threshold := cfg.GetCacheSimilarityThreshold()
-				Expect(threshold).To(Equal(float32(0.75)))
+				Expect(threshold).To(Equal(float32(0.5)))
 			})
 		})
 
@@ -1739,10 +1653,6 @@ default_model: "gpt-4"
 			It("should handle production-like configuration correctly", func() {
 				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
-
-				// Verify migrated similarity embedding config
-				Expect(cfg.EmbeddingModels.MinSimilarityThreshold()).To(Equal(float32(0.6)))
-				Expect(cfg.EmbeddingModels.UseCPU).To(BeFalse())
 
 				// Verify semantic cache config
 				Expect(cfg.SemanticCache.Enabled).To(BeTrue())

@@ -104,12 +104,11 @@ global:
         port: 6334
         collection: agentic_memory
         dimension: 256
-      embedding_model: mmbert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.30
 ```
 
-三个示例都使用默认的 `mmbert`（Vela Embedding）生成嵌入，因此 `dimension` 取其提供的维度之一：64、128、256、512 或 768。
+三个示例都使用 `embeddings.default` 指定的 Vela Embedding 生成嵌入，因此 `dimension` 取其提供的维度之一：64、128、256、512 或 768。用别的模型建索引的库，要在 `embedding` 块里写明它的部署和维度（见[嵌入](../../model-runtime/guides/embeddings.md#stores-indexed-with-another-model)）。
 若设为其他值，Router 会记录 `Failed to create memory store: … Memory will be disabled`，并在没有记忆的情况下运行。
 Qdrant 示例的 0.30 阈值基于原始余弦分数，只是起点，而不是校准值；上线前还需检查无关查询和已更正的旧事实。
 

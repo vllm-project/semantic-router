@@ -62,9 +62,9 @@ func (d ModelDeployment) ServedModel(name string) string {
 // ModelRuntimeDeploymentsInUse returns the model_runtime deployments that the
 // configuration uses, with defaults applied: those a decision signal or a
 // decision algorithm names, the decision model's for a decision signal or
-// algorithm that names none, and those an active task binding names in the
-// top-level routing surface, a recipe, or the global service catalog.
-// Declared but unused deployments are never started.
+// algorithm that names none, the one a grounding fusion asks, and those an
+// active embedding consumer embeds with. Declared but unused deployments are
+// never started.
 func ModelRuntimeDeploymentsInUse(cfg *RouterConfig) map[string]ModelDeployment {
 	used := make(map[string]ModelDeployment)
 	if cfg == nil {
@@ -148,40 +148,8 @@ func ModelRuntimeDeploymentsInUse(cfg *RouterConfig) map[string]ModelDeployment 
 			mark(deployment)
 		}
 	}
-	for name, deployment := range modelRuntimeTaskDeploymentsInUse(cfg) {
-		used[name] = deployment
-	}
-	return used
-}
-
-// modelRuntimeTaskDeploymentsInUse resolves the binding plan and keeps the
-// model_runtime deployments whose consumer is active in its own scope.
-// An invalid plan contributes nothing: validation reports it separately.
-func modelRuntimeTaskDeploymentsInUse(cfg *RouterConfig) map[string]ModelDeployment {
-	used := make(map[string]ModelDeployment)
-	plan, err := compileModelBindings(cfg)
-	if err != nil {
-		return used
-	}
-	for name, spec := range plan.global {
-		if spec.Deployment.IsModelRuntime() && spec.Deployment.MissingLocalModel() == nil && TaskConsumerInUse(cfg, GlobalModelScope, name) {
-			used[spec.Binding.Deployment] = spec.Deployment
-		}
-	}
-	scopes := cfg.consumerScopes()
-	for recipe, bindings := range plan.recipes {
-		scoped, ok := scopes[recipe]
-		if !ok {
-			continue
-		}
-		for name, spec := range bindings {
-			if spec.Deployment.IsModelRuntime() && spec.Deployment.MissingLocalModel() == nil && TaskConsumerInUse(scoped, recipe, name) {
-				used[spec.Binding.Deployment] = spec.Deployment
-			}
-		}
-	}
-	for name, deployment := range resolvedTaskDeploymentsInUse(cfg) {
-		used[name] = deployment
+	for name := range cfg.embeddingDeploymentsInUse() {
+		mark(name)
 	}
 	return used
 }
@@ -206,39 +174,6 @@ func (c *RouterConfig) consumerScopes() map[RecipeName]*RouterConfig {
 		}
 	}
 	return scopes
-}
-
-// TaskConsumerInUse reports whether the named task consumer runs in a scope:
-// a signal or plugin of a reachable routing profile reads it, or a default
-// public API serves it. scoped is the recipe-scoped configuration (the root
-// configuration for the global service scope).
-func TaskConsumerInUse(scoped *RouterConfig, scope RecipeName, name string) bool {
-	if scoped == nil {
-		return false
-	}
-	if scope == GlobalModelScope {
-		if name != "embedding" {
-			return false
-		}
-		// Recipe bindings may override the global default. Only shared services
-		// can activate the global owner directly; inherited recipe bindings are
-		// accounted for in their own scopes.
-		services := scoped.ConfigForGlobalModelServices()
-		primary := services.primaryEmbeddingModel()
-		return EmbeddingModelsNeeded(services, primary, true)[primary]
-	}
-	if name == "embedding" {
-		primary := scoped.primaryEmbeddingModel()
-		return EmbeddingModelsNeeded(scoped, primary, false)[primary]
-	}
-	return false
-}
-
-func (c *RouterConfig) primaryEmbeddingModel() string {
-	if model := strings.ToLower(strings.TrimSpace(c.EmbeddingConfig.ModelType)); model != "" {
-		return model
-	}
-	return "qwen3"
 }
 
 func (d ModelDeployment) validateModelRuntime() error {

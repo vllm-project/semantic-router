@@ -183,7 +183,6 @@ func buildCRDConfigSpec(cfg *config.RouterConfig) map[string]interface{} {
 	}
 
 	// Infrastructure configs that ConfigSpec supports
-	moveKey(flat, configSpec, "embedding_models")
 	moveKey(flat, configSpec, "classifier")
 	moveKey(flat, configSpec, "prompt_guard")
 	moveKey(flat, configSpec, "semantic_cache")

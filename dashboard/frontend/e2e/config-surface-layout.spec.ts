@@ -77,16 +77,7 @@ const configResponse = {
         pii_classifier: 'models/mmbert32k-pii-detector-merged',
       },
       embeddings: {
-        semantic: {
-          mmbert_model_path: 'models/mmbert-embed-32k-2d-matryoshka',
-          use_cpu: true,
-          embedding_config: {
-            model_type: 'mmbert',
-            preload_embeddings: true,
-            target_dimension: 768,
-            target_layer: 22,
-          },
-        },
+        default: 'qwen3-embedding',
       },
     },
   },
@@ -109,9 +100,7 @@ model_catalog:
     domain_classifier: models/mmbert32k-intent-classifier-merged
     pii_classifier: models/mmbert32k-pii-detector-merged
   embeddings:
-    semantic:
-      mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
-      use_cpu: true
+    default: qwen3-embedding
 `;
 
 async function mockConfigSurface(page: Page) {
@@ -386,7 +375,7 @@ test.describe('Config surface layout regressions', () => {
     await expect(systemBindingsCard).toBeVisible();
     await expect(embeddingsCard).toBeVisible();
     await expect(systemBindingsCard.getByText('models/.../mmbert32k-jailbreak-detector-merged')).toBeVisible();
-    await expect(embeddingsCard.getByText('models/mmbert-embed-32k-2d-matryoshka')).toBeVisible();
+    await expect(embeddingsCard.getByText('qwen3-embedding')).toBeVisible();
 
     const systemPath = systemBindingsCard.getByText('global.model_catalog.system');
     const systemButton = systemBindingsCard.getByRole('button', { name: 'Edit' });

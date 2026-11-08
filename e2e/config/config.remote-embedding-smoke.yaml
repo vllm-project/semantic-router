@@ -98,11 +98,3 @@ global:
           dimensions: 1536
     embeddings:
       default: remote-embedding
-      semantic:
-        mmbert_model_path: ""
-        qwen3_model_path: ""
-        multimodal_model_path: ""
-        use_cpu: true
-        embedding_config:
-          preload_embeddings: false
-          target_dimension: 1536

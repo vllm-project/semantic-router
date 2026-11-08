@@ -22,7 +22,7 @@ var _ = Describe("Cache lookup cancellation and miss contract (#2473)", func() {
 			Enabled:             true,
 			SimilarityThreshold: threshold,
 			MaxEntries:          16,
-			EmbeddingModel:      "qwen3",
+			EmbeddingDeployment: "qwen3-embedding",
 		})
 		Expect(err).NotTo(HaveOccurred())
 

@@ -245,11 +245,6 @@ func (m *modelResourceMigration) migrateCatalog(catalog *yaml.Node, exported Can
 			deleteKey(catalog, "system")
 		}
 	}
-	if embeddings := mappingAt(catalog, "embeddings"); embeddings != nil || exported.Embeddings.Default != "" {
-		if err := m.migrateEmbeddings(catalog, exported); err != nil {
-			return err
-		}
-	}
 	m.migrateModules(catalog)
 	if external := mappingValue(catalog, "external"); external != nil && external.Kind == yaml.SequenceNode {
 		kept := external.Content[:0]
@@ -267,28 +262,6 @@ func (m *modelResourceMigration) migrateCatalog(catalog *yaml.Node, exported Can
 		if err := setValue(catalog, "admission", exported.Admission, len(exported.Admission) == 0); err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-func (m *modelResourceMigration) migrateEmbeddings(catalog *yaml.Node, exported CanonicalModelCatalog) error {
-	embeddings := ensureMapping(catalog, "embeddings")
-	for key, name := range map[string]string{"default": exported.Embeddings.Default, "multimodal": exported.Embeddings.Multimodal} {
-		predeclared := map[string]string{"default": EmbeddingDefaultDeployment, "multimodal": MultimodalEmbeddingDeployment}[key]
-		if name != "" && name != predeclared && mappingValue(embeddings, key) == nil {
-			if err := setValue(embeddings, key, name, false); err != nil {
-				return err
-			}
-		}
-	}
-	semantic := mappingAt(embeddings, "semantic")
-	if semantic != nil && m.warned("global.model_catalog.embeddings.semantic.endpoint") {
-		deleteKey(semantic, "endpoint")
-		if config := mappingAt(semantic, "embedding_config"); config != nil {
-			deleteKey(config, "backend")
-			deleteKey(config, "model_type")
-		}
-		deleteEmpty(catalog, "embeddings", "semantic", "embedding_config")
 	}
 	return nil
 }

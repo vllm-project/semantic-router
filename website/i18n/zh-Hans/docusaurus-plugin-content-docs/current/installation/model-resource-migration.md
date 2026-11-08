@@ -11,7 +11,7 @@ translation:
 
 # 迁移模型资源
 
-早期版本通过 `external[]` 模型、embedding endpoint、绑定对象和按规则的绑定键来选择模型。这些形式仍可加载：Router 把每一种都读作有名称的部署和绑定，使用与之前相同的模型，并为每个字段报告一条 `deprecated_model_field` 警告。本页是唯一出现早期形式的地方；文档其余部分都使用每组示例中的第二种形式。[为信号选择模型](choose-a-model-for-a-signal.md)说明了它们迁移到的形式，[发布说明](../release-notes/unified-model-resources.md)概述了这次变更。
+早期版本通过 `external[]` 模型、绑定对象和按规则的绑定键来选择模型。这些形式仍可加载：Router 把每一种都读作有名称的部署和绑定，使用与之前相同的模型，并为每个字段报告一条 `deprecated_model_field` 警告。本页是唯一出现早期形式的地方；文档其余部分都使用每组示例中的第二种形式。[为信号选择模型](choose-a-model-for-a-signal.md)说明了它们迁移到的形式，[发布说明](../release-notes/unified-model-resources.md)概述了这次变更。
 
 用 `vllm-sr config validate --config config.yaml` 查看这些警告，或者直接用 Router：`router -validate-config -config config.yaml` 输出一行 JSON：`{"valid": true, "warnings": [{"code": "deprecated_model_field", "field": "...", "message": "..."}]}`。每条警告都指明字段以及 Router 把它读作什么。
 
@@ -22,6 +22,7 @@ translation:
 - `systemone` 决策模型现在也回答内置信号。以前这些信号在本地的 `vela3-fast` 上运行。除非配置写出阈值，它们的阈值为 0.5，加载时警告 `uncalibrated_preset`。
 - 只有被移除的学习型分类器使用的信号和模块（classifier、embedding、知识库和 preference 规则，domain、fact-check、feedback 和 modality 模块，安全规则的 hazard 部分）不再能加载。`vllm-sr config migrate` 会把它们改写为决策模型回答的应用信号，或说明应改写成什么。
 - prompt guard、PII 和幻觉检测模块同样不再能加载，它们的 system 行、admission 键、模块 backend 以及 `external[]` 中的 guard 字段也一样。决策模型回答 jailbreak、pii 和 hallucination 规则；模块的阈值成为读取它的规则的 predicate，绑定其他模型时以信号类型为键。
+- embedding 模型关键字（`mmbert`、`qwen3`、`multimodal`）、带远程 endpoint 的 `embeddings.semantic`、embedding 绑定以及按模型关键字的 admission 不再能加载。`vllm-sr config migrate` 会写出每一项所选的部署，并在使用它的地方写上它的名称；参见 [Embeddings](../model-runtime/guides/embeddings.md)。
 - 其他一切都解析到与之前相同的模型。
 
 早期形式和新形式为同一个信号指定模型时，新形式优先，早期字段被忽略并给出警告。同时写了 `deployment` 和 `model` 或 `model_path` 的规则，或者同时以信号类型和早期名称写出的绑定，会被拒绝。
@@ -60,39 +61,6 @@ routing:
   signals:
     safety:
       - {name: harmful, deployment: kai, predicate: {gte: 0.5}}
-```
-
-## 远程 embedding {#remote-embeddings}
-
-```yaml title="migrate-embedding-endpoint-before"
-global:
-  model_catalog:
-    embeddings:
-      semantic:
-        embedding_config: {backend: openai_compatible, model_type: remote}
-        endpoint:
-          base_url: https://embedding.example.com/v1
-          model: BAAI/bge-m3
-          api_key_env: EMBEDDING_API_KEY
-          timeout_seconds: 5
-          max_retries: 2
-          dimensions: 1024
-```
-
-```yaml title="migrate-embedding-endpoint-after"
-global:
-  model_catalog:
-    deployments:
-      remote-embed:
-        provider: openai_embeddings
-        endpoint: https://embedding.example.com/v1
-        model: BAAI/bge-m3
-        auth: {api_key_env: EMBEDDING_API_KEY}
-        timeout_ms: 5000
-        max_retries: 2
-        capabilities: {dimensions: 1024}
-    embeddings:
-      default: remote-embed
 ```
 
 ## 记忆查询改写模型 {#the-memory-rewrite-model}

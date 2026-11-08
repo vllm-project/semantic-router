@@ -54,7 +54,7 @@ func TestHybridPolarityLookupAndService(t *testing.T) {
 				searchCalls := 0
 				milvus := &MilvusCache{
 					enabled: true, config: milvusCacheTestConfig("Strong"),
-					embeddingModel: "qwen3", embeddingProvider: provider,
+					embeddingDeployment: "qwen3-embedding", embeddingProvider: provider,
 					queryByIDFn: func(_ context.Context, id, model string) (client.ResultSet, error) {
 						require.Equal(t, "candidate-id", id)
 						require.Equal(t, expectedModel, model)
@@ -130,7 +130,7 @@ func TestHybridPolarityMissPreservesNegativeScore(t *testing.T) {
 	cfg := milvusCacheTestConfig("Strong")
 	cfg.Collection.VectorField.MetricType = "IP"
 	milvus := &MilvusCache{
-		enabled: true, config: cfg, embeddingModel: "qwen3", embeddingProvider: cacheTestEmbeddingProvider(),
+		enabled: true, config: cfg, embeddingDeployment: "qwen3-embedding", embeddingProvider: cacheTestEmbeddingProvider(),
 		queryByIDFn: func(context.Context, string, string) (client.ResultSet, error) {
 			// The nearest HNSW record belongs to a different model partition.
 			return nil, nil
@@ -156,7 +156,7 @@ func TestHybridHitReportsNegationGuard(t *testing.T) {
 			storedAt := time.Now().Truncate(time.Second)
 			milvus := &MilvusCache{
 				enabled: true, config: milvusCacheTestConfig("Strong"),
-				embeddingModel: "qwen3", embeddingProvider: cacheTestEmbeddingProvider(),
+				embeddingDeployment: "qwen3-embedding", embeddingProvider: cacheTestEmbeddingProvider(),
 				queryByIDFn: func(context.Context, string, string) (client.ResultSet, error) {
 					return client.ResultSet{
 						entity.NewColumnVarChar("query", []string{tc.cached}),

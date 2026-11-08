@@ -534,13 +534,6 @@ config:
     stores:
       response_cache:
         enabled: false
-    model_catalog:
-      embeddings:
-        semantic:
-          qwen3_model_path: ""
-          mmbert_model_path: ""
-          multimodal_model_path: ""
-          use_cpu: true
 
 resources:
   limits:

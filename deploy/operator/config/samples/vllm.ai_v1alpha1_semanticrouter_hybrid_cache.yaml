@@ -55,11 +55,6 @@ spec:
 
   # Semantic router configuration
   config:
-    embedding_models:
-      mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
-      use_cpu: true
-
-    # Semantic cache with Hybrid backend (HNSW + Milvus)
     response_cache:
       enabled: true
       backend_type: hybrid
@@ -67,7 +62,6 @@ spec:
       ttl_seconds: 3600
       max_entries: 5000
       eviction_policy: lru
-      embedding_model: mmbert
 
       # HNSW configuration for hybrid backend
       hnsw:

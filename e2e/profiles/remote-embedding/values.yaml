@@ -34,6 +34,19 @@ config:
         modelRefs:
           - model: base-model
             use_reasoning: false
+        plugins:
+          # Reuses a billing answer for a paraphrase: recall embeds the request
+          # with the remote embedding deployment, and the same_request judge on
+          # the System One fixture confirms the candidate.
+          - type: response_cache
+            configuration:
+              enabled: true
+              # The e2e requests carry no user identity to partition by.
+              scope: global
+              semantic:
+                match:
+                  recall: {top_k: 1, min_similarity: 0.9}
+                  judge: {preset: same_request, deployment: fake-systemone, min_score: 0.5, on_error: fail}
       - name: default-route
         description: Fallback when billing_support does not match
         priority: 10
@@ -52,8 +65,15 @@ config:
       router_replay:
         enabled: false
     stores:
+      # The semantic response cache is the recall consumer that prepares the
+      # remote embedding deployment.
       response_cache:
-        enabled: false
+        enabled: true
+        backend_type: memory
+        embedding: {deployment: remote-embedding}
+        max_entries: 100
+        ttl_seconds: 3600
+        eviction_policy: fifo
     model_catalog:
       deployments:
         # provider-mocker's System One fixture answers billing_support, so the
@@ -78,16 +98,6 @@ config:
             dimensions: 4
       embeddings:
         default: remote-embedding
-        semantic:
-          qwen3_model_path: ""
-          mmbert_model_path: ""
-          multimodal_model_path: ""
-          use_cpu: true
-          embedding_config:
-            preload_embeddings: false
-            target_dimension: 4
-            top_k: 1
-            min_score_threshold: 0.9
 extraEnv:
   - name: REMOTE_EMBEDDING_E2E_KEY
     value: e2e-embedding-key

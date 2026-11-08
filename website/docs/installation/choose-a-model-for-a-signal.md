@@ -25,17 +25,18 @@ specific level wins.
 A binding in `recipes[].routing.model_bindings` applies only to that recipe
 and wins over the global binding for the same signal type.
 
-Embeddings ask no question. They are named where they are used:
+Embeddings ask no question and answer no signal; they serve recall only. They
+are named where they are used:
 
 | Resource | Where you name it | Default |
 | --- | --- | --- |
 | Embeddings | `global.model_catalog.embeddings.default` | `vela-embedding` |
-| Multimodal embeddings | `global.model_catalog.embeddings.multimodal` | `omni-nano` |
+| Multimodal embeddings | `global.model_catalog.embeddings.multimodal` | off |
 
-Three deployments are always declared, and the Router starts one only when
+Two deployments are always declared, and the Router starts one only when
 something resolves to it: `primary` (`vllm-sr/vela3-fast` on CPU, the default
-decision model), `vela-embedding` (Vela 1.0 Embedding) and `omni-nano` (Vela
-1.0 Omni Nano). Declare a deployment with the same name to change one.
+decision model) and `vela-embedding` (Vela 1.0 Embedding). Declare a
+deployment with the same name to change one.
 
 ## S1. All defaults: nothing written
 
@@ -53,7 +54,7 @@ changes nothing.
 | --- | --- |
 | Every question-style signal and selector | `primary`, by name |
 | Embeddings | `vela-embedding` |
-| Multimodal embeddings | `omni-nano` |
+| Multimodal embeddings | off |
 
 ## S2. Everything on a remote System One model
 

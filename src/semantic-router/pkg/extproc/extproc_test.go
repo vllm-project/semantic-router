@@ -476,16 +476,6 @@ var _ ext_proc.ExternalProcessor_ProcessServer = &MockStream{}
 // CreateTestConfig creates a standard test configuration
 func CreateTestConfig() *config.RouterConfig {
 	return &config.RouterConfig{
-		InlineModels: config.InlineModels{
-			EmbeddingModels: config.EmbeddingModels{
-				UseCPU: true,
-				EmbeddingConfig: config.HNSWConfig{
-					ModelType:         "qwen3",
-					TargetDimension:   768,
-					MinScoreThreshold: 0.8,
-				},
-			},
-		},
 		BackendModels: config.BackendModels{
 			DefaultModel: "model-b",
 			ModelConfig: map[string]config.ModelParams{
@@ -527,7 +517,6 @@ func CreateTestConfig() *config.RouterConfig {
 			SimilarityThreshold: &[]float32{0.9}[0],
 			MaxEntries:          100,
 			EvictionPolicy:      "lru",
-			EmbeddingModel:      "bert", // Default for tests
 			TTLSeconds:          3600,
 		},
 		ResponseAPI: config.ResponseAPIConfig{
@@ -549,7 +538,6 @@ var _ = Describe("ExtProc Package", func() {
 		It("should create test configuration successfully", func() {
 			cfg := CreateTestConfig()
 			Expect(cfg).NotTo(BeNil())
-			Expect(cfg.InlineModels.EmbeddingModels.UseCPU).To(BeTrue())
 			Expect(cfg.BackendModels.DefaultModel).To(Equal("model-b"))
 			Expect(len(cfg.IntelligentRouting.Categories)).To(Equal(1))
 			Expect(cfg.IntelligentRouting.Categories[0].Name).To(Equal("coding"))
@@ -1134,7 +1122,7 @@ var _ = Describe("Caching Functionality", func() {
 			SimilarityThreshold: 0.9,
 			MaxEntries:          100,
 			TTLSeconds:          3600,
-			EmbeddingModel:      "bert",
+			EmbeddingDeployment: "test-embedding",
 			EmbeddingProvider:   provider,
 		}
 		cacheBackend, err := cache.NewCacheBackend(cacheConfig)
@@ -1287,7 +1275,6 @@ var _ = Describe("Caching Functionality", func() {
 				SimilarityThreshold: 0.9,
 				MaxEntries:          100,
 				TTLSeconds:          3600,
-				EmbeddingModel:      "bert",
 			}
 			cacheBackend, err := cache.NewCacheBackend(cacheConfig)
 			Expect(err).NotTo(HaveOccurred())

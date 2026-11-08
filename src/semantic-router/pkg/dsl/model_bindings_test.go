@@ -8,7 +8,7 @@ import (
 
 func TestModelBindingsRoundTripAcrossRecipes(t *testing.T) {
 	source := `ROUTING {
-  model_bindings: {embedding: {deployment: "shared", contract: "embedding.v1", adapter: "mmbert"}}
+  model_bindings: {jailbreak_classifier: {deployment: "shared", contract: "label_scores.v1", adapter: "mmbert", head: "jailbreak"}}
 }
 RECIPE private {
   ROUTING {

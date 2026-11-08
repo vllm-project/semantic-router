@@ -49,18 +49,6 @@ spec:
 
   # Semantic router configuration
   config:
-    embedding_models:
-      mmbert_model_path: "models/Vela-1.0-Encoder-307M-Embedding"
-      use_cpu: true
-
-      embedding_config:
-        model_type: "mmbert"
-        preload_embeddings: true
-        enable_soft_matching: true
-        min_score_threshold: "0.5"
-
-    # Complexity rules: the decision model answers whether a request is
-    # easy, medium or hard, and each rule matches its hard option.
     complexity_rules:
       - name: "code-complexity"
         description: "Classify coding tasks by complexity"
@@ -73,7 +61,6 @@ spec:
     response_cache:
       enabled: true
       backend_type: "memory"
-      embedding_model: "mmbert"
       similarity_threshold: "0.85"
       max_entries: 5000
       ttl_seconds: 7200

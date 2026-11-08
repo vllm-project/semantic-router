@@ -18,8 +18,6 @@ providers:
       protocol: http
       provider: vllm
 routing:
-  model_bindings:
-    embedding: embedding-amd
   signals:
     domains:
     - name: biology
@@ -347,8 +345,8 @@ global:
     vector_store:
       enabled: true
       backend_type: memory
-      embedding_model: mmbert
-      embedding_dimension: 768
+      embedding:
+        dimension: 768
       file_storage_dir: /app/.vllm-sr/files
       metadata_store: memory
       ingestion_workers: 1
@@ -356,6 +354,8 @@ global:
     system:
       decision_model:
         deployment: decision-amd
+    embeddings:
+      default: embedding-amd
     deployments:
       decision-amd:
         provider: model_runtime
@@ -373,15 +373,6 @@ global:
         input:
           max_tokens: 32768
           overflow: reject
-    embeddings:
-      semantic:
-        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
-        embedding_config:
-          model_type: mmbert
-          preload_embeddings: true
-          target_layer: 22
-          target_dimension: 768
-          full_context: true
 entrypoints:
 - model_names: ["vela-auto"]
   recipe: default

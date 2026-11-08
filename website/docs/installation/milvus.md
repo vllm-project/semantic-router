@@ -75,7 +75,6 @@ global:
       similarity_threshold: 0.86
       max_entries: 50000
       ttl_seconds: 7200
-      embedding_model: mmbert
       milvus:
         connection:
           host: milvus.milvus.svc.cluster.local
@@ -104,7 +103,9 @@ global:
           auto_create_collection: true
 ```
 
-Set `dimension` to the output dimension of `embedding_model`. A mismatch causes
+Set `dimension` to the size of the vectors the cache embeds: 768 with Vela
+Embedding, which `embeddings.default` names, or the store's
+`embedding.dimension` when it names another deployment. A mismatch causes
 inserts or searches to fail.
 
 Enable the route plugin on decisions that may read or populate the cache:

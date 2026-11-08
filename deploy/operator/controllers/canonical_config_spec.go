@@ -46,13 +46,8 @@ func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerco
 		return err
 	}
 	if spec.EmbeddingModels != nil {
-		embeddings, err := convertToTypedConfig[routerconfig.EmbeddingModels](r, spec.EmbeddingModels)
-		if err != nil {
-			return fmt.Errorf("config.embedding_models: %w", err)
-		}
-		canonical.Global.ModelCatalog.Embeddings.Semantic = embeddings
+		return fmt.Errorf("config.embedding_models is removed: an embedding model is a model deployment, and global.model_catalog.embeddings.default names the one stores embed with")
 	}
-
 	if spec.PromptGuard != nil {
 		return fmt.Errorf("config.prompt_guard is removed: the decision model answers jailbreak rules (a threshold is a jailbreak rule's predicate)")
 	}
@@ -96,10 +91,14 @@ func operatorResponseCacheConfig(
 	if spec.ResponseCache != nil && spec.SemanticCache != nil {
 		return nil, fmt.Errorf("config.response_cache conflicts with deprecated config.semantic_cache")
 	}
-	if spec.ResponseCache != nil {
-		return spec.ResponseCache, nil
+	cache, field := spec.ResponseCache, "config.response_cache"
+	if cache == nil {
+		cache, field = spec.SemanticCache, "config.semantic_cache"
 	}
-	return spec.SemanticCache, nil
+	if cache != nil && cache.EmbeddingModel != "" {
+		return nil, fmt.Errorf("%s.embedding_model is removed: embedding.deployment names the deployment semantic reuse embeds with, embeddings.default without one", field)
+	}
+	return cache, nil
 }
 
 func (r *SemanticRouterReconciler) applyOperatorProviderDefaults(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {

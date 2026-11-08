@@ -251,7 +251,10 @@ type CacheConfig struct {
 	// Hybrid cache specific settings
 	MaxMemoryEntries int `yaml:"max_memory_entries,omitempty"` // Max entries in HNSW for hybrid cache
 
-	// EmbeddingModel specifies which embedding model to use
-	// Options: "mmbert" (default), "qwen3", "multimodal"
-	EmbeddingModel string `yaml:"embedding_model,omitempty"`
+	// EmbeddingDeployment names the deployment semantic entries are embedded
+	// with, and EmbeddingDimension and EmbeddingLayer the view the in-memory
+	// backend reads (config.RouterConfig.ResponseCacheEmbedding).
+	EmbeddingDeployment string `yaml:"-" json:"-"`
+	EmbeddingDimension  int    `yaml:"-" json:"-"`
+	EmbeddingLayer      int    `yaml:"-" json:"-"`
 }

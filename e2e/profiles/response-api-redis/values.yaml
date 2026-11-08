@@ -102,13 +102,6 @@ config:
       observability:
         tracing:
           enabled: false
-    stores:
-      response_cache:
-        embedding_model: mmbert
-      memory:
-        embedding_model: mmbert
-      vector_store:
-        embedding_model: mmbert
     integrations:
       looper:
         flow:

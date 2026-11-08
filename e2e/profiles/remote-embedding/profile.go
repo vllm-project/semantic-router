@@ -55,7 +55,7 @@ func (p *Profile) Name() string {
 
 // Description returns the profile contract.
 func (p *Profile) Description() string {
-	return "Tests OpenAI-compatible remote embedding provider startup and deterministic text embedding routing"
+	return "Tests the OpenAI-compatible remote embedding provider as the response cache's recall source, with System One routing"
 }
 
 // Setup deploys the mock provider before the router because startup probes call it immediately.

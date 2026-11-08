@@ -127,11 +127,6 @@ spec:
 
   # Semantic Router configuration
   config:
-    embedding_models:
-      mmbert_model_path: "models/Vela-1.0-Encoder-307M-Embedding"
-      use_cpu: true
-
-    # Semantic cache for response caching
     response_cache:
       enabled: true
       backend_type: "memory"
@@ -139,7 +134,6 @@ spec:
       max_entries: 1000
       ttl_seconds: 3600
       eviction_policy: "fifo"
-      embedding_model: "mmbert"
 
 
     # Reasoning mode configuration per model family

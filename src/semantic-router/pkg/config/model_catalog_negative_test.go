@@ -67,10 +67,10 @@ func TestModelCatalogRefusesWhatCannotWork(t *testing.T) {
 			"global: {model_catalog: {embeddings: {default: d3-remote}}}",
 			"embeddings need a model_runtime or openai_embeddings deployment",
 		},
-		"remote embedding dimensions that disagree with the target dimension": {
+		"a store dimension that disagrees with its remote deployment": {
 			"global:\n  model_catalog:\n    deployments:\n      remote-embed: {provider: openai_embeddings, endpoint: https://embedding.example.com/v1, model: BAAI/bge-m3, capabilities: {dimensions: 1024}}\n" +
-				"    embeddings:\n      default: remote-embed\n      semantic: {embedding_config: {target_dimension: 768}}",
-			"answers with 1024 dimensions (capabilities.dimensions), but embeddings.semantic.embedding_config.target_dimension asks for 768",
+				"  stores:\n    memory:\n      embedding: {deployment: remote-embed, dimension: 768}",
+			`global.stores.memory.embedding.dimension: deployment "remote-embed" answers with 1024 dimensions (capabilities.dimensions), not 768`,
 		},
 		"a key written inline": {
 			"global: {model_catalog: {deployments: {d3-remote: {auth: {api_key: sk-test}}}}}",

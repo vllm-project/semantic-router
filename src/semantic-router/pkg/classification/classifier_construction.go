@@ -1,7 +1,6 @@
 package classification
 
 import (
-	"fmt"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
@@ -18,7 +17,6 @@ type classifierOptionBuilder struct {
 	ownsEmbeddingSet bool
 	options          []option
 	providerInitOnce sync.Once
-	provider         embedding.Provider
 	providerErr      error
 }
 
@@ -106,22 +104,6 @@ func (b *classifierOptionBuilder) closePending() {
 		}
 	}
 	_ = classifier.Close()
-}
-
-func (b *classifierOptionBuilder) initMultiModalIfNeeded(reason string) error {
-	_, err := b.embeddingProviderForModel("multimodal", 0, 0)
-	if err != nil {
-		return fmt.Errorf("%s: %w", reason, err)
-	}
-	return nil
-}
-
-func (b *classifierOptionBuilder) defaultEmbeddingModelType() string {
-	modelType := b.cfg.EmbeddingConfig.ModelType
-	if modelType == "" {
-		return "qwen3"
-	}
-	return modelType
 }
 
 func (c *Classifier) logHeuristicClassifierInitialization() {

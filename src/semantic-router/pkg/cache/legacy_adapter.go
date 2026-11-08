@@ -12,10 +12,10 @@ import (
 // LegacyBackendAdapter confines the old backend API to one migration boundary.
 // Request paths and management APIs depend on TypedCacheStore instead.
 type LegacyBackendAdapter struct {
-	backend           CacheBackend
-	capabilities      BackendCapabilities
-	embeddingModel    string
-	embeddingProvider embedding.Provider
+	backend             CacheBackend
+	capabilities        BackendCapabilities
+	embeddingDeployment string
+	embeddingProvider   embedding.Provider
 }
 
 func NewLegacyBackendAdapter(
@@ -30,8 +30,8 @@ func NewLegacyBackendAdapter(
 	}
 }
 
-func (a *LegacyBackendAdapter) WithEmbeddingModel(model string) *LegacyBackendAdapter {
-	a.embeddingModel = normalizeEmbeddingModel(model)
+func (a *LegacyBackendAdapter) WithEmbeddingDeployment(name string) *LegacyBackendAdapter {
+	a.embeddingDeployment = name
 	return a
 }
 

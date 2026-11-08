@@ -28,14 +28,17 @@ API the Router speaks to it.
 
 The Router refuses at load a deployment given a signal it cannot answer.
 
-Three deployments are always declared and start only when something resolves
+Two deployments are always declared and start only when something resolves
 to them:
 
 | Name | Model | Used by default for |
 | --- | --- | --- |
 | `primary` | `vllm-sr/vela3-fast` on CPU | `system.decision_model` |
 | `vela-embedding` | Vela 1.0 Embedding | `embeddings.default` |
-| `omni-nano` | Vela 1.0 Omni Nano | `embeddings.multimodal` |
+
+Multimodal embedding is off until `embeddings.multimodal` names a deployment
+you declare, such as one that serves Vela 1.0 Omni Nano (see
+[Images and audio](../model-runtime/guides/multimodal.md)).
 
 ## Field reference
 
@@ -74,7 +77,7 @@ global:
     system:
       decision_model: {deployment: primary}
     bindings: {pii: primary}
-    embeddings: {default: vela-embedding, multimodal: omni-nano}
+    embeddings: {default: vela-embedding}  # multimodal: a declared deployment
 ```
 
 ### Managed `model_runtime` fields
@@ -139,9 +142,9 @@ operating point is pinned on the deployment, with `operating_point`.
 
 Resolution, for every signal: the rule's `deployment`, then the recipe's
 binding, then the global binding, then `system.decision_model` for a
-question-style signal. Embeddings resolve through `embeddings.default`, or,
-in a routing profile that embeds with its own model, through its
-`model_bindings.embedding`.
+question-style signal. Embeddings answer no signal: recall embeds with
+`embeddings.default`, or with the deployment a store's or a RAG source's
+`embedding` block names.
 
 ## Thresholds
 

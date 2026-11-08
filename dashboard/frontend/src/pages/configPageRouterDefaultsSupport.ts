@@ -159,6 +159,11 @@ function percentOrFallback(value: unknown, fallback = 'Not set'): string {
   return typeof value === 'number' ? `${Math.round(value * 100)}%` : fallback
 }
 
+// A store without embedding.deployment embeds with embeddings.default.
+function embeddingDeploymentSummary(section: Record<string, unknown> | undefined): string {
+  return stringOrFallback(asObject(section?.embedding)?.deployment, 'embeddings.default')
+}
+
 function enabledBadge(value: boolean | undefined): RouterSectionBadge {
   if (value === undefined) {
     return { label: 'Configured', tone: 'info' }
@@ -305,7 +310,7 @@ function summaryForKey(
     case 'memory':
       return [
         { label: 'Milvus address', value: stringOrFallback(asObject(section?.milvus)?.address) },
-        { label: 'Embedding model', value: stringOrFallback(section?.embedding_model) },
+        { label: 'Embedding', value: embeddingDeploymentSummary(section) },
         {
           label: 'Similarity threshold',
           value: percentOrFallback(section?.default_similarity_threshold),
@@ -320,7 +325,7 @@ function summaryForKey(
     case 'vector_store':
       return [
         { label: 'Backend', value: stringOrFallback(section?.backend_type) },
-        { label: 'Embedding model', value: stringOrFallback(section?.embedding_model) },
+        { label: 'Embedding', value: embeddingDeploymentSummary(section) },
         { label: 'Enabled', value: stringOrFallback(section?.enabled, 'Disabled') },
       ]
     case 'prompt_guard':
@@ -564,7 +569,7 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
         { name: 'enabled', label: 'Enable Memory', type: 'boolean' },
         { name: 'auto_store', label: 'Auto Store Facts', type: 'boolean' },
         routerStructuredField(key, 'milvus'),
-        { name: 'embedding_model', label: 'Embedding Model', type: 'text', placeholder: 'mmbert' },
+        routerStructuredField(key, 'embedding'),
         {
           name: 'default_retrieval_limit',
           label: 'Default Retrieval Limit',
@@ -606,12 +611,7 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           type: 'select',
           options: ['fifo', 'lru', 'lfu'],
         },
-        {
-          name: 'embedding_model',
-          label: 'Embedding Model Override',
-          type: 'text',
-          placeholder: 'mmbert',
-        },
+        routerStructuredField(key, 'embedding'),
         routerStructuredField(key, 'redis'),
         routerStructuredField(key, 'milvus'),
       ]
@@ -637,18 +637,7 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           type: 'number',
           placeholder: '50',
         },
-        {
-          name: 'embedding_model',
-          label: 'Embedding Model',
-          type: 'select',
-          options: ['mmbert', 'qwen3', 'multimodal'],
-        },
-        {
-          name: 'embedding_dimension',
-          label: 'Embedding Dimension',
-          type: 'number',
-          placeholder: 'model default',
-        },
+        routerStructuredField(key, 'embedding'),
         { name: 'ingestion_workers', label: 'Ingestion Workers', type: 'number', placeholder: '2' },
         {
           name: 'ingestion_drain_timeout_seconds',

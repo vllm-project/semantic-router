@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"strings"
 
 	"gopkg.in/yaml.v2"
 
@@ -94,14 +93,13 @@ type CanonicalModelCatalog struct {
 	SignalTimeoutMs int `yaml:"signal_timeout_ms,omitempty"`
 }
 
-// CanonicalEmbeddingModels groups embedding-related model assets. Default and
-// Multimodal name the deployments that embed text and images; Semantic holds
-// the embedding settings, and its model paths and endpoint are the
-// deprecated way to choose those models.
+// CanonicalEmbeddingModels names the embedding deployments recall uses.
+// Default embeds for every store and collection that names none of its own
+// and serves /v1/embeddings; Multimodal, which has no default, embeds the
+// images and audio a /v1/embeddings request sends.
 type CanonicalEmbeddingModels struct {
-	Default    string          `yaml:"default,omitempty"`
-	Multimodal string          `yaml:"multimodal,omitempty"`
-	Semantic   EmbeddingModels `yaml:"semantic"`
+	Default    string `yaml:"default,omitempty"`
+	Multimodal string `yaml:"multimodal,omitempty"`
 }
 
 // CanonicalModelModules holds the prompt compression of the request text
@@ -129,32 +127,10 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 	if err != nil {
 		return CanonicalGlobal{}, err
 	}
-	normalizeSparseCanonicalEmbeddingOverride(&resolved, rawOverride)
 	if err := validateDecisionModel(&resolved); err != nil {
 		return CanonicalGlobal{}, err
 	}
 	return resolved, nil
-}
-
-// Representation defaults belong to the default mmBERT model. Selecting a
-// different family must not silently request mmBERT's layer 22 from that owner.
-func normalizeSparseCanonicalEmbeddingOverride(resolved *CanonicalGlobal, raw *StructuredPayload) {
-	if raw == nil {
-		return
-	}
-	global, err := raw.AsStringMap()
-	if err != nil {
-		return
-	}
-	catalog := nestedStringMap(global["model_catalog"])
-	embeddings := nestedStringMap(catalog["embeddings"])
-	semantic := nestedStringMap(embeddings["semantic"])
-	settings := nestedStringMap(semantic["embedding_config"])
-	if model, ok := settings["model_type"].(string); ok && strings.TrimSpace(model) != "" && strings.ToLower(strings.TrimSpace(model)) != "mmbert" {
-		if !hasRawKey(settings, "target_layer") {
-			resolved.ModelCatalog.Embeddings.Semantic.EmbeddingConfig.TargetLayer = 0
-		}
-	}
 }
 
 func mergeCanonicalGlobalOverride(
@@ -176,11 +152,6 @@ func mergeCanonicalGlobalOverride(
 		return CanonicalGlobal{}, fmt.Errorf("failed to merge global override: %w", err)
 	}
 	return resolved, nil
-}
-
-func hasRawKey(raw map[string]interface{}, key string) bool {
-	_, ok := raw[key]
-	return ok
 }
 
 func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
@@ -252,7 +223,6 @@ func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalM
 	cfg.ModelDeployments = cloneModelMap(modelCatalog.Deployments)
 	cfg.GlobalModelBindings = cloneModelMap(modelCatalog.Bindings)
 	cfg.ExternalModels = append([]ExternalModelConfig(nil), modelCatalog.External...)
-	cfg.EmbeddingModels = modelCatalog.Embeddings.Semantic
 	cfg.PromptCompression = modelCatalog.Modules.PromptCompression
 	cfg.ModelAdmission = cloneAdmissionMap(modelCatalog.Admission)
 	cfg.ModelSignalTimeoutMs = modelCatalog.SignalTimeoutMs

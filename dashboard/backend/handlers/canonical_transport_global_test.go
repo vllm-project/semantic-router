@@ -172,12 +172,12 @@ func TestSetupPatchWithoutGlobalPreservesExistingOverride(t *testing.T) {
 
 func TestConfigTransportPreservesGlobalEnvironmentReferences(t *testing.T) {
 	t.Setenv("TRANSPORT_MODEL_PATH", "resolved-path-must-not-be-persisted")
-	input := []byte("global:\n  model_catalog:\n    embeddings:\n      semantic:\n        qwen3_model_path: ${TRANSPORT_MODEL_PATH}\n")
+	input := []byte("global:\n  stores:\n    memory:\n      milvus:\n        address: ${TRANSPORT_MODEL_PATH}\n")
 	config, err := decodeYAMLTaggedBytes[canonicalConfigTransport](input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if config.Global.ModelCatalog.Embeddings.Semantic.Qwen3ModelPath != "${TRANSPORT_MODEL_PATH}" {
+	if config.Global.Stores.Memory.Milvus.Address != "${TRANSPORT_MODEL_PATH}" {
 		t.Fatal("transport expanded an environment reference into persisted configuration")
 	}
 }

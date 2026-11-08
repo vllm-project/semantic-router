@@ -19,8 +19,8 @@ const remoteEmbeddingExpectedDimension = 4
 
 func init() {
 	pkgtestcases.Register("remote-embedding-routing", pkgtestcases.TestCase{
-		Description: "Verify remote embedding provider startup and deterministic billing_support routing",
-		Tags:        []string{"embedding", "remote-provider", "routing", "openai-compatible"},
+		Description: "Verify the remote embedding provider prepared for response cache recall, billing_support routing, and a paraphrase hit through remote-embedding recall",
+		Tags:        []string{"embedding", "remote-provider", "routing", "openai-compatible", "response-cache"},
 		Fn:          testRemoteEmbeddingRouting,
 	})
 }
@@ -41,6 +41,11 @@ type remoteEmbeddingProviderStatus struct {
 	LastProbeError string `json:"last_probe_error"`
 	LastCheckedAt  string `json:"last_checked_at"`
 }
+
+// remoteEmbeddingParaphrase restates the billing case's request. Recall
+// embeds it with the remote embedding deployment and finds the stored billing
+// answer; the same_request judge on the System One fixture confirms it.
+const remoteEmbeddingParaphrase = "Could you walk me through the invoice charge on my subscription and refund it? __SYSTEMONE_YES__"
 
 type remoteEmbeddingRouteCase struct {
 	Name             string
@@ -79,10 +84,14 @@ func testRemoteEmbeddingRouting(
 
 	results := make(map[string]string, len(cases))
 	for _, testCase := range cases {
-		decision, err := requestRemoteEmbeddingDecision(ctx, gatewaySession, testCase.Prompt)
-		if err != nil {
-			return fmt.Errorf("%s: %w", testCase.Name, err)
+		response, chatErr := requestRemoteEmbeddingChat(ctx, gatewaySession, testCase.Prompt)
+		if chatErr != nil {
+			return fmt.Errorf("%s: %w", testCase.Name, chatErr)
 		}
+		if response.Get("x-vsr-cache-hit") == "true" {
+			return fmt.Errorf("%s: a first request hit the response cache", testCase.Name)
+		}
+		decision := response.Get("x-vsr-selected-decision")
 		results[testCase.Name] = decision
 		if decision != testCase.ExpectedDecision {
 			return fmt.Errorf(
@@ -94,6 +103,19 @@ func testRemoteEmbeddingRouting(
 		}
 	}
 
+	time.Sleep(time.Second)
+	paraphrase, err := requestRemoteEmbeddingChat(ctx, gatewaySession, remoteEmbeddingParaphrase)
+	if err != nil {
+		return fmt.Errorf("paraphrased billing request: %w", err)
+	}
+	if paraphrase.Get("x-vsr-cache-hit") != "true" || paraphrase.Get("x-vsr-selected-decision") != "billing-route" {
+		return fmt.Errorf(
+			"paraphrased billing request: expected a billing-route response cache hit, got x-vsr-cache-hit=%q decision=%q",
+			paraphrase.Get("x-vsr-cache-hit"),
+			paraphrase.Get("x-vsr-selected-decision"),
+		)
+	}
+
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
 			"provider_backend": providerStatus.Backend,
@@ -103,6 +125,7 @@ func testRemoteEmbeddingRouting(
 			"routing_cases":    len(cases),
 			"routing_passed":   len(cases),
 			"decisions":        results,
+			"cache_similarity": paraphrase.Get("x-vsr-cache-similarity"),
 		})
 	}
 
@@ -163,11 +186,11 @@ func validateRemoteEmbeddingProviderStatus(provider *remoteEmbeddingProviderStat
 	return nil
 }
 
-func requestRemoteEmbeddingDecision(
+func requestRemoteEmbeddingChat(
 	ctx context.Context,
 	session *fixtures.ServiceSession,
 	prompt string,
-) (string, error) {
+) (http.Header, error) {
 	payload, err := json.Marshal(map[string]interface{}{
 		"model": "vllm-sr/auto",
 		"messages": []map[string]string{
@@ -175,7 +198,7 @@ func requestRemoteEmbeddingDecision(
 		},
 	})
 	if err != nil {
-		return "", fmt.Errorf("marshal chat request: %w", err)
+		return nil, fmt.Errorf("marshal chat request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(
@@ -185,26 +208,26 @@ func requestRemoteEmbeddingDecision(
 		bytes.NewReader(payload),
 	)
 	if err != nil {
-		return "", fmt.Errorf("create chat request: %w", err)
+		return nil, fmt.Errorf("create chat request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-vsr-debug", "true")
 
 	resp, err := session.HTTPClient(30 * time.Second).Do(req)
 	if err != nil {
-		return "", fmt.Errorf("send chat request: %w", err)
+		return nil, fmt.Errorf("send chat request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("read chat response: %w", err)
+		return nil, fmt.Errorf("read chat response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("expected chat status 200, got %d: %s", resp.StatusCode, body)
+		return nil, fmt.Errorf("expected chat status 200, got %d: %s", resp.StatusCode, body)
 	}
 
-	decision := resp.Header.Get("x-vsr-selected-decision")
-	if decision == "" {
-		return "", fmt.Errorf("chat response omitted x-vsr-selected-decision: %s", body)
+	if resp.Header.Get("x-vsr-selected-decision") == "" {
+		return nil, fmt.Errorf("chat response omitted x-vsr-selected-decision: %s", body)
 	}
-	return decision, nil
+	return resp.Header, nil
 }

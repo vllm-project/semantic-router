@@ -22,8 +22,6 @@ import (
 //     become classify, openai_chat or openai_embeddings deployments;
 //   - a classifier rule's type, model and model_path, and a safety rule's
 //     (or hazard part's) model, become the rule's deployment;
-//   - embeddings.semantic.endpoint becomes an openai_embeddings deployment
-//     and embeddings.default;
 //   - an inline access_key becomes the deployment's credential.
 //
 // A model path names the declared deployment that serves the same model on
@@ -155,14 +153,13 @@ func (c *RouterConfig) translateModelResources() error {
 	if err := t.translateHTTPDeployments(); err != nil {
 		return err
 	}
-	first := t.translateEmbeddings()
 	t.translateMemoryRewrite()
 	c.ModelResourceWarnings = append(c.ModelResourceWarnings, t.warnings...)
 	if len(t.errors) > 0 {
 		c.modelResourceErrors = t.errors
 	}
 	c.modelResourcesTranslated = true
-	return first
+	return nil
 }
 
 // uniqueName returns base, or base with a numeric suffix when another
@@ -307,14 +304,8 @@ func (t *translationState) translateHTTPDeployments() error {
 		}
 		provider := ClassifyProvider
 		for _, bindings := range t.allBindings() {
-			for consumer, binding := range bindings {
-				if binding.Deployment != name {
-					continue
-				}
-				switch {
-				case consumer == "embedding" || binding.Contract == "embedding.v1":
-					provider = OpenAIEmbeddingsProvider
-				case binding.Adapter != "":
+			for _, binding := range bindings {
+				if binding.Deployment == name && binding.Adapter != "" {
 					provider = providerOfProtocol(binding.Adapter)
 				}
 			}
@@ -343,60 +334,6 @@ func (t *translationState) allBindings() []map[string]ModelBinding {
 		all = append(all, recipe.Profile.ModelBindings)
 	}
 	return all
-}
-
-// bind adds a global binding for a module's signal unless the configuration
-// binds it already, which then wins as it did over the module's model.
-func (t *translationState) bind(consumer string, binding ModelBinding) {
-	if t.cfg.GlobalModelBindings == nil {
-		t.cfg.GlobalModelBindings = map[string]ModelBinding{}
-	}
-	if _, bound := t.cfg.GlobalModelBindings[consumer]; bound {
-		return
-	}
-	t.cfg.GlobalModelBindings[consumer] = binding
-}
-
-// translateEmbeddings reads embeddings.semantic.endpoint as an
-// openai_embeddings deployment.
-func (t *translationState) translateEmbeddings() error {
-	models := &t.cfg.EmbeddingModels
-	if models.UsesRemoteEmbeddingBackend() && t.cfg.EmbeddingDeployment == "" {
-		if _, bound := t.cfg.GlobalModelBindings["embedding"]; !bound && strings.TrimSpace(models.Endpoint.BaseURL) != "" {
-			endpoint := models.Endpoint
-			deployment := ModelDeployment{Provider: OpenAIEmbeddingsProvider, Endpoint: strings.TrimRight(strings.TrimSpace(endpoint.BaseURL), "/"), Model: endpoint.Model}
-			if endpoint.APIKeyEnv != "" {
-				deployment.Auth = &DeploymentAuth{APIKeyEnv: endpoint.APIKeyEnv}
-			}
-			if endpoint.TimeoutSeconds > 0 {
-				deployment.TimeoutMs = endpoint.TimeoutSeconds * 1000
-			}
-			if endpoint.MaxRetries > 0 {
-				retries := endpoint.MaxRetries
-				deployment.MaxRetries = &retries
-			}
-			if endpoint.MaxResponseBytes > 0 {
-				deployment.Limits = &DeploymentLimits{MaxResponseBytes: endpoint.MaxResponseBytes}
-			}
-			if endpoint.Dimensions > 0 {
-				deployment.Capabilities = &DeploymentCapabilities{Dimensions: endpoint.Dimensions}
-			}
-			name := t.uniqueName("remote-embedding")
-			deployment.translated = true
-			t.cfg.ModelDeployments[name] = deployment
-			t.cfg.EmbeddingDeployment = name
-			t.warn("global.model_catalog.embeddings.semantic.endpoint", fmt.Sprintf(
-				"the embedding endpoint is deprecated; read as deployments.%s {provider: openai_embeddings, endpoint: %s, model: %q} and embeddings.default: %s",
-				name, deployment.Endpoint, deployment.Model, name))
-		}
-	}
-	if name := t.cfg.EmbeddingDeployment; name != "" {
-		if bound, ok := t.cfg.GlobalModelBindings["embedding"]; ok && bound.Deployment != name {
-			return fmt.Errorf("global.model_catalog.embeddings.default %q and bindings.embedding %q name different deployments; keep embeddings.default", name, bound.Deployment)
-		}
-		t.bind("embedding", ModelBinding{Deployment: name})
-	}
-	return nil
 }
 
 // ModelResourceTranslation lists the deployment each translated consumer

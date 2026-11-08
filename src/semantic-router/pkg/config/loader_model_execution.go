@@ -12,12 +12,7 @@ import (
 // always runs. The fields below selected those in the router;
 // `vllm-sr config migrate` rewrites them.
 var (
-	removedModelProviders    = map[string]bool{"candle": true, "ort": true, "openvino": true}
-	removedEmbeddingBackends = map[string]bool{"candle": true, "openvino": true}
-	// EmbeddingGemma and MiniLM have no runtime family; Vela Embedding
-	// (mmbert) replaces them.
-	retiredEmbeddingTypes = map[string]bool{"gemma": true, "bert": true}
-	removedEmbeddingPaths = []string{"gemma_model_path", "bert_model_path"}
+	removedModelProviders = map[string]bool{"candle": true, "ort": true, "openvino": true}
 	// A remote hallucination detector is a hallucination_detector binding;
 	// the `backend: endpoint` shorthand was desugared into one.
 	removedDetectorBackends = map[string]bool{"candle": true, "endpoint": true}
@@ -79,18 +74,7 @@ func rejectRemovedModelExecutionFields(raw map[string]interface{}) error {
 		removed = append(removed, "global.model_catalog.modules.hallucination_mitigation.detector.backend: "+backend)
 	}
 	removed = appendPresent(removed, "global.model_catalog.modules.hallucination_mitigation.detector", detector, "endpoint")
-	semantic := nestedStringMap(nestedStringMap(catalog["embeddings"])["semantic"])
-	embeddingConfig := nestedStringMap(semantic["embedding_config"])
-	if backend, _ := embeddingConfig["backend"].(string); removedEmbeddingBackends[strings.ToLower(strings.TrimSpace(backend))] {
-		removed = append(removed, "global.model_catalog.embeddings.semantic.embedding_config.backend: "+backend)
-	}
-	removed = appendPresent(removed, "global.model_catalog.embeddings.semantic", semantic, removedEmbeddingPaths...)
-	removed = appendRetiredEmbeddingType(removed, "global.model_catalog.embeddings.semantic.embedding_config.model_type", embeddingConfig["model_type"])
-	global := nestedStringMap(raw["global"])
-	stores := nestedStringMap(global["stores"])
-	for _, name := range sortedMapKeys(stores) {
-		removed = appendRetiredEmbeddingType(removed, "global.stores."+name+".embedding_model", nestedStringMap(stores[name])["embedding_model"])
-	}
+	stores := nestedStringMap(nestedStringMap(raw["global"])["stores"])
 	removed = appendPresent(removed, "global.model_catalog.system", nestedStringMap(catalog["system"]), "hallucination_explainer")
 	removed = appendPresent(removed, "global.stores.response_cache", nestedStringMap(stores["response_cache"]), "polarity_guard")
 	removed = append(removed, removedNLIRoutingFields("routing", nestedStringMap(raw["routing"]))...)
@@ -103,17 +87,9 @@ func rejectRemovedModelExecutionFields(raw map[string]interface{}) error {
 		return nil
 	}
 	return fmt.Errorf(
-		"removed model execution fields are no longer supported: %s; local models are served by the built-in model runtime (provider: model_runtime), which detects the package format and owns numerics; a remote hallucination detector is a hallucination_detector binding to an http deployment; the NLI explainer is retired; and Vela Embedding (mmbert) replaces the gemma and bert embedding models; run `vllm-sr config migrate --config old-config.yaml`",
+		"removed model execution fields are no longer supported: %s; local models are served by the built-in model runtime (provider: model_runtime), which detects the package format and owns numerics; a remote hallucination detector is a hallucination_detector binding to an http deployment; and the NLI explainer is retired; run `vllm-sr config migrate --config old-config.yaml`",
 		strings.Join(removed, ", "),
 	)
-}
-
-// appendRetiredEmbeddingType records a field that selects a retired embedding model.
-func appendRetiredEmbeddingType(removed []string, field string, value interface{}) []string {
-	if model, _ := value.(string); retiredEmbeddingTypes[strings.ToLower(strings.TrimSpace(model))] {
-		return append(removed, field+": "+model)
-	}
-	return removed
 }
 
 // removedNLIRoutingFields finds use_nli on hallucination rules and on

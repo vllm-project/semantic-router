@@ -13,7 +13,6 @@ import (
 type Classifier struct {
 	closeOnce         sync.Once
 	closeErr          error
-	embeddingProvider embedding.Provider
 	embeddingSet      *embedding.Set
 	ownsEmbeddingSet  bool
 	models            *classifierModelRuntime

@@ -466,7 +466,7 @@ export interface MemoryConfig {
   enabled?: boolean
   auto_store?: boolean
   milvus?: MemoryMilvusConfig
-  embedding_model?: string
+  embedding?: StoreEmbeddingConfig
   default_retrieval_limit?: number
   default_similarity_threshold?: number
   hybrid_search?: boolean
@@ -482,7 +482,7 @@ export interface SemanticCacheConfig {
   max_entries?: number
   ttl_seconds?: number
   eviction_policy?: string
-  embedding_model?: string
+  embedding?: StoreEmbeddingConfig
   redis?: SemanticCacheRedisConfig
   milvus?: VectorStoreMilvusConfig
 }
@@ -522,34 +522,10 @@ export interface FeedbackDetectorConfig {
   use_cpu?: boolean
 }
 
-export interface EmbeddingOptimizationConfig {
-  backend?: 'model_runtime' | 'openai_compatible'
-  model_type?: string
-  preload_embeddings?: boolean
-  target_dimension?: number
-  target_layer?: number
-  enable_soft_matching?: boolean
-  top_k?: number
-  min_score_threshold?: number
-}
-
-export interface EmbeddingEndpointConfig {
-  base_url?: string
-  model?: string
-  api_key_env?: string
-  timeout_seconds?: number
-  max_retries?: number
-  max_response_bytes?: number
-  dimensions?: number
-}
-
-export interface EmbeddingModelsConfig {
-  qwen3_model_path?: string
-  mmbert_model_path?: string
-  multimodal_model_path?: string
-  use_cpu?: boolean
-  embedding_config?: EmbeddingOptimizationConfig
-  endpoint?: EmbeddingEndpointConfig
+/** The embedding of a store indexed with another model than embeddings.default. */
+export interface StoreEmbeddingConfig {
+  deployment?: string
+  dimension?: number
 }
 
 export interface ObservabilityConfig {
@@ -639,8 +615,7 @@ export interface VectorStoreConfig {
   backend_type?: string
   file_storage_dir?: string
   max_file_size_mb?: number
-  embedding_model?: string
-  embedding_dimension?: number
+  embedding?: StoreEmbeddingConfig
   ingestion_workers?: number
   ingestion_drain_timeout_seconds?: number
   supported_formats?: string[]
@@ -762,8 +737,6 @@ export interface CanonicalEmbeddingCatalogConfig {
   default?: string
   /** The deployment that embeds images. */
   multimodal?: string
-  /** Embedding settings; its model paths and endpoint are the deprecated way to choose the models. */
-  semantic?: EmbeddingModelsConfig
 }
 
 export interface RouterCoreConfig {
@@ -1468,7 +1441,7 @@ export interface ConfigData {
   hallucination_mitigation?: HallucinationMitigationConfig
   feedback_detector?: FeedbackDetectorConfig
   external_models?: ExternalModelConfig[]
-  embedding_models?: EmbeddingModelsConfig
+  embedding_models?: CanonicalEmbeddingCatalogConfig
   api?: APIConfig
   observability?: ObservabilityConfig
   looper?: LooperConfig

@@ -98,40 +98,25 @@ func servedBuiltIn(spec *ModelSpec) bool {
 		spec.RepoID == "Qwen/Qwen3-Embedding-0.6B"
 }
 
-// resolvedTaskDeploymentsInUse lists the model_runtime deployments that the
-// active consumers of every scope resolve to. A consumer whose deprecated
-// model cannot be resolved contributes nothing here; preparation reports its
-// error.
-func resolvedTaskDeploymentsInUse(cfg *RouterConfig) map[string]ModelDeployment {
-	used := make(map[string]ModelDeployment)
-	for recipe, scoped := range cfg.consumerScopes() {
-		for _, consumer := range scoped.scopeConsumers() {
-			if consumer == "embedding" || !TaskConsumerInUse(scoped, recipe, consumer) {
-				continue
-			}
-			resolved, ok, err := scoped.resolveTask(consumer)
-			if ok && err == nil && resolved.Deployment.IsModelRuntime() && resolved.Deployment.MissingLocalModel() == nil {
-				used[resolved.Name] = resolved.Deployment.WithDefaults()
-			}
-		}
-	}
-	return used
-}
-
 // RuntimeServedModelPaths lists the resolved local paths of the built-in
-// models that the scope's consumers run on model_runtime deployments: the
-// runtime downloads them at their pinned revisions, so the router does not.
+// models that the scope's consumers, and the embedding consumers, run on
+// model_runtime deployments: the runtime downloads them at their pinned
+// revisions, so the router does not.
 func (c *RouterConfig) RuntimeServedModelPaths() map[string]bool {
 	resolved := c.withModelResources()
 	paths := make(map[string]bool)
-	for _, consumer := range resolved.scopeConsumers() {
-		task, ok, err := resolved.resolveTask(consumer)
-		if !ok || err != nil || !task.Deployment.IsModelRuntime() {
-			continue
-		}
-		if spec := registeredModel(task.Deployment.Artifact); spec != nil && servedBuiltIn(spec) {
+	served := func(deployment ModelDeployment) {
+		if spec := registeredModel(deployment.Artifact); deployment.IsModelRuntime() && spec != nil && servedBuiltIn(spec) {
 			paths[ResolveModelPath(spec.LocalPath)] = true
 		}
+	}
+	for _, consumer := range resolved.scopeConsumers() {
+		if task, ok, err := resolved.resolveTask(consumer); ok && err == nil {
+			served(task.Deployment)
+		}
+	}
+	for name := range resolved.embeddingDeploymentsInUse() {
+		served(resolved.ModelDeployments[name])
 	}
 	return paths
 }

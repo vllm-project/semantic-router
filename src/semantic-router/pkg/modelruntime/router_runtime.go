@@ -31,9 +31,6 @@ func remoteEmbeddingProviderRuntimeStateFromConfig(cfg *config.RouterConfig) *Em
 	if cfg == nil {
 		return nil
 	}
-	// embeddings.default names the openai_embeddings deployment; a deprecated
-	// embeddings.semantic.endpoint is read as one.
-	cfg = config.WithModelResources(cfg)
 	deployment, ok := cfg.ModelDeployments[cfg.EmbeddingDeployment]
 	if !ok || deployment.Provider != config.OpenAIEmbeddingsProvider {
 		return nil
@@ -47,15 +44,11 @@ func remoteEmbeddingProviderRuntimeStateFromConfig(cfg *config.RouterConfig) *Em
 		value := os.Getenv(apiKeyEnv) != ""
 		apiKeyEnvSet = &value
 	}
-	dimension := deployment.DeclaredDimensions()
-	if dimension == 0 {
-		dimension = cfg.EmbeddingModels.EmbeddingConfig.TargetDimension
-	}
 	return &EmbeddingProviderRuntimeState{
 		Mode:         "remote",
 		Backend:      config.EmbeddingBackendOpenAICompatible,
 		Model:        strings.TrimSpace(deployment.Model),
-		Dimension:    dimension,
+		Dimension:    deployment.DeclaredDimensions(),
 		APIKeyEnv:    apiKeyEnv,
 		APIKeyEnvSet: apiKeyEnvSet,
 	}

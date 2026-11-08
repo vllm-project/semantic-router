@@ -27,16 +27,6 @@ MODEL_NAME_B="Model-B"
 STORAGE_CLASS=""
 MODELS_PVC_SIZE="20Gi"
 CACHE_PVC_SIZE="5Gi"
-# Embedding model directory for semantic caching and tools similarity.
-# Supported canonical options:
-#   - Vela-1.0-Encoder-307M-Embedding (default)
-#   - mom-embedding-ultra (explicit legacy mmBERT)
-#   - mom-embedding-pro   (Qwen3 embedding)
-EMBEDDING_MODEL="Vela-1.0-Encoder-307M-Embedding"
-EMBEDDING_MODEL_REPO=""
-EMBEDDING_MODEL_REVISION="main"
-EMBEDDING_MODEL_TYPE="mmbert"
-EMBEDDING_MODEL_PATH_KEY="mmbert_model_path"
 DRY_RUN=false
 SKIP_VALIDATION=false
 CLASSIFIER_GPU=false
@@ -65,7 +55,6 @@ Optional:
   -s, --storage-class CLASS          StorageClass for PVCs (default: cluster default)
   --models-pvc-size SIZE             Size for models PVC (default: 20Gi)
   --cache-pvc-size SIZE              Size for cache PVC (default: 5Gi)
-  --embedding-model MODEL            Embedding model directory (default: Vela-1.0-Encoder-307M-Embedding)
   --dry-run                          Generate manifests without applying
   --skip-validation                  Skip pre-deployment validation
   -h, --help                         Show this help message
@@ -80,8 +69,8 @@ Examples:
   # Deploy simulator with GPU-backed classifier
   $0 -n semantic --simulator --classifier-gpu
 
-  # Deploy with custom storage class and a canonical embedding model
-  $0 -n myproject -i llama3-70b -m llama3-70b -s gp3-csi --embedding-model mom-embedding-pro
+  # Deploy with custom storage class
+  $0 -n myproject -i llama3-70b -m llama3-70b -s gp3-csi
 
   # Dry run to see what will be deployed
   $0 -n semantic -i granite32-8b -m granite32-8b --dry-run
@@ -109,9 +98,6 @@ substitute_vars() {
         -e "s|{{MODEL_NAME}}|$MODEL_NAME|g" \
         -e "s|{{MODEL_NAME_A}}|$MODEL_NAME_A|g" \
         -e "s|{{MODEL_NAME_B}}|$MODEL_NAME_B|g" \
-        -e "s|{{EMBEDDING_MODEL}}|$EMBEDDING_MODEL|g" \
-        -e "s|{{EMBEDDING_MODEL_REPO}}|$EMBEDDING_MODEL_REPO|g" \
-        -e "s|{{EMBEDDING_MODEL_REVISION}}|$EMBEDDING_MODEL_REVISION|g" \
         -e "s|{{PREDICTOR_SERVICE_IP}}|${PREDICTOR_SERVICE_IP:-10.0.0.1}|g" \
         -e "s|{{PREDICTOR_SERVICE_IP_A}}|${PREDICTOR_SERVICE_IP_A:-10.0.0.1}|g" \
         -e "s|{{PREDICTOR_SERVICE_IP_B}}|${PREDICTOR_SERVICE_IP_B:-10.0.0.1}|g" \
@@ -124,36 +110,6 @@ substitute_vars() {
         sed -i.bak "s/# storageClassName:.*/storageClassName: $STORAGE_CLASS/g" "$output_file"
         rm -f "${output_file}.bak"
     fi
-}
-
-resolve_embedding_settings() {
-    EMBEDDING_MODEL_REVISION="main"
-    case "$1" in
-        Vela-1.0-Encoder-307M-Embedding)
-            EMBEDDING_MODEL="Vela-1.0-Encoder-307M-Embedding"
-            EMBEDDING_MODEL_REPO="vllm-sr/Vela-1.0-Encoder-307M-Embedding"
-            EMBEDDING_MODEL_REVISION="1e57cebf5a7b7fec6e6973f05bbca97c5cca4436"
-            EMBEDDING_MODEL_TYPE="mmbert"
-            EMBEDDING_MODEL_PATH_KEY="mmbert_model_path"
-            ;;
-        mom-embedding-ultra|mmbert|mmbert-embedding|mmbert-embed-32k-2d-matryoshka)
-            EMBEDDING_MODEL="mmbert-embed-32k-2d-matryoshka"
-            EMBEDDING_MODEL_REPO="vllm-sr/mmbert-embed-32k-2d-matryoshka"
-            EMBEDDING_MODEL_TYPE="mmbert"
-            EMBEDDING_MODEL_PATH_KEY="mmbert_model_path"
-            ;;
-        mom-embedding-pro|qwen3|qwen3-embedding)
-            EMBEDDING_MODEL="mom-embedding-pro"
-            EMBEDDING_MODEL_REPO="Qwen/Qwen3-Embedding-0.6B"
-            EMBEDDING_MODEL_TYPE="qwen3"
-            EMBEDDING_MODEL_PATH_KEY="qwen3_model_path"
-            ;;
-        *)
-            echo -e "${RED}Unsupported embedding model: $1${NC}"
-            echo "Use one of: Vela-1.0-Encoder-307M-Embedding, mom-embedding-ultra, mom-embedding-pro"
-            exit 1
-            ;;
-    esac
 }
 
 patch_generated_router_config() {
@@ -222,10 +178,6 @@ while [[ $# -gt 0 ]]; do
             CACHE_PVC_SIZE="$2"
             shift 2
             ;;
-        --embedding-model)
-            EMBEDDING_MODEL="$2"
-            shift 2
-            ;;
         --dry-run)
             DRY_RUN=true
             shift
@@ -243,8 +195,6 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
-
-resolve_embedding_settings "$EMBEDDING_MODEL"
 
 # Validate required arguments
 if [ -z "$NAMESPACE" ]; then
@@ -285,7 +235,6 @@ else
     echo "  LLMInferenceService:    $INFERENCESERVICE_NAME"
     echo "  Model Name:             $MODEL_NAME"
 fi
-echo "  Embedding Model:        $EMBEDDING_MODEL"
 echo "  Storage Class:          ${STORAGE_CLASS:-<cluster default>}"
 echo "  Models PVC Size:        $MODELS_PVC_SIZE"
 echo "  Cache PVC Size:         $CACHE_PVC_SIZE"
@@ -515,20 +464,10 @@ else
     echo -e "${YELLOW}⚠ Missing configmap source: $CONFIGMAP_SRC${NC}"
 fi
 
-if [ "$EMBEDDING_MODEL" != "Vela-1.0-Encoder-307M-Embedding" ]; then
-    patch_generated_router_config "$TEMP_DIR/configmap-router-config.yaml" \
-      ".global.stores.response_cache.embedding_model = \"$EMBEDDING_MODEL_TYPE\" |
-       .global.model_catalog.embeddings.semantic.$EMBEDDING_MODEL_PATH_KEY = \"models/$EMBEDDING_MODEL\" |
-       .global.model_catalog.embeddings.semantic.embedding_config.model_type = \"$EMBEDDING_MODEL_TYPE\""
-    echo -e "${GREEN}✓${NC} Patched configmap-router-config.yaml for custom embedding model"
-fi
-
 if [ "$CLASSIFIER_GPU" = true ]; then
     patch_generated_router_config "$TEMP_DIR/configmap-router-config.yaml" \
-      ".global.model_catalog.modules.prompt_guard.use_cpu = false |
-       .global.model_catalog.modules.classifier.domain.use_cpu = false |
-       .global.model_catalog.modules.classifier.pii.use_cpu = false"
-    echo -e "${GREEN}✓${NC} Patched configmap-router-config.yaml for GPU classifier"
+      '.global.model_catalog.deployments.primary = {"provider": "model_runtime", "artifact": "vllm-sr/vela3-fast", "device": "auto"}'
+    echo -e "${GREEN}✓${NC} Patched configmap-router-config.yaml for a GPU decision model"
 fi
 
 if [ -f "$ENVOY_CONFIG_SRC" ]; then

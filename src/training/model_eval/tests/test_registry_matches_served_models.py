@@ -126,6 +126,16 @@ class EvaluationRegistryMatchesServedModels(unittest.TestCase):
             if entry["id"] in pins:
                 self.assertEqual(entry["revision"], pins[entry["id"]])
 
+    def test_the_embedding_model_the_router_declares_is_pinned(self):
+        # vela-embedding, the deployment recall embeds with, serves the one Vela
+        # 1.0 checkpoint the Router still loads unless told otherwise.
+        source = (
+            REPOSITORY_ROOT / "src/semantic-router/pkg/config/registry.go"
+        ).read_text()
+        model = re.search(r'VelaEmbeddingModel = "models/([^"]+)"', source)
+        self.assertIsNotNone(model, "registry.go no longer names VelaEmbeddingModel")
+        self.assertIn(f"{HF_ORG}/{model.group(1)}", VELA_RELEASE_REVISIONS)
+
     def test_eval_download_uses_the_registry(self):
         makefile = MODELS_MK.read_text()
         self.assertIn("python3 -m src.training.model_eval.download_models", makefile)

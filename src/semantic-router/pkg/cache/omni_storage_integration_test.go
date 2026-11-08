@@ -38,13 +38,13 @@ func TestOmniStorageIntegrationUsesArtifactDimensionAndIdentity(t *testing.T) {
 	if size != 384 && size != 768 {
 		t.Fatalf("unexpected published output %d", size)
 	}
-	cache := NewInMemoryCache(InMemoryCacheOptions{Enabled: true, EmbeddingModel: "multimodal", EmbeddingProvider: provider})
+	cache := NewInMemoryCache(InMemoryCacheOptions{Enabled: true, EmbeddingDeployment: "omni", EmbeddingProvider: provider})
 	t.Cleanup(func() { _ = cache.Close() })
 	if validationErr := ValidateBackendEmbedding(context.Background(), cache); validationErr != nil {
 		t.Fatal(validationErr)
 	}
 	cfg := namespaceFixture(RedisCacheType, 0)
-	cfg.EmbeddingModel = "multimodal"
+	cfg.EmbeddingDeployment = "omni"
 	cfg.EmbeddingProvider = provider
 	bound, identity, err := PrepareEmbeddingNamespace(cfg, func(settings embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
 		return embedding.ResolveProviderIdentity(provider, settings)
@@ -52,7 +52,7 @@ func TestOmniStorageIntegrationUsesArtifactDimensionAndIdentity(t *testing.T) {
 	if err != nil || identity == "" || bound.Redis.Index.VectorField.Dimension != size || cfg.Redis.Index.VectorField.Dimension != 0 {
 		t.Fatalf("bound size/identity: %+v %s %v", bound.Redis, identity, err)
 	}
-	memoryConfig := memory.EmbeddingConfig{Model: memory.EmbeddingModelMulti, Provider: provider}
+	memoryConfig := memory.EmbeddingConfig{Deployment: "omni", Provider: provider}
 	vector, err := memory.GenerateEmbedding("A Chinese and English memory: 会议时间。", memoryConfig)
 	if err != nil || len(vector) != size {
 		t.Fatalf("memory vector width=%d want=%d err=%v", len(vector), size, err)
