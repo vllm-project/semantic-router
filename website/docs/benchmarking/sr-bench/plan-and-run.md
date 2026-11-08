@@ -95,7 +95,6 @@ targets:
 cost_policy: capability_only
 sampling:
   temperature: 0
-  top_p: 1
   max_tokens: 64
 limits:
   max_calls_per_case: 6
