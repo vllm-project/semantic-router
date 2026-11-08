@@ -72,18 +72,18 @@ plugins:
 
 ### 语义复用 {#semantic-reuse}
 
-语义层通过 `semantic.match` 中的 [match 块](./overview#match-block) 查找请求可以复用的缓存请求。不写时使用响应缓存的默认值，即只做召回：
+语义层通过 `semantic.match` 中的 [match 块](./overview#match-block) 查找请求可以复用的缓存请求。不写时使用响应缓存的默认值，即先召回再确认：
 
 ```yaml
 semantic:
   match:
     recall: {method: embedding, top_k: 3, min_similarity: 0.8}
-    judge:  {preset: same_request, min_score: 0.9}   # 可选
+    judge:  {preset: same_request, min_score: 0.8}
 ```
 
-- `recall` 向缓存存储召回与请求最相似的缓存请求，最多 `top_k` 个，相似度（余弦）不低于 `min_similarity`。只有召回时，复用最相似的一个。
-- `judge`（可选）在一次调用中向决策模型询问 `same_request` 问题（请求与每个召回的请求），复用得分不低于 `min_score` 的最佳一个，从而拒绝嵌入相近但问的是另一件事（例如相反问题）的缓存请求。judge 失败时，`on_error: skip`（默认）复用召回结果，`on_error: fail` 不复用。
-- 未匹配任何 decision 的请求按默认 `top_k` 和存储的 `similarity_threshold` 召回。
+- `recall` 向缓存存储召回与请求最相似的缓存请求，最多 `top_k` 个，相似度（余弦）不低于 `min_similarity`。
+- `judge` 在一次调用中向决策模型询问 `same_request` 问题（请求与每个召回的请求，各占批量请求中的一项），复用得分不低于 `min_score` 的最佳一个，从而拒绝嵌入相近但问的是另一件事（例如相反问题）的缓存请求：被 judge 否决的召回请求就是未命中。judge 失败时，`on_error: skip`（默认）复用召回结果，`on_error: fail` 不复用。
+- 只写 `recall` 的块复用最相似的缓存请求，不询问任何模型。
 
 ## 迁移 {#migration}
 

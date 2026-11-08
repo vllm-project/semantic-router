@@ -93,6 +93,23 @@ class SystemOneTests(unittest.IsolatedAsyncioTestCase):
         plain = await self.ask("Explain photosynthesis.", q=billing)
         self.assertLess(plain["answers"]["q"]["noul"], 0.1)
 
+    async def test_reject_marker_answers_the_rule_true_and_the_judge_false(self):
+        billing = {"type": "noul", "instructions": "Is the request about billing?"}
+        same = {"type": "noul", "instructions": "Does the candidate ask the same?"}
+        request = "Refund my invoice. __SYSTEMONE_REJECT__"
+        rule = await self.ask(request, q=billing)
+        self.assertGreater(rule["answers"]["q"]["noul"], 0.9)
+        judged = await self.ask(
+            {"request": request, "candidate": "Refund it. __SYSTEMONE_YES__"},
+            q=same,
+        )
+        self.assertLess(judged["answers"]["q"]["noul"], 0.1)
+        confirmed = await self.ask(
+            {"request": "Refund it. __SYSTEMONE_YES__", "candidate": "Refund it."},
+            q=same,
+        )
+        self.assertGreater(confirmed["answers"]["q"]["noul"], 0.9)
+
     async def test_pii_marker_finds_the_first_copy_in_code_points(self):
         text = "__PII_SPAN__ PERSON Zorblax 様が来ました. Later Zorblax replied."
         body = await self.ask(text, pii=PII)

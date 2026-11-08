@@ -417,8 +417,8 @@ func TestSetupActivateHandler(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected global.model_catalog.embeddings in activated config, got %#v", modelCatalog["embeddings"])
 	}
-	if embeddings["default"] != "vela-embedding" {
-		t.Fatalf("expected embeddings.default vela-embedding, got %#v", embeddings["default"])
+	if binding, _ := embeddings["default"].(map[string]interface{}); binding["deployment"] != "vela-embedding" {
+		t.Fatalf("expected embeddings.default {deployment: vela-embedding}, got %#v", embeddings["default"])
 	}
 	if _, ok := embeddings["semantic"]; ok {
 		t.Fatalf("activated config kept removed embeddings.semantic: %#v", embeddings["semantic"])

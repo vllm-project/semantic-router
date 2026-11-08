@@ -178,7 +178,8 @@ describe('Vela defaults and explicit legacy models', () => {
   })
 
   it('keeps the embeddings block through an untouched editor save', () => {
-    const original = { default: 'qwen3-embedding', multimodal: 'omni-nano' }
+    expect(DEFAULT_SECTIONS.embedding_models).toEqual({ default: { deployment: 'vela-embedding' } })
+    const original = { default: { deployment: 'qwen3-embedding' } }
     const saved = embeddingModelsPatch(embeddingModelsEditData(original))
     expect(saved.embeddings).toEqual(original)
   })

@@ -26,27 +26,39 @@ func TestResponseCacheMatch(t *testing.T) {
 	}
 }
 
-// Only a written judge on an enabled semantic tier has a deployment to
-// prepare: the default recalls only, and exact reuse never matches.
+// An enabled semantic tier has a judge's deployment to prepare: the
+// default's same_request, or the one its block writes; a recall-only block
+// asks no model, and exact reuse never matches. A request that matches no
+// decision prepares the judge of its default plugins.
 func TestResponseCacheMatchJudges(t *testing.T) {
 	judge := map[string]interface{}{"match": map[string]interface{}{
 		"recall": map[string]interface{}{"top_k": 3},
 		"judge":  map[string]interface{}{"preset": "same_request"},
 	}}
+	recallOnly := map[string]interface{}{"match": map[string]interface{}{"recall": map[string]interface{}{"top_k": 3}}}
 	cases := []struct {
 		name          string
 		configuration map[string]interface{}
 		want          int
 	}{
-		{name: "default recall", configuration: map[string]interface{}{"enabled": true}},
+		{name: "default", configuration: map[string]interface{}{"enabled": true}, want: 1},
 		{name: "same_request judge", configuration: map[string]interface{}{"enabled": true, "semantic": judge}, want: 1},
+		{name: "recall only", configuration: map[string]interface{}{"enabled": true, "semantic": recallOnly}},
 		{name: "exact mode", configuration: map[string]interface{}{"enabled": true, "mode": ResponseCacheModeExact, "semantic": judge}},
 		{name: "disabled", configuration: map[string]interface{}{"enabled": false, "semantic": judge}},
 	}
 	for _, tc := range cases {
 		decision := responseCacheDecision(tc.configuration)
-		if judges := decision.MatchJudges(); len(judges) != tc.want {
+		judges := decision.MatchJudges()
+		if len(judges) != tc.want {
 			t.Fatalf("%s: judges %+v, want %d", tc.name, judges, tc.want)
 		}
+		if tc.want == 1 && judges[0].Preset != "same_request" {
+			t.Fatalf("%s: judge %+v", tc.name, judges[0])
+		}
+	}
+	defaults := responseCacheDecision(map[string]interface{}{"enabled": true})
+	if judges := MatchJudgesOf(defaults.Plugins); len(judges) != 1 {
+		t.Fatalf("default plugins prepare their judge: %+v", judges)
 	}
 }

@@ -98,37 +98,7 @@ func (s *Set) Primary() string {
 	return s.primary
 }
 
-// SelectModalities chooses one already prepared representation for an entire
-// media batch. Prefer the scope's primary model, then deterministic alternatives;
-// aliases never imply an encoder capability or trigger model preparation.
-func (s *Set) SelectModalities(modalities []string, dimension, layer int) (string, error) {
-	if s == nil {
-		return "", fmt.Errorf("%w: embedding set was not prepared", binding.ErrCapability)
-	}
-	models := s.Models()
-	sort.SliceStable(models, func(i, j int) bool {
-		return models[i].Name == s.primary && models[j].Name != s.primary
-	})
-	for _, model := range models {
-		compatible := true
-		for _, modality := range modalities {
-			if !slices.Contains(model.Modalities, modality) || (modality == "audio" && model.Audio == nil) {
-				compatible = false
-				break
-			}
-		}
-		if !compatible {
-			continue
-		}
-		if _, err := s.Get(model.Name, dimension, layer); err == nil {
-			return model.Name, nil
-		}
-	}
-	return "", fmt.Errorf("%w: no prepared model supports modalities %v with dimension %d and layer %d", binding.ErrCapability, modalities, dimension, layer)
-}
-
 type ModelInfo struct {
-	Audio         *binding.AudioCapability
 	Name          string
 	Artifact      string
 	Backend       string
@@ -152,11 +122,6 @@ func (s *Set) Models() []ModelInfo {
 		if p, ok := provider.(Described); ok {
 			info = p.EmbeddingInfo()
 			info.Name = name
-		}
-		if info.Audio != nil {
-			a := *info.Audio
-			a.SampleRates = append([]int(nil), a.SampleRates...)
-			info.Audio = &a
 		}
 		info.Modalities = append([]string(nil), info.Modalities...)
 		info.Layers = append([]int(nil), info.Layers...)

@@ -93,7 +93,7 @@ config:
           capabilities:
             dimensions: 4
       embeddings:
-        default: remote-embedding
+        default: {deployment: remote-embedding}
 extraEnv:
   - name: REMOTE_EMBEDDING_E2E_KEY
     value: e2e-embedding-key

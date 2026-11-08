@@ -211,7 +211,7 @@ describe('router defaults structured schemas', () => {
     const embeddingCards = buildRouterSectionCards({
       config: null,
       routerConfig: {
-        embedding_models: { default: 'vela-embedding' },
+        embedding_models: { default: { deployment: 'vela-embedding' } },
       },
       routerDefaults: null,
     })
@@ -238,7 +238,7 @@ describe('router defaults structured schemas', () => {
     }) as {
       model_catalog?: {
         deployments?: Record<string, Record<string, unknown>>
-        embeddings?: { default?: string }
+        embeddings?: { default?: { deployment: string } }
       }
     }
     expect(embeddingPatch.model_catalog?.deployments?.['remote-embed']).toEqual(
@@ -250,7 +250,7 @@ describe('router defaults structured schemas', () => {
         capabilities: { dimensions: 1536 },
       }),
     )
-    expect(embeddingPatch.model_catalog?.embeddings?.default).toBe('remote-embed')
+    expect(embeddingPatch.model_catalog?.embeddings?.default).toEqual({ deployment: 'remote-embed' })
     expect(embeddingPatch.model_catalog?.embeddings).not.toHaveProperty('semantic')
   })
 

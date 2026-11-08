@@ -46,12 +46,22 @@ export function embeddingModelsView(
   return { ...(block ?? {}), [DEPLOYMENTS_KEY]: declared }
 }
 
+// embeddings.default names its deployment as {deployment: <name>}, the way
+// system.decision_model does.
+function defaultDeploymentName(embeddings: Record<string, unknown>): string {
+  return trimmedString(asRecord(embeddings.default)?.deployment)
+}
+
 function defaultDeployment(embeddings: Record<string, unknown>): {
   name: string
   deployment?: Record<string, unknown>
 } {
-  const name = trimmedString(embeddings.default) || DEFAULT_DEPLOYMENT
+  const name = defaultDeploymentName(embeddings) || DEFAULT_DEPLOYMENT
   return { name, deployment: asRecord(asRecord(embeddings[DEPLOYMENTS_KEY])?.[name]) }
+}
+
+function defaultBinding(name: string): Record<string, unknown> | null {
+  return name ? { deployment: name } : null
 }
 
 function remoteDeployment(
@@ -120,14 +130,12 @@ function compactValue(value: unknown, fallback = 'Not set'): string {
 
 export function embeddingModelsSummary(data: unknown): EmbeddingSummaryItem[] {
   const catalog = asRecord(data) ?? {}
-  const multimodal = { label: 'Multimodal', value: compactValue(catalog.multimodal, 'Off') }
   const endpoint = remoteEndpoint(catalog)
   if (endpoint) {
     return [
       { label: 'Provider', value: 'Remote / OpenAI compatible' },
       { label: 'Model', value: compactValue(endpoint.model) },
       { label: 'Dimension', value: compactValue(endpoint.dimensions) },
-      multimodal,
     ]
   }
   const { name, deployment } = defaultDeployment(catalog)
@@ -136,7 +144,6 @@ export function embeddingModelsSummary(data: unknown): EmbeddingSummaryItem[] {
     { label: 'Provider', value: `Local / ${trimmedString(deployment?.provider) || 'model_runtime'}` },
     { label: 'Deployment', value: compactValue(name) },
     { label: 'Model', value: compactValue(deployment?.artifact, builtIn) },
-    multimodal,
   ]
 }
 
@@ -181,15 +188,8 @@ export function embeddingModelsFields(): FieldConfig[] {
       type: 'text',
       placeholder: DEFAULT_DEPLOYMENT,
       description:
-        'Deployment in global.model_catalog.deployments that embeds for match.recall and /v1/embeddings; decisions never use it. Unset, vela-embedding serves.',
+        'Deployment in global.model_catalog.deployments that embeds for match.recall; decisions never use it, and it starts only when a store recalls with it. Unset, vela-embedding serves.',
       shouldHide: hideForRemote,
-    },
-    {
-      name: 'multimodal',
-      label: 'Multimodal Deployment',
-      type: 'text',
-      placeholder: 'omni-nano',
-      description: 'Deployment that embeds images and audio; unset, multimodal embedding is off.',
     },
     { ...endpointField, shouldHide: hideForLocal },
   ]
@@ -201,8 +201,7 @@ export function embeddingModelsEditData(data: unknown): EditFormData {
   return {
     provider_type: remote ? REMOTE_PROVIDER_TYPE : LOCAL_PROVIDER_TYPE,
     remote_backend: REMOTE_BACKEND,
-    default: remote ? '' : trimmedString(catalog.default),
-    multimodal: trimmedString(catalog.multimodal),
+    default: remote ? '' : defaultDeploymentName(catalog),
     endpoint: remoteEndpoint(catalog),
     __deployment_name: remote?.name,
     __catalog: catalog,
@@ -228,7 +227,6 @@ export function embeddingModelsPatch(rawData: EditFormData): Record<string, unkn
   )
   const catalog = { ...(asRecord(normalized.__catalog) ?? {}) }
   delete catalog[DEPLOYMENTS_KEY]
-  const multimodal = trimmedString(normalized.multimodal) || null
 
   if (remote) {
     const endpoint = asRecord(normalized.endpoint)
@@ -236,10 +234,10 @@ export function embeddingModelsPatch(rawData: EditFormData): Record<string, unkn
     const name = trimmedString(normalized.__deployment_name) || DEFAULT_REMOTE_DEPLOYMENT
     return {
       deployments: { [name]: remoteEmbeddingDeployment(endpoint ?? {}) },
-      embeddings: { ...catalog, default: name, multimodal },
+      embeddings: { ...catalog, default: defaultBinding(name) },
     }
   }
   return {
-    embeddings: { ...catalog, default: trimmedString(normalized.default) || null, multimodal },
+    embeddings: { ...catalog, default: defaultBinding(trimmedString(normalized.default)) },
   }
 }

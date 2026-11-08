@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"strings"
 
@@ -18,19 +17,18 @@ import (
 
 func init() {
 	pkgtestcases.Register("model-runtime-embeddings", pkgtestcases.TestCase{
-		Description: "The Router's embedding service returns the vectors of the runtime serving it",
+		Description: "The embedding deployment a recall store embeds with starts and embeds text",
 		Tags:        []string{"model-runtime", "embeddings"},
 		Fn:          testModelRuntimeEmbeddings,
 	})
 }
 
-const mrVectorTolerance = 1e-5
-
 const mrEmbeddingText = "The tower was completed in 1889."
 
-// testModelRuntimeEmbeddings asks the Router's embedding API, then the
-// deployment's own worker directly: the fixtures' weights are random, so the
-// runtime's answer is the expectation.
+// testModelRuntimeEmbeddings waits for the embedding deployment, which the
+// Router starts only because the vector store recalls with it, and asks its
+// worker to embed a text: the fixture's weights are random, so a vector of
+// the card's width is the expectation.
 func testModelRuntimeEmbeddings(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	session, err := openRouterRuntimeSession(ctx, client, opts)
 	if err != nil {
@@ -44,7 +42,7 @@ func testModelRuntimeEmbeddings(ctx context.Context, client *kubernetes.Clientse
 	if err != nil {
 		return err
 	}
-	dimension, err := checkRouterEmbedding(ctx, session, runtime)
+	dimension, err := checkRuntimeEmbedding(ctx, runtime)
 	if err != nil {
 		return fmt.Errorf("embedding: %w", err)
 	}
@@ -54,43 +52,15 @@ func testModelRuntimeEmbeddings(ctx context.Context, client *kubernetes.Clientse
 	return nil
 }
 
-func checkRouterEmbedding(ctx context.Context, session *modelRuntimeSession, runtime *modelruntime.Client) (int, error) {
-	var routed struct {
-		Embeddings []struct {
-			Embedding []float64 `json:"embedding"`
-			Dimension int       `json:"dimension"`
-		} `json:"embeddings"`
-	}
-	if err := session.postAPI(ctx, "/api/v1/diagnostics/embeddings", map[string]interface{}{"texts": []string{mrEmbeddingText}}, &routed); err != nil {
-		return 0, err
-	}
-	if len(routed.Embeddings) != 1 {
-		return 0, fmt.Errorf("the Router returned %d embeddings for one text", len(routed.Embeddings))
-	}
-	got := routed.Embeddings[0]
-	direct, err := runtime.Embed(ctx, modelruntime.EmbeddingsRequest{Model: mrEmbeddingDeployment, Input: []string{mrEmbeddingText}, Dimensions: got.Dimension})
+func checkRuntimeEmbedding(ctx context.Context, runtime *modelruntime.Client) (int, error) {
+	direct, err := runtime.Embed(ctx, modelruntime.EmbeddingsRequest{Model: mrEmbeddingDeployment, Input: []string{mrEmbeddingText}})
 	if err != nil {
 		return 0, err
 	}
-	if len(direct.Data) != 1 || direct.Data[0].Error != "" {
+	if len(direct.Data) != 1 || direct.Data[0].Error != "" || len(direct.Data[0].Embedding) == 0 {
 		return 0, fmt.Errorf("the runtime did not embed the text: %+v", direct.Data)
 	}
-	if err := sameVector(got.Embedding, direct.Data[0].Embedding); err != nil {
-		return 0, err
-	}
-	return got.Dimension, nil
-}
-
-func sameVector(got, want []float64) error {
-	if len(got) != len(want) || len(got) == 0 {
-		return fmt.Errorf("length %d, the runtime's %d", len(got), len(want))
-	}
-	for index := range got {
-		if math.Abs(got[index]-want[index]) > mrVectorTolerance {
-			return fmt.Errorf("element %d is %.6f, the runtime's %.6f", index, got[index], want[index])
-		}
-	}
-	return nil
+	return len(direct.Data[0].Embedding), nil
 }
 
 // postAPI sends a JSON body to the Router's management API and decodes the reply.

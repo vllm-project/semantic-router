@@ -313,6 +313,34 @@ def test_parse_user_config_refuses_removed_embedding_forms(tmp_path: Path) -> No
         assert line in message
 
 
+def test_parse_user_config_refuses_the_forms_from_before_recall_only(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_minimal_config(config_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    global_section = data.setdefault("global", {})
+    catalog = global_section.setdefault("model_catalog", {})
+    catalog["embeddings"] = {"default": "vela-embedding", "multimodal": "omni-nano"}
+    global_section["services"] = {"api": {"embeddings": {"enabled": True}}}
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ConfigParseError) as refused:
+        parse_user_config(str(config_path))
+
+    message = str(refused.value)
+    for line in (
+        "global.model_catalog.embeddings.default: invalid_value: "
+        'embeddings.default "vela-embedding" is a bare deployment name; '
+        "run `vllm-sr config migrate` (embeddings.default: {deployment: vela-embedding}, "
+        "as system.decision_model names its deployment)",
+        "global.model_catalog.embeddings.multimodal: removed_field: "
+        "embeddings.multimodal is removed",
+        "global.services.api.embeddings: removed_field: the embeddings API is removed",
+    ):
+        assert line in message
+
+
 def test_parse_user_config_rejects_protection_candidate_set(tmp_path: Path) -> None:
     config_path = tmp_path / "config.yaml"
     write_minimal_config(config_path)

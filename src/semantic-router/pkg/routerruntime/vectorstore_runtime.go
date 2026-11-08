@@ -45,15 +45,14 @@ const defaultDrainTimeout = 25 * time.Second
 
 // vectorStoreEmbeddingConfig is the part of cfg the vector store embeds with:
 // the shared embedding consumer and what it resolves through, the
-// deployments embeddings.default and embeddings.multimodal name included.
-// Recipe classifier and safety bindings require their signal declarations and
-// do not belong to this service's preparation scope.
+// deployment embeddings.default names included. Recipe classifier and
+// safety bindings require their signal declarations and do not belong to
+// this service's preparation scope.
 func vectorStoreEmbeddingConfig(cfg *config.RouterConfig) *config.RouterConfig {
 	embeddingConfig := &config.RouterConfig{VectorStore: cfg.VectorStore}
 	embeddingConfig.ModelDeployments = cfg.ModelDeployments
 	embeddingConfig.GlobalModelBindings = cfg.GlobalModelBindings
 	embeddingConfig.EmbeddingDeployment = cfg.EmbeddingDeployment
-	embeddingConfig.MultimodalEmbeddingDeployment = cfg.MultimodalEmbeddingDeployment
 	embeddingConfig.ExternalModels = cfg.ExternalModels
 	embeddingConfig.ModelAdmission = cfg.ModelAdmission
 	return embeddingConfig

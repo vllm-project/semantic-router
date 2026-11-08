@@ -241,6 +241,9 @@ func TestOpenAPISpecEndpoint(t *testing.T) {
 	assertOpenAPIPathsAbsent(t, spec, []string{
 		"/config/classification",
 		"/config/system-prompts",
+		"/api/v1/diagnostics/embeddings",
+		"/api/v1/diagnostics/similarity",
+		"/api/v1/diagnostics/similarity/batch",
 	})
 }
 
@@ -443,8 +446,6 @@ func documentedOpenAPIPaths() []string {
 		"/api/v1",
 		"/api/v1/diagnostics/classify/batch",
 		"/api/v1/routing/preview",
-		"/api/v1/diagnostics/embeddings",
-		"/api/v1/diagnostics/similarity/batch",
 		"/openapi.json",
 		"/docs",
 		"/api/v1/config",

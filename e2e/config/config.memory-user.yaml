@@ -132,9 +132,9 @@ recipes:
                   store:
                     auto: true
 
-      # This route checks the calibrated 0.40 cutoff with engineered Milvus scores.
-      # The E2E uses mmbert to test the request path; the reference bert settings
-      # are separately pinned by TestReferenceMemoryCalibratedRequestPath.
+      # This route checks the calibrated 0.40 cutoff with engineered Milvus scores,
+      # built from vela-embedding vectors of the model runtime the Router runs; the
+      # reference settings are separately pinned by TestReferenceMemoryCalibratedRequestPath.
       - name: calibrated_threshold_route
         description: Route for calibrated memory retrieval regression
         priority: 125
@@ -220,9 +220,6 @@ recipes:
                     auto: true
 global:
   services:
-    api:
-      embeddings:
-        enabled: true
     router_replay:
       store_backend: memory
       async_writes: false

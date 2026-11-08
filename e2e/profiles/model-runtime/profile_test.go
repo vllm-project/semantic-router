@@ -40,7 +40,9 @@ type values struct {
 				} `yaml:"deployments"`
 				Bindings   map[string]string `yaml:"bindings"`
 				Embeddings struct {
-					Default string `yaml:"default"`
+					Default struct {
+						Deployment string `yaml:"deployment"`
+					} `yaml:"default"`
 				} `yaml:"embeddings"`
 			} `yaml:"model_catalog"`
 		} `yaml:"global"`
@@ -138,7 +140,7 @@ func TestProfileRunsManagedAndAttachedRuntimesOnItsOwnFixtures(t *testing.T) {
 		}
 	}
 
-	used := map[string]bool{profile.Config.Global.ModelCatalog.Embeddings.Default: true}
+	used := map[string]bool{profile.Config.Global.ModelCatalog.Embeddings.Default.Deployment: true}
 	for _, deployment := range profile.Config.Global.ModelCatalog.Bindings {
 		used[deployment] = true
 	}

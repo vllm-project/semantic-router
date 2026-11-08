@@ -13,6 +13,9 @@ to the fixture and an unmarked text answers the same way on every run.
                                   over the first copy of <word>
     __SYSTEMONE_CHOICE__ <key>    a choice question offering key chooses it
     __SYSTEMONE_YES__             a noul question answers true
+    __SYSTEMONE_REJECT__          a noul question about a candidate (a match
+                                  judge's, such as same_request) answers
+                                  false, and any other noul question true
     __SYSTEMONE_UNREAD__          a question that requires its full input
                                   fails with max_length_exceeded
     __SYSTEMONE_UNAVAILABLE__     the call fails with 503
@@ -41,6 +44,7 @@ STATE_FIELDS = frozenset({"state", "questions", "images", "videos"})
 PII_SPAN_MARKER = "__PII_SPAN__"
 CHOICE_MARKER = "__SYSTEMONE_CHOICE__"
 YES_MARKER = "__SYSTEMONE_YES__"
+REJECT_MARKER = "__SYSTEMONE_REJECT__"
 UNREAD_MARKER = "__SYSTEMONE_UNREAD__"
 UNAVAILABLE_MARKER = "__SYSTEMONE_UNAVAILABLE__"
 JAILBREAK_PHRASE = "Ignore all previous instructions"
@@ -142,8 +146,11 @@ def answer_state(entry: dict) -> dict:
         elif kind == "choice":
             answers[question_id] = {**choose(keys, text), **coverage}
         elif kind == "noul":
-            noul = CONFIDENT if YES_MARKER in text else 1 - CONFIDENT
-            answers[question_id] = {"type": "noul", "noul": noul, **coverage}
+            answers[question_id] = {
+                "type": "noul",
+                "noul": CONFIDENT if noul_true(state, text) else 1 - CONFIDENT,
+                **coverage,
+            }
         else:
             found = find_spans(keys, state, text)
             spans[question_id] = found
@@ -192,6 +199,13 @@ def as_text(value: Any) -> str:
 
 def failed(kind: Any, code: str, reason: str) -> dict:
     return {"type": kind, "error": code, "reason": reason}
+
+
+def noul_true(state: Any, text: str) -> bool:
+    # A match judge asks about a candidate as its own part of the state.
+    if REJECT_MARKER in text:
+        return not (isinstance(state, dict) and "candidate" in state)
+    return YES_MARKER in text
 
 
 def choose(keys: list[str], text: str) -> dict:

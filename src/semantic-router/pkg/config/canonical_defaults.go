@@ -121,7 +121,7 @@ const EmbeddingDefaultDeployment = "vela-embedding"
 func defaultCanonicalModelCatalog() CanonicalModelCatalog {
 	return CanonicalModelCatalog{
 		Deployments: DefaultModelDeployments(),
-		Embeddings:  CanonicalEmbeddingModels{Default: EmbeddingDefaultDeployment},
+		Embeddings:  CanonicalEmbeddingModels{Default: EmbeddingModelBinding{Deployment: EmbeddingDefaultDeployment}},
 		System:      CanonicalSystemModels{DecisionModel: DecisionModelBinding{Deployment: DefaultDecisionDeployment}},
 	}
 }

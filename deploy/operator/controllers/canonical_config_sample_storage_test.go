@@ -53,7 +53,7 @@ func TestStorageSamplesSurviveConfigMapReconciliation(t *testing.T) {
 				redis := cache.Redis
 				if redis == nil || redis.Connection.Host != "redis.cache-backends.svc.cluster.local" ||
 					redis.Connection.Port != 6379 || redis.Connection.Password != "roundtrip-password" ||
-					redis.Index.Name != "semantic_cache_idx" || redis.Index.VectorField.Dimension != 1024 ||
+					redis.Index.Name != "semantic_cache_idx" || redis.Index.VectorField.Dimension != 768 ||
 					redis.Index.IndexType != "HNSW" || redis.Search.TopK != 1 {
 					t.Fatalf("Redis connection, Secret or index settings lost: %+v", redis)
 				}
@@ -70,7 +70,7 @@ func TestStorageSamplesSurviveConfigMapReconciliation(t *testing.T) {
 						milvus.Search.TopK != 10 || milvus.Search.ConsistencyLevel != "Session" {
 						t.Fatalf("Milvus collection or search settings lost: %+v", milvus)
 					}
-				} else if milvus.Collection.Name != "semantic_cache_hybrid" || milvus.Collection.VectorField.Dimension != 384 ||
+				} else if milvus.Collection.Name != "semantic_cache_hybrid" || milvus.Collection.VectorField.Dimension != 768 ||
 					milvus.Search.TopK != 20 || milvus.Search.ConsistencyLevel != "Eventually" ||
 					cache.MaxEntries != 5000 || cache.EvictionPolicy != "lru" {
 					t.Fatalf("hybrid local/persistent cache settings lost: %+v", cache)

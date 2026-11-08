@@ -28,8 +28,9 @@ var retiredEmbeddingKeywords = []string{"gemma", "bert"}
 // embeddingForms are the embedding settings from before every store and
 // collection named its deployment: embedding bindings, the stores' model
 // keywords and the vector store's width, admission by model keyword, and
-// embeddings.semantic, rewritten last because the others read the models it
-// held.
+// embeddings.semantic, rewritten after them because they read the models it
+// held; then the forms from before embeddings served recall alone: a bare
+// embeddings.default name, embeddings.multimodal and the embeddings API.
 var embeddingForms = []ConfigForm{
 	{
 		Code:    CodeRemovedField,
@@ -72,6 +73,57 @@ var embeddingForms = []ConfigForm{
 		Becomes: "embeddings.default names the embedding deployment; a store's embedding block names its own",
 		Migrate: migrateEmbeddingSemantic,
 	},
+	{
+		Code:  CodeInvalidValue,
+		Paths: []string{"global.model_catalog.embeddings.default"},
+		Match: func(node *yaml.Node, _ string) bool { return node.Kind == yaml.ScalarNode },
+		Describe: func(at FormMatch) (string, string) {
+			return fmt.Sprintf("embeddings.default %q is a bare deployment name", at.Node.Value), fmt.Sprintf("embeddings.default: {deployment: %s}, as system.decision_model names its deployment", at.Node.Value)
+		},
+		Migrate: func(m *Migration, at FormMatch) error {
+			setEmbeddingDefault(m, at.Parent, at.Node.Value)
+			return nil
+		},
+	},
+	{
+		Code:    CodeRemovedField,
+		Paths:   []string{"global.model_catalog.embeddings.multimodal"},
+		What:    "embeddings.multimodal is removed: embeddings serve text recall alone",
+		Becomes: "nothing; a decision about an image asks a systemone question with input.image",
+		Migrate: func(m *Migration, at FormMatch) error {
+			m.Delete(at.Parent, "multimodal")
+			m.Note(at.Path, fmt.Sprintf("deployment %s embedded the images and audio of the embeddings API, which is removed; a deployment nothing names is never started", at.Node.Value))
+			deleteEmpty(m.Root(), "global", "model_catalog", "embeddings")
+			return nil
+		},
+	},
+	{
+		Code:    CodeRemovedField,
+		Paths:   []string{"global.services.api.embeddings"},
+		What:    "the embeddings API is removed: embeddings serve recall alone",
+		Becomes: "nothing; the embedding deployment starts when the response cache, memory or a vector store recalls with it",
+		Migrate: func(m *Migration, at FormMatch) error {
+			m.Delete(at.Parent, "embeddings")
+			deleteEmpty(m.Root(), "global", "services", "api")
+			return nil
+		},
+	},
+}
+
+// embeddingDefaultName is the deployment embeddings.default names, in its
+// {deployment} form or as the bare name a form rewrites.
+func embeddingDefaultName(embeddings *yaml.Node) string {
+	if name := scalarAt(embeddings, "default"); name != "" {
+		return name
+	}
+	return scalarAt(mappingValue(embeddings, "default"), "deployment")
+}
+
+// setEmbeddingDefault writes embeddings.default: {deployment: name}.
+func setEmbeddingDefault(m *Migration, embeddings *yaml.Node, name string) {
+	binding := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+	m.Set(binding, "deployment", Scalar(name))
+	m.Set(embeddings, "default", binding)
 }
 
 // migrateEmbeddingBinding writes a global embedding binding as
@@ -86,10 +138,10 @@ func migrateEmbeddingBinding(m *Migration, at FormMatch) error {
 	if strings.HasPrefix(at.Path, "global.") {
 		deleteEmpty(m.Root(), "global", "model_catalog", "bindings")
 		embeddings := ensureMapping(m.Root(), "global", "model_catalog", "embeddings")
-		if current := scalarAt(embeddings, "default"); current != "" && current != name {
+		if current := embeddingDefaultName(embeddings); current != "" && current != name {
 			return fmt.Errorf("%s: embeddings.default %q and bindings.embedding %q name different deployments; keep embeddings.default", at.Path, current, name)
 		}
-		m.Set(embeddings, "default", Scalar(name))
+		setEmbeddingDefault(m, embeddings, name)
 		return nil
 	}
 	deleteEmpty(scopeRouting(m.Root(), at.Path), "model_bindings")
@@ -241,7 +293,7 @@ func impliedEmbeddingDeployment(root *yaml.Node, model string, useCPU bool, name
 // embeddings.semantic declares a remote endpoint.
 func remoteEmbeddingDefault(root *yaml.Node) bool {
 	embeddings := mappingAt(root, "global", "model_catalog", "embeddings")
-	if name := scalarAt(embeddings, "default"); name != "" {
+	if name := embeddingDefaultName(embeddings); name != "" {
 		return scalarAt(mappingAt(root, "global", "model_catalog", "deployments", name), "provider") == OpenAIEmbeddingsProvider
 	}
 	semantic := mappingValue(embeddings, "semantic")
@@ -316,7 +368,7 @@ func migrateEmbeddingAdmission(m *Migration, at FormMatch) error {
 // once embeddings.semantic is rewritten.
 func defaultEmbeddingDeploymentOf(root *yaml.Node) (string, error) {
 	embeddings := mappingAt(root, "global", "model_catalog", "embeddings")
-	if name := scalarAt(embeddings, "default"); name != "" {
+	if name := embeddingDefaultName(embeddings); name != "" {
 		return name, nil
 	}
 	name, _, err := semanticEmbeddingDeployment(root, mappingValue(embeddings, "semantic"))
@@ -355,10 +407,10 @@ func migrateEmbeddingSemantic(m *Migration, at FormMatch) error {
 				return err
 			}
 		}
-		if current := scalarAt(embeddings, "default"); current != "" && current != name {
+		if current := embeddingDefaultName(embeddings); current != "" && current != name {
 			m.Note(at.Path, fmt.Sprintf("embeddings.default names %s, so deployment %s, the model embeddings.semantic chose, embeds for nothing until a store names it", current, name))
 		} else {
-			m.Set(embeddings, "default", Scalar(name))
+			setEmbeddingDefault(m, embeddings, name)
 		}
 	}
 	deleteEmpty(m.Root(), "global", "model_catalog", "embeddings")

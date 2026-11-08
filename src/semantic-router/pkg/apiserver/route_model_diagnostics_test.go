@@ -137,7 +137,7 @@ func TestModelDiagnosticsHTTPAllVelaTaskContractsAndExplicitScope(t *testing.T) 
 	if err = json.Unmarshal(body, &embedded); err != nil {
 		t.Fatal(err)
 	}
-	if status != 200 || len(embedded.Result.Embedding) != 2 || fake.Calls("embeddings") != embedCalls+1 || !strings.Contains(string(body), `"dimensions":[2,4]`) || !strings.Contains(string(body), `"max_seconds":30`) {
+	if status != 200 || len(embedded.Result.Embedding) != 2 || fake.Calls("embeddings") != embedCalls+1 || !strings.Contains(string(body), `"dimensions":[2,4]`) || strings.Contains(string(body), `"max_seconds"`) {
 		t.Fatalf("embedding: %d %s", status, body)
 	}
 	if calls.Load() != 8 {

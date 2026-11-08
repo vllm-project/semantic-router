@@ -2,7 +2,6 @@ package serving
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -75,7 +74,7 @@ func (f *embedServices) Embed(_ context.Context, deployment string, request mode
 		for j := range vector {
 			vector[j] = 1
 		}
-		vector[0] = float32(len(input.Text + input.ImageURL + input.AudioWAV))
+		vector[0] = float32(len(input.Text))
 		vector[1] = float32(dimension)
 		vector[2] = float32(request.Layer)
 		response.Embeddings[i] = vector
@@ -261,41 +260,20 @@ func TestEmbeddingMapsItemErrors(t *testing.T) {
 	}
 }
 
-func TestEmbeddingMediaInputs(t *testing.T) {
+// A multimodal model's card lists its modalities, which the binding reports;
+// recall embeds its text.
+func TestEmbeddingReportsTheModalitiesOfItsCard(t *testing.T) {
 	services := &embedServices{cards: map[string]modelservice.ModelCard{"omni": embeddingCard("omni", "text", "image", "audio")}}
 	provider, err := New(services, nil).Embedding(context.Background(), embeddingSpec("omni"), 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer provider.Close()
-	if info := provider.EmbeddingInfo(); info.Audio == nil || len(info.Modalities) != 3 {
+	if info := provider.EmbeddingInfo(); len(info.Modalities) != 3 {
 		t.Fatalf("info %+v", info)
 	}
-	png := []byte("\x89PNG\r\n\x1a\nrest")
-	if _, err = provider.EmbedImage(context.Background(), png, 4); err != nil {
+	if _, err = provider.Embed(context.Background(), "the passport page"); err != nil {
 		t.Fatal(err)
-	}
-	pcm := []float32{0.5, -0.25, 0.125, 1}
-	if _, err = provider.EmbedAudio(context.Background(), embedding.AudioRequest{PCM: pcm, SampleRate: 16000, Channels: 2}); err != nil {
-		t.Fatal(err)
-	}
-	calls := services.embedCalls()
-	image, audio := calls[len(calls)-2].Inputs[0], calls[len(calls)-1].Inputs[0]
-	if !strings.HasPrefix(image.ImageURL, "data:image/png;base64,") || image.Text != "" {
-		t.Fatalf("image input %+v", image)
-	}
-	wav, err := base64.StdEncoding.DecodeString(audio.AudioWAV)
-	if err != nil {
-		t.Fatal(err)
-	}
-	decoded, err := embedding.DecodeAudio(base64.StdEncoding.EncodeToString(wav))
-	if err != nil || decoded.SampleRate != 16000 || decoded.Channels != 2 || len(decoded.PCM) != 4 {
-		t.Fatalf("audio round trip: %+v, %v", decoded, err)
-	}
-	for i := range pcm {
-		if decoded.PCM[i] != pcm[i] {
-			t.Fatalf("sample %d = %v, want %v", i, decoded.PCM[i], pcm[i])
-		}
 	}
 }
 

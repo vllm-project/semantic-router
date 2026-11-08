@@ -23,7 +23,7 @@ func validateMatch(cfg *RouterConfig, path string, block *MatchConfig, feature M
 	if block.Recall == nil && block.Judge == nil {
 		return CheckError(path, CodeMatchEmpty, "a match block runs recall, judge or both; write at least one")
 	}
-	if block.Recall == nil && row.indexed {
+	if block.Recall == nil && row.indexed && !row.listed {
 		return fmt.Errorf("%s: %s recalls its candidates from an index, which a judge cannot read whole; add recall", path, row.noun)
 	}
 	if block.Recall != nil {
@@ -32,7 +32,7 @@ func validateMatch(cfg *RouterConfig, path string, block *MatchConfig, feature M
 		}
 	}
 	if block.Judge != nil {
-		return validateMatchJudge(cfg, path+".judge", *block.Judge, block.Recall)
+		return validateMatchJudge(cfg, path+".judge", *block.Judge)
 	}
 	return nil
 }
@@ -63,9 +63,10 @@ func (row matchFeature) validateRecall(path string, recall MatchRecall) error {
 }
 
 // validateMatchJudge checks a judge: its question, the deployment that
-// answers it, which must answer its type, and its keep rules. A choice judge
-// reads at most 255 candidates, the options one question takes.
-func validateMatchJudge(cfg *RouterConfig, path string, judge MatchJudge, recall *MatchRecall) error {
+// answers it, which must answer its type, its keep rules and its cap. A
+// choice judge reads at most 255 candidates, the options one question takes;
+// more are truncated, so no recall bound is refused.
+func validateMatchJudge(cfg *RouterConfig, path string, judge MatchJudge) error {
 	switch {
 	case judge.Preset != "" && judge.Question != nil:
 		return fmt.Errorf("%s: a judge asks a preset or a question, not both", path)
@@ -85,8 +86,11 @@ func validateMatchJudge(cfg *RouterConfig, path string, judge MatchJudge, recall
 	if err := validateDeclaredQuestionType(cfg, cfg.MatchJudgeDeployment(judge), judge.QuestionType()); err != nil {
 		return fmt.Errorf("%s: %w", path, err)
 	}
-	if judge.Chooses() && recall != nil && recall.TopK > presets.MaxChoices {
-		return fmt.Errorf("%s: a choice judge chooses among at most %d candidates; recall.top_k must not exceed it", path, presets.MaxChoices)
+	if judge.MaxCandidates < 0 || (judge.Chooses() && judge.MaxCandidates > presets.MaxChoices) {
+		if judge.Chooses() {
+			return fmt.Errorf("%s.max_candidates must be within [1, %d]: a choice judge's candidates are the options of one question", path, presets.MaxChoices)
+		}
+		return fmt.Errorf("%s.max_candidates must be at least 1 when set", path)
 	}
 	if judge.TopK < 0 {
 		return fmt.Errorf("%s.top_k must be at least 1 when set", path)

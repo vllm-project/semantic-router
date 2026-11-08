@@ -175,7 +175,7 @@ func (p *RemoteEmbeddingProvider) EmbedBatch(ctx context.Context, texts []string
 	}
 	keys := make([]embedding.VectorKey, len(texts))
 	for i, text := range texts {
-		keys[i] = embedding.NewVectorKey(p.CacheIdentity(), embedding.Options{}, embedding.InputText, []byte(text))
+		keys[i] = embedding.NewVectorKey(p.CacheIdentity(), embedding.Options{}, []byte(text))
 	}
 	embedded, err := sharedVectors.Resolve(ctx, keys, func(ctx context.Context, missing []int) ([]embedding.Embedded, error) {
 		inputs := make([]modelservice.EmbedInput, len(missing))

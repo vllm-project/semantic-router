@@ -183,7 +183,6 @@ Router 无法路由某个请求时，会直接应答该请求，不调用任何�
 | `max_output_tokens_exceeded` | 400 | `invalid_request_error` | 请求的输出超过了配置的模型上限。见[请求预算错误](#request-budget-errors)。 |
 | `decision_unresolved` | 503 | `server_error` | 某个决策所需的信号不可用，导致该决策无法评估，且其 `rules.on_unknown` 为 `fail_request`。`x-vsr-applied-unknown-policy` 会给出该决策。 |
 | `no_eligible_model` | 503 | `server_error` | 选择策略拒绝了匹配决策的所有候选模型。 |
-| `too_many_tools` | 400 | `invalid_request_error` | 请求的工具数超过匹配决策的[工具选择](../tutorials/plugin/tools.md#选择)可选择的上限（255），且其 `select.on_overflow` 为 `reject`。 |
 | `tool_selection_failed` | 503 | `server_error` | 匹配决策的[工具选择](../tutorials/plugin/tools.md#选择)失败或超时，且其 `select.on_error` 为 `fail`。 |
 
 Router 会以 `WARN` 级别记录每一次此类失败，带上请求的 `x-request-id`、原因码和 Router 自己的原因：请求指定的模型、到达的配方和决策，以及错误本身。Anthropic Messages 客户端会在 Anthropic 的错误信封中收到相同的状态码和消息；该信封没有 code 字段。

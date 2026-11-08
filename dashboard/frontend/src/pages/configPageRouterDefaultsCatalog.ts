@@ -113,7 +113,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     decision_model: { deployment: 'primary' },
   } satisfies CanonicalSystemModels,
   embedding_models: {
-    default: 'vela-embedding',
+    default: { deployment: 'vela-embedding' },
   } satisfies CanonicalEmbeddingCatalogConfig,
   prompt_compression: {
     enabled: false,
@@ -246,7 +246,7 @@ export const SECTION_META: Record<
     title: 'Embedding Models',
     eyebrow: 'Model Catalog',
     description:
-      'The deployments that embed for match.recall and /v1/embeddings; decisions never use them.',
+      'The deployment that embeds for match.recall; decisions never use it, and it starts only when a store recalls with it.',
   },
   prompt_compression: {
     title: 'Prompt Compression',

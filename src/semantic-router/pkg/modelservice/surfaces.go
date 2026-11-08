@@ -89,11 +89,9 @@ type ClassifyResponse struct {
 	InputTokens int
 }
 
-// EmbedInput is one embeddings input: Text, an image data URL, or base64 WAV audio.
+// EmbedInput is one embeddings input: the text recall embeds.
 type EmbedInput struct {
-	Text     string
-	ImageURL string
-	AudioWAV string
+	Text string
 }
 
 // EmbedRequest asks for embeddings at an optional dimension and layer exit.
@@ -348,16 +346,8 @@ func encodeEmbed(ctx context.Context, model string, request EmbedRequest) (api.E
 	}
 	parts := make(api.ContentPartList, len(request.Inputs))
 	for index, input := range request.Inputs {
-		switch {
-		case input.ImageURL != "":
-			parts[index] = api.ContentPart{Type: api.ImageUrl, ImageUrl: &api.ImagePart{Url: input.ImageURL}}
-		case input.AudioWAV != "":
-			format := "wav"
-			parts[index] = api.ContentPart{Type: api.InputAudio, InputAudio: &api.AudioPart{Data: input.AudioWAV, Format: &format}}
-		default:
-			text := input.Text
-			parts[index] = api.ContentPart{Type: api.Text, Text: &text}
-		}
+		text := input.Text
+		parts[index] = api.ContentPart{Type: api.Text, Text: &text}
 	}
 	var inputs api.EmbeddingsInput
 	if err := inputs.FromContentPartList(parts); err != nil {

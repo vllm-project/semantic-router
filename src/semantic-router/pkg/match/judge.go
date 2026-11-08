@@ -54,14 +54,11 @@ func (m *Matcher) judge(ctx context.Context, spec config.MatchJudge, input Input
 
 // score asks the judge's question, compiled for the deployment's model, and
 // returns each candidate's score and how many questions it asked. A choice
-// question chooses among the candidates about the request; any other is
-// asked about each candidate, each a state of the same call, and a candidate
-// without text scores 0 unasked.
+// question chooses among the candidates about the request, at most 255 of
+// them; any other is asked about each candidate, each a state of the same
+// call, and a candidate without text scores 0 unasked.
 func (m *Matcher) score(ctx context.Context, spec config.MatchJudge, deployment string, input Input, candidates []Scored) ([]float64, int, error) {
 	chooses := spec.Chooses()
-	if chooses && len(candidates) > presets.MaxChoices {
-		return nil, 0, ErrTooManyCandidates
-	}
 	if chooses && len(candidates) == 1 {
 		return []float64{1}, 0, nil
 	}

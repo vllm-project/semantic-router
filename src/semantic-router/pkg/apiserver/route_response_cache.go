@@ -140,7 +140,7 @@ func (s *ClassificationAPIServer) handleResponseCacheTest(
 
 // acquireResponseCacheEmbedding borrows the provider of the deployment a
 // candidate cache embeds with, its binding's or embeddings.default: the live
-// cache's, else the embeddings API's.
+// cache's, else the one the default recipe's recall prepared.
 func (s *ClassificationAPIServer) acquireResponseCacheEmbedding(binding *config.EmbeddingBinding) (string, embedding.Provider, func(), error) {
 	deployment := ""
 	if binding != nil {

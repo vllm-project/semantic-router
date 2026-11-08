@@ -95,41 +95,53 @@ Every feature that finds similar items uses the same `match` block:
 
 ```yaml
 match:
-  recall: {method: embedding, top_k: 20, min_similarity: 0.3}   # narrows the candidates: embedding | bm25
-  judge:  {preset: relevance, top_k: 6, min_score: 0.5}         # decides with a System One question
+  recall: {method: embedding, top_k: 20, min_similarity: 0.3}                # narrows the candidates: embedding | bm25
+  judge:  {preset: relevance, top_k: 6, min_score: 0.5, max_candidates: 64}  # decides with a System One question
 ```
 
 - **Stages.** A block runs the stages it writes, at least one; an empty block
   fails to load with `match_empty`. A feature that writes no block runs its
   default (below); a block it writes replaces the default as a whole.
+  - With `recall` only, the result is classic embedding or BM25 similarity.
+  - With `judge` only, a System One question judges every candidate; this
+    suits small, naturally bounded candidate sets.
+  - With both, `recall` narrows the set and `judge` decides.
 - **`recall`** narrows the candidates by index similarity:
   - `method: embedding` (the default) compares embeddings in the store's
-    embedding space, and `min_similarity` is a cosine in [-1, 1];
-    `method: bm25` uses the lexical index, and `min_similarity` is a BM25
-    score;
+    embedding space (`global.model_catalog.embeddings.default` unless the
+    store names its own), and `min_similarity` is a cosine in [-1, 1];
+    `method: bm25` uses the lexical index, needs no model, and
+    `min_similarity` is a BM25 score;
   - `top_k` bounds the candidates; it is required when they come from an index.
 - **`judge`** asks one System One question about the request and the
   candidates, in one call, on the decision model or the named `deployment`:
   - `preset: relevance | same_request | tool_rank`, or a custom `question`
     (`choice`, `noul` or `score`);
   - a choice question (`tool_rank`) chooses among the candidates, which are its
-    options (at most 255), and scores each with its probability; a noul or
-    score question is asked about each candidate and scores it with P(yes) or
-    the expected level;
+    options, in one standard request, and scores each with its probability; a
+    noul or score question (`relevance`, `same_request`) is asked about each
+    candidate, one batch entry per candidate, and scores it with P(yes) or the
+    expected level;
   - `top_k`, `min_score` (absolute) and `min_ratio` (a fraction of the best
     score, in (0, 1]) keep candidates, best first;
   - `on_error: skip` (the default) keeps the recall result, or the candidates
     as they came without recall, when the judge fails or is late;
     `on_error: fail` fails the feature's match; `timeout_ms` bounds the call
     (else the deployment's `timeout_ms`, else 1000 ms).
+- **`judge.max_candidates`** is a hard cap: at most 255 for a choice judge (the
+  options of one question, its default), and 64 by default for a judge asked
+  about each candidate. More candidates never fail: the judge reads the first
+  `max_candidates` by recall rank, or as the feature lists them (most recent
+  first) without recall. Each truncation adds a `match.judge.truncated` event to
+  the request's trace span and counts in `vsr_match_judge_truncated_total`.
 
 | Feature | Default `match` | Notes |
 |---|---|---|
-| `response_cache.semantic.match` | `recall: {method: embedding, top_k: 3, min_similarity: 0.8}` | Add `judge: {preset: same_request}` to reduce false hits |
-| `context.sources[rag].match` | `recall: {method: embedding, top_k: 20, min_similarity: 0.3}`, `judge: {preset: relevance, top_k: 6, min_score: 0.5}` | Recalls by `embedding` only |
-| `context.sources[memory].match` | `recall: {method: embedding, top_k: 5, min_similarity: 0.7}` | The memory store's `default_retrieval_limit` and `default_similarity_threshold` replace the recall defaults |
-| `context.compress.match` | `judge: {preset: relevance}` | Segments come from the request itself; recalls by `bm25` only; the budget bounds what is kept |
-| `tools.select.match` | `judge: {preset: tool_rank, top_k: 3, min_ratio: 0.1}` | No recall; at most 255 candidate tools |
+| `response_cache.semantic.match` | `recall: {method: embedding, top_k: 3, min_similarity: 0.8}`, `judge: {preset: same_request, min_score: 0.8}` | The judge confirms each recalled hit; a rejected one is a miss. Exact mode stays |
+| `context.sources[rag].match` | `recall: {method: embedding, top_k: 20, min_similarity: 0.3}`, `judge: {preset: relevance, top_k: 6, min_score: 0.5}` | `recall: {method: bm25}` and a judge without recall read a local knowledge base: a `vectorstore` source over the in-memory vector store. A source over an external vector database recalls by `embedding` |
+| `context.sources[memory].match` | `recall: {method: embedding, top_k: 5, min_similarity: 0.7}` | The memory store's `default_retrieval_limit` and `default_similarity_threshold` replace the recall defaults. A judge without recall reads the user's newest memories |
+| `context.compress.match` | `recall: {method: bm25}`, `judge: {preset: relevance}` | Each segment of the request is a candidate about the latest user message; BM25 prefilters for the judge's 64; the budget bounds what is kept |
+| `tools.select.match` | `judge: {preset: tool_rank, top_k: 3, min_ratio: 0.1}` | At most 255 tools; more are truncated, or narrowed by `recall: {method: bm25}` |
 
 Every stage is counted in `vsr_match_recall_total` (feature, method, outcome)
 or `vsr_match_judge_total` (feature, preset, outcome), and timed in

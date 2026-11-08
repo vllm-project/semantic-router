@@ -16,6 +16,10 @@ var (
 		Name: "vsr_match_judge_total",
 		Help: "Match judge stages by feature, preset (question for a custom one) and outcome (ok, empty, skipped, failed).",
 	}, []string{"feature", "preset", "outcome"})
+	truncatedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "vsr_match_judge_truncated_total",
+		Help: "Match judges that read only their first max_candidates candidates, by feature and preset (question for a custom one).",
+	}, []string{"feature", "preset"})
 	stageDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "vsr_match_stage_duration_seconds",
 		Help:    "Latency of match stages by feature and stage (recall, judge); a judge without candidates is not timed.",

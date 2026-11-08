@@ -10,7 +10,7 @@ is_mtpe: true
 
 # 图像和音频 {#images-and-audio}
 
-Vela 1.0 Omni 把文本、图像和音频嵌进同一个向量空间，所以图像既能和文字描述（一张护照页的照片）比，也能和示例图像比。router 用它做多模态嵌入（`global.model_catalog.embeddings.multimodal`）。
+Vela 1.0 Omni 把文本、图像和音频嵌进同一个向量空间，所以图像既能和文字描述（一张护照页的照片）比，也能和示例图像比。它由模型运行时提供服务。router 只为召回嵌入文本：可以把 Omni 部署写成某个库的 `embedding.deployment`；要按请求图像的内容做决策，就向接受图像的部署提一道读取它（`input.image`）的 systemone 问题。
 
 | 模型 | 大小 | 向量 | 文本上限 | 什么时候用 |
 | --- | --- | --- | --- | --- |
@@ -21,7 +21,7 @@ Vela 1.0 Omni 把文本、图像和音频嵌进同一个向量空间，所以图
 
 ## 打开它 {#turn-it-on}
 
-声明多模态嵌入部署，并在 `embeddings.multimodal` 中指定它；不指定，多模态嵌入就不开：
+声明一个 Omni 部署，并在用它嵌入文本的库里指定它，这里是 Nano 384 维的向量库：
 
 ```yaml
 global:
@@ -33,11 +33,14 @@ global:
         revision: 2ff2d66385dbdd661a560ec3e8bcb45a0527d92e
         device: cpu
         input: {overflow: truncate}
-    embeddings:
-      multimodal: omni-nano
+  stores:
+    vector_store:
+      enabled: true
+      backend_type: memory
+      embedding: {deployment: omni-nano, dimension: 384}
 ```
 
-Omni 由 router 在 runtime 里跑在 CPU 上。要用 Mini，就改为声明一个 `vllm-sr/Vela-1.0-Omni-Mini` 的 `model_runtime` 部署。
+向量库需要时，router 才在 runtime 里把 Omni 跑在 CPU 上。要用 Mini，就改为声明一个 `vllm-sr/Vela-1.0-Omni-Mini` 的 `model_runtime` 部署。
 
 ## 验一下 {#check-it}
 

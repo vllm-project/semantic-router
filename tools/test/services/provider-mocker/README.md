@@ -92,6 +92,7 @@ reads pin its answer:
 | `__SYSTEMONE_CHOICE__ <key>` | A choice question offering `key` (a turn_relation label, say) chooses it |
 | `Ignore all previous instructions` | A choice question offering `jailbreak` chooses it |
 | `__SYSTEMONE_YES__` | A noul question answers true |
+| `__SYSTEMONE_REJECT__` | A noul question about a candidate (a match judge's, such as `same_request`) answers false; any other noul question true |
 | An answer sentence its context lacks | A span question offering `unsupported` (hallucination) finds the first one |
 | `__SYSTEMONE_UNREAD__` | A `require_full_input` question fails with `max_length_exceeded` |
 | `__SYSTEMONE_UNAVAILABLE__` | The call fails with 503 |

@@ -94,7 +94,36 @@ func validateContextSource(cfg *RouterConfig, path string, source *ContextSource
 	} else if err := validateMemorySource(path, source); err != nil {
 		return err
 	}
-	return validateMatch(cfg, path+".match", source.Match, source.MatchFeature())
+	if err := validateMatch(cfg, path+".match", source.Match, source.MatchFeature()); err != nil {
+		return err
+	}
+	if source.Type == ContextSourceRAG {
+		return validateRAGLexicalMatch(cfg, path, source)
+	}
+	return nil
+}
+
+// validateRAGLexicalMatch checks a rag source that recalls by BM25 or judges
+// without recall. Both read the chunks of a local knowledge base, a
+// vectorstore source over the in-memory vector store, which keeps their
+// lexical index and lists them; every other backend recalls through its own
+// search.
+func validateRAGLexicalMatch(cfg *RouterConfig, path string, source *ContextSource) error {
+	block := source.Match
+	if block == nil || (block.Recall != nil && block.Recall.EffectiveMethod() != MatchRecallBM25) {
+		return nil
+	}
+	at, what := path+".match.recall.method", "bm25 recall"
+	if block.Recall == nil {
+		at, what = path+".match", "a judge without recall"
+	}
+	switch {
+	case source.Backend != "vectorstore":
+		return fmt.Errorf("%s: %s reads a local knowledge base, a vectorstore source; a %s source recalls with embedding", at, what, source.Backend)
+	case cfg.VectorStore == nil || cfg.VectorStore.BackendType != "memory":
+		return fmt.Errorf("%s: %s reads the chunks the in-memory vector store keeps; set global.stores.vector_store.backend_type: memory, or recall with embedding", at, what)
+	}
+	return nil
 }
 
 func validateMemorySource(path string, source *ContextSource) error {

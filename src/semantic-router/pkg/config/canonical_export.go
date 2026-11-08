@@ -154,12 +154,9 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 
 func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCatalog {
 	return CanonicalModelCatalog{
-		Deployments: canonicalDeployments(cfg.ModelDeployments),
-		Bindings:    publicBindings(cfg.GlobalModelBindings),
-		Embeddings: CanonicalEmbeddingModels{
-			Default:    cfg.EmbeddingDeployment,
-			Multimodal: cfg.MultimodalEmbeddingDeployment,
-		},
+		Deployments:     canonicalDeployments(cfg.ModelDeployments),
+		Bindings:        publicBindings(cfg.GlobalModelBindings),
+		Embeddings:      CanonicalEmbeddingModels{Default: EmbeddingModelBinding{Deployment: cfg.EmbeddingDeployment}},
 		System:          canonicalSystemModelsFromRouterConfig(cfg),
 		External:        append([]ExternalModelConfig(nil), cfg.ExternalModels...),
 		Admission:       cloneAdmissionMap(cfg.ModelAdmission),

@@ -724,10 +724,8 @@ export interface CanonicalHallucinationModuleConfig {
 }
 
 export interface CanonicalEmbeddingCatalogConfig {
-  /** The deployment that embeds text. */
-  default?: string
-  /** The deployment that embeds images. */
-  multimodal?: string
+  /** The deployment recall embeds text with. */
+  default?: { deployment: string }
 }
 
 export interface RouterCoreConfig {

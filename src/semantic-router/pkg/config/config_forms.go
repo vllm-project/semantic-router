@@ -30,7 +30,6 @@ const (
 	CodeMatchEmpty               = "match_empty"
 	CodeOutputCapabilityMissing  = "output_capability_missing"
 	CodeOutputNotExecutable      = "output_not_executable"
-	CodeToolCatalogTooLarge      = "tool_catalog_too_large"
 	CodeDuplicateToolName        = "duplicate_tool_name"
 	// CodeUncalibratedPreset warns of a preset asked with the neutral
 	// threshold, because the answering model has no calibrated one.

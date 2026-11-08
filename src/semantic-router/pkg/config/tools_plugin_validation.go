@@ -94,8 +94,6 @@ func validateToolsSelectModeFields(path string, spec *ToolsSelectConfig) error {
 			return fmt.Errorf("%s.tools_db_path is required: add mode chooses from its catalog", path)
 		case spec.PreserveCount != 0:
 			return fmt.Errorf("%s.preserve_count keeps request tools in filter mode; add mode never removes them", path)
-		case spec.OnOverflow != "":
-			return fmt.Errorf("%s.on_overflow applies to filter mode; add mode's catalog is checked at load", path)
 		case spec.OnError != "" && spec.OnError != ToolsSelectOnErrorSkip && spec.OnError != ToolsSelectOnErrorFail:
 			return fmt.Errorf("%s.on_error must be %s or %s in add mode", path, ToolsSelectOnErrorSkip, ToolsSelectOnErrorFail)
 		}
@@ -106,8 +104,6 @@ func validateToolsSelectModeFields(path string, spec *ToolsSelectConfig) error {
 		return fmt.Errorf("%s.tools_db_path is read in add mode; filter mode chooses among the request's tools", path)
 	case spec.PreserveCount < 0 || spec.PreserveCount > presets.MaxChoices:
 		return fmt.Errorf("%s.preserve_count must be within [0, %d]", path, presets.MaxChoices)
-	case spec.OnOverflow != "" && spec.OnOverflow != ToolsSelectOnOverflowKeep && spec.OnOverflow != ToolsSelectOnOverflowReject:
-		return fmt.Errorf("%s.on_overflow must be %s or %s", path, ToolsSelectOnOverflowKeep, ToolsSelectOnOverflowReject)
 	case spec.OnError != "" && spec.OnError != ToolsSelectOnErrorKeep && spec.OnError != ToolsSelectOnErrorStrip && spec.OnError != ToolsSelectOnErrorFail:
 		return fmt.Errorf("%s.on_error must be %s, %s or %s in filter mode", path, ToolsSelectOnErrorKeep, ToolsSelectOnErrorStrip, ToolsSelectOnErrorFail)
 	}
@@ -141,7 +137,8 @@ func validateToolsSelectMatch(cfg *RouterConfig, path string, block *MatchConfig
 
 // validateToolCatalog checks add mode's catalog where the configuration
 // loads, when the file is there to read; the Router reads it again to serve
-// it. A decision model chooses among at most 255 options in one question.
+// it. A catalog of any size loads: the judge reads at most its
+// max_candidates of the tools the policy allows.
 func validateToolCatalog(cfg *RouterConfig, path, file string, policy *ToolsPolicyConfig) error {
 	if cfg.SkipExternalAssetValidation {
 		return nil
@@ -156,11 +153,7 @@ func validateToolCatalog(cfg *RouterConfig, path, file string, policy *ToolsPoli
 	case err != nil:
 		return fmt.Errorf("%s: %w", path, err)
 	}
-	allowed := len(policy.AllowedTools(catalog))
-	switch {
-	case allowed > presets.MaxChoices:
-		return CheckError(path, CodeToolCatalogTooLarge, fmt.Sprintf("%s has %d tools the policy allows; a decision model chooses among at most %d, the options of one question", file, allowed, presets.MaxChoices))
-	case allowed == 0:
+	if len(policy.AllowedTools(catalog)) == 0 {
 		return fmt.Errorf("%s: %s has no tool the policy allows", path, file)
 	}
 	return nil

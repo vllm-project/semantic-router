@@ -351,7 +351,7 @@ global:
       decision_model:
         deployment: decision-amd
     embeddings:
-      default: embedding-amd
+      default: {deployment: embedding-amd}
     deployments:
       decision-amd:
         provider: model_runtime

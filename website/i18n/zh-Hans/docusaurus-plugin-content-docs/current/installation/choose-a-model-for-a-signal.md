@@ -30,7 +30,6 @@ Embedding 不提问，也不回答任何信号；它们只用于召回。它们�
 | 资源 | 在哪里指定 | 默认值 |
 | --- | --- | --- |
 | Embedding | `global.model_catalog.embeddings.default` | `vela-embedding` |
-| 多模态 embedding | `global.model_catalog.embeddings.multimodal` | 不开启 |
 
 有两个部署始终已声明，只有当某处解析到其中一个时 Router 才会启动它：`primary`（CPU 上的 `vllm-sr/vela3-fast`，默认决策模型）和 `vela-embedding`（Vela 1.0 Embedding）。要更改其中一个，声明一个同名部署即可。
 
@@ -49,7 +48,6 @@ global:
 | --- | --- |
 | 每个问题类信号和选择器 | `primary`（按名称） |
 | Embedding | `vela-embedding` |
-| 多模态 embedding | 不开启 |
 
 ## S2. 全部交给远程 System One 模型 {#s2-everything-on-a-remote-system-one-model}
 

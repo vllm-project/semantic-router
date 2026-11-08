@@ -170,9 +170,6 @@ curl -sS http://localhost:8080/api/v1/diagnostics/classify/intent \
 | `POST` | `/api/v1/diagnostics/classify/combined` | Run intent, PII, and security classification |
 | `POST` | `/api/v1/diagnostics/classify/batch` | Run a selected classifier over a batch |
 | `POST` | `/api/v1/routing/preview` | Evaluate all configured signals |
-| `POST` | `/api/v1/diagnostics/embeddings` | Generate configured text or image embeddings |
-| `POST` | `/api/v1/diagnostics/similarity` | Compare a text pair |
-| `POST` | `/api/v1/diagnostics/similarity/batch` | Run batch similarity matching |
 
 Names, scores, and matched rules depend on the active recipe. Use the live
 schema for each endpoint's supported input forms.
@@ -188,10 +185,12 @@ configured inference budget. Check the effective model and deployment limits
 before retrying. Other inference failures retain their bounded signal error
 codes; the configured unknown-signal policy determines the route outcome.
 
-Standalone classification, embedding, and similarity diagnostics return
-`400 INVALID_INPUT` when inference reports that a model's input budget was
-exceeded. The error retains the model's limit details; other inference failures
-remain server errors.
+Standalone classification diagnostics return `400 INVALID_INPUT` when
+inference reports that a model's input budget was exceeded. The error retains
+the model's limit details; other inference failures remain server errors.
+Embeddings serve recall only, so the Router has no endpoint that returns them;
+`POST /api/v1/diagnostics/models/embeddings` inspects a prepared embedding
+binding.
 
 ## Diagnose a prepared model binding
 
@@ -684,9 +683,6 @@ Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, and r
 | `POST` | `/api/v1/diagnostics/classify/user-feedback` | Classify user feedback type (satisfied, need_clarification, wrong_answer, want_different) |
 | `POST` | `/api/v1/diagnostics/classify/combined` | Perform combined classification (intent, PII, and security) |
 | `POST` | `/api/v1/diagnostics/classify/batch` | Batch classification with configurable task_type parameter |
-| `POST` | `/api/v1/diagnostics/embeddings` | Generate text, image, and audio embeddings |
-| `POST` | `/api/v1/diagnostics/similarity` | Calculate pairwise text similarity |
-| `POST` | `/api/v1/diagnostics/similarity/batch` | Calculate batch text-similarity matches |
 | `POST` | `/api/v1/diagnostics/models/systemone/forward` | Forward a public native inference or discovery request through one active listener grant; requires management authorization and the original listener credentials |
 | `GET` | `/api/v1/instance` | Read the serving frontend capability mode and default native deployment |
 | `GET` | `/api/v1/diagnostics/models/tasks` | List shared judgment task templates, structural model capabilities and binding provenance |

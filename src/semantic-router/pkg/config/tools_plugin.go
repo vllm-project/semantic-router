@@ -16,8 +16,7 @@ const (
 	ToolsPolicyModeNone        = "none"
 )
 
-// Selection modes, and what a selection does when its call fails and when a
-// request has more candidate tools than one question takes options.
+// Selection modes, and what a selection does when its call fails.
 const (
 	ToolsSelectModeFilter = "filter"
 	ToolsSelectModeAdd    = "add"
@@ -26,9 +25,6 @@ const (
 	ToolsSelectOnErrorStrip = "strip"
 	ToolsSelectOnErrorSkip  = "skip"
 	ToolsSelectOnErrorFail  = "fail"
-
-	ToolsSelectOnOverflowKeep   = "keep"
-	ToolsSelectOnOverflowReject = "reject"
 )
 
 // DefaultToolsNeedThreshold is the least P(tool_need) at which a selection
@@ -89,7 +85,9 @@ type ToolsSelectConfig struct {
 	// read from the Router's working directory.
 	ToolsDBPath string `json:"tools_db_path,omitempty" yaml:"tools_db_path,omitempty"`
 	// Match is the judge that ranks the candidates and its keep rules;
-	// without it tool_rank keeps the 3 best at 0.1 of the best or more.
+	// without it tool_rank keeps the 3 best at 0.1 of the best or more. The
+	// judge reads at most 255 candidates, the first as listed; a bm25
+	// recall narrows a larger set by the request instead.
 	Match *MatchConfig `json:"match,omitempty" yaml:"match,omitempty"`
 	// NeedThreshold is the least P(tool_need) at which the judge's tools are
 	// kept or added, in [0, 1] (default 0.5).
@@ -100,10 +98,6 @@ type ToolsSelectConfig struct {
 	// OnError is what a failed or late call does: skip (the default) or fail
 	// in add mode; keep (the default), strip or fail in filter mode.
 	OnError string `json:"on_error,omitempty" yaml:"on_error,omitempty" jsonschema:"enum=skip,enum=keep,enum=strip,enum=fail"`
-	// OnOverflow is what filter mode does with more than 255 candidate tools
-	// after the policy: keep forwards them unselected (the default), reject
-	// refuses the request.
-	OnOverflow string `json:"on_overflow,omitempty" yaml:"on_overflow,omitempty" jsonschema:"enum=keep,enum=reject"`
 	// Input names what the questions read besides the current user turn.
 	Input ToolsSelectInput `json:"input,omitempty" yaml:"input,omitempty"`
 	// TimeoutMs bounds the call, up to 60000; without it a systemone
@@ -295,14 +289,6 @@ func (s *ToolsSelectConfig) EffectiveOnError() string {
 	default:
 		return ToolsSelectOnErrorKeep
 	}
-}
-
-// EffectiveOnOverflow is what filter mode does with too many candidates.
-func (s *ToolsSelectConfig) EffectiveOnOverflow() string {
-	if s.OnOverflow == "" {
-		return ToolsSelectOnOverflowKeep
-	}
-	return s.OnOverflow
 }
 
 // EffectiveMatch is the match block the selection runs: the one it writes,

@@ -52,11 +52,10 @@ plugins:
         mode: add                     # filter | add
         tools_db_path: config/tools_db.json
         match:
-          judge: {preset: tool_rank, top_k: 3, min_ratio: 0.1}
+          judge: {preset: tool_rank, top_k: 3, min_ratio: 0.1, max_candidates: 255}
         need_threshold: 0.5           # P(tool_need) 低于此值时不保留也不添加工具
         preserve_count: 0             # filter 模式：请求的前几个工具始终保留
         on_error: skip                # add：skip | fail；filter：keep | strip | fail
-        on_overflow: keep             # filter 模式，超过 255 个工具时：keep | reject
         input: {history: false}
         timeout_ms: 1000
 ```
@@ -92,16 +91,17 @@ plugins:
 - `on_error` 决定调用失败或超时时的行为：filter 模式保留请求的工具（`keep`）、移除它们（`strip`）或拒绝请求
   （`fail`）；add 模式不添加工具（`skip`）或拒绝请求（`fail`）。被拒绝的请求得到 `503` 和代码
   [`tool_selection_failed`](../../api/router.md#routing-errors)。
-- 一个问题最多有 255 个选项。filter 模式下，经过策略后工具更多的请求会不经选择直接转发
-  （`on_overflow: keep`），或以 `400` 和代码 `too_many_tools` 拒绝（`reject`）。
+- 一个问题最多有 255 个选项，所以 judge 最多读取 `match.judge.max_candidates` 个工具（默认 255）：按请求
+  或目录列出的顺序取前面的工具。更多的工具从不被拒绝；也可以写 `recall: {method: bm25, top_k: ...}`，按与请求
+  共有的词把工具缩小到描述最相关的那些。每次截断都会在请求的 trace span 上记一个 `match.judge.truncated`
+  事件，并计入 `vsr_match_judge_truncated_total`。
 - `timeout_ms` 限制调用时长，最多 60000。未设置时使用 systemone 部署自己的 `timeout_ms`，否则为 1000。
   judge 自己的 `on_error` 和 `timeout_ms` 不被接受：以选择的设置为准。
 
 add 模式的目录是一个 JSON 列表，每个条目为
 `{"tool": {"type": "function", "function": {...}}, "description": "..."}`；`description` 是决策模型选择该
 工具时阅读的内容，缺省时使用函数自己的描述。相对的 `tools_db_path` 从 Router 的工作目录读取。加载时会检查
-能读取到的目录：策略允许的工具最多 255 个（`tool_catalog_too_large`），名称不能重复
-（`duplicate_tool_name`）。Router 在构建要服务的配置时会再次读取目录，并拒绝无法读取的目录。
+能读取到的目录，大小不限：名称不能重复（`duplicate_tool_name`），且策略至少允许一个工具。Router 在构建要服务的配置时会再次读取目录，并拒绝无法读取的目录。
 
 每次选择都会记录在请求的 [router replay](./router-replay) 记录中：保留的工具、P(`tool_need`) 和结果。
 它的 judge 计入 `vsr_match_judge_total{feature="tools"}`。

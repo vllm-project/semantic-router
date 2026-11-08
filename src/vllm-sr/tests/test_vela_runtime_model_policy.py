@@ -36,8 +36,7 @@ def test_reference_vela_policy_survives_runtime_materialization(
     assert catalog["system"] == authored["system"]
     for section in ("embeddings", "modules"):
         assert _without_use_cpu(catalog[section]) == _without_use_cpu(authored[section])
-    assert catalog["embeddings"]["default"] == "vela-embedding"
-    assert "semantic" not in catalog["embeddings"]
+    assert catalog["embeddings"] == {"default": {"deployment": "vela-embedding"}}
     # The default judgment binding selects a declared logical deployment;
     # platform materialization must preserve its resource and input policy.
     assert catalog["system"]["decision_model"] == {"deployment": "primary"}

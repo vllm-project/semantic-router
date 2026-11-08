@@ -97,9 +97,14 @@ The source's `match` block keeps the documents. By default the backend
 recalls up to 20 documents with an embedding similarity of at least 0.3, and
 one call to the deployment that answers the judge (the decision model unless
 `match.judge.deployment` names another) asks the `relevance` question about
-each: the 6 most relevant documents with a score of at least 0.5 are kept, in
-the judge's order. A written block replaces the default whole: a block with
-only `recall` keeps the recalled documents in the backend's order. External
+each, one batch entry per document: the 6 most relevant documents with a
+score of at least 0.5 are kept, in the judge's order. A written block replaces
+the default whole: a block with only `recall` keeps the recalled documents in
+the backend's order. A local knowledge base, a `vectorstore` source over the
+in-memory vector store, can also recall with `method: bm25`, which embeds no
+query, or be judged whole by a block with only a `judge`: the judge reads its
+newest chunks, at most `max_candidates` (64 by default). A source over an
+external vector database recalls by embedding. External
 API documents carry the score the service returns (Pinecone `score`, Weaviate
 `1 - distance`, Elasticsearch `_score`, a custom `score`); a document without
 one counts as similarity 1.
@@ -125,7 +130,9 @@ Milvus (the default), Valkey or Qdrant. See the
 Its default `match` block recalls only: the store's
 `default_retrieval_limit` and `default_similarity_threshold`, else 5 memories
 with a similarity of at least 0.7. A written block replaces the default, and a
-`judge` asks the decision model which memories are relevant.
+`judge` asks the decision model which memories are relevant. A block with only
+a `judge` suits a small per-user memory: the judge reads the user's newest
+memories, at most `max_candidates` (64 by default).
 
 - `store.auto` writes the turn to memory after the response; unset follows
   `global.stores.memory.auto_store`. A request may turn the write off, and on
@@ -147,11 +154,13 @@ refuses the request: the Router records it in the replay record and goes on.
 
 `compress` shrinks the request's own segments: tool outputs, history and the
 documents and memories the sources injected. Its `match` block judges which
-segments matter: by default one `relevance` call scores each segment against
-the current user turn, and the least relevant segments shrink first, until the
-request fits the budget. `match: {recall: {method: bm25}}` ranks them
-lexically instead, with no call. Without a judge answer the segments are
-ranked lexically.
+segments matter. Each segment is a candidate about the latest user message: by
+default BM25 ranks the segments and one `relevance` call scores the best 64
+of them (`judge.max_candidates`), one batch entry each; the least relevant
+segments, and those the judge did not read, shrink first, until the request
+fits the budget. `match: {recall: {method: bm25}}` ranks them lexically
+instead, with no call. Without a judge answer the segments are ranked
+lexically.
 
 - `mode: auto` (the default) compresses a request over the budget, or with
   segments over their target's `min_tokens`; `always` compresses every request.

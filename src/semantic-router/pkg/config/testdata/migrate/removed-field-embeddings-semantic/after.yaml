@@ -23,7 +23,8 @@ recipes:
 global:
   model_catalog:
     embeddings:
-      default: remote-embedding
+      default:
+        deployment: remote-embedding
     deployments:
       remote-embedding:
         provider: openai_embeddings

@@ -18,6 +18,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/runtimetest"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/presets"
 )
 
 // toolsJudge is a fake decision model: it answers tool_need with need and
@@ -240,22 +241,44 @@ func TestToolsSelectOnError(t *testing.T) {
 	}
 }
 
-// More request tools than one question takes options: keep forwards them
-// unselected without asking, reject refuses the request.
-func TestToolsSelectOnOverflow(t *testing.T) {
-	names := make([]string, 256)
+// More request tools than one question takes options never fail: the judge
+// chooses among the first 255 as the request lists them, and a bm25 recall
+// narrows them by the request instead.
+func TestToolsSelectTruncatesOverflowingTools(t *testing.T) {
+	names := make([]string, 300)
 	for index := range names {
 		names[index] = fmt.Sprintf("tool_%03d", index)
 	}
-	judge := &toolsJudge{need: 0.9}
+	judge := &toolsJudge{need: 0.9, choose: map[string]float64{"tool_010": 0.9, "tool_270": 1}}
 	request := toolsRequest(names...)
 	_, response := applyTools(t, toolsRouter(judge), toolsSelect(config.ToolsSelectModeFilter, nil), request)
-	if len(request.Tools) != 256 || response.GetImmediateResponse() != nil || len(judge.asked()) != 0 {
-		t.Fatalf("keep forwards every tool unasked: %d tools, %d calls", len(request.Tools), len(judge.asked()))
+	if response.GetImmediateResponse() != nil || !reflect.DeepEqual(toolNames(request.Tools), []string{"tool_010"}) {
+		t.Fatalf("filter keeps the judge's choice among the first 255: %v", toolNames(request.Tools))
 	}
-	ctx, response := applyTools(t, toolsRouter(judge), toolsSelect(config.ToolsSelectModeFilter, func(s *config.ToolsSelectConfig) { s.OnOverflow = config.ToolsSelectOnOverflowReject }), toolsRequest(names...))
-	if response.GetImmediateResponse().GetStatus().GetCode() != 400 || ctx.ImmediateProtocolError.Code != "too_many_tools" {
-		t.Fatalf("reject refuses the request: %v %+v", response.GetImmediateResponse().GetStatus(), ctx.ImmediateProtocolError)
+	offered := 0
+	for _, call := range judge.asked() {
+		for _, question := range call.Questions {
+			if question.Type == config.SystemOneQuestionChoice {
+				offered = len(question.Choices)
+				if question.Choices[offered-1].Key != "tool_254" {
+					t.Fatalf("the choice offers the first 255 tools, ending with %s", question.Choices[offered-1].Key)
+				}
+			}
+		}
+	}
+	if offered != 255 {
+		t.Fatalf("the choice offers %d tools, want 255", offered)
+	}
+
+	request = toolsRequest(names...)
+	request.Tools[280].Description = "Find the onboarding guide for new hires"
+	judge = &toolsJudge{need: 0.9, choose: map[string]float64{"tool_280": 1}}
+	narrowed := toolsSelect(config.ToolsSelectModeFilter, func(s *config.ToolsSelectConfig) {
+		s.Match = &config.MatchConfig{Recall: &config.MatchRecall{Method: config.MatchRecallBM25, TopK: 20}, Judge: &config.MatchJudge{Preset: presets.ToolRank, TopK: 1}}
+	})
+	applyTools(t, toolsRouter(judge), narrowed, request)
+	if got := toolNames(request.Tools); !reflect.DeepEqual(got, []string{"tool_280"}) {
+		t.Fatalf("bm25 recall offers the tool the request names: %v", got)
 	}
 }
 

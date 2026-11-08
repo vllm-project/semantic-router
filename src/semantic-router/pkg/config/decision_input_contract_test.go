@@ -145,6 +145,6 @@ global:
         public_name: encoder-public
         ` + input + `
     embeddings:
-      default: encoder
+      default: {deployment: encoder}
 `
 }

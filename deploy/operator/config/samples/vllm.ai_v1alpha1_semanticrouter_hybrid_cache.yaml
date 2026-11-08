@@ -90,7 +90,7 @@ spec:
           description: "Hybrid cache backend storage"
           vector_field:
             name: embedding
-            dimension: 384  # For BERT embeddings
+            dimension: 768  # vela-embedding, embeddings.default, answers with at most 768
             metric_type: IP
           index:
             type: HNSW

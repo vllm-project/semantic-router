@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"gopkg.in/yaml.v2"
 
@@ -98,13 +99,17 @@ type CanonicalModelCatalog struct {
 	SignalTimeoutMs int `yaml:"signal_timeout_ms,omitempty"`
 }
 
-// CanonicalEmbeddingModels names the embedding deployments recall uses.
-// Default embeds for every store and collection that names none of its own
-// and serves /v1/embeddings; Multimodal, which has no default, embeds the
-// images and audio a /v1/embeddings request sends.
+// CanonicalEmbeddingModels names the embedding deployment recall uses, the
+// way system.decision_model names the decision model's. Default embeds for
+// every store and collection that names none of its own: the pre-declared
+// vela-embedding, started only when a recall consumer needs it.
 type CanonicalEmbeddingModels struct {
-	Default    string `yaml:"default,omitempty"`
-	Multimodal string `yaml:"multimodal,omitempty"`
+	Default EmbeddingModelBinding `yaml:"default,omitempty"`
+}
+
+// EmbeddingModelBinding names the deployment that embeds for recall.
+type EmbeddingModelBinding struct {
+	Deployment string `yaml:"deployment" json:"deployment" jsonschema:"required,minLength=1"`
 }
 
 // CanonicalModelModules holds the prompt compression of the request text
@@ -134,6 +139,9 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 	}
 	if err := validateDecisionModel(&resolved); err != nil {
 		return CanonicalGlobal{}, err
+	}
+	if name := resolved.ModelCatalog.Embeddings.Default.Deployment; name == "" || name != strings.TrimSpace(name) {
+		return CanonicalGlobal{}, fmt.Errorf("global.model_catalog.embeddings.default.deployment must name a declared deployment")
 	}
 	return resolved, nil
 }
@@ -223,8 +231,7 @@ func applyCanonicalIntegrationGlobal(cfg *RouterConfig, integrations CanonicalIn
 
 func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalModelCatalog) {
 	cfg.DecisionModel = modelCatalog.System.DecisionModel.Deployment
-	cfg.EmbeddingDeployment = modelCatalog.Embeddings.Default
-	cfg.MultimodalEmbeddingDeployment = modelCatalog.Embeddings.Multimodal
+	cfg.EmbeddingDeployment = modelCatalog.Embeddings.Default.Deployment
 	cfg.ModelDeployments = cloneModelMap(modelCatalog.Deployments)
 	cfg.GlobalModelBindings = cloneModelMap(modelCatalog.Bindings)
 	cfg.ExternalModels = append([]ExternalModelConfig(nil), modelCatalog.External...)

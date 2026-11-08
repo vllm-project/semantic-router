@@ -425,7 +425,6 @@ func (components *routerComponents) buildEarlyResources() error {
 	// The service wraps the generation's configuration around the recipe
 	// classifiers, which the signal runtime owns.
 	components.classificationSvc = services.NewRecipeClassificationService(components.recipeClassifiers, components.cfg)
-	components.classificationSvc.SetGlobalEmbeddings(components.serviceEmbeddings)
 	components.resources.add(components.classificationSvc.Close)
 	components.responseCache, err = newResponseCacheService(components.cfg, components.semanticCache, components.semanticCacheIdentity, components.cacheEmbeddings)
 	if err != nil {

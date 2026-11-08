@@ -373,7 +373,6 @@ decision, or request content:
 | `max_output_tokens_exceeded` | 400 | `invalid_request_error` | The requested output exceeds the configured model limit. See [request budget errors](#request-budget-errors). |
 | `decision_unresolved` | 503 | `server_error` | A decision could not be evaluated because a signal it needs was unavailable, and its `rules.on_unknown` is `fail_request`. `x-vsr-applied-unknown-policy` names the decision. |
 | `no_eligible_model` | 503 | `server_error` | The selection policy rejected every candidate model of the matched decision. |
-| `too_many_tools` | 400 | `invalid_request_error` | The request has more tools than the matched decision's [tool selection](../tutorials/plugin/tools.md#selection) chooses among (255), and its `select.on_overflow` is `reject`. |
 | `tool_selection_failed` | 503 | `server_error` | The matched decision's [tool selection](../tutorials/plugin/tools.md#selection) failed or timed out, and its `select.on_error` is `fail`. |
 
 The Router logs each of these failures at `WARN`, under the request's

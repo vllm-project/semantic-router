@@ -5,7 +5,7 @@ import { mockAuthenticatedAppShell } from './support/auth'
 const globalConfig = {
   router: { strategy: 'priority' },
   model_catalog: {
-    embeddings: { default: 'vela-embedding' },
+    embeddings: { default: { deployment: 'vela-embedding' } },
   },
 }
 
@@ -127,7 +127,7 @@ test.describe('Remote embedding provider Dashboard workflow', () => {
             capabilities: { dimensions: 1536 },
           },
         },
-        embeddings: { default: 'remote-embed' },
+        embeddings: { default: { deployment: 'remote-embed' } },
       },
     })
   })
@@ -155,7 +155,7 @@ test.describe('Remote embedding provider Dashboard workflow', () => {
     await expect(modal).toBeHidden()
     await expect.poll(() => updateBody).not.toBeNull()
     expect(updateBody).toMatchObject({
-      model_catalog: { embeddings: { default: 'vela-embedding' } },
+      model_catalog: { embeddings: { default: { deployment: 'vela-embedding' } } },
     })
     expect(updateBody).not.toHaveProperty('model_catalog.embeddings.semantic')
     expect(updateBody).not.toHaveProperty('model_catalog.deployments')

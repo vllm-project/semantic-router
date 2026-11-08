@@ -1,6 +1,6 @@
 ---
 title: 嵌入
-description: 用于召回的嵌入：响应缓存、记忆、RAG、向量库和嵌入 API。
+description: 用于召回的嵌入：响应缓存、记忆、RAG 和向量库。
 translation:
   source_commit: "439c22531380dfd51abf2ce33ce6dc4db87b1fb7"
   source_file: "docs/model-runtime/guides/embeddings.md"
@@ -12,19 +12,18 @@ is_mtpe: true
 
 嵌入把文本变成向量，router 就能按语义召回。嵌入只用于召回，从不参与路由决策：
 
-- [响应缓存](../../tutorials/plugin/response-cache.md)：重复的问题从缓存里答；
-- [context 插件](../../tutorials/plugin/context.md)的记忆源和 RAG 源，以及向量库：找存着的事实和文档（`match.recall`）；
-- `/v1/embeddings`。
+- [响应缓存](../../tutorials/plugin/response-cache.md)：找出请求可以复用的缓存请求；
+- [context 插件](../../tutorials/plugin/context.md)的记忆源和 RAG 源，以及向量库：找存着的事实和文档（`match.recall`）。
 
 默认模型是 Vela 1.0 Embedding，读得了 32,768 个 token；要快的话还能从更早的层取小向量：3、6、11、22 层，64、128、256、512 或 768 维。
 
 ## 打开它 {#turn-it-on}
 
-启用一个做召回的功能就够了：Vela Embedding 由 router 跑在 CPU 上。`global.model_catalog.embeddings.default` 指定嵌入文本的部署，不改的话就是预先声明的 `vela-embedding`。`embeddings.multimodal` 指定嵌入图像和音频的部署；不设就不开（见[图像和音频](./multimodal.md)）。
+启用一个做召回的功能就够了：Vela Embedding 由 router 跑在 CPU 上。`global.model_catalog.embeddings.default` 指定做嵌入的部署，写法和 `system.decision_model` 指定决策模型的部署一样；不改的话就是预先声明的 `vela-embedding`。只有响应缓存、记忆或向量库用它召回时它才启动；没有召回的配置从不启动它。
 
 ## 选它跑在哪 {#choose-where-it-runs}
 
-所有召回功能（响应缓存、记忆、向量库、RAG 源和 `/v1/embeddings`）都用 `embeddings.default` 指定的部署做嵌入。想改它的设备或输入预算，就用同一个名字声明这个部署：
+嵌入模型和其他部署一样：本地的 `model_runtime` 部署，或者远程的 OpenAI 兼容嵌入 API。所有召回功能都用 `embeddings.default` 指定的部署做嵌入。想改它的设备或输入预算，就用同一个名字声明这个部署：
 
 ```yaml
 global:
@@ -38,7 +37,7 @@ global:
           max_tokens: 8192
           overflow: truncate
     embeddings:
-      default: vela-embedding
+      default: {deployment: vela-embedding}
 ```
 
 不同功能可以读同一个模型的不同视图，所以已有索引照样有效：用 Vela Embedding 时，记忆存 256 维向量，内存响应缓存存第 6 层的 256 维向量，向量库和 RAG 源用全部 768 维。它们共用一个部署；每个视图自成一个向量空间，分开存。
@@ -66,11 +65,11 @@ global:
         dimension: 384
 ```
 
-没有 `embedding` 块的库用 `embeddings.default` 做嵌入。Router 加载配置时逐个检查：部署必须已声明、能嵌入文本，且给得出这个维度；远程部署看它的 `capabilities.dimensions`。
+没有 `embedding` 块的库用 `embeddings.default` 做嵌入。Router 加载配置时逐个检查部署：必须已声明、能嵌入文本，且给得出库索引的维度，即块里的 `dimension` 或持久化后端向量字段的维度。
 
 ## 用外部嵌入服务 {#use-an-external-embedding-service}
 
-任何 OpenAI 兼容的 `/embeddings` 端点（比如挂了嵌入模型的 `vllm serve`）都能换掉本地模型处理文本。把它声明为 `openai_embeddings` 部署，并在 `embeddings.default` 中指定它；Router 向 `<endpoint>/embeddings` 发送请求：
+任何 OpenAI 兼容的 `/embeddings` 端点（比如挂了嵌入模型的 `vllm serve`）都能换掉本地模型。把它声明为 `openai_embeddings` 部署，在 `capabilities` 里写明模型的事实，并在 `embeddings.default` 中指定它；Router 向 `<endpoint>/embeddings` 发送请求：
 
 ```yaml alternative
 global:
@@ -83,16 +82,16 @@ global:
         auth: {api_key_env: EMBEDDING_API_KEY}
         timeout_ms: 5000
         max_retries: 2
-        capabilities: {dimensions: 1024}
+        capabilities: {dimensions: 1024, modalities: [text]}
     embeddings:
-      default: remote-embed
+      default: {deployment: remote-embed}
 ```
 
-服务方会收到待嵌入的文本。要图像、音频、层视图或长文本开窗的功能，还是得用本地模型。
+`capabilities.dimensions` 是它的向量维度，`capabilities.modalities` 是它能嵌入的内容；声明了模态却不含 `text` 的部署不能用于召回。服务方会收到待嵌入的文本。层视图或长文本开窗还是得用本地模型。
 
 ## 验一下 {#check-it}
 
-这些 worker 级示例在含有 `vllm-srun` 的环境里运行（例如 Router 镜像）。Classify、embeddings、rerank 和 bundle 是 worker API；实例前端发布的是 System One 和 decision 请求。
+这些 worker 级示例在含有 `vllm-srun` 的环境里运行（例如 Router 镜像）。Classify、embeddings、rerank 和 bundle 是 worker API；Router 没有返回嵌入的 API，实例前端发布的是 System One 和 decision 请求。
 
 ```bash
 vllm-srun serve vllm-sr/Vela-1.0-Encoder-307M-Embedding --device cpu --port 8100

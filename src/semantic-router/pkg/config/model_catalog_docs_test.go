@@ -38,8 +38,8 @@ var allSignals = []string{
 // recipe:<name>/, to the deployment that answers it. "*" sets every
 // signal in allSignals.
 var docExampleResolutions = map[string]map[string]string{
-	"s1-defaults":         {"*": "primary", "embedding": "vela-embedding", "multimodal": ""},
-	"s2-remote-systemone": {"*": "d3-remote", "embedding": "vela-embedding", "multimodal": ""},
+	"s1-defaults":         {"*": "primary", "embedding": "vela-embedding"},
+	"s2-remote-systemone": {"*": "d3-remote", "embedding": "vela-embedding"},
 	"s3-mixed":            {"*": "d3-remote", "pii": "local-vela"},
 	"s4-type-and-rule-overrides": {
 		"*": "kai", "domain": "d3-remote", "systemone.needs_reasoning": "kai", "systemone.support_team": "d3-remote",
@@ -48,7 +48,7 @@ var docExampleResolutions = map[string]map[string]string{
 	"s5-rule-level": {
 		"domain.math": "primary", "domain.law": "kai", "safety.harmful": "d3-remote", "selector.pick-model": "kai", "domain": "primary",
 	},
-	"field-reference":      {"*": "primary", "pii": "primary", "embedding": "vela-embedding", "multimodal": ""},
+	"field-reference":      {"*": "primary", "pii": "primary", "embedding": "vela-embedding"},
 	"r1-remote-embedding":  {"embedding": "remote-embed", "*": "primary"},
 	"r3-remote-judge":      {"jailbreak": "d3-judge", "hallucination": "d3-judge", "domain": "primary"},
 	"r4-systemone-gateway": {"*": "d3-gateway"},
@@ -141,8 +141,6 @@ func resolveDocKey(cfg *RouterConfig, key string) string {
 	switch {
 	case key == "embedding":
 		return scoped.EmbeddingDeployment
-	case key == "multimodal":
-		return scoped.MultimodalEmbeddingDeployment
 	case strings.HasPrefix(key, "systemone."):
 		for _, rule := range scoped.SystemOneRules {
 			if "systemone."+rule.Name == key {
@@ -303,7 +301,7 @@ func TestModelResourceMigrationPairsResolveToTheSameDeployments(t *testing.T) {
 			if warnings := warningCodes(current)[warningDeprecatedModelField]; warnings > 0 {
 				t.Errorf("the new form writes %d deprecated fields: %+v", warnings, Warnings(current))
 			}
-			keys := append([]string{"domain", "jailbreak", "pii", "fact_check", "user_feedback", "hallucination", "embedding", "multimodal"}, ruleKeys(old)...)
+			keys := append([]string{"domain", "jailbreak", "pii", "fact_check", "user_feedback", "hallucination", "embedding"}, ruleKeys(old)...)
 			keys = append(keys, ruleKeys(current)...)
 			was, now := effectiveDeployments(old, keys), effectiveDeployments(current, keys)
 			for _, key := range sortedStringKeys(was) {

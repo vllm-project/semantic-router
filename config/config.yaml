@@ -1515,6 +1515,9 @@ recipes:
                       top_k: 6
                       min_score: 0.5
                       min_ratio: 0.2
+                      # The judge reads at most this many recalled
+                      # documents, the most similar; 64 by default.
+                      max_candidates: 32
                       on_error: skip
                       timeout_ms: 1500
                   max_context_length: 12000
@@ -2189,8 +2192,6 @@ global:
       routing_preview:
         request_timeout_seconds: 120
         max_concurrency: 16
-      embeddings:
-        enabled: false
       batch_classification:
         max_batch_size: 100
         metrics:
@@ -2639,8 +2640,8 @@ global:
         public_name: decision-public
         artifact: vllm-sr/vela3-fast
         device: cpu
-      # Vela 1.0 Omni-Nano embeds text, images and audio for /v1/embeddings
-      # requests that send media (embeddings.multimodal).
+      # Vela 1.0 Omni-Nano, the embedding model of the vector store below:
+      # its text vectors have 384 dimensions.
       omni-nano:
         provider: model_runtime
         artifact: vllm-sr/Vela-1.0-Omni-Nano
@@ -2801,15 +2802,16 @@ global:
         max_retries: 2
         limits:
           max_response_bytes: 16777216
+        # The model's facts: the width of its vectors and what it embeds.
         capabilities:
           dimensions: 1024
-    # The deployments recall embeds with: default for every store and
-    # collection that names none of its own, and for /v1/embeddings (Vela
-    # Embedding, pre-declared as vela-embedding); multimodal, which has no
-    # default, for the images and audio a /v1/embeddings request sends.
+          modalities: [text]
+    # The deployment recall embeds with, for every store and collection that
+    # names none of its own, the way system.decision_model names the decision
+    # model's: Vela Embedding, pre-declared as vela-embedding. It starts only
+    # when the response cache, memory or a vector store recalls with it.
     embeddings:
-      default: vela-embedding
-      multimodal: omni-nano
+      default: {deployment: vela-embedding}
     # The decision model answers every question-style signal and selector that
     # no rule deployment or binding names. The Router checks at load that the
     # deployment answers each one. Omission selects primary (vela3-fast).

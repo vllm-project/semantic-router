@@ -149,7 +149,7 @@ global:
         max_num_seqs: 64
         dtype: auto
     embeddings:
-      default: vela-embedding
+      default: {deployment: vela-embedding}
   stores:
     memory:
       embedding: {deployment: vela-embedding}

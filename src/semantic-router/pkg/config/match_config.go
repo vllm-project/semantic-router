@@ -36,7 +36,9 @@ type MatchRecall struct {
 // candidates, in one call, and keeps candidates by their scores. A choice
 // question chooses among the candidates, which are its options, and scores
 // each with its probability. A noul or score question is asked about each
-// candidate, and scores it with P(yes) or with the expected level.
+// candidate, and scores it with P(yes) or with the expected level. A judge
+// reads at most max_candidates candidates and truncates the rest, never
+// refuses them.
 type MatchJudge struct {
 	// Preset is a canonical question: relevance (does the candidate help
 	// answer the request), same_request (does the candidate request ask the
@@ -57,6 +59,12 @@ type MatchJudge struct {
 	// MinRatio keeps the candidates that score at least this fraction of
 	// the best one, in (0, 1].
 	MinRatio *float64 `json:"min_ratio,omitempty" yaml:"min_ratio,omitempty"`
+	// MaxCandidates is the most candidates the judge reads: the first by
+	// recall rank, or, without recall, as the feature lists them, most
+	// recent first. A choice judge reads at most 255, the options of one
+	// question, and does by default; one asked about each candidate reads
+	// 64 by default.
+	MaxCandidates int `json:"max_candidates,omitempty" yaml:"max_candidates,omitempty"`
 	// OnError is what a failed or late judge does: skip (the default) keeps
 	// the recall result, or the candidates as they came without recall;
 	// fail fails the match.
@@ -73,6 +81,10 @@ const (
 	MatchOnErrorSkip     = "skip"
 	MatchOnErrorFail     = "fail"
 )
+
+// DefaultMatchJudgeCandidates is how many candidates a judge asked about
+// each candidate reads without max_candidates: one batch entry each.
+const DefaultMatchJudgeCandidates = 64
 
 // EffectiveMethod is the recall method.
 func (r MatchRecall) EffectiveMethod() string {
@@ -110,6 +122,17 @@ func (j MatchJudge) Chooses() bool {
 	return j.QuestionType() == SystemOneQuestionChoice
 }
 
+// EffectiveMaxCandidates is the most candidates the judge reads.
+func (j MatchJudge) EffectiveMaxCandidates() int {
+	switch {
+	case j.MaxCandidates > 0:
+		return j.MaxCandidates
+	case j.Chooses():
+		return presets.MaxChoices
+	}
+	return DefaultMatchJudgeCandidates
+}
+
 // MatchJudgeDeployment returns the deployment a judge asks: its own, or the
 // decision model's.
 func (c *RouterConfig) MatchJudgeDeployment(judge MatchJudge) string {
@@ -131,42 +154,51 @@ const (
 
 // matchFeature is a feature's row of the defaults table: how its messages
 // name it, the block it runs when it writes none, whether its candidates
-// live in an index (which a judge cannot read whole, so a block it writes
-// recalls), and the recall methods its candidates are recalled by.
+// live in an index, which a judge without recall reads only when the
+// feature lists them whole (listed), and the recall methods its candidates
+// are recalled by.
 type matchFeature struct {
 	noun          string
 	defaults      MatchConfig
 	indexed       bool
+	listed        bool
 	recallMethods []string
 }
 
 // matchFeatures is the defaults table. The response cache recalls cached
-// requests, a RAG source recalls widely and lets the relevance judge decide,
-// a memory source recalls; compression judges the request's own segments,
-// whose budget bounds what it keeps; tool selection chooses among at most
-// 255 tools.
+// requests and serves one that same_request confirms; a RAG source recalls
+// widely and lets the relevance judge decide; a memory source recalls;
+// compression prefilters the request's own segments by BM25 and judges
+// them, and its budget bounds what it keeps; tool selection chooses among
+// at most 255 tools.
 var matchFeatures = map[MatchFeature]matchFeature{
 	MatchResponseCache: {
 		noun: "the response cache", indexed: true, recallMethods: []string{MatchRecallEmbedding},
-		defaults: MatchConfig{Recall: &MatchRecall{Method: MatchRecallEmbedding, TopK: 3, MinSimilarity: matchBound(0.8)}},
+		defaults: MatchConfig{
+			Recall: &MatchRecall{Method: MatchRecallEmbedding, TopK: 3, MinSimilarity: matchBound(0.8)},
+			Judge:  &MatchJudge{Preset: presets.SameRequest, MinScore: matchBound(0.8)},
+		},
 	},
 	MatchRAG: {
-		noun: "a RAG source", indexed: true, recallMethods: []string{MatchRecallEmbedding},
+		noun: "a RAG source", indexed: true, listed: true, recallMethods: []string{MatchRecallEmbedding, MatchRecallBM25},
 		defaults: MatchConfig{
 			Recall: &MatchRecall{Method: MatchRecallEmbedding, TopK: 20, MinSimilarity: matchBound(0.3)},
 			Judge:  &MatchJudge{Preset: presets.Relevance, TopK: 6, MinScore: matchBound(presets.NeutralThreshold)},
 		},
 	},
 	MatchMemory: {
-		noun: "a memory source", indexed: true, recallMethods: []string{MatchRecallEmbedding},
+		noun: "a memory source", indexed: true, listed: true, recallMethods: []string{MatchRecallEmbedding},
 		defaults: MatchConfig{Recall: &MatchRecall{Method: MatchRecallEmbedding, TopK: 5, MinSimilarity: matchBound(0.7)}},
 	},
 	MatchCompress: {
 		noun: "context compression", recallMethods: []string{MatchRecallBM25},
-		defaults: MatchConfig{Judge: &MatchJudge{Preset: presets.Relevance}},
+		defaults: MatchConfig{
+			Recall: &MatchRecall{Method: MatchRecallBM25},
+			Judge:  &MatchJudge{Preset: presets.Relevance},
+		},
 	},
 	MatchToolsSelect: {
-		noun:     "tool selection",
+		noun: "tool selection", recallMethods: []string{MatchRecallBM25},
 		defaults: MatchConfig{Judge: &MatchJudge{Preset: presets.ToolRank, TopK: 3, MinRatio: matchBound(0.1)}},
 	},
 }

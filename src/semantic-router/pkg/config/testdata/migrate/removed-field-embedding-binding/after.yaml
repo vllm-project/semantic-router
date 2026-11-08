@@ -27,4 +27,5 @@ global:
       shared-embed: {provider: openai_embeddings, endpoint: "https://embed.example.com/v1", model: BAAI/bge-m3}
       docs-embed: {provider: openai_embeddings, endpoint: "https://docs-embed.example.com/v1", model: intfloat/e5-large-v2}
     embeddings:
-      default: shared-embed
+      default:
+        deployment: shared-embed

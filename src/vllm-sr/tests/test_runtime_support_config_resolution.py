@@ -223,7 +223,7 @@ def test_effective_config_keeps_the_embedding_deployment_as_authored(
         "global": {
             "model_catalog": {
                 "deployments": {"cpu-embedding": deployment},
-                "embeddings": {"default": "cpu-embedding"},
+                "embeddings": {"default": {"deployment": "cpu-embedding"}},
             }
         },
     }
@@ -235,7 +235,7 @@ def test_effective_config_keeps_the_embedding_deployment_as_authored(
     )
     effective = yaml.safe_load(effective_path.read_text())
     catalog = effective["global"]["model_catalog"]
-    assert catalog["embeddings"] == {"default": "cpu-embedding"}
+    assert catalog["embeddings"] == {"default": {"deployment": "cpu-embedding"}}
     assert "modules" not in catalog
     assert catalog["deployments"] == {"cpu-embedding": deployment}
     assert config_path.read_bytes() == original

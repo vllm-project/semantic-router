@@ -1,6 +1,6 @@
 ---
 title: Embeddings
-description: Embeddings for recall, the response cache, memory, RAG, vector stores and the embeddings API.
+description: Embeddings for recall in the response cache, memory, RAG and vector stores.
 ---
 
 # Embeddings
@@ -8,11 +8,10 @@ description: Embeddings for recall, the response cache, memory, RAG, vector stor
 An embedding turns text into a vector so the router can recall by meaning.
 Embeddings serve recall only, never a routing decision:
 
-- the [response cache](tutorials/plugin/response-cache.md): answer a
-  repeated question from the cache;
+- the [response cache](tutorials/plugin/response-cache.md): find the cached
+  requests a request may reuse;
 - the memory and RAG sources of the [context plugin](tutorials/plugin/context.md)
-  and vector stores: find stored facts and documents (`match.recall`);
-- `/v1/embeddings`.
+  and vector stores: find stored facts and documents (`match.recall`).
 
 The default model is Vela 1.0 Embedding. It reads up to 32,768 tokens and can
 return smaller vectors from earlier layers when you need speed: layers 3, 6,
@@ -22,16 +21,17 @@ return smaller vectors from earlier layers when you need speed: layers 3, 6,
 
 Enabling a feature that recalls is enough: the router runs Vela Embedding on
 the CPU. `global.model_catalog.embeddings.default` names the deployment that
-embeds text, the pre-declared `vela-embedding` unless you change it.
-`embeddings.multimodal` names the deployment that embeds images and audio; it
-is off until you set it (see [Images and audio](./multimodal.md)).
+embeds, the way `system.decision_model` names the decision model's: the
+pre-declared `vela-embedding` unless you change it. The deployment starts only
+when the response cache, memory or a vector store recalls with it; a
+configuration without recall never starts it.
 
 ## Choose where it runs
 
-Every recall feature (the response cache, memory, vector stores, RAG sources
-and `/v1/embeddings`) embeds with the deployment `embeddings.default` names.
-To change its device or input budget, declare the deployment under the same
-name:
+An embedding model is a deployment like any other: a local `model_runtime`
+deployment, or a remote OpenAI-compatible embeddings API. Every recall feature
+embeds with the deployment `embeddings.default` names. To change its device or
+input budget, declare the deployment under the same name:
 
 ```yaml
 global:
@@ -45,7 +45,7 @@ global:
           max_tokens: 8192
           overflow: truncate
     embeddings:
-      default: vela-embedding
+      default: {deployment: vela-embedding}
 ```
 
 Features may read different views of the same model, so existing indexes stay
@@ -81,16 +81,16 @@ global:
 ```
 
 A store without an `embedding` block embeds with `embeddings.default`. The
-Router checks every block when it loads the configuration: the deployment must
-be declared and embed text, and it must answer with the dimension, its
-`capabilities.dimensions` for a remote deployment.
+Router checks every deployment when it loads the configuration: it must be
+declared and embed text, and it must answer with the width of the store's
+index, the block's `dimension` or the vector field of a persistent backend.
 
 ## Use an external embedding service
 
 Any OpenAI-compatible `/embeddings` endpoint, for example `vllm serve` with an
-embedding model, can replace the local model for text. Declare it as an
-`openai_embeddings` deployment and name it in `embeddings.default`; the Router
-posts to `<endpoint>/embeddings`:
+embedding model, can replace the local model. Declare it as an
+`openai_embeddings` deployment, with the model's facts in `capabilities`, and
+name it in `embeddings.default`; the Router posts to `<endpoint>/embeddings`:
 
 ```yaml alternative
 global:
@@ -103,19 +103,22 @@ global:
         auth: {api_key_env: EMBEDDING_API_KEY}
         timeout_ms: 5000
         max_retries: 2
-        capabilities: {dimensions: 1024}
+        capabilities: {dimensions: 1024, modalities: [text]}
     embeddings:
-      default: remote-embed
+      default: {deployment: remote-embed}
 ```
 
-The service receives the text being embedded. Features that need images,
-audio, layer views or windows of long text need a local model.
+`capabilities.dimensions` is the width of its vectors and
+`capabilities.modalities` what it embeds; a deployment that declares
+modalities without `text` cannot serve recall. The service receives the text
+being embedded. Layer views and windows of long text need a local model.
 
 ## Check it
 
 These worker-level examples run inside an environment containing `vllm-srun`
 (such as the Router image). Classify, embeddings, rerank and bundle are worker
-APIs; the instance frontend publishes System One and decision requests.
+APIs; the Router has no API that returns embeddings, and the instance frontend
+publishes System One and decision requests.
 
 ```bash
 vllm-srun serve vllm-sr/Vela-1.0-Encoder-307M-Embedding --device cpu --port 8100

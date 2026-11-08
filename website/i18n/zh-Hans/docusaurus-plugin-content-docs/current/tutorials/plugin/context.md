@@ -80,7 +80,7 @@ plugins:
 
 `hybrid.strategy` 缺省为 `sequential`：只有主后端失败或没有返回文档时才运行回退后端。`parallel` 同时发起两个查询，主后端一有文档就返回。`external_api` 的 `max_response_bytes` 限制每个响应体，省略或为 `0` 时为 4 MiB；OpenAI `direct_search` 的每个向量存储检索响应也使用同样的缺省值。
 
-源的 `match` 块决定保留哪些文档。缺省情况下，后端召回最多 20 个 embedding 相似度不低于 0.3 的文档；然后对回答判断的部署（除非 `match.judge.deployment` 指定其他部署，否则是 decision model）调用一次，对每个文档提出 `relevance` 问题：保留分数不低于 0.5 的前 6 个最相关文档，按判断给出的顺序排列。写出的块整体替换缺省值：只有 `recall` 的块按后端的顺序保留召回的文档。External API 的文档带有服务返回的分数（Pinecone `score`、Weaviate `1 - distance`、Elasticsearch `_score`、自定义 `score`）；没有分数的文档按相似度 1 计。
+源的 `match` 块决定保留哪些文档。缺省情况下，后端召回最多 20 个 embedding 相似度不低于 0.3 的文档；然后对回答判断的部署（除非 `match.judge.deployment` 指定其他部署，否则是 decision model）调用一次，对每个文档提出 `relevance` 问题（每个文档是批量请求中的一项）：保留分数不低于 0.5 的前 6 个最相关文档，按判断给出的顺序排列。写出的块整体替换缺省值：只有 `recall` 的块按后端的顺序保留召回的文档。本地知识库（基于内存向量库的 `vectorstore` 源）还可以用 `method: bm25` 召回，不对查询做嵌入；或者由只有 `judge` 的块整体判断：judge 读取它最新的分块，最多 `max_candidates` 个（缺省 64）。基于外部向量数据库的源用 embedding 召回。External API 的文档带有服务返回的分数（Pinecone `score`、Weaviate `1 - distance`、Elasticsearch `_score`、自定义 `score`）；没有分数的文档按相似度 1 计。
 
 `on_failure` 决定检索失败时怎么做：`skip`（缺省）不带文档继续，`warn` 另外记录一条警告，`block` 以 `503` 拒绝请求。检索没有结果不算失败。`cache_results` 按查询、源和 match 块把保留的文档缓存 `cache_ttl_seconds`（缺省 3600）秒。
 
@@ -90,7 +90,7 @@ plugins:
 
 记忆源读取 `global.stores.memory` 下配置的存储：Milvus（缺省）、Valkey 或 Qdrant。存储配置见[存储和工具](../global/stores-and-tools)教程，另见 [Valkey 记忆部署指南](../../installation/valkey-memory)和 [Qdrant 部署指南](../../installation/qdrant)。
 
-它的缺省 `match` 块只做召回：使用存储的 `default_retrieval_limit` 和 `default_similarity_threshold`，否则召回 5 条相似度不低于 0.7 的记忆。写出的块替换缺省值，加上 `judge` 就会让 decision model 判断哪些记忆相关。
+它的缺省 `match` 块只做召回：使用存储的 `default_retrieval_limit` 和 `default_similarity_threshold`，否则召回 5 条相似度不低于 0.7 的记忆。写出的块替换缺省值，加上 `judge` 就会让 decision model 判断哪些记忆相关。只有 `judge` 的块适合每个用户的小型记忆：judge 读取该用户最新的记忆，最多 `max_candidates` 条（缺省 64）。
 
 - `store.auto` 在响应之后把这一轮写入记忆；未设置时跟随 `global.stores.memory.auto_store`。请求可以关闭写入；只有在 `store.auto` 未设置时，请求才能打开写入。
 - `hybrid_search` 按 `hybrid_mode`（`weighted` 或 `rrf`）融合存储的向量分数和词法分数。
@@ -100,7 +100,7 @@ plugins:
 
 ### 压缩和预算 {#compression-and-budget}
 
-`compress` 压缩请求自身的片段：工具输出、历史，以及各个源注入的文档和记忆。它的 `match` 块判断哪些片段重要：缺省情况下，一次 `relevance` 调用为每个片段对照当前用户轮次打分，最不相关的片段先被压缩，直到请求放进预算。`match: {recall: {method: bm25}}` 改为按词法排序，不调用模型。没有判断结果时，片段按词法排序。
+`compress` 压缩请求自身的片段：工具输出、历史，以及各个源注入的文档和记忆。它的 `match` 块判断哪些片段重要。每个片段都是关于最新一条用户消息的候选：缺省情况下，BM25 先给片段排序，一次 `relevance` 调用为排在前面的 64 个片段打分（`judge.max_candidates`，每个片段是批量请求中的一项）；最不相关的片段和 judge 没有读到的片段先被压缩，直到请求放进预算。`match: {recall: {method: bm25}}` 改为按词法排序，不调用模型。没有判断结果时，片段按词法排序。
 
 - `mode: auto`（缺省）压缩超出预算的请求，或有片段超过其目标 `min_tokens` 的请求；`always` 压缩每个请求。
 - `targets` 设置每类片段的模式（`preserve`、`extractive`、`truncate`、`recoverable`）及其 `min_tokens` 和 `target_tokens`。`target_tokens` 必须小于 `min_tokens`。历史、RAG、记忆和当前用户文本在其目标启用之前保持不变。

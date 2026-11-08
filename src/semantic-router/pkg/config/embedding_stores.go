@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 )
 
 // The backends an embedding provider reports.
@@ -176,13 +177,11 @@ func collectRAGQueryEmbeddings(source *ContextSource, path string, into map[stri
 	}
 }
 
-// The embedding consumers: a RAG source's query embedding, the embeddings
-// API (text, and the media of the multimodal deployment), the response
-// cache, memory and vector store ingestion.
+// The embedding consumers, which all recall: a RAG source's query embedding,
+// the response cache, memory and vector store ingestion. Nothing else starts
+// an embedding deployment.
 const (
 	EmbeddingConsumerRAG           = "rag"
-	EmbeddingConsumerAPI           = "api"
-	EmbeddingConsumerMultimodalAPI = "multimodal_api"
 	EmbeddingConsumerResponseCache = "response_cache"
 	EmbeddingConsumerMemory        = "memory"
 	EmbeddingConsumerVectorStore   = "vector_store"
@@ -196,8 +195,8 @@ type EmbeddingRequirement struct {
 }
 
 // EmbeddingRequirements lists the embedding consumers one prepared scope
-// runs: its RAG sources, and with sharedServices the embeddings API, the
-// response cache, memory and vector store ingestion.
+// runs: its RAG sources, and with sharedServices the response cache, memory
+// and vector store ingestion.
 func EmbeddingRequirements(cfg *RouterConfig, sharedServices bool) []EmbeddingRequirement {
 	cacheNeeded := sharedServices && cfg.NeedsSemanticResponseCache()
 	cfg = cfg.ModelConsumerScope()
@@ -211,12 +210,6 @@ func EmbeddingRequirements(cfg *RouterConfig, sharedServices bool) []EmbeddingRe
 	}
 	if !sharedServices {
 		return result
-	}
-	if cfg.API.Embeddings.Enabled {
-		result = append(result, EmbeddingRequirement{Deployment: cfg.EmbeddingDeployment, Consumer: EmbeddingConsumerAPI})
-		if cfg.MultimodalEmbeddingDeployment != "" {
-			result = append(result, EmbeddingRequirement{Deployment: cfg.MultimodalEmbeddingDeployment, Consumer: EmbeddingConsumerMultimodalAPI})
-		}
 	}
 	if cacheNeeded {
 		name, dimension, layer := cfg.ResponseCacheEmbedding()
@@ -256,34 +249,47 @@ func (c *RouterConfig) embeddingDeploymentsInUse() map[string]bool {
 	return used
 }
 
-// validateEmbeddingStores checks, at load, the embedding deployments
-// global.model_catalog.embeddings names and the bindings of the stores.
+// validateEmbeddingStores checks, at load, the deployment
+// global.model_catalog.embeddings.default names and the bindings of the
+// stores: each deployment embeds text, at the width of the store's index.
 func validateEmbeddingStores(cfg *RouterConfig) error {
-	for _, named := range []struct{ path, name string }{
-		{"global.model_catalog.embeddings.default", cfg.EmbeddingDeployment},
-		{"global.model_catalog.embeddings.multimodal", cfg.MultimodalEmbeddingDeployment},
-	} {
-		if named.name == "" {
-			continue
-		}
-		if _, err := cfg.embeddingDeployment(named.path, named.name); err != nil {
+	if cfg.EmbeddingDeployment != "" {
+		if _, err := cfg.embeddingDeployment("global.model_catalog.embeddings.default.deployment", cfg.EmbeddingDeployment); err != nil {
 			return err
 		}
 	}
-	if err := cfg.validateEmbeddingBinding("global.stores.response_cache.embedding", cfg.SemanticCache.Embedding); err != nil {
+	cache := cfg.SemanticCache
+	field, width := cache.vectorWidth()
+	if err := cfg.validateStoreEmbedding("global.stores.response_cache", cache.Embedding, field, width); err != nil {
 		return err
 	}
-	if field, width := cfg.SemanticCache.vectorWidth(); width > 0 && cfg.SemanticCache.Embedding.width() > 0 && width != cfg.SemanticCache.Embedding.width() {
-		return fmt.Errorf("global.stores.response_cache.embedding.dimension: %d differs from %s %d; keep one", cfg.SemanticCache.Embedding.width(), field, width)
-	}
-	if err := cfg.validateEmbeddingBinding("global.stores.memory.embedding", cfg.Memory.Embedding); err != nil {
+	field, width = cfg.Memory.backendWidth()
+	if err := cfg.validateStoreEmbedding("global.stores.memory", cfg.Memory.Embedding, field, width); err != nil {
 		return err
-	}
-	if field, width := cfg.Memory.backendWidth(); width > 0 && cfg.Memory.Embedding.width() > 0 && width != cfg.Memory.Embedding.width() {
-		return fmt.Errorf("global.stores.memory.embedding.dimension: %d differs from %s %d; keep one", cfg.Memory.Embedding.width(), field, width)
 	}
 	if cfg.VectorStore != nil {
 		return cfg.validateEmbeddingBinding("global.stores.vector_store.embedding", cfg.VectorStore.Embedding)
+	}
+	return nil
+}
+
+// validateStoreEmbedding checks the embedding block of the store at path
+// and the width of its index, the value of field: the block's dimension
+// and the index's must agree, and the deployment the store embeds with must
+// answer with the index's width.
+func (c *RouterConfig) validateStoreEmbedding(path string, binding *EmbeddingBinding, field string, width int) error {
+	if err := c.validateEmbeddingBinding(path+".embedding", binding); err != nil || width == 0 {
+		return err
+	}
+	if binding.width() > 0 {
+		if binding.width() != width {
+			return fmt.Errorf("%s.embedding.dimension: %d differs from %s %d; keep one", path, binding.width(), field, width)
+		}
+		return nil
+	}
+	name := c.EmbeddingDeploymentOf(binding)
+	if deployment, ok := c.ModelDeployments[name]; ok {
+		return c.validateEmbeddingWidth(path+"."+field, name, deployment.WithDefaults(), width)
 	}
 	return nil
 }
@@ -311,25 +317,33 @@ func (c *RouterConfig) validateEmbeddingBinding(path string, binding *EmbeddingB
 	}
 	at := path + ".deployment"
 	if binding.Deployment == "" {
-		at = "global.model_catalog.embeddings.default"
+		at = "global.model_catalog.embeddings.default.deployment"
 	}
 	name := c.EmbeddingDeploymentOf(binding)
 	deployment, err := c.embeddingDeployment(at, name)
 	if err != nil || binding.Dimension == 0 {
 		return err
 	}
-	if declared := deployment.DeclaredDimensions(); declared > 0 && declared != binding.Dimension {
-		return fmt.Errorf("%s.dimension: deployment %q answers with %d dimensions (capabilities.dimensions), not %d", path, name, declared, binding.Dimension)
+	return c.validateEmbeddingWidth(path+".dimension", name, deployment, binding.Dimension)
+}
+
+// validateEmbeddingWidth checks, at path, that deployment name answers with
+// vectors of width: its declared capabilities.dimensions, or at most the
+// output of the built-in model it runs.
+func (c *RouterConfig) validateEmbeddingWidth(path, name string, deployment ModelDeployment, width int) error {
+	if declared := deployment.DeclaredDimensions(); declared > 0 && declared != width {
+		return fmt.Errorf("%s: deployment %q answers with %d dimensions (capabilities.dimensions), not %d", path, name, declared, width)
 	}
-	if spec := registeredModel(deployment.Artifact); deployment.IsModelRuntime() && spec != nil && spec.EmbeddingDim > 0 && binding.Dimension > spec.EmbeddingDim {
-		return fmt.Errorf("%s.dimension: deployment %q runs %s, which embeds at most %d dimensions, not %d", path, name, spec.RepoID, spec.EmbeddingDim, binding.Dimension)
+	if spec := registeredModel(deployment.Artifact); deployment.IsModelRuntime() && spec != nil && spec.EmbeddingDim > 0 && width > spec.EmbeddingDim {
+		return fmt.Errorf("%s: deployment %q runs %s, which embeds at most %d dimensions, not %d", path, name, spec.RepoID, spec.EmbeddingDim, width)
 	}
 	return nil
 }
 
 // embeddingDeployment is the declared deployment name, at path, which must
-// serve embeddings: an openai_embeddings deployment, or a model_runtime one
-// whose built-in model is an embedding model.
+// embed text: an openai_embeddings deployment that declares no modalities or
+// text among them, or a model_runtime one whose built-in model is an
+// embedding model.
 func (c *RouterConfig) embeddingDeployment(path, name string) (ModelDeployment, error) {
 	if name == "" {
 		return ModelDeployment{}, fmt.Errorf("%s: no embedding deployment is named; name one (vela-embedding is pre-declared)", path)
@@ -341,6 +355,9 @@ func (c *RouterConfig) embeddingDeployment(path, name string) (ModelDeployment, 
 	deployment = deployment.WithDefaults()
 	switch deployment.Provider {
 	case OpenAIEmbeddingsProvider:
+		if !deployment.EmbedsText() {
+			return ModelDeployment{}, fmt.Errorf("%s: deployment %q embeds %s (capabilities.modalities), not text, which recall embeds", path, name, strings.Join(deployment.DeclaredModalities(), ", "))
+		}
 		return deployment, nil
 	case ModelRuntimeProvider:
 		if spec := registeredModel(deployment.Artifact); spec != nil && deployment.Managed() &&

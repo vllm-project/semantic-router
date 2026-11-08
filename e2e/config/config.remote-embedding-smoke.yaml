@@ -90,4 +90,4 @@ global:
         capabilities:
           dimensions: 1536
     embeddings:
-      default: remote-embedding
+      default: {deployment: remote-embedding}

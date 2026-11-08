@@ -182,7 +182,7 @@ config:
       strategy: priority
     model_catalog:
       embeddings:
-        default: vela-embedding
+        default: {deployment: vela-embedding}
       deployments:
         # Managed: one independent decision-model worker.
         decision-fixture:
@@ -211,10 +211,13 @@ config:
         decision-offline:
           provider: model_runtime
           endpoint: http://model-runtime-offline.vllm-semantic-router-system.svc.cluster.local:8100
-    services:
-      api:
-        # Makes the global embedding deployment a prepared service.
-        embeddings: {enabled: true}
+    stores:
+      # The vector store embeds with embeddings.default, so the Router starts
+      # the managed embedding deployment for it; no request reads it.
+      vector_store:
+        enabled: true
+        backend_type: memory
+        file_storage_dir: /tmp/vsr-vector-store
 
 extraEnv:
   - name: VLLM_SRUN_COMMAND

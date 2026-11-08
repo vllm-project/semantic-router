@@ -22,7 +22,7 @@ func TestPreparedEmbeddingsServeEveryConsumer(t *testing.T) {
 		t.Fatal(err)
 	}
 	providers := map[string]embedding.Provider{config.EmbeddingDefaultDeployment: provider}
-	served := []config.EmbeddingRequirement{{Deployment: config.EmbeddingDefaultDeployment, Consumer: config.EmbeddingConsumerAPI}}
+	served := []config.EmbeddingRequirement{{Deployment: config.EmbeddingDefaultDeployment, Consumer: config.EmbeddingConsumerVectorStore}}
 	if err := validatePreparedEmbeddings(context.Background(), served, providers); err != nil || calls != 0 {
 		t.Fatalf("full-output consumer: %v, %d probes", err, calls)
 	}

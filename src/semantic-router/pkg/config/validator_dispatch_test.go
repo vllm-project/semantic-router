@@ -48,7 +48,7 @@ func TestConfigLoadValidatesGlobalsForEverySource(t *testing.T) {
 		{"learning_strategy", `router: {learning: {adaptation: {strategy: unknown}}}`, "adaptation.strategy"},
 		{"retired_selector", `router: {model_selection: {method: elo}}`, "global.router.model_selection.method is removed"},
 		{"embedding_dimensions", remoteEmbeddingGlobal, "answers with 128 dimensions"},
-		{"embedding_deployment", `model_catalog: {embeddings: {default: missing}}`, `global.model_catalog.embeddings.default: unknown deployment "missing"`},
+		{"embedding_deployment", `model_catalog: {embeddings: {default: {deployment: missing}}}`, `global.model_catalog.embeddings.default.deployment: unknown deployment "missing"`},
 		{"admission_overflow", `model_catalog: {admission: {primary: {max_concurrency: 1, on_overflow: drop}}}`, "on_overflow"},
 		{"admission_queue", `model_catalog: {admission: {primary: {max_concurrency: 1, max_queue: -1}}}`, "max_queue"},
 		{"deployment_provider", `model_catalog: {deployments: {encoder: {artifact: models/encoder, provider: unknown}}}`, "unsupported provider"},

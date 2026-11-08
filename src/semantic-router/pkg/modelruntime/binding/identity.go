@@ -160,17 +160,8 @@ type WindowCapability struct {
 
 // EmbeddingCapability describes actual vector semantics. Empty strings and
 // zero dimension/layer mean unknown, not inferred from a checkpoint name.
-type AudioCapability struct {
-	SampleRates   []int
-	MaxSampleRate int
-	MaxSeconds    int
-	MaxChannels   int
-	Layout        string
-}
-
 type EmbeddingCapability struct {
 	AvailableDimensions []int
-	Audio               *AudioCapability
 	Dimension           int
 	Layer               int
 	Pooling             string
@@ -188,11 +179,6 @@ func cloneCapability(capability Capability) Capability {
 		value := *capability.Embedding
 		value.Modalities = append([]string(nil), value.Modalities...)
 		value.AvailableDimensions = append([]int(nil), value.AvailableDimensions...)
-		if value.Audio != nil {
-			audio := *value.Audio
-			audio.SampleRates = append([]int(nil), audio.SampleRates...)
-			value.Audio = &audio
-		}
 		capability.Embedding = &value
 	}
 	return capability

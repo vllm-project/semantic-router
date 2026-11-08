@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
-	"slices"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -352,7 +351,7 @@ func candidateForBlock(
 }
 
 // scoreCandidates replaces the targets' lexical scores with the request's
-// scorer's, which reads them against the queries of their turns.
+// scorer's, which reads each of them against the latest user message.
 func scoreCandidates(
 	ctx context.Context,
 	request Request,
@@ -362,14 +361,10 @@ func scoreCandidates(
 		return nil
 	}
 	texts := make([]string, len(candidates))
-	var queries []string
 	for index, candidate := range candidates {
 		texts[index] = candidate.block.Text
-		if !slices.Contains(queries, candidate.plan.Query) {
-			queries = append(queries, candidate.plan.Query)
-		}
 	}
-	scores, err := request.Scorer.Score(ctx, strings.Join(queries, "\n"), texts)
+	scores, err := request.Scorer.Score(ctx, request.Request.LastUser, texts)
 	if err != nil {
 		return err
 	}

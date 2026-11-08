@@ -19,9 +19,6 @@ func TestConvenienceDiagnosticsHTTPRejectsForeignRecipe(t *testing.T) {
 		name, body string
 		handler    func(http.ResponseWriter, *http.Request)
 	}{
-		{"embeddings", `{"recipe":"foreign","texts":["hello"]}`, api.handleEmbeddings},
-		{"similarity", `{"recipe":"foreign","text1":"hello","text2":"world"}`, api.handleSimilarity},
-		{"batch-similarity", `{"recipe":"foreign","query":"hello","candidates":["world"]}`, api.handleBatchSimilarity},
 		{"batch", `{"recipe":"foreign","texts":["hello"]}`, api.handleBatchClassification},
 		{"combined", `{"recipe":"foreign","text":"hello"}`, api.handleCombinedClassification},
 	} {

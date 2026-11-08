@@ -36,9 +36,8 @@ to them:
 | `primary` | `vllm-sr/vela3-fast` on CPU | `system.decision_model` |
 | `vela-embedding` | Vela 1.0 Embedding | `embeddings.default` |
 
-Multimodal embedding is off until `embeddings.multimodal` names a deployment
-you declare, such as one that serves Vela 1.0 Omni Nano (see
-[Images and audio](../model-runtime/guides/multimodal.md)).
+Embeddings serve recall only: `vela-embedding` starts when the response cache,
+memory or a vector store recalls with it, never for a decision.
 
 ## Field reference
 
@@ -77,7 +76,8 @@ global:
     system:
       decision_model: {deployment: primary}
     bindings: {pii: primary}
-    embeddings: {default: vela-embedding}  # multimodal: a declared deployment
+    embeddings:
+      default: {deployment: vela-embedding}  # recall embeds with it
 ```
 
 ### Managed `model_runtime` fields
@@ -108,7 +108,7 @@ deployment with `endpoint`) and every remote provider.
 | `max_retries` | Transport retries after the first attempt, within the caller's deadline | 0–10; not on an attached runtime |
 | `tls` | `ca_file`, `server_name`, `cert_file` and `key_file` (a client certificate), `insecure_skip_verify` | `https` only; files are absolute paths |
 | `limits` | `max_request_bytes`, `max_response_bytes` | Not on an attached runtime |
-| `capabilities` | What a remote model answers when its API lists nothing: `question_types` and `presets` (systemone), `dimensions` (openai_embeddings) | |
+| `capabilities` | The remote model's facts, when its API lists nothing: `question_types`, `presets` and `modalities` (systemone); `dimensions` and `modalities` (openai_embeddings: `text`, `image`, `audio`) | An embedding deployment recall uses embeds `text` |
 | `generation` | `max_tokens`, `temperature` and `reasoning` (`{family, use_reasoning, reasoning_effort}`, where `family` names a built-in reasoning family) of an `openai_chat` deployment's completions | `max_tokens` ≤ 32768; `temperature` 0–2; `reasoning` needs `family` and `use_reasoning` |
 
 Redirects are refused, so a credential never follows a redirect to another
@@ -186,9 +186,9 @@ global:
         auth: {api_key_env: EMBEDDING_API_KEY}
         timeout_ms: 5000
         max_retries: 2
-        capabilities: {dimensions: 1024}
+        capabilities: {dimensions: 1024, modalities: [text]}
     embeddings:
-      default: remote-embed        # multimodal: <name> for multimodal embeddings
+      default: {deployment: remote-embed}
 ```
 
 The Router posts to `https://embedding.example.com/v1/embeddings`: the

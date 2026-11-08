@@ -44,10 +44,12 @@ func (r *OpenAIRouter) matcher() *match.Matcher {
 }
 
 // matchJudges are the judges of the match blocks the reachable decisions
-// run, for a generation to prepare the deployments they ask.
+// and the recipes' default plugins run, for a generation to prepare the
+// deployments they ask.
 func matchJudges(cfg *config.RouterConfig) []config.MatchJudge {
 	var judges []config.MatchJudge
 	for _, recipe := range cfg.ReachableRoutingRecipes() {
+		judges = append(judges, config.MatchJudgesOf(recipe.Profile.DefaultPlugins)...)
 		for index := range recipe.Profile.Decisions {
 			judges = append(judges, recipe.Profile.Decisions[index].MatchJudges()...)
 		}

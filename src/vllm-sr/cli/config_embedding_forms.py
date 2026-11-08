@@ -1,7 +1,9 @@
 """Embedding settings the Router no longer reads: embedding bindings, the
 stores' embedding model keywords and the vector store's width, admission by
-embedding model keyword, and embeddings.semantic. Every store and collection
-now names its embedding deployment, or embeds with embeddings.default.
+embedding model keyword, and embeddings.semantic; and, since embeddings serve
+recall alone, a bare embeddings.default name, embeddings.multimodal and the
+embeddings API. Every store and collection now names its embedding
+deployment, or embeds with embeddings.default: {deployment: <name>}.
 
 The Router refuses each one with a line that names `vllm-sr config migrate`,
 which rewrites it; the CLI refuses them with the same lines.
@@ -36,6 +38,15 @@ SEMANTIC = (
     "embeddings.default names the embedding deployment; a store's embedding "
     "block names its own",
 )
+MULTIMODAL = (
+    "embeddings.multimodal is removed: embeddings serve text recall alone",
+    "nothing; a decision about an image asks a systemone question with input.image",
+)
+EMBEDDINGS_API = (
+    "the embeddings API is removed: embeddings serve recall alone",
+    "nothing; the embedding deployment starts when the response cache, memory "
+    "or a vector store recalls with it",
+)
 
 
 def removed_embedding_forms(data: dict[str, Any]) -> list[str]:
@@ -68,8 +79,23 @@ def removed_embedding_forms(data: dict[str, Any]) -> list[str]:
         if isinstance(key, str) and key.startswith("embedding:"):
             lines.append(_line(f"global.model_catalog.admission.{key}", ADMISSION))
     embeddings = catalog.get("embeddings")
-    if isinstance(embeddings, dict) and "semantic" in embeddings:
+    embeddings = embeddings if isinstance(embeddings, dict) else {}
+    if "semantic" in embeddings:
         lines.append(_line("global.model_catalog.embeddings.semantic", SEMANTIC))
+    default = embeddings.get("default")
+    if isinstance(default, str):
+        lines.append(
+            "global.model_catalog.embeddings.default: invalid_value: "
+            f'embeddings.default "{default}" is a bare deployment name; {MIGRATE} '
+            f"(embeddings.default: {{deployment: {default}}}, as "
+            "system.decision_model names its deployment)"
+        )
+    if "multimodal" in embeddings:
+        lines.append(_line("global.model_catalog.embeddings.multimodal", MULTIMODAL))
+    services = global_section.get("services")
+    api = services.get("api") if isinstance(services, dict) else None
+    if isinstance(api, dict) and "embeddings" in api:
+        lines.append(_line("global.services.api.embeddings", EMBEDDINGS_API))
     return lines
 
 

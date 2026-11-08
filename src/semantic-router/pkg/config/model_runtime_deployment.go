@@ -112,9 +112,12 @@ func ModelRuntimeDeploymentsInUse(cfg *RouterConfig) map[string]ModelDeployment 
 		mark("")
 		return used
 	}
-	scan := func(signals Signals, decisions []Decision) {
+	scan := func(signals Signals, decisions []Decision, defaults []DecisionPlugin) {
 		for _, rule := range signals.SystemOneRules {
 			mark(rule.Deployment)
+		}
+		for _, judge := range MatchJudgesOf(defaults) {
+			mark(judge.Deployment)
 		}
 		for _, decision := range decisions {
 			if decision.Algorithm != nil && decision.Algorithm.SystemOne != nil &&
@@ -133,9 +136,9 @@ func ModelRuntimeDeploymentsInUse(cfg *RouterConfig) map[string]ModelDeployment 
 			}
 		}
 	}
-	scan(cfg.Signals, cfg.Decisions)
+	scan(cfg.Signals, cfg.Decisions, cfg.DefaultPlugins)
 	for _, recipe := range cfg.Recipes {
-		scan(recipe.Profile.Signals, recipe.Profile.Decisions)
+		scan(recipe.Profile.Signals, recipe.Profile.Decisions, recipe.Profile.DefaultPlugins)
 	}
 	for _, scoped := range cfg.consumerScopes() {
 		for _, rule := range scoped.ApplicationRules() {

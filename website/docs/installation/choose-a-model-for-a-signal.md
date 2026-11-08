@@ -30,8 +30,7 @@ are named where they are used:
 
 | Resource | Where you name it | Default |
 | --- | --- | --- |
-| Embeddings | `global.model_catalog.embeddings.default` | `vela-embedding` |
-| Multimodal embeddings | `global.model_catalog.embeddings.multimodal` | off |
+| Embeddings | `global.model_catalog.embeddings.default: {deployment: <name>}` | `vela-embedding`, started only for recall |
 
 Two deployments are always declared, and the Router starts one only when
 something resolves to it: `primary` (`vllm-sr/vela3-fast` on CPU, the default
@@ -54,7 +53,6 @@ changes nothing.
 | --- | --- |
 | Every question-style signal and selector | `primary`, by name |
 | Embeddings | `vela-embedding` |
-| Multimodal embeddings | off |
 
 ## S2. Everything on a remote System One model
 

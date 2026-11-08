@@ -212,7 +212,7 @@ func TestSurfaceStatusesMapToErrors(t *testing.T) {
 
 func TestEmbedDecodesBase64AndFloatVectorsByIndex(t *testing.T) {
 	client := newSurfaceClient(t, &surfaceRuntime{})
-	response, err := client.Embed(context.Background(), "vela-embedding", EmbedRequest{Inputs: []EmbedInput{{Text: "a"}, {ImageURL: "data:image/png;base64,AA=="}}, Dimensions: 2})
+	response, err := client.Embed(context.Background(), "vela-embedding", EmbedRequest{Inputs: []EmbedInput{{Text: "a"}, {Text: "b"}}, Dimensions: 2})
 	if err != nil {
 		t.Fatal(err)
 	}

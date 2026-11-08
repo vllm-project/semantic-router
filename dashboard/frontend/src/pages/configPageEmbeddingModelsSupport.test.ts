@@ -31,8 +31,7 @@ function afterSave(patch: Patch): Record<string, unknown> | undefined {
 }
 
 const localCatalog = {
-  default: 'qwen3-embedding',
-  multimodal: 'omni-nano',
+  default: { deployment: 'qwen3-embedding' },
   future_catalog_option: { enabled: true },
 }
 
@@ -43,26 +42,23 @@ const remoteEndpoint = {
 }
 
 describe('embedding models config support', () => {
-  it('edits the deployments embeddings.default and embeddings.multimodal name', () => {
+  it('edits the deployment embeddings.default names, as {deployment}', () => {
     const editData = embeddingModelsEditData(localCatalog)
-    expect(editData).toEqual(
-      expect.objectContaining({ provider_type: 'local', default: 'qwen3-embedding', multimodal: 'omni-nano' }),
-    )
+    expect(editData).toEqual(expect.objectContaining({ provider_type: 'local', default: 'qwen3-embedding' }))
 
-    const saved = save({ ...editData, default: ' bge-local ', multimodal: '' })
+    const saved = save({ ...editData, default: ' bge-local ' })
     expect(saved.deployments).toBeUndefined()
     expect(saved.embeddings).toEqual({
-      default: 'bge-local',
-      multimodal: null,
+      default: { deployment: 'bge-local' },
       future_catalog_option: { enabled: true },
     })
   })
 
-  it('offers deployments, not embedding model keywords or paths', () => {
+  it('offers deployments, not embedding model keywords, paths or a multimodal deployment', () => {
     const names = embeddingModelsFields().map((field) => field.name)
 
-    expect(names).toEqual(['provider_type', 'remote_backend', 'default', 'multimodal', 'endpoint'])
-    for (const removed of ['model_type', 'mmbert_model_path', 'qwen3_model_path', 'use_cpu', 'embedding_config']) {
+    expect(names).toEqual(['provider_type', 'remote_backend', 'default', 'endpoint'])
+    for (const removed of ['model_type', 'mmbert_model_path', 'qwen3_model_path', 'use_cpu', 'embedding_config', 'multimodal']) {
       expect(names).not.toContain(removed)
     }
   })
@@ -109,15 +105,14 @@ describe('embedding models config support', () => {
       },
     })
     expect(saved.embeddings).toEqual({
-      default: 'remote-embed',
-      multimodal: 'omni-nano',
+      default: { deployment: 'remote-embed' },
       future_catalog_option: { enabled: true },
     })
   })
 
   it('edits the deployment embeddings.default names', () => {
     const view = embeddingModelsView(
-      { default: 'bge' },
+      { default: { deployment: 'bge' } },
       {
         bge: {
           provider: 'openai_embeddings',
@@ -141,7 +136,7 @@ describe('embedding models config support', () => {
     })
     const saved = save(editData)
     expect(Object.keys(saved.deployments ?? {})).toEqual(['bge'])
-    expect(saved.embeddings.default).toBe('bge')
+    expect(saved.embeddings.default).toEqual({ deployment: 'bge' })
     expect(saved.embeddings).not.toHaveProperty('__deployments')
   })
 
@@ -172,7 +167,6 @@ describe('embedding models config support', () => {
       { label: 'Provider', value: 'Local / model_runtime' },
       { label: 'Deployment', value: 'vela-embedding' },
       { label: 'Model', value: 'Vela 1.0 Embedding' },
-      { label: 'Multimodal', value: 'Off' },
     ])
 
     const remote = afterSave(
@@ -187,7 +181,6 @@ describe('embedding models config support', () => {
       { label: 'Provider', value: 'Remote / OpenAI compatible' },
       { label: 'Model', value: 'text-embedding-3-small' },
       { label: 'Dimension', value: '1536' },
-      { label: 'Multimodal', value: 'omni-nano' },
     ])
     expect(embeddingModelsBadges(remote)).toContainEqual({ label: 'Remote provider', tone: 'info' })
     expect(JSON.stringify(embeddingModelsSummary(remote))).not.toContain('OPENAI_API_KEY')

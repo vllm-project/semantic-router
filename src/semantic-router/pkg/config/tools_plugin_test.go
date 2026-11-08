@@ -65,8 +65,9 @@ func TestToolsPluginLoads(t *testing.T) {
 	catalog := writeToolCatalog(t, "docs.search", "tickets.lookup", "admin.delete")
 	for name, configuration := range map[string]string{
 		"policy only":       `{enabled: true, policy: {mode: none, strip_tool_history: true}}`,
-		"filter selection":  `{enabled: true, policy: {mode: filtered, allow_tools: [a, b]}, select: {mode: filter, preserve_count: 1, need_threshold: 0.3, on_error: strip, on_overflow: reject, input: {history: true}, timeout_ms: 500}}`,
+		"filter selection":  `{enabled: true, policy: {mode: filtered, allow_tools: [a, b]}, select: {mode: filter, preserve_count: 1, need_threshold: 0.3, on_error: strip, input: {history: true}, timeout_ms: 500}}`,
 		"add selection":     `{enabled: true, policy: {mode: filtered, block_tools: [admin.delete]}, select: {mode: add, tools_db_path: ` + catalog + `, match: {judge: {preset: tool_rank, top_k: 2, min_score: 0.2}}}}`,
+		"bm25 narrowing":    `{enabled: true, select: {mode: filter, match: {recall: {method: bm25, top_k: 40}, judge: {preset: tool_rank, max_candidates: 20}}}}`,
 		"a disabled plugin": `{enabled: false}`,
 	} {
 		if _, err := loadToolsPlugin(configuration); err != nil {
@@ -78,7 +79,6 @@ func TestToolsPluginLoads(t *testing.T) {
 // Each error is one line that names the field by its document path.
 func TestToolsPluginLoadErrors(t *testing.T) {
 	const at = "recipes[default].decisions[agent].plugins[0].configuration"
-	tooMany := writeToolCatalog(t, numberedTools(256)...)
 	twice := writeToolCatalog(t, "docs.search", "docs.search")
 	cases := map[string]struct{ configuration, want string }{
 		"select without a mode":       {`{enabled: true, select: {}}`, at + ".select.mode must be filter or add"},
@@ -86,7 +86,7 @@ func TestToolsPluginLoadErrors(t *testing.T) {
 		"add without a catalog":       {`{enabled: true, select: {mode: add}}`, at + ".select.tools_db_path is required"},
 		"filter with a catalog":       {`{enabled: true, select: {mode: filter, tools_db_path: tools.json}}`, "tools_db_path is read in add mode"},
 		"add with preserve_count":     {`{enabled: true, select: {mode: add, tools_db_path: tools.json, preserve_count: 1}}`, "preserve_count keeps request tools in filter mode"},
-		"add with on_overflow":        {`{enabled: true, select: {mode: add, tools_db_path: tools.json, on_overflow: keep}}`, "on_overflow applies to filter mode"},
+		"on_overflow":                 {`{enabled: true, select: {mode: filter, on_overflow: reject}}`, `unknown field "on_overflow"`},
 		"add with on_error keep":      {`{enabled: true, select: {mode: add, tools_db_path: tools.json, on_error: keep}}`, "on_error must be skip or fail in add mode"},
 		"filter with on_error skip":   {`{enabled: true, select: {mode: filter, on_error: skip}}`, "on_error must be keep, strip or fail in filter mode"},
 		"preserve_count too large":    {`{enabled: true, select: {mode: filter, preserve_count: 256}}`, at + ".select.preserve_count must be within [0, 255]"},
@@ -95,14 +95,14 @@ func TestToolsPluginLoadErrors(t *testing.T) {
 		"min_ratio out of range":      {`{enabled: true, select: {mode: filter, match: {judge: {preset: tool_rank, min_ratio: 0}}}}`, at + ".select.match.judge.min_ratio must be within (0, 1]"},
 		"judge on_error":              {`{enabled: true, select: {mode: filter, match: {judge: {preset: tool_rank, on_error: fail}}}}`, "judge.on_error: the selection's on_error decides"},
 		"judge timeout":               {`{enabled: true, select: {mode: filter, match: {judge: {preset: tool_rank, timeout_ms: 300}}}}`, "judge.timeout_ms: the selection's timeout_ms bounds its call"},
-		"recall":                      {`{enabled: true, select: {mode: filter, match: {recall: {method: bm25}}}}`, "recalls none; remove recall"},
+		"embedding recall":            {`{enabled: true, select: {mode: filter, match: {recall: {method: embedding, top_k: 5}}}}`, at + ".select.match.recall.method: tool selection recalls with bm25 only"},
+		"choice reading 256":          {`{enabled: true, select: {mode: filter, match: {judge: {preset: tool_rank, max_candidates: 256}}}}`, at + ".select.match.judge.max_candidates must be within [1, 255]"},
 		"empty match block":           {`{enabled: true, select: {mode: filter, match: {}}}`, at + ".select.match: match_empty:"},
 		"sticky enabled":              {`{enabled: true, select: {mode: add, tools_db_path: tools.json, sticky: {enabled: true}}}`, "sticky.enabled is not supported in this release"},
 		"filtered without lists":      {`{enabled: true, policy: {mode: filtered}}`, at + ".policy: mode filtered requires allow_tools or block_tools"},
 		"strip history without none":  {`{enabled: true, policy: {strip_tool_history: true}}`, "strip_tool_history requires mode none"},
 		"an unknown select field":     {`{enabled: true, select: {mode: filter, relevance_threshold: 0.3}}`, `unknown field "relevance_threshold"`},
 		"an untrusted trust source":   {`{enabled: true, policy: {trusted_facts: {enabled: true, trust_sources: [prompt], stage_roles: [final]}}}`, at + `.policy.trusted_facts: trust_sources "prompt" is not authoritative`},
-		"more than 255 catalog tools": {`{enabled: true, select: {mode: add, tools_db_path: ` + tooMany + `}}`, at + ".select.tools_db_path: tool_catalog_too_large: " + tooMany + " has 256 tools the policy allows; a decision model chooses among at most 255, the options of one question"},
 		"a tool listed twice":         {`{enabled: true, select: {mode: add, tools_db_path: ` + twice + `}}`, at + ".select.tools_db_path: duplicate_tool_name: " + twice + ` lists tool "docs.search" twice`},
 	}
 	for name, test := range cases {
@@ -115,16 +115,19 @@ func TestToolsPluginLoadErrors(t *testing.T) {
 		}
 	}
 	var located *LocatedError
-	if _, err := loadToolsPlugin(`{enabled: true, select: {mode: add, tools_db_path: ` + tooMany + `}}`); !errors.As(err, &located) || located.Code != CodeToolCatalogTooLarge {
-		t.Fatalf("a catalog too large is a located error: %v", err)
+	if _, err := loadToolsPlugin(`{enabled: true, select: {mode: add, tools_db_path: ` + twice + `}}`); !errors.As(err, &located) || located.Code != CodeDuplicateToolName {
+		t.Fatalf("a tool listed twice is a located error: %v", err)
 	}
 }
 
-// The 255 options of one question bound the catalog's tools the policy
-// allows, and a catalog of which it allows none selects nothing.
-func TestToolCatalogIsBoundedAfterThePolicy(t *testing.T) {
+// A catalog of any size loads, since the judge truncates what it reads; a
+// catalog of which the policy allows no tool selects nothing.
+func TestToolCatalogOfAnySizeLoads(t *testing.T) {
 	names := numberedTools(300)
 	catalog := writeToolCatalog(t, names...)
+	if _, err := loadToolsPlugin(`{enabled: true, select: {mode: add, tools_db_path: ` + catalog + `}}`); err != nil {
+		t.Fatalf("a catalog of 300 tools loads: %v", err)
+	}
 	if _, err := loadToolsPlugin(`{enabled: true, policy: {mode: filtered, allow_tools: [` + strings.Join(names[:10], ", ") + `]}, select: {mode: add, tools_db_path: ` + catalog + `}}`); err != nil {
 		t.Fatalf("the policy allows 10 of the catalog's tools: %v", err)
 	}

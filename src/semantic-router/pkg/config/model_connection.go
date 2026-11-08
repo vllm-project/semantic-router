@@ -111,6 +111,32 @@ func (d ModelDeployment) DeclaredModalities() []string {
 	return slices.Clone(d.Capabilities.Modalities)
 }
 
+// The input modalities an embedding deployment may declare it embeds.
+var embeddingModalities = []string{"text", "image", "audio"}
+
+// validateEmbeddingModalities checks the modalities an embedding deployment
+// declares: known ones, each once.
+func (d ModelDeployment) validateEmbeddingModalities() error {
+	seen := map[string]bool{}
+	for _, modality := range d.DeclaredModalities() {
+		switch {
+		case !slices.Contains(embeddingModalities, modality):
+			return fmt.Errorf("capabilities.modalities lists %q; an embedding model embeds text, image or audio", modality)
+		case seen[modality]:
+			return fmt.Errorf("capabilities.modalities lists %q twice", modality)
+		}
+		seen[modality] = true
+	}
+	return nil
+}
+
+// EmbedsText reports whether an embedding deployment embeds text, which
+// recall embeds: it declares no modalities, or text among them.
+func (d ModelDeployment) EmbedsText() bool {
+	declared := d.DeclaredModalities()
+	return len(declared) == 0 || slices.Contains(declared, "text")
+}
+
 // DeclaredDimensions is the embedding dimension a deployment declares, zero
 // when it declares none.
 func (d ModelDeployment) DeclaredDimensions() int {
@@ -336,14 +362,17 @@ func (d ModelDeployment) validateRemote() error {
 			return err
 		}
 	}
-	if len(d.QuestionTypes) > 0 || (d.Capabilities != nil && (len(d.Capabilities.QuestionTypes) > 0 || len(d.Capabilities.Presets) > 0 || len(d.Capabilities.Modalities) > 0)) {
-		return fmt.Errorf("question types, presets and modalities apply to systemone deployments")
+	if len(d.QuestionTypes) > 0 || (d.Capabilities != nil && (len(d.Capabilities.QuestionTypes) > 0 || len(d.Capabilities.Presets) > 0)) {
+		return fmt.Errorf("question types and presets apply to systemone deployments")
 	}
-	if d.Capabilities != nil && d.Capabilities.Dimensions != 0 && d.Provider != OpenAIEmbeddingsProvider {
-		return fmt.Errorf("capabilities.dimensions applies to openai_embeddings deployments")
+	if d.Capabilities != nil && d.Provider != OpenAIEmbeddingsProvider && (d.Capabilities.Dimensions != 0 || len(d.Capabilities.Modalities) > 0) {
+		return fmt.Errorf("capabilities.dimensions and capabilities.modalities describe an embedding model; they apply to openai_embeddings deployments")
 	}
 	if d.Capabilities != nil && d.Capabilities.Dimensions < 0 {
 		return fmt.Errorf("capabilities.dimensions must be positive")
+	}
+	if err := d.validateEmbeddingModalities(); err != nil {
+		return err
 	}
 	endpoint, err := url.Parse(strings.TrimSpace(d.Endpoint))
 	if err != nil || (endpoint.Scheme != "http" && endpoint.Scheme != "https") || endpoint.Host == "" {

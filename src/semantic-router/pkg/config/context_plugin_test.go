@@ -49,12 +49,15 @@ func TestContextPluginValidation(t *testing.T) {
 			p.Sources[0] = ContextSource{Type: ContextSourceRAG, Backend: "mcp", BackendConfig: MustStructuredPayload(map[string]interface{}{"server_name": "s", "tool_name": "t"})}
 		}, "the router has no MCP tool invoker"},
 		"unknown on_failure": {func(p *ContextPluginConfig) { p.Sources[0].OnFailure = "retry" }, "p.sources[0]: on_failure must be skip, block or warn"},
-		"bm25 over documents": {func(p *ContextPluginConfig) {
+		"bm25 over a vector store without a lexical index": {func(p *ContextPluginConfig) {
 			p.Sources[0].Match = &MatchConfig{Recall: &MatchRecall{Method: MatchRecallBM25, TopK: 5}}
-		}, "p.sources[0].match.recall.method: a RAG source recalls with embedding only"},
-		"memory judge only": {func(p *ContextPluginConfig) {
-			p.Sources[1].Match = &MatchConfig{Judge: &MatchJudge{Preset: "relevance"}}
-		}, "p.sources[1].match: a memory source recalls its candidates from an index"},
+		}, "p.sources[0].match.recall.method: bm25 recall reads the chunks the in-memory vector store keeps; set global.stores.vector_store.backend_type: memory, or recall with embedding"},
+		"judge only over an external collection": {func(p *ContextPluginConfig) {
+			p.Sources[0] = ContextSource{Type: ContextSourceRAG, Backend: "milvus", BackendConfig: MustStructuredPayload(map[string]interface{}{"collection": "docs"}), Match: &MatchConfig{Judge: &MatchJudge{Preset: "relevance"}}}
+		}, "p.sources[0].match: a judge without recall reads a local knowledge base, a vectorstore source; a milvus source recalls with embedding"},
+		"bm25 over memories": {func(p *ContextPluginConfig) {
+			p.Sources[1].Match = &MatchConfig{Recall: &MatchRecall{Method: MatchRecallBM25, TopK: 5}}
+		}, "p.sources[1].match.recall.method: a memory source recalls with embedding only"},
 		"hybrid mode alone":     {func(p *ContextPluginConfig) { p.Sources[1].HybridSearch = false }, "p.sources[1].hybrid_mode fuses the scores of hybrid_search"},
 		"unknown hybrid mode":   {func(p *ContextPluginConfig) { p.Sources[1].HybridMode = "rerank" }, `p.sources[1].hybrid_mode "rerank" is not supported`},
 		"budget alone":          {func(p *ContextPluginConfig) { p.Compress = nil }, "p.budget bounds the request compress produces; add compress or remove budget"},
@@ -84,6 +87,34 @@ func TestContextPluginValidation(t *testing.T) {
 	disabled.Enabled, disabled.Sources[0].Backend = false, "mcp"
 	if err := validateContextPlugin(matchConfig(), "p", disabled); err != nil {
 		t.Fatalf("a disabled plugin is not checked: %v", err)
+	}
+}
+
+// A local knowledge base, a vectorstore source over the in-memory vector
+// store, recalls by bm25 or is judged whole, and a memory source is judged
+// without recall: both read their items listed, so neither needs a query
+// embedding.
+func TestContextSourcesJudgedWithoutEmbeddingRecall(t *testing.T) {
+	cfg := matchConfig()
+	cfg.VectorStore = &VectorStoreConfig{Enabled: true, BackendType: "memory"}
+	judge := &MatchJudge{Preset: "relevance", MaxCandidates: 32}
+	for name, source := range map[string]ContextSource{
+		"bm25 over a local knowledge base": func() ContextSource {
+			s := vectorStoreSource()
+			s.Match = &MatchConfig{Recall: &MatchRecall{Method: MatchRecallBM25, TopK: 20}, Judge: judge}
+			return s
+		}(),
+		"a local knowledge base judged whole": func() ContextSource {
+			s := vectorStoreSource()
+			s.Match = &MatchConfig{Judge: judge}
+			return s
+		}(),
+		"memories judged whole": {Type: ContextSourceMemory, Match: &MatchConfig{Judge: judge}},
+	} {
+		plugin := &ContextPluginConfig{Enabled: true, Sources: []ContextSource{source}}
+		if err := validateContextPlugin(cfg, "p", plugin); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
 	}
 }
 

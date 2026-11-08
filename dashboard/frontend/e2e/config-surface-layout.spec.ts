@@ -95,7 +95,7 @@ model_catalog:
     domain_classifier: models/mmbert32k-intent-classifier-merged
     pii_classifier: models/mmbert32k-pii-detector-merged
   embeddings:
-    default: qwen3-embedding
+    default: {deployment: qwen3-embedding}
 `;
 
 async function mockConfigSurface(page: Page) {

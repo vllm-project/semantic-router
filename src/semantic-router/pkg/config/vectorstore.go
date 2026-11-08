@@ -135,7 +135,8 @@ type LlamaStackVectorStoreConfig struct {
 
 	// SearchType controls the search strategy used by Llama Stack.
 	// Options: "vector" (default, semantic only) or "hybrid" (vector + keyword
-	// with Reciprocal Rank Fusion). Hybrid requires the Milvus vector_io provider.
+	// with Reciprocal Rank Fusion). Hybrid requires a vector_io provider with
+	// keyword search, such as sqlite-vec or Milvus.
 	SearchType string `json:"search_type,omitempty" yaml:"search_type,omitempty"`
 }
 

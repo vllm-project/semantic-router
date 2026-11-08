@@ -267,6 +267,17 @@ function getToolsPluginFieldSchema(): FieldSchema[] {
           type: 'object',
           fields: [
             {
+              key: 'recall',
+              label: 'Recall',
+              type: 'object',
+              description: 'Narrows a long tool list by BM25 before the judge',
+              fields: [
+                { key: 'method', label: 'Method', type: 'select', options: ['bm25'] },
+                { key: 'top_k', label: 'Top K', type: 'number' },
+                { key: 'min_similarity', label: 'Min Similarity', type: 'number' },
+              ],
+            },
+            {
               key: 'judge',
               label: 'Judge',
               type: 'object',
@@ -276,6 +287,13 @@ function getToolsPluginFieldSchema(): FieldSchema[] {
                 { key: 'top_k', label: 'Top K', type: 'number', placeholder: '3' },
                 { key: 'min_ratio', label: 'Min Ratio', type: 'number', placeholder: '0.1' },
                 { key: 'min_score', label: 'Min Score', type: 'number' },
+                {
+                  key: 'max_candidates',
+                  label: 'Max Candidates',
+                  type: 'number',
+                  placeholder: '255',
+                  description: 'At most 255 tools are offered; more are truncated, never refused',
+                },
               ],
             },
           ],
@@ -299,13 +317,6 @@ function getToolsPluginFieldSchema(): FieldSchema[] {
           type: 'select',
           options: ['keep', 'strip', 'skip', 'fail'],
           description: 'Filter: keep, strip or fail; add: skip or fail',
-        },
-        {
-          key: 'on_overflow',
-          label: 'On Overflow',
-          type: 'select',
-          options: ['keep', 'reject'],
-          description: 'Filter mode, more than 255 tools',
         },
         {
           key: 'input',

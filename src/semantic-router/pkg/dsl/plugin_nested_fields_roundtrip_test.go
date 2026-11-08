@@ -11,7 +11,7 @@ import (
 
 func TestMemoryAndToolsPluginFieldsSurviveRoundTrip(t *testing.T) {
 	for mode, selectFields := range map[string]string{
-		"filter": "preserve_count: 2\n                on_error: strip\n                on_overflow: reject",
+		"filter": "preserve_count: 2\n                on_error: strip",
 		"add":    "tools_db_path: config/tools_db.json\n                on_error: skip",
 	} {
 		t.Run(mode, func(t *testing.T) {

@@ -935,7 +935,6 @@ class ToolsSelectConfig(BaseModel):
     need_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     preserve_count: Optional[int] = Field(default=None, ge=0, le=255)
     on_error: Optional[Literal["keep", "strip", "skip", "fail"]] = None
-    on_overflow: Optional[Literal["keep", "reject"]] = None
     input: Optional[ToolsSelectInput] = None
     timeout_ms: Optional[int] = Field(default=None, ge=0, le=60000)
     sticky: Optional[StickyToolSelectionConfig] = None
@@ -945,8 +944,8 @@ class ToolsSelectConfig(BaseModel):
         if self.mode == "add":
             if not self.tools_db_path:
                 raise ValueError("mode=add requires tools_db_path")
-            if self.preserve_count is not None or self.on_overflow is not None:
-                raise ValueError("preserve_count and on_overflow apply to mode=filter")
+            if self.preserve_count is not None:
+                raise ValueError("preserve_count applies to mode=filter")
             if self.on_error not in (None, "skip", "fail"):
                 raise ValueError("mode=add takes on_error skip or fail")
         else:

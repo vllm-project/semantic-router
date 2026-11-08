@@ -17,9 +17,10 @@ import (
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
-// retrieveMemorySource recalls the user's memories for a memory source,
-// keeps them by the source's match block after its reflection filter, and
-// injects them. A failed retrieval goes on without memories.
+// retrieveMemorySource recalls the user's memories for a memory source, or
+// lists the newest for a judge without recall, keeps them by the source's
+// match block after its reflection filter, and injects them. A failed
+// retrieval goes on without memories.
 func (r *OpenAIRouter) retrieveMemorySource(
 	ctx *RequestContext,
 	plugin *config.ContextPluginConfig,
@@ -84,7 +85,7 @@ func (r *OpenAIRouter) memoryOptOut(ctx *RequestContext) (string, string, bool) 
 
 // memoryIndex recalls a user's memories from the memory store, bounded by
 // recall and filtered by the source's reflection, for a memory source's
-// match.
+// match; a judge without recall reads them listed.
 type memoryIndex struct {
 	router    *OpenAIRouter
 	source    *config.ContextSource
@@ -129,6 +130,37 @@ func (x *memoryIndex) Recall(ctx context.Context, query string, recall config.Ma
 		})
 	}
 	return scored, nil
+}
+
+// List lists the user's memories, newest first and at most limit of them,
+// for a memory source whose judge reads them without recall, filtered by
+// the source's reflection. held counts the user's memories, but the ones
+// the reflection dropped.
+func (x *memoryIndex) List(ctx context.Context, limit int) ([]match.Candidate, int, error) {
+	var listed []*memory.RetrieveResult
+	total := 0
+	for len(listed) < limit {
+		page, err := x.store.List(ctx, memory.ListOptions{UserID: x.userID, Limit: limit - len(listed), Offset: len(listed)})
+		if err != nil {
+			return nil, 0, err
+		}
+		total = page.Total
+		for _, item := range page.Memories {
+			listed = append(listed, &memory.RetrieveResult{Memory: item})
+		}
+		if len(page.Memories) == 0 || len(listed) >= total {
+			break
+		}
+	}
+	x.retrieved = len(listed)
+	x.recalled = memory.NewMemoryFilter(x.router.Config.Memory.Reflection, x.source.Reflection).Filter(listed)
+	candidates := make([]match.Candidate, 0, len(x.recalled))
+	for index, result := range x.recalled {
+		if result != nil && result.Memory != nil {
+			candidates = append(candidates, match.Candidate{ID: strconv.Itoa(index), Text: result.Memory.Content})
+		}
+	}
+	return candidates, max(total, len(listed)) - (len(listed) - len(candidates)), nil
 }
 
 // kept are the recalled memories a match kept, best first.

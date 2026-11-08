@@ -28,6 +28,13 @@ export function matchField(recallMethods: string[], judgePreset: string): FieldS
           { key: 'top_k', label: 'Top K', type: 'number' },
           { key: 'min_ratio', label: 'Min Ratio', type: 'number' },
           { key: 'min_score', label: 'Min Score', type: 'number' },
+          {
+            key: 'max_candidates',
+            label: 'Max Candidates',
+            type: 'number',
+            placeholder: '64',
+            description: 'The most candidates the judge reads; more are truncated, never refused',
+          },
         ],
       },
     ],
@@ -37,9 +44,9 @@ export function matchField(recallMethods: string[], judgePreset: string): FieldS
 const sourceFields: FieldSchema[] = [
   { key: 'type', label: 'Type', type: 'select', options: ['rag', 'memory'], required: true },
   {
-    ...matchField(['embedding'], 'relevance'),
+    ...matchField(['embedding', 'bm25'], 'relevance'),
     description:
-      'rag: recalls 20 at 0.3 and keeps the 6 the relevance judge scores 0.5 or more; memory: recalls with the store defaults',
+      'rag: recalls 20 at 0.3 and keeps the 6 the relevance judge scores 0.5 or more; bm25 and a judge alone read a local knowledge base; memory: recalls with the store defaults',
   },
   {
     key: 'backend',

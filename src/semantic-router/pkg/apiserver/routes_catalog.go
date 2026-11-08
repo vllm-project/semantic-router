@@ -151,30 +151,6 @@ func apiClassifyRoutes() []apiRoute {
 			errorResponses(400, 413, 429, 500, 503),
 			jsonBodyFor[BatchClassificationRequest](),
 		),
-		managedRoute(
-			EndpointMetadata{Path: apiDiagnosticsPath + "/embeddings", Method: "POST", Description: "Generate text, image, and audio embeddings"},
-			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
-			(*ClassificationAPIServer).handleEmbeddings,
-			jsonResponse[EmbeddingResponse](http.StatusOK, "Successful response"),
-			errorResponses(400, 413, 429, 500, 503),
-			jsonBodyFor[EmbeddingRequest](),
-		),
-		managedRoute(
-			EndpointMetadata{Path: apiDiagnosticsPath + "/similarity", Method: "POST", Description: "Calculate pairwise text similarity"},
-			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
-			(*ClassificationAPIServer).handleSimilarity,
-			jsonResponse[SimilarityResponse](http.StatusOK, "Successful response"),
-			errorResponses(400, 413, 429, 500, 503),
-			jsonBodyFor[SimilarityRequest](),
-		),
-		managedRoute(
-			EndpointMetadata{Path: apiDiagnosticsPath + "/similarity/batch", Method: "POST", Description: "Calculate batch text-similarity matches"},
-			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
-			(*ClassificationAPIServer).handleBatchSimilarity,
-			jsonResponse[BatchSimilarityResponse](http.StatusOK, "Successful response"),
-			errorResponses(400, 413, 429, 500, 503),
-			jsonBodyFor[BatchSimilarityRequest](),
-		),
 	}
 }
 

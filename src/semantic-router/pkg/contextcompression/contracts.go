@@ -43,9 +43,9 @@ type TokenCounter interface {
 	CountRequest(model string, request *RequestIR) (tokens int, source string)
 }
 
-// RelevanceScorer scores how much each text matters to the query: the
-// lowest-scored targets shrink first. Without one, targets are scored by
-// the query terms they contain.
+// RelevanceScorer scores how much each text matters to the query, the
+// latest user message: the lowest-scored targets shrink first. Without one,
+// targets are scored by the query terms they contain.
 type RelevanceScorer interface {
 	Score(ctx context.Context, query string, texts []string) ([]float64, error)
 }

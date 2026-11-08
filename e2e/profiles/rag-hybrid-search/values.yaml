@@ -36,7 +36,18 @@ config:
           - name: other
             description: General knowledge and miscellaneous topics
   global:
-    model_catalog: {}
+    model_catalog:
+      deployments:
+        # Llama Stack embeds search queries itself, so the Router embeds the
+        # chunks it inserts with the same model, served by Llama Stack.
+        llama-stack-embedding:
+          provider: openai_embeddings
+          endpoint: http://llama-stack.llama-stack-system.svc.cluster.local:8321/v1
+          model: sentence-transformers/all-MiniLM-L6-v2
+          # The first request loads the model.
+          timeout_ms: 120000
+          capabilities:
+            dimensions: 384
     router:
       strategy: priority
     services: {}
@@ -47,6 +58,7 @@ config:
         file_storage_dir: /tmp/vsr-data
         max_file_size_mb: 50
         embedding:
+          deployment: llama-stack-embedding
           dimension: 384
         ingestion_workers: 2
         ingestion_drain_timeout_seconds: 25

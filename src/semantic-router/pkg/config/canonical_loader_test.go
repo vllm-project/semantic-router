@@ -374,7 +374,7 @@ global:
     deployments:
       remote-embed: {provider: openai_embeddings, endpoint: "http://embed:8000/v1", model: e5}
     embeddings:
-      default: remote-embed
+      default: {deployment: remote-embed}
     modules:
       prompt_compression:
         enabled: true

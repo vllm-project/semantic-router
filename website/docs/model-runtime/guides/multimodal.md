@@ -1,14 +1,17 @@
 ---
 title: Images and audio
-description: Embed the images and audio requests carry with the Vela Omni embedding models.
+description: Serve the Vela Omni embedding models, which embed text, images and audio, on the model runtime.
 ---
 
 # Images and audio
 
 Vela 1.0 Omni embeds text, images and audio into one vector space, so an
 image can be compared with a text description ("a photograph of a passport
-page") or with example images. The router uses it for multimodal
-embeddings (`global.model_catalog.embeddings.multimodal`).
+page") or with example images. The model runtime serves it. The router embeds
+text only, for recall: it can name an Omni deployment as a store's
+`embedding.deployment`, and a decision about what an image shows asks a
+[systemone](tutorials/signal/learned/systemone.md) question that reads it
+(`input.image`) of a deployment that accepts images.
 
 | Model | Size | Vector | Text limit | Use when |
 | --- | --- | --- | --- | --- |
@@ -19,8 +22,8 @@ Audio of up to 30 seconds is accepted at its original sampling rate.
 
 ## Turn it on
 
-Declare the multimodal embedding deployment and name it in
-`embeddings.multimodal`; multimodal embedding is off until you do:
+Declare an Omni deployment and name it where a store embeds text with it,
+here the vector store at Nano's 384 dimensions:
 
 ```yaml
 global:
@@ -32,15 +35,16 @@ global:
         revision: 2ff2d66385dbdd661a560ec3e8bcb45a0527d92e
         device: cpu
         input: {overflow: truncate}
-    embeddings:
-      multimodal: omni-nano
+  stores:
+    vector_store:
+      enabled: true
+      backend_type: memory
+      embedding: {deployment: omni-nano, dimension: 384}
 ```
 
-The router runs Omni on the CPU in the runtime. To use Mini, declare a
-`model_runtime` deployment of `vllm-sr/Vela-1.0-Omni-Mini` instead. To route
-on what a request's image shows, ask a
-[systemone](tutorials/signal/learned/systemone.md) question that reads it
-(`input.image`) of a deployment that accepts images.
+The router runs Omni on the CPU in the runtime once the vector store needs
+it. To use Mini, declare a `model_runtime` deployment of
+`vllm-sr/Vela-1.0-Omni-Mini` instead.
 
 ## Check it
 

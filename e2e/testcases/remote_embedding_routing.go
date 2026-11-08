@@ -19,7 +19,7 @@ const remoteEmbeddingExpectedDimension = 4
 
 func init() {
 	pkgtestcases.Register("remote-embedding-routing", pkgtestcases.TestCase{
-		Description: "Verify the remote embedding provider prepared for response cache recall, billing_support routing, and a paraphrase hit through remote-embedding recall",
+		Description: "Verify the remote embedding provider prepared for response cache recall, billing_support routing, a paraphrase hit through remote-embedding recall, and a recalled request the same_request judge rejects as a miss",
 		Tags:        []string{"embedding", "remote-provider", "routing", "openai-compatible", "response-cache"},
 		Fn:          testRemoteEmbeddingRouting,
 	})
@@ -46,6 +46,12 @@ type remoteEmbeddingProviderStatus struct {
 // embeds it with the remote embedding deployment and finds the stored billing
 // answer; the same_request judge on the System One fixture confirms it.
 const remoteEmbeddingParaphrase = "Could you walk me through the invoice charge on my subscription and refund it? __SYSTEMONE_YES__"
+
+// remoteEmbeddingRejected is a billing request recall finds the stored
+// billing answers for: the mock embeds every billing text alike, so their
+// similarity is 1. The fixture's reject marker answers billing_support yes
+// and the same_request judge no, so the recalled answer is not served.
+const remoteEmbeddingRejected = "What is the pricing of the annual subscription plan? __SYSTEMONE_REJECT__"
 
 type remoteEmbeddingRouteCase struct {
 	Name             string
@@ -113,6 +119,19 @@ func testRemoteEmbeddingRouting(
 			"paraphrased billing request: expected a billing-route response cache hit, got x-vsr-cache-hit=%q decision=%q",
 			paraphrase.Get("x-vsr-cache-hit"),
 			paraphrase.Get("x-vsr-selected-decision"),
+		)
+	}
+
+	// Last, because the rejected request's own answer is stored after it.
+	rejected, err := requestRemoteEmbeddingChat(ctx, gatewaySession, remoteEmbeddingRejected)
+	if err != nil {
+		return fmt.Errorf("rejected billing request: %w", err)
+	}
+	if rejected.Get("x-vsr-cache-hit") == "true" || rejected.Get("x-vsr-selected-decision") != "billing-route" {
+		return fmt.Errorf(
+			"rejected billing request: expected a billing-route miss once same_request rejects the recalled answer, got x-vsr-cache-hit=%q decision=%q",
+			rejected.Get("x-vsr-cache-hit"),
+			rejected.Get("x-vsr-selected-decision"),
 		)
 	}
 

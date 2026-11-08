@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
@@ -146,12 +148,13 @@ func bound(value float64) *float64 { return &value }
 func TestRecallOnlyKeepsTheMostSimilarWithinItsBounds(t *testing.T) {
 	model := &judgeModel{}
 	store := &index{recalled: recalled(0.75, 0.95, 0.7, 0.85, 0.9)}
-	result, err := New(matchConfig(), model).Match(context.Background(), config.MatchResponseCache, nil, Input{Request: "reset my password", Index: store})
+	block := &config.MatchConfig{Recall: &config.MatchRecall{Method: config.MatchRecallEmbedding, TopK: 3, MinSimilarity: bound(0.8)}}
+	result, err := New(matchConfig(), model).Match(context.Background(), config.MatchResponseCache, block, Input{Request: "reset my password", Index: store})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got := ids(result.Kept); !reflect.DeepEqual(got, []string{"d1", "d4", "d3"}) {
-		t.Fatalf("kept %v: the default cache recall keeps the 3 most similar at 0.8 or more", got)
+		t.Fatalf("kept %v: the recall keeps the 3 most similar at 0.8 or more", got)
 	}
 	if result.Kept[0].Score != 0.95 || result.Kept[0].Similarity != 0.95 {
 		t.Fatalf("a recalled candidate is scored by its similarity: %+v", result.Kept[0])
@@ -161,6 +164,31 @@ func TestRecallOnlyKeepsTheMostSimilarWithinItsBounds(t *testing.T) {
 	}
 	if len(model.states()) != 0 || len(result.Stages) != 1 || result.Stages[0].Name != StageRecall || result.Stages[0].Outcome != OutcomeOK || result.Stages[0].Candidates != 5 || result.Stages[0].Kept != 3 {
 		t.Fatalf("stages %+v, %d model calls", result.Stages, len(model.states()))
+	}
+}
+
+// The response cache's default recalls the 3 cached requests most similar,
+// at 0.8 or more, and same_request confirms each at 0.8 or more: a recalled
+// request the judge rejects is a miss, and the best confirmed one is served.
+func TestCacheDefaultConfirmsRecalledRequests(t *testing.T) {
+	store := &index{recalled: recalled(0.95, 0.9, 0.85, 0.5)}
+	model := &judgeModel{scores: map[string]float64{"doc 0": 0.2, "doc 1": 0.85, "doc 2": 0.9}}
+	result, err := New(matchConfig(), model).Match(context.Background(), config.MatchResponseCache, nil, Input{Request: "reset my password", Index: store})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ids(result.Kept); !reflect.DeepEqual(got, []string{"d2", "d1"}) {
+		t.Fatalf("kept %v: the confirmed requests, best first", got)
+	}
+	states := model.states()
+	if len(states) != 3 || states[0].Questions[0].ID != "match:same_request" {
+		t.Fatalf("one same_request entry per recalled request: %+v", states)
+	}
+
+	model = &judgeModel{scores: map[string]float64{"doc 0": 0.7}}
+	result, err = New(matchConfig(), model).Match(context.Background(), config.MatchResponseCache, nil, Input{Request: "reset my password", Index: &index{recalled: recalled(0.97)}})
+	if err != nil || len(result.Kept) != 0 || result.Stages[1].Candidates != 1 || result.Stages[1].Kept != 0 {
+		t.Fatalf("a recalled request the judge rejects is a miss: %+v %v", result, err)
 	}
 }
 
@@ -187,11 +215,16 @@ func TestBM25RecallRanksListedCandidates(t *testing.T) {
 	}
 }
 
+// judgeOnly is a block that judges relevance without recall.
+func judgeOnly() *config.MatchConfig {
+	return &config.MatchConfig{Judge: &config.MatchJudge{Preset: presets.Relevance}}
+}
+
 // A judge alone asks about each listed candidate, one state each with the
 // request and the candidate as parts, and keeps them by score.
 func TestJudgeOnlyAsksAboutEachCandidate(t *testing.T) {
 	model := &judgeModel{scores: map[string]float64{"error budget policy": 0.9, "release train": 0.2, "paging rules": 0.6}}
-	result, err := New(matchConfig(), model).Match(context.Background(), config.MatchCompress, nil, Input{
+	result, err := New(matchConfig(), model).Match(context.Background(), config.MatchCompress, judgeOnly(), Input{
 		Request:    "when do we page the on-call engineer?",
 		Candidates: listed("release train", "paging rules", "error budget policy"),
 	})
@@ -300,13 +333,101 @@ func TestToolRankChoosesAmongTheCandidatesInOneState(t *testing.T) {
 	if err != nil || len(only.Kept) != 1 || only.Kept[0].Score != 1 || len(model.states()) != 0 {
 		t.Fatalf("one candidate is chosen without asking: %+v %v, %d calls", only.Kept, err, len(model.states()))
 	}
-	many := make([]Candidate, presets.MaxChoices+1)
-	for index := range many {
-		many[index] = Candidate{ID: strconv.Itoa(index)}
+}
+
+// numbered lists n candidates c0..c<n-1>, each with its own text.
+func numbered(n int) []Candidate {
+	candidates := make([]Candidate, n)
+	for index := range candidates {
+		candidates[index] = Candidate{ID: fmt.Sprintf("c%d", index), Text: fmt.Sprintf("text %d", index)}
 	}
-	failing := &config.MatchConfig{Judge: &config.MatchJudge{Preset: presets.ToolRank, OnError: config.MatchOnErrorFail}}
-	if _, err := New(matchConfig(), model).Match(context.Background(), config.MatchToolsSelect, failing, Input{Request: "q", Candidates: many}); !errors.Is(err, ErrTooManyCandidates) {
-		t.Fatalf("err = %v", err)
+	return candidates
+}
+
+// A judge reads at most max_candidates candidates and never refuses more: a
+// choice judge the first 255 as listed, one asked about each candidate the
+// first 64 by default, and after recall the first by recall rank. Each
+// truncation is an event on the request's span and a count in the metric.
+func TestJudgeTruncatesToMaxCandidates(t *testing.T) {
+	recorder := tracetest.NewSpanRecorder()
+	ctx, span := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder)).Tracer("test").Start(context.Background(), "request")
+	truncations := truncatedTotal.WithLabelValues(string(config.MatchToolsSelect), presets.ToolRank)
+	before := testutil.ToFloat64(truncations)
+
+	model := &judgeModel{choose: map[string]float64{"c3": 1}}
+	strict := &config.MatchConfig{Judge: &config.MatchJudge{Preset: presets.ToolRank, OnError: config.MatchOnErrorFail}}
+	result, err := New(matchConfig(), model).Match(ctx, config.MatchToolsSelect, strict, Input{Request: "q", Candidates: numbered(300)})
+	if err != nil || result.Kept[0].ID != "c3" {
+		t.Fatalf("more tools than one question takes options is no error: %+v %v", result.Kept, err)
+	}
+	choices := model.states()[0].Questions[0].Choices
+	if len(model.states()) != 1 || len(choices) != presets.MaxChoices || choices[0].Key != "c0" || choices[len(choices)-1].Key != "c254" {
+		t.Fatalf("the choice offers the first 255 as listed: %d choices", len(choices))
+	}
+	if stage := result.Stages[0]; stage.Candidates != presets.MaxChoices || stage.Truncated != 300-presets.MaxChoices {
+		t.Fatalf("stage %+v", stage)
+	}
+	if testutil.ToFloat64(truncations) != before+1 {
+		t.Fatal("a truncation counts once")
+	}
+	span.End()
+	events := recorder.Ended()[0].Events()
+	if len(events) != 1 || events[0].Name != "match.judge.truncated" {
+		t.Fatalf("events %+v", events)
+	}
+	attributes := map[string]string{}
+	for _, kv := range events[0].Attributes {
+		attributes[string(kv.Key)] = kv.Value.String()
+	}
+	if want := map[string]string{"match.feature": "tools", "match.judge.method": presets.ToolRank, "match.judge.candidates": "255", "match.judge.truncated": "45", "match.judge.order": "listed"}; !reflect.DeepEqual(attributes, want) {
+		t.Fatalf("event attributes %v", attributes)
+	}
+
+	model = &judgeModel{scores: map[string]float64{"text 70": 1, "text 3": 0.8}}
+	result, err = New(matchConfig(), model).Match(context.Background(), config.MatchCompress, judgeOnly(), Input{Request: "q", Candidates: numbered(80)})
+	if err != nil || len(model.states()) != config.DefaultMatchJudgeCandidates || result.Kept[0].ID != "c3" || result.Stages[0].Truncated != 16 {
+		t.Fatalf("a judge asked about each candidate reads 64 by default: %d states, %+v %v", len(model.states()), result.Stages, err)
+	}
+
+	model = &judgeModel{scores: map[string]float64{"doc 0": 0.9, "doc 4": 0.9}}
+	rag := config.MatchRAG.Default()
+	rag.Judge.MaxCandidates = 2
+	result, err = New(matchConfig(), model).Match(context.Background(), config.MatchRAG, &rag, Input{Request: "q", Index: &index{recalled: recalled(0.5, 0.9, 0.4, 0.8, 0.95)}})
+	if err != nil || !reflect.DeepEqual(ids(result.Kept), []string{"d4"}) || len(model.states()) != 2 || result.Stages[1].Truncated != 3 {
+		t.Fatalf("after recall the judge reads the most similar: %+v %v, %d states", result, err, len(model.states()))
+	}
+}
+
+// lister is a fake small store that a judge without recall reads whole: it
+// lists its candidates, newest first, up to the limit.
+type lister struct {
+	index
+	items []Candidate
+	limit int
+}
+
+func (l *lister) List(_ context.Context, limit int) ([]Candidate, int, error) {
+	l.limit = limit
+	return l.items[:min(limit, len(l.items))], len(l.items), nil
+}
+
+// A judge without recall reads a store that lists its candidates, the
+// newest up to its max_candidates, and counts the rest as truncated; a
+// store that does not list is refused.
+func TestJudgeOnlyReadsAListedStore(t *testing.T) {
+	store := &lister{items: numbered(5)}
+	model := &judgeModel{scores: map[string]float64{"text 1": 0.9, "text 2": 0.4, "text 4": 0.95}}
+	block := judgeOnly()
+	block.Judge.MinScore, block.Judge.MaxCandidates = bound(0.5), 3
+	result, err := New(matchConfig(), model).Match(context.Background(), config.MatchMemory, block, Input{Request: "what do I like?", Index: store})
+	if err != nil || !reflect.DeepEqual(ids(result.Kept), []string{"c1"}) || store.limit != 3 || len(model.states()) != 3 {
+		t.Fatalf("kept %+v %v; listed up to %d, %d states", result.Kept, err, store.limit, len(model.states()))
+	}
+	if stage := result.Stages[0]; len(result.Stages) != 1 || stage.Name != StageJudge || stage.Candidates != 3 || stage.Truncated != 2 {
+		t.Fatalf("stages %+v", result.Stages)
+	}
+	if _, err := New(matchConfig(), model).Match(context.Background(), config.MatchMemory, block, Input{Request: "q", Index: &index{}}); err == nil {
+		t.Fatal("a judge cannot read a store that does not list")
 	}
 }
 
@@ -341,7 +462,7 @@ func TestCustomJudgeQuestions(t *testing.T) {
 func TestJudgeIsCompiledForTheDeploymentsFamily(t *testing.T) {
 	for family, adapter := range map[string]bool{presets.FamilyVela3D3: true, presets.FamilyVela3: false, "decision3": false} {
 		model := &judgeModel{family: family, scores: map[string]float64{"a": 0.9}}
-		if _, err := New(matchConfig(), model).Match(context.Background(), config.MatchCompress, nil, Input{Request: "q", Candidates: listed("a")}); err != nil {
+		if _, err := New(matchConfig(), model).Match(context.Background(), config.MatchCompress, judgeOnly(), Input{Request: "q", Candidates: listed("a")}); err != nil {
 			t.Fatal(err)
 		}
 		if asked := model.states()[0].Questions[0]; asked.DecisionAdapter != adapter {
@@ -394,7 +515,7 @@ func TestJudgeFailures(t *testing.T) {
 	if !errors.Is(err, context.DeadlineExceeded) || len(timedOut.Stages) != 2 {
 		t.Fatalf("a late judge fails with its deadline: %v", err)
 	}
-	unchanged, err := New(matchConfig(), &judgeModel{err: modelservice.ErrOverloaded}).Match(context.Background(), config.MatchCompress, nil, Input{Request: "q", Candidates: listed("x", "y", "z")})
+	unchanged, err := New(matchConfig(), &judgeModel{err: modelservice.ErrOverloaded}).Match(context.Background(), config.MatchCompress, judgeOnly(), Input{Request: "q", Candidates: listed("x", "y", "z")})
 	if err != nil || !reflect.DeepEqual(ids(unchanged.Kept), []string{"c0", "c1", "c2"}) || unchanged.Kept[0].Score != 0 {
 		t.Fatalf("without recall, skip leaves the candidates as they came: %+v %v", unchanged.Kept, err)
 	}
@@ -414,7 +535,7 @@ func TestMatchWithoutCandidates(t *testing.T) {
 	}
 	segments := listed("filled", " ")
 	model = &judgeModel{scores: map[string]float64{"filled": 0.7}}
-	result, err = New(matchConfig(), model).Match(context.Background(), config.MatchCompress, nil, Input{Request: "q", Candidates: segments})
+	result, err = New(matchConfig(), model).Match(context.Background(), config.MatchCompress, judgeOnly(), Input{Request: "q", Candidates: segments})
 	if err != nil || len(model.states()) != 1 || !reflect.DeepEqual(ids(result.Kept), []string{"c0", "c1"}) || result.Kept[1].Score != 0 {
 		t.Fatalf("a candidate without text scores 0 unasked: %+v %v, %d states", result.Kept, err, len(model.states()))
 	}
@@ -428,7 +549,7 @@ func TestMatchRefusesInputItCannotScore(t *testing.T) {
 		"missing ID":          {Request: "q", Candidates: []Candidate{{Text: "a"}}},
 		"judge over an index": {Request: "q", Index: &index{}},
 	} {
-		if _, err := matcher.Match(context.Background(), config.MatchCompress, nil, input); err == nil {
+		if _, err := matcher.Match(context.Background(), config.MatchCompress, judgeOnly(), input); err == nil {
 			t.Fatalf("%s: expected an error", name)
 		}
 	}

@@ -258,12 +258,7 @@ def _rule_deployments(document):
 
 
 def _embedding_defaults(document):
-    _catalog(document)["embeddings"] = {"default": "embedder", "multimodal": "omni"}
-    _catalog(document)["deployments"]["omni"] = {
-        "provider": "model_runtime",
-        "artifact": "vllm-sr/Vela-1.0-Omni-Nano",
-        "device": "cpu",
-    }
+    _catalog(document)["embeddings"] = {"default": {"deployment": "embedder"}}
 
 
 def _bind(scope: str, key: str):

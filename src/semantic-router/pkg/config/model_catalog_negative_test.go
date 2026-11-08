@@ -60,11 +60,11 @@ func TestModelCatalogRefusesWhatCannotWork(t *testing.T) {
 			"answers no question",
 		},
 		"a question model as the default embedding": {
-			"global: {model_catalog: {embeddings: {default: primary}}}",
+			"global: {model_catalog: {embeddings: {default: {deployment: primary}}}}",
 			"serves no embeddings",
 		},
 		"a remote decision model as the default embedding": {
-			"global: {model_catalog: {embeddings: {default: d3-remote}}}",
+			"global: {model_catalog: {embeddings: {default: {deployment: d3-remote}}}}",
 			"embeddings need a model_runtime or openai_embeddings deployment",
 		},
 		"a store dimension that disagrees with its remote deployment": {

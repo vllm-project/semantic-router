@@ -149,7 +149,7 @@ func testModelRuntimeLoadRetryIsolation(ctx context.Context, client *kubernetes.
 	if err != nil {
 		return err
 	}
-	if _, err = checkRouterEmbedding(ctx, session, embedder); err != nil {
+	if _, err = checkRuntimeEmbedding(ctx, embedder); err != nil {
 		return fmt.Errorf("after the recovery: %w", err)
 	}
 	if opts.SetDetails != nil {

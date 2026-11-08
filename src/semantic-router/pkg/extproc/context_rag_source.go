@@ -25,7 +25,8 @@ const defaultRAGContextLength = 10000
 
 // ragIndex recalls a rag source's documents from its backend, which applies
 // recall's top_k and min_similarity where it can and reports each document's
-// score as its similarity.
+// score as its similarity. A judge without recall reads a local knowledge
+// base listed.
 type ragIndex struct {
 	router  *OpenAIRouter
 	request *RequestContext
@@ -34,6 +35,13 @@ type ragIndex struct {
 
 func (x ragIndex) Recall(ctx context.Context, query string, recall config.MatchRecall) ([]match.Scored, error) {
 	return x.router.recallDocuments(ctx, x.request, x.source, query, recall)
+}
+
+func (x ragIndex) List(ctx context.Context, limit int) ([]match.Candidate, int, error) {
+	if x.source.Backend != "vectorstore" {
+		return nil, 0, fmt.Errorf("a %s source lists no documents; recall from it", x.source.Backend)
+	}
+	return x.router.listVectorStoreDocuments(ctx, x.source, limit)
 }
 
 // recallDocuments asks a rag source's backend for the documents most

@@ -3297,35 +3297,6 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
-    "/api/router/api/v1/diagnostics/embeddings": {
-      "post": {
-        "operationId": "postApiRouterApiV1DiagnosticsEmbeddings",
-        "summary": "POST /api/router/api/v1/diagnostics/embeddings",
-        "tags": [
-          "router"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "evaluation.run",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "evaluation",
-        "x-vllm-sr-audit-mode": "none",
-        "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
     "/api/router/api/v1/diagnostics/models": {
       "get": {
         "operationId": "getApiRouterApiV1DiagnosticsModels",
@@ -3500,64 +3471,6 @@
       "post": {
         "operationId": "postApiRouterApiV1DiagnosticsModelsTokens",
         "summary": "POST /api/router/api/v1/diagnostics/models/tokens",
-        "tags": [
-          "router"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "evaluation.run",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "evaluation",
-        "x-vllm-sr-audit-mode": "none",
-        "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/router/api/v1/diagnostics/similarity": {
-      "post": {
-        "operationId": "postApiRouterApiV1DiagnosticsSimilarity",
-        "summary": "POST /api/router/api/v1/diagnostics/similarity",
-        "tags": [
-          "router"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "evaluation.run",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "evaluation",
-        "x-vllm-sr-audit-mode": "none",
-        "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/router/api/v1/diagnostics/similarity/batch": {
-      "post": {
-        "operationId": "postApiRouterApiV1DiagnosticsSimilarityBatch",
-        "summary": "POST /api/router/api/v1/diagnostics/similarity/batch",
         "tags": [
           "router"
         ],

@@ -50,11 +50,10 @@ plugins:
         mode: add                     # filter | add
         tools_db_path: config/tools_db.json
         match:
-          judge: {preset: tool_rank, top_k: 3, min_ratio: 0.1}
+          judge: {preset: tool_rank, top_k: 3, min_ratio: 0.1, max_candidates: 255}
         need_threshold: 0.5           # P(tool_need) below this: no tools are kept or added
         preserve_count: 0             # filter mode: the request's first tools are always kept
         on_error: skip                # add: skip | fail; filter: keep | strip | fail
-        on_overflow: keep             # filter mode, more than 255 tools: keep | reject
         input: {history: false}
         timeout_ms: 1000
 ```
@@ -100,9 +99,13 @@ The candidates and the result depend on the mode:
   (`fail`); add mode adds none (`skip`) or refuses the request (`fail`). A
   refused request gets `503` with the code
   [`tool_selection_failed`](../../api/router.md#routing-errors).
-- One question takes at most 255 options. In filter mode, a request with more
-  tools after the policy is forwarded unselected (`on_overflow: keep`) or
-  refused with `400` and the code `too_many_tools` (`reject`).
+- One question takes at most 255 options, so the judge reads at most
+  `match.judge.max_candidates` tools (255 by default): the first as the
+  request or the catalog lists them. More tools are never refused; a
+  `recall: {method: bm25, top_k: ...}` stage instead narrows them to the ones
+  whose descriptions share the most terms with the request. Each truncation is
+  a `match.judge.truncated` event on the request's trace span and a count in
+  `vsr_match_judge_truncated_total`.
 - `timeout_ms` bounds the call, up to 60000. Without it a systemone
   deployment's own `timeout_ms` applies, else 1000. The judge's own
   `on_error` and `timeout_ms` are not accepted: the selection's govern.
@@ -111,10 +114,10 @@ The catalog of add mode is a JSON list of entries
 `{"tool": {"type": "function", "function": {...}}, "description": "..."}`;
 `description` is what the decision model reads to choose the tool, the
 function's description when it is absent. A relative `tools_db_path` is read
-from the Router's working directory. The load checks a catalog it can read:
-at most 255 tools the policy allows (`tool_catalog_too_large`) and unique
-names (`duplicate_tool_name`). The Router reads the catalog again when it
-builds the configuration it serves, and refuses one it cannot read.
+from the Router's working directory. The load checks a catalog it can read,
+of any size: unique names (`duplicate_tool_name`) and at least one tool the
+policy allows. The Router reads the catalog again when it builds the
+configuration it serves, and refuses one it cannot read.
 
 Each selection is recorded in the request's
 [router replay](./router-replay) record: the tools it kept, P(`tool_need`)

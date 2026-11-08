@@ -33,8 +33,8 @@ func embeddingRequirement(t *testing.T, cfg *RouterConfig, sharedServices bool, 
 
 func TestVelaEmbeddingIsTheDefaultAndOnlyPreDeclaredEmbedding(t *testing.T) {
 	cfg := DefaultGlobalConfig()
-	if cfg.EmbeddingDeployment != EmbeddingDefaultDeployment || cfg.MultimodalEmbeddingDeployment != "" {
-		t.Fatalf("embeddings = %q / %q", cfg.EmbeddingDeployment, cfg.MultimodalEmbeddingDeployment)
+	if cfg.EmbeddingDeployment != EmbeddingDefaultDeployment {
+		t.Fatalf("embeddings.default = %q", cfg.EmbeddingDeployment)
 	}
 	deployments := DefaultModelDeployments()
 	if len(deployments) != 2 || deployments[EmbeddingDefaultDeployment].Artifact != "vllm-sr/Vela-1.0-Encoder-307M-Embedding" {
@@ -53,9 +53,8 @@ func TestRecallConsumersEmbedWithTheDefaultDeployment(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg.Memory.InUse = true
-	cfg.API.Embeddings.Enabled = true
 	cfg.VectorStore = &VectorStoreConfig{Enabled: true, BackendType: "memory"}
-	for _, consumer := range []string{EmbeddingConsumerAPI, EmbeddingConsumerMemory, EmbeddingConsumerVectorStore, EmbeddingConsumerResponseCache} {
+	for _, consumer := range []string{EmbeddingConsumerMemory, EmbeddingConsumerVectorStore, EmbeddingConsumerResponseCache} {
 		if got := embeddingRequirement(t, &cfg, true, consumer).Deployment; got != EmbeddingDefaultDeployment {
 			t.Fatalf("%s embeds with %q", consumer, got)
 		}
@@ -155,8 +154,27 @@ func TestEmbeddingBindingsAreValidatedAtLoad(t *testing.T) {
 			"global.stores.memory.embedding.dimension: 128 differs from milvus.dimension 256; keep one",
 		},
 		{
-			"unknown multimodal deployment", "  model_catalog:\n    embeddings: {multimodal: omni-nano}\n",
-			`global.model_catalog.embeddings.multimodal: unknown deployment "omni-nano"`,
+			"an index the deployment does not fill", remote + "  stores:\n    memory:\n      milvus: {dimension: 768}\n      embedding: {deployment: remote-embed}\n",
+			`global.stores.memory.milvus.dimension: deployment "remote-embed" answers with 1024 dimensions (capabilities.dimensions), not 768`,
+		},
+		{
+			"an index the default deployment cannot fill", "  stores:\n    memory:\n      milvus: {dimension: 1024}\n",
+			`global.stores.memory.milvus.dimension: deployment "vela-embedding" runs vllm-sr/Vela-1.0-Encoder-307M-Embedding, which embeds at most 768 dimensions, not 1024`,
+		},
+		{
+			"a model that embeds no text", "  model_catalog:\n    deployments:\n      image-embed: {provider: openai_embeddings, endpoint: \"https://embed.example.com/v1\", model: siglip, capabilities: {modalities: [image]}}\n    embeddings: {default: {deployment: image-embed}}\n",
+			`global.model_catalog.embeddings.default.deployment: deployment "image-embed" embeds image (capabilities.modalities), not text, which recall embeds`,
+		},
+		{
+			"text among the declared modalities", "  model_catalog:\n    deployments:\n      clip: {provider: openai_embeddings, endpoint: \"https://embed.example.com/v1\", model: clip, capabilities: {dimensions: 512, modalities: [text, image]}}\n    embeddings: {default: {deployment: clip}}\n", "",
+		},
+		{
+			"a remote model's unknown modality", "  model_catalog:\n    deployments:\n      clip: {provider: openai_embeddings, endpoint: \"https://embed.example.com/v1\", model: clip, capabilities: {modalities: [video]}}\n",
+			`capabilities.modalities lists "video"; an embedding model embeds text, image or audio`,
+		},
+		{
+			"an empty default", "  model_catalog:\n    embeddings: {default: {deployment: \"\"}}\n",
+			"global.model_catalog.embeddings.default.deployment must name a declared deployment",
 		},
 	} {
 		_, err := ParseYAMLBytes([]byte(embeddingStoresBase + "global:\n" + tc.global))
@@ -235,5 +253,45 @@ recipes:
 	}
 	if _, started := ModelRuntimeDeploymentsInUse(cfg)[EmbeddingDefaultDeployment]; started {
 		t.Fatal("the embedding model starts for a configuration without recall")
+	}
+}
+
+// vela-embedding is declared, not started: it runs once a recall consumer
+// embeds with it, and a semantic cache judged by same_request starts it for
+// its recall, not for the judge.
+func TestTheEmbeddingModelStartsOnlyForRecall(t *testing.T) {
+	withCache := func(configuration map[string]any) map[string]ModelDeployment {
+		cfg := DefaultGlobalConfig()
+		if configuration != nil {
+			cache := &cfg.SemanticCache
+			cache.InUse = true
+			cfg.GlobalPlugins = []DecisionPlugin{{Type: DecisionPluginResponseCache, Configuration: MustStructuredPayload(configuration)}}
+		}
+		if err := cfg.LayerPlugins(); err != nil {
+			t.Fatal(err)
+		}
+		return ModelRuntimeDeploymentsInUse(&cfg)
+	}
+	if _, started := withCache(nil)[EmbeddingDefaultDeployment]; started {
+		t.Fatal("a declared embedding deployment started without a consumer")
+	}
+	used := withCache(map[string]any{"enabled": true})
+	if _, started := used[EmbeddingDefaultDeployment]; !started {
+		t.Fatal("a semantic cache does not start the embedding model it recalls with")
+	}
+	if _, started := used[DefaultDecisionDeployment]; !started {
+		t.Fatal("the cache's same_request judge does not start the decision model")
+	}
+	if _, started := withCache(map[string]any{"enabled": true, "mode": ResponseCacheModeExact})[EmbeddingDefaultDeployment]; started {
+		t.Fatal("exact reuse embeds nothing")
+	}
+	cfg := DefaultGlobalConfig()
+	cfg.SemanticCache.InUse = true
+	cfg.Decisions = []Decision{cacheDemandDecision("semantic", true)}
+	if err := cfg.LayerPlugins(); err != nil {
+		t.Fatal(err)
+	}
+	if _, started := ModelRuntimeDeploymentsInUse(&cfg)[EmbeddingDefaultDeployment]; !started {
+		t.Fatal("a decision's semantic cache does not start the embedding model it recalls with")
 	}
 }

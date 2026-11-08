@@ -23,9 +23,10 @@ func matchConfig() *RouterConfig {
 	return cfg
 }
 
-// The defaults table: the cache recalls, RAG recalls and judges relevance,
-// memory recalls, compression judges relevance and tool selection ranks
-// tools. Every default is a valid block of its own feature.
+// The defaults table: the cache recalls and confirms with same_request, RAG
+// recalls and judges relevance, memory recalls, compression prefilters by
+// BM25 and judges relevance, and tool selection ranks tools. Every default
+// is a valid block of its own feature.
 func TestMatchDefaultsTable(t *testing.T) {
 	stages := func(m MatchConfig) string {
 		var written []string
@@ -38,10 +39,10 @@ func TestMatchDefaultsTable(t *testing.T) {
 		return strings.Join(written, " ")
 	}
 	want := map[MatchFeature]string{
-		MatchResponseCache: "recall:embedding",
+		MatchResponseCache: "recall:embedding judge:same_request",
 		MatchRAG:           "recall:embedding judge:relevance",
 		MatchMemory:        "recall:embedding",
-		MatchCompress:      "judge:relevance",
+		MatchCompress:      "recall:bm25 judge:relevance",
 		MatchToolsSelect:   "judge:tool_rank",
 	}
 	if len(matchFeatures) != len(want) {
@@ -55,15 +56,38 @@ func TestMatchDefaultsTable(t *testing.T) {
 		if err := validateMatch(matchConfig(), string(feature)+".match", &block, feature); err != nil {
 			t.Fatalf("%s default: %v", feature, err)
 		}
-		if row.indexed != (block.Recall != nil) {
-			t.Fatalf("%s: an indexed feature, and only one, recalls by default", feature)
+		if row.indexed && block.Recall == nil {
+			t.Fatalf("%s: an indexed feature recalls by default", feature)
 		}
 	}
 	if rag := MatchRAG.Default(); rag.Recall.TopK != 20 || *rag.Recall.MinSimilarity != 0.3 || rag.Judge.TopK != 6 || *rag.Judge.MinScore != presets.NeutralThreshold {
 		t.Fatalf("rag default = %+v %+v", rag.Recall, rag.Judge)
 	}
-	if cache := MatchResponseCache.Default(); cache.Recall.TopK != 3 || *cache.Recall.MinSimilarity != 0.8 {
-		t.Fatalf("cache default = %+v", cache.Recall)
+	if cache := MatchResponseCache.Default(); cache.Recall.TopK != 3 || *cache.Recall.MinSimilarity != 0.8 || cache.Judge.Preset != presets.SameRequest || *cache.Judge.MinScore != 0.8 {
+		t.Fatalf("cache default = %+v %+v", cache.Recall, cache.Judge)
+	}
+	if compress := MatchCompress.Default(); compress.Recall.TopK != 0 || compress.Recall.MinSimilarity != nil || compress.Judge.EffectiveMaxCandidates() != 64 {
+		t.Fatalf("compress default = %+v %+v", compress.Recall, compress.Judge)
+	}
+}
+
+// A judge reads 255 candidates when it chooses among them, 64 when it is
+// asked about each, unless max_candidates says otherwise.
+func TestMatchJudgeMaxCandidates(t *testing.T) {
+	cases := map[string]struct {
+		judge MatchJudge
+		want  int
+	}{
+		"choice":           {MatchJudge{Preset: presets.ToolRank}, presets.MaxChoices},
+		"per candidate":    {MatchJudge{Preset: presets.Relevance}, DefaultMatchJudgeCandidates},
+		"custom choice":    {MatchJudge{Question: &SystemOneQuestion{Type: SystemOneQuestionChoice}}, presets.MaxChoices},
+		"written":          {MatchJudge{Preset: presets.SameRequest, MaxCandidates: 8}, 8},
+		"written above 64": {MatchJudge{Preset: presets.Relevance, MaxCandidates: 200}, 200},
+	}
+	for name, test := range cases {
+		if got := test.judge.EffectiveMaxCandidates(); got != test.want {
+			t.Fatalf("%s: %d, want %d", name, got, test.want)
+		}
 	}
 }
 
@@ -144,6 +168,13 @@ func TestMatchBlockValidation(t *testing.T) {
 			j.Deployment, j.TopK, j.MinRatio, j.OnError, j.TimeoutMs = "chooser", 2, matchBound(1), MatchOnErrorFail, 2000
 		})}},
 		"tools on another decision model": {MatchToolsSelect, MatchConfig{Judge: judge(func(j *MatchJudge) { j.Preset, j.Deployment = presets.ToolRank, "lite" })}},
+		"tools narrowed by bm25":          {MatchToolsSelect, MatchConfig{Recall: recall(MatchRecallBM25, 300, nil), Judge: judge(func(j *MatchJudge) { j.Preset = presets.ToolRank })}},
+		"rag judge only":                  {MatchRAG, MatchConfig{Judge: judge(func(j *MatchJudge) { j.MaxCandidates = 32 })}},
+		"rag bm25":                        {MatchRAG, MatchConfig{Recall: recall(MatchRecallBM25, 10, matchBound(1.5)), Judge: judge(func(*MatchJudge) {})}},
+		"memory judge only":               {MatchMemory, MatchConfig{Judge: judge(func(*MatchJudge) {})}},
+		"choice over more than it reads":  {MatchRAG, MatchConfig{Recall: recall("", 300, nil), Judge: judge(func(j *MatchJudge) { j.Preset = presets.ToolRank })}},
+		"choice reading 255":              {MatchToolsSelect, MatchConfig{Judge: judge(func(j *MatchJudge) { j.Preset, j.MaxCandidates = presets.ToolRank, 255 })}},
+		"per candidate reading 500":       {MatchCompress, MatchConfig{Judge: judge(func(j *MatchJudge) { j.MaxCandidates = 500 })}},
 	}
 	for name, test := range valid {
 		if err := validateMatch(matchConfig(), "m", &test.block, test.feature); err != nil {
@@ -155,8 +186,8 @@ func TestMatchBlockValidation(t *testing.T) {
 		block   MatchConfig
 		want    string
 	}{
-		"judge only on an index":    {MatchRAG, MatchConfig{Judge: judge(func(*MatchJudge) {})}, "m: a RAG source recalls its candidates from an index, which a judge cannot read whole; add recall"},
-		"recall of tools":           {MatchToolsSelect, MatchConfig{Recall: recall(MatchRecallBM25, 5, nil)}, "m.recall: tool selection judges its candidates whole and recalls none; remove recall"},
+		"judge only on an index":    {MatchResponseCache, MatchConfig{Judge: judge(func(j *MatchJudge) { j.Preset = presets.SameRequest })}, "m: the response cache recalls its candidates from an index, which a judge cannot read whole; add recall"},
+		"embedding over tools":      {MatchToolsSelect, MatchConfig{Recall: recall("", 5, nil), Judge: judge(func(j *MatchJudge) { j.Preset = presets.ToolRank })}, "m.recall.method: tool selection recalls with bm25 only"},
 		"embedding over segments":   {MatchCompress, MatchConfig{Recall: recall("", 5, nil)}, "m.recall.method: context compression recalls with bm25 only"},
 		"bm25 over cached requests": {MatchResponseCache, MatchConfig{Recall: recall(MatchRecallBM25, 3, nil)}, "m.recall.method: the response cache recalls with embedding only"},
 		"unknown method":            {MatchRAG, MatchConfig{Recall: recall("dense", 3, nil)}, "m.recall.method must be embedding or bm25"},
@@ -164,7 +195,7 @@ func TestMatchBlockValidation(t *testing.T) {
 		"negative top_k":            {MatchCompress, MatchConfig{Recall: recall(MatchRecallBM25, -1, nil)}, "m.recall.top_k must be at least 1"},
 		"cosine above one":          {MatchRAG, MatchConfig{Recall: recall("", 5, matchBound(1.5))}, "m.recall.min_similarity must be a cosine similarity within [-1, 1]"},
 		"negative bm25 bound":       {MatchCompress, MatchConfig{Recall: recall(MatchRecallBM25, 5, matchBound(-1))}, "m.recall.min_similarity must be a BM25 score of at least 0"},
-		"bm25 over documents":       {MatchRAG, MatchConfig{Recall: recall(MatchRecallBM25, 5, nil)}, "m.recall.method: a RAG source recalls with embedding only"},
+		"bm25 over memories":        {MatchMemory, MatchConfig{Recall: recall(MatchRecallBM25, 5, nil)}, "m.recall.method: a memory source recalls with embedding only"},
 		"preset and question":       {MatchCompress, MatchConfig{Judge: judge(func(j *MatchJudge) { j.Question = &SystemOneQuestion{Type: SystemOneQuestionNoul, Instructions: "x"} })}, "m.judge: a judge asks a preset or a question, not both"},
 		"no question":               {MatchCompress, MatchConfig{Judge: judge(func(j *MatchJudge) { j.Preset = "" })}, "m.judge: preset must be relevance, same_request, tool_rank, or write a question"},
 		"signal preset":             {MatchCompress, MatchConfig{Judge: judge(func(j *MatchJudge) { j.Preset = presets.Domain })}, "m.judge: preset must be"},
@@ -187,13 +218,14 @@ func TestMatchBlockValidation(t *testing.T) {
 			MatchConfig{Judge: judge(func(j *MatchJudge) { j.Deployment = "chooser" })},
 			`m.judge: deployment "chooser" declares question types choice, so it does not answer a noul question`,
 		},
-		"choice over too many recalled": {
-			MatchRAG,
-			MatchConfig{Recall: recall("", 300, nil), Judge: judge(func(j *MatchJudge) { j.Preset = presets.ToolRank })},
-			"m.judge: a choice judge chooses among at most 255 candidates",
+		"choice reading more than one question takes": {
+			MatchToolsSelect,
+			MatchConfig{Judge: judge(func(j *MatchJudge) { j.Preset, j.MaxCandidates = presets.ToolRank, 256 })},
+			"m.judge.max_candidates must be within [1, 255]: a choice judge's candidates are the options of one question",
 		},
-		"negative judge top_k":  {MatchCompress, MatchConfig{Judge: judge(func(j *MatchJudge) { j.TopK = -2 })}, "m.judge.top_k must be at least 1 when set"},
-		"probability above one": {MatchCompress, MatchConfig{Judge: judge(func(j *MatchJudge) { j.MinScore = matchBound(1.2) })}, "m.judge.min_score must be within [0, 1]"},
+		"negative max_candidates": {MatchCompress, MatchConfig{Judge: judge(func(j *MatchJudge) { j.MaxCandidates = -1 })}, "m.judge.max_candidates must be at least 1 when set"},
+		"negative judge top_k":    {MatchCompress, MatchConfig{Judge: judge(func(j *MatchJudge) { j.TopK = -2 })}, "m.judge.top_k must be at least 1 when set"},
+		"probability above one":   {MatchCompress, MatchConfig{Judge: judge(func(j *MatchJudge) { j.MinScore = matchBound(1.2) })}, "m.judge.min_score must be within [0, 1]"},
 		"level above the top": {MatchCompress, MatchConfig{Judge: judge(func(j *MatchJudge) {
 			question(SystemOneQuestionScore, func(q *SystemOneQuestion) { q.Levels = []string{"no", "yes"} })(j)
 			j.MinScore, j.Deployment = matchBound(1.5), "lite"

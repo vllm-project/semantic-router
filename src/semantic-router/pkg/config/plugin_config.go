@@ -26,8 +26,9 @@ type DecisionPlugin struct {
 // the answer of a cached request that asks the same thing.
 type ResponseCacheSemanticConfig struct {
 	// Match finds the cached requests a request may reuse: recall bounds
-	// their similarity, and an optional same_request judge confirms them.
-	// Without one the response cache's default recall runs.
+	// their similarity, and a same_request judge confirms them. Without one
+	// the response cache's default runs: the 3 most similar at 0.8 or more,
+	// each confirmed by same_request on the decision model.
 	Match *MatchConfig `json:"match,omitempty" yaml:"match,omitempty"`
 }
 

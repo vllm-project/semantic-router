@@ -175,7 +175,7 @@ func TestSystemOneDeploymentsTakeOnlyTheirOwnFields(t *testing.T) {
 			"apply to an attached endpoint, not to a worker the Router starts",
 		},
 		"the default embedding deployment": {
-			"    system:\n", "    embeddings:\n      default: hosted-d3\n    system:\n",
+			"    system:\n", "    embeddings:\n      default: {deployment: hosted-d3}\n    system:\n",
 			"embeddings need a model_runtime or openai_embeddings deployment",
 		},
 	} {

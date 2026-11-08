@@ -310,10 +310,9 @@ type InlineModels struct {
 	// DecisionModel is global.model_catalog.system.decision_model, resolved
 	// to its canonical name.
 	DecisionModel string `yaml:"decision_model,omitempty"`
-	// EmbeddingDeployment and MultimodalEmbeddingDeployment are
-	// global.model_catalog.embeddings.default and .multimodal.
-	EmbeddingDeployment           string `yaml:"embedding_deployment,omitempty"`
-	MultimodalEmbeddingDeployment string `yaml:"multimodal_embedding_deployment,omitempty"`
+	// EmbeddingDeployment is global.model_catalog.embeddings.default's
+	// deployment.
+	EmbeddingDeployment string `yaml:"embedding_deployment,omitempty"`
 	// ModelResourceWarnings are the deprecated model fields the
 	// configuration was read with, and what they were read as.
 	ModelResourceWarnings []ConfigWarning `yaml:"-" json:"-"`

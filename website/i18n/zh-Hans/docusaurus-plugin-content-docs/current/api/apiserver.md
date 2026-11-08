@@ -108,9 +108,6 @@ curl -sS http://localhost:8080/api/v1/diagnostics/classify/intent \
 | `POST` | `/api/v1/diagnostics/classify/batch` | 对批次运行选定的分类器 |
 | `POST` | `/api/v1/routing/preview` | 评估所有已配置信号 |
 | `POST` | `/api/v1/diagnostics/nli` | 评估前提/假设对 |
-| `POST` | `/api/v1/diagnostics/embeddings` | 生成已配置的文本或图像嵌入 |
-| `POST` | `/api/v1/diagnostics/similarity` | 比较一对文本 |
-| `POST` | `/api/v1/diagnostics/similarity/batch` | 运行批量相似度匹配 |
 
 名称、分数和匹配规则取决于当前配方。各端点支持的输入形式见实时 schema。
 

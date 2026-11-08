@@ -24,13 +24,11 @@ import (
 const toolNeedQuestionID = "tools:" + presets.ToolNeed
 
 // What a selection did: selected the judge's tools, found that the request
-// needs none, had no candidate, had more candidates than one question takes
-// options, or failed and applied its on_error.
+// needs none, had no candidate, or failed and applied its on_error.
 const (
 	toolsSelected     = "selected"
 	toolsNotNeeded    = "not_needed"
 	toolsNoCandidates = "no_candidates"
-	toolsOverflow     = "overflow"
 	toolsSelectFailed = "failed"
 )
 
@@ -40,11 +38,14 @@ type toolsSelection struct {
 	mode       string
 	deployment string
 	candidates int
-	kept       []string
-	need       float64
-	outcome    string
-	// action is the on_error or on_overflow a failed or overflowing
-	// selection applied, and reason why the call failed.
+	// truncated is how many candidates the judge did not read, over its
+	// max_candidates.
+	truncated int
+	kept      []string
+	need      float64
+	outcome   string
+	// action is the on_error a failed selection applied, and reason why
+	// the call failed.
 	action  string
 	reason  string
 	latency time.Duration
@@ -55,8 +56,10 @@ type toolsSelection struct {
 // the tools it chose: filter mode keeps them and the request's first
 // preserve_count tools, in the request's order; add mode appends them after
 // the request's own, best first. Below need_threshold it keeps or adds none
-// of the judge's tools. It returns the failure to answer the client with
-// when the selection refuses the request.
+// of the judge's tools. The judge reads at most its max_candidates tools, the
+// first as listed or as its bm25 recall ranks them, and never refuses more.
+// It returns the failure to answer the client with when the selection
+// refuses the request.
 func (r *OpenAIRouter) selectTools(request *llmprotocol.Request, plugin *config.ToolsPluginConfig, ctx *RequestContext) *routingFailure {
 	spec := plugin.Select
 	snapshot := extractSemanticRequestSignalsWith(request, r.routingInputSelector())
@@ -70,15 +73,8 @@ func (r *OpenAIRouter) selectTools(request *llmprotocol.Request, plugin *config.
 	catalog, candidates := r.toolsCandidates(request, plugin)
 	selection := toolsSelection{mode: spec.Mode, candidates: len(candidates)}
 	defer r.recordToolsSelection(ctx, &selection)
-	switch {
-	case len(candidates) == 0:
+	if len(candidates) == 0 {
 		selection.outcome = toolsNoCandidates
-		return nil
-	case len(candidates) > presets.MaxChoices:
-		selection.outcome, selection.action = toolsOverflow, spec.EffectiveOnOverflow()
-		if selection.action == config.ToolsSelectOnOverflowReject {
-			return &routingFailureTooManyTools
-		}
 		return nil
 	}
 	input.Candidates = candidates
@@ -165,6 +161,9 @@ func (r *OpenAIRouter) askToolsSelection(ctx context.Context, spec *config.Tools
 		need, errs[1] = r.askToolNeed(stage, selection.deployment, input.State())
 	})
 	leave()
+	for _, stage := range result.Stages {
+		selection.truncated += stage.Truncated
+	}
 	if err := errors.Join(errs...); err != nil {
 		return nil, 0, err
 	}
@@ -251,6 +250,9 @@ func (r *OpenAIRouter) recordToolsSelection(ctx *RequestContext, selection *tool
 	}
 	if selection.outcome == toolsSelected || selection.outcome == toolsNotNeeded {
 		metadata["tool_need"] = strconv.FormatFloat(selection.need, 'f', 4, 64)
+	}
+	if selection.truncated > 0 {
+		metadata["truncated"] = strconv.Itoa(selection.truncated)
 	}
 	if selection.action != "" {
 		metadata["action"] = selection.action

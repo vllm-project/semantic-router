@@ -13,7 +13,7 @@ import (
 )
 
 func TestNamedSharedConsumersPrepareTheirGlobalEmbedding(t *testing.T) {
-	for _, consumer := range []string{"memory", "embedding API"} {
+	for _, consumer := range []string{"memory", "vector store"} {
 		t.Run(consumer, func(t *testing.T) {
 			fake := runtimetest.New(runtimetest.Model{ID: "global", Embedding: &runtimetest.Embedder{Dimensions: []int{8}, Layers: []int{6}}})
 			server := httptest.NewServer(fake.Handler())
@@ -22,8 +22,8 @@ func TestNamedSharedConsumersPrepareTheirGlobalEmbedding(t *testing.T) {
 			cfg.EmbeddingDeployment = "global"
 			cfg.Memory.Milvus.Dimension = 8
 			cfg.ModelDeployments = map[string]config.ModelDeployment{"global": {Provider: config.ModelRuntimeProvider, Endpoint: server.URL}}
-			if consumer == "embedding API" {
-				cfg.API.Embeddings.Enabled = true
+			if consumer == "vector store" {
+				cfg.VectorStore = &config.VectorStoreConfig{Enabled: true, BackendType: "memory"}
 			} else {
 				cfg.Recipes = []config.RoutingRecipe{{Name: config.DefaultRecipeName}, {Name: "active", Profile: config.RoutingProfile{
 					Decisions: []config.Decision{{Plugins: []config.DecisionPlugin{{Type: config.DecisionPluginContext, Configuration: config.MustStructuredPayload(map[string]any{

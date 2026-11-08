@@ -34,7 +34,7 @@ translation:
 | `primary` | CPU 上的 `vllm-sr/vela3-fast` | `system.decision_model` |
 | `vela-embedding` | Vela 1.0 Embedding | `embeddings.default` |
 
-在 `embeddings.multimodal` 指定一个你声明的部署（例如提供 Vela 1.0 Omni Nano 的部署）之前，多模态 embedding 不开启（见[图像和音频](../model-runtime/guides/multimodal.md)）。
+Embedding 只用于召回：响应缓存、记忆或向量库用 `vela-embedding` 召回时它才启动，决策从不使用它。
 
 ## 字段参考 {#field-reference}
 
@@ -73,7 +73,8 @@ global:
     system:
       decision_model: {deployment: primary}
     bindings: {pii: primary}
-    embeddings: {default: vela-embedding}  # multimodal: a declared deployment
+    embeddings:
+      default: {deployment: vela-embedding}  # recall embeds with it
 ```
 
 ### 托管 `model_runtime` 字段 {#managed-model_runtime-fields}
@@ -103,7 +104,7 @@ global:
 | `max_retries` | 首次尝试之后的传输层重试次数，不超出调用方的截止时间 | 0–10；挂接的运行时不支持 |
 | `tls` | `ca_file`、`server_name`、`cert_file` 和 `key_file`（客户端证书）、`insecure_skip_verify` | 仅限 `https`；文件为绝对路径 |
 | `limits` | `max_request_bytes`、`max_response_bytes` | 挂接的运行时不支持 |
-| `capabilities` | 远程模型的 API 未列出任何内容时，它能回答什么：`question_types` 和 `presets`（systemone），`dimensions`（openai_embeddings） | |
+| `capabilities` | 远程模型的 API 未列出任何内容时，它的模型事实：`question_types`、`presets` 和 `modalities`（systemone）；`dimensions` 和 `modalities`（openai_embeddings：`text`、`image`、`audio`） | 召回所用的 embedding 部署必须嵌入 `text` |
 | `generation` | `openai_chat` 部署生成补全时的 `max_tokens`、`temperature` 和 `reasoning`（`{family, use_reasoning, reasoning_effort}`，`family` 为内置推理系列） | `max_tokens` ≤ 32768；`temperature` 0–2；`reasoning` 需要 `family` 和 `use_reasoning` |
 
 重定向会被拒绝，因此凭据永远不会随重定向发往其他主机。
@@ -160,9 +161,9 @@ global:
         auth: {api_key_env: EMBEDDING_API_KEY}
         timeout_ms: 5000
         max_retries: 2
-        capabilities: {dimensions: 1024}
+        capabilities: {dimensions: 1024, modalities: [text]}
     embeddings:
-      default: remote-embed        # multimodal: <name> for multimodal embeddings
+      default: {deployment: remote-embed}
 ```
 
 Router 向 `https://embedding.example.com/v1/embeddings` 发送请求：操作路径追加在 endpoint 的路径之后，从不由主机名和端口拼出。

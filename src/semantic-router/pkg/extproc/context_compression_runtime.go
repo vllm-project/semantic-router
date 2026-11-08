@@ -52,8 +52,10 @@ func (r *OpenAIRouter) contextCompressionScorer(compress *config.ContextCompress
 	return matchScorer{matcher: r.matcher(), block: compress.Match}
 }
 
-// matchScorer scores compression targets by a match block. A target the
-// match does not keep scores below every kept one, so it shrinks first.
+// matchScorer scores compression targets by a match block, each target a
+// candidate about the latest user message. A target the match does not keep,
+// or its judge does not read, scores below every kept one, so it shrinks
+// first.
 type matchScorer struct {
 	matcher *match.Matcher
 	block   *config.MatchConfig
@@ -64,9 +66,12 @@ func (s matchScorer) Score(ctx context.Context, query string, texts []string) ([
 	if strings.TrimSpace(query) == "" {
 		return scores, nil
 	}
+	// The targets come in conversation order; a judge without recall reads
+	// the latest first.
 	candidates := make([]match.Candidate, len(texts))
-	for index, text := range texts {
-		candidates[index] = match.Candidate{ID: strconv.Itoa(index), Text: text}
+	for index := range texts {
+		latest := len(texts) - 1 - index
+		candidates[index] = match.Candidate{ID: strconv.Itoa(latest), Text: texts[latest]}
 	}
 	result, err := s.matcher.Match(ctx, config.MatchCompress, s.block, match.Input{Request: query, Candidates: candidates})
 	if err != nil {

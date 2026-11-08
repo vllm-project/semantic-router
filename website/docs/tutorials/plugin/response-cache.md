@@ -62,24 +62,26 @@ lexical guard recognizes English negation cues; a German `nicht` or Chinese
 
 The semantic tier finds the cached requests a request may reuse with the
 [match block](./overview#match-block) in `semantic.match`. Without one it runs
-the response cache's default, which recalls only:
+the response cache's default, which recalls and confirms:
 
 ```yaml
 semantic:
   match:
     recall: {method: embedding, top_k: 3, min_similarity: 0.8}
-    judge:  {preset: same_request, min_score: 0.9}   # optional
+    judge:  {preset: same_request, min_score: 0.8}
 ```
 
 - `recall` asks the cache store for the cached requests most similar to the
   request, at most `top_k`, each at least `min_similarity` similar (a cosine).
-  With recall alone, the most similar one is served.
-- `judge` (optional) asks the decision model the `same_request` question about
-  the request and each recalled request, in one call, and serves the best one
-  that scores at least `min_score`. It turns away a cached request that is
-  close in embedding space but asks something else, such as the opposite
-  question. When the judge fails, `on_error: skip` (the default) serves the
-  recall result and `on_error: fail` reuses nothing.
+- `judge` asks the decision model the `same_request` question about the
+  request and each recalled request, one batch entry each in one call, and
+  serves the best one that scores at least `min_score`. It turns away a cached
+  request that is close in embedding space but asks something else, such as
+  the opposite question: a recalled request the judge rejects is a miss. When
+  the judge fails, `on_error: skip` (the default) serves the recall result and
+  `on_error: fail` reuses nothing.
+- A block that writes `recall` alone serves the most similar cached request
+  and asks no model.
 - A request that matched no decision recalls with the default `top_k` and the
   store's `similarity_threshold`.
 
