@@ -107,6 +107,9 @@ func buildOwnedEmbeddingResults(ctx context.Context, set *embedding.Set, request
 		if err != nil {
 			return nil, 0, err
 		}
+		// auto selects once, from the first text, so every vector in the
+		// response shares one model's embedding space and width.
+		request.Model = output.ModelUsed
 		elapsed += output.ProcessingTimeMs
 		results = append(results, output)
 	}
