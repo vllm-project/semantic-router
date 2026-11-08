@@ -68,7 +68,7 @@ router-flow-evalscope-deps: $(HARNESS_VENV_DEPS)
 		> "$(ROUTER_FLOW_EVALSCOPE_ROOT)/.sr-bench-dependencies.txt"
 
 test-router-flow-evalscope: router-flow-evalscope-deps ## Exercise native GPQA through the real sr-bench bridge without models or datasets
-	@PYTHONPATH="$(CURDIR):$(CURDIR)/src/vllm-sr" SR_BENCH_HOME="$(CURDIR)/.venv/sr-bench" \
+	@PYTHONPATH="$(CURDIR):$(CURDIR)/src/vllm-sr$${PYTHONPATH:+:$${PYTHONPATH}}" SR_BENCH_HOME="$(CURDIR)/.venv/sr-bench" \
 		SR_BENCH_TEST_BASE_PYTHON="$(AGENT_PYTHON)" \
 		"$(ROUTER_FLOW_EVALSCOPE_PYTHON)" -m pytest -q -s bench/router_flow/real_eval/test_evalscope_gpqa_contracts.py
 
