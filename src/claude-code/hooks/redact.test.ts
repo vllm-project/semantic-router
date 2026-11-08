@@ -35,6 +35,11 @@ test('a lowercase assignment of a password or key is hidden', () => {
   expect(hidden('export github_token="abcdef0123456789"')).toBe('export github_token="[secret]"')
 })
 
+test('an INI-style assignment with spaces around = is hidden', () => {
+  expect(hidden('api_key = sk-test-FAKE1234567890abcdef')).toBe('api_key = [secret]')
+  expect(hidden('[db]\npassword = hunter2FAKE99\nhost = db.local')).toBe('[db]\npassword = [secret]\nhost = db.local')
+})
+
 test('ordinary prose, code and Markdown keep their words', () => {
   for (const text of [
     'Enter your password in the box, then press the API key button.',
@@ -48,6 +53,9 @@ test('ordinary prose, code and Markdown keep their words', () => {
     'const token = await getToken()',
     'sk-ant is the prefix of an Anthropic key',
     'secret_santa: true',
+    'api_key = settings.api_key',
+    'token = get_token()',
+    'api_key = os.environ["API_KEY"]',
   ]) {
     expect(hidden(text)).toBe(text)
   }

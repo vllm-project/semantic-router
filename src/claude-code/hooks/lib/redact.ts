@@ -63,6 +63,11 @@ const SECRET_RULES: { pattern: RegExp; value?: number }[] = [
   { pattern: /^[ \t]*(?:export[ \t]+)?[A-Z0-9_]*(?:API_?KEY|SECRET|TOKEN|PASSWORD)[A-Z0-9_]*[ \t]*=[ \t]*["']?([^\s"'`]{8,})/dgm, value: 1 },
   // The same in any case, shell style (no spaces around `=`), the value ending the word: `db_password=…`, not `password_hint=hint()`.
   { pattern: new RegExp(String.raw`^[ \t]*(?:export[ \t]+)?${KEY}=["']?(${VALUE_CHAR}{8,})(?=["']?(?:[ \t;]|$))`, 'dgim'), value: 1 },
+  // INI and .cfg style (`api_key = …`), held to the YAML rule's bar below, so `api_key = settings.api_key` stays.
+  {
+    pattern: new RegExp(String.raw`^[ \t]*${KEY}[ \t]+=[ \t]+(?=[^\s]*[A-Za-z])(?=[^\s]*\d)(${VALUE_CHAR}{8,})[ \t]*$`, 'dgim'),
+    value: 1,
+  },
   // A quoted key with a quoted value: JSON, YAML, a Python dict.
   { pattern: new RegExp(String.raw`["']${KEY}["'][ \t]*:[ \t]*["']([^"'\n]{8,})`, 'dgi'), value: 1 },
   // A bare key with a quoted value of one word: YAML, TOML, an assignment in code.
