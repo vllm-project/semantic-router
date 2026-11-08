@@ -70,7 +70,7 @@ type WorkflowPlannerConfig struct {
 
 type WorkflowStateRuntimeConfig struct {
 	StoreBackend string                   `yaml:"store_backend,omitempty" json:"store_backend,omitempty"`
-	TTLSeconds   int                      `yaml:"ttl_seconds,omitempty" json:"ttl_seconds,omitempty"`
+	TTLSeconds   int                      `yaml:"ttl_seconds" json:"ttl_seconds"`
 	File         WorkflowStateFileConfig  `yaml:"file,omitempty" json:"file,omitempty"`
 	Redis        WorkflowStateRedisConfig `yaml:"redis,omitempty" json:"redis,omitempty"`
 }
