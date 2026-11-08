@@ -154,3 +154,77 @@ func TestReplayPIIDemandTracksPossibleEffectivePolicies(t *testing.T) {
 		t.Fatal("explicit capture must remove unused PII demand")
 	}
 }
+
+func TestReplayToolResultCaptureDefaultsAndDecisionOverrides(t *testing.T) {
+	yes, no := true, false
+	cfg := &RouterConfig{RouterReplay: RouterReplayConfig{Enabled: true}}
+	if cfg.EffectiveRouterReplayConfig(nil).CapturesToolResults() {
+		t.Fatal("tool results must stay redacted by default")
+	}
+	cfg.RouterReplay.CaptureToolResults = &yes
+	if !cfg.EffectiveRouterReplayConfig(nil).CapturesToolResults() {
+		t.Fatal("global capture_tool_results was not applied")
+	}
+	off := &Decision{Plugins: []DecisionPlugin{{Type: DecisionPluginRouterReplay, Configuration: MustStructuredPayload(map[string]interface{}{"capture_tool_results": false})}}}
+	if cfg.EffectiveRouterReplayConfig(off).CapturesToolResults() {
+		t.Fatal("a decision could not turn tool-result capture off")
+	}
+	withheld := &RouterReplayPluginConfig{Enabled: true, CaptureToolResults: true, CapturePersonalData: &no}
+	if withheld.CapturesToolResults() {
+		t.Fatal("tool results were captured while personal data is withheld")
+	}
+}
+
+func TestReplayToolResultCaptureRequiresPersonalDataAtLoad(t *testing.T) {
+	const decisions = `
+routing:
+  decisions:
+    - name: agent_loop
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: local
+      plugins:
+        - type: router_replay
+          configuration:
+`
+	document := func(global, plugin string) []byte {
+		return []byte(`version: v0.3
+providers:
+  defaults:
+    model: local
+  models:
+    - name: local
+      backend_refs:
+        - endpoint: local:8000
+` + decisions + "            " + plugin + `
+global:
+  services:
+    router_replay:
+      enabled: true
+` + global)
+	}
+	for _, test := range []struct {
+		name, global, plugin, refused string
+	}{
+		{"allowed", "      capture_tool_results: true\n", "enabled: true", ""},
+		{"global conflict", "      capture_tool_results: true\n      capture_personal_data: false\n", "capture_tool_results: false", "global.services.router_replay"},
+		{"decision inherits withheld personal data", "      capture_personal_data: false\n", "capture_tool_results: true", `decision "agent_loop"`},
+		{"decision withholds inherited capture", "      capture_tool_results: true\n", "capture_personal_data: false", `decision "agent_loop"`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := ParseYAMLBytes(document(test.global, test.plugin))
+			if test.refused == "" {
+				if err != nil {
+					t.Fatalf("valid tool-result capture refused: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), test.refused) || !strings.Contains(err.Error(), "capture_tool_results") {
+				t.Fatalf("want refusal naming %s, got %v", test.refused, err)
+			}
+		})
+	}
+}

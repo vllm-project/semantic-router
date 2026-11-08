@@ -479,7 +479,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	ctx.SemanticResponse = &candidateResponse
 	ctx.SemanticRequest = reqCopy
 	ctx.ResponseEnvelope = translated.Envelope
-	ctx.ResponseVendorExtensions = protocolcodec.DiagnosticsDroppedVendorExtensions(translated.Diagnostics)
+	ctx.ResponseUnknownFields = protocolcodec.DiagnosticsDroppedUnknownFields(translated.Diagnostics)
 
 	if isStreaming {
 		ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, streamDiags...)
@@ -700,7 +700,7 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 		return nil, fallback.EvaluationResult{CanFallback: true}, engineErr
 	}
 
-	projected, projectionDiagnostics, projectionErr := r.projectAnthropicRequestForBackendWithDiagnostics(*reqCopy, dispatch.logicalModel, dispatch.targetFormat)
+	projected, projectionDiagnostics, projectionErr := r.projectRequestForBackendWithDiagnostics(*reqCopy, dispatch.effectiveBackendModel(), dispatch.targetFormat)
 	if projectionErr != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, projectionErr
 	}
@@ -1054,7 +1054,7 @@ func (r *OpenAIRouter) rollbackFallbackContext(
 	ctx.ResponseVendor = ""
 	ctx.SemanticResponse = nil
 	ctx.ResponseEnvelope = llmprotocol.Envelope{}
-	ctx.ResponseVendorExtensions = false
+	ctx.ResponseUnknownFields = false
 	ctx.RequestCostPriced = false
 	ctx.RequestCost = 0
 	ctx.RequestCostCurrency = ""
