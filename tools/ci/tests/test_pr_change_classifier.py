@@ -447,8 +447,10 @@ class SelectionTests(unittest.TestCase):
             "bench/cache_token_probe.py",
             "bench/test_cache_token_probe.py",
             "src/vllm-sr/cli/sr_bench/cache_probe.py",
+            "src/vllm-sr/cli/sr_bench/cache_probe_compatibility.py",
             "src/vllm-sr/tests/test_sr_bench_cache_probe.py",
             "src/vllm-sr/tests/test_sr_bench_cache_usage.py",
+            "src/vllm-sr/tests/test_sr_bench_cache_compatibility.py",
         ):
             with self.subTest(path=path):
                 result = classify([path])

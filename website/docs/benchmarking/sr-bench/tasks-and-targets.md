@@ -245,6 +245,28 @@ branch-image reports and GA consumers are unchanged. Read the
 interpreting thresholds; this slice does not establish full native parity or
 authorize retirement.
 
+For the retained release-report readers, freeze optional `evidence_ref` and
+`evidence_image_tag` strings beside `thresholds` in this adapter's benchmark
+options. They identify the operator's declared Router revision and image. They
+are not inferred from the worker or from a config-hash acknowledgement, and the
+direct-baseline arm does not inherit them. Target IDs supply the report labels.
+Changing these declarations changes the frozen plan.
+
+The ordinary report includes a versioned compatibility projection for a cache-only
+live Router sequence and its optional direct baseline. Extract it without running
+the probe again:
+
+```bash
+vllm-sr benchmark report RUN_ID > report.json
+jq -e '.cache_probe_compatibility // error("No cache probe projection")' \
+  report.json > cache-aggregate.json
+```
+
+The existing branch-image and GA commands accept `cache-aggregate.json` through
+their `--cache-aggregate` option. Their other evidence requirements still apply.
+Direct-only, mixed, preview and recovery runs have an unsupported projection with
+explicit validation failures rather than an inferred Router/baseline pair.
+
 ## Scripted agent-task Chat diagnostic
 
 The opt-in `agent-task-chat-v1` adapter runs the maintained tasks from

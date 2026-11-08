@@ -63,7 +63,7 @@ test-agent-task-bench: $(HARNESS_VENV_DEPS) vllm-sr-install-cli ## Test native a
 	@"$(AGENT_PYTHON)" -m pytest -q bench/test_agent_task_live_benchmark.py src/vllm-sr/tests/test_sr_bench_agent_task.py
 
 test-cache-probe-bench: $(HARNESS_VENV_DEPS) vllm-sr-install-cli ## Test native and sr-bench cache observations against local HTTP
-	@"$(AGENT_PYTHON)" -m pytest -q bench/test_cache_token_probe.py src/vllm-sr/tests/test_sr_bench_cache_probe.py src/vllm-sr/tests/test_sr_bench_cache_usage.py
+	@"$(AGENT_PYTHON)" -m pytest -q bench/test_cache_token_probe.py src/vllm-sr/tests/test_sr_bench_cache_probe.py src/vllm-sr/tests/test_sr_bench_cache_usage.py src/vllm-sr/tests/test_sr_bench_cache_compatibility.py
 
 test-bench-tools: test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-agent-task-bench test-cache-probe-bench ## Test every registered bench/ research tool
 

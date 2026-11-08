@@ -224,6 +224,11 @@ probe and its branch-image/GA consumers stay until runtime qualification and own
 review establish replacement compatibility. See the
 [task guide](../website/docs/benchmarking/sr-bench/tasks-and-targets.md#repeated-prefix-cache-diagnostic)
 and [result contract](../website/docs/benchmarking/sr-bench/results.md#cache-observation-diagnostics).
+Its versioned `cache_probe_compatibility` report projection supplies the native
+Router/baseline summary and turn fields to the existing release-report readers.
+Extract that object as the `--cache-aggregate` input. Unknown or unqualified
+observations carry validation failures, and the rest of the release evidence
+remains required; a compatible cache report does not establish release readiness.
 
 ## Router Memory cold start
 
@@ -290,7 +295,8 @@ through a local HTTP endpoint, without models or credentials. Run
 `make verify DOMAIN=agent-task-bench` for the same explicit integration check.
 
 `make test-cache-probe-bench` compares native and sr-bench cache observations
-against local HTTP fixtures and checks the shared usage receipts. Evaluation &
+against local HTTP fixtures, checks the shared usage receipts, and runs both
+release-report cache readers against the resulting artifacts. Evaluation &
 Quality owns this check through `cache-probe-bench`; `make test-bench-tools` and
 the existing bench-tools CI job include it. `make verify DOMAIN=cache-probe-bench`
 runs the same check without models or containers.
