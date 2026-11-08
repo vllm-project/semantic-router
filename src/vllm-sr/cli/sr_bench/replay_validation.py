@@ -7,6 +7,7 @@ from cli.routing_preview import PROMPT_FIELDS, case_request_fields
 from . import VERSION
 from .accounting import effective_calls
 from .contracts import canonical, digest, protocol_canonical
+from .legacy_reasoning_modes import FIELD as REASONING_CONDITIONS
 
 REPLAYABLE = {"mmlu-pro", "gpqa-diamond", "arc-agi-2", "hle", "simpleqa-verified"}
 
@@ -53,6 +54,11 @@ class ReplayValidator:
             reasons.setdefault(code, {"code": code, "message": message})
 
         bm, pm = self.baseline["manifest"], preview["manifest"]
+        if any(REASONING_CONDITIONS in value for value in (bm, pm)):
+            reject(
+                "reasoning_conditions_not_replayable",
+                "Replay does not support reasoning condition matrices; use their saved condition report.",
+            )
         if any(m.get("output_policy", "bounded") == "native" for m in (bm, pm)):
             reject(
                 "native_output_not_replayable",

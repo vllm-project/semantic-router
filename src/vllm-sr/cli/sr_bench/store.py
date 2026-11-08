@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .contracts import canonical, planned_cells
 from .experiments import bind_created_run, run_roles
+from .legacy_reasoning_modes import FIELD as REASONING_CONDITIONS
 from .preparation import summary as preparation_summary
 
 MAX_PAGE_SIZE = 500
@@ -47,6 +48,7 @@ def run_summary(run):
             "experiment",
             "plan_sha256",
             "case_sha256",
+            REASONING_CONDITIONS,
         )
         if key in source
     }

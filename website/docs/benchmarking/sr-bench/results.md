@@ -89,6 +89,53 @@ A small dev sample shows direction; a quality
 non-inferiority claim needs a prespecified margin and a holdout confidence
 interval. Token-equivalent self-hosted prices do not establish GPU invoice savings.
 
+## Reasoning-condition measurements
+
+Runs from the [native condition compiler](./tasks-and-targets.md#legacy-reasoning-conditions)
+add a `legacy_reasoning_conditions` report section. Read it through the ordinary
+command:
+
+```bash
+vllm-sr benchmark report RUN_ID
+```
+
+Each condition reports its requested mode, exact control, requested model,
+observed selections, skip status and per-category measurements. Correctness
+uses all planned cases, including failed and unanswered work. A skipped XC
+condition has zero planned calls and null accuracy, rather than an apparent
+zero-quality result. The selection hash identifies the shared native questions;
+the distinct case hashes preserve different prompt conditions.
+
+Endpoint resource measurements require one completed, untruncated subject call
+with usage and latency for every planned case. `measured_calls` and
+`measurement_coverage_complete` expose that coverage; incomplete measurements
+remain null. Ratios use total endpoint prompt tokens, including cached reads
+and cache writes. A receipt with 7 fresh, 2 cached and 1 cache-write input tokens,
+plus 3 completion tokens, has a completion/prompt ratio of 0.3, not 3/7.
+Router child-call aggregate usage remains separate from these endpoint totals.
+
+`time_per_completion_token_ms` divides the total measured request time by the
+total reported completion tokens. A zero denominator remains null. Completion
+tokens can include backend reasoning; this is not visible-text decoding speed.
+Reported reasoning-token counts retain their presence separately from requested
+reasoning settings. A flag or an absent reasoning field does not prove what the
+backend did.
+
+`plain_quality_deltas` contains descriptive differences only for complete NR
+versus NR_REASONING/AR outcomes on identical plain cases. XC changes the prompt
+and can supply a reference explanation, so it is not an identical-input toggle
+comparison. Sequential conditions do not establish matched cache state,
+latency/cost savings or production recommendations. Native plots and
+configuration recommendations remain in the original runner.
+
+Saved runs and experiment links retain the condition contract. Ordinary paired
+comparison, candidate derivation, replay and recovery currently reject these
+condition matrices explicitly. They do not drop mode metadata or silently reuse
+an incomplete matrix. Repeating the same submission with its idempotency key
+returns the existing run without more inference.
+
+## Paired quality intervals
+
 The default paired quality interval is a conservative weighted Hoeffding bound
 for independent case differences. It stays nonzero when every observed pair ties,
 including all-wrong samples. The stratified bootstrap interval is retained as a
