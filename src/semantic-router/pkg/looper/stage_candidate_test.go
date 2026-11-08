@@ -142,6 +142,54 @@ func TestLooperCandidateUsesCompleteStageBudgetExactlyOnce(t *testing.T) {
 	}
 }
 
+// A stage whose estimate exceeds the window only by the reserve for tool-call
+// arguments is admitted, and one above the window without it is not.
+func TestLooperCandidateStageRefusesOnlyWithoutReserves(t *testing.T) {
+	client, calls, _ := candidateStageClient(t)
+	base := candidateStageRequest()
+	arguments, err := json.Marshal(map[string]string{"notes": strings.Repeat("agenda ", 1000)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stage := &openai.ChatCompletionNewParams{
+		Model: "worker", MaxCompletionTokens: openai.Int(16),
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage("Summarize the meeting agenda."),
+			{OfAssistant: &openai.ChatCompletionAssistantMessageParam{ToolCalls: []openai.ChatCompletionMessageToolCallParam{{
+				ID: "call_1", Function: openai.ChatCompletionMessageToolCallFunctionParam{Name: "agenda", Arguments: string(arguments)},
+			}}}},
+			openai.ToolMessage("done", "call_1"),
+		},
+	}
+	body, err := json.Marshal(stage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	neutral, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequestForMutation(llmprotocol.OpenAIChatV1, body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	demand := selection.DemandForRequest(&neutral)
+	if demand.InputReserveTokens == 0 {
+		t.Fatal("tool-call arguments carry no reserve")
+	}
+	p := base.ModelParams["worker"]
+	p.Capabilities = []string{"text", "tools"}
+	p.ContextWindowSize = demand.InputTokens - demand.InputReserveTokens + int(*demand.MaxOutputTokens)
+	base.ModelParams["worker"] = p
+	if err := dispatchCandidateStage(client, base, stage, "worker"); err != nil {
+		t.Fatalf("stage refused on the estimate's reserves: %v", err)
+	}
+	p.ContextWindowSize--
+	base.ModelParams["worker"] = p
+	if err := dispatchCandidateStage(client, base, stage, "worker"); !errors.Is(err, selection.ErrNoEligibleCandidates) {
+		t.Fatalf("stage above the window without reserves accepted: %v", err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("connector calls=%d, want 1", calls.Load())
+	}
+}
+
 func TestLooperCandidateChecksToolAndOutputCapabilities(t *testing.T) {
 	for _, raw := range []string{
 		`{"model":"worker","messages":[{"role":"user","content":"Read the meeting agenda."}],"max_completion_tokens":16,"tools":[{"type":"function","function":{"name":"agenda","parameters":{"type":"object"}}}]}`,

@@ -148,8 +148,9 @@ func (r *OpenAIRouter) prepareEvalRequest(input services.EvalModelSelectionInput
 	ctx := &RequestContext{
 		Headers: map[string]string{}, VSRSelectedDecision: decision,
 		SemanticRequest: request, VSRConversationFacts: input.ConversationFacts,
-		VSRContextTokenCount: input.ContextTokenCount,
-		TraceContext:         input.Context,
+		VSRContextTokenCount:    input.ContextTokenCount,
+		VSRContextReserveTokens: input.ContextReserveTokens,
+		TraceContext:            input.Context,
 	}
 	if recipe, ok := r.Config.RecipeByName(input.Recipe); ok {
 		ctx.Routing.SelectRecipe(recipe)

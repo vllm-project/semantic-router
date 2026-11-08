@@ -48,12 +48,41 @@ func TestStrictCandidatesAgreeInRuntimePreviewAndAdaptation(t *testing.T) {
 	if len(refs) != 1 || refs[0].Model != "vision" {
 		t.Fatalf("adaptation resurrected candidate: %+v", refs)
 	}
-	d.Algorithm.MinimumCandidates = 2
+	// Without the image reserve, small also fits; text and unknown never do.
+	d.Algorithm.MinimumCandidates = 3
 	if _, _, err := r.selectDecisionRuntimeModel(&decision.DecisionResult{Decision: d}, d.Name, "describe", "", 1, ctx); err == nil {
 		t.Fatal("runtime ignored minimum pool")
 	}
 	if got := r.SelectModelForEval(services.EvalModelSelectionInput{Decision: d, Demand: selection.DemandForRequest(request)}); got.Status != services.EvalSelectionUnavailable {
 		t.Fatalf("preview minimum=%+v", got)
+	}
+}
+
+// After the known-limits reserve fallback, preview and live routing hand
+// Router Learning the same candidates.
+func TestStrictReserveFallbackReachesLearningInRuntimeAndPreview(t *testing.T) {
+	r := strictCandidateRouter()
+	r.Config.ModelConfig["small-b"] = r.Config.ModelConfig["small"]
+	request := strictCandidateRequest()
+	d := &config.Decision{Name: "reasoning", ModelRefs: []config.ModelRef{{Model: "small"}, {Model: "small-b"}}, Algorithm: &config.AlgorithmConfig{Type: config.DecisionAlgorithmStatic}}
+	estimate := llmprotocol.EstimateInput(request)
+	ctx := &RequestContext{SemanticRequest: request, VSRSelectedDecision: d, TraceContext: context.Background(), VSRContextTokenCount: estimate.Tokens, VSRContextReserveTokens: estimate.ReserveTokens}
+	if _, _, err := r.selectDecisionRuntimeModel(&decision.DecisionResult{Decision: d}, d.Name, "describe", "", 1, ctx); err != nil {
+		t.Fatalf("runtime refused on the image reserve: %v", err)
+	}
+	if refs := r.eligibleLearningModelRefs(d.ModelRefs, ctx); len(refs) != 2 {
+		t.Fatalf("runtime learning candidates=%+v", refs)
+	}
+	input := services.EvalModelSelectionInput{Decision: d, SemanticRequest: request, Demand: selection.DemandForRequest(request), ContextTokenCount: estimate.Tokens, ContextReserveTokens: estimate.ReserveTokens}
+	if eligible, err := r.evalStrictEligibleModelRefs(&input, d, r.Config.CandidateRequirements); err != nil || len(eligible) != 2 {
+		t.Fatalf("preview eligible=%+v err=%v", eligible, err)
+	}
+	previewCtx, err := r.prepareEvalRequest(input, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if refs := r.eligibleLearningModelRefs(d.ModelRefs, previewCtx); len(refs) != 2 {
+		t.Fatalf("preview learning candidates=%+v", refs)
 	}
 }
 
@@ -69,7 +98,7 @@ func TestStrictDispatchRechecksActualGrowthAndPermissionScope(t *testing.T) {
 	if err := r.validateDispatchRequirements(request, &providerDispatch{logicalModel: "text"}, ctx); !errors.Is(err, selection.ErrNoEligibleCandidates) {
 		t.Fatalf("scope err=%v", err)
 	}
-	request.Messages[0].Content = append(request.Messages[0].Content, llmprotocol.Content{Kind: llmprotocol.ContentText, Text: string(make([]byte, 50000))})
+	request.Messages[0].Content = append(request.Messages[0].Content, llmprotocol.Content{Kind: llmprotocol.ContentText, Text: string(make([]byte, 90000))})
 	if err := r.validateDispatchRequirements(request, dispatch, ctx); !errors.Is(err, selection.ErrNoEligibleCandidates) {
 		t.Fatalf("growth err=%v", err)
 	}
