@@ -141,9 +141,10 @@ Check the selected model on tool continuations and user follow-ups. The harness
 retains tool permissions, task state, and the outer loop; recipes do not configure
 delegated agents.
 
-Claude Code sends `x-claude-code-session-id` instead of `x-session-id`. See
+Claude Code sends `x-claude-code-session-id` instead of `x-session-id`, and
+Codex CLI sends `session-id` and `thread-id`. See
 [Agents that delegate to subagents](../tutorials/learning/protection#agents-that-delegate-to-subagents)
-for the identity headers that hold its runs and its subagents.
+for the identity headers that hold their runs and their subagents.
 
 ### Agents that send tool output as messages
 

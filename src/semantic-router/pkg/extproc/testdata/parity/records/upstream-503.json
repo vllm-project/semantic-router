@@ -82,7 +82,8 @@
             },
             {
               "name": "x-route-source",
-              "value": "parity-corpus"
+              "value": "parity-corpus",
+              "append": true
             },
             {
               "name": "content-length",
