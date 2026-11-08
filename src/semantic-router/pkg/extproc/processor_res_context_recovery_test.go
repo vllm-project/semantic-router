@@ -467,11 +467,11 @@ func TestHandleContextRecoveryFollowupAcceptsResponseVendor(t *testing.T) {
 		t,
 		llmprotocol.OpenAIChatV1,
 		llmprotocol.OpenAIChatV1,
-		llmprotocol.ResponseVendorAzure,
+		llmprotocol.ResponseVendorCloudflare,
 	)
 	got, err := router.handleContextRecoveryFollowup(
 		context.Background(),
-		azureContextRecoveryChatRetrieveBody("key-1"),
+		decoratedContextRecoveryChatRetrieveBody("key-1"),
 		ctx,
 	)
 	if err != nil {
@@ -501,11 +501,11 @@ func TestRedactContextRecoveryToolCallsUsesBackendFormatAndVendor(t *testing.T) 
 			body:   contextRecoveryChatRetrieveBody("secret-key"),
 		},
 		{
-			name:   "azure_vendor",
+			name:   "cloudflare_vendor_unknown_azure_fields",
 			source: llmprotocol.OpenAIChatV1,
 			target: llmprotocol.OpenAIChatV1,
-			vendor: llmprotocol.ResponseVendorAzure,
-			body:   azureContextRecoveryChatRetrieveBody("secret-key"),
+			vendor: llmprotocol.ResponseVendorCloudflare,
+			body:   decoratedContextRecoveryChatRetrieveBody("secret-key"),
 		},
 	}
 	for _, test := range tests {
@@ -535,8 +535,8 @@ func newContextRecoveryFollowup(
 		defer request.Body.Close()
 		_ = json.NewDecoder(request.Body).Decode(&received)
 		writer.Header().Set("Content-Type", "application/json")
-		if vendor == llmprotocol.ResponseVendorAzure {
-			_, _ = writer.Write(azureContextRecoveryChatAnswerBody())
+		if vendor == llmprotocol.ResponseVendorCloudflare {
+			_, _ = writer.Write(decoratedContextRecoveryChatAnswerBody())
 			return
 		}
 		_, _ = writer.Write([]byte(`{
@@ -603,7 +603,9 @@ func contextRecoveryChatRetrieveBody(key string) []byte {
 	}`)
 }
 
-func azureContextRecoveryChatRetrieveBody(key string) []byte {
+// decoratedContextRecoveryChatRetrieveBody keeps Azure-shaped members the Chat
+// contract does not declare so recovery still covers unknown-field payloads.
+func decoratedContextRecoveryChatRetrieveBody(key string) []byte {
 	return []byte(`{
 		"id":"initial","object":"chat.completion","created":1,"model":"model",
 		"prompt_filter_results":[{"prompt_index":0,"content_filter_results":{}}],
@@ -618,7 +620,7 @@ func azureContextRecoveryChatRetrieveBody(key string) []byte {
 	}`)
 }
 
-func azureContextRecoveryChatAnswerBody() []byte {
+func decoratedContextRecoveryChatAnswerBody() []byte {
 	return []byte(`{
 		"id":"followup","object":"chat.completion","created":1,"model":"model",
 		"prompt_filter_results":[{"prompt_index":0,"content_filter_results":{}}],
