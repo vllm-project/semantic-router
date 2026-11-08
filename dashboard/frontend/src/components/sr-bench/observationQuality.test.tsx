@@ -161,6 +161,20 @@ function renderMetrics(
 }
 
 describe('observation-only quality presentation', () => {
+  it('shows missing cache evidence separately from the unknown counter', () => {
+    const html = renderMetrics({
+      ...sessionObservation,
+      session_observation: {
+        ...sessionObservation.session_observation!,
+        cache_evidence_qualification_counts: { missing: 36 },
+        cache_evidence_unknown_turns: 0,
+      },
+    })
+    expect(html).toContain('Cache evidence qualifications:')
+    expect(html).toContain('missing: 36')
+    expect(html).toContain('Cache evidence unknown for 0 planned turns.')
+  })
+
   it('labels mixed rows with scored or observed counts over their planned denominators', () => {
     const binary: TargetMetrics = {
       ...observation,

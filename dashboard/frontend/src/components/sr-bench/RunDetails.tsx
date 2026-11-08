@@ -176,6 +176,11 @@ function SessionObservationDetails({ targets }: { targets: TargetMetrics[] }) {
               ? ` Selected model was unknown for ${number(metrics.unknown_selected_model_turns)} attempted turns.`
               : ''}
             {!metrics.usage_complete ? ' Usage is incomplete or unknown.' : ' Usage is complete.'}
+            {` Cache evidence qualifications: ${
+              Object.entries(metrics.cache_evidence_qualification_counts)
+                .map(([qualification, count]) => `${qualification}: ${number(count)}`)
+                .join(', ') || 'Unknown'
+            }.`}
             {` Cache evidence unknown for ${number(metrics.cache_evidence_unknown_turns)} planned turns.`}
           </p>
           <details className={styles.details}>
