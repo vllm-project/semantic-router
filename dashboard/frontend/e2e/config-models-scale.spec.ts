@@ -63,7 +63,6 @@ function buildConfig() {
             : `Scale-test routing model ${index}`,
         capabilities: index % 2 === 0 ? ['chat', 'reasoning'] : ['chat'],
         tags: [index % 2 === 0 ? 'rocm' : 'fallback'],
-        modality: 'text',
         param_size: `${8 + (index % 4) * 8}B`,
       })),
       signals: {},
@@ -240,7 +239,6 @@ test.describe('Models inventory at 300+ scale', () => {
     await connectionDialog
       .getByLabel('Description Optional')
       .fill('Added from the 305-model inventory.')
-    await connectionDialog.getByLabel('Modality Optional').selectOption('ar')
     await connectionDialog.getByLabel('Parameter size Optional').fill('32B')
     await connectionDialog.getByLabel('Context window Optional').fill('131072')
     await connectionDialog.getByLabel('Capabilities Comma separated').fill('chat, reasoning')
@@ -296,7 +294,6 @@ test.describe('Models inventory at 300+ scale', () => {
       description: 'Added from the 305-model inventory.',
       capabilities: ['chat', 'reasoning'],
       tags: ['rocm', 'new'],
-      modality: 'ar',
       param_size: '32B',
       context_window_size: 131072,
     })

@@ -200,13 +200,23 @@ def _removed_signal_type_forms(data: dict[str, Any]) -> Iterator[Form]:
     for prefix, routing in recipe_scopes(data):
         rules = _signals(routing).get("embeddings")
         for path, rule in _named_items(f"{prefix}.signals.embeddings", rules):
-            if not _text_embedding_rule(rule):
+            if _text_embedding_rule(rule):
+                continue
+            modality = rule.get("query_modality")
+            if isinstance(modality, str) and modality.lower() == "audio":
                 yield (
                     path,
                     code,
-                    "the embedding signal is removed, and a rule with image anchors or an audio query has no question that replaces it",
-                    "write a systemone question for it: input.image reads the request's images",
+                    "the embedding signal is removed, and no decision model reads audio, so no question replaces a rule with an audio query",
+                    "drop the rule: audio routing returns with a decision model that reads audio input",
                 )
+                continue
+            yield (
+                path,
+                code,
+                "the embedding signal is removed, and a rule with image anchors has no question that replaces it",
+                "write a systemone question for it: input.image reads the request's images",
+            )
     for prefix, routing in recipe_scopes(data):
         signals = _signals(routing)
         if "embeddings" in signals and all(

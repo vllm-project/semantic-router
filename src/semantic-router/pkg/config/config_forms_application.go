@@ -199,11 +199,15 @@ var removedSignalTypeForms = []ConfigForm{
 		Migrate: setConditionType(SignalTypeSystemOne),
 	},
 	{
-		Code:    CodeRemovedSignalType,
-		Paths:   RoutingScopes("signals.embeddings[]"),
-		Match:   func(node *yaml.Node, _ string) bool { return !textEmbeddingRule(node) },
-		What:    "the embedding signal is removed, and a rule with image anchors or an audio query has no question that replaces it",
-		Becomes: "write a systemone question for it: input.image reads the request's images",
+		Code:  CodeRemovedSignalType,
+		Paths: RoutingScopes("signals.embeddings[]"),
+		Match: func(node *yaml.Node, _ string) bool { return !textEmbeddingRule(node) },
+		Describe: func(at FormMatch) (string, string) {
+			if strings.EqualFold(scalarAt(at.Node, "query_modality"), "audio") {
+				return "the embedding signal is removed, and no decision model reads audio, so no question replaces a rule with an audio query", "drop the rule: audio routing returns with a decision model that reads audio input"
+			}
+			return "the embedding signal is removed, and a rule with image anchors has no question that replaces it", "write a systemone question for it: input.image reads the request's images"
+		},
 	},
 	{
 		Code:  CodeRemovedSignalType,

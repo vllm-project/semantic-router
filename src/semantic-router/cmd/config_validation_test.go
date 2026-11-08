@@ -13,7 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-const modalityValidationConfig = `
+const outputValidationConfig = `
 version: v0.5
 listeners:
   - name: http-8899
@@ -26,17 +26,16 @@ providers:
     - name: text-model
       backend_refs:
         - endpoint: 127.0.0.1:8000
-      modality: ar
 recipes:
   - name: default
     signals:
       modality:
-        - name: AR
+        - name: wants_text
           description: Text-only requests.
           labels: [text]
-        - name: BOTH
-          description: Text and image requests.
-          labels: [text_image]
+        - name: wants_image
+          description: Requests for a generated image.
+          labels: [image]
     decisions:
       - name: image-gen
         rules:
@@ -44,6 +43,7 @@ recipes:
           conditions:
             - type: modality
               name: CONDITION
+        OUTPUT
         modelRefs:
           - model: text-model
 `
@@ -66,18 +66,19 @@ func runValidation(t *testing.T, document string) (int, configValidationReport) 
 // -validate-config refuses what the Router refuses at startup, in the
 // Router's words, and exits 1.
 func TestValidateConfigRefusesWhatTheRouterRefuses(t *testing.T) {
-	status, report := runValidation(t, strings.Replace(modalityValidationConfig, "CONDITION", "BOTH", 1))
+	document := strings.NewReplacer("CONDITION", "wants_image", "OUTPUT", "output: {kind: image, action: generate}").Replace(outputValidationConfig)
+	status, report := runValidation(t, document)
 	if status != 1 || report.Valid {
-		t.Fatalf("status %d, report %+v: a BOTH decision without a diffusion or omni model must not validate", status, report)
+		t.Fatalf("status %d, report %+v: an image decision whose model cannot generate images must not validate", status, report)
 	}
-	if !strings.Contains(report.Error, `routes on the modality label text_image`) {
+	if !strings.Contains(report.Error, `output_capability_missing: model "text-model" does not declare image_generation in capabilities`) {
 		t.Fatalf("error %q is not the Router's", report.Error)
 	}
 }
 
 // A document that loads exits 0 and carries the warnings the Router logs.
 func TestValidateConfigReportsTheRoutersWarnings(t *testing.T) {
-	document := strings.Replace(modalityValidationConfig, "CONDITION", "AR", 1) +
+	document := strings.NewReplacer("CONDITION", "wants_text", "OUTPUT", "").Replace(outputValidationConfig) +
 		"global:\n  model_catalog:\n    bindings:\n      jailbreak: {deployment: primary, contract: decision.v1}\n"
 	status, report := runValidation(t, document)
 	if status != 0 || !report.Valid || report.Error != "" {

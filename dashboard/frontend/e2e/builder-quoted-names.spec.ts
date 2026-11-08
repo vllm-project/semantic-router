@@ -16,7 +16,6 @@ providers:
 routing:
   modelCards:
     - name: model-a
-      modality: text
   signals:
     context:
       - name: long prompts

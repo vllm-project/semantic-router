@@ -115,6 +115,9 @@ func (r *OpenAIRouter) handleModelRoutingWithPersonalizedCache(
 // handleModelRouting handles model selection and routing logic
 // decisionName, reasoningDecision, and selectedModel are pre-computed from ProcessRequest
 func (r *OpenAIRouter) handleModelRouting(request *llmprotocol.Request, originalModel string, decisionName string, reasoningDecision entropy.ReasoningDecision, selectedModel string, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+	if rejected := r.imagesEntryRejection(ctx); rejected != nil {
+		return rejected, nil
+	}
 	if changed, err := r.applyPreDispatchToolsPolicy(ctx); err != nil {
 		return nil, err
 	} else if changed {

@@ -133,6 +133,7 @@ until the selected cases are known to be isolated.
 - **provider-protocols**: affected-change Anthropic backend and cross-protocol matrix coverage.
 - **response-api**: affected-change memory-backed Responses API and cross-protocol matrix coverage.
 - **route-action**: decision route action for detected prompt attacks and benign traffic.
+- **image-routing**: routing on what a request's image shows through a `systemone` question with `input.image`, and decisions whose output contract generates an image, for Responses and Images API clients, on the provider mocker's System One fixture and images API.
 - **response-api-redis**: manual Redis persistence and TTL coverage.
 - **response-api-redis-cluster**: manual Redis Cluster persistence and TTL coverage.
 - **router-replay**: manual management-boundary, restart-recovery, and single-shadow failure-isolation coverage.

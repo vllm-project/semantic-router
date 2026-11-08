@@ -125,8 +125,8 @@ describe('Builder mutations of blocks whose headers contain DSL strings', () => 
         keywords: ['urgent'],
       }),
     ).toBe('SIGNAL keyword urgent-requests {\n  keywords: ["urgent"]\n}\n')
-    expect(updateModel('MODEL qwen3-8b {\n}\n', 'qwen3-8b', { modality: 'text' })).toBe(
-      'MODEL qwen3-8b {\n  modality: "text"\n}\n',
+    expect(updateModel('MODEL qwen3-8b {\n}\n', 'qwen3-8b', { param_size: '8B' })).toBe(
+      'MODEL qwen3-8b {\n  param_size: "8B"\n}\n',
     )
   })
 })

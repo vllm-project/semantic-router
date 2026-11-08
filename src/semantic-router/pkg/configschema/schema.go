@@ -230,6 +230,9 @@ func schemaTypeMapper(value reflect.Type) *jsonschema.Schema {
 	if value == reflect.TypeOf(routerconfig.ModelBinding{}) {
 		return modelBindingSchema()
 	}
+	if value == reflect.TypeOf(routerconfig.OutputKinds{}) {
+		return outputKindsSchema()
+	}
 	if value == reflect.TypeOf(time.Duration(0)) {
 		return &jsonschema.Schema{
 			Description: "A duration string (e.g. '30s', '100ms') or nanoseconds integer.",
@@ -240,6 +243,24 @@ func schemaTypeMapper(value reflect.Type) *jsonschema.Schema {
 		}
 	}
 	return nil
+}
+
+// outputKindsSchema publishes an output contract's kind: one kind, or a list
+// of distinct kinds that one model writes together.
+func outputKindsSchema() *jsonschema.Schema {
+	kinds := make([]any, 0, len(routerconfig.OutputKindNames()))
+	for _, kind := range routerconfig.OutputKindNames() {
+		kinds = append(kinds, kind)
+	}
+	kind := &jsonschema.Schema{Type: "string", Enum: kinds}
+	one := uint64(1)
+	return &jsonschema.Schema{
+		Description: "The media the decision's answers carry: text (the default), image, audio or video, or a list of them that one model writes together.",
+		OneOf: []*jsonschema.Schema{
+			kind,
+			{Type: "array", Items: kind, MinItems: &one, UniqueItems: true},
+		},
+	}
 }
 
 // modelBindingSchema publishes a binding's two forms: the name of the

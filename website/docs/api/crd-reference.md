@@ -187,6 +187,7 @@ _Appears in:_
 | `algorithm` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Algorithm configures base model selection for this decision. It is<br />preserved as a router-owned object so supported algorithms can evolve<br />without requiring the operator CRD to duplicate every nested field. |  | Type: object <br />Optional: \{\} <br /> |
 | `reliability` _[DecisionReliabilityConfig](#decisionreliabilityconfig)_ | Reliability overrides the timeouts and retries of the provider model<br />that serves this decision's requests |  | Optional: \{\} <br /> |
 | `fallback` _[DecisionFallbackConfig](#decisionfallbackconfig)_ | Fallback overrides the cross-model fallback policy for this decision's<br />requests, over the recipe's and the router's |  | Optional: \{\} <br /> |
+| `output` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Output declares the media this decision's answers carry, such as<br />\{kind: image, action: generate\}; without it the decision answers in<br />text. The router checks it against the referenced models when it loads<br />the configuration. |  | Type: object <br />Optional: \{\} <br /> |
 
 #### DecisionFallbackConfig
 

@@ -133,7 +133,6 @@ type ModelFacts struct {
 	Capabilities      []string                           `yaml:"capabilities,omitempty"`
 	LoRAs             []LoRAAdapter                      `yaml:"loras,omitempty"`
 	Modalities        *modelcatalog.Modalities           `yaml:"modalities,omitempty"`
-	Modality          string                             `yaml:"modality,omitempty"`
 	Tags              []string                           `yaml:"tags,omitempty"`
 }
 

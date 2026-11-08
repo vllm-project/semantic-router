@@ -416,7 +416,6 @@ def test_migrate_config_data_splits_legacy_provider_models():
             "name": "gpt-4o",
             "description": "General reasoning model",
             "capabilities": ["general", "reasoning"],
-            "modality": "text",
             "reasoning": {
                 "type": "reasoning_effort",
                 "parameter": "reasoning_effort",

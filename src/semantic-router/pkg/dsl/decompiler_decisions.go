@@ -211,6 +211,7 @@ func (d *decompiler) decompileDecision(dec config.Decision) {
 	d.writeDecisionAlgorithm(dec)
 	d.writeDecisionPlugins(dec)
 	d.decompileRetention(dec.Retention)
+	d.decompileOutput(dec.Output)
 	d.write("}\n\n")
 }
 

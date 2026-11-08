@@ -37,7 +37,7 @@ providers:
         - omni
         - text
         - vision
-      modality: omni
+      modalities: {input: [text, image], output: [text]}
     - name: local/small-7b
       api_format: openai
       provider_model_id: qwen/qwen3.5-rocm

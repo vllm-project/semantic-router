@@ -41,7 +41,6 @@ providers:
       context_window_size: 1000000
       description: OpenRouter worker for broad reasoning and final ReMoM synthesis.
       capabilities: [chat, code, reasoning, long-context]
-      modality: text
       tags: ['deployment:openrouter', 'role:synthesis']
     - name: gpt-worker
       provider_model_id: openai/gpt-5.5
@@ -67,7 +66,6 @@ providers:
       context_window_size: 1048576
       description: OpenRouter worker for frontier reasoning.
       capabilities: [chat, code, reasoning, long-context]
-      modality: text
       tags: ['deployment:openrouter', 'role:worker']
     - name: opus-worker
       provider_model_id: anthropic/claude-opus-4.8
@@ -93,7 +91,6 @@ providers:
       context_window_size: 1000000
       description: OpenRouter worker for long-horizon reasoning.
       capabilities: [chat, code, reasoning, long-context]
-      modality: text
       tags: ['deployment:openrouter', 'role:worker']
 
 evaluation:

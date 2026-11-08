@@ -46,7 +46,6 @@ MODEL anthropic/claude-opus-4.6 {
   description: "Simulated high-care domain lane for non-private legal, compliance, and health analysis."
   capabilities: ["chat", "legal_analysis", "health_guidance", "high_stakes"]
   tags: ["deployment:vllm_alias", "tier:premium", "domain:high_care"]
-  modality: "text"
 }
 
 MODEL google/gemini-2.5-flash-lite {
@@ -54,7 +53,6 @@ MODEL google/gemini-2.5-flash-lite {
   description: "Simulated low-cost domain lane for medium difficulty explanations, follow-ups, and lightweight coding."
   capabilities: ["chat", "low_cost", "explanation", "coding"]
   tags: ["deployment:vllm_alias", "tier:medium"]
-  modality: "text"
 }
 
 MODEL google/gemini-3.1-pro {
@@ -62,12 +60,11 @@ MODEL google/gemini-3.1-pro {
   description: "Simulated complex-domain lane for architecture, STEM, research synthesis, and difficult coding."
   capabilities: ["chat", "reasoning", "architecture", "research", "code"]
   tags: ["deployment:vllm_alias", "tier:complex", "domain:technical"]
-  modality: "text"
 }
 
 MODEL local/omni {
   capabilities: ["chat", "image_understanding", "multimodal", "omni", "text", "vision"]
-  modality: "omni"
+  modalities: { input: ["text", "image"], output: ["text"] }
 }
 
 MODEL openai/gpt5.4 {
@@ -75,7 +72,6 @@ MODEL openai/gpt5.4 {
   description: "Simulated frontier reasoning lane for hard non-private planning and long-horizon agent sessions."
   capabilities: ["chat", "frontier_reasoning", "planning", "synthesis"]
   tags: ["deployment:vllm_alias", "tier:frontier"]
-  modality: "text"
 }
 
 MODEL qwen/qwen3.6-rocm {
@@ -83,7 +79,6 @@ MODEL qwen/qwen3.6-rocm {
   description: "Local AMD vLLM alias backed by Qwen3.6 for privacy-sensitive work, safety containment, simple traffic, and low-cost fallbacks."
   capabilities: ["chat", "privacy_locality", "private_code", "simple_qa", "tool_use"]
   tags: ["deployment:self_hosted", "tier:simple", "policy:privacy_first"]
-  modality: "text"
 }
 
 # =============================================================================

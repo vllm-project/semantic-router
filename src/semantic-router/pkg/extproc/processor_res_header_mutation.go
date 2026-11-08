@@ -281,6 +281,8 @@ func normalizeProtocol(value string) string {
 		return "anthropic"
 	case llmprotocol.OpenAIResponsesV1:
 		return "responses"
+	case llmprotocol.OpenAIImagesV1:
+		return "images"
 	case llmprotocol.OpenAIChatV1, "":
 		return protocolDefault
 	default:
@@ -434,12 +436,8 @@ func decisionRankingHeader(ctx *RequestContext) string {
 func addDecisionDetailHeaders(builder *responseHeaderMutationBuilder, ctx *RequestContext) {
 	builder.addString(headers.VSRSelectedCategory, ctx.VSRSelectedCategory)
 	builder.addString(headers.VSRDecisionRanking, decisionRankingHeader(ctx))
-	if ctx.ModalityClassification != nil && ctx.ModalityClassification.Modality != "" {
-		modalityValue := ctx.ModalityClassification.Modality
-		if ctx.ModalityClassification.Method != "" {
-			modalityValue += ";" + ctx.ModalityClassification.Method
-		}
-		builder.addString(headers.VSRSelectedModality, modalityValue)
+	if decision := ctx.VSRSelectedDecision; decision != nil && decision.Output != nil {
+		builder.addJoined(headers.VSRSelectedModality, decision.Output.Kinds())
 	}
 	builder.addString(headers.VSRSelectedReasoning, ctx.VSRReasoningMode)
 	builder.addString(headers.VSRSessionPhase, sessionPolicyPhase(ctx))

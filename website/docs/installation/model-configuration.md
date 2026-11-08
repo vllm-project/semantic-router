@@ -115,8 +115,15 @@ recipes:
 providers:
   models:
     - name: image-backend
+      api_format: images
       capabilities: [image_generation]
+      modalities: {input: [text], output: [image]}
 ```
+
+A model's `modalities` name the media it reads and writes; a model that
+declares none reads and writes text. A decision's
+[output contract](../tutorials/decision/output) checks them, with its
+capabilities, when the configuration loads.
 
 The protocol capability vocabulary is defined by the `llmprotocol` package,
 and a declaration reaches capability-aware dispatch in one of these states:

@@ -18,15 +18,6 @@ func DecisionPluginSchemaSamples() map[string]interface{} {
 	return samples
 }
 
-func validateDecisionPluginPayload(
-	decisionName string,
-	index int,
-	plugin DecisionPlugin,
-) error {
-	_, err := DecodeDecisionPluginAt(PluginAt{Decision: decisionName, Index: index, Type: plugin.Type}, plugin)
-	return err
-}
-
 func validateResponseCachePlugin(
 	decisionName string,
 	index int,

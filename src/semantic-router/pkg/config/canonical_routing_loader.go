@@ -47,7 +47,7 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 		if !model.ModelFacts.declared() {
 			continue
 		}
-		cfg.ModelConfig[model.Name] = ModelParams{
+		params := ModelParams{
 			ParamSize:         model.ParamSize,
 			ContextWindowSize: model.ContextWindowSize,
 			MaxOutputTokens:   model.MaxOutputTokens,
@@ -55,8 +55,11 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 			Capabilities:      append([]string(nil), model.Capabilities...),
 			LoRAs:             copyLoRAAdapters(model.LoRAs),
 			Tags:              append([]string(nil), model.Tags...),
-			Modality:          model.Modality,
 		}
+		if model.Modalities != nil {
+			params.Modalities = cloneModalities(*model.Modalities)
+		}
+		cfg.ModelConfig[model.Name] = params
 	}
 
 	if cfg.VectorStore != nil {
@@ -75,7 +78,7 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 	if err := validateApplicationSignalContracts(&cfg); err != nil {
 		return nil, err
 	}
-	if err := validateRoutingModalityContracts(&cfg); err != nil {
+	if err := visitRoutingProfileConfigs(&cfg, validateDecisionOutputContracts); err != nil {
 		return nil, err
 	}
 

@@ -174,7 +174,7 @@ var registry = []Header{
 	// Intermediate decision details.
 	{VSRSelectedCategory, ToClient, SurfaceDebug, SensitivityNone, "classification", "v0.1", "Domain category the classifier chose, such as `math`."},
 	{VSRSelectedReasoning, ToClient, SurfaceDebug, SensitivityNone, "classification", "v0.1", "Reasoning mode chosen for the request: `on` or `off`."},
-	{VSRSelectedModality, ToClient, SurfaceDebug, SensitivityNone, "classification", "v0.2", "Modality result and optional method, such as `AR;classifier`."},
+	{VSRSelectedModality, ToClient, SurfaceDebug, SensitivityNone, "routing", "v0.2", "Output kinds of the selected decision's output contract, such as `image` or `text,image`; omitted for a decision that declares none."},
 	{VSRDecisionRanking, ToClient, SurfaceDebug, SensitivityNone, "routing", "v0.5", "The matched decision the selected one beat, and the comparison that settled it."},
 	{VSRSessionPhase, ToClient, SurfaceDebug, SensitivityNone, "router_learning", "v0.3", "Protection phase: `user_turn`, `tool_loop` or `provider_state`."},
 	{VSRLearningMethods, ToClient, SurfaceDebug, SensitivityNone, "router_learning", "v0.4", "Router Learning methods the learning headers summarize, such as `adaptation,protection`."},

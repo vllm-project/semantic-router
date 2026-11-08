@@ -1369,6 +1369,14 @@ spec:
                         name:
                           description: Name is the unique identifier for this decision
                           type: string
+                        output:
+                          description: |-
+                            Output declares the media this decision's answers carry, such as
+                            {kind: image, action: generate}; without it the decision answers in
+                            text. The router checks it against the referenced models when it loads
+                            the configuration.
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
                         plugins:
                           description: Plugins contains policy configurations applied
                             after rule matching

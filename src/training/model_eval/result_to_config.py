@@ -74,7 +74,6 @@ MODEL_FACTS = {
     ),
     "capabilities": ["chat"],
     "tags": ["generated", "mmlu-pro"],
-    "modality": "ar",
 }
 
 

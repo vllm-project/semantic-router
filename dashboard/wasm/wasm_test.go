@@ -10,7 +10,6 @@ import (
 )
 
 const validDSL = `MODEL qwen {
-  modality: "text"
   capabilities: ["chat"]
 }
 
@@ -106,7 +105,6 @@ ROUTE r1 {
 
 func TestValidateSoftmaxProjectionPartitionDoesNotAddBrowserRuntimeWarning(t *testing.T) {
 	input := js.ValueOf(`MODEL qwen {
-  modality: "text"
   capabilities: ["chat"]
 }
 
@@ -140,7 +138,6 @@ PROJECTION partition intent_partition {
 
 func TestValidateTestBlocksStillAddBrowserRuntimeWarning(t *testing.T) {
 	input := js.ValueOf(`MODEL qwen {
-  modality: "text"
   capabilities: ["chat"]
 }
 
@@ -191,7 +188,9 @@ providers:
     model: qwen
   models:
     - name: qwen
-      modality: text
+      modalities:
+        input: [text]
+        output: [text]
       backend_refs:
         - name: primary
           provider: vllm
@@ -283,7 +282,6 @@ const envReferenceConfigPrefix = `version: v0.5
 providers:
   models:
     - name: qwen
-      modality: text
       backend_refs:
         - name: primary
           provider: vllm
@@ -388,7 +386,6 @@ const typedEnvDefaultsConfig = `version: v0.5
 providers:
   models:
     - name: qwen
-      modality: text
       reliability:
         base_ejection_time: ${EJECTION_TIME:-30s}
       backend_refs:

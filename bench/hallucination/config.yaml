@@ -18,7 +18,6 @@ providers:
           weight: 1
       description: Benchmark target model for hallucination mitigation evaluation.
       capabilities: [chat, reasoning]
-      modality: ar
 recipes:
   - name: default
     signals:

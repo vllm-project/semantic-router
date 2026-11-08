@@ -54,7 +54,7 @@ func validateNativeSignalReference(kind string) error {
 
 func validateNativeDecisionSurfaces(decision Decision) error {
 	if len(decision.Plugins) > 0 || decision.Action != nil || decision.Fallback != nil || decision.Reliability != nil ||
-		decision.OutputContract != "" || decision.OutputContractSpec != nil ||
+		decision.OutputContract != "" || decision.OutputContractSpec != nil || decision.Output != nil ||
 		decision.Adaptations.Mode != "" || decision.Adaptations.Adaptation != nil || decision.Adaptations.Protection != nil ||
 		len(decision.CandidateIterations) > 0 || decision.Retention != nil {
 		return fmt.Errorf("decision %q: Chat plugins, actions, fallback, reliability, output contracts, adaptations, candidateIterations and retention are unsupported for native execution", decision.Name)

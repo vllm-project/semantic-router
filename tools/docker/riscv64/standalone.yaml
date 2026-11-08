@@ -17,7 +17,6 @@ providers:
           provider: vllm
           api_key_env: VSR_BACKEND_API_KEY
           weight: 100
-      modality: ar
 recipes:
   - name: default
     decisions:

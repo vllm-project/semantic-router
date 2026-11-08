@@ -15,7 +15,6 @@ MODEL "math-small" {
   param_size: "3b"
   capabilities: ["math", "chat"]
   tags: ["local", "fast"]
-  modality: "ar"
 }
 
 ROUTE math_route {
@@ -45,7 +44,7 @@ MODEL "math-small" {
     { name: "math-adapter", description: "Improves symbolic math responses" },
   ]
   tags: ["local", "fast"]
-  modality: "ar"
+  modalities: { input: ["text"], output: ["text"] }
 }
 
 ROUTE math_route {
@@ -70,7 +69,7 @@ func assertCompiledTopLevelModelCatalog(t *testing.T, params config.ModelParams)
 	assertStringField(t, "reasoning family", "", params.ReasoningFamily)
 	assertStringField(t, "param_size", "3b", params.ParamSize)
 	assertStringField(t, "description", "Math focused local model", params.Description)
-	assertStringField(t, "modality", "ar", params.Modality)
+	assertLeadingStringSlice(t, "modalities.output", params.Modalities.Output, 1, "text")
 	assertLeadingStringSlice(t, "capabilities", params.Capabilities, 2, "math")
 	assertLeadingStringSlice(t, "tags", params.Tags, 2, "local")
 	if len(params.LoRAs) != 1 || params.LoRAs[0].Name != "math-adapter" {

@@ -252,7 +252,9 @@ func (d *decompiler) writeRoutingModelFields(model config.RoutingModel) {
 	d.writeOptionalRoutingModelArray("capabilities", model.Capabilities)
 	d.writeRoutingModelLoRAs(model.LoRAs)
 	d.writeOptionalRoutingModelArray("tags", model.Tags)
-	d.writeOptionalRoutingModelString("modality", model.Modality)
+	if modalities := model.Modalities; modalities != nil {
+		d.write("  modalities: { input: %s, output: %s }\n", quotedStringArray(modalities.Input), quotedStringArray(modalities.Output))
+	}
 }
 
 func (d *decompiler) writeOptionalRoutingModelString(key, value string) {
@@ -317,8 +319,11 @@ func routingModelToDecl(model config.RoutingModel) *ModelDecl {
 	if len(model.Tags) > 0 {
 		fields["tags"] = stringsToArray(model.Tags)
 	}
-	if model.Modality != "" {
-		fields["modality"] = StringValue{V: model.Modality}
+	if modalities := model.Modalities; modalities != nil {
+		fields["modalities"] = ObjectValue{Fields: map[string]Value{
+			"input":  stringsToArray(modalities.Input),
+			"output": stringsToArray(modalities.Output),
+		}}
 	}
 	return &ModelDecl{Name: model.Name, Fields: fields}
 }

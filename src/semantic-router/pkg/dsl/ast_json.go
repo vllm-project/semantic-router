@@ -130,7 +130,15 @@ type RouteDeclJSON struct {
 	Algorithm   *AlgoSpecJSON    `json:"algorithm,omitempty"`
 	Plugins     []*PluginRefJSON `json:"plugins"`
 	Retention   *RetentionJSON   `json:"retention,omitempty"`
+	Output      *OutputJSON      `json:"output,omitempty"`
 	Pos         Position         `json:"pos"`
+}
+
+// OutputJSON is the JSON form of a route's OUTPUT block.
+type OutputJSON struct {
+	Kind   []string `json:"kind,omitempty"`
+	Action string   `json:"action,omitempty"`
+	Pos    Position `json:"pos"`
 }
 
 // RetentionJSON is the JSON form of a route's RETENTION block. All fields
@@ -444,6 +452,9 @@ func routeDeclToJSON(r *RouteDecl) *RouteDeclJSON {
 			PreferPrefixRetention: clonePtrBool(retention.PreferPrefixRetention),
 			Pos:                   retention.Pos,
 		}
+	}
+	if output := r.Output; output != nil {
+		rj.Output = &OutputJSON{Kind: append([]string(nil), output.Kind...), Action: output.Action, Pos: output.Pos}
 	}
 	return rj
 }

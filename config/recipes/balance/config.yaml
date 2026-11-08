@@ -51,7 +51,7 @@ providers:
         - omni
         - text
         - vision
-      modality: omni
+      modalities: {input: [text, image], output: [text]}
     - backend_refs:
         - endpoint: vllm:8000
           provider: vllm
@@ -85,7 +85,6 @@ providers:
         - creative_drafting
       context_window_size: 262144
       description: SIMPLE tier alias and free self-hosted default for fast QA, broad fallback, creative drafting, and most low-cost traffic.
-      modality: text
       tags:
         - tier:simple
         - cost:free
@@ -120,7 +119,6 @@ providers:
         - nuanced_explanation
       context_window_size: 262144
       description: MEDIUM tier alias for low-cost verified explanation and correction tasks.
-      modality: text
       tags:
         - tier:medium
         - cost:low
@@ -155,7 +153,6 @@ providers:
         - general_reasoning
       context_window_size: 262144
       description: COMPLEX tier alias for systems design, hard STEM, health guidance, and deep general reasoning.
-      modality: text
       tags:
         - tier:complex
         - cost:upper_mid
@@ -189,7 +186,6 @@ providers:
         - formal_derivation
       context_window_size: 262144
       description: REASONING tier alias for narrow formal math proofs and derivations.
-      modality: text
       tags:
         - tier:reasoning
         - cost:high
@@ -223,7 +219,6 @@ providers:
         - high_risk_review
       context_window_size: 262144
       description: PREMIUM tier alias reserved for legal and high-risk analysis.
-      modality: text
       tags:
         - tier:premium
         - cost:highest

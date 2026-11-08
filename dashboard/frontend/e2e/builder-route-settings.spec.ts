@@ -22,9 +22,7 @@ providers:
 routing:
   modelCards:
     - name: model-a
-      modality: text
     - name: model-b
-      modality: text
   signals:
     jailbreak:
       - name: prompt_injection

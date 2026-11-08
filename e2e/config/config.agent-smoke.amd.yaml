@@ -18,7 +18,6 @@ providers:
           weight: 100
           endpoint: "host.docker.internal:8000/v1"
           protocol: "http"
-      modality: "text"
 
 recipes:
   - name: default

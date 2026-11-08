@@ -138,8 +138,7 @@ func createValidSetupPatch() map[string]interface{} {
 			},
 			"models": []map[string]interface{}{
 				{
-					"name":     "test-model",
-					"modality": "text",
+					"name": "test-model",
 					"backend_refs": []map[string]interface{}{
 						{
 							"name":     "primary",
@@ -305,7 +304,7 @@ providers:
           endpoint: remote.example.com
           protocol: https
           weight: 100
-      modality: text
+      capabilities: [chat]
 recipes:
   - name: default
     signals:
@@ -367,7 +366,11 @@ recipes:
 		t.Fatalf("expected imported config providers.defaults.model=remote-model, got %#v", importedConfig["providers"])
 	}
 	models, _ := importedConfig["providers"].(map[string]interface{})["models"].([]interface{})
-	if len(models) == 0 || models[0].(map[string]interface{})["modality"] != "text" {
+	var capabilities []interface{}
+	if len(models) > 0 {
+		capabilities, _ = models[0].(map[string]interface{})["capabilities"].([]interface{})
+	}
+	if len(capabilities) != 1 || capabilities[0] != "chat" {
 		t.Fatalf("expected imported config model facts to be preserved, got %#v", importedConfig["providers"])
 	}
 }

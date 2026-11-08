@@ -22,6 +22,7 @@ GOLDEN = REPO_ROOT / "src/semantic-router/pkg/config/testdata/migrate"
 CASES = (
     "removed-application-fields",
     "removed-domain-autogen",
+    "removed-embedding-audio-query",
     "removed-embedding-image-anchors",
     "removed-guard-modules",
     "removed-kb-signal",

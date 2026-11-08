@@ -36,7 +36,6 @@ providers:
       context_window_size: 262144
       description: Kimi K2.7 Code solver alias for independent LiveCodeBench sampling.
       capabilities: [chat, code, reasoning, long-context]
-      modality: text
       tags: ['deployment:openrouter', 'benchmark:livecodebench', 'role:worker', 'base:kimi-k27-code']
     - name: kimi-k27-code-solver-b
       provider_model_id: moonshotai/kimi-k2.7-code
@@ -58,7 +57,6 @@ providers:
       context_window_size: 262144
       description: Kimi K2.7 Code solver alias for independent LiveCodeBench sampling.
       capabilities: [chat, code, reasoning, long-context]
-      modality: text
       tags: ['deployment:openrouter', 'benchmark:livecodebench', 'role:worker', 'base:kimi-k27-code']
     - name: kimi-k27-code-solver-c
       provider_model_id: moonshotai/kimi-k2.7-code
@@ -80,7 +78,6 @@ providers:
       context_window_size: 262144
       description: Kimi K2.7 Code solver alias for independent LiveCodeBench sampling.
       capabilities: [chat, code, reasoning, long-context]
-      modality: text
       tags: ['deployment:openrouter', 'benchmark:livecodebench', 'role:worker', 'base:kimi-k27-code']
     - name: kimi-k27-code-finalizer
       provider_model_id: moonshotai/kimi-k2.7-code
@@ -102,7 +99,6 @@ providers:
       context_window_size: 262144
       description: Kimi K2.7 Code final synthesis alias for LiveCodeBench loop recipes.
       capabilities: [chat, code, reasoning, long-context]
-      modality: text
       tags: ['deployment:openrouter', 'benchmark:livecodebench', 'role:synthesis', 'base:kimi-k27-code']
 evaluation:
   records:

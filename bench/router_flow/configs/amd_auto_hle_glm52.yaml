@@ -41,7 +41,6 @@ providers:
       context_window_size: 1048576
       description: GLM 5.2 HLE solver alias for independent high-reasoning samples.
       capabilities: [chat, reasoning, long-context]
-      modality: text
       tags: ['deployment:openrouter', 'benchmark:hle', 'role:worker', 'base:glm52']
     - name: glm52-solver-b
       provider_model_id: z-ai/glm-5.2
@@ -67,7 +66,6 @@ providers:
       context_window_size: 1048576
       description: GLM 5.2 HLE solver alias for independent high-reasoning samples.
       capabilities: [chat, reasoning, long-context]
-      modality: text
       tags: ['deployment:openrouter', 'benchmark:hle', 'role:worker', 'base:glm52']
     - name: glm52-solver-c
       provider_model_id: z-ai/glm-5.2
@@ -93,7 +91,6 @@ providers:
       context_window_size: 1048576
       description: GLM 5.2 HLE solver alias for independent high-reasoning samples.
       capabilities: [chat, reasoning, long-context]
-      modality: text
       tags: ['deployment:openrouter', 'benchmark:hle', 'role:worker', 'base:glm52']
     - name: glm52-finalizer
       provider_model_id: z-ai/glm-5.2
@@ -119,7 +116,6 @@ providers:
       context_window_size: 1048576
       description: GLM 5.2 final synthesis alias for HLE answer-contract enforcement.
       capabilities: [chat, reasoning, long-context]
-      modality: text
       tags: ['deployment:openrouter', 'benchmark:hle', 'role:synthesis', 'base:glm52']
     - name: gpt55-judge
       provider_model_id: openai/gpt-5.5
@@ -145,7 +141,6 @@ providers:
       context_window_size: 1048576
       description: External GPT-5.5 judge endpoint for EvalScope HLE scoring only.
       capabilities: [chat, reasoning, long-context]
-      modality: text
       tags: ['deployment:openrouter', 'benchmark:hle', 'role:judge', 'pool:closed']
 
 evaluation:

@@ -54,7 +54,7 @@ func TestRouterReplayShadowPayloadValidation(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateDecisionPluginPayload("route", 0, DecisionPlugin{
+			_, err := DecodeDecisionPluginAt(PluginAt{Decision: "route", Type: DecisionPluginRouterReplay}, DecisionPlugin{
 				Type:          DecisionPluginRouterReplay,
 				Configuration: MustStructuredPayload(tc.payload),
 			})

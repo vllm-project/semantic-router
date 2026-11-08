@@ -235,7 +235,6 @@ def _populate_semantic_model_fields(
     _set_if_missing(semantic_model, "capabilities", model.get("capabilities"))
     _set_if_missing(semantic_model, "loras", model.get("loras"))
     _set_if_missing(semantic_model, "quality_score", model.get("quality_score"))
-    _set_if_missing(semantic_model, "modality", model.get("modality"))
     _set_if_missing(semantic_model, "tags", model.get("tags"))
 
 

@@ -164,6 +164,7 @@ func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 	}
 
 	route.Retention = retentionToDecl(dec.Retention)
+	route.Output = outputToDecl(dec.Output)
 
 	return route
 }

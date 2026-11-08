@@ -62,6 +62,9 @@ type Decision struct {
 	CandidateIterations []CandidateIterationConfig `yaml:"candidateIterations,omitempty"`
 	// Retention says what the Router keeps of the decision's answers.
 	Retention *DecisionRetention `yaml:"retention,omitempty" json:"retention,omitempty"`
+	// Output says which media the decision's answers carry; OutputContract
+	// and OutputContractSpec shape the text of an answer.
+	Output *DecisionOutput `yaml:"output,omitempty" json:"output,omitempty"`
 	// Annotations carries bounded, non-executable decision metadata for replay
 	// and transport projections. Executable behavior belongs in Plugins or the
 	// decision's attributes.

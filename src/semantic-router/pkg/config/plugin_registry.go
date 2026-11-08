@@ -66,16 +66,6 @@ func registerDecisionPlugin(registry *extension.Registry[DecisionPluginType], sp
 // DecodeDecisionPluginAt decodes plugin's configuration into its type's
 // payload, applies the type's defaults and validates the result.
 func DecodeDecisionPluginAt(at PluginAt, plugin DecisionPlugin) (interface{}, error) {
-	// image_gen was removed when #3076 unified inference protocol translation:
-	// the router no longer executes image-generation backends. Route image
-	// generation through a vllm-omni modality route speaking the Responses-API
-	// hosted image_generation tool instead. See issue #3129.
-	if plugin.Type == "image_gen" {
-		return nil, fmt.Errorf(
-			"decision %q plugins[%d]: plugin %q is unsupported: the image_gen route plugin was removed; use the Responses-API hosted image_generation tool with a vllm-omni modality route",
-			at.Decision, at.Index, plugin.Type,
-		)
-	}
 	spec, ok := DecisionPlugins.Lookup(plugin.Type)
 	if !ok {
 		return nil, fmt.Errorf("decision %q plugins[%d]: unsupported plugin type %q", at.Decision, at.Index, plugin.Type)

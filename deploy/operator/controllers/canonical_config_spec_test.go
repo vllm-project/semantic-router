@@ -298,6 +298,38 @@ func TestConfigRecipesEntrypointsAndModelFacts(t *testing.T) {
 	}
 }
 
+func TestBuildCanonicalConfigCarriesDecisionOutput(t *testing.T) {
+	r := &SemanticRouterReconciler{}
+	sr := &vllmv1alpha1.SemanticRouter{
+		Spec: vllmv1alpha1.SemanticRouterSpec{
+			Config: vllmv1alpha1.ConfigSpec{
+				Decisions: []vllmv1alpha1.DecisionConfig{{
+					Name: "image",
+					Rules: vllmv1alpha1.RuleCombinationConfig{
+						Operator:   "AND",
+						Conditions: []vllmv1alpha1.RuleConditionConfig{{Type: "modality", Name: "wants_image"}},
+					},
+					ModelRefs: []vllmv1alpha1.ModelRefConfig{{Model: "painter"}},
+					Output:    rawCanonicalRoutingJSON(t, `{"kind":["text","image"],"action":"generate"}`),
+				}},
+			},
+		},
+	}
+
+	canonical, err := r.buildCanonicalConfig(context.Background(), sr)
+	if err != nil {
+		t.Fatalf("buildCanonicalConfig failed: %v", err)
+	}
+	decisions := defaultRecipe(canonical).Decisions
+	if len(decisions) != 1 {
+		t.Fatalf("expected one decision, got %#v", decisions)
+	}
+	output := decisions[0].Output
+	if output == nil || output.String() != "[text, image]" || output.EffectiveAction() != "generate" {
+		t.Fatalf("decision output = %#v, want the CR's contract", output)
+	}
+}
+
 func rawCanonicalRoutingJSON(t *testing.T, raw string) *apiextensionsv1.JSON {
 	t.Helper()
 

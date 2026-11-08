@@ -23,7 +23,6 @@ providers:
           protocol: http
           weight: 100
       description: General-purpose text model.
-      modality: ar
     - name: code-model
       provider_model_id: code-model
       api_format: openai
@@ -33,7 +32,6 @@ providers:
           protocol: http
           weight: 100
       description: Code model.
-      modality: ar
     - name: guarded-model
       provider_model_id: guarded-model
       api_format: openai
@@ -43,7 +41,6 @@ providers:
           protocol: http
           weight: 100
       description: Model for flagged traffic.
-      modality: ar
 
 recipes:
   - name: default

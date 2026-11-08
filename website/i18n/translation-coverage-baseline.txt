@@ -154,6 +154,7 @@ zh-Hans	tutorials/decision/and.md
 zh-Hans	tutorials/decision/composite.md
 zh-Hans	tutorials/decision/not.md
 zh-Hans	tutorials/decision/or.md
+zh-Hans	tutorials/decision/output.md
 zh-Hans	tutorials/decision/overview.md
 zh-Hans	tutorials/decision/retention.md
 zh-Hans	tutorials/decision/single.md

@@ -20,6 +20,9 @@ describe('updateRoute', () => {
   RETENTION {
     ttl_turns: 4 # keep short
   }
+  OUTPUT {
+    kind: ["text", "image"]
+  }
 }
 `
 
@@ -50,6 +53,9 @@ describe('updateRoute', () => {
   }
   RETENTION {
     ttl_turns: 4 # keep short
+  }
+  OUTPUT {
+    kind: ["text", "image"]
   }
 }
 `

@@ -274,10 +274,20 @@ func canonicalProviderModelFromRuntime(
 			Capabilities:      append([]string(nil), params.Capabilities...),
 			LoRAs:             copyLoRAAdapters(params.LoRAs),
 			Tags:              append([]string(nil), params.Tags...),
-			Modality:          params.Modality,
+			Modalities:        declaredModalities(params.Modalities),
 		}
 	}
 	return providerModel
+}
+
+// declaredModalities is a model's modalities as its entry states them: none
+// when it names neither an input nor an output.
+func declaredModalities(modalities modelcatalog.Modalities) *modelcatalog.Modalities {
+	if len(modalities.Input) == 0 && len(modalities.Output) == 0 {
+		return nil
+	}
+	clone := cloneModalities(modalities)
+	return &clone
 }
 
 func cloneCanonicalReasoning(reasoning *CanonicalReasoning) *CanonicalReasoning {

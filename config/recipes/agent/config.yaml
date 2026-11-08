@@ -80,7 +80,7 @@ providers:
         - omni
         - text
         - vision
-      modality: omni
+      modalities: {input: [text, image], output: [text]}
     - name: qwen/qwen3.6-rocm
       api_format: openai
       reasoning:
@@ -105,7 +105,6 @@ providers:
         - private_code
         - simple_qa
         - tool_use
-      modality: text
       tags:
         - deployment:self_hosted
         - tier:simple
@@ -131,7 +130,6 @@ providers:
         - low_cost
         - explanation
         - coding
-      modality: text
       tags:
         - deployment:vllm_alias
         - tier:medium
@@ -157,7 +155,6 @@ providers:
         - architecture
         - research
         - code
-      modality: text
       tags:
         - deployment:vllm_alias
         - tier:complex
@@ -183,7 +180,6 @@ providers:
         - frontier_reasoning
         - planning
         - synthesis
-      modality: text
       tags:
         - deployment:vllm_alias
         - tier:frontier
@@ -208,7 +204,6 @@ providers:
         - legal_analysis
         - health_guidance
         - high_stakes
-      modality: text
       tags:
         - deployment:vllm_alias
         - tier:premium

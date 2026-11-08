@@ -85,9 +85,9 @@ func validateFusionFallbackTargetModel(
 		return fusionFallbackTargetError(decision.Name, target,
 			"must use an OpenAI-compatible API format")
 	}
-	if !chatTextModality(modelConfig.Modality) {
+	if !modelOutputsText(modelConfig) {
 		return fusionFallbackTargetError(decision.Name, target,
-			"must be chat-capable text modality")
+			"must answer in text")
 	}
 	// Validate against the widest panel the recipe can execute; request-time
 	// context eligibility can only narrow it.
@@ -108,15 +108,6 @@ func modelHasBackend(cfg *RouterConfig, model string) bool {
 		}
 	}
 	return false
-}
-
-func chatTextModality(modality string) bool {
-	switch strings.ToLower(strings.TrimSpace(modality)) {
-	case "", "text", "ar", "both", "multimodal":
-		return true
-	default:
-		return false
-	}
 }
 
 // fusionFallbackPanelRejection reports why the target cannot serve the effective

@@ -19,6 +19,7 @@ var RemovedPluginTypes = map[string]string{
 	"memory":              "a memory source of the decision's context plugin",
 	"context_compression": "the compress block and budget of the decision's context plugin",
 	"shadow_dispatch":     "a shadow block in the decision's router_replay plugin",
+	"image_gen":           "an image model in providers.models (api_format: images, capabilities: [image_generation]) that the decision references, with output: {kind: image, action: generate}",
 	"semantic-cache":      DecisionPluginResponseCache,
 	"semantic_cache":      DecisionPluginResponseCache,
 }

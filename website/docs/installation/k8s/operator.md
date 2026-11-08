@@ -129,7 +129,6 @@ spec:
   config:
     models:
       - name: local/model
-        modality: text
         capabilities: [chat]
     recipes:
       - name: default

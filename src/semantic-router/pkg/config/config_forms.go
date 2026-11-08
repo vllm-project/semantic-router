@@ -78,8 +78,11 @@ type ConfigForm struct {
 	// for every item of the sequence under name, `*` for any key and `**`
 	// for any depth. RoutingScopes builds the patterns of every recipe.
 	Paths []string
-	// Match, when set, keeps only the matches it accepts.
-	Match func(node *yaml.Node, path string) bool
+	// Match, when set, keeps only the matches it accepts; MatchAt does so for
+	// a form whose matches depend on the document around them, such as the
+	// models a decision references.
+	Match   func(node *yaml.Node, path string) bool
+	MatchAt func(at FormMatch) bool
 	// What was removed or renamed, and what it becomes. Describe, when set,
 	// words them for one match.
 	What, Becomes string
@@ -123,7 +126,7 @@ func (at FormMatch) Above(levels int) *yaml.Node {
 // configForms lists every removed and renamed form, in the order migrate
 // rewrites them, as the concatenation of the per-feature lists: the v0.3
 // layout first, the global feature switches last.
-var configForms = slices.Concat(structureForms, systemOneForms, pluginForms, applicationForms, heuristicForms, algorithmForms, toolsForms, contextForms, responseCacheForms, routerReplayForms, retentionForms, embeddingForms, switchForms)
+var configForms = slices.Concat(structureForms, systemOneForms, pluginForms, applicationForms, heuristicForms, algorithmForms, toolsForms, contextForms, responseCacheForms, routerReplayForms, retentionForms, embeddingForms, multimodalForms, switchForms)
 
 // RoutingScopes returns the patterns of suffix in every recipe of a v0.5
 // document. Forms match v0.5 paths only: migrate rewrites the v0.3 structure
@@ -157,7 +160,7 @@ func (f ConfigForm) matches(root *yaml.Node) []FormMatch {
 	seen := map[*yaml.Node]bool{}
 	for _, pattern := range f.Paths {
 		for _, at := range matchPattern(root, strings.Split(pattern, ".")) {
-			if seen[at.Node] || (f.Match != nil && !f.Match(at.Node, at.Path)) {
+			if seen[at.Node] || (f.Match != nil && !f.Match(at.Node, at.Path)) || (f.MatchAt != nil && !f.MatchAt(at)) {
 				continue
 			}
 			seen[at.Node] = true

@@ -163,7 +163,6 @@ export interface ModelConfigEntry {
   loras?: LoRAAdapter[]
   tags?: string[]
   quality_score?: number
-  modality?: string
 }
 
 /** A backend's credential, the connection block a deployment uses. */
@@ -279,7 +278,6 @@ export interface RoutingModelCard {
   modalities?: { input: string[]; output: string[] }
   loras?: LoRAAdapter[]
   tags?: string[]
-  modality?: string
 }
 
 export interface DecisionCondition {
@@ -327,9 +325,39 @@ export interface DecisionConfig {
   output_contract_spec?: Record<string, unknown>
   candidateIterations?: Array<Record<string, unknown>>
   retention?: Record<string, unknown>
+  output?: DecisionOutputConfig
   tier?: number
   annotations?: Record<string, unknown>
   output_contract?: string
+}
+
+// The media a decision's answers carry: one kind or several, generated or an
+// edit of the media the request provides. Without it a decision answers text.
+export interface DecisionOutputConfig {
+  kind?: DecisionOutputKind | DecisionOutputKind[]
+  action?: 'generate' | 'edit'
+}
+
+export type DecisionOutputKind = 'text' | 'image' | 'audio' | 'video'
+
+// The decision editor edits kind as a list; a single kind is written as the
+// scalar the configuration documents.
+export function decisionOutputForEditor(output?: DecisionOutputConfig): Record<string, unknown> {
+  if (!output) return {}
+  const { kind, ...rest } = output
+  return kind === undefined ? rest : { ...rest, kind: Array.isArray(kind) ? kind : [kind] }
+}
+
+export function decisionOutputFromEditor(value: unknown): DecisionOutputConfig | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const { kind, action } = value as { kind?: unknown; action?: unknown }
+  const kinds = (Array.isArray(kind) ? kind : [kind])
+    .filter((entry): entry is string => typeof entry === 'string' && entry.trim() !== '')
+    .map((entry) => entry.trim() as DecisionOutputKind)
+  const output: DecisionOutputConfig = {}
+  if (kinds.length > 0) output.kind = kinds.length === 1 ? kinds[0] : kinds
+  if (action === 'generate' || action === 'edit') output.action = action
+  return Object.keys(output).length > 0 ? output : undefined
 }
 
 export const ROUTING_STRATEGIES = ['priority', 'confidence'] as const
@@ -387,7 +415,7 @@ export interface NormalizedModel {
   loras?: LoRAAdapter[]
   tags?: string[]
   card_override?: RoutingModelCard
-  modality?: string
+  modalities?: { input: string[]; output: string[] }
   pricing?: {
     currency?: string
     prompt_per_1m?: number

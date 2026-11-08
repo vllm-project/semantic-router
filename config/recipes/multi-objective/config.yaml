@@ -19,7 +19,7 @@ providers:
           provider: vllm
           weight: 1
       capabilities: [chat, image_understanding, multimodal, omni, text, vision]
-      modality: omni
+      modalities: {input: [text, image], output: [text]}
     - name: local/qwen3.5-122b-frontier
       reasoning:
         family: qwen3
@@ -43,7 +43,6 @@ providers:
         - legal_analysis
         - high_risk_review
         - deep_synthesis
-      modality: text
       tags:
         - tier:premium
         - cost:highest
@@ -72,7 +71,6 @@ providers:
         - fast_qa
         - explanation
         - general_chat
-      modality: text
       tags:
         - tier:economy
         - cost:lowest
@@ -102,7 +100,6 @@ providers:
         - fast_qa
         - explanation
         - general_chat
-      modality: text
       tags:
         - tier:economy_replica
         - cost:lowest
@@ -132,7 +129,6 @@ providers:
         - privacy_locality
         - sensitive_data
         - general_chat
-      modality: text
       tags:
         - tier:private
         - cost:low
@@ -162,7 +158,6 @@ providers:
         - coding
         - structured_output
         - tool_use
-      modality: text
       tags:
         - tier:coder
         - cost:upper_mid
@@ -191,7 +186,6 @@ providers:
         - fast_qa
         - coding
         - reasoning
-      modality: text
       tags:
         - tier:flash
         - cost:medium
@@ -220,7 +214,6 @@ providers:
         - multilingual
         - structured_output
         - long_context
-      modality: text
       tags:
         - tier:balanced
         - cost:medium
@@ -249,7 +242,6 @@ providers:
         - long_context
         - tool_use
         - reasoning_diversity
-      modality: text
       tags:
         - tier:experimental_frontier
         - cost:high

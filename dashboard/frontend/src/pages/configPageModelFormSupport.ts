@@ -381,9 +381,10 @@ export function effectiveModelCardFormData(model: NormalizedModel): Record<strin
     context_window_size: model.context_window_size ?? '',
     description: model.description ?? '',
     capabilities: model.capabilities ?? [],
+    input_modalities: model.modalities?.input ?? [],
+    output_modalities: model.modalities?.output ?? [],
     loras: model.loras ?? [],
     tags: model.tags ?? [],
-    modality: model.modality ?? '',
   }
 }
 

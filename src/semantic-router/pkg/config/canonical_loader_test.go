@@ -431,7 +431,6 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-      modality: text
 recipes:
   - name: default
     signals:
@@ -511,7 +510,6 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-      modality: text
 recipes:
   - name: default
     signals:
@@ -566,7 +564,6 @@ providers:
         currency: USD
         prompt_per_1m: 1.00
         completion_per_1m: 5.00
-      modality: ar
 recipes:
   - name: default
     signals:

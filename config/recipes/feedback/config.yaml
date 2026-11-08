@@ -39,7 +39,7 @@ providers:
         - omni
         - text
         - vision
-      modality: omni
+      modalities: {input: [text, image], output: [text]}
     - name: qwen/qwen3.5-rocm
       provider_model_id: qwen/qwen3.5-rocm
       reasoning:
@@ -60,7 +60,6 @@ providers:
         - cheap_followup
         - concise_rewrite
         - general_chat
-      modality: text
       tags:
         - tier:cheap
         - purpose:default_feedback
@@ -82,7 +81,6 @@ providers:
         - answer_repair
         - debugging
         - reasoning
-      modality: text
       tags:
         - tier:repair
         - purpose:feedback_recovery
@@ -104,7 +102,6 @@ providers:
         - verified_reasoning
         - evidence_synthesis
         - high_stakes
-      modality: text
       tags:
         - tier:verified
         - purpose:feedback_recovery

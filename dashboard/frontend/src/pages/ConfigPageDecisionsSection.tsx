@@ -16,7 +16,12 @@ import type {
   DecisionFormState,
   NormalizedModel,
 } from './configPageSupport'
-import { getReasoningFamiliesMap, mergeDecisionForSave } from './configPageSupport'
+import {
+  decisionOutputForEditor,
+  decisionOutputFromEditor,
+  getReasoningFamiliesMap,
+  mergeDecisionForSave,
+} from './configPageSupport'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 import { cloneConfigData } from './configPageCanonicalization'
 import ConfigPageDecisionPluginsEditor from './ConfigPageDecisionPluginsEditor'
@@ -278,13 +283,14 @@ export default function ConfigPageDecisionsSection({
           fullWidth: true,
         },
         {
-          label: 'Iterations, Retention & Annotations',
+          label: 'Iterations, Retention, Output & Annotations',
           value: (
             <ConfigPageSchemaFieldsEditor
               schema={DECISION_DECLARATIVE_SCHEMA}
               value={{
                 candidateIterations: decision.candidateIterations || [],
                 retention: decision.retention || {},
+                output: decisionOutputForEditor(decision.output),
                 annotations: decision.annotations || {},
               }}
               readOnly
@@ -343,6 +349,7 @@ export default function ConfigPageDecisionsSection({
             declarative: {
               candidateIterations: decision.candidateIterations || [],
               retention: decision.retention || {},
+              output: decisionOutputForEditor(decision.output),
               annotations: decision.annotations || {},
             },
             rules: JSON.parse(JSON.stringify(decision.rules || {})),
@@ -538,7 +545,8 @@ export default function ConfigPageDecisionsSection({
         label: 'Declarative Extensions',
         section: 'Output behavior',
         type: 'custom',
-        description: 'Candidate iteration, emitted directives, and bounded annotations.',
+        description:
+          'Candidate iteration, retention, the media the decision answers with, and bounded annotations.',
         customRender: (value, onChange) => (
           <ConfigPageSchemaFieldsEditor
             schema={DECISION_DECLARATIVE_SCHEMA}
@@ -612,6 +620,7 @@ export default function ConfigPageDecisionsSection({
           Object.keys(declarative.retention).length > 0
             ? (declarative.retention as Record<string, unknown>)
             : undefined,
+        output: decisionOutputFromEditor(declarative.output),
         annotations:
           declarative.annotations && typeof declarative.annotations === 'object'
             ? (declarative.annotations as Record<string, unknown>)

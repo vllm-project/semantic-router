@@ -10,6 +10,7 @@ import (
 	dynamicconfig "github.com/vllm-project/semantic-router/e2e/profiles/dynamic-config"
 	externalgatewayresponses "github.com/vllm-project/semantic-router/e2e/profiles/external-gateway-responses"
 	hallucination "github.com/vllm-project/semantic-router/e2e/profiles/hallucination"
+	imagerouting "github.com/vllm-project/semantic-router/e2e/profiles/image-routing"
 	jailbreakonerror "github.com/vllm-project/semantic-router/e2e/profiles/jailbreak-onerror"
 	longcontextrouting "github.com/vllm-project/semantic-router/e2e/profiles/long-context-routing"
 	looper "github.com/vllm-project/semantic-router/e2e/profiles/looper"
@@ -119,6 +120,11 @@ func init() {
 	register(
 		"hallucination",
 		func() framework.Profile { return hallucination.NewProfile() },
+		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
+	)
+	register(
+		"image-routing",
+		func() framework.Profile { return imagerouting.NewProfile() },
 		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
 	)
 	register(

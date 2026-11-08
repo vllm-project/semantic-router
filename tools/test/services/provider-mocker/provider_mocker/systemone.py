@@ -20,6 +20,10 @@ to the fixture and an unmarked text answers the same way on every run.
                                   fails with max_length_exceeded
     __SYSTEMONE_UNAVAILABLE__     the call fails with 503
 
+A state's images carry markers in their PNG text chunks, which every question
+of the state reads with its text; the Router sends a request's images only to
+the questions whose rules read them (input.image).
+
 Otherwise a choice question offering ``jailbreak`` chooses it when the text
 carries JAILBREAK_PHRASE, and any other choice question its first option; a
 span question offering ``unsupported`` (hallucination) finds the first
@@ -30,6 +34,8 @@ invalid_question. A failed question is answered with its error, as a model
 runtime answers it, and leaves the call's other questions answered.
 """
 
+import base64
+import binascii
 import json
 import re
 from typing import Any
@@ -51,6 +57,7 @@ JAILBREAK_PHRASE = "Ignore all previous instructions"
 CONFIDENT = 0.97
 MIN_CHOICES = 2
 SENTENCE = re.compile(r"[^.!?\n]+[.!?]?")
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 router = APIRouter()
 
@@ -127,10 +134,11 @@ def answer_state(entry: dict) -> dict:
     state = entry["state"]
     answers: dict[str, dict] = {}
     spans: dict[str, list] = {}
+    pictured = image_text(entry)
     for question_id, question in entry["questions"].items():
         kind = question.get("type")
         keys = options(question)
-        text = read_text(state, question)
+        text = "\n\n".join(filter(None, (read_text(state, question), pictured)))
         full = question.get("require_full_input") is True
         coverage = {"input_coverage": "complete"} if full else {}
         if kind not in QUESTION_TYPES:
@@ -185,6 +193,35 @@ def read_text(state: Any, question: dict) -> str:
         return as_text(state)
     fields = [over] if isinstance(over, str) else over
     return "\n\n".join(as_text(state.get(field, "")) for field in fields)
+
+
+def image_text(entry: dict) -> str:
+    """The text chunks of the PNG images a state carries as data URLs."""
+    texts: list[str] = []
+    images = entry.get("images")
+    for image in images if isinstance(images, list) else []:
+        if not isinstance(image, str) or not image.startswith("data:"):
+            continue
+        try:
+            data = base64.b64decode(image.partition(",")[2], validate=True)
+        except (binascii.Error, ValueError):
+            continue
+        texts.extend(png_texts(data))
+    return "\n\n".join(texts)
+
+
+def png_texts(data: bytes) -> list[str]:
+    if not data.startswith(PNG_SIGNATURE):
+        return []
+    texts: list[str] = []
+    at = len(PNG_SIGNATURE)
+    while at + 8 <= len(data):
+        length = int.from_bytes(data[at : at + 4], "big")
+        if data[at + 4 : at + 8] == b"tEXt":
+            _, _, text = data[at + 8 : at + 8 + length].partition(b"\x00")
+            texts.append(text.decode("latin-1"))
+        at += 12 + length
+    return texts
 
 
 def as_text(value: Any) -> str:

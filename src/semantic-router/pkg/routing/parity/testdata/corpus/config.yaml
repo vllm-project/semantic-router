@@ -41,6 +41,17 @@ providers:
           protocol: http
           provider: anthropic-compatible
       description: Anthropic Messages backend
+    - name: painter
+      provider_model_id: painter-diffusion-1
+      api_format: images
+      capabilities: [image_generation]
+      modalities: {input: [text], output: [image]}
+      backend_refs:
+        - name: painter-primary
+          endpoint: 127.0.0.1:18002
+          protocol: http
+          provider: vllm
+      description: image generation backend
 
 recipes:
   - name: default
@@ -55,7 +66,21 @@ recipes:
         - name: essay_keywords
           operator: OR
           keywords: ["essay", "poem"]
+        - name: image_keywords
+          operator: OR
+          keywords: ["draw", "sketch"]
     decisions:
+      - name: image_route
+        priority: 40
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: image_keywords
+        output: {kind: image, action: generate}
+        modelRefs:
+          - model: painter
+            use_reasoning: false
       - name: code_route
         priority: 30
         rules:

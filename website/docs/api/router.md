@@ -21,6 +21,7 @@ queries. See [Router management API](./apiserver).
 | `GET` | `/v1/responses/{id}/input_items` | OpenAI Responses | Reads stored input items |
 | `POST` | `/v1/messages` | Anthropic Messages | The router translates when the selected backend uses another protocol |
 | `POST` | `/v1/messages/count_tokens` | Anthropic Messages | Counts with the Messages backend of the named model, or of the model that last served the session, at its `count_tokens` path; otherwise answers with its own estimate, which counts text by tokenizer-style pieces rather than bytes. No turn is routed or recorded. A recipe with candidate requirements, or with a decision that reads content (any signal but conversation shape and context size) or has a plugin, always gets the estimate. Rate limits, token budgets included, admit a count by its input before it is forwarded |
+| `POST` | `/v1/images/generations` | OpenAI Images | Routed on the prompt like any text request, and answered only by a decision whose `output` is an image. See [Images API](#images-api) |
 | `POST` | `/openai/deployments/{deployment}/chat/completions` | Azure OpenAI Chat Completions | The deployment names the Router model; `api-version` is accepted and not forwarded |
 | `POST` | `/openai/responses` | Azure OpenAI Responses | Accepts the dated `api-version`; the model is in the request body and the Responses service must be enabled |
 | `POST` | `/openai/v1/responses` | Azure OpenAI Responses | The model is in the request body and the Responses service must be enabled |
@@ -288,6 +289,39 @@ curl -sS http://localhost:8899/v1/messages \
   }'
 ```
 
+### Images API
+
+```bash
+curl -sS http://localhost:8899/v1/images/generations \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "vllm-sr/auto",
+    "prompt": "Draw a lighthouse at dusk.",
+    "size": "1024x1024"
+  }'
+```
+
+The Router routes an Images API request on its prompt, like any text request.
+The request must reach a decision whose
+[output contract](../tutorials/decision/output) is an image, such as
+`output: {kind: image, action: generate}`. That decision's model generates the
+image, whether it answers on the Images API (`api_format: images`) or on the
+Responses API with the hosted `image_generation` operation, and the client
+receives the image in the Images API's own shape:
+
+```json
+{"created": 1700000000, "data": [{"b64_json": "iVBORw0KGgo..."}]}
+```
+
+The request takes `model`, `prompt`, `n`, `size`, `quality`, `background`,
+`moderation`, `output_format` and `output_compression`. `response_format` must
+be `b64_json`, and the API does not stream. A request that reaches no image
+decision (it matches none, matches one that answers in text, or names a model
+directly instead of an entrypoint such as `vllm-sr/auto`) gets `400`
+`image_route_required` before any model is called. A Chat Completions or
+Anthropic Messages request that reaches an image decision gets `400`
+`unsupported_capability`, since neither API can return an image.
+
 ### Azure OpenAI clients
 
 Clients built for Azure OpenAI can call the Router as if it were an Azure
@@ -373,6 +407,8 @@ decision, or request content:
 | `max_output_tokens_exceeded` | 400 | `invalid_request_error` | The requested output exceeds the configured model limit. See [request budget errors](#request-budget-errors). |
 | `decision_unresolved` | 503 | `server_error` | A decision could not be evaluated because a signal it needs was unavailable, and its `rules.on_unknown` is `fail_request`. `x-vsr-applied-unknown-policy` names the decision. |
 | `no_eligible_model` | 503 | `server_error` | The selection policy rejected every candidate model of the matched decision. |
+| `image_route_required` | 400 | `invalid_request_error` | An [Images API](#images-api) request reached no decision whose output is an image. |
+| `image_generation_forbidden` | 400 | `invalid_request_error` | The matched decision answers with a generated image, and the request's `tool_choice` is `none`. |
 | `tool_selection_failed` | 503 | `server_error` | The matched decision's [tool selection](../tutorials/plugin/tools.md#selection) failed or timed out, and its `select.on_error` is `fail`. |
 
 The Router logs each of these failures at `WARN`, under the request's

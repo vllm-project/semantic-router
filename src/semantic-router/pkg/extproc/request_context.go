@@ -266,9 +266,6 @@ type RequestContext struct {
 	// explicitly so the emitted path is accurate. See issue #2203.
 	ResponsePath string
 
-	// Modality routing classification result (AR/DIFFUSION/BOTH)
-	ModalityClassification *ModalityClassificationResult // Set by classifyModality()
-
 	// RequestDemandSnapshots retains at most one content-free demand estimate for
 	// each stable request stage. It is observe-only until final admission lands.
 	RequestDemandSnapshots []routerreplay.RequestDemandSnapshot
@@ -286,7 +283,7 @@ type RequestContext struct {
 	VSRContextEquivalentBytes int      // Content-free byte equivalent of the conservative routing floor
 	VSRContextHasNonText      bool     // Structured JSON or image reserves make text-only calibration unsafe
 	VSRMatchedComplexity      []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
-	VSRMatchedModality        []string // Matched modality signals: "AR", "DIFFUSION", or "BOTH"
+	VSRMatchedModality        []string // Matched modality rule names
 	VSRMatchedAuthz           []string // Matched authz rule names for user-level routing
 	VSRMatchedJailbreak       []string // Matched jailbreak rule names (confidence >= threshold)
 	VSRMatchedSafety          []string // Matched safety rule names (confidence >= threshold)

@@ -1,0 +1,149 @@
+{
+  "case": "images-api-text-route",
+  "phases": [
+    {
+      "phase": "request_headers",
+      "header": [
+        {
+          "name": ":method",
+          "value": "POST"
+        },
+        {
+          "name": ":path",
+          "value": "/v1/images/generations"
+        },
+        {
+          "name": ":authority",
+          "value": "localhost:8899"
+        },
+        {
+          "name": ":scheme",
+          "value": "http"
+        },
+        {
+          "name": "content-type",
+          "value": "application/json"
+        },
+        {
+          "name": "content-length",
+          "value": "71"
+        },
+        {
+          "name": "x-forwarded-proto",
+          "value": "http"
+        },
+        {
+          "name": "x-request-id",
+          "value": "parity-images-api-text-route"
+        }
+      ],
+      "effect": {
+        "header": {
+          "set": [
+            {
+              "name": "accept-encoding",
+              "value": ""
+            }
+          ],
+          "remove": [
+            "x-authz-team-id",
+            "x-authz-tenant-id",
+            "x-authz-user-groups",
+            "x-authz-user-id",
+            "x-disable-router-memory",
+            "x-sr-bench-expected-config-hash",
+            "x-sr-bench-max-inference-calls",
+            "x-user-anthropic-key",
+            "x-user-azure-openai-key",
+            "x-user-bedrock-key",
+            "x-user-cloudflare-workers-ai-key",
+            "x-user-gemini-key",
+            "x-user-minimax-key",
+            "x-user-openai-key",
+            "x-user-vertex-ai-key",
+            "x-vsr-cache-control",
+            "x-vsr-compression-control",
+            "x-vsr-debug",
+            "x-vsr-fusion-depth",
+            "x-vsr-gateway-credential",
+            "x-vsr-internal-auth",
+            "x-vsr-looper-decision",
+            "x-vsr-looper-iteration",
+            "x-vsr-looper-request",
+            "x-vsr-looper-secret",
+            "x-vsr-outcome-principal",
+            "x-vsr-outcome-source",
+            "x-vsr-protection-release",
+            "x-vsr-selected-recipe",
+            "x-vsr-skip-processing"
+          ]
+        }
+      }
+    },
+    {
+      "phase": "request_body",
+      "end_of_stream": true,
+      "body": "{\"model\":\"vllm-sr/auto\",\"prompt\":\"Write a python script to parse CSV.\"}",
+      "effect": {
+        "immediate": {
+          "status": 400,
+          "header": {
+            "set": [
+              {
+                "name": "content-type",
+                "value": "application/json"
+              },
+              {
+                "name": "x-vsr-schema-version",
+                "value": "2"
+              },
+              {
+                "name": "x-vsr-response-path",
+                "value": "error"
+              },
+              {
+                "name": "x-vsr-config-version",
+                "value": "1"
+              }
+            ]
+          },
+          "body": "{\"error\":{\"code\":\"image_route_required\",\"message\":\"the Images API needs a route that answers with a generated image\",\"type\":\"invalid_request_error\"}}"
+        }
+      }
+    }
+  ],
+  "response": {
+    "status": 400,
+    "header": [
+      {
+        "name": "content-type",
+        "value": "application/json"
+      },
+      {
+        "name": "x-vsr-schema-version",
+        "value": "2"
+      },
+      {
+        "name": "x-vsr-response-path",
+        "value": "error"
+      },
+      {
+        "name": "x-vsr-config-version",
+        "value": "1"
+      },
+      {
+        "name": "content-length",
+        "value": "149"
+      }
+    ],
+    "body": "{\"error\":{\"code\":\"image_route_required\",\"message\":\"the Images API needs a route that answers with a generated image\",\"type\":\"invalid_request_error\"}}"
+  },
+  "evidence": {
+    "recipe": "default",
+    "signals": {
+      "keyword": [
+        "code_keywords"
+      ]
+    }
+  }
+}

@@ -80,10 +80,6 @@ func applyEffectiveModelRegistry(
 
 func modelParamsFromEffectiveModel(model modelcatalog.EffectiveModel, qualityIndex, reasoningEffort string) ModelParams {
 	card := model.Card.Card
-	modality := model.Card.RuntimeModality
-	if modality == "" {
-		modality = runtimeModalityFromCard(card)
-	}
 	indexResults := model.Indices
 	if effortResults, ok := model.IndicesByEffort[reasoningEffort]; ok {
 		indexResults = effortResults
@@ -98,7 +94,7 @@ func modelParamsFromEffectiveModel(model modelcatalog.EffectiveModel, qualityInd
 		LoRAs:                loraAdaptersFromEffectiveCard(model.Card),
 		Tags:                 append([]string(nil), card.Tags...),
 		ReasoningFamily:      card.ReasoningFamily,
-		Modality:             modality,
+		Modalities:           cloneModalities(card.Modalities),
 		IndexResults:         cloneCatalogIndexResults(indexResults),
 		IndexResultsByEffort: cloneCatalogIndexResultsByEffort(model.IndicesByEffort),
 		QualityIndex:         qualityIndex,
@@ -123,16 +119,11 @@ func declaredCardCapabilities(card modelcatalog.EffectiveModelCard) []string {
 	return append([]string(nil), card.Card.Capabilities...)
 }
 
-func runtimeModalityFromCard(card modelcatalog.ModelCard) string {
-	if stringSliceContains(card.Capabilities, "image_generation") {
-		return "diffusion"
+func cloneModalities(modalities modelcatalog.Modalities) modelcatalog.Modalities {
+	return modelcatalog.Modalities{
+		Input:  append([]string(nil), modalities.Input...),
+		Output: append([]string(nil), modalities.Output...),
 	}
-	for _, input := range card.Modalities.Input {
-		if input != "text" {
-			return "omni"
-		}
-	}
-	return "ar"
 }
 
 func appendEffectiveProviderBinding(
@@ -419,6 +410,8 @@ func apiFormatForProtocol(protocol string) (string, error) {
 		return APIFormatResponses, nil
 	case "anthropic/messages@1":
 		return APIFormatAnthropic, nil
+	case "openai/images@1":
+		return APIFormatImages, nil
 	default:
 		return "", fmt.Errorf("protocol %q has no runtime codec", protocol)
 	}

@@ -276,9 +276,26 @@ const DECISION_DECLARATIVE_OVERRIDES: FieldSchema[] = [
       },
     ],
   },
+  {
+    key: 'output',
+    label: 'Output',
+    type: 'object',
+    description:
+      'The media the decision answers with; without it the decision answers in text. Every model the decision references must declare what the output needs.',
+    fields: [
+      {
+        key: 'kind',
+        label: 'Kind',
+        type: 'string[]',
+        placeholder: 'image',
+        description: 'text, image, audio or video; several kinds for one model that writes them all.',
+      },
+      { key: 'action', label: 'Action', type: 'select', options: ['generate', 'edit'] },
+    ],
+  },
   { key: 'annotations', label: 'Annotations', type: 'key-value' },
 ]
-const declarativeKeys = new Set(['candidateIterations', 'retention', 'annotations'])
+const declarativeKeys = new Set(['candidateIterations', 'retention', 'output', 'annotations'])
 export const DECISION_DECLARATIVE_SCHEMA = mergeRouterFieldSchemas(
   routerConfigFieldsForRef('#/$defs/Decision').filter((field) => declarativeKeys.has(field.key)),
   DECISION_DECLARATIVE_OVERRIDES,

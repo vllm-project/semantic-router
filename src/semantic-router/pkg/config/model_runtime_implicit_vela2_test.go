@@ -14,7 +14,6 @@ providers:
   models:
     - name: general
       backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
-      modality: omni
 recipes:
   - name: default
     signals:

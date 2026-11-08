@@ -2,8 +2,8 @@
 
 The CLI's offline checks cover the document's structure and the rules the CLI
 owns. The rules the Router applies when it loads a document -- its model
-deployments and bindings, and cross-field contracts such as a modality
-decision's models or a module's required settings -- live in the Router
+deployments and bindings, and cross-field contracts such as the models of a
+decision's output contract or a module's required settings -- live in the Router
 alone, so `config validate` and `config migrate` ask the Router: a local
 Router binary (`--router-binary` or VLLM_SR_ROUTER_BINARY), or the stack's
 Router image, run once with `-validate-config` and no network, or a running

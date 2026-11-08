@@ -19,7 +19,6 @@ MODEL local/deepseek-v4-flash-analyst {
   description: "Latest MIT-licensed sparse analyst tier, retained behind a stable judge after correctness calibration."
   capabilities: ["independent_analysis", "long_context", "tool_use", "reasoning_diversity"]
   tags: ["tier:experimental_frontier", "cost:high", "deployment:self_hosted", "physical:deepseek-v4-flash-0731"]
-  modality: "text"
 }
 
 MODEL local/gemma4-26b-balanced {
@@ -27,12 +26,11 @@ MODEL local/gemma4-26b-balanced {
   description: "Fast architecture-diverse MoE tier for balanced general reasoning."
   capabilities: ["reasoning", "multilingual", "structured_output", "long_context"]
   tags: ["tier:balanced", "cost:medium", "latency:fastest_measured", "deployment:self_hosted", "physical:gemma4-26b-a4b"]
-  modality: "text"
 }
 
 MODEL local/omni {
   capabilities: ["chat", "image_understanding", "multimodal", "omni", "text", "vision"]
-  modality: "omni"
+  modalities: { input: ["text", "image"], output: ["text"] }
 }
 
 MODEL local/qwen3.5-122b-frontier {
@@ -40,7 +38,6 @@ MODEL local/qwen3.5-122b-frontier {
   description: "Large local MoE tier for accuracy-first synthesis and review."
   capabilities: ["legal_analysis", "high_risk_review", "deep_synthesis"]
   tags: ["tier:premium", "cost:highest", "deployment:self_hosted", "physical:qwen3.5-122b-a10b-fp8"]
-  modality: "text"
 }
 
 MODEL local/qwen3.5-9b-economy {
@@ -48,7 +45,6 @@ MODEL local/qwen3.5-9b-economy {
   description: "Small dense local tier for low-cost and short interactive workloads."
   capabilities: ["fast_qa", "explanation", "general_chat"]
   tags: ["tier:economy", "cost:lowest", "latency:fastest", "deployment:self_hosted", "physical:qwen3.5-9b"]
-  modality: "text"
 }
 
 MODEL local/qwen3.5-9b-economy-replica {
@@ -56,7 +52,6 @@ MODEL local/qwen3.5-9b-economy-replica {
   description: "Independent replica of the economy tier for latency and load-aware selection."
   capabilities: ["fast_qa", "explanation", "general_chat"]
   tags: ["tier:economy_replica", "cost:lowest", "latency:fastest", "deployment:self_hosted", "physical:qwen3.5-9b"]
-  modality: "text"
 }
 
 MODEL local/qwen3.5-9b-private {
@@ -64,7 +59,6 @@ MODEL local/qwen3.5-9b-private {
   description: "Isolated alias of the local 9B tier for privacy-policy routes."
   capabilities: ["privacy_locality", "sensitive_data", "general_chat"]
   tags: ["tier:private", "cost:low", "deployment:self_hosted", "physical:qwen3.5-9b"]
-  modality: "text"
 }
 
 MODEL local/qwen3.6-27b-coder {
@@ -72,7 +66,6 @@ MODEL local/qwen3.6-27b-coder {
   description: "Dense Qwen3.6 tier for coding, structured output, and verification."
   capabilities: ["reasoning", "coding", "structured_output", "tool_use"]
   tags: ["tier:coder", "cost:upper_mid", "deployment:self_hosted", "physical:qwen3.6-27b"]
-  modality: "text"
 }
 
 MODEL local/qwen3.6-35b-flash {
@@ -80,7 +73,6 @@ MODEL local/qwen3.6-35b-flash {
   description: "Low-latency alias of Qwen3.6-35B-A3B-FP8 for fast reasoning."
   capabilities: ["fast_qa", "coding", "reasoning"]
   tags: ["tier:flash", "cost:medium", "latency:fast", "deployment:self_hosted", "physical:qwen3.6-35b-a3b-fp8"]
-  modality: "text"
 }
 
 # =============================================================================

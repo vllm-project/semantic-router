@@ -151,6 +151,7 @@ type rawDecisionTreeItem struct {
 	Plugin       *rawPluginRef        `parser:"| 'PLUGIN' @@"`
 	CandidateFor *rawCandidateForDecl `parser:"| @@"`
 	Retention    *rawRetentionDecl    `parser:"| @@"`
+	Output       *rawOutputDecl       `parser:"| @@"`
 }
 
 // rawRetentionDecl: RETENTION { fields... }, the decision's retention. The
@@ -158,6 +159,14 @@ type rawDecisionTreeItem struct {
 type rawRetentionDecl struct {
 	Pos    lexer.Position
 	Fields []*FieldEntry `parser:"'RETENTION' '{' @@* '}'"`
+}
+
+// rawOutputDecl: OUTPUT { kind: ..., action: ... }, the decision's output
+// contract. The grammar accepts any field so the validator can name an
+// unknown one.
+type rawOutputDecl struct {
+	Pos    lexer.Position
+	Fields []*FieldEntry `parser:"'OUTPUT' '{' @@* '}'"`
 }
 
 // rawModelDecl: MODEL <name> { fields... }
@@ -187,6 +196,7 @@ type rawRouteItem struct {
 	Action       *rawActionDecl       `parser:"| 'ACTION' @@"`
 	CandidateFor *rawCandidateForDecl `parser:"| @@"`
 	Retention    *rawRetentionDecl    `parser:"| @@"`
+	Output       *rawOutputDecl       `parser:"| @@"`
 }
 
 // rawActionDecl: ACTION <type> <destination>, e.g. ACTION route "safe-model".
@@ -457,7 +467,19 @@ type RouteDecl struct {
 	Plugins             []*PluginRef
 	CandidateIterations []*CandidateIterationDecl
 	Retention           *RetentionDecl
+	Output              *OutputDecl
 	Pos                 Position
+}
+
+// OutputDecl is the resolved AST node for a route's OUTPUT block: the kinds
+// its answers carry and its action, as written.
+type OutputDecl struct {
+	Kind   []string
+	Action string
+	// RawFields keep the parsed entries, so the validator and compiler report
+	// an unknown or wrong-typed field instead of reading it as unset.
+	RawFields []*FieldEntry
+	Pos       Position
 }
 
 // ActionDecl is the resolved AST node for a route ACTION statement.

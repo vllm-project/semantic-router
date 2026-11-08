@@ -336,6 +336,31 @@ export function ModelCapabilitiesEditor({
   )
 }
 
+// Edits one direction of a model's modalities: the media it reads or writes.
+export function ModelModalitiesEditor({
+  value,
+  onChange,
+  disabled,
+  readOnly,
+}: StructuredModelFieldProps) {
+  const modalities = Array.isArray(value)
+    ? value.filter((modality): modality is string => typeof modality === 'string')
+    : normalizeStringList(value)
+
+  return (
+    <StringListEditor
+      value={modalities}
+      onChange={(nextValue) => onChange?.(nextValue)}
+      addLabel="Add modality"
+      emptyLabel="Not declared: the model reads and writes text."
+      itemLabel="Modality"
+      placeholder="e.g. image"
+      disabled={disabled}
+      readOnly={readOnly}
+    />
+  )
+}
+
 export function ModelLorasEditor({
   value,
   onChange,

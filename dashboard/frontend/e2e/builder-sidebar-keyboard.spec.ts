@@ -19,9 +19,7 @@ providers:
 routing:
   modelCards:
     - name: model-a
-      modality: text
     - name: model-b
-      modality: text
 `
 
 async function tabUntilFocused(page: Page, target: Locator, maxPresses = 10) {

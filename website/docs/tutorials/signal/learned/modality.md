@@ -72,9 +72,10 @@ Router's own validation. `method:
 keyword` needs `keywords`; `method: hybrid` also needs `lower_threshold_ratio`
 and a classifier or keywords.
 
-A decision on `BOTH` must reference both an AR model (`modality: ar` in
-`providers.models`) and a diffusion model (`modality: diffusion`), or an omni
-model (`modality: omni`).
+A decision that answers an image request with a generated image declares it in
+an output contract, `output: {kind: image}` or `output: {kind: [text, image]}`,
+and every model it references declares `image_generation`; see
+[Output](../../decision/output).
 
 ## Dependencies and Limitations
 

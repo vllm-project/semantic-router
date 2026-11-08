@@ -878,9 +878,6 @@
         "modalities": {
           "$ref": "#/$defs/Modalities"
         },
-        "modality": {
-          "type": "string"
-        },
         "tags": {
           "items": {
             "type": "string"
@@ -1825,6 +1822,9 @@
         "retention": {
           "$ref": "#/$defs/DecisionRetention"
         },
+        "output": {
+          "$ref": "#/$defs/DecisionOutput"
+        },
         "annotations": {
           "type": "object"
         }
@@ -1931,6 +1931,46 @@
       "required": [
         "deployment"
       ]
+    },
+    "DecisionOutput": {
+      "properties": {
+        "kind": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "text",
+                "image",
+                "audio",
+                "video"
+              ]
+            },
+            {
+              "items": {
+                "type": "string",
+                "enum": [
+                  "text",
+                  "image",
+                  "audio",
+                  "video"
+                ]
+              },
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true
+            }
+          ]
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "generate",
+            "edit"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
     },
     "DecisionPlugin": {
       "allOf": [

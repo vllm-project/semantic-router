@@ -17,7 +17,6 @@ providers:
           endpoint: vllm:8000
           protocol: http
           provider: vllm
-      modality: ar
       capabilities:
         - text
 recipes:

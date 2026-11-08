@@ -15,7 +15,6 @@ providers:
 routing:
   modelCards:
     - name: model-a
-      modality: text
   signals:
     keywords:
       - name: legal_terms

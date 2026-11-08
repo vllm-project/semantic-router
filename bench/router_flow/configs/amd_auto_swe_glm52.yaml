@@ -41,7 +41,6 @@ providers:
       context_window_size: 1048576
       description: GLM 5.2 planner alias for SWE-Bench Pro issue triage.
       capabilities: [chat, code, reasoning, long-context]
-      modality: text
       tags: ['deployment:openrouter', 'benchmark:swe-bench-pro', 'role:planner', 'base:glm52']
     - name: glm52-patcher-a
       provider_model_id: z-ai/glm-5.2
@@ -67,7 +66,6 @@ providers:
       context_window_size: 1048576
       description: GLM 5.2 patch author alias for SWE-Bench Pro.
       capabilities: [chat, code, reasoning, long-context]
-      modality: text
       tags: ['deployment:openrouter', 'benchmark:swe-bench-pro', 'role:patcher', 'base:glm52']
     - name: glm52-patcher-b
       provider_model_id: z-ai/glm-5.2
@@ -93,7 +91,6 @@ providers:
       context_window_size: 1048576
       description: GLM 5.2 alternate patch author alias for SWE-Bench Pro.
       capabilities: [chat, code, reasoning, long-context]
-      modality: text
       tags: ['deployment:openrouter', 'benchmark:swe-bench-pro', 'role:patcher', 'base:glm52']
     - name: glm52-verifier
       provider_model_id: z-ai/glm-5.2
@@ -119,7 +116,6 @@ providers:
       context_window_size: 1048576
       description: GLM 5.2 verifier alias for regression and test-risk review.
       capabilities: [chat, code, reasoning, long-context]
-      modality: text
       tags: ['deployment:openrouter', 'benchmark:swe-bench-pro', 'role:verifier', 'base:glm52']
     - name: glm52-finalizer
       provider_model_id: z-ai/glm-5.2
@@ -145,7 +141,6 @@ providers:
       context_window_size: 1048576
       description: GLM 5.2 finalizer alias for patch and answer contract synthesis.
       capabilities: [chat, code, reasoning, long-context]
-      modality: text
       tags: ['deployment:openrouter', 'benchmark:swe-bench-pro', 'role:finalizer', 'base:glm52']
 
 evaluation:

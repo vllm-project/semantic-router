@@ -367,9 +367,6 @@ const promoteLegacyModelBindings = (cfg: ConfigData) => {
         metrics: { score: modelConfig.quality_score },
       })
     }
-    if (modelConfig.modality) {
-      cardPatch.modality = modelConfig.modality
-    }
     upsertRoutingModelCard(cfg, modelName, cardPatch)
 
     const existing = providerModelsByName.get(modelName)

@@ -53,7 +53,7 @@ func recordResponseHeaderFacts(ctx *RequestContext) {
 	ctx.RequestCost, ctx.RequestCostCurrency, ctx.RequestCostPriced = 0.000054, "USD", true
 	ctx.Retention = &config.DecisionRetention{Drop: &drop, TTLTurns: &turns, KeepCurrentModel: &keep, PreferPrefixRetention: &prefer}
 	ctx.VSRSelectedCategory = "math"
-	ctx.ModalityClassification = &ModalityClassificationResult{Modality: ModalityAR, Method: "classifier"}
+	ctx.VSRSelectedDecision = &config.Decision{Name: "escalate-extreme", Output: &config.DecisionOutput{Kind: config.OutputKinds{config.OutputKindText, config.OutputKindImage}}}
 	ctx.VSRReasoningMode = "on"
 	ctx.VSRLearningPolicies.Set(routerLearningPolicy{
 		Method: routerLearningMethodProtection, Scope: "conversation", Action: routerLearningActionAllowSwitch, Reason: "switch_allowed",

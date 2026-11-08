@@ -1,1 +1,1 @@
-recipes[default].signals.embeddings[chart]: removed_signal_type: the embedding signal is removed, and a rule with image anchors or an audio query has no question that replaces it; run `vllm-sr config migrate` (write a systemone question for it: input.image reads the request's images)
+recipes[default].signals.embeddings[chart]: removed_signal_type: the embedding signal is removed, and a rule with image anchors has no question that replaces it; run `vllm-sr config migrate` (write a systemone question for it: input.image reads the request's images)

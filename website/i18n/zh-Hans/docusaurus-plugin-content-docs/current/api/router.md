@@ -22,6 +22,7 @@ Router 数据面在配置的监听器上接收模型请求。默认的 standalon
 | `DELETE` | `/v1/responses/{id}` | OpenAI Responses | 删除已存储的 response |
 | `GET` | `/v1/responses/{id}/input_items` | OpenAI Responses | 读取已存储的 input items |
 | `POST` | `/v1/messages` | Anthropic Messages | 当所选后端使用其他协议时，Router 会做转换 |
+| `POST` | `/v1/images/generations` | OpenAI Images | 与任何文本请求一样按提示词路由，只有 `output` 为图像的决策才会应答。参见 [Images API](#images-api) |
 | `POST` | `/openai/deployments/{deployment}/chat/completions` | Azure OpenAI Chat Completions | URL 中的 deployment 是 Router 模型名；接受 `api-version` |
 | `POST` | `/openai/responses` | Azure OpenAI Responses | 接受带日期的 `api-version`；模型名在请求体中，需要启用 Responses 服务 |
 | `POST` | `/openai/v1/responses` | Azure OpenAI Responses | 模型名在请求体中，需要启用 Responses 服务 |
@@ -137,6 +138,35 @@ curl -sS http://localhost:8899/v1/messages \
 
 协议转换仅限于 Router 支持的字段。请求跨协议时，检查 `x-vsr-client-protocol`、`x-vsr-upstream-protocol` 以及任何 `x-vsr-protocol-warnings` 响应头。
 
+### Images API {#images-api}
+
+```bash
+curl -sS http://localhost:8899/v1/images/generations \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "vllm-sr/auto",
+    "prompt": "Draw a lighthouse at dusk.",
+    "size": "1024x1024"
+  }'
+```
+
+Router 与任何文本请求一样，按 Images API 请求的提示词路由。请求必须到达
+[输出约定](../tutorials/decision/output)为图像的决策，例如
+`output: {kind: image, action: generate}`。由该决策的模型生成图像：无论模型在
+Images API（`api_format: images`）上应答，还是在 Responses API 上通过托管的
+`image_generation` 操作应答，客户端都会以 Images API 自身的格式收到图像：
+
+```json
+{"created": 1700000000, "data": [{"b64_json": "iVBORw0KGgo..."}]}
+```
+
+请求接受 `model`、`prompt`、`n`、`size`、`quality`、`background`、`moderation`、
+`output_format` 和 `output_compression`。`response_format` 必须为 `b64_json`，且该
+API 不支持流式输出。未到达图像决策的请求（没有匹配任何决策、匹配到以文本应答的决策，
+或直接指定模型而非 `vllm-sr/auto` 这样的入口）会在调用任何模型之前收到 `400`
+`image_route_required`。到达图像决策的 Chat Completions 或 Anthropic Messages 请求会收到
+`400` `unsupported_capability`，因为这两种 API 都无法返回图像。
+
 ### Azure OpenAI 客户端 {#azure-openai-clients}
 
 deployment Chat 路径从 URL 读取模型名；Responses 和 v1 Chat 路径从请求体读取模型名。监听器配置 `api_keys` 时，Router 用客户端的 `api-key` 验证请求，并在转发给 provider 前移除该请求头。
@@ -183,6 +213,8 @@ Router 无法路由某个请求时，会直接应答该请求，不调用任何�
 | `max_output_tokens_exceeded` | 400 | `invalid_request_error` | 请求的输出超过了配置的模型上限。见[请求预算错误](#request-budget-errors)。 |
 | `decision_unresolved` | 503 | `server_error` | 某个决策所需的信号不可用，导致该决策无法评估，且其 `rules.on_unknown` 为 `fail_request`。`x-vsr-applied-unknown-policy` 会给出该决策。 |
 | `no_eligible_model` | 503 | `server_error` | 选择策略拒绝了匹配决策的所有候选模型。 |
+| `image_route_required` | 400 | `invalid_request_error` | [Images API](#images-api) 请求未到达任何输出为图像的决策。 |
+| `image_generation_forbidden` | 400 | `invalid_request_error` | 匹配的决策以生成的图像应答，而请求的 `tool_choice` 为 `none`。 |
 | `tool_selection_failed` | 503 | `server_error` | 匹配决策的[工具选择](../tutorials/plugin/tools.md#选择)失败或超时，且其 `select.on_error` 为 `fail`。 |
 
 Router 会以 `WARN` 级别记录每一次此类失败，带上请求的 `x-request-id`、原因码和 Router 自己的原因：请求指定的模型、到达的配方和决策，以及错误本身。Anthropic Messages 客户端会在 Anthropic 的错误信封中收到相同的状态码和消息；该信封没有 code 字段。

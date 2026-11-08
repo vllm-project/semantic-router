@@ -73,6 +73,19 @@ protocols:
   - structured_output
   - reasoning
   - usage
+- id: openai/images@1
+  display_name: OpenAI Images
+  wire_format: openai.images.v1
+  default_base_path: /v1
+  operations:
+  - id: create
+    method: POST
+    path: /v1/images/generations
+  - id: list_models
+    method: GET
+    path: /v1/models
+  capabilities:
+  - image_generation
 - id: anthropic/messages@1
   display_name: Anthropic Messages
   wire_format: anthropic.messages.v1
@@ -1704,12 +1717,15 @@ providers:
   protocols:
   - openai/chat-completions@1
   - openai/responses@1
+  - openai/images@1
   default_protocol: openai/chat-completions@1
   supported_operations:
   - openai/chat-completions@1#create
   - openai/chat-completions@1#list_models
   - openai/responses@1#create
   - openai/responses@1#list_models
+  - openai/images@1#create
+  - openai/images@1#list_models
   auth:
     strategy: bearer
     header: Authorization
@@ -1731,12 +1747,15 @@ providers:
   protocols:
   - openai/chat-completions@1
   - openai/responses@1
+  - openai/images@1
   default_protocol: openai/chat-completions@1
   supported_operations:
   - openai/chat-completions@1#create
   - openai/chat-completions@1#list_models
   - openai/responses@1#create
   - openai/responses@1#list_models
+  - openai/images@1#create
+  - openai/images@1#list_models
   reasoning_transport: top_level_effort
   auth:
     strategy: bearer
@@ -3015,6 +3034,7 @@ providers:
   protocols:
   - openai/chat-completions@1
   - openai/responses@1
+  - openai/images@1
   - anthropic/messages@1
   default_protocol: openai/chat-completions@1
   supported_operations:
@@ -3022,6 +3042,8 @@ providers:
   - openai/chat-completions@1#list_models
   - openai/responses@1#create
   - openai/responses@1#list_models
+  - openai/images@1#create
+  - openai/images@1#list_models
   - anthropic/messages@1#create
   - anthropic/messages@1#list_models
   auth:

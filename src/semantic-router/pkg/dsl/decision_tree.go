@@ -112,6 +112,8 @@ func applyDecisionTreeItemToRoute(route *RouteDecl, item *rawDecisionTreeItem) {
 		route.CandidateIterations = append(route.CandidateIterations, rawToCandidateIteration(item.CandidateFor))
 	case item.Retention != nil:
 		route.Retention = rawToRetentionDecl(item.Retention)
+	case item.Output != nil:
+		route.Output = rawToOutputDecl(item.Output)
 	}
 }
 

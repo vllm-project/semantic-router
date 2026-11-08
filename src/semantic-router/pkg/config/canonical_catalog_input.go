@@ -76,7 +76,7 @@ func (builder *catalogInputBuilder) addModel(model CanonicalProviderModel, model
 	}
 	if model.APIFormat != "" && catalogProtocolForAPIFormat(model.APIFormat) == "" {
 		return fmt.Errorf(
-			"providers.models[%d].api_format %q is unsupported; use openai, responses, anthropic, or systemone",
+			"providers.models[%d].api_format %q is unsupported; use openai, responses, anthropic, images, or systemone",
 			modelIndex, model.APIFormat,
 		)
 	}
@@ -248,6 +248,8 @@ func catalogProtocolForAPIFormat(apiFormat string) string {
 		return "anthropic/messages@1"
 	case APIFormatOpenAI:
 		return "openai/chat-completions@1"
+	case APIFormatImages:
+		return "openai/images@1"
 	default:
 		return ""
 	}
@@ -322,10 +324,6 @@ func applyCatalogCardLists(card RoutingModel, overlay *modelcatalog.ModelCardOve
 	if card.Modalities != nil {
 		value := *card.Modalities
 		overlay.Modalities = &value
-	}
-	if card.Modality != "" {
-		value := card.Modality
-		overlay.RuntimeModality = &value
 	}
 	if card.Tags != nil {
 		value := append([]string(nil), card.Tags...)

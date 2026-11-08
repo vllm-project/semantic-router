@@ -98,7 +98,7 @@ const HEADER_INFO: Record<
     type: 'info',
   },
   [X_VSR_SELECTED_MODALITY]: {
-    label: 'Modality',
+    label: 'Output',
     type: 'info',
   },
   [X_VSR_CACHE_HIT]: {

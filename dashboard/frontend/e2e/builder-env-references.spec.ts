@@ -19,7 +19,6 @@ providers:
 routing:
   modelCards:
     - name: model-a
-      modality: text
   signals:
     keywords:
       - name: billing
@@ -76,7 +75,6 @@ providers:
 routing:
   modelCards:
     - name: model-a
-      modality: text
   signals:
     context:
       - name: long_context

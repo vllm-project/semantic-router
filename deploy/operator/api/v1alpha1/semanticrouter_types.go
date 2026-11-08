@@ -1370,6 +1370,15 @@ type DecisionConfig struct {
 	// requests, over the recipe's and the router's
 	// +optional
 	Fallback *DecisionFallbackConfig `json:"fallback,omitempty" yaml:"fallback,omitempty"`
+
+	// Output declares the media this decision's answers carry, such as
+	// {kind: image, action: generate}; without it the decision answers in
+	// text. The router checks it against the referenced models when it loads
+	// the configuration.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	Output *apiextensionsv1.JSON `json:"output,omitempty" yaml:"output,omitempty"`
 }
 
 // RuleCombinationConfig defines how to combine multiple rule conditions

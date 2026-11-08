@@ -67,7 +67,7 @@ global:
 
 没有这个块时，Router 加载配置时会记录 `modality_detector_disabled` 警告，`vllm-sr config validate` 也会通过 Router 自身的校验打印同一警告。`method: keyword` 需要 `keywords`；`method: hybrid` 还需要 `lower_threshold_ratio`，以及分类器或关键词。
 
-基于 `BOTH` 的决策必须同时引用一个 AR 模型（在 `providers.models` 中设 `modality: ar`）和一个扩散模型（`modality: diffusion`），或者引用一个全模态模型（`modality: omni`）。
+以生成图像回答图像请求的决策，在输出契约中声明这一点，即 `output: {kind: image}` 或 `output: {kind: [text, image]}`，并且它引用的每个模型都声明 `image_generation`；参见[输出](../../decision/output)。
 
 ## 依赖与限制 {#dependencies-and-limitations}
 

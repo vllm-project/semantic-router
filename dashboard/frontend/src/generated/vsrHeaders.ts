@@ -397,7 +397,7 @@ export const X_VSR_SELECTED_CONFIDENCE = 'x-vsr-selected-confidence'
 /** Decision the decision engine selected; omitted when no decision matched. Surface: public. */
 export const X_VSR_SELECTED_DECISION = 'x-vsr-selected-decision'
 
-/** Modality result and optional method, such as `AR;classifier`. Surface: debug. */
+/** Output kinds of the selected decision's output contract, such as `image` or `text,image`; omitted for a decision that declares none. Surface: debug. */
 export const X_VSR_SELECTED_MODALITY = 'x-vsr-selected-modality'
 
 /** Model alias the Router selected. Surface: public. */

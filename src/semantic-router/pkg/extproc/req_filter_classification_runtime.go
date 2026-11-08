@@ -283,6 +283,9 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 	if err := r.benchmarkCallLimitCheck(ctx); err != nil {
 		return "", 0, reasoningDecision, "", err
 	}
+	if err := r.applyDecisionOutput(ctx); err != nil {
+		return "", 0, reasoningDecision, "", err
+	}
 	decisionName := result.Decision.Name
 	evaluationConfidence := result.Confidence
 

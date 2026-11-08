@@ -16,7 +16,7 @@ const configResponse = {
     ],
   },
   routing: {
-    modelCards: [{ name: 'model-a', modality: 'text' }],
+    modelCards: [{ name: 'model-a' }],
     signals: { jailbreak: [{ name: 'prompt_injection', threshold: 0.7 }] },
     decisions: [
       {

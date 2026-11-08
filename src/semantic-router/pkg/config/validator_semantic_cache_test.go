@@ -44,12 +44,12 @@ func TestValidateResponseCacheSemanticMatch(t *testing.T) {
 func TestValidateSemanticCacheMode(t *testing.T) {
 	for _, mode := range []string{"", ResponseCacheModeSemantic, ResponseCacheModeExact, ResponseCacheModeExactThenSemantic} {
 		decision := responseCacheDecision(map[string]interface{}{"enabled": true, "mode": mode})
-		if err := validateDecisionPluginPayload(decision.Name, 0, decision.Plugins[0]); err != nil {
+		if _, err := DecodeDecisionPluginAt(PluginAt{Decision: decision.Name, Type: decision.Plugins[0].Type}, decision.Plugins[0]); err != nil {
 			t.Fatalf("valid mode %q rejected: %v", mode, err)
 		}
 	}
 	decision := responseCacheDecision(map[string]interface{}{"enabled": true, "mode": "unsafe"})
-	if err := validateDecisionPluginPayload(decision.Name, 0, decision.Plugins[0]); err == nil {
+	if _, err := DecodeDecisionPluginAt(PluginAt{Decision: decision.Name, Type: decision.Plugins[0].Type}, decision.Plugins[0]); err == nil {
 		t.Fatal("unknown response_cache mode must be rejected")
 	}
 }

@@ -82,7 +82,7 @@ def configuration(backend, listener):
         models.append(
             {
                 "name": name,
-                "modality": "ar",
+                "capabilities": ["chat"],
                 "provider_model_id": name,
                 "api_format": "openai",
                 "backend_refs": [

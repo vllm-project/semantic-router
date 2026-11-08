@@ -13,13 +13,6 @@ import {
   type VLLMEndpoint,
 } from './configPageSupport'
 
-const catalogRuntimeModality = (model?: BuiltInModelMetadata): string | undefined => {
-  if (!model) return undefined
-  if (model.capabilities.includes('image_generation')) return 'diffusion'
-  if (model.modalities.input.some((input) => input !== 'text')) return 'omni'
-  return 'ar'
-}
-
 const intersectValues = <Value extends string>(
   current: Value[] | undefined,
   next: Value[] | undefined,
@@ -78,7 +71,7 @@ const normalizedProviderModel = (
     capabilities: override?.capabilities ?? builtIn?.capabilities,
     loras: override?.loras,
     tags: override?.tags ?? builtIn?.tags,
-    modality: override?.modality ?? catalogRuntimeModality(builtIn),
+    modalities: override?.modalities ?? builtIn?.modalities,
     card_override: override,
     pricing: model.pricing,
     reliability: model.reliability,
@@ -95,7 +88,7 @@ const normalizedUnboundCard = (card: RoutingModelCard): NormalizedModel => ({
   capabilities: card.capabilities,
   loras: card.loras,
   tags: card.tags,
-  modality: card.modality,
+  modalities: card.modalities,
 })
 
 const canonicalModels = (

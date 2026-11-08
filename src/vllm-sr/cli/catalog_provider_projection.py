@@ -29,6 +29,7 @@ _API_FORMAT_TO_PROTOCOL = {
     "openai": "openai/chat-completions@1",
     "responses": "openai/responses@1",
     "anthropic": "anthropic/messages@1",
+    "images": "openai/images@1",
     "systemone": "vllm-sr/systemone@1",
 }
 _PROTOCOL_TO_API_FORMAT = {
@@ -514,7 +515,7 @@ def _protocol_for_api_format(api_format: str, path: str) -> str:
     if protocol is None:
         raise CatalogProviderProjectionError(
             f"{path}.api_format {api_format!r} is unsupported; use openai, "
-            "responses, anthropic, or systemone"
+            "responses, anthropic, images, or systemone"
         )
     return protocol
 

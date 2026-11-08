@@ -30,6 +30,7 @@ func EffectiveCandidateRequest(request *llmprotocol.Request, decision *config.De
 		if policy := decision.GetToolsConfig().ActivePolicy(); policy.EffectiveMode() == config.ToolsPolicyModeNone {
 			llmprotocol.StripTools(&view, policy.StripToolHistory)
 		}
+		ApplyDecisionOutput(&view, decision)
 		if params := decision.GetRequestParamsConfig(); params != nil {
 			for _, field := range params.BlockedParams {
 				if _, err := llmprotocol.BlockRequestField(&view, strings.TrimSpace(field)); err != nil {

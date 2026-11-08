@@ -663,9 +663,8 @@
   "e2e/config/config.modality-routing.yaml": {
     "signals": {
       "default/domain.text_generation": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/modality.AR": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/modality.BOTH": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/modality.DIFFUSION": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/modality.wants_image": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/modality.wants_text": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
@@ -777,6 +776,13 @@
     "started": [
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     ]
+  },
+  "e2e/profiles/image-routing/values.yaml": {
+    "signals": {
+      "default/modality.wants_image": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/modality.wants_text_image": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/systemone.photo_kind": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
+    }
   },
   "e2e/profiles/jailbreak-onerror/values.yaml": {
     "signals": {

@@ -10,7 +10,7 @@ translation:
 
 # 协议兼容性矩阵
 
-Semantic Router 在数据平面两侧都支持三种推理线格式。客户端请求被解码为协议中立形式，路由策略选择模型，该模型的 `api_format` 选择后端编解码器。响应再被翻译回客户端的原始格式。
+Semantic Router 在数据平面两侧都支持三种推理线格式，以及用于图像生成的 Images API。客户端请求被解码为协议中立形式，路由策略选择模型，该模型的 `api_format` 选择后端编解码器。响应再被翻译回客户端的原始格式。
 
 ```text
 client endpoint -> client codec -> routing -> backend codec -> model endpoint
@@ -30,6 +30,7 @@ client endpoint -> client codec -> routing -> backend codec -> model endpoint
 | OpenAI Chat Completions | `POST /v1/chat/completions` | Supported | Supported | 在公共推理监听器上可用。 |
 | OpenAI Responses | `POST /v1/responses` | Supported | Supported | 需要 `global.services.response_api` 及其存储可用。Router 拥有的对象操作不会转发到模型后端。 |
 | Anthropic Messages | `POST /v1/messages` | Supported | Supported | 发送 Anthropic 请求形状和适当的 `anthropic-version` 标头。客户端身份验证仍取决于部署。 |
+| OpenAI Images | `POST /v1/images/generations` | Supported | Not supported | 只由 `output` 为图像的决策应答。参见 [Images API](../api/router#images-api)。 |
 
 公共监听器还提供 `GET /v1/models`。完整的方法和路径清单、Responses 对象操作以及请求示例见 [Router API](../api/router)。
 
@@ -44,6 +45,7 @@ client endpoint -> client codec -> routing -> backend codec -> model endpoint
 | `openai` | OpenAI Chat Completions | `/v1/chat/completions` | 省略 `api_format` 时的默认值。`backend_refs[].chat_path` 可以覆盖 Chat 路径。 |
 | `responses` | OpenAI Responses | `/v1/responses` | 后端本身必须实现 Responses 线契约；启用 Router 的 Responses 服务不会为后端添加该 API。 |
 | `anthropic` | Anthropic Messages | `/v1/messages` | 在后端 ref 上配置 provider 身份验证和所需的版本标头。 |
+| `images` | OpenAI Images | `/v1/images/generations` | 只生成图像，用于[输出](../tutorials/decision/output)为图像的决策；从不流式输出。 |
 
 这些字段容易混淆：
 

@@ -604,6 +604,7 @@ func (v *Validator) checkRouteConstraints(r *RouteDecl) {
 	}
 
 	v.checkRouteRetention(r)
+	v.checkRouteOutput(r)
 }
 
 func (v *Validator) checkAlgorithmConstraints(algo *AlgoSpec, parentContext string) {

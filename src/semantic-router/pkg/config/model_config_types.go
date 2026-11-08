@@ -144,7 +144,7 @@ type ModelParams struct {
 	IndexResultsByEffort map[string]map[string]modelcatalog.IndexResult `yaml:"-" json:"-"`
 	QualityIndex         string                                         `yaml:"-" json:"-"`
 	ExternalModelIDs     map[string]string                              `yaml:"external_model_ids,omitempty"`
-	Modality             string                                         `yaml:"modality,omitempty"`
+	Modalities           modelcatalog.Modalities                        `yaml:"modalities,omitempty"`
 }
 
 // EvidenceScore resolves a versioned static model index. Missing, failed, and

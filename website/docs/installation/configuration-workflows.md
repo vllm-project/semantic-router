@@ -96,7 +96,6 @@ configOverride:
     strategy: priority
     modelCards:
       - name: local/general
-        modality: text
         capabilities: [chat]
     decisions:
       - name: default-route

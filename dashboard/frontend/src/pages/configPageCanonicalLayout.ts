@@ -35,7 +35,6 @@ const MODEL_FACT_KEYS = [
   'capabilities',
   'loras',
   'modalities',
-  'modality',
   'tags',
 ] as const satisfies ReadonlyArray<keyof RoutingModelCard>
 

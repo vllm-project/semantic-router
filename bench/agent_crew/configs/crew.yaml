@@ -28,7 +28,6 @@ providers:
           endpoint: host.docker.internal:11434
           protocol: http
           weight: 100
-      modality: text
 
     # Non-reasoning Grok: no hidden thinking tokens. Prices read 2026-09-11 from
     # docs.x.ai/developers/models; re-check before the measured runs.
@@ -62,7 +61,6 @@ providers:
             #       endpoint: https://api.openai.com/v1
             #       provider: openai
             #       auth: {api_key_env: OPENAI_API_KEY}
-      modality: text
 
 recipes:
   - name: default

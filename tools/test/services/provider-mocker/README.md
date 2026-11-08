@@ -97,6 +97,11 @@ reads pin its answer:
 | `__SYSTEMONE_UNREAD__` | A `require_full_input` question fails with `max_length_exceeded` |
 | `__SYSTEMONE_UNAVAILABLE__` | The call fails with 503 |
 
+A state's images (PNG data URLs) carry markers in their `tEXt` chunks, which
+every question of that state reads with its text. The Router sends a request's
+images only to the questions whose rules read them (`input.image`), so a
+marker in an image reaches exactly those questions.
+
 Otherwise a choice question answers its first option, a noul false and a span
 question nothing. Choice, noul and span are the question types it lists; any
 other fails with `invalid_question`. A failed question carries its error in

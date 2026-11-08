@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -352,7 +353,7 @@ SIGNAL domain physics {
 func TestCompileMinimal(t *testing.T) {
 	input := `MODEL "qwen2.5:3b" {
   param_size: "3b"
-  modality: "text"
+  modalities: { input: ["text", "image"], output: ["text"] }
 }
 
 SIGNAL domain math {
@@ -424,8 +425,8 @@ ROUTE math_route {
 	if params.ParamSize != "3b" {
 		t.Errorf("expected param_size 3b, got %q", params.ParamSize)
 	}
-	if params.Modality != "text" {
-		t.Errorf("expected modality text, got %q", params.Modality)
+	if !slices.Equal(params.Modalities.Input, []string{"text", "image"}) || !slices.Equal(params.Modalities.Output, []string{"text"}) {
+		t.Errorf("expected modalities text and image in, text out, got %+v", params.Modalities)
 	}
 }
 
@@ -655,7 +656,6 @@ SIGNAL authz auth { role: "admin" subjects: [{ kind: "User", name: "admin" }] }
 func TestCompileEmitYAML(t *testing.T) {
 	input := `MODEL "qwen2.5:3b" {
   description: "Math-capable model"
-  modality: "text"
 }
 
 SIGNAL domain math {
@@ -696,7 +696,6 @@ MODEL "qwen2.5:3b" {
   context_window_size: 32768
   description: "Compact reasoning model for general and STEM traffic"
   capabilities: ["general", "reasoning", "math"]
-  modality: "text"
 }
 
 MODEL "qwen3:70b" {
@@ -704,7 +703,7 @@ MODEL "qwen3:70b" {
   context_window_size: 131072
   description: "Large reasoning model for urgent and difficult AI queries"
   capabilities: ["general", "reasoning", "coding", "long_context"]
-  modality: "text"
+  modalities: { input: ["text"], output: ["text"] }
 }
 
 # Signals
@@ -861,14 +860,13 @@ MODEL "qwen2.5:3b" {
   param_size: "3b"
   description: "Math model"
   capabilities: ["math", "reasoning"]
-  modality: "text"
 }
 
 MODEL "qwen3:70b" {
   param_size: "70b"
   description: "Urgent AI model"
   capabilities: ["ai", "reasoning"]
-  modality: "text"
+  modalities: { input: ["text", "image"], output: ["text"] }
 }
 
 SIGNAL domain math {
@@ -1055,8 +1053,8 @@ ROUTE urgent_ai_route {
 		t.Errorf("round-trip: logprob_weight = %v, want 0.6", confidence.HybridWeights.LogprobWeight)
 	}
 
-	if roundTripped.ModelConfig["qwen3:70b"].Modality != "text" {
-		t.Errorf("round-trip: qwen3:70b modality = %q", roundTripped.ModelConfig["qwen3:70b"].Modality)
+	if !slices.Equal(roundTripped.ModelConfig["qwen3:70b"].Modalities.Output, []string{"text"}) {
+		t.Errorf("round-trip: qwen3:70b modalities = %+v", roundTripped.ModelConfig["qwen3:70b"].Modalities)
 	}
 }
 
@@ -1686,7 +1684,7 @@ ROUTE test {
 
 func TestEmitCRD(t *testing.T) {
 	input := `
-MODEL "qwen2.5:3b" { param_size: "3b" modality: "text" }
+MODEL "qwen2.5:3b" { param_size: "3b" }
 SIGNAL domain math { description: "Math" labels: ["math"] }
 ROUTE math_route {
   PRIORITY 100
@@ -2515,7 +2513,7 @@ ROUTE route_c { PRIORITY 50 WHEN domain("bio") MODEL "m:1b" (reasoning = false) 
 
 func TestWhitespaceAndCommentVariants(t *testing.T) {
 	// Minimal whitespace
-	compact := `MODEL "m:1b"{modality:"text"}SIGNAL domain m{description:"Math"}ROUTE r{PRIORITY 1 WHEN domain("m")MODEL "m:1b"}`
+	compact := `MODEL "m:1b"{param_size:"1b"}SIGNAL domain m{description:"Math"}ROUTE r{PRIORITY 1 WHEN domain("m")MODEL "m:1b"}`
 
 	cfg1, errs1 := Compile(compact)
 	if len(errs1) > 0 {
@@ -3472,7 +3470,7 @@ ROUTE my_route (description = "A detailed description") {
 
 func TestFormatProducesValidDSL(t *testing.T) {
 	// Messy input with inconsistent formatting
-	input := `MODEL "m:1b"{modality:"text"}
+	input := `MODEL "m:1b"{param_size:"1b"}
 SIGNAL domain math{description:"Math" labels:["math"]}
 ROUTE r{PRIORITY 100 WHEN domain("math") MODEL "m:1b"(reasoning=true)}`
 

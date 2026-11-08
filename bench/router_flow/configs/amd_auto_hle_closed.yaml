@@ -41,7 +41,6 @@ providers:
       context_window_size: 1000000
       description: Closed-model HLE worker for high-confidence reasoning and disagreement checks.
       capabilities: [chat, reasoning, long-context]
-      modality: text
       tags: ['deployment:openrouter', 'benchmark:hle', 'role:worker', 'pool:closed']
     - name: gemini31-worker
       provider_model_id: google/gemini-3.1-pro-preview
@@ -67,7 +66,6 @@ providers:
       context_window_size: 1000000
       description: Closed-model HLE worker and synthesis/judge model.
       capabilities: [chat, reasoning, long-context]
-      modality: text
       tags: ['deployment:openrouter', 'benchmark:hle', 'role:synthesis', 'pool:closed']
 
 evaluation:

@@ -239,7 +239,7 @@ x-vsr-replay-id: replay_01J...
 | `x-vsr-retention-prefer-prefix` | response | debug | none | retention | v0.4 | Whether the directive prefers prefix retention. |
 | `x-vsr-retention-ttl-turns` | response | debug | none | retention | v0.4 | Retention lifetime the directive sets, in conversation turns. |
 | `x-vsr-selected-category` | response | debug | none | classification | v0.1 | Domain category the classifier chose, such as `math`. |
-| `x-vsr-selected-modality` | response | debug | none | classification | v0.2 | Modality result and optional method, such as `AR;classifier`. |
+| `x-vsr-selected-modality` | response | debug | none | routing | v0.2 | Output kinds of the selected decision's output contract, such as `image` or `text,image`; omitted for a decision that declares none. |
 | `x-vsr-selected-reasoning` | response | debug | none | classification | v0.1 | Reasoning mode chosen for the request: `on` or `off`. |
 | `x-vsr-session-phase` | response | debug | none | router_learning | v0.3 | Protection phase: `user_turn`, `tool_loop` or `provider_state`. |
 | `x-claude-code-session-id` | request, provider request | control | none | session | v0.3 | Conversation id Claude Code sends; `x-session-id` takes precedence, and providers receive it. |

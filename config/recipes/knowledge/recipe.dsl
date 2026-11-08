@@ -23,7 +23,7 @@ MODEL cloud/frontier-72b {
 
 MODEL local/omni {
   capabilities: ["chat", "image_understanding", "multimodal", "omni", "text", "vision"]
-  modality: "omni"
+  modalities: { input: ["text", "image"], output: ["text"] }
 }
 
 MODEL local/small-7b {

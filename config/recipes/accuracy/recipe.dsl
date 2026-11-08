@@ -33,7 +33,6 @@ MODEL gemini31-worker {
   description: "OpenRouter worker for broad reasoning and coding."
   capabilities: ["chat", "code", "reasoning", "long-context"]
   tags: ["deployment:openrouter", "role:worker"]
-  modality: "text"
 }
 
 MODEL gpt55-worker {
@@ -41,12 +40,11 @@ MODEL gpt55-worker {
   description: "OpenRouter worker for long-context planning and frontier synthesis."
   capabilities: ["chat", "code", "reasoning", "long-context", "planning", "synthesis"]
   tags: ["deployment:openrouter", "role:worker", "role:planner"]
-  modality: "text"
 }
 
 MODEL local/omni {
   capabilities: ["chat", "image_understanding", "multimodal", "omni", "text", "vision"]
-  modality: "omni"
+  modalities: { input: ["text", "image"], output: ["text"] }
 }
 
 MODEL opus48-worker {
@@ -54,7 +52,6 @@ MODEL opus48-worker {
   description: "OpenRouter worker for long-horizon agentic work."
   capabilities: ["chat", "code", "reasoning", "long-context"]
   tags: ["deployment:openrouter", "role:worker"]
-  modality: "text"
 }
 
 MODEL qwen-coordinator {
@@ -62,7 +59,6 @@ MODEL qwen-coordinator {
   description: "Local planner and synthesis model for Router Flow dynamic plans."
   capabilities: ["chat", "planning", "synthesis", "code"]
   tags: ["deployment:self_hosted", "role:planner"]
-  modality: "text"
 }
 
 # =============================================================================

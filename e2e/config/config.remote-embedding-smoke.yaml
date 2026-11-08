@@ -30,7 +30,6 @@ providers:
           weight: 100
           endpoint: "host.docker.internal:18000/v1"
           protocol: "http"
-      modality: "text"
     - name: "default-model"
       provider_model_id: "default-model"
       backend_refs:
@@ -39,7 +38,6 @@ providers:
           weight: 100
           endpoint: "host.docker.internal:18001/v1"
           protocol: "http"
-      modality: "text"
 
 recipes:
   - name: default

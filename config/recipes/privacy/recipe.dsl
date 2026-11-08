@@ -40,12 +40,11 @@ MODEL cloud/frontier-reasoning {
   description: "High-cost cloud frontier lane reserved for non-sensitive deep reasoning and synthesis."
   capabilities: ["frontier_reasoning", "deep_synthesis", "architecture_review", "long_context"]
   tags: ["deployment:cloud", "policy:non_sensitive_only", "tier:frontier", "cost:high"]
-  modality: "text"
 }
 
 MODEL local/omni {
   capabilities: ["chat", "image_understanding", "multimodal", "omni", "text", "vision"]
-  modality: "omni"
+  modalities: { input: ["text", "image"], output: ["text"] }
 }
 
 MODEL local/private-qwen {
@@ -53,7 +52,6 @@ MODEL local/private-qwen {
   description: "Low-cost self-hosted lane for privacy-sensitive, suspicious, and standard local traffic."
   capabilities: ["self_hosted", "privacy_locality", "security_containment", "code", "internal_docs"]
   tags: ["deployment:self_hosted", "policy:local_first", "policy:privacy_first", "cost:free"]
-  modality: "text"
 }
 
 # =============================================================================

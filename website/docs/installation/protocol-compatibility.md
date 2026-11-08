@@ -6,7 +6,7 @@ description: Match client-facing inference APIs to supported backend model proto
 # Protocol Compatibility Matrix
 
 Semantic Router supports three inference wire formats on both sides of the
-data plane. A client request is decoded into a protocol-neutral form, routing
+data plane, and the Images API for image generation. A client request is decoded into a protocol-neutral form, routing
 policy selects a model, and that model's `api_format` selects the backend codec.
 The response is translated back to the client's original format.
 
@@ -32,6 +32,7 @@ start with [Connect an agent harness](agent-harness).
 | OpenAI Chat Completions | `POST /v1/chat/completions` | Supported | Supported | Available on the public inference listener. |
 | OpenAI Responses | `POST /v1/responses` | Supported | Supported | Requires `global.services.response_api` and its store to be available. Router-owned object operations are not forwarded to a model backend. |
 | Anthropic Messages | `POST /v1/messages` | Supported | Supported | Send the Anthropic request shape and an appropriate `anthropic-version` header. Client authentication remains deployment-specific. |
+| OpenAI Images | `POST /v1/images/generations` | Supported | Not supported | Answered only by a decision whose `output` is an image. See [Images API](../api/router#images-api). |
 
 The public listener also serves `GET /v1/models` and Anthropic's
 `POST /v1/messages/count_tokens`, which coding agents use to size a file before
@@ -58,6 +59,7 @@ contract implemented by that model endpoint, not the provider brand.
 | `openai` | OpenAI Chat Completions | `/v1/chat/completions` | Default when `api_format` is omitted. `backend_refs[].chat_path` can override the Chat path. |
 | `responses` | OpenAI Responses | `/v1/responses` | The backend itself must implement the Responses wire contract; enabling the Router's Responses service does not add that API to a backend. |
 | `anthropic` | Anthropic Messages | `/v1/messages` | Configure provider authentication and required version headers on the backend ref. vLLM serves this API from 0.11.1, so a vLLM backend keeps `provider: vllm`, which sends the bearer token vLLM checks for `--api-key`. |
+| `images` | OpenAI Images | `/v1/images/generations` | Generates images only, for a decision whose [output](../tutorials/decision/output) is an image; it never streams. |
 
 These fields are easy to confuse:
 

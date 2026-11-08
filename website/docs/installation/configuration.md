@@ -211,7 +211,6 @@ providers:
           endpoint: host.docker.internal:8000
           protocol: http
           provider: vllm
-      modality: text
       capabilities: [chat]
 recipes:
   - name: default

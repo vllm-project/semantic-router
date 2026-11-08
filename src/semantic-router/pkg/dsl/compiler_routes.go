@@ -53,6 +53,7 @@ func (c *Compiler) compileRoute(r *RouteDecl) config.Decision {
 	}
 
 	c.compileRouteRetention(r, &decision)
+	c.compileRouteOutput(r, &decision)
 	return decision
 }
 

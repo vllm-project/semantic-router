@@ -25,7 +25,6 @@ providers:
           weight: 1
           endpoint: host.docker.internal:8000
           protocol: http
-      modality: text
 recipes:
   - name: default
     signals:

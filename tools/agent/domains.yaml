@@ -1170,6 +1170,22 @@ profiles:
       - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
       - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
       - src/semantic-router/pkg/extproc/provider_request_adapter.go
+  image-routing:
+    display_name: Image Routing
+    owner: e2e
+    coverage_role: image-input-and-output-contracts
+    selection: pr
+    paths:
+      - e2e/profiles/image-routing/**
+      - e2e/testcases/image_routing.go
+      - tools/test/services/provider-mocker/provider_mocker/systemone.py
+      - tools/test/services/provider-mocker/provider_mocker/images.py
+      - src/semantic-router/pkg/config/decision_output.go
+      - src/semantic-router/pkg/config/validator_decision_output.go
+      - src/semantic-router/pkg/extproc/decision_output.go
+      - src/semantic-router/pkg/selection/output_contract.go
+      - src/semantic-router/pkg/protocolcodec/images_codec.go
+      - src/semantic-router/pkg/classification/classifier_signal_systemone*.go
   route-action:
     display_name: Route Actions
     owner: e2e

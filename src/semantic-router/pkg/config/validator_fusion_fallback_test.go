@@ -3,6 +3,8 @@ package config
 import (
 	"strings"
 	"testing"
+
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 )
 
 func fusionFallbackTestConfig(fusion *FusionAlgorithmConfig) (*RouterConfig, Decision) {
@@ -18,7 +20,7 @@ func fusionFallbackTestConfig(fusion *FusionAlgorithmConfig) (*RouterConfig, Dec
 				"backup-model": {},
 				"panel-a":      {},
 				"claude-model": {APIFormat: ClientProtocolAnthropic},
-				"image-model":  {Modality: "image"},
+				"image-model":  {Modalities: modelcatalog.Modalities{Input: []string{"text"}, Output: []string{"image"}}},
 			},
 		},
 	}
@@ -73,7 +75,7 @@ func TestFusionFallbackTargetRejected(t *testing.T) {
 	}{
 		{name: "undeclared model", target: "missing-model", wantReason: "providers.models[]"},
 		{name: "anthropic api format", target: "claude-model", wantReason: "OpenAI-compatible"},
-		{name: "non chat modality", target: "image-model", wantReason: "chat-capable"},
+		{name: "image output only", target: "image-model", wantReason: "answer in text"},
 		{name: "panel member", target: "panel-a", wantReason: "analysis models"},
 	}
 	for _, tc := range cases {

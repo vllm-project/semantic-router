@@ -1,10 +1,32 @@
 """The System One fixture answers the Router's canonical questions by marker."""
 
+import base64
+import struct
 import unittest
+import zlib
 
 import httpx
 from provider_mocker import systemone
 from provider_mocker.app import app
+
+
+def png_with_text(text: str) -> bytes:
+    """A 1x1 PNG whose tEXt chunk carries text."""
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        crc = zlib.crc32(kind + data) & 0xFFFFFFFF
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", crc)
+
+    header = struct.pack(">IIBBBBB", 1, 1, 8, 0, 0, 0, 0)
+    pixels = zlib.compress(b"\x00\x00")
+    return (
+        systemone.PNG_SIGNATURE
+        + chunk(b"IHDR", header)
+        + chunk(b"tEXt", b"Comment\x00" + text.encode("latin-1"))
+        + chunk(b"IDAT", pixels)
+        + chunk(b"IEND", b"")
+    )
+
 
 JAILBREAK = {
     "type": "choice",
@@ -189,6 +211,31 @@ class SystemOneTests(unittest.IsolatedAsyncioTestCase):
             response = await self.post(body)
             self.assertEqual(response.status_code, 400, body)
             self.assertEqual(response.json()["error"]["code"], "invalid_request")
+
+    async def test_an_image_text_chunk_answers_the_questions_of_its_state(self):
+        kind = {"type": "choice", "criteria": {"other": "else", "receipt": "a receipt"}}
+        image = (
+            "data:image/png;base64,"
+            + base64.b64encode(png_with_text("__SYSTEMONE_CHOICE__ receipt")).decode()
+        )
+        body = await self.post(
+            {
+                "states": {
+                    "pictured": {
+                        "state": "What does this show?",
+                        "images": [image],
+                        "questions": {"kind": kind},
+                    },
+                    "text": {
+                        "state": "What does this show?",
+                        "questions": {"kind": kind},
+                    },
+                }
+            }
+        )
+        states = body.json()["states"]
+        self.assertEqual(states["pictured"]["answers"]["kind"]["choice"], "receipt")
+        self.assertEqual(states["text"]["answers"]["kind"]["choice"], "other")
 
     async def test_unsupported_questions_and_requests_are_refused(self):
         body = await self.ask("x", q={"type": "score"}, one={"type": "choice"})

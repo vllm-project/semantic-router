@@ -514,9 +514,6 @@ func TestHandleAutoModelRoutingEmitsSelectedModelAndEncodedBody(t *testing.T) {
 	router := routingTestRouter("qwen14b-dev")
 	request := testNeutralRequest("vllm-sr/auto", "hello from routed model")
 	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
-	ctx.ModalityClassification = &ModalityClassificationResult{
-		Modality: ModalityBoth, Confidence: 0.97, Method: "signal",
-	}
 
 	response, err := router.handleEntrypointModelRouting(
 		request, "vllm-sr/auto", "", entropy.ReasoningDecision{}, "qwen14b-dev", ctx,
@@ -538,9 +535,6 @@ func TestHandleAutoModelRoutingEmitsSelectedModelAndEncodedBody(t *testing.T) {
 	}
 	if request.Model != "qwen14b-dev" || ctx.SemanticRequest != request {
 		t.Fatalf("neutral request was not updated in place: %+v", request)
-	}
-	if ctx.ModalityClassification.Modality != ModalityBoth {
-		t.Fatalf("backend dispatch lost modality evidence: %+v", ctx.ModalityClassification)
 	}
 }
 

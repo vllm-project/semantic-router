@@ -1387,6 +1387,44 @@ class DecisionRetention(BaseModel):
         return self
 
 
+OUTPUT_KINDS = ("text", "image", "audio", "video")
+
+
+class DecisionOutput(BaseModel):
+    """The media a decision's answers carry.
+
+    Mirrors the Go-side `config.DecisionOutput`: kind is one of text, image,
+    audio and video, or a list of them; action generates them or edits the
+    image or video the request provides. Whether this release executes a
+    contract, and whether its models declare what it needs, is the Router's
+    check at load.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Optional[Literal["text", "image", "audio", "video"] | List[str]] = None
+    action: Optional[Literal["generate", "edit"]] = None
+
+    @model_validator(mode="after")
+    def validate_kinds(self):
+        if isinstance(self.kind, list):
+            if not self.kind:
+                raise ValueError("output: kind lists no output")
+            for kind in self.kind:
+                if kind not in OUTPUT_KINDS:
+                    raise ValueError(
+                        f"output: kind {kind!r} is not one of {', '.join(OUTPUT_KINDS)}"
+                    )
+            if len(set(self.kind)) != len(self.kind):
+                raise ValueError("output: kind lists a kind twice")
+        kinds = self.kind if isinstance(self.kind, list) else [self.kind or "text"]
+        if self.action == "edit" and not {"image", "video"} & set(kinds):
+            raise ValueError(
+                "output: action edit edits an image or a video the request provides"
+            )
+        return self
+
+
 class DecisionAction(BaseModel):
     """Explicit action a matched decision applies instead of candidate ranking."""
 
@@ -1553,6 +1591,7 @@ class Decision(BaseModel):
     fallback: Optional[FallbackOverride] = None
     plugins: Optional[List[PluginConfig]] = []
     retention: Optional[DecisionRetention] = None
+    output: Optional[DecisionOutput] = None
     annotations: Optional[Dict[str, Any]] = None
 
     @model_validator(mode="before")
@@ -2073,7 +2112,6 @@ class ModelFacts(BaseModel):
     loras: Optional[List[LoRAAdapter]] = None
     tags: Optional[List[str]] = None
     modalities: Optional[Dict[str, List[str]]] = None
-    modality: Optional[str] = None
 
     @field_validator("released_at", "knowledge_cutoff", mode="before")
     @classmethod

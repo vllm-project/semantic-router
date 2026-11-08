@@ -105,7 +105,6 @@ providers:
       modalities:
         input: [text]
         output: [text]
-      modality: ar
       tags: [default, fast]
     # Keep remote-provider access fields visible without mixing incompatible
     # request semantics into the weighted qwen3-8b replica pool above.
@@ -177,7 +176,6 @@ providers:
           description: Adapter specialized for advanced computer science and software design prompts.
         - name: business-adapter
           description: Adapter specialized for business strategy and operations prompts.
-      modality: ar
       tags: [premium, analysis]
     - name: llava-omni
       provider_model_id: llava-omni-preview
@@ -199,11 +197,11 @@ providers:
       context_window_size: 65536
       description: Omni model that can satisfy both text and multimodal orchestration paths.
       capabilities: [chat, vision, multimodal]
-      modality: omni
+      modalities: {input: [text, image], output: [text]}
       tags: [multimodal, omni]
     - name: sdxl-image
       provider_model_id: sdxl-image
-      api_format: openai
+      api_format: images
       pricing:
         currency: USD
         prompt_per_1m: 4.0
@@ -220,8 +218,21 @@ providers:
       context_window_size: 8192
       description: Diffusion-style image generation backend used by image routes.
       capabilities: [image_generation]
-      modality: diffusion
+      modalities: {input: [text], output: [image]}
       tags: [image, diffusion]
+    - name: omni-image
+      provider_model_id: omni-image-preview
+      api_format: responses
+      backend_refs:
+        - name: omni-image-primary
+          provider: vllm
+          endpoint: 127.0.0.1:8004
+          protocol: http
+          weight: 100
+      description: Omni model that answers in text and generates images in one response.
+      capabilities: [chat, vision, image_generation]
+      modalities: {input: [text, image], output: [text, image]}
+      tags: [multimodal, image]
     # Catalog-backed models do not need a handwritten routing.modelCards entry.
     - name: built-in-catalog-example
       catalog: vllm-sr/mom-v1-lite
@@ -1947,29 +1958,33 @@ recipes:
             use_reasoning: false
 
       - name: image_generation_route
-        description: Dedicated image-generation route using the OpenAI image backend.
+        description: Dedicated image-generation route on the images API backend.
         priority: 105
         rules:
           operator: AND
           conditions:
             - type: modality
               name: DIFFUSION
+        output:
+          kind: image
+          action: generate
         modelRefs:
           - model: sdxl-image
             use_reasoning: false
 
       - name: multimodal_route
-        description: BOTH-modality route requiring text and image-capable execution.
+        description: Text with a generated image, written by one omni model.
         priority: 100
         rules:
           operator: AND
           conditions:
             - type: modality
               name: BOTH
+        output:
+          kind: [text, image]
+          action: generate
         modelRefs:
-          - model: qwen3-8b
-            use_reasoning: true
-          - model: sdxl-image
+          - model: omni-image
             use_reasoning: false
   - name: privacy-first
     description: Keeps privacy-sensitive traffic on the local default-tier model.

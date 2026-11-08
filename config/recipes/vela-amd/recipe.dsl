@@ -165,7 +165,6 @@ SIGNAL systemone semantic-code {
 
 MODEL vela-default {
   capabilities: ["text"]
-  modality: "ar"
 }
 
 # =============================================================================

@@ -19,7 +19,6 @@ providers:
 routing:
   modelCards:
     - name: model-a
-      modality: text
 `
 
 test.beforeEach(async ({ page }) => {

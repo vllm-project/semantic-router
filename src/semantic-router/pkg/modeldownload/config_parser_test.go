@@ -61,7 +61,6 @@ providers:
           endpoint: localhost:8000
           protocol: http
           weight: 100
-      modality: text
 recipes:
   - name: default
     decisions:
@@ -107,7 +106,6 @@ providers:
           endpoint: localhost:8000
           protocol: http
           weight: 100
-      modality: text
 recipes:
   - name: default
     decisions:

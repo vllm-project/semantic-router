@@ -20,6 +20,7 @@ from cli.config_plugin_forms import removed_plugin_forms
 from cli.config_renamed_forms import read_renamed_forms
 from cli.config_context_forms import removed_context_forms
 from cli.config_embedding_forms import removed_embedding_forms
+from cli.config_multimodal_forms import removed_multimodal_forms
 from cli.config_reuse_forms import removed_reuse_forms
 from cli.config_recipe_scopes import recipe_scopes
 from cli.config_structure_forms import removed_structure_forms
@@ -245,6 +246,7 @@ def _reject_invalid_config_surfaces(data: Dict[str, Any], config_path: str) -> N
         + removed_context_forms(data)
         + removed_reuse_forms(data)
         + removed_embedding_forms(data)
+        + removed_multimodal_forms(data)
     )
     if removed_forms:
         raise ConfigParseError("\n".join(removed_forms))

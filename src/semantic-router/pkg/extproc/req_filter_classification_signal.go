@@ -170,7 +170,6 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	}
 
 	r.setFactCheckFromSignals(ctx, signals.MatchedFactCheckRules)
-	r.setModalityFromSignals(ctx, signals.MatchedModalityRules)
 }
 
 func cloneProjectionTraceForReplay(t *projectiontrace.Trace) *projectiontrace.Trace {

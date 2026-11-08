@@ -9,15 +9,16 @@ providers:
           provider: vllm
           endpoint: 127.0.0.1:8000
           weight: 1
-      modality: ar
+    # vLLM-Omni serves the image model on /v1/images/generations.
     - name: "Qwen/Qwen-Image"
+      api_format: images
       backend_refs:
         - name: vllm-omni
           provider: vllm
           endpoint: 127.0.0.1:8001
           weight: 1
-      modality: diffusion
       capabilities: [image_generation]
+      modalities: {input: [text], output: [image]}
 recipes:
   - name: default
     signals:
@@ -26,48 +27,35 @@ recipes:
           description: Text generation and general queries.
           labels: [other]
       modality:
-        - name: AR
-          description: Text-only response via autoregressive LLM.
+        - name: wants_text
+          description: Text-only answers.
           labels: [text]
-        - name: DIFFUSION
-          description: Image generation via diffusion model.
+        - name: wants_image
+          description: Requests for a generated image.
           labels: [image]
-        - name: BOTH
-          description: Hybrid response requiring both text and image.
-          labels: [text_image]
     decisions:
       - name: image_generation
-        description: Route image generation requests to the diffusion model.
+        description: Generate the image a request asks for with the diffusion model.
         priority: 200
         rules:
           operator: AND
           conditions:
             - type: modality
-              name: DIFFUSION
+              name: wants_image
+        output:
+          kind: image
+          action: generate
         modelRefs:
-          - model: "Qwen/Qwen-Image"
-            use_reasoning: false
-      - name: text_and_image
-        description: Route hybrid text+image requests to both models in parallel.
-        priority: 190
-        rules:
-          operator: AND
-          conditions:
-            - type: modality
-              name: BOTH
-        modelRefs:
-          - model: "Qwen/Qwen2.5-14B-Instruct"
-            use_reasoning: false
           - model: "Qwen/Qwen-Image"
             use_reasoning: false
       - name: text_generation
-        description: Default text routing for AR requests.
+        description: Default text routing.
         priority: 1
         rules:
           operator: OR
           conditions:
             - type: modality
-              name: AR
+              name: wants_text
             - type: domain
               name: text_generation
         modelRefs:
