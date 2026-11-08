@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
+import { validateTree } from '@/components/ExpressionBuilderSupport'
 import { updateSignal } from '@/lib/dslMutations'
 import type { ASTProgram } from '@/types/dsl'
 import {
   chooseDefaultBuilderRoutingScope,
   listBuilderRoutingScopes,
+  listReferenceableSignals,
   mutateBuilderRecipeSource,
   resolveBuilderRoutingScope,
   summarizeBuilderRoutingScopes,
@@ -202,5 +204,36 @@ RECIPE speed {
     expect(chooseDefaultBuilderRoutingScope(ast)).toBe('global')
     expect(resolveBuilderRoutingScope(ast, 'global')?.modelBindings).toEqual({ embedding: binding })
     expect(resolveBuilderRoutingScope(ast, 'recipe:balanced')?.modelBindings).toBeUndefined()
+  })
+})
+
+describe('listReferenceableSignals', () => {
+  const pos = { Line: 1, Column: 1 }
+
+  it('offers the role an authz binding grants, not the binding name', () => {
+    const available = listReferenceableSignals([
+      { signalType: 'authz', name: 'admins', fields: { role: 'admin' }, pos },
+      { signalType: 'authz', name: 'admin-tokens', fields: { role: 'admin' }, pos },
+    ])
+
+    expect(available).toEqual([{ signalType: 'authz', name: 'admin' }])
+    expect(validateTree({ signalType: 'authz', signalName: 'admin' }, available)).toEqual([])
+    expect(validateTree({ signalType: 'authz', signalName: 'admins' }, available)).toEqual([
+      'Signal authz("admins") is not defined',
+    ])
+  })
+
+  it('expands complexity levels and projection outputs', () => {
+    expect(
+      listReferenceableSignals(
+        [{ signalType: 'complexity', name: 'difficulty', fields: {}, pos }],
+        [{ name: 'band', outputs: [{ name: 'band_low' }], pos }],
+      ),
+    ).toEqual([
+      { signalType: 'complexity', name: 'difficulty:easy' },
+      { signalType: 'complexity', name: 'difficulty:medium' },
+      { signalType: 'complexity', name: 'difficulty:hard' },
+      { signalType: 'projection', name: 'band_low' },
+    ])
   })
 })
