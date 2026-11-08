@@ -2,12 +2,13 @@
 
 ## Overview
 
-`context` is the route-local plugin that assembles the request's context. Its
-`sources` retrieve documents (`rag`) and the user's memories (`memory`), each
-kept by its `match` block. `compress` shrinks the request's own segments,
-judged by its `match` block, until the request fits the `budget`. `injection`
-places what the sources kept. A memory source also writes the turn to memory
-after the response.
+`context` is the plugin that assembles the request's context. Its `sources`
+retrieve documents (`rag`) and the user's memories (`memory`), each kept by
+its `match` block. `compress` shrinks the request's own segments, judged by
+its `match` block, until the request fits the `budget`, and its `signals`
+compress the text the routing signals read. `injection` places what the
+sources kept. A memory source also writes the turn to memory after the
+response.
 
 ## Key Advantages
 
@@ -16,8 +17,9 @@ after the response.
   documents and ranks the segments compression keeps.
 - The budget is one number, the most input tokens the request keeps, or the
   model's context window less the reserved output.
-- Routing signals still evaluate the original request: the plugin changes only
-  the conversation sent to the selected model.
+- The conversation sent to the selected model changes only by `compress`;
+  the routing signals read the original text unless `compress.signals`
+  compresses it, and the jailbreak and PII rules still read the original.
 
 ## What Problem Does It Solve?
 
@@ -66,11 +68,12 @@ plugins:
         mode: tool_role                 # tool_role | system_prompt
 ```
 
-An enabled plugin needs `sources` or `compress`; `budget` needs `compress`.
+An enabled plugin needs `sources` or `compress`; `budget` needs a `compress`
+block that compresses the request.
 `enabled: false` turns context off for the decision, global memory included.
-A decision without a `context` plugin reads global memory when
-`global.stores.memory.enabled` is true; a decision with one reads only the
-sources it lists.
+A decision runs the `context` plugin of `global.plugins`, layered with its
+recipe's and its own field by field: the `sources` it writes replace the ones
+it inherits.
 
 ### RAG sources
 
@@ -198,6 +201,42 @@ trusted-user-scoped, bounded by TTL, bytes and retrieval count.
 `x-vsr-compression-control` header; they are ignored unless the route enables
 them.
 
+### Signals
+
+`compress.signals` compresses the text the routing signals read, before they
+run: the sentences its profile scores highest are kept, the rest dropped.
+The signals read the request before a decision is chosen, so `signals` is
+read from the context plugin of `global.plugins`, layered with the recipe's
+own `context` plugin; a decision's `context` plugin refuses it.
+
+```yaml
+global:
+  plugins:
+    - type: context
+      configuration:
+        enabled: true
+        compress:
+          signals:
+            enabled: true
+            max_tokens: 4096            # text over it is compressed down to it
+            min_length: 512             # characters; text this long or shorter is kept whole
+            profile: default            # default | coding | medical | security | multi_turn
+            skip_signals: [jailbreak, pii]
+```
+
+- A `compress` block with only `signals` leaves the request whole. A decision
+  that compresses its requests writes its own `compress` fields, such as
+  `mode: auto`; it inherits `signals` but does not change what the signals
+  read.
+- `profile` sets the scoring weights and the first and last sentences kept;
+  `textrank_weight`, `position_weight`, `tfidf_weight`, `novelty_weight`,
+  `position_depth`, `preserve_first_n` and `preserve_last_n` override it.
+  `multi-turn` is read as `multi_turn`; another name fails at load.
+- `skip_signals` names the signal types that read the original text,
+  `jailbreak` and `pii` by default.
+- A recipe turns it off with `signals: {enabled: false}` in its own `context`
+  plugin.
+
 ### Injection
 
 `injection.mode: tool_role` (the default) adds one tool call and its result per
@@ -222,7 +261,10 @@ recovery invalidation requires `compression.manage`.
 
 ## Observability
 
-Each stage's judge is counted in `vsr_match_judge_total{feature="rag"}`,
+`compress.signals` is counted by `llm_prompt_compression_total` (by `recipe`
+and `outcome`) and timed as the `prompt_compression` stage of
+`llm_routing_stage_duration_seconds`. Each stage's judge is counted in
+`vsr_match_judge_total{feature="rag"}`,
 `{feature="memory"}` or `{feature="compress"}`. The request's
 [router replay](./router-replay) record keeps the RAG backend and the memory
 outcome, including a memory failure the request went on without. Memory
@@ -250,6 +292,9 @@ their removed fields, fails at load with a one-line hint, and
 - Compression `scoring` is removed: `bm25` becomes
   `match: {recall: {method: bm25}}`, and the embedding scoring is replaced by
   the relevance judge. `budget.target_tokens` becomes `budget.max_tokens`.
+- `global.model_catalog.modules.prompt_compression` becomes `compress.signals`
+  of the context plugin in `global.plugins`. A decision's `compress` block
+  that held nothing gets `mode: auto`, so it still compresses its requests.
 
 Complete examples:
 [`config/fragments/plugin/context/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/context).

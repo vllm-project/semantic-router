@@ -360,22 +360,6 @@ stop-hallucination-services:
 	@-lsof -ti:8801 | xargs kill -9 2>/dev/null || true
 	@echo "All services stopped"
 
-# Hallucination Detection Demo with Tool Calling
-demo-hallucination: ## Run interactive hallucination detection demo (CLI)
-demo-hallucination: build-router provider-mocker-install
-	@echo "Starting Hallucination Detection Demo (CLI)..."
-	@PROVIDER_MOCKER_PYTHON="$(PROVIDER_MOCKER_PYTHON)" ./e2e/testing/hallucination-demo/run_demo.sh
-
-demo-hallucination-web: ## Run hallucination demo with browser-based UI (recommended)
-demo-hallucination-web: build-router provider-mocker-install
-	@echo "Starting Hallucination Detection Demo (Web UI)..."
-	@PROVIDER_MOCKER_PYTHON="$(PROVIDER_MOCKER_PYTHON)" ./e2e/testing/hallucination-demo/run_demo.sh --web
-
-demo-hallucination-auto: ## Run hallucination demo with predefined questions (non-interactive)
-demo-hallucination-auto: build-router provider-mocker-install
-	@echo "Starting Hallucination Detection Demo (auto mode)..."
-	@PROVIDER_MOCKER_PYTHON="$(PROVIDER_MOCKER_PYTHON)" ./e2e/testing/hallucination-demo/run_demo.sh --demo
-
 # ============== Image Generation Tests ==============
 
 # Test image generation with vLLM-Omni

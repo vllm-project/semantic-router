@@ -92,8 +92,7 @@ func TestConfigWithBackendPointsEveryProviderAtTheFake(t *testing.T) {
 		for _, ref := range model.BackendRefs {
 			refs++
 			endpoint, _ := ref["endpoint"].(string)
-			baseURL, _ := ref["base_url"].(string)
-			if endpoint != "127.0.0.1:19999" && !strings.HasPrefix(baseURL, "http://127.0.0.1:19999/") {
+			if endpoint != "127.0.0.1:19999" && !strings.HasPrefix(endpoint, "http://127.0.0.1:19999/") {
 				t.Fatalf("backend ref not rewritten: %v", ref)
 			}
 		}

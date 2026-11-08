@@ -47,6 +47,9 @@ recipes:
           description: Queries with factual claims that should be verified against evidence.
         - name: no_fact_check_needed
           description: Creative or opinion-heavy prompts that do not need factual verification.
+          labels: [NO_FACT_CHECK_NEEDED]
+          predicate:
+            gt: 0.3
 ```
 
 只定义决策会引用的标签；学习型分类器决定哪一条触发。

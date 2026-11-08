@@ -382,7 +382,7 @@ const SignalEditorForm: React.FC<{
   const [localFields, setLocalFields] = useState<DSLFieldObject>(() => ({ ...signal.fields }));
 
   const { data, scope } = useSignalCapabilities();
-  const availability = signalAvailability(data, scope, signal.signalType, signal.name, localFields);
+  const availability = signalAvailability(data, scope, signal.signalType, localFields);
   const schema =
     signal.signalType === "systemone"
       ? signalCapabilitySchema(

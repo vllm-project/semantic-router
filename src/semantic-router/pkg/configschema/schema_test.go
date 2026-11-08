@@ -128,11 +128,14 @@ func TestSchemaPublishesEveryRoutingSurface(t *testing.T) {
 		"services.management_api",
 		"services.startup_status",
 		"model_catalog.admission",
-		"model_catalog.modules.prompt_compression",
+		"plugins",
 	} {
 		if !globalPaths[path] {
 			t.Errorf("global section catalog is missing %q", path)
 		}
+	}
+	if globalPaths["model_catalog.modules"] {
+		t.Error("global section catalog still has model_catalog.modules")
 	}
 	for _, surface := range document.Extension.Signals {
 		if surface.Type == "" || surface.Collection == "" || surface.SchemaRef == "" {

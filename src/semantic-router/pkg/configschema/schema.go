@@ -760,24 +760,10 @@ func buildGlobalSections(root *jsonschema.Schema) ([]globalSectionSurface, error
 			return nil, fmt.Errorf("global layer %q has no object schema", layer.Key)
 		}
 		for section := owner.Properties.Oldest(); section != nil; section = section.Next() {
-			if layer.Key != "model_catalog" || section.Key != "modules" {
-				sections = append(sections, globalSectionSurface{
-					Key: section.Key, Layer: layer.Key, DisplayName: humanizeSchemaName(section.Key),
-					Path: []string{layer.Key, section.Key},
-				})
-				continue
-			}
-
-			modules := referencedDefinition(root, section.Value.Ref)
-			if modules == nil || modules.Properties == nil {
-				return nil, fmt.Errorf("global model modules schema is missing")
-			}
-			for module := modules.Properties.Oldest(); module != nil; module = module.Next() {
-				sections = append(sections, globalSectionSurface{
-					Key: module.Key, Layer: layer.Key, DisplayName: humanizeSchemaName(module.Key),
-					Path: []string{layer.Key, "modules", module.Key},
-				})
-			}
+			sections = append(sections, globalSectionSurface{
+				Key: section.Key, Layer: layer.Key, DisplayName: humanizeSchemaName(section.Key),
+				Path: []string{layer.Key, section.Key},
+			})
 		}
 	}
 	return sections, nil

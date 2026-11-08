@@ -63,8 +63,8 @@ type SemanticRouterSpec struct {
 
 	// Configuration overrides merged into the canonical v0.5 config.yaml.
 	// Router-wide runtime overrides land under config.global.router/services/stores/
-	// integrations/model_catalog, with model-backed modules nested under
-	// config.global.model_catalog.modules. Provider defaults land under
+	// integrations/model_catalog, and the default plugins under
+	// config.global.plugins. Provider defaults land under
 	// config.providers.defaults.
 	// +optional
 	Config ConfigSpec `json:"config,omitempty"`
@@ -399,11 +399,13 @@ type ConfigSpec struct {
 	// +kubebuilder:validation:Type=object
 	ComplexityModel *apiextensionsv1.JSON `json:"complexity_model,omitempty"`
 
-	// ExternalModels declares the remote models other configuration refers to
-	// by name or role. Mirrors global.model_catalog.external[] in the router
-	// config field for field; the router's own validator checks it.
+	// ExternalModels is removed: a remote model is a model deployment with
+	// provider openai_chat, openai_embeddings or systemone. A resource that
+	// sets it is refused.
 	// +optional
-	ExternalModels []ExternalModelConfig `json:"external_models,omitempty"`
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:pruning:PreserveUnknownFields
+	ExternalModels *apiextensionsv1.JSON `json:"external_models,omitempty"`
 
 	// Decision routing strategy ("priority" for priority-based matching)
 	// +kubebuilder:validation:Enum=priority
@@ -1266,44 +1268,6 @@ type ComplexityRulesConfig struct {
 type ComplexityCandidates struct {
 	// List of candidate phrases or examples
 	Candidates []string `json:"candidates"`
-}
-
-// ExternalModelConfig is one entry of global.model_catalog.external[]: a
-// remote model the router finds by its role. Field names are the router's
-// YAML keys so the generic typed conversion carries them unchanged.
-type ExternalModelConfig struct {
-	// Name identifies the entry in the catalog.
-	// +kubebuilder:validation:MinLength=1
-	Name string `json:"name"`
-
-	// ModelRole is what the model is used for; the router finds the model by
-	// its role.
-	// +kubebuilder:validation:MinLength=1
-	ModelRole string `json:"model_role"`
-
-	// ModelName is the model identifier the remote service expects.
-	// +kubebuilder:validation:MinLength=1
-	ModelName string `json:"llm_model_name"`
-
-	// Endpoint is where the remote model is reached.
-	Endpoint ExternalModelEndpoint `json:"llm_endpoint"`
-
-	// TimeoutSeconds bounds one call when the backend block sets no deadline.
-	// +kubebuilder:validation:Minimum=1
-	// +optional
-	TimeoutSeconds int `json:"llm_timeout_seconds,omitempty"`
-}
-
-// ExternalModelEndpoint is the address of a remote classification model.
-type ExternalModelEndpoint struct {
-	// +kubebuilder:validation:MinLength=1
-	Address string `json:"address"`
-	// +kubebuilder:validation:Minimum=1
-	// +kubebuilder:validation:Maximum=65535
-	Port int `json:"port"`
-	// +kubebuilder:validation:Enum=http;https
-	// +optional
-	Protocol string `json:"protocol,omitempty"`
 }
 
 // RuleComposition defines how to compose/filter rules based on other signals

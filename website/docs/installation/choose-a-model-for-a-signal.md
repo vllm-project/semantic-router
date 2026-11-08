@@ -225,11 +225,11 @@ config.yaml` runs the same checks.
 | A binding or rule names a deployment that is not declared | The binding or rule, the unknown name and the declared names |
 | A deployment cannot answer the signal it is given, such as `bindings.pii: remote-embed` or an `embeddings.default` that serves no embeddings | The signal, the deployment and what it can answer |
 | A binding key is not a signal type, such as `bindings.piii` | The key and the closest signal type |
-| A deployment that cannot answer the questions a rule asks, such as a `classify` deployment named by a `domains` rule | The rule, the deployment and the providers that can answer it |
+| A deployment that cannot answer the questions a rule asks, such as an `openai_embeddings` deployment named by a `domains` rule | The rule, the deployment and the providers that can answer it |
 | A key written inline, such as `auth.api_key` or an `Authorization` header | That keys come from `api_key_env` or `api_key_file` |
 | A `pii` or `hallucination` rule on a deployment without spans | `span_required`; a masking plugin that needs those spans is refused as well |
 
-Configurations written in the earlier forms still load, with a
-`deprecated_model_field` warning for each field.
+The Router refuses a configuration written in the earlier forms, with one
+line for each field that names `vllm-sr config migrate`.
 [Migrate model resources](model-resource-migration.md) shows each earlier form
 next to the form on this page.

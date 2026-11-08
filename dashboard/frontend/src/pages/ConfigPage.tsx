@@ -13,7 +13,6 @@ import {
   canonicalizeConfigForManagerSave,
   projectCanonicalConfigForManager,
 } from './configPageCanonicalization'
-import { ConfigFormat, detectConfigFormat } from '../types/config'
 import {
   ConfigData,
   getDefaultModelName,
@@ -48,7 +47,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   const [config, setConfig] = useState<ConfigData | null>(null)
   const [loading, setLoading] = useState(!isMCPSection)
   const [error, setError] = useState<string | null>(null)
-  const [configFormat, setConfigFormat] = useState<ConfigFormat>('python-cli')
   const configEditorReadonly = configReadonly
 
   // Effective global runtime config resolved from router defaults + config.yaml overrides
@@ -103,14 +101,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         }
         return await response.json()
       })
-      const normalized = projectCanonicalConfigForManager(data)
-      setConfig(normalized)
-      // Detect config format
-      const format = detectConfigFormat(normalized)
-      setConfigFormat(format)
-      if (format === 'legacy') {
-        console.warn('Legacy config format detected. Consider migrating to Python CLI format.')
-      }
+      setConfig(projectCanonicalConfigForManager(data))
       return true
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch config')
@@ -196,24 +187,17 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     setViewModalEditCallback(null)
   }
 
-  // ============================================================================
-  // HELPER FUNCTIONS - Normalize data access across config formats
-  // ============================================================================
-
-  // Helper: Check if using Python CLI format
-  const isPythonCLI = configFormat === 'python-cli'
-  const models = getNormalizedModels(config, isPythonCLI)
-  const defaultModel = getDefaultModelName(config, isPythonCLI)
-  const reasoningFamilies = getReasoningFamiliesMap(config, isPythonCLI)
+  const models = getNormalizedModels(config)
+  const defaultModel = getDefaultModelName(config)
+  const reasoningFamilies = getReasoningFamiliesMap()
 
   // ============================================================================
-  // SECTION PANEL RENDERS - Aligned with Python CLI config structure
+  // SECTION PANEL RENDERS
   // ============================================================================
 
   const renderSignalsSection = () => (
     <ConfigPageSignalsSection
       config={config}
-      isPythonCLI={isPythonCLI}
       isReadonly={configEditorReadonly}
       signalsSearch={signalsSearch}
       onSignalsSearchChange={setSignalsSearch}
@@ -226,7 +210,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   const renderDecisionsSection = () => (
     <ConfigPageDecisionsSection
       config={config}
-      isPythonCLI={isPythonCLI}
       isReadonly={configEditorReadonly}
       decisionsSearch={decisionsSearch}
       onDecisionsSearchChange={setDecisionsSearch}
@@ -251,7 +234,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   const renderModelsSection = () => (
     <ConfigPageModelsSection
       config={config}
-      isPythonCLI={isPythonCLI}
       isReadonly={configEditorReadonly}
       canVerifyModels={canRunEvaluation(user)}
       models={models}
@@ -286,11 +268,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       config={config}
       isReadonly={configEditorReadonly}
       openEditModal={openEditModal}
-      saveConfig={saveConfig}
       refreshConfig={async () => {
         await fetchConfig()
       }}
-      showLegacyCategories={!isPythonCLI}
     />
   )
 

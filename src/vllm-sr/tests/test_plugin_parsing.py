@@ -14,42 +14,16 @@ from cli.models import (
     ContextSource,
     ToolsPluginConfig,
 )
-from cli.config_migration import migrate_config_data
 from cli.parser import ConfigParseError, parse_user_config
 from cli.validator import validate_user_config
+from recipe_document_test_support import default_recipe_document
 
 
 def _write_config(config_yaml: str) -> str:
-    data = yaml.safe_load(config_yaml)
-    providers = data.get("providers") if isinstance(data, dict) else None
-    models = providers.get("models", []) if isinstance(providers, dict) else []
-    if isinstance(data, dict) and (
-        "signals" in data
-        or "decisions" in data
-        or any(
-            isinstance(model, dict)
-            and any(
-                key in model
-                for key in (
-                    "endpoints",
-                    "access_key",
-                    "reasoning_family",
-                    "param_size",
-                    "context_window_size",
-                    "description",
-                    "capabilities",
-                    "quality_score",
-                    "modality",
-                    "tags",
-                )
-            )
-            for model in models
-        )
-    ):
-        data = migrate_config_data(data)
-
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-        yaml.safe_dump(data, f, sort_keys=False)
+        yaml.safe_dump(
+            default_recipe_document(yaml.safe_load(config_yaml)), f, sort_keys=False
+        )
         return f.name
 
 
@@ -91,7 +65,6 @@ class TestPluginTypeValidation:
     def test_new_plugin_types_validate_in_full_config(self):
         """Test newly exposed plugin types validate end-to-end."""
         config_yaml = """
-version: v0.1
 listeners:
   - name: "http-8888"
     address: "0.0.0.0"
@@ -129,14 +102,6 @@ decisions:
               action: "annotate"
               details: true
           on_unknown: "none"
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
 """
 
         temp_path = _write_config(config_yaml)
@@ -216,7 +181,6 @@ class TestRouterReplayPluginConfig:
     def test_router_replay_plugin_in_config(self):
         """Test router_replay plugin in full config."""
         config_yaml = """
-version: v0.1
 listeners:
   - name: "http-8888"
     address: "0.0.0.0"
@@ -248,14 +212,6 @@ decisions:
           capture_request_body: true
           capture_response_body: false
           max_body_bytes: 2048
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
 """
 
         temp_path = _write_config(config_yaml)
@@ -321,7 +277,6 @@ class TestPluginConfigurationValidation:
     def test_invalid_router_replay_config(self):
         """Test that invalid router_replay configuration is caught."""
         config_yaml = """
-version: v0.1
 listeners:
   - name: "http-8888"
     address: "0.0.0.0"
@@ -351,14 +306,6 @@ decisions:
           enabled: true
           max_records: "invalid"  # Should be int
           capture_request_body: "yes"  # Should be bool
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
 """
 
         temp_path = _write_config(config_yaml)
@@ -375,7 +322,6 @@ providers:
     def test_invalid_response_cache_config(self):
         """Test that invalid response_cache configuration is caught."""
         config_yaml = """
-version: v0.1
 listeners:
   - name: "http-8888"
     address: "0.0.0.0"
@@ -404,14 +350,6 @@ decisions:
         configuration:
           enabled: "yes"  # Should be bool
           ttl_seconds: -1  # Should be >= 0
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
 """
 
         temp_path = _write_config(config_yaml)
@@ -426,7 +364,6 @@ providers:
     def test_missing_required_fields(self):
         """Test that missing required fields are caught."""
         config_yaml = """
-version: v0.1
 listeners:
   - name: "http-8888"
     address: "0.0.0.0"
@@ -445,14 +382,6 @@ decisions:
         configuration:
           # Missing required 'enabled' field
           ttl_seconds: 60
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
 """
 
         temp_path = _write_config(config_yaml)
@@ -568,7 +497,6 @@ class TestContextPluginConfig:
 
     def test_context_plugin_in_full_config(self):
         config_yaml = """
-version: v0.1
 listeners:
   - name: "http-8888"
     address: "0.0.0.0"
@@ -610,14 +538,6 @@ decisions:
                 timeout_seconds: 10
           injection:
             mode: "tool_role"
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
 """
 
         temp_path = _write_config(config_yaml)
@@ -638,7 +558,6 @@ providers:
 
     def test_invalid_context_config_in_full_yaml(self):
         config_yaml = """
-version: v0.1
 listeners:
   - name: "http-8888"
     address: "0.0.0.0"
@@ -660,14 +579,6 @@ decisions:
             - type: "rag"
               backend: "external_api"
               cache_ttl_seconds: "invalid"
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
 """
 
         temp_path = _write_config(config_yaml)

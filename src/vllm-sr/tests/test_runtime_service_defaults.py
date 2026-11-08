@@ -62,7 +62,6 @@ def test_resolve_effective_config_path_injects_local_service_runtime_defaults(
         config_path=config_path,
         algorithm=None,
         setup_mode=False,
-        platform=None,
     )
 
     assert effective_path == tmp_path / ".vllm-sr" / "runtime-config.yaml"
@@ -104,7 +103,6 @@ def test_resolve_effective_config_path_preserves_explicit_management_listener(
         config_path=config_path,
         algorithm=None,
         setup_mode=False,
-        platform=None,
     )
 
     effective = yaml.safe_load(effective_path.read_text())
@@ -131,7 +129,6 @@ def test_resolve_effective_config_path_leaves_the_looper_endpoint_alone(
         config_path=config_path,
         algorithm=None,
         setup_mode=False,
-        platform=None,
     )
 
     effective = yaml.safe_load(effective_path.read_text())
@@ -148,7 +145,6 @@ def test_resolve_effective_config_path_preserves_setup_mode_bootstrap_config(
         config_path=config_path,
         algorithm=None,
         setup_mode=True,
-        platform=None,
     )
 
     assert effective_path == config_path
@@ -167,7 +163,6 @@ def test_target_neutral_config_skips_all_local_runtime_materialization(tmp_path:
         config_path=config_path,
         algorithm=None,
         setup_mode=False,
-        platform=None,
         materialize_local_runtime=False,
     )
 
@@ -200,7 +195,6 @@ def test_generated_runtime_config_references_credentials_instead_of_carrying_the
         config_path=config_path,
         algorithm=None,
         setup_mode=False,
-        platform=None,
     )
 
     services = yaml.safe_load(effective_path.read_text())["global"]["services"]

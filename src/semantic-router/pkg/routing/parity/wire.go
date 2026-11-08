@@ -194,14 +194,16 @@ func (c *Corpus) ConfigWithBackend(baseURL string) ([]byte, error) {
 	}
 	for _, model := range mappingSequence(mappingValue(documentRoot(&document), "providers"), "models") {
 		for _, ref := range mappingSequence(model, "backend_refs") {
-			if baseURLNode := mappingValue(ref, "base_url"); baseURLNode != nil {
-				original, err := url.Parse(baseURLNode.Value)
+			endpoint := mappingValue(ref, "endpoint")
+			switch {
+			case endpoint == nil:
+			case strings.Contains(endpoint.Value, "://"):
+				original, err := url.Parse(endpoint.Value)
 				if err != nil {
 					return nil, err
 				}
-				baseURLNode.Value = target.Scheme + "://" + target.Host + original.Path
-			}
-			if endpoint := mappingValue(ref, "endpoint"); endpoint != nil {
+				endpoint.Value = target.Scheme + "://" + target.Host + original.Path
+			default:
 				endpoint.Value = target.Host
 			}
 			if protocol := mappingValue(ref, "protocol"); protocol != nil {

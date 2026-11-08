@@ -43,5 +43,3 @@ recipes:
         priority: 50
         rules: {type: modality, name: image_request}
         modelRefs: [{model: general}]
-global:
-  model_catalog: {}

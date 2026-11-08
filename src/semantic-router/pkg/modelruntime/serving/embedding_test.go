@@ -42,10 +42,6 @@ func (f *embedServices) CurrentCard(deployment string) (modelservice.ModelCard, 
 	return card, ok
 }
 
-func (f *embedServices) Classify(context.Context, string, modelservice.ClassifyRequest) (modelservice.ClassifyResponse, error) {
-	return modelservice.ClassifyResponse{}, errors.New("not used")
-}
-
 func (f *embedServices) Embed(_ context.Context, deployment string, request modelservice.EmbedRequest) (modelservice.EmbedResponse, error) {
 	f.mu.Lock()
 	f.embeds = append(f.embeds, request)
@@ -99,8 +95,8 @@ func embeddingCard(id string, modalities ...string) modelservice.ModelCard {
 
 func embeddingSpec(deployment string) config.ResolvedModelBinding {
 	return config.ResolvedModelBinding{
-		Recipe: config.DefaultRecipeName, Name: "embedding",
-		Binding:    config.ModelBinding{Deployment: deployment, Contract: embeddingContract},
+		Recipe: config.DefaultRecipeName, Name: "embedding", Contract: embeddingContract,
+		Binding:    config.ModelBinding{Deployment: deployment},
 		Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider, Endpoint: "http://runtime:8100", Device: "cpu", Input: config.ModelInputBudget{Overflow: "truncate"}},
 	}
 }

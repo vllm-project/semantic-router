@@ -4,7 +4,7 @@ import path from 'node:path'
 import { mockAuthenticatedAppShell, test } from './support/compiler'
 
 // Uses the production Go compiler through its HTTP handler; only server data is a fixture.
-const config = `version: v0.3
+const config = `version: v0.5
 providers:
   models:
     - name: model-a
@@ -19,42 +19,40 @@ providers:
         - name: local
           endpoint: localhost:8001
           protocol: http
-routing:
-  modelCards:
-    - name: model-a
-    - name: model-b
-  signals:
-    jailbreak:
-      - name: prompt_injection
-        threshold: 0.8
-  decisions:
-    - name: guard_route
-      description: Route prompt attacks to a safe model.
-      priority: 120
-      tier: 2
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions:
-          - type: jailbreak
-            name: prompt_injection
-      action:
-        type: route
-        destination: model-a
-      modelRefs:
-        - model: model-a
-          use_reasoning: true
-          reasoning_mode: enabled
-      candidateIterations:
-        - variable: candidate
-          source: models
-          models:
-            - model: model-b
-          outputs:
-            - type: model
-              value: candidate
-      retention:
-        ttl_turns: 4
+recipes:
+  - name: default
+    signals:
+      jailbreak:
+        - name: prompt_injection
+          predicate: {gte: 0.8}
+    decisions:
+      - name: guard_route
+        description: Route prompt attacks to a safe model.
+        priority: 120
+        tier: 2
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: jailbreak
+              name: prompt_injection
+        action:
+          type: route
+          destination: model-a
+        modelRefs:
+          - model: model-a
+            use_reasoning: true
+            reasoning_mode: enabled
+        candidateIterations:
+          - variable: candidate
+            source: models
+            models:
+              - model: model-b
+            outputs:
+              - type: model
+                value: candidate
+        retention:
+          ttl_turns: 4
 `
 
 test('keeps route settings outside the form when a Builder route is saved', async ({ page }) => {

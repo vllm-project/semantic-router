@@ -88,13 +88,14 @@ func (s matchScorer) Score(ctx context.Context, query string, texts []string) ([
 	return scores, nil
 }
 
-// contextCompression is the decision's context plugin when it compresses.
+// contextCompression is the decision's context plugin when it compresses the
+// request.
 func contextCompression(decision *config.Decision) *config.ContextPluginConfig {
 	if decision == nil {
 		return nil
 	}
 	plugin := decision.GetContextConfig()
-	if plugin == nil || !plugin.Enabled || plugin.Compress == nil {
+	if plugin == nil || !plugin.Enabled || !plugin.Compress.CompressesRequest() {
 		return nil
 	}
 	return plugin

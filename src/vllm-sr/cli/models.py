@@ -2,7 +2,6 @@
 
 import json
 import math
-import posixpath
 import re
 from datetime import date, datetime
 from enum import Enum
@@ -693,10 +692,30 @@ class ContextCompressionRequestControlsConfig(BaseModel):
     max_target_tokens: int = Field(default=16000, ge=0)
 
 
+class ContextSignalsCompressConfig(BaseModel):
+    """compress.signals: the text the routing signals read, compressed before
+    they run to the sentences its profile scores highest."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    profile: Optional[str] = None
+    max_tokens: int = 0
+    min_length: Optional[int] = Field(default=None, ge=0)
+    skip_signals: Optional[List[str]] = None
+    textrank_weight: Optional[float] = None
+    position_weight: Optional[float] = None
+    tfidf_weight: Optional[float] = None
+    novelty_weight: Optional[float] = None
+    position_depth: Optional[float] = None
+    preserve_first_n: Optional[int] = None
+    preserve_last_n: Optional[int] = None
+
+
 class ContextCompressConfig(BaseModel):
     """The context plugin's compress block: the request's own segments,
     judged by its match block (relevance by default), shrink within the
-    budget."""
+    budget; signals compresses the text the routing signals read."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -706,6 +725,7 @@ class ContextCompressConfig(BaseModel):
     recovery: Optional[ContextCompressionRecoveryConfig] = None
     request_controls: Optional[ContextCompressionRequestControlsConfig] = None
     failure_mode: Literal["fail_open", "fail_closed"] = "fail_open"
+    signals: Optional[ContextSignalsCompressConfig] = None
 
 
 class ContextMemoryStoreConfig(BaseModel):
@@ -767,8 +787,8 @@ class ContextInjectionConfig(BaseModel):
 
 
 class ContextPluginConfig(BaseModel):
-    """Configuration for the context plugin: sources (RAG, memory) kept by
-    their match blocks, compress within the budget, and injection."""
+    """Configuration for a decision's context plugin: sources (RAG, memory)
+    kept by their match blocks, compress within the budget, and injection."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -780,6 +800,12 @@ class ContextPluginConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_context(self):
+        if self.compress is not None and self.compress.signals is not None:
+            raise ValueError(
+                "compress.signals: the routing signals read the request before a "
+                "decision is chosen; set compress.signals in global.plugins or the "
+                "recipe's plugins"
+            )
         if not self.enabled:
             return self
         if not self.sources and self.compress is None:
@@ -2172,8 +2198,25 @@ class ReasoningFamily(BaseModel):
 REMOVED_BACKEND_REF_FIELDS = ("compat_gateway", "openai_compat_gateway")
 
 
+class BackendAuth(BaseModel):
+    """A backend's credential: the mode (delegated sends the requesting user's
+    credential instead of a key), the header (the provider's own when unset),
+    the prefix ("" sends the bare key) and the key's environment variable."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    credential: Optional[Literal["delegated"]] = None
+    header: Optional[str] = None
+    prefix: Optional[str] = None
+    api_key_env: Optional[str] = None
+
+
 class BackendRef(BaseModel):
-    """Inline backend access details carried under providers.models[].backend_refs."""
+    """Inline backend access details carried under providers.models[].backend_refs.
+
+    A backend connects as a deployment does: endpoint (host:port with protocol,
+    or a full URL), auth and headers.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -2181,18 +2224,12 @@ class BackendRef(BaseModel):
     endpoint: Optional[str] = None
     protocol: str = "http"
     weight: int = Field(default=1, ge=0)
-    base_url: Optional[str] = None
     provider: str = "vllm"
-    auth_header: Optional[str] = None
-    auth_prefix: Optional[str] = None
-    extra_headers: Optional[Dict[str, str]] = None
+    auth: Optional[BackendAuth] = None
+    headers: Optional[Dict[str, str]] = None
     api_version: Optional[str] = None
     chat_path: Optional[str] = None
     api_key: Optional[str] = None
-    api_key_env: Optional[str] = None
-    # The backend receives the request's deployment-injected gateway credential
-    # (global.services.authz.gateway_credential) instead of a static key.
-    trusted_gateway: bool = False
 
     @model_validator(mode="before")
     @classmethod
@@ -2201,6 +2238,10 @@ class BackendRef(BaseModel):
         # define, so the opt-ins are gone; name them instead of reporting a
         # generic extra field, as the Router does.
         if isinstance(data, dict):
+            if "trusted_gateway" in data:
+                raise ValueError(
+                    "trusted_gateway was removed; write auth: {credential: delegated}"
+                )
             for field in REMOVED_BACKEND_REF_FIELDS:
                 if field in data:
                     raise ValueError(
@@ -2212,10 +2253,10 @@ class BackendRef(BaseModel):
     def resolve_api_key(self) -> Optional[str]:
         if self.api_key:
             return self.api_key
-        if self.api_key_env:
+        if self.auth is not None and self.auth.api_key_env:
             import os
 
-            return os.getenv(self.api_key_env)
+            return os.getenv(self.auth.api_key_env)
         return None
 
 
@@ -2245,54 +2286,18 @@ class Providers(BaseModel):
         return self.defaults.reasoning_effort
 
 
-class PairScorerSelection(BaseModel):
-    """An immutable trained exit; zero resolves to actual full depth/width."""
-
-    model_config = ConfigDict(extra="forbid")
-    layer: int = Field(default=0, ge=0)
-    dimension: int = Field(default=0, ge=0)
-
-
-class OperatingPointReference(BaseModel):
-    """Explicit immutable score policy; relative paths are inside the deployment."""
-
-    model_config = ConfigDict(extra="forbid")
-    path: str = Field(min_length=1)
-    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-
-    @field_validator("path")
-    @classmethod
-    def validate_policy_path(cls, value):
-        normalized = posixpath.normpath(value)
-        if value != value.strip() or (
-            not posixpath.isabs(value)
-            and (normalized == ".." or normalized.startswith("../"))
-        ):
-            raise ValueError(
-                "operating point path must be trimmed and stay inside the artifact"
-            )
-        return value
-
-
 class ModelBinding(BaseModel):
     """The deployment that answers one shared-answer signal, globally or in one recipe.
 
-    A binding is written as the deployment's name (`pii: local-vela`); the
-    object form also takes a head. Its contract, adapter, mapping_path,
-    pair_scorer and operating_point are deprecated: the Router derives the
-    contract from the signal and the adapter from the deployment's provider.
-    A rule that asks its own question names its deployment on the rule.
+    A binding is written as the deployment's name (`pii: local-vela`) or as
+    {deployment: local-vela}; the signal decides the question and the
+    deployment's provider how it is asked. A rule that asks its own question
+    names its deployment on the rule.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     deployment: str
-    head: Optional[str] = None
-    contract: Optional[str] = None
-    adapter: Optional[str] = None
-    mapping_path: Optional[str] = None
-    pair_scorer: Optional[PairScorerSelection] = None
-    operating_point: Optional[OperatingPointReference] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -2301,15 +2306,9 @@ class ModelBinding(BaseModel):
             return {"deployment": value.strip()}
         return value
 
-    @model_serializer(mode="wrap")
-    def write_deployment_name(self, handler):
-        if all(
-            getattr(self, name) is None
-            for name in type(self).model_fields
-            if name != "deployment"
-        ):
-            return self.deployment
-        return handler(self)
+    @model_serializer(mode="plain")
+    def write_deployment_name(self):
+        return self.deployment
 
 
 class CandidateRequirements(BaseModel):

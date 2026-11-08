@@ -231,7 +231,7 @@ describe("setup wizard provider projection", () => {
     expect(claude.backend_refs).toEqual([
       expect.objectContaining({
         provider: "anthropic",
-        base_url: "https://api.anthropic.com",
+        endpoint: "https://api.anthropic.com",
       }),
     ]);
   });

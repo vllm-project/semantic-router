@@ -1,0 +1,44 @@
+# A binding is its deployment's name: the signal decides the contract and the
+# question, the provider how it is asked, and the decision model reads its
+# own labels, so contract, adapter, head, mapping_path and operating_point go.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    model_bindings:
+      jailbreak: {deployment: kai, contract: decision.v1}
+      pii: {deployment: vela, adapter: auto, mapping_path: /models/pii/labels.json}
+    signals:
+      jailbreak:
+        - {name: attack}
+      pii:
+        - {name: contact}
+    decisions:
+      - name: blocked
+        priority: 200
+        rules:
+          operator: OR
+          conditions:
+            - {type: jailbreak, name: attack}
+            - {type: pii, name: contact}
+        modelRefs: [{model: general}]
+global:
+  model_catalog:
+    deployments:
+      kai:
+        provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        device: cpu
+      vela:
+        provider: model_runtime
+        artifact: vllm-sr/vela3-fast
+        device: cpu
+    bindings:
+      domain:
+        deployment: kai
+        head: router
+        operating_point: {path: point.json, sha256: "0000000000000000000000000000000000000000000000000000000000000000"}

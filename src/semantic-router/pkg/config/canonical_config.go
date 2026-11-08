@@ -7,7 +7,6 @@ import (
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 // CanonicalConfigVersion identifies the steady-state public configuration
@@ -147,15 +146,12 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	if err := validateCanonicalContract(canonical); err != nil {
 		return nil, err
 	}
-	backendWarnings := backendConnectionWarnings(canonical.Providers.Models)
-	if err := normalizeBackendConnections(canonical); err != nil {
+	if err := validateBackendConnections(canonical); err != nil {
 		return nil, err
 	}
-	bindingWarnings, err := checkCanonicalBindingKeys(canonical)
-	if err != nil {
+	if err := checkCanonicalBindingKeys(canonical); err != nil {
 		return nil, err
 	}
-	backendWarnings = append(backendWarnings, bindingWarnings...)
 
 	input, err := canonicalCatalogInput(canonical)
 	if err != nil {
@@ -189,10 +185,6 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	if err := applyEffectiveModelRegistry(&cfg, effective, canonical.Providers.Models); err != nil {
 		return nil, err
 	}
-	if err := cfg.translateModelResources(); err != nil {
-		return nil, err
-	}
-	cfg.ModelResourceWarnings = append(cfg.ModelResourceWarnings, backendWarnings...)
 	cfg.EffectiveModelRegistry = effective
 	cfg.Evaluation = cloneCanonicalEvaluation(canonical.Evaluation)
 	if err := validateNativeRoutingConfig(&cfg); err != nil {
@@ -216,7 +208,7 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 	if err := validateCanonicalFallback(canonical); err != nil {
 		return err
 	}
-	if err := validateCanonicalTrustedGateways(canonical); err != nil {
+	if err := validateCanonicalDelegatedBackends(canonical); err != nil {
 		return err
 	}
 	cards, err := canonicalModelCardIndex(canonical.Providers.Models)
@@ -230,69 +222,17 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 	return validateCanonicalDefaultModel(canonical.Providers, aliases, cards)
 }
 
-// validateCanonicalTrustedGateways checks every backend_ref that opts into
-// the request's trusted gateway credential: the authz contract that supplies
-// the credential must be enabled, the backend must not serve System One
-// calls, which never carry it, and it must not also carry a static key,
-// which would otherwise stand in silently for a missing one.
-func validateCanonicalTrustedGateways(canonical *CanonicalConfig) error {
-	enabled := false
-	if canonical.Global != nil {
-		authz := canonical.Global.Services.Authz
-		if err := validateGatewayCredentialHeader(authz.GatewayCredential, authz.Identity); err != nil {
-			return err
-		}
-		enabled = authz.GatewayCredential.Enabled
-	}
+// validateCanonicalDelegatedBackends checks every backend_ref whose auth is
+// credential: delegated: the authz contract that supplies the requesting
+// user's credential must be enabled.
+func validateCanonicalDelegatedBackends(canonical *CanonicalConfig) error {
+	enabled := canonical.Global != nil && canonical.Global.Services.Authz.DelegatedCredential.Enabled
 	for _, model := range canonical.Providers.Models {
 		for index, backend := range model.BackendRefs {
-			if !backend.TrustedGateway {
-				continue
-			}
-			if !enabled {
-				return fmt.Errorf(
-					"providers.models[%s].backend_refs[%d].trusted_gateway requires global.services.authz.gateway_credential.enabled: true",
-					model.Name, index,
-				)
-			}
-			if model.APIFormat == APIFormatSystemOne {
-				return fmt.Errorf(
-					"providers.models[%s].backend_refs[%d].trusted_gateway: only System One calls reach an api_format: systemone backend, and they go without a client's gateway credential; give it its own key",
-					model.Name, index,
-				)
-			}
-			// Contract validation runs before auth is normalized, so a key set
-			// through auth.api_key_env is still under backend.Auth here.
-			if backend.APIKey != "" || backend.APIKeyEnv != "" ||
-				(backend.Auth != nil && backend.Auth.APIKeyEnv != "") {
-				return fmt.Errorf(
-					"providers.models[%s].backend_refs[%d].trusted_gateway cannot combine with api_key, api_key_env or auth.api_key_env: the request supplies the credential",
-					model.Name, index,
-				)
+			if backend.Auth.Delegated() && !enabled {
+				return fmt.Errorf("providers.models[%s].backend_refs[%d]: %s", model.Name, index, delegatedContractRequired)
 			}
 		}
-	}
-	return nil
-}
-
-// validateGatewayCredentialHeader keeps the gateway credential off a header
-// that carries a client credential or an identity: the Router must never
-// forward a client's raw credential, nor read one authentication output as
-// another.
-func validateGatewayCredentialHeader(credential GatewayCredentialConfig, identity IdentityConfig) error {
-	header := credential.GetHeader()
-	reserved := IsShadowCredentialHeader(header)
-	for _, name := range []string{
-		identity.GetUserIDHeader(), identity.GetUserGroupsHeader(),
-		headers.AuthzUserID, headers.AuthzUserGroups, headers.AuthzTeamID, headers.AuthzTenantID,
-	} {
-		reserved = reserved || strings.EqualFold(header, strings.TrimSpace(name))
-	}
-	if reserved {
-		return fmt.Errorf(
-			"global.services.authz.gateway_credential.header %q carries a client credential or an identity; name a dedicated header the authenticator sets, such as %s",
-			header, headers.VSRGatewayCredential,
-		)
 	}
 	return nil
 }

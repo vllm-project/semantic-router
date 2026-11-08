@@ -78,7 +78,7 @@ class TestExtprocListenerIdentity(MockUpstreamMixin, ServeSessionMixin, CLITestB
         config_path = Path(
             self.write_minimal_canonical_config(
                 port=UNTRUSTED_PORT,
-                base_url=f"http://{mock_container}:{PROVIDER_MOCKER_PORT}",
+                endpoint=f"http://{mock_container}:{PROVIDER_MOCKER_PORT}",
                 provider="openai",
                 api_only=True,
             )

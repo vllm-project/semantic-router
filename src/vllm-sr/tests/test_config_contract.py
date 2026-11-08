@@ -3,7 +3,6 @@ from typing import get_args
 import pytest
 from cli.algorithms import AlgorithmConfig
 from cli.config_contract import (
-    LEGACY_SIGNAL_KEY_TO_CANONICAL,
     QUORUM_FAILURE_POLICY_VALUES,
     UNKNOWN_POLICY_VALUES,
     QuorumFailurePolicy,
@@ -36,13 +35,6 @@ def test_unknown_policy_literal_matches_allowed_values():
 def test_quorum_failure_policy_literal_matches_allowed_values():
     assert get_args(QuorumFailurePolicy) == QUORUM_FAILURE_POLICY_VALUES
     assert QUORUM_FAILURE_POLICY_VALUES == ("fail", "fallback")
-
-
-def test_legacy_signal_inventory_covers_flat_authz_and_context_blocks():
-    assert LEGACY_SIGNAL_KEY_TO_CANONICAL["role_bindings"] == "role_bindings"
-    assert LEGACY_SIGNAL_KEY_TO_CANONICAL["context_rules"] == "context"
-    for removed in ("session_metrics", "structure_rules", "events"):
-        assert removed not in LEGACY_SIGNAL_KEY_TO_CANONICAL
 
 
 def test_build_signal_reference_index_names_complexity_rules_and_authz_roles():

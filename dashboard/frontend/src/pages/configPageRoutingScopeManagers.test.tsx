@@ -80,7 +80,6 @@ describe('recipe-aware config managers', () => {
     const markup = renderToStaticMarkup(
       createElement(ConfigPageSignalsSection, {
         config,
-        isPythonCLI: true,
         isReadonly: false,
         signalsSearch: '',
         onSignalsSearchChange: vi.fn(),
@@ -99,7 +98,6 @@ describe('recipe-aware config managers', () => {
     const markup = renderToStaticMarkup(
       createElement(ConfigPageDecisionsSection, {
         config,
-        isPythonCLI: true,
         isReadonly: false,
         decisionsSearch: '',
         onDecisionsSearchChange: vi.fn(),

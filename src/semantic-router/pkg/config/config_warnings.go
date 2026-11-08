@@ -20,10 +20,7 @@ func Warnings(cfg *RouterConfig) []ConfigWarning {
 	if cfg == nil || cfg.RoutingScope != "" {
 		return nil
 	}
-	warnings := append([]ConfigWarning(nil), cfg.FormWarnings...)
-	warnings = append(warnings, cfg.ModelResourceTranslation()...)
-	warnings = append(warnings, modelResolutionWarnings(cfg)...)
-	return warnings
+	return slices.Concat(cfg.FormWarnings, modelResolutionWarnings(cfg))
 }
 
 // logConfigWarnings logs each warning that has no event of its own when the
@@ -32,7 +29,7 @@ func logConfigWarnings(cfg *RouterConfig) error {
 	if cfg == nil || cfg.RoutingScope != "" {
 		return nil
 	}
-	for _, warning := range slices.Concat(cfg.FormWarnings, cfg.ModelResourceTranslation(), modelResolutionWarnings(cfg)) {
+	for _, warning := range Warnings(cfg) {
 		logging.ComponentWarnEvent("config", warning.Code, map[string]interface{}{
 			"field":  warning.Field,
 			"reason": warning.Message,

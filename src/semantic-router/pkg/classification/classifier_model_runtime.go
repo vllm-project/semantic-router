@@ -12,15 +12,12 @@ type classifierModelRuntime struct {
 	runtime *serving.Runtime
 	// systemOne asks the systemone deployments' remote APIs.
 	systemOne modelservice.Remote
-	plan      *config.ModelBindingPlan
 	cfg       *config.RouterConfig
 	recipe    config.RecipeName
 }
 
 func newClassifierModelRuntime(cfg *config.RouterConfig, options RecipeRuntimeOptions) (*classifierModelRuntime, error) {
-	cfg = config.WithModelResources(cfg)
-	plan, err := config.CompileModelBindings(cfg)
-	if err != nil {
+	if err := config.ValidateModelBindings(cfg); err != nil {
 		return nil, err
 	}
 	runtime := options.Runtime
@@ -31,7 +28,7 @@ func newClassifierModelRuntime(cfg *config.RouterConfig, options RecipeRuntimeOp
 	if recipe == "" {
 		recipe = cfg.DefaultRecipe().Name
 	}
-	return &classifierModelRuntime{runtime: runtime, systemOne: options.SystemOne, plan: plan, cfg: cfg, recipe: recipe}, nil
+	return &classifierModelRuntime{runtime: runtime, systemOne: options.SystemOne, cfg: cfg, recipe: recipe}, nil
 }
 
 // decider answers systemone signals through the generation's deployments.

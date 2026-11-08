@@ -32,7 +32,7 @@ func embeddingInventoryResponse(t *testing.T, api *ClassificationAPIServer) embe
 
 func prepareEmbeddingInventoryOwner(t *testing.T, runtime *serving.Runtime, recipe, name string) {
 	t.Helper()
-	task, err := binding.Register(binding.NewRegistry(runtime.ObserveBinding), "embedding.v1", func(string) error { return nil }, func(string, string) error { return nil })
+	task, err := binding.RegisterTask(binding.NewRegistry(runtime.ObserveBinding), "embedding.v1", "embedding.v1", func(string) error { return nil }, func(string, string) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}

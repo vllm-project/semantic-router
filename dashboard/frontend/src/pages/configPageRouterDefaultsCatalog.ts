@@ -13,9 +13,7 @@ import type {
   LooperConfig,
   MemoryConfig,
   ModelSelectionConfig,
-  ModalityDetectorConfig,
   ObservabilityConfig,
-  PromptCompressionConfig,
   RateLimitConfig,
   ResponseAPIConfig,
   RouterLearningConfig,
@@ -107,7 +105,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
       max_entries_per_store: 100000,
     },
   } satisfies VectorStoreConfig,
-  external_models: [],
   admission: {},
   system_models: {
     decision_model: { deployment: 'primary' },
@@ -115,13 +112,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   embedding_models: {
     default: { deployment: 'vela-embedding' },
   } satisfies CanonicalEmbeddingCatalogConfig,
-  prompt_compression: {
-    enabled: false,
-    profile: 'default',
-  } satisfies PromptCompressionConfig,
-  modality_detector: {
-    enabled: false,
-  } satisfies ModalityDetectorConfig,
   observability: {
     metrics: {
       enabled: true,
@@ -146,7 +136,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     },
   } satisfies ObservabilityConfig,
   looper: {
-    endpoint: 'http://localhost:8899/v1/chat/completions',
     timeout_seconds: 1200,
     headers: {},
   } satisfies LooperConfig,
@@ -226,11 +215,6 @@ export const SECTION_META: Record<
     description:
       'Document ingestion, vector backend selection, and file-backed knowledge-store defaults.',
   },
-  external_models: {
-    title: 'External Models',
-    eyebrow: 'Model Catalog',
-    description: 'Deprecated external LLM integrations, kept as the configuration declares them.',
-  },
   admission: {
     title: 'Model Admission',
     eyebrow: 'Model Catalog',
@@ -248,17 +232,6 @@ export const SECTION_META: Record<
     description:
       'The deployment that embeds for match.recall; decisions never use it, and it starts only when a store recalls with it.',
   },
-  prompt_compression: {
-    title: 'Prompt Compression',
-    eyebrow: 'Model Catalog',
-    description: 'Optional signal-evaluation compression profiles plus hard input bounds.',
-  },
-  modality_detector: {
-    title: 'Modality Detector',
-    eyebrow: 'Model Catalog',
-    description:
-      'Prompt modality detection strategy, classifier settings, and keyword fallback behavior.',
-  },
   observability: {
     title: 'Observability',
     eyebrow: 'Services',
@@ -267,7 +240,7 @@ export const SECTION_META: Record<
   looper: {
     title: 'Looper',
     eyebrow: 'Integrations',
-    description: 'Multi-model execution endpoint, timeout policy, and per-request headers.',
+    description: 'Timeout policy and per-request headers for the model calls a Looper makes.',
   },
   clear_route_cache: {
     title: 'Route Cache Reset',

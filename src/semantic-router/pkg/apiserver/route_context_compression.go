@@ -140,7 +140,7 @@ func (s *ClassificationAPIServer) handleContextCompressionPreview(
 	if !ok {
 		return
 	}
-	if !pluginConfig.Enabled || pluginConfig.Compress == nil {
+	if !pluginConfig.Enabled || !pluginConfig.Compress.CompressesRequest() {
 		s.writeJSONResponse(w, http.StatusOK, contextCompressionPreviewResponse{
 			Valid:      true,
 			SkipReason: contextcompression.SkipDisabled,

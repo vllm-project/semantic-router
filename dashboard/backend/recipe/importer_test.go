@@ -540,7 +540,7 @@ func TestRecipeEnvironmentBindingsRequireExplicitAvailableAllowlist(t *testing.T
 providers:
   models:
     - backend_refs:
-        - api_key_env: OPENROUTER_API_KEY
+        - auth: {api_key_env: OPENROUTER_API_KEY}
           endpoint: ${MODEL_ENDPOINT}
           fallback: ${OPTIONAL_ENDPOINT:-https://example.com}
           escaped: $$NOT_A_BINDING

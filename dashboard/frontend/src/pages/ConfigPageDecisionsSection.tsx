@@ -53,7 +53,6 @@ import {
 
 interface ConfigPageDecisionsSectionProps {
   config: ConfigData | null
-  isPythonCLI: boolean
   isReadonly: boolean
   decisionsSearch: string
   onDecisionsSearchChange: (value: string) => void
@@ -72,7 +71,6 @@ function configuredObject(value: Record<string, unknown>): Record<string, unknow
 
 export default function ConfigPageDecisionsSection({
   config,
-  isPythonCLI,
   isReadonly,
   decisionsSearch,
   onDecisionsSearchChange,
@@ -87,7 +85,7 @@ export default function ConfigPageDecisionsSection({
   const [decisionDeleteError, setDecisionDeleteError] = useState<string | null>(null)
   const { applyScopedConfig, routingScopes, scopedConfig, selectedScopeId, setSelectedScopeId } =
     useRoutingScopeManager(config)
-  const reasoningFamilies = getReasoningFamiliesMap(config, isPythonCLI)
+  const reasoningFamilies = getReasoningFamiliesMap()
   useEffect(() => {
     setDecisionPendingDelete(null)
     setDecisionDeleteError(null)
@@ -562,10 +560,6 @@ export default function ConfigPageDecisionsSection({
         throw new Error('Configuration not loaded yet.')
       }
 
-      if (!isPythonCLI) {
-        throw new Error('Decisions are only supported for Python CLI configs.')
-      }
-
       const name = (formData.name || '').trim()
       if (!name) {
         throw new Error('Name is required.')
@@ -661,8 +655,8 @@ export default function ConfigPageDecisionsSection({
 
   const confirmDeleteDecision = async () => {
     if (!decisionPendingDelete) return
-    if (!config || !isPythonCLI) {
-      setDecisionDeleteError('Deleting decisions is only supported for Python CLI configs.')
+    if (!config) {
+      setDecisionDeleteError('Configuration not loaded yet.')
       return
     }
 

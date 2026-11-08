@@ -354,18 +354,15 @@ func TestUpdateConfigHandler_PreservesBackendTargetFields(t *testing.T) {
 	models[0]["reasoning"] = map[string]interface{}{"family": "gpt"}
 	models[0]["backend_refs"] = []map[string]interface{}{
 		{
-			"name":          "hosted-primary",
-			"endpoint":      "provider.internal:8443",
-			"protocol":      "https",
-			"weight":        75,
-			"base_url":      "https://provider.example/v1",
-			"provider":      "openai",
-			"auth_header":   "Authorization",
-			"auth_prefix":   "Bearer",
-			"extra_headers": map[string]string{"X-Tenant": "production"},
-			"api_version":   "2026-09-01",
-			"chat_path":     "/chat/completions",
-			"api_key_env":   "PROVIDER_API_KEY",
+			"name":        "hosted-primary",
+			"endpoint":    "provider.internal:8443",
+			"protocol":    "https",
+			"weight":      75,
+			"provider":    "openai",
+			"auth":        map[string]string{"header": "Authorization", "prefix": "Bearer", "api_key_env": "PROVIDER_API_KEY"},
+			"headers":     map[string]string{"X-Tenant": "production"},
+			"api_version": "2026-09-01",
+			"chat_path":   "/chat/completions",
 		},
 	}
 
@@ -398,18 +395,15 @@ func TestUpdateConfigHandler_PreservesBackendTargetFields(t *testing.T) {
 	got := updatedRefs[0].(map[string]interface{})
 
 	want := map[string]interface{}{
-		"name":          "hosted-primary",
-		"endpoint":      "provider.internal:8443",
-		"protocol":      "https",
-		"weight":        75,
-		"base_url":      "https://provider.example/v1",
-		"provider":      "openai",
-		"auth_header":   "Authorization",
-		"auth_prefix":   "Bearer",
-		"extra_headers": map[string]interface{}{"X-Tenant": "production"},
-		"api_version":   "2026-09-01",
-		"chat_path":     "/chat/completions",
-		"api_key_env":   "PROVIDER_API_KEY",
+		"name":        "hosted-primary",
+		"endpoint":    "provider.internal:8443",
+		"protocol":    "https",
+		"weight":      75,
+		"provider":    "openai",
+		"auth":        map[string]interface{}{"header": "Authorization", "prefix": "Bearer", "api_key_env": "PROVIDER_API_KEY"},
+		"headers":     map[string]interface{}{"X-Tenant": "production"},
+		"api_version": "2026-09-01",
+		"chat_path":   "/chat/completions",
 	}
 	for key, expected := range want {
 		if actual := got[key]; !reflect.DeepEqual(actual, expected) {

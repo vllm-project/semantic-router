@@ -2456,32 +2456,14 @@ model_config:
 				Expect((PromptCompressionConfig{Profile: "Multi-Turn"}).NormalizedProfile()).To(Equal("multi_turn"))
 			})
 
-			It("should reject unknown profile names during config validation", func() {
-				cfg := &RouterConfig{
-					InlineModels: InlineModels{
-						PromptCompression: PromptCompressionConfig{
-							Enabled:   true,
-							Profile:   "finance",
-							MaxTokens: 512,
-						},
-					},
-				}
-				err := validateConfigContracts(cfg)
-				Expect(err).To(MatchError(ContainSubstring("unknown prompt_compression.profile")))
+			It("should reject unknown profile names", func() {
+				err := validateSignalsCompression("signals", &PromptCompressionConfig{Enabled: true, Profile: "finance", MaxTokens: 512})
+				Expect(err).To(MatchError(ContainSubstring(`signals.profile: unknown profile "finance"`)))
 				Expect(err).To(MatchError(ContainSubstring("default, coding, medical, security, multi_turn")))
 			})
 
-			It("should accept the multi-turn profile alias during config validation", func() {
-				cfg := &RouterConfig{
-					InlineModels: InlineModels{
-						PromptCompression: PromptCompressionConfig{
-							Enabled:   true,
-							Profile:   "multi-turn",
-							MaxTokens: 512,
-						},
-					},
-				}
-				Expect(validateConfigContracts(cfg)).To(Succeed())
+			It("should accept the multi-turn profile alias", func() {
+				Expect(validateSignalsCompression("signals", &PromptCompressionConfig{Enabled: true, Profile: "multi-turn", MaxTokens: 512})).To(Succeed())
 			})
 		})
 

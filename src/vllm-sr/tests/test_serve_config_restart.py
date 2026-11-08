@@ -1,5 +1,6 @@
 """A restart must not feed the departing router a new watched configuration."""
 
+import json
 import os
 import subprocess
 import sys
@@ -9,7 +10,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from cli import router_validation, runtime_lifecycle
+from cli import container_images, router_validation, runtime_lifecycle
 from cli.commands import runtime_paths, runtime_serve_config
 from cli.parser import ConfigParseError
 from cli.runtime_stack import resolve_runtime_stack
@@ -287,31 +288,156 @@ def test_restart_finishes_sigterm_before_old_process_can_reload(tmp_path, monkey
         process.wait(timeout=3)
 
 
-def test_serve_keeps_old_runtime_when_router_refuses_new_config(tmp_path, monkeypatch):
-    source, active, old, _candidate = prepare_replacement(tmp_path, monkeypatch)
-    router = tmp_path / "router"
-    router.write_text(
-        f"#!{sys.executable}\n"
-        "import json, sys\n"
-        "sys.stdin.read()\n"
-        "print(json.dumps({'valid': False, 'error': "
-        "'routing.model_bindings.pii: no deployment named redactor'}))\n"
-        "sys.exit(1)\n",
-        encoding="utf-8",
-    )
-    router.chmod(0o755)
-    monkeypatch.setenv(router_validation.ROUTER_BINARY_ENV, str(router))
+def _served_router(monkeypatch, *, verdict, pull=None):
+    """Fake the host: the image the start would pull, and what it says."""
+
+    ensured, validated = [], []
+    real_run = subprocess.run
+
+    def ensure(image, pull_policy):
+        ensured.append((image, pull_policy))
+        if pull is not None:
+            pull()
+
+    def run(command, **kwargs):
+        if command[1:3] == ["image", "inspect"]:
+            return subprocess.CompletedProcess(command, 0, "2026-11-06T10:12:13Z", "")
+        if "-validate-config" not in command:
+            return real_run(command, **kwargs)
+        validated.append(command[command.index("-validate-config") - 1])
+        return subprocess.CompletedProcess(
+            command, 0 if verdict["valid"] else 1, json.dumps(verdict).encode(), b""
+        )
+
+    monkeypatch.setattr(router_validation, "_container_runtime_installed", lambda: True)
+    monkeypatch.setattr(router_validation, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(router_validation.subprocess, "run", run)
+    monkeypatch.setattr(container_images, "_ensure_image_available", ensure)
+    for name in ("VLLM_SR_ROUTER_IMAGE", "VLLM_SR_IMAGE"):
+        monkeypatch.delenv(name, raising=False)
+    return ensured, validated
+
+
+def _record_stops(monkeypatch):
     stopped = []
     monkeypatch.setattr(
         runtime_serve_config,
         "stop_runtime_before_config_replacement",
         stopped.append,
     )
+    return stopped
+
+
+@pytest.mark.router_image
+def test_serve_keeps_old_runtime_when_router_refuses_new_config(tmp_path, monkeypatch):
+    source, active, old, _candidate = prepare_replacement(tmp_path, monkeypatch)
+    _served_router(
+        monkeypatch,
+        verdict={
+            "valid": False,
+            "error": "routing.model_bindings.pii: no deployment named redactor",
+        },
+    )
+    stopped = _record_stops(monkeypatch)
 
     with pytest.raises(ValueError, match="no deployment named redactor"):
         runtime_serve_config._prepare_docker_runtime_config(
-            source, None, False, None, (), True
+            source, None, False, None, (), True, image="router:new"
         )
 
     assert not stopped
     assert active.read_bytes() == old
+
+
+@pytest.mark.router_image
+@pytest.mark.parametrize(
+    ("options", "environment", "expected"),
+    [
+        ({"image": "router:new"}, {}, "router:new"),
+        ({"image": "base:new", "router_image": "router:new"}, {}, "router:new"),
+        ({}, {"VLLM_SR_IMAGE": "pinned:new"}, "pinned:new"),
+        ({}, {}, container_images.VLLM_SR_CONTAINER_IMAGE_DEFAULT),
+    ],
+)
+def test_serve_checks_a_new_config_with_the_image_it_runs(
+    tmp_path, monkeypatch, options, environment, expected
+):
+    source, active, _old, candidate = prepare_replacement(tmp_path, monkeypatch)
+    ensured, validated = _served_router(monkeypatch, verdict={"valid": True})
+    for name, value in environment.items():
+        monkeypatch.setenv(name, value)
+    # Neither a local binary nor the running stack's older image may judge it.
+    monkeypatch.setenv(router_validation.ROUTER_BINARY_ENV, str(tmp_path / "router"))
+    monkeypatch.setattr(
+        router_validation, "_running_router", lambda: ("stack:old", "old-id")
+    )
+    stopped = _record_stops(monkeypatch)
+
+    _path, _setup, lock = runtime_serve_config._prepare_docker_runtime_config(
+        source, None, False, "cpu", (), True, image_pull_policy="never", **options
+    )
+    lock.close()
+
+    assert validated == [expected]
+    assert ensured == [(expected, "never")]
+    assert stopped and active.read_bytes() == candidate
+
+
+@pytest.mark.router_image
+def test_a_failed_pull_of_the_served_image_leaves_the_old_runtime(
+    tmp_path, monkeypatch
+):
+    source, active, old, _candidate = prepare_replacement(tmp_path, monkeypatch)
+
+    def failed_pull():
+        raise SystemExit(1)
+
+    _ensured, validated = _served_router(
+        monkeypatch, verdict={"valid": True}, pull=failed_pull
+    )
+    stopped = _record_stops(monkeypatch)
+
+    with pytest.raises(SystemExit):
+        runtime_serve_config._prepare_docker_runtime_config(
+            source, None, False, "cpu", (), True, image="router:new"
+        )
+
+    assert not validated and not stopped
+    assert active.read_bytes() == old
+
+
+@pytest.mark.router_image
+@pytest.mark.parametrize(
+    ("checkout", "update"),
+    [
+        (None, ""),
+        (
+            Path("/src/semantic-router"),
+            "rebuild it from this checkout (`make -C /src/semantic-router "
+            "vllm-sr-build`) and serve it with `--image-pull-policy ifnotpresent` or ",
+        ),
+    ],
+)
+def test_a_moving_tag_serve_just_pulled_is_not_pulled_again(
+    tmp_path, monkeypatch, checkout, update
+):
+    source, _active, _old, _candidate = prepare_replacement(tmp_path, monkeypatch)
+    _served_router(monkeypatch, verdict={"valid": False, "error": "unknown field"})
+    monkeypatch.setattr(router_validation, "_source_checkout", lambda: checkout)
+    image = container_images.VLLM_SR_CONTAINER_IMAGE_DEFAULT.rsplit(":", 1)[0]
+    monkeypatch.setattr(
+        router_validation, "VLLM_SR_CONTAINER_IMAGE_DEFAULT", f"{image}:latest"
+    )
+    monkeypatch.setattr(container_images, "_PULLED_IMAGES", {f"{image}:latest"})
+    _record_stops(monkeypatch)
+
+    with pytest.raises(ValueError) as refused:
+        runtime_serve_config._prepare_docker_runtime_config(
+            source, None, False, "cpu", (), True, image=f"{image}:latest"
+        )
+
+    assert str(refused.value).endswith(
+        "`latest` is a moving tag: this local copy was built on 2026-11-06 and may "
+        f"be older than this CLI; {update}name the Router with `--image` or "
+        "`VLLM_SR_IMAGE`."
+    )

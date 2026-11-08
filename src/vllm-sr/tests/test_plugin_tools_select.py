@@ -5,50 +5,23 @@ import tempfile
 
 import pytest
 import yaml
-from cli.config_migration import migrate_config_data
 from cli.models import ToolsPluginConfig
 from cli.parser import ConfigParseError, parse_user_config
 from cli.validator import validate_user_config
 from pydantic import ValidationError as PydanticValidationError
+from recipe_document_test_support import default_recipe_document
 
 
 def _write_config(config_yaml: str) -> str:
-    data = yaml.safe_load(config_yaml)
-    providers = data.get("providers") if isinstance(data, dict) else None
-    models = providers.get("models", []) if isinstance(providers, dict) else []
-    if isinstance(data, dict) and (
-        "signals" in data
-        or "decisions" in data
-        or any(
-            isinstance(model, dict)
-            and any(
-                key in model
-                for key in (
-                    "endpoints",
-                    "access_key",
-                    "reasoning_family",
-                    "param_size",
-                    "context_window_size",
-                    "description",
-                    "capabilities",
-                    "quality_score",
-                    "modality",
-                    "tags",
-                )
-            )
-            for model in models
-        )
-    ):
-        data = migrate_config_data(data)
-
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-        yaml.safe_dump(data, f, sort_keys=False)
+        yaml.safe_dump(
+            default_recipe_document(yaml.safe_load(config_yaml)), f, sort_keys=False
+        )
         return f.name
 
 
 def _tools_plugin_config(configuration: str) -> str:
     return f"""
-version: v0.1
 listeners:
   - name: "http-8888"
     address: "0.0.0.0"
@@ -73,14 +46,6 @@ decisions:
       - type: "tools"
         configuration:
 {configuration}
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
 """
 
 
@@ -189,7 +154,6 @@ class TestMultiplePlugins:
     def test_multiple_plugins_in_decision(self):
         """Test decision with multiple plugins."""
         config_yaml = """
-version: v0.1
 listeners:
   - name: "http-8888"
     address: "0.0.0.0"
@@ -226,14 +190,6 @@ decisions:
         configuration:
           enabled: true
           system_prompt: "You are a test assistant"
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
 """
 
         temp_path = _write_config(config_yaml)
@@ -255,7 +211,6 @@ providers:
     def test_multiple_plugins_with_context(self):
         """Test a context plugin alongside system_prompt, response_cache, and router_replay."""
         config_yaml = """
-version: v0.1
 listeners:
   - name: "http-8888"
     address: "0.0.0.0"
@@ -309,14 +264,6 @@ decisions:
         configuration:
           enabled: true
           max_records: 200
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
 """
 
         temp_path = _write_config(config_yaml)

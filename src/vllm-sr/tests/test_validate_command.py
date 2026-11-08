@@ -82,7 +82,7 @@ providers:
       catalog: openai/gpt-5.4
       backend_refs:
         - provider: openai
-          api_key_env: VALIDATION_ONLY_OPENAI_API_KEY
+          auth: {api_key_env: VALIDATION_ONLY_OPENAI_API_KEY}
 recipes:
   - name: default
 """,
@@ -259,25 +259,23 @@ recipes:
 
 
 @pytest.mark.parametrize(
-    ("base_url", "expected_error"),
+    ("url", "expected_error"),
     (
         (
             "ftp://example.com/v1#fragment",
-            "base_url scheme 'ftp' is unsupported",
+            "endpoint scheme 'ftp' is unsupported",
         ),
         (
             "https://example.com/v1#fragment",
-            "base_url userinfo and fragments are not allowed",
+            "endpoint userinfo and fragments are not allowed",
         ),
         (
             "https://example.com/v1?region=west",
-            "base_url query parameters are not supported by Envoy routing",
+            "endpoint query parameters are not supported by Envoy routing",
         ),
     ),
 )
-def test_validate_command_rejects_invalid_backend_url(
-    tmp_path, base_url, expected_error
-):
+def test_validate_command_rejects_invalid_backend_url(tmp_path, url, expected_error):
     config_path = _write_config(
         tmp_path,
         f"""
@@ -289,7 +287,7 @@ providers:
       api_format: openai
       backend_refs:
         - provider: vllm
-          base_url: {base_url}
+          endpoint: {url}
 recipes:
   - name: default
 """,
@@ -309,83 +307,83 @@ recipes:
         (
             """
         - provider: vllm
-          base_url: http://a.example/v1
-          api_key_env: KEY_A
+          endpoint: http://a.example/v1
+          auth: {api_key_env: KEY_A}
         - provider: vllm
-          base_url: http://b.example/custom
-          api_key_env: KEY_A
+          endpoint: http://b.example/custom
+          auth: {api_key_env: KEY_A}
 """,
             "base path differ",
         ),
         (
             """
         - provider: vllm
-          base_url: http://a.example/v1
-          api_key_env: KEY_A
+          endpoint: http://a.example/v1
+          auth: {api_key_env: KEY_A}
         - provider: vllm
-          base_url: http://b.example/v1
-          api_key_env: KEY_B
+          endpoint: http://b.example/v1
+          auth: {api_key_env: KEY_B}
 """,
             "credential source differ",
         ),
         (
             """
         - provider: vllm
-          base_url: http://a.example/v1
+          endpoint: http://a.example/v1
         - provider: sglang
-          base_url: http://b.example/v1
+          endpoint: http://b.example/v1
 """,
             "provider differ",
         ),
         (
             """
         - provider: vllm
-          base_url: http://a.example/v1
+          endpoint: http://a.example/v1
         - provider: vllm
-          base_url: https://a.example/v1
+          endpoint: https://a.example/v1
 """,
             "URL scheme",
         ),
         (
             """
         - provider: vllm
-          base_url: http://a.example/v1
-          extra_headers:
+          endpoint: http://a.example/v1
+          headers:
             x-region: east
         - provider: vllm
-          base_url: http://b.example/v1
-          extra_headers:
+          endpoint: http://b.example/v1
+          headers:
             x-region: west
 """,
-            "extra headers differ",
+            "headers differ",
         ),
         (
             """
         - provider: vllm
-          base_url: https://a.example/v1
+          endpoint: https://a.example/v1
         - provider: vllm
-          base_url: https://b.example/v1
+          endpoint: https://b.example/v1
 """,
             "TLS server name differ",
         ),
         (
             """
         - provider: vllm
-          base_url: https://127.0.0.1/v1
+          endpoint: https://127.0.0.1/v1
 """,
             "HTTPS endpoint must use a DNS hostname",
         ),
         (
             """
         - provider: vllm
-          base_url: http://a.example:not-a-port/v1
+          endpoint: http://a.example:not-a-port/v1
 """,
             "has an invalid endpoint port",
         ),
         (
             """
         - provider: vllm
-          base_url: http://a.example:0/v1
+          endpoint: http://a.example:0/v1
 """,
             "expected 1..65535",
         ),
@@ -399,7 +397,7 @@ recipes:
         (
             """
         - provider: vllm
-          base_url: http://a.example:65536/v1
+          endpoint: http://a.example:65536/v1
 """,
             "has an invalid endpoint port",
         ),
@@ -414,20 +412,12 @@ recipes:
             """
         - name: replica
           provider: vllm
-          base_url: http://a.example/v1
+          endpoint: http://a.example/v1
         - name: replica
           provider: vllm
-          base_url: http://b.example/v1
+          endpoint: http://b.example/v1
 """,
             "name 'replica' is duplicated",
-        ),
-        (
-            """
-        - provider: vllm
-          base_url: http://base.example/v1
-          endpoint: endpoint.example:8000/v1
-""",
-            "cannot set both base_url and endpoint",
         ),
     ),
 )
@@ -510,7 +500,7 @@ recipes:
       backend_refs:
         - provider: azure-openai
 """,
-            "requires endpoint or base_url because provider 'azure-openai' has no default",
+            "requires endpoint because provider 'azure-openai' has no default",
         ),
     ),
 )
@@ -560,7 +550,7 @@ recipes:
       api_format: openai
       backend_refs:
         - provider: vllm
-          base_url: http://[::1]:8000/v1
+          endpoint: http://[::1]:8000/v1
 """,
         """
     - name: local-model
@@ -606,7 +596,7 @@ recipes:
 
 
 def test_validate_command_accepts_non_ascii_config_under_ascii_locale(tmp_path):
-    config_content = "version: v0.5\n# Description: Router configuration \u2014 Decision & Latency Profile \u201cexperimental\u201d\n# Comment: \u6a21\u578b\u914d\u7f6e\nlisteners: []\nproviders:\n  defaults:\n    model: local-model\n  models:\n    - name: local-model\n      api_format: openai\n      backend_refs:\n        - provider: vllm\n          base_url: http://127.0.0.1:8000/v1\n          api_key_env: TEST_API_KEY\nrecipes:\n  - name: default\n"
+    config_content = "version: v0.5\n# Description: Router configuration \u2014 Decision & Latency Profile \u201cexperimental\u201d\n# Comment: \u6a21\u578b\u914d\u7f6e\nlisteners: []\nproviders:\n  defaults:\n    model: local-model\n  models:\n    - name: local-model\n      api_format: openai\n      backend_refs:\n        - provider: vllm\n          endpoint: http://127.0.0.1:8000/v1\n          auth:\n            api_key_env: TEST_API_KEY\nrecipes:\n  - name: default\n"
     config_path = tmp_path / "config.yaml"
     config_path.write_text(config_content, encoding="utf-8")
 
@@ -624,6 +614,8 @@ def test_validate_command_accepts_non_ascii_config_under_ascii_locale(tmp_path):
     env["PYTHONCOERCECLOCALE"] = "0"
     env["PYTHONIOENCODING"] = "utf-8"
 
+    # The CLI reads the file here; --offline keeps the check off whatever
+    # Router image the host happens to have.
     result = subprocess.run(
         [
             sys.executable,
@@ -633,6 +625,7 @@ def test_validate_command_accepts_non_ascii_config_under_ascii_locale(tmp_path):
             "validate",
             "--config",
             str(config_path),
+            "--offline",
         ],
         cwd=tmp_path,
         env=env,

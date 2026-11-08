@@ -121,7 +121,7 @@ export function buildConnectedProviderModel({
     backend_refs: [
       {
         name: `${providerID}-primary`,
-        base_url: baseURL,
+        endpoint: baseURL,
         provider: providerID,
         ...(apiKey ? { api_key: apiKey } : {}),
       },

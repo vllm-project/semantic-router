@@ -53,7 +53,6 @@ func vectorStoreEmbeddingConfig(cfg *config.RouterConfig) *config.RouterConfig {
 	embeddingConfig.ModelDeployments = cfg.ModelDeployments
 	embeddingConfig.GlobalModelBindings = cfg.GlobalModelBindings
 	embeddingConfig.EmbeddingDeployment = cfg.EmbeddingDeployment
-	embeddingConfig.ExternalModels = cfg.ExternalModels
 	embeddingConfig.ModelAdmission = cfg.ModelAdmission
 	return embeddingConfig
 }

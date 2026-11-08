@@ -108,10 +108,10 @@ func TestClientsMaySupplyOnlyTheRouterControlHeaders(t *testing.T) {
 			t.Errorf("DroppedFromClients() drops %s, which clients may send", name)
 		}
 	}
-	// The authenticator sets the gateway credential, so the Router reads it,
+	// The authenticator sets the delegated credential, so the Router reads it,
 	// and no provider ever receives the header.
-	if slices.Contains(dropped, VSRGatewayCredential) || !slices.Contains(KeptFromProviders(), VSRGatewayCredential) {
-		t.Errorf("%s must reach the Router and never a provider", VSRGatewayCredential)
+	if slices.Contains(dropped, VSRDelegatedCredential) || !slices.Contains(KeptFromProviders(), VSRDelegatedCredential) {
+		t.Errorf("%s must reach the Router and never a provider", VSRDelegatedCredential)
 	}
 }
 

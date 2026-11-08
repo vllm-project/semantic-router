@@ -183,7 +183,7 @@ def test_init_binds_each_recipe_and_validates_without_touching_source(
     # Follow the same initialization -> local materialization -> storage
     # provisioning boundary as serve, without starting containers in unit tests.
     layout = resolve_runtime_stack()
-    effective = resolve_effective_config_path(output, None, False, None)
+    effective = resolve_effective_config_path(output, None, False)
     runtime = yaml.safe_load(effective.read_text())
     postgres = runtime["global"]["services"]["router_replay"]["postgres"]
     assert postgres == {
@@ -248,7 +248,7 @@ def test_init_preserves_authored_replay_settings(tmp_path, authored):
     assert written["plugins"] == (
         plugins or [{"type": "router_replay", "configuration": {"enabled": True}}]
     )
-    effective = resolve_effective_config_path(output, None, False, None)
+    effective = resolve_effective_config_path(output, None, False)
     runtime = yaml.safe_load(effective.read_text())
     effective_replay = runtime["global"]["services"]["router_replay"]
     assert all(effective_replay[key] == value for key, value in authored.items())
@@ -532,7 +532,6 @@ def _compose(source, refs, model_names, config=None):
         "balance",
         bundle="mom-v1",
         config=config or builtin_recipes.load_provider_config(source),
-        config_path=source,
         bindings=refs,
         model_names=model_names,
     )

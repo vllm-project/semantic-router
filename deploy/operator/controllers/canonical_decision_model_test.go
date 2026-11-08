@@ -140,11 +140,6 @@ func TestASystemOneDecisionModelAnswersEveryBuiltInSignal(t *testing.T) {
 	if key, err := cfg.ModelDeployments["d3-remote"].Auth.Key(); err != nil || key != "operator-test-key" {
 		t.Fatalf("auth.api_key_env does not read the Pod environment: %v", err)
 	}
-	for _, warning := range routerconfig.Warnings(cfg) {
-		if warning.Code == "deprecated_model_field" {
-			t.Errorf("the operator writes a deprecated model field: %+v", warning)
-		}
-	}
 }
 
 func TestASystemOneKeyReachesTheRouterFromASecret(t *testing.T) {

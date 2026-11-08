@@ -11,10 +11,7 @@ import {
 } from './configPageDecisionBindingsSupport'
 import { DEFAULT_SECTIONS, SECTION_META } from './configPageRouterDefaultsCatalog'
 import { routerStructuredField } from './configPageRouterStructuredFields'
-import {
-  DEPRECATED_MODULE_MODEL_FIELDS,
-  normalizeRouterStructuredFields,
-} from './configPageRouterStructuredSchema'
+import { normalizeRouterStructuredFields } from './configPageRouterStructuredSchema'
 import {
   embeddingModelsBadges,
   embeddingModelsEditData,
@@ -93,7 +90,7 @@ export const ROUTER_LAYER_META: Record<RouterLayerKey, { title: string; descript
   },
   model_catalog: {
     title: 'Model Catalog',
-    description: 'Router-owned embedding catalogs, external models, and model-backed modules.',
+    description: 'Router-owned embedding catalogs, deployments, and decision model bindings.',
   },
 }
 
@@ -111,20 +108,6 @@ export function routerLayerMeta(layer: string): { title: string; description: st
 
 function cloneDefaultSection(key: RouterSystemKey): unknown {
   return JSON.parse(JSON.stringify(DEFAULT_SECTIONS[key]))
-}
-
-const LEGACY_ROOT_KEYS: Partial<Record<RouterSystemKey, keyof ConfigData>> = {
-  response_api: 'response_api',
-  router_replay: 'router_replay',
-  memory: 'memory',
-  response_cache: 'response_cache',
-  external_models: 'external_models',
-  embedding_models: 'embedding_models',
-  observability: 'observability',
-  looper: 'looper',
-  clear_route_cache: 'clear_route_cache',
-  model_selection: 'model_selection',
-  api: 'api',
 }
 
 function asObject(value: unknown): Record<string, unknown> | undefined {
@@ -217,14 +200,7 @@ function getSectionValue(
     return canonicalValue
   }
 
-  const maybeConfig = config as ConfigData
-  const globalValue = getNestedValue(maybeConfig.global, sectionPath)
-  if (globalValue !== undefined) {
-    return globalValue
-  }
-
-  const legacyKey = LEGACY_ROOT_KEYS[key]
-  return legacyKey ? maybeConfig[legacyKey] : undefined
+  return getNestedValue((config as ConfigData).global, sectionPath)
 }
 
 function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummaryItem[] {
@@ -318,45 +294,10 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
         { label: 'Embedding', value: embeddingDeploymentSummary(section) },
         { label: 'Enabled', value: stringOrFallback(section?.enabled, 'Disabled') },
       ]
-    case 'external_models': {
-      const models = asArray(data) || []
-      const roles = models
-        .map((item) => (typeof item.model_role === 'string' ? item.model_role : null))
-        .filter((value): value is string => Boolean(value))
-      return [
-        { label: 'Configured models', value: `${models.length}` },
-        { label: 'Roles', value: roles.length ? roles.join(', ') : 'Not set' },
-        {
-          label: 'Providers',
-          value:
-            models
-              .map((item) => (typeof item.llm_provider === 'string' ? item.llm_provider : null))
-              .filter(Boolean)
-              .join(', ') || 'Not set',
-        },
-      ]
-    }
     case 'admission':
       return [{ label: 'Policies', value: `${section ? Object.keys(section).length : 0}` }]
     case 'embedding_models':
       return embeddingModelsSummary(data)
-    case 'prompt_compression':
-      return [
-        { label: 'Enabled', value: stringOrFallback(section?.enabled, 'Disabled') },
-        { label: 'Profile', value: stringOrFallback(section?.profile) },
-        { label: 'Max tokens', value: stringOrFallback(section?.max_tokens) },
-        {
-          label: 'Skip signals',
-          value:
-            (Array.isArray(section?.skip_signals) ? section?.skip_signals.join(', ') : 'Not set') ||
-            'Not set',
-        },
-      ]
-    case 'modality_detector':
-      return [
-        { label: 'Enabled', value: stringOrFallback(section?.enabled, 'Disabled') },
-        { label: 'Method', value: stringOrFallback(section?.method) },
-      ]
     case 'observability':
       return [
         { label: 'Metrics', value: asObject(section?.metrics)?.enabled ? 'Enabled' : 'Disabled' },
@@ -371,7 +312,6 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
       ]
     case 'looper':
       return [
-        { label: 'Endpoint', value: stringOrFallback(section?.endpoint) },
         {
           label: 'Timeout',
           value: section?.timeout_seconds ? `${section.timeout_seconds}s` : 'Not set',
@@ -410,13 +350,6 @@ function badgesForKey(key: RouterSystemKey, data: unknown): RouterSectionBadge[]
 
   if (key === 'embedding_models') {
     badges.push(...embeddingModelsBadges(data))
-  }
-
-  if (key === 'external_models') {
-    const models = asArray(data) || []
-    if (models.length === 0) {
-      badges.push({ label: 'No external models', tone: 'inactive' })
-    }
   }
 
   return badges
@@ -610,106 +543,12 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
         routerStructuredField(key, 'milvus'),
         routerStructuredField(key, 'llama_stack'),
       ]
-    case 'external_models':
-      return [routerStructuredField(key, 'items')]
     case 'embedding_models':
       return embeddingModelsFields()
-    case 'prompt_compression':
-      return [
-        { name: 'enabled', label: 'Enable Prompt Compression', type: 'boolean' },
-        {
-          name: 'profile',
-          label: 'Profile',
-          type: 'select',
-          options: ['default', 'coding', 'medical', 'security', 'multi_turn'],
-        },
-        { name: 'max_tokens', label: 'Max Tokens', type: 'number', placeholder: '512' },
-        { name: 'min_length', label: 'Min Length', type: 'number', placeholder: '64' },
-        routerStructuredField(key, 'skip_signals'),
-        {
-          name: 'textrank_weight',
-          label: 'TextRank Weight',
-          type: 'number',
-          step: 0.01,
-          placeholder: '1.0',
-        },
-        {
-          name: 'position_weight',
-          label: 'Position Weight',
-          type: 'number',
-          step: 0.01,
-          placeholder: '1.0',
-        },
-        {
-          name: 'tfidf_weight',
-          label: 'TFIDF Weight',
-          type: 'number',
-          step: 0.01,
-          placeholder: '1.0',
-        },
-        {
-          name: 'novelty_weight',
-          label: 'Novelty Weight',
-          type: 'number',
-          step: 0.01,
-          placeholder: '0.05',
-        },
-        {
-          name: 'position_depth',
-          label: 'Position Depth',
-          type: 'number',
-          step: 0.01,
-          placeholder: '1.0',
-        },
-        {
-          name: 'preserve_first_n',
-          label: 'Preserve First Sentences',
-          type: 'number',
-          placeholder: '3',
-        },
-        {
-          name: 'preserve_last_n',
-          label: 'Preserve Last Sentences',
-          type: 'number',
-          placeholder: '2',
-        },
-      ]
-    case 'modality_detector':
-      return [
-        { name: 'enabled', label: 'Enable Modality Detector', type: 'boolean' },
-        {
-          name: 'method',
-          label: 'Detection Method',
-          type: 'select',
-          options: ['classifier', 'keyword', 'hybrid'],
-        },
-        routerStructuredField(key, 'classifier'),
-        routerStructuredField(key, 'keywords'),
-        routerStructuredField(key, 'both_keywords'),
-        {
-          name: 'confidence_threshold',
-          label: 'Confidence Threshold',
-          type: 'percentage',
-          placeholder: '80',
-        },
-        {
-          name: 'lower_threshold_ratio',
-          label: 'Lower Threshold Ratio',
-          type: 'percentage',
-          placeholder: '60',
-        },
-      ]
     case 'observability':
       return [routerStructuredField(key, 'metrics'), routerStructuredField(key, 'tracing')]
     case 'looper':
       return [
-        { name: 'enabled', label: 'Enable Looper', type: 'boolean' },
-        {
-          name: 'endpoint',
-          label: 'Endpoint',
-          type: 'text',
-          placeholder: 'http://localhost:8899/v1/chat/completions',
-        },
         {
           name: 'timeout_seconds',
           label: 'Timeout (seconds)',
@@ -729,19 +568,8 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
   return []
 }
 
-// Modules whose model a binding chooses; their deprecated model fields are
-// neither offered nor saved.
-function withoutModelFields(module: unknown): Record<string, unknown> {
-  const rest = { ...(asObject(module) || {}) }
-  for (const field of DEPRECATED_MODULE_MODEL_FIELDS) delete rest[field]
-  return rest
-}
-
 function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
   const curated = curatedFieldsForKey(key)
-  if (key === 'external_models') {
-    return curated
-  }
   if (key === 'admission') {
     return [
       generatedRouterValueField(
@@ -764,9 +592,6 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
 function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
   if (key === 'clear_route_cache') {
     return { value: Boolean(data) }
-  }
-  if (key === 'external_models') {
-    return { items: Array.isArray(data) ? data : cloneDefaultSection(key) }
   }
   if (key === 'admission') {
     return { value: asObject(data) || cloneDefaultSection(key) }
@@ -800,12 +625,6 @@ function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<Config
     return buildNestedPatch(
       CURATED_ROUTER_SECTIONS[key].path,
       Boolean(data.value),
-    ) as Partial<ConfigData>
-  }
-  if (key === 'external_models') {
-    return buildNestedPatch(
-      CURATED_ROUTER_SECTIONS[key].path,
-      Array.isArray(data.items) ? data.items : [],
     ) as Partial<ConfigData>
   }
   if (key === 'admission') {
@@ -884,12 +703,6 @@ export function buildRouterSectionCards(ctx: RouterSectionContext): RouterSectio
       editData: editDataForKey(key, view),
       editFields: fieldsForKey(key),
       save: (nextData: EditFormData) => saveForKey(key, nextData),
-      ...(key === 'external_models'
-        ? {
-            deprecation:
-              'External models are deprecated: the Router reads each one as a deployment. Declare remote models in Deployments with provider classify, openai_chat or openai_embeddings, then bind signals to them.',
-          }
-        : {}),
     }
   })
 
@@ -904,10 +717,7 @@ export function buildRouterSectionCards(ctx: RouterSectionContext): RouterSectio
     .filter((surface) => !curatedPaths.has(surface.path.join('.')))
     .map((surface) => {
       const schemaPath = ['global', ...surface.path]
-      const moduleSection = surface.path[0] === 'model_catalog' && surface.path[1] === 'modules'
-      const generatedFields = mergeGeneratedRouterFields(schemaPath, [], {
-        omitNested: moduleSection ? DEPRECATED_MODULE_MODEL_FIELDS : [],
-      })
+      const generatedFields = mergeGeneratedRouterFields(schemaPath, [])
       const objectForm = generatedFields.length > 0
       const defaultData = getNestedValue(ctx.routerDefaults, surface.path)
       const overrideData = getNestedValue(ctx.config?.global, surface.path)
@@ -945,16 +755,7 @@ export function buildRouterSectionCards(ctx: RouterSectionContext): RouterSectio
         save: (nextData) =>
           buildNestedPatch(
             surface.path,
-            !objectForm
-              ? nextData.value
-              : moduleSection
-                ? Object.fromEntries(
-                    Object.entries(nextData).map(([name, value]) => [
-                      name,
-                      asObject(value) ? withoutModelFields(value) : value,
-                    ]),
-                  )
-                : nextData,
+            !objectForm ? nextData.value : nextData,
           ) as Partial<ConfigData>,
       }
     })

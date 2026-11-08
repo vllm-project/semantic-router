@@ -151,6 +151,13 @@ def build(base: dict, grounding_on: bool, policy: str = "weight") -> dict:
     if "vector_store" in stores:
         stores["vector_store"]["enabled"] = False
     stores.pop("tool_sessions", None)
+
+    # No authenticator fronts the local run, and the bench recipe asks no
+    # delegated deployment; one that nothing asks fails to load.
+    deployments = c["global"].get("model_catalog", {}).get("deployments", {})
+    for name, deployment in list(deployments.items()):
+        if (deployment.get("auth") or {}).get("credential") == "delegated":
+            del deployments[name]
     return c
 
 

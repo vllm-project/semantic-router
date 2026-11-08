@@ -4,54 +4,11 @@ import (
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 )
 
-// PromptCompressionConfig controls NLP-based prompt compression before signal extraction.
-type PromptCompressionConfig struct {
-	Enabled        bool     `yaml:"enabled"`
-	Profile        string   `yaml:"profile,omitempty"`
-	MaxTokens      int      `yaml:"max_tokens"`
-	MinLength      int      `yaml:"min_length,omitempty"`
-	SkipSignals    []string `yaml:"skip_signals,omitempty"`
-	TextRankWeight float64  `yaml:"textrank_weight,omitempty"`
-	PositionWeight float64  `yaml:"position_weight,omitempty"`
-	TFIDFWeight    float64  `yaml:"tfidf_weight,omitempty"`
-	NoveltyWeight  float64  `yaml:"novelty_weight,omitempty"`
-	PositionDepth  float64  `yaml:"position_depth,omitempty"`
-	PreserveFirstN int      `yaml:"preserve_first_n,omitempty"`
-	PreserveLastN  int      `yaml:"preserve_last_n,omitempty"`
-}
-
-func (pc PromptCompressionConfig) SkipSignalsSet() map[string]bool {
-	signals := pc.SkipSignals
-	if len(signals) == 0 {
-		signals = []string{SignalTypeJailbreak, SignalTypePII}
-	}
-	m := make(map[string]bool, len(signals))
-	for _, s := range signals {
-		m[s] = true
-	}
-	return m
-}
-
-type ExternalModelConfig struct {
-	Name             string                        `yaml:"name,omitempty"`
-	Provider         string                        `yaml:"llm_provider"`
-	ModelRole        string                        `yaml:"model_role"`
-	ModelEndpoint    ClassifierVLLMEndpoint        `yaml:"llm_endpoint,omitempty"`
-	ModelName        string                        `yaml:"llm_model_name,omitempty"`
-	TimeoutSeconds   float64                       `yaml:"llm_timeout_seconds,omitempty"`
-	AccessKey        string                        `yaml:"access_key,omitempty" json:"-"`
-	MaxTokens        int                           `yaml:"max_tokens,omitempty"`
-	Temperature      float64                       `yaml:"temperature,omitempty"`
-	Reasoning        *ExternalModelReasoningConfig `yaml:"reasoning,omitempty"`
-	MaxRequestBytes  int64                         `yaml:"max_request_bytes,omitempty"`
-	MaxResponseBytes int64                         `yaml:"max_response_bytes,omitempty"`
-}
-
-// ExternalModelReasoningConfig controls reasoning for requests made to a
-// vLLM-backed external classifier. Family references the shared reasoning-family
-// catalog; the external model contract intentionally does not support inline
-// family definitions.
-type ExternalModelReasoningConfig struct {
+// GenerationReasoning turns a chat model's reasoning on or off for its
+// answers. Family references the shared reasoning-family catalog, which
+// says how a request turns reasoning on; a deployment defines no family of
+// its own.
+type GenerationReasoning struct {
 	Family          string `yaml:"family" jsonschema:"required"`
 	UseReasoning    *bool  `yaml:"use_reasoning" jsonschema:"required"`
 	ReasoningEffort string `yaml:"reasoning_effort,omitempty"`
@@ -64,15 +21,6 @@ type AdmissionConfig struct {
 	MaxQueue       int    `yaml:"max_queue,omitempty"`
 	QueueTimeoutMs int    `yaml:"queue_timeout_ms,omitempty"`
 	OnOverflow     string `yaml:"on_overflow,omitempty"`
-}
-
-type ClassifierVLLMEndpoint struct {
-	Address         string `yaml:"address"`
-	Port            int    `yaml:"port"`
-	Protocol        string `yaml:"protocol,omitempty"`
-	Name            string `yaml:"name,omitempty"`
-	UseChatTemplate bool   `yaml:"use_chat_template,omitempty"`
-	PromptTemplate  string `yaml:"prompt_template,omitempty"`
 }
 
 type VLLMEndpoint struct {
@@ -104,10 +52,17 @@ type ProviderProfile struct {
 	ExtraHeaders  map[string]string `yaml:"extra_headers,omitempty"`
 	APIVersion    string            `yaml:"api_version,omitempty"`
 	ChatPath      string            `yaml:"chat_path,omitempty"`
-	// TrustedGateway selects the request's trusted gateway credential as this
+	// AuthCredential is the backend's credential mode (auth.credential):
+	// delegated selects the requesting user's delegated credential as this
 	// backend's credential; static keys and per-user provider keys are not
 	// consulted for it.
-	TrustedGateway bool `yaml:"trusted_gateway,omitempty"`
+	AuthCredential string `yaml:"auth_credential,omitempty"`
+}
+
+// Delegated reports whether the backend takes the requesting user's
+// delegated credential instead of a key.
+func (p *ProviderProfile) Delegated() bool {
+	return p != nil && p.AuthCredential == CredentialDelegated
 }
 
 type ModelPricing struct {
@@ -237,22 +192,3 @@ const (
 	PIITypeUSSSN           = "US_SSN"
 	PIITypeZipCode         = "ZIP_CODE"
 )
-
-// FindExternalModelByRole searches for an external model configuration by its role.
-func (cfg *RouterConfig) FindExternalModelByRole(role string) *ExternalModelConfig {
-	for i := range cfg.ExternalModels {
-		if cfg.ExternalModels[i].ModelRole == role {
-			return &cfg.ExternalModels[i]
-		}
-	}
-	return nil
-}
-
-func (cfg *RouterConfig) FindExternalModelByName(name string) *ExternalModelConfig {
-	for i := range cfg.ExternalModels {
-		if cfg.ExternalModels[i].Name == name {
-			return &cfg.ExternalModels[i]
-		}
-	}
-	return nil
-}

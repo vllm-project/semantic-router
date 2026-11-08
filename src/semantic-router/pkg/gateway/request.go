@@ -104,9 +104,9 @@ func newRequestID() string {
 // client-sent value is dropped before routing sees it.
 var identityHeaders = []string{
 	headers.AuthzUserID, headers.AuthzUserGroups, headers.AuthzTeamID, headers.AuthzTenantID,
-	// The deployment authenticator's gateway credential is an authentication
-	// output too, and a client must not supply its own.
-	headers.VSRGatewayCredential,
+	// The deployment authenticator's delegated credential is an
+	// authentication output too, and a client must not supply its own.
+	headers.VSRDelegatedCredential,
 }
 
 func headerSet(names []string) map[string]bool {

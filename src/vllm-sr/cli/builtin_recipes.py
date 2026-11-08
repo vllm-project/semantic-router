@@ -186,7 +186,6 @@ def compose_builtin_recipe(
     *,
     bundle: str,
     config: dict[str, Any],
-    config_path: Path,
     bindings: Any,
     model_names: Sequence[str],
     version: str = DEFAULT_CHANNEL,
@@ -194,7 +193,7 @@ def compose_builtin_recipe(
 ) -> dict[str, Any]:
     """Return a validated copy of config that publishes one installed recipe.
 
-    config is the provider config read from config_path. Every selected
+    config is a provider config as load_provider_config reads it. Every selected
     decision is bound to operator-supplied provider model refs, and the new
     entrypoint serves model_names, the first as its primary name. The original
     package, provider document, and authored model metadata are unchanged.
@@ -281,7 +280,7 @@ def compose_builtin_recipe(
     # deployment, so callers must start from a provider config, not setup mode.
     if (candidate.get("setup") or {}).get("mode"):
         raise ValueError("Start from an explicit provider config, not setup mode")
-    _validate_composition(candidate, config_path)
+    _validate_composition(candidate)
     return candidate
 
 
@@ -289,12 +288,10 @@ def _render_config(config: dict[str, Any]) -> str:
     return yaml.safe_dump(config, sort_keys=False, allow_unicode=True)
 
 
-def _validate_composition(candidate: dict[str, Any], config_path: Path) -> None:
+def _validate_composition(candidate: dict[str, Any]) -> None:
     # Validate the rendered document, typed exactly as the file will load.
     parsed = parse_user_config_data(
-        safe_load_router_config(_render_config(candidate)),
-        str(config_path),
-        log_summary=False,
+        safe_load_router_config(_render_config(candidate)), log_summary=False
     )
     errors = validate_user_config(parsed, log_summary=False)
     if errors:
@@ -333,7 +330,6 @@ def initialize_builtin_recipe(
         name,
         bundle=bundle,
         config=config,
-        config_path=config_path,
         bindings=yaml.safe_load(bindings_path.read_text(encoding="utf-8")),
         model_names=[model_name],
         version=version,

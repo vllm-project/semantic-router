@@ -48,7 +48,8 @@ global:
 | `global.services` | API、Response API、可观测性、authz、速率限制、管理 API、启动状态、回放 | [API 与可观测性](./api-and-observability) |
 | `global.stores` | 响应缓存、memory、向量存储 | [存储与工具](./stores-and-tools) |
 | `global.integrations` | 工具目录和 Looper 运行时/状态 | [存储与工具](./stores-and-tools) |
-| `global.model_catalog` | 嵌入、系统模型、外部辅助、知识库、能力模块 | [Router 运行时](../../model-runtime/overview.md) |
+| `global.model_catalog` | 部署、绑定、准入、嵌入模型和决策模型 | [Router 运行时](../../model-runtime/overview.md) |
+| `global.plugins` | 每个请求运行的默认插件，例如 `context`（记忆、`compress.signals`）和 `router_replay` | [插件](../plugin/overview) |
 
 入口和命名配方是顶层对象，而不是全局设置；见[虚拟模型](./entrypoints-and-recipes)。
 远程文本嵌入见[运行时嵌入](../../model-runtime/guides/embeddings)。

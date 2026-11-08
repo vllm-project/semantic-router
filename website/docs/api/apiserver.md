@@ -691,9 +691,6 @@ Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, and r
 | `GET` | `/api/v1/diagnostics/routes/systemone` | List active native recipe entrypoints for operator diagnostics without probing models; availability describes the routing plan, not backend health |
 | `POST` | `/api/v1/diagnostics/routes/systemone` | Run a native recipe using operator classify.invoke permission; signals and the selected algorithm share one deadline and physical call ledger, with per-decision limits tightening the request ceiling; independent of public listener grants |
 | `GET` | `/api/v1/diagnostics/models` | List prepared model bindings in an explicitly selected recipe |
-| `POST` | `/api/v1/diagnostics/models/labels` | Inspect a prepared label distribution; windowed bindings preserve their configured scan |
-| `POST` | `/api/v1/diagnostics/models/label-scores` | Inspect independent label scores using the prepared operating point when configured |
-| `POST` | `/api/v1/diagnostics/models/tokens` | Inspect prepared token spans with original UTF-8 byte offsets and complete configured window scanning |
 | `POST` | `/api/v1/diagnostics/models/embeddings` | Run the explicitly selected prepared embedding binding at its published representation |
 <!-- END-GENERATED-ENDPOINT-INDEX -->
 

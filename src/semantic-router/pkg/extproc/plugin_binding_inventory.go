@@ -73,7 +73,7 @@ func (r *OpenAIRouter) contextPluginDependencies(plugin *config.ContextPluginCon
 	if plugin.Source(config.ContextSourceMemory) != nil {
 		add("memory_store", r.MemoryStore != nil)
 	}
-	if compress := plugin.Compress; compress != nil {
+	if compress := plugin.Compress; compress.CompressesRequest() {
 		add("context_compression", r.ContextCompression != nil)
 		if compress.Recovery != nil && compress.Recovery.Enabled {
 			add("context_recovery", r.CompressionRecovery != nil)

@@ -1,16 +1,12 @@
 import { effectiveModelAPIFormat, protocolForModelAPIFormat } from './configPageModelCatalogSupport'
-import type { Endpoint } from '../components/EndpointsEditor'
 import bundledCatalog from '../modelCatalogMetadata'
 import type { BuiltInModelCatalog, BuiltInModelMetadata } from '../types/modelCatalog'
 import {
-  normalizeEndpoint,
   normalizeProviderModelEndpoints,
   type ConfigData,
-  type ModelConfigEntry,
   type NormalizedModel,
   type ProviderModelConfig,
   type RoutingModelCard,
-  type VLLMEndpoint,
 } from './configPageSupport'
 
 const intersectValues = <Value extends string>(
@@ -109,48 +105,7 @@ const canonicalModels = (
   return models
 }
 
-const legacyEndpoints = (config: ConfigData, model: ModelConfigEntry): Endpoint[] =>
-  model.preferred_endpoints
-    ?.map((name: string) => {
-      const endpoint = config.vllm_endpoints?.find((entry: VLLMEndpoint) => entry.name === name)
-      return endpoint
-        ? normalizeEndpoint(
-            {
-              name,
-              weight: endpoint.weight || 1,
-              endpoint: `${endpoint.address}:${endpoint.port}`,
-              protocol: 'http',
-            },
-            0,
-          )
-        : null
-    })
-    .filter((entry): entry is NonNullable<typeof entry> => entry !== null) ?? []
-
-const legacyModels = (config: ConfigData): NormalizedModel[] =>
-  (Object.entries(config.model_config ?? {}) as [string, ModelConfigEntry][]).map(
-    ([name, model]) => ({
-      name,
-      reasoning_family: model.reasoning_family,
-      reasoning: model.reasoning_family ? { family: model.reasoning_family } : undefined,
-      provider_model_id: model.model_id,
-      api_format: model.api_format,
-      api_format_override: model.api_format,
-      external_model_ids: model.external_model_ids,
-      backend_refs: model.preferred_endpoints?.map((name) => ({ name })),
-      endpoints: legacyEndpoints(config, model),
-      access_key: undefined,
-      pricing: model.pricing,
-    }),
-  )
-
 export const getNormalizedModels = (
   config: ConfigData | null,
-  isPythonCLI: boolean,
   catalog: BuiltInModelCatalog | null = bundledCatalog as unknown as BuiltInModelCatalog,
-): NormalizedModel[] => {
-  if (!config) return []
-  if (isPythonCLI && config.providers?.models) return canonicalModels(config, catalog)
-  if (config.model_config) return legacyModels(config)
-  return []
-}
+): NormalizedModel[] => (config?.providers?.models ? canonicalModels(config, catalog) : [])

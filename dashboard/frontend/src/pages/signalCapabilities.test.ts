@@ -13,16 +13,12 @@ function catalog(): DecisionTasks {
     tasks: [],
     deployments: [],
     bindings: [],
-    default_bindings: {
-      domain_classifier: { deployment: 'primary', contract: 'label_distribution.v1' },
-    },
+    default_bindings: { domain: { deployment: 'primary' } },
   }
-  for (const [id, type, binding, optional] of [
-    ['domain', 'domain', 'domain_classifier', false],
-    ['pii_presence', 'pii', 'pii_classifier', false],
-    ['pii_categories', 'pii', 'pii_classifier', false],
-    ['pii_spans', 'pii', 'pii_classifier', true],
-    ['classifier', 'classifier', 'classifier.{name}', false],
+  for (const [id, kind, type, binding] of [
+    ['domain', 'signal', 'domain', 'domain'],
+    ['pii_presence', 'plugin', 'masking', 'pii'],
+    ['pii_spans', 'signal', 'pii', 'pii'],
   ] as const)
     data.tasks.push({
       id,
@@ -33,7 +29,7 @@ function catalog(): DecisionTasks {
       output: 'choice',
       full_input: true,
       template: { state: '', questions: {} },
-      consumers: [{ kind: 'signal', type, binding, optional }],
+      consumers: [{ kind, type, binding }],
     })
   data.deployments.push({
     deployment: 'primary',
@@ -42,7 +38,7 @@ function catalog(): DecisionTasks {
     native_question_types: ['choice', 'noul'],
     tasks: data.tasks.map((task) => ({
       task_id: task.id,
-      supported: ['pii_presence', 'pii_categories'].includes(task.id),
+      supported: task.id === 'pii_spans',
       reason: 'Unsupported native question',
       quality: 'unevaluated',
     })),
@@ -57,20 +53,9 @@ describe('signal capability admission', () => {
     expect(signalAvailability(data, { recipe: 'default' }, 'pii').supported).toBe(true)
     expect(signalAvailability(data, { recipe: 'default' }, 'keyword').supported).toBe(true)
   })
-  it('keeps optional span detection from disabling a verdict task', () => {
-    const data = catalog()
-    expect(data.deployments[0].tasks.find((task) => task.task_id === 'pii_spans')?.supported).toBe(
-      false,
-    )
-    expect(signalAvailability(data, { recipe: 'private' }, 'pii').supported).toBe(true)
-    data.deployments[0].tasks.find((task) => task.task_id === 'pii_categories')!.supported = false
-    expect(signalAvailability(data, { recipe: 'private' }, 'pii').supported).toBe(false)
-  })
   it('honors explicit specialist overrides before default capabilities', () => {
     const data = catalog()
-    data.global_bindings = {
-      domain_classifier: { deployment: 'specialist', contract: 'label_distribution.v1' },
-    }
+    data.global_bindings = { domain: { deployment: 'specialist' } }
     expect(signalAvailability(data, { recipe: 'private' }, 'domain').supported).toBe(true)
     expect(
       signalAvailability(data, { recipe: 'private', globalBindings: {} }, 'domain').supported,
@@ -78,10 +63,7 @@ describe('signal capability admission', () => {
     expect(
       signalAvailability(
         data,
-        {
-          recipe: 'private',
-          bindings: { domain_classifier: { deployment: 'primary', contract: 'decision.v1' } },
-        },
+        { recipe: 'private', bindings: { domain: { deployment: 'primary' } } },
         'domain',
       ).supported,
     ).toBe(false)
@@ -91,44 +73,26 @@ describe('signal capability admission', () => {
     data.bindings.push({
       task_id: 'domain',
       recipe: 'other',
-      consumer: 'domain_classifier',
+      consumer: 'domain',
       source: 'recipe',
       deployment: 'specialist',
       model: '',
       ready: true,
       editable: true,
       path: [],
-      binding: { deployment: 'specialist', contract: 'label_distribution.v1' },
+      binding: { deployment: 'specialist' },
     })
     expect(signalAvailability(data, { recipe: 'private' }, 'domain').supported).toBe(false)
-  })
-  it('resolves namespaced classifier overrides and explicit legacy specialists', () => {
-    const data = catalog()
-    const scope = {
-      recipe: 'private',
-      bindings: {
-        'classifier.risk': { deployment: 'specialist', contract: 'label_distribution.v1' },
-      },
-    }
-    expect(signalAvailability(data, scope, 'classifier', 'risk').supported).toBe(true)
-    expect(signalAvailability(data, scope, 'classifier', 'other').supported).toBe(false)
-    expect(
-      signalAvailability(data, scope, 'classifier', 'other', {
-        type: 'local',
-        model_path: 'models/risk',
-      }).supported,
-    ).toBe(true)
   })
   it('allows composed Set through Noul but blocks unsupported Score and Span', () => {
     const data = catalog()
     const scope = { recipe: 'default' }
     expect(decisionQuestionTypes(data, scope, {})).toEqual(['choice', 'noul', 'set'])
     expect(
-      signalAvailability(data, scope, 'systemone', 'needs', { question: { type: 'set' } }).supported,
+      signalAvailability(data, scope, 'systemone', { question: { type: 'set' } }).supported,
     ).toBe(true)
     expect(
-      signalAvailability(data, scope, 'systemone', 'difficulty', { question: { type: 'score' } })
-        .supported,
+      signalAvailability(data, scope, 'systemone', { question: { type: 'score' } }).supported,
     ).toBe(false)
     const schema = signalCapabilitySchema(
       getSignalFieldSchema('systemone'),
@@ -149,59 +113,24 @@ describe('signal capability admission', () => {
       signalAvailability(data, { recipe: 'private', bindings: { domain: 'primary' } }, 'domain')
         .supported,
     ).toBe(false)
-    expect(
-      signalAvailability(
-        data,
-        { recipe: 'private', globalBindings: { domain_classifier: { deployment: 'specialist' } } },
-        'domain',
-      ).supported,
-    ).toBe(true)
   })
-  it('answers a rule from its deployment, then the rule key older configs bound it with', () => {
+  it('answers a rule from its own deployment before its binding', () => {
     const data = catalog()
+    const scope = { recipe: 'private', bindings: { domain: 'primary' } }
+    expect(signalAvailability(data, scope, 'domain').supported).toBe(false)
+    expect(signalAvailability(data, scope, 'domain', { deployment: 'specialist' }).supported).toBe(
+      true,
+    )
     expect(
-      signalAvailability(
-        data,
-        { recipe: 'private', bindings: { 'classifier.risk': 'primary' } },
-        'classifier',
-        'risk',
-        { deployment: 'specialist' },
-      ).supported,
-    ).toBe(true)
-    expect(
-      signalAvailability(
-        data,
-        { recipe: 'private', bindings: { 'classifier.risk': 'specialist' } },
-        'classifier',
-        'risk',
-      ).supported,
-    ).toBe(true)
-    // A rule-level type has no type-level binding.
-    expect(
-      signalAvailability(
-        data,
-        { recipe: 'private', bindings: { classifier: 'specialist' } },
-        'classifier',
-        'risk',
-      ).supported,
-    ).toBe(false)
-    expect(
-      signalAvailability(data, { recipe: 'private' }, 'classifier', 'risk', {
-        deployment: 'specialist',
-      }).supported,
-    ).toBe(true)
-    expect(
-      signalAvailability(data, { recipe: 'private' }, 'classifier', 'risk', {
-        deployment: 'primary',
-      }).supported,
+      signalAvailability(data, { recipe: 'private' }, 'domain', { deployment: 'primary' })
+        .supported,
     ).toBe(false)
   })
   it('does not guess an unavailable model capability', () => {
     expect(signalAvailability(null, { recipe: 'default' }, 'domain').supported).toBe(false)
     expect(
-      signalAvailability(catalog(), { recipe: 'default' }, 'systemone', '', {
-        deployment: 'missing',
-      }).supported,
+      signalAvailability(catalog(), { recipe: 'default' }, 'systemone', { deployment: 'missing' })
+        .supported,
     ).toBe(false)
   })
 })

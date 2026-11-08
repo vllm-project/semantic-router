@@ -2,8 +2,8 @@
 
 :::note
 This note records an earlier release. The system lines, module `model_id` and
-`classifier.model_path` it mentions are deprecated: they still load, with a
-`deprecated_model_field` warning.
+`classifier.model_path` it mentions are removed: the Router refuses them, and
+`vllm-sr config migrate` rewrites them.
 [Migrate model resources](../installation/model-resource-migration) shows the
 current form of each.
 :::

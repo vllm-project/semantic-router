@@ -17,7 +17,6 @@ import TableHeader from '../components/TableHeader'
 import type { ViewSection } from '../components/ViewModal'
 import type { SignalType as CanonicalSignalType } from '../lib/dslSchemaCatalogs'
 import { getSignalFieldSchema } from '../lib/dslSchemas'
-import { hasFlatSignals } from '../types/config'
 import styles from './ConfigPage.module.css'
 import signalStyles from './ConfigPageSignalsSection.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
@@ -32,7 +31,6 @@ import type { ConfigData, ConfigSignals, SignalType } from './configPageSupport'
 
 interface ConfigPageSignalsSectionProps {
   config: ConfigData | null
-  isPythonCLI: boolean
   isReadonly: boolean
   signalsSearch: string
   onSignalsSearchChange: (value: string) => void
@@ -103,46 +101,20 @@ function summarizeSignal(record: SignalRecord): string {
   return configured > 0 ? `${configured} configured fields` : 'Uses default behavior'
 }
 
-function buildLegacySignals(config: ConfigData | null): ConfigSignals | undefined {
-  if (!hasFlatSignals(config)) return undefined
-  return {
-    keywords: config?.keyword_rules,
-    embeddings: config?.embedding_rules,
-    domains: (config?.categories || []).map((category) => ({
-      name: category.name,
-      description: category.description || '',
-      mmlu_categories: category.mmlu_categories,
-      model_scores: Array.isArray(category.model_scores) ? category.model_scores : undefined,
-    })),
-    fact_check: config?.fact_check_rules,
-    user_feedbacks: config?.user_feedback_rules,
-    reasks: config?.reask_rules,
-    preferences: config?.preference_rules,
-    language: config?.language_rules,
-    context: config?.context_rules,
-    complexity: config?.complexity_rules,
-    jailbreak: config?.jailbreak,
-    hallucination: config?.hallucination,
-    pii: config?.pii,
-  }
-}
-
 function SignalDefinitionEditor({
   value,
   onChange,
   scope,
-  name,
   capabilityRef,
 }: {
   value: SignalDefinition
   onChange: (value: SignalDefinition) => void
   scope: SignalCapabilityScope
-  name: string
   capabilityRef: React.MutableRefObject<DecisionTasks | null>
 }) {
   const { data, error, refresh } = useDecisionTasks()
   capabilityRef.current = data
-  const availability = signalAvailability(data, scope, value.type, name, value.fields)
+  const availability = signalAvailability(data, scope, value.type, value.fields)
   const schema =
     value.type === 'systemone'
       ? signalCapabilitySchema(
@@ -161,7 +133,7 @@ function SignalDefinitionEditor({
           }
         >
           {SIGNAL_CATALOG.map((candidate) => {
-            const status = signalAvailability(data, scope, candidate.type, name)
+            const status = signalAvailability(data, scope, candidate.type)
             return (
               <option
                 key={candidate.type}
@@ -197,7 +169,6 @@ function SignalDefinitionEditor({
 
 export default function ConfigPageSignalsSection({
   config,
-  isPythonCLI,
   isReadonly,
   signalsSearch,
   onSignalsSearchChange,
@@ -225,7 +196,7 @@ export default function ConfigPageSignalsSection({
     setActionError(null)
   }, [selectedScopeId])
 
-  const effectiveSignals = scopedConfig?.signals || buildLegacySignals(config)
+  const effectiveSignals = scopedConfig?.signals
   const allSignals = SIGNAL_CATALOG.flatMap<ManagedSignal>((entry) =>
     readSignalCollection(effectiveSignals, entry.collection).map((rawData) => ({
       name: rawData.name,
@@ -306,12 +277,11 @@ export default function ConfigPageSignalsSection({
         type: 'custom',
         required: true,
         description: 'Fields are driven by the same canonical signal schema used by Builder.',
-        customRender: (value, onChange, form) => (
+        customRender: (value, onChange) => (
           <SignalDefinitionEditor
             value={(value as SignalDefinition | undefined) || initialData.definition}
             onChange={(next) => onChange(next)}
             scope={scope}
-            name={form?.name || ''}
             capabilityRef={capabilityRef}
           />
         ),
@@ -324,7 +294,6 @@ export default function ConfigPageSignalsSection({
       fields,
       async (formData) => {
         if (!config || !scopedConfig) throw new Error('Routing profile not loaded yet.')
-        if (!isPythonCLI) throw new Error('Editing signals requires the canonical config format.')
         const name = formData.name.trim()
         if (!name) throw new Error('Name is required.')
         const definition = formData.definition
@@ -332,7 +301,6 @@ export default function ConfigPageSignalsSection({
           capabilityRef.current,
           scope,
           definition.type,
-          name,
           definition.fields,
         )
         if (!availability.supported) throw new Error(availability.reason)
@@ -477,7 +445,7 @@ export default function ConfigPageSignalsSection({
             onSearchChange={onSignalsSearchChange}
             onAdd={() => openSignalEditor('add')}
             addButtonText="Add Signal"
-            disabled={isReadonly || !isPythonCLI}
+            disabled={isReadonly}
             variant="embedded"
           />
           {selectedSignalKeys.size > 0 ? (
@@ -513,7 +481,7 @@ export default function ConfigPageSignalsSection({
             onDelete={handleDeleteSignal}
             emptyMessage={search ? 'No signals match your search' : 'No signals configured'}
             className={styles.managerTable}
-            readonly={isReadonly || !isPythonCLI}
+            readonly={isReadonly}
             pagination={{
               pageSize: 25,
               pageSizeOptions: [10, 25, 50],
@@ -521,7 +489,7 @@ export default function ConfigPageSignalsSection({
               resetKey: `${selectedScopeId}:${signalsSearch}`,
             }}
             selection={
-              !isReadonly && isPythonCLI
+              !isReadonly
                 ? {
                     selectedKeys: selectedSignalKeys,
                     onChange: setSelectedSignalKeys,

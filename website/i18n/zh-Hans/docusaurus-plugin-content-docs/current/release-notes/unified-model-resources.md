@@ -45,4 +45,4 @@ global:
 
 ## 早期配置 {#earlier-configurations}
 
-用早期形式写的配置仍可加载，并使用相同的模型。Router 为每个早期字段报告一条 `deprecated_model_field` 警告，`vllm-sr config validate --config config.yaml` 会列出它们，`vllm-sr config migrate --config config.yaml` 会把它们改写为新形式。[迁移模型资源](../installation/model-resource-migration.md)将每种早期形式与取代它的形式并列展示。
+Router 拒绝用早期形式写的配置，并为每个早期字段给出一行错误，指明取代它的写法。`vllm-sr config validate --config config.yaml` 会列出它们，`vllm-sr config migrate --config config.yaml` 会把它们改写为新形式。[迁移模型资源](../installation/model-resource-migration.md)将每种早期形式与取代它的形式并列展示。

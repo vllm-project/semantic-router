@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import yaml
@@ -10,7 +9,6 @@ import yaml
 from cli.commands.runtime_paths import _write_runtime_config
 from cli.config_recipe_scopes import recipe_scopes
 from cli.config_schema import routing_surface_catalog
-from cli.consts import PLATFORM_CUDA, PLATFORM_ROCM
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -86,111 +84,6 @@ DEFAULT_CONFIG_BLOCK_BY_ALGORITHM: dict[str, dict[str, object]] = {
     },
     "multi_factor": {},
 }
-
-GPU_OVERRIDE_PREVIEW_LIMIT = 8
-TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
-FALSEY_ENV_VALUES = {"0", "false", "no", "off"}
-# Platforms with GPU defaults for router internal models.
-GPU_DEFAULT_PLATFORMS = (PLATFORM_ROCM, PLATFORM_CUDA)
-
-
-def _normalize_platform(value: str | None) -> str:
-    if value is None:
-        return ""
-    return str(value).strip().lower()
-
-
-def _set_use_cpu_false(
-    config_node: object, path: str, changed_paths: list[str]
-) -> None:
-    if isinstance(config_node, dict):
-        for key, value in config_node.items():
-            current_path = f"{path}.{key}" if path else key
-            if key == "use_cpu" and value is True:
-                config_node[key] = False
-                changed_paths.append(current_path)
-            else:
-                _set_use_cpu_false(value, current_path, changed_paths)
-        return
-
-    if isinstance(config_node, list):
-        for index, item in enumerate(config_node):
-            _set_use_cpu_false(item, f"{path}[{index}]", changed_paths)
-
-
-def _resolve_gpu_default_platform(platform: str | None) -> str:
-    """Return the normalized GPU platform requiring use_cpu defaults, else ""."""
-    normalized_platform = _normalize_platform(
-        platform or os.getenv("VLLM_SR_PLATFORM") or os.getenv("DASHBOARD_PLATFORM")
-    )
-    if normalized_platform not in GPU_DEFAULT_PLATFORMS:
-        return ""
-
-    env_prefix = f"VLLM_SR_{normalized_platform.upper()}"
-    force_gpu = os.getenv(f"{env_prefix}_FORCE_GPU", "").strip().lower()
-    if force_gpu in TRUTHY_ENV_VALUES:
-        return normalized_platform
-    if force_gpu in FALSEY_ENV_VALUES:
-        log.info(
-            "Platform %s detected: keeping router internal model use_cpu settings; "
-            "%s_FORCE_GPU is explicitly disabled",
-            normalized_platform,
-            env_prefix,
-        )
-        return ""
-
-    preserve_cpu = os.getenv(f"{env_prefix}_PRESERVE_CPU", "").strip().lower()
-    if preserve_cpu in TRUTHY_ENV_VALUES:
-        log.info(
-            "Platform %s detected: keeping router internal model use_cpu settings; "
-            "%s_PRESERVE_CPU is enabled",
-            normalized_platform,
-            env_prefix,
-        )
-        return ""
-    return normalized_platform
-
-
-def _platform_requires_gpu_defaults(platform: str | None) -> bool:
-    return bool(_resolve_gpu_default_platform(platform))
-
-
-def apply_platform_gpu_defaults(
-    merged_config: dict[str, object], platform: str | None
-) -> bool:
-    """
-    Apply platform-specific GPU defaults.
-
-    AMD (ROCm) and NVIDIA (CUDA) platforms default local signal models to GPU.
-    Platform defaults never construct or modify bindings or deployments.
-    Set
-    VLLM_SR_<PLATFORM>_PRESERVE_CPU=1/true/yes/on (e.g. VLLM_SR_NVIDIA_PRESERVE_CPU)
-    or VLLM_SR_<PLATFORM>_FORCE_GPU=0/false/no/off
-    to preserve CPU settings when the router does not have dedicated GPU headroom.
-    """
-    resolved_platform = _resolve_gpu_default_platform(platform)
-    if not resolved_platform:
-        return False
-
-    changed_paths: list[str] = []
-    _set_use_cpu_false(merged_config, "", changed_paths)
-    if not changed_paths:
-        log.info(
-            "Platform %s detected: no use_cpu flags found to override",
-            resolved_platform,
-        )
-        return False
-
-    preview = ", ".join(changed_paths[:GPU_OVERRIDE_PREVIEW_LIMIT])
-    if len(changed_paths) > GPU_OVERRIDE_PREVIEW_LIMIT:
-        preview = f"{preview}, ..."
-    log.info(
-        "Platform %s detected: applied %d internal model use_cpu default(s) (%s)",
-        resolved_platform,
-        len(changed_paths),
-        preview,
-    )
-    return True
 
 
 def _normalized_algorithm_override(

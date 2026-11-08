@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from cli.config_schema import routing_surface_catalog, schema_document
+from cli.config_schema import routing_surface_catalog
 
 CANONICAL_VERSION = str(routing_surface_catalog()["config_version"])
 
@@ -21,31 +21,6 @@ QuorumFailurePolicy = Literal["fail", "fallback"]
 CONDITION_TYPE_DOMAIN = "domain"
 CONDITION_TYPE_PROJECTION = "projection"
 
-CANONICAL_TOP_LEVEL_KEYS = frozenset(schema_document()["properties"])
-
-LEGACY_PROVIDER_DEFAULT_KEYS = (
-    "default_model",
-    "reasoning_families",
-    "default_reasoning_effort",
-)
-
-LEGACY_PROVIDER_KEYS = frozenset(
-    {
-        *LEGACY_PROVIDER_DEFAULT_KEYS,
-        "model_config",
-        "vllm_endpoints",
-        "provider_profiles",
-    }
-)
-
-LEGACY_PROVIDER_MODEL_SURFACE_KEYS = frozenset(
-    {
-        "endpoints",
-        "access_key",
-        "quality_score",
-    }
-)
-
 
 @dataclass(frozen=True)
 class SignalFamilySpec:
@@ -55,7 +30,6 @@ class SignalFamilySpec:
     signal_attr: str
     condition_type: str
     display_name: str
-    legacy_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -67,31 +41,12 @@ class ProjectionFamilySpec:
     display_name: str
 
 
-_LEGACY_SIGNAL_KEYS = {
-    "keywords": "keyword_rules",
-    "domains": "categories",
-    "fact_check": "fact_check_rules",
-    "user_feedbacks": "user_feedback_rules",
-    "language": "language_rules",
-    "context": "context_rules",
-    "complexity": "complexity_rules",
-    "modality": "modality_rules",
-    "role_bindings": "role_bindings",
-    "jailbreak": "jailbreak",
-    "hallucination": "hallucination",
-    "pii": "pii",
-    "conversation": "conversation",
-    "metadata": "metadata",
-    "input_modality": "input_modality",
-}
-
 SIGNAL_FAMILY_SPECS = tuple(
     SignalFamilySpec(
         canonical_key=surface["collection"],
         signal_attr=surface["collection"],
         condition_type=surface["type"],
         display_name=surface["display_name"],
-        legacy_key=_LEGACY_SIGNAL_KEYS.get(surface["collection"]),
     )
     for surface in routing_surface_catalog()["signals"]
 )
@@ -103,16 +58,6 @@ PROJECTION_FAMILY_SPECS = tuple(
         display_name=surface["display_name"],
     )
     for surface in routing_surface_catalog()["projections"]
-)
-
-LEGACY_SIGNAL_KEY_TO_CANONICAL = {
-    spec.legacy_key: spec.canonical_key
-    for spec in SIGNAL_FAMILY_SPECS
-    if spec.legacy_key is not None
-}
-
-LEGACY_ROUTING_KEYS = frozenset(
-    {"signals", "decisions", *LEGACY_SIGNAL_KEY_TO_CANONICAL}
 )
 
 _SIGNAL_FAMILY_BY_CONDITION_TYPE = {

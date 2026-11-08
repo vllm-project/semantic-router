@@ -29,7 +29,7 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-          api_key_env: PRIVATE_MODEL_API_KEY
+          auth: {api_key_env: PRIVATE_MODEL_API_KEY}
 recipes:
   - name: default
 `))
@@ -98,7 +98,7 @@ func assertExportedAuthoredModel(t *testing.T, exported *CanonicalConfig) {
 	if reasoning.Family != "" || len(reasoning.Levels) != 3 {
 		t.Fatalf("exported inline reasoning changed shape: %#v", reasoning)
 	}
-	if ref := exported.Providers.Models[0].BackendRefs[0]; ref.APIKeyEnv != "" || ref.Auth == nil || ref.Auth.APIKeyEnv != "PRIVATE_MODEL_API_KEY" {
+	if ref := exported.Providers.Models[0].BackendRefs[0]; ref.Auth == nil || ref.Auth.APIKeyEnv != "PRIVATE_MODEL_API_KEY" {
 		t.Fatalf("exported backend ref = %#v, want auth.api_key_env", ref)
 	}
 }
@@ -523,8 +523,7 @@ providers:
       backend_refs:
         - provider: vllm
           endpoint: https://private.example/v1
-          auth_header: x-api-key
-          auth_prefix: ""
+          auth: {header: x-api-key, prefix: ""}
           api_key: static-secret
 recipes:
   - name: default

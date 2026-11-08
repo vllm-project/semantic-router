@@ -61,9 +61,9 @@ interface BuiltModel {
   backend_refs: Array<{
     name: string;
     weight: number;
-    endpoint?: string;
+    /** host:port for a local runtime, or the provider's full URL. */
+    endpoint: string;
     protocol: "http" | "https";
-    base_url?: string;
     provider: ProviderKind;
     api_key?: string;
   }>;
@@ -577,7 +577,7 @@ export function buildSetupConfig(
           name: endpointName,
           weight: 100,
           protocol,
-          base_url: trimmedBaseUrl,
+          endpoint: trimmedBaseUrl,
           provider: model.providerKind,
           api_key: apiKey,
         };

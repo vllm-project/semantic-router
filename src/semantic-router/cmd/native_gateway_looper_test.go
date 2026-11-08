@@ -24,7 +24,7 @@ import (
 )
 
 // A standalone Router runs a Looper decision's model calls in process: the
-// backends see every hop, and nothing calls back through the Looper endpoint.
+// backends see every hop.
 func TestStandaloneRouterRunsLooperHopsInProcess(t *testing.T) {
 	var hops atomic.Int32
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -39,18 +39,12 @@ func TestStandaloneRouterRunsLooperHopsInProcess(t *testing.T) {
 			`"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`)
 	}))
 	defer backend.Close()
-	var loopedBack atomic.Int32
-	loopback := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		loopedBack.Add(1)
-		http.Error(w, "the standalone Router must not loop back", http.StatusInternalServerError)
-	}))
-	defer loopback.Close()
 
 	t.Setenv(configsnapshot.HistoryDirEnv, t.TempDir())
 	previous := modelservice.DefaultManager()
 	modelservice.SetDefault(nil)
 	t.Cleanup(func() { modelservice.SetDefault(previous) })
-	document := strings.NewReplacer("BACKEND", strings.TrimPrefix(backend.URL, "http://"), "LOOPER", loopback.URL).Replace(`version: v0.5
+	document := strings.ReplaceAll(`version: v0.5
 listeners:
   - name: http-8899
     address: 127.0.0.1
@@ -66,9 +60,6 @@ providers:
 global:
   stores:
     response_cache: {}
-  integrations:
-    looper:
-      endpoint: LOOPER/v1/chat/completions
 recipes:
   - name: default
     decisions:
@@ -80,7 +71,7 @@ recipes:
           type: ratings
           on_error: fail
           ratings: {max_concurrent: 2}
-`)
+`, "BACKEND", strings.TrimPrefix(backend.URL, "http://"))
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	if err := os.WriteFile(path, []byte(document), 0o600); err != nil {
 		t.Fatal(err)
@@ -125,7 +116,7 @@ recipes:
 	if resp.Header.Get("x-vsr-response-path") != "looper" {
 		t.Fatalf("response path %q", resp.Header.Get("x-vsr-response-path"))
 	}
-	if hops.Load() != 2 || loopedBack.Load() != 0 {
-		t.Fatalf("backend hops %d, loopback calls %d", hops.Load(), loopedBack.Load())
+	if hops.Load() != 2 {
+		t.Fatalf("backend hops %d", hops.Load())
 	}
 }

@@ -106,7 +106,7 @@ class TestServeManagedModelRuntime(MockUpstreamMixin, ServeSessionMixin, CLITest
 
         config_path = Path(
             self.write_minimal_canonical_config(
-                base_url=f"http://{mock_container}:{PROVIDER_MOCKER_PORT}",
+                endpoint=f"http://{mock_container}:{PROVIDER_MOCKER_PORT}",
                 provider="openai",
                 api_only=True,
             )

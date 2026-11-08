@@ -63,9 +63,9 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 func (p *Profile) GetTestCases() []string {
 	return testmatrix.Combine(
 		testmatrix.BaselineRouterContract,
-		// The gateway credential contract is off here; its header must still
-		// never reach the backend (issue #2286 default-disabled behavior).
-		[]string{"trusted-gateway-credential-disabled"},
+		// The delegated credential contract is off here; its header must
+		// still never reach the backend (issue #2286 default-disabled behavior).
+		[]string{"delegated-credential-disabled"},
 	)
 }
 

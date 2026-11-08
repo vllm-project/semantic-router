@@ -18,14 +18,13 @@ type configValidationReport struct {
 	Valid    bool                   `json:"valid"`
 	Error    string                 `json:"error,omitempty"`
 	Warnings []config.ConfigWarning `json:"warnings"`
-	// Migrated is the file with its removed and renamed forms and its
-	// deprecated model fields in the forms that replace them
-	// (-migrate-config), whether or not the file itself loads; Kept are its
-	// notes: what migrate rewrote (migration_change), the deprecated fields
-	// that have no replacement and stay, and what an operator must do
-	// (migration_action); MigrationError is why it could not be written.
+	// Migrated is the file with its removed and renamed forms in the forms
+	// that replace them (-migrate-config), whether or not the file itself
+	// loads; Notes say what migrate rewrote (migration_change) and what an
+	// operator must do (migration_action); MigrationError is why it could not
+	// be written.
 	Migrated       string                 `json:"migrated,omitempty"`
-	Kept           []config.ConfigWarning `json:"kept,omitempty"`
+	Notes          []config.ConfigWarning `json:"notes,omitempty"`
 	MigrationError string                 `json:"migration_error,omitempty"`
 }
 
@@ -60,12 +59,12 @@ func validateConfigFile(path string, gateway config.GatewayMode, migrate bool, o
 
 // migrateConfigInto writes the file's migration into the report.
 func migrateConfigInto(report *configValidationReport, data []byte) {
-	migrated, kept, err := config.MigrateConfig(data)
+	migrated, notes, err := config.MigrateConfig(data)
 	if err != nil {
 		report.MigrationError = err.Error()
 		return
 	}
-	report.Migrated, report.Kept = string(migrated), kept
+	report.Migrated, report.Notes = string(migrated), notes
 }
 
 func validateConfigInto(report *configValidationReport, data []byte, gateway config.GatewayMode) error {

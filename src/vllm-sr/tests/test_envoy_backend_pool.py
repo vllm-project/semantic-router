@@ -20,7 +20,7 @@ from cli.parser import parse_user_config  # noqa: E402
         (
             """
         - provider: vllm
-          base_url: http://query.example.test/v1?region=west
+          endpoint: http://query.example.test/v1?region=west
 """,
             "query parameters are not supported by Envoy routing",
         ),
@@ -41,14 +41,6 @@ from cli.parser import parse_user_config  # noqa: E402
           endpoint: local-b.example:8000/v1
 """,
             "name 'replica' is duplicated",
-        ),
-        (
-            """
-        - provider: vllm
-          base_url: http://base.example/v1
-          endpoint: endpoint.example:8000/v1
-""",
-            "cannot set both base_url and endpoint",
         ),
     ),
 )

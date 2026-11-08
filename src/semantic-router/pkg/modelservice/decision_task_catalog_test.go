@@ -15,8 +15,8 @@ func TestTaskCatalogSeparatesAvailableTasksFromActiveBindings(t *testing.T) {
 	if response.DefaultDeployment != "primary" || len(response.Tasks) != len(BuiltinTasks()) || len(response.Models) != 30 {
 		t.Fatalf("catalog unavailable: %d %d", len(response.Tasks), len(response.Models))
 	}
-	if response.DefaultBindings[config.SignalTypePII].Contract != config.DecisionTaskContract {
-		t.Fatal("generic default falsely requires token locations")
+	if response.DefaultBindings[config.SignalTypePII].Deployment != "primary" {
+		t.Fatal("the decision model does not answer the pii signal by default")
 	}
 	for _, model := range response.Models {
 		for _, task := range model.Tasks {
@@ -60,16 +60,16 @@ func TestTaskCatalogKeepsADeclaredVela3D3Deployment(t *testing.T) {
 
 func TestTaskCatalogPreservesExplicitSpecialistBindingAndDemand(t *testing.T) {
 	cfg := config.DefaultGlobalConfig()
-	cfg.GlobalModelBindings = map[string]config.ModelBinding{"pii_classifier": {Deployment: "specialist", Contract: config.RemoteClassifierContractTokenSpans}}
+	cfg.GlobalModelBindings = map[string]config.ModelBinding{config.SignalTypePII: {Deployment: "specialist"}}
 	cfg.ModelDeployments["specialist"] = config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: "org/pii-specialist"}
 	cfg.PIIRules = []config.PIIRule{{Name: "personal"}}
 	cfg.Decisions = []config.Decision{{Name: "route", Rules: config.RuleCombination{Operator: "AND", Conditions: []config.RuleNode{{Type: "pii", Name: "personal"}}}}}
 	card := ModelCard{ID: "org/pii-specialist", Surfaces: []string{"classify"}, Heads: []HeadCard{{Kind: "token", Labels: []string{"O", "PERSON"}}}}
 	response := ProjectTaskCatalog(&cfg, []DeploymentStatus{{Name: "specialist", Model: card.ID, Ready: true, Card: &card}})
-	if len(response.Bindings) != 1 || response.Bindings[0].Deployment != "specialist" || response.Bindings[0].Source != "global" || !response.Bindings[0].Ready || response.Bindings[0].Binding.Contract != config.RemoteClassifierContractTokenSpans {
+	if len(response.Bindings) != 1 || response.Bindings[0].Deployment != "specialist" || response.Bindings[0].Source != "global" || !response.Bindings[0].Ready || response.Bindings[0].Binding.Deployment != "specialist" {
 		t.Fatalf("specialist provenance lost: %+v", response.Bindings)
 	}
-	if response.GlobalBindings["pii_classifier"].Deployment != "specialist" {
+	if response.GlobalBindings[config.SignalTypePII].Deployment != "specialist" {
 		t.Fatal("inactive authored defaults unavailable to editor")
 	}
 }
@@ -86,7 +86,7 @@ func TestTaskCatalogDisplaysArtifactWithoutChangingDeploymentIdentity(t *testing
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := config.DefaultGlobalConfig()
 			cfg.ModelDeployments["primary"] = config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: tc.declaredArtifact}
-			cfg.GlobalModelBindings = map[string]config.ModelBinding{"pii_classifier": {Deployment: "primary", Contract: config.DecisionTaskContract}}
+			cfg.GlobalModelBindings = map[string]config.ModelBinding{config.SignalTypePII: {Deployment: "primary"}}
 			cfg.PIIRules = []config.PIIRule{{Name: "personal"}}
 			cfg.Decisions = []config.Decision{{Name: "route", Rules: config.RuleCombination{Operator: "AND", Conditions: []config.RuleNode{{Type: "pii", Name: "personal"}}}}}
 			card := ModelCard{ID: "primary", Repo: tc.observedRepo, Surfaces: []string{"decisions"}, QuestionTypes: []string{"choice", "noul", "score"}}

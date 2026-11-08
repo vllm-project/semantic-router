@@ -14,7 +14,7 @@ providers:
     - name: gpt-4o-mini
       backend_refs:
         - name: openai
-          base_url: https://api.openai.com/v1
+          endpoint: https://api.openai.com/v1
           provider: openai
 recipes:
   - name: default

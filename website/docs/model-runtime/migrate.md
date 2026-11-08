@@ -58,10 +58,10 @@ example:
 
 ```text
 Changes to review
-  global.model_catalog.deployments.vela-domain
-      provider candle -> model_runtime, device cuda:0
+  global.model_catalog.deployments.vela-embedding
+      provider ort is removed: the built-in model runtime serves every local model; rewritten as provider: model_runtime, on its device, with its artifact's Hub repository (2 places)
   global.model_catalog.deployments.vela-domain.precision
-      removed fp16: the model runs in its published precision (dtype: auto); dtype: float16 runs it in half precision on a GPU
+      the model runs in its published precision (dtype: auto); dtype: float16 runs it in half precision on a GPU
 ```
 
 It prints a **Warning** for anything you still have to do yourself: a
@@ -234,12 +234,10 @@ global:
         scope: global
 ```
 
-The response cache used MiniLM, the former default; it now embeds with
-`embeddings.default`, the `vela-embedding` deployment the file declares on the
-AMD GPU, which also replaces the embedding binding. The guard and the hallucination detector,
-which a module `model_id` named, are now deployments named after their models
-and bound with `bindings.jailbreak` and `bindings.hallucination`. Running the
-command again on the migrated file changes nothing.
+The embedding binding is dropped: the response cache embeds with
+`embeddings.default`, the `vela-embedding` deployment the file declares, now
+served by the model runtime on the AMD GPU. Running the command again on the
+migrated file changes nothing.
 
 ## Engine arguments
 

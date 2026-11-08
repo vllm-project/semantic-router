@@ -341,7 +341,7 @@ providers:
       provider_model_id: "gemini-model"
       backend_refs:
         - name: "gemini"
-          base_url: "https://generativelanguage.googleapis.com/v1beta/openai"
+          endpoint: "https://generativelanguage.googleapis.com/v1beta/openai"
           provider: "openai"
           weight: 100
 recipes:
@@ -416,7 +416,7 @@ providers:
       provider_model_id: "provider-model"
       backend_refs:
         - name: "provider"
-          base_url: "https://api.example.com/v1/chat"
+          endpoint: "https://api.example.com/v1/chat"
           provider: "openai"
           weight: 100
 recipes:
@@ -625,12 +625,10 @@ providers:
       provider_model_id: "openai/gpt-4o-mini"
       backend_refs:
         - name: "openrouter"
-          base_url: "https://openrouter.ai/api/v1"
+          endpoint: "https://openrouter.ai/api/v1"
           provider: "openai"
-          auth_header: "Authorization"
-          auth_prefix: "Bearer"
-          api_key_env: "OPENROUTER_API_KEY"
-          extra_headers:
+          auth: {header: "Authorization", prefix: "Bearer", api_key_env: "OPENROUTER_API_KEY"}
+          headers:
             X-Test-Trace: "router-flow"
             X-Test-Tenant: "eval"
           weight: 1
@@ -703,14 +701,14 @@ providers:
       provider_model_id: "openai/gpt-4o-mini"
       backend_refs:
         - name: "primary"
-          base_url: "https://primary.example.com/v1"
+          endpoint: "https://primary.example.com/v1"
           provider: "openai"
-          api_key_env: "OPENAI_API_KEY"
+          auth: {api_key_env: "OPENAI_API_KEY"}
           weight: 1
         - name: "secondary"
-          base_url: "https://secondary.example.com/v1"
+          endpoint: "https://secondary.example.com/v1"
           provider: "openai"
-          api_key_env: "OPENAI_API_KEY"
+          auth: {api_key_env: "OPENAI_API_KEY"}
           weight: 1
 recipes:
   - name: default
@@ -751,7 +749,7 @@ providers:
     - name: test-model
       backend_refs:
         - provider: openai-compatible
-          base_url: https://192.0.2.1/v1
+          endpoint: https://192.0.2.1/v1
 recipes:
   - name: default
 """,
@@ -781,7 +779,7 @@ providers:
       backend_refs:
         - name: "anthropic-primary"
           weight: 100
-          base_url: "https://domain.com/Anthropic"
+          endpoint: "https://domain.com/Anthropic"
           provider: "anthropic"
 recipes:
   - name: default

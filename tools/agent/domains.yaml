@@ -903,8 +903,8 @@ profiles:
     default_local: true
     paths:
       - e2e/testcases/signal_routing_helpers.go
-      - e2e/testcases/trusted_gateway_credential.go
-      - src/semantic-router/pkg/extproc/gateway_credential*.go
+      - e2e/testcases/delegated_credential.go
+      - src/semantic-router/pkg/extproc/delegated_credential*.go
       - e2e/profiles/ai-gateway/**
       - deploy/kubernetes/ai-gateway/**
       - e2e/pkg/**
@@ -1140,17 +1140,18 @@ profiles:
       - e2e/testcases/full_duplex_routing.go
       - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
       - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
-  trusted-gateway:
-    display_name: Trusted Gateway Credential
+  delegated-credential:
+    display_name: Delegated Credential
     owner: e2e
-    coverage_role: deployment-injected-gateway-credential-forwarding-and-rejection
+    coverage_role: delegated-credential-forwarding-and-rejection
     selection: pr
     paths:
-      - e2e/profiles/trusted-gateway/**
-      - e2e/testcases/trusted_gateway_credential.go
-      - src/semantic-router/pkg/extproc/gateway_credential*.go
+      - e2e/profiles/delegated-credential/**
+      - e2e/testcases/delegated_credential.go
+      - src/semantic-router/pkg/extproc/delegated_credential*.go
       - src/semantic-router/pkg/extproc/processor_req_body_routing.go
       - src/semantic-router/pkg/extproc/processor_req_header.go
+      - src/semantic-router/pkg/principal/**
       - src/semantic-router/pkg/authz/**
   provider-protocols:
     display_name: Provider Protocols

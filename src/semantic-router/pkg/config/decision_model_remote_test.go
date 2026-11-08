@@ -60,7 +60,7 @@ global:
         provider: systemone
         endpoint: https://gateway.example.com/Unified/v1/systemone
         model: vLLM-SR-d3-27B
-        question_types: [choice, noul, score]
+        capabilities: {question_types: [choice, noul, score]}
         auth: {header: Ocp-Apim-Subscription-Key, prefix: "", api_key_file: /run/secrets/gateway-key}
     system:
       decision_model: {deployment: hosted-d3}
@@ -109,10 +109,8 @@ func TestSystemOneDeploymentsAnswerDecisionQuestions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	canonical := gateway
-	canonical.Capabilities, canonical.QuestionTypes = &DeploymentCapabilities{QuestionTypes: gateway.QuestionTypes}, nil
-	if roundTrip.DecisionModel != "hosted-d3" || !reflect.DeepEqual(roundTrip.ModelDeployments["gateway-d3"], canonical) {
-		t.Fatalf("round trip changed the deployment:\n%+v\n%+v", roundTrip.ModelDeployments["gateway-d3"], canonical)
+	if roundTrip.DecisionModel != "hosted-d3" || !reflect.DeepEqual(roundTrip.ModelDeployments["gateway-d3"], gateway) {
+		t.Fatalf("round trip changed the deployment:\n%+v\n%+v", roundTrip.ModelDeployments["gateway-d3"], gateway)
 	}
 }
 
@@ -164,7 +162,7 @@ func TestSystemOneDeploymentsTakeOnlyTheirOwnFields(t *testing.T) {
 		},
 		"an unknown question type": {
 			"question_types: [choice, noul, score]", "question_types: [choice, box]",
-			`question_types lists "box"`,
+			`capabilities.question_types lists "box"`,
 		},
 		"a timeout past the decision limit": {
 			"timeout_ms: 3000", "timeout_ms: 90000",

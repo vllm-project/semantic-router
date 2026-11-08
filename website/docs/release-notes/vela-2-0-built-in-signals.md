@@ -2,8 +2,8 @@
 
 :::note
 This note records an earlier release and keeps its original examples. Their
-system lines and `modality_detector.classifier.model_path` are deprecated: they
-still load, with a `deprecated_model_field` warning.
+system lines and `modality_detector.classifier.model_path` are removed: the
+Router refuses them, and `vllm-sr config migrate` rewrites them.
 [Migrate model resources](../installation/model-resource-migration) shows the
 current form of each.
 :::

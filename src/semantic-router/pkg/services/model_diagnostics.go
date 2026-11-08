@@ -105,7 +105,7 @@ func (s *ClassificationService) AcquireModelDiagnostics(recipe string) (ModelDia
 }
 
 // ModelDiagnostics holds one recipe's prepared bindings on its model runtime:
-// classify, embedding and relevance bindings.
+// its embedding bindings.
 type ModelDiagnostics struct {
 	Tasks *serving.Runtime
 }

@@ -195,8 +195,8 @@ Router 在加载配置时检查每个名称和每一处对应关系；不会静�
 | 绑定或规则指向未声明的部署 | 该绑定或规则、未知名称以及已声明的名称 |
 | 部署无法回答分配给它的信号，例如 `bindings.pii: remote-embed`，或不提供 embedding 的 `embeddings.default` | 该信号、该部署以及它能回答什么 |
 | 绑定键不是信号类型，例如 `bindings.piii` | 该键以及最接近的信号类型 |
-| 部署无法回答规则提出的问题，例如 `domains` 规则指向一个 `classify` 部署 | 该规则、该部署以及能回答它的 provider |
+| 部署无法回答规则提出的问题，例如 `domains` 规则指向一个 `openai_embeddings` 部署 | 该规则、该部署以及能回答它的 provider |
 | 在配置中直接写密钥，例如 `auth.api_key` 或 `Authorization` 请求头 | 密钥来自 `api_key_env` 或 `api_key_file` |
 | `pii` 或 `hallucination` 规则所在的部署不提供片段 | `span_required`；需要这些片段的 masking 插件同样被拒绝 |
 
-用早期形式写的配置仍可加载，每个字段报告一条 `deprecated_model_field` 警告。[迁移模型资源](model-resource-migration.md)将每种早期形式与本页的形式并列展示。
+Router 拒绝用早期形式写的配置，每个字段给出一行错误并指明 `vllm-sr config migrate`。[迁移模型资源](model-resource-migration.md)将每种早期形式与本页的形式并列展示。

@@ -141,14 +141,17 @@ config:
               # safety-net in case the router produces no match.
               - ""
   global:
-    model_catalog:
-      modules:
-        # Keep existing protocol probes below min_length. The dedicated JSON
-        # compression case supplies a larger request and verifies routing.
-        prompt_compression:
+    plugins:
+      - type: context
+        configuration:
           enabled: true
-          max_tokens: 256
-          min_length: 4096
+          compress:
+            # Keep existing protocol probes below min_length. The dedicated JSON
+            # compression case supplies a larger request and verifies routing.
+            signals:
+              enabled: true
+              max_tokens: 256
+              min_length: 4096
     router:
       clear_route_cache: true
       strategy: priority

@@ -152,6 +152,13 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 			http.NotFound(w, r)
 			return
 		}
+		// A System One request's calls act for its client too, so it
+		// keeps the authenticator's outputs only from a trusted sender.
+		if !serving.TrustIdentity.trusts(r) {
+			for name := range headerSet(append(append([]string(nil), identityHeaders...), serving.IdentityHeaders...)) {
+				r.Header.Del(name)
+			}
+		}
 		serving.SystemOne.ServeHTTP(w, r)
 		return
 	}

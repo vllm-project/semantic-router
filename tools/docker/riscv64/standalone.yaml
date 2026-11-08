@@ -13,9 +13,9 @@ providers:
       api_format: openai
       backend_refs:
         - name: external
-          base_url: http://inference.example:8000/v1
+          endpoint: http://inference.example:8000/v1
           provider: vllm
-          api_key_env: VSR_BACKEND_API_KEY
+          auth: {api_key_env: VSR_BACKEND_API_KEY}
           weight: 100
 recipes:
   - name: default

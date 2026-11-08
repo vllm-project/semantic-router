@@ -33,7 +33,7 @@ providers:
       backend_refs:
         - name: primary
           provider: vllm
-          base_url: http://127.0.0.1:8000/v1
+          endpoint: http://127.0.0.1:8000/v1
 recipes:
   - name: default
 `))
@@ -101,7 +101,7 @@ providers:
       api_format: openai
       backend_refs:
         - provider: vllm
-          base_url: http://127.0.0.1:8000/v1
+          endpoint: http://127.0.0.1:8000/v1
 recipes:
   - name: default
 `)
@@ -180,7 +180,7 @@ providers:
       api_format: openai
       backend_refs:
         - provider: vllm
-          base_url: http://127.0.0.1:8000/v1
+          endpoint: http://127.0.0.1:8000/v1
 recipes:
   - name: default
 `)
@@ -269,7 +269,7 @@ func TestRemovedEvaluationLayoutsAreRejected(t *testing.T) {
 		{
 			name: "model card evaluations",
 			yaml: "version: v0.5\nproviders:\n  models:\n    - name: private\n      evaluations: []\nrecipes: [{name: default}]\n",
-			want: "providers.models[0].evaluations",
+			want: "providers.models[private].evaluations: removed_field: providers.models[private].evaluations belongs to the provider catalog before config v0.3",
 		},
 	}
 	for _, test := range tests {

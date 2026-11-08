@@ -208,7 +208,7 @@ func (c *RouterConfig) compileApplicationRule(spec applicationRuleSpec) Applicat
 	rule := SystemOneRule{
 		Name: spec.name, Description: spec.description, Question: PresetSystemOneQuestion(preset),
 		Labels: slices.Clone(spec.labels), IgnoreLabels: slices.Clone(spec.ignoreLabels), Predicate: spec.predicate,
-		Deployment: c.applicationDeployment(spec.signalType, spec.name, spec.deployment), Stage: preset.Stage, Input: input,
+		Deployment: c.applicationDeployment(spec.signalType, spec.deployment), Stage: preset.Stage, Input: input,
 		TimeoutMs: spec.timeoutMs,
 	}
 	if len(rule.Labels) == 0 {
@@ -274,22 +274,15 @@ func (c *RouterConfig) calibratedThreshold(deployment, preset, stage string) (fl
 }
 
 // applicationDeployment is the deployment an application rule names, else
-// its recipe's binding of the rule (a deprecated safety.<rule> or
-// complexity.<rule> key) or of its type, else the global one; empty leaves
-// the rule to the decision model.
-func (c *RouterConfig) applicationDeployment(signalType, name, deployment string) string {
+// its recipe's binding of its type, else the global one; empty leaves the
+// rule to the decision model.
+func (c *RouterConfig) applicationDeployment(signalType, deployment string) string {
 	if named := strings.TrimSpace(deployment); named != "" {
 		return named
 	}
-	keys := []string{BindingConsumer(signalType)}
-	if signalType == SignalTypeSafety || signalType == SignalTypeComplexity {
-		keys = []string{signalType + "." + name, signalType}
-	}
 	for _, bindings := range []map[string]ModelBinding{c.recipeBindings(), c.GlobalModelBindings} {
-		for _, key := range keys {
-			if binding, ok := bindings[key]; ok {
-				return binding.Deployment
-			}
+		if binding, ok := bindings[signalType]; ok {
+			return binding.Deployment
 		}
 	}
 	return ""
@@ -307,14 +300,13 @@ func (c *RouterConfig) ApplicationTypeDeployment(signalType string) (string, str
 // ApplicationTypeBinding is the binding ApplicationTypeDeployment reads, as
 // written; the decision model's for "default".
 func (c *RouterConfig) ApplicationTypeBinding(signalType string) (ModelBinding, string) {
-	key := BindingConsumer(signalType)
-	if binding, ok := c.recipeBindings()[key]; ok {
+	if binding, ok := c.recipeBindings()[signalType]; ok {
 		return binding, "recipe"
 	}
-	if binding, ok := c.GlobalModelBindings[key]; ok {
+	if binding, ok := c.GlobalModelBindings[signalType]; ok {
 		return binding, "global"
 	}
-	return ModelBinding{Deployment: c.deploymentOrDecisionModel(""), Contract: DecisionTaskContract}, "default"
+	return ModelBinding{Deployment: c.deploymentOrDecisionModel("")}, "default"
 }
 
 // PresetThreshold is the threshold calibrated for a preset on the model an

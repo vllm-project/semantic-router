@@ -18,7 +18,7 @@ func matchConfig() *RouterConfig {
 			Provider: SystemOneProvider, Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra",
 			Capabilities: &DeploymentCapabilities{QuestionTypes: []string{SystemOneQuestionChoice}},
 		},
-		"bert": {Provider: "http", ExternalModel: "bert"},
+		"bert": {Provider: OpenAIEmbeddingsProvider, Endpoint: "http://embedder:8000/v1", Model: "bert"},
 	}
 	return cfg
 }

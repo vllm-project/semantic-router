@@ -252,7 +252,7 @@ providers:
       backend_refs:
         - provider: vllm
           endpoint: localhost:8000
-          api_key_env: CUSTOM_PROVIDER_API_KEY
+          auth: {api_key_env: CUSTOM_PROVIDER_API_KEY}
 """,
         encoding="utf-8",
     )

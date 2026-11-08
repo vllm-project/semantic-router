@@ -8,10 +8,9 @@ This directory holds smoke, demo, and harness manifests that the repository uses
 - response API and hallucination test configs
 - ONNX binding test configs
 
-`config.hallucination.yaml` is the local hallucination router config used by the
-`hallucination-demo` targets in `tools/make/build-run-test.mk` (and
-`e2e/testing/hallucination-demo/`). It runs the default Vela Halu detector in a
-router-managed model runtime, so the flow can be exercised locally with
+`config.hallucination.yaml` is the local hallucination router config. It runs
+the default Vela Halu detector in a router-managed model runtime, so the flow
+can be exercised locally with
 `./bin/router -config=e2e/config/config.hallucination.yaml` once the runtime is
 installed (`make model-runtime-install`).
 

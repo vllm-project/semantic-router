@@ -18,12 +18,6 @@ const (
 	ConfigSourceKubernetes ConfigSource = "kubernetes"
 )
 
-// Model role constants for external models.
-const (
-	ModelRoleMemoryRewrite    = "memory_rewrite"
-	ModelRoleMemoryExtraction = "memory_extraction"
-)
-
 // Signal type constants for rule conditions.
 const (
 	SignalTypeKeyword       = "keyword"
@@ -79,7 +73,6 @@ type RouterConfig struct {
 	// Static global configuration.
 	RoutingDefaults  RoutingDefaults `yaml:"-" json:"-"`
 	InlineModels     `yaml:",inline"`
-	ExternalModels   []ExternalModelConfig `yaml:"external_models,omitempty"`
 	SemanticCache    `yaml:"semantic_cache"`
 	Memory           MemoryConfig            `yaml:"memory"`
 	VectorStore      *VectorStoreConfig      `yaml:"vector_store,omitempty"`
@@ -131,31 +124,33 @@ type AuthzConfig struct {
 	FailOpen  bool                  `yaml:"fail_open,omitempty"`
 	Identity  IdentityConfig        `yaml:"identity,omitempty"`
 	Providers []AuthzProviderConfig `yaml:"providers,omitempty"`
-	// GatewayCredential names the trusted authentication result header that
-	// carries a dedicated credential for trusted upstream gateways.
-	GatewayCredential GatewayCredentialConfig `yaml:"gateway_credential,omitempty"`
+	// DelegatedCredential is the source of delegated credentials: the
+	// trusted authentication result header that carries the requesting
+	// user's credential for upstreams whose auth is credential: delegated.
+	DelegatedCredential DelegatedCredentialConfig `yaml:"delegated_credential,omitempty"`
 }
 
-// GatewayCredentialConfig declares the dedicated downstream-gateway credential
-// a deployment authenticator attaches to an authenticated request. The Router
+// DelegatedCredentialConfig declares the credential a deployment
+// authenticator issues for the user of an authenticated request. The Router
 // trusts it exactly as it trusts the identity headers: the gateway in front
 // removes client-supplied copies, and a standalone listener drops them unless
-// it trusts identity headers. The value is forwarded only to a backend_ref
-// marked trusted_gateway, under that backend's auth header, and never to any
-// other upstream. Disabled by default.
-type GatewayCredentialConfig struct {
+// it trusts identity headers. The value is presented only to an upstream
+// whose auth is credential: delegated, under that upstream's auth header, by
+// a call made for the request, and never to any other upstream. Disabled by
+// default.
+type DelegatedCredentialConfig struct {
 	Enabled bool `yaml:"enabled,omitempty"`
 	// Header is the request header the authenticator sets; default
-	// x-vsr-gateway-credential.
+	// x-vsr-delegated-credential.
 	Header string `yaml:"header,omitempty"`
 }
 
 // GetHeader returns the configured header name, lowercased, or the default.
-func (c GatewayCredentialConfig) GetHeader() string {
+func (c DelegatedCredentialConfig) GetHeader() string {
 	if header := strings.ToLower(strings.TrimSpace(c.Header)); header != "" {
 		return header
 	}
-	return headers.VSRGatewayCredential
+	return headers.VSRDelegatedCredential
 }
 
 // IdentityConfig controls how the router reads user identity from request headers.
@@ -300,9 +295,9 @@ func (s SkipProcessingConfig) IsEnabled() bool {
 	return s.Enabled
 }
 
-// InlineModels captures built-in model families and prompt-processing settings.
+// InlineModels captures the model catalog: deployments, bindings, admission
+// and the decision and embedding models.
 type InlineModels struct {
-	PromptCompression    PromptCompressionConfig    `yaml:"prompt_compression"`
 	ModelAdmission       map[string]AdmissionConfig `yaml:"model_admission,omitempty"`
 	ModelSignalTimeoutMs int                        `yaml:"model_signal_timeout_ms,omitempty"`
 	GlobalModelBindings  map[string]ModelBinding    `yaml:"global_model_bindings,omitempty"`
@@ -313,19 +308,10 @@ type InlineModels struct {
 	// EmbeddingDeployment is global.model_catalog.embeddings.default's
 	// deployment.
 	EmbeddingDeployment string `yaml:"embedding_deployment,omitempty"`
-	// ModelResourceWarnings are the deprecated model fields the
-	// configuration was read with, and what they were read as.
-	ModelResourceWarnings []ConfigWarning `yaml:"-" json:"-"`
 	// FormWarnings are the renamed forms the document was written in, which
 	// it was read as their canonical forms (config_forms.go).
 	FormWarnings []ConfigWarning `yaml:"-" json:"-"`
 
-	// modelResourcesTranslated is set once deprecated model fields were
-	// read as deployments and bindings (model_resource_translation.go).
-	modelResourcesTranslated bool
-	// modelResourceErrors fail the consumers whose deprecated model names
-	// no model when they run.
-	modelResourceErrors map[string]error
 	// scopedBindings are a recipe scope's own bindings, before the global
 	// ones (ConfigForRecipe); nil outside a recipe scope.
 	scopedBindings map[string]ModelBinding

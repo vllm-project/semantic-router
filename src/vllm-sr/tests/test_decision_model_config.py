@@ -484,8 +484,8 @@ def test_the_decision_forms_are_read_as_systemone(tmp_path):
 
     written = _config(written_as_decision)
     before = copy.deepcopy(written)
-    config = parse_user_config_data(written, str(tmp_path / "config.yaml"))
-    canonical = parse_user_config_data(_config(), str(tmp_path / "canonical.yaml"))
+    config = parse_user_config_data(written)
+    canonical = parse_user_config_data(_config())
 
     assert written == before
     assert validate_user_config(config, log_summary=False) == []

@@ -10,14 +10,14 @@ translation:
 
 ## 概述 {#overview}
 
-`context` 是组装请求上下文的路由局部插件。它的 `sources` 检索文档（`rag`）和用户的记忆（`memory`），各由自己的 `match` 块决定保留哪些。`compress` 压缩请求自身的片段，由它的 `match` 块判断哪些片段重要，直到请求放进 `budget`。`injection` 决定保留下来的内容放在哪里。记忆源还会在响应之后把这一轮写入记忆。
+`context` 是组装请求上下文的插件。它的 `sources` 检索文档（`rag`）和用户的记忆（`memory`），各由自己的 `match` 块决定保留哪些。`compress` 压缩请求自身的片段，由它的 `match` 块判断哪些片段重要，直到请求放进 `budget`；它的 `signals` 压缩路由信号读取的文本。`injection` 决定保留下来的内容放在哪里。记忆源还会在响应之后把这一轮写入记忆。
 
 ## 主要优势 {#key-advantages}
 
 - 一个插件按固定顺序负责检索、记忆和压缩。
 - 每个阶段只调用一次 decision model：相关性判断决定 RAG 源保留哪些文档，也为压缩要保留的片段排序。
 - 预算只有一个数：请求最多保留的输入 token 数，或模型上下文窗口减去预留的输出。
-- 路由信号仍然评估原始请求：插件只改变发给所选模型的对话。
+- 发给所选模型的对话只由 `compress` 改变；路由信号读取原始文本，除非 `compress.signals` 压缩它，jailbreak 和 PII 规则仍读取原文。
 
 ## 解决什么问题？ {#what-problem-does-it-solve}
 
@@ -62,7 +62,7 @@ plugins:
         mode: tool_role                 # tool_role | system_prompt
 ```
 
-启用的插件需要 `sources` 或 `compress`；`budget` 需要 `compress`。`enabled: false` 为该决策关闭上下文，包括全局记忆。没有 `context` 插件的决策在 `global.stores.memory.enabled` 为 true 时读取全局记忆；有插件的决策只读取它列出的源。
+启用的插件需要 `sources` 或 `compress`；`budget` 需要一个压缩请求的 `compress` 块。`enabled: false` 为该决策关闭上下文，包括全局记忆。决策运行 `global.plugins` 的 `context` 插件，并与配方和它自己的插件逐字段合并：它写出的 `sources` 替换继承来的源。
 
 ### RAG 源 {#rag-sources}
 
@@ -113,6 +113,30 @@ JSON 字符串只通过其字符串叶子压缩，OpenAI 数组内容压缩文�
 
 `request_controls` 允许调用方在 `x-vsr-compression-control` 请求头中发送 `bypass`（跳过压缩）或 `target=N`（工具输出目标，受 `max_target_tokens` 限制）；路由未启用时这些控制被忽略。
 
+### 信号 {#signals}
+
+`compress.signals` 在路由信号运行之前压缩它们读取的文本：保留其 profile 评分最高的句子，丢弃其余句子。信号在选出决策之前读取请求，所以 `signals` 从 `global.plugins` 的 context 插件读取，并与配方自己的 `context` 插件合并；决策的 `context` 插件不能包含它。
+
+```yaml
+global:
+  plugins:
+    - type: context
+      configuration:
+        enabled: true
+        compress:
+          signals:
+            enabled: true
+            max_tokens: 4096            # 超过它的文本被压缩到它
+            min_length: 512             # 字符数；不超过这个长度的文本保持原样
+            profile: default            # default | coding | medical | security | multi_turn
+            skip_signals: [jailbreak, pii]
+```
+
+- 只有 `signals` 的 `compress` 块不压缩请求本身。要压缩请求的决策写出自己的 `compress` 字段，例如 `mode: auto`；它继承 `signals`，但不改变信号读取的内容。
+- `profile` 设定评分权重和总是保留的首尾句子；`textrank_weight`、`position_weight`、`tfidf_weight`、`novelty_weight`、`position_depth`、`preserve_first_n` 和 `preserve_last_n` 覆盖它。`multi-turn` 按 `multi_turn` 读取；其他名称在加载时失败。
+- `skip_signals` 列出读取原始文本的信号类型，缺省为 `jailbreak` 和 `pii`。
+- 配方在自己的 `context` 插件中写 `signals: {enabled: false}` 来关闭它。
+
 ### 注入 {#injection}
 
 `injection.mode: tool_role`（缺省）在最后一条用户消息之后，为每个源添加一个工具调用及其结果：文档用 `vsr_rag_context`，记忆用 `vsr_memory_context`，按源的顺序排列。`system_prompt` 改为把它们加入系统提示词。压缩会把两者都识别为检索到的上下文。
@@ -130,7 +154,7 @@ JSON 字符串只通过其字符串叶子压缩，OpenAI 数组内容压缩文�
 
 ## 可观测性 {#observability}
 
-每个阶段的判断计入 `vsr_match_judge_total{feature="rag"}`、`{feature="memory"}` 或 `{feature="compress"}`。请求的[路由回放](./router-replay)记录保存 RAG 后端和记忆结果，包括请求在失败后继续的记忆失败。记忆检索计入带 `backend` 和 `status` 标签（`hit`、`miss`、`error`）的 `llm_memory_retrieval_total`。压缩指标报告是否运行、策略、前后计数和省略内容；这些是估算，不是实测的计费 token 节省。原始的被省略内容和恢复键不包含在内。
+`compress.signals` 计入 `llm_prompt_compression_total`（按 `recipe` 和 `outcome`），并作为 `llm_routing_stage_duration_seconds` 的 `prompt_compression` 阶段计时。每个阶段的判断计入 `vsr_match_judge_total{feature="rag"}`、`{feature="memory"}` 或 `{feature="compress"}`。请求的[路由回放](./router-replay)记录保存 RAG 后端和记忆结果，包括请求在失败后继续的记忆失败。记忆检索计入带 `backend` 和 `status` 标签（`hit`、`miss`、`error`）的 `llm_memory_retrieval_total`。压缩指标报告是否运行、策略、前后计数和省略内容；这些是估算，不是实测的计费 token 节省。原始的被省略内容和恢复键不包含在内。
 
 ## 迁移 {#migrating}
 
@@ -140,5 +164,6 @@ JSON 字符串只通过其字符串叶子压缩，OpenAI 数组内容压缩文�
 - RAG 的 `min_confidence_threshold` 只在事实核查规则匹配时才检索：迁移会把一个 `fact_check` 条件以 AND 方式加入决策的规则。
 - 记忆的 `retrieval_limit` 和 `similarity_threshold` 变为 `match.recall`，`auto_store` 变为 `store.auto`。
 - 压缩的 `scoring` 已移除：`bm25` 变为 `match: {recall: {method: bm25}}`，embedding 打分由相关性判断取代。`budget.target_tokens` 变为 `budget.max_tokens`。
+- `global.model_catalog.modules.prompt_compression` 变为 `global.plugins` 中 context 插件的 `compress.signals`。原本为空的决策 `compress` 块得到 `mode: auto`，使它继续压缩请求。
 
 完整示例：[`config/fragments/plugin/context/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/context)。

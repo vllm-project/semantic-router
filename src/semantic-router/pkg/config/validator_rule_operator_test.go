@@ -316,7 +316,7 @@ providers:
       provider_model_id: openai/gpt-5.5
       backend_refs:
         - name: openrouter
-          base_url: https://openrouter.ai/api/v1
+          endpoint: https://openrouter.ai/api/v1
           provider: openai
 recipes:
   - name: default

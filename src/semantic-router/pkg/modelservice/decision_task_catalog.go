@@ -96,7 +96,7 @@ func ProjectTaskCatalog(cfg *config.RouterConfig, statuses []DeploymentStatus) T
 	}
 	for _, signalType := range config.SharedAnswerSignalTypes {
 		name, _ := cfg.ApplicationTypeDeployment(signalType)
-		response.DefaultBindings[signalType] = config.ModelBinding{Deployment: name, Contract: config.DecisionTaskContract}
+		response.DefaultBindings[signalType] = config.ModelBinding{Deployment: name}
 	}
 	for name, resource := range cfg.ModelDeployments {
 		if _, exists := observed[name]; exists {
@@ -128,9 +128,6 @@ func ProjectTaskCatalog(cfg *config.RouterConfig, statuses []DeploymentStatus) T
 		for _, signalType := range applicationTypesInUse(scoped) {
 			authored, source := scoped.ApplicationTypeBinding(signalType)
 			name := authored.Deployment
-			if authored.Contract == "" {
-				authored.Contract = config.DecisionTaskContract
-			}
 			status := observed[name]
 			response.Bindings = append(response.Bindings, TaskCatalogBinding{
 				TaskID: PresetTask(applicationTypePreset(scoped, signalType)), Consumer: signalType, Key: signalType, Recipe: string(recipe.Name),
@@ -152,7 +149,7 @@ func ProjectTaskCatalog(cfg *config.RouterConfig, statuses []DeploymentStatus) T
 			response.Bindings = append(response.Bindings, TaskCatalogBinding{
 				TaskID: "selector", Consumer: "selector." + decision.Name, Key: "selector." + decision.Name, Recipe: string(recipe.Name),
 				Deployment: name, Model: taskCatalogModelName(status, cfg.ModelDeployments[name].Artifact), Source: source, Ready: status.Ready,
-				Binding: config.ModelBinding{Deployment: name, Contract: config.DecisionTaskContract},
+				Binding: config.ModelBinding{Deployment: name},
 			})
 		}
 	}

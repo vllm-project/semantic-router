@@ -46,8 +46,8 @@ func prepareMmbert(t *testing.T) embedding.Provider {
 		t.Skip("set VLLM_SR_MMBERT_TEST_MODEL to run the model-backed polarity regression")
 	}
 	provider, err := servingtest.Managed(t).Embedding(context.Background(), config.ResolvedModelBinding{
-		Recipe: "cache-regression", Name: "embedding",
-		Binding: config.ModelBinding{Deployment: "mmbert-test", Contract: "embedding.v1"},
+		Recipe: "cache-regression", Name: "embedding", Contract: "embedding.v1",
+		Binding: config.ModelBinding{Deployment: "mmbert-test"},
 		Deployment: config.ModelDeployment{
 			Artifact: modelPath, Provider: config.ModelRuntimeProvider, Device: "cpu",
 			Input: config.ModelInputBudget{MaxTokens: 512, Overflow: "reject"},

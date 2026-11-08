@@ -124,7 +124,7 @@ func (d *shadowDispatcher) connectorFor(job *shadowJob, target *shadowTarget) (*
 	if client, ok := d.clients[key]; ok {
 		return client, "", nil
 	}
-	authorize, err := configuredProviderAuthorizer(job.routerConfig, target.profile, target.logicalModel)
+	authorize, err := configuredProviderAuthorizer(job.routerConfig, target.profile, target.logicalModel, "router_replay_shadow")
 	if err != nil {
 		return nil, shadowReasonCredentialUnresolved, err
 	}

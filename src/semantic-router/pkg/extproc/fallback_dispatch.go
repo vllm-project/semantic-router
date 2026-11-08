@@ -24,6 +24,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
@@ -775,15 +776,15 @@ func (r *OpenAIRouter) fallbackProviderAuthorizer(
 	if err != nil {
 		return nil, err
 	}
-	if profile != nil && profile.TrustedGateway {
-		// The same contract as primary dispatch: only the request's trusted
-		// gateway credential, and the attempt fails without it.
-		credential, ok := trustedGatewayCredential(reqCtx)
+	if profile.Delegated() {
+		// The same contract as primary dispatch: only the request's delegated
+		// credential, and the attempt fails before the call without it.
+		credential, ok := requestDelegatedCredential(reqCtx)
 		if !ok {
-			return nil, errTrustedGatewayCredentialMissing
+			return nil, principal.ErrCredentialMissing
 		}
 		if providerAuth.Strategy == "none" || providerAuth.Header == "" {
-			return nil, fmt.Errorf("trusted gateway backend has no auth header to carry the credential")
+			return nil, fmt.Errorf("delegated backend has no auth header to carry the credential")
 		}
 		return func(_ context.Context, request *http.Request) error {
 			value := credential
@@ -836,6 +837,10 @@ func (r *OpenAIRouter) dispatchFallbackHTTP(
 		return nil, 0, err
 	}
 	authorize, err := r.fallbackProviderAuthorizer(reqCtx, dispatch.profile, dispatch.effectiveBackendModel())
+	if errors.Is(err, principal.ErrCredentialMissing) {
+		// The attempt ends as the Router's own 401, before any upstream call.
+		return delegatedCredentialMissingBody, http.StatusUnauthorized, nil
+	}
 	if err != nil {
 		return nil, 0, err
 	}

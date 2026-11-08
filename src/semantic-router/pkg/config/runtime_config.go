@@ -6,9 +6,9 @@ import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmproto
 type LooperConfig struct {
 	// EntrypointModels is the resolved virtual-model inventory for recursion guards.
 	EntrypointModels []string `yaml:"-"`
-	// Endpoint is deprecated and ignored: the Router makes a Looper's model
-	// calls in process. It is still accepted for one release.
-	Endpoint           string            `yaml:"endpoint,omitempty"`
+	// Endpoint points a connector client built in code at a chat completions
+	// URL; the Router's Loopers make their model calls in process.
+	Endpoint           string            `yaml:"-"`
 	GRPCMaxMsgSizeMB   int               `yaml:"grpc_max_msg_size_mb,omitempty"`
 	MaxResponseBytesMB int               `yaml:"max_response_bytes_mb,omitempty"`
 	TimeoutSeconds     int               `yaml:"timeout_seconds,omitempty"`

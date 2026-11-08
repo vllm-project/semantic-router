@@ -166,8 +166,8 @@ export const X_VSR_COST_CURRENCY = 'x-vsr-cost-currency'
 /** `true` asks for `x-vsr-trace` on the response; honored only for a caller `global.router.headers.debug` allows. Surface: control. */
 export const X_VSR_DEBUG = 'x-vsr-debug'
 
-/** Dedicated credential the authenticator attaches for a trusted upstream gateway; only a backend marked `trusted_gateway` receives its value, under its own auth header, and `gateway_credential.header` names another header. Surface: internal. */
-export const X_VSR_GATEWAY_CREDENTIAL = 'x-vsr-gateway-credential'
+/** The requesting user's credential the authenticator attaches; only an upstream with `auth.credential: delegated` receives its value, under its own auth header, and `delegated_credential.header` names another header. Surface: internal. */
+export const X_VSR_DELEGATED_CREDENTIAL = 'x-vsr-delegated-credential'
 
 /** In-process request authentication; the Router drops it from every client request. Surface: internal. */
 export const X_VSR_INTERNAL_AUTH = 'x-vsr-internal-auth'

@@ -31,58 +31,26 @@ var ruleLevelDeployment = map[string]string{
 }
 
 // checkBindingKeys checks the keys one bindings map of a configuration
-// writes and lists its deprecated keys and binding forms, one warning per
-// binding.
-func checkBindingKeys(path string, bindings map[string]ModelBinding) ([]ConfigWarning, error) {
-	var warnings []ConfigWarning
+// writes: each names an application signal type.
+func checkBindingKeys(path string, bindings map[string]ModelBinding) error {
 	for _, key := range sortedModelKeys(bindings) {
-		note := ""
 		switch {
 		case slices.Contains(SharedAnswerSignalTypes, key):
-		case IsDeprecatedBindingKey(key):
-			note = fmt.Sprintf("%s is deprecated; key the binding by its signal type: %s", key, BindingKey(key))
-		case strings.HasPrefix(key, "safety.") || strings.HasPrefix(key, "complexity."):
-			note = fmt.Sprintf("a binding for one rule is deprecated; set deployment on the rule (%s)", ruleDeploymentPath(key))
 		case strings.HasPrefix(key, "systemone."):
-			return nil, fmt.Errorf("%s.%s: systemone rules each ask their own question; set deployment on the rule (recipes[].signals.systemone[].deployment)", path, key)
+			return fmt.Errorf("%s.%s: systemone rules each ask their own question; set deployment on the rule (recipes[].signals.systemone[].deployment)", path, key)
 		case ruleLevelDeployment[key] != "":
-			return nil, fmt.Errorf("%s.%s: %s rules each ask their own question, so a binding cannot choose their deployment; set %s, or leave it out to use system.decision_model", path, key, key, ruleLevelDeployment[key])
+			return fmt.Errorf("%s.%s: %s rules each ask their own question, so a binding cannot choose their deployment; set %s, or leave it out to use system.decision_model", path, key, key, ruleLevelDeployment[key])
 		default:
-			return nil, fmt.Errorf("%s.%s: unknown signal type%s; a binding is keyed by one of %s", path, key, suggestKey(key), strings.Join(SharedAnswerSignalTypes, ", "))
-		}
-		if fields := bindings[key].DeprecatedFields(); len(fields) > 0 {
-			form := fmt.Sprintf("%s: the signal decides the contract and the provider the adapter", strings.Join(fields, ", "))
-			if note == "" {
-				note = fmt.Sprintf("%s; write the binding as %s: %s", form, key, bindings[key].Deployment)
-			} else {
-				note += "; and " + form
-			}
-		}
-		if note != "" {
-			warnings = append(warnings, ConfigWarning{Code: warningDeprecatedModelField, Field: path + "." + key, Message: note})
+			return fmt.Errorf("%s.%s: unknown signal type%s; a binding is keyed by one of %s", path, key, suggestKey(key), strings.Join(SharedAnswerSignalTypes, ", "))
 		}
 	}
-	return warnings, nil
+	return nil
 }
 
-// ruleDeploymentPath is where the rule a deprecated rule key names writes its
-// deployment.
-func ruleDeploymentPath(key string) string {
-	if strings.HasPrefix(key, "safety.") {
-		return "recipes[].signals.safety[" + strings.TrimPrefix(key, "safety.") + "].deployment"
-	}
-	return "recipes[].signals.complexity[" + strings.TrimPrefix(key, "complexity.") + "].deployment"
-}
-
-// suggestKey names the signal type, or the deprecated consumer name of
-// earlier releases, closest to an unknown key.
+// suggestKey names the signal type closest to an unknown key.
 func suggestKey(key string) string {
 	best, bestDistance := "", 4
-	candidates := slices.Clone(SharedAnswerSignalTypes)
-	for consumer := range bindingKeyOfConsumer {
-		candidates = append(candidates, consumer)
-	}
-	for _, candidate := range candidates {
+	for _, candidate := range SharedAnswerSignalTypes {
 		if distance := levenshtein(key, candidate); distance < bestDistance {
 			best, bestDistance = candidate, distance
 		}
@@ -90,27 +58,24 @@ func suggestKey(key string) string {
 	if best == "" {
 		return ""
 	}
-	return fmt.Sprintf(" (did you mean %s?)", BindingKey(best))
+	return fmt.Sprintf(" (did you mean %s?)", best)
 }
 
 // checkCanonicalBindingKeys checks the bindings maps a document writes.
-func checkCanonicalBindingKeys(canonical *CanonicalConfig) ([]ConfigWarning, error) {
+func checkCanonicalBindingKeys(canonical *CanonicalConfig) error {
 	var global map[string]ModelBinding
 	if canonical.Global != nil {
 		global = canonical.Global.ModelCatalog.Bindings
 	}
-	warnings, err := checkBindingKeys("global.model_catalog.bindings", global)
-	if err != nil {
-		return nil, err
+	if err := checkBindingKeys("global.model_catalog.bindings", global); err != nil {
+		return err
 	}
 	for _, recipe := range canonical.Recipes {
-		scoped, err := checkBindingKeys(recipePath(recipe.Name)+".model_bindings", recipe.ModelBindings)
-		if err != nil {
-			return nil, err
+		if err := checkBindingKeys(recipePath(recipe.Name)+".model_bindings", recipe.ModelBindings); err != nil {
+			return err
 		}
-		warnings = append(warnings, scoped...)
 	}
-	return warnings, nil
+	return nil
 }
 
 // explainUnknownField says why a field a configuration may reasonably write

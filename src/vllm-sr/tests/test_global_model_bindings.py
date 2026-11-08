@@ -23,9 +23,9 @@ def document():
                     }
                 },
                 "bindings": {
-                    "pii": {"deployment": "shared"},
-                    "domain": {"deployment": "shared"},
-                    "jailbreak": {"deployment": "shared", "head": "guard"},
+                    "pii": "shared",
+                    "domain": "shared",
+                    "jailbreak": "shared",
                 },
             }
         },
@@ -71,12 +71,15 @@ def test_global_bindings_keep_their_authored_form():
 
 def test_a_recipe_binding_overrides_only_its_recipe():
     raw = document()
-    local = {"deployment": "shared", "head": "token-spans"}
-    raw["recipes"][0]["model_bindings"] = {"pii": local}
+    raw["global"]["model_catalog"]["deployments"]["local"] = {
+        "provider": "model_runtime",
+        "artifact": "/models/local-encoder",
+    }
+    raw["recipes"][0]["model_bindings"] = {"pii": {"deployment": "local"}}
     config = UserConfig.model_validate(raw)
-    assert config.recipes[0].model_bindings["pii"].head == "token-spans"
+    assert config.recipes[0].model_bindings["pii"].deployment == "local"
     assert config.recipes[1].model_bindings == {}
-    assert "head" not in config.global_["model_catalog"]["bindings"]["pii"]
+    assert config.global_["model_catalog"]["bindings"]["pii"] == "shared"
 
 
 def test_unknown_binding_fields_are_rejected():

@@ -1,6 +1,7 @@
 import type { EditFormData, FieldConfig } from '../components/EditModal'
 import { routerStructuredField } from './configPageRouterStructuredFields'
 import { normalizeRouterStructuredFields } from './configPageRouterStructuredSchema'
+import { bindingDeployment } from './modelBindings'
 
 const REMOTE_BACKEND = 'openai_compatible'
 // A remote embedding model is an openai_embeddings deployment that
@@ -49,7 +50,7 @@ export function embeddingModelsView(
 // embeddings.default names its deployment as {deployment: <name>}, the way
 // system.decision_model does.
 function defaultDeploymentName(embeddings: Record<string, unknown>): string {
-  return trimmedString(asRecord(embeddings.default)?.deployment)
+  return bindingDeployment(embeddings.default) ?? ''
 }
 
 function defaultDeployment(embeddings: Record<string, unknown>): {

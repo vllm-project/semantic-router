@@ -1,10 +1,8 @@
 // Package serving implements the router's typed task bindings through
-// model_runtime deployments. It keeps the binding facade (Sequence, Scores,
-// windows, Tokens, Grounded, OperatingPoint, Embedding, Relevance and their
-// diagnostics) so consumers change only their constructor. Tokenization,
-// windows and head readouts run in the runtime; this package checks each
-// binding against its deployment's model card before the binding is
-// published and converts results to the router's task types once.
+// model_runtime deployments: the embedding bindings recall embeds with, and
+// their diagnostics. It checks each binding against its deployment's model
+// card before the binding is published and converts results to the router's
+// task types once.
 package serving
 
 import (
@@ -15,7 +13,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/diagnostics"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
@@ -33,7 +30,6 @@ type Services interface {
 	Card(ctx context.Context, deployment string) (modelservice.ModelCard, error)
 	// CurrentCard reads observed ready metadata without discovery or waiting.
 	CurrentCard(deployment string) (modelservice.ModelCard, bool)
-	Classify(ctx context.Context, deployment string, request modelservice.ClassifyRequest) (modelservice.ClassifyResponse, error)
 	Embed(ctx context.Context, deployment string, request modelservice.EmbedRequest) (modelservice.EmbedResponse, error)
 }
 
@@ -41,21 +37,13 @@ type Services interface {
 // shared with the preceding generation; each returned binding owns an
 // independent reference to its deployment's admission gate.
 type Runtime struct {
-	Pool            *binding.Pool
-	services        Services
-	registry        *binding.Registry
-	inventory       *binding.Inventory
-	prepared        *binding.PreparedTasks
-	sequence        *binding.Task[string, tasks.LabelDistribution]
-	scores          *binding.Task[string, tasks.LabelScores]
-	sequenceWindows *binding.Task[tasks.TextWindowsRequest, tasks.WindowedLabelDistribution]
-	scoreWindows    *binding.Task[tasks.TextWindowsRequest, tasks.WindowedLabelScores]
-	tokens          *binding.Task[string, tasks.TokenClassificationResult]
-	tokenWindows    *binding.Task[tasks.TextWindowsRequest, tasks.WindowedTokenClassification]
-	grounded        *binding.Task[tasks.GroundedTextRequest, tasks.TokenClassificationResult]
+	Pool      *binding.Pool
+	services  Services
+	registry  *binding.Registry
+	inventory *binding.Inventory
+	prepared  *binding.PreparedTasks
 
-	mu              sync.Mutex
-	operatingPoints map[*binding.Resolved[tasks.TextWindowsRequest, tasks.WindowedLabelScores]]*OperatingPointScorer
+	mu sync.Mutex
 }
 
 // New returns a runtime over services (nil when the process has none).
@@ -70,26 +58,7 @@ func New(services Services, pool *binding.Pool) *Runtime {
 		prepared.Observe(event)
 		diagnostics.Observe(event)
 	})
-	r := &Runtime{
-		Pool: pool, services: services, registry: registry, inventory: inventory, prepared: prepared,
-		operatingPoints: make(map[*binding.Resolved[tasks.TextWindowsRequest, tasks.WindowedLabelScores]]*OperatingPointScorer),
-	}
-	r.sequence = mustRegister(registry, config.RemoteClassifierContractLabelDistribution, config.RemoteClassifierContractLabelDistribution, validateText, validateDistributionResult)
-	r.scores = mustRegister(registry, config.RemoteClassifierContractLabelScores, config.RemoteClassifierContractLabelScores, validateText, validateScoresResult)
-	r.sequenceWindows = mustRegister(registry, "windowed_label_distribution.v1", config.RemoteClassifierContractLabelDistribution, validateWindowInput, validateWindowDistribution)
-	r.scoreWindows = mustRegister(registry, "windowed_label_scores.v1", config.RemoteClassifierContractLabelScores, validateWindowInput, validateWindowScores)
-	r.tokens = mustRegister(registry, config.RemoteClassifierContractTokenSpans, config.RemoteClassifierContractTokenSpans, validateText, validateSpans)
-	r.tokenWindows = mustRegister(registry, "windowed_token_spans.v1", config.RemoteClassifierContractTokenSpans, validateWindowInput, validateWindowTokens)
-	r.grounded = mustRegister(registry, "grounded_text.v1", config.RemoteClassifierContractTokenSpans, validateGroundedInput, validateGroundedSpans)
-	return r
-}
-
-func mustRegister[I, O any](registry *binding.Registry, taskID, contract string, input func(I) error, output func(I, O) error) *binding.Task[I, O] {
-	task, err := binding.RegisterTask(registry, taskID, contract, input, output)
-	if err != nil {
-		panic(err)
-	}
-	return task
+	return &Runtime{Pool: pool, services: services, registry: registry, inventory: inventory, prepared: prepared}
 }
 
 // Services returns the generation's deployment services (nil when absent).
@@ -120,9 +89,5 @@ func observePreparationFailure(spec config.ResolvedModelBinding, err error) {
 }
 
 func taskIdentity(spec config.ResolvedModelBinding) binding.Identity {
-	adapter := spec.Binding.Adapter
-	if adapter == "" {
-		adapter = "auto"
-	}
-	return binding.Identity{Recipe: string(spec.Recipe), Name: spec.Name, Deployment: spec.Binding.Deployment, Contract: spec.Binding.Contract, Adapter: adapter, Head: spec.Binding.Head}
+	return binding.Identity{Recipe: string(spec.Recipe), Name: spec.Name, Deployment: spec.Binding.Deployment, Contract: spec.Contract, Adapter: "auto"}
 }

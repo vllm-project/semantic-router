@@ -44,6 +44,12 @@ class TestContextCompressConfig:
                 enabled=True, compress={}, budget={"trigger_tokens": 4000}
             )
 
+    def test_a_decision_compresses_no_signals(self):
+        with pytest.raises(
+            PydanticValidationError, match="before a decision is chosen"
+        ):
+            _compress(signals={"enabled": True, "max_tokens": 512})
+
     def test_budget_needs_compress(self):
         with pytest.raises(PydanticValidationError, match="add compress"):
             ContextPluginConfig(

@@ -62,7 +62,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr config envoy`](#vllm-sr-config-envoy) | Print the generated Envoy configuration. |
 | [`vllm-sr config get`](#vllm-sr-config-get) | Read the active canonical configuration from a Router. |
 | [`vllm-sr config init`](#vllm-sr-config-init) | Create a minimal canonical configuration template. |
-| [`vllm-sr config migrate`](#vllm-sr-config-migrate) | Migrate a legacy or mixed config file to canonical v0.5 YAML. |
+| [`vllm-sr config migrate`](#vllm-sr-config-migrate) | Migrate a config file to canonical v0.5 YAML. |
 | [`vllm-sr config plan`](#vllm-sr-config-plan) | Validate and plan an exact remote mutation without changing the Router. |
 | [`vllm-sr config propose`](#vllm-sr-config-propose) | Print a reviewable config proposal. This command does not apply it. |
 | [`vllm-sr config rollback`](#vllm-sr-config-rollback) | Compare-and-swap the active configuration to a recorded version. |
@@ -805,19 +805,21 @@ Create a minimal canonical configuration template.
 Usage: vllm-sr config migrate [OPTIONS]
 ```
 
-Migrate a legacy or mixed config file to canonical v0.5 YAML.
+Migrate a config file to canonical v0.5 YAML.
 
-The output is written only when the Router's own validation accepts it: a
-local Router binary ($VLLM_SR_ROUTER_BINARY) or the Router in its local
-image. With --offline, or when no Router can run, only the CLI's
-structural checks run.
+The Router rewrites the file: a local Router binary
+($VLLM_SR_ROUTER_BINARY) or, present here and never pulled, the Router
+image `vllm-sr serve` runs by default ($VLLM_SR_ROUTER_IMAGE,
+$VLLM_SR_IMAGE or this CLI's own); a running stack's Router is not asked.
+The output is written only when the CLI's structural checks and the
+Router's own validation accept it, in the gateway mode --gateway names.
 
 | Parameter | Description |
 | --- | --- |
 | `--config TEXT` | Path to source config file (default: config.yaml) Default: config.yaml. |
 | `--output TEXT` | Path for migrated canonical config (default: &lt;config&gt;.migrated.yaml) |
+| `--gateway CHOICE` | The gateway mode the configuration is served in (default: $VLLM_SR_GATEWAY or standalone). Choices: standalone, extproc. |
 | `--force` | Overwrite the output file if it already exists. Default: false. |
-| `--offline` | Check the output with only the CLI's structural checks, without the Router's validation. Default: false. |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr config plan` {#vllm-sr-config-plan}
@@ -922,10 +924,12 @@ Validate configuration file.
 
 The Router's own validation decides, as it does when `vllm-sr serve` or
 `vllm-sr config apply` loads the file: a local Router binary
-(--router-binary or $VLLM_SR_ROUTER_BINARY), the Router in its local image
-(never pulled), or the running Router --endpoint names. The CLI checks the
-file's structure and the rules it owns as well. With --offline, or when no
-Router can run, only the CLI's structural checks run.
+(--router-binary or $VLLM_SR_ROUTER_BINARY), a Router image present here
+and never pulled (--image, else the one `vllm-sr serve` runs by default:
+$VLLM_SR_ROUTER_IMAGE, $VLLM_SR_IMAGE or this CLI's own), or the running
+Router --endpoint names. A running stack's Router is asked only when named.
+The CLI checks the file's structure and the rules it owns as well. With
+--offline, or when no Router can run, only the CLI's structural checks run.
 
 Examples:
 
@@ -941,8 +945,8 @@ vllm-sr config validate --endpoint http://localhost:8080
 | `--config TEXT` | Path to config file (default: config.yaml) Default: config.yaml. |
 | `--endpoint TEXT` | Validate with this running Router instead of a local Router. |
 | `--router-binary PATH` | Local Router executable whose own validation to run, preferred over the image (default: $VLLM_SR_ROUTER_BINARY). |
-| `--image TEXT` | Router image whose own validation to run (default: the stack's, if present). |
-| `--gateway CHOICE` | The gateway mode the configuration is served in (default: standalone). Choices: standalone, extproc. |
+| `--image TEXT` | Router image whose own validation to run (default: the one `vllm-sr serve` runs without --image, if present). |
+| `--gateway CHOICE` | The gateway mode the configuration is served in (default: $VLLM_SR_GATEWAY or standalone). Choices: standalone, extproc. |
 | `--offline` | Run only the CLI's structural checks, without the Router's validation. Default: false. |
 | `--timeout FLOAT` | [default: 15] |
 | `--token-env TEXT` | [default: VSR_MGMT_TOKEN] |

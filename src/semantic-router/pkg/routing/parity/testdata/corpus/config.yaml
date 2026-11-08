@@ -24,11 +24,10 @@ providers:
       api_format: openai
       backend_refs:
         - name: large-primary
-          base_url: https://llm.example.com/v1
+          endpoint: https://llm.example.com/v1
           provider: openai
-          auth_header: Authorization
-          auth_prefix: Bearer
-          extra_headers:
+          auth: {header: Authorization, prefix: Bearer}
+          headers:
             X-Tenant: parity-corpus
           api_key: parity-static-key
       description: strong general model

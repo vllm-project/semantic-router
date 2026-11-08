@@ -112,9 +112,6 @@ const redisSchema = object('Redis Backend', {
   }),
 })
 
-/** Module fields that chose a model before bindings and deployments did. */
-export const DEPRECATED_MODULE_MODEL_FIELDS = ['model_id', 'model_ref', 'backend'] as const
-
 const tracingSchema = object('Tracing', {
   enabled: boolean('Enabled'),
   provider: text('Provider'),
@@ -333,63 +330,7 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
       }),
     },
   },
-  external_models: {
-    items: {
-      label: 'External Models',
-      description: 'External provider models used by router-owned auxiliary workflows.',
-      schema: objectList(
-        'External Model',
-        {
-          llm_provider: text('Provider'),
-          model_role: text('Model Role', { required: true }),
-          llm_endpoint: object('Endpoint', {
-            address: text('Address'),
-            port: number('Port', { min: 1, max: 65535 }),
-            protocol: select('Protocol', ['http', 'https']),
-            name: text('Name'),
-            use_chat_template: boolean('Use Chat Template'),
-            prompt_template: text('Prompt Template'),
-          }),
-          llm_model_name: text('Model Name'),
-          llm_timeout_seconds: number('Timeout Seconds', { min: 0 }),
-          parser_type: text('Parser Type'),
-          threshold: number('Threshold', { min: 0, max: 1, step: 0.01 }),
-          access_key: password('Access Key'),
-          max_tokens: number('Max Tokens', { min: 1 }),
-          temperature: number('Temperature', { min: 0 }),
-        },
-        'llm_model_name',
-      ),
-    },
-  },
   embedding_models: EMBEDDING_MODELS_STRUCTURED_FIELDS,
-  prompt_compression: {
-    skip_signals: {
-      label: 'Skip Signals',
-      description: 'Signals that bypass prompt compression.',
-      schema: stringList('Signal', 'jailbreak'),
-    },
-  },
-  modality_detector: {
-    classifier: {
-      label: 'Classifier',
-      description: 'Modality classifier model and device.',
-      schema: object('Classifier', {
-        model_path: text('Model Path'),
-        use_cpu: boolean('Use CPU'),
-      }),
-    },
-    keywords: {
-      label: 'Keywords',
-      description: 'Keywords used by keyword or hybrid detection.',
-      schema: stringList('Keyword', 'image'),
-    },
-    both_keywords: {
-      label: 'Required Keyword Pairs',
-      description: 'Keywords that must co-occur for a match.',
-      schema: stringList('Keyword', 'draw'),
-    },
-  },
   observability: {
     metrics: {
       label: 'Metrics',

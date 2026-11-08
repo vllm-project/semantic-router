@@ -22,6 +22,3 @@ global:
         endpoint: https://app.vllm-sr.ai/v1/systemone
         model: vllm-sr/d3-ultra
         auth: {api_key_env: VSR_APP_KEY}
-      content-risk:
-        provider: classify
-        endpoint: https://risk.example.com

@@ -118,7 +118,7 @@ func KeptFromProviders() []string {
 // key, the internal authentication and the KV hints among them. The Router
 // never believes a client's value of one, and removes it from the
 // provider-bound request before it sets its own. The authenticator's outputs
-// are left out: its gateway credential is trusted like the identity headers,
+// are left out: its delegated credential is trusted like the identity headers,
 // whose client copies the gateway in front strips.
 func DroppedFromClients() []string {
 	var names []string
@@ -235,7 +235,7 @@ var registry = []Header{
 	{UserVertexAIKey, FromClient, SurfaceInternal, SensitivitySecret, "authz", "v0.2", "Per-user Vertex AI token the authenticator injects."},
 	{UserMiniMaxKey, FromClient, SurfaceInternal, SensitivitySecret, "authz", "v0.3", "Per-user MiniMax key the authenticator injects."},
 	{UserCloudflareWorkersAIKey, FromClient, SurfaceInternal, SensitivitySecret, "authz", "v0.4", "Per-user Cloudflare Workers AI token the authenticator injects."},
-	{VSRGatewayCredential, FromClient, SurfaceInternal, SensitivitySecret, "authz", "v0.5", "Dedicated credential the authenticator attaches for a trusted upstream gateway; only a backend marked `trusted_gateway` receives its value, under its own auth header, and `gateway_credential.header` names another header."},
+	{VSRDelegatedCredential, FromClient, SurfaceInternal, SensitivitySecret, "authz", "v0.5", "The requesting user's credential the authenticator attaches; only an upstream with `auth.credential: delegated` receives its value, under its own auth header, and `delegated_credential.header` names another header."},
 	{VSRInternalAuth, FromClient, SurfaceInternal, SensitivitySecret, "looper", "v0.4", "In-process request authentication; the Router drops it from every client request."},
 	{Authorization, FromClient | ToProvider, SurfaceInternal, SensitivitySecret, "credentials", "v0.1", "Bearer credential: a client's key for the Router, and the provider credential the Router sets."},
 	{APIKey, FromClient | ToProvider, SurfaceInternal, SensitivitySecret, "credentials", "v0.2", "Azure OpenAI key: a client's authenticates to the Router and is removed, and the Router sets the provider's."},

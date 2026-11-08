@@ -31,8 +31,8 @@ providers:
       provider_model_id: vllm-sr/Decision-2.0-Nox-4B
       backend_refs:
         - provider: systemone-compatible
-          base_url: http://localhost:8900/v1
-          api_key_env: NATIVE_TEST_TOKEN
+          endpoint: http://localhost:8900/v1
+          auth: {api_key_env: NATIVE_TEST_TOKEN}
 global:
   model_catalog:
     deployments:
@@ -242,10 +242,8 @@ def test_native_rejects_chat_directives_before_pydantic_drops_them(
         UserConfig.model_validate(native_document)
 
 
-@pytest.mark.parametrize(
-    "variant", ["contrastive", "examples", "external", "http", "mcp", "explicit"]
-)
-def test_native_signal_backend_lifecycle(native_document, variant):
+@pytest.mark.parametrize("backend", ["examples", "local-kai", "remote"])
+def test_native_signal_backend_lifecycle(native_document, backend):
     profile = native_document["recipes"][1]
     profile["signals"] = {
         "preferences": [
@@ -257,23 +255,13 @@ def test_native_signal_backend_lifecycle(native_document, variant):
         "operator": "AND",
         "conditions": [{"type": "preference", "name": "brief"}],
     }
-    catalog = native_document["global"]["model_catalog"]
-    if variant in {"contrastive", "explicit"}:
-        catalog["modules"] = {"classifier": {"preference": {"use_contrastive": True}}}
-    elif variant == "examples":
+    if backend == "examples":
         profile["signals"]["preferences"][0]["examples"] = ["be brief"]
-    elif variant == "external":
-        catalog["external"] = [{"model_role": "preference"}]
-    elif variant == "mcp":
-        catalog["modules"] = {"classifier": {"mcp": {"enabled": True}}}
-        profile["decisions"][0]["rules"]["conditions"][0]["type"] = "domain"
-    if variant in {"http", "explicit"}:
-        profile["model_bindings"] = {
-            "preference": "local-kai" if variant == "explicit" else "remote"
-        }
+    else:
+        profile["model_bindings"] = {"preference": backend}
     errors = validate_native_execution(UserConfig.model_validate(native_document))
-    # The Router judges the preference backend, the CLI only the MCP classifier.
-    assert bool(errors) == (variant == "mcp")
+    # The Router judges the preference backend.
+    assert not errors
 
 
 def test_native_stage_cannot_shadow_abstention(native_document):

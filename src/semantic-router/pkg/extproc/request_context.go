@@ -188,12 +188,12 @@ type RequestContext struct {
 	// authentication; this field must only ever be populated from the
 	// configured auth gateway header, never from request-body content.
 	AuthenticatedPrincipal string
-	// gatewayCredential is the dedicated credential the deployment
-	// authenticator attached for a trusted upstream gateway, taken off the
-	// headers at capture (see captureGatewayCredential). Unexported so no
+	// delegatedCredential is the requesting user's credential the deployment
+	// authenticator attached for delegated upstreams, taken off the headers at
+	// capture (see captureDelegatedCredential). Unexported so no
 	// serialization or dump of the context carries it; read it through
-	// trustedGatewayCredential.
-	gatewayCredential   string
+	// requestDelegatedCredential.
+	delegatedCredential string
 	TurnIndex           int     // Number of prior turns in this session (0 = first turn)
 	PreviousModel       string  // Model used in the immediately preceding turn; empty on first turn
 	CacheWarmthEstimate float64 // [0,1] from EstimateCacheProbability; 0.5 = unknown

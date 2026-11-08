@@ -58,18 +58,11 @@ const configResponse = {
       response_api: { enabled: true },
     },
     model_catalog: {
-      modules: {
-        prompt_guard: {
-          enabled: true,
-          model_ref: 'prompt_guard',
-          threshold: 0.7,
-          use_cpu: true,
-        },
-      },
       system: {
-        prompt_guard: 'models/mmbert32k-jailbreak-detector-merged',
-        domain_classifier: 'models/mmbert32k-intent-classifier-merged',
-        pii_classifier: 'models/mmbert32k-pii-detector-merged',
+        decision_model: { deployment: 'main-judge' },
+      },
+      bindings: {
+        jailbreak: 'guard-judge',
       },
       embeddings: {
         default: 'qwen3-embedding',
@@ -84,16 +77,10 @@ services:
   response_api:
     enabled: true
 model_catalog:
-  modules:
-    prompt_guard:
-      enabled: true
-      model_ref: prompt_guard
-      threshold: 0.7
-      use_cpu: true
   system:
-    prompt_guard: models/mmbert32k-jailbreak-detector-merged
-    domain_classifier: models/mmbert32k-intent-classifier-merged
-    pii_classifier: models/mmbert32k-pii-detector-merged
+    decision_model: {deployment: main-judge}
+  bindings:
+    jailbreak: guard-judge
   embeddings:
     default: {deployment: qwen3-embedding}
 `;
@@ -154,7 +141,7 @@ async function expectInside(container: Locator, child: Locator) {
 }
 
 test.describe('Config surface layout regressions', () => {
-  test('opens decision model settings directly and saves bindings instead of system lines', async ({ page }) => {
+  test('opens decision model settings directly and saves the decision model and a binding', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await mockConfigSurface(page);
 
@@ -183,7 +170,6 @@ test.describe('Config surface layout regressions', () => {
     const card = page.locator('#global-section-system_models');
     await expect(card.getByRole('heading', { name: 'Decision Model & Bindings' })).toBeInViewport();
     await expect(card.getByText('main-judge', { exact: true })).toBeVisible();
-    await expect(card.getByText('3 deprecated model paths', { exact: true })).toBeVisible();
     await card.getByRole('button', { name: 'Edit', exact: true }).click();
 
     const modal = page.getByRole('dialog', { name: 'Edit Decision Model & Bindings' });
@@ -193,9 +179,8 @@ test.describe('Config surface layout regressions', () => {
     await modal.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(modal).toBeHidden();
     expect(patch).toEqual({
-      system: { decision_model: { deployment: 'alternate-judge' }, domain_classifier: null },
-      bindings: { domain: 'alternate-judge', domain_classifier: null },
-      modules: { classifier: { domain: { model_id: null, model_ref: null, backend: null } } },
+      system: { decision_model: { deployment: 'alternate-judge' } },
+      bindings: { domain: 'alternate-judge' },
     });
     await expect(card.getByText('alternate-judge', { exact: true })).toBeVisible();
   });
@@ -369,7 +354,7 @@ test.describe('Config surface layout regressions', () => {
 
     await expect(systemBindingsCard).toBeVisible();
     await expect(embeddingsCard).toBeVisible();
-    await expect(systemBindingsCard.getByText('models/.../mmbert32k-jailbreak-detector-merged')).toBeVisible();
+    await expect(systemBindingsCard.getByText('guard-judge', { exact: true })).toBeVisible();
     await expect(embeddingsCard.getByText('qwen3-embedding')).toBeVisible();
 
     const systemPath = systemBindingsCard.getByText('global.model_catalog.system');

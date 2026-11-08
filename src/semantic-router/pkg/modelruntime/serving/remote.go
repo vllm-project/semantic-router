@@ -10,11 +10,11 @@ import (
 )
 
 // A systemone deployment is a decision model behind a remote System One API.
-// It answers a binding's questions and presets as a model_runtime decision
-// model does, through the generation's remote client: its card is the one the
-// API lists, read while the generation prepares, and in a request stage its
-// questions travel in one call with the stage's other questions to it (see
-// modelservice.Bundle). It serves no classify head, embeddings or rerank.
+// It answers questions and presets as a model_runtime decision model does,
+// through the generation's remote client: its card is the one the API lists,
+// read while the generation prepares, and in a request stage its questions
+// travel in one call with the stage's other questions to it (see
+// modelservice.Bundle). It serves no embeddings.
 
 // providerOf is the provider a binding's capability and resource report.
 func providerOf(spec config.ResolvedModelBinding) string {
@@ -74,13 +74,6 @@ func (s remoteServices) Decide(ctx context.Context, deployment string, request m
 		return modelservice.Response{}, ErrNotConfigured
 	}
 	return decider.Decide(ctx, deployment, request)
-}
-
-func (s remoteServices) Classify(ctx context.Context, deployment string, request modelservice.ClassifyRequest) (modelservice.ClassifyResponse, error) {
-	if err := s.local(deployment, "classify"); err != nil {
-		return modelservice.ClassifyResponse{}, err
-	}
-	return s.inner.Classify(ctx, deployment, request)
 }
 
 func (s remoteServices) Embed(ctx context.Context, deployment string, request modelservice.EmbedRequest) (modelservice.EmbedResponse, error) {

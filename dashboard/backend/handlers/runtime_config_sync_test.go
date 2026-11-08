@@ -60,7 +60,6 @@ func TestRuntimeOwnedConfigPathDoesNotResyncIntoNestedStateDirectory(t *testing.
 		t.Fatal(err)
 	}
 	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", configPath)
-	t.Setenv("VLLM_SR_PLATFORM", "rocm")
 
 	got, err := syncRuntimeConfigForCurrentRuntime(configPath)
 	if err != nil || got != configPath {
@@ -82,19 +81,17 @@ listeners:
   - name: http-8899
     address: 0.0.0.0
     port: 8899
-global:
-  model_catalog:
-    modules:
-      classifier:
-        domain:
-          use_cpu: true
+recipes:
+  - name: default
+    decisions:
+      - name: default
 `
 	if err := os.WriteFile(configPath, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 
 	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", "/app/.vllm-sr/runtime-config.yaml")
-	t.Setenv("DASHBOARD_PLATFORM", "rocm")
+	t.Setenv("VLLM_SR_ALGORITHM_OVERRIDE", "multi_factor")
 	t.Setenv("VLLM_SR_PYTHON_BIN", testRuntimeSyncPythonBinary(t))
 	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
@@ -116,16 +113,34 @@ global:
 	if err != nil {
 		t.Fatalf("read runtime config: %v", err)
 	}
-	if !contains(string(runtimeData), "use_cpu: false") {
-		t.Fatalf("expected ROCm classifier GPU defaults, got:\n%s", string(runtimeData))
+	if !contains(string(runtimeData), "type: multi_factor") {
+		t.Fatalf("expected the algorithm override, got:\n%s", string(runtimeData))
 	}
 
 	sourceData, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("read source config: %v", err)
 	}
-	if !contains(string(sourceData), "use_cpu: true") {
+	if string(sourceData) != configYAML {
 		t.Fatalf("expected source config to remain unchanged, got:\n%s", string(sourceData))
+	}
+}
+
+func TestPlatformBrandingAloneDoesNotSyncRuntimeConfig(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", "")
+	t.Setenv("VLLM_SR_ALGORITHM_OVERRIDE", "")
+	t.Setenv("VLLM_SR_PLATFORM", "rocm")
+	t.Setenv("DASHBOARD_PLATFORM", "rocm")
+	// A sync would fail here: this is not a Python interpreter.
+	t.Setenv("VLLM_SR_PYTHON_BIN", "/bin/sh")
+
+	got, err := syncRuntimeConfigLocally(configPath)
+	if err != nil || got != configPath {
+		t.Fatalf("syncRuntimeConfigLocally() = %q, %v", got, err)
 	}
 }
 

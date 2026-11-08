@@ -202,5 +202,8 @@ func validateDecisionReplayShadow(cfg *RouterConfig, decision *Decision) error {
 			model,
 		)
 	}
+	if path, delegated := cfg.DelegatedBackendOf(model); delegated {
+		return delegatedRouterOwnError(path, fmt.Sprintf("router_replay.shadow copies (decisions[%s]) call it as the Router", decision.Name))
+	}
 	return nil
 }

@@ -28,7 +28,6 @@ func prepareEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *s
 	if cfg == nil {
 		return nil, fmt.Errorf("embedding configuration is required")
 	}
-	cfg = config.WithModelResources(cfg)
 	if runtime == nil {
 		runtime = serving.New(nil, nil)
 	}
@@ -95,8 +94,8 @@ func embeddingSpec(cfg *config.RouterConfig, recipe config.RecipeName, name stri
 		consumer = strings.Join(consumers, "+") + ".embedding"
 	}
 	return config.ResolvedModelBinding{
-		Recipe: recipe, Name: consumer,
-		Binding:    config.ModelBinding{Deployment: name, Contract: "embedding.v1"},
+		Recipe: recipe, Name: consumer, Contract: "embedding.v1",
+		Binding:    config.ModelBinding{Deployment: name},
 		Deployment: deployment.WithDefaults(), Admission: cfg.ModelAdmission[name],
 	}, nil
 }

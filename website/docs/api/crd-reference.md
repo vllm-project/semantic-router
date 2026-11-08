@@ -159,7 +159,7 @@ _Appears in:_
 | `classifier` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Classifier is removed: the decision model answers domain and pii rules,<br />and a threshold is the rule's predicate. A resource that sets it is<br />refused. |  | Type: object <br />Optional: \{\} <br /> |
 | `complexity_rules` _[ComplexityRulesConfig](#complexityrulesconfig) array_ | Complexity rules for complexity-aware routing |  | Optional: \{\} <br /> |
 | `complexity_model` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ComplexityModel is removed: the decision model answers complexity<br />rules. A resource that sets it is refused. |  | Type: object <br />Optional: \{\} <br /> |
-| `external_models` _[ExternalModelConfig](#externalmodelconfig) array_ | ExternalModels declares the remote models other configuration refers to<br />by name or role. Mirrors global.model_catalog.external[] in the router<br />config field for field; the router's own validator checks it. |  | Optional: \{\} <br /> |
+| `external_models` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ExternalModels is removed: a remote model is a model deployment with<br />provider openai_chat, openai_embeddings or systemone. A resource that<br />sets it is refused. |  | Schemaless: \{\} <br />Optional: \{\} <br /> |
 | `strategy` _string_ | Decision routing strategy ("priority" for priority-based matching) |  | Enum: [priority] <br />Optional: \{\} <br /> |
 | `decisions` _[DecisionConfig](#decisionconfig) array_ | Routing decisions based on signals (domain, complexity, etc.) |  | Optional: \{\} <br /> |
 | `reasoning_effort` _string_ | ReasoningEffort is the default reasoning effort for model bindings that do<br />not select a different effort. The selected model family validates the<br />value because built-in and custom families may expose different ladders. |  | Optional: \{\} <br /> |
@@ -269,38 +269,6 @@ _Appears in:_
 | `type` _string_ |  | otlp | Optional: \{\} <br /> |
 | `endpoint` _string_ |  | jaeger:4317 | Optional: \{\} <br /> |
 | `insecure` _boolean_ |  | true | Optional: \{\} <br /> |
-
-#### ExternalModelConfig
-
-ExternalModelConfig is one entry of global.model_catalog.external[]: a
-remote model the router finds by its role. Field names are the router's
-YAML keys so the generic typed conversion carries them unchanged.
-
-_Appears in:_
-
-- [ConfigSpec](#configspec)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `name` _string_ | Name identifies the entry in the catalog. |  | MinLength: 1 <br /> |
-| `model_role` _string_ | ModelRole is what the model is used for; the router finds the model by<br />its role. |  | MinLength: 1 <br /> |
-| `llm_model_name` _string_ | ModelName is the model identifier the remote service expects. |  | MinLength: 1 <br /> |
-| `llm_endpoint` _[ExternalModelEndpoint](#externalmodelendpoint)_ | Endpoint is where the remote model is reached. |  |  |
-| `llm_timeout_seconds` _integer_ | TimeoutSeconds bounds one call when the backend block sets no deadline. |  | Minimum: 1 <br />Optional: \{\} <br /> |
-
-#### ExternalModelEndpoint
-
-ExternalModelEndpoint is the address of a remote classification model.
-
-_Appears in:_
-
-- [ExternalModelConfig](#externalmodelconfig)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `address` _string_ |  |  | MinLength: 1 <br /> |
-| `port` _integer_ |  |  | Maximum: 65535 <br />Minimum: 1 <br /> |
-| `protocol` _string_ |  |  | Enum: [http https] <br />Optional: \{\} <br /> |
 
 #### GatewayReference
 
@@ -1038,7 +1006,7 @@ _Appears in:_
 | `service` _[ServiceSpec](#servicespec)_ | Service configuration |  | Optional: \{\} <br /> |
 | `resources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#resourcerequirements-v1-core)_ | Resource requirements |  | Optional: \{\} <br /> |
 | `persistence` _[PersistenceSpec](#persistencespec)_ | Persistence configuration |  | Optional: \{\} <br /> |
-| `config` _[ConfigSpec](#configspec)_ | Configuration overrides merged into the canonical v0.5 config.yaml.<br />Router-wide runtime overrides land under config.global.router/services/stores/<br />integrations/model_catalog, with model-backed modules nested under<br />config.global.model_catalog.modules. Provider defaults land under<br />config.providers.defaults. |  | Optional: \{\} <br /> |
+| `config` _[ConfigSpec](#configspec)_ | Configuration overrides merged into the canonical v0.5 config.yaml.<br />Router-wide runtime overrides land under config.global.router/services/stores/<br />integrations/model_catalog, and the default plugins under<br />config.global.plugins. Provider defaults land under<br />config.providers.defaults. |  | Optional: \{\} <br /> |
 | `toolsDb` _[ToolEntry](#toolentry) array_ | Tools database configuration |  | Optional: \{\} <br /> |
 | `vllmEndpoints` _[VLLMEndpointSpec](#vllmendpointspec) array_ | VLLMEndpoints is a Kubernetes-native backend discovery adapter.<br />It generates canonical config.providers.models[].backend_refs<br />and the loras of those entries. |  | Optional: \{\} <br /> |
 | `autoscaling` _[AutoscalingSpec](#autoscalingspec)_ | Autoscaling configuration |  | Optional: \{\} <br /> |

@@ -1,5 +1,3 @@
-import type { ReactElement } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import { DEFAULT_SECTIONS } from './configPageRouterDefaultsCatalog'
@@ -36,18 +34,19 @@ describe('Vela defaults and explicit legacy models', () => {
       { label: 'PII', value: 'Follows main-judge' },
     ])
     expect(card.badges).toContainEqual({ label: '0 explicit bindings', tone: 'inactive' })
-    // Rules that ask their own question name their deployment on the rule.
     expect(card.editFields.map((field) => field.name)).toEqual([
       'decision_model',
       'binding:domain',
-      'binding:jailbreak',
-      'binding:pii',
       'binding:fact_check',
       'binding:user_feedback',
-      'binding:modality',
+      'binding:jailbreak',
+      'binding:safety',
+      'binding:pii',
       'binding:hallucination',
-      'binding:preference',
-      'binding:reask',
+      'binding:refusal',
+      'binding:turn_relation',
+      'binding:complexity',
+      'binding:modality',
     ])
   })
 
@@ -63,7 +62,7 @@ describe('Vela defaults and explicit legacy models', () => {
     ])
   })
 
-  describe('with bindings and a deprecated system line', () => {
+  describe('with bindings', () => {
     const authored: CanonicalModelCatalogConfig = {
       deployments: {
         'judge-a': { provider: 'model_runtime', artifact: 'vllm-sr/Vela-2.0-4B' },
@@ -73,46 +72,36 @@ describe('Vela defaults and explicit legacy models', () => {
           model: 'vllm-sr/d3-ultra',
         },
       },
-      bindings: {
-        domain_classifier: { deployment: 'judge-a', contract: 'label_distribution.v1' },
-        'classifier.risk': 'judge-a',
-      },
-      system: { decision_model: { deployment: 'main-judge' }, pii_classifier: 'models/custom-pii' },
+      bindings: { domain: { deployment: 'judge-a' }, pii: 'd3-remote' },
+      system: { decision_model: { deployment: 'main-judge' } },
     }
     const card = () => systemModelCard({ decision_model: { deployment: 'main-judge' } }, authored)
 
-    it('shows each binding by signal type and deprecated forms read-only', () => {
+    it('shows each binding by signal type', () => {
       expect(card().summary).toEqual([
         { label: 'Decision Model', value: 'main-judge' },
         { label: 'Jailbreak', value: 'Follows main-judge' },
         { label: 'Domain', value: 'judge-a' },
-        { label: 'PII', value: 'models/custom-pii (deprecated system.pii_classifier)' },
+        { label: 'PII', value: 'd3-remote' },
       ])
-      expect(card().badges).toEqual([
-        { label: '1 explicit binding', tone: 'active' },
-        { label: '1 deprecated model path', tone: 'info' },
-        { label: '1 deprecated binding', tone: 'info' },
-      ])
+      expect(card().badges).toEqual([{ label: '2 explicit bindings', tone: 'active' }])
       expect(card().editData).toEqual({
         decision_model: 'main-judge',
         'binding:domain': 'judge-a',
-        'binding:jailbreak': '',
-        'binding:pii': 'models/custom-pii (deprecated system.pii_classifier)',
         'binding:fact_check': '',
         'binding:user_feedback': '',
-        'binding:modality': '',
+        'binding:jailbreak': '',
+        'binding:safety': '',
+        'binding:pii': 'd3-remote',
         'binding:hallucination': '',
-        'binding:preference': '',
-        'binding:reask': '',
+        'binding:refusal': '',
+        'binding:turn_relation': '',
+        'binding:complexity': '',
+        'binding:modality': '',
       })
       expect(
         card().editFields.find((field) => field.name === 'binding:jailbreak')?.options,
       ).toEqual(['', 'd3-remote', 'judge-a', 'main-judge'])
-      const deprecated = card().editFields.find((field) => field.name === 'deprecated_bindings')
-      expect(deprecated?.type).toBe('custom')
-      expect(
-        renderToStaticMarkup(deprecated!.customRender!(undefined, () => {}) as ReactElement),
-      ).toContain('classifier.risk: judge-a')
     })
 
     it('writes only the decision model when no binding changes', () => {
@@ -121,7 +110,7 @@ describe('Vela defaults and explicit legacy models', () => {
       })
     })
 
-    it('writes changed bindings as deployment names and clears what they replace', () => {
+    it('writes changed bindings as deployment names and clears unset ones', () => {
       const patch = card().save({
         ...card().editData,
         decision_model: 'd3-remote',
@@ -129,30 +118,12 @@ describe('Vela defaults and explicit legacy models', () => {
         'binding:jailbreak': 'judge-a',
         'binding:pii': '',
       })
-      const modelFields = { model_id: null, model_ref: null, backend: null }
       expect(patch).toEqual({
         model_catalog: {
-          system: {
-            decision_model: { deployment: 'd3-remote' },
-            domain_classifier: null,
-            prompt_guard: null,
-            pii_classifier: null,
-          },
-          bindings: {
-            domain: 'd3-remote',
-            domain_classifier: null,
-            jailbreak: 'judge-a',
-            prompt_guard: null,
-            pii: null,
-            pii_classifier: null,
-          },
-          modules: {
-            classifier: { domain: modelFields, pii: modelFields },
-            prompt_guard: modelFields,
-          },
+          system: { decision_model: { deployment: 'd3-remote' } },
+          bindings: { domain: 'd3-remote', jailbreak: 'judge-a', pii: null },
         },
       })
-      expect(JSON.stringify(patch)).not.toContain('contract')
     })
   })
 

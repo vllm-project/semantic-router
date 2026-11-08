@@ -140,8 +140,17 @@ func validateMemorySource(path string, source *ContextSource) error {
 }
 
 // validateContextCompress checks the compress block: its mode and failure
-// mode, targets, recovery store, request controls and match block.
+// mode, targets, recovery store, request controls and match block, and its
+// signals.
 func validateContextCompress(cfg *RouterConfig, path string, compress *ContextCompressConfig) error {
+	if compress.Signals != nil {
+		if err := validateSignalsCompression(path+".signals", compress.Signals); err != nil {
+			return err
+		}
+	}
+	if !compress.CompressesRequest() {
+		return nil
+	}
 	if err := validateContextCompressShape(path, compress); err != nil {
 		return err
 	}
@@ -173,6 +182,9 @@ func validateContextCompressShape(path string, compress *ContextCompressConfig) 
 func validateContextBudget(path string, plugin *ContextPluginConfig) error {
 	if plugin.Compress == nil {
 		return fmt.Errorf("%s bounds the request compress produces; add compress or remove budget", path)
+	}
+	if !plugin.Compress.CompressesRequest() {
+		return fmt.Errorf("%s bounds the request compress produces, and a compress block with only signals leaves the request whole; set compress.mode: auto or remove budget", path)
 	}
 	if limit := plugin.Budget.MaxTokens; limit != nil && !limit.Auto && limit.Value == 0 {
 		return fmt.Errorf("%s.max_tokens must be at least 1, or auto", path)
@@ -261,7 +273,7 @@ func ValidateContextCompressPreview(plugin *ContextPluginConfig) error {
 	if plugin == nil {
 		return fmt.Errorf("context configuration is required")
 	}
-	if plugin.Compress == nil {
+	if !plugin.Compress.CompressesRequest() {
 		return nil
 	}
 	if err := validateContextCompressShape("compress", plugin.Compress); err != nil {

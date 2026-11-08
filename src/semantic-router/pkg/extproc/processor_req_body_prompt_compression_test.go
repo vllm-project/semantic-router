@@ -72,11 +72,14 @@ providers:
         - endpoint: 127.0.0.1:8001
           provider: vllm
 global:
-  model_catalog:
-    modules:
-      prompt_compression:
+  plugins:
+    - type: context
+      configuration:
         enabled: true
-        max_tokens: 16
+        compress:
+          signals:
+            enabled: true
+            max_tokens: 16
 `
 
 func TestPromptCompressionKeepsChatDispatchPromptAndTools(t *testing.T) {

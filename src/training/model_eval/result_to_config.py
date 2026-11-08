@@ -48,22 +48,11 @@ import yaml
 
 DEFAULT_OUTPUT_FILE = "config/config.eval.yaml"
 
-DEFAULT_EMBEDDINGS = {
-    "semantic": {
-        "mmbert_model_path": "models/Vela-1.0-Encoder-307M-Embedding",
-        "use_cpu": True,
-        "embedding_config": {
-            "model_type": "mmbert",
-            "preload_embeddings": True,
-            "target_dimension": 768,
-            "target_layer": 22,
-            "min_score_threshold": 0.5,
-        },
-    }
-}
+# The response cache embeds with embeddings.default, the pre-declared
+# vela-embedding deployment.
+DEFAULT_EMBEDDINGS = {"default": {"deployment": "vela-embedding"}}
 
 DEFAULT_RESPONSE_CACHE = {
-    "embedding_model": "mmbert",
     "max_entries": 1000,
     "ttl_seconds": 3600,
 }
@@ -97,7 +86,7 @@ CATEGORY_REASONING = {
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Analyze MMLU-Pro results and generate a canonical v0.3 config scaffold"
+        description="Analyze MMLU-Pro results and generate a canonical v0.5 config scaffold"
     )
     parser.add_argument(
         "--results-dir",
@@ -115,7 +104,7 @@ def parse_args():
         "--mode",
         choices=("full", "patch"),
         default="full",
-        help="Output mode: 'full' generates a complete v0.3 config scaffold "
+        help="Output mode: 'full' generates a complete v0.5 config scaffold "
         "(default, upstream behavior). 'patch' generates only the "
         "recipes[default].signals.domains section as a merge patch — useful when you "
         "already have a config and want to update just the routing policy "
@@ -303,7 +292,7 @@ def build_domain_signals(category_accuracies):
                 "description": (
                     f"MMLU-Pro category generated from evaluation results: {category_name}."
                 ),
-                "mmlu_categories": [category_name],
+                "labels": [category_name],
                 "model_scores": [
                     {
                         "model": model_name,
@@ -328,7 +317,7 @@ def generate_config_yaml(
     api_format,
     provider_name,
 ):
-    """Generate a canonical v0.3 config scaffold from MMLU-Pro results."""
+    """Generate a canonical v0.5 config scaffold from MMLU-Pro results."""
     average_accuracies = calculate_average_accuracies(category_accuracies)
     if not average_accuracies:
         raise ValueError("No non-auto model results were found in the input directory")
@@ -543,7 +532,7 @@ def build_cost_aware_domain_signals(
                 "description": (
                     f"MMLU-Pro category generated from evaluation results: {category_name}."
                 ),
-                "mmlu_categories": [category_name],
+                "labels": [category_name],
                 "model_scores": model_scores,
             }
         )
@@ -613,7 +602,7 @@ def main():
         return
 
     # ---- Mode: full (default, upstream behavior) ----
-    print("Generating canonical v0.3 config scaffold...")
+    print("Generating canonical v0.5 config scaffold...")
     config = generate_config_yaml(
         category_accuracies,
         args.similarity_threshold,

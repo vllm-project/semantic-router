@@ -7,7 +7,7 @@ from contextlib import nullcontext
 import pytest
 import yaml
 from cli import decision_model, runtime_lifecycle, runtime_service_status
-from cli.commands import runtime_config_mutation, runtime_paths, runtime_serve_config
+from cli.commands import runtime_paths, runtime_serve_config
 from cli.config_schema.validation import validate_config_structure
 from cli.k8s_backend import K8sBackend
 from cli.models import UserConfig
@@ -216,18 +216,3 @@ def test_kubernetes_status_reads_the_live_config(monkeypatch, tmp_path):
     )
     backend = K8sBackend(namespace="vllm-sr", chart_dir=str(tmp_path))
     assert backend._live_decision_model() == "candidate"
-
-
-def test_gpu_platforms_put_the_safety_module_on_the_gpu(monkeypatch):
-    monkeypatch.delenv("VLLM_SR_ROCM_PRESERVE_CPU", raising=False)
-    monkeypatch.delenv("VLLM_SR_ROCM_FORCE_GPU", raising=False)
-    config = {
-        "global": {
-            "model_catalog": {"modules": {"safety": {"safety": {"use_cpu": True}}}}
-        }
-    }
-    assert runtime_config_mutation.apply_platform_gpu_defaults(config, "rocm")
-    assert (
-        config["global"]["model_catalog"]["modules"]["safety"]["safety"]["use_cpu"]
-        is False
-    )

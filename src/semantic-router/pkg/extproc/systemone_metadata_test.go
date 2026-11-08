@@ -28,7 +28,7 @@ providers:
     - name: kai
       api_format: systemone
       provider_model_id: kai-native
-      backend_refs: [{provider: systemone-compatible, base_url: 'http://unused.invalid/v1'}]
+      backend_refs: [{provider: systemone-compatible, endpoint: 'http://unused.invalid/v1'}]
 entrypoints:
   - model_names: [vllm-sr/auto]
     recipe: default

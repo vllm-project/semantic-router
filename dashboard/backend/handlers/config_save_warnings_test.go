@@ -42,15 +42,6 @@ func decodeSavedConfig(t *testing.T, response *httptest.ResponseRecorder) savedC
 	return body
 }
 
-func hasConfigWarning(warnings []routerconfig.ConfigWarning, code, field string) bool {
-	for _, warning := range warnings {
-		if warning.Code == code && warning.Field == field && warning.Message != "" {
-			return true
-		}
-	}
-	return false
-}
-
 // forEverySave saves config through each save path that persists model
 // resources: the full update, the global patch, the raw global block and a
 // DSL deploy merged into it.
@@ -130,26 +121,23 @@ func withRoutingBindings(bindings map[string]any) map[string]any {
 	return config
 }
 
-func TestConfigSavesReturnTheRouterWarningForADeprecatedBindingField(t *testing.T) {
+func TestConfigSavesRefuseARemovedBindingField(t *testing.T) {
 	applyWithoutRuntime(t)
 	config := withRoutingBindings(map[string]any{
 		"pii": map[string]any{"deployment": "primary", "contract": "decision.v1"},
 	})
 	forEverySave(t, config, func(t *testing.T, response *httptest.ResponseRecorder) {
-		body := decodeSavedConfig(t, response)
-		if !hasConfigWarning(body.Warnings, "deprecated_model_field", "recipes[default].model_bindings.pii") {
-			t.Fatalf("warnings = %+v, want the Router's deprecation of the binding contract", body.Warnings)
+		if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "contract") {
+			t.Fatalf("save answered %d: %s, want the binding's contract refused", response.Code, response.Body.String())
 		}
 	})
 }
 
-func TestConfigSavesDoNotDeprecateABindingWrittenAsADeploymentName(t *testing.T) {
+func TestConfigSavesKeepABindingWrittenAsADeploymentName(t *testing.T) {
 	applyWithoutRuntime(t)
 	forEverySave(t, withRoutingBindings(map[string]any{"pii": "primary"}), func(t *testing.T, response *httptest.ResponseRecorder) {
-		for _, warning := range decodeSavedConfig(t, response).Warnings {
-			if warning.Code == "deprecated_model_field" {
-				t.Fatalf("a binding written as a deployment name was deprecated: %+v", warning)
-			}
+		if warnings := decodeSavedConfig(t, response).Warnings; len(warnings) > 0 {
+			t.Fatalf("a binding written as a deployment name saved with warnings: %+v", warnings)
 		}
 	})
 }

@@ -121,7 +121,7 @@ Router 询问的模型（回答信号、嵌入文本和重排文档的模型）�
 | 家族和类型 | 用于 | 可复用片段 | 指南 |
 | --- | --- | --- | --- |
 | `content-safety` — 插件包 | 内容安全将受支持的路由局部安全插件组合成一个可复用策略。 | [`config/fragments/plugin/content-safety/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/content-safety/) | [指南](../tutorials/plugin/content-safety) |
-| `context` — 路由插件 | `context` 是组装请求上下文的路由局部插件。 | [`config/fragments/plugin/context/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/context/) | [指南](../tutorials/plugin/context) |
+| `context` — 路由插件 | `context` 是组装请求上下文的插件。 | [`config/fragments/plugin/context/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/context/) | [指南](../tutorials/plugin/context) |
 | `fast-response` — 路由插件 | `fast_response` 是立即返回确定性回退消息的路由局部插件。 | [`config/fragments/plugin/fast-response/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/fast-response/) | [指南](../tutorials/plugin/fast-response) |
 | `header-mutation` — 路由插件 | `header_mutation` 是添加、更新或删除下游标头的路由局部插件。 | [`config/fragments/plugin/header-mutation/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/header-mutation/) | [指南](../tutorials/plugin/header-mutation) |
 | `request-params` — 路由插件 | `request_params` 是在转发到后端之前校验并裁剪 OpenAI Chat Completions 请求正文的路由局部插件。 | [`config/fragments/plugin/request-params/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/request-params/) | [指南](../tutorials/plugin/request-params) |

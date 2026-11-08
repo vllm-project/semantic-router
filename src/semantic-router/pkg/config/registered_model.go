@@ -1,9 +1,7 @@
 package config
 
-// RegisteredModel is the built-in model a path, alias or Hub repository
+// registeredModel is the built-in model a path, alias or Hub repository
 // names, nil for any other model.
-func RegisteredModel(model string) *ModelSpec { return registeredModel(model) }
-
 func registeredModel(model string) *ModelSpec {
 	if spec := GetModelByPath(model); spec != nil {
 		return spec

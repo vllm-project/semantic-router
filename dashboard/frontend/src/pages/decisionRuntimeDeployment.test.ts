@@ -24,8 +24,9 @@ function snapshot(): RouterConfig {
         deployments: {
           other: { provider: 'model_runtime', artifact: 'team/other', max_num_seqs: 4 },
           'private-specialist': {
-            provider: 'classify',
-            endpoint: 'https://pii.example.com/v1',
+            provider: 'systemone',
+            endpoint: 'https://pii.example.com/v1/systemone',
+            model: 'team/pii-judge',
             auth: { api_key_env: 'PII_KEY' },
           },
         },

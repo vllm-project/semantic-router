@@ -147,12 +147,7 @@ def test_bootstrap_document_parses_without_relaxing_the_router_schema(tmp_path):
 @pytest.mark.parametrize("owner", ["default", "private"])
 def test_bootstrap_metadata_preserves_typed_model_bindings(tmp_path: Path, owner):
     document = build_bootstrap_config()
-    binding = {
-        "deployment": "shared",
-        "contract": "token_spans.v1",
-        "adapter": "mmbert",
-    }
-    document["recipes"] = [{"name": owner, "model_bindings": {"pii": binding}}]
+    document["recipes"] = [{"name": owner, "model_bindings": {"pii": "shared"}}]
     document["global"] = {
         "model_catalog": {
             "deployments": {
@@ -170,7 +165,7 @@ def test_bootstrap_metadata_preserves_typed_model_bindings(tmp_path: Path, owner
     parsed = parse_user_config(str(path), log_summary=False)
     parsed_profile = parsed.recipes[0]
 
-    assert parsed_profile.model_bindings["pii"].model_dump(exclude_none=True) == binding
+    assert parsed_profile.model_bindings["pii"].model_dump() == "shared"
     assert parsed.global_ == document["global"]
     assert parsed.setup == document["setup"]
     assert path.read_text() == original
@@ -202,7 +197,7 @@ def test_bootstrap_document_rejects_invalid_setup_metadata(tmp_path, setup, erro
         ("version", "v0.1", "version"),
         ("unknown_root", True, "config.unknown_root"),
         ("providers", {"models": [{"name": "model", "typo": True}]}, "typo"),
-        ("signals", {}, "Deprecated config fields"),
+        ("signals", {}, "top-level signals belongs to the layout before config v0.3"),
     ],
 )
 def test_setup_envelope_does_not_bypass_canonical_validation(

@@ -3,23 +3,29 @@ import { expect, type Locator, type Page } from '@playwright/test'
 import { mockAuthenticatedAppShell, test } from './support/compiler'
 
 // Uses the production Go compiler through its HTTP handler; only server data is a fixture.
-const config = `version: v0.3
+const config = `version: v0.5
 providers:
   models:
     - name: model-a
+      description: The first model.
       backend_refs:
         - name: local
           endpoint: localhost:8000
           protocol: http
     - name: model-b
+      description: The second model.
       backend_refs:
         - name: local
           endpoint: localhost:8001
           protocol: http
-routing:
-  modelCards:
-    - name: model-a
-    - name: model-b
+recipes:
+  - name: default
+    decisions:
+      - name: default_route
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs:
+          - model: model-a
 `
 
 async function tabUntilFocused(page: Page, target: Locator, maxPresses = 10) {

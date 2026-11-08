@@ -24,7 +24,7 @@ def test_parse_args_defaults_to_eval_config(monkeypatch):
     assert args.api_format == "openai"
 
 
-def test_generate_config_yaml_emits_canonical_v03_layout():
+def test_generate_config_yaml_emits_canonical_v05_layout():
     category_accuracies = {
         "math": {
             "qwen3-8b": 0.82,
@@ -103,6 +103,4 @@ def test_generate_config_yaml_emits_canonical_v03_layout():
     served = yaml.safe_load((root / "config/config.yaml").read_text())
     actual = config["global"]["model_catalog"]
     expected = served["global"]["model_catalog"]
-    assert actual["embeddings"]["semantic"]["mmbert_model_path"] == (
-        expected["embeddings"]["semantic"]["mmbert_model_path"]
-    )
+    assert actual["embeddings"] == expected["embeddings"]

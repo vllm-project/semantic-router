@@ -1,9 +1,9 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -14,8 +14,9 @@ import (
 // The examples on the model catalog pages are the configurations these tests
 // load. Each titled YAML block, merged onto testdata/model_catalog_docs/base.yaml
 // when it is a fragment, must load and resolve as its expectation below
-// says; each migration pair must resolve the earlier form to the same
-// deployments as the new one; the zh-Hans pages carry the same blocks.
+// says; the earlier form of each migration pair must be refused, and migrate
+// must rewrite it to resolve as the new one; the zh-Hans pages carry the same
+// blocks.
 
 const modelCatalogDocsBase = "testdata/model_catalog_docs/base.yaml"
 
@@ -106,8 +107,8 @@ func mergeYAML(base, overlay map[string]interface{}) map[string]interface{} {
 	return merged
 }
 
-// loadDocExample loads an example, merged onto the base.
-func loadDocExample(t *testing.T, example docExample) (*RouterConfig, error) {
+// catalogExampleDocument is an example merged onto the base.
+func catalogExampleDocument(t *testing.T, example docExample) []byte {
 	t.Helper()
 	var base, overlay map[string]interface{}
 	data, err := os.ReadFile(modelCatalogDocsBase)
@@ -118,13 +119,19 @@ func loadDocExample(t *testing.T, example docExample) (*RouterConfig, error) {
 		t.Fatal(err)
 	}
 	if err = yaml.Unmarshal([]byte(example.text), &overlay); err != nil {
-		return nil, fmt.Errorf("%s: not YAML: %w", example.title, err)
+		t.Fatalf("%s: not YAML: %v", example.title, err)
 	}
 	encoded, err := yaml.Marshal(mergeYAML(base, overlay))
 	if err != nil {
 		t.Fatal(err)
 	}
-	return ParseYAMLBytesWithoutEnvExpansion(encoded)
+	return encoded
+}
+
+// loadDocExample loads an example, merged onto the base.
+func loadDocExample(t *testing.T, example docExample) (*RouterConfig, error) {
+	t.Helper()
+	return ParseYAMLBytesWithoutEnvExpansion(catalogExampleDocument(t, example))
 }
 
 // resolveDocKey is the deployment a documented key resolves to.
@@ -148,10 +155,10 @@ func resolveDocKey(cfg *RouterConfig, key string) string {
 			}
 		}
 		return "no rule " + key
-	case isApplicationConsumer(key) && !strings.Contains(key, ".") && BindingConsumer(key) == key:
+	case knownBindingKey(key):
 		name, _ := scoped.ApplicationTypeDeployment(key)
 		return name
-	case strings.Contains(key, ".") && isApplicationConsumer(strings.SplitN(key, ".", 2)[0]):
+	case strings.Contains(key, ".") && knownBindingKey(strings.SplitN(key, ".", 2)[0]):
 		for _, rule := range scoped.ApplicationRules() {
 			if rule.Type+"."+rule.Rule.Name == key {
 				return scoped.deploymentOrDecisionModel(rule.Rule.Deployment)
@@ -166,7 +173,7 @@ func resolveDocKey(cfg *RouterConfig, key string) string {
 		}
 		return "no selector " + key
 	}
-	resolved, ok, err := scoped.ResolveTask(BindingConsumer(key))
+	resolved, ok, err := scoped.ResolveTask(key)
 	switch {
 	case err != nil:
 		return "error: " + err.Error()
@@ -205,9 +212,6 @@ func TestModelCatalogDocExamplesResolveAsDocumented(t *testing.T) {
 				t.Fatalf("%s: example %q does not load: %v", example.page, example.title, err)
 			}
 			codes := warningCodes(cfg)
-			if codes[warningDeprecatedModelField] > 0 {
-				t.Errorf("example %q writes deprecated fields: %+v", example.title, Warnings(cfg))
-			}
 			for _, code := range docExampleWarnings[example.title] {
 				if codes[code] == 0 {
 					t.Errorf("example %q reports no %s warning: %+v", example.title, code, Warnings(cfg))
@@ -266,7 +270,10 @@ func effectiveDeployments(cfg *RouterConfig, keys []string) map[string]string {
 	return effective
 }
 
-func TestModelResourceMigrationPairsResolveToTheSameDeployments(t *testing.T) {
+// The earlier form of each pair fails to load with a removed form's line, and
+// what migrate writes for it resolves to the same deployments as the new
+// form.
+func TestModelResourceMigrationPairsMigrateToTheNewForm(t *testing.T) {
 	examples := map[string]docExample{}
 	for _, example := range readDocExamples(t, filepath.Join(docsRoot(), "docs", "installation", "model-resource-migration.md")) {
 		examples[example.title] = example
@@ -287,19 +294,21 @@ func TestModelResourceMigrationPairsResolveToTheSameDeployments(t *testing.T) {
 		}
 		pairs++
 		t.Run(name, func(t *testing.T) {
-			old, err := loadDocExample(t, before)
+			document := catalogExampleDocument(t, before)
+			if _, err := ParseYAMLBytesWithoutEnvExpansion(document); err == nil || !strings.Contains(err.Error(), "run `vllm-sr config migrate`") {
+				t.Fatalf("the earlier form loads, or fails without a migrate hint: %v", err)
+			}
+			migrated, _, err := MigrateConfig(document)
 			if err != nil {
-				t.Fatalf("the earlier form no longer loads: %v", err)
+				t.Fatalf("migrate: %v", err)
+			}
+			old, err := ParseYAMLBytesWithoutEnvExpansion(migrated)
+			if err != nil {
+				t.Fatalf("the migrated form does not load: %v", err)
 			}
 			current, err := loadDocExample(t, after)
 			if err != nil {
 				t.Fatalf("the new form does not load: %v", err)
-			}
-			if warningCodes(old)[warningDeprecatedModelField] == 0 {
-				t.Errorf("the earlier form loads without a deprecated_model_field warning")
-			}
-			if warnings := warningCodes(current)[warningDeprecatedModelField]; warnings > 0 {
-				t.Errorf("the new form writes %d deprecated fields: %+v", warnings, Warnings(current))
 			}
 			keys := append([]string{"domain", "jailbreak", "pii", "fact_check", "user_feedback", "hallucination", "embedding"}, ruleKeys(old)...)
 			keys = append(keys, ruleKeys(current)...)
@@ -313,6 +322,43 @@ func TestModelResourceMigrationPairsResolveToTheSameDeployments(t *testing.T) {
 	}
 	if pairs == 0 {
 		t.Fatal("the migration page has no before/after pairs")
+	}
+}
+
+// The model runtime's migration page shows what `vllm-sr config migrate`
+// writes for its legacy.yaml, in both languages.
+func TestModelRuntimeMigrationExampleIsWhatConfigMigrateWrites(t *testing.T) {
+	page := filepath.Join("model-runtime", "migrate.md")
+	for _, path := range []string{
+		filepath.Join(docsRoot(), "docs", page),
+		filepath.Join(docsRoot(), "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", page),
+	} {
+		examples := map[string]docExample{}
+		for _, example := range readDocExamples(t, path) {
+			examples[example.title] = example
+		}
+		legacy, documented := examples["legacy.yaml"], examples["legacy.migrated.yaml"]
+		if legacy.text == "" || documented.text == "" {
+			t.Errorf("%s has no legacy.yaml and legacy.migrated.yaml blocks", path)
+			continue
+		}
+		if _, err := ParseYAMLBytesWithoutEnvExpansion([]byte(legacy.text)); err == nil || !strings.Contains(err.Error(), "run `vllm-sr config migrate`") {
+			t.Errorf("%s: legacy.yaml loads, or fails without a migrate hint: %v", path, err)
+		}
+		migrated, _, err := MigrateConfig([]byte(legacy.text))
+		if err != nil {
+			t.Fatalf("%s: migrate: %v", path, err)
+		}
+		var got, want interface{}
+		if err := yaml.Unmarshal(migrated, &got); err != nil {
+			t.Fatal(err)
+		}
+		if err := yaml.Unmarshal([]byte(documented.text), &want); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: legacy.migrated.yaml is not what config migrate writes:\n%s", path, migrated)
+		}
 	}
 }
 

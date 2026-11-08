@@ -11,23 +11,7 @@ import (
 // deployment names cannot start with it.
 const ImplicitDeploymentPrefix = "@"
 
-// ImplicitTaskDeployment resolves the deployment that answers consumer in
-// this scope without a binding the configuration authors: the decision
-// model, or the deployment a deprecated module path declared. ok is false
-// when nothing answers it or an authored binding does; err reports a
-// deprecated model that cannot be resolved.
-func (c *RouterConfig) ImplicitTaskDeployment(consumer string) (name string, deployment ModelDeployment, ok bool, err error) {
-	resolved, ok, err := c.ResolveTask(consumer)
-	if IsDeferredModelError(err) {
-		return "", ModelDeployment{}, false, err
-	}
-	if !ok || err != nil || (resolved.Explicit() && !resolved.Deployment.Translated()) {
-		return "", ModelDeployment{}, false, nil
-	}
-	return resolved.Name, resolved.Deployment, true, nil
-}
-
-// ImplicitModelRuntimeDeployment resolves a module's model reference to the
+// ImplicitModelRuntimeDeployment resolves a model reference to the
 // model_runtime deployment that serves it: a built-in model (a registry path
 // or alias) at its pinned revision, or a local package directory. It runs on
 // CPU when useCPU, else on the best available device, with the runtime's
@@ -43,20 +27,6 @@ func ImplicitModelRuntimeDeployment(model string, useCPU bool) (ModelDeployment,
 		return ModelDeployment{}, fmt.Errorf("model %q is neither a built-in model nor a local package directory; declare a model_runtime deployment with its Hub repository and revision", strings.TrimSpace(model))
 	}
 	return deployment, nil
-}
-
-// MissingLocalModel reports, for a deployment a deprecated model path
-// declared, a local package directory that does not exist (yet): the
-// consumer that runs it fails, as such a model did before, and the runtime
-// does not start it.
-func (d ModelDeployment) MissingLocalModel() error {
-	if !d.translated || !d.IsModelRuntime() || d.legacyPath == "" || GetModelByPath(d.legacyPath) != nil {
-		return nil
-	}
-	if _, err := os.Stat(d.Artifact); err != nil {
-		return fmt.Errorf("model %q is neither a built-in model nor a local package directory; declare a model_runtime deployment with its Hub repository and revision", d.legacyPath)
-	}
-	return nil
 }
 
 // modelRuntimeDeploymentOf is ImplicitModelRuntimeDeployment without
@@ -103,25 +73,25 @@ func servedBuiltIn(spec *ModelSpec) bool {
 // model_runtime deployments: the runtime downloads them at their pinned
 // revisions, so the router does not.
 func (c *RouterConfig) RuntimeServedModelPaths() map[string]bool {
-	resolved := c.withModelResources()
 	paths := make(map[string]bool)
 	served := func(deployment ModelDeployment) {
 		if spec := registeredModel(deployment.Artifact); deployment.IsModelRuntime() && spec != nil && servedBuiltIn(spec) {
 			paths[ResolveModelPath(spec.LocalPath)] = true
 		}
 	}
-	for _, consumer := range resolved.scopeConsumers() {
-		if task, ok, err := resolved.resolveTask(consumer); ok && err == nil {
+	for _, consumer := range c.scopeConsumers() {
+		if task, ok, err := c.resolveTask(consumer); ok && err == nil {
 			served(task.Deployment)
 		}
 	}
-	for name := range resolved.embeddingDeploymentsInUse() {
-		served(resolved.ModelDeployments[name])
+	for name := range c.embeddingDeploymentsInUse() {
+		served(c.ModelDeployments[name])
 	}
 	return paths
 }
 
-// implicitConsumers lists the task consumers a scope's modules and rules may run.
+// implicitConsumers lists the application signal types whose model the
+// Router prepares for a scope: the guards and the span signals.
 func (c *RouterConfig) implicitConsumers() []string {
-	return []string{"prompt_guard", "pii_classifier", "hallucination_detector"}
+	return []string{SignalTypeJailbreak, SignalTypePII, SignalTypeHallucination}
 }

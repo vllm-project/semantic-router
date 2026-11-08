@@ -11,11 +11,11 @@ translation:
 
 # 迁移模型资源
 
-早期版本通过 `external[]` 模型、绑定对象和按规则的绑定键来选择模型。这些形式仍可加载：Router 把每一种都读作有名称的部署和绑定，使用与之前相同的模型，并为每个字段报告一条 `deprecated_model_field` 警告。本页是唯一出现早期形式的地方；文档其余部分都使用每组示例中的第二种形式。[为信号选择模型](choose-a-model-for-a-signal.md)说明了它们迁移到的形式，[发布说明](../release-notes/unified-model-resources.md)概述了这次变更。
+早期版本通过 `external[]` 模型、绑定对象、按规则的绑定键以及请求后端自己的连接字段来选择模型。Router 在加载时拒绝这些形式，每一种都给出一行错误并指明 `vllm-sr config migrate`，后者会把它改写为对应示例中的第二种形式。本页是唯一出现早期形式的地方；文档其余部分都使用每组示例中的第二种形式。[为信号选择模型](choose-a-model-for-a-signal.md)说明了它们迁移到的形式，[发布说明](../release-notes/unified-model-resources.md)概述了这次变更。
 
-用 `vllm-sr config validate --config config.yaml` 查看这些警告，或者直接用 Router：`router -validate-config -config config.yaml` 输出一行 JSON：`{"valid": true, "warnings": [{"code": "deprecated_model_field", "field": "...", "message": "..."}]}`。每条警告都指明字段以及 Router 把它读作什么。
+用 `vllm-sr config validate --config config.yaml` 查看这些拒绝，或者直接用 Router：`router -validate-config -config config.yaml` 输出一行 JSON，其中 `error` 是这些拒绝，例如 `{"valid": false, "error": "<path>: removed_field: <what>; run vllm-sr config migrate (<becomes>)"}`。每一行都指明字段以及取代它的写法。
 
-`vllm-sr config migrate --config config.yaml` 把较早的文件改写为 v0.3 布局，并请 Router 把本页列出的每个字段写成对应示例中的第二种形式；文件的其余部分保持原样。它需要能运行的 Router（`VLLM_SR_ROUTER_BINARY` 指向的 Router 二进制文件，或 Router 镜像）；使用 `--offline` 时模型字段保持不变。直接写在配置里的密钥会移到环境变量中，输出会给出需要设置的变量名。如果某个已弃用字段包含任何部署字段都无法表达的设置，模型字段保持原样，输出会说明是哪个设置。
+`vllm-sr config migrate --config config.yaml` 请 Router 改写文件：本页的每种形式，以及本版本移除的其他形式，都写成取代它的形式；文件的其余部分保持原样。它询问 `VLLM_SR_ROUTER_BINARY` 指定的 Router 二进制文件，否则询问 `vllm-sr serve` 默认运行的 Router 镜像（`VLLM_SR_ROUTER_IMAGE` 或 `VLLM_SR_IMAGE` 指定的镜像，否则是本 CLI 自己的发布版本），该镜像必须已在本机：migrate 从不拉取它，也从不询问正在运行的栈中的 Router。`external[]` 模型中直接写出的密钥会移到环境变量中，输出会给出需要设置的变量名。询问分类器头（契约为 `label_distribution.v1`、`label_scores.v1`、`label_decision.v1`、`score.v1` 或 `token_spans.v1`）的绑定会被删除，规则或绑定对 `classify` 或 `http` 部署的引用也会被删除：任何信号都不再询问分类器，由决策模型回答该信号。config v0.3 之前布局的文件也在同一次运行中迁移。
 
 ## 其他变化 {#what-else-changes}
 
@@ -25,7 +25,7 @@ translation:
 - embedding 模型关键字（`mmbert`、`qwen3`、`multimodal`）、带远程 endpoint 的 `embeddings.semantic`、embedding 绑定以及按模型关键字的 admission 不再能加载。`vllm-sr config migrate` 会写出每一项所选的部署，并在使用它的地方写上它的名称；参见 [Embeddings](../model-runtime/guides/embeddings.md)。
 - 其他一切都解析到与之前相同的模型。
 
-早期形式和新形式为同一个信号指定模型时，新形式优先，早期字段被忽略并给出警告。同时写了 `deployment` 和 `model` 或 `model_path` 的规则，或者同时以信号类型和早期名称写出的绑定，会被拒绝。
+早期形式和新形式为同一个信号指定模型时，迁移保留新形式的值。同时写了 `deployment` 和 `model` 或 `model_path` 的规则，或者同时以信号类型和早期名称写出的绑定，会被拒绝。
 
 ## 绑定对象 {#binding-objects}
 
@@ -99,7 +99,7 @@ global:
 
 ## 部署字段 {#deployment-fields}
 
-顶层的 `question_types` 移到 `capabilities` 下，`served_name` 改为 `model`，直接写在配置中的密钥（`access_key`、后端的 `api_key`）改为 `auth.api_key_env`；在部署上也可以改为 `auth.api_key_file`。
+顶层的 `question_types` 移到 `capabilities` 下，部署或副本上的 `served_name` 改为 `model`。已移除的 `classify` 或 `http` provider 的部署会被删除：任何信号都不再询问分类器服务。
 
 ```yaml title="migrate-deployment-fields-before"
 global:

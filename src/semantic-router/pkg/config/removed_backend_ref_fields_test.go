@@ -18,7 +18,7 @@ providers:
       backend_refs:
         - name: gateway
           provider: anthropic-compatible
-          base_url: https://gateway.example.com/anthropic
+          endpoint: https://gateway.example.com/anthropic
           ` + field + `: true
 recipes:
   - name: default
@@ -45,7 +45,7 @@ providers:
       backend_refs:
         - name: gateway
           provider: anthropic-compatible
-          base_url: https://gateway.example.com/anthropic
+          endpoint: https://gateway.example.com/anthropic
 recipes:
   - name: default
 `))

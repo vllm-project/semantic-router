@@ -58,7 +58,7 @@ class TestConfigLifecycle(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
     def _write_config(self, mock_container: str) -> None:
         self.write_minimal_canonical_config(
             provider="openai",
-            base_url=f"http://{mock_container}:{PROVIDER_MOCKER_PORT}/v1",
+            endpoint=f"http://{mock_container}:{PROVIDER_MOCKER_PORT}/v1",
         )
 
     def test_status_uses_the_active_management_port(self):

@@ -32,8 +32,7 @@ providers:
       backend_refs:
         - provider: vllm
           endpoint: https://private.example/v1
-          auth_header: x-api-key
-          auth_prefix: ""
+          auth: {header: x-api-key, prefix: ""}
           api_key: static-secret
 recipes:
   - name: default

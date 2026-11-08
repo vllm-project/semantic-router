@@ -59,11 +59,11 @@ providers:
     - name: fast
       api_format: systemone
       provider_model_id: fast-native
-      backend_refs: [{provider: systemone-compatible, base_url: %s/v1}]
+      backend_refs: [{provider: systemone-compatible, endpoint: %s/v1}]
     - name: strong
       api_format: systemone
       provider_model_id: strong-native
-      backend_refs: [{provider: systemone-compatible, base_url: %s/v1}]
+      backend_refs: [{provider: systemone-compatible, endpoint: %s/v1}]
 entrypoints:
   - model_names: [vllm-sr/auto]
     recipe: default
@@ -221,11 +221,11 @@ providers:
       api_format: systemone
       provider_model_id: fast-native
       reliability: {retry_count: 1, retry_on: 5xx, retriable_status_codes: [500]}
-      backend_refs: [{provider: systemone-compatible, base_url: %s/v1}]
+      backend_refs: [{provider: systemone-compatible, endpoint: %s/v1}]
     - name: strong
       api_format: systemone
       provider_model_id: strong-native
-      backend_refs: [{provider: systemone-compatible, base_url: %s/v1}]
+      backend_refs: [{provider: systemone-compatible, endpoint: %s/v1}]
 entrypoints:
   - model_names: [vllm-sr/auto]
     recipe: default
@@ -345,7 +345,7 @@ providers:
     - name: fast
       api_format: systemone
       provider_model_id: fast-native
-      backend_refs: [{provider: systemone-compatible, base_url: 'http://unused.invalid/v1'}]
+      backend_refs: [{provider: systemone-compatible, endpoint: 'http://unused.invalid/v1'}]
 global:
   model_catalog:
     deployments:

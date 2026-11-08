@@ -24,7 +24,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// The skip-processing opt-out would bypass a listener's model allow-list,
 	// so a restricted listener does not honor it.
 	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled() && ctx.ListenerModels == nil)
-	r.captureGatewayCredential(ctx)
+	r.captureDelegatedCredential(ctx)
 	if r.Config != nil {
 		ctx.sessionIDHeaders = r.Config.Headers.SessionIDHeaderNames()
 	}
@@ -53,7 +53,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	if ctx.SkipProcessing {
 		detectStreamingExpectation(ctx)
 		mutation := buildLooperInternalHeaderRemovalMutation()
-		r.appendGatewayCredentialRemoval(mutation)
+		r.appendDelegatedCredentialRemoval(mutation)
 		mutation.RemoveHeaders = append(mutation.RemoveHeaders, r.protectionReleaseHeaderForRemoval()...)
 		// Per-user keys reach a provider only as its credential, which a
 		// skipped request never gets.
@@ -88,7 +88,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		return r.rejectBodylessInferenceRequest(ctx), nil
 	}
 	mutation := buildIdentityEncodingRequestMutation()
-	r.appendGatewayCredentialRemoval(mutation)
+	r.appendDelegatedCredentialRemoval(mutation)
 	mutation.RemoveHeaders = append(mutation.RemoveHeaders, r.protectionReleaseHeaderForRemoval()...)
 	if isAzureOpenAIPath(path) {
 		// The Azure client key authenticates to the Router, never to a provider.

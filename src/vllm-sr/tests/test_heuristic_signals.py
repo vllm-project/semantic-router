@@ -46,9 +46,7 @@ def test_parser_refuses_a_removed_heuristic_with_the_router_line(case: str) -> N
     hint = (GOLDEN / case / "hint.txt").read_text(encoding="utf-8").strip()
 
     with pytest.raises(ConfigParseError) as refused:
-        parse_user_config_data(
-            _golden(case, "before.yaml"), "before.yaml", log_summary=False
-        )
+        parse_user_config_data(_golden(case, "before.yaml"), log_summary=False)
 
     assert hint in str(refused.value).splitlines()
 

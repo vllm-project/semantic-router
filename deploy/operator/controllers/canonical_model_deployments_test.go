@@ -16,7 +16,7 @@ func TestOperatorModelDeploymentsReachCanonicalConfig(t *testing.T) {
 	spec := vllmv1alpha1.ConfigSpec{
 		ModelDeployments: rawCanonicalRoutingJSON(t, `{"shared":{"artifact":"vllm-sr/checkpoint","revision":"`+strings.Repeat("a", 40)+`","provider":"model_runtime","device":"cpu","input":{"max_tokens":512,"overflow":"reject"}}}`),
 		ModelAdmission:   rawCanonicalRoutingJSON(t, `{"shared":{"max_concurrency":2,"max_queue":3,"queue_timeout_ms":500,"on_overflow":"shed"}}`),
-		ModelBindings:    rawCanonicalRoutingJSON(t, `{"domain":"shared","safety.private":{"deployment":"shared","head":"safety"}}`),
+		ModelBindings:    rawCanonicalRoutingJSON(t, `{"domain":"shared","safety":{"deployment":"shared"}}`),
 		Recipes:          rawCanonicalRoutingJSON(t, `[{"name": "default", "model_bindings":{"pii":{"deployment":"shared"}}}]`),
 	}
 	r := &SemanticRouterReconciler{}
@@ -44,7 +44,7 @@ func TestOperatorModelDeploymentsReachCanonicalConfig(t *testing.T) {
 	if defaultRecipe(&roundTrip).ModelBindings["pii"] != wantBinding {
 		t.Fatalf("task binding was lost: %#v", defaultRecipe(&roundTrip).ModelBindings)
 	}
-	wantGlobal := map[string]routerconfig.ModelBinding{"domain": {Deployment: "shared"}, "safety.private": {Deployment: "shared", Head: "safety"}}
+	wantGlobal := map[string]routerconfig.ModelBinding{"domain": {Deployment: "shared"}, "safety": {Deployment: "shared"}}
 	if !reflect.DeepEqual(roundTrip.Global.ModelCatalog.Bindings, wantGlobal) {
 		t.Fatalf("global bindings were changed: %#v", roundTrip.Global.ModelCatalog.Bindings)
 	}

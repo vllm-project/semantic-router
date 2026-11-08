@@ -318,7 +318,7 @@ func CanonicalRecipeFromRouting(recipe RoutingRecipe) CanonicalRecipe {
 	return CanonicalRecipe{
 		Name:                  string(recipe.Name),
 		Description:           recipe.Description,
-		ModelBindings:         publicBindings(recipe.Profile.ModelBindings),
+		ModelBindings:         cloneModelMap(recipe.Profile.ModelBindings),
 		Plugins:               copyDecisionPlugins(recipe.Profile.Plugins),
 		Signals:               canonicalSignalsFromSignals(recipe.Profile.Signals),
 		Projections:           canonicalProjectionsFromProjections(recipe.Profile.Projections),

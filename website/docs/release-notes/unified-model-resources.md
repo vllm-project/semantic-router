@@ -69,9 +69,9 @@ Everything else resolves to the same models as before.
 
 ## Earlier configurations
 
-Configurations written in the earlier forms still load and use the same
-models. The Router reports a `deprecated_model_field` warning for each earlier
-field, `vllm-sr config validate --config config.yaml` lists them, and
+The Router refuses a configuration written in the earlier forms, with a
+one-line error for each earlier field that names what replaces it.
+`vllm-sr config validate --config config.yaml` lists them, and
 `vllm-sr config migrate --config config.yaml` rewrites them in the new form.
 [Migrate model resources](../installation/model-resource-migration.md) shows
 each earlier form next to the one that replaces it.

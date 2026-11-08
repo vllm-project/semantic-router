@@ -20,7 +20,6 @@ var (
 		validateRoutingPreviewConfig,
 		validateModelPricingContracts,
 		validateReasoningFamilyContracts,
-		validateExternalModelContracts,
 		validateGlobalMemoryContracts,
 		validateEmbeddingStores,
 		validateModelSelectionConfig,
@@ -29,7 +28,6 @@ var (
 		validateRoutingInputContracts,
 		validateRouterHeadersContracts,
 		validateFlowContracts,
-		validatePromptCompressionContracts,
 		validateModelAdmissionContracts,
 		validateModelSignalTimeoutContracts,
 		validateModelDeploymentContracts,
@@ -84,11 +82,6 @@ func validateConfigStructure(cfg *RouterConfig) error {
 // ValidateKubernetesConfigContracts validates the complete candidate after CRDs
 // have been merged, before the reconciler publishes it to the runtime.
 func ValidateKubernetesConfigContracts(cfg *RouterConfig) error {
-	if cfg != nil {
-		if err := cfg.translateModelResources(); err != nil {
-			return err
-		}
-	}
 	return validateConfigContracts(cfg)
 }
 
@@ -101,7 +94,7 @@ func validateConfigContractsAtStage(cfg *RouterConfig, stage configValidationSta
 		return fmt.Errorf("router configuration is nil")
 	}
 	effective := *cfg
-	effective.ModelBindings = cfg.EffectiveModelBindings(cfg.Signals, cfg.ModelBindings)
+	effective.ModelBindings = cfg.EffectiveModelBindings(cfg.ModelBindings)
 	if effective.scopedBindings == nil {
 		effective.scopedBindings = cloneModelMap(cfg.ModelBindings)
 		if effective.scopedBindings == nil {
@@ -118,9 +111,14 @@ func validateConfigContractsAtStage(cfg *RouterConfig, stage configValidationSta
 	if err := runConfigContractValidators(cfg, routingConfigContractValidators); err != nil {
 		return err
 	}
-	return visitRoutingProfileConfigs(cfg, func(profile *RouterConfig) error {
+	if err := visitRoutingProfileConfigs(cfg, func(profile *RouterConfig) error {
 		return runConfigContractValidators(profile, routingProfileContractValidators)
-	})
+	}); err != nil {
+		return err
+	}
+	// Which calls reach a delegated upstream follows from the whole, valid
+	// routing graph.
+	return validateDelegatedUpstreams(cfg)
 }
 
 func runConfigContractValidators(cfg *RouterConfig, validators []configContractValidator) error {

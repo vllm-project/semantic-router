@@ -13,9 +13,9 @@ func taskBindingConfig() *RouterConfig {
 		},
 	}
 	cfg.ModelBindings = map[string]ModelBinding{
-		"domain":         {Deployment: "kai"},
-		"prompt_guard":   {Deployment: "vela-guard"},
-		"pii_classifier": {Deployment: "vela-pii"},
+		SignalTypeDomain:    {Deployment: "kai"},
+		SignalTypeJailbreak: {Deployment: "vela-guard"},
+		SignalTypePII:       {Deployment: "vela-pii"},
 	}
 	cfg.Categories = []Category{{Name: "math", Labels: []string{"math"}}}
 	cfg.Decisions = []Decision{{Name: "math", Rules: RuleNode{Type: SignalTypeDomain, Name: "math"}}}
@@ -23,22 +23,21 @@ func taskBindingConfig() *RouterConfig {
 }
 
 func TestModelRuntimeServesTaskBindings(t *testing.T) {
-	plan, err := CompileModelBindings(taskBindingConfig())
-	if err != nil {
+	cfg := taskBindingConfig()
+	if err := validateModelBindingContracts(cfg); err != nil {
 		t.Fatal(err)
 	}
-	spec, ok := plan.Lookup(DefaultRecipeName, "pii_classifier")
-	if !ok || !spec.Deployment.IsModelRuntime() || spec.Deployment.Input.Overflow != "window" || spec.Binding.Contract != DecisionTaskContract {
-		t.Fatalf("pii binding = %+v", spec)
+	pii, ok, err := cfg.ResolveTask(SignalTypePII)
+	if err != nil || !ok || !pii.Deployment.IsModelRuntime() || pii.Deployment.Input.Overflow != "window" || pii.Name != "vela-pii" {
+		t.Fatalf("pii binding = %+v %v", pii, err)
 	}
-	for _, rule := range taskBindingConfig().ApplicationRules() {
+	for _, rule := range cfg.ApplicationRules() {
 		if rule.Rule.Deployment != "kai" {
 			t.Fatalf("the domain binding answers %s:%s, got %q", rule.Type, rule.Rule.Name, rule.Rule.Deployment)
 		}
 	}
-	cfg := taskBindingConfig()
-	cfg.ModelBindings["hallucination_explainer"] = ModelBinding{Deployment: "vela-guard", Contract: "text_pair_distribution.v1", Adapter: "modernbert"}
-	if _, err := CompileModelBindings(cfg); err == nil {
+	cfg.ModelBindings["hallucination_explainer"] = ModelBinding{Deployment: "vela-guard"}
+	if err := validateModelBindingContracts(cfg); err == nil {
 		t.Fatal("the retired NLI explainer must not bind a model_runtime deployment")
 	}
 }

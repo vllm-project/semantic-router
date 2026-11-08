@@ -77,7 +77,7 @@ func TestSystemOneDeploymentSpeaksToAGatewayWithItsOwnCredentialHeader(t *testin
 	t.Setenv("GATEWAY_TEST_KEY", "fake-subscription-key")
 	remote := newSystemOne(t, systemOneConfig(t, `        endpoint: `+server.URL+`/Unified/v1/systemone
         model: vLLM-SR-d3-27B
-        question_types: [choice, noul]
+        capabilities: {question_types: [choice, noul]}
         auth: {header: Ocp-Apim-Subscription-Key, prefix: "", api_key_env: GATEWAY_TEST_KEY}
 `))
 

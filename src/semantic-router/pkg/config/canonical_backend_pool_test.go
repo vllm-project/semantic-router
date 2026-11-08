@@ -15,13 +15,13 @@ func TestCanonicalBackendPoolAcceptsHomogeneousReplicas(t *testing.T) {
           provider: vllm
           endpoint: 10.0.0.1:8000/v1
           protocol: http
-          api_key_env: POOL_API_KEY
+          auth: {api_key_env: POOL_API_KEY}
           weight: 75
         - name: secondary
           provider: vllm
           endpoint: 10.0.0.2:8001/v1
           protocol: http
-          api_key_env: POOL_API_KEY
+          auth: {api_key_env: POOL_API_KEY}
           weight: 25
 `)))
 	if err != nil {
@@ -68,39 +68,39 @@ func TestCanonicalBackendPoolRejectsHeterogeneousRequestSemantics(t *testing.T) 
         - name: primary
           provider: vllm
           endpoint: 10.0.0.1:8000
-          api_key_env: PRIMARY_API_KEY
+          auth: {api_key_env: PRIMARY_API_KEY}
         - name: secondary
           provider: vllm
           endpoint: 10.0.0.2:8000
-          api_key_env: SECONDARY_API_KEY
+          auth: {api_key_env: SECONDARY_API_KEY}
 `,
 			want: "credential source",
 		},
 		{
-			name: "extra headers",
+			name: "headers",
 			backendRefs: `
         - name: primary
           provider: vllm
           endpoint: 10.0.0.1:8000
-          extra_headers:
+          headers:
             X-Tenant: one
         - name: secondary
           provider: vllm
           endpoint: 10.0.0.2:8000
-          extra_headers:
+          headers:
             X-Tenant: two
 `,
-			want: "extra headers",
+			want: "headers differ",
 		},
 		{
 			name: "TLS server name",
 			backendRefs: `
         - name: primary
           provider: vllm
-          base_url: https://api-1.example.test/v1
+          endpoint: https://api-1.example.test/v1
         - name: secondary
           provider: vllm
-          base_url: https://api-2.example.test/v1
+          endpoint: https://api-2.example.test/v1
 `,
 			want: "TLS server name",
 		},

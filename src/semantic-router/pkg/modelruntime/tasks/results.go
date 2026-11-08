@@ -3,68 +3,6 @@
 // recipe bindings supply label mappings and task-specific interpretation.
 package tasks
 
-// LabelDistribution contains a complete distribution in the label order of
-// the prepared binding. It deliberately has no independently supplied argmax.
-type LabelDistribution struct {
-	Probabilities []float32
-	Input         *InputUsage
-	Window        *ScanWindow
-}
-
-// ScanWindow names the window a windowed scan kept and how many it read. A
-// scan reports one distribution for a document it read in several windows, so
-// without this the score cannot be attributed to the part of the document that
-// produced it. Nil means the result did not come from a windowed scan.
-type ScanWindow struct {
-	Start, End int // Half-open offsets in the content token IDs.
-	Count      int // Windows the scan read for this input.
-}
-
-// TokenEntity is a labeled span in the exact input text. Start and End are
-// UTF-8 byte offsets, with End exclusive. Adapters convert other offset units
-// once, before returning a result. Confidence is a probability in [0,1] only
-// when the containing result explicitly declares ScoresAvailable=true.
-type TokenEntity struct {
-	EntityType  string
-	Start       int
-	End         int
-	Text        string
-	Confidence  float32
-	Subtype     string
-	Explanation string
-}
-
-// TokenClassificationResult retains valid spans even when the provider reports
-// a partial scan. TruncatedAt, when known, is a UTF-8 byte boundary in the input.
-// The accompanying partial-result error remains visible to the caller.
-type TokenClassificationResult struct {
-	Input       *InputUsage
-	Entities    []TokenEntity
-	TruncatedAt *int
-	// Summary preserves a provider's aggregate span score when supplied.
-	// Its semantics are explicit; an empty span list does not imply confidence 1.
-	Summary          *ScoreResult
-	SummarySemantics *ScoreSemantics
-	// ScoresAvailable distinguishes reported probabilities from models that
-	// select spans without scores. False means unavailable; nil means the
-	// adapter has not declared score semantics. Neither implies probability 0.
-	ScoresAvailable *bool
-}
-
-// HasScores reports whether every span carries a model-reported probability.
-func (r TokenClassificationResult) HasScores() bool {
-	return r.ScoresAvailable != nil && *r.ScoresAvailable
-}
-
-// GroundedTextRequest preserves the inputs of a grounding task independently
-// from its shared token-spans result. Returned offsets refer to Answer, never
-// to a flattened prompt containing the context and question.
-type GroundedTextRequest struct {
-	Context  string
-	Question string
-	Answer   string
-}
-
 // TextPairRequest retains the ordered premise and hypothesis of an NLI task.
 type TextPairRequest struct {
 	Premise    string
@@ -90,6 +28,4 @@ type InputUsage struct {
 	Truncated       bool
 }
 
-func (r LabelDistribution) InputMetadata() *InputUsage         { return r.Input }
-func (r TokenClassificationResult) InputMetadata() *InputUsage { return r.Input }
-func (r EmbeddingResult) InputMetadata() *InputUsage           { return r.Input }
+func (r EmbeddingResult) InputMetadata() *InputUsage { return r.Input }

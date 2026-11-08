@@ -89,7 +89,7 @@ const AddSignalForm: React.FC<{
   const [name, setName] = useState("");
   const [fields, setFields] = useState<DSLFieldObject>({});
   const { data, scope } = useSignalCapabilities();
-  const availability = signalAvailability(data, scope, signalType, name, fields);
+  const availability = signalAvailability(data, scope, signalType, fields);
   const schema =
     signalType === "systemone"
       ? signalCapabilitySchema(
@@ -99,7 +99,7 @@ const AddSignalForm: React.FC<{
       : getSignalFieldSchema(signalType);
   const disabledTypes = Object.fromEntries(
     SIGNAL_TYPES.flatMap((type) => {
-      const result = signalAvailability(data, scope, type, name);
+      const result = signalAvailability(data, scope, type);
       return result.supported ? [] : [[type, result.reason || "Unavailable"]];
     }),
   );

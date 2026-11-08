@@ -178,7 +178,7 @@ providers:
           provider: vllm
           endpoint: http://localhost:8000/v1
           protocol: http
-          api_key_env: OPENAI_API_KEY
+          auth: {api_key_env: OPENAI_API_KEY}
       param_size: 3b
       capabilities: [math, chat]
       loras:

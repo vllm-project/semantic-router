@@ -232,7 +232,7 @@ func appendMaterializedEndpoint(
 		modelAlias, provider.Instance.Name, endpointURL.name, bindingIndex, endpointIndex,
 	)
 	profile := materializedProviderProfile(effective, endpointURL.url)
-	if err := validateTrustedGatewayProfile(&profile); err != nil {
+	if err := validateDelegatedProfile(&profile); err != nil {
 		return fmt.Errorf("providers.models[%s].backend_refs[%d]: %w", modelAlias, bindingIndex, err)
 	}
 	cfg.ProviderProfiles[endpointName] = profile
@@ -249,10 +249,10 @@ func appendMaterializedEndpoint(
 	return nil
 }
 
-// validateTrustedGatewayProfile requires a trusted gateway to have a wire
+// validateDelegatedProfile requires a delegated backend to have a wire
 // header that can carry the request's credential.
-func validateTrustedGatewayProfile(profile *ProviderProfile) error {
-	if !profile.TrustedGateway {
+func validateDelegatedProfile(profile *ProviderProfile) error {
+	if !profile.Delegated() {
 		return nil
 	}
 	auth, err := profile.ResolveAuth()
@@ -261,7 +261,7 @@ func validateTrustedGatewayProfile(profile *ProviderProfile) error {
 	}
 	if auth.Strategy == "none" || strings.TrimSpace(auth.Header) == "" {
 		return fmt.Errorf(
-			"trusted_gateway needs an auth header to carry the gateway credential; provider %q sends none, set auth.header",
+			"auth.credential: delegated needs a header to carry the credential; provider %q sends none, set auth.header",
 			profile.Type,
 		)
 	}
@@ -294,7 +294,7 @@ func materializedProviderProfile(
 		APIVersion:         provider.Instance.APIVersion, AuthHeader: provider.Instance.AuthHeader,
 		AuthPrefix: provider.Instance.AuthPrefix, AuthPrefixSet: provider.Instance.AuthPrefixSet,
 		ChatPath:       provider.Instance.ChatPath,
-		TrustedGateway: provider.Instance.TrustedGateway,
+		AuthCredential: provider.Instance.AuthCredential,
 	}
 }
 

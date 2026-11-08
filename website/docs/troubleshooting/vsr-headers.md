@@ -314,7 +314,7 @@ generates this table; run `make headers-generate` after changing it.
 | `x-user-minimax-key` | request | internal | secret | authz | v0.3 | Per-user MiniMax key the authenticator injects. |
 | `x-user-openai-key` | request | internal | secret | authz | v0.2 | Per-user OpenAI key the authenticator injects. |
 | `x-user-vertex-ai-key` | request | internal | secret | authz | v0.2 | Per-user Vertex AI token the authenticator injects. |
-| `x-vsr-gateway-credential` | request | internal | secret | authz | v0.5 | Dedicated credential the authenticator attaches for a trusted upstream gateway; only a backend marked `trusted_gateway` receives its value, under its own auth header, and `gateway_credential.header` names another header. |
+| `x-vsr-delegated-credential` | request | internal | secret | authz | v0.5 | The requesting user's credential the authenticator attaches; only an upstream with `auth.credential: delegated` receives its value, under its own auth header, and `delegated_credential.header` names another header. |
 | `x-vsr-internal-auth` | request | internal | secret | looper | v0.4 | In-process request authentication; the Router drops it from every client request. |
 | `x-vsr-kv-cache-id` | provider request | internal | none | kv_transfer | v0.4 | Opaque id of the source KV block. |
 | `x-vsr-kv-mapper-id` | provider request | internal | none | kv_transfer | v0.4 | Mapper artifact for the source and target model pair. |

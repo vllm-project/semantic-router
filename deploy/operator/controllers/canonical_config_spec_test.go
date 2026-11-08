@@ -23,14 +23,6 @@ func TestBuildCanonicalConfigAppliesOperatorDefaults(t *testing.T) {
 				ComplexityRules: []vllmv1alpha1.ComplexityRulesConfig{
 					{Name: "code", Description: "Code difficulty"},
 				},
-				ExternalModels: []vllmv1alpha1.ExternalModelConfig{
-					{
-						Name:      "rewriter",
-						ModelRole: routerconfig.ModelRoleMemoryRewrite,
-						ModelName: "rewriter-v1",
-						Endpoint:  vllmv1alpha1.ExternalModelEndpoint{Address: "rewriter.default.svc", Port: 8080, Protocol: "http"},
-					},
-				},
 			},
 		},
 	}
@@ -42,23 +34,6 @@ func TestBuildCanonicalConfigAppliesOperatorDefaults(t *testing.T) {
 
 	assertOperatorRouterProviderConfig(t, canonical)
 	assertOperatorComplexityConfig(t, defaultRecipe(canonical).Signals.Complexity)
-	assertOperatorExternalModels(t, canonical.Global.ModelCatalog.External)
-}
-
-// The CRD's external_models block must land on global.model_catalog.external
-// with the router's own field names.
-func assertOperatorExternalModels(t *testing.T, external []routerconfig.ExternalModelConfig) {
-	t.Helper()
-	if len(external) != 1 {
-		t.Fatalf("external models were not carried onto the canonical config: %#v", external)
-	}
-	model := external[0]
-	if model.Name != "rewriter" || model.ModelRole != routerconfig.ModelRoleMemoryRewrite || model.ModelName != "rewriter-v1" {
-		t.Fatalf("unexpected external model: %#v", model)
-	}
-	if model.ModelEndpoint.Address != "rewriter.default.svc" || model.ModelEndpoint.Port != 8080 || model.ModelEndpoint.Protocol != "http" {
-		t.Fatalf("external model endpoint did not survive conversion: %#v", model.ModelEndpoint)
-	}
 }
 
 func TestOperatorResponseCacheConfigNormalizesLegacyAndRejectsConflict(t *testing.T) {
@@ -452,6 +427,7 @@ func TestOperatorRefusesTheRemovedClassifierFields(t *testing.T) {
 		"config.prompt_guard":     {PromptGuard: block(`{"threshold":"0.6"}`)},
 		"config.classifier":       {Classifier: block(`{"pii_model":{"threshold":"0.3"}}`)},
 		"config.complexity_model": {ComplexityModel: block(`{}`)},
+		"config.external_models":  {ExternalModels: block(`[{"name":"rewriter","model_role":"memory_rewrite"}]`)},
 	} {
 		canonical := &routerconfig.CanonicalConfig{Global: &routerconfig.CanonicalGlobal{}}
 		if err := r.applyOperatorModelCatalog(canonical, spec); err == nil || !strings.Contains(err.Error(), field+" is removed") {

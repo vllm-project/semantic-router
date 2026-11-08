@@ -69,6 +69,9 @@ func (r *OpenAIRouter) handleRequestBody(
 	ctx.RequestAudio = snapshot.FirstAudio
 
 	decisionState, earlyResponse := r.runRequestPreRoutingStages(originalModel, request, snapshot, ctx)
+	if refused := r.delegatedCredentialRefusal(ctx); refused != nil {
+		return refused, nil
+	}
 	if earlyResponse != nil {
 		return earlyResponse, nil
 	}

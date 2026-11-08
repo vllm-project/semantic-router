@@ -21,8 +21,9 @@ const (
 // ContextPluginConfig assembles a decision's request context. Its sources
 // retrieve documents and memories, each kept by its match block; compress
 // shrinks the request's own segments, judged by its match block, within the
-// budget; injection places what the sources kept. A memory source also
-// writes the turn to memory after the response.
+// budget, and the text the routing signals read; injection places what the
+// sources kept. A memory source also writes the turn to memory after the
+// response.
 type ContextPluginConfig struct {
 	// Enabled turns the plugin on; false turns context off for the
 	// decision, global memory included.
@@ -79,7 +80,8 @@ type ContextMemoryStoreConfig struct {
 // ContextCompressConfig shrinks the request's own segments: tool outputs,
 // history and the injected documents and memories. Its match block judges
 // which segments matter, relevance by default; the least relevant shrink
-// first, until the request fits the budget.
+// first, until the request fits the budget. Signals compresses the text the
+// routing signals read; a block with only signals leaves the request whole.
 type ContextCompressConfig struct {
 	// Mode auto compresses a request near the budget or with segments over
 	// their target's min_tokens; always compresses every request.
@@ -91,6 +93,9 @@ type ContextCompressConfig struct {
 	// FailureMode fail_open (the default) sends the request uncompressed
 	// when compression fails; fail_closed refuses it.
 	FailureMode string `json:"failure_mode,omitempty" yaml:"failure_mode,omitempty" jsonschema:"enum=fail_open,enum=fail_closed"`
+	// Signals runs before the decision is chosen, so it is read from
+	// global.plugins and the recipe's plugins; a decision's own refuses it.
+	Signals *PromptCompressionConfig `json:"signals,omitempty" yaml:"signals,omitempty"`
 }
 
 // ContextBudgetConfig bounds the provider-bound request that compress
@@ -130,6 +135,23 @@ func ContextPluginOf(plugins []DecisionPlugin) *ContextPluginConfig {
 		return nil
 	}
 	return plugin
+}
+
+// SignalsCompression is the compress.signals the requests of a recipe run
+// before their decision: that of the context plugin of global.plugins layered
+// with the recipe's plugins; nil when it compresses nothing.
+func (r *RoutingRecipe) SignalsCompression() *PromptCompressionConfig {
+	if r == nil {
+		return nil
+	}
+	plugin := ContextPluginOf(r.Profile.DefaultPlugins)
+	if plugin == nil || plugin.Compress == nil {
+		return nil
+	}
+	if signals := plugin.Compress.Signals; signals != nil && signals.Enabled && signals.MaxTokens > 0 {
+		return signals
+	}
+	return nil
 }
 
 // Source returns the plugin's source of a type, nil without one.
@@ -234,6 +256,16 @@ func (s *ContextSource) EffectiveOnFailure() string {
 		return RAGOnFailureSkip
 	}
 	return s.OnFailure
+}
+
+// CompressesRequest reports whether the block compresses the request the
+// selected model reads: every block but one that holds only signals.
+func (c *ContextCompressConfig) CompressesRequest() bool {
+	if c == nil {
+		return false
+	}
+	return c.Signals == nil || c.Mode != "" || c.Targets != nil || c.Match != nil ||
+		c.Recovery != nil || c.RequestControls != nil || c.FailureMode != ""
 }
 
 // EffectiveMode returns the defaulted compression mode.

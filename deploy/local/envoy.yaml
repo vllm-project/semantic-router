@@ -49,7 +49,7 @@ static_resources:
               - "x-authz-user-groups"
               - "x-authz-team-id"
               - "x-authz-tenant-id"
-              - "x-vsr-gateway-credential"
+              - "x-vsr-delegated-credential"
               response_headers_to_add:
               - header:
                   key: "x-vsr-upstream-host"
@@ -75,17 +75,17 @@ static_resources:
                 - remove: "x-authz-user-groups"
                 - remove: "x-authz-team-id"
                 - remove: "x-authz-tenant-id"
-          # The gateway credential is an authenticator output, never a client
+          # The delegated credential is an authenticator output, never a client
           # input. Remove any client copy before ext_proc sees the request; the
           # route-level removal above only runs at the router filter. This
           # fixture runs no authenticator, and a custom
-          # global.services.authz.gateway_credential.header must be added here.
+          # global.services.authz.delegated_credential.header must be added here.
           - name: envoy.filters.http.lua
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
               inline_code: |
                 function envoy_on_request(request_handle)
-                  request_handle:headers():remove("x-vsr-gateway-credential")
+                  request_handle:headers():remove("x-vsr-delegated-credential")
                 end
           - name: envoy.filters.http.ext_proc
             typed_config:

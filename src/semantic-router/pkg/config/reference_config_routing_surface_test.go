@@ -73,7 +73,8 @@ func assertReferenceCorePluginCoverage(t testingT, pluginsByType map[string][]ma
 	assertPluginConfigCoverage(t, contextPlugins, reflect.TypeOf(ContextPluginConfig{}), DecisionPluginContext)
 	contextConfigs := collectChildMapsFromSlice(t, contextPlugins, "configuration", "plugins(context)")
 	compressConfigs := collectChildMapsFromSlice(t, contextConfigs, "compress", "plugins(context).configuration")
-	assertSliceUnionCoversStructFields(t, compressConfigs, reflect.TypeOf(ContextCompressConfig{}), "plugins(context).configuration.compress")
+	// signals is never a decision's (assertReferenceConfigSignalsCompressionCoverage).
+	assertSliceUnionCoversStructFields(t, compressConfigs, reflect.TypeOf(ContextCompressConfig{}), "plugins(context).configuration.compress", "signals")
 	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, contextConfigs, "budget", "plugins(context).configuration"), reflect.TypeOf(ContextBudgetConfig{}), "plugins(context).configuration.budget")
 	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, contextConfigs, "injection", "plugins(context).configuration"), reflect.TypeOf(ContextInjectionConfig{}), "plugins(context).configuration.injection")
 	compressionTargets := collectChildMapsFromSlice(t, compressConfigs, "targets", "plugins(context).configuration.compress")

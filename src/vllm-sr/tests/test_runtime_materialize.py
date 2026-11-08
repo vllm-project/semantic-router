@@ -25,22 +25,12 @@ def _write_source(path: Path) -> bytes:
                     ],
                 }
             ],
-            "global": {
-                "model_catalog": {
-                    "modules": {"classifier": {"domain": {"use_cpu": True}}}
-                }
-            },
+            "global": {"model_catalog": {}},
         },
         sort_keys=False,
     ).encode("utf-8")
     path.write_bytes(raw)
     return raw
-
-
-def _domain_use_cpu(realized: dict) -> bool:
-    return realized["global"]["model_catalog"]["modules"]["classifier"]["domain"][
-        "use_cpu"
-    ]
 
 
 def test_realize_runtime_config_applies_overrides_without_mutating_source(
@@ -50,15 +40,12 @@ def test_realize_runtime_config_applies_overrides_without_mutating_source(
     original = _write_source(source)
     target = tmp_path / "state" / "runtime-config.yaml"
 
-    result = realize_runtime_config(
-        source, target, algorithm="multi_factor", platform="rocm"
-    )
+    result = realize_runtime_config(source, target, algorithm="multi_factor")
 
     assert result == target
     assert source.read_bytes() == original
     realized = yaml.safe_load(target.read_text(encoding="utf-8"))
     assert realized["recipes"][0]["decisions"][0]["algorithm"]["type"] == "multi_factor"
-    assert _domain_use_cpu(realized) is False
     assert stat.S_IMODE(target.stat().st_mode) == 0o600
 
 
@@ -98,8 +85,6 @@ def test_runtime_materialize_module_cli(tmp_path: Path, capsys):
             str(target),
             "--algorithm",
             "multi_factor",
-            "--platform",
-            "rocm",
         ]
     )
 
@@ -116,14 +101,12 @@ def test_runtime_materialize_module_uses_current_runtime_env(
     _write_source(source)
     target = tmp_path / "state" / "runtime-config.yaml"
     monkeypatch.setenv("VLLM_SR_ALGORITHM_OVERRIDE", "multi_factor")
-    monkeypatch.setenv("DASHBOARD_PLATFORM", "rocm")
 
     assert main(["--source", str(source), "--target", str(target)]) == 0
 
     assert capsys.readouterr().out.strip() == str(target)
     realized = yaml.safe_load(target.read_text(encoding="utf-8"))
     assert realized["recipes"][0]["decisions"][0]["algorithm"]["type"] == "multi_factor"
-    assert _domain_use_cpu(realized) is False
 
 
 def test_managed_materialization_realizes_empty_imported_listener(tmp_path: Path):
@@ -181,12 +164,7 @@ def test_managed_materialization_rejects_before_publishing(
     assert source.read_bytes() == original
 
 
-def test_runtime_materialize_keeps_authored_gpu_embedding_budget(
-    tmp_path: Path, monkeypatch
-):
-    monkeypatch.setenv("DASHBOARD_PLATFORM", "rocm")
-    monkeypatch.delenv("VLLM_SR_ROCM_PRESERVE_CPU", raising=False)
-    monkeypatch.delenv("VLLM_SR_ROCM_FORCE_GPU", raising=False)
+def test_runtime_materialize_keeps_authored_gpu_embedding_budget(tmp_path: Path):
     source = tmp_path / "raw.yaml"
     _write_source(source)
     document = yaml.safe_load(source.read_text())

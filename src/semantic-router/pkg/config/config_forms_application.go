@@ -534,18 +534,6 @@ var applicationModuleForms = []ConfigForm{
 	removedModuleForm("hallucination_mitigation", "", "", nil),
 	{
 		Code:    CodeRemovedField,
-		Paths:   []string{"global.model_catalog.external[]"},
-		Match:   hasAnyKey("parser_type", "threshold"),
-		What:    "an external model's parser_type and threshold configured the removed chat jailbreak guard",
-		Becomes: "drop them; a jailbreak rule asks the decision model",
-		Migrate: func(m *Migration, at FormMatch) error {
-			m.Delete(at.Node, "parser_type")
-			m.Delete(at.Node, "threshold")
-			return nil
-		},
-	},
-	{
-		Code:    CodeRemovedField,
 		Paths:   []string{"global.services.api.batch_classification"},
 		Match:   hasAnyKey("max_concurrency", "concurrency_threshold"),
 		What:    "batch_classification.max_concurrency and concurrency_threshold gated the removed classifier modules",
@@ -621,7 +609,7 @@ var legacyModalityLabels = map[string]string{"AR": "text", "DIFFUSION": "image",
 
 var removedSystemLines = []string{
 	"safety", "hazard", "domain_classifier", "fact_check_classifier", "feedback_detector",
-	"prompt_guard", "pii_classifier", "hallucination_detector",
+	"prompt_guard", "pii_classifier", "hallucination_detector", "hallucination_explainer",
 }
 
 // removedAdmissionKeys gated the removed modules, by signal type or by the
@@ -639,8 +627,15 @@ var removedBindingConsumers = map[string]string{
 	"domain_classifier": SignalTypeDomain, "fact_check_classifier": SignalTypeFactCheck,
 	"feedback_detector": SignalTypeUserFeedback, "modality_detector": SignalTypeModality,
 	"prompt_guard": SignalTypeJailbreak, "pii_classifier": SignalTypePII, "hallucination_detector": SignalTypeHallucination,
-	"hazard": "", "classifier": "", "preference": "", "reask": "",
+	"hazard": "", "classifier": "", "preference": "", "reask": "", "hallucination_explainer": "",
 }
+
+// The contracts a binding object named: a decision-task binding of a module
+// the decision model now answers, and a remote three-class complexity scorer.
+const (
+	decisionTaskContract      = "decision.v1"
+	labelDistributionContract = "label_distribution.v1"
+)
 
 func removedBindingKey(key string, binding *yaml.Node) bool {
 	if _, removed := removedBindingConsumers[key]; removed || strings.HasPrefix(key, "classifier.") {
@@ -649,12 +644,12 @@ func removedBindingKey(key string, binding *yaml.Node) bool {
 	// A three-class complexity scorer was a remote classifier; the complexity
 	// preset is answered by the decision model.
 	return (key == SignalTypeComplexity || strings.HasPrefix(key, SignalTypeComplexity+".")) &&
-		scalarAt(binding, "contract") == RemoteClassifierContractLabelDistribution
+		scalarAt(binding, "contract") == labelDistributionContract
 }
 
 func renamedBindingKey(key string, binding *yaml.Node) (string, bool) {
 	signalType := removedBindingConsumers[key]
-	return signalType, signalType != "" && scalarAt(binding, "contract") == DecisionTaskContract
+	return signalType, signalType != "" && scalarAt(binding, "contract") == decisionTaskContract
 }
 
 // removedModuleForm is the form of a module only removed signals used. Its

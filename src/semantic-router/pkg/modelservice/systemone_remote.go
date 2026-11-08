@@ -18,6 +18,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 )
 
 // listingTimeout bounds one read of a remote models listing beside requests;
@@ -101,10 +102,16 @@ func NewRemoteSystemOne(cfg *config.RouterConfig) (*RemoteSystemOne, error) {
 			cancel()
 			return nil, fmt.Errorf("systemone deployment %q: %w", name, err)
 		}
+		// A delegated deployment answers each user with that user's
+		// credential, so no answer is kept for another request.
+		var cache *resultCache
+		if !deployment.Auth.Delegated() {
+			cache = newExpiringResultCache(ResultCacheEntries(), remoteCacheTTL)
+		}
 		remote.deployments[name] = &systemOneDeployment{
 			name: name, model: deployment.Model,
 			declared: deployment.DeclaredQuestionTypes(), presets: deployment.DeclaredPresets(),
-			client: client, cache: newExpiringResultCache(ResultCacheEntries(), remoteCacheTTL),
+			client: client, cache: cache,
 		}
 	}
 	return remote, nil
@@ -378,6 +385,14 @@ func (d *systemOneDeployment) readListing(parent context.Context, timeout time.D
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	card, err := d.listing(ctx)
+	if errors.Is(err, principal.ErrRouterCall) {
+		// The listing is the Router's own read; a delegated deployment
+		// answers it for no one, so its declared card applies.
+		logging.ComponentWarnEvent("model_runtime", "delegated_router_call_refused", map[string]interface{}{
+			"call": "systemone_listing", "deployment": d.name, "question_types": d.declaredCard().QuestionTypes,
+		})
+		return
+	}
 	if err != nil {
 		logging.ComponentEvent("model_runtime", "systemone_deployment_unlisted", map[string]interface{}{
 			"deployment": d.name, "reason": err.Error(), "question_types": d.declaredCard().QuestionTypes,

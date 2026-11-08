@@ -119,7 +119,7 @@ providers:
       api_format: openai
       backend_refs:
         - name: litellm
-          base_url: https://litellm.internal/v1
+          endpoint: https://litellm.internal/v1
           provider: openai-compatible
           trusted_gateway: true             # receives the gateway credential
 ```
@@ -148,8 +148,8 @@ The contract is disabled by default. Once enabled:
   gateway), replacing whatever the client sent there. The client's other
   credential headers are removed, so a gateway that authenticates on
   `x-api-key` does not also receive the client's `Authorization`.
-- A trusted gateway has no `api_key` or `api_key_env`; configuration rejects the
-  combination so a shared key can never stand in silently. A request that
+- A trusted gateway has no `api_key` or `auth.api_key_env`; configuration rejects
+  the combination so a shared key can never stand in silently. A request that
   reaches a trusted gateway without the credential is rejected with `401` before
   any upstream call, including fallback attempts.
 - Looper hops run on the client's behalf spend the same credential, typed and

@@ -41,7 +41,7 @@ func preparedInventoryServiceWith(t *testing.T, options classification.RecipeRun
 // provider inference correctness is covered by the native integration tests.
 func prepareInventoryTask(t *testing.T, runtime *serving.Runtime, recipe, name, contract, device string) *binding.Resolved[string, string] {
 	t.Helper()
-	task, err := binding.Register(binding.NewRegistry(runtime.ObserveBinding), contract, func(string) error { return nil }, func(string, string) error { return nil })
+	task, err := binding.RegisterTask(binding.NewRegistry(runtime.ObserveBinding), contract, contract, func(string) error { return nil }, func(string, string) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,21 +62,15 @@ func TestPreparedInventoryIncludesEveryTaskAndRecipe(t *testing.T) {
 	runtime := serving.New(nil, nil)
 	cfg, service := preparedInventoryService(t, runtime)
 	for _, task := range []struct{ name, contract string }{
-		{"domain_classifier", "label_distribution.v1"},
-		{"prompt_guard", "label_distribution.v1"},
-		{"pii_classifier", "token_spans.v1"},
-		{"fact_check_classifier", "label_distribution.v1"},
-		{"feedback_detector", "label_distribution.v1"},
-		{"modality_detector", "label_distribution.v1"},
-		{"safety.safe", "label_distribution.v1"},
-		{"safety.safe.hazard", "label_scores.v1"},
+		{"jailbreak", "decision.v1"},
+		{"pii", "decision.v1"},
 		{"embedding", "embedding.v1"},
 	} {
 		prepareInventoryTask(t, runtime, "vela", task.name, task.contract, "rocm:0")
 	}
 	api := &ClassificationAPIServer{config: cfg, classificationSvc: service}
 	response := api.buildModelsInfoResponse()
-	if len(response.Models) != 9 || response.Summary.LoadedModels != 9 || response.Summary.TotalModels != 9 || !response.System.GPUAvailable {
+	if len(response.Models) != 3 || response.Summary.LoadedModels != 3 || response.Summary.TotalModels != 3 || !response.System.GPUAvailable {
 		t.Fatalf("incomplete prepared task inventory: %+v", response)
 	}
 	for _, model := range response.Models {
@@ -87,9 +81,9 @@ func TestPreparedInventoryIncludesEveryTaskAndRecipe(t *testing.T) {
 			t.Fatalf("lost runtime evidence: %+v", model)
 		}
 	}
-	_ = requireModelInfo(t, response.Models, "category_classifier")
-	_ = requireModelInfo(t, response.Models, "jailbreak_classifier")
-	_ = requireModelInfo(t, response.Models, "safety.safe.hazard")
+	_ = requireModelInfo(t, response.Models, "jailbreak")
+	_ = requireModelInfo(t, response.Models, "pii")
+	_ = requireModelInfo(t, response.Models, "test_embedding_model")
 }
 
 func TestModelsUseGPUReadsTheRuntimeDeviceNames(t *testing.T) {

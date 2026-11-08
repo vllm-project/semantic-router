@@ -69,7 +69,6 @@ describe('model form effective fields', () => {
     }
     const model = getNormalizedModels(
       { providers: { models: [{ name: 'custom-alias', backend_refs: [{ provider: 'test' }] }] } },
-      true,
       customCatalog,
     )[0]
     const form = editModelFormData(model)
@@ -97,7 +96,6 @@ describe('model form effective fields', () => {
           ],
         },
       },
-      true,
       catalog,
     )[0]
     const data = editModelFormData(model)

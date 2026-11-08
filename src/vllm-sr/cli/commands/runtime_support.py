@@ -18,8 +18,6 @@ from cli.bootstrap import (
 from cli.commands.runtime_config_mutation import (
     _apply_algorithm_override,
     _normalized_algorithm_override,
-    _platform_requires_gpu_defaults,
-    apply_platform_gpu_defaults,
 )
 from cli.commands.runtime_management_credentials import (
     management_credential_env_names,
@@ -409,7 +407,6 @@ def _resolve_effective_config_document(
     config_path: Path,
     algorithm: str | None,
     setup_mode: bool,
-    platform: str | None,
     *,
     materialize_local_runtime: bool = True,
 ) -> tuple[dict[str, object], bool]:
@@ -423,14 +420,8 @@ def _resolve_effective_config_document(
         changed = inject_local_store_runtime_defaults(config, stack) or changed
         changed = apply_local_tracing_endpoint(config, stack) or changed
     normalized_algorithm = _normalized_algorithm_override(algorithm, setup_mode)
-    apply_gpu_defaults = _platform_requires_gpu_defaults(platform)
-    if not normalized_algorithm and not apply_gpu_defaults and not changed:
-        return config, False
-
     if normalized_algorithm:
         changed = _apply_algorithm_override(config, normalized_algorithm) or changed
-
-    changed = apply_platform_gpu_defaults(config, platform) or changed
     return config, changed
 
 
@@ -438,7 +429,6 @@ def build_effective_config_bytes(
     config_path: Path,
     algorithm: str | None,
     setup_mode: bool,
-    platform: str | None,
 ) -> bytes:
     """Build the effective config bytes."""
 
@@ -446,7 +436,6 @@ def build_effective_config_bytes(
         config_path,
         algorithm,
         setup_mode,
-        platform,
     )
     if not changed:
         return config_path.read_bytes()
@@ -457,7 +446,6 @@ def build_effective_config_document(
     config_path: Path,
     algorithm: str | None,
     setup_mode: bool,
-    platform: str | None,
     *,
     materialize_local_runtime: bool = True,
 ) -> dict[str, object]:
@@ -467,7 +455,6 @@ def build_effective_config_document(
         config_path,
         algorithm,
         setup_mode,
-        platform,
         materialize_local_runtime=materialize_local_runtime,
     )
     return config
@@ -478,30 +465,22 @@ def realize_runtime_config(
     target_path: Path,
     *,
     algorithm: str | None = None,
-    platform: str | None = None,
     managed_listener: bool = False,
 ) -> Path:
     """Realize one raw config at an explicit runtime-owned path.
 
-    The raw source is never changed. Runtime defaults and current CLI
-    algorithm/platform transforms are applied before a strict atomic replace of
-    ``target_path``. A managed listener is validated before publication.
+    The raw source is never changed. Runtime defaults and the CLI's algorithm
+    override are applied before a strict atomic replace of ``target_path``. A
+    managed listener is validated before publication.
     """
 
     if algorithm is None:
         algorithm = os.getenv(RUNTIME_ALGORITHM_OVERRIDE_ENV, "").strip() or None
-    if platform is None:
-        platform = (
-            os.getenv("VLLM_SR_PLATFORM", "").strip()
-            or os.getenv("DASHBOARD_PLATFORM", "").strip()
-            or None
-        )
 
     effective = build_effective_config_bytes(
         source_path,
         algorithm=algorithm,
         setup_mode=is_setup_mode_config(source_path),
-        platform=platform,
     )
     if managed_listener:
         prepared = UserConfig.model_validate(yaml.safe_load(effective), extra="allow")
@@ -513,7 +492,6 @@ def resolve_effective_config_path(
     config_path: Path,
     algorithm: str | None,
     setup_mode: bool,
-    platform: str | None,
     *,
     materialize_local_runtime: bool = True,
 ) -> Path:
@@ -523,7 +501,6 @@ def resolve_effective_config_path(
         config_path,
         algorithm,
         setup_mode,
-        platform,
         materialize_local_runtime=materialize_local_runtime,
     )
     return _finalize_runtime_config_write(
@@ -533,15 +510,12 @@ def resolve_effective_config_path(
     )
 
 
-def sync_runtime_config(
-    config_path: Path, algorithm: str | None = None, platform: str | None = None
-) -> Path:
+def sync_runtime_config(config_path: Path, algorithm: str | None = None) -> Path:
     """Regenerate the internal runtime config from the user-facing source config."""
     return resolve_effective_config_path(
         config_path=config_path,
         algorithm=algorithm,
         setup_mode=is_setup_mode_config(config_path),
-        platform=platform,
     )
 
 

@@ -15,7 +15,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--source", required=True, type=Path)
     parser.add_argument("--target", required=True, type=Path)
     parser.add_argument("--algorithm")
-    parser.add_argument("--platform")
     parser.add_argument(
         "--managed-listener",
         action="store_true",
@@ -30,7 +29,6 @@ def main(argv: list[str] | None = None) -> int:
         args.source,
         args.target,
         algorithm=(args.algorithm or "").strip() or None,
-        platform=(args.platform or "").strip() or None,
         managed_listener=args.managed_listener,
     )
     print(result)

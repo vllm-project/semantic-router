@@ -83,6 +83,7 @@ REMOVED_SYSTEM_LINES = (
     "prompt_guard",
     "pii_classifier",
     "hallucination_detector",
+    "hallucination_explainer",
 )
 REMOVED_ADMISSION_KEYS = (
     "safety",
@@ -114,6 +115,7 @@ REMOVED_BINDING_CONSUMERS = {
     "classifier": "",
     "preference": "",
     "reask": "",
+    "hallucination_explainer": "",
 }
 
 
@@ -367,16 +369,6 @@ def _application_module_forms(data: dict[str, Any]) -> Iterator[Form]:
         )
         yield (path, "removed_section", f"{path} is removed", becomes)
     code = "removed_field"
-    for path, model in _named_items(
-        "global.model_catalog.external", catalog.get("external")
-    ):
-        if "parser_type" in model or "threshold" in model:
-            yield (
-                path,
-                code,
-                "an external model's parser_type and threshold configured the removed chat jailbreak guard",
-                "drop them; a jailbreak rule asks the decision model",
-            )
     batch = _mapping_at(data, "global", "services", "api", "batch_classification")
     if "max_concurrency" in batch or "concurrency_threshold" in batch:
         yield (

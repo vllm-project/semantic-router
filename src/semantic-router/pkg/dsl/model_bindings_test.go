@@ -8,11 +8,11 @@ import (
 
 func TestModelBindingsRoundTripAcrossRecipes(t *testing.T) {
 	source := `ROUTING {
-  model_bindings: {jailbreak_classifier: {deployment: "shared", contract: "label_scores.v1", adapter: "mmbert", head: "jailbreak"}}
+  model_bindings: {jailbreak: {deployment: "shared"}}
 }
 RECIPE private {
   ROUTING {
-    model_bindings: {pii_classifier: {deployment: "private-pii", contract: "token_spans.v1", adapter: "mmbert", head: "pii", mapping_path: "mappings/pii.json"}}
+    model_bindings: {pii: "private-pii"}
   }
 }
 ENTRYPOINT {model_names: ["private"] recipe: "private"}
@@ -32,7 +32,7 @@ ENTRYPOINT {model_names: ["private"] recipe: "private"}
 	if !reflect.DeepEqual(config.ModelBindings, roundTrip.ModelBindings) || !reflect.DeepEqual(config.Recipes, roundTrip.Recipes) {
 		t.Fatalf("recipe bindings changed during round trip:\n%s", output)
 	}
-	if _, leaked := roundTrip.ModelBindings["pii_classifier"]; leaked {
+	if _, leaked := roundTrip.ModelBindings["pii"]; leaked {
 		t.Fatal("private binding leaked into default routing")
 	}
 	program := DecompileRoutingToAST(config)
@@ -41,7 +41,7 @@ ENTRYPOINT {model_names: ["private"] recipe: "private"}
 		t.Fatal("builder AST lost model bindings")
 	}
 	yamlBytes, err := EmitRoutingYAMLFromConfig(roundTrip)
-	if err != nil || !strings.Contains(string(yamlBytes), "model_bindings:") || !strings.Contains(string(yamlBytes), "mapping_path: mappings/pii.json") {
+	if err != nil || !strings.Contains(string(yamlBytes), "model_bindings:") || !strings.Contains(string(yamlBytes), "jailbreak: shared") {
 		t.Fatalf("routing YAML lost binding fields: %v\n%s", err, yamlBytes)
 	}
 }
@@ -49,8 +49,9 @@ ENTRYPOINT {model_names: ["private"] recipe: "private"}
 func TestModelBindingsRejectInvalidDSLShape(t *testing.T) {
 	for _, source := range []string{
 		`ROUTING {model_bindings: "not-an-object"}`,
-		`ROUTING {model_bindings: {pii_classifier: {deploymnt: "typo"}}}`,
-		`ROUTING {model_bindings: {pii_classifier: {deployment: 12}}}`,
+		`ROUTING {model_bindings: {pii: {deploymnt: "typo"}}}`,
+		`ROUTING {model_bindings: {pii: {deployment: 12}}}`,
+		`ROUTING {model_bindings: {pii: {deployment: "shared", contract: "token_spans.v1"}}}`,
 	} {
 		if _, errs := Compile(source); len(errs) == 0 {
 			t.Errorf("invalid binding accepted: %s", source)

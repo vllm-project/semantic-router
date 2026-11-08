@@ -36,7 +36,7 @@ func (c *ContextPluginConfig) MatchJudges() []MatchJudge {
 			judges = append(judges, *judge)
 		}
 	}
-	if c.Compress != nil {
+	if c.Compress.CompressesRequest() {
 		if judge := MatchCompress.Effective(c.Compress.Match).Judge; judge != nil {
 			judges = append(judges, *judge)
 		}

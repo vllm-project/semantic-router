@@ -103,10 +103,6 @@ global:
   model_catalog:
     embeddings: {}
     system: {}
-    modules:
-      prompt_compression:
-        enabled: false
-        max_tokens: 0
   plugins:
     - type: response_cache
       configuration:

@@ -153,35 +153,6 @@ runtime dependency; they do not define routing behavior by themselves.
   bodies. Review its access controls and retention settings before enabling it.
 - `global.router.skip_processing.enabled` should be enabled only when an
   authenticated upstream component owns the bypass header.
-- Knowledge bases are declared under `global.model_catalog.kbs[]`; routing
-  signals bind to those shared assets by name.
-- Built-in category/domain classification uses the local `variant` selector by
-  default. A named remote classifier may instead be attached with
-  `global.model_catalog.modules.classifier.domain.backend`; its `model` must
-  name an entry in `global.model_catalog.external[]` with
-  `model_role: classification`. The shared backend contract uses
-  `protocol`, `contract`, `model`, and optional `deadline_ms`.
-- Complexity attaches the same block at
-  `global.model_catalog.modules.complexity.backend`, beside `prototype_scoring`
-  rather than on a rule, so it survives the per-recipe replacement of
-  `recipes[].signals`. It reads two contracts and therefore requires `contract`
-  to be stated: `score.v1`, where each rule converts the score with its own
-  `hard_above`/`easy_below` boundaries, or `label_distribution.v1`, where the
-  winning label is the verdict. `threshold` stays the symmetric shorthand for
-  the local signed margin, and the `hard`/`easy` candidate lists are unread
-  once a backend supplies the score.
-- PII attaches the same block at
-  `global.model_catalog.modules.classifier.pii.backend`. It reads one contract,
-  `token_spans.v1`, so `contract` may be omitted; the remote model returns
-  entity spans as code-point offsets into the exact request string, and its
-  labels must be in the configured `pii_mapping_path`. `on_error` beside the
-  backend selects what a backend failure, or a provider-declared truncation,
-  does to the rule that consumed it: `allow` (default) treats the content as
-  not matching, `block` matches it as `classification_error`. A backend is
-  mutually exclusive with the local `use_mmbert_32k` selector.
-- External LLM classifiers use `max_response_bytes` on their
-  `global.model_catalog.external[]` entry. The MCP classifier uses the same key
-  under `global.model_catalog.modules.classifier.mcp`.
 
 ## Keep examples in sync
 

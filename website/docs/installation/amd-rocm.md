@@ -291,18 +291,21 @@ The paper's router GPU footprint of under 800 MB covers its three classifier
 sessions with compression on. The Vela AMD recipe loads the decision model and the embedding model, so
 size Router memory from measurements on your hardware.
 
-To use the paper's 512-token compression profile, add this block to your
-config:
+To use the paper's 512-token compression profile, add this `context` plugin to
+`global.plugins`, or its `compress.signals` block to the one you have there:
 
 ```yaml
 global:
-  model_catalog:
-    modules:
-      prompt_compression:
+  plugins:
+    - type: context
+      configuration:
         enabled: true
-        profile: default
-        max_tokens: 512
-        skip_signals: [jailbreak, pii]
+        compress:
+          signals:
+            enabled: true
+            profile: default
+            max_tokens: 512
+            skip_signals: [jailbreak, pii]
 ```
 
 The `default` profile supplies the paper's weights, position depth and kept

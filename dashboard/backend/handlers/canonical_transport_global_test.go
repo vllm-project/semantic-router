@@ -183,7 +183,7 @@ func TestConfigTransportPreservesGlobalEnvironmentReferences(t *testing.T) {
 }
 
 func TestConfigTransportResolvesGlobalAliasesFromOtherSections(t *testing.T) {
-	input := []byte("version: v0.5\nlisteners: &empty []\nglobal:\n  model_catalog:\n    external: *empty\n")
+	input := []byte("version: v0.5\nlisteners: &empty []\nglobal:\n  router:\n    headers:\n      session_id_headers: *empty\n")
 	config, err := decodeYAMLTaggedBytes[canonicalConfigTransport](input)
 	if err != nil {
 		t.Fatal(err)

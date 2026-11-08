@@ -6,6 +6,7 @@ import pytest
 import yaml
 from cli.main import main
 from cli.models import UserConfig
+from cli.parser import ConfigParseError, parse_user_config_data
 from cli.validator import validate_user_config
 from click.testing import CliRunner
 
@@ -73,13 +74,14 @@ def test_implicit_algorithm_alias_is_rejected(family):
     document["global"]["integrations"]["looper"] = {
         family: {"model_names": ["gpt-oss"]}
     }
-    errors = validate_user_config(
-        UserConfig.model_validate(document), log_summary=False
-    )
-    assert any(
-        error.field == f"global.integrations.looper.{family}.model_names"
-        and "entrypoints and recipes" in error.message
-        for error in errors
+    with pytest.raises(ConfigParseError) as refused:
+        parse_user_config_data(document, log_summary=False)
+    algorithm = "workflows" if family == "flow" else family
+    assert str(refused.value) == (
+        f"global.integrations.looper.{family}.model_names: removed_field: the model "
+        "names of a Looper algorithm are removed; run `vllm-sr config migrate` (an "
+        "entrypoint whose model_names name a recipe with a decision that runs the "
+        f"{algorithm} algorithm)"
     )
 
 
@@ -110,5 +112,4 @@ def test_config_validate_rejects_the_removed_field(tmp_path):
     path.write_text(yaml.safe_dump(_CAPTURED_MODEL_CONFIG))
     result = CliRunner().invoke(main, ["config", "validate", "--config", str(path)])
     assert result.exit_code != 0
-    assert FLOW_FIELD in result.output
-    assert "Additional properties are not allowed" in result.output
+    assert f"{FLOW_FIELD}: removed_field" in " ".join(result.output.split())

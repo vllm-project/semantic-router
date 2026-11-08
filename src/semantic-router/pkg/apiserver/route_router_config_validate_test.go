@@ -74,7 +74,7 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-          api_key_env: VALIDATE_SECRET_CANARY
+          auth: {api_key_env: VALIDATE_SECRET_CANARY}
       description: ${VALIDATE_SECRET_CANARY}
 recipes:
   - name: default

@@ -12,7 +12,6 @@ import (
 // and request-reachable recipes. Unregistered paths are supplied locally and
 // validated by actual provider preparation, not by the download registry.
 func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
-	cfg = config.WithModelResources(cfg)
 	inventory := &modelInventory{registry: cfg.MoMRegistry, specs: map[string]ModelSpec{}}
 	scopes := []*config.RouterConfig{}
 	defaultScope := *cfg.ModelConsumerScope()

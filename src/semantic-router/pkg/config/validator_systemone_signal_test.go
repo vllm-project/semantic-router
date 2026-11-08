@@ -10,7 +10,7 @@ func systemOneConfig() *RouterConfig {
 	cfg := &RouterConfig{}
 	cfg.ModelDeployments = map[string]ModelDeployment{
 		"decider": {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Decision-2.0-Kai-0.6B", Revision: strings.Repeat("a", 40)},
-		"bert":    {Provider: "http", ExternalModel: "bert"},
+		"bert":    {Provider: OpenAIEmbeddingsProvider, Endpoint: "http://embedder:8000/v1", Model: "bert"},
 	}
 	threshold := 1.0
 	cfg.SystemOneRules = []SystemOneRule{
@@ -27,13 +27,13 @@ func TestModelRuntimeDeploymentValidation(t *testing.T) {
 		{Provider: ModelRuntimeProvider, Artifact: "/models/kai", Device: "rocm:1"},
 		{Provider: ModelRuntimeProvider, Endpoint: "unix:///run/vllm-sr/kai.sock"},
 		{Provider: ModelRuntimeProvider, Endpoint: "http://decision-runtime:8100"},
-		{Provider: ModelRuntimeProvider, Endpoint: "http://shared-runtime:8100", ServedName: "vela-domain"},
+		{Provider: ModelRuntimeProvider, Endpoint: "http://shared-runtime:8100", Model: "vela-domain"},
 		{Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-PII", Device: "xpu:0", Input: ModelInputBudget{MaxTokens: 32768, Overflow: "window"}},
 		{Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-Domain", Device: "mps", Input: ModelInputBudget{MaxTokens: 512, Overflow: "truncate"}},
 		{Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", MaxNumSeqs: intPtr(1), MaxNumBatchedTokens: intPtr(8), BatchWindowMS: ptrFloat64(0), Dtype: "auto", EnableSharedContext: boolPtr(true)},
 	}
 	for _, deployment := range valid {
-		if err := deployment.WithDefaults().validate(&RouterConfig{}); err != nil {
+		if err := deployment.WithDefaults().validate(); err != nil {
 			t.Fatalf("%+v: %v", deployment, err)
 		}
 	}
@@ -52,12 +52,12 @@ func TestModelRuntimeDeploymentValidation(t *testing.T) {
 		"negative budget":       {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Input: ModelInputBudget{MaxTokens: -1}},
 		"bad overflow":          {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Input: ModelInputBudget{Overflow: "drop"}},
 		"attached device":       {Provider: ModelRuntimeProvider, Endpoint: "http://runtime:8100", Device: "cuda"},
-		"managed served name":   {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", ServedName: "x"},
-		"engine args elsewhere": {Provider: "http", ExternalModel: "x", Dtype: "float32"},
-		"served name elsewhere": {Provider: "http", ExternalModel: "x", ServedName: "x"},
+		"managed served model":  {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Model: "x"},
+		"engine args elsewhere": {Provider: OpenAIChatProvider, Endpoint: "http://chat:8000/v1", Model: "x", Dtype: "float32"},
+		"classifier service":    {Provider: "classify", Endpoint: "http://classifier:8080"},
 	}
 	for name, deployment := range invalid {
-		if err := deployment.WithDefaults().validate(&RouterConfig{}); err == nil {
+		if err := deployment.WithDefaults().validate(); err == nil {
 			t.Fatalf("%s: expected a validation error", name)
 		}
 	}

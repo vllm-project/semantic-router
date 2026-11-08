@@ -34,13 +34,9 @@ func (s *observedDecisionServices) Decide(_ context.Context, _ string, request m
 	return modelservice.Response{Answers: answers}, nil
 }
 
-func attachedDecisionModels(t *testing.T, explicit bool) (*classifierModelRuntime, *observedDecisionServices) {
+func attachedDecisionModels(t *testing.T) (*classifierModelRuntime, *observedDecisionServices) {
 	t.Helper()
-	source := setQuestionOnTheDecisionModel
-	if explicit {
-		source = strings.Replace(source, "\n  - name: default\n", "\n  - name: default\n    model_bindings:\n      pii_classifier: {deployment: primary, contract: decision.v1}\n", 1)
-	}
-	cfg, err := config.ParseYAMLBytes([]byte(source))
+	cfg, err := config.ParseYAMLBytes([]byte(setQuestionOnTheDecisionModel))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +54,7 @@ func decisionObservation(types ...string) modelservice.ModelCard {
 }
 
 func TestAttachedDecisionQuestionsRecoverWithoutDiscovery(t *testing.T) {
-	models, services := attachedDecisionModels(t, false)
+	models, services := attachedDecisionModels(t)
 	c := &Classifier{Config: models.cfg, models: models}
 	if err := c.prepareSystemOneSignals(); err != nil {
 		t.Fatalf("offline attached provider blocked preparation: %v", err)
@@ -95,7 +91,7 @@ func TestAttachedDecisionQuestionsRecoverWithoutDiscovery(t *testing.T) {
 }
 
 func TestAttachedDecisionSpanIsNeverComposedOrSilentlyAccepted(t *testing.T) {
-	models, services := attachedDecisionModels(t, false)
+	models, services := attachedDecisionModels(t)
 	models.cfg.SystemOneRules[0].Question.Type = "span"
 	c := &Classifier{Config: models.cfg, models: models}
 	if err := c.prepareSystemOneSignals(); err != nil {

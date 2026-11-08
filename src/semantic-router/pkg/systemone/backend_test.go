@@ -13,6 +13,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
 
@@ -45,8 +46,8 @@ providers:
       provider_model_id: native-model
       backend_refs:
         - provider: systemone-compatible
-          base_url: %s/custom/v1
-          api_key_env: SYSTEMONE_BACKEND_TEST_KEY
+          endpoint: %s/custom/v1
+          auth: {api_key_env: SYSTEMONE_BACKEND_TEST_KEY}
 `, server.URL)))
 	if err != nil {
 		t.Fatal(err)
@@ -70,10 +71,12 @@ providers:
 	}
 }
 
-func TestNativeRemoteAdapterRefusesATrustedGatewayBeforeDispatch(t *testing.T) {
+func TestNativeRemoteAdapterPresentsOnlyTheRequestsDelegatedCredential(t *testing.T) {
 	var calls atomic.Int64
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	var received atomic.Value
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
+		received.Store(r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(certainResponse))
 	}))
@@ -84,7 +87,7 @@ recipes:
 global:
   services:
     authz:
-      gateway_credential:
+      delegated_credential:
         enabled: true
 providers:
   models:
@@ -93,8 +96,8 @@ providers:
       provider_model_id: judge-model
       backend_refs:
         - provider: openai-compatible
-          base_url: %[1]s/v1
-          trusted_gateway: true
+          endpoint: %[1]s/v1
+          auth: {credential: delegated}
 `, server.URL)))
 	if err != nil {
 		t.Fatal(err)
@@ -104,14 +107,24 @@ providers:
 		t.Fatal(err)
 	}
 	defer remote.Close(context.Background())
-	// A loaded configuration refuses a trusted gateway on a systemone backend
-	// or a stage's judge model; dispatch still never sends one a call.
 	invoke := BackendInvoker(cfg, "", nil, remote)
-	if _, _, err := invoke(context.Background(), "judge", json.RawMessage(singleRequest)); !errors.Is(err, errTrustedGatewayUnsupported) {
-		t.Fatalf("error = %v, want the trusted gateway refusal", err)
+	// A judge call made for a client request carries that request's credential.
+	if code, _, err := invoke(principal.ForRequest(context.Background(), "alice-key"), "judge", json.RawMessage(singleRequest)); err != nil || code != http.StatusOK {
+		t.Fatalf("status=%d error=%v", code, err)
 	}
-	if calls.Load() != 0 {
-		t.Fatalf("a trusted gateway received %d calls without a credential", calls.Load())
+	if got, _ := received.Load().(string); got != "Bearer alice-key" || calls.Load() != 1 {
+		t.Fatalf("Authorization = %q after %d calls, want the request's credential", got, calls.Load())
+	}
+	// Without one the request answers 401, and a Router-own call is refused;
+	// neither is sent.
+	if code, _, err := invoke(principal.ForRequest(context.Background(), ""), "judge", json.RawMessage(singleRequest)); !errors.Is(err, principal.ErrCredentialMissing) || code != http.StatusUnauthorized {
+		t.Fatalf("status=%d error=%v, want 401 for the missing credential", code, err)
+	}
+	if code, _, err := invoke(context.Background(), "judge", json.RawMessage(singleRequest)); !errors.Is(err, principal.ErrRouterCall) || code != http.StatusForbidden {
+		t.Fatalf("status=%d error=%v, want the Router-own call refused", code, err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("a delegated backend received %d calls, want only the one with a credential", calls.Load())
 	}
 }
 

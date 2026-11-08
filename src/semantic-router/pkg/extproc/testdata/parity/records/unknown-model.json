@@ -67,7 +67,7 @@
             "x-vsr-cost",
             "x-vsr-cost-currency",
             "x-vsr-debug",
-            "x-vsr-gateway-credential",
+            "x-vsr-delegated-credential",
             "x-vsr-internal-auth",
             "x-vsr-kv-cache-id",
             "x-vsr-kv-mapper-id",

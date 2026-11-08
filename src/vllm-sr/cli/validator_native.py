@@ -160,7 +160,6 @@ def _native_profile_errors(config, profile, field):
     references.extend(
         item.type for score in profile.projections.scores or [] for item in score.inputs
     )
-    errors.extend(_native_signal_backend_errors(config, set(references), field))
     for kind in references:
         if (kind or "").strip().lower() in _UNAVAILABLE_NATIVE_CONTEXT:
             errors.append(
@@ -170,19 +169,6 @@ def _native_profile_errors(config, profile, field):
                 )
             )
     return errors
-
-
-def _native_signal_backend_errors(config, references, field):
-    catalog = (config.global_ or {}).get("model_catalog") or {}
-    classifier = (catalog.get("modules") or {}).get("classifier") or {}
-    if "domain" in references and (classifier.get("mcp") or {}).get("enabled"):
-        return [
-            ValidationError(
-                "native domain signals do not support the MCP classifier; use a model deployment binding",
-                field=field,
-            )
-        ]
-    return []
 
 
 def _native_decision_errors(decision, models, calibrations, path):

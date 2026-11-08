@@ -43,7 +43,7 @@ providers:
   models:
     - name: fast
       api_format: systemone
-      backend_refs: [{provider: systemone-compatible, base_url: 'https://example.invalid/v1'}]
+      backend_refs: [{provider: systemone-compatible, endpoint: 'https://example.invalid/v1'}]
 entrypoints:
   - model_names: [vllm-sr/auto]
     recipe: default

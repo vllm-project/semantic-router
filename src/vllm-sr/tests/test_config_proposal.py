@@ -41,7 +41,6 @@ providers:
           protocol: http
           weight: 100
           api_key: {SECRET}
-          api_key_env: LOCAL_MODEL_API_KEY
     - name: cheap-model
       backend_refs:
         - name: cheap
@@ -133,10 +132,6 @@ def test_supported_intent_preserves_unrelated_config_and_redacts_secrets(tmp_pat
     assert "algorithm" not in keep_me
     assert candidate["listeners"][0]["port"] == LISTENER_PORT
     assert candidate["providers"]["models"][0]["backend_refs"][0]["api_key"] == "***"
-    assert (
-        candidate["providers"]["models"][0]["backend_refs"][0]["api_key_env"]
-        == "LOCAL_MODEL_API_KEY"
-    )
     assert "multi_factor" in document["diff"]
     removed = [
         line[1:]
@@ -336,7 +331,6 @@ providers:
           protocol: http
           weight: 100
           api_key: {SECRET}
-          api_key_env: LOCAL_MODEL_API_KEY
     - name: cheap-model
       backend_refs:
         - name: cheap
@@ -423,10 +417,10 @@ def test_cli_withholds_recipe_privacy_without_writing(tmp_path):
     assert config_path.read_text(encoding="utf-8") == RECIPE_CONFIG
 
 
-def test_relative_base_url_fails_the_provider_projection_check(tmp_path):
+def test_an_endpoint_without_a_host_fails_the_provider_projection_check(tmp_path):
     text = BASE_CONFIG.replace(
         "endpoint: 127.0.0.1:8000\n          protocol: http",
-        "base_url: api.example.com/v1",
+        "endpoint: https:///v1",
     )
     config_path = _write_config(tmp_path, text)
 
@@ -629,7 +623,7 @@ def test_credential_header_values_are_redacted(tmp_path):
         f"api_key: {SECRET}",
         (
             f"api_key: {SECRET}\n"
-            "          extra_headers:\n"
+            "          headers:\n"
             f"            Authorization: Basic {HEADER_SECRET}"
         ),
     )
@@ -647,7 +641,7 @@ def test_credential_header_values_are_redacted(tmp_path):
     backend = yaml.safe_load(document["candidate_yaml"])["providers"]["models"][0][
         "backend_refs"
     ][0]
-    assert backend["extra_headers"]["Authorization"] == "***"
+    assert backend["headers"]["Authorization"] == "***"
 
 
 def _stage_installed_assets(destination: Path) -> None:

@@ -185,4 +185,19 @@ describe('embedding models config support', () => {
     expect(embeddingModelsBadges(remote)).toContainEqual({ label: 'Remote provider', tone: 'info' })
     expect(JSON.stringify(embeddingModelsSummary(remote))).not.toContain('OPENAI_API_KEY')
   })
+
+  it('reads a default binding written as a deployment name', () => {
+    expect(
+      embeddingModelsSummary({
+        default: 'qwen3-embedding',
+        __deployments: {
+          'qwen3-embedding': { provider: 'model_runtime', artifact: 'Qwen/Qwen3-Embedding-0.6B' },
+        },
+      }),
+    ).toEqual([
+      { label: 'Provider', value: 'Local / model_runtime' },
+      { label: 'Deployment', value: 'qwen3-embedding' },
+      { label: 'Model', value: 'Qwen/Qwen3-Embedding-0.6B' },
+    ])
+  })
 })

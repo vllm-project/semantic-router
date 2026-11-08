@@ -71,7 +71,7 @@
             "x-vsr-cost",
             "x-vsr-cost-currency",
             "x-vsr-debug",
-            "x-vsr-gateway-credential",
+            "x-vsr-delegated-credential",
             "x-vsr-internal-auth",
             "x-vsr-kv-cache-id",
             "x-vsr-kv-mapper-id",
@@ -140,7 +140,7 @@
             "x-user-minimax-key",
             "x-user-openai-key",
             "x-user-vertex-ai-key",
-            "x-vsr-gateway-credential"
+            "x-vsr-delegated-credential"
           ]
         },
         "body": {

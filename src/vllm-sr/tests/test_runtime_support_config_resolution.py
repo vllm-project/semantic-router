@@ -1,124 +1,31 @@
-"""Tests for effective runtime config paths and platform overrides."""
+"""Tests for effective runtime config paths."""
 
 from pathlib import Path
 
-import pytest
 import yaml
 from cli.commands.runtime_support import (
     configure_runtime_override_env_vars,
     resolve_effective_config_path,
+    sync_runtime_config,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
-def _domain_on_cpu_config() -> dict:
-    return {
+def test_resolve_effective_config_path_applies_the_algorithm_override(
+    tmp_path: Path,
+):
+    config_path = tmp_path / "config.yaml"
+    config = {
         "version": "v0.5",
-        "global": {
-            "model_catalog": {"modules": {"classifier": {"domain": {"use_cpu": True}}}}
-        },
+        "recipes": [{"name": "default", "decisions": [{"name": "default"}]}],
     }
-
-
-def _domain_use_cpu(effective: dict) -> bool:
-    return effective["global"]["model_catalog"]["modules"]["classifier"]["domain"][
-        "use_cpu"
-    ]
-
-
-def test_resolve_effective_config_path_adds_no_embedding_settings_on_amd(
-    tmp_path: Path, monkeypatch
-):
-    monkeypatch.delenv("VLLM_SR_ROCM_FORCE_GPU", raising=False)
-    monkeypatch.delenv("VLLM_SR_ROCM_PRESERVE_CPU", raising=False)
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text(yaml.safe_dump(_domain_on_cpu_config(), sort_keys=False))
-
-    effective_path = resolve_effective_config_path(
-        config_path=config_path,
-        algorithm=None,
-        setup_mode=False,
-        platform="rocm",
-    )
-
-    effective = yaml.safe_load(effective_path.read_text())
-    assert _domain_use_cpu(effective) is False
-    assert "embeddings" not in effective["global"]["model_catalog"]
-
-
-def test_resolve_effective_config_path_enables_nvidia_gpu_by_default(
-    tmp_path: Path, monkeypatch
-):
-    monkeypatch.delenv("VLLM_SR_CUDA_FORCE_GPU", raising=False)
-    monkeypatch.delenv("VLLM_SR_CUDA_PRESERVE_CPU", raising=False)
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text(yaml.safe_dump(_domain_on_cpu_config(), sort_keys=False))
-
-    effective_path = resolve_effective_config_path(
-        config_path=config_path,
-        algorithm=None,
-        setup_mode=False,
-        platform="cuda",
-    )
-
-    effective = yaml.safe_load(effective_path.read_text())
-    assert _domain_use_cpu(effective) is False
-
-
-def test_resolve_effective_config_path_preserves_nvidia_use_cpu_when_requested(
-    tmp_path: Path, monkeypatch
-):
-    monkeypatch.setenv("VLLM_SR_CUDA_PRESERVE_CPU", "1")
-    monkeypatch.delenv("VLLM_SR_CUDA_FORCE_GPU", raising=False)
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text(yaml.safe_dump(_domain_on_cpu_config(), sort_keys=False))
-
-    effective_path = resolve_effective_config_path(
-        config_path=config_path,
-        algorithm=None,
-        setup_mode=False,
-        platform="cuda",
-    )
-
-    effective = yaml.safe_load(effective_path.read_text())
-    assert _domain_use_cpu(effective) is True
-
-
-def test_resolve_effective_config_path_preserves_amd_use_cpu_when_requested(
-    tmp_path: Path, monkeypatch
-):
-    monkeypatch.setenv("VLLM_SR_ROCM_PRESERVE_CPU", "1")
-    monkeypatch.delenv("VLLM_SR_ROCM_FORCE_GPU", raising=False)
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text(yaml.safe_dump(_domain_on_cpu_config(), sort_keys=False))
-
-    effective_path = resolve_effective_config_path(
-        config_path=config_path,
-        algorithm=None,
-        setup_mode=False,
-        platform="rocm",
-    )
-
-    effective = yaml.safe_load(effective_path.read_text())
-    assert _domain_use_cpu(effective) is True
-
-
-def test_resolve_effective_config_path_combines_algorithm_and_platform_overrides(
-    tmp_path: Path, monkeypatch
-):
-    monkeypatch.delenv("VLLM_SR_ROCM_FORCE_GPU", raising=False)
-    monkeypatch.delenv("VLLM_SR_ROCM_PRESERVE_CPU", raising=False)
-    config_path = tmp_path / "config.yaml"
-    config = _domain_on_cpu_config()
-    config["recipes"] = [{"name": "default", "decisions": [{"name": "default"}]}]
     config_path.write_text(yaml.safe_dump(config, sort_keys=False))
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,
         algorithm="multi_factor",
         setup_mode=False,
-        platform="rocm",
     )
 
     assert effective_path == tmp_path / ".vllm-sr" / "runtime-config.yaml"
@@ -126,14 +33,28 @@ def test_resolve_effective_config_path_combines_algorithm_and_platform_overrides
     assert (
         effective["recipes"][0]["decisions"][0]["algorithm"]["type"] == "multi_factor"
     )
-    assert _domain_use_cpu(effective) is False
 
 
-def test_resolve_effective_config_path_injects_no_amd_model_settings_by_default(
-    tmp_path: Path, monkeypatch
+def test_sync_runtime_config_takes_the_call_the_dashboard_and_router_make(
+    tmp_path: Path,
 ):
-    monkeypatch.delenv("VLLM_SR_ROCM_FORCE_GPU", raising=False)
-    monkeypatch.delenv("VLLM_SR_ROCM_PRESERVE_CPU", raising=False)
+    config_path = tmp_path / "config.yaml"
+    config = {
+        "version": "v0.5",
+        "recipes": [{"name": "default", "decisions": [{"name": "default"}]}],
+    }
+    config_path.write_text(yaml.safe_dump(config, sort_keys=False))
+
+    effective_path = sync_runtime_config(config_path, algorithm="multi_factor")
+
+    assert effective_path == tmp_path / ".vllm-sr" / "runtime-config.yaml"
+    effective = yaml.safe_load(effective_path.read_text())
+    assert (
+        effective["recipes"][0]["decisions"][0]["algorithm"]["type"] == "multi_factor"
+    )
+
+
+def test_resolve_effective_config_path_injects_no_model_settings(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         yaml.safe_dump(
@@ -175,18 +96,13 @@ def test_resolve_effective_config_path_injects_no_amd_model_settings_by_default(
         config_path=config_path,
         algorithm=None,
         setup_mode=False,
-        platform="rocm",
     )
 
     effective = yaml.safe_load(effective_path.read_text())
     assert effective.get("global", {}).get("model_catalog", {}) == {}
 
 
-def test_resolve_effective_config_path_keeps_a_recipe_catalog_with_amd_gpu_default(
-    tmp_path: Path, monkeypatch
-):
-    monkeypatch.delenv("VLLM_SR_ROCM_FORCE_GPU", raising=False)
-    monkeypatch.delenv("VLLM_SR_ROCM_PRESERVE_CPU", raising=False)
+def test_resolve_effective_config_path_keeps_a_recipe_catalog(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
     balance_recipe = REPO_ROOT / "config" / "recipes" / "balance" / "config.yaml"
     config_path.write_text(balance_recipe.read_text(encoding="utf-8"))
@@ -195,7 +111,6 @@ def test_resolve_effective_config_path_keeps_a_recipe_catalog_with_amd_gpu_defau
         config_path=config_path,
         algorithm=None,
         setup_mode=False,
-        platform="rocm",
     )
 
     effective = yaml.safe_load(effective_path.read_text())
@@ -207,11 +122,7 @@ def test_resolve_effective_config_path_keeps_a_recipe_catalog_with_amd_gpu_defau
     assert model_catalog["deployments"] == source_catalog["deployments"]
 
 
-@pytest.mark.parametrize("platform", ["rocm", "cuda"])
-def test_effective_config_keeps_the_embedding_deployment_as_authored(
-    tmp_path: Path, monkeypatch, platform
-):
-    monkeypatch.setenv(f"VLLM_SR_{platform.upper()}_FORCE_GPU", "1")
+def test_effective_config_keeps_the_embedding_deployment_as_authored(tmp_path: Path):
     deployment = {
         "provider": "model_runtime",
         "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Embedding",
@@ -231,7 +142,7 @@ def test_effective_config_keeps_the_embedding_deployment_as_authored(
     config_path.write_text(yaml.safe_dump(source), encoding="utf-8")
     original = config_path.read_bytes()
     effective_path = resolve_effective_config_path(
-        config_path=config_path, algorithm=None, setup_mode=False, platform=platform
+        config_path=config_path, algorithm=None, setup_mode=False
     )
     effective = yaml.safe_load(effective_path.read_text())
     catalog = effective["global"]["model_catalog"]
@@ -284,7 +195,6 @@ def test_resolve_effective_config_path_uses_state_root_for_runtime_override(
         config_path=config_path,
         algorithm=None,
         setup_mode=False,
-        platform=None,
     )
 
     assert effective_path == state_root / ".vllm-sr" / "runtime-config.yaml"

@@ -246,14 +246,10 @@ func decodeYAMLBytes(data []byte, expand func(map[string]interface{})) (*RouterC
 func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
 	validators := []func(map[string]interface{}) error{
 		rejectDeprecatedUserConfigFields,
-		rejectRemovedEntrypointFields,
-		rejectRemovedEvaluationFields,
 		rejectRemovedTaxonomyLegacyFields,
 		rejectRemovedDecisionToolFields,
 		rejectRemovedRouterLearningFields,
 		rejectUnsupportedRouterLearningFields,
-		rejectRemovedModelExecutionFields,
-		rejectRemovedDeploymentProfile,
 		rejectRemovedBackendRefFields,
 	}
 	for _, validate := range validators {
@@ -262,26 +258,6 @@ func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
 		}
 	}
 	return nil
-}
-
-func rejectRemovedEvaluationFields(raw map[string]interface{}) error {
-	removed := make([]string, 0)
-	if _, ok := raw["evaluation_catalog"]; ok {
-		removed = append(removed, "evaluation_catalog")
-	}
-	models, _ := nestedStringMap(raw["providers"])["models"].([]interface{})
-	for index, rawModel := range models {
-		if _, ok := nestedStringMap(rawModel)["evaluations"]; ok {
-			removed = append(removed, fmt.Sprintf("providers.models[%d].evaluations", index))
-		}
-	}
-	if len(removed) == 0 {
-		return nil
-	}
-	return fmt.Errorf(
-		"removed config fields are no longer supported: %s; move benchmark definitions, indices, and model-linked records under evaluation",
-		strings.Join(removed, ", "),
-	)
 }
 
 func parseRawConfigMap(data []byte) (map[string]interface{}, error) {
@@ -298,7 +274,7 @@ func parseRawConfigMap(data []byte) (map[string]interface{}, error) {
 func rejectDeprecatedUserConfigFields(raw map[string]interface{}) error {
 	if deprecated := deprecatedUserConfigFields(raw); len(deprecated) > 0 {
 		return fmt.Errorf(
-			"deprecated config fields are no longer supported: %s; rewrite the file to canonical v0.5 providers/recipes/global or run `vllm-sr config migrate --config old-config.yaml`",
+			"deprecated config fields are no longer supported: %s; rewrite them in the canonical v0.5 providers/recipes/global layout",
 			strings.Join(deprecated, ", "),
 		)
 	}
@@ -672,10 +648,7 @@ func canonicalConfigRequiredError(raw map[string]interface{}) error {
 	if len(unsupported) > 0 {
 		detail = fmt.Sprintf("unexpected top-level keys: %s", strings.Join(unsupported, ", "))
 	}
-	return fmt.Errorf(
-		"config file must use the canonical v0.5 hierarchy; %s; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3",
-		detail,
-	)
+	return fmt.Errorf("config file must use the canonical v0.5 hierarchy; %s", detail)
 }
 
 func finalizeParsedConfig(cfg *RouterConfig) error {
@@ -713,90 +686,14 @@ func logParsedDecisions(cfg *RouterConfig) {
 	})
 }
 
+// deprecatedUserConfigFields are earlier fields no migrate rewrites.
 func deprecatedUserConfigFields(raw map[string]interface{}) []string {
-	fields := deprecatedProviderConfigFields(nestedStringMap(raw["providers"]))
-	fields = append(fields, deprecatedGlobalConfigFields(nestedStringMap(raw["global"]))...)
-	return append(fields, deprecatedDecisionConfigFields(raw)...)
-}
-
-func deprecatedProviderConfigFields(providers map[string]interface{}) []string {
-	fields := []string{}
-	for _, key := range []string{
-		"model_targets",
-		"backends",
-		"auth_profiles",
-		"default_model",
-		"reasoning_families",
-		"default_reasoning_effort",
-	} {
-		if _, ok := providers[key]; ok {
-			fields = append(fields, "providers."+key)
-		}
-	}
-	providerDefaults := nestedStringMap(providers["defaults"])
-	for _, key := range []string{"default_model", "default_reasoning_effort", "reasoning_families"} {
-		if _, ok := providerDefaults[key]; ok {
-			fields = append(fields, "providers.defaults."+key)
-		}
-	}
-	fields = append(fields, deprecatedProviderModelFields(providers)...)
-	return fields
-}
-
-func deprecatedProviderModelFields(providers map[string]interface{}) []string {
-	models, ok := providers["models"].([]interface{})
-	if !ok {
-		return nil
-	}
-	fields := []string{}
-	for index, rawModel := range models {
-		fields = append(fields, deprecatedProviderModelFieldNames(nestedStringMap(rawModel), index)...)
-	}
-	return fields
-}
-
-func deprecatedProviderModelFieldNames(model map[string]interface{}, index int) []string {
-	fields := []string{}
-	for _, key := range []string{
-		"access", "endpoints", "access_key", "quality_score",
-	} {
-		if _, ok := model[key]; ok {
-			fields = append(fields, fmt.Sprintf("providers.models[%d].%s", index, key))
-		}
-	}
-	if _, ok := model["reasoning_family"]; ok {
-		fields = append(fields, fmt.Sprintf("providers.models[%d].reasoning_family", index))
-	}
-	return append(fields, deprecatedBackendRefFields(model, index)...)
-}
-
-func deprecatedBackendRefFields(model map[string]interface{}, modelIndex int) []string {
-	refs, ok := model["backend_refs"].([]interface{})
-	if !ok {
-		return nil
-	}
-	fields := []string{}
-	for backendIndex, rawRef := range refs {
-		if _, ok := nestedStringMap(rawRef)["type"]; ok {
-			fields = append(fields, fmt.Sprintf(
-				"providers.models[%d].backend_refs[%d].type", modelIndex, backendIndex,
-			))
-		}
-	}
-	return fields
-}
-
-func deprecatedGlobalConfigFields(global map[string]interface{}) []string {
-	fields := []string{}
-	if _, ok := global["modules"]; ok {
-		fields = append(fields, "global.modules")
-	}
-	modelCatalog := nestedStringMap(global["model_catalog"])
-	embeddings := nestedStringMap(modelCatalog["embeddings"])
+	var fields []string
+	embeddings := nestedStringMap(nestedStringMap(nestedStringMap(raw["global"])["model_catalog"])["embeddings"])
 	if _, ok := embeddings["bert"]; ok {
 		fields = append(fields, "global.model_catalog.embeddings.bert")
 	}
-	return fields
+	return append(fields, deprecatedDecisionConfigFields(raw)...)
 }
 
 func deprecatedDecisionConfigFields(raw map[string]interface{}) []string {
@@ -850,24 +747,4 @@ func nestedStringMap(raw interface{}) map[string]interface{} {
 	default:
 		return map[string]interface{}{}
 	}
-}
-
-func rejectRemovedEntrypointFields(raw map[string]interface{}) error {
-	global := nestedStringMap(raw["global"])
-	router := nestedStringMap(global["router"])
-	for _, name := range []string{"auto_model_name", "auto_model_names"} {
-		if _, exists := router[name]; exists {
-			return fmt.Errorf("global.router.%s was removed; configure entrypoints with recipe: default and model_names", name)
-		}
-	}
-	if _, exists := router["include_config_models_in_list"]; exists {
-		return fmt.Errorf("global.router.include_config_models_in_list was renamed to global.router.list_backend_models")
-	}
-	looper := nestedStringMap(nestedStringMap(global["integrations"])["looper"])
-	for _, algorithm := range []string{"remom", "fusion", "flow"} {
-		if _, exists := nestedStringMap(looper[algorithm])["model_names"]; exists {
-			return fmt.Errorf("global.integrations.looper.%s.model_names was removed; expose the algorithm through an explicit entrypoint and recipe", algorithm)
-		}
-	}
-	return nil
 }

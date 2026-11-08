@@ -25,13 +25,13 @@ providers:
       provider_model_id: vllm-sr/Decision-2.0-Nox-4B
       backend_refs:
         - provider: systemone-compatible
-          base_url: http://127.0.0.1:8900/v1
-          api_key_env: NATIVE_TEST_TOKEN
+          endpoint: http://127.0.0.1:8900/v1
+          auth: {api_key_env: NATIVE_TEST_TOKEN}
     - name: reviewer
       api_format: openai
       backend_refs:
         - provider: openai-compatible
-          base_url: http://127.0.0.1:8901/v1
+          endpoint: http://127.0.0.1:8901/v1
 global:
   model_catalog:
     deployments:
@@ -150,20 +150,19 @@ func TestCanonicalNativeRoutingRejectsAmbiguousContracts(t *testing.T) {
 
 // System One calls carry no client's gateway credential, so neither a
 // systemone backend nor a stage's judge model may be a trusted gateway.
-func TestCanonicalNativeRoutingRefusesTrustedGateways(t *testing.T) {
-	enabled := strings.Replace(nativeRoutingTestYAML, "global:\n", "global:\n  services:\n    authz:\n      gateway_credential: {enabled: true}\n", 1)
-	for _, test := range []struct{ name, backend string }{
-		{"systemone backend", "        - provider: systemone-compatible\n"},
-		{"judge model", "        - provider: openai-compatible\n"},
+func TestCanonicalNativeRoutingAcceptsDelegatedBackends(t *testing.T) {
+	enabled := strings.Replace(nativeRoutingTestYAML, "global:\n", "global:\n  services:\n    authz:\n      delegated_credential: {enabled: true}\n", 1)
+	for _, test := range []struct{ name, backend, delegated string }{
+		{"systemone backend", "          auth: {api_key_env: NATIVE_TEST_TOKEN}\n", "          auth: {credential: delegated}\n"},
+		{"judge model", "        - provider: openai-compatible\n", "        - provider: openai-compatible\n          auth: {credential: delegated}\n"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			raw := strings.Replace(enabled, test.backend, test.backend+"          trusted_gateway: true\n", 1)
+			raw := strings.Replace(enabled, test.backend, test.delegated, 1)
 			if enabled == nativeRoutingTestYAML || raw == enabled {
 				t.Fatal("test mutation did not match")
 			}
-			_, err := ParseYAMLBytes([]byte(raw))
-			if err == nil || !strings.Contains(err.Error(), "without a client's gateway credential") {
-				t.Fatalf("got %v, want the trusted gateway refusal", err)
+			if _, err := ParseYAMLBytes([]byte(raw)); err != nil {
+				t.Fatalf("a System One call made for a client request carries its credential, so a delegated %s loads: %v", test.name, err)
 			}
 		})
 	}

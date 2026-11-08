@@ -4,7 +4,7 @@ import path from 'node:path'
 import { mockAuthenticatedAppShell, test } from './support/compiler'
 
 // Uses the production Go compiler through its HTTP handler; only server data is a fixture.
-const config = `version: v0.3
+const config = `version: v0.5
 providers:
   models:
     - name: model-a
@@ -12,41 +12,40 @@ providers:
         - name: local
           endpoint: localhost:8000
           protocol: http
-routing:
-  modelCards:
-    - name: model-a
-  signals:
-    keywords:
-      - name: legal_terms
-        operator: OR
-        keywords: [contract, liability]
-      - name: opinion_request
-        operator: OR
-        keywords: [argue, persuade]
-      - name: risk_markers
-        operator: OR
-        keywords: [lawsuit, penalty]
-  decisions:
-    - name: legal_review_route
-      description: Review legal requests unless they only ask for an argument.
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: legal_terms
-          - operator: NOT
-            conditions:
-              - operator: AND
-                conditions:
-                  - type: keyword
-                    name: opinion_request
-                  - operator: NOT
-                    conditions:
-                      - type: keyword
-                        name: risk_markers
-      modelRefs:
-        - model: model-a
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: legal_terms
+          operator: OR
+          keywords: [contract, liability]
+        - name: opinion_request
+          operator: OR
+          keywords: [argue, persuade]
+        - name: risk_markers
+          operator: OR
+          keywords: [lawsuit, penalty]
+    decisions:
+      - name: legal_review_route
+        description: Review legal requests unless they only ask for an argument.
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: legal_terms
+            - operator: NOT
+              conditions:
+                - operator: AND
+                  conditions:
+                    - type: keyword
+                      name: opinion_request
+                    - operator: NOT
+                      conditions:
+                        - type: keyword
+                          name: risk_markers
+        modelRefs:
+          - model: model-a
 `
 const condition =
   'keyword("legal_terms") AND NOT (keyword("opinion_request") AND NOT keyword("risk_markers"))'

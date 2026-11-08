@@ -56,9 +56,9 @@ func TestDecisionModelDefaultUsesDeclaredResource(t *testing.T) {
 		t.Fatalf("default %s %+v %v", name, resource, err)
 	}
 	for _, consumer := range []string{"prompt_guard", "pii_classifier", "hallucination_detector"} {
-		got, deployment, found, err := cfg.ImplicitTaskDeployment(consumer)
-		if err != nil || !found || got != name || !reflect.DeepEqual(deployment, resource) {
-			t.Fatalf("%s duplicated resource: %s %+v %v", consumer, got, deployment, err)
+		resolved, found, err := cfg.ResolveTask(consumer)
+		if err != nil || !found || resolved.Explicit() || resolved.Name != name || !reflect.DeepEqual(resolved.Deployment, resource) {
+			t.Fatalf("%s duplicated resource: %+v %v", consumer, resolved, err)
 		}
 	}
 	if cfg.SystemOneRuleDeployment(cfg.SystemOneRules[0]) != name {

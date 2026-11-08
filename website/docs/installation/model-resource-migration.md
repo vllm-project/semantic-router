@@ -6,30 +6,37 @@ description: Each earlier way to choose a model for a signal, next to the deploy
 
 # Migrate model resources
 
-Earlier releases chose models with `external[]` models, binding objects and
-per-rule binding keys. These forms still load: the Router
-reads each as named deployments and bindings, uses the same models as before,
-and reports a `deprecated_model_field` warning for each field. This page is the only place
-the earlier forms appear; the rest of the documentation uses the second form of
-each pair. [Choose a model for a signal](choose-a-model-for-a-signal.md)
-explains the form they move to, and the
+Earlier releases chose models with `external[]` models, binding objects,
+per-rule binding keys and a request backend's own connection fields. The
+Router refuses each of these forms at load with a one-line error that names
+`vllm-sr config migrate`, which rewrites it into the second form of its pair.
+This page is the only place the earlier forms appear; the rest of the
+documentation uses the second form of each pair.
+[Choose a model for a signal](choose-a-model-for-a-signal.md) explains the
+form they move to, and the
 [release note](../release-notes/unified-model-resources.md) summarizes the
 change.
 
-See the warnings with `vllm-sr config validate --config config.yaml`, or with
+See the refusals with `vllm-sr config validate --config config.yaml`, or with
 the Router itself: `router -validate-config -config config.yaml` prints one
-JSON line, `{"valid": true, "warnings": [{"code": "deprecated_model_field",
-"field": "...", "message": "..."}]}`. Each warning names the field and what the
-Router reads it as.
+JSON line whose `error` holds the refusals, such as
+`{"valid": false, "error": "<path>: removed_field: <what>; run vllm-sr config migrate (<becomes>)"}`.
+Each line names the field and what replaces it.
 
-`vllm-sr config migrate --config config.yaml` rewrites an older file into the
-v0.3 layout and asks the Router to write each field on this page in the second
-form of its pair; it leaves the rest of the file as written. It needs a Router
-to run (a Router binary in `VLLM_SR_ROUTER_BINARY`, or the Router image); with
-`--offline` the model fields stay as they are. A key written inline moves to
-an environment variable, and the output names the variable to set. When a
-deprecated field holds a setting no deployment field expresses, the model
-fields stay as written and the output says which setting.
+`vllm-sr config migrate --config config.yaml` asks the Router to rewrite the
+file: each form on this page, and the other forms this release removed, in
+the form that replaces it; the rest of the file stays as written. It asks the
+Router binary `VLLM_SR_ROUTER_BINARY` names, else the Router image
+`vllm-sr serve` runs by default (the one `VLLM_SR_ROUTER_IMAGE` or
+`VLLM_SR_IMAGE` names, else this CLI's own release), which must be present:
+migrate never pulls it and never asks a running stack's Router. An
+`external[]` model's inline key moves to an environment variable,
+and the output names the variable to set. A binding that asked a classifier
+head (a `label_distribution.v1`, `label_scores.v1`, `label_decision.v1`,
+`score.v1` or `token_spans.v1` contract) is dropped, and so is a rule's or a
+binding's reference to a `classify` or `http` deployment: no signal asks a
+classifier any more, and the decision model answers the signal. A file in the
+layout before config v0.3 migrates in the same run.
 
 ## What else changes
 
@@ -54,10 +61,10 @@ fields stay as written and the output says which setting.
   [Embeddings](../model-runtime/guides/embeddings.md).
 - Everything else resolves to the same models as before.
 
-When an earlier and a new form name the model for the same signal, the new
-form wins and the earlier field is ignored with a warning. A rule that writes
-both `deployment` and `model` or `model_path`, or a binding written under both
-its signal type and its earlier name, is refused.
+When an earlier and a new form name the model for the same signal, migrate
+keeps the new form's value. A rule that writes both `deployment` and `model`
+or `model_path`, or a binding written under both its signal type and its
+earlier name, is refused.
 
 ## Binding objects
 
@@ -134,9 +141,9 @@ global:
 
 ## Deployment fields
 
-Top-level `question_types` moves under `capabilities`, `served_name` becomes
-`model`, and a key written inline (`access_key`, a backend's `api_key`) moves
-to `auth.api_key_env`, or on a deployment to `auth.api_key_file` as well.
+Top-level `question_types` moves under `capabilities`, and `served_name`, on a
+deployment or a replica, becomes `model`. A deployment of the removed
+`classify` or `http` provider is dropped: no signal asks a classifier service.
 
 ```yaml title="migrate-deployment-fields-before"
 global:

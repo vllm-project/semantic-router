@@ -1017,8 +1017,8 @@ spec:
                 description: |-
                   Configuration overrides merged into the canonical v0.5 config.yaml.
                   Router-wide runtime overrides land under config.global.router/services/stores/
-                  integrations/model_catalog, with model-backed modules nested under
-                  config.global.model_catalog.modules. Provider defaults land under
+                  integrations/model_catalog, and the default plugins under
+                  config.global.plugins. Provider defaults land under
                   config.providers.defaults.
                 properties:
                   api:
@@ -1544,61 +1544,10 @@ spec:
                     x-kubernetes-preserve-unknown-fields: true
                   external_models:
                     description: |-
-                      ExternalModels declares the remote models other configuration refers to
-                      by name or role. Mirrors global.model_catalog.external[] in the router
-                      config field for field; the router's own validator checks it.
-                    items:
-                      description: |-
-                        ExternalModelConfig is one entry of global.model_catalog.external[]: a
-                        remote model the router finds by its role. Field names are the router's
-                        YAML keys so the generic typed conversion carries them unchanged.
-                      properties:
-                        llm_endpoint:
-                          description: Endpoint is where the remote model is reached.
-                          properties:
-                            address:
-                              minLength: 1
-                              type: string
-                            port:
-                              maximum: 65535
-                              minimum: 1
-                              type: integer
-                            protocol:
-                              enum:
-                              - http
-                              - https
-                              type: string
-                          required:
-                          - address
-                          - port
-                          type: object
-                        llm_model_name:
-                          description: ModelName is the model identifier the remote
-                            service expects.
-                          minLength: 1
-                          type: string
-                        llm_timeout_seconds:
-                          description: TimeoutSeconds bounds one call when the backend
-                            block sets no deadline.
-                          minimum: 1
-                          type: integer
-                        model_role:
-                          description: |-
-                            ModelRole is what the model is used for; the router finds the model by
-                            its role.
-                          minLength: 1
-                          type: string
-                        name:
-                          description: Name identifies the entry in the catalog.
-                          minLength: 1
-                          type: string
-                      required:
-                      - llm_endpoint
-                      - llm_model_name
-                      - model_role
-                      - name
-                      type: object
-                    type: array
+                      ExternalModels is removed: a remote model is a model deployment with
+                      provider openai_chat, openai_embeddings or systemone. A resource that
+                      sets it is refused.
+                    x-kubernetes-preserve-unknown-fields: true
                   model_admission:
                     description: |-
                       ModelAdmission contains canonical global.model_catalog.admission budgets.

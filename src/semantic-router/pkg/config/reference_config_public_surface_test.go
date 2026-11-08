@@ -28,14 +28,13 @@ func assertReferenceConfigProviderCoverage(t testingT, root map[string]interface
 		"providers.models[].reasoning",
 	)
 	backendRefs := collectNestedSliceItems(t, models, "backend_refs", "providers.models")
-	// base_url, api_key, api_key_env, auth_header, auth_prefix and
-	// extra_headers are the deprecated spellings of endpoint, auth and headers.
+	// The reference config writes no key inline (api_key).
 	assertSliceUnionCoversStructFields(
 		t,
 		backendRefs,
 		reflect.TypeOf(CanonicalBackendRef{}),
 		"providers.models[].backend_refs",
-		"base_url", "api_key", "api_key_env", "auth_header", "auth_prefix", "extra_headers",
+		"api_key",
 	)
 	// A backend reads its key from api_key_env only.
 	assertSliceUnionCoversStructFields(
@@ -290,4 +289,5 @@ func assertReferenceConfigGlobalCoverage(t testingT, root map[string]interface{}
 	assertReferenceConfigStoreGlobalCoverage(t, mustMapAt(t, global, "stores"))
 	assertReferenceConfigIntegrationGlobalCoverage(t, mustMapAt(t, global, "integrations"))
 	assertReferenceConfigModelCatalogCoverage(t, mustMapAt(t, global, "model_catalog"))
+	assertReferenceConfigSignalsCompressionCoverage(t, mustSliceAt(t, global, "plugins"))
 }

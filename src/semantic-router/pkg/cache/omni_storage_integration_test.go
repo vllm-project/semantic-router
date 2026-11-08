@@ -22,8 +22,8 @@ func TestOmniStorageIntegrationUsesArtifactDimensionAndIdentity(t *testing.T) {
 		t.Skip("set VELA_OMNI_ARTIFACT to select the Omni storage integration")
 	}
 	provider, err := servingtest.Managed(t).Embedding(context.Background(), config.ResolvedModelBinding{
-		Recipe: "storage-test", Name: "embedding",
-		Binding:    config.ModelBinding{Deployment: "omni", Contract: "embedding.v1"},
+		Recipe: "storage-test", Name: "embedding", Contract: "embedding.v1",
+		Binding:    config.ModelBinding{Deployment: "omni"},
 		Deployment: config.ModelDeployment{Artifact: artifact, Provider: config.ModelRuntimeProvider, Device: "cpu", Input: config.ModelInputBudget{Overflow: "reject"}},
 	}, 0, 0)
 	if err != nil {

@@ -118,26 +118,15 @@ type CanonicalBackendRef struct {
 	Endpoint   string `yaml:"endpoint,omitempty"`
 	Protocol   string `yaml:"protocol,omitempty"`
 	Weight     int    `yaml:"weight,omitempty"`
-	BaseURL    string `yaml:"base_url,omitempty"`
 	Provider   string `yaml:"provider,omitempty"`
-	AuthHeader string `yaml:"auth_header,omitempty"`
-	// AuthPrefix is presence-aware so an explicit empty string can disable a
-	// catalog provider's default prefix (for example, a raw x-api-key value).
-	AuthPrefix   *string           `yaml:"auth_prefix,omitempty"`
-	ExtraHeaders map[string]string `yaml:"extra_headers,omitempty"`
-	APIVersion   string            `yaml:"api_version,omitempty"`
-	ChatPath     string            `yaml:"chat_path,omitempty"`
-	APIKey       string            `yaml:"api_key,omitempty"`
-	APIKeyEnv    string            `yaml:"api_key_env,omitempty"`
-	// TrustedGateway marks an upstream gateway that receives the request's
-	// deployment-injected gateway credential (global.services.authz
-	// .gateway_credential) under this backend's auth header, instead of a
-	// static api_key. A request without a trusted credential is rejected
-	// before dispatch.
-	TrustedGateway bool `yaml:"trusted_gateway,omitempty"`
+	APIVersion string `yaml:"api_version,omitempty"`
+	ChatPath   string `yaml:"chat_path,omitempty"`
+	APIKey     string `yaml:"api_key,omitempty"`
 	// Auth is the backend's credential, as in a deployment's connection
-	// block: the header (the provider's own when unset), the prefix ("" sends
-	// the bare key) and the key's environment variable.
+	// block: the credential mode (delegated sends the requesting user's
+	// credential instead of a key), the header (the provider's own when
+	// unset), the prefix ("" sends the bare key, presence-aware) and the
+	// key's environment variable.
 	Auth *DeploymentAuth `yaml:"auth,omitempty"`
 	// Headers are non-secret headers sent with every request.
 	Headers map[string]string `yaml:"headers,omitempty"`

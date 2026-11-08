@@ -108,10 +108,10 @@ providers:
 
 	message := err.Error()
 	for _, fragment := range []string{
-		"deprecated config fields are no longer supported",
-		"providers.default_model",
-		"providers.models[0].endpoints",
-		"vllm-sr config migrate --config old-config.yaml",
+		"signals: removed_section: top-level signals belongs to the layout before config v0.3; run `vllm-sr config migrate` (" + previousReleaseLayout + ")",
+		"decisions: removed_section: top-level decisions belongs to the layout before config v0.3",
+		"providers.default_model: removed_field: providers.default_model belongs to the provider catalog before config v0.3",
+		"providers.models[qwen2.5:3b].endpoints: removed_field: providers.models[qwen2.5:3b].endpoints belongs to the provider catalog before config v0.3",
 	} {
 		if !strings.Contains(message, fragment) {
 			t.Fatalf("expected error to mention %q, got: %s", fragment, message)
@@ -134,9 +134,8 @@ semantic_cache:
 
 	message := err.Error()
 	for _, fragment := range []string{
-		"config file must use the canonical v0.5 hierarchy",
-		"unexpected top-level keys: default_model, semantic_cache",
-		"vllm-sr config migrate --config old-config.yaml",
+		"default_model: removed_section: top-level default_model belongs to the layout before config v0.3",
+		"semantic_cache: removed_section: top-level semantic_cache belongs to the layout before config v0.3",
 	} {
 		if !strings.Contains(message, fragment) {
 			t.Fatalf("expected error to mention %q, got: %s", fragment, message)
@@ -337,7 +336,7 @@ global:
 	}
 }
 
-func TestParseYAMLBytesParsesNestedCanonicalModelCatalogModules(t *testing.T) {
+func TestParseYAMLBytesParsesNestedCanonicalModelCatalog(t *testing.T) {
 	canonicalYAML := []byte(`
 version: v0.5
 listeners:
@@ -375,10 +374,6 @@ global:
       remote-embed: {provider: openai_embeddings, endpoint: "http://embed:8000/v1", model: e5}
     embeddings:
       default: {deployment: remote-embed}
-    modules:
-      prompt_compression:
-        enabled: true
-        max_tokens: 2048
 `)
 
 	cfg, err := ParseYAMLBytes(canonicalYAML)
@@ -400,9 +395,6 @@ global:
 	}
 	if cfg.SemanticCache.InUse {
 		t.Fatal("expected semantic cache enabled override to be false")
-	}
-	if !cfg.PromptCompression.Enabled || cfg.PromptCompression.MaxTokens != 2048 {
-		t.Fatalf("expected the nested prompt_compression module, got %+v", cfg.PromptCompression)
 	}
 	if cfg.EmbeddingDeployment != "remote-embed" {
 		t.Fatalf("expected the embeddings.default override, got %q", cfg.EmbeddingDeployment)
@@ -612,7 +604,7 @@ providers:
       provider_model_id: openai/gpt-5.5
       backend_refs:
         - name: openrouter
-          base_url: https://openrouter.ai/api/v1
+          endpoint: https://openrouter.ai/api/v1
           provider: openai
 recipes:
   - name: default

@@ -657,8 +657,6 @@ class TestCLITargetRouting:
         monkeypatch,
         tmp_path,
     ):
-        monkeypatch.delenv("VLLM_SR_ROCM_FORCE_GPU", raising=False)
-        monkeypatch.delenv("VLLM_SR_ROCM_PRESERVE_CPU", raising=False)
         source = {
             "version": "v0.5",
             "listeners": [{"name": "http", "address": "0.0.0.0", "port": 8899}],
@@ -670,11 +668,6 @@ class TestCLITargetRouting:
                     ],
                 }
             ],
-            "global": {
-                "model_catalog": {
-                    "modules": {"classifier": {"domain": {"use_cpu": True}}}
-                }
-            },
         }
         config_path = tmp_path / "config.yaml"
         config_path.write_text(yaml.safe_dump(source), encoding="utf-8")

@@ -30,8 +30,12 @@ func loadOnBase(t *testing.T, fragment string) (*RouterConfig, error) {
 	return ParseYAMLBytesWithoutEnvExpansion(encoded)
 }
 
-const remoteEmbedDeployment = `
+const (
+	remoteEmbedDeployment = `
       remote-embed: {provider: openai_embeddings, endpoint: https://embedding.example.com/v1, model: BAAI/bge-m3, auth: {api_key_env: EMBEDDING_API_KEY}}`
+	remoteChatDeployment = `
+      remote-chat: {provider: openai_chat, endpoint: https://chat.example.com/v1, model: rewriter, auth: {api_key_env: CHAT_API_KEY}}`
+)
 
 func TestModelCatalogRefusesWhatCannotWork(t *testing.T) {
 	for name, tc := range map[string]struct{ fragment, want string }{
@@ -44,12 +48,12 @@ func TestModelCatalogRefusesWhatCannotWork(t *testing.T) {
 			`deployment "missing" is not declared in global.model_catalog.deployments`,
 		},
 		"a rule naming a deployment that answers no question": {
-			"recipes: [{name: default, signals: {domains: [{name: math, labels: [math], deployment: content-risk}]}}]",
-			`deployment "content-risk" must use provider model_runtime or systemone`,
+			"global:\n  model_catalog:\n    deployments:" + remoteEmbedDeployment + "\nrecipes: [{name: default, signals: {domains: [{name: math, labels: [math], deployment: remote-embed}]}}]",
+			`deployment "remote-embed" must use provider model_runtime or systemone`,
 		},
-		"a binding of an application type to a classify deployment": {
-			"global: {model_catalog: {bindings: {domain: content-risk}}}",
-			"the classify API has no domain task",
+		"a binding of an application type to a chat deployment": {
+			"global:\n  model_catalog:\n    deployments:" + remoteChatDeployment + "\n    bindings: {domain: remote-chat}",
+			"an openai_chat deployment answers no signal",
 		},
 		"an embedding model bound to a question-style signal": {
 			"global:\n  model_catalog:\n    deployments:" + remoteEmbedDeployment + "\n    bindings: {pii: remote-embed}",
@@ -100,13 +104,13 @@ func TestModelCatalogRefusesWhatCannotWork(t *testing.T) {
 			"global: {model_catalog: {deployments: {d3-remote: {capabilities: {presets: [halu]}}}, system: {decision_model: {deployment: d3-remote}}}}\nrecipes: [{name: default, signals: {keywords: [{name: secret, operator: OR, keywords: [ssn]}], pii: [{name: personal, predicate: {gte: 0.5}}]}, decisions: [{name: mask, rules: {type: keyword, name: secret}, modelRefs: [{model: general}], plugins: [{type: masking, configuration: {enabled: true, signal: personal}}]}]}]",
 			`recipes[default].signals.pii[personal]: span_required: resolves to deployment "d3-remote", which cannot answer span questions`,
 		},
-		"operating_point on a remote deployment": {
-			"global: {model_catalog: {deployments: {content-risk: {operating_point: {path: operating_point.json, sha256: e79a78f48bf45eb38e3f5402de3b3b18eeaa822e00b42b3640bf471276290de5}}}}}",
-			"operating_point pins a managed model_runtime head",
+		"operating_point on a deployment": {
+			"global: {model_catalog: {deployments: {d3-remote: {operating_point: {path: operating_point.json, sha256: e79a78f48bf45eb38e3f5402de3b3b18eeaa822e00b42b3640bf471276290de5}}}}}",
+			"global.model_catalog.deployments.d3-remote.operating_point: removed_field: a deployment's operating_point is removed: nothing reads it",
 		},
 		"generation on a deployment that is not openai_chat": {
-			"global: {model_catalog: {deployments: {content-risk: {generation: {max_tokens: 64}}}}}",
-			"generation applies to openai_chat deployments",
+			"global: {model_catalog: {deployments: {d3-remote: {generation: {max_tokens: 64}}}}}",
+			"generation belongs to an openai_chat deployment",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

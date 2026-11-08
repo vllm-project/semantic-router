@@ -7,7 +7,6 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // CanonicalGlobal contains router-managed runtime defaults plus sparse
@@ -84,15 +83,13 @@ type CanonicalIntegrationGlobal struct {
 	Looper     LooperConfig      `yaml:"looper"`
 }
 
-// CanonicalModelCatalog groups router-owned model assets and the module
-// configs that resolve through those assets.
+// CanonicalModelCatalog groups the Router's model assets: the deployments,
+// their bindings and admission, and the embedding and decision models.
 type CanonicalModelCatalog struct {
 	Bindings    map[string]ModelBinding    `yaml:"bindings,omitempty"`
 	Deployments map[string]ModelDeployment `yaml:"deployments,omitempty"`
 	Embeddings  CanonicalEmbeddingModels   `yaml:"embeddings"`
 	System      CanonicalSystemModels      `yaml:"system"`
-	External    []ExternalModelConfig      `yaml:"external,omitempty"`
-	Modules     CanonicalModelModules      `yaml:"modules"`
 	Admission   map[string]AdmissionConfig `yaml:"admission,omitempty"`
 	// SignalTimeoutMs is the deadline of a request's model-runtime signals,
 	// below the request's; 0 derives it from the request's deadline.
@@ -110,12 +107,6 @@ type CanonicalEmbeddingModels struct {
 // EmbeddingModelBinding names the deployment that embeds for recall.
 type EmbeddingModelBinding struct {
 	Deployment string `yaml:"deployment" json:"deployment" jsonschema:"required,minLength=1"`
-}
-
-// CanonicalModelModules holds the prompt compression of the request text
-// signals read.
-type CanonicalModelModules struct {
-	PromptCompression PromptCompressionConfig `yaml:"prompt_compression"`
 }
 
 // CanonicalSystemModels centralizes stable capability bindings for built-in models.
@@ -220,13 +211,6 @@ func applyCanonicalStoreGlobal(cfg *RouterConfig, stores CanonicalStoreGlobal) {
 func applyCanonicalIntegrationGlobal(cfg *RouterConfig, integrations CanonicalIntegrationGlobal) {
 	cfg.KVTransfer = integrations.KVTransfer
 	cfg.Looper = integrations.Looper
-	if integrations.Looper.Endpoint != "" {
-		logging.ComponentWarnEvent("config", "looper_endpoint_deprecated", map[string]interface{}{
-			"field":  "global.integrations.looper.endpoint",
-			"reason": "the Router makes Looper calls in process; the field is ignored and goes in the next release",
-			"fix":    "remove it, or run vllm-sr config migrate",
-		})
-	}
 }
 
 func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalModelCatalog) {
@@ -234,8 +218,6 @@ func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalM
 	cfg.EmbeddingDeployment = modelCatalog.Embeddings.Default.Deployment
 	cfg.ModelDeployments = cloneModelMap(modelCatalog.Deployments)
 	cfg.GlobalModelBindings = cloneModelMap(modelCatalog.Bindings)
-	cfg.ExternalModels = append([]ExternalModelConfig(nil), modelCatalog.External...)
-	cfg.PromptCompression = modelCatalog.Modules.PromptCompression
 	cfg.ModelAdmission = cloneAdmissionMap(modelCatalog.Admission)
 	cfg.ModelSignalTimeoutMs = modelCatalog.SignalTimeoutMs
 }

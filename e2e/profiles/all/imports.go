@@ -7,6 +7,7 @@ import (
 	complexityrouting "github.com/vllm-project/semantic-router/e2e/profiles/complexity-routing"
 	conversationrouting "github.com/vllm-project/semantic-router/e2e/profiles/conversation-routing"
 	dashboard "github.com/vllm-project/semantic-router/e2e/profiles/dashboard"
+	delegatedcredential "github.com/vllm-project/semantic-router/e2e/profiles/delegated-credential"
 	dynamicconfig "github.com/vllm-project/semantic-router/e2e/profiles/dynamic-config"
 	externalgatewayresponses "github.com/vllm-project/semantic-router/e2e/profiles/external-gateway-responses"
 	hallucination "github.com/vllm-project/semantic-router/e2e/profiles/hallucination"
@@ -37,7 +38,6 @@ import (
 	standalone "github.com/vllm-project/semantic-router/e2e/profiles/standalone"
 	streaming "github.com/vllm-project/semantic-router/e2e/profiles/streaming"
 	structurerouting "github.com/vllm-project/semantic-router/e2e/profiles/structure-routing"
-	trustedgateway "github.com/vllm-project/semantic-router/e2e/profiles/trusted-gateway"
 	vectorstoreregistry "github.com/vllm-project/semantic-router/e2e/profiles/vectorstore-registry"
 )
 
@@ -49,8 +49,8 @@ var providerMockerLocalImages = []framework.LocalImageBuild{
 		RolloutRestarts: []framework.RolloutRestartTarget{
 			{Namespace: "default", Deployment: "provider-mocker"},
 			{Namespace: "provider-protocols-system", Deployment: "provider-mocker"},
-			{Namespace: "trusted-gateway-system", Deployment: "trusted-gateway"},
-			{Namespace: "trusted-gateway-system", Deployment: "static-backend"},
+			{Namespace: "delegated-credential-system", Deployment: "delegated-gateway"},
+			{Namespace: "delegated-credential-system", Deployment: "static-backend"},
 			{Namespace: "default", Deployment: "looper-provider-mocker"},
 			{Namespace: "default", Deployment: "mock-llm"},
 		},
@@ -92,8 +92,8 @@ func init() {
 	)
 	register("authz-rbac", func() framework.Profile { return authzrbac.NewProfile() }, framework.ProfileCapabilities{})
 	register(
-		"trusted-gateway",
-		func() framework.Profile { return trustedgateway.NewProfile() },
+		"delegated-credential",
+		func() framework.Profile { return delegatedcredential.NewProfile() },
 		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
 	)
 	register("pii-remote-backend", func() framework.Profile { return piiremotebackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})

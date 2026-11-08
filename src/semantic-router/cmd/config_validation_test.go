@@ -78,14 +78,16 @@ func TestValidateConfigRefusesWhatTheRouterRefuses(t *testing.T) {
 
 // A document that loads exits 0 and carries the warnings the Router logs.
 func TestValidateConfigReportsTheRoutersWarnings(t *testing.T) {
-	document := strings.NewReplacer("CONDITION", "wants_text", "OUTPUT", "").Replace(outputValidationConfig) +
-		"global:\n  model_catalog:\n    bindings:\n      jailbreak: {deployment: primary, contract: decision.v1}\n"
+	document := strings.NewReplacer(
+		"CONDITION", "wants_text", "OUTPUT", "",
+		"    signals:\n", "    signals:\n      decision:\n        - name: needs_tools\n          question: {type: noul, instructions: \"Does the request need a tool?\"}\n",
+	).Replace(outputValidationConfig)
 	status, report := runValidation(t, document)
 	if status != 0 || !report.Valid || report.Error != "" {
 		t.Fatalf("status %d, report %+v: the document loads", status, report)
 	}
-	if len(report.Warnings) != 1 || report.Warnings[0].Code != "deprecated_model_field" {
-		t.Fatalf("warnings = %+v, want deprecated_model_field", report.Warnings)
+	if len(report.Warnings) != 1 || report.Warnings[0].Code != config.CodeRenamedSignalType {
+		t.Fatalf("warnings = %+v, want %s", report.Warnings, config.CodeRenamedSignalType)
 	}
 }
 
@@ -99,16 +101,16 @@ func TestValidateConfigReportsAnUnreadableFile(t *testing.T) {
 	}
 }
 
-// -migrate-config writes the deprecated model fields in the forms that
-// replace them; the migrated file loads with no deprecated field.
-func TestMigrateConfigRewritesDeprecatedModelFields(t *testing.T) {
+// -migrate-config writes a file the Router refuses for its removed model
+// fields in the forms that replace them; the migrated file loads.
+func TestMigrateConfigRewritesRemovedModelFields(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	document := `version: v0.5
 providers:
   defaults: {model: general}
   models:
     - name: general
-      backend_refs: [{name: local, base_url: "http://127.0.0.1:8000/v1", provider: vllm, weight: 1}]
+      backend_refs: [{name: local, endpoint: "http://127.0.0.1:8000/v1", provider: vllm, weight: 1}]
 recipes:
   - name: default
     signals:
@@ -127,29 +129,27 @@ global:
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if status := validateConfigFile(path, config.GatewayStandalone, true, &out); status != 0 {
-		t.Fatalf("status %d: %s", status, out.String())
+	if status := validateConfigFile(path, config.GatewayStandalone, true, &out); status != 1 {
+		t.Fatalf("status %d for a file written in removed forms: %s", status, out.String())
 	}
 	var report configValidationReport
 	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 		t.Fatal(err)
 	}
-	if report.Migrated == "" || report.MigrationError != "" {
+	if report.Valid || !strings.Contains(report.Error, "removed_field") || report.Migrated == "" || report.MigrationError != "" {
 		t.Fatalf("migration report %+v", report)
 	}
-	for _, note := range report.Kept {
+	for _, note := range report.Notes {
 		if note.Code != "migration_change" {
-			t.Fatalf("a deprecated field stays or needs an action: %+v", note)
+			t.Fatalf("a rewrite needs an action: %+v", note)
 		}
 	}
 	migrated, err := config.ParseYAMLBytesWithoutEnvExpansion([]byte(report.Migrated))
 	if err != nil {
 		t.Fatalf("the migrated file does not load: %v\n%s", err, report.Migrated)
 	}
-	for _, warning := range config.Warnings(migrated) {
-		if warning.Code == "deprecated_model_field" {
-			t.Fatalf("the migrated file keeps a deprecated field: %+v\n%s", warning, report.Migrated)
-		}
+	if warnings := config.Warnings(migrated); len(warnings) > 0 {
+		t.Fatalf("the migrated file loads with warnings: %+v\n%s", warnings, report.Migrated)
 	}
 	if !strings.Contains(report.Migrated, "pii: primary") || strings.Contains(report.Migrated, "contract") || strings.Contains(report.Migrated, "base_url") {
 		t.Fatalf("the migrated file is not in the canonical form:\n%s", report.Migrated)

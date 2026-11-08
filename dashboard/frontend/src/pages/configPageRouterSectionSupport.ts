@@ -1,6 +1,5 @@
 import type { FieldConfig } from '../components/EditModal'
 import type { ViewSection } from '../components/ViewModal'
-import type { ConfigData } from './configPageSupport'
 
 export type OpenEditModal = <TForm extends object>(
   title: string,
@@ -15,25 +14,3 @@ export type OpenViewModal = (
   sections: ViewSection[],
   onEdit?: () => void
 ) => void
-
-export type RouterConfigSectionData = Pick<
-  ConfigData,
-  'embedding_models' | 'response_cache' | 'prompt_guard' | 'classifier' | 'api' | 'observability'
->
-
-export interface RouterSectionBaseProps {
-  config: ConfigData | null
-  routerConfig: RouterConfigSectionData
-  isReadonly: boolean
-  openEditModal: OpenEditModal
-  saveConfig: (config: ConfigData) => Promise<void>
-}
-
-export interface LegacyCategoriesSectionProps {
-  config: ConfigData | null
-  isReadonly: boolean
-  openEditModal: OpenEditModal
-  saveConfig: (config: ConfigData) => Promise<void>
-}
-
-export const cloneConfig = (config: ConfigData | null): ConfigData => ({ ...(config || {}) })

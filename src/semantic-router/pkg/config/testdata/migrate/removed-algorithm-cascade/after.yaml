@@ -16,14 +16,14 @@ providers:
       api_format: systemone
       provider_model_id: vllm-sr/Decision-2.0-Nox-4B
       backend_refs:
-        - endpoint: http://127.0.0.1:8900/v1
-          provider: systemone-compatible
+        - provider: systemone-compatible
+          endpoint: http://127.0.0.1:8900/v1
 global:
   model_catalog:
     deployments:
       local-kai:
-        artifact: vllm-sr/Decision-2.0-Kai-0.6B
         provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
         device: cpu
 entrypoints:
   - model_names: [vllm-sr/auto]

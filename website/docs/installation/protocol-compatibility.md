@@ -102,14 +102,14 @@ providers:
       backend_refs:
         - name: gateway
           provider: anthropic-compatible
-          base_url: https://gateway.example.com/anthropic
+          endpoint: https://gateway.example.com/anthropic
     - name: gpt-via-relay
       provider_model_id: example-gpt
       api_format: openai
       backend_refs:
         - name: relay
           provider: openai-compatible
-          base_url: https://relay.example.com/v1
+          endpoint: https://relay.example.com/v1
 ```
 
 - A reply, a stream event, or an error body that carries a field its
@@ -149,7 +149,7 @@ providers:
       backend_refs:
         - name: gateway
           provider: anthropic-compatible
-          base_url: https://gateway.example.com/anthropic
+          endpoint: https://gateway.example.com/anthropic
           compat_gateway: true
 ```
 

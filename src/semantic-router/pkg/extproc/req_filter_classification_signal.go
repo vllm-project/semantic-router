@@ -94,26 +94,30 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 		input.allMessagesText = history.currentUserMessage
 	}
 
-	if input.evaluationText == "" {
-		return input
-	}
-
-	input.compressedText, input.skipCompressionSignals, input.compression = r.compressSignalEvaluationText(input.evaluationText)
 	return input
 }
 
-func (r *OpenAIRouter) compressSignalEvaluationText(evaluationText string) (string, map[string]bool, promptCompressionRun) {
+// compressSignalEvaluationInput compresses the text the signals read by the
+// request's compress.signals, which nil leaves whole.
+func compressSignalEvaluationInput(input *signalEvaluationInput, signals *config.PromptCompressionConfig) {
+	if input.evaluationText == "" {
+		return
+	}
+	input.compressedText, input.skipCompressionSignals, input.compression = compressSignalEvaluationText(input.evaluationText, signals)
+}
+
+func compressSignalEvaluationText(evaluationText string, signals *config.PromptCompressionConfig) (string, map[string]bool, promptCompressionRun) {
 	compressedText := evaluationText
 	var skipCompressionSignals map[string]bool
 
-	if !r.Config.PromptCompression.Enabled || r.Config.PromptCompression.MaxTokens <= 0 {
+	if signals == nil || !signals.Enabled || signals.MaxTokens <= 0 {
 		return compressedText, skipCompressionSignals, promptCompressionRun{outcome: metrics.PromptCompressionSkippedDisabled}
 	}
 
-	cfg := buildCompressionConfig(r.Config.PromptCompression)
+	cfg := buildCompressionConfig(*signals)
 	origTokens := promptcompression.CountTokensApprox(evaluationText)
-	if r.Config.PromptCompression.MinLength > 0 && len(evaluationText) <= r.Config.PromptCompression.MinLength {
-		logging.Infof("[PromptCompression] Skipped: %d chars <= min_length threshold %d", len(evaluationText), r.Config.PromptCompression.MinLength)
+	if signals.MinLength > 0 && len(evaluationText) <= signals.MinLength {
+		logging.Infof("[PromptCompression] Skipped: %d chars <= min_length threshold %d", len(evaluationText), signals.MinLength)
 		return compressedText, skipCompressionSignals, promptCompressionRun{outcome: metrics.PromptCompressionSkippedMinLength}
 	}
 	if origTokens <= cfg.MaxTokens {
@@ -125,7 +129,7 @@ func (r *OpenAIRouter) compressSignalEvaluationText(evaluationText string) (stri
 	run := promptCompressionRun{outcome: metrics.PromptCompressionCompressed, elapsed: time.Since(started)}
 	logging.Infof("[PromptCompression] Compressed evaluationText: %d -> %d tokens (ratio=%.2f, kept %d sentences)",
 		result.OriginalTokens, result.CompressedTokens, result.Ratio, len(result.KeptIndices))
-	return result.Compressed, r.Config.PromptCompression.SkipSignalsSet(), run
+	return result.Compressed, signals.SkipSignalsSet(), run
 }
 
 func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals *classification.SignalResults) {

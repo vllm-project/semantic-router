@@ -144,22 +144,9 @@ func validateNativeStageBindings(cfg *RouterConfig, algorithm *AlgorithmConfig) 
 			}
 		} else if model.APIFormat != APIFormatOpenAI {
 			return fmt.Errorf("stage %q: LLM model %q requires api_format: openai", stage.StageName(), stage.Model)
-		} else if cfg.servedByTrustedGateway(stage.Model) {
-			return fmt.Errorf("stage %q: LLM model %q has a trusted_gateway backend, which System One calls reach without a client's gateway credential", stage.StageName(), stage.Model)
 		}
 	}
 	return nil
-}
-
-// servedByTrustedGateway reports whether a backend of a provider alias is a
-// trusted gateway, which accepts only a client request's gateway credential.
-func (c *RouterConfig) servedByTrustedGateway(alias string) bool {
-	for _, endpoint := range c.GetEndpointsForModel(alias) {
-		if profile, err := c.GetProviderProfileForEndpoint(endpoint.Name); err == nil && profile != nil && profile.TrustedGateway {
-			return true
-		}
-	}
-	return false
 }
 
 // Calibration resolves a named immutable artifact without doing file I/O.

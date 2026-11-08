@@ -124,9 +124,11 @@ func (at FormMatch) Above(levels int) *yaml.Node {
 }
 
 // configForms lists every removed and renamed form, in the order migrate
-// rewrites them, as the concatenation of the per-feature lists: the v0.3
-// layout first, the global feature switches last.
-var configForms = slices.Concat(structureForms, systemOneForms, pluginForms, applicationForms, heuristicForms, algorithmForms, toolsForms, contextForms, responseCacheForms, routerReplayForms, retentionForms, embeddingForms, multimodalForms, switchForms)
+// rewrites them, as the concatenation of the per-feature lists: the layouts
+// the previous release migrated, which migrate refuses before rewriting
+// anything, then the v0.3 layout, the global feature switches and last the
+// Looper model names, whose recipe copies the default recipe as migrated.
+var configForms = slices.Concat(previousReleaseForms, structureForms, legacyRouterForms, systemOneForms, pluginForms, applicationForms, heuristicForms, algorithmForms, toolsForms, contextForms, responseCacheForms, routerReplayForms, retentionForms, embeddingForms, multimodalForms, modelRuntimeForms, modelResourceForms, switchForms, looperModelNameForms)
 
 // RoutingScopes returns the patterns of suffix in every recipe of a v0.5
 // document. Forms match v0.5 paths only: migrate rewrites the v0.3 structure

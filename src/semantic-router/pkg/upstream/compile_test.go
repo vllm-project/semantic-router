@@ -46,8 +46,8 @@ providers:
       api_format: openai
       backend_refs:
         - provider: vllm
-          base_url: https://api.example.test/compatible-mode/v1/
-          extra_headers:
+          endpoint: https://api.example.test/compatible-mode/v1/
+          headers:
             X-Tenant: one
             X-Region: west
 recipes:

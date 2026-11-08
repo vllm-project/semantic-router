@@ -1,8 +1,9 @@
 """The v0.3 layout of a configuration and the store and service switches the
 Router no longer reads: schema v0.3, the top-level routing block and its
 model cards, each recipe's routing block, the response cache store's enabled
-and similarity_threshold, the memory store's enabled, and the replay
-service's enablement and capture fields.
+and similarity_threshold, the memory store's enabled, the replay service's
+enablement and capture fields, and the model catalog's prompt compression,
+now compress.signals of the context plugin in global.plugins.
 
 The Router refuses each one with a line that names `vllm-sr config migrate`,
 which rewrites it; the CLI refuses them with the same lines. A v0.3 document
@@ -87,6 +88,13 @@ def removed_structure_forms(data: dict[str, Any]) -> list[str]:
             "global.services.router_replay: removed_field: "
             f"{_removed_fields('global.services.router_replay', fields)}; {MIGRATE} "
             "(the configuration of a router_replay plugin in global.plugins)"
+        )
+    modules = _mapping(_mapping(global_section.get("model_catalog")).get("modules"))
+    if "prompt_compression" in modules:
+        path = "global.model_catalog.modules.prompt_compression"
+        lines.append(
+            f"{path}: removed_section: {path} is removed; {MIGRATE} "
+            "(compress.signals of a context plugin in global.plugins)"
         )
     return lines
 

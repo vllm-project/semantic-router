@@ -21,3 +21,18 @@ func validateDecisionAutomaticOutput(decision Decision) error {
 	}
 	return nil
 }
+
+// validateDecisionAutomaticOutputCandidates refuses automatic output over a
+// delegated candidate: the render that sizes the output is a Router-own call.
+func validateDecisionAutomaticOutputCandidates(cfg *RouterConfig, decision Decision) error {
+	params := decision.GetRequestParamsConfig()
+	if cfg == nil || params == nil || !params.DefaultMaxTokens.IsAuto() {
+		return nil
+	}
+	for _, ref := range decision.ModelRefs {
+		if path, delegated := cfg.DelegatedBackendOf(ref.Model); delegated {
+			return delegatedRouterOwnError(path, fmt.Sprintf("the automatic output render (decisions[%s]) calls it as the Router", decision.Name))
+		}
+	}
+	return nil
+}

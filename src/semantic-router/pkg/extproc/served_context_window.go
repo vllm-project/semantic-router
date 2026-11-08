@@ -129,7 +129,7 @@ func servedContextWindowTargets(cfg *config.RouterConfig) []servedContextWindowT
 }
 
 func (r *OpenAIRouter) checkServedContextWindow(ctx context.Context, target servedContextWindowTarget) {
-	authorize, err := configuredProviderAuthorizer(r.Config, target.profile, target.model)
+	authorize, err := configuredProviderAuthorizer(r.Config, target.profile, target.model, "context_window_probe")
 	if err != nil {
 		logServedContextWindowUnverified(target.model, target.endpoint, err)
 		return

@@ -56,7 +56,7 @@ func (r *OpenAIRouter) benchmarkUsageScopeKnown(ctx *RequestContext, allowLooper
 		case config.DecisionPluginContext:
 			// Only compression that asks no model keeps the receipt's accounting.
 			plugin := decision.GetContextConfig()
-			if plugin == nil || plugin.Enabled && (len(plugin.Sources) > 0 || plugin.Compress == nil || config.MatchCompress.Effective(plugin.Compress.Match).Judge != nil) {
+			if plugin == nil || plugin.Enabled && (len(plugin.Sources) > 0 || plugin.Compress == nil || plugin.Compress.CompressesRequest() && config.MatchCompress.Effective(plugin.Compress.Match).Judge != nil) {
 				return false
 			}
 		default:

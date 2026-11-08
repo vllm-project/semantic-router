@@ -176,8 +176,8 @@
           },
           "type": "array"
         },
-        "gateway_credential": {
-          "$ref": "#/$defs/GatewayCredentialConfig"
+        "delegated_credential": {
+          "$ref": "#/$defs/DelegatedCredentialConfig"
         }
       },
       "additionalProperties": false,
@@ -430,23 +430,8 @@
         "weight": {
           "type": "integer"
         },
-        "base_url": {
-          "type": "string"
-        },
         "provider": {
           "type": "string"
-        },
-        "auth_header": {
-          "type": "string"
-        },
-        "auth_prefix": {
-          "type": "string"
-        },
-        "extra_headers": {
-          "additionalProperties": {
-            "type": "string"
-          },
-          "type": "object"
         },
         "api_version": {
           "type": "string"
@@ -456,12 +441,6 @@
         },
         "api_key": {
           "type": "string"
-        },
-        "api_key_env": {
-          "type": "string"
-        },
-        "trusted_gateway": {
-          "type": "boolean"
         },
         "auth": {
           "$ref": "#/$defs/DeploymentAuth"
@@ -719,15 +698,6 @@
         "system": {
           "$ref": "#/$defs/CanonicalSystemModels"
         },
-        "external": {
-          "items": {
-            "$ref": "#/$defs/ExternalModelConfig"
-          },
-          "type": "array"
-        },
-        "modules": {
-          "$ref": "#/$defs/CanonicalModelModules"
-        },
         "admission": {
           "additionalProperties": {
             "$ref": "#/$defs/AdmissionConfig"
@@ -736,15 +706,6 @@
         },
         "signal_timeout_ms": {
           "type": "integer"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "CanonicalModelModules": {
-      "properties": {
-        "prompt_compression": {
-          "$ref": "#/$defs/PromptCompressionConfig"
         }
       },
       "additionalProperties": false,
@@ -1371,30 +1332,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "ClassifierVLLMEndpoint": {
-      "properties": {
-        "address": {
-          "type": "string"
-        },
-        "port": {
-          "type": "integer"
-        },
-        "protocol": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "use_chat_template": {
-          "type": "boolean"
-        },
-        "prompt_template": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "ComplexityRule": {
       "properties": {
         "name": {
@@ -1476,6 +1413,9 @@
             "fail_open",
             "fail_closed"
           ]
+        },
+        "signals": {
+          "$ref": "#/$defs/PromptCompressionConfig"
         }
       },
       "additionalProperties": false,
@@ -2270,8 +2210,23 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "DelegatedCredentialConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "header": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "DeploymentAuth": {
       "properties": {
+        "credential": {
+          "type": "string"
+        },
         "header": {
           "type": "string"
         },
@@ -2324,7 +2279,7 @@
           "type": "number"
         },
         "reasoning": {
-          "$ref": "#/$defs/ExternalModelReasoningConfig"
+          "$ref": "#/$defs/GenerationReasoning"
         }
       },
       "additionalProperties": false,
@@ -2543,67 +2498,6 @@
       "type": "object",
       "required": [
         "model"
-      ]
-    },
-    "ExternalModelConfig": {
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "llm_provider": {
-          "type": "string"
-        },
-        "model_role": {
-          "type": "string"
-        },
-        "llm_endpoint": {
-          "$ref": "#/$defs/ClassifierVLLMEndpoint"
-        },
-        "llm_model_name": {
-          "type": "string"
-        },
-        "llm_timeout_seconds": {
-          "type": "number"
-        },
-        "access_key": {
-          "type": "string"
-        },
-        "max_tokens": {
-          "type": "integer"
-        },
-        "temperature": {
-          "type": "number"
-        },
-        "reasoning": {
-          "$ref": "#/$defs/ExternalModelReasoningConfig"
-        },
-        "max_request_bytes": {
-          "type": "integer"
-        },
-        "max_response_bytes": {
-          "type": "integer"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "ExternalModelReasoningConfig": {
-      "properties": {
-        "family": {
-          "type": "string"
-        },
-        "use_reasoning": {
-          "type": "boolean"
-        },
-        "reasoning_effort": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "family",
-        "use_reasoning"
       ]
     },
     "FactCheckRule": {
@@ -2838,17 +2732,24 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "GatewayCredentialConfig": {
+    "GenerationReasoning": {
       "properties": {
-        "enabled": {
+        "family": {
+          "type": "string"
+        },
+        "use_reasoning": {
           "type": "boolean"
         },
-        "header": {
+        "reasoning_effort": {
           "type": "string"
         }
       },
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "required": [
+        "family",
+        "use_reasoning"
+      ]
     },
     "HallucinationRule": {
       "properties": {
@@ -3354,9 +3255,6 @@
     },
     "LooperConfig": {
       "properties": {
-        "endpoint": {
-          "type": "string"
-        },
         "grpc_max_msg_size_mb": {
           "type": "integer"
         },
@@ -4032,9 +3930,6 @@
         "revision": {
           "type": "string"
         },
-        "external_model": {
-          "type": "string"
-        },
         "provider": {
           "type": "string"
         },
@@ -4092,26 +3987,14 @@
         "capabilities": {
           "$ref": "#/$defs/DeploymentCapabilities"
         },
-        "operating_point": {
-          "$ref": "#/$defs/OperatingPointReference"
-        },
         "generation": {
           "$ref": "#/$defs/DeploymentGeneration"
-        },
-        "question_types": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
         },
         "replicas": {
           "items": {
             "$ref": "#/$defs/ModelReplica"
           },
           "type": "array"
-        },
-        "served_name": {
-          "type": "string"
         },
         "public_name": {
           "type": "string"
@@ -4204,9 +4087,6 @@
           "type": "string"
         },
         "endpoint": {
-          "type": "string"
-        },
-        "served_name": {
           "type": "string"
         },
         "model": {
@@ -4466,22 +4346,6 @@
       },
       "additionalProperties": false,
       "type": "object"
-    },
-    "OperatingPointReference": {
-      "properties": {
-        "path": {
-          "type": "string"
-        },
-        "sha256": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "path",
-        "sha256"
-      ]
     },
     "OutputContractChoiceSetSpec": {
       "properties": {
@@ -7832,25 +7696,6 @@
         "path": [
           "model_catalog",
           "system"
-        ]
-      },
-      {
-        "key": "external",
-        "layer": "model_catalog",
-        "display_name": "External",
-        "path": [
-          "model_catalog",
-          "external"
-        ]
-      },
-      {
-        "key": "prompt_compression",
-        "layer": "model_catalog",
-        "display_name": "Prompt Compression",
-        "path": [
-          "model_catalog",
-          "modules",
-          "prompt_compression"
         ]
       },
       {

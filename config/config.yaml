@@ -131,13 +131,14 @@ providers:
       provider_model_id: gateway-routed-reference
       api_format: openai
       backend_refs:
-        # A trusted upstream gateway: it receives the request's
-        # deployment-injected gateway credential as its Bearer token instead
-        # of a static api_key, and requests without one are rejected.
-        - name: trusted-gateway
+        # A delegated upstream gateway: it receives the requesting user's
+        # delegated credential as its Bearer token instead of a static key,
+        # and requests without one are rejected before dispatch.
+        - name: delegated-gateway
           endpoint: https://gateway.example.com/v1
           provider: openai-compatible
-          trusted_gateway: true
+          auth:
+            credential: delegated
           weight: 100
     - name: qwen3-32b
       reasoning:
@@ -677,7 +678,7 @@ recipes:
             gte: 1.5
         - name: support_team
           description: Which team should handle the request, asked of a remote System One API.
-          deployment: decision-remote
+          deployment: decision-delegated
           question:
             type: choice
             instructions: Which team should handle this request?
@@ -2286,12 +2287,12 @@ global:
           headers:
             X-Plan: premium
             X-Role: admin
-      # The deployment authenticator attaches a dedicated credential for
-      # trusted upstream gateways under this header; only backend_refs marked
-      # trusted_gateway receive it.
-      gateway_credential:
+      # The deployment authenticator attaches the requesting user's
+      # credential under this header; only upstreams whose auth is
+      # credential: delegated receive it.
+      delegated_credential:
         enabled: true
-        header: x-vsr-gateway-credential
+        header: x-vsr-delegated-credential
     ratelimit:
       fail_open: false
       providers:
@@ -2683,9 +2684,6 @@ global:
           max_tokens: 4096
           overflow: reject
       # Unbound examples below: nothing resolves to them, so they do not load.
-      # operating_point pins the operating point a scores head's package
-      # serves: the runtime refuses a package whose policy file has another
-      # digest.
       scores-head:
         provider: model_runtime
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Hazard
@@ -2694,9 +2692,6 @@ global:
         input:
           max_tokens: 32768
           overflow: reject
-        operating_point:
-          path: operating_point.json
-          sha256: e79a78f48bf45eb38e3f5402de3b3b18eeaa822e00b42b3640bf471276290de5
       # Replicas of one logical deployment: a local worker, and a worker
       # started elsewhere, named by endpoint and its served model.
       decision-replicas:
@@ -2757,6 +2752,18 @@ global:
         auth:
           api_key_env: SYSTEMONE_DECISION_KEY
         timeout_ms: 3000
+      # The same API asked with the requesting user's credential, which the
+      # authenticator in front issues (global.services.authz
+      # .delegated_credential), instead of a key of the Router's own. Only a
+      # call made for a client request reaches it, and a request without the
+      # credential is answered 401 before the call.
+      decision-delegated:
+        provider: systemone
+        endpoint: https://systemone.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
+        auth:
+          credential: delegated
+        timeout_ms: 3000
       # The same API behind a gateway with its own header and path prefix;
       # prefix "" sends the bare key. capabilities declares the question types,
       # presets and input modalities the model answers and reads, used only
@@ -2773,41 +2780,24 @@ global:
           question_types: [choice, noul, score]
           presets: [pii, halu]
           modalities: [text, image, video]
-      # A chat model: POST <endpoint>/chat/completions. generation sets
-      # max_tokens and temperature of its completions.
-      openai-classifier:
-        provider: openai_chat
-        endpoint: https://openai-proxy:443/v1
-        model: gpt-4.1-mini
-        auth:
-          api_key_env: OPENAI_CLASSIFIER_API_KEY
-        timeout_ms: 15000
-        generation:
-          max_tokens: 128
-          temperature: 0
-      # A chat model asked with reasoning off: generation.reasoning names a
+      # A chat model: POST <endpoint>/chat/completions. limits bounds the
+      # request and response bodies; generation sets the max_tokens and
+      # temperature of its completions, and generation.reasoning names a
       # built-in reasoning family.
       memory-rewriter:
         provider: openai_chat
         endpoint: http://memory-rewriter:8000/v1
         model: qwen3
         timeout_ms: 5000
-        generation:
-          max_tokens: 256
-          reasoning:
-            family: qwen3
-            use_reasoning: false
-      # A classifier service speaking the Router's classification API: POST
-      # <endpoint>/classify. limits bounds the request and response bodies.
-      sequence-classifier:
-        provider: classify
-        endpoint: http://sequence-classifier:8080
-        auth:
-          api_key_env: SEQUENCE_CLASSIFIER_API_KEY
-        timeout_ms: 5000
         limits:
           max_request_bytes: 262144
           max_response_bytes: 1048576
+        generation:
+          max_tokens: 256
+          temperature: 0
+          reasoning:
+            family: qwen3
+            use_reasoning: false
       # A remote embedding model: POST <endpoint>/embeddings. Name it in
       # embeddings.default to embed with it; max_retries retries transport
       # failures within the caller's deadline.
@@ -2867,31 +2857,36 @@ global:
     # second), or 45 s for a served request. A rule still waiting for its
     # answer is unknown.
     signal_timeout_ms: 0
-    # Modules tune the Router's own request processing; a signal is answered
-    # by its rule's deployment, a binding or the decision model.
-    modules:
-      prompt_compression:
-        enabled: true
-        # Built-in profile for scoring/preserve defaults: default, coding, medical,
-        # security, or multi_turn. The multi-turn alias is normalized to multi_turn.
-        # Unknown profiles fail config validation. Explicit weights override the profile.
-        profile: default
-        max_tokens: 4096
-        min_length: 512
-        skip_signals: [jailbreak, pii]
-        textrank_weight: 0.4
-        position_weight: 0.2
-        tfidf_weight: 0.3
-        novelty_weight: 0.1
-        position_depth: 0.1
-        preserve_first_n: 3
-        preserve_last_n: 2
   plugins:
     - type: context
       configuration:
         enabled: true
         sources:
           - type: memory
+        compress:
+          # signals compresses the text the routing signals read, before a
+          # decision is chosen, so global.plugins and a recipe's plugins set
+          # it, never a decision's. A block with only signals leaves the
+          # request whole; a decision's own compress fields compress it.
+          signals:
+            enabled: true
+            # Built-in profile for scoring/preserve defaults: default, coding, medical,
+            # security, or multi_turn. The multi-turn alias is normalized to multi_turn.
+            # Unknown profiles fail config validation. Explicit weights override the profile.
+            profile: default
+            # Text over max_tokens is compressed down to it; text of min_length
+            # characters or fewer is never compressed.
+            max_tokens: 4096
+            min_length: 512
+            # The signal types that read the original text.
+            skip_signals: [jailbreak, pii]
+            textrank_weight: 0.4
+            position_weight: 0.2
+            tfidf_weight: 0.3
+            novelty_weight: 0.1
+            position_depth: 0.1
+            preserve_first_n: 3
+            preserve_last_n: 2
     - type: router_replay
       configuration:
         enabled: true

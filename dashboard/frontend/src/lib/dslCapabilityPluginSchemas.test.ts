@@ -24,6 +24,7 @@ describe('capability plugin field schemas', () => {
       'recovery',
       'request_controls',
       'failure_mode',
+      'signals',
     ])
     expect(resolveCapabilityPluginFieldSchema('context_compression')).toBeNull()
   })

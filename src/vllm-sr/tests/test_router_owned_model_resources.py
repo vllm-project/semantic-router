@@ -16,6 +16,7 @@ import yaml
 from cli import router_validation
 from cli.commands.runtime_paths import STATE_ROOT_DIR_ENV
 from cli.commands.validate import collect_config_errors
+from cli.gateway_mode import GATEWAY_ENV
 from cli.main import main
 from cli.models import UserConfig
 from cli.parser import ConfigParseError, parse_user_config_data
@@ -45,15 +46,6 @@ BASE = {
                     "auth": {"api_key_env": "JUDGE_KEY"},
                     "timeout_ms": 1500,
                 },
-                "classifier": {
-                    "provider": "classify",
-                    "endpoint": "https://classify.example.com",
-                    "auth": {
-                        "header": "X-Api-Key",
-                        "prefix": "",
-                        "api_key_file": "/run/secrets/classify",
-                    },
-                },
                 "embedder": {
                     "provider": "openai_embeddings",
                     "endpoint": "https://embed.example.com/v1",
@@ -72,10 +64,11 @@ BASE = {
     },
 }
 
-DEPRECATED = {
-    "code": "deprecated_model_field",
-    "field": "global.model_catalog.bindings.pii",
-    "message": "contract: the signal decides the contract; write pii: local-vela",
+RENAMED = {
+    "code": "renamed_signal_type",
+    "field": "recipes[default].signals.decision",
+    "message": "the decision signal is named systemone; run `vllm-sr config "
+    "migrate` (recipes[default].signals.systemone)",
 }
 UNCALIBRATED = {
     "code": "uncalibrated_preset",
@@ -98,9 +91,7 @@ def _catalog(document: dict) -> dict:
 
 def _cli_errors(document: dict) -> list[str]:
     """What the CLI refuses on its own: its schema, typed model and rules."""
-    config = parse_user_config_data(
-        copy.deepcopy(document), "config.yaml", log_summary=False
-    )
+    config = parse_user_config_data(copy.deepcopy(document), log_summary=False)
     return [str(error) for error in collect_config_errors(config)]
 
 
@@ -113,7 +104,7 @@ def _cli_rule_errors(document: dict) -> list[str]:
 def _signal_bindings(document):
     _catalog(document)["bindings"] = {
         "jailbreak": {"deployment": "chat-judge"},
-        "pii": {"deployment": "local-vela", "head": "pii"},
+        "pii": "local-vela",
         "domain": {"deployment": "d3-remote"},
         "fact_check": {"deployment": "local-vela"},
         "user_feedback": {"deployment": "local-vela"},
@@ -207,10 +198,6 @@ def _connection_block(document):
 
 def _deployment_settings(document):
     deployments = _catalog(document)["deployments"]
-    deployments["local-vela"]["operating_point"] = {
-        "path": "operating_point.json",
-        "sha256": "a" * 64,
-    }
     deployments["chat-judge"]["generation"] = {"max_tokens": 64, "temperature": 0}
 
 
@@ -277,8 +264,21 @@ def _bind(scope: str, key: str):
 
 @pytest.mark.parametrize("scope", ["global", "recipe"])
 @pytest.mark.parametrize("key", ["pii", "hallucination"])
-def test_decision_task_bindings_are_the_routers_to_judge(scope, key):
-    assert _cli_errors(_document(_bind(scope, key))) == []
+def test_a_binding_object_with_a_contract_is_refused_with_the_routers_line(scope, key):
+    prefix = (
+        "global.model_catalog.bindings"
+        if scope == "global"
+        else "recipes[private].model_bindings"
+    )
+
+    with pytest.raises(ConfigParseError) as refused:
+        _cli_errors(_document(_bind(scope, key)))
+
+    assert str(refused.value) == (
+        f"{prefix}.{key}: removed_field: {prefix}.{key}.contract is removed; "
+        f"run `vllm-sr config migrate` ({key}: local-vela; the signal decides "
+        "what the deployment answers)"
+    )
 
 
 @pytest.mark.parametrize("scope", ["global", "recipe"])
@@ -333,7 +333,7 @@ def test_a_string_binding_names_its_deployment():
     config = UserConfig.model_validate(_document(_string_bindings))
     binding = config.recipes[0].model_bindings["turn_relation"]
 
-    assert binding.deployment == "chat-judge" and binding.contract is None
+    assert binding.deployment == "chat-judge"
     assert binding.model_dump() == "chat-judge"
 
 
@@ -380,7 +380,7 @@ def test_config_validate_reports_the_router_binarys_refusal_and_warnings(
     refusal = 'global.model_catalog.deployments.chat-judge: unsupported provider "x"'
     router = _fake_router(
         tmp_path,
-        {"valid": False, "error": refusal, "warnings": [DEPRECATED]},
+        {"valid": False, "error": refusal, "warnings": [RENAMED]},
         code=1,
     )
     monkeypatch.setenv(ROUTER_BINARY_ENV, str(router))
@@ -390,7 +390,7 @@ def test_config_validate_reports_the_router_binarys_refusal_and_warnings(
     assert result.exit_code == 1, result.output
     assert "Configuration is valid" not in result.stdout
     assert f"the Router binary {router} refuses it: {refusal}" in result.stderr
-    assert "the signal decides the contract" in _flat(result.stderr)
+    assert "the decision signal is named systemone" in _flat(result.stderr)
     call = _router_call(tmp_path)
     assert call["argv"] == [
         "-validate-config",
@@ -408,7 +408,7 @@ def test_config_validate_prints_the_router_binarys_warnings(monkeypatch, tmp_pat
     (stack / "models").mkdir(parents=True)
     config = _write(stack, BASE)
     router = _fake_router(
-        tmp_path, {"valid": True, "warnings": [DEPRECATED, UNCALIBRATED]}
+        tmp_path, {"valid": True, "warnings": [RENAMED, UNCALIBRATED]}
     )
 
     result = _validate(
@@ -420,7 +420,7 @@ def test_config_validate_prints_the_router_binarys_warnings(monkeypatch, tmp_pat
         result.stdout
     )
     warnings = _flat(result.stderr)
-    assert "the signal decides the contract" in warnings
+    assert "the decision signal is named systemone" in warnings
     assert "has no calibrated threshold" in warnings
     call = _router_call(tmp_path)
     assert call["argv"][-2:] == ["-gateway", "extproc"]
@@ -540,76 +540,253 @@ def test_offline_runs_only_the_structural_checks(monkeypatch, tmp_path):
     assert not (tmp_path / "router-call.json").exists()
 
 
-def test_migrate_writes_the_routers_rewrite_of_the_model_fields(monkeypatch, tmp_path):
-    source = _write(tmp_path, BASE)
-    rewritten = yaml.safe_dump(BASE, sort_keys=False) + "# the Router's rewrite\n"
-    changed = {
-        "code": "migration_change",
-        "field": "global.model_catalog",
-        "message": "deprecated model fields are written as the deployments, "
-        "bindings and rule deployments the Router reads them as",
-    }
-    kept = {
-        "code": "deprecated_model_field",
-        "field": 'global.model_catalog.external["rewriter"]',
-        "message": "external models are deprecated",
-    }
-    router = tmp_path / "router"
-    router.write_text(
+LEGACY = {
+    **BASE,
+    "global": {
+        "model_catalog": {
+            "deployments": {"local-vela": {"artifact": "vllm-sr/vela3-fast"}},
+            "bindings": {"pii": {"deployment": "local-vela", "contract": "x"}},
+        }
+    },
+}
+REFUSAL = (
+    "global.model_catalog.bindings.pii: removed_field: "
+    "global.model_catalog.bindings.pii.contract is removed; run `vllm-sr config "
+    "migrate` (pii: local-vela; the signal decides what the deployment answers)"
+)
+CHANGED = {
+    "code": "migration_change",
+    "field": "global.model_catalog.bindings.pii",
+    "message": "global.model_catalog.bindings.pii.contract is removed; written as "
+    "pii: local-vela",
+}
+ACTION = {
+    "code": "migration_action",
+    "field": "global.model_catalog.deployments.rewriter.auth.api_key_env",
+    "message": "set VLLM_SR_REWRITER_API_KEY to the key access_key held",
+}
+
+
+def _migrating_router(tmp_path: Path, migration: dict, verdict: dict) -> Path:
+    """A Router binary that answers -migrate-config with migration and any
+    other call with verdict, recording what each call was asked."""
+
+    script = tmp_path / "router"
+    script.write_text(
         f"#!{sys.executable}\n"
         "import json, sys\n"
-        "sys.stdin.read()\n"
-        "report = {'valid': True, 'warnings': []}\n"
-        "if '-migrate-config' in sys.argv:\n"
-        f"    report.update(migrated={rewritten!r}, kept=[{changed!r}, {kept!r}])\n"
-        "print(json.dumps(report))\n",
+        "config = open(sys.argv[sys.argv.index('-config') + 1]).read()\n"
+        f"with open({str(tmp_path / 'router-calls.jsonl')!r}, 'a') as record:\n"
+        "    record.write(json.dumps({'argv': sys.argv[1:], 'config': config}) + '\\n')\n"
+        f"report = {migration!r} if '-migrate-config' in sys.argv else {verdict!r}\n"
+        "print(json.dumps(report))\n"
+        "sys.exit(0 if report['valid'] else 1)\n",
         encoding="utf-8",
     )
-    router.chmod(0o755)
+    script.chmod(0o755)
+    return script
+
+
+def _router_calls(tmp_path: Path) -> list[dict]:
+    calls = (tmp_path / "router-calls.jsonl").read_text(encoding="utf-8")
+    return [json.loads(line) for line in calls.splitlines()]
+
+
+def _migrate(*arguments: str):
+    return CliRunner().invoke(main, ["config", "migrate", *arguments])
+
+
+def test_migrate_writes_what_the_router_rewrites(monkeypatch, tmp_path):
+    source = _write(tmp_path, LEGACY)
+    rewritten = yaml.safe_dump(BASE, sort_keys=False)
+    router = _migrating_router(
+        tmp_path,
+        {
+            "valid": False,
+            "error": REFUSAL,
+            "warnings": [],
+            "migrated": rewritten,
+            "notes": [CHANGED, ACTION],
+        },
+        {"valid": True, "warnings": [UNCALIBRATED]},
+    )
     monkeypatch.setenv(ROUTER_BINARY_ENV, str(router))
 
-    result = CliRunner().invoke(main, ["config", "migrate", "--config", str(source)])
+    result = _migrate("--config", str(source))
 
     assert result.exit_code == 0, result.output
     output = tmp_path / "config.migrated.yaml"
     assert output.read_text(encoding="utf-8") == rewritten
-    assert "written as the deployments, bindings and rule deployments" in _flat(
-        result.stdout
+    asked, checked = _router_calls(tmp_path)
+    assert "-migrate-config" in asked["argv"]
+    assert asked["config"] == source.read_text(encoding="utf-8")
+    assert "-migrate-config" not in checked["argv"]
+    assert checked["config"] == rewritten
+    stdout, stderr = _flat(result.stdout), _flat(result.stderr)
+    assert f"Checked by the Router binary {router}" in stdout
+    assert "Changes to review global.model_catalog.bindings.pii" in stdout
+    assert "written as pii: local-vela" in stdout
+    assert "set VLLM_SR_REWRITER_API_KEY to the key access_key held" in stderr
+    assert "has no calibrated threshold" in stderr
+
+
+@pytest.mark.parametrize(
+    "migration, verdict, refusal",
+    [
+        (
+            {
+                "valid": False,
+                "error": REFUSAL,
+                "warnings": [],
+                "migration_error": "default_model: removed_section: it has no "
+                "mechanical rewrite",
+            },
+            {"valid": True, "warnings": []},
+            "The Router could not migrate the configuration: default_model: "
+            "removed_section: it has no mechanical rewrite",
+        ),
+        (
+            {"valid": True, "warnings": []},
+            {"valid": True, "warnings": []},
+            "The Router could not migrate the configuration: it wrote nothing",
+        ),
+        (
+            {
+                "valid": False,
+                "error": REFUSAL,
+                "warnings": [],
+                "migrated": yaml.safe_dump(BASE, sort_keys=False),
+            },
+            {"valid": False, "error": "deployments: refused", "warnings": []},
+            "refuses it: deployments: refused",
+        ),
+    ],
+    ids=["refused form", "no migration", "output refused"],
+)
+def test_migrate_writes_nothing_the_router_does_not_accept(
+    monkeypatch, tmp_path, migration, verdict, refusal
+):
+    source = _write(tmp_path, LEGACY)
+    output = tmp_path / "out.yaml"
+    output.write_text("previous: output\n", encoding="utf-8")
+    monkeypatch.setenv(
+        ROUTER_BINARY_ENV, str(_migrating_router(tmp_path, migration, verdict))
     )
-    assert "kept: external models are deprecated" in _flat(result.stderr)
+
+    result = _migrate("--config", str(source), "--output", str(output), "--force")
+
+    assert result.exit_code == 1
+    assert refusal in _flat(result.stderr)
+    assert "No output was written" in result.stderr
+    assert output.read_text(encoding="utf-8") == "previous: output\n"
 
 
-def test_migrate_holds_its_output_to_the_routers_verdict(monkeypatch, tmp_path):
-    source = _write(tmp_path, BASE)
-    output = tmp_path / "config.migrated.yaml"
-    _fake_router(
-        tmp_path,
-        {"valid": False, "error": "deployments: refused", "warnings": []},
-        code=1,
-    )
-    monkeypatch.setenv(ROUTER_BINARY_ENV, str(tmp_path / "router"))
+def test_migrate_needs_a_router(monkeypatch, tmp_path):
+    source = _write(tmp_path, LEGACY)
+    monkeypatch.setenv(ROUTER_BINARY_ENV, str(tmp_path / "absent-router"))
 
-    refused = CliRunner().invoke(main, ["config", "migrate", "--config", str(source)])
+    result = _migrate("--config", str(source))
 
-    assert refused.exit_code == 1
-    assert "refuses it: deployments: refused" in refused.stderr
-    assert "No output was written" in refused.stderr
-    assert not output.exists()
+    assert result.exit_code == 1
+    assert "No Router could migrate the configuration" in _flat(result.stderr)
+    assert not (tmp_path / "config.migrated.yaml").exists()
+    assert _migrate("--config", str(source), "--offline").exit_code == 2
 
-    (tmp_path / "router-call.json").unlink()
-    offline = CliRunner().invoke(
-        main, ["config", "migrate", "--config", str(source), "--offline"]
-    )
 
-    assert offline.exit_code == 0, offline.output
-    assert "Only the CLI's structural checks ran (--offline)" in _flat(offline.stdout)
-    assert not (tmp_path / "router-call.json").exists()
-    output.unlink()
+IDENTITY_REFUSAL = (
+    "global.services.authz.providers, which resolve per-user API keys and reads "
+    "the client identity an authenticating gateway sets in x-authz-user-id and "
+    "x-authz-user-groups, needs an identity source in standalone mode; behind an "
+    "authenticating proxy, set listeners[].identity.trust_headers: true, or serve "
+    "with --gateway extproc"
+)
+UNTRUSTED_IDENTITY_HINT = (
+    "Hint: Re-run with `--gateway extproc` when Envoy or another authenticating "
+    "gateway sits in front of the Router, or set "
+    "`listeners[].identity.trust_headers: true` only behind a trusted proxy."
+)
 
-    router = _fake_router(tmp_path, {"valid": True, "warnings": [DEPRECATED]})
-    accepted = CliRunner().invoke(main, ["config", "migrate", "--config", str(source)])
 
-    assert accepted.exit_code == 0, accepted.output
-    assert f"Checked by the Router binary {router}" in accepted.stdout
-    assert "the signal decides the contract" in _flat(accepted.stderr)
-    assert _router_call(tmp_path)["config"] == output.read_text(encoding="utf-8")
+def _migrating_to(monkeypatch, tmp_path: Path, verdict: dict) -> str:
+    """Route migrate to a Router that rewrites LEGACY into BASE and answers the
+    check of BASE with verdict; return what it rewrites."""
+
+    rewritten = yaml.safe_dump(BASE, sort_keys=False)
+    migration = {
+        "valid": False,
+        "error": REFUSAL,
+        "warnings": [],
+        "migrated": rewritten,
+    }
+    router = _migrating_router(tmp_path, migration, verdict)
+    monkeypatch.setenv(ROUTER_BINARY_ENV, str(router))
+    return rewritten
+
+
+@pytest.mark.parametrize(
+    "arguments, environment, mode",
+    [
+        ((), None, "standalone"),
+        (("--gateway", "extproc"), None, "extproc"),
+        ((), "extproc", "extproc"),
+        (("--gateway", "standalone"), "extproc", "standalone"),
+    ],
+    ids=["default", "option", "environment", "option over environment"],
+)
+def test_migrate_checks_its_output_in_the_gateway_mode(
+    monkeypatch, tmp_path, arguments, environment, mode
+):
+    source = _write(tmp_path, LEGACY)
+    rewritten = _migrating_to(monkeypatch, tmp_path, {"valid": True, "warnings": []})
+    if environment is None:
+        monkeypatch.delenv(GATEWAY_ENV, raising=False)
+    else:
+        monkeypatch.setenv(GATEWAY_ENV, environment)
+
+    result = _migrate("--config", str(source), *arguments)
+
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "config.migrated.yaml").read_text(encoding="utf-8") == rewritten
+    calls = _router_calls(tmp_path)
+    modes = [call["argv"][call["argv"].index("-gateway") + 1] for call in calls]
+    assert modes == [mode, mode]
+
+
+def test_migrate_takes_only_a_known_gateway_mode(tmp_path):
+    source = _write(tmp_path, LEGACY)
+
+    result = _migrate("--config", str(source), "--gateway", "envoy")
+
+    assert result.exit_code == 2
+    assert "--gateway" in result.output
+    assert not (tmp_path / "config.migrated.yaml").exists()
+
+
+@pytest.mark.parametrize(
+    "arguments, error, hinted",
+    [
+        ((), IDENTITY_REFUSAL, True),
+        ((), "deployments: refused", False),
+        (("--gateway", "extproc"), IDENTITY_REFUSAL, False),
+    ],
+    ids=["standalone identity", "another refusal", "extproc"],
+)
+def test_a_standalone_refusal_of_identity_headers_names_the_way_out(
+    monkeypatch, tmp_path, arguments, error, hinted
+):
+    source = _write(tmp_path, LEGACY)
+    monkeypatch.delenv(GATEWAY_ENV, raising=False)
+    rewritten = _migrating_to(monkeypatch, tmp_path, {"valid": False, "error": error})
+
+    result = _migrate("--config", str(source), *arguments)
+
+    assert result.exit_code == 1
+    stderr = _flat(result.stderr)
+    assert f"refuses it: {error}" in stderr
+    assert (UNTRUSTED_IDENTITY_HINT in stderr) is hinted
+    assert "No output was written" in stderr
+    assert not (tmp_path / "config.migrated.yaml").exists()
+    # The Router checked the migration as written, once: migrate never trusts
+    # the identity headers itself.
+    _asked, checked = _router_calls(tmp_path)
+    assert checked["config"] == rewritten

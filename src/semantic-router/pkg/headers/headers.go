@@ -197,14 +197,15 @@ const (
 	AuthzTeamID   = "x-authz-team-id"
 	AuthzTenantID = "x-authz-tenant-id"
 
-	// VSRGatewayCredential is the default header through which the deployment
-	// authenticator hands the Router the dedicated credential for a trusted
-	// upstream gateway (global.services.authz.gateway_credential). It is a
-	// trusted authentication output like the identity headers: the gateway
-	// strips client-supplied copies, the Router removes it from every upstream
-	// request, and only a backend_ref marked trusted_gateway receives its
-	// value, under that backend's auth header. See issue #2286.
-	VSRGatewayCredential = "x-vsr-gateway-credential" // #nosec G101 -- header name, not a credential
+	// VSRDelegatedCredential is the default header through which the
+	// deployment authenticator hands the Router the requesting user's
+	// credential for delegated upstreams (global.services.authz
+	// .delegated_credential). It is a trusted authentication output like the
+	// identity headers: the gateway strips client-supplied copies, the Router
+	// removes it from every upstream request, and only an upstream whose auth
+	// is credential: delegated receives its value, under that upstream's auth
+	// header. See issue #2286.
+	VSRDelegatedCredential = "x-vsr-delegated-credential" // #nosec G101 -- header name, not a credential
 )
 
 // Internal Request Authentication

@@ -113,17 +113,6 @@ def _default_entrypoint_contract(config: UserConfig) -> list[ValidationError]:
     return errors
 
 
-def _optional_mapping(
-    parent: dict, key: str, field: str
-) -> tuple[dict, list[ValidationError]]:
-    raw_value = parent.get(key)
-    if raw_value is None:
-        return {}, []
-    if isinstance(raw_value, dict):
-        return raw_value, []
-    return {}, [ValidationError(f"{field} must be a mapping or null", field=field)]
-
-
 def _normalized_string_list(
     value, field: str
 ) -> tuple[list[str], list[ValidationError]]:
@@ -232,50 +221,9 @@ def _validate_entrypoints(
 
 def validate_recipe_contracts(config: UserConfig) -> list[ValidationError]:
     recipe_names, errors = _recipe_name_contract(config)
-    errors.extend(_validate_entrypoint_contract_keys(config.global_ or {}))
     reserved_models = {}
     for api in ("chat", "systemone"):
         reserved_models[api], alias_errors = _reserved_routing_models(config, api)
         errors.extend(alias_errors)
     errors.extend(_validate_entrypoints(config, recipe_names, reserved_models))
-    return errors
-
-
-def _validate_entrypoint_contract_keys(global_config: dict) -> list[ValidationError]:
-    router, errors = _optional_mapping(global_config, "router", "global.router")
-    for name in ("auto_model_name", "auto_model_names"):
-        if name in router:
-            errors.append(
-                ValidationError(
-                    f"global.router.{name} was removed; configure entrypoints with recipe: default and model_names",
-                    field=f"global.router.{name}",
-                )
-            )
-    if "include_config_models_in_list" in router:
-        errors.append(
-            ValidationError(
-                "Use global.router.list_backend_models",
-                field="global.router.include_config_models_in_list",
-            )
-        )
-    integrations, nested_errors = _optional_mapping(
-        global_config, "integrations", "global.integrations"
-    )
-    errors.extend(nested_errors)
-    looper, nested_errors = _optional_mapping(
-        integrations, "looper", "global.integrations.looper"
-    )
-    errors.extend(nested_errors)
-    for family in ("remom", "fusion", "flow"):
-        settings, nested_errors = _optional_mapping(
-            looper, family, f"global.integrations.looper.{family}"
-        )
-        errors.extend(nested_errors)
-        if "model_names" in settings:
-            errors.append(
-                ValidationError(
-                    "Expose the algorithm through entrypoints and recipes",
-                    field=f"global.integrations.looper.{family}.model_names",
-                )
-            )
     return errors

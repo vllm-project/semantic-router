@@ -37,7 +37,7 @@ def _gateway_config(extra: dict) -> dict:
                         {
                             "name": "gateway",
                             "provider": "anthropic-compatible",
-                            "base_url": "https://gateway.example.com/anthropic",
+                            "endpoint": "https://gateway.example.com/anthropic",
                             **extra,
                         }
                     ],

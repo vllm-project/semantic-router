@@ -33,10 +33,6 @@ configOverride:
       observability:
         tracing:
           enabled: false
-    model_catalog:
-      modules:
-        prompt_compression:
-          enabled: false
 service:
   type: ClusterIP
 

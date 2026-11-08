@@ -203,8 +203,8 @@ func (c *compiler) clusterSecret(alias string, params config.ModelParams, endpoi
 	if params.AuthoredModel != nil {
 		for _, ref := range params.AuthoredModel.BackendRefs {
 			switch {
-			case ref.APIKeyEnv != "":
-				spec.Env = appendUnique(spec.Env, ref.APIKeyEnv)
+			case ref.Auth != nil && ref.Auth.APIKeyEnv != "":
+				spec.Env = appendUnique(spec.Env, ref.Auth.APIKeyEnv)
 			case ref.APIKey != "":
 				spec.Inline++
 			}

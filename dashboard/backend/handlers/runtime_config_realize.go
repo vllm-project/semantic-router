@@ -68,13 +68,6 @@ func realizeRuntimeConfigWithCLI(raw []byte, targetPath string, options runtimeM
 	if algorithm := strings.TrimSpace(os.Getenv("VLLM_SR_ALGORITHM_OVERRIDE")); algorithm != "" {
 		cmd.Args = append(cmd.Args, "--algorithm", algorithm)
 	}
-	platform := strings.TrimSpace(os.Getenv("VLLM_SR_PLATFORM"))
-	if platform == "" {
-		platform = strings.TrimSpace(os.Getenv("DASHBOARD_PLATFORM"))
-	}
-	if platform != "" {
-		cmd.Args = append(cmd.Args, "--platform", platform)
-	}
 	cmd.Dir = cliRoot
 	cmd.Env = append(os.Environ(), "PYTHONPATH="+cliRoot)
 	_, err = cmd.CombinedOutput()

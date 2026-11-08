@@ -47,7 +47,6 @@ def stack(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> LocalStack:
     stack = LocalStack(
         layout=resolve_runtime_stack(),
         state_dir=state_dir,
-        platform=None,
         algorithm=None,
     )
     _publish_management_endpoint(monkeypatch, stack, 8080, 8080)
@@ -495,7 +494,7 @@ def test_local_stack_reads_the_router_container(monkeypatch, tmp_path):
 
     assert found is not None
     assert found.state_dir == state_dir
-    assert (found.platform, found.algorithm) == ("rocm", "random")
+    assert found.algorithm == "random"
     assert found.owns(tmp_path / "config.yaml")
     assert not found.owns(tmp_path / "elsewhere" / "config.yaml")
 

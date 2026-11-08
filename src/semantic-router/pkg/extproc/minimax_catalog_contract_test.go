@@ -154,7 +154,7 @@ providers:
       backend_refs:
         - name: primary
           provider: %s
-          base_url: %s
+          endpoint: %s
           api_key: minimax-fixture-key
 recipes:
   - name: default

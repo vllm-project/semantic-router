@@ -36,7 +36,7 @@ providers:
       backend_refs:
         - provider: vllm
           endpoint: hosted.example:443/v1
-          api_key_env: TEST_HOSTED_KEY
+          auth: {api_key_env: TEST_HOSTED_KEY}
 recipes:
   - name: default
     decisions:

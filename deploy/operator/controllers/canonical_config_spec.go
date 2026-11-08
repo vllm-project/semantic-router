@@ -62,15 +62,8 @@ func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerco
 	if spec.ComplexityModel != nil {
 		return fmt.Errorf("config.complexity_model is removed: the decision model answers complexity rules")
 	}
-	if len(spec.ExternalModels) > 0 {
-		// The CRD block mirrors the router's external catalog entry field for
-		// field, so the generic typed conversion is enough; backend blocks
-		// resolve their model against this list at router config load.
-		external, err := convertToTypedConfig[[]routerconfig.ExternalModelConfig](r, spec.ExternalModels)
-		if err != nil {
-			return fmt.Errorf("config.external_models: %w", err)
-		}
-		canonical.Global.ModelCatalog.External = external
+	if spec.ExternalModels != nil {
+		return fmt.Errorf("config.external_models is removed: a remote model is a model deployment with provider openai_chat, openai_embeddings or systemone")
 	}
 	return nil
 }

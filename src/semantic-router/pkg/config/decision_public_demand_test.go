@@ -4,7 +4,7 @@ import "testing"
 
 func TestDecisionPublicIdentityNeverUsesRuntimePrivateNames(t *testing.T) {
 	for _, artifact := range []string{"/srv/private/model", "models/private-model", "./org/model", "../org/model", ""} {
-		resource := ModelDeployment{Provider: ModelRuntimeProvider, Artifact: artifact, ServedName: "internal-runtime-name"}
+		resource := ModelDeployment{Provider: ModelRuntimeProvider, Artifact: artifact, Model: "internal-runtime-name"}
 		if got := resource.PublicModelName(); got != "" {
 			t.Fatalf("local artifact leaked: %s", got)
 		}

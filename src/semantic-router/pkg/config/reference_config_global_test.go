@@ -236,7 +236,6 @@ func assertReferenceConfigModelCatalogCoverage(t testingT, modelCatalog map[stri
 	// way to choose a signal's model, which a binding now names.
 	assertMapCoversStructFields(t, mustMapAt(t, modelCatalog, "system"), reflect.TypeOf(CanonicalSystemModels{}), "global.model_catalog.system",
 		"prompt_guard", "pii_classifier", "hallucination_detector")
-	assertReferenceConfigModelModuleCoverage(t, mustMapAt(t, modelCatalog, "modules"))
 }
 
 // assertReferenceConfigDeploymentCoverage requires, across the reference
@@ -246,9 +245,7 @@ func assertReferenceConfigModelCatalogCoverage(t testingT, modelCatalog map[stri
 // model_runtime both managed and attached.
 func assertReferenceConfigDeploymentCoverage(t testingT, deployments map[string]interface{}) {
 	items := referenceMapValues(deployments)
-	// external_model, question_types and served_name are the deprecated
-	// spellings of a remote provider, capabilities.question_types and model.
-	assertSliceUnionCoversStructFields(t, items, reflect.TypeOf(ModelDeployment{}), "global.model_catalog.deployments", "external_model", "question_types", "served_name")
+	assertSliceUnionCoversStructFields(t, items, reflect.TypeOf(ModelDeployment{}), "global.model_catalog.deployments")
 	for _, block := range []struct {
 		key string
 		typ reflect.Type
@@ -259,11 +256,10 @@ func assertReferenceConfigDeploymentCoverage(t testingT, deployments map[string]
 		{"limits", reflect.TypeOf(DeploymentLimits{})},
 		{"capabilities", reflect.TypeOf(DeploymentCapabilities{})},
 		{"generation", reflect.TypeOf(DeploymentGeneration{})},
-		{"operating_point", reflect.TypeOf(OperatingPointReference{})},
 	} {
 		assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, items, block.key, "global.model_catalog.deployments"), block.typ, "global.model_catalog.deployments[]."+block.key)
 	}
-	assertSliceUnionCoversStructFields(t, collectNestedSliceItems(t, items, "replicas", "global.model_catalog.deployments"), reflect.TypeOf(ModelReplica{}), "global.model_catalog.deployments[].replicas", "served_name")
+	assertSliceUnionCoversStructFields(t, collectNestedSliceItems(t, items, "replicas", "global.model_catalog.deployments"), reflect.TypeOf(ModelReplica{}), "global.model_catalog.deployments[].replicas")
 
 	providers := map[string]bool{}
 	for _, item := range items {
@@ -276,7 +272,7 @@ func assertReferenceConfigDeploymentCoverage(t testingT, deployments map[string]
 		}
 		providers[provider] = true
 	}
-	for _, provider := range []string{ModelRuntimeProvider, ModelRuntimeProvider + " (attached)", SystemOneProvider, ClassifyProvider, OpenAIChatProvider, OpenAIEmbeddingsProvider} {
+	for _, provider := range []string{ModelRuntimeProvider, ModelRuntimeProvider + " (attached)", SystemOneProvider, OpenAIChatProvider, OpenAIEmbeddingsProvider} {
 		if !providers[provider] {
 			t.Fatalf("global.model_catalog.deployments must declare a %s deployment", provider)
 		}
@@ -316,7 +312,15 @@ func assertReferenceConfigEmbeddingCatalogCoverage(t testingT, embeddings map[st
 	assertMapCoversStructFields(t, embeddings, reflect.TypeOf(CanonicalEmbeddingModels{}), "global.model_catalog.embeddings")
 }
 
-func assertReferenceConfigModelModuleCoverage(t testingT, modules map[string]interface{}) {
-	assertMapCoversStructFields(t, modules, reflect.TypeOf(CanonicalModelModules{}), "global.model_catalog.modules")
-	assertMapCoversStructFields(t, mustMapAt(t, modules, "prompt_compression"), reflect.TypeOf(PromptCompressionConfig{}), "global.model_catalog.modules.prompt_compression")
+// assertReferenceConfigSignalsCompressionCoverage requires the context plugin
+// of global.plugins to write every compress.signals field: the signals read
+// the request before a decision is chosen, so no decision writes them.
+func assertReferenceConfigSignalsCompressionCoverage(t testingT, plugins []interface{}) {
+	for _, item := range plugins {
+		if plugin, ok := item.(map[string]interface{}); ok && plugin["type"] == DecisionPluginContext {
+			assertMapCoversStructFields(t, mustMapAt(t, plugin, "configuration", "compress", "signals"), reflect.TypeOf(PromptCompressionConfig{}), "global.plugins(context).configuration.compress.signals")
+			return
+		}
+	}
+	t.Fatalf("config/config.yaml must include a context plugin in global.plugins")
 }

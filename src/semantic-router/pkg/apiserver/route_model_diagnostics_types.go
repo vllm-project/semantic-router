@@ -58,46 +58,6 @@ type ModelDiagnosticInputUsage struct {
 	ProcessedTokens int  `json:"processed_tokens"`
 	Truncated       bool `json:"truncated"`
 }
-type ModelDiagnosticLabelWindow struct {
-	Start         int       `json:"start"`
-	End           int       `json:"end"`
-	Probabilities []float32 `json:"probabilities"`
-}
-type ModelDiagnosticLabelsResult struct {
-	Probabilities []float32                    `json:"probabilities,omitempty"`
-	Windows       []ModelDiagnosticLabelWindow `json:"windows,omitempty"`
-	ContentTokens int                          `json:"content_tokens,omitempty"`
-	Input         *ModelDiagnosticInputUsage   `json:"input,omitempty"`
-}
-type ModelDiagnosticScoreWindow struct {
-	Start  int       `json:"start"`
-	End    int       `json:"end"`
-	Scores []float32 `json:"scores"`
-}
-type ModelDiagnosticScoresResult struct {
-	Scores       []float32                    `json:"scores,omitempty"`
-	Windows      []ModelDiagnosticScoreWindow `json:"windows,omitempty"`
-	Input        *ModelDiagnosticInputUsage   `json:"input,omitempty"`
-	PolicySHA256 string                       `json:"policy_sha256,omitempty"`
-	Thresholds   []float32                    `json:"thresholds,omitempty"`
-	WindowRanges [][2]int                     `json:"window_ranges,omitempty"`
-}
-type ModelDiagnosticEntity struct {
-	Type       string   `json:"type"`
-	Start      int      `json:"start"`
-	End        int      `json:"end"`
-	Text       string   `json:"text"`
-	Confidence *float32 `json:"confidence,omitempty"`
-}
-type ModelDiagnosticTokensResult struct {
-	Entities        []ModelDiagnosticEntity    `json:"entities"`
-	Input           *ModelDiagnosticInputUsage `json:"input,omitempty"`
-	ScoresAvailable bool                       `json:"scores_available"`
-	ScanIncomplete  bool                       `json:"scan_incomplete"`
-	TruncatedAt     *int                       `json:"truncated_at,omitempty"`
-	Windows         [][2]int                   `json:"windows,omitempty"`
-	ContentTokens   int                        `json:"content_tokens,omitempty"`
-}
 type ModelDiagnosticEmbeddingResult struct {
 	Embedding []float32                  `json:"embedding"`
 	Input     *ModelDiagnosticInputUsage `json:"input,omitempty"`

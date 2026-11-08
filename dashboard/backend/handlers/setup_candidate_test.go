@@ -74,11 +74,11 @@ func activateSetupRoundTrip(t *testing.T, configPath, root string, configJSON js
 	return active
 }
 
-func TestSetupSparseModuleRoundTripPreservesOmittedFields(t *testing.T) {
+func TestSetupSparseGlobalRoundTripPreservesOmittedFields(t *testing.T) {
 	configPath, root, _ := setupActivationRegressionRuntime(t)
 	patch := createValidSetupPatch()
-	global := map[string]interface{}{"model_catalog": map[string]interface{}{
-		"modules": map[string]interface{}{"prompt_compression": map[string]interface{}{"max_tokens": 2048}},
+	global := map[string]interface{}{"stores": map[string]interface{}{
+		"response_cache": map[string]interface{}{"max_entries": 2048},
 	}}
 	patch["global"] = global
 	imported := importSetupRoundTrip(t, configPath, patch)
@@ -92,13 +92,13 @@ func TestSetupSparseModuleRoundTripPreservesOmittedFields(t *testing.T) {
 	}
 	assertManagedSetupAuthoredGlobal(t, global, returned)
 	resolvedGlobal := decoded["global"].(map[string]interface{})
-	if !reflect.DeepEqual(resolvedGlobal["model_catalog"], jsonValue(t, global["model_catalog"])) {
-		t.Fatalf("validation changed the authored model catalog: %#v", resolvedGlobal["model_catalog"])
+	if !reflect.DeepEqual(resolvedGlobal["stores"], jsonValue(t, global["stores"])) {
+		t.Fatalf("validation changed the authored stores: %#v", resolvedGlobal["stores"])
 	}
 	active := activateSetupRoundTrip(t, configPath, root, returned)
-	defaults := routerconfig.DefaultGlobalConfig().PromptCompression
-	if active.PromptCompression.MaxTokens != 2048 || active.PromptCompression.Enabled != defaults.Enabled || active.PromptCompression.MinLength != defaults.MinLength {
-		t.Fatalf("sparse module override changed inherited settings: %+v", active.PromptCompression)
+	defaults := routerconfig.DefaultGlobalConfig().SemanticCache
+	if active.SemanticCache.MaxEntries != 2048 || active.SemanticCache.TTLSeconds != defaults.TTLSeconds || active.SemanticCache.BackendType != defaults.BackendType {
+		t.Fatalf("sparse store override changed inherited settings: %+v", active.SemanticCache)
 	}
 	if active.ManagementAPI.BindAddress != "0.0.0.0" {
 		t.Fatalf("omitted management listener became authored: %+v", active.ManagementAPI)
@@ -112,8 +112,8 @@ func TestSetupCandidatePreservesGlobalReplacementAndBootstrapInheritance(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	baseGlobal := map[string]interface{}{"model_catalog": map[string]interface{}{
-		"modules": map[string]interface{}{"prompt_compression": map[string]interface{}{"max_tokens": 2048}},
+	baseGlobal := map[string]interface{}{"stores": map[string]interface{}{
+		"response_cache": map[string]interface{}{"max_entries": 2048},
 	}}
 	globalYAML, err := marshalYAMLBytes(map[string]interface{}{"global": baseGlobal})
 	if err != nil {
@@ -126,7 +126,7 @@ func TestSetupCandidatePreservesGlobalReplacementAndBootstrapInheritance(t *test
 		patch := createValidSetupPatch()
 		want := baseGlobal
 		if replace {
-			want = map[string]interface{}{"model_catalog": map[string]interface{}{}}
+			want = map[string]interface{}{"stores": map[string]interface{}{}}
 			patch["global"] = want
 		}
 		returned := validateSetupRoundTrip(t, configPath, patch)

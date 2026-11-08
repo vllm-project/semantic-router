@@ -209,20 +209,23 @@ test.describe("Setup wizard routing import", () => {
               },
             ],
           },
-          routing: {
-            decisions: [
-              {
-                name: "default-route",
-                description:
-                  "Generated during setup to route all requests to the default model.",
-                priority: 100,
-                rules: { operator: "AND", conditions: [] },
-                modelRefs: [
-                  { model: "qwen/qwen3.5-rocm", use_reasoning: false },
-                ],
-              },
-            ],
-          },
+          recipes: [
+            {
+              name: "default",
+              decisions: [
+                {
+                  name: "default-route",
+                  description:
+                    "Generated during setup to route all requests to the default model.",
+                  priority: 100,
+                  rules: { operator: "AND", conditions: [] },
+                  modelRefs: [
+                    { model: "qwen/qwen3.5-rocm", use_reasoning: false },
+                  ],
+                },
+              ],
+            },
+          ],
         },
       });
     await expect(page.getByText("Ready")).toBeVisible();

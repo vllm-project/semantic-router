@@ -52,9 +52,9 @@ func TestConfigLoadValidatesGlobalsForEverySource(t *testing.T) {
 		{"admission_overflow", `model_catalog: {admission: {primary: {max_concurrency: 1, on_overflow: drop}}}`, "on_overflow"},
 		{"admission_queue", `model_catalog: {admission: {primary: {max_concurrency: 1, max_queue: -1}}}`, "max_queue"},
 		{"deployment_provider", `model_catalog: {deployments: {encoder: {artifact: models/encoder, provider: unknown}}}`, "unsupported provider"},
-		{"prompt_profile", `model_catalog: {modules: {prompt_compression: {profile: unknown}}}`, "prompt_compression.profile"},
-		{"remom_models", `integrations: {looper: {remom: {model_names: [""]}}}`, "remom.model_names was removed"},
-		{"fusion_models", `integrations: {looper: {fusion: {model_names: [""]}}}`, "fusion.model_names was removed"},
+		{"prompt_profile", `plugins: [{type: context, configuration: {enabled: true, compress: {signals: {enabled: true, profile: unknown, max_tokens: 512}}}}]`, `global.plugins[context].configuration.compress.signals.profile: unknown profile "unknown"`},
+		{"remom_models", `integrations: {looper: {remom: {model_names: [""]}}}`, "global.integrations.looper.remom.model_names: removed_field: the model names of a Looper algorithm are removed"},
+		{"fusion_models", `integrations: {looper: {fusion: {model_names: [""]}}}`, "global.integrations.looper.fusion.model_names: removed_field: the model names of a Looper algorithm are removed"},
 		{"flow_backend", `integrations: {looper: {flow: {state: {store_backend: unknown}}}}`, "state.store_backend"},
 	}
 	for _, tc := range cases {

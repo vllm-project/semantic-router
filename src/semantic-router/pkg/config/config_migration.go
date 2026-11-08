@@ -1,7 +1,6 @@
 package config
 
 import (
-	"bytes"
 	"fmt"
 
 	"gopkg.in/yaml.v3"
@@ -10,6 +9,10 @@ import (
 // migrationChangeCode marks a note of a form migrate rewrote; a person may
 // review it, but the migrated file works as the original did.
 const migrationChangeCode = "migration_change"
+
+// migrationActionCode marks a note of what an operator must do for the
+// migrated file to work as the original did.
+const migrationActionCode = "migration_action"
 
 // Migration is the rewrite of one document: each form's Migrate edits its
 // nodes with these helpers, and the notes say what changed and what a person
@@ -87,35 +90,27 @@ func Scalar(value string) *yaml.Node {
 }
 
 // MigrateConfig rewrites a document's removed and renamed forms in the forms
-// that replace them, keeping every other field as written, and then its
-// deprecated model fields (MigrateModelResources). The notes name what
-// changed and what a person must review. The migrated document must load.
+// that replace them, keeping every other field as written. The notes name
+// what changed and what a person must review. The migrated document must
+// load.
 //
 // The forms run in one order, configForms': first the v0.3 layout
 // (structureForms: the version, the model cards, the top-level routing block
 // and each recipe's), then every other form, whose patterns name v0.5 paths
 // only, so a removed form written in a v0.3 layout is matched after the
-// layout is rewritten; last the global feature switches (switchForms), which
-// read the decisions and stores the earlier forms made canonical.
+// layout is rewritten; then the global feature switches (switchForms), which
+// read the decisions and stores the earlier forms made canonical; last the
+// Looper model names (looperModelNameForms), whose recipe copies the default
+// recipe as migrated.
 func MigrateConfig(data []byte) ([]byte, []ConfigWarning, error) {
 	migrated, notes, err := migrateConfigForms(data, configForms)
 	if err != nil {
 		return nil, nil, err
 	}
-	modelsMigrated, kept, err := MigrateModelResources(migrated)
-	if err != nil {
-		return nil, nil, err
-	}
-	if !bytes.Equal(modelsMigrated, migrated) {
-		notes = append(notes, ConfigWarning{
-			Code: migrationChangeCode, Field: "global.model_catalog",
-			Message: "deprecated model fields are written as the deployments, bindings and rule deployments the Router reads them as",
-		})
-	}
-	if _, err := ParseYAMLBytesWithoutEnvExpansion(modelsMigrated); err != nil {
+	if _, err := ParseYAMLBytesWithoutEnvExpansion(migrated); err != nil {
 		return nil, nil, fmt.Errorf("the migrated configuration does not load: %w", err)
 	}
-	return modelsMigrated, append(notes, kept...), nil
+	return migrated, notes, nil
 }
 
 // migrateConfigForms applies every form's rewrite, in registry order, to
@@ -134,24 +129,26 @@ func migrateConfigForms(data []byte, forms []ConfigForm) ([]byte, []ConfigWarnin
 	changed := false
 	for _, form := range forms {
 		matches := form.matches(root)
+		if len(matches) == 0 {
+			continue
+		}
+		// The note describes the first match as it was written, before any
+		// rewrite of the form changed it.
+		what, becomes := form.describe(matches[0])
+		if form.Migrate == nil {
+			return nil, nil, CheckError(matches[0].Path, form.Code, what+"; it has no mechanical rewrite: "+becomes)
+		}
 		for _, at := range matches {
-			what, becomes := form.describe(at)
-			if form.Migrate == nil {
-				return nil, nil, CheckError(at.Path, form.Code, what+"; it has no mechanical rewrite: "+becomes)
-			}
 			if err := form.Migrate(m, at); err != nil {
 				return nil, nil, fmt.Errorf("%s: %w", at.Path, err)
 			}
 			changed = true
 		}
-		if len(matches) > 0 {
-			what, becomes := form.describe(matches[0])
-			message := what + "; rewritten as " + becomes
-			if len(matches) > 1 {
-				message += fmt.Sprintf(" (%d places)", len(matches))
-			}
-			m.Changed(matches[0].Path, message)
+		message := what + "; rewritten as " + becomes
+		if len(matches) > 1 {
+			message += fmt.Sprintf(" (%d places)", len(matches))
 		}
+		m.Changed(matches[0].Path, message)
 	}
 	if !changed {
 		return data, m.notes, nil
@@ -161,4 +158,106 @@ func migrateConfigForms(data []byte, forms []ConfigForm) ([]byte, []ConfigWarnin
 		return nil, nil, err
 	}
 	return migrated, m.notes, nil
+}
+
+// YAML node helpers. A mapping node holds its keys and values alternately.
+
+func mappingValue(node *yaml.Node, key string) *yaml.Node {
+	if node == nil || node.Kind != yaml.MappingNode {
+		return nil
+	}
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if node.Content[i].Value == key {
+			return node.Content[i+1]
+		}
+	}
+	return nil
+}
+
+func mappingAt(node *yaml.Node, path ...string) *yaml.Node {
+	for _, key := range path {
+		node = mappingValue(node, key)
+	}
+	if node == nil || node.Kind != yaml.MappingNode {
+		return nil
+	}
+	return node
+}
+
+func sequenceAt(node *yaml.Node, path ...string) []*yaml.Node {
+	for _, key := range path {
+		node = mappingValue(node, key)
+	}
+	if node == nil || node.Kind != yaml.SequenceNode {
+		return nil
+	}
+	return node.Content
+}
+
+func scalarAt(node *yaml.Node, key string) string {
+	if value := mappingValue(node, key); value != nil && value.Kind == yaml.ScalarNode {
+		return value.Value
+	}
+	return ""
+}
+
+func ensureMapping(node *yaml.Node, path ...string) *yaml.Node {
+	for _, key := range path {
+		next := mappingValue(node, key)
+		if next == nil || next.Kind != yaml.MappingNode {
+			next = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+			setNode(node, key, next)
+		}
+		node = next
+	}
+	return node
+}
+
+func deleteKey(node *yaml.Node, key string) {
+	if node == nil || node.Kind != yaml.MappingNode {
+		return
+	}
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if node.Content[i].Value == key {
+			node.Content = append(node.Content[:i], node.Content[i+2:]...)
+			return
+		}
+	}
+}
+
+// deleteEmpty removes the mapping at path when the migration left it empty,
+// and each parent that leaves empty in turn.
+func deleteEmpty(node *yaml.Node, path ...string) {
+	for ; len(path) > 0; path = path[:len(path)-1] {
+		parent := mappingAt(node, path[:len(path)-1]...)
+		child := mappingValue(parent, path[len(path)-1])
+		if parent == nil || child == nil || child.Kind != yaml.MappingNode || len(child.Content) > 0 {
+			return
+		}
+		deleteKey(parent, path[len(path)-1])
+	}
+}
+
+func setNode(node *yaml.Node, key string, value *yaml.Node) {
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if node.Content[i].Value == key {
+			node.Content[i+1] = value
+			return
+		}
+	}
+	node.Content = append(node.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key}, value)
+}
+
+// setValue writes value at key, or removes the key when remove is set.
+func setValue(node *yaml.Node, key string, value interface{}, remove bool) error {
+	if remove {
+		deleteKey(node, key)
+		return nil
+	}
+	var encoded yaml.Node
+	if err := encoded.Encode(value); err != nil {
+		return err
+	}
+	setNode(node, key, &encoded)
+	return nil
 }

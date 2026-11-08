@@ -142,6 +142,41 @@ const compressTargetsField: FieldSchema = {
   ],
 }
 
+const signalsCompressFields: FieldSchema[] = [
+  { key: 'enabled', label: 'Enabled', type: 'boolean' },
+  {
+    key: 'profile',
+    label: 'Profile',
+    type: 'select',
+    options: ['', 'default', 'coding', 'medical', 'security', 'multi_turn'],
+  },
+  {
+    key: 'max_tokens',
+    label: 'Max Tokens',
+    type: 'number',
+    description: 'Text over it is compressed down to it',
+  },
+  {
+    key: 'min_length',
+    label: 'Min Length',
+    type: 'number',
+    description: 'Characters; text this long or shorter is never compressed',
+  },
+  {
+    key: 'skip_signals',
+    label: 'Skip Signals',
+    type: 'string[]',
+    description: 'Signal types that read the original text; jailbreak and pii by default',
+  },
+  { key: 'textrank_weight', label: 'TextRank Weight', type: 'number' },
+  { key: 'position_weight', label: 'Position Weight', type: 'number' },
+  { key: 'tfidf_weight', label: 'TF-IDF Weight', type: 'number' },
+  { key: 'novelty_weight', label: 'Novelty Weight', type: 'number' },
+  { key: 'position_depth', label: 'Position Depth', type: 'number' },
+  { key: 'preserve_first_n', label: 'Preserve First N Sentences', type: 'number' },
+  { key: 'preserve_last_n', label: 'Preserve Last N Sentences', type: 'number' },
+]
+
 const compressFields: FieldSchema[] = [
   { key: 'mode', label: 'Mode', type: 'select', options: ['auto', 'always'] },
   compressTargetsField,
@@ -185,6 +220,14 @@ const compressFields: FieldSchema[] = [
     type: 'select',
     options: ['fail_open', 'fail_closed'],
   },
+  {
+    key: 'signals',
+    label: 'Signals',
+    type: 'object',
+    description:
+      'Compresses the text the routing signals read, in global and recipe plugins only; alone it leaves the request whole',
+    fields: signalsCompressFields,
+  },
 ]
 
 export const contextPluginFields: FieldSchema[] = [
@@ -203,7 +246,8 @@ export const contextPluginFields: FieldSchema[] = [
     key: 'compress',
     label: 'Compress',
     type: 'object',
-    description: 'Shrinks tool outputs, history and injected context within the budget',
+    description:
+      'Shrinks tool outputs, history and injected context within the budget, and the text the signals read',
     fields: compressFields,
   },
   {

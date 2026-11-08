@@ -40,9 +40,4 @@ global:
   services:
     api:
       batch_classification: {max_batch_size: 50}
-  model_catalog:
-    external:
-      - name: guard
-        model_role: guardrail
-        llm_model_name: guard-v1
-        llm_endpoint: {address: 127.0.0.1, port: 8001}
+  model_catalog: {}

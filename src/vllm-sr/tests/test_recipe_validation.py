@@ -732,46 +732,6 @@ def test_nullable_global_sections_do_not_crash_validation():
     validate_user_config(config)
 
 
-def test_malformed_global_sections_are_reported():
-    config = recipe_config()
-    config.global_ = {"router": [], "integrations": "bad"}
-
-    errors = validate_user_config(config)
-
-    assert any(error.field == "global.router" for error in errors)
-    assert any(error.field == "global.integrations" for error in errors)
-
-
-def test_malformed_alias_values_are_reported_without_crashing():
-    config = recipe_config()
-    config.global_ = {
-        "router": {"auto_model_names": 123},
-        "integrations": {
-            "looper": {
-                "fusion": {"model_names": "bad"},
-            }
-        },
-    }
-
-    errors = validate_user_config(config)
-
-    assert any(error.field == "global.router.auto_model_names" for error in errors)
-    assert any(
-        error.field == "global.integrations.looper.fusion.model_names"
-        for error in errors
-    )
-
-
-def test_removed_alias_fields_require_entrypoint_configuration():
-    config = recipe_config()
-    config.global_ = {"router": {"auto_model_names": [" amd/custom-auto "]}}
-    config.entrypoints[0].model_names = ["amd/custom-auto"]
-
-    errors = validate_user_config(config)
-
-    assert any("was removed" in error.message for error in errors)
-
-
 def test_configured_model_names_keep_exact_collision_semantics():
     config = recipe_config()
     config.providers.models[0].name = " model-a "

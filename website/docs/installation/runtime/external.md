@@ -1,13 +1,12 @@
 ---
 title: Remote services
-description: Connect a classifier, guard, chat judge or embedding model hosted outside the Router.
+description: Connect a decision model, embedding model or chat model hosted outside the Router.
 ---
 
 Use a remote service when another server manages the model and its hardware.
 Declare it as a deployment whose `provider` is the API it speaks, then name that
-deployment where a signal uses it. The Router sends the service the text to
-inspect and uses its response as a routing signal. For models the router runs
-itself, see the [model runtime](model-runtime/overview.md). The
+deployment where it is used. For models the router runs itself, see the
+[model runtime](model-runtime/overview.md). The
 [model catalog reference](../model-catalog.md#connection-block) lists every
 connection field, and
 [Choose a model for a signal](../choose-a-model-for-a-signal.md) shows where
@@ -17,53 +16,41 @@ each signal's deployment is named.
 
 | Service | `provider` | Typical use |
 | --- | --- | --- |
-| Classification API (`POST <endpoint>/classify`) | `classify` | Domain, custom labels, prompt attacks, PII, hallucination detection, complexity, safety |
-| Chat API (`POST <endpoint>/chat/completions`) | `openai_chat` | Prompt attacks, hallucination detection, preference, LLM classification |
-| OpenAI-compatible embedding API (`POST <endpoint>/embeddings`) | `openai_embeddings` | [Remote embeddings](../../model-runtime/guides/embeddings.md#use-an-external-embedding-service) |
 | System One API | `systemone` | [System One questions](../../tutorials/signal/learned/systemone.md#ask-a-remote-system-one-model) and every built-in question-style signal |
-| MCP tool | `modules.classifier.mcp` | Classification through an MCP server |
+| OpenAI-compatible embedding API (`POST <endpoint>/embeddings`) | `openai_embeddings` | [Remote embeddings](../../model-runtime/guides/embeddings.md#use-an-external-embedding-service) |
+| Chat API (`POST <endpoint>/chat/completions`) | `openai_chat` | The memory query rewrite that `global.stores.memory.query_rewrite` names |
 
-Fact-check, user feedback and output-modality classification have no
-classification API; bind them to a `model_runtime` or `systemone` deployment.
+A signal is answered by a decision model: a `model_runtime` or `systemone`
+deployment. No signal asks a classification or chat service.
 
-## Connect a guard service
+## Connect a remote decision model
 
-The service must accept `POST /classify` with `{"inputs":"text"}` and return
-scores for every configured label. The
-[model catalog](../model-catalog.md) lists what a `classify` deployment answers.
-
-Merge this fragment into your existing `config.yaml`. Replace the hostname and
-`INJECTION` with your service's endpoint and positive label:
+Merge this fragment into your existing `config.yaml`. Replace the endpoint and
+model with your service's:
 
 ```yaml
 global:
   model_catalog:
     deployments:
-      guard-service:
-        provider: classify
-        endpoint: https://guard.example.com
-        auth: {api_key_env: GUARD_SERVICE_KEY}
+      d3-remote:
+        provider: systemone
+        endpoint: https://systemone.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
+        auth: {api_key_env: SYSTEMONE_KEY}
         timeout_ms: 5000
         limits: {max_response_bytes: 1048576}
-    modules:
-      prompt_guard:
-        enabled: true
-        threshold: 0.7
-        positive_labels: [INJECTION]
 recipes:
   - name: default
     model_bindings:
-      jailbreak: guard-service
+      jailbreak: d3-remote
 ```
 
-`guard-service` is the connection; the `jailbreak` binding makes it answer the
+`d3-remote` is the connection; the `jailbreak` binding makes it answer the
 recipe's jailbreak signal. Add a
 [jailbreak signal and decision](../../tutorials/signal/learned/jailbreak.md)
-to choose what happens when an attack is detected.
-
-For a chat-based guard, declare an `openai_chat` deployment with the chat
-model's `model`, and bind `jailbreak` to it. The response must use the
-supported guard verdict format.
+to choose what happens when an attack is detected. To answer every
+question-style signal with it, name it in
+`global.model_catalog.system.decision_model`.
 
 ## Test the connection
 
@@ -83,21 +70,12 @@ endpoint to check capacity.
 
 ## Avoid common integration errors
 
-- Return every configured classification label exactly once with a valid score.
-- For PII, return scored entities with valid Unicode offsets. For hallucination
-  detection, return spans relative to the answer: a `classify` service
-  receives the answer as `inputs` and the context and question under
-  `parameters`; an `openai_chat` service receives all three in the prompt.
-  Span labels come from the built-in set (`HALLUCINATED`, `unsupported`,
-  `contradicted`, `unverifiable`, and the chat taxonomy categories).
 - Set `timeout_ms`, `limits` and `auth` on the deployment. A key comes from
   `auth.api_key_env` or `auth.api_key_file`, never from the configuration
   itself. Enforce token limits in the service; local tokenizer `input`
   settings do not apply.
-- A classify request contains text but no model name. Use separate endpoints
-  for different classify models. Chat and embedding requests include the
-  deployment's `model`.
+- A `systemone` service that publishes no model card answers the question
+  types and presets its deployment's `capabilities` declares.
 
 See [when a check cannot finish](../../model-runtime/guides/safety.md#when-a-check-cannot-finish)
-before using remote signals to enforce a guardrail. MCP transport, tool, and timeout options
-are listed in the [configuration reference](../../api/configuration-schema.mdx).
+before using remote signals to enforce a guardrail.

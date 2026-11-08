@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -52,9 +53,14 @@ var structureForms = []ConfigForm{
 	},
 }
 
+// laterCardFields are card fields that are no model fact but that a later
+// form rewrites on the providers.models[] entry: the modality keyword.
+var laterCardFields = []string{"modality"}
+
 // migrateModelCards merges each card into the providers.models[] entry whose
 // catalog identity it is (its catalog, else its name; one of the same name
-// first). A card no entry names becomes a metadata-only entry.
+// first). One entry declares a card's facts, and every entry of the card's
+// catalog reads them. A card no entry names becomes a metadata-only entry.
 func migrateModelCards(m *Migration, at FormMatch) error {
 	models := ensureSequence(ensureMapping(at.Root, "providers"), "models")
 	loras := map[string]bool{}
@@ -88,7 +94,7 @@ func migrateModelCards(m *Migration, at FormMatch) error {
 			if field == "name" {
 				continue
 			}
-			if !slices.Contains(ModelFactFields(), field) {
+			if !slices.Contains(ModelFactFields(), field) && !slices.Contains(laterCardFields, field) {
 				return fmt.Errorf("model card %s: unknown field %s", name, field)
 			}
 			if mappingValue(entry, field) != nil {
@@ -185,19 +191,25 @@ func markDefaultEntrypoint(m *Migration, root *yaml.Node) error {
 	if len(recipes.Content) < 2 {
 		return nil
 	}
-	for _, entrypoint := range entrypoints {
+	markRecipeEntrypointDefault(root, string(DefaultRecipeName))
+	return nil
+}
+
+// markRecipeEntrypointDefault marks the first chat entrypoint of a recipe
+// default: true, or adds one serving vllm-sr/auto, the built-in default
+// entrypoint, which led the routing table.
+func markRecipeEntrypointDefault(root *yaml.Node, recipe string) {
+	for _, entrypoint := range sequenceAt(root, "entrypoints") {
 		api := scalarAt(entrypoint, "api")
-		if scalarAt(entrypoint, "recipe") == string(DefaultRecipeName) && (api == "" || api == string(ChatAPI)) {
+		if scalarAt(entrypoint, "recipe") == recipe && (api == "" || api == string(ChatAPI)) {
 			setNode(entrypoint, "default", boolNode(true))
-			return nil
+			return
 		}
 	}
-	// The built-in default entrypoint led the routing table.
-	entrypoint := mappingNode("model_names", stringSequence(DefaultEntrypointModel), "recipe", string(DefaultRecipeName))
+	entrypoint := mappingNode("model_names", stringSequence(DefaultEntrypointModel), "recipe", recipe)
 	setNode(entrypoint, "default", boolNode(true))
 	sequence := ensureSequence(root, "entrypoints")
 	sequence.Content = append([]*yaml.Node{entrypoint}, sequence.Content...)
-	return nil
 }
 
 func recipeNamed(root *yaml.Node, name string) *yaml.Node {
@@ -210,9 +222,9 @@ func recipeNamed(root *yaml.Node, name string) *yaml.Node {
 }
 
 // switchForms are the feature switches global.stores and global.services held,
-// now global.plugins entries. Migrate rewrites them last, after the stores'
-// own forms renamed them and the plugin forms gave each plugin its canonical
-// type.
+// and the prompt compression global.model_catalog.modules held, now
+// global.plugins entries. Migrate rewrites them last, after the stores' own
+// forms renamed them and the plugin forms gave each plugin its canonical type.
 var switchForms = []ConfigForm{
 	{
 		Code:     CodeRemovedField,
@@ -235,6 +247,89 @@ var switchForms = []ConfigForm{
 		Describe: describeRouterReplaySwitches,
 		Migrate:  migrateRouterReplaySwitches,
 	},
+	{
+		Code:    CodeRemovedSection,
+		Paths:   []string{"global.model_catalog.modules.prompt_compression"},
+		What:    "global.model_catalog.modules.prompt_compression is removed",
+		Becomes: "compress.signals of a context plugin in global.plugins",
+		Migrate: migratePromptCompression,
+	},
+}
+
+// migratePromptCompression makes the prompt compression of the text the
+// signals read compress.signals of the context plugin in global.plugins, the
+// default plugins every recipe's requests run before their decision. It runs
+// after the memory switch, which adds that plugin to a document without one.
+// Disabled, it compressed nothing and is dropped.
+func migratePromptCompression(m *Migration, at FormMatch) error {
+	signals := at.Node
+	m.Delete(at.Parent, at.Key)
+	deleteEmpty(at.Root, "global", "model_catalog", "modules")
+	if maxTokens, err := strconv.Atoi(scalarAt(signals, "max_tokens")); err != nil || maxTokens <= 0 || !yamlTrue(mappingValue(signals, "enabled")) {
+		m.Changed(at.Path, "prompt compression was off, so it compressed nothing, and is dropped")
+		return nil
+	}
+	configuration := globalPluginConfiguration(at.Root, DecisionPluginContext)
+	compress := ensureMapping(configuration, "compress")
+	if mappingValue(compress, "signals") != nil {
+		return fmt.Errorf("global.plugins' context plugin already compresses what the signals read; keep one")
+	}
+	// A block that held nothing compressed its requests with the defaults;
+	// layered over one with only signals it would leave them whole.
+	if blocks := emptyCompressBlocks(at.Root); len(blocks) > 0 {
+		for _, block := range blocks {
+			setNode(block, "mode", Scalar(ContextCompressionModeAuto))
+		}
+		m.Changed(at.Path, "the compress blocks that held nothing write mode: auto, so they still compress their requests beside the global compress.signals")
+	}
+	m.Set(compress, "signals", signals)
+	orderKeys(configuration, contextKeyOrder)
+	if !yamlTrue(mappingValue(configuration, "enabled")) {
+		m.Note(at.Path, "global.plugins' context plugin is disabled, so its compress.signals compresses nothing; enable the plugin for the signals to read compressed text")
+	}
+	for _, recipe := range sequenceAt(at.Root, "recipes") {
+		for _, plugin := range sequenceAt(recipe, "plugins") {
+			if scalarAt(plugin, "type") == DecisionPluginContext && scalarAt(mappingValue(plugin, "configuration"), "enabled") == "false" {
+				m.Note(recipePath(scalarAt(recipe, "name"))+".plugins", "the recipe turns the context plugin off, so its signals read the whole request; enable it to compress them as before")
+			}
+		}
+	}
+	return nil
+}
+
+// globalPluginConfiguration is the configuration of the plugin of a type in
+// global.plugins, which it adds, enabled, when there is none.
+func globalPluginConfiguration(root *yaml.Node, pluginType string) *yaml.Node {
+	plugins := ensureSequence(ensureMapping(root, "global"), "plugins")
+	for _, plugin := range plugins.Content {
+		if plugin = resolveAlias(plugin); scalarAt(plugin, "type") == pluginType {
+			return ensureMapping(plugin, "configuration")
+		}
+	}
+	configuration := mappingNode("enabled", boolNode(true))
+	plugins.Content = append(plugins.Content, mappingNode("type", pluginType, "configuration", configuration))
+	return configuration
+}
+
+// emptyCompressBlocks are the compress blocks that hold nothing in the context
+// plugins of every recipe and decision.
+func emptyCompressBlocks(root *yaml.Node) []*yaml.Node {
+	var blocks []*yaml.Node
+	for _, recipe := range sequenceAt(root, "recipes") {
+		plugins := slices.Clone(sequenceAt(recipe, "plugins"))
+		for _, decision := range sequenceAt(recipe, "decisions") {
+			plugins = append(plugins, sequenceAt(decision, "plugins")...)
+		}
+		for _, plugin := range plugins {
+			if scalarAt(plugin, "type") != DecisionPluginContext {
+				continue
+			}
+			if compress := mappingAt(plugin, "configuration", "compress"); compress != nil && len(compress.Content) == 0 {
+				blocks = append(blocks, compress)
+			}
+		}
+	}
+	return blocks
 }
 
 func responseCacheSwitches(store *yaml.Node) []string {

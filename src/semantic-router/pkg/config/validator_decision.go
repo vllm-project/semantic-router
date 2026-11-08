@@ -301,7 +301,12 @@ func validateDecisionCandidateIterationOutputs(iter CandidateIterationConfig, co
 	return nil
 }
 
+// validateDecisionPluginContracts checks a recipe's default plugins before its
+// decisions', which layer them, so a refused default names its own path.
 func validateDecisionPluginContracts(cfg *RouterConfig) error {
+	if err := validateDefaultPluginContracts(cfg); err != nil {
+		return err
+	}
 	for _, decision := range cfg.AllRoutingDecisions() {
 		if err := validateOneDecisionPluginContracts(
 			cfg,
@@ -310,7 +315,7 @@ func validateDecisionPluginContracts(cfg *RouterConfig) error {
 			return err
 		}
 	}
-	return validateDefaultPluginContracts(cfg)
+	return nil
 }
 
 // validateGlobalPluginContracts checks global.plugins at every load: a request
@@ -352,10 +357,29 @@ func validateOneDecisionPluginContracts(
 	if err := validatePluginContracts(cfg, decision.Name, decision.Plugins, configuration); err != nil {
 		return err
 	}
+	if err := validateDecisionSignalsCompression(decision, configuration); err != nil {
+		return err
+	}
 	if err := validateDecisionReplayShadow(cfg, decision); err != nil {
 		return err
 	}
 	warnCachedPersonalization(cfg, decision)
+	return nil
+}
+
+// validateDecisionSignalsCompression refuses compress.signals in a decision's
+// own context plugin: the routing signals read the request before a decision
+// is chosen.
+func validateDecisionSignalsCompression(decision *Decision, configuration func(index int, pluginType string) string) error {
+	for index, plugin := range decision.DeclaredPlugins() {
+		if NormalizeDecisionPluginType(plugin.Type) != DecisionPluginContext {
+			continue
+		}
+		context := decodePlugin([]DecisionPlugin{plugin}, DecisionPluginContext, &ContextPluginConfig{})
+		if context != nil && context.Compress != nil && context.Compress.Signals != nil {
+			return fmt.Errorf("%s.compress.signals: the routing signals read the request before a decision is chosen; set compress.signals in global.plugins or the recipe's plugins", configuration(index, plugin.Type))
+		}
+	}
 	return nil
 }
 

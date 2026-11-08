@@ -48,10 +48,10 @@ vllm-sr config migrate --config legacy.yaml --output legacy.migrated.yaml
 
 ```text
 Changes to review
-  global.model_catalog.deployments.vela-domain
-      provider candle -> model_runtime, device cuda:0
+  global.model_catalog.deployments.vela-embedding
+      provider ort is removed: the built-in model runtime serves every local model; rewritten as provider: model_runtime, on its device, with its artifact's Hub repository (2 places)
   global.model_catalog.deployments.vela-domain.precision
-      removed fp16: the model runs in its published precision (dtype: auto); dtype: float16 runs it in half precision on a GPU
+      the model runs in its published precision (dtype: auto); dtype: float16 runs it in half precision on a GPU
 ```
 
 对于仍需你亲自处理的事项，它会打印 **Warning**：无法安全改写的、指向你自有模型的相对路径
@@ -213,8 +213,7 @@ global:
         scope: global
 ```
 
-响应缓存原本使用此前的默认模型 MiniLM；现在它用 `embeddings.default` 向量化，即文件在 AMD GPU 上声明的 `vela-embedding` 部署，它也取代了 embedding 绑定。
-原先由模块 `model_id` 指定的防护模型和幻觉检测器，现在是以各自模型命名的部署，并通过 `bindings.jailbreak` 和 `bindings.hallucination` 绑定。
+embedding 绑定被删除：响应缓存用 `embeddings.default` 向量化，即文件声明的 `vela-embedding` 部署，现在由模型运行时在 AMD GPU 上提供服务。
 对迁移后的文件再次运行该命令不会做任何修改。
 
 ## 引擎参数 {#engine-arguments}
