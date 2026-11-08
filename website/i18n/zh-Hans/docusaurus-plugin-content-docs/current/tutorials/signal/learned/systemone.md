@@ -228,7 +228,7 @@ recipes:
 - `image` 和 `video`：当前轮次的图片和视频。部署必须能读取这种输入：模型卡列出该模态的模型运行时模型，或在 `capabilities.modalities` 中声明它的 `systemone` 部署。否则配置会以 `input_modality_unsupported` 被拒绝。目前没有部署读取音频，因此 `input.audio` 总会被拒绝。
 - `answer` 和 `context`：模型的回答及其依据上下文，仅适用于 `stage: response` 规则。
 
-读取请求相同部分的规则共享一次调用；读取其他部分的规则作为同一调用的额外状态发送。
+读取请求相同部分的规则共享一次调用；规则读取不同部分时，这次调用是批量请求，规则读取的每段文本各占一条。
 
 ### 读取完整输入 {#read-the-whole-input}
 
@@ -303,7 +303,7 @@ global:
           api_key_env: GATEWAY_KEY
 ```
 
-- 同一请求阶段发给该部署的问题（包括询问它的内置信号的问题）会合并为一次 System One 调用：选项以 System One `criteria` 发送，问题读取的其他文本作为额外的 `states` 条目发送，调用的截止时间以 `options.deadline_ms` 发送。System One API 会因一个失败的问题而整体拒绝调用，并指明该问题，因此 Router 会在同一截止时间内去掉它、把其余问题再问一次：只有失败问题对应的信号变为未知。其他任何失败都会使该次调用的所有信号变为未知。针对同一输入的相同问题，其答案最多复用 10 分钟，配置变更后即失效。
+- 同一请求阶段发给该部署的问题（包括询问它的内置信号的问题）会合并为一次 System One 调用：选项以 System One `criteria` 发送，调用的截止时间以 `options.deadline_ms` 发送。关于一段文本的问题是一个标准请求；关于多段文本的问题是一个批量请求，每段文本在 `states` 下各占一条，没有顶层的 `state` 或 `questions`（见模型运行时的 [decisions 参考](../../../model-runtime/reference#decisions)）。API 必须接受这两种形式。System One API 会因一个失败的问题而整体拒绝调用，并指明该问题，因此 Router 会在同一截止时间内去掉它、把其余问题再问一次：只有失败问题对应的信号变为未知。其他任何失败都会使该次调用的所有信号变为未知。针对同一输入的相同问题，其答案最多复用 10 分钟，配置变更后即失效。
 - 模型能回答的题型、现成问题（`pii`、`halu`）和能读取的输入模态优先取自配置加载时读取的 `GET <endpoint>/models` 列表中该模型的信息；列表未列出时使用 `capabilities.question_types`、`capabilities.presets` 和 `capabilities.modalities`；都没有时使用 System One 题型 `choice`、`noul` 和 `score`，并只读取文本。模型不原生支持 `set` 时，`set` 问题会组合为多个 `noul` 问题。
 - 网络往返比本地模型更慢。未设置自身 `timeout_ms` 的问题使用部署的 `timeout_ms`，否则使用默认的 1000 ms。API 变慢、失败或不可达时，其信号为未知，请求不会因此失败。Router 对每类失败只记录一次日志，且不包含密钥。
 - `global.model_catalog.system.decision_model.deployment` 也可以指向 `systemone` 部署。此时未指定部署的问题和 [System One 选择器](../../algorithm/selection/systemone.md) 会询问它，没有被绑定到其他部署的内置信号也会询问它。安全规则的 hazard 部分、embedding 和重排序仍使用各自的部署。配置未写出的模块阈值在这样的模型上为 0.5，并给出 `uncalibrated_preset` 警告。在不回答 span 问题的模型上，PII 和幻觉检测只给出不含位置的是/否判断，并在配置加载时给出 `span_fallback` 警告；此时对 PII 做 masking 的配置会被拒绝。[为信号选择模型](../../../installation/choose-a-model-for-a-signal.md#s2-everything-on-a-remote-system-one-model)展示了这种配置。

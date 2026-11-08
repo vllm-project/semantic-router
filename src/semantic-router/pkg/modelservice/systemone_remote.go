@@ -34,10 +34,6 @@ const listingLimit = 1 << 20
 // deployment's limits set another.
 const systemOneRequestLimit = 16 << 20
 
-// remoteStateLimit is how many texts one System One call asks about: the
-// request's own state and its further states.
-const remoteStateLimit = 8
-
 // remoteCacheTTL is how long a remote answer serves a repeated call. The
 // cache belongs to one configuration generation and is dropped with it.
 const remoteCacheTTL = 10 * time.Minute
@@ -250,8 +246,6 @@ func (d *systemOneDeployment) declaredCard() ModelCard {
 	return RemoteCard(d.model, d.declared, d.presets)
 }
 
-func (d *systemOneDeployment) stateLimit() int { return remoteStateLimit }
-
 // send asks a fused task's questions in one System One call. A System One
 // API fails a call with a failed question as a whole and names the question;
 // send then asks the rest once more without it, within the same deadline,
@@ -263,7 +257,7 @@ func (d *systemOneDeployment) send(ctx context.Context, task *bundleTask) {
 	var failure *questionFailure
 	if err == nil {
 		if failed, ok := failedQuestion(status, data); ok && ctx.Err() == nil {
-			if retry, ok := plan.without(task, failed.question); ok {
+			if retry, ok := plan.without(failed.question); ok {
 				systemOneRetries.WithLabelValues(d.name).Inc()
 				logging.ComponentDebugEvent("model_runtime", "systemone_question_retried", map[string]interface{}{
 					"deployment": d.name, "question": failed.question, "question_error": failed.code,
@@ -511,19 +505,27 @@ func systemOneQuestion(question Question) api.Question {
 // decisions answer. A System One API answers a request with a failed question
 // as a whole, with an error status, so the call's questions share its error.
 func DecodeSystemOneResponse(status int, body []byte, questions []Question) (Response, error) {
-	decoded, err := decodeSystemOneBody(status, body)
+	decoded, err := decodeSystemOneBody(status, body, false)
 	if err != nil {
 		return Response{}, err
 	}
 	return decodeResponse(decoded, questions), nil
 }
 
-func decodeSystemOneBody(status int, body []byte) (api.DecisionResponse, error) {
+// decodeSystemOneBody reads a System One API's answer to a standard request,
+// or with batch to a batch, whose answers are its entries'.
+func decodeSystemOneBody(status int, body []byte, batch bool) (api.DecisionResponse, error) {
 	if err := systemOneStatusError(status); err != nil {
 		return api.DecisionResponse{}, err
 	}
 	var decoded api.DecisionResponse
-	if len(body) > SystemOneResponseLimit || json.Unmarshal(body, &decoded) != nil || decoded.Answers == nil {
+	invalid := len(body) > SystemOneResponseLimit || json.Unmarshal(body, &decoded) != nil
+	if batch {
+		invalid = invalid || decoded.States == nil
+	} else {
+		invalid = invalid || decoded.Answers == nil
+	}
+	if invalid {
 		return api.DecisionResponse{}, fmt.Errorf("%w: invalid System One response", ErrFailed)
 	}
 	return decoded, nil

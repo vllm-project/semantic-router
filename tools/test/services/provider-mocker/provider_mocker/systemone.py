@@ -2,7 +2,10 @@
 
 The Router asks a systemone deployment its questions with POST <endpoint> and
 reads its model listing with GET <endpoint>/models; this fixture serves both
-under /v1/systemone for the one model it lists. It runs no model: markers in
+under /v1/systemone for the one model it lists. A request is a standard
+request (``state`` and ``questions``) or a batch (``states`` alone, named
+standard requests answered under their names); like the model runtime, the
+fixture refuses a body that mixes the two. It runs no model: markers in
 the text a question reads pin what it answers, so an assertion is attributable
 to the fixture and an unmarked text answers the same way on every run.
 
@@ -33,6 +36,8 @@ from fastapi.responses import JSONResponse
 
 MODEL = "e2e/fake-systemone"
 QUESTION_TYPES = ("choice", "noul", "span")
+# A standard request's own fields, which a batch carries in its entries.
+STATE_FIELDS = frozenset({"state", "questions", "images", "videos"})
 PII_SPAN_MARKER = "__PII_SPAN__"
 CHOICE_MARKER = "__SYSTEMONE_CHOICE__"
 YES_MARKER = "__SYSTEMONE_YES__"
@@ -60,20 +65,41 @@ async def systemone_decisions(request: Request):
         body = await request.json()
     except ValueError:
         body = None
-    if not well_formed(body) or not all(
-        well_formed(entry) for entry in states_of(body).values()
-    ):
-        return error(400, "invalid_request", "a request takes a state and questions")
+    entries = standard_requests(body)
+    if entries is None:
+        return error(
+            400,
+            "invalid_request",
+            "a request takes a state and questions, or states alone",
+        )
     if body.get("model", MODEL) != MODEL:
         return error(404, "model_not_found", f"this API serves {MODEL}")
-    entries = [body, *states_of(body).values()]
-    if any(UNAVAILABLE_MARKER in as_text(entry["state"]) for entry in entries):
+    if any(UNAVAILABLE_MARKER in as_text(entry["state"]) for entry in entries.values()):
         return error(503, "unavailable", "model unavailable")
-    response = answer_state(body)
-    states = {name: answer_state(entry) for name, entry in states_of(body).items()}
-    if states:
-        response["states"] = states
-    return response
+    if "states" not in body:
+        return answer_state(body)
+    states = {name: answer_state(entry) for name, entry in entries.items()}
+    used = sum(state["usage"]["input_tokens"] for state in states.values())
+    return {
+        "model": MODEL,
+        "states": states,
+        "usage": {"input_tokens": used, "output_tokens": 0},
+    }
+
+
+def standard_requests(body: Any) -> dict | None:
+    """The standard requests a body asks, by name: itself under "", or its
+    batch's entries; None for a body that is neither, or mixes the two."""
+    if not isinstance(body, dict):
+        return None
+    if "states" not in body:
+        return {"": body} if well_formed(body) else None
+    states = body["states"]
+    if STATE_FIELDS & set(body) or not isinstance(states, dict) or not states:
+        return None
+    if not all(well_formed(entry) for entry in states.values()):
+        return None
+    return states
 
 
 def well_formed(entry: Any) -> bool:
@@ -85,11 +111,6 @@ def well_formed(entry: Any) -> bool:
         and len(questions) > 0
         and all(isinstance(question, dict) for question in questions.values())
     )
-
-
-def states_of(body: dict) -> dict:
-    states = body.get("states")
-    return states if isinstance(states, dict) else {}
 
 
 def error(status: int, code: str, message: str) -> JSONResponse:

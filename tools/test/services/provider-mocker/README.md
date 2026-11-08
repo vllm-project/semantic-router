@@ -80,6 +80,9 @@ and `__mock_gateway_fields__`, which adds fields no Messages schema declares: a
 `/v1/systemone` answers the questions the Router compiles its application
 signals into, for a `systemone` deployment with
 `endpoint: http://<service>:8000/v1/systemone` and `model: e2e/fake-systemone`.
+It takes a standard request (`state` and `questions`) or a batch (`states`
+alone, answered entry by entry under the same names) and, like the model
+runtime, refuses a body that mixes the two with `invalid_request`.
 It runs no model and reads all of every text; markers in the text a question
 reads pin its answer:
 

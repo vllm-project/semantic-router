@@ -23,7 +23,8 @@ import (
 // question types and presets, answers a choice question with its first
 // option (by key) most probable and a span question (the pii preset) with a
 // PERSON span over the first three bytes of its text, each having read its
-// whole input, and keeps the body of every call.
+// whole input, of a standard request or of each entry of a batch, refuses a
+// body that mixes the two, and keeps the body of every call.
 type systemOneServer struct {
 	listing string
 	mu      sync.Mutex
@@ -46,13 +47,17 @@ func (s *systemOneServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	var body struct {
 		Model     string              `json:"model"`
-		State     string              `json:"state"`
+		State     *string             `json:"state"`
 		Questions map[string]question `json:"questions"`
 		States    map[string]state    `json:"states"`
 	}
 	raw := new(strings.Builder)
 	if err := json.NewDecoder(teeReader(r, raw)).Decode(&body); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if batch := body.States != nil; batch && (body.State != nil || body.Questions != nil) || !batch && body.State == nil {
+		http.Error(w, `{"error":{"code":"invalid_request"}}`, http.StatusBadRequest)
 		return
 	}
 	s.mu.Lock()
@@ -82,15 +87,15 @@ func (s *systemOneServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return map[string]any{"model": body.Model, "answers": answers, "spans": spans, "usage": map[string]int{"input_tokens": 9}}
 	}
-	response := answer(body.State, body.Questions)
-	if len(body.States) > 0 {
-		states := map[string]any{}
-		for name, entry := range body.States {
-			states[name] = answer(entry.State, entry.Questions)
-		}
-		response["states"] = states
+	if body.States == nil {
+		_ = json.NewEncoder(w).Encode(answer(*body.State, body.Questions))
+		return
 	}
-	_ = json.NewEncoder(w).Encode(response)
+	states := map[string]any{}
+	for name, entry := range body.States {
+		states[name] = answer(entry.State, entry.Questions)
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"model": body.Model, "states": states, "usage": map[string]int{"input_tokens": 9 * len(states)}})
 }
 
 func (s *systemOneServer) calls() []string {

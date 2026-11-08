@@ -141,21 +141,37 @@ class SystemOneTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(response.status_code, 503)
 
-    async def test_further_states_are_answered_in_the_same_call(self):
+    async def test_a_batch_answers_each_entry_under_its_name(self):
         body = await self.post(
             {
-                "state": "hello",
-                "questions": {"pii": PII},
                 "states": {
+                    "request": {"state": "hello", "questions": {"pii": PII}},
                     "turn": {
                         "state": "__PII_SPAN__ EMAIL_ADDRESS a@b.example",
                         "questions": {"pii": PII},
-                    }
+                    },
                 },
             }
         )
-        states = body.json()["states"]
+        self.assertEqual(body.status_code, 200, body.text)
+        answered = body.json()
+        self.assertNotIn("answers", answered)
+        states = answered["states"]
+        self.assertEqual(set(states), {"request", "turn"})
+        self.assertEqual(states["request"]["spans"]["pii"], [])
         self.assertEqual(states["turn"]["spans"]["pii"][0]["text"], "a@b.example")
+
+    async def test_a_body_mixing_a_standard_request_and_a_batch_is_refused(self):
+        entry = {"state": "hello", "questions": {"pii": PII}}
+        for body in (
+            {**entry, "states": {"turn": entry}},
+            {"state": "hello", "states": {"turn": entry}},
+            {"questions": {"pii": PII}, "states": {"turn": entry}},
+            {"states": {}},
+        ):
+            response = await self.post(body)
+            self.assertEqual(response.status_code, 400, body)
+            self.assertEqual(response.json()["error"]["code"], "invalid_request")
 
     async def test_unsupported_questions_and_requests_are_refused(self):
         body = await self.ask("x", q={"type": "score"}, one={"type": "choice"})

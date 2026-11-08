@@ -265,8 +265,8 @@ recipes:
 - `answer` and `context`: the model's answer and its grounding context, for
   a `stage: response` rule only.
 
-Rules that read the same parts of the request share a call; a rule that
-reads other parts travels as a further state of the same call.
+Rules that read the same parts of the request share a call; when rules read
+different parts, the call is a batch with an entry per text they read.
 
 ### Read the whole input
 
@@ -364,8 +364,12 @@ global:
 
 - A request stage's questions to the deployment, including those of the
   built-in signals that ask it, go in one System One call: their options as
-  System One `criteria`, any other text they read as a further `states`
-  entry, and the call's deadline as `options.deadline_ms`. A System One API
+  System One `criteria` and the call's deadline as `options.deadline_ms`.
+  Questions about one text are one standard request; questions about several
+  texts are a batch, with an entry per text under `states` and no top-level
+  `state` or `questions` (see the model runtime's
+  [decisions reference](../../../model-runtime/reference#decisions)). The
+  API must take both forms. A System One API
   fails a call with a failed question as a whole and names the question, so
   the router asks the other questions once more within the same deadline:
   only the failed question's signal is unknown. Any other failure leaves

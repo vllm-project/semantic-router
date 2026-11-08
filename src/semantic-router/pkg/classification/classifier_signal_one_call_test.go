@@ -168,30 +168,28 @@ func TestAStageAsksVela2OneCallWhateverItsSignalsTiming(t *testing.T) {
 }
 
 // A rule that reads the history asks the request with its earlier user
-// messages, a state of its own in the stage's one call.
+// messages, a state of its own in the stage's one call: the guard reads them
+// as context, and the pii rule, a span question, scans them with the request.
 func TestHistoryAwareRulesAskTheirStateInTheStagesOneCall(t *testing.T) {
 	document := strings.Replace(oneCallConfig, "TIMEOUT", "0", 1)
 	for name, tc := range map[string]struct {
 		document string
+		states   int
 		reading  int
 	}{
-		"the guard and the pii rule": {document, 2},
-		"the guard alone":            {strings.Replace(document, oneCallPIIRule, strings.Replace(oneCallPIIRule, "          input: {history: true}\n", "", 1), 1), 1},
+		"the guard and the pii rule": {document, 3, 2},
+		"the guard alone":            {strings.Replace(document, oneCallPIIRule, strings.Replace(oneCallPIIRule, "          input: {history: true}\n", "", 1), 1), 2, 1},
 	} {
 		t.Run(name, func(t *testing.T) {
 			classifier, fake := oneCallClassifierFrom(t, tc.document)
 			before := len(fake.Decisions())
 			evaluateOneCall(t, classifier, "please refund the billing for my order", oneCallHistory)
 			asked := fake.Decisions()[before:]
-			if len(asked) != 1 || asked[0].States == nil || len(*asked[0].States) != 1 {
-				t.Fatalf("one call, the history in a state of its own: %+v", asked)
-			}
-			states := []api.DecisionState{{State: asked[0].State, Questions: asked[0].Questions}}
-			for _, entry := range *asked[0].States {
-				states = append(states, entry)
+			if len(asked) != 1 || asked[0].Questions != nil || asked[0].States == nil || len(*asked[0].States) != tc.states {
+				t.Fatalf("one call, a batch with the history in an entry of its own: %+v", asked)
 			}
 			reading := 0
-			for _, state := range states {
+			for _, state := range *asked[0].States {
 				encoded, err := json.Marshal(state.State)
 				if err != nil {
 					t.Fatal(err)

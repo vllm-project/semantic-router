@@ -18,10 +18,11 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/presets"
 )
 
-// vela2PublishedConfig binds every built-in signal a Vela 2.0 model answers to
-// one deployment, behind the test's recording proxy, and asks one decision
-// question of each type. The guard and PII rules also read earlier messages,
-// so a request with history asks its questions about several states.
+// vela2PublishedConfig makes the Vela 2.0 deployment behind the test's
+// recording proxy the decision model, which answers every built-in signal's
+// preset, and asks one decision question of each type. The guard and PII
+// rules also read the earlier user turns, so a request with history asks
+// their questions about the request with them.
 const vela2PublishedConfig = `
 version: v0.5
 providers:
@@ -39,27 +40,10 @@ global:
       vela2:
         provider: model_runtime
         endpoint: %s
-        served_name: %s
-    bindings:
-      domain_classifier: {deployment: vela2, contract: label_distribution.v1}
-      prompt_guard: {deployment: vela2, contract: label_distribution.v1}
-      safety.unsafe: {deployment: vela2, contract: label_distribution.v1}
-      fact_check_classifier: {deployment: vela2, contract: label_distribution.v1}
-      feedback_detector: {deployment: vela2, contract: label_distribution.v1}
-      modality_detector: {deployment: vela2, contract: label_distribution.v1}
-      pii_classifier: {deployment: vela2, contract: token_spans.v1}
-      hallucination_detector: {deployment: vela2, contract: token_spans.v1}
-    modules:
-      prompt_guard:
-        enabled: true
-      modality_detector:
-        enabled: true
-        method: classifier
-        confidence_threshold: 0.51
-      hallucination_mitigation:
-        detector:
-          min_span_length: 1
-          min_span_confidence: 0
+        model: %s
+    system:
+      decision_model:
+        deployment: vela2
 recipes:
   - name: default
     signals:
@@ -81,7 +65,6 @@ recipes:
         - {name: DIFFUSION, labels: [image]}
       systemone:
         - name: tone
-          deployment: vela2
           timeout_ms: 60000
           question:
             type: choice
@@ -91,13 +74,11 @@ recipes:
               - {key: casual, description: relaxed or chatty}
               - {key: upset, description: angry or frustrated}
         - name: urgent
-          deployment: vela2
           timeout_ms: 60000
           question:
             type: noul
             instructions: Does the request need an urgent answer?
         - name: effort
-          deployment: vela2
           timeout_ms: 60000
           predicate: {gte: 1}
           question:
@@ -105,7 +86,6 @@ recipes:
             instructions: How much work would a good answer take?
             levels: [A one-line answer, A short explanation, A detailed multi-step answer]
         - name: topics
-          deployment: vela2
           timeout_ms: 60000
           question:
             type: set
@@ -116,7 +96,6 @@ recipes:
               - {key: account, description: "logins, passwords or account settings"}
               - {key: medication, description: drugs or doses}
         - name: entities
-          deployment: vela2
           timeout_ms: 60000
           question:
             type: span
@@ -150,7 +129,7 @@ recipes:
 
 // vela2Item is one request of the corpus: its text, the user's earlier
 // messages, and the assistant's reply before it, if any (which makes the
-// feedback detector ask its question).
+// stage ask the feedback question).
 type vela2Item struct {
 	name, text string
 	prior      []string
@@ -169,12 +148,12 @@ var vela2PublishedItems = []vela2Item{
 	{name: "technical", text: "Explain how TCP congestion control works, with an example."},
 	{name: "multilingual-pii", text: "请帮我查询一下发往上海的包裹，收件人是李华，电话 13800138000。"},
 	{
-		name:  "history-two-states",
+		name:  "history-three-states",
 		text:  "Can you summarise the release notes I sent you?",
 		prior: []string{"Earlier I sent the release notes to Tom Baker at tom.baker@example.com."},
 	},
 	{
-		name:      "feedback-three-states",
+		name:      "feedback-four-states",
 		text:      "That answer is wrong; please check your calculation again.",
 		prior:     []string{"What is 17 times 23? My name is Anna Müller."},
 		assistant: "17 times 23 is 381.",
@@ -183,20 +162,23 @@ var vela2PublishedItems = []vela2Item{
 
 // vela2PublishedItems08B is the 0.8B's corpus: a decoder on CPU answers a
 // request in seconds, so it takes one request with one state and one with
-// three, which between them ask every question.
-var vela2PublishedItems08B = []string{"support-pii", "feedback-three-states"}
+// four, which between them ask every question.
+var vela2PublishedItems08B = []string{"support-pii", "feedback-four-states"}
 
-// The questions a request stage asks about the request: one per bound
-// built-in signal and decision question, and the feedback question after an
-// assistant reply. Each earlier message gets the history-aware guard and PII
-// questions.
+// The questions a request stage asks about the request: one per built-in
+// signal's preset and decision question. The history-aware guard asks its
+// question about the request with the earlier user turns, and the PII rule,
+// a span question, scans those turns and the request as one text; both ask
+// the request's own state when there are none. After an assistant reply, the
+// feedback question asks about the request with the answer it replies to.
 var (
 	vela2RequestQuestions = []string{
-		"domain_classifier:domain", "effort", "entities", "fact_check_classifier:factcheck", "modality_detector:modality",
-		"pii_classifier:pii", "prompt_guard:attack", "safety.unsafe:p_harm", "tone", "topics", "urgent",
+		"preset:domain", "preset:fact_check", "preset:harm", "preset:modality",
+		"systemone:effort", "systemone:entities", "systemone:tone", "systemone:topics", "systemone:urgent",
 	}
-	vela2FeedbackQuestion = "feedback_detector:feedback"
-	vela2HistoryQuestions = []string{"pii_classifier:pii", "prompt_guard:attack"}
+	vela2FeedbackQuestion = "preset:feedback"
+	vela2HistoryQuestions = []string{"preset:jailbreak"}
+	vela2ScanQuestions    = []string{"preset:pii"}
 )
 
 var vela2PublishedHallucinations = []struct{ name, context, question, answer string }{
@@ -252,6 +234,11 @@ func testVela2PublishedAnswers(t *testing.T, endpointEnv, model string, items []
 	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
 	lease, err := manager.Acquire(cfg)
 	if err != nil {
+		t.Fatal(err)
+	}
+	// An attached deployment's card arrives with its watcher; a rule asked
+	// before it does is unknown.
+	if _, err = lease.Card(context.Background(), "vela2"); err != nil {
 		t.Fatal(err)
 	}
 	classifier, err := buildClassifier(cfg, RecipeRuntimeOptions{Runtime: serving.New(lease, nil)})
@@ -329,7 +316,7 @@ func checkVela2Item(t *testing.T, endpoint string, classifier *Classifier, cfg *
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	input.RequestFacts = RequestFacts{Context: ctx}
+	input.RequestFacts = RequestFacts{Context: ctx, Turns: vela2PriorTurns(item)}
 	started := time.Now()
 	results := classifier.evaluateAllSignalsWithContext(input, cfg.Decisions, true)
 	t.Logf("request stage took %s", time.Since(started).Round(time.Millisecond))
@@ -337,44 +324,63 @@ func checkVela2Item(t *testing.T, endpoint string, classifier *Classifier, cfg *
 		t.Fatalf("signal errors %v", results.SignalErrors)
 	}
 
-	// One decisions call carries every question of the stage, with one
-	// further state per earlier message the history-aware rules read.
+	// One decisions call carries every question of the stage: a standard
+	// request about the request alone, or a batch with an entry for each state
+	// the stage reads: the request, the request with the user's earlier turns
+	// (the guard), those turns and the request as one text (the PII rule), and
+	// the request with the answer it replies to (the feedback question).
 	calls := decisionCalls(t, recorder.take())
 	if len(calls) != 1 {
 		t.Fatalf("the stage sent %d decisions calls, want one", len(calls))
 	}
 	call := calls[0]
-	history := historyForHistoryAwareSignals(input.PriorUserMessages, input.NonUserMessages)
-	if len(call.States) != len(history) {
-		t.Fatalf("the call carries %d further states, want one per earlier message (%d)", len(call.States), len(history))
+	history := strings.Join(item.prior, "\n\n")
+	want := map[string][]string{
+		"request":              slices.Clone(vela2RequestQuestions),
+		"request+history":      slices.Clone(vela2HistoryQuestions),
+		"request+history text": slices.Clone(vela2ScanQuestions),
 	}
-	roles := map[string]string{"": "request"}
-	if text := jsonString(call.State); text != item.text {
-		t.Fatalf("the call's own state is %q, want the request", text)
+	if history == "" {
+		want = map[string][]string{"request": slices.Concat(vela2RequestQuestions, vela2HistoryQuestions, vela2ScanQuestions)}
 	}
-	asked := slices.Clone(vela2RequestQuestions)
 	if item.assistant != "" {
-		asked = append(asked, vela2FeedbackQuestion)
-		sort.Strings(asked)
+		want["request+answer"] = []string{vela2FeedbackQuestion}
 	}
-	if got := sortedKeys(call.Questions); !slices.Equal(got, asked) {
-		t.Fatalf("the call asks %v about the request, want %v", got, asked)
+	for _, questions := range want {
+		sort.Strings(questions)
 	}
-	for name, state := range call.States {
-		index := slices.Index(history, jsonString(state.State))
-		if index < 0 {
-			t.Fatalf("state %s is %s, which is no earlier message", name, state.State)
+	names, alone := call.stateRequests()
+	if len(names) != len(want) {
+		t.Fatalf("the call asks about %d states, want %d (%v)", len(names), len(want), sortedKeys(want))
+	}
+	roles, seen := map[string]string{}, map[string]bool{}
+	request, guard, pii, feedback := "", "", "", ""
+	for index, name := range names {
+		role := vela2StateRole(t, alone[index].State, item.text, history, item.assistant)
+		if seen[role] {
+			t.Fatalf("the call asks about the %s twice", role)
 		}
-		roles[name] = fmt.Sprintf("history:%d", index+1)
-		if got := sortedKeys(state.Questions); !slices.Equal(got, vela2HistoryQuestions) {
-			t.Fatalf("the call asks %v about %s, want %v", got, roles[name], vela2HistoryQuestions)
+		roles[name], seen[role] = role, true
+		if got := sortedKeys(alone[index].Questions); !slices.Equal(got, want[role]) {
+			t.Fatalf("the call asks %v about the %s, want %v", got, role, want[role])
+		}
+		if role == "request" {
+			request = name
+		}
+		if slices.Contains(want[role], "preset:jailbreak") {
+			guard = name
+		}
+		if slices.Contains(want[role], "preset:pii") {
+			pii = name
+		}
+		if slices.Contains(want[role], vela2FeedbackQuestion) {
+			feedback = name
 		}
 	}
 
 	// The call answers the same when it is asked again, and each of its
 	// states as its questions asked about that state alone (with one state,
 	// the repeated call is that request).
-	names, alone := call.stateRequests()
 	repeat := vela2Call{answer: askVela2(t, endpoint, call.withoutDeadline())}
 	answers := make(map[string]vela2StateAnswer, len(names))
 	for index, name := range names {
@@ -389,8 +395,45 @@ func checkVela2Item(t *testing.T, endpoint string, classifier *Classifier, cfg *
 		}
 		answers[roles[name]] = checkVela2Record(t, alone[index].Questions, fused, os.Getenv(vela2RecordEnv) == "1")
 	}
-	checkVela2Signals(t, cfg, results, call, history)
+	checkVela2Signals(t, cfg, results, call, request, guard, pii, feedback)
 	return answers
+}
+
+// vela2PriorTurns are the turns before the request, as extproc hands them to
+// the signals: the user's earlier messages, then the assistant's reply.
+func vela2PriorTurns(item vela2Item) []ConversationTurn {
+	var turns []ConversationTurn
+	for _, text := range item.prior {
+		turns = append(turns, ConversationTurn{Role: "user", Text: text})
+	}
+	if item.assistant != "" {
+		turns = append(turns, ConversationTurn{Role: "assistant", Text: item.assistant})
+	}
+	return turns
+}
+
+// vela2StateRole names what a state of the call holds: the request alone, the
+// request with the user's earlier turns, those turns and the request as one
+// text, or the request with the answer it replies to.
+func vela2StateRole(t *testing.T, state json.RawMessage, request, history, answer string) string {
+	t.Helper()
+	if jsonString(state) == request {
+		return "request"
+	}
+	if history != "" && jsonString(state) == history+"\n\n"+request {
+		return "request+history text"
+	}
+	var parts map[string]string
+	if json.Unmarshal(state, &parts) == nil && len(parts) == 2 && parts["request"] == request {
+		if history != "" && parts["history"] == history {
+			return "request+history"
+		}
+		if answer != "" && parts["previous_answer"] == answer {
+			return "request+answer"
+		}
+	}
+	t.Fatalf("state %s is none of the request, the request with the user's earlier turns or with the answer before it, and those turns with the request", state)
+	return ""
 }
 
 // checkVela2Record is a state's answer as the record keeps it; to record it,
@@ -425,12 +468,15 @@ func compareVela2States(t *testing.T, got, want map[string]vela2StateAnswer, tol
 }
 
 // checkVela2Signals checks that the Router read each signal from its own
-// state's answers in the fused call: the decision questions' values, the
-// guard's highest risk and the PII entities over the request and its earlier
-// messages, and the safety rule's risk.
-func checkVela2Signals(t *testing.T, cfg *config.RouterConfig, results *SignalResults, call vela2Call, history []string) {
+// state's answers in the fused call: the decision questions' values and the
+// safety rule's risk from the request's (the state named request), the
+// guard's risk from the one the guard asks about (named guard), the PII
+// entities from the one the PII rule scans (named pii), and the feedback
+// rule's label from the one with the answer it judges (named feedback; none
+// without an assistant reply).
+func checkVela2Signals(t *testing.T, cfg *config.RouterConfig, results *SignalResults, call vela2Call, request, guard, pii, feedback string) {
 	t.Helper()
-	own := call.stateAnswer(t, "")
+	own := call.stateAnswer(t, request)
 	expect := func(key string, want float64) {
 		t.Helper()
 		if got, ok := results.SignalValues[key]; !ok || math.IsNaN(want) || math.Abs(got-want) > vela2StateTolerance {
@@ -467,28 +513,35 @@ func checkVela2Signals(t *testing.T, cfg *config.RouterConfig, results *SignalRe
 			}
 		}
 	}
-	expect("safety:unsafe", number(own, "answers", "safety.unsafe:p_harm", "probabilities", "unsafe"))
+	expect("safety:unsafe", number(own, "answers", "preset:harm", "probabilities", "unsafe"))
 
-	risk := 0.0
-	entities := map[string]bool{}
-	for _, name := range append([]string{""}, sortedKeys(call.States)...) {
-		answer := call.stateAnswer(t, name)
-		risk = math.Max(risk, number(answer, "answers", "prompt_guard:attack", "probabilities", "jailbreak"))
-		for _, span := range spanList(answer, "pii_classifier:pii") {
-			if number(span, "probability") >= 0.01 {
-				entities[fmt.Sprint(span["label"])] = true
-			}
-		}
-	}
+	guarded := call.stateAnswer(t, guard)
+	risk := number(guarded, "answers", "preset:jailbreak", "probabilities", "jailbreak")
 	if got := results.SignalValues["jailbreak:attack"]; float32(got) != float32(risk) {
-		t.Fatalf("guard risk %v, the call's highest jailbreak probability over %d states is %v", got, 1+len(history), risk)
+		t.Fatalf("guard risk %v, the call's jailbreak probability is %v", got, risk)
+	}
+	entities := map[string]bool{}
+	for _, span := range spanList(call.stateAnswer(t, pii), "preset:pii") {
+		if label := fmt.Sprint(span["label"]); piiCounts(label) && number(span, "probability") >= 0.01 {
+			entities[label] = true
+		}
 	}
 	detected := slices.Clone(results.PIIEntities)
 	sort.Strings(detected)
 	detected = slices.Compact(detected)
 	if want := sortedKeys(entities); !slices.Equal(detected, want) {
-		t.Fatalf("PII entities %v, the call's spans over %d states name %v", detected, 1+len(history), want)
+		t.Fatalf("PII entities %v, the call's spans name %v", detected, want)
 	}
+	if feedback != "" {
+		expect("user_feedback:wrong_answer:WRONG_ANSWER", number(call.stateAnswer(t, feedback), "answers", vela2FeedbackQuestion, "probabilities", "WRONG_ANSWER"))
+	}
+}
+
+// piiCounts reports whether a pii rule that ignores no label counts a span of
+// the model's label: one of the pii preset's.
+func piiCounts(label string) bool {
+	preset, _ := presets.Lookup(presets.PII, presets.StageRequest)
+	return slices.ContainsFunc(preset.Options, func(option presets.Option) bool { return option.Key == label })
 }
 
 func number(answer map[string]interface{}, path ...string) float64 {

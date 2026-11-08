@@ -110,8 +110,8 @@ func decideKey(request Request) cacheKey {
 	return w.key()
 }
 
-// decideStatesKey keys a decisions call about several states: each state's
-// name (the request's own is "") and request, in request order.
+// decideStatesKey keys a decisions batch about several states: each entry's
+// name and request, in request order.
 func decideStatesKey(names []string, requests []Request) cacheKey {
 	w := newKeyWriter(surfaceDecideStates)
 	w.int(len(requests))

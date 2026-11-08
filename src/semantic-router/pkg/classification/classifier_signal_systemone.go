@@ -96,6 +96,9 @@ func (r systemOneReading) previousAnswer() string {
 // others as context). A part with nothing to read is left out.
 func (r systemOneReading) state(rule config.SystemOneRule) modelservice.Request {
 	input := rule.Input
+	if request, ok := r.spanScan(rule); ok {
+		return request
+	}
 	parts := map[string]string{}
 	add := func(name, text string) {
 		if strings.TrimSpace(text) != "" {
@@ -139,6 +142,36 @@ func (r systemOneReading) state(rule config.SystemOneRule) modelservice.Request 
 	return request
 }
 
+// spanScan is the state of a request-stage span rule that reads the earlier
+// user turns or the tool results and nothing else: a span question locates
+// its spans in the request alone, so that text is scanned with the request
+// instead of being read as context.
+func (r systemOneReading) spanScan(rule config.SystemOneRule) (modelservice.Request, bool) {
+	input := rule.Input
+	if rule.Question.Type != config.SystemOneQuestionSpan || input.Answer || input.Context || input.PreviousTurns > 0 {
+		return modelservice.Request{}, false
+	}
+	var scanned []string
+	if input.History {
+		scanned = append(scanned, r.history...)
+	}
+	if input.ToolResults {
+		scanned = append(scanned, r.toolResults...)
+	}
+	scanned = slices.DeleteFunc(scanned, func(text string) bool { return strings.TrimSpace(text) == "" })
+	if len(scanned) == 0 {
+		return modelservice.Request{}, false
+	}
+	request := modelservice.Request{State: strings.Join(append(scanned, r.request), "\n\n")}
+	if input.Image {
+		request.Images = slices.Clone(r.images)
+	}
+	if input.Video {
+		request.Videos = slices.Clone(r.videos)
+	}
+	return request, true
+}
+
 // askedRule is one rule a stage asks: a systemone rule, or an application
 // rule compiled into one, which publishes its matches and values under its
 // application type and shares its preset's question with the stage's other
@@ -169,15 +202,18 @@ func (a askedRule) questionID() string {
 }
 
 // systemOneCall is the rules a stage asks one deployment about one state.
+// requestAlone is whether that state is the request text and nothing else.
 type systemOneCall struct {
-	deployment string
-	request    modelservice.Request
-	rules      []askedRule
+	deployment   string
+	request      modelservice.Request
+	rules        []askedRule
+	requestAlone bool
 }
 
 // systemOneCalls groups rules by the deployment that answers them and the
 // state they read, in rule order: every rule of a stage goes to its
-// deployment in one call, its other states as further states of it.
+// deployment in one call, a batch with an entry per state when it reads
+// several.
 func (c *Classifier) systemOneCalls(rules []askedRule, reading systemOneReading) []*systemOneCall {
 	var calls []*systemOneCall
 	for _, asked := range rules {
@@ -187,7 +223,7 @@ func (c *Classifier) systemOneCalls(rules []askedRule, reading systemOneReading)
 			return call.deployment == deployment && sameState(call.request, state)
 		})
 		if index < 0 {
-			calls = append(calls, &systemOneCall{deployment: deployment, request: state})
+			calls = append(calls, &systemOneCall{deployment: deployment, request: state, requestAlone: state.Parts == nil && state.State == reading.request})
 			index = len(calls) - 1
 		}
 		calls[index].rules = append(calls[index].rules, asked)

@@ -69,21 +69,23 @@ func CalibrationTaskSHA256(request *NativeRequest) (string, error) {
 			task["options"], _ = json.Marshal(options)
 		}
 	}
-	if err := maskCalibrationState(task); err != nil {
-		return "", err
-	}
-	if states, present := task["states"]; present {
-		var named map[string]map[string]json.RawMessage
-		if err := json.Unmarshal(states, &named); err != nil || named == nil {
-			return "", errors.New("invalid named calibration states")
+	states, batch := task["states"]
+	if !batch {
+		if err := maskCalibrationState(task); err != nil {
+			return "", err
 		}
-		for _, state := range named {
-			if err := maskCalibrationState(state); err != nil {
-				return "", err
-			}
-		}
-		task["states"], _ = json.Marshal(named)
+		return calibrationSHA(task)
 	}
+	var named map[string]map[string]json.RawMessage
+	if err := json.Unmarshal(states, &named); err != nil || named == nil {
+		return "", errors.New("invalid named calibration states")
+	}
+	for _, state := range named {
+		if err := maskCalibrationState(state); err != nil {
+			return "", err
+		}
+	}
+	task["states"], _ = json.Marshal(named)
 	return calibrationSHA(task)
 }
 

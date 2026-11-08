@@ -136,7 +136,7 @@ func summarizePII(results *SignalResults) {
 // request text alone: Router Replay captures a prompt only when a complete
 // read found no personal data in it.
 func recordPrivacyEvidence(results *SignalResults, call *systemOneCall, response modelservice.Response, err error) {
-	if call.request.Parts != nil || !slices.ContainsFunc(call.rules, func(asked askedRule) bool { return asked.preset == presets.PII }) {
+	if !call.requestAlone || !slices.ContainsFunc(call.rules, func(asked askedRule) bool { return asked.preset == presets.PII }) {
 		return
 	}
 	answer, answered := response.Answers[presetQuestionID(presets.PII)]

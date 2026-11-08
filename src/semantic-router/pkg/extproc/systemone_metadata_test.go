@@ -74,15 +74,18 @@ recipes:
 	question := `{"meta":{"type":"noul","instructions":"Is this relevant?"}}`
 	answer := json.RawMessage(`{"meta":{"type":"noul","noul":0.99,"extension":{"meta":"answer data"}}}`)
 	response, err := json.Marshal(map[string]any{
-		"model": "kai-native", "meta": identity, "answers": answer,
-		"states": map[string]any{"meta": map[string]any{"model": "kai-native", "meta": identity, "answers": answer}},
+		"model": "kai-native", "meta": identity,
+		"states": map[string]any{
+			"first": map[string]any{"model": "kai-native", "meta": identity, "answers": answer},
+			"meta":  map[string]any{"model": "kai-native", "meta": identity, "answers": answer},
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, options := range []string{"", `,"options":{"return_meta":false}`, `,"options":{"return_meta":true}`} {
 		t.Run(options, func(t *testing.T) {
-			body := json.RawMessage(`{"model":"vllm-sr/auto","state":"first","questions":` + question + `,"states":{"meta":{"state":"second","questions":` + question + `}}` + options + `}`)
+			body := json.RawMessage(`{"model":"vllm-sr/auto","states":{"first":{"state":"first","questions":` + question + `},"meta":{"state":"second","questions":` + question + `}}` + options + `}`)
 			status, result, err := router.RouteSystemOne(t.Context(), "vllm-sr/auto", body, func(_ context.Context, model string, task json.RawMessage) (int, []byte, error) {
 				if model != "kai" || !strings.Contains(string(task), `"return_meta":true`) {
 					t.Fatal("calibrated cascade did not request internal provenance")
@@ -93,9 +96,8 @@ recipes:
 				t.Fatalf("status=%d error=%v", status, err)
 			}
 			var envelope struct {
-				Meta    json.RawMessage `json:"meta"`
-				Answers json.RawMessage `json:"answers"`
-				States  map[string]struct {
+				Meta   json.RawMessage `json:"meta"`
+				States map[string]struct {
 					Meta    json.RawMessage `json:"meta"`
 					Answers json.RawMessage `json:"answers"`
 				} `json:"states"`
@@ -104,11 +106,16 @@ recipes:
 				t.Fatal(err)
 			}
 			visible := strings.Contains(options, `"return_meta":true`)
-			if (len(envelope.Meta) != 0) != visible || (len(envelope.States["meta"].Meta) != 0) != visible {
-				t.Fatalf("metadata visibility differs across states: %s", result)
+			for name, state := range envelope.States {
+				if (len(envelope.Meta) != 0) != visible || (len(state.Meta) != 0) != visible {
+					t.Fatalf("metadata visibility differs across states (%s): %s", name, result)
+				}
+				if string(state.Answers) != string(answer) {
+					t.Fatalf("metadata filtering changed native answers: %s", result)
+				}
 			}
-			if string(envelope.Answers) != string(answer) || string(envelope.States["meta"].Answers) != string(answer) {
-				t.Fatalf("metadata filtering changed native answers: %s", result)
+			if len(envelope.States) != 2 {
+				t.Fatalf("the batch's entries: %s", result)
 			}
 		})
 	}

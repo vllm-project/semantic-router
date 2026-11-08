@@ -72,8 +72,9 @@ global:
 
 // moduleSystemOneAPI is hosted-d3's System One API. It lists the types
 // choice, noul, score and set (no span, no preset), chooses math, benign or
-// the first option of a choice question, answers a noul question 0.9, and
-// keeps the question IDs of each call.
+// the first option of a choice question, answers a noul question 0.9, of a
+// standard request or of each entry of a batch, refuses a body that mixes
+// the two, and keeps the question IDs of each call.
 type moduleSystemOneAPI struct {
 	mu    sync.Mutex
 	calls [][]string
@@ -94,6 +95,7 @@ func (a *moduleSystemOneAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	var body struct {
 		Model     string              `json:"model"`
+		State     json.RawMessage     `json:"state"`
 		Questions map[string]question `json:"questions"`
 		States    map[string]struct {
 			Questions map[string]question `json:"questions"`
@@ -101,6 +103,10 @@ func (a *moduleSystemOneAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if batch := body.States != nil; batch && (body.State != nil || body.Questions != nil) || !batch && body.State == nil {
+		http.Error(w, `{"error":{"code":"invalid_request"}}`, http.StatusBadRequest)
 		return
 	}
 	var ids []string
@@ -132,13 +138,15 @@ func (a *moduleSystemOneAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return map[string]any{"model": body.Model, "answers": answers, "usage": map[string]int{"input_tokens": 12}}
 	}
-	response := answer(body.Questions)
-	if len(body.States) > 0 {
+	var response map[string]any
+	if body.States == nil {
+		response = answer(body.Questions)
+	} else {
 		states := map[string]any{}
 		for name, state := range body.States {
 			states[name] = answer(state.Questions)
 		}
-		response["states"] = states
+		response = map[string]any{"model": body.Model, "states": states, "usage": map[string]int{"input_tokens": 12 * len(states)}}
 	}
 	slices.Sort(ids)
 	a.mu.Lock()

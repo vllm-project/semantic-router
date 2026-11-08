@@ -15333,7 +15333,6 @@
                     }
                   },
                   "required": [
-                    "answers",
                     "model",
                     "usage"
                   ]
@@ -16193,10 +16192,6 @@
                         }
                       }
                     },
-                    "required": [
-                      "questions",
-                      "state"
-                    ],
                     "additionalProperties": false
                   }
                 },
@@ -18985,10 +18980,6 @@
                         }
                       }
                     },
-                    "required": [
-                      "questions",
-                      "state"
-                    ],
                     "additionalProperties": false
                   }
                 },

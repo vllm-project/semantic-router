@@ -45,8 +45,8 @@ func judgeRuntime(t *testing.T) (*Matcher, *runtimetest.Runtime, *modelservice.L
 	return New(cfg, runtimeAnswerer{lease}), runtime, lease
 }
 
-// A judge asks about every recalled candidate in one decisions call: one
-// state per candidate, each asking the relevance question.
+// A judge asks about every recalled candidate in one decisions call: a batch
+// with an entry per candidate, each asking the relevance question.
 func TestAJudgeAsksAboutEveryCandidateInOneCall(t *testing.T) {
 	matcher, runtime, _ := judgeRuntime(t)
 	store := &index{recalled: recalled(0.9, 0.8, 0.7, 0.6, 0.5)}
@@ -55,10 +55,10 @@ func TestAJudgeAsksAboutEveryCandidateInOneCall(t *testing.T) {
 		t.Fatal(err)
 	}
 	calls := runtime.Decisions()
-	if len(calls) != 1 || calls[0].States == nil || len(*calls[0].States) != 4 {
-		t.Fatalf("%d decisions calls, want one with the 5 candidates as its states", len(calls))
+	if len(calls) != 1 || calls[0].State != nil || calls[0].States == nil || len(*calls[0].States) != 5 {
+		t.Fatalf("%d decisions calls, want one batch with an entry per candidate", len(calls))
 	}
-	texts := []string{stateCandidate(t, calls[0].State)}
+	var texts []string
 	for _, state := range *calls[0].States {
 		if _, ok := state.Questions["match:relevance"]; !ok || len(state.Questions) != 1 {
 			t.Fatalf("state questions %v", state.Questions)

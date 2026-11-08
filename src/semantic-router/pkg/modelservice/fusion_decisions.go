@@ -14,21 +14,22 @@ import (
 // fuses the parked decisions calls to one model with the same options (but
 // the deadline) and cache into one task and hands each caller the answers to
 // its own questions. Calls about one state share it, and the model reads
-// their questions together, as one request with all of them. Calls about
-// other states go in the same call as further states (DecisionRequest.states),
-// each read exactly as a request of its own. Calls about one state that ask
-// the same question under one ID (consumers of a family's trained question)
-// share its answer; calls about one state whose question IDs could otherwise
-// share an answer key (an equal ID, or an ID under a Set question's "<id>."
-// labels) stay apart.
+// their questions together, as one request with all of them. A task about
+// one state is a standard request (DecisionRequest.state and questions); a
+// task about several is a batch (DecisionRequest.states) with an entry per
+// state, each read exactly as a request of its own. Calls about one state
+// that ask the same question under one ID (consumers of a family's trained
+// question) share its answer; calls about one state whose question IDs could
+// otherwise share an answer key (an equal ID, or an ID under a Set question's
+// "<id>." labels) stay apart.
 //
 // The result cache applies to the call the runtime answers: a fused call is
 // looked up and stored under the key of all its states and questions, so an
 // answer a model gave alongside other questions never serves a call that
 // asked alone.
 
-// fusedDecision is a decisions task's states, the request's own state first,
-// and its cache key.
+// fusedDecision is a decisions task's states, in request order, and its
+// cache key.
 type fusedDecision struct {
 	states []*fusedState
 	cache  *resultCache
@@ -37,7 +38,7 @@ type fusedDecision struct {
 
 // fusedState is one state of a fused decisions task: the calls about it, its
 // request (the state and every question about it once, in ID order), its
-// name in the request's states ("" for the request's own state), its fusion
+// entry's name in a batch ("" when the task asks about it alone), its fusion
 // key and the questions it asks by ID.
 type fusedState struct {
 	name    string
@@ -194,8 +195,7 @@ func fuseDecisions(limit int, calls []*bundleCall) []*bundleTask {
 
 // fits reports whether a call can join the task: about one of its states
 // with questions compatible with that state's, or about another state while
-// the task has fewer than limit of them: as many states as the runtime takes
-// tasks in one bundle, each of which it runs as a job of its own.
+// the task has fewer than limit of them.
 func (d *fusedDecision) fits(call *bundleCall, text string, limit int) bool {
 	for _, state := range d.states {
 		if state.text == text {
@@ -227,32 +227,20 @@ func (d *fusedDecision) add(call *bundleCall, text string) {
 	}
 }
 
-// prepareDecision builds a decisions task's request. The state with the most
-// questions (the first in order on a tie) is the request's own; the others
-// are its states "1", "2", ... in order. The request carries the latest
-// deadline of its calls (none if a call has none).
+// prepareDecision builds a decisions task's request: a standard request
+// about its one state, or a batch whose entries "1", "2", ... are its states
+// in order. The request carries the latest deadline of its calls (none if a
+// call has none).
 func (t *bundleTask) prepareDecision() {
 	d := t.decision
-	own := 0
 	for index, state := range d.states {
 		sort.SliceStable(state.request.Questions, func(i, j int) bool { return state.request.Questions[i].ID < state.request.Questions[j].ID })
-		if len(state.request.Questions) > len(d.states[own].request.Questions) {
-			own = index
-		}
-	}
-	d.states = append(append([]*fusedState{d.states[own]}, d.states[:own]...), d.states[own+1:]...)
-	first := d.states[0].calls[0]
-	body := *first.task.Decisions
-	body.Questions = d.states[0].questions()
-	if len(d.states) > 1 {
-		states := make(map[string]api.DecisionState, len(d.states)-1)
-		for index, state := range d.states[1:] {
+		if len(d.states) > 1 {
 			state.name = strconv.Itoa(index + 1)
-			own := state.calls[0].task.Decisions
-			states[state.name] = api.DecisionState{State: own.State, Images: own.Images, Videos: own.Videos, Questions: state.questions()}
 		}
-		body.States = &states
 	}
+	first := d.states[0].calls[0]
+	body := decisionsAbout(*first.task.Decisions, d.states, (*fusedState).questions)
 	if body.Options != nil {
 		options := *body.Options
 		options.DeadlineMs = t.latestDeadline()
@@ -262,6 +250,26 @@ func (t *bundleTask) prepareDecision() {
 	if d.cache != nil {
 		d.key = d.cacheKey()
 	}
+}
+
+// decisionsAbout is the decisions request about states, with shared's model
+// and options: a standard request about one state, or a batch with an entry
+// per state under its name. questions are the questions it asks about a
+// state.
+func decisionsAbout(shared api.DecisionRequest, states []*fusedState, questions func(*fusedState) map[string]api.Question) api.DecisionRequest {
+	body := api.DecisionRequest{Model: shared.Model, Options: shared.Options}
+	if len(states) == 1 {
+		own := states[0].calls[0].task.Decisions
+		body.State, body.Images, body.Videos, body.Questions = own.State, own.Images, own.Videos, questions(states[0])
+		return body
+	}
+	entries := make(map[string]api.DecisionState, len(states))
+	for _, state := range states {
+		own := state.calls[0].task.Decisions
+		entries[state.name] = api.DecisionState{State: own.State, Images: own.Images, Videos: own.Videos, Questions: questions(state)}
+	}
+	body.States = &entries
+	return body
 }
 
 // questions is the encoded questions of every call about the state.
@@ -291,8 +299,8 @@ func (t *bundleTask) latestDeadline() *float64 {
 	return latest
 }
 
-// cacheKey keys a task by its own state's request, and each further state's
-// name and request after it.
+// cacheKey keys a task by its one state's request, or by each batch entry's
+// name and request.
 func (d *fusedDecision) cacheKey() cacheKey {
 	if len(d.states) == 1 {
 		return decideKey(d.states[0].request)
@@ -363,25 +371,33 @@ func (t *bundleTask) answerDecision(result api.BundleResult, err error) {
 	t.deliver(responses, err)
 }
 
-// decode reads every state's answers: the request's own from the response,
-// and each further state's from its entry.
+// decode reads every state's answers.
 func (d *fusedDecision) decode(body api.DecisionResponse) ([]Response, error) {
-	responses := make([]Response, len(d.states))
-	responses[0] = decodeResponse(body, d.states[0].request.Questions)
-	for index, state := range d.states[1:] {
+	return decodeStates(body, d.states)
+}
+
+// decodeStates reads the answers about states from the response to the
+// request decisionsAbout makes about them: the one state's from the
+// response, or each state's from its batch entry.
+func decodeStates(body api.DecisionResponse, states []*fusedState) ([]Response, error) {
+	if len(states) == 1 {
+		return []Response{decodeResponse(body, states[0].request.Questions)}, nil
+	}
+	responses := make([]Response, len(states))
+	for index, state := range states {
 		var entry api.DecisionStateResponse
 		found := false
 		if body.States != nil {
 			entry, found = (*body.States)[state.name]
 		}
 		if !found {
-			return nil, fmt.Errorf("%w: the decision response has no answers about state %q", ErrFailed, state.name)
+			return nil, fmt.Errorf("%w: the decisions response has no answers about entry %q", ErrFailed, state.name)
 		}
 		answered := api.DecisionResponse{
 			Model: entry.Model, Answers: entry.Answers, Sets: entry.Sets, Spans: entry.Spans,
 			Thresholds: entry.Thresholds, SpanHeads: entry.SpanHeads, Usage: entry.Usage,
 		}
-		responses[index+1] = decodeResponse(answered, state.request.Questions)
+		responses[index] = decodeResponse(answered, state.request.Questions)
 	}
 	return responses, nil
 }
