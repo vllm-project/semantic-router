@@ -1,0 +1,89 @@
+package extproc
+
+import (
+	"context"
+	"strings"
+	"testing"
+
+	http_ext "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
+	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+)
+
+// A Responses client that asked for a stream can be routed to a provider that
+// answers with one JSON object. The client asked for SSE, so it keeps SSE: the
+// buffered answer arrives as the terminal event it already describes.
+func TestBufferedResponsesAnswerReachesAStreamingClient(t *testing.T) {
+	body := `{"id":"resp_1","object":"response","created_at":1,"model":"public-model",` +
+		`"status":"completed","output":[{"type":"message","id":"msg_1","status":"completed",` +
+		`"role":"assistant","content":[{"type":"output_text","text":"hello","annotations":[]}]}],` +
+		`"usage":{"input_tokens":1,"output_tokens":2,"total_tokens":3}}`
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{
+		SourceFormat: llmprotocol.OpenAIResponsesV1, TargetFormat: llmprotocol.OpenAIResponsesV1,
+		RequestModel: "public-model", TraceContext: context.Background(),
+		SemanticRequest: &llmprotocol.Request{Generation: 1, Model: "public-model", Stream: true},
+	}
+	headers, err := router.handleResponseHeaders(looperTransportHeaders(200, "application/json"), ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ctx.IsStreamingResponse != true {
+		t.Fatal("stream:true Responses request must keep streaming response mode")
+	}
+	if mode := headers.GetModeOverride().GetResponseBodyMode(); mode != http_ext.ProcessingMode_STREAMED {
+		t.Fatalf("forced streaming must keep its streamed body mode, got %v", mode)
+	}
+	response, err := router.handleResponseBody(&ext_proc.ProcessingRequest_ResponseBody{
+		ResponseBody: &ext_proc.HttpBody{Body: []byte(body), EndOfStream: true},
+	}, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := string(response.GetResponseBody().GetResponse().GetBodyMutation().GetBody())
+	if !strings.Contains(client, "event: response.completed") {
+		t.Fatalf("client body is not the terminal SSE event: %q", client)
+	}
+	if !strings.Contains(client, `"text":"hello"`) {
+		t.Fatalf("the buffered answer was dropped: %q", client)
+	}
+	if strings.Contains(client, "stream_incomplete") {
+		t.Fatalf("a complete upstream answer must not be reported as incomplete: %q", client)
+	}
+}
+
+func TestBridgeBufferedResponsesBodyLeavesOtherBodiesAlone(t *testing.T) {
+	router := &OpenAIRouter{}
+	streaming := &RequestContext{
+		SourceFormat:    llmprotocol.OpenAIResponsesV1,
+		SemanticRequest: &llmprotocol.Request{Stream: true},
+	}
+	chat := &RequestContext{
+		SourceFormat:    llmprotocol.OpenAIChatV1,
+		SemanticRequest: &llmprotocol.Request{Stream: true},
+	}
+	sse := "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"r\"}}\n\n"
+	cases := []struct {
+		name string
+		ctx  *RequestContext
+		body string
+		want string
+	}{
+		{"sse passes through", streaming, sse, sse},
+		{"chat object is not a responses object", chat, `{"object":"response"}`, `{"object":"response"}`},
+		{"another json object", streaming, `{"object":"chat.completion"}`, `{"object":"chat.completion"}`},
+		{
+			"a failed status stays on the error path", streaming,
+			`{"object":"response","status":"failed"}`, `{"object":"response","status":"failed"}`,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			bridged, ok := router.bridgeBufferedResponsesBody([]byte(c.body), c.ctx)
+			if ok {
+				t.Fatalf("body was bridged: %q", bridged)
+			}
+		})
+	}
+}

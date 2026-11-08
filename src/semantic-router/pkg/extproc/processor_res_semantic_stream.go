@@ -1,6 +1,8 @@
 package extproc
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"time"
@@ -51,6 +53,9 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 	recordStreamingTTFT(ctx)
 	r.initializeSemanticResponseStream(ctx)
 	buffers := semanticStreamBuffers{}
+	if bridged, ok := r.bridgeBufferedResponsesBody(responseBody, ctx); ok {
+		responseBody, buffers.bridged = bridged, true
+	}
 	buffers.push(responseBody, ctx)
 	if endOfStream {
 		buffers.finalize(ctx)
@@ -75,6 +80,10 @@ type semanticStreamBuffers struct {
 	public     []byte
 	errorFrame []byte
 	streamErr  error
+	// bridged marks a body the Router rewrote from a buffered provider object
+	// into stream events, so the client keeps the codec's frames instead of the
+	// upstream bytes.
+	bridged bool
 }
 
 func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestContext) {
@@ -125,6 +134,44 @@ func (buffers *semanticStreamBuffers) recordError(ctx *RequestContext, err error
 	ctx.StreamingAborted = true
 }
 
+// bridgeBufferedResponsesBody renders a buffered provider answer as the event
+// stream the client asked for. A provider may ignore stream:true and reply with
+// one JSON object; that body carries no data: line for the SSE decoder, so the
+// forced streaming path would drop every byte and report stream_incomplete. The
+// neutral response is decoded and re-emitted through the same encoder synthetic
+// producers and cache replay use.
+//
+// The bridge needs the whole object in one read. A provider body large enough
+// for the router's streamed read size to split still ends in stream_incomplete;
+// accumulating across reads would have to hold back pass-through until the
+// object parses.
+func (r *OpenAIRouter) bridgeBufferedResponsesBody(body []byte, ctx *RequestContext) ([]byte, bool) {
+	if !isResponseAPIStreamRequest(ctx) ||
+		!bytes.HasPrefix(bytes.TrimSpace(body), []byte("{")) || !json.Valid(body) {
+		return nil, false
+	}
+	var probe struct {
+		Object string `json:"object"`
+	}
+	if err := json.Unmarshal(body, &probe); err != nil || probe.Object != "response" {
+		return nil, false
+	}
+	engine, err := r.protocolEngineForBackend(ctx)
+	if err != nil {
+		return nil, false
+	}
+	source, target := responseWireFormats(ctx)
+	response, _, _, err := engine.DecodeResponse(source, body)
+	if err != nil {
+		return nil, false
+	}
+	frames, _, err := engine.EncodeResponseStream(target, response, responseStreamContext(ctx, source, target))
+	if err != nil || len(frames) == 0 {
+		return nil, false
+	}
+	return frames, true
+}
+
 func appendProtocolFrames(body []byte, frames [][]byte) []byte {
 	for _, frame := range frames {
 		body = append(body, frame...)
@@ -170,7 +217,7 @@ func (buffers *semanticStreamBuffers) processingResponse(ctx *RequestContext) *e
 		}, nil)
 	}
 	if ctx.ProtocolResponseStream != nil &&
-		(requiresClientResponseRewrite(ctx) || ctx.StreamingAborted) {
+		(requiresClientResponseRewrite(ctx) || ctx.StreamingAborted || buffers.bridged) {
 		return buildResponseBodyContinueResponse(&ext_proc.BodyMutation{
 			Mutation: &ext_proc.BodyMutation_Body{Body: buffers.translated},
 		}, nil)
@@ -205,6 +252,23 @@ func recordStreamingTTFT(ctx *RequestContext) {
 	logging.Debugf("Recorded TTFT on first streamed body chunk: model=%q, TTFT=%.4fs", ctx.RequestModel, ttft)
 }
 
+func responseStreamContext(
+	ctx *RequestContext,
+	source, target llmprotocol.WireFormat,
+) llmprotocol.StreamContext {
+	streamContext := llmprotocol.StreamContext{
+		Context: ctx.TraceContext, Source: source, Target: target,
+		Options:     clientStreamOptions(ctx),
+		PublicModel: ctx.RequestModel, PreviousResponseID: responseObjectPreviousID(ctx),
+		// The model the upstream reports, as buffered and same-format replies pass it through.
+		PreferProviderModel: true,
+	}
+	if responseID := responseObjectPublicID(ctx); responseID != "" {
+		streamContext.ResponseID = responseID
+	}
+	return streamContext
+}
+
 func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 	if ctx == nil {
 		return fmt.Errorf("request context is unavailable")
@@ -217,17 +281,8 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 		return err
 	}
 	source, target := responseWireFormats(ctx)
-	streamContext := llmprotocol.StreamContext{
-		Context: ctx.TraceContext, Source: source, Target: target,
-		Options:     clientStreamOptions(ctx),
-		PublicModel: ctx.RequestModel, PreviousResponseID: responseObjectPreviousID(ctx),
-		// The model the upstream reports, as buffered and same-format replies pass it through.
-		PreferProviderModel: true,
-	}
+	streamContext := responseStreamContext(ctx, source, target)
 	mutation := clientStreamMutation(ctx, source)
-	if responseID := responseObjectPublicID(ctx); responseID != "" {
-		streamContext.ResponseID = responseID
-	}
 	stream, err := engine.NewStreamWithMutation(source, target, streamContext, mutation)
 	if err != nil {
 		return err
