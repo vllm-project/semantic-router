@@ -2135,9 +2135,11 @@ global:
     # call flag that OpenAI Chat and Responses backends cannot carry, and
     # messages[].role sends Anthropic system messages inside the conversation to
     # those backends as user text, for chat templates that accept a system
-    # message only first. reasoning.signature drops the signature an Anthropic
-    # backend puts on its thinking, which Chat and Responses clients cannot
-    # carry. Empty keeps every lossy translation failing closed.
+    # message only first. content.file sends each file in the conversation as
+    # a short note to a model whose capabilities leave out file_input.
+    # reasoning.signature drops the signature an Anthropic backend puts on its
+    # thinking, which Chat and Responses clients cannot carry. Empty keeps every
+    # lossy translation failing closed.
     allow_lossy_translation: []
     # The user text that routing reads. A user message whose text matches a
     # skip pattern (RE2) is never routing text, and each strip block cuts its

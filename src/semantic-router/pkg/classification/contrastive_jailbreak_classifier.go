@@ -16,6 +16,7 @@ import (
 // ContrastiveJailbreakResult holds the analysis outcome for a single rule.
 type ContrastiveJailbreakResult struct {
 	MaxScore       float32 // Highest contrastive score across analysed messages
+	ExplicitMatch  bool    // Whether any message matched a configured explicit hard-block pattern
 	WorstMessage   string  // The message that produced MaxScore
 	WorstMsgIndex  int     // Index of that message in the input slice
 	JailbreakSim   float32 // max_sim(worstMsg, jailbreak_kb) for the worst message
@@ -114,18 +115,12 @@ func (c *ContrastiveJailbreakClassifier) AnalyzeMessages(messages []string) Cont
 		TotalMessages: len(messages),
 	}
 
-	// Search every bounded chunk before starting embedding inference. Explicit
-	// patterns are deterministic policy and can terminate the scan immediately,
-	// which also keeps long-context containment probes inexpensive.
-	for i, msg := range messages {
+	// Explicit patterns are deterministic policy matches. Record them separately
+	// from the contrastive score, which must be calculated independently.
+	for _, msg := range messages {
 		if c.matchesExplicitJailbreak(msg) {
-			result.MaxScore = 1
-			result.WorstMessage = msg
-			result.WorstMsgIndex = i
-			result.JailbreakSim = 1
-			result.BenignSim = 0
-			result.ProcessingTime = time.Since(start)
-			return result
+			result.ExplicitMatch = true
+			break
 		}
 	}
 
@@ -273,7 +268,49 @@ func contrastiveCosineSimilarity(a, b []float32) float32 {
 }
 
 func (c *ContrastiveJailbreakClassifier) embedText(text string) ([]float32, error) {
-	return embedding.Embed(context.Background(), c.provider, text, embedding.Options{})
+	vector, err := embedding.Embed(context.Background(), c.provider, text, embedding.Options{})
+	if err != nil {
+		return nil, err
+	}
+	if err := validateContrastiveEmbedding(c.provider, vector); err != nil {
+		return nil, err
+	}
+	return vector, nil
+}
+
+// validateContrastiveEmbedding rejects vectors that cannot produce a
+// meaningful contrastive score. The empty and non-finite checks mirror the
+// validation the model runtime applies to embedding results. An all-zero
+// vector is rejected as well: cosine scoring normalizes by vector norm, so a
+// zero vector scores 0 against every reference and would be indistinguishable
+// from content that was genuinely compared and found clean, rather than from
+// content that could not be scored at all. The dimension check uses the
+// provider's declared dimension, applying the same "declared dimension > 0"
+// guard as the OpenAI-compatible provider's own response validation; an
+// undeclared dimension (0) means unknown and is not enforced here. An invalid
+// vector must surface as an error so knowledge-base preload fails instead of
+// storing it, and an invalid request embedding is counted as a failed message
+// rather than scored.
+func validateContrastiveEmbedding(provider embedding.Provider, vector []float32) error {
+	if len(vector) == 0 {
+		return fmt.Errorf("embedding vector is empty")
+	}
+	allZero := true
+	for _, value := range vector {
+		if math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) {
+			return fmt.Errorf("embedding vector is not finite")
+		}
+		if value != 0 {
+			allZero = false
+		}
+	}
+	if allZero {
+		return fmt.Errorf("embedding vector is all zeros")
+	}
+	if dimension := provider.Dimension(); dimension > 0 && len(vector) != dimension {
+		return fmt.Errorf("embedding dimension mismatch: got %d, want %d", len(vector), dimension)
+	}
+	return nil
 }
 
 // preloadKBEmbeddings concurrently computes embeddings for jailbreak and benign

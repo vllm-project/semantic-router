@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import quote, urlparse
@@ -28,13 +30,31 @@ from community_lifecycle_policy import (
     title_format_error,
 )
 
+# gh prints "message (HTTP 502)" for a JSON error and a bare "HTTP 502" otherwise.
+SERVER_ERROR = re.compile(
+    r"(?:\(HTTP |^gh: HTTP )(5[0-9]{2})\)?\s*\Z", flags=re.MULTILINE
+)
+RETRY_DELAYS_SECONDS: tuple[int, ...] = (5, 15, 45)
+RETRY_BUDGET_SECONDS = 120
+
 # Requests the acceptance sweep leaves to every other workflow sharing the
 # repository's Actions token, whose hourly budget is about a thousand.
 API_RESERVE_REQUESTS = 300
 
 
+def is_read(method: str, endpoint: str, payload: dict[str, Any] | None) -> bool:
+    """A GET, or a GraphQL query, which travels as a POST but only reads."""
+
+    if method == "GET":
+        return True
+    query = (payload or {}).get("query") or ""
+    return endpoint == "graphql" and query.lstrip().startswith("query")
+
+
 class GitHubClient:
     """Call ``gh api`` and remember the token's remaining REST budget."""
+
+    retry_budget_seconds = RETRY_BUDGET_SECONDS
 
     def __init__(self) -> None:
         self.rate_limit_remaining: int | None = None
@@ -50,23 +70,41 @@ class GitHubClient:
         command = ["gh", "api", endpoint, "--method", method, "--include"]
         if payload is not None:
             command.extend(["--input", "-"])
-        result = subprocess.run(
-            command,
-            input=json.dumps(payload) if payload is not None else None,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        headers, body = split_http_response(result.stdout)
-        remaining = headers.get("x-ratelimit-remaining", "")
-        if remaining.isdigit():
-            self.rate_limit_remaining = int(remaining)
-        if result.returncode != 0:
+        read = is_read(method, endpoint, payload)
+        delays = iter(RETRY_DELAYS_SECONDS)
+        while True:
+            result = subprocess.run(
+                command,
+                input=json.dumps(payload) if payload is not None else None,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            headers, body = split_http_response(result.stdout)
+            remaining = headers.get("x-ratelimit-remaining", "")
+            if remaining.isdigit():
+                self.rate_limit_remaining = int(remaining)
+            if result.returncode == 0:
+                return json.loads(body) if body.strip() else None
             if ignore_not_found and "HTTP 404" in result.stderr:
                 return None
-            sys.stderr.write(result.stderr)
-            raise SystemExit(result.returncode)
-        return json.loads(body) if body.strip() else None
+            server_error = SERVER_ERROR.search(result.stderr[-256:])
+            delay = next(delays, None)
+            # A write that failed with a 5xx may already have landed, so only reads wait.
+            if (
+                not read
+                or server_error is None
+                or delay is None
+                or delay > self.retry_budget_seconds
+            ):
+                sys.stderr.write(result.stderr)
+                raise SystemExit(result.returncode)
+            print(
+                f"::warning::GitHub returned HTTP {server_error[1]} for a read;"
+                f" retrying in {delay} seconds."
+            )
+            self.retry_budget_seconds -= delay
+            time.sleep(delay)
 
 
 def split_http_response(output: str) -> tuple[dict[str, str], str]:
