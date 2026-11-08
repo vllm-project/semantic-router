@@ -129,6 +129,69 @@ class Latency(unittest.TestCase):
             self.assertEqual("slow runtime" in err.getvalue(), warned)
 
 
+class Bf16(unittest.TestCase):
+    def test_flags_name_native_bf16(self):
+        tiger_lake = "processor\t: 0\nflags\t\t: fpu sse avx2 avx512f avx512_vnni\n"
+        sapphire_rapids = "flags\t\t: avx512f avx512_bf16 amx_bf16\n"
+        graviton3 = "Features\t: fp asimd sve bf16 i8mm\n"
+        self.assertIs(detect.has_bf16(tiger_lake), False)
+        self.assertIs(detect.has_bf16(sapphire_rapids), True)
+        self.assertIs(detect.has_bf16(graviton3), True)
+        self.assertIsNone(detect.has_bf16("processor\t: 0\n"))
+
+    def test_a_cpu_without_bf16_is_said_to_run_float32(self):
+        found = {
+            "runtime": {"ready": False, "url": "u"},
+            "pythons": [{"ok": True}],
+            "memory": {"totalGiB": 16},
+            "gpus": [],
+            "cpuBf16": False,
+        }
+        rec = detect.recommend(found)
+        self.assertEqual(rec["runtime"], "local-cpu")
+        self.assertIn("runs in float32", rec["why"])
+        self.assertNotIn("0.1 to 0.25", rec["why"])
+
+
+class Disk(unittest.TestCase):
+    def found(self, free, **over):
+        base = {
+            "runtime": {"ready": False, "url": "u"},
+            "pythons": [{"ok": True}],
+            "memory": {"totalGiB": 16},
+            "gpus": [],
+            "diskFreeGiB": free,
+        }
+        base.update(over)
+        return base
+
+    def test_too_little_disk_means_no_local_install(self):
+        rec = detect.recommend(self.found(1.8))
+        self.assertEqual(rec["runtime"], "remote")
+        self.assertIn("only 1.8 GiB disk free", rec["why"])
+
+    def test_enough_disk_installs_locally(self):
+        self.assertEqual(detect.recommend(self.found(5.1))["runtime"], "local-cpu")
+
+    def test_what_is_already_there_is_not_counted_again(self):
+        found = self.found(1.8, vllmSrun={"path": "p"}, modelCached=True)
+        self.assertEqual(detect.recommend(found)["runtime"], "local-cpu")
+
+    def test_a_ready_runtime_needs_no_disk(self):
+        ready = {
+            "ready": True,
+            "url": "http://127.0.0.1:8790/v1/decisions",
+            "device": "cpu",
+        }
+        self.assertEqual(
+            detect.recommend(self.found(0.2, runtime=ready))["runtime"], "existing"
+        )
+
+    def test_the_model_cache_follows_hf_home(self):
+        with mock.patch.dict("os.environ", {"HF_HOME": "/data/hf", "HF_HUB_CACHE": ""}):
+            self.assertEqual(detect.model_cache(), Path("/data/hf/hub"))
+
+
 class KeepRunning(unittest.TestCase):
     """Keeping a ready runtime saves the `runtime` value that matches where it really runs."""
 

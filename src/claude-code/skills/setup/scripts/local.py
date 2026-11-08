@@ -4,6 +4,7 @@
 Every command is safe to rerun: it reads what exists and does only what is missing.
 `--dry-run` prints the commands without running them. Nothing here uses sudo.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -17,6 +18,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+import detect
 import runtime
 
 HOME = Path.home() / ".local/share/vsr"
@@ -37,8 +39,10 @@ CPU_TORCH = "https://download.pytorch.org/whl/cpu"
 LABEL = "vsr-runtime"
 
 
-def serve_command(venv: Path, model: str, device: str, port: int) -> list[str]:
-    return [
+def serve_command(
+    venv: Path, model: str, device: str, port: int, dtype: str | None = None
+) -> list[str]:
+    command = [
         str(venv / "bin/vllm-srun"),
         "serve",
         model,
@@ -49,6 +53,26 @@ def serve_command(venv: Path, model: str, device: str, port: int) -> list[str]:
         "--port",
         str(port),
     ]
+    return command + (["--dtype", dtype] if dtype else [])
+
+
+def serve_dtype(device: str, asked: str, bf16: bool | None) -> str | None:
+    """The --dtype to pass: as asked, or float32 on a CPU that would emulate bfloat16 (vela3's
+    published precision); None leaves the runtime's own `auto`."""
+    if asked != "auto":
+        return asked
+    return "float32" if device == "cpu" and bf16 is False else None
+
+
+def disk_short(venv: Path) -> str | None:
+    """Why the disk is too full to install and download vela3-lite, or None when it fits."""
+    cache = detect.model_cache()
+    found = {
+        "vllmSrun": (venv / "bin/vllm-srun").exists(),
+        "modelCached": detect.model_cached(cache),
+        "diskFreeGiB": min(detect.free_gib(venv), detect.free_gib(cache)),
+    }
+    return detect.disk_short(found, "cpu")
 
 
 def install_steps(venv: Path, device: str, python: str) -> list[list[str]]:
@@ -109,7 +133,13 @@ def port_open(port: int) -> bool:
 
 
 def start(
-    venv: Path, model: str, device: str, port: int, log: Path, dry_run: bool
+    venv: Path,
+    model: str,
+    device: str,
+    port: int,
+    log: Path,
+    dry_run: bool,
+    dtype: str | None = None,
 ) -> int:
     url = f"http://127.0.0.1:{port}/v1/decisions"
     if runtime.health(url)["ready"]:
@@ -122,7 +152,7 @@ def start(
             file=sys.stderr,
         )
         return 1
-    command = serve_command(venv, model, device, port)
+    command = serve_command(venv, model, device, port, dtype)
     print(f"$ {shlex.join(command)} > {log} 2>&1 &")
     if dry_run:
         return 0
@@ -195,9 +225,16 @@ def enable_steps(kind: str, path: Path) -> list[list[str]]:
 
 
 def service(
-    kind: str, venv: Path, model: str, device: str, port: int, log: Path, write: bool
+    kind: str,
+    venv: Path,
+    model: str,
+    device: str,
+    port: int,
+    log: Path,
+    write: bool,
+    dtype: str | None = None,
 ) -> int:
-    path, text = unit_text(kind, serve_command(venv, model, device, port), log)
+    path, text = unit_text(kind, serve_command(venv, model, device, port, dtype), log)
     current = path.read_text() if path.exists() else None
     print(f"# {path}\n{text}")
     if not write:
@@ -229,6 +266,12 @@ def main(argv: list[str]) -> int:
             "--device", default="cpu", choices=("cpu", "cuda", "rocm", "auto")
         )
         one.add_argument("--port", type=int, default=8790)
+        one.add_argument(
+            "--dtype",
+            default="auto",
+            choices=("auto", "float32", "bfloat16", "float16"),
+            help="auto: float32 on a CPU without native bf16, else the runtime's default",
+        )
         one.add_argument("--log", type=Path, default=HOME / "runtime.log")
         one.add_argument(
             "--python",
@@ -248,15 +291,32 @@ def main(argv: list[str]) -> int:
         steps = install_steps(args.venv, args.device, args.python)
         if not steps:
             print(f"nothing to install: {args.venv} already has torch and vllm-srun")
+        short = disk_short(args.venv) if steps and args.device == "cpu" else None
+        if short and not args.dry_run:
+            print(f"not installing: {short}", file=sys.stderr)
+            return 1
+        if short:
+            print(f"warning: {short}", file=sys.stderr)
         return run(steps, args.dry_run)
-    if args.command == "start":
-        return start(
-            args.venv, args.model, args.device, args.port, args.log, args.dry_run
-        )
     if args.command == "wait":
         return wait(args.port, args.timeout, args.log)
+    bf16 = detect.cpu_bf16() if args.device == "cpu" else None
+    dtype = serve_dtype(args.device, args.dtype, bf16)
+    if dtype == "float32" and args.dtype == "auto":
+        print("this CPU has no native bf16, so the runtime computes in float32")
+    if args.command == "start":
+        return start(
+            args.venv, args.model, args.device, args.port, args.log, args.dry_run, dtype
+        )
     return service(
-        args.kind, args.venv, args.model, args.device, args.port, args.log, args.write
+        args.kind,
+        args.venv,
+        args.model,
+        args.device,
+        args.port,
+        args.log,
+        args.write,
+        dtype,
     )
 
 

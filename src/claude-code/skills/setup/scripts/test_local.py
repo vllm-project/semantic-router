@@ -1,7 +1,10 @@
+import contextlib
+import io
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).parent))
 import local
@@ -27,6 +30,36 @@ class Install(unittest.TestCase):
                 f"/{local.COMMIT}/src/model-runtime/requirements-lock.txt", lock
             )
             self.assertIn(f"@{local.COMMIT}#", steps[-1][-1])
+
+
+class Dtype(unittest.TestCase):
+    def test_a_cpu_without_bf16_serves_in_float32(self):
+        self.assertEqual(local.serve_dtype("cpu", "auto", False), "float32")
+
+    def test_otherwise_the_runtime_keeps_its_own_default(self):
+        for device, bf16 in (("cpu", True), ("cpu", None), ("cuda", False)):
+            with self.subTest(device=device, bf16=bf16):
+                self.assertIsNone(local.serve_dtype(device, "auto", bf16))
+
+    def test_an_explicit_dtype_wins(self):
+        self.assertEqual(local.serve_dtype("cpu", "bfloat16", False), "bfloat16")
+
+    def test_the_serve_command_passes_the_dtype_only_when_set(self):
+        venv = Path("/v")
+        command = local.serve_command(venv, "m", "cpu", 8790, "float32")
+        self.assertEqual(command[-2:], ["--dtype", "float32"])
+        self.assertNotIn("--dtype", local.serve_command(venv, "m", "cpu", 8790))
+
+    def test_a_full_disk_stops_the_install(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            local.detect, "free_gib", return_value=0.5
+        ), mock.patch.object(local, "run") as run, contextlib.redirect_stderr(
+            io.StringIO()
+        ) as err:
+            code = local.main(["install", "--venv", str(Path(tmp) / "venv")])
+        self.assertEqual(code, 1)
+        run.assert_not_called()
+        self.assertIn("only 0.5 GiB disk free", err.getvalue())
 
 
 if __name__ == "__main__":

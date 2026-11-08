@@ -2,6 +2,7 @@
 """Look at this machine before asking anything: OS, CPU, memory, GPU, Python, an installed
 vllm-srun, and whether a runtime already answers at the configured URL. Installs nothing.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -30,6 +31,12 @@ MODELS = [
     ("vllm-sr/vela3-flash", 16, 22),
     ("vllm-sr/vela3-turbo", 50, 64),
 ]
+# The venv with CPU torch measured 1.1 GiB on Linux; CUDA or ROCm torch is an estimate.
+VENV_GIB = {"cpu": 1.1, "gpu": 6.0}
+# Room for pip's downloads and temporary files while installing.
+SPARE_GIB = 1.0
+# CPU flags for native bfloat16: x86 (AVX512_BF16, AMX) and Arm (BF16).
+BF16_FLAGS = {"avx512_bf16", "amx_bf16", "bf16"}
 
 
 def _run(command: list[str], timeout: float = 10) -> str | None:
@@ -86,6 +93,65 @@ def vm_stat_available(text: str) -> int | None:
     if not size or "free" not in pages:
         return None
     return int(size.group(1)) * sum(int(n) for n in pages.values())
+
+
+def has_bf16(cpuinfo: str) -> bool | None:
+    """Whether /proc/cpuinfo lists a native bfloat16 flag; None when it lists no flags."""
+    found = re.search(r"^(?:flags|Features)\s*:(.*)$", cpuinfo, re.M)
+    return None if found is None else bool(BF16_FLAGS & set(found.group(1).split()))
+
+
+def cpu_bf16() -> bool | None:
+    """Whether the CPU computes bfloat16 natively. Without it the runtime emulates bf16, which
+    measured 2 to 18 times slower than float32 on an i5-1135G7. None when this cannot be read.
+    """
+    cpuinfo = Path("/proc/cpuinfo")
+    if cpuinfo.exists():
+        return has_bf16(cpuinfo.read_text(errors="replace"))
+    if platform.system() == "Darwin":
+        flag = _run(["sysctl", "-n", "hw.optional.arm.FEAT_BF16"])
+        return None if flag is None else flag == "1"
+    return None
+
+
+def model_cache() -> Path:
+    """Where the Hugging Face hub keeps downloaded models."""
+    if os.environ.get("HF_HUB_CACHE"):
+        return Path(os.environ["HF_HUB_CACHE"])
+    if os.environ.get("HF_HOME"):
+        return Path(os.environ["HF_HOME"]) / "hub"
+    cache = os.environ.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")
+    return Path(cache) / "huggingface/hub"
+
+
+def free_gib(path: Path) -> float:
+    """Free space on the disk that holds `path`, or would hold it once created."""
+    while not path.exists() and path != path.parent:
+        path = path.parent
+    return round(shutil.disk_usage(path).free / GIB, 1)
+
+
+def model_cached(cache: Path) -> bool:
+    return all(
+        (cache / f"models--vllm-sr--{name}").exists()
+        for name in ("vela3-lite", "d3-lite")
+    )
+
+
+def disk_need(found: dict, kind: str) -> float:
+    """GiB a local install of vela3-lite still needs: the venv, the model, and spare room."""
+    venv = 0 if found.get("vllmSrun") else VENV_GIB[kind]
+    model = 0 if found.get("modelCached") else MODELS[0][1]
+    return round(venv + model + SPARE_GIB, 1)
+
+
+def disk_short(found: dict, kind: str) -> str | None:
+    """Why the disk is too full for a local install, or None when it fits (or is unknown)."""
+    free = found.get("diskFreeGiB")
+    need = disk_need(found, kind)
+    if free is None or free >= need:
+        return None
+    return f"only {free} GiB disk free, and a local runtime needs about {need} GiB"
 
 
 def _whole(value: object) -> int | None:
@@ -247,6 +313,7 @@ def recommend(found: dict) -> dict:
             gpu["device"] in ("cuda", "rocm")
             and (gpu["freeGiB"] or 0) >= MODELS[0][2]
             and good_python
+            and disk_short(found, "gpu") is None
         ):
             fits = [name for name, _, need in MODELS if (gpu["freeGiB"] or 0) >= need]
             return {
@@ -256,15 +323,28 @@ def recommend(found: dict) -> dict:
                 "larger": fits[1:],
                 "why": f"{gpu['name']} has {gpu['freeGiB']} GiB free",
             }
+    short = disk_short(found, "cpu")
+    if good_python and ram >= 4 and short:
+        return {
+            "runtime": "remote",
+            "why": f"{short}; free some space or use a remote runtime",
+        }
     if good_python and ram >= 4:
-        if found.get("os", {}).get("appleSilicon"):
+        if found.get("cpuBf16") is False and not found.get("os", {}).get(
+            "appleSilicon"
+        ):
+            why = (
+                f"{os.cpu_count()} cores and {ram} GiB RAM run vela3-lite; this CPU has no bf16, so it "
+                "runs in float32, measured at 0.7 to 2.4 s per question on a 4-core laptop CPU"
+            )
+        elif found.get("os", {}).get("appleSilicon"):
             why = (
                 f"{ram} GiB RAM fit vela3-lite, but an Apple Silicon CPU takes about 2 s per question, "
                 "several times an x86 CPU, so the apps will often step aside: a remote runtime is "
                 "recommended if you have one, since the runtime cannot use the Apple GPU (mps) yet"
             )
         else:
-            why = f"{os.cpu_count()} cores and {ram} GiB RAM run vela3-lite in 0.1 to 0.25 s per question (measured on x86 CPUs)"
+            why = f"{os.cpu_count()} cores and {ram} GiB RAM run vela3-lite in 0.1 to 0.25 s per question (measured on x86 CPUs with bf16)"
         if any(g["device"] in ("cuda", "rocm") for g in found["gpus"]):
             why += "; the GPU has too little free memory right now"
         return {
@@ -282,16 +362,20 @@ def recommend(found: dict) -> dict:
 
 def detect(plugin_id: str | None) -> dict:
     url, saved_runtime = configured(plugin_id)
+    cache = model_cache()
     found = {
         "os": os_info(),
         "cpus": os.cpu_count(),
+        "cpuBf16": cpu_bf16(),
         "memory": memory(),
         "gpus": gpus(),
         "pythons": pythons(),
         "git": shutil.which("git") is not None,
         "vllmSrun": vllm_srun(),
         "runtime": {**runtime.health(url), "portOpen": port_open(url)},
-        "diskFreeGiB": round(shutil.disk_usage(Path.home()).free / GIB, 1),
+        # The venv and the model may sit on different disks; the fuller one decides.
+        "diskFreeGiB": min(free_gib(VENV), free_gib(cache)),
+        "modelCached": model_cached(cache),
         "savedRuntime": saved_runtime,
     }
     if found["runtime"]["ready"]:
@@ -338,7 +422,12 @@ def summary(found: dict) -> str:
     lines = [
         f"machine   {o.get('name', o['system'])} · {o['arch']} · {found['cpus']} cores · {m['totalGiB']} GiB RAM"
         + (f" ({m['availableGiB']} available)" if m["availableGiB"] is not None else "")
-        + f" · {found['diskFreeGiB']} GiB disk free",
+        + f" · {found['diskFreeGiB']} GiB disk free"
+        + (
+            " · CPU without bf16 (runs float32)"
+            if found.get("cpuBf16") is False
+            else ""
+        ),
         f"gpu       {gpu}",
         f"python    {py}"
         + (

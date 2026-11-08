@@ -25,7 +25,8 @@ PROBES = Path(__file__).with_name("probes.jsonl")
 # A probe whose score moved more than this from its measured one is reported as drift.
 DRIFT_TOLERANCE = 0.15
 # Above this median per question, the hooks' 1.5 to 3 s limits are often reached and the apps
-# step aside. vela3-lite takes 0.1 to 0.25 s on an x86 CPU and about 2 s on an Apple Silicon one.
+# step aside. vela3-lite takes 0.1 to 0.25 s on an x86 CPU with bf16, 0.7 to 2.4 s in float32 on a
+# 4-core laptop CPU without it, and about 2 s on an Apple Silicon one.
 SLOW_MS = 1000
 
 
