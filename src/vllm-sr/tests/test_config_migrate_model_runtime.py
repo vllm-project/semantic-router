@@ -130,6 +130,23 @@ def test_native_deployments_become_model_runtime_deployments():
     assert not any(note.action_required for note in notes)
 
 
+def test_a_provider_model_deployment_survives_migration():
+    migrated, _ = _migrate(
+        _config(
+            providers={
+                "models": [
+                    {
+                        "name": "native-kai",
+                        "api_format": "systemone",
+                        "deployment": "decision-kai",
+                    }
+                ]
+            }
+        )
+    )
+    assert migrated["providers"]["models"][0]["deployment"] == "decision-kai"
+
+
 def test_fp16_precision_keeps_the_published_precision_and_names_dtype():
     migrated, notes = _migrate(
         _config(
