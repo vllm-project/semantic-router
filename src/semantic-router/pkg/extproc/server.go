@@ -288,6 +288,9 @@ func (s *Server) StartContextWithReady(ctx context.Context, onServing func()) er
 		}
 	}}
 
+	// Serve's first Accept reports serving, so the config watch exists before it.
+	watch := s.prepareConfigWatch()
+
 	// Run the server in a separate goroutine
 	serverErrCh := make(chan error, 1)
 	go func() {
@@ -303,7 +306,7 @@ func (s *Server) StartContextWithReady(ctx context.Context, onServing func()) er
 	defer s.lifecycle.beginShutdown()
 	go func() {
 		defer watcherDone()
-		s.watchConfigAndReload(watchCtx)
+		watch(watchCtx)
 	}()
 
 	// Process signal ownership belongs to the command entrypoint. This server
@@ -840,6 +843,7 @@ func publishSnapshotState(
 		if runtimeRegistry != nil {
 			runtimeRegistry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{
 				Config: cfg, ConfigSnapshot: snapshot, AcquireClassification: routerruntime.AcquireClassification(acquire),
+				MemoryStatus: routerruntime.MemoryStatus{Reason: routerruntime.MemoryReasonStarting},
 			})
 		} else {
 			services.SetGlobalClassificationService(nil)
@@ -857,6 +861,7 @@ func publishSnapshotState(
 			ClassificationService: router.ClassificationService,
 			AcquireClassification: routerruntime.AcquireClassification(acquire),
 			MemoryStore:           router.MemoryStore,
+			MemoryStatus:          router.MemoryStatus,
 			ModelSelector:         router.ModelSelector,
 			LearningRuntime:       router.routerLearningRuntimeState(),
 			ReplayRuntime:         router,

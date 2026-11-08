@@ -1,5 +1,8 @@
 package trainingcontract
 
+// APIBasePath is the canonical management HTTP prefix for this contract.
+const APIBasePath = "/api/training/v2"
+
 type SubmitRunRequest struct {
 	SchemaVersion  string  `json:"schema_version" jsonschema:"enum=semantic-router.training/v2"`
 	IdempotencyKey string  `json:"idempotency_key" jsonschema:"minLength=1"`

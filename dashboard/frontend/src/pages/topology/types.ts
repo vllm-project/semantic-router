@@ -271,6 +271,7 @@ export interface PricingConfig {
   prompt_per_1m?: number
   cached_input_per_1m?: number
   cache_write_per_1m?: number
+  cache_write_1h_per_1m?: number
   completion_per_1m?: number
 }
 

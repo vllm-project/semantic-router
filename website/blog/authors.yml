@@ -48,7 +48,7 @@ andyluo:
 
 anupsharma:
   name: Anup Sharma
-  title: AI & Distributed System @ Nutanix
+  title: Engineering @ Sarvam AI
   url: https://www.linkedin.com/in/anup-sharma1
   image_url: /img/team/anup.jpeg
 
@@ -63,6 +63,12 @@ aayushsaini101:
   title: SDE, Data and AI @ Red Hat
   url: https://github.com/AayushSaini101
   image_url: https://github.com/AayushSaini101.png
+
+sharanharsoor:
+  name: Sharan Harsoor
+  title: Founder and maintainer of Runkite · ML Engineer
+  url: https://github.com/sharanharsoor
+  image_url: https://github.com/sharanharsoor.png
 
 shivjikumarjha:
   name: Shivji Kumar Jha
@@ -85,3 +91,14 @@ abhinav:
   title: Software Engineer at Barclays
   url: https://www.linkedin.com/in/abhinav-mahajan-b805b022a/
   image_url: /img/team/abhinav.png
+
+Alex-Wengg:
+  name: Alex Weng
+  title: Fluid Inference
+  url: https://github.com/Alex-Wengg
+  image_url: https://github.com/Alex-Wengg.png
+
+LeON-Nie-code:
+  name: Leon Nie
+  url: https://github.com/LeON-Nie-code
+  image_url: https://avatars.githubusercontent.com/u/118652405?v=4

@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 提示词分类路由
 description: 提出结合关键词、正则、嵌入和分类器信号的路由框架。
 created: 2025-10-08

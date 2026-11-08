@@ -316,8 +316,8 @@ def test_engines_learn_the_engines_of_their_processs_other_cpu_models(
     seen = []
     choose = runtime_module.choose_engine
 
-    def recording(name, spec, device, preferred=None):
-        chosen, engine = choose(name, spec, device, preferred)
+    def recording(name, spec, device, preferred=None, dtype="auto"):
+        chosen, engine = choose(name, spec, device, preferred, dtype)
         load = engine.load
 
         def load_and_record(spec, accelerator, device, options):
@@ -358,11 +358,19 @@ def test_planned_engines_need_nothing_loaded():
     )
 
 
-@pytest.mark.parametrize("profile", ["shared_context", "batching", "max_speed"])
-def test_approximate_profiles_serve_every_head(packages, profile):
+@pytest.mark.parametrize("shared", [None, True])
+def test_merged_forwards_serve_every_head(packages, shared):
     models = tuple(
-        ModelConfig(model=str(path), name=name, device="cpu", profile=profile)
+        config
         for name, path in packages.items()
+        for config in (
+            ModelConfig(
+                model=str(path), name=name, device="cpu", enable_shared_context=shared
+            ),
+            ModelConfig(
+                model=str(path), name=f"{name}-alone", device="cpu", max_num_seqs=1
+            ),
+        )
     )
     runtime = Runtime(ServeConfig(models=models, result_cache_entries=0))
     runtime.start(background=False)
@@ -370,7 +378,7 @@ def test_approximate_profiles_serve_every_head(packages, profile):
         client = TestClient(create_app(runtime))
         for name in packages:
             inputs = [GROUNDED] if name == "grounded" else [TEXT, LONG[:200]]
-            exact = classify(client, name, inputs, profile="exact")["results"]
+            exact = classify(client, f"{name}-alone", inputs)["results"]
             approximate = classify(client, name, inputs)["results"]
             for left, right in zip(exact, approximate, strict=True):
                 values = "scores" if name == "scores" else "probabilities"
@@ -409,7 +417,6 @@ def test_cpu_rows_are_bit_identical_alone_and_inside_other_requests_batches(runt
                     "classify",
                     {"model": name, "input": [value]},
                     None,
-                    "exact",
                     False,
                     0.0,
                 ),

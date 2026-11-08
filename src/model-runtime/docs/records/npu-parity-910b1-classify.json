@@ -1,0 +1,530 @@
+{
+ "phase": "classify",
+ "rows": [
+  {
+   "model": "Vela-1.0-Encoder-307M-Domain",
+   "surface": "classify",
+   "request": 0,
+   "npu_self_diff": 0.0,
+   "npu_self_path": ".results[0].probabilities[9]",
+   "npu_self_bitwise": true,
+   "cpu_npu_diff": 7.4426643550395966e-06,
+   "cpu_npu_path": ".results[0].probabilities[10]",
+   "cpu_npu_bitwise": false,
+   "cpu_answer": {
+    "model": "Vela-1.0-Encoder-307M-Domain",
+    "head": "default",
+    "kind": "sequence",
+    "labels": [
+     "biology",
+     "business",
+     "chemistry",
+     "computer science",
+     "economics",
+     "engineering",
+     "health",
+     "history",
+     "law",
+     "math",
+     "other",
+     "philosophy",
+     "physics",
+     "psychology"
+    ],
+    "results": [
+     {
+      "index": 0,
+      "probabilities": [
+       1.307515162807249e-06,
+       0.9957275390625,
+       1.3284412681002777e-08,
+       6.731520261382684e-05,
+       3.3668673040665453e-06,
+       4.788122623722302e-06,
+       1.7371566229940072e-07,
+       1.4627836719682819e-07,
+       0.00024005900195334107,
+       9.038268444783171e-08,
+       0.003952544182538986,
+       2.8906961802022124e-07,
+       5.1032188252975175e-08,
+       2.429044798191171e-06
+      ],
+      "label": "business"
+     }
+    ],
+    "usage": {
+     "input_tokens": 15,
+     "output_tokens": 0
+    }
+   },
+   "npu_answer": {
+    "model": "Vela-1.0-Encoder-307M-Domain",
+    "head": "default",
+    "kind": "sequence",
+    "labels": [
+     "biology",
+     "business",
+     "chemistry",
+     "computer science",
+     "economics",
+     "engineering",
+     "health",
+     "history",
+     "law",
+     "math",
+     "other",
+     "philosophy",
+     "physics",
+     "psychology"
+    ],
+    "results": [
+     {
+      "index": 0,
+      "probabilities": [
+       1.3110927739035105e-06,
+       0.9957209825515747,
+       1.329634091717935e-08,
+       6.708244472974911e-05,
+       3.381435135452193e-06,
+       4.7920975703164e-06,
+       1.7427154830329528e-07,
+       1.460231686678526e-07,
+       0.0002392613678239286,
+       9.052131844100586e-08,
+       0.003959986846894026,
+       2.9036851856290014e-07,
+       5.097319544233869e-08,
+       2.436325075905188e-06
+      ],
+      "label": "business"
+     }
+    ],
+    "usage": {
+     "input_tokens": 15,
+     "output_tokens": 0
+    }
+   }
+  },
+  {
+   "model": "Vela-1.0-Encoder-307M-Domain",
+   "surface": "classify",
+   "request": 1,
+   "npu_self_diff": 0.0,
+   "npu_self_path": ".results[0].probabilities[9]",
+   "npu_self_bitwise": true,
+   "cpu_npu_diff": 0.000531315803527832,
+   "cpu_npu_path": ".results[0].probabilities[5]",
+   "cpu_npu_bitwise": false,
+   "cpu_answer": {
+    "model": "Vela-1.0-Encoder-307M-Domain",
+    "head": "default",
+    "kind": "sequence",
+    "labels": [
+     "biology",
+     "business",
+     "chemistry",
+     "computer science",
+     "economics",
+     "engineering",
+     "health",
+     "history",
+     "law",
+     "math",
+     "other",
+     "philosophy",
+     "physics",
+     "psychology"
+    ],
+    "results": [
+     {
+      "index": 0,
+      "probabilities": [
+       0.0014923373237252235,
+       9.300615784013644e-05,
+       0.13603714108467102,
+       0.0008827861747704446,
+       0.12629194557666779,
+       0.14883601665496826,
+       0.00022369927319232374,
+       4.202419222565368e-05,
+       0.00010166117135668173,
+       0.0806015282869339,
+       0.019421471282839775,
+       1.6404041161877103e-05,
+       0.4858314096927643,
+       0.00012862775474786758
+      ],
+      "label": "physics"
+     }
+    ],
+    "usage": {
+     "input_tokens": 18,
+     "output_tokens": 0
+    }
+   },
+   "npu_answer": {
+    "model": "Vela-1.0-Encoder-307M-Domain",
+    "head": "default",
+    "kind": "sequence",
+    "labels": [
+     "biology",
+     "business",
+     "chemistry",
+     "computer science",
+     "economics",
+     "engineering",
+     "health",
+     "history",
+     "law",
+     "math",
+     "other",
+     "philosophy",
+     "physics",
+     "psychology"
+    ],
+    "results": [
+     {
+      "index": 0,
+      "probabilities": [
+       0.001497254939749837,
+       9.281102393288165e-05,
+       0.13647933304309845,
+       0.000884343811776489,
+       0.12613385915756226,
+       0.14830470085144043,
+       0.0002238377055618912,
+       4.208233076496981e-05,
+       0.00010185425344388932,
+       0.08063680678606033,
+       0.019397133961319923,
+       1.6427864466095343e-05,
+       0.48606112599372864,
+       0.0001284571917494759
+      ],
+      "label": "physics"
+     }
+    ],
+    "usage": {
+     "input_tokens": 18,
+     "output_tokens": 0
+    }
+   }
+  },
+  {
+   "model": "Vela-1.0-Encoder-307M-Domain",
+   "surface": "classify",
+   "request": 2,
+   "npu_self_diff": 0.0,
+   "npu_self_path": ".results[0].probabilities[9]",
+   "npu_self_bitwise": true,
+   "cpu_npu_diff": 0.012701690196990967,
+   "cpu_npu_path": ".results[0].probabilities[3]",
+   "cpu_npu_bitwise": false,
+   "cpu_answer": {
+    "model": "Vela-1.0-Encoder-307M-Domain",
+    "head": "default",
+    "kind": "sequence",
+    "labels": [
+     "biology",
+     "business",
+     "chemistry",
+     "computer science",
+     "economics",
+     "engineering",
+     "health",
+     "history",
+     "law",
+     "math",
+     "other",
+     "philosophy",
+     "physics",
+     "psychology"
+    ],
+    "results": [
+     {
+      "index": 0,
+      "probabilities": [
+       0.00022879817697685212,
+       2.0207751731504686e-05,
+       8.262118171842303e-06,
+       0.862033486366272,
+       3.0354993214132264e-05,
+       0.13698415458202362,
+       4.590409298543818e-05,
+       1.4223151083569974e-05,
+       2.738085458986461e-05,
+       5.954212838332751e-07,
+       0.00016383608453907073,
+       2.5210547391907312e-05,
+       5.707759555662051e-05,
+       0.00036066959728486836
+      ],
+      "label": "computer science"
+     }
+    ],
+    "usage": {
+     "input_tokens": 13,
+     "output_tokens": 0
+    }
+   },
+   "npu_answer": {
+    "model": "Vela-1.0-Encoder-307M-Domain",
+    "head": "default",
+    "kind": "sequence",
+    "labels": [
+     "biology",
+     "business",
+     "chemistry",
+     "computer science",
+     "economics",
+     "engineering",
+     "health",
+     "history",
+     "law",
+     "math",
+     "other",
+     "philosophy",
+     "physics",
+     "psychology"
+    ],
+    "results": [
+     {
+      "index": 0,
+      "probabilities": [
+       0.00022078801703173667,
+       1.97540193767054e-05,
+       7.9174897109624e-06,
+       0.8747351765632629,
+       2.8706237571896054e-05,
+       0.12433589994907379,
+       4.1248888010159135e-05,
+       1.3976286027173046e-05,
+       2.523774492146913e-05,
+       5.849970534654858e-07,
+       0.00014706503134220839,
+       2.4621933334856294e-05,
+       5.243865234660916e-05,
+       0.00034650645102374256
+      ],
+      "label": "computer science"
+     }
+    ],
+    "usage": {
+     "input_tokens": 13,
+     "output_tokens": 0
+    }
+   }
+  },
+  {
+   "model": "Vela-1.0-Encoder-307M-Domain",
+   "surface": "classify",
+   "request": 3,
+   "npu_self_diff": 0.0,
+   "npu_self_path": ".results[0].probabilities[9]",
+   "npu_self_bitwise": true,
+   "cpu_npu_diff": 0.0012056529521942139,
+   "cpu_npu_path": ".results[0].probabilities[1]",
+   "cpu_npu_bitwise": false,
+   "cpu_answer": {
+    "model": "Vela-1.0-Encoder-307M-Domain",
+    "head": "default",
+    "kind": "sequence",
+    "labels": [
+     "biology",
+     "business",
+     "chemistry",
+     "computer science",
+     "economics",
+     "engineering",
+     "health",
+     "history",
+     "law",
+     "math",
+     "other",
+     "philosophy",
+     "physics",
+     "psychology"
+    ],
+    "results": [
+     {
+      "index": 0,
+      "probabilities": [
+       0.00041326574864797294,
+       0.3432998061180115,
+       6.130611291155219e-05,
+       0.306592732667923,
+       0.005322019103914499,
+       0.003098282963037491,
+       0.003531727474182844,
+       0.00032162293791770935,
+       0.017409851774573326,
+       0.0005992569494992495,
+       0.3183552920818329,
+       0.00026640374562703073,
+       3.387218021089211e-05,
+       0.0006945048808120191
+      ],
+      "label": "business"
+     }
+    ],
+    "usage": {
+     "input_tokens": 29,
+     "output_tokens": 0
+    }
+   },
+   "npu_answer": {
+    "model": "Vela-1.0-Encoder-307M-Domain",
+    "head": "default",
+    "kind": "sequence",
+    "labels": [
+     "biology",
+     "business",
+     "chemistry",
+     "computer science",
+     "economics",
+     "engineering",
+     "health",
+     "history",
+     "law",
+     "math",
+     "other",
+     "philosophy",
+     "physics",
+     "psychology"
+    ],
+    "results": [
+     {
+      "index": 0,
+      "probabilities": [
+       0.0004156271752435714,
+       0.3445054590702057,
+       6.128379027359188e-05,
+       0.3058098554611206,
+       0.0052980841137468815,
+       0.003091011196374893,
+       0.0035350520629435778,
+       0.00032167727476917207,
+       0.017419790849089622,
+       0.0005979970446787775,
+       0.3179514706134796,
+       0.00026599655393511057,
+       3.3774318580981344e-05,
+       0.0006929561495780945
+      ],
+      "label": "business"
+     }
+    ],
+    "usage": {
+     "input_tokens": 29,
+     "output_tokens": 0
+    }
+   }
+  },
+  {
+   "model": "Vela-1.0-Encoder-307M-Domain",
+   "surface": "classify",
+   "request": 4,
+   "npu_self_diff": 0.0,
+   "npu_self_path": ".results[0].probabilities[9]",
+   "npu_self_bitwise": true,
+   "cpu_npu_diff": 4.715184331871569e-08,
+   "cpu_npu_path": ".results[0].probabilities[11]",
+   "cpu_npu_bitwise": false,
+   "cpu_answer": {
+    "model": "Vela-1.0-Encoder-307M-Domain",
+    "head": "default",
+    "kind": "sequence",
+    "labels": [
+     "biology",
+     "business",
+     "chemistry",
+     "computer science",
+     "economics",
+     "engineering",
+     "health",
+     "history",
+     "law",
+     "math",
+     "other",
+     "philosophy",
+     "physics",
+     "psychology"
+    ],
+    "results": [
+     {
+      "index": 0,
+      "probabilities": [
+       1.9747244550671894e-06,
+       1.4951125137940835e-07,
+       1.2116731795686064e-07,
+       3.775682699824756e-08,
+       4.80633900679095e-07,
+       1.9393779027154778e-08,
+       7.951585757837165e-06,
+       6.203518296388211e-06,
+       1.6051196780608734e-06,
+       6.743922540408676e-07,
+       0.9999738931655884,
+       6.051267064322019e-06,
+       8.076349189423127e-08,
+       7.241488333420421e-07
+      ],
+      "label": "other"
+     }
+    ],
+    "usage": {
+     "input_tokens": 14,
+     "output_tokens": 0
+    }
+   },
+   "npu_answer": {
+    "model": "Vela-1.0-Encoder-307M-Domain",
+    "head": "default",
+    "kind": "sequence",
+    "labels": [
+     "biology",
+     "business",
+     "chemistry",
+     "computer science",
+     "economics",
+     "engineering",
+     "health",
+     "history",
+     "law",
+     "math",
+     "other",
+     "philosophy",
+     "physics",
+     "psychology"
+    ],
+    "results": [
+     {
+      "index": 0,
+      "probabilities": [
+       1.9716292172233807e-06,
+       1.4979471529841248e-07,
+       1.218183598439282e-07,
+       3.781188695484161e-08,
+       4.807668574358104e-07,
+       1.936424354198607e-08,
+       7.949045539135113e-06,
+       6.186526661622338e-06,
+       1.6117309087348985e-06,
+       6.721161298628431e-07,
+       0.9999738931655884,
+       6.098418907640735e-06,
+       8.050941602277817e-08,
+       7.236297392410052e-07
+      ],
+      "label": "other"
+     }
+    ],
+    "usage": {
+     "input_tokens": 14,
+     "output_tokens": 0
+    }
+   }
+  }
+ ]
+}

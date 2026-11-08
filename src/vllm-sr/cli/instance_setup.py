@@ -91,6 +91,7 @@ def attach_controller(source, config, env, gateway, startup_timeout):
         result = subprocess.run(
             [
                 runtime,
+                "container",
                 "inspect",
                 "--format",
                 "{{.Image}}",
@@ -112,6 +113,7 @@ def attach_controller(source, config, env, gateway, startup_timeout):
     inspected_env = subprocess.run(
         [
             runtime,
+            "container",
             "inspect",
             "--format",
             "{{json .Config.Env}}",
@@ -153,7 +155,7 @@ def stop_managed_controller():
     layout = resolve_runtime_stack()
     runtime = get_container_runtime()
     inspected = subprocess.run(
-        [runtime, "inspect", layout.dashboard_container_name],
+        [runtime, "container", "inspect", layout.dashboard_container_name],
         capture_output=True,
         timeout=10,
         check=False,

@@ -52,7 +52,7 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
         ):
             self.assertIn(contract, source)
         self.assertIn('"--check-published"', source)
-        self.assertIn("check_wheel(wheels[0])", source)
+        self.assertIn("check_wheel(wheels[0], image_tag)", source)
         self.assertIn("verify_resources(wheels[0], sources[0])", source)
         self.assertIn("fetch-depth: 0", self.text)
         self.assertIn("github.event.pull_request.base.sha", self.text)

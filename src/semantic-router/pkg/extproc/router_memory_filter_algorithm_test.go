@@ -79,7 +79,7 @@ func TestCreateMemoryRuntimeValidatesReflectionAlgorithm(t *testing.T) {
 			t.Run(scope.name+"/"+tc.algorithm, func(t *testing.T) {
 				// Memory stays disabled, so no store is created and only the
 				// startup check can fail.
-				store, extractor, err := createMemoryRuntime(scope.build(tc.algorithm))
+				store, extractor, _, err := createMemoryRuntime(scope.build(tc.algorithm))
 				assert.Nil(t, store)
 				assert.Nil(t, extractor)
 				if !tc.wantErr {
@@ -102,7 +102,7 @@ func TestCreateMemoryRuntimeRejectsUnknownGlobalAlgorithmDespiteOverride(t *test
 	cfg.Memory.Reflection.Algorithm = "recency_semantic"
 	cfg.Decisions = []config.Decision{reflectionDecision("memory_route", "heuristic")}
 
-	_, _, err := createMemoryRuntime(cfg)
+	_, _, _, err := createMemoryRuntime(cfg)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "global.stores.memory.reflection.algorithm")
 }

@@ -92,7 +92,7 @@ func TestRouterReplayDatasetExportBuildsExamplesFromWholeRecords(t *testing.T) {
 	assertDatasetStatus(t, response, typev3.StatusCode_OK)
 	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
 
-	assertStringField(t, body, "version", "shadow-dataset.v1")
+	assertStringField(t, body, "version", "shadow-dataset.v2")
 	counts, ok := body["counts"].(map[string]interface{})
 	if !ok {
 		t.Fatalf("expected manifest counts, got %#v", body["counts"])

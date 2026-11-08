@@ -98,13 +98,10 @@ class ModelContractTests(unittest.TestCase):
     def test_each_vela2_size_has_its_own_runtime_and_endpoint(self):
         suites = run_model_tests.VELA2_SUITES.values()
         self.assertEqual(
-            [(repo, profile) for repo, profile, _, _ in suites],
-            [
-                ("vllm-sr/Vela-2.0-0.3B", "max_speed"),
-                ("vllm-sr/Vela-2.0-0.8B", "exact"),
-            ],
+            [repo for repo, _, _ in suites],
+            ["vllm-sr/Vela-2.0-0.3B", "vllm-sr/Vela-2.0-0.8B"],
         )
-        self.assertEqual(len({env for _, _, env, _ in suites}), len(suites))
+        self.assertEqual(len({env for _, env, _ in suites}), len(suites))
         logs = {filename for _, _, filename in run_model_tests.SELECTIONS}
         self.assertTrue(set(run_model_tests.VELA2_SUITES) <= logs)
 
@@ -137,10 +134,10 @@ class ModelContractTests(unittest.TestCase):
         for call in resolver.resolve.call_args_list:
             self.assertEqual(call.kwargs, {"cache_dir": root / "cache"})
         for log, model in models.items():
-            repo, profile, env, _ = run_model_tests.VELA2_SUITES[log]
+            repo, env, _ = run_model_tests.VELA2_SUITES[log]
             self.assertEqual(
-                (model["repo_id"], model["profile"], model["env"], model["revision"]),
-                (repo, profile, env, "b" * 40),
+                (model["repo_id"], model["env"], model["revision"]),
+                (repo, env, "b" * 40),
             )
             self.assertEqual(model["bytes"], len("weights"))
 
@@ -153,7 +150,6 @@ class ModelContractTests(unittest.TestCase):
                 "env": "VLLM_SRUN_VELA2_ENDPOINT",
                 "repo_id": "vllm-sr/Vela-2.0-0.3B",
                 "revision": "b" * 40,
-                "profile": "max_speed",
             }
             command = f"{sys.executable} {root / 'srun.py'} {arguments}"
             with (
@@ -171,12 +167,12 @@ class ModelContractTests(unittest.TestCase):
         for flag, value in (
             ("--revision", "b" * 40),
             ("--device", "cpu"),
-            ("--profile", "max_speed"),
             ("--cache-dir", str(root / "cache")),
             ("--result-cache-entries", "0"),
         ):
             self.assertEqual(argv[argv.index(flag) + 1], value)
         self.assertIn("--offline", argv)
+        self.assertNotIn("--profile", argv)
         self.assertIn("ready_seconds", model)
 
     def test_a_vela2_runtime_that_exits_fails_every_test_it_serves(self):
@@ -186,7 +182,6 @@ class ModelContractTests(unittest.TestCase):
                 "env": "VLLM_SRUN_VELA2_ENDPOINT",
                 "repo_id": "vllm-sr/Vela-2.0-0.3B",
                 "revision": "b" * 40,
-                "profile": "max_speed",
             }
             command = f"{sys.executable} -c 'raise SystemExit(3)'"
             with mock.patch.dict(os.environ, {"VLLM_SRUN_COMMAND": command}):

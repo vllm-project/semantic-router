@@ -36,6 +36,10 @@ CANONICAL_SERVICE_DEFAULTS: dict[str, dict[str, object]] = {
     },
 }
 
+# The services and stores only the routing pipeline reads. Engine mode never
+# builds that pipeline, so a stack that cannot enable routing leaves them out.
+ROUTING_SERVICE_KEYS = frozenset({"response_api", "router_replay"})
+
 CANONICAL_STORE_DEFAULTS: dict[str, dict[str, object]] = {
     "response_cache": {
         "enabled": True,
@@ -59,16 +63,22 @@ def is_setup_mode_config(config: Mapping[str, Any]) -> bool:
 
 
 def detect_canonical_storage_backends(
-    config: Mapping[str, Any], stack_layout: RuntimeStackLayout | None = None
+    config: Mapping[str, Any],
+    stack_layout: RuntimeStackLayout | None = None,
+    *,
+    routing: bool = True,
 ) -> set[str]:
     """Return provisionable backends implied by canonical service and store defaults.
 
     When a stack layout is supplied, canonical omitted service endpoints are
     resolved to that stack while explicit external endpoints are never
-    converted into speculative local sidecars.
+    converted into speculative local sidecars. Without *routing*, the services
+    and the response cache of the routing pipeline need no backend.
     """
     backends: set[str] = set()
     for service_key in CANONICAL_SERVICE_DEFAULTS:
+        if not routing and service_key in ROUTING_SERVICE_KEYS:
+            continue
         backend = effective_service_backend(config, service_key)
         if backend in {"redis", "postgres", "milvus"} and (
             stack_layout is None
@@ -76,7 +86,7 @@ def detect_canonical_storage_backends(
         ):
             backends.add(backend)
 
-    if _response_cache_requires_managed_milvus(config, stack_layout):
+    if routing and _response_cache_requires_managed_milvus(config, stack_layout):
         backends.add("milvus")
 
     vs_metadata = _vector_store_metadata_backend(config)

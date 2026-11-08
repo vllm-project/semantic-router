@@ -118,7 +118,18 @@ async def chat_completions(request: Request):
     scenario_response = await respond_to_scenario(request, req, created_ts)
     if scenario_response is not None:
         return scenario_response
-    if chat_contains(req, openrouter_fixture.MARKER):
+    if chat_contains(req, openrouter_fixture.MARKER) or chat_contains(
+        req, openrouter_fixture.REASONING_MARKER
+    ):
+        if (
+            openrouter_fixture.reasoning_turn(req)
+            and any(message.role == "tool" for message in req.messages)
+            and not openrouter_fixture.reasoning_follow_up_valid(req)
+        ):
+            return invalid_request_response(
+                "OpenRouter reasoning continuity blocks were lost or changed",
+                "messages.reasoning_details",
+            )
         if req.stream:
             return StreamingResponse(
                 openrouter_fixture.streamed_reply(req, created_ts),
@@ -129,6 +140,9 @@ async def chat_completions(request: Request):
     vllm_reasoning = vllm_fixture.reasoning_answer_reply(req, created_ts)
     if vllm_reasoning is not None:
         return vllm_reasoning
+    vllm_error = vllm_fixture.error_reply(req, created_ts)
+    if vllm_error is not None:
+        return vllm_error
     vllm_stop = vllm_fixture.matched_stop(req)
     if vllm_stop and chat_contains(req, vllm_fixture.MARKER):
         if req.stream:

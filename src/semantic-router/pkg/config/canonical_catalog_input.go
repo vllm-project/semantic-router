@@ -297,7 +297,8 @@ func catalogPricing(value ModelPricing) modelcatalog.Pricing {
 	return modelcatalog.Pricing{
 		Currency: value.Currency, PromptPer1M: value.PromptPer1M,
 		CompletionPer1M: value.CompletionPer1M, CachedInputPer1M: value.CachedInputPer1M,
-		CacheWritePer1M: value.CacheWritePer1M,
+		CacheWritePer1M:   value.CacheWritePer1M,
+		CacheWrite1hPer1M: value.CacheWrite1hPer1M,
 	}
 }
 

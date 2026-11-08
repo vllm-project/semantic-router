@@ -108,7 +108,7 @@ func (f *embedServices) embedCalls() []modelservice.EmbedRequest {
 func embeddingCard(id string, modalities ...string) modelservice.ModelCard {
 	return modelservice.ModelCard{
 		ID: id, Repo: "vllm-sr/" + id, ModelSHA256: strings.Repeat("ab", 32), Revision: strings.Repeat("1", 40),
-		Surfaces: []string{"embeddings"}, MaxInputTokens: 512, MaxInputs: 3, Device: "cpu", Dtype: "float32", Profile: "exact", Engine: "native",
+		Surfaces: []string{"embeddings"}, MaxInputTokens: 512, MaxInputs: 3, Device: "cpu", Dtype: "float32", Engine: "native",
 		Embedding: &modelservice.EmbeddingCard{Dimensions: []int{8, 4}, Layers: []int{6, 22}, Modalities: modalities, Normalized: true, Pooling: "mean"},
 	}
 }
@@ -117,7 +117,7 @@ func embeddingSpec(deployment string) config.ResolvedModelBinding {
 	return config.ResolvedModelBinding{
 		Recipe: config.DefaultRecipeName, Name: "embedding",
 		Binding:    config.ModelBinding{Deployment: deployment, Contract: embeddingContract},
-		Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider, Endpoint: "http://runtime:8100", Device: "cpu", Profile: "exact", Input: config.ModelInputBudget{Overflow: "truncate"}},
+		Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider, Endpoint: "http://runtime:8100", Device: "cpu", Input: config.ModelInputBudget{Overflow: "truncate"}},
 	}
 }
 

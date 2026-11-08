@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/openai/openai-go"
 
@@ -37,6 +38,8 @@ type ToolsDatabase struct {
 	modelType           string // Model type to use for embeddings (e.g., "mmbert", "qwen3")
 	targetDim           int    // Target dimension for embeddings
 	provider            embedding.Provider
+	// loadedAt is when a catalog batch was last published; zero until then.
+	loadedAt time.Time
 }
 
 // ToolsDatabaseOptions holds options for creating a new tools database
@@ -63,6 +66,15 @@ func NewToolsDatabase(options ToolsDatabaseOptions) *ToolsDatabase {
 // IsEnabled returns whether the tools database is enabled
 func (db *ToolsDatabase) IsEnabled() bool {
 	return db.enabled
+}
+
+// LoadedAt returns when a catalog batch was last published, or the zero time
+// when none has been. Callers use it as bounded runtime availability evidence:
+// an enabled flag alone says nothing about a load.
+func (db *ToolsDatabase) LoadedAt() time.Time {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	return db.loadedAt
 }
 
 // AddTool admits an isolated definition under its normalized unique name.

@@ -73,7 +73,7 @@ from cli.storage_backends import (
     provision_storage_backends,
     storage_data_volume_is_recorded,
 )
-from cli.terminal import echo, fields, heading, hint, success, warning
+from cli.terminal import echo, fields, heading, hint, quiet_logs, success, warning
 from cli.utils import get_logger, load_config
 
 log = get_logger(__name__)
@@ -204,7 +204,8 @@ def _preflight_runtime_config(
     state_root_dir,
     stack_layout,
 ):
-    print_vllm_logo()
+    if not quiet_logs():
+        print_vllm_logo()
     recover_pending_recipe_activation_for_stack(
         runtime_config_path=runtime_config_file,
         state_root_dir=state_root_dir,
@@ -292,6 +293,8 @@ def _start_vllm_sr_locked(
         env_vars,
         stack_layout,
         enable_observability,
+        # A Dashboard can turn routing on in the running stack.
+        routing=_routing_enabled(user_config) or not dashboard_disabled,
     )
 
     setup_mode = str(env_vars.get("VLLM_SR_SETUP_MODE", "")).lower() == "true"
@@ -403,6 +406,11 @@ def _readiness_token_env(
     return _configured_management_readiness_token_env(user_config, available)
 
 
+def _routing_enabled(user_config) -> bool:
+    router = (user_config.get("global") or {}).get("router") or {}
+    return router.get("enabled") is not False
+
+
 def _start_support_services(
     user_config,
     shared_network_name,
@@ -410,11 +418,13 @@ def _start_support_services(
     env_vars,
     stack_layout,
     enable_observability,
+    *,
+    routing=True,
 ):
     if not enable_observability:
         _stop_observability_containers(stack_layout)
     started_backends = provision_storage_backends(
-        user_config, stack_layout, state_root_dir=state_root_dir
+        user_config, stack_layout, state_root_dir=state_root_dir, routing=routing
     )
     env_vars[MANAGED_STORAGE_BACKENDS_ENV] = ",".join(sorted(started_backends))
     observability_network_name = start_observability_stack(
@@ -787,12 +797,13 @@ def show_status(service: str = "all"):
         echo()
 
     services = _requested_services(service)
-    if (
-        service == "all"
-        and container_status(stack_layout.envoy_container_name) == "not found"
-    ):
-        # A standalone stack has no Envoy container.
-        services.remove("envoy")
+    if service == "all":
+        # A standalone stack has no Envoy container, and a minimal one (Engine
+        # mode's default) no Dashboard.
+        for optional in ("envoy", "dashboard"):
+            name = stack_layout.service_container_name(optional)
+            if container_status(name) == "not found":
+                services.remove(optional)
     for requested_service in services:
         report_service_status(requested_service, stack_layout)
 

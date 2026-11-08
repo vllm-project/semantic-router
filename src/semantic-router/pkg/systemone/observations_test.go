@@ -81,7 +81,7 @@ func TestNativeGateRequiresCoverageAndKnownStatistics(t *testing.T) {
 }
 
 func TestNativeProvenanceRequestPreservesTaskAndClientOptions(t *testing.T) {
-	for _, options := range []string{"", `,"options":null`, `,"options":{}`, `,"options":{"return_meta":false}`, `,"options":{"return_meta":true}`, `,"options":{"profile":"exact","max_tokens":8192}`} {
+	for _, options := range []string{"", `,"options":null`, `,"options":{}`, `,"options":{"return_meta":false}`, `,"options":{"return_meta":true}`, `,"options":{"deadline_ms":500,"max_tokens":8192}`} {
 		t.Run(options, func(t *testing.T) {
 			body := strings.TrimSuffix(mixedRequest, "}") + options + "}"
 			request, err := ParseNativeRequest(json.RawMessage(body))
@@ -104,7 +104,7 @@ func TestNativeProvenanceRequestPreservesTaskAndClientOptions(t *testing.T) {
 			if string(inferenceOptions["return_meta"]) != "true" {
 				t.Fatal("internal provenance was not requested")
 			}
-			if strings.Contains(options, "max_tokens") && (string(inferenceOptions["profile"]) != `"exact"` || string(inferenceOptions["max_tokens"]) != "8192") {
+			if strings.Contains(options, "max_tokens") && (string(inferenceOptions["deadline_ms"]) != "500" || string(inferenceOptions["max_tokens"]) != "8192") {
 				t.Fatal("inference options changed")
 			}
 			if strings.Contains(request.SignalText, "return_meta") || strings.Contains(request.SignalText, "max_tokens") {

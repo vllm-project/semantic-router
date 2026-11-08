@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 模型性能评测
 sidebar_label: 模型评测
 translation:
@@ -156,7 +157,7 @@ global:
 
 - `listeners` 为空。
 - `routing.decisions` 为空。
-- provider 绑定使用命令行默认值，而不是部署发现。
+- 后端引用使用命令行默认值，而不是部署发现。
 - 评测类别可能与面向用户的决策不匹配。
 - 稀疏的 `global` 分区可能与你的运行时或安全策略不匹配。
 

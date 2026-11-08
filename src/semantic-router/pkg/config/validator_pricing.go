@@ -48,6 +48,12 @@ func validateModelPricing(modelName string, pricing ModelPricing) error {
 			value float64
 		}{name: "cache_write_per_1m", value: *pricing.CacheWritePer1M})
 	}
+	if pricing.CacheWrite1hPer1M != nil {
+		rates = append(rates, struct {
+			name  string
+			value float64
+		}{name: "cache_write_1h_per_1m", value: *pricing.CacheWrite1hPer1M})
+	}
 
 	for _, rate := range rates {
 		if math.IsNaN(rate.value) || math.IsInf(rate.value, 0) || rate.value < 0 {

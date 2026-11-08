@@ -146,6 +146,7 @@ class FixturePublicationTests(unittest.TestCase):
                     ["e2e/testing/run_memory_integration.sh"],
                     source_sha="c" * 40,
                     profile=profile,
+                    publish=profile == "main",
                 )
                 with patch(
                     "ci_plan.resolve_published",
@@ -188,13 +189,28 @@ class FixturePublicationTests(unittest.TestCase):
             resolve_image_sources(plan)
         self.assertNotIn(mocker.IMAGE, plan["build_images"])
 
-    def test_release_and_nightly_require_a_published_main_fixture(self):
-        for profile in ("release", "nightly"):
+    def test_weekly_can_qualify_fixture_before_explicit_main_publication(self):
+        plan = make_plan([], source_sha="c" * 40, profile="nightly")
+        with patch(
+            "ci_plan.resolve_published",
+            side_effect=mocker.PublicationMissingError("missing"),
+        ):
+            resolve_image_sources(plan)
+        self.assertEqual(plan["image_sources"][mocker.IMAGE]["source"], "candidate")
+        self.assertIn(mocker.IMAGE, plan["build_images"])
+        self.assertNotIn(mocker.IMAGE, plan["publish_images"])
+        producer = json.loads(github_outputs(plan)["image_producers"])["image-fixtures"]
+        self.assertEqual(producer["build_images"], [mocker.IMAGE])
+        self.assertEqual(producer["published_images"], [])
+
+    def test_release_requires_a_published_main_fixture(self):
+        for profile in ("release",):
             with self.subTest(profile=profile):
                 plan = make_plan(
                     ["e2e/testing/run_memory_integration.sh"],
                     source_sha="c" * 40,
                     profile=profile,
+                    publish=profile == "main",
                 )
                 with patch(
                     "ci_plan.resolve_published",
@@ -215,6 +231,7 @@ class FixturePublicationTests(unittest.TestCase):
                 ["e2e/testing/run_memory_integration.sh"],
                 source_sha="c" * 40,
                 profile=profile,
+                publish=profile == "main",
                 full=full,
             )
             with self.subTest(profile=profile, full=full):
@@ -236,6 +253,7 @@ class FixturePublicationTests(unittest.TestCase):
                 ],
                 source_sha="c" * 40,
                 profile=profile,
+                publish=profile == "main",
             )
             self.assertNotIn(mocker.IMAGE, plan["build_images"])
             self.assertEqual(plan["image_sources"][mocker.IMAGE]["source"], "published")
@@ -246,6 +264,7 @@ class FixturePublicationTests(unittest.TestCase):
                 [mocker.CONTEXT + "/provider_mocker/app.py"],
                 source_sha="c" * 40,
                 profile=profile,
+                publish=profile == "main",
             )
             self.assertIn(mocker.IMAGE, plan["build_images"])
             self.assertEqual(mocker.IMAGE in plan["publish_images"], profile == "main")

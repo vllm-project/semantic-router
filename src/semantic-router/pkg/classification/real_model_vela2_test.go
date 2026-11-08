@@ -44,8 +44,8 @@ const (
 	vela2CPUTolerance = 1e-3
 	// vela2StateTolerance bounds a state's answers in a call with several
 	// states against the same questions asked about that state alone: on CPU,
-	// max_speed packs the states' sequences into one forward and rounds the
-	// last bits differently; exact runs them as separate requests.
+	// the runtime batches the states' sequences into one forward on its packed
+	// FP32 copy, which rounds the last bits differently from a state alone.
 	vela2StateTolerance = 1e-6
 	// vela2Margin keeps a recorded decision (a Choice's top option, a Set
 	// label's selection, a span) this far from its boundary, so a move within
@@ -60,8 +60,11 @@ type vela2Card struct {
 	Repo        string `json:"repo"`
 	Revision    string `json:"revision"`
 	ModelSHA256 string `json:"model_sha256"`
-	Profile     string `json:"profile"`
+	Numerics    string `json:"numerics"`
 	Device      string `json:"device"`
+	EngineArgs  struct {
+		Dtype string `json:"dtype"`
+	} `json:"engine_args"`
 }
 
 func servedCard(t *testing.T, endpoint string) vela2Card {
@@ -98,18 +101,17 @@ func requireVela2Runtime(t *testing.T, env, model string) (string, vela2Card) {
 		}
 		t.Skipf("optional real model %s requires a runtime serving it at %s", spec.RepoID, env)
 	}
-	deployment, err := config.ImplicitModelRuntimeDeployment(model, true)
-	if err != nil {
+	if _, err := config.ImplicitModelRuntimeDeployment(model, true); err != nil {
 		t.Fatal(err)
 	}
 	card := servedCard(t, endpoint)
 	if card.Repo != spec.RepoID || card.Revision != spec.Revision {
 		t.Fatalf("real model %s registers revision %s, but %s serves %s at revision %s", spec.RepoID, spec.Revision, endpoint, card.Repo, card.Revision)
 	}
-	if card.Device != "cpu" || card.Profile != deployment.Profile {
-		t.Fatalf("%s serves %s on %s at profile %s; the Router runs it on cpu at %s", endpoint, card.ID, card.Device, card.Profile, deployment.Profile)
+	if card.Device != "cpu" || card.EngineArgs.Dtype != "auto" {
+		t.Fatalf("%s serves %s on %s at dtype %s; the Router runs it on cpu at dtype auto", endpoint, card.ID, card.Device, card.EngineArgs.Dtype)
 	}
-	t.Logf("real model=%s registered_revision=%s model_sha256=%s profile=%s endpoint=%s", spec.RepoID, spec.Revision, card.ModelSHA256, card.Profile, endpoint)
+	t.Logf("real model=%s registered_revision=%s model_sha256=%s numerics=%s endpoint=%s", spec.RepoID, spec.Revision, card.ModelSHA256, card.Numerics, endpoint)
 	return endpoint, card
 }
 
@@ -499,7 +501,7 @@ type vela2ModelAnswers struct {
 	RepoID        string                      `json:"repo_id"`
 	Revision      string                      `json:"revision"`
 	ModelSHA256   string                      `json:"model_sha256"`
-	Profile       string                      `json:"profile"`
+	Numerics      string                      `json:"numerics"`
 	Items         map[string]vela2ItemAnswers `json:"items"`
 	Hallucination map[string]vela2StateAnswer `json:"hallucination,omitempty"`
 }

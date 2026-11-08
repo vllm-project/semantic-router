@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -11,14 +12,19 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
+var errManagerClosed = errors.New("MCP manager is closed")
+
 // Manager is the MCP client manager. Server configs are persisted in workflowstore;
 // active client connections remain in memory only.
 type Manager struct {
 	mu                 sync.RWMutex
 	clients            map[string]*Client
 	connectAttempts    map[string]*clientConnectAttempt
+	testConnections    map[*Client]context.CancelFunc
 	configs            map[string]*ServerConfig
 	store              *workflowstore.Store
+	closed             bool
+	connectWG          sync.WaitGroup
 	connectClientFn    func(context.Context, *Client) error
 	disconnectClientFn func(*Client) error
 }
@@ -28,6 +34,7 @@ func NewManager(store *workflowstore.Store) (*Manager, error) {
 	m := &Manager{
 		clients:         make(map[string]*Client),
 		connectAttempts: make(map[string]*clientConnectAttempt),
+		testConnections: make(map[*Client]context.CancelFunc),
 		configs:         make(map[string]*ServerConfig),
 		store:           store,
 	}
@@ -306,14 +313,37 @@ func (m *Manager) TestConnection(ctx context.Context, config *ServerConfig) erro
 	if err != nil {
 		return err
 	}
-	defer func() { _ = client.Disconnect() }()
+	testCtx, cancel := context.WithCancel(ctx)
+	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		cancel()
+		return errManagerClosed
+	}
+	// Tests do not replace published clients, and multiple tests of the same
+	// server must each be canceled and joined during shutdown.
+	m.testConnections[client] = cancel
+	m.connectWG.Add(1)
+	m.mu.Unlock()
+	defer func() {
+		cancel()
+		_ = m.disconnectClient(client)
+		m.mu.Lock()
+		delete(m.testConnections, client)
+		m.mu.Unlock()
+		m.connectWG.Done()
+	}()
 
-	return client.Connect(ctx)
+	return m.connectClient(testCtx, client)
 }
 
 // ConnectEnabled connects to all enabled servers
 func (m *Manager) ConnectEnabled(ctx context.Context) {
 	m.mu.RLock()
+	if m.closed {
+		m.mu.RUnlock()
+		return
+	}
 	configs := make([]*ServerConfig, 0)
 	for _, config := range m.configs {
 		if config.Enabled {
@@ -324,13 +354,38 @@ func (m *Manager) ConnectEnabled(ctx context.Context) {
 
 	for _, config := range configs {
 		go func(c *ServerConfig) {
-			if err := m.Connect(ctx, c.ID); err != nil {
-				log.Printf("[MCP-Manager] ConnectEnabled failed: error_class=%T", err)
-			} else {
+			err := m.Connect(ctx, c.ID)
+			if err == nil {
 				log.Printf("[MCP-Manager] ConnectEnabled succeeded")
+				return
+			}
+			if !errors.Is(err, errManagerClosed) {
+				log.Printf("[MCP-Manager] ConnectEnabled failed: error_class=%T", err)
 			}
 		}(config)
 	}
+}
+
+// Close permanently stops new connections, cancels active connection attempts,
+// disconnects published clients, and waits for all connection goroutines to
+// finish their cleanup before returning.
+func (m *Manager) Close() {
+	m.mu.Lock()
+	if !m.closed {
+		m.closed = true
+		for _, cancel := range m.testConnections {
+			cancel()
+		}
+		for id := range m.clients {
+			_ = m.disconnectClientLocked(id)
+		}
+	}
+	m.mu.Unlock()
+
+	// Connect and TestConnection add to connectWG while holding m.mu, and
+	// reject work after m.closed is set. Release the lock so in-flight calls
+	// can finish their cleanup before the wait completes.
+	m.connectWG.Wait()
 }
 
 // DisconnectAll disconnects all connections

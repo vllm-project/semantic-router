@@ -71,7 +71,7 @@ func TestModelRuntimeInventoryListsPublishedDeploymentsWithoutCredentials(t *tes
 		t.Fatalf("guard = %+v", guard)
 	}
 	wantHeads := []modelRuntimeHead{{Name: "default", Kind: "sequence", Labels: []string{"benign", "jailbreak"}}}
-	if guard.Family != "task_heads" || !reflect.DeepEqual(guard.Surfaces, []string{"classify"}) || !reflect.DeepEqual(guard.Heads, wantHeads) || guard.Device != "cpu" || guard.Profile != "exact" {
+	if guard.Family != "task_heads" || !reflect.DeepEqual(guard.Surfaces, []string{"classify"}) || !reflect.DeepEqual(guard.Heads, wantHeads) || guard.Device != "cpu" || guard.EngineArgs == nil || guard.EngineArgs.Dtype != "auto" || guard.Numerics != "exact" {
 		t.Fatalf("guard card = %+v", guard)
 	}
 	if kai.Family != "decision2" || !reflect.DeepEqual(kai.Surfaces, []string{"decisions"}) || len(kai.Heads) != 0 {

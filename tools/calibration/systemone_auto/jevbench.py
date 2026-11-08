@@ -233,8 +233,8 @@ def safe_response(raw: dict, question: dict) -> dict:
                 cleaned[key] = meta[key]
         for key, allowed in {
             "engine": {"native"},
-            "profile": {"exact"},
-            "numerics": {"exact"},
+            "dtype": {"float32", "bfloat16", "float16"},
+            "numerics": {"exact", "approximate"},
             "accelerator": {"cpu", "cuda", "rocm", "mps"},
         }.items():
             if isinstance(meta.get(key), str) and meta[key] in allowed:
@@ -267,7 +267,7 @@ def native_identity(raw: dict, identities: dict) -> str | None:
         "revision",
         "model_sha256",
         "engine",
-        "profile",
+        "dtype",
         "numerics",
         "accelerator",
     )

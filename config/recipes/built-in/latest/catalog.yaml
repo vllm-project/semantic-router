@@ -23,7 +23,7 @@ defaults:
 assets:
 - id: mom-v1
   bundle: mom-v1
-  sha256: sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a
+  sha256: sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb
 protocols:
 - id: vllm-sr/systemone@1
   display_name: System One
@@ -1146,7 +1146,51 @@ providers:
     monogram: G
     monochrome: true
   conformance:
-    status: unverified
+    status: live_verified
+    verified_at: '2026-09-22'
+  models:
+  - catalog: openai/gpt-oss-120b
+    relationship: managed_cloud
+    id: openai/gpt-oss-120b
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.15
+      completion_per_1m: 0.6
+    lifecycle: active
+    verification:
+      status: reproduced
+      verified_at: '2026-09-22'
+      source: https://console.groq.com/docs/models
+  - catalog: openai/gpt-oss-20b
+    relationship: managed_cloud
+    id: openai/gpt-oss-20b
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.075
+      completion_per_1m: 0.3
+    lifecycle: active
+    verification:
+      status: reproduced
+      verified_at: '2026-09-22'
+      source: https://console.groq.com/docs/models
+  - catalog: qwen/qwen3.8-27b
+    relationship: managed_cloud
+    id: qwen/qwen3.8-27b
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.8
+      completion_per_1m: 4.0
+    lifecycle: experimental
+    verification:
+      status: reproduced
+      verified_at: '2026-09-22'
+      source: https://console.groq.com/docs/models
 - id: hugging-face
   display_name: Hugging Face
   description: Models served through the Hugging Face router.
@@ -1346,6 +1390,30 @@ providers:
     status: fixture_verified
     verified_at: '2026-09-04'
   models:
+  - catalog: minimax/minimax-m3.1-flash
+    relationship: first_party
+    id: MiniMax-M3.1-Flash
+    protocols:
+    - openai/chat-completions@1
+    reasoning_transport: top_level_effort
+    reasoning_modes:
+    - adaptive
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.15
+      completion_per_1m: 0.6
+      cached_input_per_1m: 0.015
+    restrictions:
+      context_window_size: 1000000
+      max_output_tokens: 524288
+      unsupported_request_fields:
+        openai/chat-completions@1:
+        - service_tier
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-10-23'
+      source: https://platform.minimax.io/docs/api-reference/text-openai-api
   - catalog: minimax/minimax-m2.5
     relationship: first_party
     id: MiniMax-M2.5
@@ -2947,12 +3015,15 @@ providers:
   protocols:
   - openai/chat-completions@1
   - openai/responses@1
+  - anthropic/messages@1
   default_protocol: openai/chat-completions@1
   supported_operations:
   - openai/chat-completions@1#create
   - openai/chat-completions@1#list_models
   - openai/responses@1#create
   - openai/responses@1#list_models
+  - anthropic/messages@1#create
+  - anthropic/messages@1#list_models
   auth:
     strategy: bearer
     header: Authorization
@@ -3200,6 +3271,22 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://huggingface.co/meta-llama/Llama-4-Maverick-17B-128E-Instruct
+  - catalog: minimax/minimax-m3.1-flash
+    relationship: self_hosted
+    id: MiniMaxAI/MiniMax-M3.1-Flash
+    protocols:
+    - openai/chat-completions@1
+    reasoning_transport: chat_template_kwargs
+    reasoning_modes:
+    - adaptive
+    restrictions:
+      minimum_vllm_version: 0.33.0
+      nightly_required: true
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-10-23'
+      source: https://github.com/vllm-project/vllm/blob/eff8a5689681ea9db3c6390e5e4415d6dca42431/recipes/models/MiniMaxAI/MiniMax-M3.1-Flash.yaml
   - catalog: minimax/minimax-m2.5
     relationship: self_hosted
     id: MiniMaxAI/MiniMax-M2.5
@@ -3930,7 +4017,35 @@ providers:
     monochrome: true
   conformance:
     status: unverified
-  models: []
+  models:
+  - catalog: writer/palmyra-x6
+    relationship: first_party
+    id: palmyra-x6
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 2.0
+      completion_per_1m: 8.0
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-20'
+      source: https://dev.writer.com/home/models
+  - catalog: writer/palmyra-x5
+    relationship: first_party
+    id: palmyra-x5
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.6
+      completion_per_1m: 6.0
+    lifecycle: deprecated
+    verification:
+      status: claimed
+      verified_at: '2026-09-20'
+      source: https://dev.writer.com/home/models
 - id: xai
   display_name: xAI
   description: Grok models through an OpenAI-style API.
@@ -4468,6 +4583,19 @@ reasoning_families:
   modes:
   - enabled
   default_mode: enabled
+- id: minimax-m3.1-flash
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels:
+  - low
+  - medium
+  - high
+  - xhigh
+  - max
+  default: max
+  modes:
+  - adaptive
+  default_mode: adaptive
 - id: minimax-m3
   type: reasoning_mode
   parameter: thinking_mode
@@ -6749,6 +6877,51 @@ models:
   - open_weights
   - reasoning
   - dense
+- id: minimax/minimax-m3.1-flash
+  display_name: MiniMax M3.1 Flash
+  description: Open-weight multimodal MiniMax model for coding and agentic workloads with tunable reasoning depth.
+  kind: physical
+  publisher: MiniMax
+  presentation:
+    logo: package:minimax
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash
+    license: MiniMax-Community-License
+  family: minimax-m3.1
+  reasoning_family: minimax-m3.1-flash
+  parameter_size: 428B (23B active)
+  revision: 262ae6830934f3512211081b8a3f16425b93a239
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: MiniMax
+    status: claimed
+    verified_at: '2026-10-27'
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md
+  tags:
+  - open_weights
+  - multimodal
+  - moe
+  - agentic
+  released_at: '2026-10-19'
 - id: minimax/minimax-m3
   display_name: MiniMax M3
   description: Native multimodal open-weight MiniMax model with million-token context.
@@ -8452,8 +8625,9 @@ models:
     monogram: S
     monochrome: false
   distribution:
-    type: proprietary_api
-    source: https://platform.stepfun.ai/docs/en/guides/models/step-5-preview
+    type: open_weights
+    source: https://huggingface.co/stepfun-ai/Step-5-Preview
+    license: StepFun Model License 1.0
   family: step-5
   reasoning_family: step-3.7
   parameter_size: 600B (27B active)
@@ -8477,10 +8651,10 @@ models:
   verification:
     authority: StepFun
     status: claimed
-    verified_at: '2026-09-24'
-    source: https://www.stepfun.com/step-5-preview
+    verified_at: '2026-10-18'
+    source: https://huggingface.co/stepfun-ai/Step-5-Preview
   tags:
-  - proprietary
+  - open_weights
   - reasoning
   - multimodal
   - agentic
@@ -8993,6 +9167,83 @@ models:
   - reasoning
   - coding
   released_at: '2025-05-21'
+- id: writer/palmyra-x6
+  display_name: Palmyra X6
+  description: Writer's flagship agentic Palmyra model for long-horizon enterprise workflows, sub-agents, and MCP tool use.
+  kind: physical
+  publisher: Writer
+  presentation:
+    logo: monogram
+    monogram: W
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://dev.writer.com/home/models
+  family: palmyra-x6
+  lifecycle: active
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 8192
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Writer
+    status: claimed
+    verified_at: '2026-09-20'
+    source: https://dev.writer.com/home/models
+  tags:
+  - proprietary
+  - agentic
+  - enterprise
+  released_at: '2026-08-13'
+- id: writer/palmyra-x5
+  display_name: Palmyra X5
+  description: Writer's general-purpose Palmyra model with a 1M token context window, adaptive reasoning, and vision input;
+    Writer has scheduled it for deprecation on 2026-12-14 with migration to Palmyra X6.
+  kind: physical
+  publisher: Writer
+  presentation:
+    logo: monogram
+    monogram: W
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://dev.writer.com/home/models
+  family: palmyra-x5
+  lifecycle: deprecated
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 8192
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Writer
+    status: claimed
+    verified_at: '2026-09-20'
+    source: https://dev.writer.com/home/models
+  tags:
+  - proprietary
+  - multimodal
+  - enterprise
+  released_at: '2025-04-28'
 - id: xai/grok-4.7
   display_name: Grok 4.7
   description: xAI frontier reasoning model for coding, agentic tasks, and knowledge work.
@@ -9505,7 +9756,8 @@ models:
   released_at: '2026-04-07'
 - id: vllm-sr/mom-v1-blend
   display_name: MoM V1 Blend
-  description: Balances measured quality, latency, and cost across reasoning, simple, and general requests.
+  description: Spends reasoning only where a request needs it; one decision-model call per request selects one of ten lanes,
+    from thinking off to maximum effort.
   kind: virtual
   publisher: vllm-sr.ai
   presentation:
@@ -9517,7 +9769,7 @@ models:
     source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
   family: mom
   generation: 1
-  policy_version: 3.0.0
+  policy_version: 4.0.0
   lifecycle: active
   capabilities:
   - chat
@@ -9540,7 +9792,69 @@ models:
   - tools
   - multimodal
   roles:
-  - name: reasoning
+  - name: long_context
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - long_context
+    recommended_pool:
+    - zai/glm-5.3-flash
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+  - name: vision
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - vision
+    recommended_pool:
+    - zai/glm-5.3-flash
+  - name: recovery
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    recommended_pool:
+    - zai/glm-5.3-flash
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: agentic
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    - tools
+    recommended_pool:
+    - zai/glm-5.3-flash
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: facts
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    recommended_pool:
+    - zai/glm-5.3-flash
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: frontier
+    required: true
+    minimum_candidates: 2
+    traits:
+    - chat
+    - reasoning
+    recommended_pool:
+    - zai/glm-5.3-flash
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: code
     required: true
     minimum_candidates: 1
     traits:
@@ -9550,16 +9864,27 @@ models:
     - deepseek/deepseek-v4-flash
     - deepseek/deepseek-v4-pro
     - zai/glm-5.1
-  - name: simple
+  - name: hard
     required: true
     minimum_candidates: 1
     traits:
     - chat
+    - reasoning
     recommended_pool:
     - deepseek/deepseek-v4-flash
     - deepseek/deepseek-v4-pro
     - zai/glm-5.1
-  - name: medium
+  - name: standard
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: fast
     required: true
     minimum_candidates: 1
     traits:
@@ -9571,7 +9896,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a
+    asset_sha256: sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb
 - id: vllm-sr/mom-v1-lite
   display_name: MoM V1 Lite
   description: Prioritizes known cost within task-specific quality bands for tools, reasoning, and economy routing.
@@ -9586,7 +9911,7 @@ models:
     source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
   family: mom
   generation: 1
-  policy_version: 3.0.0
+  policy_version: 4.0.0
   lifecycle: active
   capabilities:
   - chat
@@ -9638,7 +9963,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a
+    asset_sha256: sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb
 - id: vllm-sr/mom-v1-flash
   display_name: MoM V1 Flash
   description: Prioritizes measured first-token or output-token latency within task-specific quality bands.
@@ -9653,7 +9978,7 @@ models:
     source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
   family: mom
   generation: 1
-  policy_version: 3.0.0
+  policy_version: 4.0.0
   lifecycle: active
   capabilities:
   - chat
@@ -9708,7 +10033,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a
+    asset_sha256: sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb
 - id: vllm-sr/mom-v1-ultra
   display_name: MoM V1 Ultra
   description: Combines strict quality selection with bounded review and agent workflows.
@@ -9723,7 +10048,7 @@ models:
     source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
   family: mom
   generation: 1
-  policy_version: 3.0.0
+  policy_version: 4.0.0
   lifecycle: active
   capabilities:
   - chat
@@ -9793,7 +10118,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a
+    asset_sha256: sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb
 - id: vllm-sr/mom-v1-vault
   display_name: MoM V1 Vault
   description: Contains prompt attacks and routes private or sensitive work to the operator-assigned model pools.
@@ -9808,7 +10133,7 @@ models:
     source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
   family: mom
   generation: 1
-  policy_version: 3.0.0
+  policy_version: 4.0.0
   lifecycle: active
   capabilities:
   - chat
@@ -9846,7 +10171,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a
+    asset_sha256: sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb
 benchmarks:
 - id: tiger-ai-lab/mmlu-pro@1.0.0
   display_name: MMLU-Pro
@@ -9967,6 +10292,40 @@ benchmarks:
     description: Independently measured Terminal-Bench 2.1 result for the named model variant and reasoning effort.
   metrics:
   - id: resolved
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: harbor/terminal-bench@4.0.0
+  display_name: Terminal-Bench 4.0
+  domain: agentic_systems
+  source: https://github.com/harbor-framework/terminal-bench/releases/tag/v4.0.0
+  default_profile: published-agent
+  profiles:
+  - id: published-agent
+    display_name: Published agent
+    description: Terminal-Bench 4.0 result with the agent and harness retained on the evaluation record; separate from the
+      2.1 default index component.
+  metrics:
+  - id: resolved
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: sunblaze-ucb/cybergym@1.0.0
+  display_name: CyberGym
+  domain: cybersecurity
+  source: https://github.com/sunblaze-ucb/cybergym
+  default_profile: published-agent
+  profiles:
+  - id: published-agent
+    display_name: Published agent
+    description: Vendor-published CyberGym vulnerability-reproduction success rate with the agent and context budget retained
+      on the evaluation record.
+  metrics:
+  - id: success_rate
     unit: proportion
     direction: higher_is_better
     range:
@@ -10617,6 +10976,10 @@ benchmarks:
     display_name: Prompt-level loose accuracy
     description: Prompt-level loose accuracy on IFBench, with model-side reasoning and generation settings retained on the
       record.
+  - id: published-unspecified
+    display_name: Published setup unspecified
+    description: Vendor-published IFBench result whose accuracy level (prompt or instruction, loose or strict) is not stated
+      by the source; kept separate from prompt-level loose records.
   metrics:
   - id: accuracy
     unit: proportion
@@ -10745,6 +11108,10 @@ benchmarks:
   - id: published-standard
     display_name: Published standard
     description: Accuracy on MATH using the source-published evaluation setup.
+  - id: published-hard-subset
+    display_name: Published hard subset
+    description: Vendor-published result labeled MATH-Hard by the source; the hard-subset definition and harness are not stated
+      by the source and it is never compared with full-set MATH records.
   - id: rmcb-eacl-2026-valid-output-test
     display_name: RMCB EACL 2026 valid-output test
     description: Accuracy over valid generated outputs in the EACL 2026 RMCB test protocol; filtering counts and generation
@@ -10898,6 +11265,10 @@ benchmarks:
   source: https://github.com/suzgunmirac/BIG-Bench-Hard
   default_profile: rmcb-eacl-2026-valid-output-test
   profiles:
+  - id: published-standard
+    display_name: Published standard
+    description: Vendor-published BIG-Bench Hard accuracy; prompt format, shot count, and harness are retained on the evaluation
+      record when the source states them.
   - id: rmcb-eacl-2026-valid-output-test
     display_name: RMCB EACL 2026 valid-output test
     description: Accuracy over valid generated outputs in the EACL 2026 RMCB test protocol; filtering counts and dataset revision
@@ -11016,6 +11387,140 @@ benchmarks:
     description: Vendor-published AdvanceIF accuracy with the evaluated model variant retained on the record.
   metrics:
   - id: accuracy
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: idavidrein/gpqa@1.0.0
+  display_name: GPQA
+  domain: scientific_reasoning
+  source: https://arxiv.org/abs/2311.12022
+  default_profile: published-unspecified
+  profiles:
+  - id: published-unspecified
+    display_name: Published subset unspecified
+    description: Vendor-published GPQA accuracy whose subset (main, extended, or diamond) is not stated by the source; kept
+      separate from GPQA Diamond records and excluded from the default index.
+  metrics:
+  - id: accuracy
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: openai/mrcr@1.0.0
+  display_name: OpenAI MRCR
+  domain: long_context
+  source: https://huggingface.co/datasets/openai/mrcr
+  default_profile: published-8-needle
+  profiles:
+  - id: published-8-needle
+    display_name: Published 8-needle
+    description: Vendor-published score on the 8-needle OpenAI MRCR task; the context-length bins covered are not stated by
+      the source.
+  metrics:
+  - id: score
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: bigcode/bigcodebench@1.0.0
+  display_name: BigCodeBench
+  domain: software_engineering
+  source: https://bigcode-bench.github.io/
+  default_profile: published-full-instruct
+  profiles:
+  - id: published-full-instruct
+    display_name: Published Full Instruct
+    description: Vendor-published Pass@1 on the BigCodeBench Full split, Instruct variant; calibration and decoding settings
+      are not stated by the source.
+  metrics:
+  - id: pass_at_1
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: unattributed/finance-agent@1.0.0
+  display_name: Finance Agent (owner and version unstated)
+  domain: financial_reasoning
+  default_profile: published-unspecified
+  profiles:
+  - id: published-unspecified
+    display_name: Published setup unspecified
+    description: Vendor-published result labeled only "Finance Agent" by the source; benchmark owner, version, and run setup
+      are not stated, so it is never merged with Vals Finance Agent records.
+  metrics:
+  - id: score
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: afterquery/financeqa@1.0.0
+  display_name: FinanceQA
+  domain: financial_reasoning
+  source: https://huggingface.co/datasets/AfterQuery/FinanceQA
+  default_profile: published-unspecified
+  profiles:
+  - id: published-unspecified
+    display_name: Published setup unspecified
+    description: Vendor-published FinanceQA score; grader, prompt protocol, and dataset revision are not stated by the source.
+  metrics:
+  - id: score
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: patronusai/financebench@1.0.0
+  display_name: FinanceBench
+  domain: financial_reasoning
+  source: https://huggingface.co/datasets/PatronusAI/financebench
+  default_profile: published-unspecified
+  profiles:
+  - id: published-unspecified
+    display_name: Published setup unspecified
+    description: Vendor-published FinanceBench score; retrieval configuration, grader, and dataset revision are not stated
+      by the source.
+  metrics:
+  - id: score
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: gorilla/bfcl-core@1.0.0
+  display_name: BFCL Core
+  domain: agentic_systems
+  source: https://gorilla.cs.berkeley.edu/leaderboard.html
+  default_profile: published-unspecified
+  profiles:
+  - id: published-unspecified
+    display_name: Published setup unspecified
+    description: Vendor-published score labeled "BFCL Core" by the source; the BFCL version and the category composition behind
+      "Core" are not stated by the source and are not defined by the public leaderboard.
+  metrics:
+  - id: score
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: scale/mcp-atlas@1.0.0
+  display_name: MCP Atlas
+  domain: agentic_systems
+  source: https://labs.scale.com/leaderboard/mcp_atlas
+  default_profile: published-unspecified
+  profiles:
+  - id: published-unspecified
+    display_name: Published setup unspecified
+    description: Vendor-published MCP Atlas score; leaderboard revision, tool-call budget, and judge configuration are not
+      stated by the source.
+  metrics:
+  - id: score
     unit: proportion
     direction: higher_is_better
     range:
@@ -23203,6 +23708,107 @@ evaluations:
     provenance: vendor_claimed
     verification: claimed
     source: https://arxiv.org/pdf/2504.21318v1
+    redistributable: true
+- id: minimax/minimax-m3.1-flash-model-card-automation-bench@1.0.0
+  model: minimax/minimax-m3.1-flash
+  benchmark: zapier/automation-bench@1.0.6
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: MiniMax-M3.1-Flash
+    revision: 262ae6830934f3512211081b8a3f16425b93a239
+    source_kind: official_model_card
+    tasks: 600
+  metrics:
+    score: 0.628
+  status: available
+  observed_at: '2026-10-27'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md
+    redistributable: true
+- id: minimax/minimax-m3.1-flash-model-card-deep-swe@1.0.0
+  model: minimax/minimax-m3.1-flash
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: MiniMax-M3.1-Flash
+    revision: 262ae6830934f3512211081b8a3f16425b93a239
+    source_kind: official_model_card
+    agent: mini-SWE-agent
+    agent_version: 2.4.5
+    context_window: 512K
+  metrics:
+    resolved: 0.737
+  status: available
+  observed_at: '2026-10-27'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md
+    redistributable: true
+- id: minimax/minimax-m3.1-flash-model-card-humanitys-last-exam@1.0.0
+  model: minimax/minimax-m3.1-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: text-only
+  reasoning_effort: unspecified
+  subject:
+    variant: MiniMax-M3.1-Flash
+    revision: 262ae6830934f3512211081b8a3f16425b93a239
+    source_kind: official_model_card
+    questions: 2158
+    tools: false
+  metrics:
+    accuracy: 0.434
+  status: available
+  observed_at: '2026-10-27'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md
+    redistributable: true
+- id: minimax/minimax-m3.1-flash-model-card-terminal-bench@4.0.0
+  model: minimax/minimax-m3.1-flash
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: MiniMax-M3.1-Flash
+    revision: 262ae6830934f3512211081b8a3f16425b93a239
+    source_kind: official_model_card
+    agent: Codex
+    agent_version: 0.149.1
+  metrics:
+    resolved: 0.381
+  status: available
+  observed_at: '2026-10-27'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md
+    redistributable: true
+- id: minimax/minimax-m3.1-flash-model-card-cybergym@1.0.0
+  model: minimax/minimax-m3.1-flash
+  benchmark: sunblaze-ucb/cybergym@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: MiniMax-M3.1-Flash
+    revision: 262ae6830934f3512211081b8a3f16425b93a239
+    source_kind: official_model_card
+    agent: Claude Code
+    agent_version: 2.1.263
+    context_window: 1M
+  metrics:
+    success_rate: 0.822
+  status: available
+  observed_at: '2026-10-27'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md
     redistributable: true
 - id: independent/minimax-m3-aa-briefcase@1.0.0
   model: minimax/minimax-m3
@@ -37549,6 +38155,304 @@ evaluations:
     verification: claimed
     source: https://huggingface.co/tiiuae/Falcon-H1-34B-Instruct
     redistributable: true
+- id: writer/palmyra-x6-model-catalog-finance-agent@1.0.0
+  model: writer/palmyra-x6
+  benchmark: unattributed/finance-agent@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: unspecified
+  subject:
+    variant: Palmyra X6
+    source_model_slug: palmyra-x6
+    source_kind: official_model_card
+    source_label: Finance Agent
+    benchmark_revision: unspecified_by_source
+    harness: raw model, not WRITER Agent, per source
+    tool_policy: unspecified_by_source
+    context_length: unspecified_by_source
+    endpoint: unspecified_by_source
+  metrics:
+    score: 0.753
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://dev.writer.com/home/models
+    redistributable: true
+- id: writer/palmyra-x6-model-catalog-financeqa@1.0.0
+  model: writer/palmyra-x6
+  benchmark: afterquery/financeqa@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: unspecified
+  subject:
+    variant: Palmyra X6
+    source_model_slug: palmyra-x6
+    source_kind: official_model_card
+    source_label: FinanceQA
+    benchmark_revision: unspecified_by_source
+    harness: raw model, not WRITER Agent, per source
+    tool_policy: unspecified_by_source
+    context_length: unspecified_by_source
+    endpoint: unspecified_by_source
+  metrics:
+    score: 0.673
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://dev.writer.com/home/models
+    redistributable: true
+- id: writer/palmyra-x6-model-catalog-financebench@1.0.0
+  model: writer/palmyra-x6
+  benchmark: patronusai/financebench@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: unspecified
+  subject:
+    variant: Palmyra X6
+    source_model_slug: palmyra-x6
+    source_kind: official_model_card
+    source_label: FinanceBench
+    benchmark_revision: unspecified_by_source
+    harness: raw model, not WRITER Agent, per source
+    tool_policy: unspecified_by_source
+    context_length: unspecified_by_source
+    endpoint: unspecified_by_source
+  metrics:
+    score: 0.855
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://dev.writer.com/home/models
+    redistributable: true
+- id: writer/palmyra-x6-technical-report-bfcl-core@1.0.0
+  model: writer/palmyra-x6
+  benchmark: gorilla/bfcl-core@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: unspecified
+  subject:
+    variant: Palmyra x6
+    source_model_slug: palmyra-x6
+    source_kind: official_technical_report
+    source_label: BFCL Core
+    source_document: arXiv:2608.16620v1
+    benchmark_revision: unspecified_by_source
+    harness: unspecified_by_source
+    tool_policy: unspecified_by_source
+    context_length: unspecified_by_source
+    endpoint: unspecified_by_source
+  metrics:
+    score: 0.785
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2608.16620
+    redistributable: true
+- id: writer/palmyra-x6-technical-report-ifbench@1.0.0
+  model: writer/palmyra-x6
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: unspecified
+  subject:
+    variant: Palmyra x6
+    source_model_slug: palmyra-x6
+    source_kind: official_technical_report
+    source_label: IFBench
+    source_document: arXiv:2608.16620v1
+    reported_in: Figure 2 bar label
+    benchmark_revision: unspecified_by_source
+    harness: unspecified_by_source
+    tool_policy: unspecified_by_source
+    context_length: unspecified_by_source
+    endpoint: unspecified_by_source
+  metrics:
+    accuracy: 0.737
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2608.16620
+    redistributable: true
+- id: writer/palmyra-x6-technical-report-mcp-atlas@1.0.0
+  model: writer/palmyra-x6
+  benchmark: scale/mcp-atlas@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: unspecified
+  subject:
+    variant: Palmyra x6
+    source_model_slug: palmyra-x6
+    source_kind: official_technical_report
+    source_label: MCP-Atlas
+    source_document: arXiv:2608.16620v1
+    reported_in: Figure 2 bar label
+    benchmark_revision: unspecified_by_source
+    harness: unspecified_by_source
+    tool_policy: unspecified_by_source
+    context_length: unspecified_by_source
+    endpoint: unspecified_by_source
+  metrics:
+    score: 0.771
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2608.16620
+    redistributable: true
+- id: writer/palmyra-x5-model-catalog-mmlu-pro@1.0.0
+  model: writer/palmyra-x5
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Palmyra X5
+    source_model_slug: palmyra-x5
+    source_kind: official_model_card
+    source_label: MMLU_PRO
+    benchmark_revision: unspecified_by_source
+    harness: unspecified_by_source
+    tool_policy: unspecified_by_source
+    context_length: unspecified_by_source
+    endpoint: unspecified_by_source
+  metrics:
+    accuracy: 0.6502
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://dev.writer.com/home/models
+    redistributable: true
+- id: writer/palmyra-x5-model-catalog-gpqa@1.0.0
+  model: writer/palmyra-x5
+  benchmark: idavidrein/gpqa@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: unspecified
+  subject:
+    variant: Palmyra X5
+    source_model_slug: palmyra-x5
+    source_kind: official_model_card
+    source_label: GPQA
+    dataset_subset: unspecified_by_source
+    benchmark_revision: unspecified_by_source
+    harness: unspecified_by_source
+    tool_policy: unspecified_by_source
+    context_length: unspecified_by_source
+    endpoint: unspecified_by_source
+  metrics:
+    accuracy: 0.472
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://dev.writer.com/home/models
+    redistributable: true
+- id: writer/palmyra-x5-model-catalog-bbh@1.0.0
+  model: writer/palmyra-x5
+  benchmark: maveriq/bigbenchhard@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Palmyra X5
+    source_model_slug: palmyra-x5
+    source_kind: official_model_card
+    source_label: BBH (Big-Bench Hard)
+    benchmark_revision: unspecified_by_source
+    harness: unspecified_by_source
+    tool_policy: unspecified_by_source
+    context_length: unspecified_by_source
+    endpoint: unspecified_by_source
+  metrics:
+    accuracy: 0.7099
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://dev.writer.com/home/models
+    redistributable: true
+- id: writer/palmyra-x5-model-catalog-math-hard@1.0.0
+  model: writer/palmyra-x5
+  benchmark: hendrycks/math@1.0.0
+  benchmark_profile: published-hard-subset
+  reasoning_effort: unspecified
+  subject:
+    variant: Palmyra X5
+    source_model_slug: palmyra-x5
+    source_kind: official_model_card
+    source_label: MATH_HARD
+    dataset_subset: hard subset as labeled by source, definition unspecified_by_source
+    benchmark_revision: unspecified_by_source
+    harness: unspecified_by_source
+    tool_policy: unspecified_by_source
+    context_length: unspecified_by_source
+    endpoint: unspecified_by_source
+  metrics:
+    accuracy: 0.7157
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://dev.writer.com/home/models
+    redistributable: true
+- id: writer/palmyra-x5-launch-openai-mrcr-8-needle@1.0.0
+  model: writer/palmyra-x5
+  benchmark: openai/mrcr@1.0.0
+  benchmark_profile: published-8-needle
+  reasoning_effort: unspecified
+  subject:
+    variant: Palmyra X5
+    source_model_slug: palmyra-x5
+    source_kind: official_launch_evaluation
+    source_label: OpenAI MRCR 8-needle
+    needles: 8
+    benchmark_revision: unspecified_by_source
+    harness: unspecified_by_source
+    tool_policy: unspecified_by_source
+    context_length: unspecified_by_source
+    endpoint: unspecified_by_source
+  metrics:
+    score: 0.191
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://writer.com/blog/long-context-palmyra-x5/
+    redistributable: true
+- id: writer/palmyra-x5-launch-bigcodebench-full-instruct@1.0.0
+  model: writer/palmyra-x5
+  benchmark: bigcode/bigcodebench@1.0.0
+  benchmark_profile: published-full-instruct
+  reasoning_effort: unspecified
+  subject:
+    variant: Palmyra X5
+    source_model_slug: palmyra-x5
+    source_kind: official_launch_evaluation
+    source_label: BigCodeBench (Full, Instruct)
+    dataset_split: full
+    dataset_variant: instruct
+    benchmark_revision: unspecified_by_source
+    harness: unspecified_by_source
+    tool_policy: unspecified_by_source
+    context_length: unspecified_by_source
+    endpoint: unspecified_by_source
+  metrics:
+    pass_at_1: 0.487
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://writer.com/blog/long-context-palmyra-x5/
+    redistributable: true
 - id: independent/grok-4-3-non-reasoning-critpt@1.0.0
   model: xai/grok-4.3
   benchmark: artificial-analysis/critpt@1.0.0
@@ -51027,6 +51931,28 @@ index_results:
   - tii/falcon-h1-34b-instruct-mmlu-pro@1.0.0
   domains:
     general_reasoning: 58.730000000000004
+- model: writer/palmyra-x5
+  reasoning_effort: unspecified
+  index: vllm-sr/general@1.0.0
+  status: available
+  score: 65.02
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.6502
+    normalized: 0.6502
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: writer/palmyra-x5-model-catalog-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  provenance:
+  - writer/palmyra-x5-model-catalog-mmlu-pro@1.0.0
+  domains:
+    general_reasoning: 65.02
 - model: xai/grok-4.6
   reasoning_effort: low
   index: vllm-sr/reasoning@1.0.0

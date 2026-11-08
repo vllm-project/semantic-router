@@ -29,6 +29,23 @@ interface Highlight {
 
 const highlights: Highlight[] = [
   {
+    id: 'decision-30-localllama-hot',
+    dateIso: '2026-10-12',
+    dateLabel: 'October 12, 2026',
+    label: '#1 hot on r/LocalLLaMA',
+    title: 'Decision 3.0 tops r/LocalLLaMA',
+    statement:
+      'The Decision 3.0 launch post reached #1 on the r/LocalLLaMA hot feed, with 224 upvotes and 272 shares in its first five hours.',
+    image: '/img/trending/decision-30-localllama-hot.jpg',
+    imageWidth: 1150,
+    imageHeight: 647,
+    imageAlt:
+      'The Decision 3.0 launch post at the top of the r/LocalLLaMA hot feed.',
+    sourceLabel: 'Reddit · r/LocalLLaMA',
+    sourceUrl:
+      'https://www.reddit.com/r/LocalLLaMA/comments/1x3th4p/decision_30_open_multimodal_decision_models_from/',
+  },
+  {
     id: 'hf-model-downloads',
     dateIso: '2026-10-10',
     dateLabel: 'October 10, 2026',

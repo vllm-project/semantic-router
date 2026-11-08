@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "ad233487"
   source_file: "docs/tutorials/learning/adaptations.md"

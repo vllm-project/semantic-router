@@ -27,7 +27,7 @@ func calibrationFixture(t *testing.T) (*NativeRequest, *config.RoutingRecipe, Na
 	recipe := &config.RoutingRecipe{Name: "native", Profile: config.RoutingProfile{
 		Decisions: []config.Decision{{Name: "classify", Algorithm: plan}},
 	}}
-	identity := InferenceIdentity{ModelID: "fast-actual", Revision: "revision-a", ModelSHA256: strings.Repeat("a", 64), Engine: "candle", Profile: "exact", Numerics: "exact", Accelerator: "cpu"}
+	identity := InferenceIdentity{ModelID: "fast-actual", Revision: "revision-a", ModelSHA256: strings.Repeat("a", 64), Engine: "candle", Dtype: "float32", Numerics: "exact", Accelerator: "cpu"}
 	var response map[string]any
 	if decodeErr := json.Unmarshal([]byte(uncertainResponse), &response); decodeErr != nil {
 		t.Fatal(decodeErr)

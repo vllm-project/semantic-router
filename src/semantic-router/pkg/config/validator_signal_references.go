@@ -71,6 +71,15 @@ func validateLeafSignalReference(
 	if !strictReferences {
 		return nil
 	}
+	if node.Name != name {
+		return fmt.Errorf(
+			"routing.decisions[%q]: signal %s reference %q has surrounding whitespace; expected %q without padding",
+			decisionName,
+			signalType,
+			node.Name,
+			name,
+		)
+	}
 	if name == "" {
 		return fmt.Errorf("routing.decisions[%q]: signal condition of type %q requires a name", decisionName, signalType)
 	}

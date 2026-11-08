@@ -56,7 +56,7 @@ func (s *surfaceRuntime) handler() http.Handler {
 		for model, inputs := range s.maxInputs {
 			cards = append(cards, map[string]interface{}{"id": model, "object": "model", "family": "task_heads", "surfaces": []string{"classify"}, "ready": true, "limits": map[string]int{"max_inputs": inputs}})
 		}
-		writeJSON(w, http.StatusOK, map[string]interface{}{"object": "list", "api_version": "2.0.0", "data": cards, "limits": map[string]int{"max_bundle_tasks": limit, "max_request_bytes": 8 << 20}})
+		writeJSON(w, http.StatusOK, map[string]interface{}{"object": "list", "api_version": "3.2.0", "data": cards, "limits": map[string]int{"max_bundle_tasks": limit, "max_request_bytes": 8 << 20}})
 	})
 	mux.HandleFunc("/v1/classify", surface("classify"))
 	mux.HandleFunc("/v1/embeddings", surface("embeddings"))

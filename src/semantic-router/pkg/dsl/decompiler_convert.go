@@ -50,6 +50,9 @@ func (d *decompiler) keywordToSignal(kw *config.KeywordRule) *SignalDecl {
 	if kw.NgramArity != 0 {
 		fields["ngram_arity"] = IntValue{V: kw.NgramArity}
 	}
+	if kw.IncludeHistory {
+		fields["include_history"] = BoolValue{V: true}
+	}
 	return &SignalDecl{SignalType: "keyword", Name: kw.Name, Fields: fields}
 }
 
@@ -186,6 +189,9 @@ func (d *decompiler) complexityToSignal(comp *config.ComplexityRule) *SignalDecl
 	}
 	if comp.Description != "" {
 		fields["description"] = StringValue{V: comp.Description}
+	}
+	if comp.Deployment != "" {
+		fields["deployment"] = StringValue{V: comp.Deployment}
 	}
 	if len(comp.Hard.Candidates) > 0 || len(comp.Hard.ImageCandidates) > 0 {
 		fields["hard"] = complexityCandidatesValue(comp.Hard)

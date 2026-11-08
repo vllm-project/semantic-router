@@ -127,6 +127,7 @@ func TestRedisCacheConditionalRefillIsSafeAcrossClients(t *testing.T) {
 	// A separate cache client commits a write and invalidates the shared user
 	// namespace while the reader is still waiting on its backing-store query.
 	require.NoError(t, writer.InvalidateByUser(ctx, opts.UserID))
+	mr.FastForward(cacheWriteHold + time.Second) // refills resume after the write hold
 	_, currentGeneration, hit := writer.GetWithGeneration(ctx, opts)
 	require.False(t, hit)
 	require.NotEmpty(t, currentGeneration)
@@ -240,7 +241,7 @@ func TestRedisCache_InvalidateByUser_DeletesTrackedKeys(t *testing.T) {
 	ctx := context.Background()
 
 	user := "u_inv_idx"
-	_ = cache.InvalidateByUser(ctx, user) // clean slate from prior runs
+	resetRedisCacheUser(ctx, cache, user) // clean slate from prior runs
 
 	// Two distinct queries -> two distinct value keys for the same user.
 	opts1 := RetrieveOptions{Query: "alpha", UserID: user, Limit: 5, Threshold: 0.5}
@@ -290,8 +291,8 @@ func TestRedisCache_InvalidateByUser_ScopedToUser(t *testing.T) {
 
 	optsA := RetrieveOptions{Query: "q", UserID: "u_scope_a", Limit: 5, Threshold: 0.5}
 	optsB := RetrieveOptions{Query: "q", UserID: "u_scope_b", Limit: 5, Threshold: 0.5}
-	_ = cache.InvalidateByUser(ctx, optsA.UserID)
-	_ = cache.InvalidateByUser(ctx, optsB.UserID)
+	resetRedisCacheUser(ctx, cache, optsA.UserID)
+	resetRedisCacheUser(ctx, cache, optsB.UserID)
 	cache.Set(ctx, optsA, []*RetrieveResult{})
 	cache.Set(ctx, optsB, []*RetrieveResult{})
 

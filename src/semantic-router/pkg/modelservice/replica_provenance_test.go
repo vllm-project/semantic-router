@@ -7,7 +7,7 @@ import (
 )
 
 func TestReplicaAliasesPreserveObservedNativeProvenance(t *testing.T) {
-	meta := `{"revision":"revision-a","model_sha256":"` + strings.Repeat("a", 64) + `","engine":"native","profile":"exact","numerics":"exact","accelerator":"cpu"}`
+	meta := `{"revision":"revision-a","model_sha256":"` + strings.Repeat("a", 64) + `","engine":"native","dtype":"float32","numerics":"exact","accelerator":"cpu"}`
 	answers := `{"meta":{"type":"noul","noul":0.9,"extension":{"meta":"answer data"}}}`
 	native := `{"model":"native-artifact","meta":` + meta + `,"answers":` + answers + `,"states":{"meta":{"model":"native-artifact","meta":` + meta + `,"answers":` + answers + `}}}`
 	for _, bundle := range []bool{false, true} {

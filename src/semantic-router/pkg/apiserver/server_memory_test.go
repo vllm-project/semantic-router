@@ -3,6 +3,9 @@
 package apiserver
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -245,4 +248,104 @@ func memoryPluginDecision(name, pluginType string) config.Decision {
 			},
 		},
 	}
+}
+
+func parseErrorMessage(t *testing.T, body []byte) string {
+	t.Helper()
+	var resp map[string]interface{}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("Failed to parse error response: %v", err)
+	}
+	errObj, ok := resp["error"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Response missing 'error' object: %s", string(body))
+	}
+	msg, _ := errObj["message"].(string)
+	return msg
+}
+
+func TestMemoryStoreUnavailableReasonMessages(t *testing.T) {
+	tests := []struct {
+		name        string
+		status      routerruntime.MemoryStatus
+		wantMessage string
+	}{
+		{
+			name: "disabled by config",
+			status: routerruntime.MemoryStatus{
+				Reason:  routerruntime.MemoryReasonDisabledByConfig,
+				Backend: "milvus",
+			},
+			wantMessage: "Memory store is disabled in configuration. Enable memory in configuration.",
+		},
+		{
+			name: "backend unavailable naming backend",
+			status: routerruntime.MemoryStatus{
+				Reason:  routerruntime.MemoryReasonBackendUnavailable,
+				Backend: "milvus",
+			},
+			wantMessage: "Memory backend \"milvus\" is unavailable. Check backend connectivity.",
+		},
+		{
+			name: "backend unavailable valkey",
+			status: routerruntime.MemoryStatus{
+				Reason:  routerruntime.MemoryReasonBackendUnavailable,
+				Backend: "valkey",
+			},
+			wantMessage: "Memory backend \"valkey\" is unavailable. Check backend connectivity.",
+		},
+		{
+			name: "router still starting",
+			status: routerruntime.MemoryStatus{
+				Reason:  routerruntime.MemoryReasonStarting,
+				Backend: "milvus",
+			},
+			wantMessage: "Memory store is not yet initialized. Router is still starting.",
+		},
+		{
+			name:        "unrecognized reason fallback",
+			status:      routerruntime.MemoryStatus{Reason: "unrecognized"},
+			wantMessage: "Memory store is not configured or not yet initialized. Enable memory in configuration.",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			registry := routerruntime.NewRegistry(nil)
+			registry.SetMemoryStatus(tt.status)
+			server := &ClassificationAPIServer{runtimeRegistry: registry}
+
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/storage/memories?user_id=test", nil)
+			w := httptest.NewRecorder()
+			server.handleListMemories(w, req)
+
+			if w.Code != http.StatusServiceUnavailable {
+				t.Fatalf("expected 503, got %d", w.Code)
+			}
+			code := parseErrorResponse(t, w.Body.Bytes())
+			if code != "MEMORY_NOT_AVAILABLE" {
+				t.Fatalf("expected MEMORY_NOT_AVAILABLE, got %s", code)
+			}
+			msg := parseErrorMessage(t, w.Body.Bytes())
+			if msg != tt.wantMessage {
+				t.Fatalf("got message %q, want %q", msg, tt.wantMessage)
+			}
+		})
+	}
+
+	t.Run("nil runtime registry legacy fallback", func(t *testing.T) {
+		server := &ClassificationAPIServer{runtimeRegistry: nil, memoryStore: nil}
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/storage/memories?user_id=test", nil)
+		w := httptest.NewRecorder()
+		server.handleListMemories(w, req)
+
+		if w.Code != http.StatusServiceUnavailable {
+			t.Fatalf("expected 503, got %d", w.Code)
+		}
+		msg := parseErrorMessage(t, w.Body.Bytes())
+		want := "Memory store is not configured or not yet initialized. Enable memory in configuration."
+		if msg != want {
+			t.Fatalf("got message %q, want %q", msg, want)
+		}
+	})
 }

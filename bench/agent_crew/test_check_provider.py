@@ -143,6 +143,37 @@ def test_unknown_fields_inside_nested_provider_objects_are_flagged() -> None:
     ]
 
 
+def test_litellm_provider_specific_fields_pass() -> None:
+    """LiteLLM adds provider_specific_fields on choice and message; the router accepts them."""
+    reply = {
+        **OPENAI_REPLY,
+        "choices": [
+            {
+                **OPENAI_REPLY["choices"][0],
+                "provider_specific_fields": {
+                    "routed_experts": None,
+                    "token_ids": None,
+                    "stop_reason": None,
+                },
+                "message": {
+                    "role": "assistant",
+                    "content": "ok",
+                    "reasoning_content": "short",
+                    "provider_specific_fields": {
+                        "reasoning": "short\n",
+                        "refusal": None,
+                    },
+                },
+            }
+        ],
+    }
+    assert problems(reply) == []
+
+
+def test_litellm_codec_fixture_passes() -> None:
+    assert problems(codec_fixture("contracts", "litellm-chat-response-in.json")) == []
+
+
 def test_openrouter_metadata_and_ollama_tool_call_index_pass() -> None:
     reply = {
         **OPENAI_REPLY,

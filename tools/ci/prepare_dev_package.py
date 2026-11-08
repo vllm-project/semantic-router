@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 VERSION_LINE = re.compile(r'^version = "(\d+\.\d+\.\d+)"$', re.MULTILINE)
+REVISION_LINE = re.compile(r'^SOURCE_REVISION = ""$', re.MULTILINE)
+COMMIT = re.compile(r"[0-9a-f]{40}")
 
 
 def prepare_version(project: Path, source_date_epoch: int) -> str:
@@ -30,16 +32,34 @@ def prepare_version(project: Path, source_date_epoch: int) -> str:
     return version
 
 
+def record_source_revision(project: Path, revision: str) -> None:
+    """Pin the package's default images to the ones main publishes for its commit."""
+    if not COMMIT.fullmatch(revision):
+        raise ValueError("expected a full lowercase commit SHA")
+    path = project / "cli" / "source_revision.py"
+    content = path.read_text(encoding="utf-8")
+    if len(REVISION_LINE.findall(content)) != 1:
+        raise ValueError("expected one empty SOURCE_REVISION assignment")
+    path.write_text(
+        REVISION_LINE.sub(f'SOURCE_REVISION = "{revision}"', content),
+        encoding="utf-8",
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project", type=Path, default=Path("src/vllm-sr"))
     parser.add_argument("--source-date-epoch", type=int, required=True)
+    parser.add_argument("--source-revision", required=True)
     parser.add_argument("--github-output", type=Path, required=True)
     args = parser.parse_args()
+    if not COMMIT.fullmatch(args.source_revision):
+        parser.error("--source-revision must be a full lowercase commit SHA")
     version = prepare_version(args.project, args.source_date_epoch)
+    record_source_revision(args.project, args.source_revision)
     with args.github_output.open("a", encoding="utf-8") as output:
         output.write(f"version={version}\n")
-    print(f"Development package version: {version}")
+    print(f"Development package version: {version} ({args.source_revision} images)")
 
 
 if __name__ == "__main__":

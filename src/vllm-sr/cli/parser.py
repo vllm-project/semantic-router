@@ -16,8 +16,12 @@ from cli.config_migration_looper import LOOPER_ENDPOINT_PATH
 from cli.config_schema.validation import validate_config_structure
 from cli.config_yaml import safe_load_router_config
 from cli.context_bands import references_environment
-from cli.model_runtime_retired import retired_model_fields
-from cli.models import UserConfig
+from cli.model_runtime_retired import (
+    ENGINE_ARGUMENTS,
+    removed_deployment_profiles,
+    retired_model_fields,
+)
+from cli.models import REMOVED_BACKEND_REF_FIELDS, UserConfig
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -67,6 +71,33 @@ def _deprecated_config_fields(data: Dict[str, Any]) -> list[str]:
         fields.append("global.modules")
 
     return fields
+
+
+def _removed_backend_ref_fields(data: Dict[str, Any]) -> list[tuple[str, str]]:
+    """Backend refs that still set a removed gateway opt-in, as (path, field)."""
+
+    found: list[tuple[str, str]] = []
+    providers = data.get("providers")
+    models = providers.get("models") if isinstance(providers, dict) else None
+    if not isinstance(models, list):
+        return found
+    for index, model in enumerate(models):
+        if not isinstance(model, dict):
+            continue
+        name = model.get("name")
+        label = name if isinstance(name, str) and name.strip() else str(index)
+        refs = model.get("backend_refs")
+        if not isinstance(refs, list):
+            continue
+        for ref_index, ref in enumerate(refs):
+            if not isinstance(ref, dict):
+                continue
+            for field in REMOVED_BACKEND_REF_FIELDS:
+                if field in ref:
+                    found.append(
+                        (f"providers.models[{label}].backend_refs[{ref_index}]", field)
+                    )
+    return found
 
 
 def _removed_router_learning_fields(data: Dict[str, Any]) -> list[str]:
@@ -154,6 +185,14 @@ def _reject_invalid_config_surfaces(data: Dict[str, Any], config_path: str) -> N
             "or rewrite the file to canonical v0.3 `providers/routing/global`."
         )
 
+    removed_backend_ref_fields = _removed_backend_ref_fields(data)
+    if removed_backend_ref_fields:
+        path, field = removed_backend_ref_fields[0]
+        raise ConfigParseError(
+            f"{path}: {field} was removed; gateway response fields are accepted "
+            "by default, so delete it"
+        )
+
     removed_router_learning_fields = _removed_router_learning_fields(data)
     if removed_router_learning_fields:
         joined_fields = ", ".join(removed_router_learning_fields)
@@ -164,6 +203,15 @@ def _reject_invalid_config_surfaces(data: Dict[str, Any], config_path: str) -> N
             "session or conversation protection, and `routing.decisions[].adaptations` "
             "only when a decision needs apply/observe/bypass control or a local "
             "adaptation candidate_set override."
+        )
+
+    profiles = removed_deployment_profiles(data)
+    if profiles:
+        raise ConfigParseError(
+            f"{', '.join(profiles)}: profile was removed; batching is on by default "
+            "and set by the deployment's engine arguments "
+            f"({', '.join(ENGINE_ARGUMENTS)}). Use "
+            f"`vllm-sr config migrate --config {config_path}`."
         )
 
     retired_fields = retired_model_fields(data)
@@ -244,7 +292,7 @@ def parse_user_config(config_path: str, *, log_summary: bool = True) -> UserConf
     # Load YAML. Context band token counts keep their source spelling so the
     # checks below see the text the Router parses from the forwarded file.
     try:
-        with open(config_file, "r") as f:
+        with open(config_file, "r", encoding="utf-8") as f:
             data = safe_load_router_config(f)
     except yaml.YAMLError as e:
         raise ConfigParseError(f"Invalid YAML syntax: {e}")
@@ -335,7 +383,7 @@ def load_config_file(config_path: str) -> Dict[str, Any]:
         raise ConfigParseError(f"Configuration file not found: {config_path}")
 
     try:
-        with open(config_file, "r") as f:
+        with open(config_file, "r", encoding="utf-8") as f:
             data = safe_load_router_config(f)
         return data or {}
     except yaml.YAMLError as e:

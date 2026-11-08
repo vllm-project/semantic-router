@@ -19,9 +19,9 @@ from cli.local_stack_config import (
     stack_document,
 )
 from cli.router_management_client import (
+    API_ROOT,
     RouterManagementClient,
     RouterManagementError,
-    default_management_base_url,
 )
 
 # A mutation answers once the Router has activated the change, which includes
@@ -50,10 +50,15 @@ def _document_for(
     so the Router keeps its management listener and service endpoints.
     """
 
-    if not _targets_local_stack(endpoint) or mode != "replace":
+    if mode != "replace":
+        return _read(config_path), None
+    target = _local_management_endpoint(endpoint) if endpoint is not None else None
+    if endpoint is not None and target is None:
         return _read(config_path), None
     stack = local_stack()
-    if stack is None:
+    if stack is None or (
+        target is not None and not stack.publishes_management_endpoint(*target)
+    ):
         return _read(config_path), None
     if not stack.owns(config_path):
         raise click.ClickException(
@@ -65,13 +70,21 @@ def _document_for(
     return stack_document(stack, config_path), stack
 
 
-def _targets_local_stack(endpoint: str | None) -> bool:
-    """Whether the request goes to the local stack's management API."""
+def _local_management_endpoint(endpoint: str) -> tuple[str, int] | None:
+    """A direct loopback URL whose published listener can belong to the stack."""
 
-    if endpoint is None:
-        return True
-    target, local = urlsplit(endpoint), urlsplit(default_management_base_url())
-    return target.hostname in _LOOPBACK_HOSTS and target.port == local.port
+    target = urlsplit(endpoint.strip())
+    if (
+        target.scheme != "http"
+        or target.hostname not in _LOOPBACK_HOSTS
+        or target.path.rstrip("/") not in {"", API_ROOT}
+        or target.query
+        or target.fragment
+        or target.username is not None
+        or target.password is not None
+    ):
+        return None
+    return target.hostname, target.port if target.port is not None else 80
 
 
 def _timeout_message(error: RouterManagementError, timeout: float) -> str:

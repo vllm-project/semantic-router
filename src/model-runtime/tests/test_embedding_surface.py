@@ -23,7 +23,7 @@ MEDIA = EmbeddingInfo(
 def request(body, **options):
     if options:
         body = {**body, "options": options}
-    return SurfaceRequest("embeddings", body, None, "exact", True, time.monotonic())
+    return SurfaceRequest("embeddings", body, None, True, time.monotonic())
 
 
 def templated_tokenizer() -> Tokenizer:

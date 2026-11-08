@@ -55,15 +55,19 @@ MANAGED_STORAGE_CREDENTIAL_MOUNTS = frozenset(
 
 
 def detect_required_backends(
-    config: dict, stack_layout: RuntimeStackLayout | None = None
+    config: dict,
+    stack_layout: RuntimeStackLayout | None = None,
+    *,
+    routing: bool = True,
 ) -> set[str]:
     """Read store_backend values from the config and return backends that need provisioning.
 
     Reads from the canonical v0.3 path: global.services.<key>.store_backend and
     falls back to router-owned canonical defaults for local serve workflows.
     Returns only backends the CLI knows how to provision (redis, postgres).
+    Without *routing*, the stores only the routing pipeline uses are left out.
     """
-    return detect_canonical_storage_backends(config, stack_layout)
+    return detect_canonical_storage_backends(config, stack_layout, routing=routing)
 
 
 def start_storage_backends(
@@ -120,13 +124,15 @@ def provision_storage_backends(
     stack_layout: RuntimeStackLayout,
     *,
     state_root_dir: str,
+    routing: bool = True,
 ) -> set[str]:
     """Detect which storage backends the config requires and start them.
 
     *state_root_dir* is required: it is where this stack's storage credentials
-    live, and Redis and Postgres have no credential-less start.
+    live, and Redis and Postgres have no credential-less start. *routing* is
+    whether the stack can run the routing pipeline (see detect_required_backends).
     """
-    required = detect_required_backends(config, stack_layout)
+    required = detect_required_backends(config, stack_layout, routing=routing)
     return start_storage_backends(
         required,
         stack_layout,

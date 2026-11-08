@@ -1,10 +1,11 @@
 ---
+is_mtpe: false
 title: 与 llm-d 集成
 description: 由 Semantic Router 选择模型池，由 llm-d 在该池内调度副本。
 translation:
   source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
   source_file: "docs/installation/k8s/llm-d.md"
-  outdated: false
+  outdated: true
 ---
 
 # 与 llm-d 集成

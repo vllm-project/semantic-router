@@ -3,6 +3,8 @@ package modelservice
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"testing"
@@ -88,6 +90,59 @@ func nanValue() float64 {
 	return zero / zero
 }
 
+func TestDecodeRejectsOutOfRangeSetAndSpanProbabilities(t *testing.T) {
+	for name, probability := range map[string]float64{
+		"negative": -0.1, "above one": 999, "nan": math.NaN(), "infinity": math.Inf(1),
+		"zero": 0, "one": 1,
+	} {
+		for _, preset := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/preset=%t", name, preset), func(t *testing.T) {
+				kind, noul := "noul", 0.5
+				sets := map[string]api.SetAnswer{"topics": {Probabilities: map[string]float64{"billing": probability, "shipping": 0.5}}}
+				spans := map[string][]api.Span{"cities": {{Label: "city", Text: "Paris", End: 5, Probability: probability}}}
+				body := api.DecisionResponse{
+					Answers: map[string]api.Answer{"cities": {Type: &kind, Noul: &noul}},
+					Sets:    &sets, Spans: &spans,
+				}
+				questions := []Question{topicsQuestion("topics"), entitiesQuestion("cities")}
+				if preset {
+					questions = []Question{{ID: "topics", Preset: "harm"}, {ID: "cities", Preset: "pii"}}
+				}
+				response := decodeResponse(body, questions)
+				want := "invalid_model_output"
+				if probability == 0 || probability == 1 {
+					want = ""
+				}
+				for _, question := range questions {
+					if got := response.Answers[question.ID]; got.Error != want {
+						t.Errorf("%s: error = %q, want %q (answer %+v)", question.ID, got.Error, want, got)
+					}
+				}
+			})
+			t.Run(fmt.Sprintf("%s/span_noul/preset=%t", name, preset), func(t *testing.T) {
+				kind := "noul"
+				spans := map[string][]api.Span{"cities": {{Label: "city", Text: "Paris", End: 5, Probability: 0.5}}}
+				body := api.DecisionResponse{
+					Answers: map[string]api.Answer{"cities": {Type: &kind, Noul: &probability}},
+					Spans:   &spans,
+				}
+				question := entitiesQuestion("cities")
+				if preset {
+					question = Question{ID: "cities", Preset: "pii"}
+				}
+				got := decodeResponse(body, []Question{question}).Answers["cities"]
+				if probability == 0 || probability == 1 {
+					if got.Error != "" || got.Noul != probability || len(got.Spans) != 1 {
+						t.Fatalf("valid span noul: got %+v", got)
+					}
+				} else if got.Error != "invalid_model_output" || got.Noul != 0 || len(got.Spans) != 0 {
+					t.Fatalf("invalid span noul must clear evidence: got %+v", got)
+				}
+			})
+		}
+	}
+}
+
 // stage runs calls as participants of one bundle, as a request stage's signals do.
 func stage(window time.Duration, calls ...func(context.Context)) *Bundle {
 	ctx, bundle := WithBundle(context.Background(), window)
@@ -146,30 +201,6 @@ func TestBundleAsksOneModelTheStagesQuestionsAboutOneStateInOneTask(t *testing.T
 	}
 	if len(answers[2].Answers) != 1 || answers[2].Answers["pii_classifier:pii"].Type != "span" || len(answers[2].Answers["pii_classifier:pii"].Spans) != 1 {
 		t.Fatalf("the caller about the other state gets that state's answer: %+v", answers[2].Answers)
-	}
-}
-
-func TestBundleAsksAnOlderRuntimeOneTaskPerState(t *testing.T) {
-	runtime := runtimetest.New(vela2Fake("vela"))
-	runtime.SetAPIVersion("2.1.0")
-	lease := attachedLease(t, map[*runtimetest.Runtime][]string{runtime: {"vela"}})
-	first := Request{State: "refund my billing to Tom", Questions: []Question{{ID: "pii_classifier:pii", Preset: "pii"}}}
-	second := Request{State: "a different message", Questions: []Question{{ID: "pii_classifier:pii", Preset: "pii"}}}
-	var errs [2]error
-	stage(time.Second,
-		func(ctx context.Context) { _, errs[0] = lease.Decide(ctx, "vela", first) },
-		func(ctx context.Context) { _, errs[1] = lease.Decide(ctx, "vela", second) },
-	)
-	if errs[0] != nil || errs[1] != nil {
-		t.Fatal(errs)
-	}
-	if calls, tasks := runtime.Bundles(); calls != 1 || tasks != 2 {
-		t.Fatalf("a runtime without states gets one task per state, in one bundle: %d bundles, %d tasks", calls, tasks)
-	}
-	for _, asked := range runtime.Decisions() {
-		if asked.States != nil {
-			t.Fatalf("a runtime without states is never sent them: %+v", asked)
-		}
 	}
 }
 

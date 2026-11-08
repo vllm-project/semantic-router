@@ -3,15 +3,15 @@ package modelservice
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
 )
 
-// RuntimeAPIMajor is the major version of the runtime contract
-// (src/model-runtime/vllm_srun/api/openapi.yaml info.version) this
-// client was generated from. A runtime that serves another major is refused.
-const RuntimeAPIMajor = "2"
+// RuntimeAPIVersion is the version of the runtime contract
+// (src/model-runtime/vllm_srun/api/openapi.yaml info.version) this client was
+// generated from. A Router and its model runtime come from one release, so a
+// runtime that serves any other version is refused.
+const RuntimeAPIVersion = "3.2.0"
 
 // processHealth is a runtime process's /health: its own state and, when it
 // serves several models, each model's state.
@@ -28,16 +28,16 @@ type modelHealth struct {
 }
 
 // incompatible reports why the process's contract version is not the one
-// this client speaks, or "" when it is.
+// this client was generated from, or "" when it is.
 func (h processHealth) incompatible() string {
-	if major, _, _ := strings.Cut(h.apiVersion, "."); major == RuntimeAPIMajor {
+	if h.apiVersion == RuntimeAPIVersion {
 		return ""
 	}
-	served := h.apiVersion
-	if served == "" {
-		served = "no api_version"
+	served := "serves contract " + h.apiVersion
+	if h.apiVersion == "" {
+		served = "reports no contract version"
 	}
-	return fmt.Sprintf("the runtime serves contract %s; this router speaks %s.x", served, RuntimeAPIMajor)
+	return fmt.Sprintf("the model runtime %s; this router was built for %s; a router and its model runtime must come from the same release", served, RuntimeAPIVersion)
 }
 
 // stateOf returns a model's state. A process that serves one model may

@@ -167,13 +167,55 @@ class RenamedFilesTests(unittest.TestCase):
 
 
 class ImpactTests(unittest.TestCase):
+    def test_retained_bench_harnesses_have_owning_checks(self) -> None:
+        cases = (
+            (
+                "bench/looper_tts/test_contracts.py",
+                {"name": "looper-bench-contracts", "owner": "router-core"},
+                "make test-looper-tts",
+            ),
+            (
+                "bench/openai_fault_proxy.py",
+                {"name": "soak-tools", "owner": "e2e"},
+                "make test-fault-proxy",
+            ),
+        )
+        for path, domain, check in cases:
+            with self.subTest(path=path):
+                result = harness.build_impact(changed_files=[path], environment="cpu")
+                self.assertIn(domain, result["domains"])
+                self.assertIn(check, result["checks"])
+
     def test_impact_contains_facts_without_skill_or_completion_policy(self) -> None:
         result = harness.build_impact(["tools/make/agent.mk"], "cpu")
 
         self.assertEqual(
-            result["domains"], [{"name": "harness", "owner": "maintainers"}]
+            result["domains"],
+            [
+                {"name": "harness", "owner": "maintainers"},
+                {"name": "component-execution", "owner": "maintainers"},
+            ],
         )
         self.assertEqual(result["checks"], ["make harness-check"])
+        self.assertEqual(
+            {job["name"] for job in result["candidate_ci_jobs"]},
+            {
+                "quality",
+                "security",
+                "cli-unit",
+                "model-runtime",
+                "bench-tools",
+                "training",
+                "onnx-artifacts",
+                "mock-provider",
+                "learning-tools",
+                "harness-tools",
+                "e2e-unit",
+                "soak-tools",
+            },
+        )
+        self.assertEqual(result["optional_e2e_profiles"], [])
+        self.assertEqual(result["pr_images"], [])
         self.assertNotIn("primary_skill", result)
         self.assertNotIn("completion_boundary", result)
         self.assertNotIn("loop_mode", result)

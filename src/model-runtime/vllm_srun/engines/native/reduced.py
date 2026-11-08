@@ -1,9 +1,9 @@
-"""Reduced copies of an encoder backbone's linear layers (the ``max_speed`` profile).
+"""Reduced copies of an encoder backbone's linear layers, which batches that merge requests run.
 
 ``reduced_view`` returns a view of a backbone that shares every parameter
 (embeddings, norms, rotary tables) except its ``nn.Linear`` layers, which the
 view holds in a reduced form; the backbone keeps its FP32 weights, so
-``exact`` batches never see the copy. Kinds (``DtypePolicy.reduced_gpu`` /
+reference batches (the golden check's) never see the copy. Kinds (``DtypePolicy.reduced_gpu`` /
 ``reduced_cpu``):
 
 - ``bfloat16``: BF16 weights, run under BF16 autocast (norms, softmax and the

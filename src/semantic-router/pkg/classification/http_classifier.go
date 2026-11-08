@@ -64,20 +64,18 @@ type HTTPClassifierInference struct {
 }
 
 // NewHTTPClassifierInference creates a new http_classify-backed inference
-// instance from an external model config and label mapping.
-func NewHTTPClassifierInference(cfg *config.ExternalModelConfig, mapping sequenceLabelMapping) (*HTTPClassifierInference, error) {
-	return newHTTPClassifierInference(cfg, mapping, 0)
+// instance from a classify deployment and label mapping.
+func NewHTTPClassifierInference(deployment config.ModelDeployment, mapping sequenceLabelMapping) (*HTTPClassifierInference, error) {
+	return newHTTPClassifierInference(deployment, mapping)
 }
 
-// newHTTPClassifierInference is shared by the existing prompt_guard connector
-// and category's backend adapter. A non-zero deadline comes from the shared
-// backend block; zero preserves the external-model legacy timeout behavior.
-func newHTTPClassifierInference(cfg *config.ExternalModelConfig, mapping sequenceLabelMapping, deadline time.Duration) (*HTTPClassifierInference, error) {
-	if cfg == nil {
-		return nil, fmt.Errorf("http_classify external model config is required")
-	}
-	if cfg.ModelEndpoint.Address == "" {
-		return nil, fmt.Errorf("http_classify endpoint address is required")
+// newHTTPClassifierInference asks a classify deployment for a label
+// distribution. A call is one lightweight forward pass, not a generative
+// call, so it fails fast: 5 s and one retry unless the deployment sets its
+// own timeout_ms and max_retries.
+func newHTTPClassifierInference(deployment config.ModelDeployment, mapping sequenceLabelMapping) (*HTTPClassifierInference, error) {
+	if strings.TrimSpace(deployment.Endpoint) == "" {
+		return nil, fmt.Errorf("http_classify endpoint is required")
 	}
 	if isNilMapping(mapping) {
 		return nil, fmt.Errorf("label mapping is required for http_classify")
@@ -93,40 +91,21 @@ func newHTTPClassifierInference(cfg *config.ExternalModelConfig, mapping sequenc
 	if n := mapping.LabelCount(); n < 2 {
 		return nil, fmt.Errorf("http_classify label mapping must define at least 2 labels, got %d", n)
 	}
-
-	scheme := strings.ToLower(strings.TrimSpace(cfg.ModelEndpoint.Protocol))
-	if scheme == "" {
-		scheme = "http"
-	}
-	baseURL := fmt.Sprintf("%s://%s:%d", scheme, strings.TrimSpace(cfg.ModelEndpoint.Address), cfg.ModelEndpoint.Port)
-
-	// http_classify is a single lightweight forward pass, not a generative
-	// call - it should fail fast rather than share http_chat's more
-	// generous default.
-	timeout := 5 * time.Second
-	if deadline > 0 {
-		timeout = deadline
-	} else if cfg.TimeoutSeconds > 0 {
-		timeout = time.Duration(cfg.TimeoutSeconds) * time.Second
-	}
-
-	remote, err := connector.New(baseURL, bearerAuthorizer(cfg.AccessKey), connector.Options{
-		AttemptTimeout:   timeout,
-		MaxRetries:       1,
-		MaxRequestBytes:  cfg.GetMaxRequestBytes(),
-		MaxResponseBytes: cfg.GetMaxResponseBytes(),
-		MaxErrorBytes:    maxClassifyErrorBodyBytes,
-	})
+	timeout := deployment.TimeoutOr(defaultHTTPClassifyTimeout)
+	remote, err := remoteConnector(deployment, timeout, 1, maxClassifyErrorBodyBytes)
 	if err != nil {
 		return nil, fmt.Errorf("create http_classify connector: %w", err)
 	}
-
 	return &HTTPClassifierInference{
 		connector: remote,
 		timeout:   timeout,
 		mapping:   mapping,
 	}, nil
 }
+
+// defaultHTTPClassifyTimeout bounds a /classify call whose deployment sets
+// no timeout_ms.
+const defaultHTTPClassifyTimeout = 5 * time.Second
 
 // isNilMapping reports whether mapping is nil - either a literal nil
 // interface, or an interface holding a nil concrete pointer (e.g. a

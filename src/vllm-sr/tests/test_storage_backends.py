@@ -315,7 +315,7 @@ def test_running_storage_with_loopback_binding_remains_reusable(monkeypatch):
     assert code == 0
     assert stderr == ""
     assert len(calls) == 3
-    assert calls[0][1] == "inspect"
+    assert calls[0][1:3] == ["container", "inspect"]
     assert calls[1][1:3] == ["network", "connect"]
     # Reuse is also the migration step for a stack that predates the data
     # network, so the container leaves the application network here.

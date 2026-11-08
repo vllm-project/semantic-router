@@ -22,8 +22,12 @@ const (
 	PurposeRoutingSignals        ModelPurpose = "routing-signals"        // Answer several built-in routing signals in one call
 )
 
+// Vela3SignalModel is the registry path of Vela 3.0 vela3-fast, the default
+// model of every built-in signal it answers.
+const Vela3SignalModel = "models/vela3-fast"
+
 // Vela2SignalModel is the registry path of Vela 2.0 0.3B, the default model
-// of every built-in signal it answers.
+// before Vela 3.0.
 const Vela2SignalModel = "models/Vela-2.0-0.3B"
 
 // Registry paths of the larger Vela 2.0 sizes a decision model may name.
@@ -90,10 +94,6 @@ type ModelSpec struct {
 	// so the model loads once and a request's questions share one call.
 	SharedDeployment bool `json:"-" yaml:"-"`
 
-	// CPUProfile is the model_runtime profile an implicit CPU deployment of
-	// the model runs; the runtime's accuracy record for the model backs it.
-	CPUProfile string `json:"-" yaml:"-"`
-
 	// RequiresGPU marks a model whose implicit deployment runs on a GPU only:
 	// a module that names it runs it on the best GPU, and a host without one
 	// cannot serve it.
@@ -117,11 +117,29 @@ var velaShieldArtifactPatterns = append([]string{"lc/*", "heads/*", "demo.py", "
 // DefaultModelRegistry provides the structured model registry
 // Users can override this by specifying mom_registry in their config.yaml
 var DefaultModelRegistry = []ModelSpec{
+	// Vela 3.0 vela3-fast answers the built-in domain, Guard, safety,
+	// fact-check, feedback and modality signals as questions on its router
+	// adapters, and PII and hallucination with its span presets. The model
+	// runtime downloads and verifies it; it runs at its published FP32
+	// (src/model-runtime/docs/records/vela3-parity.md).
+	{
+		LocalPath:          Vela3SignalModel,
+		RepoID:             "vllm-sr/vela3-fast",
+		Revision:           "7cbefd4b92b57234bd0ffb9872451e81abcdac79",
+		Aliases:            []string{"vela3-fast"},
+		Purpose:            PurposeRoutingSignals,
+		Description:        "Answer the built-in routing signals in one call: domain, prompt attacks, safety, fact-check need, feedback and modality, with PII and hallucination spans. Supports up to 32K input.",
+		ParameterSize:      "380M encoder with adapters",
+		MaxContextLength:   32768,
+		RuntimeProvisioned: true,
+		SharedDeployment:   true,
+		Tags:               []string{"vela", "vela3", "multi-task", "spans"},
+	},
 	// Vela 2.0 0.3B answers the built-in domain, Guard, safety, fact-check,
 	// feedback and modality signals as questions, and PII and hallucination
 	// with its span presets. The model runtime downloads and verifies it; on
-	// CPU, max_speed runs its float32-packed copy, which keeps its answers
-	// (src/model-runtime/docs/records/vela2-parity.md).
+	// CPU it runs its consented float32-packed copy by default, which keeps
+	// its answers (src/model-runtime/docs/records/vela2-parity.md).
 	{
 		LocalPath:          Vela2SignalModel,
 		RepoID:             "vllm-sr/Vela-2.0-0.3B",
@@ -133,7 +151,6 @@ var DefaultModelRegistry = []ModelSpec{
 		MaxContextLength:   8192,
 		RuntimeProvisioned: true,
 		SharedDeployment:   true,
-		CPUProfile:         "max_speed",
 		Tags:               []string{"vela", "vela2", "multi-task", "spans", "multilingual"},
 	},
 	// The larger Vela 2.0 sizes answer the same questions and span presets as

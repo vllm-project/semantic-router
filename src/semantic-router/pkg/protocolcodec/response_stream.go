@@ -30,12 +30,15 @@ func (engine *Engine) EncodeResponseStream(
 	if encodeResponseStreamErr != nil {
 		return nil, nil, encodeResponseStreamErr
 	}
+	diagnostics := projectReasoningContinuity(context.Source, format, pair.buffered.Capabilities(), &response)
+	diagnostics = appendDiagnostics(diagnostics,
+		projectReasoningSignature(engine.policy, context.Source, format, pair.buffered.Capabilities(), &response), engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.RequireCapabilities(
 		format,
 		pair.buffered.Capabilities(),
 		llmprotocol.RequiredResponseCapabilities(response),
 	); err != nil {
-		return nil, nil, err
+		return nil, diagnostics, err
 	}
 	context.PublicModel = response.Model
 	context.ResponseID = response.ID
@@ -48,7 +51,6 @@ func (engine *Engine) EncodeResponseStream(
 		return nil, nil, encodeResponseStreamErr
 	}
 	var body bytes.Buffer
-	var diagnostics llmprotocol.Diagnostics
 	for _, event := range events {
 		frames, eventDiagnostics, pushErr := encoder.Push(event)
 		diagnostics = appendDiagnostics(diagnostics, eventDiagnostics, engine.policy.Limits.Diagnostics)
@@ -82,11 +84,16 @@ func neutralResponseEvents(response llmprotocol.Response) ([]llmprotocol.Event, 
 		}
 		return []llmprotocol.Event{failed}, nil
 	}
-	events := []llmprotocol.Event{{
+	startEvent := llmprotocol.Event{
 		Type:       llmprotocol.EventResponseStarted,
 		ResponseID: response.ID,
 		Model:      response.Model,
-	}}
+	}
+	if response.Usage.State != "" {
+		usage := response.Usage
+		startEvent.Usage = &usage
+	}
+	events := []llmprotocol.Event{startEvent}
 	itemIndex := 0
 	for outputIndex, output := range response.Output {
 		groups := groupResponseStreamContent(output.Content)

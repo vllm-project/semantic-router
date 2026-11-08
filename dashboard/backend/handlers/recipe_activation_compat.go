@@ -108,7 +108,7 @@ func managedSplitManagementReachabilityRequired() bool {
 	if err != nil || parsed.Hostname() == "" {
 		return false
 	}
-	return strings.EqualFold(parsed.Hostname(), managedContainerNameForService("router"))
+	return strings.EqualFold(parsed.Hostname(), ManagedContainerName("router"))
 }
 
 type listenerIdentity struct {

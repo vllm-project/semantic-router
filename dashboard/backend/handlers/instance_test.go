@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -15,7 +16,14 @@ import (
 
 func instanceTestSocket(t *testing.T, handler http.Handler) {
 	t.Helper()
-	socket := filepath.Join(t.TempDir(), "control.sock")
+	// t.TempDir() embeds the test name; on macOS that exceeds the 104-byte
+	// unix socket path limit, so use a short anonymous temp dir instead.
+	dir, err := os.MkdirTemp("", "sr")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	socket := filepath.Join(dir, "control.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
 		t.Fatal(err)
@@ -61,7 +69,7 @@ func TestInstanceUnixStatusAndModels(t *testing.T) {
 	}
 	response := httptest.NewRecorder()
 	InstanceHandler()(response, httptest.NewRequest("PATCH", "/api/instance", strings.NewReader(`{}`)))
-	if response.Code != 405 || response.Header().Get("Allow") != "GET" {
+	if response.Code != 405 || response.Header().Get("Allow") != "GET, HEAD" {
 		t.Fatal("instance mutation allowed")
 	}
 }

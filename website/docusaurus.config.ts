@@ -207,6 +207,10 @@ const config: Config = {
             to: '/docs/next/model-runtime/troubleshooting',
           },
           {
+            from: '/docs/next/model-runtime/profiles',
+            to: '/docs/next/model-runtime/engine-args',
+          },
+          {
             from: '/docs/installation/kubernetes',
             to: '/docs/installation/k8s/ai-gateway',
           },

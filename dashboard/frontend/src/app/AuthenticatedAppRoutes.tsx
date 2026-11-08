@@ -10,6 +10,7 @@ import {
 } from './routeManifest'
 import RecoverableLazyRoute from './RecoverableLazyRoute'
 import EvaluationAvailabilityRoute from './EvaluationAvailabilityRoute'
+import type { DashboardCapabilities } from '../contexts/dashboardCapabilities'
 import { canAccessDashboardPath, type PermissionUser } from '../utils/accessControl'
 import {
   loadBuilderPage,
@@ -36,15 +37,11 @@ import {
 
 interface AuthenticatedAppRoutesProps {
   canAccessMLSetup: boolean
-  mlPipelineAvailable: boolean
-  mlPipelineUnavailableReason: string
-  mlPipelineAvailabilityChecked: boolean
   user: PermissionUser | null
   setupMode: boolean
-  settingsLoading: boolean
-  srBenchAvailable: boolean
-  srBenchUnavailableReason: string
-  settingsError: string | null
+  capabilities: DashboardCapabilities | null
+  capabilitiesLoading: boolean
+  capabilitiesError: string | null
   onRefreshAccess: () => void
 }
 
@@ -92,20 +89,18 @@ const renderShellContent = (
 
 const renderShellElement = (
   route: ShellRouteDefinition,
-  settingsLoading: boolean,
-  srBenchAvailable: boolean,
-  srBenchUnavailableReason: string,
-  settingsError: string | null,
+  capabilities: DashboardCapabilities | null,
+  capabilitiesLoading: boolean,
+  capabilitiesError: string | null,
   onRefreshAccess: () => void,
 ) => {
   const content = renderShellContent(route, shellPageElements[route.page])
   if (route.page !== 'evaluation') return content
   return (
     <EvaluationAvailabilityRoute
-      available={srBenchAvailable}
-      isLoading={settingsLoading}
-      reason={srBenchUnavailableReason}
-      settingsError={settingsError}
+      capability={capabilities?.evaluation}
+      isLoading={capabilitiesLoading}
+      error={capabilitiesError}
       onRefreshAccess={onRefreshAccess}
     >
       {content}
@@ -115,15 +110,11 @@ const renderShellElement = (
 
 export const renderAuthenticatedAppRoutes = ({
   canAccessMLSetup,
-  mlPipelineAvailable,
-  mlPipelineUnavailableReason,
-  mlPipelineAvailabilityChecked,
   user,
   setupMode,
-  settingsLoading,
-  srBenchAvailable,
-  srBenchUnavailableReason,
-  settingsError,
+  capabilities,
+  capabilitiesLoading,
+  capabilitiesError,
   onRefreshAccess,
 }: AuthenticatedAppRoutesProps): React.ReactElement => (
   <>
@@ -139,10 +130,9 @@ export const renderAuthenticatedAppRoutes = ({
           canAccessDashboardPath(user, route.path) ? (
             renderShellElement(
               route,
-              settingsLoading,
-              srBenchAvailable,
-              srBenchUnavailableReason,
-              settingsError,
+              capabilities,
+              capabilitiesLoading,
+              capabilitiesError,
               onRefreshAccess,
             )
           ) : (
@@ -167,10 +157,9 @@ export const renderAuthenticatedAppRoutes = ({
       element={
         canAccessMLSetup ? (
           <EvaluationAvailabilityRoute
-            available={mlPipelineAvailable}
-            isLoading={settingsLoading}
-            reason={mlPipelineUnavailableReason}
-            settingsError={mlPipelineAvailabilityChecked ? null : settingsError}
+            capability={capabilities?.mlPipeline}
+            isLoading={capabilitiesLoading}
+            error={capabilitiesError}
             onRefreshAccess={onRefreshAccess}
             featureName="ML pipeline"
           >

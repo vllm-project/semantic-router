@@ -16,6 +16,10 @@ type envExpander struct {
 	// keepUnset writes a reference without a default as is, instead of empty,
 	// when lookup does not find its variable.
 	keepUnset bool
+	// unset names variables written empty even when keepUnset is set.
+	unset map[string]bool
+	// kept maps each reference written as is to its variable.
+	kept map[string]string
 }
 
 // processEnv resolves references from this process, as the Router does when it loads a config.
@@ -138,10 +142,41 @@ func (e envExpander) resolve(name, reference string) string {
 	if value, ok := e.lookup(name); ok {
 		return value
 	}
-	if e.keepUnset {
-		return reference
+	if !e.keepUnset || e.unset[name] {
+		return ""
 	}
-	return ""
+	if e.kept != nil {
+		e.kept[reference] = name
+	}
+	return reference
+}
+
+// unsetQuoted makes each variable whose kept reference appears in message read
+// as empty from now on, and reports whether there was one.
+func (e envExpander) unsetQuoted(message string) bool {
+	found := false
+	for reference, name := range e.kept {
+		if !e.unset[name] && quotesReference(message, reference) {
+			e.unset[name] = true
+			found = true
+		}
+	}
+	return found
+}
+
+// quotesReference reports whether message contains reference other than as
+// the start of a longer $NAME.
+func quotesReference(message, reference string) bool {
+	for {
+		index := strings.Index(message, reference)
+		if index < 0 {
+			return false
+		}
+		message = message[index+len(reference):]
+		if strings.HasSuffix(reference, "}") || message == "" || !isEnvNameByte(message[0]) {
+			return true
+		}
+	}
 }
 
 func isEnvNameByte(ch byte) bool {

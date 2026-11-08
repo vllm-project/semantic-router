@@ -10,6 +10,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -276,6 +277,9 @@ func (l *FusionLooper) callFusionModel(
 			DecisionName: req.DecisionName,
 			Iteration:    iteration,
 			Mode:         responseMode(streaming),
+			// Panel and analysis calls drop tools above. Only synthesis and the
+			// quorum fallback keep them, and both produce the final answer.
+			ToolStage: llmprotocol.TrustedStageFinal,
 		},
 	)
 }

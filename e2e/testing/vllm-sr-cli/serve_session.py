@@ -169,6 +169,7 @@ class ServeSessionMixin:
         ensure_models_dir: bool = False,
         skip_processing: bool = False,
         looper: bool = False,
+        arguments: tuple[str, ...] = (),
     ):
         """Start one background serve session and clean it up automatically."""
         self.write_minimal_canonical_config(
@@ -188,7 +189,7 @@ class ServeSessionMixin:
         if env:
             full_env.update(env)
 
-        serve_process = self._start_serve_background(env=full_env)
+        serve_process = self._start_serve_background(env=full_env, arguments=arguments)
         try:
             self._wait_for_serve_success(serve_process)
             yield serve_process

@@ -4,7 +4,10 @@ Decision 3.0 packages carry it under ``visual.``. Every operation follows the
 Transformers 5.17 ``Qwen3_5VisionModel`` the packages were scored with, except
 the patch embedding, which runs as the matrix product it equals (a Conv3d
 whose kernel equals its stride over inputs already cut into patches), as the
-released runtime runs it. Each image attends only to itself.
+released runtime runs it. Each image attends only to itself: one attention
+call per image, or with ``packed`` one variable-length call over all of them
+(``packed.py``), which rounds differently and serves forwards that merge
+requests only.
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ from torch import nn
 
 from ....accel.kernels import KernelSet
 from .common import rotate_half
+from .packed import Packed, varlen_attention
 
 MODEL_TYPE = "qwen3_5_vision"
 LAYER_NORM_EPS = 1e-6
@@ -77,6 +81,7 @@ class VisionAttention(nn.Module):
         lengths: list[int],
         rotary: tuple[torch.Tensor, torch.Tensor],
         kernels: KernelSet,
+        packed: Packed | None = None,
     ) -> torch.Tensor:
         seq_length = hidden_states.shape[0]
         query, key, value = (
@@ -86,6 +91,12 @@ class VisionAttention(nn.Module):
             .unbind(0)
         )
         query, key = rotate_vision(query, key, *rotary)
+        if packed is not None:
+            attended = varlen_attention(
+                kernels, query, key, value, packed, groups=1, scaling=self.scaling
+            )
+            out: torch.Tensor = self.proj(attended.reshape(seq_length, -1))
+            return out
         query = query.transpose(0, 1).unsqueeze(0)
         key = key.transpose(0, 1).unsqueeze(0)
         value = value.transpose(0, 1).unsqueeze(0)
@@ -100,8 +111,8 @@ class VisionAttention(nn.Module):
             )
         ]
         attended = torch.cat(outputs, dim=1).reshape(seq_length, -1).contiguous()
-        out: torch.Tensor = self.proj(attended)
-        return out
+        projected: torch.Tensor = self.proj(attended)
+        return projected
 
 
 class VisionBlock(nn.Module):
@@ -118,9 +129,10 @@ class VisionBlock(nn.Module):
         lengths: list[int],
         rotary: tuple[torch.Tensor, torch.Tensor],
         kernels: KernelSet,
+        packed: Packed | None = None,
     ) -> torch.Tensor:
         hidden_states = hidden_states + self.attn(
-            self.norm1(hidden_states), lengths, rotary, kernels
+            self.norm1(hidden_states), lengths, rotary, kernels, packed
         )
         out: torch.Tensor = hidden_states + self.mlp(self.norm2(hidden_states))
         return out
@@ -271,13 +283,17 @@ class Qwen3_5VisionBackbone(nn.Module):
             raise ValueError("deepstack vision features are not supported")
 
     def forward(
-        self, pixel_values: torch.Tensor, grids: list[tuple[int, int, int]]
+        self,
+        pixel_values: torch.Tensor,
+        grids: list[tuple[int, int, int]],
+        packed: bool = False,
     ) -> torch.Tensor:
         """Merged image features ``[tokens, out_hidden_size]`` for the patch rows of every image, in order.
 
         The resampling taps, weights and rotary positions are computed on the host
         (each weight is one correctly rounded FP32 operation, the same on any
-        device), so the forward never reads the device back.
+        device), so the forward never reads the device back. ``packed`` attends
+        over all frames in one variable-length call per block.
         """
         assert self.kernels is not None, "bind kernels before running the tower"
         device = pixel_values.device
@@ -290,7 +306,8 @@ class Qwen3_5VisionBackbone(nn.Module):
         pos = (self.pos_embed(indices) * weights[:, :, None]).sum(1)
         hidden = hidden + pos.to(hidden.dtype)
         rotary = self.rotary_emb(positions)
+        layout = Packed(lengths, device) if packed and len(lengths) > 1 else None
         for block in self.blocks:
-            hidden = block(hidden, lengths, rotary, self.kernels)
+            hidden = block(hidden, lengths, rotary, self.kernels, layout)
         merged: torch.Tensor = self.merger(hidden)
         return merged

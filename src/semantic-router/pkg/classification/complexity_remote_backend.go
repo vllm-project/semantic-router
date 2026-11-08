@@ -47,38 +47,15 @@ type scoreEntry struct {
 	Score *float64 `json:"score"`
 }
 
-func newScoringHTTPBackend(cfg *config.ExternalModelConfig, deadline time.Duration) (ScoringBackend, error) {
-	if cfg == nil {
-		return nil, fmt.Errorf("score.v1 external model config is required")
+func newScoringHTTPBackend(deployment config.ModelDeployment) (ScoringBackend, error) {
+	if strings.TrimSpace(deployment.Endpoint) == "" {
+		return nil, fmt.Errorf("score.v1 endpoint is required")
 	}
-	if strings.TrimSpace(cfg.ModelEndpoint.Address) == "" {
-		return nil, fmt.Errorf("score.v1 endpoint address is required")
-	}
-
-	scheme := strings.ToLower(strings.TrimSpace(cfg.ModelEndpoint.Protocol))
-	if scheme == "" {
-		scheme = "http"
-	}
-	baseURL := fmt.Sprintf("%s://%s:%d", scheme, strings.TrimSpace(cfg.ModelEndpoint.Address), cfg.ModelEndpoint.Port)
-
-	timeout := 5 * time.Second
-	if deadline > 0 {
-		timeout = deadline
-	} else if cfg.TimeoutSeconds > 0 {
-		timeout = time.Duration(cfg.TimeoutSeconds) * time.Second
-	}
-
-	remote, err := connector.New(baseURL, bearerAuthorizer(cfg.AccessKey), connector.Options{
-		AttemptTimeout:   timeout,
-		MaxRetries:       1,
-		MaxRequestBytes:  cfg.GetMaxRequestBytes(),
-		MaxResponseBytes: cfg.GetMaxResponseBytes(),
-		MaxErrorBytes:    maxClassifyErrorBodyBytes,
-	})
+	timeout := deployment.TimeoutOr(defaultHTTPClassifyTimeout)
+	remote, err := remoteConnector(deployment, timeout, 1, maxClassifyErrorBodyBytes)
 	if err != nil {
 		return nil, fmt.Errorf("create score.v1 connector: %w", err)
 	}
-
 	return &scoringHTTPBackend{connector: remote, timeout: timeout}, nil
 }
 

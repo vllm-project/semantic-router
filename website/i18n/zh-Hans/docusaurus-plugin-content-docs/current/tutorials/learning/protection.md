@@ -1,8 +1,9 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "ee350c76c2d43e884fe8db7af1ba1aba539588c3"
   source_file: "docs/tutorials/learning/protection.md"
-  outdated: false
+  outdated: true
 ---
 
 # 防护

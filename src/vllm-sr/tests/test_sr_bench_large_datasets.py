@@ -194,10 +194,26 @@ def test_large_source_selection_compose_and_paginated_browse_through_service(
         worker.join(timeout=5)
 
 
+def _selection(root, asset_bytes):
+    first = _write(root, "livecodebench", 64, asset_bytes)
+    second = _write(root, "gpqa-diamond", 2)
+    return DatasetReader(root), [first["id"], second["id"]]
+
+
+def _compose_and_browse_peak(reader, ids):
+    tracemalloc.start()
+    try:
+        result = reader.compose(ids, ["livecodebench", "gpqa-diamond"])
+        assert reader.page(result["id"], limit="3")["total"] == 66
+        assert reader.detail(result["id"])["case_count"] == 66
+        return tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+
+
 def test_composition_and_public_pages_retain_bounded_memory(tmp_path, monkeypatch):
-    first = _write(tmp_path, "livecodebench", 64, 128 * 1024)
-    second = _write(tmp_path, "gpqa-diamond", 2)
-    reader = DatasetReader(tmp_path)
+    small = _selection(tmp_path / "small", 1024)
+    large = _selection(tmp_path / "large", 128 * 1024)
     original_read = Path.read_bytes
 
     def reject_eager(path):
@@ -206,18 +222,12 @@ def test_composition_and_public_pages_retain_bounded_memory(tmp_path, monkeypatc
         return original_read(path)
 
     monkeypatch.setattr(Path, "read_bytes", reject_eager)
-    tracemalloc.start()
-    try:
-        result = reader.compose(
-            [first["id"], second["id"]], ["livecodebench", "gpqa-diamond"]
-        )
-        assert reader.page(result["id"], limit="3")["total"] == 66
-        assert reader.detail(result["id"])["case_count"] == 66
-        _, peak = tracemalloc.get_traced_memory()
-    finally:
-        tracemalloc.stop()
+    # The window's fixed cost, such as file buffers sized by the filesystem's
+    # block size, varies by host; the same work on small assets measures it.
+    baseline = _compose_and_browse_peak(*small)
+    peak = _compose_and_browse_peak(*large)
     # Eight MiB of private assets must not become an in-memory case list.
-    assert peak < 4 * 1024 * 1024
+    assert peak - baseline < 4 * 1024 * 1024
 
 
 @pytest.mark.parametrize("operation", ["page", "detail", "compose"])

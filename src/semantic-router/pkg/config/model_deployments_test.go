@@ -72,11 +72,31 @@ func TestCompileModelBindingsRejectsInvalidPreparation(t *testing.T) {
 			d.Device = "CUDA 0"
 			cfg.ModelDeployments["shared-encoder"] = d
 		}, "device must be"},
-		{"malformed profile", func(cfg *RouterConfig) {
+		{"no rows per forward", func(cfg *RouterConfig) {
 			d := cfg.ModelDeployments["shared-encoder"]
-			d.Profile = "max-speed!"
+			d.MaxNumSeqs = intPtr(0)
 			cfg.ModelDeployments["shared-encoder"] = d
-		}, "profile must be"},
+		}, "max_num_seqs must be at least 1"},
+		{"no input tokens", func(cfg *RouterConfig) {
+			d := cfg.ModelDeployments["shared-encoder"]
+			d.MaxModelLen = intPtr(0)
+			cfg.ModelDeployments["shared-encoder"] = d
+		}, "max_model_len must be at least 1"},
+		{"input limit on an attached endpoint", func(cfg *RouterConfig) {
+			d := cfg.ModelDeployments["shared-encoder"]
+			d.MaxModelLen, d.Device, d.Endpoint = intPtr(32000), "", "http://runtime:8000"
+			cfg.ModelDeployments["shared-encoder"] = d
+		}, "max_model_len applies only to a managed worker"},
+		{"input limit on replicas", func(cfg *RouterConfig) {
+			d := cfg.ModelDeployments["shared-encoder"]
+			d.MaxModelLen, d.Device, d.Replicas = intPtr(32000), "", []ModelReplica{{Device: "cpu"}, {Device: "cpu"}}
+			cfg.ModelDeployments["shared-encoder"] = d
+		}, "max_model_len applies only to a managed worker"},
+		{"unknown dtype", func(cfg *RouterConfig) {
+			d := cfg.ModelDeployments["shared-encoder"]
+			d.Dtype = "half"
+			cfg.ModelDeployments["shared-encoder"] = d
+		}, "dtype must be one of auto, float32, bfloat16 or float16"},
 		{"negative budget", func(cfg *RouterConfig) {
 			d := cfg.ModelDeployments["shared-encoder"]
 			d.Input.MaxTokens = -1
@@ -99,13 +119,29 @@ func TestCompileModelBindingsRejectsInvalidPreparation(t *testing.T) {
 	}
 }
 
-func TestPluginAcceleratorAndProfileNamesAreTheRuntimes(t *testing.T) {
+func TestPluginAcceleratorNamesAreTheRuntimes(t *testing.T) {
 	cfg := testDeploymentConfig()
 	d := cfg.ModelDeployments["shared-encoder"]
-	d.Device, d.Profile = "npu:1", "vendor_low_latency"
+	d.Device = "npu:1"
 	cfg.ModelDeployments["shared-encoder"] = d
 	if _, err := CompileModelBindings(cfg); err != nil {
-		t.Fatalf("a well-formed plugin accelerator and profile compile; the runtime decides whether it has them: %v", err)
+		t.Fatalf("a well-formed plugin accelerator compiles; the runtime decides whether it has it: %v", err)
+	}
+}
+
+func TestEngineArgumentsCompileOnModelRuntimeDeployments(t *testing.T) {
+	cfg := testDeploymentConfig()
+	d := cfg.ModelDeployments["shared-encoder"]
+	window, shared := 0.5, false
+	d.MaxNumSeqs, d.MaxNumBatchedTokens, d.BatchWindowMS = intPtr(1), intPtr(4096), &window
+	d.Dtype, d.EnableSharedContext = "bfloat16", &shared
+	d.MaxModelLen = intPtr(32000)
+	cfg.ModelDeployments["shared-encoder"] = d
+	if _, err := CompileModelBindings(cfg); err != nil {
+		t.Fatalf("engine arguments within their ranges compile: %v", err)
+	}
+	if !d.HasEngineArgs() || cfg.ModelDeployments["shared-encoder"].WithDefaults().Dtype != "bfloat16" {
+		t.Fatalf("defaults must keep the declared engine arguments: %+v", d)
 	}
 }
 
@@ -132,7 +168,7 @@ func TestNamedDeploymentAdmissionAndCanonicalRoundTrip(t *testing.T) {
 		t.Fatal("deployment lost during canonical round trip")
 	}
 	recipes := canonicalRecipesFromRouterConfig(cfg)
-	if len(recipes) != 2 || recipes[0].Routing.ModelBindings["pii_classifier"].Head != "pii-head" {
+	if len(recipes) != 2 || recipes[0].Routing.ModelBindings[BindingKey("pii_classifier")].Head != "pii-head" {
 		t.Fatal("recipe binding lost during export")
 	}
 	scoped := cfg.ConfigForRecipe(&cfg.Recipes[0])

@@ -9,6 +9,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+GRADER_BASE_IMAGE = "docker.io/library/python:3.12-slim-bookworm"
+
 # Harness and task versions are part of sr-bench 1.0, never a moving branch.
 PACKAGES = {
     "tau3": {
@@ -151,7 +153,7 @@ def build_grading_image():
     """Build only the offline code grader; no subject code runs at setup time."""
     directory = home() / "sandbox"
     directory.mkdir(parents=True, exist_ok=True)
-    base = "python:3.12-slim-bookworm"
+    base = GRADER_BASE_IMAGE
     _run(["docker", "pull", base])
     images = json.loads(
         subprocess.check_output(["docker", "image", "inspect", base], text=True)

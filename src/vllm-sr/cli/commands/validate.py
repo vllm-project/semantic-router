@@ -11,7 +11,11 @@ from cli.config_contract import (
 )
 from cli.models import UserConfig
 from cli.parser import ConfigParseError, parse_user_config
-from cli.router_validation import RouterValidationUnavailableError, RouterVerdict
+from cli.router_validation import (
+    ROUTER_BINARY_ENV,
+    RouterValidationUnavailableError,
+    RouterVerdict,
+)
 from cli.terminal import echo, error, fields, heading, success
 from cli.validation_error import ValidationError
 from cli.validator import (
@@ -111,7 +115,7 @@ def collect_config_errors(user_config: UserConfig) -> list[ValidationError]:
     return errors
 
 
-def _router_verdict(
+def ask_router(
     router_verdict: Callable[[], RouterVerdict] | None,
 ) -> tuple[RouterVerdict | None, str]:
     """The Router's verdict, or why it could not give one."""
@@ -126,6 +130,42 @@ def _router_verdict(
         return None, "the container runtime is not reachable"
 
 
+def router_refusal(verdict: RouterVerdict | None) -> list[ValidationError]:
+    if verdict is None or verdict.valid:
+        return []
+    return [ValidationError(f"{verdict.source} refuses it: {verdict.error}")]
+
+
+def router_warnings(verdict: RouterVerdict | None) -> list[ValidationError]:
+    if verdict is None:
+        return []
+    return [
+        ValidationError(item.message, field=item.field or None)
+        for item in verdict.warnings
+    ]
+
+
+def router_check_line(verdict: RouterVerdict | None, unavailable: str, ask: str) -> str:
+    """Who checked the file: the Router as well, or only the CLI's structure.
+
+    ask says how to get the Router's verdict when no Router could run.
+    """
+
+    if verdict is not None:
+        return f"  Checked by {verdict.source} as well as the CLI."
+    if not unavailable:
+        return (
+            "  Only the CLI's structural checks ran (--offline); the Router "
+            "did not check the model deployments, bindings or its other "
+            "load-time rules."
+        )
+    return (
+        f"  Only the CLI's structural checks ran: {unavailable}. The Router "
+        "checks the model deployments, bindings and its other load-time "
+        f"rules; {ask}."
+    )
+
+
 def validate_command(
     config_path: str,
     *,
@@ -136,8 +176,8 @@ def validate_command(
 
     Args:
         config_path: Path to user config.yaml
-        router_verdict: Runs the Router's own validation of the file, after
-            the CLI's checks pass. None runs only the CLI's checks.
+        router_verdict: Runs the Router's own validation of the file, whatever
+            the CLI's own checks find. None runs only the CLI's checks.
     """
     # Parse config
     try:
@@ -147,31 +187,25 @@ def validate_command(
         sys.exit(1)
 
     errors = collect_config_errors(user_config)
+    verdict, unavailable = ask_router(router_verdict)
+    errors.extend(router_refusal(verdict))
     if errors:
         print_validation_errors(errors)
-        sys.exit(1)
-
-    verdict, unavailable = _router_verdict(router_verdict)
-    if verdict is not None and not verdict.valid:
-        print_validation_errors(
-            [ValidationError(f"{verdict.source} refuses it: {verdict.error}")]
-        )
+        print_validation_warnings(router_warnings(verdict))
         sys.exit(1)
 
     success("Configuration is valid")
-    if verdict is not None:
-        echo(f"  Checked by {verdict.source} as well as the CLI.")
-        print_validation_warnings(
-            [ValidationError(item.message) for item in verdict.warnings]
+    echo(
+        router_check_line(
+            verdict,
+            unavailable,
+            f"pass --router-binary (or set {ROUTER_BINARY_ENV}), --image or "
+            "--endpoint to ask it",
         )
-    else:
-        if unavailable:
-            echo(
-                f"  Only the CLI's own checks ran: {unavailable}. The Router "
-                "checks more when it loads the file; pass --endpoint to "
-                "validate with a running Router."
-            )
-        print_validation_warnings(collect_validation_warnings(user_config))
+    )
+    print_validation_warnings(
+        router_warnings(verdict) + collect_validation_warnings(user_config)
+    )
     heading("Configuration summary")
     fields(
         (

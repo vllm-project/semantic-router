@@ -45,12 +45,12 @@ func TestCurrentCardRejectsIncompatibleReplicaAndConcurrentRetirement(t *testing
 	worker.group.failure = nil
 	worker.group.client = &Client{}
 	worker.group.client.bundleTasks.Store(DefaultBundleTasks)
-	worker.served.card = &ModelCard{ID: "primary", Repo: poolArtifact, Profile: "exact", ModelSHA256: strings.Repeat("a", 64)}
+	worker.served.card = &ModelCard{ID: "primary", Repo: poolArtifact, ModelSHA256: strings.Repeat("a", 64), EngineArgs: EngineArgs{Dtype: "auto"}}
 	worker.served.ready.Store(true)
 	if _, ok := lease.CurrentCard("primary"); !ok {
 		t.Fatal("offline peer masked a compatible worker")
 	}
-	worker.served.card = &ModelCard{ID: "primary", Repo: "different/model", Profile: "exact", ModelSHA256: strings.Repeat("a", 64)}
+	worker.served.card = &ModelCard{ID: "primary", Repo: "different/model", ModelSHA256: strings.Repeat("a", 64)}
 	if _, ok := lease.CurrentCard("primary"); ok {
 		t.Fatal("incompatible replica exposed old pool metadata")
 	}
@@ -65,7 +65,7 @@ func TestCurrentCardRejectsIncompatibleReplicaAndConcurrentRetirement(t *testing
 	for range 100 {
 		worker.group.mu.Lock()
 		worker.served.ready.Store(false)
-		worker.served.card = &ModelCard{ID: "primary", Repo: poolArtifact, Profile: "exact", ModelSHA256: strings.Repeat("a", 64)}
+		worker.served.card = &ModelCard{ID: "primary", Repo: poolArtifact, ModelSHA256: strings.Repeat("a", 64), EngineArgs: EngineArgs{Dtype: "auto"}}
 		worker.served.ready.Store(true)
 		worker.group.mu.Unlock()
 	}

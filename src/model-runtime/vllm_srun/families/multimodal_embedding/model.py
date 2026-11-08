@@ -123,8 +123,8 @@ class NativeOmniModel(OmniModel):
     (``batch_invariant``, probed at load), else one at a time. Each image runs
     the vision tower alone; each audio input runs CLAP over its windows
     together and Whisper over its features. An input's answer never depends
-    on the other inputs of its batch, so the ``exact`` profile may run
-    queued requests together.
+    on the other inputs of its batch, so queued requests may run together
+    without changing an answer.
     """
 
     packs_rows = True
@@ -221,7 +221,7 @@ class GraphOmniModel(OmniModel):
     """A prepared bundle on the onnxruntime engine; each input runs its modality's graphs.
 
     Every input runs its graphs alone, so its vector is the same in any batch:
-    the ``exact`` profile hands every queued request to one ``run``, which runs
+    the scheduler hands every queued request to one ``run``, which runs
     up to ``CONCURRENT_INPUTS`` text and audio inputs at once on their graphs'
     ONNX Runtime pools (one short input's run leaves most of a pool idle).
     Images run one after another beside them: one image's run keeps every

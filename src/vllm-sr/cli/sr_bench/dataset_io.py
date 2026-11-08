@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
-import fcntl
 import hashlib
 import os
 import stat
 from contextlib import contextmanager
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - managed packages are Linux-only today.
+    fcntl = None  # type: ignore[assignment]
 
 MAX_ROW_BYTES = 128 * 1024 * 1024
 MAX_SCAN_BYTES = 2 * 1024 * 1024 * 1024
@@ -119,9 +123,13 @@ def publish_dataset(directory, staged_data, sha, staged_manifest, rendered):
     before = directory.lstat()
     if not stat.S_ISDIR(before.st_mode) or directory.resolve() != directory:
         raise ValueError("Prepared dataset must not be a symlink")
-    descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    descriptor = os.open(
+        directory,
+        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+    )
     try:
-        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        if fcntl is not None:
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
         opened = os.fstat(descriptor)
         if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
             raise ValueError("Prepared dataset directory changed")

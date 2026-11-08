@@ -21,7 +21,7 @@ func (m *MilvusStore) Get(ctx context.Context, id string) (*Memory, error) {
 	logging.Debugf("MilvusStore.Get: retrieving memory id=%s", id)
 
 	// Query by ID (includes embedding so the caller can Upsert without re-generating it)
-	filterExpr := fmt.Sprintf("id == \"%s\"", id)
+	filterExpr := milvusEqString("id", id)
 	outputFields := []string{"id", "content", "user_id", "memory_type", "metadata", "created_at", "updated_at", "embedding"}
 
 	var queryResult []entity.Column

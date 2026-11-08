@@ -3,13 +3,23 @@
 from __future__ import annotations
 
 import argparse
-import fcntl
 import hashlib
 import hmac
 import json
 import os
 import signal
 import threading
+from contextlib import suppress
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - managed packages are Linux-only today.
+    fcntl = None  # type: ignore[assignment]
+
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None  # type: ignore[assignment]
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -689,8 +699,12 @@ def serve(store=DEFAULT_STORE, host="127.0.0.1", port=8090, store_identity=None)
     )
     lock = (root / "service.lock").open("a+")
     try:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
+        if fcntl is not None:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        elif msvcrt is not None:
+            lock.seek(0)
+            msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+    except (BlockingIOError, OSError):
         raise ValueError("A service already owns this store") from None
     server = Server((host, port), Store(root), token, store_identity)
     (root / "service.json").write_text(
@@ -712,6 +726,13 @@ def serve(store=DEFAULT_STORE, host="127.0.0.1", port=8090, store_identity=None)
         server.server_close()
         for thread in list(server.engine.threads.values()):
             thread.join(timeout=5)
+        if fcntl is not None:
+            with suppress(OSError):
+                fcntl.flock(lock, fcntl.LOCK_UN)
+        elif msvcrt is not None:
+            with suppress(OSError):
+                lock.seek(0)
+                msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
         lock.close()
 
 

@@ -12,8 +12,15 @@ import tempfile
 import venv
 from pathlib import Path
 
+DEFAULT_IMAGES = (
+    "VLLM_SR_CONTAINER_IMAGE_DEFAULT",
+    "VLLM_SR_CONTAINER_IMAGE_ROCM",
+    "VLLM_SR_CONTAINER_IMAGE_CUDA",
+    "VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT",
+)
 
-def check_wheel(wheel: Path) -> None:
+
+def check_wheel(wheel: Path, image_tag: str | None = None) -> None:
     wheel = wheel.resolve(strict=True)
     with tempfile.TemporaryDirectory(prefix="vllm-sr-wheel-") as temporary:
         root = Path(temporary)
@@ -117,6 +124,30 @@ def check_wheel(wheel: Path) -> None:
         if launcher_version is not None and launcher_version != version:
             raise RuntimeError("installer launcher does not match the installed wheel")
         print(version)
+        if image_tag is not None:
+            images = subprocess.run(
+                args=[
+                    str(python),
+                    "-I",
+                    "-c",
+                    "from cli import consts; print("
+                    + ", ".join(f"consts.{name}" for name in DEFAULT_IMAGES)
+                    + ")",
+                ],
+                cwd=root,
+                env=child_env,
+                text=True,
+                capture_output=True,
+                check=True,
+                timeout=60,
+            ).stdout.split()
+            if len(images) != len(DEFAULT_IMAGES) or any(
+                image.rsplit(":", 1)[-1] != image_tag for image in images
+            ):
+                raise RuntimeError(
+                    f"installed CLI does not default to its {image_tag} images: {images}"
+                )
+            print(f"Installed wheel runs its own images: {', '.join(images)}")
         schema = json.loads(cli("config", "schema"))
         if not schema.get("sections"):
             raise RuntimeError("installed CLI has no progressive schema index")
@@ -167,7 +198,11 @@ def check_wheel(wheel: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("wheel", type=Path)
-    check_wheel(parser.parse_args().wheel)
+    parser.add_argument(
+        "--image-tag", help="Tag every default first-party image must carry."
+    )
+    args = parser.parse_args()
+    check_wheel(args.wheel, args.image_tag)
 
 
 if __name__ == "__main__":

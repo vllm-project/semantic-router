@@ -6,11 +6,13 @@ from cli import container_run_command, execution_platform, router_validation
 
 @pytest.fixture(autouse=True)
 def _no_router_image_validation(monkeypatch, request):
-    """Keep `config validate` from running a local Router image in unit tests.
+    """Keep `config validate` and `config migrate` from running a local Router.
 
-    Tests that cover the Router's validation mark themselves `router_image`.
+    Tests that cover the Router's validation mark themselves `router_image`,
+    or name a fake Router binary in VLLM_SR_ROUTER_BINARY.
     """
 
+    monkeypatch.delenv(router_validation.ROUTER_BINARY_ENV, raising=False)
     if request.node.get_closest_marker("router_image"):
         return
 

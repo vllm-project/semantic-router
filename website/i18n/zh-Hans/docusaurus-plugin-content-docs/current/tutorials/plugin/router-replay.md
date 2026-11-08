@@ -1,8 +1,9 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "aa7b7e7bc1de4d193342e869a952552a4c15552c"
   source_file: "docs/tutorials/plugin/router-replay.md"
-  outdated: false
+  outdated: true
 ---
 
 # 路由回放
@@ -84,7 +85,7 @@ plugins:
 
 ### 不采集个人数据
 
-在全局或 decision 插件中设置 `capture_personal_data: false`。检测到个人数据时，回放保留路由、模型、信号及检测到的 PII 类型等元数据，但不保存请求和响应正文、提示词、工具定义或工具轨迹。该设置会按需评估配方已有的 PII 信号，即使 decision 未引用它们。
+在全局或 decision 插件中设置 `capture_personal_data: false`。检测到个人数据时，回放保留路由、模型、信号及检测到的 PII 类型等元数据，但不保存请求和响应正文、提示词、工具定义或工具轨迹。提示词在路由之后检查，请求不会等待这一步：除非某个路由 decision 已用 PII 信号读过它，回放记录先不含提示词写入，再由配方已配置的 PII 规则单独读取最新一条用户消息；读取完成且未发现个人数据后，提示词才会补进该记录。
 
 没有配置 PII 检测器、证据不可用或分类失败时，也会保守地省略内容；无需为了此设置强制配置 PII 信号。配置检测器后，确认没有个人数据的请求可以采集内容，例如：
 

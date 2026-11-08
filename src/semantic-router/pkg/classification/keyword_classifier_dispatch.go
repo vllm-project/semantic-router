@@ -53,13 +53,31 @@ func (c *KeywordClassifier) ClassifyWithKeywordsAndCount(text string) (string, [
 // order. Decision evaluation must use this method because a request can satisfy
 // multiple named signals that participate in AND, OR, and NOT expressions.
 func (c *KeywordClassifier) MatchAll(text string) ([]KeywordRuleMatch, error) {
+	return c.MatchAllWithHistory(text, "")
+}
+
+// MatchAllWithHistory is MatchAll with an optional conversation history.
+// Rules with includeHistory match against historyText (prior user messages
+// plus the current message) when it is non-empty; every other rule matches
+// against currentText only.
+func (c *KeywordClassifier) MatchAllWithHistory(currentText, historyText string) ([]KeywordRuleMatch, error) {
 	if c == nil {
 		return nil, nil
 	}
-	analysis := lexical.NewText(text)
+	analysis := lexical.NewText(currentText)
+	// historyAnalysis is built lazily, only if some rule opts into history.
+	var historyAnalysis *lexical.Text
 	matches := make([]KeywordRuleMatch, 0)
+
 	for _, rule := range c.rules {
-		match, err := c.matchRule(text, analysis, rule)
+		text, ruleAnalysis := currentText, analysis
+		if rule.includeHistory && historyText != "" {
+			if historyAnalysis == nil {
+				historyAnalysis = lexical.NewText(historyText)
+			}
+			text, ruleAnalysis = historyText, historyAnalysis
+		}
+		match, err := c.matchRule(text, ruleAnalysis, rule)
 		if err != nil {
 			return nil, err
 		}

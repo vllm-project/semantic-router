@@ -26,7 +26,7 @@ func TestCachingStoreEquivalentPoliciesShareVersionedEntry(t *testing.T) {
 			store := &retrievalPolicyStore{}
 			wrapped := NewCachingStore(store, cache, "valkey")
 			opts := RetrieveOptions{Query: "coffee", UserID: "equivalent-user", HybridSearch: hybrid, Limit: 5, Threshold: 0.5}
-			_ = cache.InvalidateByUser(ctx, opts.UserID)
+			resetRedisCacheUser(ctx, cache, opts.UserID)
 			t.Cleanup(func() { _ = cache.InvalidateByUser(ctx, opts.UserID) })
 			first, err := wrapped.Retrieve(ctx, opts)
 			require.NoError(t, err)
@@ -59,7 +59,7 @@ func TestRedisCacheVersionExcludesLegacyValuesAndPreservesLifecycle(t *testing.T
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = cache.Close() })
 	opts := RetrieveOptions{Query: "coffee", UserID: "version-user", Limit: 5, Threshold: 0.5, HybridSearch: true}
-	_ = cache.InvalidateByUser(ctx, opts.UserID)
+	resetRedisCacheUser(ctx, cache, opts.UserID)
 	t.Cleanup(func() { _ = cache.InvalidateByUser(ctx, opts.UserID) })
 	stale, err := json.Marshal([]*RetrieveResult{{Memory: &Memory{ID: "legacy-vector-result", UserID: opts.UserID}}})
 	require.NoError(t, err)

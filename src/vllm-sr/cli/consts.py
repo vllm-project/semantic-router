@@ -4,6 +4,7 @@ import re
 
 from cli import __version__
 from cli.model_catalog import available_catalog_versions
+from cli.source_revision import SOURCE_REVISION
 
 
 def _release_catalog_installed(release: str) -> bool:
@@ -18,7 +19,7 @@ def image_tag_for_cli_version(
     A release build ships its vMAJOR.MINOR catalog snapshot, which the release
     contract requires before the tag. `main` already carries the next version
     without that snapshot, so a source install of it runs the main-channel
-    images, as dev builds do.
+    images.
     """
     match = re.fullmatch(r"(\d+)\.(\d+)\.\d+", cli_version)
     if match and released(f"v{match.group(1)}.{match.group(2)}"):
@@ -26,9 +27,27 @@ def image_tag_for_cli_version(
     return "latest"
 
 
-_DEFAULT_IMAGE_TAG = image_tag_for_cli_version(__version__)
+def image_tag_for_cli_build(
+    cli_version: str, source_revision: str, released=_release_catalog_installed
+) -> str:
+    """Run the images published from this build's commit.
 
-# Docker image configuration
+    A development package records its main commit, whose images main publishes
+    before the package. The moving `latest` images can already reject the
+    config this CLI writes, so only a source checkout, which records no commit,
+    follows them.
+    """
+    tag = image_tag_for_cli_version(cli_version, released)
+    if tag == "latest" and source_revision:
+        return source_revision
+    return tag
+
+
+_DEFAULT_IMAGE_TAG = image_tag_for_cli_build(__version__, SOURCE_REVISION)
+
+# Docker image configuration. Every image the CLI pulls by default names its
+# registry: Podman without unqualified-search registries, as Debian and Ubuntu
+# package it, cannot pull a short name, and Docker resolves both to one image.
 VLLM_SR_CONTAINER_IMAGE_DEFAULT = (
     f"ghcr.io/vllm-project/semantic-router/vllm-sr:{_DEFAULT_IMAGE_TAG}"
 )
@@ -38,7 +57,7 @@ VLLM_SR_CONTAINER_IMAGE_ROCM = (
 VLLM_SR_CONTAINER_IMAGE_CUDA = (
     f"ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:{_DEFAULT_IMAGE_TAG}"
 )
-VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT = "envoyproxy/envoy:v1.35.3"
+VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT = "docker.io/envoyproxy/envoy:v1.35.3"
 VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT = (
     f"ghcr.io/vllm-project/semantic-router/dashboard:{_DEFAULT_IMAGE_TAG}"
 )

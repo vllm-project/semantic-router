@@ -23,7 +23,7 @@ func (c *RouterConfig) GetFullModelPricing(modelName string) (ModelPricing, bool
 }
 
 func normalizeConfiguredPricing(pricing ModelPricing) (ModelPricing, bool) {
-	if pricing.PromptPer1M == 0 && pricing.CompletionPer1M == 0 && pricing.CachedInputPer1M == 0 && pricing.CacheWritePer1M == nil && pricing.Currency == "" {
+	if pricing.PromptPer1M == 0 && pricing.CompletionPer1M == 0 && pricing.CachedInputPer1M == 0 && pricing.CacheWritePer1M == nil && pricing.CacheWrite1hPer1M == nil && pricing.Currency == "" {
 		return ModelPricing{}, false
 	}
 	if pricing.Currency == "" {
@@ -51,6 +51,9 @@ func (c *RouterConfig) GetMostExpensiveFullModelPricing() (string, ModelPricing,
 		peakInputRate := pricing.PromptPer1M
 		if pricing.CacheWritePer1M != nil && *pricing.CacheWritePer1M > peakInputRate {
 			peakInputRate = *pricing.CacheWritePer1M
+		}
+		if pricing.CacheWrite1hPer1M != nil && *pricing.CacheWrite1hPer1M > peakInputRate {
+			peakInputRate = *pricing.CacheWrite1hPer1M
 		}
 		score := peakInputRate + pricing.CompletionPer1M
 		if !found || score > bestScore {

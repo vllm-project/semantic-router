@@ -116,7 +116,6 @@ def test_native_deployments_become_model_runtime_deployments():
         "provider": "model_runtime",
         "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Reranker",
         "device": "rocm:0",
-        "profile": "max_speed",
     }
     assert deployments["embedder"] == {
         "provider": "model_runtime",
@@ -131,8 +130,8 @@ def test_native_deployments_become_model_runtime_deployments():
     assert not any(note.action_required for note in notes)
 
 
-def test_existing_profile_wins_over_fp16_precision():
-    migrated, _ = _migrate(
+def test_fp16_precision_keeps_the_published_precision_and_names_dtype():
+    migrated, notes = _migrate(
         _config(
             {
                 "model_catalog": {
@@ -150,7 +149,83 @@ def test_existing_profile_wins_over_fp16_precision():
         )
     )
 
-    assert _catalog(migrated)["deployments"]["fast"]["profile"] == "batching"
+    assert _catalog(migrated)["deployments"]["fast"] == {
+        "provider": "model_runtime",
+        "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
+        "device": "cuda:0",
+    }
+    messages = {note.path: note.message for note in notes}
+    assert (
+        "dtype: float16" in messages["global.model_catalog.deployments.fast.precision"]
+    )
+    assert "global.model_catalog.deployments.fast.profile" in messages
+
+
+def _profiled(**deployments):
+    return _config(
+        {
+            "model_catalog": {
+                "deployments": {
+                    name: {
+                        "provider": "model_runtime",
+                        "artifact": "vllm-sr/Decision-2.0-Kai-0.6B",
+                        **fields,
+                    }
+                    for name, fields in deployments.items()
+                }
+            }
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    ("profile", "engine_args"),
+    [
+        ("exact", {}),
+        ("batching", {}),
+        ("shared_context", {"enable_shared_context": True}),
+        ("max_speed", {"enable_shared_context": True}),
+    ],
+)
+def test_each_former_profile_becomes_its_engine_arguments(profile, engine_args):
+    migrated, notes = _migrate(_profiled(chosen={"profile": profile}))
+
+    assert _catalog(migrated)["deployments"]["chosen"] == {
+        "provider": "model_runtime",
+        "artifact": "vllm-sr/Decision-2.0-Kai-0.6B",
+        **engine_args,
+    }
+    (note,) = [n for n in notes if n.path.endswith(".chosen.profile")]
+    assert note.message.startswith(f"{profile} -> ")
+    assert not note.action_required
+    again, more = _migrate(migrated)
+    assert again == migrated and not list(more)
+
+
+def test_exact_names_the_behaviour_change():
+    _, notes = _migrate(_profiled(chosen={"profile": "exact"}))
+
+    (note,) = list(notes)
+    assert "batches concurrent requests by default" in note.message
+
+
+def test_an_authored_engine_argument_wins_over_the_mapped_one():
+    migrated, _ = _migrate(
+        _profiled(
+            chosen={"profile": "max_speed", "enable_shared_context": False},
+        )
+    )
+
+    assert _catalog(migrated)["deployments"]["chosen"]["enable_shared_context"] is False
+
+
+def test_an_unknown_profile_is_removed_and_asks_for_engine_arguments():
+    migrated, notes = _migrate(_profiled(vendor={"profile": "vendor_low_latency"}))
+
+    assert "profile" not in _catalog(migrated)["deployments"]["vendor"]
+    (note,) = list(notes)
+    assert note.action_required
+    assert "max_num_seqs" in note.message and "dtype" in note.message
 
 
 def test_legacy_alias_artifact_moves_to_its_vela_replacement_and_drops_revision():
@@ -450,35 +525,21 @@ def _endpoint_config(endpoint, bindings=None):
     return _config({"model_catalog": catalog})
 
 
-def test_endpoint_hallucination_detector_becomes_an_http_chat_binding():
+def test_endpoint_hallucination_detector_becomes_an_openai_chat_deployment():
     migrated, notes = _migrate(_endpoint_config("http://detector.example:8077/v1/"))
 
     catalog = _catalog(migrated)
     assert catalog["modules"]["hallucination_mitigation"]["detector"] == {
         "include_explanation": True
     }
-    assert catalog["external"] == [
-        {
-            "name": "hallucination-detector",
-            "model_role": "classification",
-            "llm_endpoint": {
-                "address": "detector.example",
-                "port": 8077,
-                "protocol": "http",
-            },
-            "llm_model_name": "KRLabsOrg/lettucedect-v2-qwen-2b",
-            "llm_timeout_seconds": 10,
-        }
-    ]
+    assert "external" not in catalog
     assert catalog["deployments"]["hallucination-detector"] == {
-        "provider": "http",
-        "external_model": "hallucination-detector",
+        "provider": "openai_chat",
+        "endpoint": "http://detector.example:8077/v1",
+        "model": "KRLabsOrg/lettucedect-v2-qwen-2b",
+        "timeout_ms": 10000,
     }
-    assert catalog["bindings"]["hallucination_detector"] == {
-        "deployment": "hallucination-detector",
-        "contract": "token_spans.v1",
-        "adapter": "http_chat",
-    }
+    assert catalog["bindings"] == {"hallucination": "hallucination-detector"}
     detector = "global.model_catalog.modules.hallucination_mitigation.detector"
     assert {detector + ".backend", detector + ".enable_nli_filtering"} <= _note_paths(
         notes
@@ -491,21 +552,28 @@ def test_endpoint_on_another_path_needs_a_hand_written_binding():
         _migrate(_endpoint_config("http://detector.example:8077/detect"))
 
 
-def test_an_existing_detector_binding_wins_over_the_endpoint_shorthand():
-    binding = {
-        "deployment": "grounding",
-        "contract": "token_spans.v1",
-        "adapter": "http_classify",
-    }
+@pytest.mark.parametrize(
+    "key,binding",
+    [
+        (
+            "hallucination_detector",
+            {
+                "deployment": "grounding",
+                "contract": "token_spans.v1",
+                "adapter": "http_classify",
+            },
+        ),
+        ("hallucination", "grounding"),
+    ],
+)
+def test_an_existing_detector_binding_wins_over_the_endpoint_shorthand(key, binding):
     migrated, _ = _migrate(
-        _endpoint_config(
-            "http://detector.example:8077/v1", {"hallucination_detector": binding}
-        )
+        _endpoint_config("http://detector.example:8077/v1", {key: binding})
     )
 
     catalog = _catalog(migrated)
-    assert catalog["bindings"] == {"hallucination_detector": binding}
-    assert "external" not in catalog
+    assert catalog["bindings"] == {key: binding}
+    assert "external" not in catalog and "deployments" not in catalog
     assert catalog["modules"]["hallucination_mitigation"]["detector"] == {
         "include_explanation": True
     }
@@ -522,6 +590,7 @@ def test_every_field_the_router_rejects_leaves_the_configuration():
                             "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
                             "precision": "fp16",
                             "custom_ops_profile": "none",
+                            "profile": "exact",
                         }
                     },
                     "modules": {
@@ -540,7 +609,6 @@ def test_every_field_the_router_rejects_leaves_the_configuration():
     assert catalog["deployments"]["served"] == {
         "provider": "model_runtime",
         "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
-        "profile": "max_speed",
     }
     assert catalog["modules"] == {"prompt_guard": {}, "hallucination_mitigation": {}}
     assert migrated["global"]["stores"]["response_cache"] == {}

@@ -33,7 +33,12 @@ def test_grading_image_checks_dependencies_before_accepting_build(
     commands, imports = [], []
 
     def inspect(args, **_kwargs):
-        assert args == ["docker", "image", "inspect", "python:3.12-slim-bookworm"]
+        assert args == [
+            "docker",
+            "image",
+            "inspect",
+            "docker.io/library/python:3.12-slim-bookworm",
+        ]
         return json.dumps([{"RepoDigests": [base]}])
 
     def import_dependency(name, *_args, **_kwargs):

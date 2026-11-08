@@ -179,9 +179,6 @@ func (p *Profile) GetTestCases() []string {
 		"chat-completions-request-authz",
 		// Security test — validates that client-supplied identity headers are stripped
 		"authz-header-spoofing",
-		// NOTE: ratelimit-limitor is NOT run here: it requires x-authz-* from the client to reach
-		// the router, but EnvoyPatchPolicy Lua strips those headers (same as production anti-spoofing).
-		// Run ratelimit-limitor from a profile without header stripping, or after JWT sets headers post-strip.
 	}
 }
 

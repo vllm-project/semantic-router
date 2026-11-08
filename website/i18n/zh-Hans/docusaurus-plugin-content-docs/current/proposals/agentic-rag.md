@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: OpenAI RAG 集成
 description: 记录用于检索增强生成的 OpenAI Files 和 Vector Stores 集成。
 created: 2026-01-23

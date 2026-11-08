@@ -80,9 +80,7 @@ def load_matrix(
             if cost_metric == "server_compute_ms":
                 cost = compute_cost
             if target in runtime_identities and runtime_identities[target] != identity:
-                raise ValueError(
-                    "native runtime identity/profile changed within collection"
-                )
+                raise ValueError("native runtime identity changed within collection")
             runtime_identities[target] = identity
         # Recompute from raw outputs; cached labelled results cannot override ground truth.
         matrix[identifier][target] = {

@@ -323,7 +323,7 @@ func TestDoAnswersConnectionFailuresAsEnvoy(t *testing.T) {
 		body string
 	}{
 		"refused": {KindConnectFailure, "upstream connect error or disconnect/reset before headers. " +
-			"reset reason: remote connection failure, transport failure reason: delayed connect error: 111"},
+			"reset reason: remote connection failure, transport failure reason: delayed connect error: " + refusedErrno},
 		"reset": {KindReset, "upstream connect error or disconnect/reset before headers. " +
 			"reset reason: connection termination"},
 	}

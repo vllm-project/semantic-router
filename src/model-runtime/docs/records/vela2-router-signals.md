@@ -17,7 +17,7 @@ on the CPU latency.
   held-out. Modality (held-out AUC −0.180) and feedback (accuracy −0.038, fresh
   −0.178) regress most; domain (−0.037) and fact check (held-out AUC −0.101) are
   behind too.
-- **Latency:** with `max_speed`, the 0.3B's default CPU profile, a request takes
+- **Latency:** batched on its packed FP32 copy, the 0.3B's default on CPU, a request takes
   79 ms at the median against 16 ms on the Vela 1.0 models, about 4.9 times as
   long, and the Router serves 11.9 against 38.9 requests per second on 12 cores
   (12.8 against 51.8 at concurrency 16).
@@ -70,20 +70,23 @@ of the 0.3B, `@Vela-2.0-0.3B`:
   sequence classifiers. Beyond 8,192 tokens the model truncates, so a prompt
   attack placed after that point goes unseen; Vela 1.0 Guard scanned up to 32K
   tokens.
-- **Profile:** on CPU the deployment runs `max_speed`, which loads the 0.3B's
-  consented `float32-packed` copy. [vela2-parity.md](vela2-parity.md) shows it
-  keeps every Choice, Score and Set decision and 463 of 464 spans, with
-  answers within about 1e-5 of `exact`. On a GPU (`use_cpu: false`) the
-  deployment is `@Vela-2.0-0.3B/auto` on `exact`, the faster profile there for
-  a single request ([vela2-performance.md](vela2-performance.md)).
+- **Engine arguments:** on CPU the deployment batches on the 0.3B's
+  consented `float32-packed` copy, the runtime's default there.
+  [vela2-parity.md](vela2-parity.md) shows it keeps every Choice, Score and
+  Set decision and 463 of 464 spans, with answers within about 1e-5 of each
+  request alone. On a GPU (`use_cpu: false`) the deployment is
+  `@Vela-2.0-0.3B/auto`, which answered each request alone when this was
+  measured, the faster path there for a single request
+  ([vela2-performance.md](vela2-performance.md)).
 - **What stays on Vela 1.0:** Hazard (the card publishes no trained question
   for it), the embedding, Omni and reranker models (Vela 2.0 has no such exit),
   and every module or binding a configuration pins.
 
-**`max_speed` against `exact`.** Replayed on fresh runtimes, 60 recorded
-requests of the accuracy run (six questions each) got the same answers under
-`max_speed` as under `exact` to within 5e-6, and to within 3e-6 when two ran at
-once. The accuracy arm below runs the defaults, so it measures `max_speed`.
+**Batched on the packed copy against each request alone.** Replayed on fresh
+runtimes, 60 recorded requests of the accuracy run (six questions each) got
+the same answers batched on the packed copy as alone to within 5e-6, and to
+within 3e-6 when two ran at once. The accuracy arm below runs the defaults, so
+it measures the packed copy.
 
 ## Latency
 
@@ -127,9 +130,9 @@ in both arms; the signals' models differ, so their verdicts do.
 and the 17 PII labels. That is at least 560 tokens of schema ahead of a prompt
 whose median is about 15 tokens, through one 307M-parameter forward. Each
 Vela 1.0 model is an encoder of the same size, but it reads only the prompt,
-and the Router runs the models in separate runtime processes at once. On the
-`exact` profile the 0.3B took 132 ms at the median against Vela 1.0's 16 ms;
-`max_speed` brings that to 79 ms.
+and the Router runs the models in separate runtime processes at once. Alone,
+the 0.3B took 132 ms at the median against Vela 1.0's 16 ms; batched on the
+packed copy brings that to 79 ms.
 
 ## Accuracy
 
@@ -155,7 +158,7 @@ held-out file of the eight signals whose text the suite publishes.
     `config/config.yaml` did.
   - `vela2`: the Router's defaults. No model is configured, and the modality
     classifier has no `model_path`, so every signal runs on the implicit
-    `@Vela-2.0-0.3B` deployment under `max_speed`.
+    `@Vela-2.0-0.3B` deployment, batched on its packed copy.
 - **Request-time signals, through the Router:** each arm's Router answered every
   row through `POST /api/v1/routing/preview`, a feedback row after an assistant
   turn. The Router's managed model runtime was `tools/router_signal_ab.py

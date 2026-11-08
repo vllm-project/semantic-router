@@ -13,9 +13,10 @@ the four scored panels, on both of its paths, for all six Decision 2.0 sizes.
   `system_one`) on the same image and node.
 - **Native side:** `tools/gpu_parity.py`, which loads the package through
   `Decision2Family`, `NativeEngine` and the ROCm accelerator (no package code)
-  and answers on the `exact` profile.
+  and answers each request alone, in the released batches (the golden
+  check's reference path).
 
-## Exact profile, four scored panels
+## Each request alone, four scored panels
 
 Panels: typed-final (1,600 prompts), css15 (6,547), public231 (231) and
 mlx-diag (2,275), 10,653 prompts in all. "Identical" means every answer's
@@ -44,7 +45,7 @@ JSON is byte-identical (0 decision changes, max |Δp| 0.0).
 
 ## Shared context
 
-The `shared_context` profile against the released runtime's
+The runtime's shared context against the released runtime's
 `share_context=True` switch, on 207 requests:
 
 - 200 typed-final prompts, each with its own questions plus 15 companion
@@ -88,6 +89,6 @@ python3 tools/gpu_parity.py --package PACKAGE_DIR --released RELEASED_ANSWERS.js
   --panel typed-final:PROMPTS.jsonl:1600 --panel css15:PROMPTS.jsonl:6547 \
   --panel public231:PROMPTS.jsonl:231 --panel mlx-diag:PROMPTS.jsonl:2275 \
   --output parity.json [--no-fused --no-graphs] [--base-path BASE_DIR]
-python3 tools/gpu_parity.py ... --profile shared_context --share-policy '{"min_shared_tokens": 0}'
+python3 tools/gpu_parity.py ... --shared-context --share-policy '{"min_shared_tokens": 0}'
 pytest -m gpu tests/test_gpu_fast_path.py
 ```

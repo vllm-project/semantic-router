@@ -1,0 +1,58 @@
+{
+ "context": {
+  "hardware": "NVIDIA H200 sm_90 143771 MiB driver 580.159.04",
+  "image": "runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404",
+  "torch": "2.8.0+cu128",
+  "triton": "3.4.0",
+  "fla": "0.5.2",
+  "head": "ec307ad6ed081dd220b5dbb3571a1f9987d06914",
+  "date": "2026-10-16",
+  "device": "cuda:0",
+  "vega": "community_followup H200 pod; scored file Decision-2.0-Vega-27B.fast-vs-ref.json"
+ },
+ "panel": "mmlu_pro 400",
+ "jobs": [
+  {
+   "file": "Decision-2.0-Eos-0.8B.fast.json",
+   "identical_prompts": 400,
+   "category_changes": 0,
+   "max_abs_drift": 0.0,
+   "collection": "october_16_batch"
+  },
+  {
+   "file": "Decision-2.0-Kai-0.6B.fast.json",
+   "identical_prompts": 400,
+   "category_changes": 0,
+   "max_abs_drift": 0.0,
+   "collection": "october_16_batch"
+  },
+  {
+   "file": "Decision-2.0-Lux-9B.fast.json",
+   "identical_prompts": 400,
+   "category_changes": 0,
+   "max_abs_drift": 0.0,
+   "collection": "october_16_batch"
+  },
+  {
+   "file": "Decision-2.0-Nox-4B.fast.json",
+   "identical_prompts": 400,
+   "category_changes": 0,
+   "max_abs_drift": 0.0,
+   "collection": "october_16_batch"
+  },
+  {
+   "file": "Decision-2.0-Sol-2B.fast.json",
+   "identical_prompts": 400,
+   "category_changes": 0,
+   "max_abs_drift": 0.0,
+   "collection": "october_16_batch"
+  },
+  {
+   "file": "Decision-2.0-Vega-27B.fast-vs-ref.json",
+   "identical_prompts": 400,
+   "category_changes": 0,
+   "max_abs_drift": 0.0,
+   "collection": "community_followup"
+  }
+ ]
+}

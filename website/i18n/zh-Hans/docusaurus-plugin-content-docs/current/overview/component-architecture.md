@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 sidebar_position: 3
 title: 组件架构
 description: 前端、可选决策引擎与模型运行时如何组合，以及模型选择和副本调度的区别。
@@ -39,7 +40,7 @@ vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine --platform cpu
 
 每次不带 `--engine`（`-e`）的启动都是 Router 模式。仅传 MODEL 不会选择 Engine 模式。Dashboard 展示启动模式并管理模型部署，不负责切换实例模式。
 
-模型 worker 根据实际使用方准备：原生模型发布、路由任务以及已启用的模型服务。声明但未使用的 deployment 不会启动。因而，纯规则 Chat 路由在没有其他模型使用方时可以不运行模型 worker；语义缓存、embedding、记忆和 RAG 等功能可能引入额外需求。“按需”指配置中的实际需求，不表示每个模型都等到首条请求才开始加载。
+模型 worker 只为实际用到的部署准备：原生模型发布、路由信号以及已启用的模型服务。声明但未使用的 deployment 不会启动。因而，纯规则 Chat 路由在没有其他功能需要模型时可以不运行模型 worker；语义缓存、embedding、记忆和 RAG 等功能可能让更多部署投入使用。“按需”指配置中的实际需求，不表示每个模型都等到首条请求才开始加载。
 
 ## 分开处理协议与路由策略 {#separate-protocol-handling-from-routing-policy}
 
@@ -69,22 +70,22 @@ Dashboard session 不能替代公共 listener 凭据。原生模型授权与 Cha
 
 ## 用副本扩展部署 {#scale-a-deployment-through-replicas}
 
-[![Deployment 副本池，以及 worker 内部的 family、profile、执行引擎和 accelerator](/img/architecture/system-one/03-serving-engine-and-workers.svg)](/img/architecture/system-one/03-serving-engine-and-workers.svg)
+[![Deployment 副本池，以及 worker 内部的 family、批次规划、执行引擎和 accelerator](/img/architecture/system-one/03-serving-engine-and-workers.svg)](/img/architecture/system-one/03-serving-engine-and-workers.svg)
 
 模型选择回答“**哪个模型适合这项任务？**”；副本调度回答“**该 deployment 的哪个就绪 worker 执行它？**”。这是两个独立层次。
 
-受管副本各有独立进程，由 vLLM-SR 启停和监管。附加副本连接由其他服务管理的运行时。同一池中的兼容 worker 共享模型身份、revision、profile 和能力。图中的 GPU 放置是示例，也支持 CPU worker。
+受管副本各有独立进程，由 vLLM-SR 启停和监管。附加副本连接由其他服务管理的运行时。同一池中的兼容 worker 共享模型身份、revision、引擎参数和能力。图中的 GPU 放置是示例，也支持 CPU worker。
 
 当前调度优先选择未完成请求字节数最少的就绪 worker；相同时选择最久未被分配的 worker。每个 worker 最多接收 32 个在途 HTTP 请求，池满直接报告过载，不在池内维护等待队列。这些观测不是实测 token 数，也不是 GPU forward 并发数。
 
-Worker 内部由 model family 定义输入和类型化输出，profile 规划任务及数值策略，执行引擎与 accelerator 完成计算。多个问题可以共享请求或兼容的计算，但一次 API 调用仍可能需要多次 forward。这些是软件接口，不是神经网络层。
+Worker 内部由 model family 定义输入和类型化输出，批次规划器按 deployment 的引擎参数组成 forward，执行引擎与 accelerator 完成计算。多个问题可以共享请求或兼容的计算，但一次 API 调用仍可能需要多次 forward。这些是软件接口，不是神经网络层。
 
 ```bash
 # 在两块宿主机 GPU 上运行两个独立副本。
 vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0,1
 ```
 
-DP 复制模型，不通过张量并行或流水线并行拆分权重。增加副本前，应针对实际输入长度测量吞吐和尾延迟，尤其是多个 worker 共用一块 GPU 时。参见[前端与运行时部署](../model-runtime/deploy)和 [Profiles](../model-runtime/profiles)。
+DP 复制模型，不通过张量并行或流水线并行拆分权重。增加副本前，应针对实际输入长度测量吞吐和尾延迟，尤其是多个 worker 共用一块 GPU 时。参见[前端与运行时部署](../model-runtime/deploy)和[引擎参数](../model-runtime/engine-args)。
 
 ## 在判断模型之间路由 System One {#route-system-one-across-decision-models}
 

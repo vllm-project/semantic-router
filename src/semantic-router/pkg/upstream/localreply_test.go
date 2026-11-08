@@ -5,9 +5,15 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"syscall"
 	"testing"
 )
+
+// refusedErrno is the trailing number the local reply prints for a refused
+// connection. It is 111 on Linux and 61 on darwin, so an expected string cannot
+// hardcode it.
+var refusedErrno = strconv.Itoa(int(syscall.ECONNREFUSED))
 
 func TestEnvoyReplyStrings(t *testing.T) {
 	const reset = "upstream connect error or disconnect/reset before headers. "
@@ -28,7 +34,7 @@ func TestEnvoyReplyStrings(t *testing.T) {
 		},
 		{
 			"refused", &Error{Kind: KindConnectFailure, Err: refused}, false, http.StatusServiceUnavailable,
-			reset + "reset reason: remote connection failure, transport failure reason: delayed connect error: 111",
+			reset + "reset reason: remote connection failure, transport failure reason: delayed connect error: " + refusedErrno,
 		},
 		{
 			"connect timeout", &Error{Kind: KindConnectFailure, Err: &connectError{err: context.DeadlineExceeded}}, false,

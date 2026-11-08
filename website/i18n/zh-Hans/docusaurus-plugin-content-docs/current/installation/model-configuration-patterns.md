@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 模型配置模式
 description: 在编写 YAML 之前，比较受支持的目录、自定义、推理、provider 和副本组合。
 translation:
@@ -32,7 +33,7 @@ translation:
   catalog: openai/gpt-5.6-sol
   backend_refs:
     - provider: openai
-      api_key_env: OPENAI_API_KEY
+      auth: {api_key_env: OPENAI_API_KEY}
 ```
 
 ## 带运维部署名称的目录模型
@@ -43,8 +44,8 @@ translation:
   provider_model_id: my-production-deployment
   backend_refs:
     - provider: microsoft-foundry
-      base_url: https://example.services.ai.azure.com
-      api_key_env: FOUNDRY_API_KEY
+      endpoint: https://example.services.ai.azure.com
+      auth: {api_key_env: FOUNDRY_API_KEY}
 ```
 
 ## 自定义透传模型

@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: sr-bench 1.0
 description: 在可复用的冻结任务上比较 MoM 和单模型的能力、成本、延迟与 token 消耗。
 translation:

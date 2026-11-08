@@ -2,7 +2,8 @@
 
 For models that name them it registers the ``geglu`` slot's ``contiguous``
 variant and, on x86, the ``linear`` slot's ``float32-packed`` one
-(``onednn.py``): together they make an encoder's forward batch-invariant.
+(``onednn.py``): together they make an encoder's forward batch-invariant where
+the packed products measure so at load (``onednn.invariant``).
 
 All CPU device work of a process runs on one thread (``execute``). PyTorch's
 OpenMP backend keeps one thread team per calling thread; as soon as two teams
@@ -19,7 +20,7 @@ import platform
 import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
+from typing import Any, TypeVar
 
 import torch
 
@@ -34,6 +35,7 @@ from .kernels import (
 )
 
 _LOCK = threading.Lock()
+T = TypeVar("T")
 _EXECUTOR: ThreadPoolExecutor | None = None
 
 
@@ -94,6 +96,13 @@ def device_thread() -> ThreadPoolExecutor:
         return _EXECUTOR
 
 
+def on_device_thread(work: Callable[[], T]) -> T:
+    """``work`` on the CPU device thread, inline when already on it."""
+    if threading.current_thread().name.startswith("vllm-sr-cpu"):
+        return work()
+    return device_thread().submit(work).result()
+
+
 class CPUAccelerator(Accelerator):
     name = "cpu"
     validated = True
@@ -126,6 +135,13 @@ class CPUAccelerator(Accelerator):
 
     def torch_device(self, device: DeviceInfo) -> torch.device:
         return torch.device("cpu")
+
+    def golden_reference(self, device: DeviceInfo) -> str | None:
+        if not device.arch:
+            return None
+        capability = torch.backends.cpu.get_cpu_capability().lower().replace(" ", "_")
+        bf16 = "bf16_native" if device.bf16 else "bf16_emulated"
+        return f"cpu:{device.arch}:{capability}:{bf16}"
 
     def kernels(self, device: DeviceInfo) -> KernelSet:
         kernels = reference_kernels("cpu")
@@ -162,9 +178,9 @@ class CPUAccelerator(Accelerator):
                 "model's CPU kernels need; serve it with a PyTorch that has LAPACK "
                 "(the router's CPU image) or on a GPU device"
             )
+        if capability == "nvfp4":
+            return f"{device.label}: NVFP4 packages need FP4 tensor cores (a Blackwell GPU)"
         return super().lacks(device, capability)
 
     def execute(self, device: DeviceInfo, work: Callable[[], Any]) -> Any:
-        if threading.current_thread().name.startswith("vllm-sr-cpu"):
-            return work()
-        return device_thread().submit(work).result()
+        return on_device_thread(work)

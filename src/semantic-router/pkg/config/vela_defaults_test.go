@@ -5,20 +5,20 @@ import (
 	"testing"
 )
 
-func TestBuiltInSignalsDefaultToVela2WithoutChangingInputPolicies(t *testing.T) {
+func TestBuiltInSignalsDefaultToVela3WithoutChangingInputPolicies(t *testing.T) {
 	cfg := DefaultGlobalConfig()
-	paths := map[string]string{
-		"Domain":    cfg.CategoryModel.ModelID,
-		"Guard":     cfg.PromptGuard.ModelID,
-		"Safety":    cfg.SafetyModels.Safety.ModelID,
-		"PII":       cfg.PIIModel.ModelID,
-		"FactCheck": cfg.HallucinationMitigation.FactCheckModel.ModelID,
-		"Halu":      cfg.HallucinationMitigation.HallucinationModel.ModelID,
-		"Feedback":  cfg.FeedbackDetector.ModelID,
+	consumers := map[string]string{
+		"Domain":    "domain_classifier",
+		"Guard":     "prompt_guard",
+		"Safety":    "safety.unsafe",
+		"PII":       "pii_classifier",
+		"FactCheck": "fact_check_classifier",
+		"Halu":      "hallucination_detector",
+		"Feedback":  "feedback_detector",
 	}
-	for task, path := range paths {
-		if path != Vela2SignalModel {
-			t.Fatalf("%s default = %s, want %s", task, path, Vela2SignalModel)
+	for task, consumer := range consumers {
+		if got := effectiveModel(t, &cfg, consumer); !sameModel(got, Vela3SignalModel) {
+			t.Fatalf("%s default = %s, want %s", task, got, Vela3SignalModel)
 		}
 	}
 	if spec := GetModelByPath(cfg.MmBertModelPath); cfg.MmBertModelPath != "models/Vela-1.0-Encoder-307M-Embedding" || spec == nil || len(spec.Revision) != 40 {
@@ -30,14 +30,14 @@ func TestBuiltInSignalsDefaultToVela2WithoutChangingInputPolicies(t *testing.T) 
 	if cfg.EmbeddingConfig.FullContext || cfg.EmbeddingConfig.TargetLayer != 22 || cfg.EmbeddingConfig.TargetDimension != 0 {
 		t.Fatal("embedding input/representation defaults changed")
 	}
-	// The 0.3B's thresholds keep the Vela 1.0 specialists' operating points on
-	// the router signal suite's dev split (docs/records/vela2-router-signals.md).
+	// vela3-fast's thresholds keep the Vela 1.0 specialists' operating points on
+	// the router signal suite's dev split (docs/records/vela3-router-signals.md).
 	for name, got := range map[string][2]float32{
-		"Guard":     {cfg.PromptGuard.Threshold, .75},
-		"Domain":    {cfg.CategoryModel.Threshold, .28},
-		"PII":       {cfg.PIIModel.Threshold, .01},
-		"FactCheck": {cfg.HallucinationMitigation.FactCheckModel.Threshold, .93},
-		"Feedback":  {cfg.FeedbackDetector.Threshold, .37},
+		"Guard":     {cfg.PromptGuard.Threshold, .88},
+		"Domain":    {cfg.CategoryModel.Threshold, .41},
+		"PII":       {cfg.PIIModel.Threshold, .18},
+		"FactCheck": {cfg.HallucinationMitigation.FactCheckModel.Threshold, .9999},
+		"Feedback":  {cfg.FeedbackDetector.Threshold, .47},
 	} {
 		if got[0] != got[1] {
 			t.Fatalf("%s threshold = %v, want the calibrated %v", name, got[0], got[1])
@@ -68,15 +68,15 @@ global:
 	if err != nil {
 		t.Fatal(err)
 	}
-	for got, want := range map[string]string{
-		cfg.CategoryModel.ModelID: vela1.DomainClassifier, cfg.PromptGuard.ModelID: vela1.PromptGuard,
-		cfg.SafetyModels.Safety.ModelID: vela1.Safety, cfg.PIIModel.ModelID: vela1.PIIClassifier,
-		cfg.HallucinationMitigation.FactCheckModel.ModelID:     vela1.FactCheckClassifier,
-		cfg.HallucinationMitigation.HallucinationModel.ModelID: vela1.HallucinationDetector,
-		cfg.FeedbackDetector.ModelID:                           vela1.FeedbackDetector,
+	for consumer, want := range map[string]string{
+		"domain_classifier": vela1.DomainClassifier, "prompt_guard": vela1.PromptGuard,
+		"safety.unsafe": vela1.Safety, "pii_classifier": vela1.PIIClassifier,
+		"fact_check_classifier":  vela1.FactCheckClassifier,
+		"hallucination_detector": vela1.HallucinationDetector,
+		"feedback_detector":      vela1.FeedbackDetector,
 	} {
-		if got != want {
-			t.Fatalf("restored module runs %s, want %s", got, want)
+		if got := effectiveModel(t, cfg, consumer); !sameModel(got, want) {
+			t.Fatalf("restored %s runs %s, want %s", consumer, got, want)
 		}
 	}
 	// A threshold the document does not set follows its model; an explicit one stays.
@@ -94,23 +94,27 @@ global:
 }
 
 func TestARemoteGuardKeepsItsPreviousThreshold(t *testing.T) {
-	global := DefaultCanonicalGlobal()
-	if err := resolveModuleModelRefs(&global); err != nil {
-		t.Fatal(err)
-	}
-	global.ModelCatalog.Modules.PromptGuard.Backend = &RemoteClassifierBackend{Model: "guard-service"}
-	raw, err := NewStructuredPayload(map[string]interface{}{"model_catalog": map[string]interface{}{
-		"modules": map[string]interface{}{"prompt_guard": map[string]interface{}{"backend": map[string]interface{}{"model": "guard-service"}}},
-	}})
+	cfg, err := ParseYAMLBytes([]byte(`version: v0.3
+global:
+  model_catalog:
+    external:
+      - name: guard-service
+        model_role: guardrail
+        llm_provider: vllm
+        llm_endpoint: {address: guard.example.com, port: 8000}
+    modules:
+      prompt_guard:
+        jailbreak_mapping_path: /tmp/jailbreak_mapping.json
+        backend: {protocol: http_classify, model: guard-service}
+`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	normalizeModuleOperatingPoints(&global, raw)
-	if got := global.ModelCatalog.Modules.PromptGuard.Threshold; got != .5 {
+	if got := cfg.PromptGuard.Threshold; got != .5 {
 		t.Fatalf("a remote Guard keeps 0.5, got %v", got)
 	}
-	if got := global.ModelCatalog.Modules.Classifier.Domain.Threshold; got != .28 {
-		t.Fatalf("the local domain module keeps the 0.3B's 0.28, got %v", got)
+	if got := cfg.CategoryModel.Threshold; got != .41 {
+		t.Fatalf("the local domain module keeps vela3-fast's 0.41, got %v", got)
 	}
 }
 
@@ -147,7 +151,11 @@ global:
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{cfg.CategoryModel.ModelID, cfg.PIIModel.ModelID, cfg.HallucinationMitigation.FactCheckModel.ModelID, cfg.FeedbackDetector.ModelID, cfg.MmBertModelPath} {
+	paths := []string{cfg.MmBertModelPath}
+	for _, consumer := range []string{"domain_classifier", "pii_classifier", "fact_check_classifier", "feedback_detector"} {
+		paths = append(paths, effectiveModel(t, cfg, consumer))
+	}
+	for _, path := range paths {
 		if strings.Contains(path, "Vela") {
 			t.Fatalf("explicit old model silently migrated: %s", path)
 		}

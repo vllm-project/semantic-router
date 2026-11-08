@@ -234,12 +234,12 @@ func testVela2PublishedAnswers(t *testing.T, endpointEnv, model string, items []
 		if want == nil {
 			t.Fatalf("%s records no answers of %s; %s", vela2AnswersPath, name, vela2RecordHint)
 		}
-		if want.Revision != card.Revision || want.ModelSHA256 != card.ModelSHA256 || want.Profile != card.Profile {
-			t.Fatalf("%s records %s@%s (identity %s, profile %s), but the runtime serves %s@%s (identity %s, profile %s); %s",
-				vela2AnswersPath, want.RepoID, want.Revision, want.ModelSHA256, want.Profile, card.Repo, card.Revision, card.ModelSHA256, card.Profile, vela2RecordHint)
+		if want.Revision != card.Revision || want.ModelSHA256 != card.ModelSHA256 || want.Numerics != card.Numerics {
+			t.Fatalf("%s records %s@%s (identity %s, %s numerics), but the runtime serves %s@%s (identity %s, %s numerics); %s",
+				vela2AnswersPath, want.RepoID, want.Revision, want.ModelSHA256, want.Numerics, card.Repo, card.Revision, card.ModelSHA256, card.Numerics, vela2RecordHint)
 		}
 	}
-	got := &vela2ModelAnswers{RepoID: card.Repo, Revision: card.Revision, ModelSHA256: card.ModelSHA256, Profile: card.Profile, Items: map[string]vela2ItemAnswers{}}
+	got := &vela2ModelAnswers{RepoID: card.Repo, Revision: card.Revision, ModelSHA256: card.ModelSHA256, Numerics: card.Numerics, Items: map[string]vela2ItemAnswers{}}
 
 	proxy, recorder := recordVela2Calls(t, endpoint)
 	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(vela2PublishedConfig, proxy, card.ID)))

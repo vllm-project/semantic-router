@@ -5,6 +5,15 @@ description: Combine Semantic Router model-pool selection with AIBrix model depl
 
 # Integrate with AIBrix
 
+:::note Experimental integration example
+
+This integration has no maintained platform-specific E2E qualification. The
+project continuously tests standalone and the Agent Router ExtProc path. Use
+this guide as an example and qualify the exact upstream release and deployment
+you choose. See [Deployment Support](../support-matrix).
+
+:::
+
 Use this topology when AIBrix owns model deployment, scaling, and replica-level
 routing, while Semantic Router should select a model pool from request meaning
 and policy.

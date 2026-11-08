@@ -223,7 +223,8 @@ func (r *OpenAIRouter) applyContextOverflow(ctx *RequestContext, request *llmpro
 	*request = *detached
 	request.Generation++
 	ctx.ContextRequestIR = nil
-	ctx.VSRContextTokenCount = llmprotocol.EstimateInput(request).Tokens
+	estimate := llmprotocol.EstimateInput(request)
+	ctx.VSRContextTokenCount, ctx.VSRContextReserveTokens = estimate.Tokens, estimate.ReserveTokens
 	result.Plan.TriggerReason = "context_window"
 	r.recordCompressionPlan(ctx, result)
 	if fingerprint, fingerprintErr := cache.FingerprintValue(cfg); fingerprintErr == nil && len(fingerprint) >= 12 {

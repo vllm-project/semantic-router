@@ -283,6 +283,7 @@ class CLITestBase(unittest.TestCase):
             result = self._run_subprocess(
                 [
                     self.container_runtime,
+                    "container",
                     "inspect",
                     "--format",
                     "{{.State.Status}}",
@@ -591,6 +592,7 @@ class CLITestBase(unittest.TestCase):
         result = self._run_subprocess(
             [
                 self.container_runtime,
+                "container",
                 "inspect",
                 "--format",
                 format_string,
@@ -635,6 +637,7 @@ class CLITestBase(unittest.TestCase):
         result = self._run_subprocess(
             [
                 self.container_runtime,
+                "container",
                 "inspect",
                 "--format",
                 "{{range $name, $_ := .NetworkSettings.Networks}}{{$name}} {{end}}",

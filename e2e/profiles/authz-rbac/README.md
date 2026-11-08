@@ -1,9 +1,10 @@
 # Authorization and RBAC E2E profile
 
 This profile verifies the safe boundary for identity-derived routing headers.
-The Gateway removes client-supplied `x-authz-user-id` and
-`x-authz-user-groups` before ExtProc, so a caller cannot claim a Router role by
-setting those headers directly.
+The Gateway removes the client-supplied `x-authz-user-id`,
+`x-authz-user-groups`, `x-authz-team-id` and `x-authz-tenant-id` before
+ExtProc, so a caller cannot claim a Router role, team or tenant by setting
+those headers directly.
 
 The current profile runs:
 
@@ -57,6 +58,8 @@ kubectl logs --namespace envoy-gateway-system \
   -l gateway.envoyproxy.io/owning-gateway-name=semantic-router
 ```
 
-`ratelimit-limitor` is not part of this profile because its direct client
-identity headers conflict with the anti-spoofing filter. Test rate limits with
-a trusted post-auth identity source or in the profile that owns that contract.
+Rate-limit enforcement is checked directly with post-authentication request
+contexts in `src/semantic-router/pkg/extproc/processor_req_body_rate_limit_test.go`
+and limiter cases in `src/semantic-router/pkg/ratelimit/ratelimit_test.go`.
+This profile checks the gateway's identity-header stripping; it does not claim
+an authenticated rate-limit deployment test.

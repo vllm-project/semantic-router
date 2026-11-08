@@ -135,3 +135,81 @@ func TestValkeyAtomicStoreConcurrentSameIDHasOneCompleteWinner(t *testing.T) {
 	assert.NotEmpty(t, stored["user_id"])
 	assert.NotEmpty(t, stored[valkeyStoreOperationIDField])
 }
+
+func TestValkeyAtomicRecordRetrievalUpdatesExistingMemory(t *testing.T) {
+	_, client := newValkeyAtomicStoreTestClient(t)
+	ctx := context.Background()
+	key := "memory:retrieve-existing"
+
+	err := client.HSet(ctx, key, map[string]string{
+		"id":           "retrieve-existing",
+		"content":      "cached data",
+		"access_count": "3",
+		"updated_at":   "1000",
+	}).Err()
+	require.NoError(t, err)
+
+	command := valkeyBuildAtomicRecordRetrievalCommand(key, "2500")
+	result, err := runValkeyAtomicStoreTestCommand(ctx, client, command)
+	require.NoError(t, err)
+	assert.Equal(t, "updated", result)
+	require.NoError(t, valkeyAtomicRecordRetrievalResult(result, "retrieve-existing"))
+
+	fields, err := client.HGetAll(ctx, key).Result()
+	require.NoError(t, err)
+	assert.Equal(t, "4", fields["access_count"], "access_count should be incremented")
+	assert.Equal(t, "2500", fields["updated_at"], "updated_at should be updated")
+	assert.Equal(t, "cached data", fields["content"])
+}
+
+func TestValkeyAtomicRecordRetrievalDoesNotResurrectDeletedMemory(t *testing.T) {
+	server, client := newValkeyAtomicStoreTestClient(t)
+	ctx := context.Background()
+	key := "memory:retrieve-deleted"
+
+	err := client.HSet(ctx, key, map[string]string{
+		"id":           "retrieve-deleted",
+		"content":      "temporary memory",
+		"access_count": "1",
+		"updated_at":   "1000",
+	}).Err()
+	require.NoError(t, err)
+
+	// Simulate concurrent Forget() deleting the key
+	err = client.Del(ctx, key).Err()
+	require.NoError(t, err)
+	require.False(t, server.Exists(key))
+
+	command := valkeyBuildAtomicRecordRetrievalCommand(key, "3000")
+	result, err := runValkeyAtomicStoreTestCommand(ctx, client, command)
+	require.NoError(t, err)
+	assert.Equal(t, "missing", result)
+	require.NoError(t, valkeyAtomicRecordRetrievalResult(result, "retrieve-deleted"))
+
+	// Must NOT resurrect the key or create an orphan record with access_count/updated_at
+	assert.False(t, server.Exists(key), "deleted memory must not be resurrected by access tracking")
+}
+
+func TestValkeyAtomicRecordRetrievalMissingKeyLeavesNoKey(t *testing.T) {
+	server, client := newValkeyAtomicStoreTestClient(t)
+	ctx := context.Background()
+	key := "memory:never-existed"
+
+	command := valkeyBuildAtomicRecordRetrievalCommand(key, "3000")
+	result, err := runValkeyAtomicStoreTestCommand(ctx, client, command)
+	require.NoError(t, err)
+	assert.Equal(t, "missing", result)
+	require.NoError(t, valkeyAtomicRecordRetrievalResult(result, "never-existed"))
+
+	assert.False(t, server.Exists(key), "missing key must never be created by access tracking")
+}
+
+func TestValkeyAtomicRecordRetrievalResultParsing(t *testing.T) {
+	require.NoError(t, valkeyAtomicRecordRetrievalResult("updated", "id-1"))
+	require.NoError(t, valkeyAtomicRecordRetrievalResult("missing", "id-1"))
+	require.NoError(t, valkeyAtomicRecordRetrievalResult([]byte("updated"), "id-1"))
+	require.NoError(t, valkeyAtomicRecordRetrievalResult([]byte("missing"), "id-1"))
+
+	assert.ErrorContains(t, valkeyAtomicRecordRetrievalResult("unexpected", "id-1"), "unexpected atomic Valkey record retrieval response \"unexpected\"")
+	assert.ErrorContains(t, valkeyAtomicRecordRetrievalResult(123, "id-1"), "unexpected atomic Valkey record retrieval response type int")
+}

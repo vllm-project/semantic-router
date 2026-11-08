@@ -37,8 +37,8 @@ class TestCLITestBaseRuntimeTopology(unittest.TestCase):
 
     def _mock_statuses(self, statuses_by_name: dict[str, str]):
         def side_effect(command, *, timeout, **_kwargs):
-            if command[1] == "inspect":
-                if command[2:4] == ["--format", "{{.State.Status}}"]:
+            if command[1:3] == ["container", "inspect"]:
+                if command[3:5] == ["--format", "{{.State.Status}}"]:
                     name = command[-1]
                     status = statuses_by_name.get(name)
                     if status is None:

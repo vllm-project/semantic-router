@@ -9,6 +9,7 @@ import (
 	"github.com/openai/openai-go/shared"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -23,7 +24,7 @@ func (l *WorkflowsLooper) generateDynamicWorkflowPlan(
 		return nil, nil, fmt.Errorf("workflows dynamic mode requires planner.model")
 	}
 	planReq := dynamicWorkflowPlannerRequest(req, cfg, original, workerModels)
-	resp, err := l.callWorkflowModel(ctx, planReq, workflowPlannerStageConfig(cfg), cfg.PlannerModel, false, 1, req)
+	resp, err := l.callWorkflowModel(ctx, planReq, workflowPlannerStageConfig(cfg), cfg.PlannerModel, llmprotocol.TrustedStageAdvisor, false, 1, req)
 	if err != nil {
 		return nil, resp, fmt.Errorf("workflow planner %q failed: %w", cfg.PlannerModel, err)
 	}

@@ -9,3 +9,8 @@ routing:
         operator: OR
         keywords: ["ssn", "social security", "credit card", "password"]
         case_sensitive: false
+      - name: local_only_markers
+        operator: OR
+        keywords: ["local model only", "do not upload to cloud"]
+        case_sensitive: false
+        include_history: true

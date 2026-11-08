@@ -1,12 +1,16 @@
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import SetupStatusPage from './SetupStatusPage'
+import {
+  isCapabilityUsable,
+  PROBE_PENDING,
+  type DashboardCapability,
+} from '../contexts/dashboardCapabilities'
 
 interface EvaluationAvailabilityRouteProps {
-  available: boolean
+  capability: DashboardCapability | undefined
   isLoading: boolean
-  reason: string
-  settingsError: string | null
+  error: string | null
   onRefreshAccess: () => void
   children: ReactNode
   featureName?: string
@@ -14,21 +18,20 @@ interface EvaluationAvailabilityRouteProps {
 
 /** Keep a disabled or failed feature out of the normal workspace. */
 export default function EvaluationAvailabilityRoute({
-  available,
+  capability,
   isLoading,
-  reason,
-  settingsError,
+  error,
   onRefreshAccess,
   children,
   featureName = 'Evaluation',
 }: EvaluationAvailabilityRouteProps) {
   const navigate = useNavigate()
 
-  if (isLoading) {
+  if (isLoading || capability?.reason === PROBE_PENDING) {
     return (
       <SetupStatusPage
         title={`Checking ${featureName}`}
-        description={`Confirming that the ${featureName} service initialized successfully.`}
+        description={`Confirming that the ${featureName} service is available.`}
         actionLabel=""
         onAction={() => undefined}
         variant="loading"
@@ -36,22 +39,22 @@ export default function EvaluationAvailabilityRoute({
     )
   }
 
-  if (settingsError) {
+  if (error || !capability) {
     return (
       <SetupStatusPage
         title={`Unable to check ${featureName} access`}
-        description={settingsError}
+        description={error ?? `${featureName} availability was not reported.`}
         actionLabel="Refresh access"
         onAction={onRefreshAccess}
       />
     )
   }
 
-  if (!available) {
+  if (!isCapabilityUsable(capability)) {
     return (
       <SetupStatusPage
         title={`${featureName} is not available`}
-        description={reason || `${featureName} is not available for this deployment.`}
+        description={capability.remediation || `${featureName} is not available for this deployment.`}
         actionLabel="Return to Dashboard"
         onAction={() => navigate('/dashboard', { replace: true })}
       />

@@ -28,8 +28,10 @@ vllm-sr serve --config config.yaml
 ```
 
 A stable CLI pulls Router and Dashboard images tagged with its own release
-version. Development CLI builds use `:latest`; `--image` and the documented
-image environment overrides select a different build when needed.
+version, and a development CLI build pulls the images published from its own
+`main` commit, tagged with that commit's SHA. A source checkout uses `:latest`.
+`--image` and the documented image environment overrides select a different
+build when needed.
 
 With no `--config`, `vllm-sr serve` uses `config.yaml` in the current directory
 or opens first-run setup in the Dashboard. During setup the command keeps
@@ -105,6 +107,23 @@ Use `--minimal` to run without the Dashboard and the observability stack
 without allowing configuration changes. Pin images and review
 [Security Hardening](security-hardening) before exposing a listener beyond a
 trusted host.
+
+### Keep the stack running across crashes and reboots
+
+The containers that `vllm-sr serve` creates have no restart policy by default: a
+crashed container stays down, and the stack does not come back after a host
+reboot. On a server, start it with a policy:
+
+```bash
+vllm-sr serve --config config.yaml --restart-policy unless-stopped
+```
+
+`unless-stopped` and `always` restart a container that exits and start the
+stack again when the Docker daemon starts; `on-failure` restarts only containers
+that fail. `vllm-sr stop` still stops the stack. The policy applies to the
+containers that start creates, so pass it on every `serve`. With Podman, enable
+its restart service as well (`systemctl enable --now podman-restart.service`) so
+that containers with a policy come back after a reboot.
 
 With `--gateway extproc`, Envoy uses the safe `info` log level by default. To
 troubleshoot temporarily, set `VLLM_SR_ENVOY_LOG_LEVEL=debug` before starting

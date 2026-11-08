@@ -83,9 +83,71 @@ func TestOpenAIChatResponseTranslatesProviderExtensionReplies(t *testing.T) {
 	}
 }
 
+// LiteLLM proxied vLLM reply with provider_specific_fields on both the
+// choice and the message (issue #4936). The useful content is already in
+// canonical fields; the decorations are dropped and the response is
+// re-encoded so they are not replayed to the client.
+const litellmChatResponseFixture = `{
+  "id":"chatcmpl-litellm","object":"chat.completion","created":1791782944,
+  "model":"Qwen/Qwen3.8-27B",
+  "system_fingerprint":"vllm-0.26.1rc1.dev1177+ga9a17e709-tp2-58b79d32",
+  "choices":[{
+    "finish_reason":"stop","index":0,
+    "message":{
+      "content":"\n\nok","role":"assistant",
+      "reasoning_content":"We need to respond with exactly ok.",
+      "provider_specific_fields":{"reasoning":"We need to respond with exactly ok.\n","refusal":null}
+    },
+    "provider_specific_fields":{"routed_experts":null,"token_ids":null,"stop_reason":null}
+  }],
+  "usage":{"completion_tokens":29,"prompt_tokens":57,"total_tokens":86,
+    "completion_tokens_details":{"reasoning_tokens":25}}
+}`
+
+func TestOpenAIChatResponseAcceptsLiteLLMProviderSpecificFields(t *testing.T) {
+	response, envelope, diagnostics, err := NewBuiltinEngine().DecodeResponse(llmprotocol.OpenAIChatV1, []byte(litellmChatResponseFixture))
+	if err != nil {
+		t.Fatalf("DecodeResponse() error = %v", err)
+	}
+	if response.Usage.Total.Value == nil || *response.Usage.Total.Value != 86 {
+		t.Fatalf("usage = %+v", response.Usage)
+	}
+	if len(response.Output) != 1 {
+		t.Fatalf("output = %+v", response.Output)
+	}
+	assertDiagnosticFields(t, diagnostics,
+		"choices.message.provider_specific_fields",
+		"choices.provider_specific_fields",
+	)
+	if !envelope.ResponseReencodeRequired {
+		t.Fatal("LiteLLM decorations must force a re-encode")
+	}
+}
+
+func TestOpenAIChatResponseTranslatesLiteLLMReply(t *testing.T) {
+	translated, err := NewBuiltinEngine().TranslateResponse(
+		llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, []byte(litellmChatResponseFixture), nil,
+	)
+	if err != nil {
+		t.Fatalf("TranslateResponse() error = %v", err)
+	}
+	if len(translated.Response.Output) != 1 || translated.Response.Usage.Total.Value == nil {
+		t.Fatalf("translated response = %+v", translated.Response)
+	}
+	if strings.Contains(string(translated.Body), "provider_specific_fields") {
+		t.Fatal("provider_specific_fields must not appear in the re-encoded response")
+	}
+}
+
+func TestOpenAIChatRequestRejectsLiteLLMProviderSpecificFields(t *testing.T) {
+	raw := []byte(`{"model":"client-model","messages":[{"role":"user","content":"ok","provider_specific_fields":{"reasoning":"x"}}]}`)
+	_, _, _, err := NewBuiltinEngine().DecodeRequestForMutation(llmprotocol.OpenAIChatV1, raw)
+	assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "unsupported_messages_provider_specific_fields")
+}
+
 func TestOpenAIChatResponseStillRejectsUnknownProviderFields(t *testing.T) {
 	body := strings.Replace(groqChatResponseFixture, `"x_groq"`, `"x_unknown":1,"x_groq"`, 1)
-	_, _, _, err := NewBuiltinEngine().DecodeResponse(llmprotocol.OpenAIChatV1, []byte(body))
+	_, _, _, err := conformanceEngine().DecodeResponse(llmprotocol.OpenAIChatV1, []byte(body))
 	assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json")
 }
 
@@ -160,9 +222,13 @@ func TestChatStreamTimingsStaysStrict(t *testing.T) {
 		"unrelated unknown field": `"surprise":{"a":1}`,
 	} {
 		t.Run(name, func(t *testing.T) {
+			policy := llmprotocol.DefaultPolicy()
+			if name == "unrelated unknown field" {
+				policy = conformancePolicy()
+			}
 			decoder := OpenAIChatCodec{}.NewDecoder(
 				llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
-				llmprotocol.DefaultPolicy(),
+				policy,
 			)
 			payload := []byte("data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"model\",\"choices\":[]," + extra + "}\n\n")
 			if _, _, err := decoder.Push(payload); err == nil {
@@ -191,6 +257,56 @@ func TestChatStreamAcceptsMistralPField(t *testing.T) {
 	assertDiagnosticFields(t, diagnostics, "stream.p", "stream.usage.service_tier")
 }
 
+// A provider field that rides every chunk is one omission, not one per chunk.
+// Each Push starts its diagnostic list empty, so before the once-per-stream
+// guard the repeats reached the caller's accumulation: one increment of
+// llm_translation_lossy_total and one structured event per chunk for a single
+// loss, and a Push carrying the whole stream spent the 64-entry budget on
+// repeats so the final chunk's usage omission was truncated away.
+func TestChatStreamReportsAChunkConstantFieldOnce(t *testing.T) {
+	repeated := []byte("data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"mistral-medium-latest\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" hi\"}}],\"p\":\"abcdefghijklm\"}\n\n")
+	final := []byte("data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":1791279240,\"model\":\"mistral-medium-latest\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" you today?\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":16,\"total_tokens\":26,\"completion_tokens\":10,\"prompt_tokens_details\":{\"cached_tokens\":0},\"service_tier\":\"standard\"},\"p\":\"abcdefghijklm\"}\n\n" +
+		"data: [DONE]\n\n")
+
+	t.Run("once across pushes", func(t *testing.T) {
+		decoder := OpenAIChatCodec{}.NewDecoder(
+			llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
+			llmprotocol.DefaultPolicy(),
+		)
+		var accumulated llmprotocol.Diagnostics
+		for i := 0; i < 99; i++ {
+			_, diagnostics, err := decoder.Push(repeated)
+			if err != nil {
+				t.Fatalf("chunk %d was rejected: %v", i, err)
+			}
+			accumulated = append(accumulated, diagnostics...)
+		}
+		_, finalDiagnostics, err := decoder.Push(final)
+		if err != nil {
+			t.Fatalf("final chunk was rejected: %v", err)
+		}
+		assertDiagnosticFields(t, accumulated, "stream.p")
+		assertDiagnosticFields(t, finalDiagnostics, "stream.usage.service_tier")
+	})
+
+	t.Run("the budget keeps distinct losses", func(t *testing.T) {
+		decoder := OpenAIChatCodec{}.NewDecoder(
+			llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
+			llmprotocol.DefaultPolicy(),
+		)
+		var payload []byte
+		for i := 0; i < 99; i++ {
+			payload = append(payload, repeated...)
+		}
+		payload = append(payload, final...)
+		_, diagnostics, err := decoder.Push(payload)
+		if err != nil {
+			t.Fatalf("stream was rejected: %v", err)
+		}
+		assertDiagnosticFields(t, diagnostics, "stream.p", "stream.usage.service_tier")
+	})
+}
+
 // p is accepted only as a string, and non-string types or other unknown fields are still
 // rejected.
 func TestChatStreamPFieldStaysStrict(t *testing.T) {
@@ -201,9 +317,13 @@ func TestChatStreamPFieldStaysStrict(t *testing.T) {
 		"unrelated unknown field": `"surprise":{"a":1}`,
 	} {
 		t.Run(name, func(t *testing.T) {
+			policy := llmprotocol.DefaultPolicy()
+			if name == "unrelated unknown field" {
+				policy = conformancePolicy()
+			}
 			decoder := OpenAIChatCodec{}.NewDecoder(
 				llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
-				llmprotocol.DefaultPolicy(),
+				policy,
 			)
 			payload := []byte("data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"model\",\"choices\":[]," + extra + "}\n\n")
 			if _, _, err := decoder.Push(payload); err == nil {
@@ -211,4 +331,126 @@ func TestChatStreamPFieldStaysStrict(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Cerebras's OpenAI-compatible replies carry a top-level time_info object
+// (issue #5628) with serving timing metadata: queue_time, prompt_time,
+// completion_time, total_time, and a duplicate created. It is provider timing
+// metadata, not model output, so the response decodes with the usage untouched
+// and the drop is reported.
+const cerebrasChatResponseFixture = `{
+  "id":"chatcmpl-cerebras","object":"chat.completion","created":1725397005,
+  "model":"llama3.1-8b",
+  "choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"ok"}}],
+  "time_info":{"queue_time":0.254,"prompt_time":0.05,"completion_time":0.6,"total_time":0.907,"created":1725397005},
+  "usage":{"prompt_tokens":18,"completion_tokens":5,"total_tokens":23},
+  "system_fingerprint":"fp_1"
+}`
+
+func TestOpenAIChatResponseAcceptsCerebrasTimeInfo(t *testing.T) {
+	response, _, diagnostics, err := NewBuiltinEngine().DecodeResponse(llmprotocol.OpenAIChatV1, []byte(cerebrasChatResponseFixture))
+	if err != nil {
+		t.Fatalf("DecodeResponse() error = %v", err)
+	}
+	if response.Usage.Total.Value == nil || *response.Usage.Total.Value != 23 {
+		t.Fatalf("usage = %+v", response.Usage)
+	}
+	assertDiagnosticFields(t, diagnostics, "time_info")
+}
+
+// A null time_info is "no timing reported", not a field to report, and every
+// other unknown field is still rejected.
+func TestOpenAIChatResponseTimeInfoStaysStrict(t *testing.T) {
+	t.Run("null time_info reports nothing", func(t *testing.T) {
+		body := strings.Replace(
+			cerebrasChatResponseFixture,
+			`"time_info":{"queue_time":0.254,"prompt_time":0.05,"completion_time":0.6,"total_time":0.907,"created":1725397005}`,
+			`"time_info":null`, 1,
+		)
+		_, _, diagnostics, err := NewBuiltinEngine().DecodeResponse(llmprotocol.OpenAIChatV1, []byte(body))
+		if err != nil {
+			t.Fatalf("DecodeResponse() error = %v", err)
+		}
+		for _, diagnostic := range diagnostics {
+			if diagnostic.Field == "time_info" {
+				t.Fatalf("null time_info was reported: %+v", diagnostics)
+			}
+		}
+	})
+
+	t.Run("unrelated unknown field", func(t *testing.T) {
+		body := strings.Replace(cerebrasChatResponseFixture, `"time_info"`, `"x_unknown":1,"time_info"`, 1)
+		_, _, _, err := conformanceEngine().DecodeResponse(llmprotocol.OpenAIChatV1, []byte(body))
+		assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json")
+	})
+}
+
+// Cerebras rides the same time_info object on stream chunks. A field on every
+// chunk is one drop, not one per chunk.
+func TestChatStreamAcceptsCerebrasTimeInfo(t *testing.T) {
+	decoder := OpenAIChatCodec{}.NewDecoder(
+		llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
+		llmprotocol.DefaultPolicy(),
+	)
+	timeInfo := `"time_info":{"queue_time":0.254,"prompt_time":0.05,"completion_time":0.6,"total_time":0.907,"created":1725397005}`
+	payload := []byte(
+		"data: {\"id\":\"chatcmpl-cerebras\",\"object\":\"chat.completion.chunk\",\"created\":1725397005,\"model\":\"model\"," + timeInfo + ",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hello\"},\"finish_reason\":null}]}\n\n" +
+			"data: {\"id\":\"chatcmpl-cerebras\",\"object\":\"chat.completion.chunk\",\"created\":1725397005,\"model\":\"model\"," + timeInfo + ",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":18,\"completion_tokens\":5,\"total_tokens\":23}}\n\n" +
+			"data: [DONE]\n\n",
+	)
+	_, diagnostics, err := decoder.Push(payload)
+	if err != nil {
+		t.Fatalf("Cerebras stream chunks were rejected: %v", err)
+	}
+	if len(diagnostics) != 1 || diagnostics[0].Field != "stream.time_info" || diagnostics[0].Action != llmprotocol.DiagnosticDropped {
+		t.Fatalf("time_info omission was not explicit or not once per stream: %+v", diagnostics)
+	}
+}
+
+// A null time_info on a chunk is "no timing reported", and every other unknown
+// field is still rejected.
+func TestChatStreamCerebrasTimeInfoStaysStrict(t *testing.T) {
+	t.Run("null time_info reports nothing", func(t *testing.T) {
+		decoder := OpenAIChatCodec{}.NewDecoder(
+			llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
+			llmprotocol.DefaultPolicy(),
+		)
+		payload := []byte("data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"model\",\"time_info\":null,\"choices\":[]}\n\n")
+		_, diagnostics, err := decoder.Push(payload)
+		if err != nil {
+			t.Fatalf("chunk with null time_info was rejected: %v", err)
+		}
+		for _, diagnostic := range diagnostics {
+			if diagnostic.Field == "stream.time_info" {
+				t.Fatalf("null time_info was reported: %+v", diagnostics)
+			}
+		}
+	})
+
+	t.Run("unrelated unknown field", func(t *testing.T) {
+		decoder := OpenAIChatCodec{}.NewDecoder(
+			llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
+			conformancePolicy(),
+		)
+		payload := []byte("data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"model\",\"choices\":[],\"surprise\":{\"a\":1}}\n\n")
+		if _, _, err := decoder.Push(payload); err == nil {
+			t.Fatal("chunk with an unrelated unknown field was accepted")
+		}
+	})
+}
+
+// A same-format Chat response replays the original bytes, so the omission the
+// diagnostic reports describes the neutral representation only: the client
+// still receives time_info verbatim. Both facts are pinned here so neither
+// side can drift silently.
+func TestOpenAIChatResponseSameFormatReplayForwardsTimeInfo(t *testing.T) {
+	engine := NewBuiltinEngine()
+	translated, err := engine.TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, []byte(cerebrasChatResponseFixture), nil)
+	if err != nil {
+		t.Fatalf("TranslateResponse() error = %v", err)
+	}
+	if string(translated.Body) != cerebrasChatResponseFixture {
+		t.Fatal("same-format response was not replayed byte-for-byte; time_info must reach the client unchanged")
+	}
+	assertDiagnosticFields(t, translated.Diagnostics, "time_info")
 }

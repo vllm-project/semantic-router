@@ -121,8 +121,8 @@ def response(payload, *, no_coverage=False):
         "meta": {
             "revision": REVISIONS[model],
             "model_sha256": ("a" if model == "kai" else "b") * 64,
-            "profile": "exact",
-            "numerics": "exact",
+            "dtype": "bfloat16",
+            "numerics": "approximate",
             "engine": "native",
             "accelerator": "cpu",
             "device": "private-device",
@@ -404,7 +404,7 @@ def test_response_projection_excludes_private_diagnostics(suite):
         "meta": {
             "revision": "private.invalid",
             "model_sha256": "private.invalid",
-            "profile": "private.invalid",
+            "dtype": "private.invalid",
             "accelerator": ["private.invalid"],
             "device": "private-device",
         },

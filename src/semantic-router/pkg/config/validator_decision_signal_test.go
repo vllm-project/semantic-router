@@ -23,12 +23,13 @@ func decisionSignalConfig() *RouterConfig {
 func TestModelRuntimeDeploymentValidation(t *testing.T) {
 	valid := []ModelDeployment{
 		{Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Decision-2.0-Kai-0.6B"},
-		{Provider: ModelRuntimeProvider, Artifact: "/models/kai", Device: "rocm:1", Profile: "shared_context"},
+		{Provider: ModelRuntimeProvider, Artifact: "/models/kai", Device: "rocm:1"},
 		{Provider: ModelRuntimeProvider, Endpoint: "unix:///run/vllm-sr/kai.sock"},
 		{Provider: ModelRuntimeProvider, Endpoint: "http://decision-runtime:8100"},
 		{Provider: ModelRuntimeProvider, Endpoint: "http://shared-runtime:8100", ServedName: "vela-domain"},
 		{Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-PII", Device: "xpu:0", Input: ModelInputBudget{MaxTokens: 32768, Overflow: "window"}},
 		{Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-Domain", Device: "mps", Input: ModelInputBudget{MaxTokens: 512, Overflow: "truncate"}},
+		{Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", MaxNumSeqs: intPtr(1), MaxNumBatchedTokens: intPtr(8), BatchWindowMS: ptrFloat64(0), Dtype: "auto", EnableSharedContext: boolPtr(true)},
 	}
 	for _, deployment := range valid {
 		if err := deployment.WithDefaults().validate(&RouterConfig{}); err != nil {
@@ -41,14 +42,17 @@ func TestModelRuntimeDeploymentValidation(t *testing.T) {
 		"short revision":        {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Revision: "881bee41"},
 		"local revision":        {Provider: ModelRuntimeProvider, Artifact: "/models/kai", Revision: strings.Repeat("a", 40)},
 		"malformed device":      {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Device: "cuda:x"},
-		"malformed profile":     {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Profile: "Turbo"},
+		"no rows per forward":   {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", MaxNumSeqs: intPtr(0)},
+		"tiny token budget":     {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", MaxNumBatchedTokens: intPtr(4)},
+		"negative window":       {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", BatchWindowMS: ptrFloat64(-1)},
+		"unknown dtype":         {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Dtype: "fp16"},
 		"bad endpoint":          {Provider: ModelRuntimeProvider, Endpoint: "tcp://host:1"},
 		"relative socket":       {Provider: ModelRuntimeProvider, Endpoint: "unix://run/x.sock"},
 		"negative budget":       {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Input: ModelInputBudget{MaxTokens: -1}},
 		"bad overflow":          {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Input: ModelInputBudget{Overflow: "drop"}},
 		"attached device":       {Provider: ModelRuntimeProvider, Endpoint: "http://runtime:8100", Device: "cuda"},
 		"managed served name":   {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", ServedName: "x"},
-		"profile elsewhere":     {Provider: "http", ExternalModel: "x", Profile: "exact"},
+		"engine args elsewhere": {Provider: "http", ExternalModel: "x", Dtype: "float32"},
 		"served name elsewhere": {Provider: "http", ExternalModel: "x", ServedName: "x"},
 	}
 	for name, deployment := range invalid {
@@ -60,7 +64,7 @@ func TestModelRuntimeDeploymentValidation(t *testing.T) {
 
 func TestModelRuntimeDeploymentDefaults(t *testing.T) {
 	deployment := ModelDeployment{Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x"}.WithDefaults()
-	if deployment.Device != "auto" || deployment.Profile != "exact" || !deployment.Managed() {
+	if deployment.Device != "auto" || deployment.HasEngineArgs() || !deployment.Managed() {
 		t.Fatalf("defaults = %+v", deployment)
 	}
 	if (ModelDeployment{Provider: ModelRuntimeProvider, Endpoint: "http://x:1"}).Managed() {
@@ -226,6 +230,14 @@ func TestDecisionSelectorContract(t *testing.T) {
 	if err := validateDecisionSelectorConfig("d", refs, ok); err != nil {
 		t.Fatalf("a selector without a deployment asks the decision model: %v", err)
 	}
+	modelFree := &AlgorithmConfig{Type: DecisionAlgorithmDecision, Decision: &DecisionSelectionConfig{Instructions: "Which?"}}
+	if err := validateDecisionSelectorConfig("d", nil, modelFree); err != nil {
+		t.Fatalf("a model-free built-in Recipe receives its candidates through assignments: %v", err)
+	}
+	modelFree.Decision.Candidates = map[string]string{"large": "Best quality"}
+	if err := validateDecisionSelectorConfig("d", nil, modelFree); err == nil {
+		t.Fatal("candidates must name assigned modelRefs")
+	}
 	cases := map[string]func(*AlgorithmConfig) []ModelRef{
 		"blank deployment":  func(a *AlgorithmConfig) []ModelRef { a.Decision.Deployment = " "; return refs },
 		"padded deployment": func(a *AlgorithmConfig) []ModelRef { a.Decision.Deployment = " decider"; return refs },
@@ -253,7 +265,7 @@ func TestModelRuntimeDeploymentsInUse(t *testing.T) {
 	cfg.ModelDeployments["idle"] = ModelDeployment{Provider: ModelRuntimeProvider, Artifact: "vllm-sr/idle"}
 	cfg.Decisions = []Decision{{Name: "route", Algorithm: &AlgorithmConfig{Type: "decision", Decision: &DecisionSelectionConfig{Deployment: "selector"}}}}
 	used := ModelRuntimeDeploymentsInUse(cfg)
-	if len(used) != 2 || used["decider"].Profile != "exact" || used["selector"].Endpoint == "" {
+	if len(used) != 2 || used["decider"].Device != "auto" || used["selector"].Endpoint == "" {
 		t.Fatalf("in use = %+v", used)
 	}
 	if _, idle := used["idle"]; idle {

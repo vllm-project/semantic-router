@@ -43,12 +43,30 @@ provider pool, live health, latency, load, and cost metadata.
 | Balanced | Recovers from poor answers, spends more effort on difficult work, and otherwise weighs quality, latency, cost, and load. |
 | Speed | Uses observed latency for interactive work and keeps a bounded capable lane for heavier requests. |
 | Cost | Uses economical local replicas and enables bounded reasoning only when the request calls for it. |
-| Accuracy | Keeps ordinary work direct; explicit verification, expert comparison, multi-path reasoning, or workflows can use confidence, fusion, ReMoM, or Router Flow. |
-| Privacy | Contains jailbreak and sensitive-data signals locally and defaults to a local model. |
+| Accuracy | Keeps ordinary work direct; explicit verification, expert comparison, deep reasoning, or staged workflows can use confidence, fusion, ReMoM, or Router Flow. |
+| Privacy | Contains attempts to override the assistant locally, keeps sensitive work on the local model, and defaults to a local model. |
 
-In the balanced objective, FactCheck estimates the need for external knowledge;
-that signal alone does not establish high effort. Explicit verification, proof,
-and demanding reasoning retain the deliberate lane.
+Every objective routes on named questions to the router's decision model,
+answered together in one call per request, and on facts read from the request
+itself: an image, an active tool loop, the input length, and, for Balanced, a
+repeated request.
+
+| Objective | Question (threshold) | Decides |
+| --- | --- | --- |
+| Balanced | `correction` (0.6) | The user says an answer was wrong: the recovery lane. A repeated request also recovers; the built-in re-ask judgment compares the last two user turns. |
+| Balanced | `deliberate` (0.3), `verification` (0.7) | Careful reasoning about trade-offs, a root cause or several exact constraints, or an explicit request to verify or cite: the deliberate lane. Inputs of 12K tokens or more take it too. |
+| Speed | `heavy` (0.5) | A detailed design, a thorough review or a deep analysis: the heavy lane. Inputs of 16K tokens or more take it too. |
+| Cost | `depth` (0.6) | A hard problem that needs investigation or careful multi-step reasoning: bounded local reasoning. Inputs of 16K tokens or more take it too. |
+| Accuracy | `workflow` (0.7) | A task carried out in stages, such as research, implement and validate, or by several agents: Router Flow. A request for an expert panel does not count. |
+| Accuracy | `mode` = `experts` (0.7) | Several independent models or experts answering the same question: fusion. |
+| Accuracy | `verification` (0.9) | An explicit request to fact-check, verify or cite sources: the confidence route. |
+| Accuracy | `depth` (0.5) | A hard problem that needs investigation or careful multi-step reasoning: ReMoM. |
+| Privacy | `attack` (0.6) | The message tells the assistant to override its rules, reveal hidden instructions or secrets, or exfiltrate data: local containment with tools disabled. Quoting such a phrase for review does not count. |
+| Privacy | `confidential` (0.5), `personal_data` (0.5) | Confidential or internal material, a request to keep the data local, or personal data about a specific person: the local sensitive lane. |
+
+In Accuracy, text that the user gives to translate, quote, define or explain
+(`quoted`, 0.5) never starts orchestration, and an active client tool loop is
+synthesized directly unless the request is a staged workflow.
 
 Every objective includes an `omni` decision. Image-bearing requests use the
 shared local visual-language model; the privacy objective still gives attack
@@ -58,13 +76,37 @@ Workflow owns tool interruption and resume. Fusion and confidence routes may
 return a tool call only from the final selected model. Multi-response routes do
 not attempt to merge independent tool trajectories.
 
+When a question goes unanswered, each objective falls back conservatively.
+Balanced's deliberate lane, Speed's heavy lane and Cost's local reasoning
+match an unanswered question, so a decision-model outage never lowers quality.
+Accuracy's orchestration lanes need an answer, so the request stays on the
+direct lane. Privacy's sensitive lane matches an unanswered question, so the
+request stays on the local model with tools disabled. Preview lists an
+unanswered question under `signal_errors`, and the router counts it in
+`vsr_model_runtime_unknown_answers_total` by deployment and reason.
+
+The questions read the start of the latest user message, up to the decision
+model's input limit (16,384 tokens for Vela 2.0 0.8B): put the request before
+a long attachment.
+
 ## Requirements
 
 - Reachable OpenAI-compatible endpoints for every provider alias used by the
   selected objectives.
 - Live latency and load observations for objectives that use them.
-- The embedding, feedback, fact-check, PII, jailbreak, language, complexity,
-  and privacy-KB assets referenced by [`config.yaml`](config.yaml).
+- The decision model for the questions. The recipe declares it as the
+  `primary` deployment of `vllm-sr/Vela-2.0-0.8B`, which
+  `global.model_catalog.system.decision_model` names. The deployment sets no
+  device, so the model runtime uses a GPU when the router has one and the CPU
+  otherwise. In the CPU conformance run, with the router limited to 4 CPUs
+  and 8 requests in flight, the 129 probes took 584 s (0.22 requests per
+  second); the median request took 28 s and the 95th percentile 101 s.
+  Serve it on a GPU for live traffic: set `device: rocm` or `device: cuda` on
+  the `primary` deployment to require one. For a smaller model, change its
+  `artifact` (for example to `vllm-sr/Vela-2.0-0.3B`) or point
+  `global.model_catalog.system.decision_model.deployment` at another
+  deployment, and rerun the probes, because the thresholds were calibrated on
+  the 0.8B.
 - Redis for the response API and startup-status service.
 - Postgres for Router Replay. Local `vllm-sr serve` provisions managed Redis
   and Postgres services with development-only runtime defaults. Direct Router,
@@ -74,18 +116,12 @@ not attempt to merge independent tool trajectories.
 
 ## Data handling and safety
 
-Vela Guard scans up to 32,768 input tokens in overlapping 512-token windows.
-An attack detected in any window takes the security lane before the privacy
-lane. Both remain local with tools disabled; classifier errors and overload are
-reported in the signal trace. The bounded admission queue waits at most five
-seconds before reporting overload.
-
-The PII rule allows GPE entities such as cities and countries, so ordinary
-geography does not trigger privacy containment. Other detected entity types,
-including email and street addresses, remain restricted at the configured
-threshold. This is a type-level allowance: a person's city is also allowed by
-this PII rule. It does not distinguish public geography from personal location
-disclosure; explicit private-context signals still apply.
+The privacy objective's questions read the latest user message, so an attack
+or personal data placed only in an earlier turn, or past the first 16,384
+tokens, is not seen. Containment and the sensitive lane both stay local with
+tools disabled, and an unanswered question keeps the request on the sensitive
+lane. A city or country name alone is not personal data; an email or street
+address with it is.
 
 Each objective has isolated routing state, but providers and supporting stores
 are shared infrastructure. The privacy objective keeps model traffic local and
@@ -114,7 +150,8 @@ IDs in the OpenAI-compatible request body.
 The probe set covers every objective, route priority, multilingual and negative
 cases, tool and multi-turn shapes, privacy signals, and long-input boundaries.
 It validates recipe isolation and selection without requiring generation from
-the provider pool. See [`probes.yaml`](probes.yaml) and the
+the provider pool. With the declared Vela 2.0 0.8B and the router limited to
+4 CPUs, all 129 probes reach their expected decision. See [`probes.yaml`](probes.yaml) and the
 [conformance guide](../CONFORMANCE.md).
 
 ## Limitations

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -17,12 +18,12 @@ type (
 	RouterModelsSystem  = modelinventory.SystemInfo
 )
 
-func fetchRouterModelsInfo(routerAPIURL string, credentialProvider ...routerauth.CredentialProvider) *RouterModelsInfo {
+func fetchRouterModelsInfo(ctx context.Context, routerAPIURL string, credentialProvider ...routerauth.CredentialProvider) *RouterModelsInfo {
 	if routerAPIURL == "" {
 		return nil
 	}
 
-	resp, err := routerManagementGET(strings.TrimSuffix(routerAPIURL, "/")+"/api/v1/inventory/models", 2*time.Second, credentialProvider...)
+	resp, err := routerManagementGET(ctx, strings.TrimSuffix(routerAPIURL, "/")+"/api/v1/inventory/models", 2*time.Second, credentialProvider...)
 	if err != nil {
 		return nil
 	}

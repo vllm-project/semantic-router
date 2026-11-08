@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/signal/learned/jailbreak.md"
@@ -11,7 +12,7 @@ translation:
 
 `jailbreak` 在 Router 提交路由前检测提示注入与越狱企图。在 `routing.signals.jailbreak` 下定义越狱规则。
 
-它使用 `global.model_catalog.modules.prompt_guard` 以及 `global.model_catalog.system` 中已配置的越狱模型绑定。
+除非 `jailbreak` 绑定指定了其他部署，否则由决策模型回答它；见[为信号选择模型](../../../installation/choose-a-model-for-a-signal.md)。`global.model_catalog.modules.prompt_guard` 保存它的设置。
 
 ## 主要优势 {#key-advantages}
 
@@ -67,9 +68,9 @@ routing:
 
 ### 本地分类器的 Token 窗口 {#token-windows-for-a-local-classifier}
 
-默认的 prompt guard 模型 Vela 2.0 0.3B 完整读取每段文本（最多 8,192 个 token），不使用窗口（见[选择模型](../../../model-runtime/choose-a-model.md#vela-20)）。模块运行 Vela 1.0 Guard 时，按 512 token 窗口扫描每个文本片段，窗口间重叠 255 个内容 token，文档预算为该模型的 32,768 token（含特殊 token）。此行为仅适用于未指定配方模型绑定或 `window`，且 `max_sequence_length` 保持为零的配置。每次前向计算仍限于 512 token；较长片段需要多次前向计算。准备阶段会记录解析后的窗口和文档预算，并检查实际加载模型的容量。不兼容的自定义产物会使准备失败，超过文档预算的片段会产生输入限制错误。
+默认的决策模型在其自身输入上限内读取每段文本，不使用窗口（各模型的上限见[选择模型](../../../model-runtime/choose-a-model.md#vela-20)）。绑定到 Vela 1.0 Guard 时，信号按 512 token 窗口扫描每个文本片段，窗口间重叠 255 个内容 token，文档预算为该模型的 32,768 token（含特殊 token）。此行为仅适用于未指定 `window` 且 `max_sequence_length` 保持为零的配置。每次前向计算仍限于 512 token；较长片段需要多次前向计算。准备阶段会记录解析后的窗口和文档预算，并检查实际加载模型的容量。不兼容的自定义产物会使准备失败，超过文档预算的片段会产生输入限制错误。
 
-显式模型绑定、文档预算、窗口策略与远程后端保持各自的配置行为。例如，经过资格验证并设置 `input.overflow: reject` 的 8K 部署仍在其预算内处理整个片段。
+文档预算、窗口策略与远程部署保持各自的配置行为。例如，经过资格验证并设置 `input.overflow: reject` 的 8K 部署仍在其预算内处理整个片段。
 
 对于使用重叠 token 窗口评估的检查点，在 prompt-guard 模块中配置相同窗口策略：
 
@@ -86,9 +87,11 @@ global:
 
 `size` 包含分词器的特殊 token；`overlap` 只计算内容 token。若分词器使用两个特殊 token，上例每次扫描 126 个内容 token，步长为 63。运行时使用完整输入的 token ID 规划窗口，不对各窗口的文本解码后重新分词，并在每个窗口中重置位置。总输入必须符合 `max_sequence_length`；超限是推理错误，不会留下未检查的后缀。
 
+当 `jailbreak` 绑定到本地部署时，部署的 `input.max_tokens` 提供整文档预算。使用窗口扫描时，该预算可以超过检查点单次前向的容量：`input: {max_tokens: 65536, overflow: window}` 加上 `window: {size: 32768, overlap: 256}`，可用每次最多 32K token 的前向扫描最多 64K token。准备阶段会按已加载的检查点和图检查每个窗口；仅有 32K 的文档预算并不代表支持 32K 前向。所有计数都使用 Guard 分词器，并包含其特殊 token。显式的非窗口 `reject` 与 `truncate` 部署保持现有输入策略。
+
 请求规则、检测 API 和响应扫描使用相同的窗口间最大正类风险。对于多个正类标签，运行时先在各窗口内累加其概率，再选择风险最高的窗口。标签和置信度保留该窗口的完整概率分布。对比式规则保持现有文本窗口策略。
 
-在隐式默认配置之外，省略 `window` 会保留完整输入推理或已配置的旧扫描方式。窗口大小和阈值需要针对检查点单独评估；扫描所有 token 并不证明模型理解了远距离上下文。被引用的攻击以及含义依赖另一窗口的指令需要单独评估。绑定到[模型运行时](../../../model-runtime/guides/safety)部署的模型也可选择 token 窗口，但模型必须支持所请求的窗口大小。
+在隐式默认配置之外，省略 `window` 会保留完整输入推理或已配置的旧扫描方式。窗口大小和阈值需要针对检查点单独评估；扫描所有 token 并不证明模型理解了远距离上下文。被引用的攻击以及含义依赖另一窗口的指令需要单独评估。绑定到[模型运行时](../../../model-runtime/guides/safety)部署的 `jailbreak` 也可选择 token 窗口，但模型必须支持所请求的窗口大小。
 
 后端若声明输入被截断或未处理完整，该输入即为未扫描；在 `reject` 下超过防护模型输入上限、或超过其[扫描预算](../../../model-runtime/reference#long-inputs)的输入也一样。请求规则、文本检测 API 和响应扫描不能使用其概率宣称完整输入干净：无论 `on_error` 如何设置，规则都以类型 `unscanned` 匹配它，因此填充提示词无法让攻击绕过防护。未能在信号截止时间（`global.model_catalog.signal_timeout_ms`）内完成的扫描也一样。设置 `prompt_guard.on_unscanned: allow` 可让这类内容改为遵循 `on_error`。另一个已完整打分片段上的检测仍然算作检测；后端故障继续遵循配置的 `on_error` 与响应规则策略。
 
@@ -108,7 +111,7 @@ routing:
 
 响应方向规则只使用序列分类器：`method: contrastive`、模式列表与 `include_history` 是请求阶段设置，在其上会被拒绝。匹配、分数与失败报告在与请求方向规则相同的 `jailbreak:<name>` 键下。路由回放将观察记录为每条响应方向规则一条结果，包含判定（`detected`、`not_detected` 或 `unavailable`）、它阈值化的分数或失败码，以及插件应用的动作；使用 `x-vsr-debug` 时，`x-vsr-matched-jailbreak` 请求头在请求规则之后携带匹配的响应规则。
 
-响应方向规则不是决策输入。决策在请求路由时、模型回答前选定，因此在规则中或通过投影直接读取该规则的决策会在配置加载时被拒绝。观察由请求所选决策的 `response_jailbreak` 插件消费，并对其应用已配置动作。规则从请求解析到的配方读取，因此在一个入口配方上声明的规则只对该入口的响应打分。一旦声明了响应方向规则，插件自己的 `threshold` 会被忽略，加载时会报告这一点；阈值由规则拥有。决策的 `response_jailbreak` 插件在未声明响应方向规则时运行也会在加载时报告：插件随后自己对响应分类，这是兼容路径。任一消费者都足以为本配方供给 `prompt_guard`：即使没有决策规则读取 jailbreak 信号，越狱模型及其标签映射也会为响应阶段加载。
+响应方向规则不是决策输入。决策在请求路由时、模型回答前选定，因此在规则中或通过投影直接读取该规则的决策会在配置加载时被拒绝。观察由请求所选决策的 `response_jailbreak` 插件消费，并对其应用已配置动作。规则从请求解析到的配方读取，因此在一个入口配方上声明的规则只对该入口的响应打分。一旦声明了响应方向规则，插件自己的 `threshold` 会被忽略，加载时会报告这一点；阈值由规则拥有。决策的 `response_jailbreak` 插件在未声明响应方向规则时运行也会在加载时报告：插件随后自己对响应分类，这是兼容路径。任一方都足以为本配方供给 jailbreak 信号：即使没有决策规则读取 jailbreak 信号，它的模型及标签映射也会为响应阶段加载。
 
 未解析的检测器（后端失败，或响应没有可打分的文本）通过 `SignalErrors` 报告，方式与其他信号相同，而不会看起来像干净响应。只有每一块都被打分时，响应才是干净的：后端失败的块会让规则保持未解析，除非其他块已经产生的分数已经匹配它。响应只打分一次，每条规则在该分数上画自己的线，因此部分扫描按规则解析：分数 0.5 匹配阈值为 0.4 的规则，并使阈值为 0.9 的规则保持未解析，因为从未打分的那一块本可能给出更高分数。
 

@@ -35,6 +35,7 @@ type routerComponents struct {
 	serviceEmbeddings           *embedding.Set
 	cacheEmbeddings             *embedding.Set
 	modelLease                  *modelservice.Lease
+	systemOne                   *modelservice.RemoteSystemOne
 	decisionCards               map[string]modelservice.ModelCard
 	serving                     *serving.Runtime
 	rerankers                   map[config.RecipeName]modelruntime.PairScorer
@@ -57,6 +58,7 @@ type routerComponents struct {
 	recipeModelSelectors        map[config.RecipeName]*selection.Registry
 	lookupTable                 lookuptable.LookupTable
 	memoryStore                 memory.Store
+	memoryStatus                routerruntime.MemoryStatus
 	memoryExtractor             *memory.MemoryExtractor
 	memoryPersistence           *memory.PersistenceRunner
 	protocolCodecs              *protocolcodec.Registry
@@ -336,7 +338,7 @@ func assembleRouterComponents(cfg *config.RouterConfig, pool *binding.Pool, sign
 		logging.ComponentEvent("extproc", "model_selection_disabled", map[string]interface{}{})
 	}
 
-	components.memoryStore, components.memoryExtractor, err = createMemoryRuntime(cfg, components.serviceEmbeddings)
+	components.memoryStore, components.memoryExtractor, components.memoryStatus, err = createMemoryRuntime(cfg, components.serviceEmbeddings)
 	if err != nil {
 		return nil, rollbackResources(components.resources, err)
 	}
@@ -436,6 +438,7 @@ func (components *routerComponents) buildEarlyResources() error {
 func (components *routerComponents) useSignals(signals *signalRuntime) {
 	components.signals = signals
 	components.modelLease = signals.modelLease
+	components.systemOne = signals.systemOne
 	components.serving = signals.serving
 	components.embeddings = signals.embeddings
 	components.serviceEmbeddings = signals.serviceEmbeddings
@@ -543,6 +546,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		ReplayRecorders:             components.replayRecorders,
 		ShadowDispatcher:            components.shadowDispatcher,
 		MemoryStore:                 components.memoryStore,
+		MemoryStatus:                components.memoryStatus,
 		MemoryExtractor:             components.memoryExtractor,
 		memoryPersistence:           components.memoryPersistence,
 		ProtocolCodecs:              components.protocolCodecs,
@@ -557,6 +561,9 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 	}
 	if components.modelLease != nil {
 		router.decisionDecider = components.modelLease
+	}
+	if components.systemOne != nil {
+		router.systemOneDecider = components.systemOne
 	}
 	if components.classificationSvc != nil {
 		components.classificationSvc.SetEvalModelSelector(router)

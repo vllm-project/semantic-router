@@ -71,6 +71,9 @@ Latest Git commit times are the primary drift signal. translation.source_commit
 is a secondary metadata signal: when it is behind but the translated file is not
 older, the file is reported for verification instead of definitely outdated.
 
+Current translations must declare is_mtpe as a top-level, unquoted boolean.
+The audit reports missing or invalid review state without assigning it.
+
 Missing locale files use Docusaurus's current-English fallback and are reported
 as coverage information. Exit status is 0 when every present translation is
 synced, 1 when a present translation or its metadata needs work, and 2 for usage
@@ -80,7 +83,7 @@ Options:
   -l, --locale LOCALE   Check specific locale only (default: all)
       --fix-status       Update unambiguous translation.outdated flags
       --update-baseline  Record the current locale override paths and exit
-      --coverage-only    Check current-doc coverage without source drift metadata
+      --coverage-only    Check current-doc coverage and review state, without source drift
   -h, --help            Show this help message
 EOF
             exit 0
@@ -135,6 +138,25 @@ frontmatter_value() {
             }
         }
     ' "$file" | sed -E "s/[[:space:]]+#.*$//; s/^['\"]//; s/['\"]$//"
+}
+
+# The banner reads the root field. Keep quotes so strings such as "false"
+# cannot pass as booleans and silently suppress the notice.
+frontmatter_review_state() {
+    awk '
+        NR == 1 {
+            if ($0 != "---") exit
+            next
+        }
+        $0 == "---" { exit }
+        /^is_mtpe:[[:space:]]*/ {
+            value = $0
+            sub(/^is_mtpe:[[:space:]]*/, "", value)
+            sub(/[[:space:]]+#.*$/, "", value)
+            sub(/[[:space:]]+$/, "", value)
+            print value
+        }
+    ' "$1"
 }
 
 source_update_count() {
@@ -294,6 +316,12 @@ check_locale() {
 
     while IFS= read -r -d '' translated_file; do
         local translated_rel_path="${translated_file#"$WEBSITE_DIR/$i18n_dir"/}"
+        local review_state
+        review_state="$(frontmatter_review_state "$translated_file")"
+        if [[ "$review_state" != "true" && "$review_state" != "false" ]]; then
+            metadata_files+=("current/$translated_rel_path|missing or invalid is_mtpe (expected a top-level boolean: true or false)")
+            metadata_count=$((metadata_count + 1))
+        fi
         if [[ ! -f "$DOCS_DIR/$translated_rel_path" ]]; then
             orphaned_translations+=("$translated_rel_path")
             orphaned_translation_count=$((orphaned_translation_count + 1))

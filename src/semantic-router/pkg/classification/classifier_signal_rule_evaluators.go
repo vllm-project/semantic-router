@@ -11,9 +11,20 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
+// evaluateKeywordSignal evaluates keyword rules against the current text only.
 func (c *Classifier) evaluateKeywordSignal(results *SignalResults, mu *sync.Mutex, text string) {
+	c.evaluateKeywordSignalWithHistory(results, mu, text, nil)
+}
+
+// evaluateKeywordSignalWithHistory evaluates keyword rules; rules that opted
+// into include_history also see the prior user messages.
+func (c *Classifier) evaluateKeywordSignalWithHistory(results *SignalResults, mu *sync.Mutex, text string, priorUserMessages []string) {
 	start := time.Now()
-	matches, err := c.keywordClassifier.MatchAll(text)
+	historyText := ""
+	if len(priorUserMessages) > 0 && c.keywordClassifier.HasHistoryRules() {
+		historyText = keywordHistoryText(text, priorUserMessages)
+	}
+	matches, err := c.keywordClassifier.MatchAllWithHistory(text, historyText)
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()
 

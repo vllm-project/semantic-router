@@ -18,7 +18,7 @@ REMOVED_EMBEDDING_BACKENDS = frozenset({"candle", "openvino"})
 # replaces them. Their path keys are refused even when empty.
 RETIRED_EMBEDDING_TYPES = frozenset({"gemma", "bert"})
 RETIRED_EMBEDDING_PATHS = ("gemma_model_path", "bert_model_path")
-# A remote hallucination detector is a hallucination_detector binding; the
+# A remote hallucination detector is a hallucination binding; the
 # `backend: endpoint` shorthand was desugared into one.
 REMOVED_DETECTOR_BACKENDS = frozenset({"candle", "endpoint"})
 REMOVED_DEPLOYMENT_FIELDS = ("precision", "custom_ops_profile", "compilation_cache_dir")
@@ -35,6 +35,28 @@ REMOVED_MODULE_FIELDS: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
     ),
     (("hallucination_mitigation",), ("explainer", "nli_model")),
 )
+
+
+# The model runtime's numerics profiles became engine arguments; `vllm-sr
+# config migrate` maps a deployment's profile onto them.
+ENGINE_ARGUMENTS = (
+    "max_num_seqs",
+    "max_num_batched_tokens",
+    "batch_window_ms",
+    "enable_shared_context",
+    "dtype",
+)
+
+
+def removed_deployment_profiles(data: dict[str, Any]) -> list[str]:
+    """The deployments of a raw configuration that still set a runtime profile."""
+    root = _mapping(data.get("global"))
+    deployments = _mapping(_mapping(root.get("model_catalog")).get("deployments"))
+    return [
+        f"global.model_catalog.deployments.{name}.profile"
+        for name in sorted(deployments)
+        if "profile" in _mapping(deployments[name])
+    ]
 
 
 def retired_model_fields(data: dict[str, Any]) -> list[str]:

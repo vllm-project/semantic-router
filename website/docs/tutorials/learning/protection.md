@@ -61,19 +61,128 @@ components otherwise default to enabled when the master switch is enabled.
 
 | Scope | What is protected | What can re-route |
 | --- | --- | --- |
-| `conversation` | Turns sharing one `x-conversation-id`. | A new `x-conversation-id` in the same `x-session-id`. |
-| `session` | Turns sharing one `x-session-id`. | Idle timeout or a decision with `adaptations.mode: bypass`. |
+| `conversation` | Turns sharing one `x-conversation-id`. | A new `x-conversation-id` in the same `x-session-id`, or an explicit release. |
+| `session` | Turns sharing one `x-session-id`. | Idle timeout, a decision with `adaptations.mode: bypass`, or an explicit release. |
 
 Use `conversation` when each agent run should be independently routed. Use
 `session` when one session-level model choice should remain stable across
 multiple user-initiated runs. In `conversation` scope, a changed decision resets
 minimum-turn and continuity-cost preferences. In `session` scope, a changed
 decision or conversation alone does not release an eligible current model;
-idle timeout, bypass, candidate exclusion, or qualified rescue can release it.
+idle timeout, bypass, candidate exclusion, qualified rescue, or an explicit
+release can release it.
 Neither scope can retain a previous model outside the admitted candidate set.
 
 If the configured identity headers are missing, protection fails open and
 records diagnostics instead of failing the request.
+
+### Agents that delegate to subagents
+
+A harness such as Claude Code sends one session ID for a run and its subagents.
+Under `scope: session` that holds every subagent on the model its parent was
+given, even when a decision routes the subagent's request elsewhere. Name the
+header that identifies each agent to hold them separately:
+
+```yaml
+protection:
+  enabled: true
+  scope: session
+  identity:
+    headers:
+      session: x-claude-code-session-id
+      agent: x-claude-code-agent-id
+```
+
+Claude Code sends `x-claude-code-agent-id` only on subagent requests, so the
+main agent keeps its session key and each subagent gets its own. A subagent is
+held on the model chosen for its first request, under the same rules as a
+session. Without `agent`, protection behaves as before.
+
+Codex CLI sends `session-id` and `thread-id` on every request. A root thread
+sends its own ID in both. A review child that Codex starts on that thread keeps
+the root's `session-id` and sends its own `thread-id`:
+
+```yaml
+protection:
+  enabled: true
+  scope: session
+  identity:
+    headers:
+      session: session-id
+      agent: thread-id
+```
+
+Because the root also sends `thread-id`, its key holds both its session ID and
+its thread ID, not the session ID alone. Both IDs stay the same across tool
+continuations and across turns after `codex exec resume`, so protection holds
+the root and each review child on their own models across the session.
+`codex exec review` starts a new session, so its review child gets its own key
+either way. These headers were checked with Codex CLI 0.167.0, configured as
+the [protocol compatibility guide](../../installation/protocol-compatibility)
+requires.
+
+### Explicit release
+
+A harness that knows its task has changed phase can ask for a fresh decision
+without starting a new session. It sends the release header on one request;
+protection releases the hold on that request's key, runs the recipe again and
+holds whatever the recipe selects. The session ID does not change, so Replay
+and run-level reporting keep one run. The recipe can select the same model
+again: a release asks for a new decision, not for a different model.
+
+```yaml
+protection:
+  release:
+    enabled: true                        # default
+    header: x-vsr-protection-release     # default
+    min_user_turns_between: 2            # default; 0 removes the limit
+```
+
+Any non-empty value requests a release. The release applies only to the
+request's protection key: with an `agent` header configured, releasing one
+subagent leaves the main agent and other subagents held. The router removes the
+header before the request reaches a backend, whether or not release is enabled,
+so config load accepts only an `x-` header name, and rejects an identity header,
+a credential header such as `x-api-key` or `x-goog-api-key`, a gateway header
+(`x-envoy-*`, `x-authz-*`, `x-forwarded-*`, `x-request-id`), or another `x-vsr-`
+control header.
+
+A release is honored only when all of these hold:
+
+- The key already holds a model. A new session or a new agent gets a normal
+  first decision instead.
+- The request is at a portable turn boundary, with no active tool loop and no
+  nonportable context. Otherwise the reason is `release_not_at_turn_boundary`.
+- At least `min_user_turns_between` user turns lie between the last honored
+  release on the key and this one. With the default `2`, a release on turn 3
+  allows the next one on turn 6; `0` removes the limit. A user turn is a request
+  outside a tool loop; tool hops do not count. Otherwise the reason is
+  `release_interval`.
+- `release.enabled` is not `false`. Otherwise the reason is `release_disabled`.
+- Protection runs in `apply` mode for the request. A decision with
+  `adaptations.mode: bypass` reports `protection_bypassed`; a request where
+  protection is off reports `protection_disabled`, or `missing_identity` when
+  the identity headers are absent; `protection.mode: observe` reports
+  `release_observe_only`.
+
+A refused release keeps the current hold and reports its reason in
+`x-vsr-protocol-warnings`. It does not use up the interval. An honored release
+skips the held-model shortcut and rescue. With the progress gate enabled, the
+gate's evidence, cooldown and oscillation rules do not suppress it; the
+interval replaces them, and the gate trace records `bypassed_by_release`. Hard
+candidate eligibility still applies. Replay records the action
+`release_switch` with the previous and selected model. When the recipe selects
+the held model again, the release still uses up the interval, and Replay
+records `hold_current` with the reason `release_kept_current`. Under the
+decision's `protection.mode: observe`, routing is unchanged and the release is
+recorded as not honored, without using up the interval.
+
+:::warning
+Do not put the release header in Claude Code's `ANTHROPIC_CUSTOM_HEADERS`.
+That setting is fixed at startup and sent on every request, so every request
+would ask for a release. Protection would then re-decide every
+`min_user_turns_between + 1` user turns, which effectively turns the hold off.
+:::
 
 ## Guards
 
@@ -110,7 +219,11 @@ ownership lock whose previous model is outside the admitted pool returns
 `503` instead of transferring ownership or forcing that model. Router-owned
 Responses history becomes portable after the router has expanded it into the
 complete stateless request; its retained `previous_response_id` alone does not
-create a lock. An active tool loop still does. Unknown response IDs fail during
+create a lock. An active tool loop does while the conversation remains on the
+decision that admitted the loop. When classification moves to a different
+decision, that lock releases and the new decision routes from its own
+candidates; the transfer is traced as `decision_drift`. Opaque provider state
+stays bound to the model that created it. Unknown response IDs fail during
 history lookup, before selection.
 
 ## Progress Gate

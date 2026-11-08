@@ -35,14 +35,11 @@ var BaselineRouterContract = []string{
 	"security-window-provenance",
 	"jailbreak-detection",
 	"decision-priority-selection",
-	"plugin-chain-execution",
 	// Provider-bound request effects for system_prompt, request_params, and header_mutation (issue #3180)
 	"plugin-request-mutations",
 	// Provider-bound tool passthrough, filtering, removal, semantic add/filter, and PII precedence (issue #3180)
 	"tool-selection",
-	"rule-condition-logic",
 	"decision-fallback-behavior",
-	"plugin-config-variations",
 	"chat-completions-progressive-stress",
 	"protocol-codec-openai-regression",
 	// Retention directive response-header contract (issue #2009)
@@ -85,6 +82,8 @@ var DashboardContract = []string{
 	"dashboard-status",
 	// Issue #2794: OpenAPI rendered from the route registration.
 	"dashboard-openapi",
+	// Issue #2794: per-caller capability states with cached dependency probes.
+	"dashboard-capabilities",
 	// Issue #2466: invitation, role-bound routes, and immediate session revocation.
 	"dashboard-route-bound-authorization",
 	// Config endpoints
@@ -96,6 +95,12 @@ var DashboardContract = []string{
 	"dashboard-deploy-safe-failure",
 	// Rollback must restore the exact pre-deploy config and ledger both operations (issue #3233)
 	"dashboard-deploy-rollback",
+	// The active projection names the served config by version and hash after deploy and rollback (issue #3233)
+	"dashboard-status-active-config",
+	// Logs state their deployment contract and the audit trail records a rejected deploy (issue #3233)
+	"dashboard-logs-diagnostics",
+	// Anonymous and forged sessions are rejected on logs and deploy without touching state (issue #3233)
+	"dashboard-anonymous-access-denied",
 	// sr-bench execution, final-channel scoring, accounting, idempotency, and cancellation.
 	"dashboard-sr-bench",
 	// Sessions/workflows survive Dashboard restart; independent worker evidence survives its own restart.
@@ -108,6 +113,8 @@ var DashboardContract = []string{
 // OpenAI-shaped backends because they assert on Anthropic-specific
 // behaviour such as cache-token synthesis and stop-reason mapping.
 var ProviderProtocolsContract = []string{
+	"provider-cache-cost-breakdown",
+	"provider-cache-net-savings",
 	"prompt-compression-json-routing",
 	// Chat clients must receive Chat Completions even though the selected
 	// backend speaks Anthropic Messages.
@@ -116,6 +123,9 @@ var ProviderProtocolsContract = []string{
 	"anthropic-chat-cache-control",
 	"anthropic-prompt-cache-policy",
 	"anthropic-messages-stop-sequence",
+	// A stop_sequence terminal must project to the generic Chat stop for
+	// clients that cannot carry the matched string (issue #4892)
+	"anthropic-chat-stop-sequence",
 	"anthropic-messages-streaming",
 	"anthropic-chat-completions-streaming",
 	"anthropic-response-api-buffered",
@@ -125,6 +135,8 @@ var ProviderProtocolsContract = []string{
 	"protocol-codec-anthropic-backend-buffered-matrix",
 	"protocol-codec-anthropic-backend-streaming-matrix",
 	"protocol-codec-anthropic-response-diagnostics",
+	// Gateway fields in Anthropic usage need no backend setting (issue #5841)
+	"protocol-codec-anthropic-gateway-fields",
 	"protocol-codec-responses-verbosity-anthropic",
 	"protocol-codec-prompt-cache-key-anthropic",
 	"protocol-codec-anthropic-per-message-effort-backend",

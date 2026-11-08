@@ -134,7 +134,7 @@ The reference is the package loaded by Transformers in FP32 on the CPU with
 (the Embedding contract) or final-normed (the Reranker contract); pooling,
 Matryoshka truncation and L2 as the package configures them. The runtime
 serves the whole corpus as one request. The CPU rows ran the reference over
-one right-padded batch at `ebecf9a3a`: the `exact` path on oneDNN's pre-packed
+one right-padded batch at `ebecf9a3a`: the reference path on oneDNN's pre-packed
 FP32 linears, and the Reranker's scorer as a two-output packed linear whose
 second row is zeros (a one-output packed linear changes with the batch size,
 which the load-time batch-invariance probe rejects). The ROCm rows ran each
@@ -205,14 +205,14 @@ frames that hold only padding, are bit-identical by test):
 The CLAP log-mel differences sit in the dB domain (values of tens of dB) and
 vanish through the encoder: the CLAP embeddings agree to 4.5e-6.
 
-## `max_speed` reduced copies against the exact path
+## Reduced copies against the reference path
 
 `tools/embed_parity.py reduced` loads the model with a copy of its linear
 layers and answers the parity corpus through both paths; the floor is
 design section 5.4's (embeddings: cosine ≥ 0.999 per vector; reranking: 99 %
 pairwise order agreement on document pairs whose exact logits differ by more
 than 1e-3). Latency is the per-request p50 of both paths over the corpus in
-the same process. Measured at `fe65a8d5c`, when `exact` still ran
+the same process. Measured at `fe65a8d5c`, when the reference path still ran
 `F.linear`.
 
 | Model | Device | Copy | Worst cosine / order agreement | Max \|Δ\| | Exact → copy p50 ms | Floor |
@@ -233,8 +233,8 @@ BF16 keeps the Embedding above the floor but buys nothing: it is no faster
 on the CPU, and on the GPU a single request is launch-bound and autocast
 adds a cast per linear (2.6 → 4.3 ms). For the Reranker, BF16 is faster on
 the CPU but its shallow exits fall below the floor on both devices.
-oneDNN's pre-packed FP32 linears are the exact path's numbers within 1.5e-5
-and twice as fast, so the `exact` path itself now runs them on x86 CPUs (the
+oneDNN's pre-packed FP32 linears are the reference path's numbers within 1.5e-5
+and twice as fast, so the reference path itself now runs them on x86 CPUs (the
 `task_heads` kernel variants, as for the classify heads), which leaves a
 `float32-packed` copy nothing to gain. Qwen3-Embedding runs the decoder path,
 which loads no copy; Omni runs no reduced copy.

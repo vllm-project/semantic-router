@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 统一配置契约 v0.3
 description: 记录路由器、CLI、仪表盘、Helm、operator 和 DSL 共享的已实现配置契约。
 created: 2026-03-17
@@ -6,10 +7,14 @@ status: Implemented
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/proposals/unified-config-contract-v0-3.md"
-  outdated: false
+  outdated: true
 ---
 
 > **状态：** 已实现 · **创建日期：** 2026-03-17
+
+:::note
+本记录早于模型目录的重新设计。它描述的绑定契约、模块 `backend` 块和 `external[]` 模型已弃用：它们仍可加载，并报告 `deprecated_model_field` 警告。[迁移模型资源](../installation/model-resource-migration.md)给出了每一种的当前形式。
+:::
 
 ## 问题 {#problem}
 

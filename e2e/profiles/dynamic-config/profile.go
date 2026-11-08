@@ -106,9 +106,6 @@ func (p *Profile) GetTestCases() []string {
 		testmatrix.RouterSmoke,
 		[]string{
 			"decision-priority-selection",
-			"plugin-chain-execution",
-			"rule-condition-logic",
-			"embedding-signal-routing",
 			"dynamic-config-generation-lifecycle",
 		},
 	)

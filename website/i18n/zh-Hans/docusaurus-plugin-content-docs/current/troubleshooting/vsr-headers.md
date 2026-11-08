@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "f0cbd8621f9d5e9c6e0e25ea86ac4c0e4bd16326"
   source_file: "docs/troubleshooting/vsr-headers.md"
@@ -14,7 +15,7 @@ Router 使用这些请求头和响应头来保持会话连续性、路由可观�
 Router 把头分到两个面：
 
 - **默认面** — 每个未被响应缓存服务的路由推理响应都包含 `x-vsr-schema-version` 和 `x-vsr-response-path`。这两个关键头由路由流水线产生，因此改由 Router 自身处理器应答的响应（例如 `GET /v1/models`）会省略它们。唯一例外是管理端点 `POST /api/v1/routing/preview`：它在结果成功时返回 `x-vsr-config-hash`。成功路由的响应还可以包含最终配方、决策、置信度、算法、模型、路由延迟、成本和回放 id——仅当启用 Router Replay 且记录已持久化时才包含回放 id。发生协议转换时会出现协议标记；仅在存在警告时出现协议警告。
-- **调试面** — 中间分类细节、匹配信号、工具选择指标和 `x-vsr-retention-*` 指令仅在请求设置 `x-vsr-debug: true` 时内联出现。启用回放时，同样的诊断上下文仍可通过 `x-vsr-replay-id` 获得。
+- **调试面** — 中间分类细节、匹配信号、工具选择指标和 `x-vsr-retention-*` 指令仅在请求设置 `x-vsr-debug: true`、且 [`global.router.headers.debug`](#who-may-turn-on-the-debug-headers) 允许该调用方时内联出现；默认不允许任何调用方。启用回放时，同样的诊断上下文仍可通过 `x-vsr-replay-id` 获得。
 
 决策和匹配信号头还要求同时满足以下全部条件：
 
@@ -23,6 +24,28 @@ Router 把头分到两个面：
 3. Router 为该请求评估了路由决策或信号。
 
 缓存命中响应可以发出缓存头，但它们不会重新运行路由，因此不会附加新的匹配信号头。
+
+## 谁可以打开调试头 {#who-may-turn-on-the-debug-headers}
+
+调试头会列出请求命中的信号规则和防护规则、决策排名以及路由学习的原因，所以客户端不能自己打开它们。由 `global.router.headers.debug` 决定谁可以打开；其他调用方发来的 `x-vsr-debug` 会被忽略。
+
+| `debug` | 谁能拿到调试头 |
+| ------- | -------------- |
+| `none`（默认） | 任何人都不能。 |
+| `any` | 每个发送 `x-vsr-debug: true` 的客户端。用于开发和测试，或者放在会替不受信任的客户端删掉该头的网关后面。 |
+| `authenticated` | 只有 `debug_principals` 里的用户和组，以你的认证组件设置的身份头为准（`global.services.authz.identity`）。 |
+
+```yaml
+global:
+  router:
+    headers:
+      debug: authenticated
+      debug_principals:
+        users: [oncall-bot]
+        groups: [platform-sre]
+```
+
+`authenticated` 信任身份头。standalone 模式的 Router 只在设置了 `identity.trust_headers` 的 listener 上保留它们；没有任何 listener 信任身份头时，Router 拒绝 `authenticated`。放在基于 Envoy 的网关之后时，网关必须删掉客户端发来的身份头。Dashboard Playground、`vllm-sr route --debug` 和 sr-bench 会请求调试头；调用方不被允许时，它们只显示默认面。
 
 ## 请求头
 
@@ -33,7 +56,7 @@ Router 把头分到两个面：
 | `x-claude-code-session-id` | request | Claude Code 在 Messages API 请求上提供的对话标识。两者同时存在时，`x-session-id` 优先。 |
 | `x-disable-router-memory` | request | 当客户端已经注入记忆、Router 托管记忆会重复时，设为 `true`。 |
 | `x-vsr-skip-processing` | request | 在启用 `global.router.skip_processing.enabled` 时，让请求退出 Router 处理。使用值 `true`。 |
-| `x-vsr-debug` | request | 让请求进入详细/调试响应头——合约原本省略或降级到回放的头会为该请求内联发出。使用值 `true`。 |
+| `x-vsr-debug` | request | 请求调试响应头——合约原本省略或降级到回放的头会为该请求内联发出。仅当 `global.router.headers.debug` 允许该调用方时生效，否则忽略。使用值 `true`。 |
 
 ## 协议与回放头
 
@@ -195,7 +218,7 @@ x-vsr-replay-id: replay_01J...
 
 这里的 `x-vsr-replay-id` 之所以出现，是因为启用了 Router Replay 且记录已持久化。回放被禁用或持久化失败时，响应会携带其他头并省略该头。
 
-请求带 `x-vsr-debug: true` 时，被降级的中间细节和匹配信号也会内联发出：
+`global.router.headers.debug` 允许的调用方在请求中带 `x-vsr-debug: true` 时，被降级的中间细节和匹配信号也会内联发出：
 
 ```http
 HTTP/1.1 200 OK
@@ -211,6 +234,17 @@ x-vsr-matched-context: long-context
 x-vsr-matched-projections: use-reasoning-model
 x-vsr-replay-id: replay_01J...
 ```
+
+## 身份头 {#identity-headers}
+
+这些头由 Router 前面的认证组件设置，Router 用它们做角色绑定、限流、记忆，以及 user、team、tenant 三种响应缓存范围。除非 listener 信任身份头（见 [Gateway 模式](../installation/gateway-modes#identity-headers)），否则客户端发来的这些头会被丢弃；任何身份头都不会到达模型提供方。
+
+| 头 | 说明 |
+| --- | --- |
+| `x-authz-user-id` | 已认证的用户。可用 `global.services.authz.identity.user_id_header` 改用其他头。 |
+| `x-authz-user-groups` | 用户所属的组，逗号分隔。可用 `global.services.authz.identity.user_groups_header` 改用其他头。 |
+| `x-authz-team-id` | 团队，用于 `team` 响应缓存范围。 |
+| `x-authz-tenant-id` | 租户，用于 `tenant` 响应缓存范围。 |
 
 ## 兼容性与解读
 

@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 配置契约
 description: 发现、校验并扩展 canonical vLLM Semantic Router 配置，而无需重复 schema。
 translation:

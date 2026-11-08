@@ -38,6 +38,7 @@ export interface ProviderModel {
     prompt_per_1m?: number
     cached_input_per_1m?: number
     cache_write_per_1m?: number
+    cache_write_1h_per_1m?: number
     completion_per_1m?: number
   }
   reliability?: {
@@ -215,12 +216,18 @@ export interface MetadataSignal {
 export interface ClassifierSignal {
   name: string
   description?: string
-  type: 'local' | 'llm' | 'sequence_classifier'
+  /** The deployment that answers this rule; without one, its binding or the decision model does. */
+  deployment?: string
+  /** @deprecated Name a deployment instead. */
+  type?: 'local' | 'llm' | 'sequence_classifier'
+  /** @deprecated Name a deployment instead. */
   model?: string
+  /** @deprecated Name a deployment instead. */
   model_path?: string
   labels: string[]
   instructions?: string
   disable_rationale?: boolean
+  /** @deprecated Name a deployment instead. */
   use_cpu?: boolean
 }
 
@@ -283,6 +290,8 @@ export interface RuleComposer {
 
 export interface ComplexitySignal {
   name: string
+  /** The deployment that answers this rule; without one, its binding or the decision model does. */
+  deployment?: string
   threshold: number
   hard: ComplexityCandidates
   easy: ComplexityCandidates
@@ -313,19 +322,25 @@ export interface JailbreakSignal {
   method?: string // "classifier" (default) or "contrastive"
   include_history?: boolean
   direction?: 'request' | 'response' // "request" (default) scores the prompt, "response" the model's output
-  jailbreak_patterns?: string[] // Known jailbreak prompts (contrastive KB)
-  benign_patterns?: string[] // Known benign prompts (contrastive KB)
+  jailbreak_patterns?: string[] // Deterministic case-insensitive, whitespace-normalized substring hard blocks
+  benign_patterns?: string[] // Benign examples for contrastive scoring; not explicit allow rules
   description?: string
 }
 
 export interface SafetySignal {
   name: string
   description?: string
+  /** The deployment that answers this rule; without one, its binding or the decision model does. */
+  deployment?: string
+  /** @deprecated Name a deployment instead. */
   model?: string
   labels?: string[]
   unsafe_labels?: string[]
   threshold: number
   hazard?: {
+    /** The deployment that scores the hazard categories. */
+    deployment?: string
+    /** @deprecated Name a deployment instead. */
     model?: string
     labels: string[]
     categories: string[]
@@ -437,6 +452,7 @@ export interface PluginConfig {
     | 'context_compression'
     | 'prompt_cache'
     | 'shadow_dispatch'
+    | 'masking'
   configuration: Record<string, unknown>
 }
 

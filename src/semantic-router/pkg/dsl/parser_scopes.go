@@ -30,6 +30,9 @@ func applyRawRouting(prog *Program, raw *rawRoutingDecl) []error {
 func rawToEntrypoint(raw *rawEntrypointDecl) (*EntrypointDecl, []error) {
 	decl := &EntrypointDecl{Pos: posFromLexer(raw.Pos)}
 	fields := entriesToMap(raw.Fields)
+	if api, ok := getStringField(fields, "api"); ok {
+		decl.API = api
+	}
 	if recipe, ok := getStringField(fields, "recipe"); ok {
 		decl.Recipe = recipe
 	}

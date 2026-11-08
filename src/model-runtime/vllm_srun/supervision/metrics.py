@@ -125,7 +125,8 @@ class RuntimeMetrics:
                 "engine",
                 "accelerator",
                 "device",
-                "profile",
+                "dtype",
+                "numerics",
             ],
             registry=self.registry,
         )

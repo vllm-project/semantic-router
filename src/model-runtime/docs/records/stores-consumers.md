@@ -16,9 +16,9 @@ a managed model runtime process.
 - **Commits:**
   - legacy: base `1c6d372ec`;
   - serving: `b604edeab`. It has the batch-invariance probe for embedders and
-    rerankers (`ebecf9a3a`), and `exact` shares batches across lengths on
-    models that pack rows (`10564d6c0`). The harness sets the embedding
-    profile itself, so the change of the implicit default that follows
+    rerankers (`ebecf9a3a`), and merged forwards share batches across
+    lengths on models that pack rows (`10564d6c0`). The harness sets the
+    embedding deployments' batching itself, so the change of the implicit default that follows
     (`c7b48cb1b`) does not change what these rows run.
 
   Both are exact mirrors; a temporary harness was added to scratch copies.
@@ -31,9 +31,10 @@ a managed model runtime process.
   threads. Its venv has the router image's pins (`Dockerfile.extproc`):
   PyTorch 2.10.0 CPU, then the runtime's dependencies and its `multimodal`
   extra as the resolver picked them (ONNX Runtime 1.30.0, NumPy 2.5.3).
-  Embeddings run at `exact`, which the router's implicit embedding
-  deployments use, and at `batching`. The reranker runs at `exact`, as the
-  maintained config declares it.
+  Embeddings run *merged*, as a batch-invariant model's requests run by
+  default (the requests queued together share forwards, without a window),
+  and *windowed* (rows collected for the 2 ms batching window first). The
+  reranker runs merged.
 - **Inputs:** 2,024 distinct, deterministic prompt-like texts of 15–60 words.
 
 ## Workloads
@@ -54,9 +55,9 @@ a managed model runtime process.
 
 ## Method
 
-Six rounds. A round runs legacy, `exact` and `batching` once each, every run
+Six rounds. A round runs legacy, merged and windowed once each, every run
 in a fresh process and its own scope, with the order rotated: legacy first in
-rounds 1 and 4, `exact` in rounds 2 and 5, `batching` in rounds 3 and 6. Each
+rounds 1 and 4, merged in rounds 2 and 5, windowed in rounds 3 and 6. Each
 sequential operation was timed on its own, after a 20-call warm-up. The tables
 show means over the six rounds. The intervals pair each round's runtime value
 with legacy's from the same round: a 95% t interval (5 degrees of freedom) over
@@ -64,7 +65,7 @@ the six differences.
 
 ## One caller (ms per operation, p50 / p95)
 
-| Consumer | Legacy candle | `exact` | `batching` |
+| Consumer | Legacy candle | Merged | Windowed |
 | --- | --- | --- | --- |
 | Cache write | 15.1 / 20.7 | 4.41 / 5.53 | 6.18 / 7.17 |
 | Cache lookup, new query | 15.7 / 21.1 | 4.39 / 5.50 | 6.38 / 7.27 |
@@ -75,21 +76,21 @@ the six differences.
 
 ## Four concurrent callers (operations per second; p50 / p95 ms under load)
 
-| Consumer | Legacy candle | `exact` | `batching` |
+| Consumer | Legacy candle | Merged | Windowed |
 | --- | --- | --- | --- |
 | Cache lookup, new query | 181 (21.9 / 28.6) | 275 (15.0 / 18.9) | 318 (12.6 / 14.8) |
 | Memory retrieval | 48.0 (84.6 / 104) | 98.4 (42.2 / 50.7) | 118 (34.5 / 40.6) |
 | RAG rerank, 20 documents | 1.42 (2,559 / 3,256) | 4.31 (906 / 1,061) | 4.50 (862 / 1,006) |
 
-The RAG rerank row is the reranker at `exact` in every column; only the
-embedding profile changes.
+The RAG rerank row is the reranker merged in every column; only the
+embedding's batching changes.
 
 ## Runtime minus legacy, with 95% intervals
 
 Latency in ms (negative is faster); throughput in operations per second
 (positive is more). "1 caller" throughput is 1,000 / the mean latency.
 
-| Row | Metric | `exact` | `batching` |
+| Row | Metric | Merged | Windowed |
 | --- | --- | --- | --- |
 | Cache write, 1 caller | p50 | −10.7 [−11.2, −10.2] | −8.94 [−9.32, −8.55] |
 | Cache write, 1 caller | p95 | −15.2 [−15.9, −14.5] | −13.6 [−13.9, −13.2] |
@@ -119,37 +120,36 @@ Latency in ms (negative is faster); throughput in operations per second
 | RAG rerank, 20 documents, 4 callers | p95 | −2,195 [−2,460, −1,929] | −2,250 [−2,507, −1,993] |
 | RAG rerank, 20 documents, 4 callers | ops/s | +2.89 [+2.22, +3.55] | +3.08 [+2.45, +3.70] |
 
-Every interval lies on the runtime's side of zero, at both profiles: no row
-regressed. The widest is four callers' cache lookups at `exact`, whose rounds
+Every interval lies on the runtime's side of zero, merged and windowed: no row
+regressed. The widest is four callers' cache lookups merged, whose rounds
 ran 208–327/s against legacy's 169–187/s.
 
-## `exact` is the default again
+## Merged is the default for batch-invariant models
 
-At `exact` a batch-invariant model shares forwards between the jobs that are
+Merged, a batch-invariant model shares forwards between the jobs that are
 queued together. Before `10564d6c0`, those shared batches held one
 power-of-two length class each. These texts span several classes, and with
 closed-loop callers the queue is short, so 3,223 of 3,225 plans held one row:
 four callers got 159 cache lookups/s against legacy's 187, and the router's
-implicit embedding deployments ran at `batching` instead.
+implicit embedding deployments ran windowed instead.
 
 A `task_heads` forward lays rows back to back with no padding, so the length
 class bought nothing there. The model now says so (`packs_rows`, which
-`task_heads` sets from its engine), and `exact` drops the class for it.
+`task_heads` sets from its engine), and merged forwards drop the class for it.
 Models that pad, such as multimodal Omni, keep it. The load-time probe
 already checks one mixed-length batch, over five length classes, against
-each row alone. With that, `exact` clears legacy on every row above, so the
-implicit `@embedding.*` deployments use it again (`c7b48cb1b`), as the design
-makes it the default. Their vectors are the same alone and inside shared
-batches. `batching` still gets four callers more lookups (318 against 275/s)
-at about 2 ms more per lone request (6.38 against 4.39 ms). A deployment that
-declares a profile keeps it.
+each row alone. With that, merged clears legacy on every row above, so the
+implicit `@embedding.*` deployments use it again (`c7b48cb1b`). Their vectors
+are the same alone and inside shared batches. Windowed still gets four callers
+more lookups (318 against 275/s) at about 2 ms more per lone request (6.38
+against 4.39 ms); a batch-invariant model never waits for the window now.
 
 ## PyTorch 2.14.1 (diagnostic)
 
 The same six-round A/B with a venv on PyTorch 2.14.1 (the earlier records'
-version, otherwise the same pins) agreed: `exact` and `batching` were wholly
+version, otherwise the same pins) agreed: merged and windowed were wholly
 better than legacy on all 27 rows. Four callers got 217 cache lookups/s at
-`exact` against legacy's 186 (+30.8 [+14.2, +47.3]) and 91.5 memory
+merged against legacy's 186 (+30.8 [+14.2, +47.3]) and 91.5 memory
 retrievals/s against 49.0. One caller's lookup took 6.04 ms at p50 there,
 against 4.39 ms on 2.10.0; the reranker took 199 ms against 240 ms.
 
@@ -166,14 +166,14 @@ those calls does not depend on the device.
   runtime's PyTorch encoder runs the layer-6 exit and full depth well ahead of
   candle's CPU path on the same cores. Its reranker scores a query's 20
   documents in one packed forward.
-- **Concurrency.** At `exact`, four callers' embeddings share packed forwards,
+- **Concurrency.** Merged, four callers' embeddings share packed forwards,
   so they get 1.5× legacy's cache lookups and 2.0× its memory retrievals.
-  `batching` waits for more rows and gets 1.8× and 2.5×.
+  Windowed waits for more rows and gets 1.8× and 2.5×.
 - **The round trip.** The runtime call (JSON over its socket) costs less than
   1 ms. Without the router's vector cache (`VLLM_SR_EMBEDDING_CACHE_MB=0`), a
   repeated query took 0.66 / 0.92 ms at an earlier head (node D): one round
   trip, answered by the runtime's own result cache.
 - **Repeated text.** Legacy re-embeds a text it has seen before. The router's
   content-hash vector cache answers it in 0.07 ms, with no runtime call.
-- **Tail latency.** p95 / p50 is 1.17–1.26 on the serving path at `exact` (the
+- **Tail latency.** p95 / p50 is 1.17–1.26 on the serving path, merged (the
   0.07 ms repeated-query lookups aside) and 1.23–1.52 for legacy.
