@@ -435,6 +435,14 @@ func applyRecoverableCandidate(
 	if block.JSON && !compressed.Applied {
 		return false, compressed, "", nil
 	}
+	if strings.TrimSpace(request.Scope) == "" {
+		// Trusted scope is required to store and later retrieve originals.
+		// Empty scope falls back to extractive compression without a key.
+		if !compressed.Applied {
+			return false, compressed, "", nil
+		}
+		return true, compressed, "", nil
+	}
 	if request.Recovery == nil || !request.Policy.Recovery.Enabled {
 		return false, compressed, "", fmt.Errorf("recovery store is unavailable")
 	}

@@ -291,7 +291,10 @@ Nightly images use `nightly-YYYYMMDD`; nightly chart versions use
 `0.0.0-nightly.YYYYMMDD`. Every day at 02:00 UTC the newest `main` commit is
 qualified with the complete CPU suite and, if it passes, published under that
 day's date. A day without new commits, or whose commit fails qualification,
-publishes no new date. They are intended for pre-release testing only, and
+publishes no new date. A published date never changes: another qualification on
+the same date publishes nothing, and its commit appears under a later date, so
+the images and chart you pinned stay the ones you tested. They are intended for
+pre-release testing only, and
 older dates may no longer be retained. Discover an available date before
 pinning it:
 

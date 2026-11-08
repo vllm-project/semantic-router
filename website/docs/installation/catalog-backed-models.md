@@ -24,7 +24,7 @@ providers:
       backend_refs:
         - name: openai-primary
           provider: openai
-          api_key_env: OPENAI_API_KEY
+          auth: {api_key_env: OPENAI_API_KEY}
 
 routing: {}
 ```
@@ -58,7 +58,7 @@ providers:
       backend_refs:
         - name: primary
           provider: minimax
-          api_key_env: MINIMAX_API_KEY
+          auth: {api_key_env: MINIMAX_API_KEY}
 routing:
   decisions:
     - name: flash_default
@@ -87,7 +87,7 @@ For an existing self-hosted server, replace the backend above with:
 ```yaml
         - name: primary
           provider: vllm
-          base_url: http://127.0.0.1:8000/v1
+          endpoint: http://127.0.0.1:8000/v1
 ```
 
 The mapping resolves `MiniMaxAI/MiniMax-M3.1-Flash` and sends effort inside
@@ -120,8 +120,8 @@ providers:
       provider_model_id: my-production-deployment
       backend_refs:
         - provider: microsoft-foundry
-          base_url: https://example.services.ai.azure.com
-          api_key_env: FOUNDRY_API_KEY
+          endpoint: https://example.services.ai.azure.com
+          auth: {api_key_env: FOUNDRY_API_KEY}
 ```
 
 The Dashboard shows **Deployment name** or **Provider model ID** only when the
@@ -177,7 +177,7 @@ providers:
       catalog: tencent/hunyuan-7b-instruct
       backend_refs:
         - provider: vllm
-          base_url: http://127.0.0.1:8000/v1
+          endpoint: http://127.0.0.1:8000/v1
 routing:
   modelCards:
     - name: tencent/hunyuan-7b-instruct

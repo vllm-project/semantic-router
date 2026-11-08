@@ -22,6 +22,42 @@ func newTestInMemoryStore() *InMemoryStore {
 	})
 }
 
+func TestInMemoryStore_GetReturnsIndependentCopy(t *testing.T) {
+	ctx := context.Background()
+	store := newTestInMemoryStore()
+	stored := &Memory{
+		ID:              "mem-get-copy",
+		Type:            MemoryTypeSemantic,
+		Content:         "original content",
+		Embedding:       []float32{1, 2, 3},
+		UserID:          "user-1",
+		ProjectID:       "project-1",
+		Source:          "api",
+		CreatedAt:       time.Unix(1704067200, 0),
+		CreatedByUserID: "user-1",
+		ConversationID:  "conversation-1",
+		CreatedVia:      "api",
+	}
+	require.NoError(t, store.Store(ctx, stored))
+
+	expected := *stored
+	expected.Embedding = append([]float32(nil), stored.Embedding...)
+	returned, err := store.Get(ctx, stored.ID)
+	require.NoError(t, err)
+	require.Equal(t, &expected, returned)
+
+	returned.Content = "caller mutation"
+	returned.ProjectID = "caller-project"
+	returned.Source = "caller-source"
+	returned.CreatedByUserID = "caller-user"
+	returned.Embedding[0] = 99
+
+	again, err := store.Get(ctx, stored.ID)
+	require.NoError(t, err)
+	require.NotSame(t, returned, again)
+	require.Equal(t, &expected, again, "mutating a Get result must not modify stored memory")
+}
+
 // =============================================================================
 // Similarity Threshold Tests
 // =============================================================================

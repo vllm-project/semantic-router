@@ -53,6 +53,12 @@ func gatewayIdentityUses(cfg *RouterConfig) []CapabilityUse {
 			Subject: fmt.Sprintf("global.services.authz.providers, which resolve per-user API keys and %s,", reads),
 		})
 	}
+	if cfg.Headers.Debug == DebugHeadersAuthenticated {
+		uses = append(uses, CapabilityUse{
+			Path:    "global.router.headers.debug",
+			Subject: fmt.Sprintf("global.router.headers.debug: %s, which %s,", DebugHeadersAuthenticated, reads),
+		})
+	}
 	return uses
 }
 

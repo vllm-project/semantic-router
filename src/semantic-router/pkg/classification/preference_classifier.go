@@ -30,12 +30,12 @@ type PreferenceClassifier struct {
 }
 
 // NewPreferenceClassifier creates a new preference classifier
-func NewPreferenceClassifier(externalCfg *config.ExternalModelConfig, rules []config.PreferenceRule, localCfg *config.PreferenceModelConfig) (*PreferenceClassifier, error) {
-	return NewPreferenceClassifierWithProvider(externalCfg, rules, localCfg, nil)
+func NewPreferenceClassifier(external *config.ModelDeployment, rules []config.PreferenceRule, localCfg *config.PreferenceModelConfig) (*PreferenceClassifier, error) {
+	return NewPreferenceClassifierWithProvider(external, rules, localCfg, nil)
 }
 
 func NewPreferenceClassifierWithProvider(
-	externalCfg *config.ExternalModelConfig,
+	external *config.ModelDeployment,
 	rules []config.PreferenceRule,
 	localCfg *config.PreferenceModelConfig,
 	provider embedding.Provider,
@@ -51,7 +51,7 @@ func NewPreferenceClassifierWithProvider(
 		return newContrastivePreferenceClassifier(rules, resolvedLocalCfg, provider)
 	}
 
-	return newExternalPreferenceClassifier(externalCfg, rules)
+	return newExternalPreferenceClassifier(external, rules)
 }
 
 // Classify determines the best route preference for the given conversation

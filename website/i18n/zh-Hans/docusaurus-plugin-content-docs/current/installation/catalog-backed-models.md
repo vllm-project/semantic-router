@@ -26,7 +26,7 @@ providers:
       backend_refs:
         - name: openai-primary
           provider: openai
-          api_key_env: OPENAI_API_KEY
+          auth: {api_key_env: OPENAI_API_KEY}
 
 routing: {}
 ```
@@ -50,7 +50,7 @@ providers:
       backend_refs:
         - name: primary
           provider: minimax
-          api_key_env: MINIMAX_API_KEY
+          auth: {api_key_env: MINIMAX_API_KEY}
 routing:
   decisions:
     - name: flash_default
@@ -71,7 +71,7 @@ routing:
 ```yaml
         - name: primary
           provider: vllm
-          base_url: http://127.0.0.1:8000/v1
+          endpoint: http://127.0.0.1:8000/v1
 ```
 
 该映射解析到 `MiniMaxAI/MiniMax-M3.1-Flash`，将 effort 放入 `chat_template_kwargs`。请使用 [vLLM 配方](https://recipes.vllm.ai/MiniMaxAI/MiniMax-M3.1-Flash)：本次核对的版本要求 vLLM 0.33.0 nightly、专用 `minimax-m31-flash` 镜像、`--block-size 128` 和 `minimax_m3` reasoning/tool parser，普通稳定版 pip 安装不足以部署。Hopper 示例将上下文限制为 262,144 并关闭 video；应在 canonical 模型卡 override 中声明实际提供的窗口和能力。映射为实验性，不代表任何具体部署已通过验证。
@@ -90,8 +90,8 @@ providers:
       provider_model_id: my-production-deployment
       backend_refs:
         - provider: microsoft-foundry
-          base_url: https://example.services.ai.azure.com
-          api_key_env: FOUNDRY_API_KEY
+          endpoint: https://example.services.ai.azure.com
+          auth: {api_key_env: FOUNDRY_API_KEY}
 ```
 
 仅当所选映射需要时，控制面板才会显示 **Deployment name** 或 **Provider model ID**。它是上游标识符，而不是第二个目录身份。

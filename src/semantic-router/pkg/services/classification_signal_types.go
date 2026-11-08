@@ -156,6 +156,9 @@ type EvalModelSelectionInput struct {
 	Query             string
 	Category          string
 	ContextTokenCount int
+	// ContextReserveTokens is the reserve part of ContextTokenCount, which a
+	// refusal does not count.
+	ContextReserveTokens int
 }
 
 type EvalModelSelection struct {

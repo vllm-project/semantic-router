@@ -52,7 +52,7 @@ routing:
 
 保持规则名与决策要引用的路由行为对齐。
 
-检测器默认关闭，因此这些规则只有在配置了 `modality_detector` 块时才会匹配。使用 `method: classifier` 且不设置 `classifier.model_path` 时，它运行 **vela3-fast**（Vela 3.0），其校准后的 `confidence_threshold` 为 0.63：
+检测器默认关闭，因此这些规则只有在配置了 `modality_detector` 块时才会匹配。使用 `method: classifier` 时，除非 `modality` 绑定指定了其他部署，否则由决策模型回答它（[为信号选择模型](../../../installation/choose-a-model-for-a-signal.md)）。默认决策模型 **vela3-fast**（Vela 3.0）校准后的 `confidence_threshold` 为 0.63：
 
 ```yaml
 global:
@@ -70,9 +70,9 @@ global:
 
 ## 依赖与限制 {#dependencies-and-limitations}
 
-未声明配方模型绑定时，`classifier.max_sequence_length: 0` 保留 512-token 默认值。长提示会选取开头、中间和结尾的代表性片段用于路由，模型运行时会截断仍超出预算的输入。这项策略限制推理成本，并不对每个 token 分类。
+没有 `modality` 绑定时，`classifier.max_sequence_length: 0` 保留 512-token 默认值。长提示会选取开头、中间和结尾的代表性片段用于路由，模型运行时会截断仍超出预算的输入。这项策略限制推理成本，并不对每个 token 分类。
 
-要让模态分类接收未经路由采样的输入，请将 `modality_detector` 绑定到命名部署，并将 `input.max_tokens` 设为大于 512。设置 `input.overflow: reject` 可拒绝超出预算的输入。预算应在所选模型产物和提供方已验证的范围内；模型标称支持 32K，并不表示每种提供方都已验证 32K 执行。模块的 `classifier.max_sequence_length` 设为大于 512 的正值也会跳过路由采样，但仍保留模块的截断策略。
+要让模态分类接收未经路由采样的输入，请将 `modality` 绑定到一个部署，并将其 `input.max_tokens` 设为大于 512。设置 `input.overflow: reject` 可拒绝超出预算的输入。预算应在所选模型产物和提供方已验证的范围内；模型标称支持 32K，并不表示每种提供方都已验证 32K 执行。模块的 `classifier.max_sequence_length` 设为大于 512 的正值也会跳过路由采样，但仍保留模块的截断策略。
 
 `method: classifier` 下，实际推理错误会使模态保持未知，由决策的 `on_unknown` 策略处理，不会产生 `AR` 匹配。`method: hybrid` 则显式允许关键词回退。
 

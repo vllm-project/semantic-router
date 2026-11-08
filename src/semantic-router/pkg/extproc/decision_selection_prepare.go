@@ -28,7 +28,7 @@ func prepareDecisionSelectionCards(cfg *config.RouterConfig, provider interface 
 			deployment := cfg.DecisionSelectorDeployment(selector)
 			card, exists := cards[deployment]
 			if remote := cfg.ModelDeployments[deployment]; !exists && remote.IsSystemOne() {
-				card, exists = modelservice.RemoteCard(remote.Model, remote.QuestionTypes, nil), true
+				card, exists = modelservice.RemoteCard(remote.Model, remote.DeclaredQuestionTypes(), remote.DeclaredPresets()), true
 				cards[deployment] = card
 			}
 			if !exists {

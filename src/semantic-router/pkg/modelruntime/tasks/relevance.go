@@ -35,6 +35,20 @@ func ValidateRelevanceScores(input []QueryDocument, output RelevanceScores) erro
 	return nil
 }
 
+// ValidateRelevanceScoreValues checks the scores of a scorer that reports
+// no token usage: one finite score per pair.
+func ValidateRelevanceScoreValues(input []QueryDocument, output RelevanceScores) error {
+	if len(input) == 0 || len(input) != len(output.Scores) {
+		return fmt.Errorf("relevance scores must match the pair count")
+	}
+	for _, value := range output.Scores {
+		if err := RelevanceScoreSemantics().Validate(ScoreResult{Value: float64(value)}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // InputMetadata reports total work across pairs. Per-pair budgets are checked
 // by the native tokenizer, never against this batch aggregate.
 func (r RelevanceScores) InputMetadata() *InputUsage {

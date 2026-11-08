@@ -34,7 +34,7 @@ func decodeResponsesInput(raw json.RawMessage, request *llmprotocol.Request, pol
 }
 
 var responsesItemUnionFields = []string{
-	"arguments", "call_id", "caller", "content", "encrypted_content", "id", "input", "name", "namespace",
+	"arguments", "async", "call_id", "caller", "content", "encrypted_content", "id", "input", "name", "namespace",
 	"output", "phase", "result", "role", "status", "summary", "type",
 }
 
@@ -136,11 +136,11 @@ func responsesItemAllowedFields(itemType string) []string {
 	case "message":
 		return []string{"content", "id", "phase", "role", "status", "type"}
 	case "function_call":
-		return []string{"arguments", "call_id", "caller", "id", "name", "namespace", "status", "type"}
+		return []string{"arguments", "async", "call_id", "caller", "id", "name", "namespace", "status", "type"}
 	case "function_call_output":
 		return []string{"call_id", "caller", "id", "name", "namespace", "output", "status", "type"}
 	case "custom_tool_call":
-		return []string{"call_id", "caller", "id", "input", "name", "namespace", "status", "type"}
+		return []string{"async", "call_id", "caller", "id", "input", "name", "namespace", "status", "type"}
 	case "custom_tool_call_output":
 		return []string{"call_id", "caller", "id", "output", "status", "type"}
 	case "reasoning":
@@ -185,6 +185,7 @@ func decodeResponsesInputItem(
 
 func validateResponsesInputItemMetadata(item responsesItemWire) error {
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
+		"input.async":             item.Async,
 		"input.caller":            item.Caller,
 		"input.encrypted_content": item.EncryptedContent,
 		"input.phase":             item.Phase,

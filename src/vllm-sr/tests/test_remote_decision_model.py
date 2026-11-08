@@ -1,4 +1,8 @@
-"""A systemone deployment, a remote System One API, as a decision model in the CLI contract."""
+"""A systemone deployment, a remote System One API, as a decision model in the CLI contract.
+
+The Router validates the deployment's fields; the CLI serves it without a
+local model.
+"""
 
 import copy
 
@@ -120,68 +124,31 @@ def test_systemone_deployments_answer_questions_selectors_and_the_default():
 
 
 @pytest.mark.parametrize(
-    "mutate, message",
+    "mutate",
     [
-        (lambda d: _deployment("hosted-d3")(d).update({"device": "cpu"}), "not device"),
-        (
-            lambda d: _deployment("hosted-d3")(d).update({"max_num_seqs": 4}),
-            "not max_num_seqs",
+        lambda d: _deployment("hosted-d3")(d).update({"input": {"overflow": "reject"}}),
+        lambda d: _deployment("gateway-d3")(d).update(
+            {"capabilities": {"question_types": ["set", "span"], "presets": ["pii"]}}
         ),
-        (
-            lambda d: _deployment("hosted-d3")(d).update(
-                {"endpoint": "systemone.example.com/v1/systemone"}
-            ),
-            "endpoint must be the http:// or https:// URL",
+        lambda d: _deployment("hosted-d3")(d).update(
+            {"headers": {"X-Org": "acme"}, "max_retries": 2}
         ),
-        (
-            lambda d: _deployment("hosted-d3")(d).update(
-                {"endpoint": "https://user:secret@systemone.example.com/v1/systemone"}
-            ),
-            "endpoint must not carry credentials",
-        ),
-        (lambda d: _deployment("hosted-d3")(d).pop("model"), "model must name"),
-        (
-            lambda d: _deployment("hosted-d3")(d).update(
-                {"auth": {"header": "Authorization"}}
-            ),
-            "exactly one of api_key_env and api_key_file",
-        ),
-        (
-            lambda d: _deployment("gateway-d3")(d)["auth"].update(
-                {"api_key_file": "secrets/key"}
-            ),
-            "auth.api_key_file must be an absolute path",
-        ),
-        (
-            lambda d: _deployment("gateway-d3")(d).update(
-                {"question_types": ["choice", "box"]}
-            ),
-            "question_types lists distinct types",
-        ),
-        (
-            lambda d: _deployment("hosted-d3")(d).update({"timeout_ms": 90000}),
-            "timeout_ms must be within",
-        ),
+        lambda d: _deployment("hosted-d3")(d).update({"timeout_ms": 90000}),
     ],
+    ids=["input", "capabilities", "connection", "timeout"],
 )
-def test_systemone_deployments_take_only_their_own_fields(mutate, message):
-    assert any(message in error for error in _errors(_config(mutate)))
+def test_the_router_judges_a_systemone_deployments_fields(mutate):
+    assert _errors(_config(mutate)) == []
 
 
-def test_a_task_never_binds_a_systemone_deployment():
+def test_question_signals_may_bind_a_systemone_deployment():
     def bind(document):
         document["global"]["model_catalog"]["bindings"] = {
-            "domain_classifier": {
-                "deployment": "hosted-d3",
-                "contract": "label_distribution.v1",
-                "adapter": "vela",
-            }
+            "domain": "hosted-d3",
+            "pii": {"deployment": "gateway-d3", "contract": "token_spans.v1"},
         }
 
-    assert any(
-        "answers decision signals and selectors only" in error
-        for error in _errors(_config(bind))
-    )
+    assert _errors(_config(bind)) == []
 
 
 def test_serving_a_systemone_decision_model_starts_no_local_one():
@@ -192,9 +159,7 @@ def test_serving_a_systemone_decision_model_starts_no_local_one():
         document["global"]["model_catalog"]["deployments"]
         == before["global"]["model_catalog"]["deployments"]
     )
-    runtime_serve_config._check_served_decision_model(
-        document, "cpu", local_host=True
-    )
+    runtime_serve_config._check_served_decision_model(document, "cpu", local_host=True)
     with pytest.raises(ValueError, match="is a systemone deployment"):
         apply_instance_options(
             copy.deepcopy(before),

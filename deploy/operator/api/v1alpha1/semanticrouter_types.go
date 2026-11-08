@@ -284,18 +284,41 @@ type ConfigSpec struct {
 	// +kubebuilder:validation:Type=object
 	Routing *apiextensionsv1.JSON `json:"routing,omitempty" yaml:"routing,omitempty"`
 
-	// DecisionModel selects the declared deployment that answers default judgment tasks.
-	// Omitted uses the Router's primary deployment. Artifact identity belongs in
-	// model_deployments; the reference never infers a model family or alias.
+	// DecisionModel selects the declared deployment that answers default judgment
+	// tasks: a model_runtime deployment, or a systemone deployment that a remote
+	// System One API serves. Every built-in signal that no binding names follows
+	// it. A module threshold the resource does not set comes from the deployment
+	// that answers the module: calibrated for a built-in model, 0.5 for a
+	// systemone one. Omitted uses the Router's primary deployment. Artifact
+	// identity belongs in model_deployments; the reference never infers a model
+	// family or alias.
 	// +optional
 	DecisionModel *DecisionModelBinding `json:"decision_model,omitempty" yaml:"decision_model,omitempty"`
 
 	// ModelDeployments contains canonical global.model_catalog.deployments.
 	// The router validates provider, device, precision and task compatibility.
+	// A remote deployment (provider systemone, openai_embeddings, classify,
+	// openai_chat or rerank) takes a connection block: endpoint, model, auth,
+	// headers, timeout_ms, max_retries, tls, limits and capabilities. Its key
+	// never goes in the resource: auth.api_key_env names a spec.env variable
+	// that valueFrom.secretKeyRef fills from a Secret. The operator mounts no
+	// Secret into the Pod, so auth.api_key_file is not available.
 	// +optional
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Type=object
 	ModelDeployments *apiextensionsv1.JSON `json:"model_deployments,omitempty" yaml:"model_deployments,omitempty"`
+
+	// ModelBindings contains canonical global.model_catalog.bindings: each key
+	// is a signal type whose rules share one answer (domain, jailbreak, pii,
+	// fact_check, user_feedback, modality, hallucination, preference, reask),
+	// and each value names the model_deployments entry that answers it. A rule
+	// that asks its own question names its deployment on the rule. A signal no
+	// binding names follows decision_model; routing.model_bindings binds in
+	// the routing scope and wins over these.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	ModelBindings *apiextensionsv1.JSON `json:"model_bindings,omitempty" yaml:"model_bindings,omitempty"`
 
 	// ModelAdmission contains canonical global.model_catalog.admission budgets.
 	// Keys name deployments or the router's existing admission consumers.
@@ -1549,11 +1572,14 @@ type PromptGuardConfig struct {
 	// +kubebuilder:default=true
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
-	// ModelID binds the guard to one model; empty runs the decision model.
+	// ModelID binds the guard to one model; empty runs the deployment
+	// model_bindings names for jailbreak, else the decision model. Deprecated:
+	// bind jailbreak in model_bindings instead.
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
 	// Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float
-	// precision issues; empty takes the threshold calibrated for the model.
+	// precision issues; empty takes the threshold of the deployment that
+	// answers the guard.
 	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
 	// +optional
 	Threshold string `json:"threshold,omitempty"`
@@ -1602,6 +1628,8 @@ type ClassifierConfig struct {
 
 // CategoryModelConfig defines category model configuration
 type CategoryModelConfig struct {
+	// ModelID binds the domain classifier to one model. Deprecated: bind domain
+	// in model_bindings instead.
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
 	// Classification threshold (0.0-1.0). Stored as string to avoid float precision issues.
@@ -1636,6 +1664,8 @@ type PIIModelConfig struct {
 	// +nullable
 	// +optional
 	Window *PromptGuardWindowConfig `json:"window,omitempty"`
+	// ModelID binds the PII classifier to one model. Deprecated: bind pii in
+	// model_bindings instead.
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
 	// Detection threshold (0.0-1.0). Stored as string to avoid float precision issues.

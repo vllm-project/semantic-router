@@ -593,7 +593,8 @@ func TestBuildModelSpecsAcceptsReferenceConfig(t *testing.T) {
 		t.Fatalf("BuildModelSpecs() error = %v", err)
 	}
 
-	assertContainsAllModelSpecs(t, specs, "models/Vela-1.0-Encoder-307M-Embedding")
+	// embeddings.default names vela-embedding, so the model runtime serves it.
+	assertRuntimeServed(t, cfg, specs, "models/Vela-1.0-Encoder-307M-Embedding")
 	served := cfg.RuntimeServedModelPaths()
 	for _, spec := range specs {
 		if served[spec.LocalPath] && !spec.FilesOnly {

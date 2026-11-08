@@ -39,7 +39,7 @@
       ],
       "effect": {
         "immediate": {
-          "status": 404,
+          "status": 503,
           "header": {
             "set": [
               {
@@ -60,13 +60,13 @@
               }
             ]
           },
-          "body": "{\"error\":{\"type\":\"invalid_request_error\",\"code\":\"not_found\",\"message\":\"resource not found\",\"param\":null}}"
+          "body": "{\"error\":{\"type\":\"server_error\",\"code\":\"response_store_unavailable\",\"message\":\"the Responses API is enabled but its store failed to start, check global.services.response_api\",\"param\":null}}"
         }
       }
     }
   ],
   "response": {
-    "status": 404,
+    "status": 503,
     "header": [
       {
         "name": "content-type",
@@ -86,10 +86,10 @@
       },
       {
         "name": "content-length",
-        "value": "105"
+        "value": "189"
       }
     ],
-    "body": "{\"error\":{\"type\":\"invalid_request_error\",\"code\":\"not_found\",\"message\":\"resource not found\",\"param\":null}}"
+    "body": "{\"error\":{\"type\":\"server_error\",\"code\":\"response_store_unavailable\",\"message\":\"the Responses API is enabled but its store failed to start, check global.services.response_api\",\"param\":null}}"
   },
   "evidence": {}
 }

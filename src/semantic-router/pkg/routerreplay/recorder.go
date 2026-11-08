@@ -45,6 +45,7 @@ type (
 	LearningPolicyDiagnostics     = store.LearningPolicyDiagnostics
 	LearningProtectionDiagnostics = store.LearningProtectionDiagnostics
 	LearningRescueDiagnostics     = store.LearningRescueDiagnostics
+	LearningReleaseDiagnostics    = store.LearningReleaseDiagnostics
 	LearningSamplingDiagnostics   = store.LearningSamplingDiagnostics
 	Outcome                       = store.Outcome
 	PreparedDispatchReceipt       = store.PreparedDispatchReceipt

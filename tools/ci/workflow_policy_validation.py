@@ -496,10 +496,21 @@ def validate_nightly_qualification(
             "nightly-build.yml: a dispatch must cancel the qualification it supersedes, "
             "and a scheduled run must wait for it"
         )
+    reserve = json.dumps(nightly.jobs.get("reserve", {}))
     for job_id in ("docker", "helm"):
-        if "concurrency" in nightly.jobs.get(job_id, {}):
+        job = nightly.jobs.get(job_id, {})
+        if "concurrency" in job:
             errors.append(
                 f"nightly-build.yml: '{job_id}' publication must not be cancelled"
+            )
+        if (
+            "tools/ci/nightly_tags.py" not in reserve
+            or "reserve" not in needs(job)
+            or "needs.reserve.outputs.publish == 'true'" not in job.get("if", "")
+        ):
+            errors.append(
+                f"nightly-build.yml: '{job_id}' may publish only a date that is free "
+                "or the run's own"
             )
     for job_id in ("ci", "helm"):
         if nightly.jobs.get(job_id, {}).get("with", {}).get("date") != (

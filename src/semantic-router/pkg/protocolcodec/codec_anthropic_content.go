@@ -3,6 +3,7 @@ package protocolcodec
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -566,7 +567,8 @@ func encodeAnthropicBaseRequest(request llmprotocol.Request) (anthropicRequestWi
 			Target: llmprotocol.AnthropicMessagesV1,
 			Field:  "max_tokens",
 			Action: llmprotocol.DiagnosticGenerated,
-			Reason: "Anthropic Messages requires an explicit output limit; the source request omitted one",
+			Reason: fmt.Sprintf("Anthropic Messages requires an explicit output limit; the source request omitted one, so %d was sent; "+
+				"request_params.default_max_tokens sets this value", defaultAnthropicMaxOutputTokens),
 		})
 	} else {
 		wire.MaxTokens = llmprotocol.Int64(*request.Sampling.MaxOutputTokens)

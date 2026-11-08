@@ -27,16 +27,16 @@ func TestProfilePinsVela1HaluWithoutAuxiliaryClassifiers(t *testing.T) {
 		return root
 	}
 	cfg := section(values, "config")
-	module := section(cfg, "global", "model_catalog", "modules", "hallucination_mitigation")
+	catalog := section(cfg, "global", "model_catalog")
+	module := section(catalog, "modules", "hallucination_mitigation")
 	if module["enabled"] != true {
 		t.Fatal("Halu detector must be enabled")
 	}
-	detector := section(module, "detector")
-	if detector["model_id"] != "models/Vela-1.0-Encoder-307M-Halu" {
-		t.Fatal("profile must pin Vela 1.0 Halu; the default detector is vela3-fast, which needs more memory than this profile's limit")
+	name, _ := section(catalog, "bindings")["hallucination"].(string)
+	if section(catalog, "deployments", name)["artifact"] != "vllm-sr/Vela-1.0-Encoder-307M-Halu" {
+		t.Fatal("profile must bind hallucination to Vela 1.0 Halu; the default detector is vela3-fast, which needs more memory than this profile's limit")
 	}
-	factCheck := section(module, "fact_check")
-	if factCheck["model_ref"] != "" || factCheck["model_id"] != "" {
+	if section(module, "fact_check")["enabled"] != false {
 		t.Fatal("profile unexpectedly enables fact_check")
 	}
 	if _, retired := module["explainer"]; retired {

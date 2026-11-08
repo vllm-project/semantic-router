@@ -56,15 +56,21 @@ func resolveGlobalModelBindings(cfg *RouterConfig) (map[string]ResolvedModelBind
 		decl := cfg.GlobalModelBindings[name]
 		deployment, exists := cfg.ModelDeployments[decl.Deployment]
 		if !exists {
-			return nil, fmt.Errorf("global.model_catalog.bindings.%s: unknown deployment %q", name, decl.Deployment)
+			return nil, fmt.Errorf("global.model_catalog.bindings.%s: unknown deployment %q; %s", BindingKey(name), decl.Deployment, declaredDeployments(cfg.ModelDeployments))
 		}
 		deployment = deployment.WithDefaults()
+		if !knownBindingKey(name) {
+			return nil, fmt.Errorf("global.model_catalog.bindings.%s: unknown task consumer %q", BindingKey(name), name)
+		}
+		decl = withImpliedContract(name, decl, deployment)
 		if err := validateTaskModelBinding(name, decl, deployment); err != nil {
-			return nil, fmt.Errorf("global.model_catalog.bindings.%s: %w", name, err)
+			return nil, fmt.Errorf("global.model_catalog.bindings.%s: %w", BindingKey(name), err)
 		}
 		resolved[name] = ResolvedModelBinding{Recipe: GlobalModelScope, Name: name, Binding: decl, Deployment: deployment, Admission: cfg.ModelAdmission[decl.Deployment]}
 	}
-	if _, ok := resolved["embedding"]; ok && cfg.NeedsSemanticResponseCache() {
+	// The embedding endpoint a deprecated field declared kept the response
+	// cache's own embedding model.
+	if embedding, ok := resolved["embedding"]; ok && !embedding.Deployment.Translated() && cfg.NeedsSemanticResponseCache() {
 		model := SemanticCacheEmbeddingModel(cfg)
 		primary := strings.ToLower(strings.TrimSpace(cfg.EmbeddingConfig.ModelType))
 		if primary == "" {

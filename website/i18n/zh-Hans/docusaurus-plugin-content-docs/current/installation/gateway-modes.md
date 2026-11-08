@@ -103,8 +103,9 @@ listeners:
 
 ### 身份 header {#identity-headers}
 
-默认情况下，standalone listener 会丢弃客户端发送的身份 header，因为 Router 前面没有任何组件认证过它：任何人都可以冒充任何
-用户。在认证代理之后，或者对自行设置用户的可信应用服务器，可以让 listener 保留这些 header：
+默认情况下，listener 会丢弃客户端发送的身份 header，因为 Router 前面没有任何组件认证过它：任何人都可以冒充任何
+用户。standalone 模式下由 Router 自己丢弃；使用 `--gateway extproc` 时，CLI 生成的 Envoy listener 会在任何过滤器或 Router
+读取它们之前删除它们。在认证代理之后，或者对自行设置用户的可信应用服务器，可以让 listener 保留这些 header：
 
 ```yaml
 listeners:
@@ -117,10 +118,13 @@ listeners:
       trusted_peers: ["10.0.0.0/8"]
 ```
 
-- `trust_headers` 保留 `x-authz-*` header 以及 `global.services.authz.identity` 指定的名称。
+- `trust_headers` 保留 `x-authz-*` header（`x-authz-user-id`、`x-authz-user-groups`、`x-authz-team-id`、
+  `x-authz-tenant-id`）以及 `global.services.authz.identity` 指定的名称。
 - `trusted_peers`（CIDR）只在连接的对端地址属于其中某个网络时才保留它们；Router 不会为此读取 `X-Forwarded-For`。
-  为空时，信任 header 的 listener 信任所有对端。
+  为空时，信任 header 的 listener 信任所有对端。只有 standalone 模式检查对端：`--gateway extproc` 拒绝
+  `trusted_peers`，这时请只保留 `trust_headers`，并放在会删除客户端身份 header 的代理之后。
 - 每个 listener 只为自己的请求做决定，重新加载会应用修改。在不信任身份的 listener 上，请求是匿名的。
+- 两种模式下，身份 header 都不会到达模型提供方：Router 和生成的 Envoy listener 会从每个上游请求中删除它们。
 
 Memory、router replay 和按用户学习的选择算法（`gmtrouter`、`rl_driven`）会记录每个请求的用户。没有信任身份的 listener
 时，它们仍会加载，并把每个请求视为匿名请求；Router 会在启动时记录一条点名这些功能的警告。
@@ -134,7 +138,9 @@ Memory、router replay 和按用户学习的选择算法（`gmtrouter`、`rl_dri
 - 匹配 `user` 或 `group` 的限流规则；
 - 解析按用户 API key 的 `global.services.authz.providers`。
 
-请在认证代理之后的 listener 上打开 `identity.trust_headers`，或者在能认证客户端的网关之后用 `--gateway extproc` 运行它们。令牌桶限流、mTLS、JWT 或 OIDC 以及高级路由匹配已计划在
+请在认证代理之后的 listener 上打开 `identity.trust_headers`，或者在能认证客户端、并删除客户端所发身份 header 的网关之后用
+`--gateway extproc` 运行它们。CLI 生成的 Envoy listener 不认证任何人，所以同样需要在认证代理之后打开
+`identity.trust_headers`；否则每个请求都是匿名的，角色绑定会拒绝它要评估的请求。令牌桶限流、mTLS、JWT 或 OIDC 以及高级路由匹配已计划在
 standalone 模式中支持；在那之前它们同样需要 Envoy。
 
 ## 目标与平台

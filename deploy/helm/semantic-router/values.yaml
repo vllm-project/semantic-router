@@ -187,7 +187,8 @@ tolerations: []
 # Affinity rules
 affinity: {}
 # Extra volumes for custom mounts (e.g., a shared model cache via hostPath).
-# When extraVolumeMounts claims /app/models, it replaces the default model volume.
+# When extraVolumeMounts claims /app/models or /var/lib/vsr, it replaces the
+# chart's model volume or data volume.
 extraVolumes: []
 # Example:
 #   - name: ml-models
@@ -195,8 +196,9 @@ extraVolumes: []
 #       path: /mnt/ml-models
 #       type: DirectoryOrCreate
 
-# Extra volume mounts. A mount at /app/models replaces the default emptyDir/PVC
-# mount; supply its matching volume through extraVolumes.
+# Extra volume mounts. A mount at /app/models or /var/lib/vsr replaces the
+# chart's emptyDir/PVC mount there; supply its matching volume through
+# extraVolumes.
 extraVolumeMounts: []
 # Example:
 #   - name: ml-models
@@ -263,6 +265,26 @@ persistence:
   annotations: {}
   # -- Existing claim name (if provided, will use existing PVC instead of creating new one)
   existingClaim: ""
+# The Router's data directory, /var/lib/vsr. The root filesystem is read-only,
+# so this volume is where the Router keeps the files it writes: the vector
+# store's uploaded files (global.stores.vector_store.file_storage_dir,
+# /var/lib/vsr/data by default) and any other local storage path you set under
+# it. A mount at /var/lib/vsr in extraVolumeMounts replaces it.
+data:
+  persistence:
+    # -- Keep the data directory on a PersistentVolumeClaim so it survives Pod
+    # replacement. Off, it is an emptyDir that a new Pod starts empty.
+    enabled: false
+    # -- Storage class name. Leave empty for the cluster default; use "-" to render storageClassName: "".
+    storageClassName: ""
+    # -- Access mode. Several Router replicas share the data directory only through ReadWriteMany.
+    accessMode: ReadWriteOnce
+    # -- Storage size of the data directory
+    size: 10Gi
+    # -- Annotations for the PVC
+    annotations: {}
+    # -- Existing claim name (if provided, will use existing PVC instead of creating new one)
+    existingClaim: ""
 # Router runtime feature gates
 router:
   # -- Override config.global.router.skip_processing.enabled when non-null.

@@ -98,7 +98,7 @@ Nano 的 English 分数通过未改变的冻结文本路径保留。Mini 的带�
 
 ## 默认值与输入预算 {#defaults-and-input-budgets}
 
-未配置模型时，内置 Domain、Guard、Safety、PII、FactCheck、Feedback、Modality 和幻觉检测信号在 **vela3-fast**（Vela 3.0）上运行，兼容问题按部署、输入和执行阶段合并；一次 API 调用不等于整个请求只执行一次 forward（见[选择模型](../../model-runtime/choose-a-model.md#vela-20)）。语义 Embedding 和 Reranker 使用 Vela 1.0。内置 Vela 1.0 Hazard deployment 需要显式绑定；目录中存在它不代表自动启用 Safety 到 Hazard 的级联。在 `global.model_catalog.system` 中写明 Vela 1.0 任务模型即可选择该专用模型。只有 recipe 实际需要的模型才会加载；Encoder 基座用于训练，不作为额外路由信号加载。
+未配置模型时，内置 Domain、Guard、Safety、PII、FactCheck、Feedback、Modality 和幻觉检测信号在 **vela3-fast**（Vela 3.0）上运行，兼容问题按部署、输入和执行阶段合并；一次 API 调用不等于整个请求只执行一次 forward（见[选择模型](../../model-runtime/choose-a-model.md#vela-20)）。语义 Embedding 和 Reranker 使用 Vela 1.0。预先声明的 `hazard` 部署（Vela 1.0 Hazard）回答安全规则的 `hazard` 部分；目录中存在它不代表自动启用 Safety 到 Hazard 的级联。绑定到某个 Vela 1.0 任务模型的部署即可选择该专用模型（[为信号选择模型](../../installation/choose-a-model-for-a-signal.md)）。只有 recipe 实际需要的模型才会加载；Encoder 基座用于训练，不作为额外路由信号加载。
 
 运行 Vela 1.0 任务模型且未设置阈值的模块使用 Guard **0.5**、FactCheck **0.95**、Feedback **0.7**。`NO_FEEDBACK` 不产生反馈匹配。Safety 独立于 Guard，有害内容不必同时被判断为提示词攻击。Hazard 使用与模型产物绑定的逐标签阈值，单一阈值不能代表它的发布决策策略。
 
@@ -111,9 +111,7 @@ Router 提供服务的每个 Vela 模型都运行在[模型运行时](../../mode
 ```yaml
 routing:
   model_bindings:
-    domain_classifier:
-      deployment: vela-domain
-      contract: label_distribution.v1
+    domain: vela-domain
 
 global:
   model_catalog:
@@ -127,9 +125,9 @@ global:
           overflow: reject
 ```
 
-其他分类器使用相同的 deployment 与 consumer binding 结构。PII 返回 `token_spans.v1`，Embedding 使用 `embedding.v1`，Reranker 使用 `relevance_scores.v1`。运行时从模型包读取每个模型的架构，因此这些 binding 不需要 adapter。完整契约见[与路由器一起运行](../../model-runtime/deploy)。
+其他共享同一回答的信号以同样方式按信号类型绑定。Embedding 在 `global.model_catalog.embeddings.default` 中指定部署，reranker 在 RAG 插件的 `rerank.deployment` 中指定。信号决定每个模型返回什么（PII 片段、embedding 向量、相关性分数），运行时从模型包读取每个模型的架构，因此不需要写契约或适配器。完整说明见[与路由器一起运行](../../model-runtime/deploy.md)。
 
-Hazard 使用独立分类契约 `label_scores.v1`，并通过 SHA-256 固定 `operating_point.json`。该策略绑定权重、tokenizer、重叠窗口和十二个阈值。Decision 选择标签，不覆盖这些阈值；参考配置包含完整示例。
+要把 Hazard 作为独立分类器使用，在它的部署上用 `operating_point` 通过 SHA-256 固定 `operating_point.json`，并在分类器规则上指定该部署。该策略绑定权重、tokenizer、重叠窗口和十二个阈值。Decision 选择标签，不覆盖这些阈值；参考配置包含完整示例。
 
 PII 的重叠扫描、Hazard 的窗口策略与整段文本分类不同。应按任务选择输入策略，并使用应用中的实际输入长度测量时延。
 
@@ -165,10 +163,10 @@ curl --fail 'http://localhost:8080/api/v1/routing/preview?trace=true' \
 
 使用 entrypoint 声明的公共模型名。请求前检查 `/ready`，并查看响应中的信号值与求值轨迹。
 
-重排发生在路由后的 vectorstore RAG 插件中。按[神经重排](/docs/tutorials/plugin/rag#neural-reranking)绑定 `rag.reranker` 并启用 `rerank`，通过已入库文档和真实聊天请求验证。请求 trace 记录候选数、reranker 身份、相关性分数和重排时延；routing Preview 不执行 RAG 插件。
+重排发生在路由后的 vectorstore RAG 插件中。按[神经重排](/docs/tutorials/plugin/rag#neural-reranking)在插件的 `rerank` 块中指定 reranker 部署，通过已入库文档和真实聊天请求验证。请求 trace 记录候选数、reranker 身份、相关性分数和重排时延；routing Preview 不执行 RAG 插件。
 
 ## 保留旧部署 {#preserve-an-earlier-deployment}
 
-显式指定的旧模型路径和别名仍指向原仓库。复现旧分类器时，应同时选择匹配的 mapping、阈值和输入策略。升级 Vela 不会重写显式模型选择。
+指向旧模型的部署仍使用原仓库。复现旧分类器时，应同时选择匹配的 mapping、阈值和输入策略。升级 Vela 不会改变你声明的部署。早期模型字段如何对应到部署和绑定，见[迁移模型资源](../../installation/model-resource-migration.md)。
 
 Embedding 权重或表示发生变化时，向量空间也随之变化。响应缓存和 memory 按表示身份隔离数据；已有 vector store 需要兼容的 embedding 或重新索引，不会静默接管或删除旧数据。详见[存储与工具](./stores-and-tools.md)。

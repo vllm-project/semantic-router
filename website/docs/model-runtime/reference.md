@@ -21,7 +21,7 @@ vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine
 | --- | --- | --- |
 | `MODEL` | configured default, or Vela 3.0 vela3-fast | Override the default judgment deployment's artifact. Other deployments, backend LLMs and public grants stay as authored. |
 | `--engine`, `-e` | off | Start Engine mode. Every invocation without this flag starts Router mode, including a restart of a saved Engine configuration. |
-| `--config FILE` | `config.yaml` | Canonical listeners, deployments, task bindings and routing. Docker preserves the active configuration unless explicitly replaced. |
+| `--config FILE` | `config.yaml` | Canonical listeners, deployments, bindings and routing. Docker preserves the active configuration unless explicitly replaced. |
 | `--platform` | `auto` | Execution backend: `auto`, `cpu`, `cuda` or `rocm`. Automatic detection inspects the container host or the selected Kubernetes cluster. |
 | `--data-parallel-size`, `-dp` | existing placement, or one worker | Number of independent managed replicas of the default deployment. Writes the canonical `replicas` list. |
 | `--device-ids` | existing placement, or available GPUs | Docker host GPU indices. With `-dp N`, supply one ID to share that GPU or N IDs to use one per replica. This does not change GPU visibility. |
@@ -238,7 +238,8 @@ Vela 2.0 question that supports windowing reads a long state part whole up to it
 0.3B) and 32 on a GPU. A decisions request's `options.max_tokens`, or the
 models-file option `max_scan_tokens`, sets another. A question with
 `overflow: truncate` reads only the part's first `limits.truncate_tokens`
-instead: one input on a CPU, one forward. Questions of both kinds share their
+instead: one input on a CPU, one forward. A Vela 3.0 evidence span question
+truncates to its own 32,768-token window instead. Questions of both kinds share their
 model input, as they would without `overflow`, unless a part has to be read
 in windows. An input over its scan budget fails instead of being read:
 
@@ -652,18 +653,21 @@ In summary:
 | `artifact`, `revision` | deployment | Hub repository and commit, or an absolute local path. |
 | `device` | deployment | See [Run it with the router](./deploy.md#describe-a-deployment). |
 | `max_num_seqs`, `max_num_batched_tokens`, `batch_window_ms`, `dtype`, `enable_shared_context`, `max_model_len` | deployment | The deployment's [engine arguments](./engine-args.md); an unset one keeps the runtime's default. `max_model_len` applies to a managed worker without replicas. |
-| `input.max_tokens`, `input.overflow` | deployment | Input limit of task models. A deployment that answers questions takes only `overflow: window` with `max_tokens`: the scan budget its questions read a long part whole to (see [Long inputs](#long-inputs)). That includes the default decision model, a deployment published for direct System One inference, and the deployment of a local System One alias, whether or not a listener publishes the alias. A routed System One entrypoint is not one deployment. A task binding that is none of these keeps a task-model limit. |
+| `input.max_tokens`, `input.overflow` | deployment | Input limit of task models. A deployment that answers questions takes only `overflow: window` with `max_tokens`: the scan budget its questions read a long part whole to (see [Long inputs](#long-inputs)). That includes the default decision model, a deployment published for direct System One inference, and the deployment of a local System One alias, whether or not a listener publishes the alias. A routed System One entrypoint is not one deployment. A bound deployment that is none of these keeps a task-model limit. |
 | `signal_timeout_ms` | `global.model_catalog` | Deadline of a request's model-runtime signals. By default the request's deadline less a tenth of the time left (at least a second), or 45 s for a served request, which has none the router sees. A signal still running resolves through its policy: a routing signal through `on_error`, a safety signal as unscanned. |
 | `on_unscanned` | `modules.prompt_guard`, `modules.classifier.pii` | `block` (default): content the model did not read in full matches the rule as `unscanned`. `allow`: it follows `on_error`. |
-| `replicas` | deployment | Placements of independent workers for one logical model. Each has `device` or `endpoint`/`served_name`; omit for one worker. Do not combine with deployment-level placement. |
-| `enabled` | `global.router` | Default `true`. Disable routing consumers while retaining the frontend, native API and default decision model. |
-| `endpoint`, `served_name` | deployment | Attach to a runtime you run. |
-| `deployment`, `contract`, `head` | binding | Which deployment a feature uses, the answer type it reads and an optional head name. |
+| `replicas` | deployment | Placements of independent workers for one logical model. Each has `device` or `endpoint`/`model`; omit for one worker. Do not combine with deployment-level placement. |
+| `enabled` | `global.router` | Default `true`. Disable routing signals while retaining the frontend, native API and decision model. |
+| `endpoint`, `model` | deployment | Attach to a runtime you run; `model` is the served model's ID. The [connection block](../installation/model-catalog.md#connection-block) adds `auth`, `headers`, `timeout_ms` and `tls`. |
+| `bindings.<type>`, `routing.model_bindings.<type>` | `global.model_catalog`, recipe | The deployment a signal type uses: a name, or `{deployment, head}` to select a head. |
+| `deployment` | rule | The deployment a `decision`, `classifiers`, `safety` (and `hazard`) or `complexity` rule asks. |
 
-The binding names (`domain_classifier`, `pii_classifier`, `prompt_guard`,
-`fact_check_classifier`, `feedback_detector`, `modality_detector`,
-`hallucination_detector`, `embedding`, `rag.reranker`, `safety.<rule>`,
-`classifier.<rule>`) and their contracts are listed in the task guides.
+The binding keys are the signal types `domain`, `jailbreak`, `pii`,
+`fact_check`, `user_feedback`, `modality`, `hallucination`, `preference` and
+`reask`. Embeddings name their deployment in
+`global.model_catalog.embeddings.default`, and the reranker in the RAG plugin's
+`rerank.deployment`. [Choose a model for a signal](../installation/choose-a-model-for-a-signal.md)
+shows how each resolves; the task guides list the answer each signal reads.
 
 ## Router-managed runtimes
 
@@ -680,7 +684,7 @@ The binding names (`domain_classifier`, `pii_classifier`, `prompt_guard`,
 
 The CPU budget is the router's `GOMAXPROCS`, normally derived from CPU affinity
 and the container's CPU quota. `vllm-sr serve` forwards `VLLM_SRUN_CPU_THREADS`
-to the router. Worker thread counts stay independent of active routing consumers;
+to the router. Worker thread counts stay independent of the active routing signals;
 see [CPU threads](model-runtime/deploy.md#cpu-threads) for tuning guidance.
 
 The router talks to managed runtimes only over Unix sockets in a directory only

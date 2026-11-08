@@ -66,10 +66,10 @@ These fields are easy to confuse:
 - backend-ref `provider` supplies provider-specific authentication and path
   defaults. It does not prove that the endpoint implements an API format.
 
-For every backend format, `base_url` names the complete upstream API root. Its
-path is retained and the protocol operation suffix is appended exactly once;
-the protocol's default `/v1` base path is used only when the URL has no path.
-`chat_path` applies only to Chat Completions.
+For every backend format, a full URL in `endpoint` names the complete upstream
+API root. Its path is retained and the protocol operation suffix is appended
+exactly once; the protocol's default `/v1` base path is used only when the URL
+has no path. `chat_path` applies only to Chat Completions.
 
 With `--gateway extproc`, the generated Envoy cluster for an HTTPS backend
 verifies both the server
@@ -187,7 +187,7 @@ instead of being silently dropped.
 | Text verbosity (`low`, `medium`, `high`) | Supported | Supported | Not forwarded; reported as `dropped` |
 | Strict JSON Schema output | Supported | Supported | Supported |
 | Buffered and streaming responses | Supported | Supported | Supported |
-| Reasoning content and effort | Supported, except signed thinking blocks | Supported, except signed thinking blocks | Supported |
+| Reasoning content and effort | Supported, signed thinking blocks only with an opt-in | Supported, signed thinking blocks only with an opt-in | Supported |
 | Reasoning summary requests (`reasoning.summary`) | Not forwarded; reported as `dropped` | Supported; reported as `dropped` if the provider uses `chat_template_kwargs` for reasoning controls | Not forwarded; reported as `dropped` |
 | JSON object mode without a schema | Supported | Supported | Not supported |
 | Audio input | Supported | Not supported | Not supported |
@@ -206,6 +206,10 @@ This table describes codec representation, not model capability. For example,
 an OpenAI-compatible server can accept the Chat request shape while rejecting
 images or tools for a particular model. Qualify the actual endpoint and model
 revision before adding them to a routing pool.
+
+Responses requires a detail level on every input image. An image that arrives
+without one, as every Messages image and tool-result image does, reaches a
+Responses backend with `detail: auto`, the Responses default.
 
 When translating Chat history to an Anthropic Messages backend, empty text
 blocks are omitted. An assistant's `content: ""` beside `tool_calls` therefore
@@ -241,6 +245,16 @@ after a tool result, and `x-vsr-protocol-warnings` reports an `approximated`
 diagnostic for `messages[].role`. Messages backends receive the message in
 place either way.
 
+A model whose declared capabilities leave out `file_input` cannot receive a
+file, so a request that holds one fails with `unsupported_capability`. A coding
+agent that reads a PDF returns it as a document in a tool result, and every
+later call of the session resends it. Listing `content.file` in
+`global.router.allow_lossy_translation` sends each file to such a model as a
+short note saying it was not sent, so the agent can read the file another
+way, and `x-vsr-protocol-warnings` reports a `dropped` diagnostic for
+`content.file`. A model that declares `file_input`, or declares no
+capabilities, still receives the file.
+
 Reasoning content translated out of an Anthropic backend fails when the backend
 attaches a reasoning signature, which its thinking responses carry by default.
 A Chat Completions or Responses client then receives a typed
@@ -248,7 +262,11 @@ A Chat Completions or Responses client then receives a typed
 failure arrives mid-stream, after the response headers and any earlier deltas,
 because the signature reaches the encoder only with the reasoning delta.
 Same-format traffic, including Messages clients reading an Anthropic backend, is
-unaffected.
+unaffected. Listing `reasoning.signature` in
+`global.router.allow_lossy_translation` lets these responses through: the Router
+drops the signature, keeps the reasoning text, and reports the loss as
+`approximated`. The signature cannot come back on later turns, so use it with
+backends that do not need it, such as vLLM.
 
 A Responses client can still use `previous_response_id` with a Chat
 Completions or Messages backend. The Router retrieves and materializes the
@@ -276,10 +294,10 @@ providers:
       api_format: anthropic
       backend_refs:
         - name: anthropic-primary
-          base_url: https://api.anthropic.com
+          endpoint: https://api.anthropic.com
           provider: anthropic
-          api_key_env: ANTHROPIC_API_KEY
-          extra_headers:
+          auth: {api_key_env: ANTHROPIC_API_KEY}
+          headers:
             anthropic-version: "2023-06-01"
           weight: 100
 ```
@@ -325,8 +343,10 @@ schema, streaming, tools, or error translation.
   The Router then omits the flag, leaves the tool-result content unchanged,
   and reports the loss as `approximated` with field `tool_result.is_error` in
   `x-vsr-protocol-warnings` and in `llm_translation_lossy_total`. The list
-  also accepts `messages[].role` for system messages inside the conversation,
-  described above, and every other lossy translation still fails closed.
+  also accepts `messages[].role` for system messages inside the conversation
+  and `content.file` for files a model cannot read, both described above,
+  `reasoning.signature` (see the signed thinking note above), and every other
+  lossy translation still fails closed.
 - The response keeps the client protocol's JSON or SSE shape. Provider
   transport errors and incomplete streams are translated separately from
   successful model responses.
@@ -348,6 +368,12 @@ schema, streaming, tools, or error translation.
   as the Router passes it up to the error event, then the Router's error frame
   with a string `code` and no `[DONE]`, however the stream is split into body
   chunks, as long as each frame is within the Router's SSE frame limit.
+- A Chat or Responses request that omits its output limit reaches `openai` and
+  `responses` backends without one, so the backend's remaining context bounds
+  the output. Anthropic Messages requires a limit, so a route to an `anthropic`
+  backend sends `max_tokens: 4096` and reports `max_tokens` as `generated`.
+  Thinking counts toward that limit. A positive integer in the decision's
+  `request_params.default_max_tokens` replaces the 4096 for these requests.
 - `x-vsr-client-protocol`, `x-vsr-upstream-protocol`, and
   `x-vsr-protocol-warnings` expose translation details when applicable. See
   [VSR routing headers](../troubleshooting/vsr-headers).
@@ -373,6 +399,7 @@ The Router handles them as follows:
 | `client_metadata` | Accepted and not forwarded, because it carries Codex telemetry rather than model input. |
 | `input[].internal_chat_message_metadata_passthrough` | Accepted and not forwarded. Codex CLI 0.163 attaches it to every input message to record which instructions the message carries; it is client metadata, not model input. |
 | `text.verbosity` | Forwarded to `responses` backends, mapped to `verbosity` for `openai` Chat backends, and reported as `dropped` for `anthropic` Messages backends. The only accepted values are `low`, `medium`, and `high`. |
+| Omitted `max_output_tokens` | Codex CLI sends no output limit, so a route to an `anthropic` backend gets `max_tokens: 4096` as described above. A reasoning model can spend all of it before it answers, which Codex CLI reports as `Incomplete response returned, reason: max_output_tokens`. Set a positive integer `request_params.default_max_tokens` on the decisions that send Codex CLI to an `anthropic` backend. |
 
 Each accepted but unforwarded field appears as a `dropped` entry in
 `x-vsr-protocol-warnings`.
@@ -402,4 +429,24 @@ web_search = "disabled"
 
 [features]
 multi_agent = false
+```
+
+Point Codex at the Router through a model provider of your own rather than
+`openai_base_url`. The built-in `openai` provider opens a Responses WebSocket
+first, which the Router does not serve. Codex CLI 0.163.0 retries it for about
+six seconds at the start of every run before it sends the first turn over HTTP,
+and tries it again before later turns. A provider
+defined in `config.toml` uses HTTP from the start, since `supports_websockets`
+defaults to `false`. Set `model` to a Router entrypoint as well, such as
+`vllm-sr/auto`, since a name that matches no entrypoint is sent to a backend
+model of that name:
+
+```toml
+model = "vllm-sr/auto"
+model_provider = "vllm-sr"
+
+[model_providers.vllm-sr]
+name = "vLLM Semantic Router"
+base_url = "http://localhost:8899/v1"
+wire_api = "responses"
 ```

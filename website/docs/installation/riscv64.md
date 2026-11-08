@@ -8,7 +8,8 @@ description: Build and run the experimental standalone Router on native Linux RI
 Linux RISC-V64 is an **experimental** platform for the standalone Router.
 The Router runs natively and forwards requests directly to model endpoints;
 Envoy is not part of this deployment. Models used for classification,
-embeddings or reranking, when configured, run in an external model runtime.
+embeddings or reranking, when configured, run in a model runtime on another
+host, attached by its `endpoint`.
 LLM generation uses a separate backend endpoint.
 
 ## Coverage

@@ -84,6 +84,7 @@ COPY src/semantic-router/pkg/inflight/ /app/src/semantic-router/pkg/inflight/
 COPY src/semantic-router/pkg/k8s/configwriter/ /app/src/semantic-router/pkg/k8s/configwriter/
 COPY src/semantic-router/pkg/llmprotocol/ /app/src/semantic-router/pkg/llmprotocol/
 COPY src/semantic-router/pkg/modelinventory/ /app/src/semantic-router/pkg/modelinventory/
+COPY src/semantic-router/pkg/modelruntime/connector/ /app/src/semantic-router/pkg/modelruntime/connector/
 COPY src/semantic-router/pkg/modelservice/ /app/src/semantic-router/pkg/modelservice/
 COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
 COPY src/semantic-router/pkg/openapischema/ /app/src/semantic-router/pkg/openapischema/

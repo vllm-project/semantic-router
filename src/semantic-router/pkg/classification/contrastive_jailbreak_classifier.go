@@ -16,6 +16,7 @@ import (
 // ContrastiveJailbreakResult holds the analysis outcome for a single rule.
 type ContrastiveJailbreakResult struct {
 	MaxScore       float32 // Highest contrastive score across analysed messages
+	ExplicitMatch  bool    // Whether any message matched a configured explicit hard-block pattern
 	WorstMessage   string  // The message that produced MaxScore
 	WorstMsgIndex  int     // Index of that message in the input slice
 	JailbreakSim   float32 // max_sim(worstMsg, jailbreak_kb) for the worst message
@@ -71,6 +72,13 @@ type contrastiveJailbreakMessageResult struct {
 // classifier for a single contrastive JailbreakRule. KB embeddings are computed
 // eagerly using a worker pool (same approach as ComplexityClassifier).
 func NewContrastiveJailbreakClassifierWithProvider(rule config.JailbreakRule, defaultModelType string, provider embedding.Provider) (*ContrastiveJailbreakClassifier, error) {
+	if !hasUsableContrastivePattern(rule.JailbreakPatterns) {
+		return nil, fmt.Errorf("contrastive jailbreak rule %q requires at least one non-blank jailbreak pattern", rule.Name)
+	}
+	if !hasUsableContrastivePattern(rule.BenignPatterns) {
+		return nil, fmt.Errorf("contrastive jailbreak rule %q requires at least one non-blank benign pattern", rule.Name)
+	}
+
 	modelType := defaultModelType
 	if modelType == "" {
 		modelType = "qwen3"
@@ -107,19 +115,21 @@ func (c *ContrastiveJailbreakClassifier) AnalyzeMessages(messages []string) Cont
 		TotalMessages: len(messages),
 	}
 
-	// Search every bounded chunk before starting embedding inference. Explicit
-	// patterns are deterministic policy and can terminate the scan immediately,
-	// which also keeps long-context containment probes inexpensive.
-	for i, msg := range messages {
+	// Explicit patterns are deterministic policy matches. Record them separately
+	// from the contrastive score, which must be calculated independently.
+	for _, msg := range messages {
 		if c.matchesExplicitJailbreak(msg) {
-			result.MaxScore = 1
-			result.WorstMessage = msg
-			result.WorstMsgIndex = i
-			result.JailbreakSim = 1
-			result.BenignSim = 0
-			result.ProcessingTime = time.Since(start)
-			return result
+			result.ExplicitMatch = true
+			break
 		}
+	}
+
+	// A contrastive score requires both sides of the comparison. Without
+	// either knowledge base, its maximum similarity remains the -1 sentinel;
+	// subtracting that sentinel would manufacture an artificially high score.
+	if len(c.jailbreakEmbeddings) == 0 || len(c.benignEmbeddings) == 0 {
+		result.ProcessingTime = time.Since(start)
+		return result
 	}
 
 	embeddings, failed := c.embedMessages(messages)
@@ -213,6 +223,15 @@ func normalizeContrastivePattern(text string) string {
 	return strings.ToLower(strings.Join(strings.Fields(text), " "))
 }
 
+func hasUsableContrastivePattern(patterns []string) bool {
+	for _, pattern := range patterns {
+		if normalizeContrastivePattern(pattern) != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *ContrastiveJailbreakClassifier) matchesExplicitJailbreak(text string) bool {
 	normalized := normalizeContrastivePattern(text)
 	for pattern := range c.exactJailbreaks {
@@ -280,9 +299,15 @@ func (c *ContrastiveJailbreakClassifier) preloadKBEmbeddings() error {
 func (c *ContrastiveJailbreakClassifier) contrastiveJailbreakEmbeddingTasks() []contrastiveJailbreakEmbeddingTask {
 	tasks := make([]contrastiveJailbreakEmbeddingTask, 0, len(c.rule.JailbreakPatterns)+len(c.rule.BenignPatterns))
 	for _, pattern := range c.rule.JailbreakPatterns {
+		if normalizeContrastivePattern(pattern) == "" {
+			continue
+		}
 		tasks = append(tasks, contrastiveJailbreakEmbeddingTask{text: pattern, isJailbreak: true})
 	}
 	for _, pattern := range c.rule.BenignPatterns {
+		if normalizeContrastivePattern(pattern) == "" {
+			continue
+		}
 		tasks = append(tasks, contrastiveJailbreakEmbeddingTask{text: pattern})
 	}
 	return tasks

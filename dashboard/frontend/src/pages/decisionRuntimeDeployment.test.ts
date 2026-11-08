@@ -19,9 +19,15 @@ function snapshot(): RouterConfig {
     },
     global: {
       model_catalog: {
-        system: { decision_model: 'Vela-2.0-4B', pii: 'private-specialist' },
+        system: { decision_model: { deployment: 'other' } },
+        bindings: { pii: 'private-specialist' },
         deployments: {
-          other: { provider: 'model_runtime', artifact: 'team/other', profile: 'batching' },
+          other: { provider: 'model_runtime', artifact: 'team/other', max_num_seqs: 4 },
+          'private-specialist': {
+            provider: 'classify',
+            endpoint: 'https://pii.example.com/v1',
+            auth: { api_key_env: 'PII_KEY' },
+          },
         },
         admission: { custom: { max_inflight: 7 } },
       },
@@ -90,7 +96,11 @@ describe('Decision runtime catalog projection', () => {
           unboundDecision: { provider: 'model_runtime', artifact: entry.id },
           other: { provider: 'model_runtime', artifact: 'team/custom-question-model' },
           observedQuestion: { provider: 'model_runtime', artifact: 'team/observed-question' },
-          external: { provider: 'external', artifact: entry.id },
+          remote: {
+            provider: 'systemone',
+            endpoint: 'https://systemone.example.com/v1/systemone',
+            model: entry.id,
+          },
         },
       },
     }
@@ -205,7 +215,8 @@ describe('Decision runtime canonical mutations', () => {
             artifact: entry.id,
             revision: 'a'.repeat(40),
             device: 'rocm:1',
-            profile: 'batching',
+            max_num_batched_tokens: 8192,
+            batch_window_ms: 4,
             input: { max_tokens: 2048, overflow: 'window' },
           },
         },
@@ -225,7 +236,8 @@ describe('Decision runtime canonical mutations', () => {
       artifact: entry.id,
       revision: 'a'.repeat(40),
       device: 'rocm:0',
-      profile: 'batching',
+      max_num_batched_tokens: 8192,
+      batch_window_ms: 4,
       input: { max_tokens: 2048, overflow: 'window' },
     })
   })

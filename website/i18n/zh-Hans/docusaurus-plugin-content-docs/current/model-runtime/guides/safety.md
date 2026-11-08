@@ -50,25 +50,34 @@ routing:
         - model: safety-capable-model
 ```
 
-Guard 和 Safety 都由 router 跑在 CPU 上。两个都把整个请求按滑动窗口读完，最多 32,768 个 token。
+没有绑定、规则上也没写 `deployment` 时，prompt guard 和 safety 使用决策模型，默认是 vela3-fast。Vela 1.0 Guard 和 Safety 专用模型是显式的替代选择，各有自己的输入窗口和校准阈值。换模型时要重新评估规则阈值，并区分模型的输入上限和完整扫描预算。见[选择模型](../choose-a-model#vela-20)和[为信号选择模型](../../installation/choose-a-model-for-a-signal.md)。
 
 ## 选模型和跑在哪 {#choose-a-model-and-where-it-runs}
 
-| 功能 | 绑定 | 契约 | 默认模型 |
+| 功能 | 部署写在哪里 | 默认 | Vela 1.0 专用模型 |
 | --- | --- | --- | --- |
-| 越狱 | `prompt_guard` | `label_distribution.v1` | `vllm-sr/Vela-2.0-0.3B`（或 `vllm-sr/Vela-1.0-Encoder-307M-Guard`） |
-| Safety 规则 `<name>` | `safety.<name>` | `label_distribution.v1` | `vllm-sr/Vela-2.0-0.3B`（或 `vllm-sr/Vela-1.0-Encoder-307M-Safety`） |
-| 规则 `<name>` 的 Hazard | `safety.<name>.hazard` | `label_scores.v1` | `vllm-sr/Vela-1.0-Encoder-307M-Hazard` |
+| 越狱 | `bindings.jailbreak` | 决策模型（`vllm-sr/vela3-fast`） | `vllm-sr/Vela-1.0-Encoder-307M-Guard` |
+| Safety 规则 `<name>` | 规则上的 `deployment` | 决策模型（`vllm-sr/vela3-fast`） | `vllm-sr/Vela-1.0-Encoder-307M-Safety` 或 `-Shield` |
+| 规则 `<name>` 的 Hazard 部分 | 规则上的 `hazard.deployment` | 预先声明的 `hazard` 部署（`vllm-sr/Vela-1.0-Encoder-307M-Hazard`） | |
 
-所有 Safety 规则都想换 Shield，就改模块的模型：
+规则的 hazard 部分使用 Vela 1.0 Hazard，除非它指定了其他部署。完整配置见[安全信号指南](../../tutorials/signal/learned/safety.md)。
+
+要用 Shield，就声明它的部署，并在每条安全规则上指定它：
 
 ```yaml
 global:
   model_catalog:
-    modules:
-      safety:
-        safety:
-          model_id: models/Vela-1.0-Encoder-307M-Shield
+    deployments:
+      shield:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Shield
+        revision: a981a99eeb05a2859b88b5cee9af4352897ec4ec
+routing:
+  signals:
+    safety:
+      - name: unsafe-content
+        deployment: shield
+        threshold: 0.5
 ```
 
 想让 Guard 跑在 GPU 上，就写部署再绑：
@@ -85,12 +94,10 @@ global:
           max_tokens: 32768
           overflow: window
     bindings:
-      prompt_guard:
-        deployment: vela-guard
-        contract: label_distribution.v1
+      jailbreak: vela-guard
 ```
 
-Hazard 用的是随模型发布的十二个阈值（它的工作点），所以每类风险都保留着测出来时的精度。这些不用手设；规则的 `hazard.threshold` 只是在它们之上再筛。
+规则的 hazard 部分在其 `categories` 中的最高分达到该规则的 `hazard.threshold` 时匹配：所选的每个类别共用这一个阈值。要让每个类别按 Vela 1.0 Hazard 为它发布的阈值判断，请改在 classifier 规则上指定 hazard 部署，见[分类器信号](../../tutorials/signal/learned/classifier.md#independent-labels-with-a-frozen-operating-point)。
 
 ## 检查做不完的时候 {#when-a-check-cannot-finish}
 

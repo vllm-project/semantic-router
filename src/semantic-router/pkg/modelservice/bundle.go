@@ -26,7 +26,9 @@ type participantKey struct{}
 // /v1/bundle call per runtime process, or several when the stage has more
 // calls than the process takes in one bundle. Classify calls that differ only
 // in their inputs share one task, and the questions a stage asks one served
-// model share one decisions task (see fuse and fuseDecisions).
+// model share one decisions task (see fuse and fuseDecisions). The questions
+// to a remote deployment (a systemone one) share one System One call of their
+// own, sent the same way.
 //
 // The goroutines of the stage Join the bundle. A runtime call made with the
 // bundle's context parks in it, and each caller gets its own result.
@@ -89,6 +91,19 @@ type bundleCall struct {
 	// is sent.
 	decision *decisionCall
 	sent     chan struct{}
+	// remote is set for a decisions call to a deployment the model runtime
+	// does not serve, which answers it instead of client.
+	remote remoteTarget
+}
+
+// remoteTarget is a deployment outside the model runtime, a remote System
+// One API, that answers a stage's fused decisions tasks to it.
+type remoteTarget interface {
+	// stateLimit is how many states one of its exchanges asks about.
+	stateLimit() int
+	// send answers the task in one exchange, or two when the first fails
+	// on one named question, and delivers every call's answers.
+	send(ctx context.Context, task *bundleTask)
 }
 
 // decisionCall is a decisions call parked in a bundle: the request it asks,
@@ -237,9 +252,9 @@ func (b *Bundle) waiting(p *participant) func() {
 }
 
 // Await counts the caller of ctx as asked and blocked in its bundle while it
-// waits for an exchange the bundle does not carry, such as a call to a remote
-// System One model, so the bundle sends the stage's other calls without
-// waiting for it. Call the returned function when the exchange ends.
+// waits for an exchange the bundle does not carry, so the bundle sends the
+// stage's other calls without waiting for it. Call the returned function when
+// the exchange ends.
 func Await(ctx context.Context) func() {
 	bundle := bundleFrom(ctx)
 	if bundle == nil {
@@ -306,6 +321,17 @@ func (b *Bundle) decide(ctx context.Context, client *Client, decision *decisionC
 		return Response{}, exchangeTiming{}, err
 	}
 	return decision.response, call.timing, call.err
+}
+
+// decideRemote parks a decisions call to a remote deployment: it travels with
+// the stage's other questions to that deployment, local signals' and decision
+// signals' alike, once all of its askers have asked.
+func (b *Bundle) decideRemote(ctx context.Context, target remoteTarget, decision *decisionCall, body api.DecisionRequest) (Response, error) {
+	call := &bundleCall{ctx: ctx, task: api.BundleTask{Decisions: &body}, done: make(chan struct{}), decision: decision, sent: make(chan struct{}), remote: target}
+	if err := b.park(nil, call); err != nil {
+		return Response{}, err
+	}
+	return decision.response, call.err
 }
 
 // park adds a call to the bundle and waits until it is answered or its
@@ -456,10 +482,19 @@ func (b *Bundle) sendLocked(others bool, deployments []string) {
 		b.pending = make(map[*Client][]*bundleCall)
 	}
 	questions := make(map[*Client][]*bundleCall)
+	remote := make(map[remoteTarget][]*bundleCall)
 	var asked []*Client
+	var remotes []remoteTarget
 	for _, deployment := range deployments {
 		questionWait.Observe(time.Since(b.since[deployment]).Seconds())
 		for _, call := range b.questions[deployment] {
+			if call.remote != nil {
+				if _, seen := remote[call.remote]; !seen {
+					remotes = append(remotes, call.remote)
+				}
+				remote[call.remote] = append(remote[call.remote], call)
+				continue
+			}
 			if _, seen := questions[call.client]; !seen {
 				asked = append(asked, call.client)
 			}
@@ -469,11 +504,14 @@ func (b *Bundle) sendLocked(others bool, deployments []string) {
 		delete(b.since, deployment)
 	}
 	for _, client := range asked {
-		tasks := fuseDecisions(client, questions[client])
+		tasks := fuseDecisions(int(client.bundleTasks.Load()), questions[client])
 		for _, task := range tasks {
 			b.countLocked(task)
 		}
 		add(client, tasks...)
+	}
+	for _, target := range remotes {
+		b.sendRemoteLocked(target, remote[target])
 	}
 	b.flushes++
 	for _, client := range order {
@@ -493,6 +531,27 @@ func (b *Bundle) sendLocked(others bool, deployments []string) {
 			}
 			go b.send(ctx, cancel, client, part)
 		}
+	}
+}
+
+// sendRemoteLocked sends a remote deployment's parked questions: one
+// exchange per fused task, each in a context that lasts as long as the
+// latest of its callers waits.
+func (b *Bundle) sendRemoteLocked(target remoteTarget, calls []*bundleCall) {
+	tasks := fuseDecisions(target.stateLimit(), calls)
+	for _, task := range tasks {
+		b.countLocked(task)
+	}
+	for _, task := range answerCached(tasks) {
+		ctx, cancel := b.carrier([]*bundleTask{task})
+		for _, call := range task.calls {
+			call.carrier = ctx
+			close(call.sent)
+		}
+		go func(task *bundleTask) {
+			defer cancel()
+			target.send(ctx, task)
+		}(task)
 	}
 }
 

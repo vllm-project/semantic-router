@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 )
 
@@ -21,6 +22,9 @@ func validateDecisionSignalContracts(cfg *RouterConfig) error {
 		if err := validateDecisionDeployment(cfg, rule.Deployment, "question"); err != nil {
 			return fmt.Errorf("routing.signals.decision[%s]: %w", rule.Name, err)
 		}
+		if err := validateDeclaredQuestionType(cfg, cfg.DecisionQuestionDeployment(rule), rule.Question.Type); err != nil {
+			return fmt.Errorf("routing.signals.decision[%s]: %w", rule.Name, err)
+		}
 	}
 	if err := validateSetLabelAnswerKeys(cfg, cfg.DecisionRules); err != nil {
 		return err
@@ -33,8 +37,26 @@ func validateDecisionSignalContracts(cfg *RouterConfig) error {
 		if err := validateDecisionDeployment(cfg, algorithm.Decision.Deployment, "selector"); err != nil {
 			return fmt.Errorf("decision '%s', algorithm.decision: %w", decision.Name, err)
 		}
+		if err := validateDeclaredQuestionType(cfg, cfg.DecisionSelectorDeployment(*algorithm.Decision), DecisionQuestionChoice); err != nil {
+			return fmt.Errorf("decision '%s', algorithm.decision: %w", decision.Name, err)
+		}
 	}
 	return nil
+}
+
+// validateDeclaredQuestionType refuses a question a systemone deployment's
+// declared question types leave out. A deployment that declares none is told
+// by its API's listing.
+func validateDeclaredQuestionType(cfg *RouterConfig, name, questionType string) error {
+	deployment, ok := cfg.ModelDeployments[name]
+	if !ok || !deployment.IsSystemOne() {
+		return nil
+	}
+	declared := deployment.DeclaredQuestionTypes()
+	if len(declared) == 0 || slices.Contains(declared, questionType) {
+		return nil
+	}
+	return fmt.Errorf("deployment %q declares question types %s, so it does not answer a %s question", name, strings.Join(declared, ", "), questionType)
 }
 
 // ValidateDecisionSignalRuleContract validates one decision signal without the

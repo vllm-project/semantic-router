@@ -16,7 +16,11 @@ limitations under the License.
 
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+	"strings"
+)
 
 // VectorStoreConfig holds configuration for the vector store feature.
 type VectorStoreConfig struct {
@@ -202,7 +206,37 @@ func (c *VectorStoreConfig) Validate() error {
 	if err := validateVectorStoreMetadataStore(c); err != nil {
 		return err
 	}
+	if err := validateVectorStoreSupportedFormats(c.SupportedFormats); err != nil {
+		return err
+	}
 	return validateVectorStoreBackendConfig(c)
+}
+
+// VectorStoreFormatExtension normalizes a supported_formats entry to a
+// lowercase file extension with a leading dot.
+func VectorStoreFormatExtension(format string) string {
+	ext := strings.ToLower(strings.TrimSpace(format))
+	if ext != "" && !strings.HasPrefix(ext, ".") {
+		ext = "." + ext
+	}
+	return ext
+}
+
+// VectorStoreTextFormats lists the supported_formats extensions that
+// vectorstore.ExtractText can read.
+var VectorStoreTextFormats = []string{".txt", ".md", ".json", ".csv", ".html", ".htm"}
+
+func validateVectorStoreSupportedFormats(formats []string) error {
+	for _, format := range formats {
+		if !slices.Contains(VectorStoreTextFormats, VectorStoreFormatExtension(format)) {
+			return fmt.Errorf(
+				"vector_store.supported_formats must contain only '%s', got '%s'",
+				strings.Join(VectorStoreTextFormats, "', '"),
+				format,
+			)
+		}
+	}
+	return nil
 }
 
 func validateVectorStoreBackendType(backendType string) error {
@@ -295,7 +329,7 @@ func validateVectorStoreMetadataStore(c *VectorStoreConfig) error {
 // ApplyDefaults fills in default values for unset fields.
 func (c *VectorStoreConfig) ApplyDefaults() {
 	if c.FileStorageDir == "" {
-		c.FileStorageDir = "/var/lib/vsr/data"
+		c.FileStorageDir = DefaultVectorStoreFileStorageDir
 	}
 	if c.MaxFileSizeMB <= 0 {
 		c.MaxFileSizeMB = 50

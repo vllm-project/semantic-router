@@ -67,29 +67,34 @@ config:
     model_catalog:
       kbs: []
       # use_contrastive: false switches the preference classifier onto the
-      # external path below instead of local embedding similarity - the one
+      # chat model bound below instead of local embedding similarity - the one
       # thing this profile exists to exercise.
       modules:
         classifier:
           preference:
             use_contrastive: false
-      external:
-        - name: e2e-preference-external
-          llm_provider: openai
-          model_role: preference
-          llm_endpoint:
-            address: mock-preference-llm.default.svc.cluster.local
-            port: 8000
-            protocol: http
-          llm_model_name: e2e-preference-external
-          llm_timeout_seconds: 5
-          access_key: e2e-preference-key
+      deployments:
+        e2e-preference-external:
+          provider: openai_chat
+          endpoint: http://mock-preference-llm.default.svc.cluster.local:8000/v1
+          model: e2e-preference-external
+          auth:
+            api_key_env: E2E_PREFERENCE_KEY
+          timeout_ms: 5000
+      bindings:
+        preference: e2e-preference-external
     services:
       response_api:
         enabled: true
         store_backend: memory
         ttl_seconds: 3600
         max_responses: 1000
+
+# The mock preference model checks this test credential; the Router reads it
+# from the environment, never from its configuration.
+extraEnv:
+  - name: E2E_PREFERENCE_KEY
+    value: e2e-preference-key
 
 resources:
   # 2Gi OOMKills the router on a CI runner: it restarts, never becomes ready,

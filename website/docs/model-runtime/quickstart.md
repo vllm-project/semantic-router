@@ -224,7 +224,7 @@ runtime restarts later, the signal is unknown until the model is back and
 `on_unknown: no_match` sends requests to `default-route` meanwhile.
 
 Router and Engine mode share one managed instance. To attach an independently
-operated worker instead, use an explicit `endpoint` and `served_name`; the
+operated worker instead, use an explicit `endpoint` and `model`; the
 [deployment guide](./deploy.md) describes its separate worker API and lifecycle.
 
 ## Next steps

@@ -34,10 +34,11 @@ func (c *Classifier) prepareDecisionSignals() error {
 	for _, rule := range c.labelledDecisionRules() {
 		name, deployment := c.decisionRuleDeployment(rule)
 		if deployment.IsSystemOne() {
-			if len(deployment.QuestionTypes) == 0 {
+			declared := deployment.DeclaredQuestionTypes()
+			if len(declared) == 0 {
 				continue
 			}
-			if _, err := modelservice.CompileTask(modelservice.TaskDefinition{ID: "decision", Stage: "request"}, DecisionQuestion(rule.Name, rule.Question), modelservice.RemoteCard(deployment.Model, deployment.QuestionTypes, nil)); err != nil {
+			if _, err := modelservice.CompileTask(modelservice.TaskDefinition{ID: "decision", Stage: "request"}, DecisionQuestion(rule.Name, rule.Question), modelservice.RemoteCard(deployment.Model, declared, deployment.DeclaredPresets())); err != nil {
 				return fmt.Errorf("routing.signals.decision[%s]: systemone deployment %q: %w", rule.Name, name, err)
 			}
 			continue

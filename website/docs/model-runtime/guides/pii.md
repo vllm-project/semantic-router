@@ -38,7 +38,8 @@ routing:
         - model: private-model
 ```
 
-Without an override, the Router uses the default vela3-fast deployment for PII.
+Without a binding, the Router asks the decision model, vela3-fast by default,
+for PII.
 Its input limits and coverage differ from the Vela 1.0 specialist below; see
 [Choose a model](../choose-a-model#built-in-signals). Rule thresholds are explicit
 policy: calibrate this example's value for the model you select.
@@ -49,7 +50,7 @@ still depends on the text and model.
 
 ## Choose where it runs
 
-The binding is `pii_classifier` and reads text spans (`token_spans.v1`):
+The binding key is `pii`, and the signal reads text spans:
 
 ```yaml
 global:
@@ -63,9 +64,7 @@ global:
           max_tokens: 32768
           overflow: window
     bindings:
-      pii_classifier:
-        deployment: vela-pii
-        contract: token_spans.v1
+      pii: vela-pii
     modules:
       classifier:
         pii:
@@ -81,9 +80,9 @@ beginning, and `reject` makes the signal unknown for longer requests.
 ### On Vela 2.0
 
 Vela 2.0 finds the same 17 types with its router span head, as a ready-made
-question. Bind `pii_classifier` to a Vela 2.0 deployment and the PII question
-travels in the same call as the [decision questions](model-runtime/guides/decisions.md) the
-request asks that deployment about the same text:
+question. Bind `pii` to a Vela 2.0 deployment and the PII question travels in
+the same call as the [decision questions](model-runtime/guides/decisions.md)
+the request asks that deployment about the same text:
 
 ```yaml alternative
 global:
@@ -94,9 +93,7 @@ global:
         artifact: vllm-sr/Vela-2.0-0.3B
         device: cpu
     bindings:
-      pii_classifier:
-        deployment: vela2
-        contract: token_spans.v1
+      pii: vela2
 ```
 
 Vela 2.0 uses its own full-input checks and supported scan budget; it does not

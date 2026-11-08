@@ -160,14 +160,14 @@ spec:
       tools_db_path: config/tools_db.json
       fallback_to_empty: true
 
-    # Prompt guard (jailbreak detection)
+    # Prompt guard (jailbreak detection), answered by the decision model
+    # (vela3-fast by default).
     prompt_guard:
       enabled: true
-      model_id: models/vela3-fast
       threshold: "0.88"
       use_cpu: true
 
-    # Domain and PII classifiers use the Vela 2.0 0.3B defaults.
+    # Domain and PII classifiers follow the decision model too.
 
     # Reasoning families configuration
     reasoning_effort: medium  # low, medium, high

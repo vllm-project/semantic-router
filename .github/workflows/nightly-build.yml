@@ -63,10 +63,46 @@ jobs:
       date: ${{ needs.head.outputs.date }}
     secrets: inherit
 
+  reserve:
+    name: Keep Published Nightly Dates Unchanged
+    needs: [head, ci]
+    if: ${{ !cancelled() && needs.ci.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+    outputs:
+      publish: ${{ steps.date.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ci-build-image-*
+          path: .agent-harness/nightly-receipts
+      - name: Install image registry client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+      - name: Publish only a free date or this run's own partial publication
+        id: date
+        env:
+          DATE: ${{ needs.head.outputs.date }}
+          IMAGES: ${{ needs.ci.outputs.publish_images }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GHCR_TOKEN" | skopeo login --username "$GITHUB_ACTOR" --password-stdin ghcr.io
+          python3 tools/ci/nightly_tags.py --date "$DATE" --images "$IMAGES" \
+            --receipts .agent-harness/nightly-receipts \
+            --registry "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}" --github-output "$GITHUB_OUTPUT"
+
   docker:
     name: Publish Nightly Images
-    if: ${{ !cancelled() && needs.ci.result == 'success' }}
-    needs: ci
+    if: >-
+      !cancelled() && needs.ci.result == 'success'
+      && needs.reserve.outputs.publish == 'true'
+    needs: [ci, reserve]
     permissions:
       contents: read
       actions: read
@@ -80,8 +116,10 @@ jobs:
 
   helm:
     name: Publish Nightly Helm Chart
-    if: ${{ !cancelled() && needs.ci.result == 'success' }}
-    needs: [head, ci]
+    if: >-
+      !cancelled() && needs.ci.result == 'success'
+      && needs.reserve.outputs.publish == 'true'
+    needs: [head, ci, reserve]
     permissions:
       contents: read
       actions: read

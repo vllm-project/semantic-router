@@ -63,8 +63,10 @@ func NewFeedbackDetector(cfg *config.FeedbackDetectorConfig, models ...*classifi
 		return nil, nil // Disabled
 	}
 
-	runtime := consumerModelRuntime(models)
-	spec, err := runtime.localSpec("feedback_detector", cfg.ModelID, "auto", config.RemoteClassifierContractLabelDistribution, cfg.UseCPU, cfg.MaxSequenceLength)
+	runtime := consumerModelRuntime(models).withModule(cfg.ModelID, func(scoped *config.RouterConfig) {
+		scoped.FeedbackDetector = *cfg
+	})
+	spec, err := runtime.localSpec("feedback_detector", "auto", config.RemoteClassifierContractLabelDistribution, cfg.MaxSequenceLength)
 	detector := &FeedbackDetector{
 		backend: &ownedSequenceBackend{runtime: runtime.runtime, spec: spec, err: err},
 		config:  cfg,
@@ -117,7 +119,11 @@ func (d *FeedbackDetector) loadMapping(path string) error {
 	if len(idxToLabel) == 0 {
 		return fmt.Errorf("feedback mapping %s declares no labels", path)
 	}
-	if err := ValidateLabelMappingAgainstModelConfig(path, d.config.ModelID, idxToLabel); err != nil {
+	modelDir := ""
+	if d.backend != nil {
+		modelDir = deploymentModelDir(d.backend.spec.Deployment)
+	}
+	if err := ValidateLabelMappingAgainstModelConfig(path, modelDir, idxToLabel); err != nil {
 		return err
 	}
 	d.mapping = &FeedbackMapping{
@@ -162,11 +168,6 @@ func (d *FeedbackDetector) Initialize() error {
 		return nil
 	}
 
-	// Initialize ML model - ModelID is required
-	if d.config.ModelID == "" {
-		return fmt.Errorf("feedback detector requires ModelID to be configured")
-	}
-
 	if d.config.FeedbackMappingPath != "" {
 		if err := d.loadMapping(d.config.FeedbackMappingPath); err != nil {
 			return err
@@ -177,14 +178,14 @@ func (d *FeedbackDetector) Initialize() error {
 
 	d.backend.labels = indexedNativeLabels(d.mapping.IdxToLabel)
 	d.backend.normalizeLabel = normalizeFeedbackLabel
-	if err := d.backend.Init(d.config.ModelID, d.config.UseCPU, len(d.mapping.IdxToLabel)); err != nil {
+	if err := d.backend.Init(d.backend.spec.Binding.Deployment, d.config.UseCPU, len(d.mapping.IdxToLabel)); err != nil {
 		return err
 	}
 
 	d.initialized = true
 	logging.ComponentEvent("classifier", "feedback_detector_initialized", map[string]interface{}{
-		"backend":   d.backend.spec.Deployment.Provider,
-		"model_ref": d.config.ModelID,
+		"backend":    d.backend.spec.Deployment.Provider,
+		"deployment": d.backend.spec.Binding.Deployment,
 	})
 
 	return nil

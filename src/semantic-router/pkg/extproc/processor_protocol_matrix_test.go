@@ -518,7 +518,8 @@ func assertExtProcStreamingPair(
 	if err != nil {
 		t.Fatalf("reconstruct response: %v", err)
 	}
-	assertExtProcMatrixResponse(t, *semantic, "public-model")
+	// The model the upstream named, as the buffered matrix sees it.
+	assertExtProcMatrixResponse(t, *semantic, "source-model")
 	assertClientStreamDecodes(t, engine, clientFormat, clientWire.Bytes())
 }
 

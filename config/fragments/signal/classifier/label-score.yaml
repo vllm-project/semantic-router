@@ -1,23 +1,18 @@
 global:
   model_catalog:
-    external:
-      - name: risk-judge
-        llm_provider: openai
-        model_role: classification
-        llm_endpoint:
-          address: classifier.example.com
-          port: 443
-          protocol: https
-          use_chat_template: true
-        llm_model_name: gpt-4.1-mini
-        llm_timeout_seconds: 5
+    deployments:
+      # A chat model used as a classifier: POST <endpoint>/chat/completions.
+      risk-judge:
+        provider: openai_chat
+        endpoint: https://classifier.example.com/v1
+        model: gpt-4.1-mini
+        timeout_ms: 5000
 
 routing:
   signals:
     classifiers:
       - name: tool-risk
-        type: llm
-        model: risk-judge
+        deployment: risk-judge
         labels: [SAFE, RISKY]
         disable_rationale: true
         instructions: >-

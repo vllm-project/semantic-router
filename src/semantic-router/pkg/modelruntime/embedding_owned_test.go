@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -116,5 +117,20 @@ func TestOwnedRecipeEmbeddingDoesNotProvisionSharedCache(t *testing.T) {
 	}
 	if _, err := PrepareOwnedResponseCacheEmbeddings(context.Background(), cfg, nil); err == nil {
 		t.Fatal("service runtime ignored required cache artifact")
+	}
+}
+
+func TestOwnedRemoteEmbeddingReturnsProviderConstructionError(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.EmbeddingRules = []config.EmbeddingRule{{Name: "active", Candidates: []string{"candidate"}}}
+	cfg.EmbeddingConfig.TargetDimension = 768
+	cfg.EmbeddingDeployment = "remote-embed"
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"remote-embed": {
+		Provider: config.OpenAIEmbeddingsProvider, Endpoint: "http://127.0.0.1:8000", Model: "BAAI/bge-m3",
+		Capabilities: &config.DeploymentCapabilities{Dimensions: 1024},
+	}}
+	_, err := PrepareOwnedEmbeddings(context.Background(), cfg, serving.New(nil, binding.NewPool()))
+	if err == nil || !strings.Contains(err.Error(), "must match target_dimension") {
+		t.Fatalf("construction error = %v", err)
 	}
 }

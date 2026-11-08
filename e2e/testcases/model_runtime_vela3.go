@@ -50,6 +50,13 @@ var mrVela3Cases = []mrVela3Case{
 		prompt:   "My name is John Smith, my email is john.smith@example.com and my phone number is 555-123-4567. Please update my shipping address.",
 		decision: "pii_route",
 	},
+	{
+		// A text state is the user part as it is, even when it parses as JSON:
+		// the PII preset reads all of it, not only the answer.
+		name:     "personal data as JSON",
+		prompt:   `{"request": "My name is John Smith and my email is john.smith@example.com.", "answer": "Noted."}`,
+		decision: "pii_route",
+	},
 	{name: "order number", prompt: "Where is order A-778120? It was supposed to arrive last Tuesday."},
 	{name: "account", prompt: "Why was my subscription charged twice this month? Please check my billing history."},
 	{name: "small talk", prompt: "Tell me a fun fact about penguins.", decision: "default-route"},

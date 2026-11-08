@@ -19,7 +19,7 @@ vllm-sr serve --config config.yaml
 
 Startup sets `global.router.enabled`: every `serve` invocation without `-e`
 starts Router mode; `-e` starts Engine mode and preserves saved routing without
-initializing its consumers or Chat backends. Dashboard displays this startup
+initializing its signals or Chat backends. Dashboard displays this startup
 mode and manages model deployments independently. It does not switch modes.
 The native API is available in either mode. On the docker target, Engine mode
 starts only the Router container unless `--dashboard`, `--observability` or
@@ -27,22 +27,23 @@ starts only the Router container unless `--dashboard`, `--observability` or
 
 Model resources use either **managed** workers, which the frontend starts and
 supervises, or **attached** workers, whose lifecycle belongs to another owner.
-A logical deployment can have one or more compatible replicas. Task bindings
-and public model names identify the logical deployment, independently of where
-its workers run.
+A logical deployment can have one or more compatible replicas. Bindings and
+public model names identify the logical deployment, independently of where its
+workers run.
 
 ## Built-in features need no configuration
 
 When you turn on a built-in feature, such as a `domain` signal or the semantic
 cache, the router already knows which model it needs. Judgment tasks share the
-default decision deployment; embeddings and other specialist tasks use their
-configured models. To choose CPU or GPU placement, configure the deployment's
-`device` or `replicas` as described below.
+decision model; embeddings and the reranker use their own deployments
+([Choose a model for a signal](../installation/choose-a-model-for-a-signal.md)).
+To choose CPU or GPU placement, configure the deployment's `device` or
+`replicas` as described below.
 
-Deployments used by enabled consumers or published native model grants are
-loaded. Engine mode also loads the default decision deployment. In Router mode,
-the default deployment is loaded when a consumer needs it. Other declarations
-do not start workers.
+Deployments that an enabled signal or feature resolves to, or that a published
+native model grant names, are loaded. Engine mode also loads the decision
+model. In Router mode, the decision model is loaded when something resolves to
+it. Other declarations do not start workers.
 
 ## Describe a deployment
 
@@ -74,33 +75,38 @@ global:
 | `device` | `auto` (default), `cpu`, `cuda:N`, `rocm:N`, `xpu:N`, `npu:N`, `mps`, or an accelerator a plugin adds. |
 | `max_num_seqs`, `max_num_batched_tokens`, `batch_window_ms`, `dtype`, `enable_shared_context`, `max_model_len` | Engine arguments: how the worker batches requests, the precision it computes in and a Decision model's input limit. Leave them out for the runtime's defaults. `max_model_len` applies to a managed worker without replicas. See [Engine arguments](./engine-args.md). |
 | `input` | For task models: the longest input in tokens (`max_tokens`) and what to do with longer input (`overflow`: `reject`, `truncate` or `window`). |
-| `replicas` | Explicit managed `device` or attached `endpoint`/`served_name` placements for this model. Omit for one worker. |
+| `replicas` | Explicit managed `device` or attached `endpoint`/`model` placements for this model. Omit for one worker. |
 | `endpoint` | Attach to a runtime you run instead of starting one. |
-| `served_name` | The model's ID on an attached runtime, as its `GET /v1/models` lists it (default: the deployment name). |
+| `model` | The model's ID on an attached runtime, as its `GET /v1/models` lists it (default: the deployment name). |
 
-Then connect a feature to the deployment with a **binding**:
+An attached runtime also takes `auth`, `headers`, `timeout_ms` and `tls`; the
+[model catalog reference](../installation/model-catalog.md#connection-block)
+lists every field.
+
+Then connect a signal to the deployment with a **binding**, keyed by its signal
+type:
 
 ```yaml
 global:
   model_catalog:
     bindings:
-      domain_classifier:
-        deployment: vela-domain
-        contract: label_distribution.v1
+      domain: vela-domain
 ```
 
-Each feature reads one kind of answer, its `contract`: a semantic judgment
-(`decision.v1`), label probabilities (`label_distribution.v1`), independent
-label scores (`label_scores.v1`), text spans (`token_spans.v1`), vectors
-(`embedding.v1`) or relevance scores (`relevance_scores.v1`). The task guides list the binding for each feature.
-The Router checks bindings against the model's description: heads, labels,
-dimensions, question types, and input limits. A known mismatch is rejected.
-For offline attached custom questions or explicit `decision.v1` tasks, metadata
-validation is deferred until a ready model card is observed; requests cannot
-run an unchecked task. See [readiness](#when-a-model-is-not-ready).
+The signal decides which kind of answer it reads: a semantic judgment, label
+probabilities, independent label scores, text spans, vectors or relevance
+scores. A binding names only the deployment; the task guides list the signal
+each feature reads. The Router checks bindings against the model's
+description: heads, labels, dimensions, question types, and input limits. A
+known mismatch is rejected. For custom questions to an offline attached
+runtime, metadata validation is deferred until a ready model card is observed;
+requests cannot run an unchecked task. See [readiness](#when-a-model-is-not-ready).
 
 A binding under `global.model_catalog.bindings` applies everywhere. A recipe
-can override it under its own `routing.model_bindings`.
+can override it under its own `routing.model_bindings`. Rules that ask their
+own question (`decision`, `classifiers`, `safety`, `complexity`) name their
+deployment on the rule instead; see
+[Choose a model for a signal](../installation/choose-a-model-for-a-signal.md).
 
 ## Place and scale replicas
 
@@ -160,12 +166,13 @@ choosing this layout. Within a worker, rows of concurrent requests already
 share forwards ([Engine arguments](./engine-args.md)). Replicas do not shard
 weights and are not tensor or pipeline parallelism.
 
-Do not combine `replicas` with deployment-level `device`, `endpoint` or
-`served_name`. Omitting `replicas` keeps the one-worker shorthand with the same dispatch and
-status contract as an explicit single replica. Single-worker deployments retain
-the frontend result cache; multiple replicas use independent worker caches. A replica's
-placement is independent of bindings, so changes to routing consumers retain
-unchanged worker identities. Reconfiguration prepares a compatible pool before
+Do not combine `replicas` with deployment-level `device` or `endpoint`; an
+attached replica names its served model with its own `model`. Omitting
+`replicas` keeps the one-worker shorthand with the same dispatch and status
+contract as an explicit single replica. Single-worker deployments retain the
+frontend result cache; multiple replicas use independent worker caches. A
+replica's placement is independent of bindings, so changes to the signals that
+use a deployment retain unchanged worker identities. Reconfiguration prepares a compatible pool before
 publishing it, and retired workers drain existing requests.
 
 The pool admits at most 32 in-flight HTTP requests per worker and has no pool
@@ -187,7 +194,7 @@ VLLM_SRUN_CPU_THREADS=8 vllm-sr serve --platform cpu --config config.yaml
 
 The setting is capped by the available CPU budget; it does not set the number
 of workers. Each deployment or replica still owns an independent worker, and
-mode changes do not redistribute threads among active consumers. Start with
+mode changes do not redistribute threads among active workers. Start with
 the default, then compare latency and throughput with your actual input lengths
 and concurrency. Fewer threads can reduce contention when several CPU models
 are busy; longer inputs on dedicated cores may benefit from a higher override.
@@ -263,15 +270,15 @@ global:
       gpu-lux:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Lux-9B
-        endpoint: http://gpu-runtime.internal:8100
-        served_name: Decision-2.0-Lux-9B
+        endpoint: http://gpu-runtime.example.com:8100
+        model: Decision-2.0-Lux-9B
 ```
 
-`served_name` is the ID the runtime lists in `GET /v1/models`. A runtime lists a
+`model` is the ID the runtime lists in `GET /v1/models`. A runtime lists a
 published model under its repository name without the organization, here
 `Decision-2.0-Lux-9B`, unless `--served-model-name` gives it another one.
-Without `served_name` the router asks for the deployment name. A name the
-runtime does not serve leaves the deployment unavailable.
+Without `model` the router asks for the deployment name. A name the runtime
+does not serve leaves the deployment unavailable.
 
 `endpoint` takes `http://host:port`, `https://host:port` or a Unix socket,
 `unix:///path/to/runtime.sock`. The router does not start, restart or stop an
@@ -373,7 +380,7 @@ The router serves a configuration only once the models it runs for it have
 loaded. At startup it waits for every deployment it manages: the task models
 its routes use (domain, PII, guard, safety, fact-check, feedback and
 hallucination models, and your own classifiers) and the decision models that
-`decision` signals and the `decision` selection algorithm ask. Implicit and native-head bindings to attached runtimes also need model
+`decision` signals and the `decision` selection algorithm ask. Signals that an attached runtime answers as the decision model, or through a binding that selects a head, also need model
 metadata during preparation, so start those runtimes before the Router. While it waits, `/health` answers and `/ready` returns `503`;
 `/startup-status` lists each managed deployment with its state (`starting`,
 `loading`, `warming`, `ready`, ...), and `vllm-sr serve` prints the ones it
@@ -383,12 +390,12 @@ is not ready in time, the router does not start; its log and its last startup
 status (`phase: error`) name the deployment and the reason (see
 [Troubleshooting](model-runtime/troubleshooting.md#the-runtime-reports-failed)).
 
-Custom `decision` questions and explicit `contract: decision.v1` task bindings
-can target an offline attached runtime without blocking startup. They remain
-unknown until the current model card is ready and supports the required task.
-Recovery does not bypass capability checks: a ready incompatible card rejects
-the task. Native-head bindings still require their specific metadata; readiness
-does not silently switch a PII span detector to a presence-only judgment.
+Custom `decision` questions can target an offline attached runtime without
+blocking startup. They remain unknown until the current model card is ready
+and supports the required task. Recovery does not bypass capability checks: a
+ready incompatible card rejects the task. Bindings that select a head still
+require their specific metadata; readiness does not silently switch a PII span
+detector to a presence-only judgment.
 
 A deployment declared but unused is never started and does not hold up startup.
 

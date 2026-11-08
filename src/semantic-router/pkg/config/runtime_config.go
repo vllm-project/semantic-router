@@ -234,6 +234,15 @@ type MemoryConfig struct {
 	AdaptiveThreshold          bool                    `yaml:"adaptive_threshold,omitempty"`
 	Reflection                 MemoryReflectionConfig  `yaml:"reflection,omitempty"`
 	Persistence                MemoryPersistenceConfig `yaml:"persistence,omitempty"`
+	// QueryRewrite names the openai_chat deployment that rewrites a query
+	// with its conversation before memory search.
+	QueryRewrite *MemoryQueryRewriteConfig `yaml:"query_rewrite,omitempty"`
+}
+
+// MemoryQueryRewriteConfig names the deployment that rewrites memory search
+// queries.
+type MemoryQueryRewriteConfig struct {
+	Deployment string `yaml:"deployment"`
 }
 
 // MemoryPersistenceConfig bounds asynchronous response memory writes.

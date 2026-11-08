@@ -104,6 +104,8 @@ The `store_backend` field controls where response and conversation history is pe
 | `redis` | Survives router restart, shared across replicas | Production (default) |
 | `memory` | Lost on router restart | Local development only |
 
+The `redis` store needs `redis.address` (or `cluster_addresses` in cluster mode). When the store cannot start, the router still starts, logs `response_api_store_init_failed`, and answers every `/v1/responses` request with 503 and code `response_store_unavailable`. Set `enabled: false` to serve no Responses API at all, which answers 404.
+
 ### Observability
 
 ```yaml
@@ -306,6 +308,27 @@ Gateway, ext_authz, route-level filters, etc.) is responsible for setting
 or stripping the header on trust grounds. Background on the AI Gateway
 interop pattern that motivates this gate lives in
 [issue #1808](https://github.com/vllm-project/semantic-router/issues/1808).
+
+### Debug Headers
+
+`global.router.headers.debug` decides who may turn on the debug response
+headers with `x-vsr-debug: true`. They name the signal and guard rules a
+request matched, so the default, `none`, ignores the header from every client.
+`any` honors it from every client, for development and tests. `authenticated`
+honors it only from the users and groups in `debug_principals`, as the identity
+headers your authenticator sets assert them.
+
+```yaml
+global:
+  router:
+    headers:
+      debug: authenticated
+      debug_principals:
+        groups: [platform-sre]
+```
+
+See [VSR routing headers](../../troubleshooting/vsr-headers#who-may-turn-on-the-debug-headers)
+for the headers it covers.
 
 ### Router Replay
 

@@ -19,55 +19,13 @@ providers:
       provider: vllm
 routing:
   model_bindings:
-    domain_classifier:
-      deployment: domain-amd
-      contract: label_distribution.v1
-      adapter: modernbert
-      mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json
-    pii_classifier:
-      deployment: pii-amd
-      contract: token_spans.v1
-      adapter: modernbert
-      mapping_path: models/Vela-1.0-Encoder-307M-PII/pii_mapping.json
-    prompt_guard:
-      deployment: guard-amd
-      contract: label_distribution.v1
-      adapter: modernbert
-      mapping_path: models/Vela-1.0-Encoder-307M-Guard/jailbreak_type_mapping.json
-    feedback_detector:
-      deployment: feedback-amd
-      contract: label_distribution.v1
-      adapter: modernbert
-    fact_check_classifier:
-      deployment: factcheck-amd
-      contract: label_distribution.v1
-      adapter: modernbert
-    modality_detector:
-      deployment: modality-amd
-      contract: label_distribution.v1
-      adapter: modernbert
-    safety.unsafe-content:
-      deployment: safety-amd
-      contract: label_distribution.v1
-      adapter: modernbert
-    embedding:
-      deployment: embedding-amd
-      contract: embedding.v1
-      adapter: mmbert
-    rag.reranker:
-      deployment: reranker-amd
-      contract: relevance_scores.v1
-      adapter: vela_reranker
-      pair_scorer:
-        layer: 22
-        dimension: 768
-    classifier.content-risk:
-      deployment: hazard-amd
-      contract: label_scores.v1
-      adapter: modernbert
-      operating_point:
-        path: operating_point.json
-        sha256: e79a78f48bf45eb38e3f5402de3b3b18eeaa822e00b42b3640bf471276290de5
+    domain: domain-amd
+    pii: pii-amd
+    jailbreak: guard-amd
+    user_feedback: feedback-amd
+    fact_check: factcheck-amd
+    modality: modality-amd
+    embedding: embedding-amd
   signals:
     domains:
     - name: biology
@@ -137,6 +95,7 @@ routing:
       include_history: false
     safety:
     - name: unsafe-content
+      deployment: safety-amd
       labels:
       - safe
       - unsafe
@@ -169,7 +128,7 @@ routing:
       - Debug this Python program and fix its error.
     classifiers:
     - name: content-risk
-      type: local
+      deployment: hazard-amd
       labels:
       - violence
       - criminal_activity
@@ -210,7 +169,10 @@ routing:
         top_k: 3
         similarity_threshold: 0.0
         rerank:
+          deployment: reranker-amd
           top_k: 2
+          layer: 22
+          dimension: 768
         max_context_length: 4096
         injection_mode: tool_role
         on_failure: block
@@ -422,14 +384,9 @@ global:
         input:
           max_tokens: 32768
           overflow: reject
-    system:
-      domain_classifier: models/Vela-1.0-Encoder-307M-Domain
-      pii_classifier: models/Vela-1.0-Encoder-307M-PII
-      prompt_guard: models/Vela-1.0-Encoder-307M-Guard
-      feedback_detector: models/Vela-1.0-Encoder-307M-Feedback
-      fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck
-      safety: models/Vela-1.0-Encoder-307M-Safety
-      hazard: models/Vela-1.0-Encoder-307M-Hazard
+        operating_point:
+          path: operating_point.json
+          sha256: e79a78f48bf45eb38e3f5402de3b3b18eeaa822e00b42b3640bf471276290de5
     embeddings:
       semantic:
         mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
@@ -443,19 +400,16 @@ global:
       classifier:
         domain:
           enabled: true
-          model_ref: domain_classifier
           threshold: 0.5
           fallback_category: other
           category_mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json
         pii:
           enabled: true
-          model_ref: pii_classifier
           threshold: 0.9
           pii_mapping_path: models/Vela-1.0-Encoder-307M-PII/pii_mapping.json
           on_error: block
       prompt_guard:
         enabled: true
-        model_ref: prompt_guard
         threshold: 0.5
         positive_labels:
         - jailbreak
@@ -463,18 +417,14 @@ global:
         on_error: block
       feedback_detector:
         enabled: true
-        model_ref: feedback_detector
         threshold: 0.7
       hallucination_mitigation:
         enabled: false
         fact_check:
-          model_ref: fact_check_classifier
           threshold: 0.95
       modality_detector:
         enabled: true
         method: classifier
-        classifier:
-          model_path: models/Vela-1.0-Encoder-307M-Modality
         confidence_threshold: 0.7
 
 entrypoints:
