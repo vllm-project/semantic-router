@@ -20,6 +20,10 @@ from .failures import first_saved_failure
 from .grading import (
     BINARY_RESULT,
     CACHE_OBSERVATION_RESULT,
+    MRCR_METRIC,
+    MRCR_REPORT_VERSION,
+    MRCR_SEQUENCE_RESULT,
+    MRCR_TOKEN_BINS,
     SESSION_OBSERVATION_RESULT,
     TOKEN_COVERAGE_RESULT,
     WEIGHTED_RUBRIC_RESULT,
@@ -493,6 +497,63 @@ def token_coverage_report(
             "all_planned_tasks; incomplete cohorts report an observed lower bound"
         ),
         **_scripted_task_evidence(cases=cases, calls=calls),
+    }
+
+
+def mrcr_sequence_report(
+    cases: list[dict[str, Any]], results: list[dict[str, Any]]
+) -> dict[str, Any]:
+    planned_ids = {case["id"] for case in cases}
+    rows = [row for row in results if row.get("case_id") in planned_ids]
+    if len({row["case_id"] for row in rows}) != len(rows):
+        raise ValueError("MRCR report contains duplicate case results")
+    graded = [row for row in rows if row["status"] == "completed"]
+    for row in graded:
+        validate_result(kind=MRCR_SEQUENCE_RESULT, result=row)
+
+    def cohort(group: list[dict[str, Any]]) -> dict[str, Any]:
+        group_ids = {case["id"] for case in group}
+        group_rows = [row for row in rows if row["case_id"] in group_ids]
+        group_graded = [row for row in group_rows if row["status"] == "completed"]
+        group_complete = bool(group_ids) and len(group_graded) == len(group_ids)
+        return {
+            "planned": len(group_ids),
+            "graded": len(group_graded),
+            "num": len(group_graded),
+            "failed": sum(row["status"] == "failed" for row in group_rows),
+            "cancelled": sum(
+                row["status"] in {"cancelled", "interrupted"} for row in group_rows
+            ),
+            "pending": len(group_ids)
+            - len(group_rows)
+            + sum(row["status"] in {"queued", "running"} for row in group_rows),
+            "complete": group_complete,
+            "score": (
+                sum(row["score"] for row in group_graded) / len(group_graded)
+                if group_complete
+                else None
+            ),
+        }
+
+    cases_by_bin: dict[int, list[dict[str, Any]]] = {}
+    for case in cases:
+        index = case["metadata"]["mrcr"]["bin_index"]
+        cases_by_bin.setdefault(index, []).append(case)
+    return {
+        "version": MRCR_SEQUENCE_RESULT,
+        "report_version": MRCR_REPORT_VERSION,
+        "metric": MRCR_METRIC,
+        "denominator": "all_planned_cases; incomplete cohorts have no score",
+        "overall": cohort(cases),
+        "by_token_bin": [
+            {
+                "aggregation_name": f"{lower}-{upper}",
+                "bin_index": index,
+                **cohort(group),
+            }
+            for index, (lower, upper) in enumerate(MRCR_TOKEN_BINS)
+            if (group := cases_by_bin.get(index))
+        ],
     }
 
 
@@ -1276,6 +1337,16 @@ def make_report(store, run_id):
                 if len(kinds) == 1:
                     metrics[-1]["token_coverage"] = benchmarks[-1]["token_coverage"]
             if (
+                kinds[benchmark] == MRCR_SEQUENCE_RESULT
+                and manifest["mode"] != "preview"
+            ):
+                benchmarks[-1]["mrcr"] = mrcr_sequence_report(
+                    cases=[c for c in manifest["cases"] if c["id"] in ids],
+                    results=rows,
+                )
+                if len(kinds) == 1:
+                    metrics[-1]["mrcr"] = benchmarks[-1]["mrcr"]
+            if (
                 kinds[benchmark] == CACHE_OBSERVATION_RESULT
                 and manifest["mode"] != "preview"
             ):
@@ -1329,32 +1400,24 @@ def make_report(store, run_id):
             if target_full_suite and item["complete"] and not manifest.get("recovery")
             else None
         )
+        if any("session_observation" in row for row in rows):
+            scope = "session-routing observation; no answer-quality score"
+        elif any("cache_observation" in row for row in rows):
+            scope = "cache-observation diagnostic; no answer-quality score"
+        elif any("token_coverage" in row for row in rows):
+            scope = "token-coverage diagnostic; no combined accuracy"
+        elif any("mrcr" in row for row in rows):
+            scope = "native MRCR sequence-ratio diagnostic; no combined accuracy"
+        elif any("weighted_rubric" in row for row in rows):
+            scope = "weighted-rubric diagnostic; no combined accuracy"
+        elif target_full_suite:
+            scope = "full sr-bench 1.0"
+        elif extension_subset:
+            scope = "extension diagnostic; normalized adapter weights"
+        else:
+            scope = "selected benchmark subset; renormalized fixed weights"
         item["score_scope"] = (
-            (
-                "session-routing observation; no answer-quality score"
-                if any("session_observation" in row for row in rows)
-                else (
-                    "cache-observation diagnostic; no answer-quality score"
-                    if any("cache_observation" in row for row in rows)
-                    else (
-                        "token-coverage diagnostic; no combined accuracy"
-                        if any("token_coverage" in row for row in rows)
-                        else (
-                            "weighted-rubric diagnostic; no combined accuracy"
-                            if any("weighted_rubric" in row for row in rows)
-                            else (
-                                "full sr-bench 1.0"
-                                if target_full_suite
-                                else (
-                                    "extension diagnostic; normalized adapter weights"
-                                    if extension_subset
-                                    else "selected benchmark subset; renormalized fixed weights"
-                                )
-                            )
-                        )
-                    )
-                )
-            )
+            scope
             + f"; profile={manifest['profile']}"
             + ("; custom task subset" if custom_subset else "")
         )

@@ -99,7 +99,7 @@ function MetricsTable({
                   )}
               </td>
               <td>
-                {preview || observationOnly(target)
+                {preview || !qualityApplies(target)
                   ? '—'
                   : `${number(target.correct)} / ${number(target.total)}`}
               </td>
@@ -322,6 +322,12 @@ export default function RunDetails({
     ? Math.min(100, ((progress.completed + progress.failed) / progress.total) * 100)
     : 0
   const metrics = report?.summary.targets ?? run?.summary?.targets ?? []
+  const selectedBenchmark = selected
+    ? report?.benchmarks.find(
+        (row) =>
+          row.benchmark === selected.benchmark && row.target_id === selected.target_id,
+      )
+    : undefined
   const totalTokens =
     metrics.length && metrics.every((target) => tokenTotal(target.tokens) !== null)
       ? metrics.reduce((sum, target) => sum + tokenTotal(target.tokens)!, 0)
@@ -586,7 +592,7 @@ export default function RunDetails({
             {metrics.length > 0 && <SessionObservationDetails targets={metrics} />}
             <p className={styles.muted}>
               {metrics.some((target) => !qualityApplies(target))
-                ? 'Accuracy is not applicable to observation-only or mixed cohorts.'
+                ? 'Binary accuracy is not applicable to non-binary or mixed cohorts.'
                 : 'Scores wait for every planned outcome; failures count as incorrect.'}{' '}
               Unknown usage and cost remain “—”; incomplete evidence cannot establish a cost saving.
             </p>
@@ -805,8 +811,13 @@ export default function RunDetails({
                     </pre>
                     {selected.details?.quality_failure === 'output_limit' ? (
                       <p className={styles.notice}>
-                        The output limit was reached. This case counts as incorrect under the frozen
-                        protocol.
+                        {selectedBenchmark &&
+                        (selectedBenchmark.result_kind === undefined ||
+                          selectedBenchmark.result_kind === 'binary')
+                          ? 'The output limit was reached. This case counts as incorrect under the frozen protocol.'
+                          : selectedBenchmark?.result_kind === 'mrcr-sequence-ratio-v1'
+                            ? 'The output limit was reached. No MRCR grade was recorded.'
+                            : 'The output limit was reached. This result has no binary correctness grade.'}
                       </p>
                     ) : selected.details?.strict_format === false ? (
                       <p className={styles.notice}>
