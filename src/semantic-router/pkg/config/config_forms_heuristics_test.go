@@ -13,14 +13,14 @@ import (
 // wrote out, a reference that reads the rule's value, and a count of images.
 func TestHeuristicMigrationNotes(t *testing.T) {
 	want := map[string][]string{
-		"removed-events-signal": {"routing.signals.keywords[critical_payment_event]"},
+		"removed-events-signal": {"recipes[default].signals.keywords[critical_payment_event]"},
 		"removed-structure-signal": {
-			"routing.decisions[dense].rules",
-			"routing.projections.scores[shape].inputs[constraint_dense]",
-			"routing.signals.keywords[constraint_dense].density",
+			"recipes[default].decisions[dense].rules",
+			"recipes[default].projections.scores[shape].inputs[constraint_dense]",
+			"recipes[default].signals.keywords[constraint_dense].density",
 		},
 		"removed-actions-signal":             nil,
-		"removed-conversation-image-content": {"recipes[gallery].routing.signals.input_modality[many_images]"},
+		"removed-conversation-image-content": {"recipes[gallery].signals.input_modality[many_images]"},
 	}
 	for name, places := range want {
 		_, notes, err := MigrateConfig(readGolden(t, filepath.Join("testdata", "migrate", name, "before.yaml")))
@@ -43,27 +43,33 @@ func TestHeuristicMigrationNotes(t *testing.T) {
 // collection already holds is refused, in every routing scope.
 func TestHeuristicMigrationRefusesNameCollisions(t *testing.T) {
 	for name, document := range map[string]string{
-		"events": `version: v0.3
-routing:
-  signals:
-    keywords: [{name: urgent, operator: OR, keywords: [now]}]
-    events: [{name: urgent, event_types: [outage]}]
-`,
-		"actions": `version: v0.3
-routing:
-  signals:
-    systemone:
-      - {name: action, question: {type: noul, instructions: "Does the request ask for an action?"}}
-    actions: [{name: fix}]
-`,
-		"image_content": `version: v0.3
+		"events": `version: v0.5
 recipes:
+  - name: default
+    signals:
+      keywords: [{name: urgent, operator: OR, keywords: [now]}]
+      events: [{name: urgent, event_types: [outage]}]
+`,
+		"actions": `version: v0.5
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - {name: action, question: {type: noul, instructions: "Does the request ask for an action?"}}
+      actions: [{name: fix}]
+`,
+		"image_content": `version: v0.5
+recipes:
+  - name: default
   - name: media
-    routing:
-      signals:
-        input_modality: [{name: pictures, modality: image}]
-        conversation:
-          - {name: pictures, feature: {type: exists, source: {type: image_content}}}
+    signals:
+      input_modality: [{name: pictures, modality: image}]
+      conversation:
+        - {name: pictures, feature: {type: exists, source: {type: image_content}}}
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `,
 	} {
 		_, _, err := MigrateConfig([]byte(document))

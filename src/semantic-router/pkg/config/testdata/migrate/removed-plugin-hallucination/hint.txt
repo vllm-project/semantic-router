@@ -1,1 +1,1 @@
-recipes[grounded].routing.decisions[grounded].plugins[1]: removed_plugin_type: plugin hallucination was removed; run `vllm-sr config migrate` (a response_guard rule over the fact_check and hallucination signals)
+recipes[grounded].decisions[grounded].plugins[1]: removed_plugin_type: plugin hallucination was removed; run `vllm-sr config migrate` (a response_guard rule over the fact_check and hallucination signals)

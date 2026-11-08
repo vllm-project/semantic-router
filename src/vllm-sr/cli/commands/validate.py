@@ -31,7 +31,7 @@ def _count_items(value) -> int:
 
 
 def _signal_summary_lines(signals) -> list[str]:
-    """Return non-empty signal summary lines for the canonical v0.3 surface."""
+    """Return non-empty signal summary lines for the canonical v0.5 surface."""
     if not signals:
         return []
 

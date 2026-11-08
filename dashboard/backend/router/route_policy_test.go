@@ -243,7 +243,7 @@ func setupRouteInventoryServerWithConfig(t *testing.T, options ...func(*config.C
 		t.Fatal(err)
 	}
 	configPath := filepath.Join(dir, "config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	cfg := &config.Config{

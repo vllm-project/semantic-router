@@ -17,22 +17,23 @@ Vela 1.0 PII 找出请求里的个人信息，还告诉你它在哪：每个片�
 ## 打开它 {#turn-it-on}
 
 ```yaml
-routing:
-  signals:
-    pii:
-      - name: personal_data
-        threshold: 0.85
-        pii_types_allowed: [EMAIL_ADDRESS]
-  decisions:
-    - name: keep-private
-      priority: 200
-      rules:
-        operator: AND
-        conditions:
-          - type: pii
-            name: personal_data
-      modelRefs:
-        - model: private-model
+recipes:
+  - name: default
+    signals:
+      pii:
+        - name: personal_data
+          threshold: 0.85
+          pii_types_allowed: [EMAIL_ADDRESS]
+    decisions:
+      - name: keep-private
+        priority: 200
+        rules:
+          operator: AND
+          conditions:
+            - type: pii
+              name: personal_data
+        modelRefs:
+          - model: private-model
 ```
 
 Vela PII 由 router 跑在 CPU 上。整个请求最多 32,768 个 token，按 512 token 的滑动窗口读完，所以长文档末尾的名字和开头的一样找得准。

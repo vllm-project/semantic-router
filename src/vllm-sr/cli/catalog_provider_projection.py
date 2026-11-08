@@ -202,6 +202,7 @@ def _validate_physical_backend_requirement(
         or model.deployment
         or card.get("kind") == "virtual"
         or allow_backendless_physical
+        or model.states_only_facts()
     ):
         return
     raise CatalogProviderProjectionError(

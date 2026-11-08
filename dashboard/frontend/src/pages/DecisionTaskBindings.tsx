@@ -20,7 +20,6 @@ const GLOBAL_BINDINGS_PATH = ['global', 'model_catalog', 'bindings']
 
 // The rule key a binding named a rule's model with before rules named it.
 const RULE_KEY_TYPES: Record<RuleTarget['collection'], string> = {
-  classifiers: 'classifier',
   safety: 'safety',
   complexity: 'complexity',
   systemone: 'systemone',
@@ -28,7 +27,6 @@ const RULE_KEY_TYPES: Record<RuleTarget['collection'], string> = {
 
 // The legacy fields a rule named its model with; its deployment replaces them.
 const RULE_MODEL_FIELDS: Record<RuleTarget['collection'], string[]> = {
-  classifiers: ['type', 'model', 'model_path', 'use_cpu'],
   safety: ['model'],
   complexity: [],
   systemone: [],
@@ -42,23 +40,23 @@ function taskConsumer(binding: DecisionTaskBinding): string {
 function taskBindingLabel(binding: DecisionTaskBinding): string {
   const rule = ruleTarget(taskConsumer(binding))
   if (!rule) return bindingKey(taskConsumer(binding))
-  return `signals.${rule.collection}[${rule.rule ?? '*'}]${rule.hazard ? '.hazard' : ''}.deployment`
+  return `signals.${rule.collection}[${rule.rule ?? '*'}].deployment`
 }
 
-// The task catalog reports recipe-scoped paths; an explicit default recipe
-// holds the default routing of a recipes-only configuration.
+// The task catalog reports the binding's recipe; the default recipe is the
+// routing profile of the config view.
 function routingPath(config: RouterConfig, binding: DecisionTaskBinding): string[] {
   const path = binding.path.slice(0, -1)
   if (
-    !['routing', 'recipes'].includes(path[0]) ||
+    path[0] !== 'recipes' ||
     path[path.length - 1] !== 'model_bindings' ||
     binding.path.some(isUnsafeBindingKey)
   )
     throw new Error('This task does not expose an editable binding.')
   const index = config.recipes?.findIndex((recipe) => recipe.name === binding.recipe) ?? -1
-  if (path[0] === 'routing' && index < 0) return ['routing']
-  if (index < 0) throw new Error('This recipe was removed. Refresh the task list.')
-  return ['recipes', String(index), 'routing']
+  if (index >= 0) return ['recipes', String(index), 'routing']
+  if (binding.recipe === (config.default_recipe?.name ?? 'default')) return ['routing']
+  throw new Error('This recipe was removed. Refresh the task list.')
 }
 
 function objectAt(root: unknown, path: readonly string[]): Record<string, unknown> {
@@ -88,18 +86,11 @@ function withRuleDeployment(
   const bindings = routing.model_bindings as Record<string, unknown> | undefined
   if (bindings && typeof bindings === 'object') delete bindings[taskConsumer(binding)]
   for (const item of matches) {
-    const owner = rule.hazard ? item.hazard : item
-    if (!owner || typeof owner !== 'object')
-      throw new Error('The binding configuration changed. Refresh before editing.')
-    const target = owner as Record<string, unknown>
-    for (const field of rule.hazard ? ['model'] : RULE_MODEL_FIELDS[rule.collection])
-      delete target[field]
-    if (deployment === null) delete target.deployment
-    else target.deployment = deployment
+    for (const field of RULE_MODEL_FIELDS[rule.collection]) delete item[field]
+    if (deployment === null) delete item.deployment
+    else item.deployment = deployment
     if (bindings && typeof bindings === 'object')
-      delete bindings[
-        `${RULE_KEY_TYPES[rule.collection]}.${item.name}${rule.hazard ? '.hazard' : ''}`
-      ]
+      delete bindings[`${RULE_KEY_TYPES[rule.collection]}.${item.name}`]
   }
   return config
 }

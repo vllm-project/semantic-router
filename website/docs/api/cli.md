@@ -62,7 +62,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr config envoy`](#vllm-sr-config-envoy) | Print the generated Envoy configuration. |
 | [`vllm-sr config get`](#vllm-sr-config-get) | Read the active canonical configuration from a Router. |
 | [`vllm-sr config init`](#vllm-sr-config-init) | Create a minimal canonical configuration template. |
-| [`vllm-sr config migrate`](#vllm-sr-config-migrate) | Migrate a legacy or mixed config file to canonical v0.3 YAML. |
+| [`vllm-sr config migrate`](#vllm-sr-config-migrate) | Migrate a legacy or mixed config file to canonical v0.5 YAML. |
 | [`vllm-sr config plan`](#vllm-sr-config-plan) | Validate and plan an exact remote mutation without changing the Router. |
 | [`vllm-sr config propose`](#vllm-sr-config-propose) | Print a reviewable config proposal. This command does not apply it. |
 | [`vllm-sr config rollback`](#vllm-sr-config-rollback) | Compare-and-swap the active configuration to a recorded version. |
@@ -805,7 +805,7 @@ Create a minimal canonical configuration template.
 Usage: vllm-sr config migrate [OPTIONS]
 ```
 
-Migrate a legacy or mixed config file to canonical v0.3 YAML.
+Migrate a legacy or mixed config file to canonical v0.5 YAML.
 
 The output is written only when the Router's own validation accepts it: a
 local Router binary ($VLLM_SR_ROUTER_BINARY) or the Router in its local
@@ -854,7 +854,7 @@ vllm-sr config propose --config config.yaml \
 
 | Parameter | Description |
 | --- | --- |
-| `--config TEXT` | Path to a canonical v0.3 config file. The file is not modified.  [required] |
+| `--config TEXT` | Path to a canonical v0.5 config file. The file is not modified.  [required] |
 | `--intent TEXT` | Maintained proposal intent id, for example selection.latency-aware.  [required] |
 | `--decision TEXT` | Name of an existing routing decision. Used by decision intents. |
 | `--recipe TEXT` | Name of an existing recipe. Used by recipe intents. |

@@ -9,33 +9,30 @@ import (
 // name collisions.
 
 const recipesOnlyConfigYAML = `
-version: v0.3
-routing:
-  modelCards:
-    - name: model-a
-      description: default tier
-    - name: model-b
-      description: privacy tier
+version: v0.5
 recipes:
+  - name: default
   - name: privacy
     description: privacy profile
-    routing:
-      signals:
-        keywords:
-          - name: pii_keywords
-            operator: OR
-            keywords: ["ssn"]
-      decisions:
-        - name: privacy_route
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: pii_keywords
-          modelRefs:
-            - model: model-b
-              use_reasoning: false
+    signals:
+      keywords:
+        - name: pii_keywords
+          operator: OR
+          keywords: ["ssn"]
+    decisions:
+      - name: privacy_route
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: pii_keywords
+        modelRefs:
+          - model: model-b
+            use_reasoning: false
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: ["vllm-sr/privacy"]
     recipe: privacy
 providers:
@@ -46,10 +43,12 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
+      description: default tier
     - name: model-b
       backend_refs:
         - endpoint: 127.0.0.1:8001
           provider: vllm
+      description: privacy tier
 `
 
 func TestRecipesOnlyConfigKeepsDecisionsReachable(t *testing.T) {
@@ -75,40 +74,34 @@ func TestRecipesOnlyConfigKeepsDecisionsReachable(t *testing.T) {
 
 func TestDomainRulesOfTheSameNameStayRecipeLocal(t *testing.T) {
 	yamlConfig := `
-version: v0.3
-routing:
-  modelCards:
-    - name: model-a
-      description: default tier
-    - name: model-b
-      description: privacy tier
-  signals:
-    domains: [{name: math}]
-  decisions:
-    - name: math_default
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: math
-      modelRefs:
-        - model: model-a
-          use_reasoning: false
+version: v0.5
 recipes:
+  - name: default
+    signals:
+      domains: [{name: math}]
+    decisions:
+      - name: math_default
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: math
+        modelRefs:
+          - model: model-a
+            use_reasoning: false
   - name: privacy
-    routing:
-      signals:
-        domains: [{name: math}]
-      decisions:
-        - name: math_privacy
-          rules:
-            operator: AND
-            conditions:
-              - type: domain
-                name: math
-          modelRefs:
-            - model: model-b
-              use_reasoning: false
+    signals:
+      domains: [{name: math}]
+    decisions:
+      - name: math_privacy
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: math
+        modelRefs:
+          - model: model-b
+            use_reasoning: false
 providers:
   defaults:
     model: model-a
@@ -117,10 +110,16 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
+      description: default tier
     - name: model-b
       backend_refs:
         - endpoint: 127.0.0.1:8001
           provider: vllm
+      description: privacy tier
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `
 	cfg, err := ParseYAMLBytes([]byte(yamlConfig))
 	if err != nil {
@@ -143,24 +142,26 @@ providers:
 
 func TestSignalDefinitionsWithTheSameNameStayRecipeLocal(t *testing.T) {
 	yamlConfig := recipeTestBaseYAML + `
-recipes:
   - name: privacy
-    routing:
-      signals:
-        keywords:
-          - name: urgent_keywords
-            operator: OR
-            keywords: ["ssn"]
-      decisions:
-        - name: privacy_route
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: urgent_keywords
-          modelRefs:
-            - model: model-b
-              use_reasoning: false
+    signals:
+      keywords:
+        - name: urgent_keywords
+          operator: OR
+          keywords: ["ssn"]
+    decisions:
+      - name: privacy_route
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: urgent_keywords
+        modelRefs:
+          - model: model-b
+            use_reasoning: false
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `
 	cfg, err := ParseYAMLBytes([]byte(yamlConfig))
 	if err != nil {
@@ -177,73 +178,79 @@ recipes:
 
 func TestSignalReferencesCannotCrossRecipeBoundaries(t *testing.T) {
 	yamlConfig := recipeTestBaseYAML + `
-recipes:
   - name: privacy
-    routing:
-      decisions:
-        - name: privacy_route
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: urgent_keywords
-          modelRefs:
-            - model: model-b
-              use_reasoning: false
+    decisions:
+      - name: privacy_route
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: urgent_keywords
+        modelRefs:
+          - model: model-b
+            use_reasoning: false
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `
 	_, err := ParseYAMLBytes([]byte(yamlConfig))
-	if err == nil || !strings.Contains(err.Error(), `routing recipe "privacy"`) || !strings.Contains(err.Error(), "not declared in this recipe") {
+	if err == nil || !strings.Contains(err.Error(), "recipes[privacy].decisions[") || !strings.Contains(err.Error(), "not declared in this recipe") {
 		t.Fatalf("expected a recipe-local signal reference error, got %v", err)
 	}
 }
 
 func TestSignalReferencesCannotCrossSignalFamilies(t *testing.T) {
 	yamlConfig := recipeTestBaseYAML + `
-recipes:
   - name: privacy
-    routing:
-      signals:
-        keywords:
-          - name: shared_name
-            operator: OR
-            keywords: ["ssn"]
-      decisions:
-        - name: privacy_route
-          rules:
-            operator: AND
-            conditions:
-              - type: authz
-                name: shared_name
-          modelRefs:
-            - model: model-b
-              use_reasoning: false
+    signals:
+      keywords:
+        - name: shared_name
+          operator: OR
+          keywords: ["ssn"]
+    decisions:
+      - name: privacy_route
+        rules:
+          operator: AND
+          conditions:
+            - type: authz
+              name: shared_name
+        modelRefs:
+          - model: model-b
+            use_reasoning: false
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `
 	_, err := ParseYAMLBytes([]byte(yamlConfig))
-	if err == nil || !strings.Contains(err.Error(), `routing recipe "privacy"`) || !strings.Contains(err.Error(), "not declared in this recipe") {
+	if err == nil || !strings.Contains(err.Error(), "recipes[privacy].decisions[") || !strings.Contains(err.Error(), "not declared in this recipe") {
 		t.Fatalf("expected a signal-family-local reference error, got %v", err)
 	}
 }
 
 func TestDuplicateDecisionNameAcrossRecipesIsIsolated(t *testing.T) {
 	yamlConfig := recipeTestBaseYAML + `
-recipes:
   - name: privacy
-    routing:
-      signals:
-        keywords:
-          - name: pii_keywords
-            operator: OR
-            keywords: ["ssn"]
-      decisions:
-        - name: default_route
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: pii_keywords
-          modelRefs:
-            - model: model-b
-              use_reasoning: false
+    signals:
+      keywords:
+        - name: pii_keywords
+          operator: OR
+          keywords: ["ssn"]
+    decisions:
+      - name: default_route
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: pii_keywords
+        modelRefs:
+          - model: model-b
+            use_reasoning: false
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `
 	cfg, err := ParseYAMLBytes([]byte(yamlConfig))
 	if err != nil {
@@ -270,28 +277,29 @@ func TestEntrypointNameCollisionsRejected(t *testing.T) {
 			wantErrSubstr: "already a configured model",
 		},
 		{
-			name:          "auto alias",
+			name:          "default entrypoint name",
 			entrypoint:    DefaultEntrypointModel,
-			wantErrSubstr: "conflicts with a named recipe",
+			wantErrSubstr: "is already mapped by another entrypoint",
 		},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			yamlConfig := recipeTestBaseYAML + `
-recipes:
   - name: privacy
-    routing:
-      decisions:
-        - name: privacy_route
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: urgent_keywords
-          modelRefs:
-            - model: model-b
-              use_reasoning: false
+    decisions:
+      - name: privacy_route
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: urgent_keywords
+        modelRefs:
+          - model: model-b
+            use_reasoning: false
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: ["` + testCase.entrypoint + `"]
     recipe: privacy
 `
@@ -308,29 +316,26 @@ entrypoints:
 
 func TestEntrypointNameCollidingWithLoRARejected(t *testing.T) {
 	yamlConfig := `
-version: v0.3
-routing:
-  modelCards:
-    - name: base-model
-      loras:
-        - name: general-expert
-          description: Default LoRA adapter
+version: v0.5
 recipes:
+  - name: default
   - name: privacy
-    routing:
-      signals:
-        domains: [{name: other}]
-      decisions:
-        - name: privacy_route
-          rules:
-            operator: AND
-            conditions:
-              - type: domain
-                name: other
-          modelRefs:
-            - model: base-model
-              use_reasoning: false
+    signals:
+      domains: [{name: other}]
+    decisions:
+      - name: privacy_route
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: other
+        modelRefs:
+          - model: base-model
+            use_reasoning: false
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: ["general-expert"]
     recipe: privacy
 providers:
@@ -341,6 +346,9 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
+      loras:
+        - name: general-expert
+          description: Default LoRA adapter
 `
 	_, err := ParseYAMLBytes([]byte(yamlConfig))
 	if err == nil {

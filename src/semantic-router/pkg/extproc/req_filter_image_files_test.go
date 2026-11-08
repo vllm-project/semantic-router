@@ -230,7 +230,7 @@ func TestResponsesImageFileDispatchHonorsCanonicalModelCapabilities(t *testing.T
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: vision-model
@@ -239,10 +239,9 @@ providers:
           provider: vllm
           endpoint: 127.0.0.1:8000
           weight: 1
-routing:
-  modelCards:
-    - name: vision-model
       %s
+recipes:
+  - name: default
 `, tc.capabilities)))
 			if err != nil {
 				t.Fatalf("parse model capabilities: %v", err)

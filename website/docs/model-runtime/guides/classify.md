@@ -26,24 +26,25 @@ Add the signal and use it in a route. A domain rule matches the domains its
 `labels` name, by default its own name:
 
 ```yaml
-routing:
-  signals:
-    domains:
-      - name: math
-        description: Mathematics and quantitative reasoning.
-      - name: computing
-        description: Programming and computer science.
-        labels: [computer science]
-  decisions:
-    - name: math-route
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: math
-      modelRefs:
-        - model: math-model
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: math
+          description: Mathematics and quantitative reasoning.
+        - name: computing
+          description: Programming and computer science.
+          labels: [computer science]
+    decisions:
+      - name: math-route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: math
+        modelRefs:
+          - model: math-model
 ```
 
 ## Choose where it runs
@@ -78,28 +79,29 @@ question: a choice over them that the decision model answers. Route on one of
 its labels:
 
 ```yaml
-routing:
-  signals:
-    systemone:
-      - name: ticket_topic
-        question:
-          type: choice
-          instructions: Which desk should handle the ticket?
-          choices:
-            - key: billing
-            - key: shipping
-            - key: other
-  decisions:
-    - name: billing-desk
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: systemone
-            name: ticket_topic
-            label: billing
-            predicate:
-              gte: 0.5
-      modelRefs:
-        - model: support-model
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: ticket_topic
+          question:
+            type: choice
+            instructions: Which desk should handle the ticket?
+            choices:
+              - key: billing
+              - key: shipping
+              - key: other
+    decisions:
+      - name: billing-desk
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: systemone
+              name: ticket_topic
+              label: billing
+              predicate:
+                gte: 0.5
+        modelRefs:
+          - model: support-model
 ```

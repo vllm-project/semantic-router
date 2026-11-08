@@ -79,7 +79,7 @@ func (c *ResponseGuardPluginConfig) EffectiveOnUnknown() string {
 
 // validateResponseGuardPlugin checks a guard's shape: its rules, their
 // actions and the condition trees they read. Which signals a tree may name
-// depends on its routing scope (validateResponseGuardReferences).
+// depends on its recipe (validateResponseGuardReferences).
 func validateResponseGuardPlugin(at PluginAt, p *ResponseGuardPluginConfig) error {
 	if len(p.Rules) == 0 {
 		return at.Errorf("rules: at least one rule is required")

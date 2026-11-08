@@ -17,7 +17,7 @@ import (
 
 // testRouterConfigYAML is a minimal canonical config with a single backed model.
 const testRouterConfigYAML = `
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -28,14 +28,13 @@ providers:
         - endpoint: 127.0.0.1:8000
           provider: vllm
           api_key: test-secret
-routing:
-  modelCards:
-    - name: known-model
-  decisions:
-    - name: default_route
-      priority: 1
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: known-model}]
+recipes:
+  - name: default
+    decisions:
+      - name: default_route
+        priority: 1
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: known-model}]
 `
 
 func newModelResolutionTestRouter(t *testing.T) (*OpenAIRouter, *config.RouterConfig) {

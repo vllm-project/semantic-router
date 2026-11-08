@@ -210,6 +210,26 @@ func (in *ConfigSpec) DeepCopyInto(out *ConfigSpec) {
 		*out = new(apiextensionsv1.JSON)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.Recipes != nil {
+		in, out := &in.Recipes, &out.Recipes
+		*out = new(apiextensionsv1.JSON)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.Entrypoints != nil {
+		in, out := &in.Entrypoints, &out.Entrypoints
+		*out = new(apiextensionsv1.JSON)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.Plugins != nil {
+		in, out := &in.Plugins, &out.Plugins
+		*out = new(apiextensionsv1.JSON)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.Models != nil {
+		in, out := &in.Models, &out.Models
+		*out = new(apiextensionsv1.JSON)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.DecisionModel != nil {
 		in, out := &in.DecisionModel, &out.DecisionModel
 		*out = new(DecisionModelBinding)

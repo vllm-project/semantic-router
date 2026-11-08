@@ -57,8 +57,8 @@ func init() {
 }
 
 func overreachDocument(backend string) string {
-	return strings.Replace(stampDocument(backend, ""), "        - type: "+stampType+"\n          configuration:\n",
-		"        - type: "+overreachType+"\n          configuration: {}\n", 1)
+	return strings.Replace(stampDocument(backend, ""), "          - type: "+stampType+"\n            configuration:\n",
+		"          - type: "+overreachType+"\n            configuration: {}\n", 1)
 }
 
 const completion = `{"id":"c","object":"chat.completion","model":"m","choices":[{"index":0,` +

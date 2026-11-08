@@ -121,18 +121,19 @@ global:
   model_catalog:
     deployments:
       local-vela: {provider: model_runtime, artifact: vllm-sr/vela3-fast, device: cpu}
-    bindings:            # every recipe
+    bindings: # every recipe
       pii: local-vela
-routing:
-  model_bindings:        # this routing profile; recipes[].routing.model_bindings for one recipe
-    domain: d3-remote
+recipes:
+  - name: default
+    model_bindings: # this routing profile; recipes[].model_bindings for one recipe
+      domain: d3-remote
 ```
 
 Binding keys are the application signal types: `domain`, `fact_check`,
 `user_feedback`, `jailbreak`, `safety`, `pii`, `hallucination`, `refusal`,
 `turn_relation`, `complexity` and `modality`. A binding answers the rules of
 its type that name no deployment; a rule writes `deployment:` to ask another.
-`routing.signals.systemone[]` rules and `algorithm.systemone` of a decision
+`recipes[].signals.systemone[]` rules and `algorithm.systemone` of a decision
 write `deployment:` too. The `jailbreak`, `pii` and `hallucination` bindings
 also name the model of the plugin module of that type.
 
@@ -206,10 +207,11 @@ global:
         model: vllm-sr/d3-ultra
         auth: {api_key_env: JUDGE_KEY}
         timeout_ms: 5000
-routing:
-  model_bindings:
-    jailbreak: d3-judge                  # request- and response-stage rules
-    hallucination: d3-judge
+recipes:
+  - name: default
+    model_bindings:
+      jailbreak: d3-judge # request- and response-stage rules
+      hallucination: d3-judge
 ```
 
 Every `jailbreak` and `hallucination` rule of this scope asks `d3-judge`; the

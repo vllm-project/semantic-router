@@ -23,6 +23,7 @@ from .engine import (
     compute_threshold_fix,
     compute_weight_fix,
     decompose_projection,
+    default_recipe,
     find_failing_leaves,
     find_false_positive_leaves,
     probe_severity,
@@ -532,7 +533,7 @@ def _update_score_weight(score: dict, signal_name: str, new_weight: float) -> No
 def apply_structural_fix(cfg: dict, sfix: StructuralFix) -> dict:
     """Remove specified signal leaves from a decision's OR condition."""
     cfg = copy.deepcopy(cfg)
-    for dec in cfg["routing"]["decisions"]:
+    for dec in default_recipe(cfg).get("decisions", []):
         if dec["name"] != sfix.decision_name:
             continue
         if sfix.action == "remove_false_positive_branches":
@@ -555,7 +556,7 @@ def apply_structural_fix(cfg: dict, sfix: StructuralFix) -> dict:
 def apply_fix_to_config(cfg: dict, fix: Fix, dsl: DSLConfig) -> dict:
     """Mutate config dict for a parametric fix, maintaining partition consistency."""
     cfg = copy.deepcopy(cfg)
-    proj = cfg["routing"]["projections"]
+    proj = default_recipe(cfg)["projections"]
     if fix.fix_type == "threshold":
         for m in proj.get("mappings", []):
             if m["name"] != fix.target:

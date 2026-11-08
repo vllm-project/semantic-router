@@ -3,7 +3,7 @@
 ## Overview
 
 `fact-check` decides whether a prompt should be treated as evidence-sensitive
-traffic. Define its labels under `routing.signals.fact_check`.
+traffic. Define its labels under `recipes[].signals.fact_check`.
 
 This family is learned: the decision model answers it unless a `fact_check` binding names another deployment ([Choose a model for a signal](../../../installation/choose-a-model-for-a-signal.md)). `global.model_catalog.modules.hallucination_mitigation.fact_check` holds its settings.
 
@@ -32,13 +32,14 @@ Use `fact-check` when:
 ## Configuration
 
 ```yaml
-routing:
-  signals:
-    fact_check:
-      - name: needs_fact_check
-        description: Queries with factual claims that should be verified against evidence.
-      - name: no_fact_check_needed
-        description: Creative or opinion-heavy prompts that do not need factual verification.
+recipes:
+  - name: default
+    signals:
+      fact_check:
+        - name: needs_fact_check
+          description: Queries with factual claims that should be verified against evidence.
+        - name: no_fact_check_needed
+          description: Creative or opinion-heavy prompts that do not need factual verification.
 ```
 
 Define only the labels your decisions will reference. The learned classifier decides which one fires.

@@ -47,7 +47,7 @@ func TestSignalTimeoutValidates(t *testing.T) {
 
 func TestSignalTimeoutRoundTripsTheCanonicalConfig(t *testing.T) {
 	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: m
@@ -60,17 +60,18 @@ providers:
 global:
   model_catalog:
     signal_timeout_ms: 2500
-routing:
-  decisions:
-    - name: d
-      priority: 1
-      rules: {operator: AND, conditions: [{type: keyword, name: k}]}
-      modelRefs: [{model: m}]
-  signals:
-    keywords:
-      - name: k
-        operator: OR
-        keywords: [hello]
+recipes:
+  - name: default
+    decisions:
+      - name: d
+        priority: 1
+        rules: {operator: AND, conditions: [{type: keyword, name: k}]}
+        modelRefs: [{model: m}]
+    signals:
+      keywords:
+        - name: k
+          operator: OR
+          keywords: [hello]
 `))
 	if err != nil {
 		t.Fatal(err)

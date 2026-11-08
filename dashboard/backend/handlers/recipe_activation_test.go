@@ -898,7 +898,7 @@ func withManagementBearer(config []byte) []byte {
 }
 
 func withManagedPostgresReplay(config []byte) []byte {
-	return []byte(strings.Replace(string(config), "global:\n", "global:\n  services:\n    router_replay:\n      enabled: true\n      store_backend: postgres\n      postgres:\n        host: postgres\n        port: 5432\n        database: vsr\n        user: router\n        password: test-only\n        ssl_mode: disable\n        table_name: router_replay\n", 1))
+	return []byte(strings.Replace(string(config), "global:\n", "global:\n  plugins:\n    - type: router_replay\n      configuration:\n        enabled: true\n  services:\n    router_replay:\n      store_backend: postgres\n      postgres:\n        host: postgres\n        port: 5432\n        database: vsr\n        user: router\n        password: test-only\n        ssl_mode: disable\n        table_name: router_replay\n", 1))
 }
 
 func importRecipeIntoStore(t *testing.T, store *recipe.Store, name string) recipe.PackageSummary {

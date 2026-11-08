@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: gpt-4o-mini
@@ -8,41 +8,16 @@ providers:
       pricing:
         prompt_per_1m: 0.15
         completion_per_1m: 0.6
-    - name: gpt-4o
-      pricing:
-        prompt_per_1m: 2.5
-        completion_per_1m: 10
-routing:
-  modelCards:
-    - name: gpt-4o-mini
       loras:
         - name: legal-assistant
           description: Legal assistant
     - name: gpt-4o
+      pricing:
+        prompt_per_1m: 2.5
+        completion_per_1m: 10
       loras:
         - name: legal-expert
           description: Legal domain specialist
-  signals:
-    domains:
-      - name: law
-        description: Legal questions and law-related topics
-      - name: business
-        description: Business and management related queries
-  decisions:
-    - name: legal_advice
-      description: Legal domain with system prompt
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: law
-      modelRefs:
-        - model: gpt-4o
-          use_reasoning: false
-      plugins:
-        - type: system_prompt
-        - type: response_cache
 global:
   router:
     config_source: kubernetes
@@ -112,15 +87,12 @@ global:
     ratelimit: {}
     management_api: {}
     router_replay:
-      enabled: false
       ttl_seconds: 0
     startup_status:
       store_backend: ""
   stores:
     response_cache:
       backend_type: memory
-      enabled: true
-      similarity_threshold: 0.8
       max_entries: 1000
       ttl_seconds: 3600
       eviction_policy: fifo
@@ -135,3 +107,36 @@ global:
       prompt_compression:
         enabled: false
         max_tokens: 0
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        scope: global
+        semantic:
+          match:
+            recall:
+              min_similarity: 0.8
+              top_k: 1
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: law
+          description: Legal questions and law-related topics
+        - name: business
+          description: Business and management related queries
+    decisions:
+      - name: legal_advice
+        description: Legal domain with system prompt
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: law
+        modelRefs:
+          - model: gpt-4o
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+          - type: response_cache

@@ -28,15 +28,6 @@ var heuristicForms = []ConfigForm{
 		return nil
 	}),
 	{
-		Code:  CodeRemovedSignalType,
-		Paths: RoutingScopes("signals.structure[]"),
-		Match: func(node *yaml.Node, _ string) bool {
-			return strings.EqualFold(scalarAt(mappingAt(node, "feature", "source"), "type"), "text_bytes")
-		},
-		What:    "a structure rule on text_bytes is removed, and no keywords rule measures text length",
-		Becomes: "a context rule on the request's estimated tokens",
-	},
-	{
 		Code:    CodeRemovedSignalType,
 		Paths:   RoutingScopes("signals.structure"),
 		What:    "the structure signal is removed",
@@ -92,7 +83,7 @@ var heuristicForms = []ConfigForm{
 	},
 }
 
-// signalReferencePatterns are where a routing scope names a signal rule:
+// signalReferencePatterns are where a recipe names a signal rule:
 // decision conditions and projection inputs.
 var signalReferencePatterns = []string{
 	"decisions[].rules.**",
@@ -100,7 +91,7 @@ var signalReferencePatterns = []string{
 }
 
 // removedReferenceForm is the form of the references to a removed signal
-// type, in every routing scope.
+// type, in every recipe.
 func removedReferenceForm(signalType, becomes string, migrate func(*Migration, FormMatch) error) ConfigForm {
 	var paths []string
 	for _, pattern := range signalReferencePatterns {
@@ -152,7 +143,7 @@ func noteValueReferences(m *Migration, scope *yaml.Node, scopePath, signalType s
 	}
 }
 
-// signalsScope is the routing scope of a match at signals.<type> and its path.
+// signalsScope is the recipe of a match at signals.<type> and its path.
 func signalsScope(at FormMatch) (*yaml.Node, string) {
 	return at.Above(2), strings.TrimSuffix(at.Path, "signals."+at.Key)
 }
@@ -290,6 +281,25 @@ func eventTerms(rule *yaml.Node, temporal bool) []string {
 // characters a unit.
 const structureDensityScale = 200
 
+// utf8BytePatterns count a text's UTF-8 bytes as keyword occurrences: every
+// character matches the first, and each later pattern matches the characters
+// of more than one, two and three bytes.
+var utf8BytePatterns = []string{`(?s).`, `[^\x00-\x7F]`, `[^\x00-\x{7FF}]`, `[^\x00-\x{FFFF}]`}
+
+// promptCompressionEnabled reports whether the text the signals read is
+// compressed before they run.
+func promptCompressionEnabled(root *yaml.Node) bool {
+	if enabledScalar(mappingAt(root, "global", "model_catalog", "modules", "prompt_compression")) {
+		return true
+	}
+	for _, plugin := range sequenceAt(root, "global", "plugins") {
+		if scalarAt(plugin, "type") == "context" && enabledScalar(mappingAt(plugin, "configuration", "compress", "signals")) {
+			return true
+		}
+	}
+	return false
+}
+
 // migrateStructureRules writes each structure rule as a keywords rule with
 // operator OR: a regex source is a regex keyword, a keyword_set its literal
 // keywords, and each ordered sequence a regex over its markers. A count
@@ -335,10 +345,21 @@ func rewriteStructureRule(m *Migration, scopePath string, rule *yaml.Node, featu
 			}
 			keywords = append(keywords, "(?s)"+strings.Join(markers, ".*"))
 		}
+	case "text_bytes":
+		method, keywords = "regex", utf8BytePatterns
+		m.Changed(scopePath+"signals.keywords["+scalarAt(rule, "name")+"]",
+			"text_bytes is the count of these patterns: each character matches once, and once more for every UTF-8 byte past its first")
+		if promptCompressionEnabled(m.Root()) {
+			m.Changed(scopePath+"signals.keywords["+scalarAt(rule, "name")+"]",
+				"it counts the bytes of the text the keywords rules read, which compress.signals compresses; text_bytes counted the original text: "+
+					"add keyword to compress.signals.skip_signals to count that")
+		}
 	default:
 		return fmt.Errorf("feature.source.type %q has no keywords form", sourceType)
 	}
-	caseSensitive := boolAt(source, "case_sensitive")
+	// The byte patterns must not fold case: a character that folds to ASCII
+	// would no longer match the non-ASCII ones.
+	caseSensitive := boolAt(source, "case_sensitive") || sourceType == "text_bytes"
 	m.Delete(rule, "feature")
 	m.Delete(rule, "predicate")
 	m.Set(rule, "operator", Scalar("OR"))

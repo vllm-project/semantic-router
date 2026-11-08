@@ -29,7 +29,7 @@ func TestGeneratedArtifactsMatchGoSource(t *testing.T) {
 		t.Fatal(err)
 	}
 	artifacts := []string{
-		filepath.Join(root, "src", "semantic-router", "pkg", "configschema", "router-config-v0.3.schema.json"),
+		filepath.Join(root, "src", "semantic-router", "pkg", "configschema", "router-config-v0.5.schema.json"),
 	}
 	for _, artifact := range artifacts {
 		got, readErr := os.ReadFile(artifact)
@@ -60,9 +60,9 @@ func TestGeneratedArtifactsMatchGoSource(t *testing.T) {
 func TestCanonicalSchemaIsTheOnlyTrackedSchemaArtifact(t *testing.T) {
 	root := repositoryRoot(t)
 	for _, obsolete := range []string{
-		filepath.Join(root, "config", "schemas", "router-config-v0.3.schema.json"),
-		filepath.Join(root, "src", "vllm-sr", "cli", "config_schema", "router-config-v0.3.schema.json"),
-		filepath.Join(root, "dashboard", "frontend", "src", "generated", "router-config-v0.3.schema.json"),
+		filepath.Join(root, "config", "schemas", "router-config-v0.5.schema.json"),
+		filepath.Join(root, "src", "vllm-sr", "cli", "config_schema", "router-config-v0.5.schema.json"),
+		filepath.Join(root, "dashboard", "frontend", "src", "generated", "router-config-v0.5.schema.json"),
 	} {
 		if _, err := os.Stat(obsolete); err == nil {
 			t.Errorf("obsolete schema mirror still exists: %s", obsolete)
@@ -80,10 +80,13 @@ func TestSchemaPublishesEveryRoutingSurface(t *testing.T) {
 	if err := json.Unmarshal(Document(), &document); err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range []string{"version", "listeners", "providers", "evaluation", "routing", "entrypoints", "recipes", "global"} {
+	for _, field := range []string{"version", "listeners", "providers", "evaluation", "entrypoints", "recipes", "global"} {
 		if _, ok := document.Properties[field]; !ok {
 			t.Errorf("root schema is missing %q", field)
 		}
+	}
+	if _, ok := document.Properties["routing"]; ok {
+		t.Error("root schema still publishes the removed routing block")
 	}
 	if _, ok := document.Properties["setup"]; ok {
 		t.Error("steady-state Router schema must not publish transient Dashboard setup state")

@@ -150,7 +150,7 @@ func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 	}
 
 	// PLUGINs
-	for _, p := range dec.Plugins {
+	for _, p := range dec.DeclaredPlugins() {
 		ref := &PluginRef{Name: sanitizeName(p.Type)}
 		fields := pluginConfigToFields(&p)
 		if len(fields) > 0 {

@@ -314,17 +314,18 @@ func TestConvertProviderMetadataUsesCatalogAndNestedReasoning(t *testing.T) {
 	assert.Equal(t, "high", converted[1].Reasoning.Default)
 }
 
-func TestConvertRoutingModelCardsUsesCatalogIdentity(t *testing.T) {
-	cards := convertRoutingModelCards([]v1alpha1.ModelConfig{
+func TestConvertProviderMetadataDeclaresEveryPoolModel(t *testing.T) {
+	models := convertProviderMetadata([]v1alpha1.ModelConfig{
 		{Name: "frontier", Catalog: "vendor/reasoner-v1", LoRAs: []v1alpha1.LoRAConfig{{Name: "expert"}}},
 		{Name: "private-model"},
 	})
 
-	require.Len(t, cards, 2)
-	assert.Equal(t, "vendor/reasoner-v1", cards[0].Name)
-	require.Len(t, cards[0].LoRAs, 1)
-	assert.Equal(t, "expert", cards[0].LoRAs[0].Name)
-	assert.Equal(t, "private-model", cards[1].Name)
+	require.Len(t, models, 2)
+	assert.Equal(t, "frontier", models[0].Name)
+	assert.Equal(t, "vendor/reasoner-v1", models[0].Catalog)
+	require.Len(t, models[0].LoRAs, 1)
+	assert.Equal(t, "expert", models[0].LoRAs[0].Name)
+	assert.Equal(t, "private-model", models[1].Name)
 }
 
 func TestCRDConverterConvertsKeywordCounts(t *testing.T) {
@@ -359,9 +360,9 @@ func TestCRDConverterConvertsKeywordCounts(t *testing.T) {
 
 	outputConfig, err := NewCRDConverter().Convert(pool, route, &config.CanonicalConfig{})
 	require.NoError(t, err)
-	require.Len(t, outputConfig.Routing.Signals.Keywords, 2)
+	require.Len(t, outputConfig.Recipes[0].Signals.Keywords, 2)
 
-	counted, dense := outputConfig.Routing.Signals.Keywords[0], outputConfig.Routing.Signals.Keywords[1]
+	counted, dense := outputConfig.Recipes[0].Signals.Keywords[0], outputConfig.Recipes[0].Signals.Keywords[1]
 	assert.Equal(t, "Prompts that contain many explicit questions.", counted.Description)
 	assert.Equal(t, "regex", counted.Method)
 	assert.Equal(t, config.NumericPredicate{GTE: &four}, *counted.Count)
@@ -515,9 +516,9 @@ func TestCRDConverterConvertsOpenEndedContextRule(t *testing.T) {
 
 	outputConfig, err := NewCRDConverter().Convert(pool, route, &config.CanonicalConfig{})
 	require.NoError(t, err)
-	require.Len(t, outputConfig.Routing.Signals.Context, 2)
+	require.Len(t, outputConfig.Recipes[0].Signals.Context, 2)
 
-	overflow := outputConfig.Routing.Signals.Context[1]
+	overflow := outputConfig.Recipes[0].Signals.Context[1]
 	assert.Equal(t, "overflow_context", overflow.Name)
 	assert.Equal(t, config.TokenCount("8001"), overflow.MinTokens)
 	assert.False(t, overflow.MaxTokens.IsSet())

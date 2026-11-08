@@ -257,16 +257,17 @@ global:
 A per-decision override belongs in the plugin configuration:
 
 ```yaml
-routing:
-  decisions:
-    - name: cached-route
-      plugins:
-        - type: response_cache
-          configuration:
-            enabled: true
-            semantic:
-              match:
-                recall: {top_k: 3, min_similarity: 0.70}
+recipes:
+  - name: default
+    decisions:
+      - name: cached-route
+        plugins:
+          - type: response_cache
+            configuration:
+              enabled: true
+              semantic:
+                match:
+                  recall: {top_k: 3, min_similarity: 0.70}
 ```
 
 Lower thresholds increase false-match risk. Evaluate answer equivalence before
@@ -312,14 +313,15 @@ detector is producing low-confidence false positives, evaluate a higher
 threshold:
 
 ```yaml
-routing:
-  signals:
-    pii:
-      - name: pii-policy
-        threshold: 0.90
-        pii_types_allowed:
-          - GPE
-          - ORGANIZATION
+recipes:
+  - name: default
+    signals:
+      pii:
+        - name: pii-policy
+          threshold: 0.90
+          pii_types_allowed:
+            - GPE
+            - ORGANIZATION
 ```
 
 Changing a privacy threshold changes false-negative risk. Validate it against a
@@ -340,11 +342,12 @@ decision.
 To reduce false positives, evaluate a higher threshold on the affected signal:
 
 ```yaml
-routing:
-  signals:
-    jailbreak:
-      - name: jailbreak-standard
-        threshold: 0.85
+recipes:
+  - name: default
+    signals:
+      jailbreak:
+        - name: jailbreak-standard
+          threshold: 0.85
 ```
 
 If a route should not depend on jailbreak detection, remove that condition

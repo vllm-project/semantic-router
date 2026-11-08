@@ -11,40 +11,42 @@ import (
 
 func TestDecompileRoutingPreservesRawPluginConfigMaps(t *testing.T) {
 	cfg := mustParseRoutingPluginConfigTest(t, `
-version: v0.3
-routing:
-  modelCards:
-    - name: "test-model"
-  signals:
-    domains:
-      - name: test
-        labels: [other]
-        description: test
-  decisions:
-    - name: plugin_route
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: test
-      modelRefs:
-        - model: test-model
-      plugins:
-        - type: response_cache
-          configuration:
-            enabled: true
-            semantic:
-              match:
-                recall: {top_k: 3, min_similarity: 0.81}
-                judge: {preset: same_request, min_score: 0.9}
-        - type: router_replay
-          configuration:
-            enabled: true
-            max_records: 1000
-            capture_request_body: true
-            capture_response_body: true
-            max_body_bytes: 4096
+version: v0.5
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: test
+          labels: [other]
+          description: test
+    decisions:
+      - name: plugin_route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: test
+        modelRefs:
+          - model: test-model
+        plugins:
+          - type: response_cache
+            configuration:
+              enabled: true
+              semantic:
+                match:
+                  recall: {top_k: 3, min_similarity: 0.81}
+                  judge: {preset: same_request, min_score: 0.9}
+          - type: router_replay
+            configuration:
+              enabled: true
+              max_records: 1000
+              capture_request_body: true
+              capture_response_body: true
+              max_body_bytes: 4096
+providers:
+  models:
+    - name: test-model
 `)
 
 	dslText := mustDecompileRoutingPluginConfigTest(t, cfg)
@@ -106,40 +108,42 @@ func TestDecompileRoutingRoundTripsHeaderAndResponsePlugins(t *testing.T) {
 
 func TestDecompileRoutingRoundTripsToolsPluginConfig(t *testing.T) {
 	cfg := mustParseRoutingPluginConfigTest(t, `
-version: v0.3
-routing:
-  modelCards:
-    - name: "test-model"
-  signals:
-    domains:
-      - name: test
-        labels: [other]
-        description: test
-  decisions:
-    - name: plugin_route
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: test
-      modelRefs:
-        - model: test-model
-      plugins:
-        - type: tools
-          configuration:
-            enabled: true
-            policy:
-              mode: filtered
-              allow_tools: [docs.search, tickets.lookup]
-            select:
-              mode: filter
-              match:
-                judge: {preset: tool_rank, top_k: 4, min_ratio: 0.2}
-              need_threshold: 0.6
-              preserve_count: 1
-              on_error: strip
-              input: {history: true}
+version: v0.5
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: test
+          labels: [other]
+          description: test
+    decisions:
+      - name: plugin_route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: test
+        modelRefs:
+          - model: test-model
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              policy:
+                mode: filtered
+                allow_tools: [docs.search, tickets.lookup]
+              select:
+                mode: filter
+                match:
+                  judge: {preset: tool_rank, top_k: 4, min_ratio: 0.2}
+                need_threshold: 0.6
+                preserve_count: 1
+                on_error: strip
+                input: {history: true}
+providers:
+  models:
+    - name: test-model
 `)
 
 	dslText := mustDecompileRoutingPluginConfigTest(t, cfg)
@@ -456,20 +460,22 @@ ROUTE invalid_prompt_cache {
 
 func TestDecompileRoutingRoundTripsToolsStripHistory(t *testing.T) {
 	cfg := mustParseRoutingPluginConfigTest(t, `
-version: v0.3
-routing:
-  modelCards:
-    - name: "local-guard"
-  decisions:
-    - name: privacy_route
-      priority: 100
-      modelRefs:
-        - model: local-guard
-      plugins:
-        - type: tools
-          configuration:
-            enabled: true
-            policy: {mode: none, strip_tool_history: true}
+version: v0.5
+recipes:
+  - name: default
+    decisions:
+      - name: privacy_route
+        priority: 100
+        modelRefs:
+          - model: local-guard
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              policy: {mode: none, strip_tool_history: true}
+providers:
+  models:
+    - name: local-guard
 `)
 
 	dslText := mustDecompileRoutingPluginConfigTest(t, cfg)

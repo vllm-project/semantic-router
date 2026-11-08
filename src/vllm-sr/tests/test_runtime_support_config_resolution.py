@@ -14,7 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 def _domain_on_cpu_config() -> dict:
     return {
-        "version": "v0.3",
+        "version": "v0.5",
         "global": {
             "model_catalog": {"modules": {"classifier": {"domain": {"use_cpu": True}}}}
         },
@@ -111,7 +111,7 @@ def test_resolve_effective_config_path_combines_algorithm_and_platform_overrides
     monkeypatch.delenv("VLLM_SR_ROCM_PRESERVE_CPU", raising=False)
     config_path = tmp_path / "config.yaml"
     config = _domain_on_cpu_config()
-    config["routing"] = {"decisions": [{"name": "default"}]}
+    config["recipes"] = [{"name": "default", "decisions": [{"name": "default"}]}]
     config_path.write_text(yaml.safe_dump(config, sort_keys=False))
 
     effective_path = resolve_effective_config_path(
@@ -123,7 +123,9 @@ def test_resolve_effective_config_path_combines_algorithm_and_platform_overrides
 
     assert effective_path == tmp_path / ".vllm-sr" / "runtime-config.yaml"
     effective = yaml.safe_load(effective_path.read_text())
-    assert effective["routing"]["decisions"][0]["algorithm"]["type"] == "multi_factor"
+    assert (
+        effective["recipes"][0]["decisions"][0]["algorithm"]["type"] == "multi_factor"
+    )
     assert _domain_use_cpu(effective) is False
 
 
@@ -136,14 +138,8 @@ def test_resolve_effective_config_path_injects_no_amd_model_settings_by_default(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
-                "listeners": [
-                    {
-                        "name": "http",
-                        "address": "0.0.0.0",
-                        "port": 8899,
-                    }
-                ],
+                "version": "v0.5",
+                "listeners": [{"name": "http", "address": "0.0.0.0", "port": 8899}],
                 "providers": {
                     "defaults": {"model": "test-model"},
                     "models": [
@@ -156,17 +152,19 @@ def test_resolve_effective_config_path_injects_no_amd_model_settings_by_default(
                         }
                     ],
                 },
-                "routing": {
-                    "modelCards": [{"name": "test-model"}],
-                    "decisions": [
-                        {
-                            "name": "default-route",
-                            "priority": 1,
-                            "rules": {"operator": "AND", "conditions": []},
-                            "modelRefs": [{"model": "test-model"}],
-                        }
-                    ],
-                },
+                "recipes": [
+                    {
+                        "name": "default",
+                        "decisions": [
+                            {
+                                "name": "default-route",
+                                "priority": 1,
+                                "rules": {"operator": "AND", "conditions": []},
+                                "modelRefs": [{"model": "test-model"}],
+                            }
+                        ],
+                    }
+                ],
                 "global": {},
             },
             sort_keys=False,
@@ -221,7 +219,7 @@ def test_effective_config_keeps_the_embedding_deployment_as_authored(
         "input": {"max_tokens": 128, "overflow": "reject"},
     }
     source = {
-        "version": "v0.3",
+        "version": "v0.5",
         "global": {
             "model_catalog": {
                 "deployments": {"cpu-embedding": deployment},
@@ -246,10 +244,10 @@ def test_effective_config_keeps_the_embedding_deployment_as_authored(
 def test_configure_runtime_override_env_vars_sets_internal_runtime_path(tmp_path: Path):
     env_vars: dict[str, str] = {}
     source_config = tmp_path / "config.yaml"
-    source_config.write_text("version: v0.3\n")
+    source_config.write_text("version: v0.5\n")
     effective_config = tmp_path / ".vllm-sr" / "runtime-config.yaml"
     effective_config.parent.mkdir(parents=True, exist_ok=True)
-    effective_config.write_text("version: v0.3\n")
+    effective_config.write_text("version: v0.5\n")
 
     configure_runtime_override_env_vars(env_vars, source_config, effective_config)
 
@@ -273,13 +271,9 @@ def test_resolve_effective_config_path_uses_state_root_for_runtime_override(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [
-                    {
-                        "name": "http-8899",
-                        "address": "0.0.0.0",
-                        "port": 8899,
-                    }
+                    {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
             },
             sort_keys=False,

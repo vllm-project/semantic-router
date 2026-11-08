@@ -8,6 +8,7 @@ from pathlib import Path
 import yaml
 
 from cli.commands.runtime_paths import _write_runtime_config
+from cli.config_recipe_scopes import recipe_scopes
 from cli.config_schema import routing_surface_catalog
 from cli.consts import PLATFORM_CUDA, PLATFORM_ROCM
 from cli.utils import get_logger
@@ -208,17 +209,21 @@ def _normalized_algorithm_override(
 
 
 def _routing_decisions(config: dict[str, object]) -> list[dict[str, object]]:
-    routing = config.get("routing")
-    if not isinstance(routing, dict):
-        log.warning("No routing section found; skipping --algorithm override")
+    scopes = recipe_scopes(config)
+    if not scopes:
+        log.warning("No recipe found; skipping --algorithm override")
         return []
 
-    decisions = routing.get("decisions", [])
-    if not isinstance(decisions, list):
-        log.warning("routing.decisions is not a list; skipping --algorithm override")
-        return []
-
-    return [decision for decision in decisions if isinstance(decision, dict)]
+    found: list[dict[str, object]] = []
+    for path, recipe in scopes:
+        decisions = recipe.get("decisions", [])
+        if not isinstance(decisions, list):
+            log.warning(
+                f"{path}.decisions is not a list; skipping --algorithm override"
+            )
+            continue
+        found.extend(decision for decision in decisions if isinstance(decision, dict))
+    return found
 
 
 def log_algorithm_hint(algorithm: str) -> None:

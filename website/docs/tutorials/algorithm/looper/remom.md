@@ -84,7 +84,7 @@ Some tasks benefit from parallel exploration and later synthesis rather than one
 
 ## Configuration
 
-Map the public name to the recipe shown below. Move the `routing` block into a named recipe to isolate it from default routing.
+Map the public name to the recipe shown below. Declare it as its own recipe, and point the entrypoint at it, to isolate it from the other recipes.
 
 ```yaml
 entrypoints:
@@ -95,30 +95,31 @@ entrypoints:
 Configure a ReMoM decision:
 
 ```yaml
-routing:
-  decisions:
-    - name: reasoning_panel
-      description: Combine a bounded reasoning panel into one answer.
-      priority: 100
-      output_contract: Preserve any explicit output format exactly.
-      output_contract_spec:
-        type: reference_selection
-        reference:
-          source: candidate_responses
-          id_format: index
-        extract:
-          mode: exact
-          sources: [content]
-        postprocess:
-          - type: dereference_selected_reference
-      modelRefs:
-        - model: qwen3-32b
-        - model: deepseek-worker
-      algorithm:
-        type: remom
-        remom:
-          breadth_schedule: [3, 2]
-          model_distribution: weighted
+recipes:
+  - name: default
+    decisions:
+      - name: reasoning_panel
+        description: Combine a bounded reasoning panel into one answer.
+        priority: 100
+        output_contract: Preserve any explicit output format exactly.
+        output_contract_spec:
+          type: reference_selection
+          reference:
+            source: candidate_responses
+            id_format: index
+          extract:
+            mode: exact
+            sources: [content]
+          postprocess:
+            - type: dereference_selected_reference
+        modelRefs:
+          - model: qwen3-32b
+          - model: deepseek-worker
+        algorithm:
+          type: remom
+          remom:
+            breadth_schedule: [3, 2]
+            model_distribution: weighted
 ```
 
 `output_contract` is decision-scoped prompt text. Use it for benchmark or

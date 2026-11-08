@@ -1,1 +1,1 @@
-routing.decisions[private-chat].emits: removed_field: emits is removed; run `vllm-sr config migrate` (the decision's retention attribute)
+recipes[default].decisions[private-chat].emits: removed_field: emits is removed; run `vllm-sr config migrate` (the decision's retention attribute)

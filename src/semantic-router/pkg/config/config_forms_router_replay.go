@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -18,6 +19,59 @@ var routerReplayForms = []ConfigForm{
 		Becomes: RemovedPluginTypes["shadow_dispatch"],
 		Migrate: migrateShadowDispatchPlugin,
 	},
+	{
+		Code:    CodeRemovedField,
+		Paths:   RoutingScopes("data_policy"),
+		What:    "a recipe's data_policy is removed",
+		Becomes: "the recipe's router_replay plugin: enabled: false for replay: false, capture_personal_data: false for replay_personal_data: false",
+		Migrate: migrateDataPolicy,
+	},
+}
+
+// dataPolicyFields are the data_policy fields that forbade something when
+// false, and the router_replay field that forbids it now.
+var dataPolicyFields = []struct{ policy, replay, forbade string }{
+	{"replay", "enabled", "replay capture"},
+	{"replay_personal_data", "capture_personal_data", "capturing personal data"},
+}
+
+// migrateDataPolicy keeps what a recipe's data_policy did. A field set to
+// false forbade replay capture, or the capture of personal data, for every
+// request of the recipe, whatever a decision's router_replay plugin said: the
+// recipe's router_replay plugin forbids it now, and so does each decision's
+// that allowed it. Unset or true, a field never allowed anything by itself,
+// and nothing replaces it.
+func migrateDataPolicy(m *Migration, at FormMatch) error {
+	recipe, policy := at.Parent, resolveAlias(at.Node)
+	m.Delete(recipe, "data_policy")
+	prefix := strings.TrimSuffix(at.Path, ".data_policy")
+	forbidden := false
+	for _, field := range dataPolicyFields {
+		if value := mappingValue(policy, field.policy); value == nil || value.ShortTag() != "!!bool" || !strings.EqualFold(value.Value, "false") {
+			continue
+		}
+		forbidden = true
+		plugins := ensureSequence(recipe, "plugins")
+		plugin := pluginOfType(plugins, DecisionPluginRouterReplay)
+		if plugin == nil {
+			plugin = mappingNode("type", DecisionPluginRouterReplay)
+			plugins.Content = append(plugins.Content, plugin)
+		}
+		setNode(ensureMapping(plugin, "configuration"), field.replay, boolNode(false))
+		for _, decision := range sequenceAt(recipe, "decisions") {
+			decision = resolveAlias(decision)
+			replay := pluginOfType(resolveAlias(mappingValue(decision, "plugins")), DecisionPluginRouterReplay)
+			if configuration := mappingValue(replay, "configuration"); yamlTrue(mappingValue(configuration, field.replay)) {
+				setNode(configuration, field.replay, boolNode(false))
+				m.Changed(fmt.Sprintf("%s.decisions[%s]", prefix, scalarAt(decision, "name")),
+					fmt.Sprintf("its router_replay %s is false: the recipe's data_policy forbade %s", field.replay, field.forbade))
+			}
+		}
+	}
+	if !forbidden {
+		m.Changed(at.Path, "data_policy is dropped: it forbade nothing, so it changed nothing")
+	}
+	return nil
 }
 
 // migrateShadowDispatchPlugin moves an enabled shadow_dispatch plugin's

@@ -9,7 +9,7 @@ import (
 )
 
 const decisionReliabilityDoc = `
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: model-a
@@ -18,29 +18,28 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-routing:
-  modelCards:
-    - name: model-a
-  decisions:
-    - name: slow_route
-      priority: 10
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: model-a
-          use_reasoning: false
-      reliability:
-        total_timeout: 90s
-        per_try_timeout: 0s
-        idle_timeout: 30s
-        first_byte_timeout: 5s
-        retry_count: 0
-        retry_on: reset,5xx
-        retriable_status_codes: [429]
-        retry_back_off_base: 50ms
-        retry_back_off_max: 1s
-        retry_after_max: 10s
+recipes:
+  - name: default
+    decisions:
+      - name: slow_route
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: model-a
+            use_reasoning: false
+        reliability:
+          total_timeout: 90s
+          per_try_timeout: 0s
+          idle_timeout: 30s
+          first_byte_timeout: 5s
+          retry_count: 0
+          retry_on: reset,5xx
+          retriable_status_codes: [429]
+          retry_back_off_base: 50ms
+          retry_back_off_max: 1s
+          retry_after_max: 10s
 `
 
 func TestDecisionReliabilityRoundTripsCanonicalConfig(t *testing.T) {
@@ -94,7 +93,7 @@ func TestGatewayReliabilityKeepsNativeOnlyFieldsToTheNativeGateway(t *testing.T)
 		t.Fatalf("error = %v, want the native-only fields and a pointer to --gateway standalone", err)
 	}
 	violations := CheckGatewayCapabilities(parsed, GatewayExtProc)
-	if len(violations) != 1 || violations[0].Path != "routing.decisions[slow_route].reliability" ||
+	if len(violations) != 1 || violations[0].Path != "recipes[default].decisions[slow_route].reliability" ||
 		violations[0].Capability != CapabilityNativeReliability {
 		t.Fatalf("violations = %+v, want one at the decision's reliability block", violations)
 	}
@@ -108,23 +107,24 @@ func TestGatewayReliabilityKeepsNativeOnlyFieldsToTheNativeGateway(t *testing.T)
 // headers carry the decision's reliability block, and the others belong to
 // the Router or Envoy. Each one fails the load with its own line.
 func TestHeaderMutationCannotWriteTheHeadersTheRouterOwns(t *testing.T) {
-	doc := strings.Replace(decisionReliabilityDoc, "      reliability:\n", `      plugins:
-        - type: header_mutation
-          configuration:
-            add:
-              - {name: x-envoy-max-retries, value: "3"}
-              - {name: x-team, value: search}
-            update:
-              - {name: X-Envoy-Retry-On, value: 5xx}
-              - {name: Authorization, value: Bearer forged}
-            delete: [x-envoy-upstream-rq-timeout-ms, x-legacy, x-vsr-selected-model]
-      reliability:
+	doc := strings.Replace(decisionReliabilityDoc, "\n        reliability:\n", `
+        plugins:
+          - type: header_mutation
+            configuration:
+              add:
+                - {name: x-envoy-max-retries, value: "3"}
+                - {name: x-team, value: search}
+              update:
+                - {name: X-Envoy-Retry-On, value: 5xx}
+                - {name: Authorization, value: Bearer forged}
+              delete: [x-envoy-upstream-rq-timeout-ms, x-legacy, x-vsr-selected-model]
+        reliability:
 `, 1)
 	_, err := ParseYAMLBytes([]byte(doc))
 	if err == nil {
 		t.Fatal("header_mutation wrote headers the Router owns, and the configuration loaded")
 	}
-	const at = "routing.decisions[slow_route].plugins[0].configuration."
+	const at = "recipes[default].decisions[slow_route].plugins[0].configuration."
 	for _, want := range []string{
 		at + "add[x-envoy-max-retries]: reserved_header: x-envoy-max-retries carries the decision's retries and timeouts",
 		at + "update[X-Envoy-Retry-On]: reserved_header: X-Envoy-Retry-On carries the decision's retries and timeouts",
@@ -140,12 +140,13 @@ func TestHeaderMutationCannotWriteTheHeadersTheRouterOwns(t *testing.T) {
 		t.Errorf("a header the Router does not own was refused: %v", err)
 	}
 
-	own := strings.Replace(decisionReliabilityDoc, "      reliability:\n", `      plugins:
-        - type: header_mutation
-          configuration:
-            add: [{name: x-team, value: search}]
-            delete: [x-legacy]
-      reliability:
+	own := strings.Replace(decisionReliabilityDoc, "\n        reliability:\n", `
+        plugins:
+          - type: header_mutation
+            configuration:
+              add: [{name: x-team, value: search}]
+              delete: [x-legacy]
+        reliability:
 `, 1)
 	parsed, err := ParseYAMLBytes([]byte(own))
 	if err != nil {

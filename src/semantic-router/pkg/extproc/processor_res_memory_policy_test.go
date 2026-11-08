@@ -38,30 +38,31 @@ func TestResponseMemoryWritesHonorPolicyBeforeClientPreference(t *testing.T) {
 		disable    bool
 		wantWrites int
 	}{
-		{name: "global default", global: config.MemoryConfig{Enabled: true, AutoStore: true}, wantWrites: 1},
+		{name: "global default", global: config.MemoryConfig{InUse: true, AutoStore: true}, wantWrites: 1},
 		{name: "global disabled", global: config.MemoryConfig{AutoStore: true}, request: &yes},
-		{name: "decision disabled", global: config.MemoryConfig{Enabled: true, AutoStore: true}, decision: &config.ContextPluginConfig{Enabled: false}, request: &yes},
-		{name: "decision auto-store disabled overrides global", global: config.MemoryConfig{Enabled: true, AutoStore: true}, decision: memorySourcePlugin(&no)},
-		{name: "decision auto-store disabled overrides client", global: config.MemoryConfig{Enabled: true, AutoStore: true}, decision: memorySourcePlugin(&no), request: &yes},
-		{name: "client opt-out", global: config.MemoryConfig{Enabled: true, AutoStore: true}, request: &no},
-		{name: "client opt-out overrides decision opt-in", global: config.MemoryConfig{Enabled: true}, decision: memorySourcePlugin(&yes), request: &no},
-		{name: "client opt-in", global: config.MemoryConfig{Enabled: true}, request: &yes, wantWrites: 1},
+		{name: "decision disabled", global: config.MemoryConfig{InUse: true, AutoStore: true}, decision: &config.ContextPluginConfig{Enabled: false}, request: &yes},
+		{name: "decision auto-store disabled overrides global", global: config.MemoryConfig{InUse: true, AutoStore: true}, decision: memorySourcePlugin(&no)},
+		{name: "decision auto-store disabled overrides client", global: config.MemoryConfig{InUse: true, AutoStore: true}, decision: memorySourcePlugin(&no), request: &yes},
+		{name: "client opt-out", global: config.MemoryConfig{InUse: true, AutoStore: true}, request: &no},
+		{name: "client opt-out overrides decision opt-in", global: config.MemoryConfig{InUse: true}, decision: memorySourcePlugin(&yes), request: &no},
+		{name: "client opt-in", global: config.MemoryConfig{InUse: true}, request: &yes, wantWrites: 1},
 		{name: "decision opt-in", global: config.MemoryConfig{}, decision: memorySourcePlugin(&yes), wantWrites: 1},
-		{name: "retention drop", global: config.MemoryConfig{Enabled: true, AutoStore: true}, request: &yes, drop: &yes},
-		{name: "retention keep", global: config.MemoryConfig{Enabled: true, AutoStore: true}, drop: &no, wantWrites: 1},
-		{name: "request memory opt-out", global: config.MemoryConfig{Enabled: true, AutoStore: true}, request: &yes, disable: true},
-		{name: "route opt-out", global: config.MemoryConfig{Enabled: true, AutoStore: true, DisabledRoutes: []string{"/v1/responses"}}, request: &yes},
-		{name: "model opt-out", global: config.MemoryConfig{Enabled: true, AutoStore: true, DisabledModels: []string{"model"}}, request: &yes},
+		{name: "retention drop", global: config.MemoryConfig{InUse: true, AutoStore: true}, request: &yes, drop: &yes},
+		{name: "retention keep", global: config.MemoryConfig{InUse: true, AutoStore: true}, drop: &no, wantWrites: 1},
+		{name: "request memory opt-out", global: config.MemoryConfig{InUse: true, AutoStore: true}, request: &yes, disable: true},
+		{name: "route opt-out", global: config.MemoryConfig{InUse: true, AutoStore: true, DisabledRoutes: []string{"/v1/responses"}}, request: &yes},
+		{name: "model opt-out", global: config.MemoryConfig{InUse: true, AutoStore: true, DisabledModels: []string{"model"}}, request: &yes},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			store := &countingPolicyMemoryStore{}
 			runner := memory.NewPersistenceRunner(time.Second, 1, 1)
 			t.Cleanup(func() { _ = runner.RetireAndWait(time.Second) })
-			router := &OpenAIRouter{
-				Config: &config.RouterConfig{Memory: tc.global}, MemoryExtractor: memory.NewMemoryChunkStore(store),
-				memoryPersistence: runner,
+			cfg := &config.RouterConfig{Memory: tc.global}
+			if tc.global.InUse {
+				cfg.GlobalPlugins = []config.DecisionPlugin{memoryTestPlugin()}
 			}
+			router := &OpenAIRouter{Config: cfg, MemoryExtractor: memory.NewMemoryChunkStore(store), memoryPersistence: runner}
 			ctx := memoryPolicyContext(tc.request)
 			if tc.decision != nil {
 				payload, err := config.NewStructuredPayload(*tc.decision)
@@ -94,7 +95,7 @@ func TestResponseMemoryClientOptOutSurvivesProviderMaterialization(t *testing.T)
 	runner := memory.NewPersistenceRunner(time.Second, 1, 1)
 	t.Cleanup(func() { _ = runner.RetireAndWait(time.Second) })
 	router := &OpenAIRouter{
-		Config:            &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, AutoStore: true}},
+		Config:            &config.RouterConfig{GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()}, Memory: config.MemoryConfig{InUse: true, AutoStore: true}},
 		MemoryExtractor:   memory.NewMemoryChunkStore(store),
 		memoryPersistence: runner,
 	}

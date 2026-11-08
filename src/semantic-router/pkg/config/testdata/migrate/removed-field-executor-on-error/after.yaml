@@ -1,53 +1,53 @@
 # Every executor reads one algorithm.on_error: each executor's own on_error
 # moves up beside its type.
-version: v0.3
+version: v0.5
 providers:
   defaults: {model: small}
   models:
     - name: small
       backend_refs: [{name: small, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+      description: Fast general model
     - name: large
       backend_refs: [{name: large, endpoint: "127.0.0.1:8001", protocol: http, weight: 1}]
-routing:
-  modelCards:
-    - {name: small, description: Fast general model}
-    - {name: large, description: Strong reasoning model}
-  decisions:
-    - name: fused
-      priority: 100
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: small}, {model: large}]
-      algorithm:
-        type: fusion
-        fusion:
-          model: large
-          analysis_models: [small, large]
-        on_error: fail
-    - name: rated
-      priority: 90
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: small}, {model: large}]
-      algorithm:
-        type: ratings
-        ratings: {max_concurrent: 2}
-        on_error: skip
-    - name: rounds
-      priority: 80
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: small}, {model: large}]
-      algorithm:
-        type: remom
-        remom: {breadth_schedule: [2]}
-        on_error: skip
-    - name: planned
-      priority: 70
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: small}]
-      algorithm:
-        type: workflows
-        workflows:
-          mode: dynamic
-          planner: {model: large}
-          max_steps: 2
-          final: {model: small}
-        on_error: fail
+      description: Strong reasoning model
+recipes:
+  - name: default
+    decisions:
+      - name: fused
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: small}, {model: large}]
+        algorithm:
+          type: fusion
+          fusion:
+            model: large
+            analysis_models: [small, large]
+          on_error: fail
+      - name: rated
+        priority: 90
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: small}, {model: large}]
+        algorithm:
+          type: ratings
+          ratings: {max_concurrent: 2}
+          on_error: skip
+      - name: rounds
+        priority: 80
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: small}, {model: large}]
+        algorithm:
+          type: remom
+          remom: {breadth_schedule: [2]}
+          on_error: skip
+      - name: planned
+        priority: 70
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: small}]
+        algorithm:
+          type: workflows
+          workflows:
+            mode: dynamic
+            planner: {model: large}
+            max_steps: 2
+            final: {model: small}
+          on_error: fail

@@ -7,7 +7,7 @@ metadata:
     component: config
 data:
   config.yaml: |
-    version: v0.3
+    version: v0.5
     providers:
       defaults:
         model: granite32-8b
@@ -22,6 +22,10 @@ data:
               provider: vllm
               endpoint: granite32-8b-predictor.<namespace>.svc.cluster.local:80
               weight: 1
+          param_size: 8B
+          capabilities:
+            - chat
+            - reasoning
         - name: granite32-78b
           reasoning:
             family: qwen3
@@ -31,80 +35,72 @@ data:
               provider: vllm
               endpoint: granite32-78b-predictor.<namespace>.svc.cluster.local:80
               weight: 1
-    routing:
-      modelCards:
-        - name: granite32-8b
-          param_size: 8B
-          capabilities:
-            - chat
-            - reasoning
-        - name: granite32-78b
           param_size: 78B
           capabilities:
             - chat
             - reasoning
             - long-context
-      signals:
-        domains:
-          - name: business
-            description: Business and management related queries
-            labels:
-              - business
-          - name: math
-            description: Mathematics and quantitative reasoning
-            labels:
-              - math
-          - name: other
-            description: General knowledge and miscellaneous topics
-            labels:
-              - other
-        complexity:
-          - name: needs_reasoning
-            description: Escalate difficult or multi-step prompts.
-      decisions:
-        - name: business_default
-          description: Business traffic stays on the fast Granite tier.
-          priority: 100
-          rules:
-            operator: AND
-            conditions:
-              - type: domain
-                name: business
-          modelRefs:
-            - model: granite32-8b
-              use_reasoning: false
-        - name: math_escalation
-          description: Math and other hard requests escalate to the larger model.
-          priority: 110
-          rules:
-            operator: OR
-            conditions:
-              - type: domain
-                name: math
-              - type: complexity
-                name: needs_reasoning
-                label: hard
-          modelRefs:
-            - model: granite32-78b
-              use_reasoning: true
-        - name: general_fallback
-          description: Fallback route for general prompts.
-          priority: 10
-          rules:
-            operator: AND
-            conditions:
-              - type: domain
-                name: other
-          modelRefs:
-            - model: granite32-8b
-              use_reasoning: false
+    recipes:
+      - name: default
+        signals:
+          domains:
+            - name: business
+              description: Business and management related queries
+              labels:
+                - business
+            - name: math
+              description: Mathematics and quantitative reasoning
+              labels:
+                - math
+            - name: other
+              description: General knowledge and miscellaneous topics
+              labels:
+                - other
+          complexity:
+            - name: needs_reasoning
+              description: Escalate difficult or multi-step prompts.
+        decisions:
+          - name: business_default
+            description: Business traffic stays on the fast Granite tier.
+            priority: 100
+            rules:
+              operator: AND
+              conditions:
+                - type: domain
+                  name: business
+            modelRefs:
+              - model: granite32-8b
+                use_reasoning: false
+          - name: math_escalation
+            description: Math and other hard requests escalate to the larger model.
+            priority: 110
+            rules:
+              operator: OR
+              conditions:
+                - type: domain
+                  name: math
+                - type: complexity
+                  name: needs_reasoning
+                  label: hard
+            modelRefs:
+              - model: granite32-78b
+                use_reasoning: true
+          - name: general_fallback
+            description: Fallback route for general prompts.
+            priority: 10
+            rules:
+              operator: AND
+              conditions:
+                - type: domain
+                  name: other
+            modelRefs:
+              - model: granite32-8b
+                use_reasoning: false
     global:
       router:
         strategy: priority
       stores:
         response_cache:
-          enabled: true
           backend_type: memory
-          similarity_threshold: 0.85
           max_entries: 5000
           ttl_seconds: 7200

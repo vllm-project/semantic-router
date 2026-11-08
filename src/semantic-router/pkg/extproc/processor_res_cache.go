@@ -59,8 +59,8 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 	}
 
 	ttlSeconds := -1
-	if r != nil && r.Config != nil {
-		ttlSeconds = r.Config.GetCacheTTLSecondsForDecisionObject(ctx.VSRSelectedDecision)
+	if plugin := requestResponseCache(ctx); plugin != nil && plugin.TTLSeconds != nil {
+		ttlSeconds = *plugin.TTLSeconds
 	}
 	ttlSeconds = applyResponseCacheRequestTTL(ctx, ttlSeconds)
 	ttlSeconds = applyRetentionTTLOverride(ttlSeconds, ctx)

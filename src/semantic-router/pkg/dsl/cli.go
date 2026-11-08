@@ -103,19 +103,77 @@ func CLIDecompile(inputPath, outputPath string) error {
 }
 
 // A routing-only fallback intentionally skips provider validation. Never use
-// it for a complete document: it would silently discard invalid recipe and
-// entrypoint scopes while returning successful but incomplete DSL.
+// it for a complete document: a fragment holds recipes, entrypoints and
+// providers.models[] entries that state only model facts, nothing else.
 func isRoutingOnlyFragment(data []byte) bool {
 	var fields map[string]interface{}
-	if err := yaml.Unmarshal(data, &fields); err != nil || fields["routing"] == nil {
+	if err := yaml.Unmarshal(data, &fields); err != nil || fields["recipes"] == nil {
 		return false
 	}
-	for key := range fields {
-		if key != "version" && key != "routing" {
+	for key, value := range fields {
+		switch key {
+		case "recipes", "entrypoints":
+		case "version":
+			if value != config.CanonicalConfigVersion {
+				return false
+			}
+		case "providers":
+			if !factOnlyProviders(value) {
+				return false
+			}
+		default:
 			return false
 		}
 	}
 	return true
+}
+
+func factOnlyProviders(value interface{}) bool {
+	providers, ok := stringKeyed(value)
+	if !ok || len(providers) != 1 {
+		return false
+	}
+	models, ok := providers["models"].([]interface{})
+	if !ok {
+		return false
+	}
+	facts := map[string]bool{"name": true}
+	for _, field := range config.ModelFactFields() {
+		facts[field] = true
+	}
+	for _, raw := range models {
+		model, ok := stringKeyed(raw)
+		if !ok {
+			return false
+		}
+		for field := range model {
+			if !facts[field] {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// stringKeyed reads a YAML mapping, which yaml.v2 decodes with interface keys
+// below the top level.
+func stringKeyed(value interface{}) (map[string]interface{}, bool) {
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		return typed, true
+	case map[interface{}]interface{}:
+		mapping := make(map[string]interface{}, len(typed))
+		for key, item := range typed {
+			name, ok := key.(string)
+			if !ok {
+				return nil, false
+			}
+			mapping[name] = item
+		}
+		return mapping, true
+	default:
+		return nil, false
+	}
 }
 
 // TestBlockRunnerFactory constructs a TEST block runner for a parsed program.

@@ -43,9 +43,10 @@ global:
         enabled: true
         threshold: 0.7
         positive_labels: [INJECTION]
-routing:
-  model_bindings:
-    jailbreak: guard-service
+recipes:
+  - name: default
+    model_bindings:
+      jailbreak: guard-service
 ```
 
 `guard-service` 是连接；`jailbreak` 绑定让它回答配方的 jailbreak 信号。添加 [jailbreak 信号和决策](../../tutorials/signal/learned/jailbreak.md)，以决定检测到攻击时如何处理。

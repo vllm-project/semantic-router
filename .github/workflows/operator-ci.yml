@@ -287,16 +287,17 @@ jobs:
               timeoutSeconds: 5
               failureThreshold: 60
             config:
-              routing:
-                strategy: priority
-                decisions:
-                  - name: operator_ci_route
-                    rules:
-                      operator: AND
-                    modelRefs:
-                      - model: operator-ci-model
-                        use_reasoning: false
-              semantic_cache:
+              recipes:
+                - name: default
+                  strategy: priority
+                  decisions:
+                    - name: operator_ci_route
+                      rules:
+                        operator: AND
+                      modelRefs:
+                        - model: operator-ci-model
+                          use_reasoning: false
+              response_cache:
                 enabled: true
                 backend_type: "memory"
                 max_entries: 100

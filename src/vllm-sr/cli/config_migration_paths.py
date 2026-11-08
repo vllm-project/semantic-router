@@ -1,4 +1,6 @@
-"""Locations in a canonical configuration that several migrations visit."""
+"""Locations in a canonical configuration that several migrations visit, in
+the v0.3 layout (the top-level routing block and each recipe's routing block)
+that the Router's migration rewrites, and in flat v0.5 recipes."""
 
 from __future__ import annotations
 
@@ -20,36 +22,41 @@ def as_list(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
 
 
+def routing_profiles(canonical: dict[str, Any]) -> Iterator[tuple[str, dict[str, Any]]]:
+    """Each routing profile of the document with its path."""
+
+    routing = dict_at(canonical, "routing")
+    if routing is not None:
+        yield "routing", routing
+    for index, recipe in enumerate(as_list(canonical.get("recipes"))):
+        if not isinstance(recipe, dict):
+            continue
+        nested = dict_at(recipe, "routing")
+        if nested is not None:
+            yield f"recipes[{index}].routing", nested
+        else:
+            yield f"recipes[{index}]", recipe
+
+
 def binding_maps(canonical: dict[str, Any]) -> Iterator[tuple[str, dict[str, Any]]]:
     catalog_bindings = dict_at(canonical, "global", "model_catalog", "bindings")
     if catalog_bindings is not None:
         yield "global.model_catalog.bindings", catalog_bindings
-    routing_bindings = dict_at(canonical, "routing", "model_bindings")
-    if routing_bindings is not None:
-        yield "routing.model_bindings", routing_bindings
-    for index, recipe in enumerate(as_list(canonical.get("recipes"))):
-        bindings = dict_at(recipe, "routing", "model_bindings")
+    for path, profile in routing_profiles(canonical):
+        bindings = dict_at(profile, "model_bindings")
         if bindings is not None:
-            yield f"recipes[{index}].routing.model_bindings", bindings
+            yield f"{path}.model_bindings", bindings
 
 
 def signal_maps(canonical: dict[str, Any]) -> Iterator[tuple[str, dict[str, Any]]]:
-    signals = dict_at(canonical, "routing", "signals")
-    if signals is not None:
-        yield "routing.signals", signals
-    for index, recipe in enumerate(as_list(canonical.get("recipes"))):
-        recipe_signals = dict_at(recipe, "routing", "signals")
-        if recipe_signals is not None:
-            yield f"recipes[{index}].routing.signals", recipe_signals
+    for path, profile in routing_profiles(canonical):
+        signals = dict_at(profile, "signals")
+        if signals is not None:
+            yield f"{path}.signals", signals
 
 
 def decisions(canonical: dict[str, Any]) -> Iterator[tuple[str, dict[str, Any]]]:
-    routing = dict_at(canonical, "routing", default={})
-    for index, decision in enumerate(as_list(routing.get("decisions"))):
-        if isinstance(decision, dict):
-            yield f"routing.decisions[{index}]", decision
-    for recipe_index, recipe in enumerate(as_list(canonical.get("recipes"))):
-        routing = dict_at(recipe, "routing", default={})
-        for index, decision in enumerate(as_list(routing.get("decisions"))):
+    for path, profile in routing_profiles(canonical):
+        for index, decision in enumerate(as_list(profile.get("decisions"))):
             if isinstance(decision, dict):
-                yield f"recipes[{recipe_index}].routing.decisions[{index}]", decision
+                yield f"{path}.decisions[{index}]", decision

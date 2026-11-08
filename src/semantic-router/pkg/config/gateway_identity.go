@@ -74,7 +74,7 @@ func UntrustedIdentityWarning(cfg *RouterConfig) string {
 	if memoryRecordsUsers(cfg) {
 		features = append(features, "memory")
 	}
-	if cfg.RouterReplay.Enabled {
+	if cfg.UsesRouterReplay() {
 		features = append(features, "router replay")
 	}
 	if len(features) == 0 {
@@ -86,15 +86,7 @@ func UntrustedIdentityWarning(cfg *RouterConfig) string {
 }
 
 func memoryRecordsUsers(cfg *RouterConfig) bool {
-	if cfg.Memory.Enabled {
-		return true
-	}
-	for _, at := range cfg.RoutingDecisionsAt() {
-		if cfg.IsMemoryEnabledForDecision(at.Decision.Name) {
-			return true
-		}
-	}
-	return false
+	return cfg.UsesMemory()
 }
 
 func firstSignalOfType(node *RuleNode, signalType string) (string, bool) {

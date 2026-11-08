@@ -20,21 +20,27 @@ func cacheEmbeds(cfg *RouterConfig, sharedServices bool) bool {
 func TestResponseCacheDemandUsesReachableConsumersAndPreservesExactOnly(t *testing.T) {
 	for _, tc := range []struct {
 		name            string
+		global          []DecisionPlugin
 		decisions       []Decision
 		store, semantic bool
 	}{
-		{"legacy global without decisions", nil, true, true},
-		{"no plugin", []Decision{{Name: "route"}}, false, false},
-		{"disabled plugin", []Decision{cacheDemandDecision("semantic", false)}, false, false},
-		{"exact only", []Decision{cacheDemandDecision("exact", true)}, true, false},
-		{"semantic", []Decision{cacheDemandDecision("semantic", true)}, true, true},
-		{"both", []Decision{cacheDemandDecision("exact_then_semantic", true)}, true, true},
+		{"nothing without decisions", nil, nil, false, false},
+		{"global plugin without decisions", cacheDemandDecision("semantic", true).Plugins, nil, true, true},
+		{"no plugin", nil, []Decision{{Name: "route"}}, false, false},
+		{"disabled plugin", nil, []Decision{cacheDemandDecision("semantic", false)}, false, false},
+		{"exact only", nil, []Decision{cacheDemandDecision("exact", true)}, true, false},
+		{"semantic", nil, []Decision{cacheDemandDecision("semantic", true)}, true, true},
+		{"both", nil, []Decision{cacheDemandDecision("exact_then_semantic", true)}, true, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := &RouterConfig{}
-			cfg.SemanticCache.Enabled = true
+			cfg.SemanticCache.InUse = true
 			cfg.EmbeddingDeployment = EmbeddingDefaultDeployment
+			cfg.GlobalPlugins = tc.global
 			cfg.Decisions = tc.decisions
+			if err := cfg.LayerPlugins(); err != nil {
+				t.Fatal(err)
+			}
 			store, semantic := cfg.ResponseCacheDemand()
 			if store != tc.store || semantic != tc.semantic {
 				t.Fatalf("demand = %v/%v", store, semantic)
@@ -42,10 +48,13 @@ func TestResponseCacheDemandUsesReachableConsumersAndPreservesExactOnly(t *testi
 			if got := cacheEmbeds(cfg, true); got != tc.semantic {
 				t.Fatalf("embedding demand=%v", got)
 			}
+			if got := cacheEmbeds(cfg.ConfigForGlobalModelServices(), true); got != tc.semantic {
+				t.Fatalf("global services embedding demand=%v", got)
+			}
 		})
 	}
 	cfg := &RouterConfig{}
-	cfg.SemanticCache.Enabled = true
+	cfg.SemanticCache.InUse = true
 	cfg.EmbeddingDeployment = EmbeddingDefaultDeployment
 	cfg.Recipes = []RoutingRecipe{{Name: "default"}, {Name: "cached", Profile: RoutingProfile{Decisions: []Decision{cacheDemandDecision("semantic", true)}}}, {Name: "uncached", Profile: RoutingProfile{Decisions: []Decision{{Name: "plain"}}}}}
 	cfg.Entrypoints = []EntrypointMapping{{ModelNames: []string{"public"}, Recipe: "uncached"}}

@@ -195,7 +195,7 @@ PII 0.18, fact check 0.9999 and user feedback 0.47.
   its operating points are close to 1.
 - **Other models:** a module that runs any other model and sets no threshold
   keeps that model's own default.
-- **Your own rule thresholds** (`routing.signals.jailbreak[].threshold` and the
+- **Your own rule thresholds** (`recipes[].signals.jailbreak[].threshold` and the
   like) are yours. The record maps each Vela 1.0 value to vela3-fast: prompt
   guard 0.3–0.9 → 0.87–0.91, PII → 0.18, safety 0.5 → 0.52, fact check
   0.65–0.95 → 0.9997–0.9999, modality `confidence_threshold` 0.7 → 0.63.

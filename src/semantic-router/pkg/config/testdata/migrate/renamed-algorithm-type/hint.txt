@@ -1,1 +1,1 @@
-routing.decisions[pick].algorithm: renamed_algorithm_type: the decision selector is named systemone; run `vllm-sr config migrate` (algorithm.type: systemone and an algorithm.systemone block)
+recipes[default].decisions[pick].algorithm: renamed_algorithm_type: the decision selector is named systemone; run `vllm-sr config migrate` (algorithm.type: systemone and an algorithm.systemone block)

@@ -22,7 +22,7 @@ const (
 // deliberately no fail-open option for a privacy control.
 type MaskingPluginConfig struct {
 	Enabled bool `json:"enabled" yaml:"enabled"`
-	// Signal names the pii rule of the decision's routing scope that finds
+	// Signal names the pii rule of the decision's recipe that finds
 	// the personal data: its detector, its threshold, and its
 	// pii_types_allowed, which are never masked.
 	Signal string `json:"signal" yaml:"signal"`
@@ -82,7 +82,7 @@ func validateMaskingPlugin(at PluginAt, p *MaskingPluginConfig) error {
 	return nil
 }
 
-// validateMaskingSignals resolves every masking plugin of a routing scope to
+// validateMaskingSignals resolves every masking plugin of a recipe to
 // the pii rule it names.
 func validateMaskingSignals(cfg *RouterConfig) error {
 	for i := range cfg.Decisions {
@@ -95,7 +95,7 @@ func validateMaskingSignals(cfg *RouterConfig) error {
 	return nil
 }
 
-// PIIRule returns the pii rule of this routing scope named name.
+// PIIRule returns the pii rule of this recipe named name.
 func (c *RouterConfig) PIIRule(name string) *PIIRule {
 	for i := range c.PIIRules {
 		if c.PIIRules[i].Name == name {
@@ -106,7 +106,7 @@ func (c *RouterConfig) PIIRule(name string) *PIIRule {
 }
 
 // MaskingSignals are the pii rules the enabled masking plugins of this
-// routing scope name, in decision order.
+// recipe name, in decision order.
 func (c *RouterConfig) MaskingSignals() []string {
 	var names []string
 	for i := range c.Decisions {

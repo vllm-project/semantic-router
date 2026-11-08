@@ -118,23 +118,23 @@ python result_to_config.py \
 - 每个被评测逻辑模型的一个 provider 绑定和 Model Card
 - 每个观察到的 MMLU-Pro 类别的一个领域信号
 - 每个类别的排名 `model_scores`
-- 空的 `routing.decisions` 列表
+- 空的 `recipes[].decisions` 列表
 - 响应缓存、工具、嵌入、prompt guard 和分类器的稀疏默认值
 
 生成的文档具有此顶层形状。此处省略列表和模块体；检查 `config.eval.yaml` 以查看被评测模型、分数和类别信号。
 
 ```yaml
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
     model: evaluated-model
   models: []
-routing:
-  modelCards: []
-  signals:
-    domains: []
-  decisions: []
+recipes:
+  - name: default
+    signals:
+      domains: []
+    decisions: []
 global:
   stores:
     response_cache: {}
@@ -154,7 +154,7 @@ global:
 `config.eval.yaml` 有意不完整：
 
 - `listeners` 为空。
-- `routing.decisions` 为空。
+- `recipes[].decisions` 为空。
 - 后端引用使用命令行默认值，而不是部署发现。
 - 评测类别可能与面向用户的决策不匹配。
 - 稀疏的 `global` 分区可能与你的运行时或安全策略不匹配。

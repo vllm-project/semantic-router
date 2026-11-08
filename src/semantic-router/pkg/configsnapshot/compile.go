@@ -231,9 +231,6 @@ func (c *compiler) programs() {
 	for _, recipe := range recipes {
 		name := string(recipe.Name)
 		path := "recipes[" + name + "]"
-		if recipe.Name == config.DefaultRecipeName {
-			path = "routing"
-		}
 		program := &Resource{Ref: Ref{Kind: KindProgram, Name: name}, Path: path, Hash: fingerprint(recipe)}
 		spec := ProgramSpec{}
 		clusters := make(map[string]bool)

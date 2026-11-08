@@ -259,7 +259,7 @@ func (d *decompiler) writeDecisionAlgorithm(dec config.Decision) {
 }
 
 func (d *decompiler) writeDecisionPlugins(dec config.Decision) {
-	for _, p := range dec.Plugins {
+	for _, p := range dec.DeclaredPlugins() {
 		pluginType := config.NormalizeDecisionPluginType(p.Type)
 		pluginFields := decompilePluginConfig(&p)
 		if pluginFields != "" {

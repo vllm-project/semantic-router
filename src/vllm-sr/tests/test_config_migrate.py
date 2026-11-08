@@ -33,8 +33,14 @@ def test_migrate_preserves_named_entries_and_removes_retired_empty_auto_aliases(
 
     migrated = migrate_config_data(source)
 
-    assert migrated["entrypoints"] == source["entrypoints"]
-    assert migrated["recipes"] == source["recipes"]
+    assert migrated["entrypoints"] == [
+        {"model_names": ["vllm-sr/auto"], "recipe": "default", "default": True},
+        *source["entrypoints"],
+    ]
+    assert migrated["recipes"] == [
+        {"name": "default"},
+        {"name": "balanced", "decisions": []},
+    ]
     assert "auto_model_names" not in migrated["global"]["router"]
 
 
@@ -198,13 +204,10 @@ def test_migrate_coalesces_non_conflicting_alias_cards_by_catalog_identity():
 
     migrated = migrate_config_data(source)
 
-    assert migrated["routing"]["modelCards"] == [
-        {
-            "name": "openai/gpt-5.4",
-            "description": "Approved production profile",
-            "tags": ["canary"],
-        }
-    ]
+    by_name = {model["name"]: model for model in migrated["providers"]["models"]}
+    assert by_name["prod"]["description"] == "Approved production profile"
+    assert by_name["prod"]["tags"] == ["canary"]
+    assert "routing" not in migrated
     assert migrate_config_data(migrated) == migrated
     UserConfig.model_validate(migrated)
 
@@ -231,13 +234,10 @@ def test_migrate_coalesces_existing_canonical_card_with_alias_metadata():
 
     migrated = migrate_config_data(source)
 
-    assert migrated["routing"]["modelCards"] == [
-        {
-            "name": "openai/gpt-5.4",
-            "description": "Shared",
-            "tags": ["approved"],
-        }
-    ]
+    model = migrated["providers"]["models"][0]
+    assert model["description"] == "Shared"
+    assert model["tags"] == ["approved"]
+    assert "routing" not in migrated
 
 
 def test_migrate_rejects_conflicting_alias_cards_by_catalog_identity():
@@ -328,8 +328,14 @@ def test_migrate_config_preserves_entrypoints_and_recipes():
 
     migrated = migrate_config_data(config)
 
-    assert migrated["entrypoints"] == config["entrypoints"]
-    assert migrated["recipes"] == config["recipes"]
+    assert migrated["entrypoints"] == [
+        {"model_names": ["vllm-sr/auto"], "recipe": "default", "default": True},
+        *config["entrypoints"],
+    ]
+    assert migrated["recipes"] == [
+        {"name": "default"},
+        {"name": "private", **config["recipes"][0]["routing"]},
+    ]
 
 
 def _legacy_provider_models_config() -> dict:
@@ -395,17 +401,9 @@ def test_migrate_config_data_splits_legacy_provider_models():
 
     migrated = migrate_config_data(legacy)
 
-    assert migrated["version"] == "v0.3"
-    assert migrated["routing"]["signals"]["keywords"][0]["name"] == "math_terms"
-    assert migrated["routing"]["decisions"][0]["name"] == "default-route"
-    assert migrated["routing"]["modelCards"] == [
-        {
-            "name": "gpt-4o",
-            "description": "General reasoning model",
-            "capabilities": ["general", "reasoning"],
-            "modality": "text",
-        }
-    ]
+    assert migrated["version"] == "v0.5"
+    assert migrated["recipes"][0]["signals"]["keywords"][0]["name"] == "math_terms"
+    assert migrated["recipes"][0]["decisions"][0]["name"] == "default-route"
     assert migrated["evaluation"]["records"] == [
         {
             "model": "gpt-4o",
@@ -416,6 +414,9 @@ def test_migrate_config_data_splits_legacy_provider_models():
     assert migrated["providers"]["models"] == [
         {
             "name": "gpt-4o",
+            "description": "General reasoning model",
+            "capabilities": ["general", "reasoning"],
+            "modality": "text",
             "reasoning": {
                 "type": "reasoning_effort",
                 "parameter": "reasoning_effort",
@@ -474,7 +475,7 @@ def test_migrate_config_data_unifies_evaluation_definitions_and_records():
             "metrics": {"accuracy": 0.82},
         }
     ]
-    assert migrated["routing"].get("modelCards") is None
+    assert "routing" not in migrated
     UserConfig.model_validate(migrated)
 
 
@@ -569,9 +570,9 @@ def test_cli_config_migrate_writes_canonical_yaml(tmp_path: Path):
     assert f"Output{migrated_path}" in compact_output
     migrated = yaml.safe_load(migrated_path.read_text())
 
-    assert migrated["version"] == "v0.3"
+    assert migrated["version"] == "v0.5"
     assert migrated["providers"]["defaults"]["model"] == "gpt-4o-mini"
-    assert "modelCards" not in migrated["routing"]
+    assert "routing" not in migrated
     assert migrated["providers"]["models"][0]["backend_refs"] == [
         {
             "name": "primary",
@@ -634,7 +635,7 @@ def test_cli_config_migrate_reports_non_canonical_output_without_writing(
 
     assert result.exit_code == 1
     assert "Configuration migrated" not in result.stdout
-    assert "routing.decisions.0.plugins.0.type" in result.stderr
+    assert "recipes.0.decisions.0.plugins.0.type" in result.stderr
     assert "No output was written" in result.stderr
     assert not (tmp_path / "config.migrated.yaml").exists()
 
@@ -703,7 +704,7 @@ def test_cli_config_migrate_rejects_hnsw_fields_without_writing(tmp_path: Path):
 
     assert result.exit_code == 1
     assert "Configuration migrated" not in result.stdout
-    assert "hnsw_config" in result.stderr
+    assert "global.stores.response_cache" in result.stderr
     assert "No output was written" in result.stderr
     assert not (tmp_path / "legacy.migrated.yaml").exists()
 
@@ -747,7 +748,7 @@ def test_parse_user_config_rejects_deprecated_global_modules(tmp_path: Path):
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
@@ -765,18 +766,20 @@ def test_parse_user_config_rejects_deprecated_global_modules(tmp_path: Path):
                         }
                     ],
                 },
-                "routing": {
-                    "modelCards": [{"name": "gpt-4o-mini"}],
-                    "decisions": [
-                        {
-                            "name": "default-route",
-                            "description": "fallback",
-                            "priority": 100,
-                            "rules": {"operator": "AND", "conditions": []},
-                            "modelRefs": [{"model": "gpt-4o-mini"}],
-                        }
-                    ],
-                },
+                "recipes": [
+                    {
+                        "name": "default",
+                        "decisions": [
+                            {
+                                "name": "default-route",
+                                "description": "fallback",
+                                "priority": 100,
+                                "rules": {"operator": "AND", "conditions": []},
+                                "modelRefs": [{"model": "gpt-4o-mini"}],
+                            }
+                        ],
+                    }
+                ],
                 "global": {"modules": {"prompt_guard": {"model_ref": "prompt_guard"}}},
             },
             sort_keys=False,
@@ -796,7 +799,7 @@ def test_parse_user_config_rejects_legacy_flat_signal_blocks(tmp_path: Path):
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
@@ -814,18 +817,20 @@ def test_parse_user_config_rejects_legacy_flat_signal_blocks(tmp_path: Path):
                         }
                     ],
                 },
-                "routing": {
-                    "modelCards": [{"name": "gpt-4o-mini"}],
-                    "decisions": [
-                        {
-                            "name": "default-route",
-                            "description": "fallback",
-                            "priority": 100,
-                            "rules": {"operator": "AND", "conditions": []},
-                            "modelRefs": [{"model": "gpt-4o-mini"}],
-                        }
-                    ],
-                },
+                "recipes": [
+                    {
+                        "name": "default",
+                        "decisions": [
+                            {
+                                "name": "default-route",
+                                "description": "fallback",
+                                "priority": 100,
+                                "rules": {"operator": "AND", "conditions": []},
+                                "modelRefs": [{"model": "gpt-4o-mini"}],
+                            }
+                        ],
+                    }
+                ],
                 "keyword_rules": [
                     {
                         "name": "legacy-keywords",

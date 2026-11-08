@@ -40,22 +40,23 @@ translation:
 
 ## 配置
 
-在 v0.3 中，决策位于 `routing.decisions` 下：
+在 v0.3 中，决策位于 `recipes[].decisions` 下：
 
 ```yaml
-routing:
-  decisions:
-    - name: business_route
-      description: Route business requests to the business model.
-      priority: 110
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: qwen2.5:3b
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: business_route
+        description: Route business requests to the business model.
+        priority: 110
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: qwen2.5:3b
+            use_reasoning: false
 ```
 
 每个 `rules` 节点要么是叶子（`type` 和 `name`），要么是组合（`operator` 和 `conditions`）。运算符必须是 `AND`、`OR` 或 `NOT`；大小写和周围空白会被归一化，带条件的节点省略运算符时表示 `AND`。`NOT` 严格一元，恰好接受一个子条件；把 `NOT` 套在 `OR` 或 `AND` 外包一层即可得到 NOR 或 NAND。配置校验会拒绝任何其他运算符、子条件为零或多个的 `NOT`、同时混用叶子和组合字段的节点，以及除根 `AND`（显式的全匹配形式）之外任何没有子节点的组合。错误会点名决策和节点路径，例如

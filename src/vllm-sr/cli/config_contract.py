@@ -42,14 +42,7 @@ LEGACY_PROVIDER_MODEL_SURFACE_KEYS = frozenset(
     {
         "endpoints",
         "access_key",
-        "param_size",
-        "context_window_size",
-        "description",
-        "capabilities",
-        "loras",
         "quality_score",
-        "modality",
-        "tags",
     }
 )
 
@@ -128,10 +121,12 @@ _SIGNAL_FAMILY_BY_CONDITION_TYPE = {
 
 
 def iter_routing_profiles(config: Any) -> Iterable[tuple[str, Any]]:
-    """Yield the default and named routing profiles through one contract."""
-    yield "default", config.routing
+    """Yield each recipe by name; a document without recipes routes through an
+    empty recipe named default."""
+    if not config.recipes:
+        yield "default", config.default_recipe
     for recipe in config.recipes:
-        yield recipe.name, recipe.routing
+        yield recipe.name, recipe
 
 
 def iter_condition_leaves(conditions: Any) -> Iterable[Any]:

@@ -233,22 +233,15 @@ func EmbeddingRequirements(cfg *RouterConfig, sharedServices bool) []EmbeddingRe
 	return result
 }
 
-// MemoryConfigured reports whether memory runs: the store is enabled, or a
-// decision has a memory plugin.
+// MemoryConfigured reports whether memory runs: a reachable request's context
+// plugin recalls memories (Memory.InUse, which a scoped view clears when it
+// does not own the store).
 func MemoryConfigured(cfg *RouterConfig) bool {
-	if cfg.Memory.Enabled {
-		return true
-	}
-	for _, decision := range cfg.Decisions {
-		if decision.HasPlugin("memory") {
-			return true
-		}
-	}
-	return false
+	return cfg.Memory.InUse
 }
 
 // embeddingDeploymentsInUse lists the deployments the embedding consumers of
-// the global services and of every routing scope run.
+// the global services and of every recipe run.
 func (c *RouterConfig) embeddingDeploymentsInUse() map[string]bool {
 	used := map[string]bool{}
 	for _, requirement := range EmbeddingRequirements(c.ConfigForGlobalModelServices(), true) {

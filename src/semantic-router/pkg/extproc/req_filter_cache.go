@@ -27,11 +27,8 @@ import (
 //   - writes would cache a personalized answer that could leak to other users
 //
 // This avoids orphaned pending cache entries and unnecessary embedding work.
-func decisionWillPersonalize(ctx *RequestContext, cfg *config.RouterConfig) bool {
-	if ctx.VSRSelectedDecision == nil {
-		return false
-	}
-	plugin := cfg.ContextPlugin(ctx.VSRSelectedDecision)
+func decisionWillPersonalize(ctx *RequestContext) bool {
+	plugin := config.ContextPluginOf(requestPlugins(nil, ctx))
 	return plugin != nil && len(plugin.Sources) > 0
 }
 
@@ -44,7 +41,7 @@ func (r *OpenAIRouter) handleCaching(
 	// Skip entire cache path for decisions that will inject user-specific context.
 	// Both reads (would serve stale generic answers) and writes (would leak
 	// personalized data) are wrong when RAG or memory is enabled.
-	if decisionWillPersonalize(ctx, r.Config) {
+	if decisionWillPersonalize(ctx) {
 		logging.Debugf("[Cache] Skipping cache for decision '%s': RAG or memory enabled", categoryName)
 		return nil, false
 	}
@@ -184,11 +181,10 @@ func responseCacheIdentity(ctx *RequestContext, model string) cache.CacheIdentit
 	revision := ""
 	if ctx.VSRSelectedDecision != nil {
 		decision = ctx.VSRSelectedDecision.Name
-		if plugin := ctx.VSRSelectedDecision.GetResponseCacheConfig(); plugin != nil &&
-			plugin.Revision != nil {
-			if value, err := cache.FingerprintValue(plugin.Revision); err == nil {
-				revision = value
-			}
+	}
+	if plugin := requestResponseCache(ctx); plugin != nil && plugin.Revision != nil {
+		if value, err := cache.FingerprintValue(plugin.Revision); err == nil {
+			revision = value
 		}
 	}
 	scope := responseCacheScope(ctx)
@@ -228,7 +224,7 @@ func (r *OpenAIRouter) performCacheLookup(
 		return nil, false
 	}
 
-	block := r.Config.ResponseCacheMatch(ctx.VSRSelectedDecision)
+	block := requestResponseCache(ctx).SemanticMatch()
 	recall := config.MatchResponseCache.Effective(block).Recall
 	threshold := 0.0
 	if recall != nil && recall.MinSimilarity != nil {

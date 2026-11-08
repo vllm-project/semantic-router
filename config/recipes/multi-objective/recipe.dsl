@@ -92,6 +92,12 @@ MODEL local/qwen3.6-35b-flash {
 # =============================================================================
 
 ENTRYPOINT {
+  model_names: ["vllm-sr/auto"]
+  recipe: "default"
+  default: true
+}
+
+ENTRYPOINT {
   model_names: ["vllm-sr/mom-v1-blend"]
   recipe: "balanced"
 }
@@ -136,7 +142,7 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
   SIGNAL turn_relation unified_balance_reask {
     description: "Detect an immediate semantic repeat after an unsatisfactory answer."
     labels: ["reask"]
-    input: { previous_turns: 1 }
+    input: { previous_turns: 2 }
   }
 
   SIGNAL context unified_balance_long_context {

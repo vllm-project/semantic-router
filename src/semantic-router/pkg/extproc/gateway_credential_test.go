@@ -22,7 +22,7 @@ import (
 func gatewayCredentialTestRouter(t *testing.T, extraGlobal string) *OpenAIRouter {
 	t.Helper()
 	cfg, err := config.ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: gateway-model
@@ -41,7 +41,8 @@ providers:
           provider: openai-compatible
           endpoint: https://direct.example/v1
           api_key: static-secret
-routing: {}
+recipes:
+  - name: default
 global:
   services:
     authz:
@@ -237,7 +238,7 @@ func TestTrustedGatewayDispatchPresentsTheCredentialUnderTheProviderAuthHeader(t
 
 func TestTrustedGatewayOnAnotherAuthHeaderDropsTheClientsAuthorization(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: claude-gateway
@@ -248,7 +249,8 @@ providers:
           provider: anthropic
           endpoint: https://gateway.example/v1
           trusted_gateway: true
-routing: {}
+recipes:
+  - name: default
 global:
   services:
     authz:

@@ -1,31 +1,31 @@
 # hybrid is multi_factor weighing quality by hybrid's automix weight and cost by
 # its cost weight; its experience and router_dc weights are dropped with a note.
 # The decision's weights override the global hybrid block's.
-version: v0.3
+version: v0.5
 providers:
   defaults: {model: small}
   models:
     - name: small
       pricing: {prompt_per_1m: 0.1, completion_per_1m: 0.2}
       backend_refs: [{name: small, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+      description: Fast general model
     - name: large
       pricing: {prompt_per_1m: 3, completion_per_1m: 6}
       backend_refs: [{name: large, endpoint: "127.0.0.1:8001", protocol: http, weight: 1}]
-routing:
-  modelCards:
-    - {name: small, description: Fast general model}
-    - {name: large, description: Strong reasoning model}
-  decisions:
-    - name: blended
-      priority: 100
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: small}, {model: large}]
-      algorithm:
-        type: multi_factor
-        multi_factor:
-          weights:
-            quality: 0.5
-            cost: 0.3
+      description: Strong reasoning model
+recipes:
+  - name: default
+    decisions:
+      - name: blended
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: small}, {model: large}]
+        algorithm:
+          type: multi_factor
+          multi_factor:
+            weights:
+              quality: 0.5
+              cost: 0.3
 global:
   router:
     model_selection:

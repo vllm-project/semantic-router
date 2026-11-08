@@ -23,7 +23,7 @@ import (
 
 func TestProviderCredentialIsInjectedOnceWithOverwriteSemantics(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: private
@@ -35,7 +35,8 @@ providers:
           auth_header: x-api-key
           auth_prefix: ""
           api_key: static-secret
-routing: {}
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -71,7 +72,7 @@ routing: {}
 
 func TestProviderWithNoAuthDoesNotRequireCredentialInFailClosedMode(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: local
@@ -80,7 +81,8 @@ providers:
       backend_refs:
         - provider: ollama
           endpoint: http://127.0.0.1:11434/v1
-routing: {}
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -697,7 +699,7 @@ func TestProviderAuthResolutionFailureEmitsEventAndKeepsGenericResponse(t *testi
 	defer restoreLogger()
 
 	cfg, err := config.ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: broken
@@ -706,7 +708,8 @@ providers:
       backend_refs:
         - provider: vllm
           endpoint: https://broken.example/v1
-routing: {}
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatal(err)

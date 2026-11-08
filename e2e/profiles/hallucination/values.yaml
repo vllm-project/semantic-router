@@ -4,7 +4,7 @@ image:
   tag: latest
   pullPolicy: Never
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -16,61 +16,60 @@ config:
             provider: vllm
             endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    decisions:
-      # Fact-checkable questions route here and, because the response carries
-      # tool context, trigger the remote hallucination check.
-      - name: fact_check_decision
-        description: Verify factual answers and run endpoint hallucination detection
-        priority: 100
-        rules:
-          operator: OR
-          conditions:
-            - type: fact_check
-              name: needs_fact_check
-        modelRefs:
-          - model: openai/gpt-oss-20b
-            use_reasoning: false
-        plugins:
-          - type: response_guard
-            configuration:
-              rules:
-                - when:
-                    operator: AND
-                    conditions:
-                      - type: fact_check
-                        name: needs_fact_check
-                      - type: hallucination
-                        name: ungrounded_claims
-                  action: annotate
-              on_unknown: annotate
-      - name: default_decision
-        description: Default catch-all decision
-        priority: 1
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: openai/gpt-oss-20b
-            use_reasoning: false
-    signals:
-      fact_check:
-        - name: needs_fact_check
-          description: Query contains factual claims that should be verified against context
-          predicate:
-            gte: 0.9997
-        - name: no_fact_check_needed
-          description: Query is creative, code, or opinion based - no fact verification needed
-          labels: [NO_FACT_CHECK_NEEDED]
-          predicate:
-            gt: 0.0003
-      # Checked from the model's answer against the tool context the request
-      # carried. The response_guard above annotates the answer on it.
-      hallucination:
-        - name: ungrounded_claims
-          description: Detect claims in the answer that the tool context does not support.
-    modelCards:
-      - name: openai/gpt-oss-20b
+  recipes:
+    - name: default
+      decisions:
+        # Fact-checkable questions route here and, because the response carries
+        # tool context, trigger the remote hallucination check.
+        - name: fact_check_decision
+          description: Verify factual answers and run endpoint hallucination detection
+          priority: 100
+          rules:
+            operator: OR
+            conditions:
+              - type: fact_check
+                name: needs_fact_check
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: false
+          plugins:
+            - type: response_guard
+              configuration:
+                rules:
+                  - when:
+                      operator: AND
+                      conditions:
+                        - type: fact_check
+                          name: needs_fact_check
+                        - type: hallucination
+                          name: ungrounded_claims
+                    action: annotate
+                on_unknown: annotate
+        - name: default_decision
+          description: Default catch-all decision
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: false
+      signals:
+        fact_check:
+          - name: needs_fact_check
+            description: Query contains factual claims that should be verified against context
+            predicate:
+              gte: 0.9997
+          - name: no_fact_check_needed
+            description: Query is creative, code, or opinion based - no fact verification needed
+            labels: [NO_FACT_CHECK_NEEDED]
+            predicate:
+              gt: 0.0003
+        # Checked from the model's answer against the tool context the request
+        # carried. The response_guard above annotates the answer on it.
+        hallucination:
+          - name: ungrounded_claims
+            description: Detect claims in the answer that the tool context does not support.
   global:
     router:
       strategy: priority

@@ -8,7 +8,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
-// validateHeaderMutationContracts refuses every header a routing scope's
+// validateHeaderMutationContracts refuses every header a recipe's
 // header_mutation plugins add, update or delete that the Router or Envoy
 // owns (headers.RouterOwned), one line per header.
 func validateHeaderMutationContracts(cfg *RouterConfig) error {

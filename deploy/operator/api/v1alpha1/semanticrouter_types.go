@@ -61,7 +61,7 @@ type SemanticRouterSpec struct {
 	// +optional
 	Persistence PersistenceSpec `json:"persistence,omitempty"`
 
-	// Configuration overrides merged into the canonical v0.3 config.yaml.
+	// Configuration overrides merged into the canonical v0.5 config.yaml.
 	// Router-wide runtime overrides land under config.global.router/services/stores/
 	// integrations/model_catalog, with model-backed modules nested under
 	// config.global.model_catalog.modules. Provider defaults land under
@@ -75,7 +75,7 @@ type SemanticRouterSpec struct {
 
 	// VLLMEndpoints is a Kubernetes-native backend discovery adapter.
 	// It generates canonical config.providers.models[].backend_refs
-	// and config.routing.modelCards entries.
+	// and the loras of those entries.
 	// +optional
 	VLLMEndpoints []VLLMEndpointSpec `json:"vllmEndpoints,omitempty"`
 
@@ -275,14 +275,42 @@ type DecisionModelBinding struct {
 
 // ConfigSpec defines the semantic router configuration
 type ConfigSpec struct {
-	// Routing contains canonical v0.3 routing configuration under config.routing.
-	// It is intentionally preserved as an object so the operator can pass through
-	// the router-owned signal, projection, decision, and algorithm contract without
-	// lagging behind every router schema addition.
+	// Routing is removed: the router configuration has no top-level routing
+	// block. Its fields are the recipe named default under config.recipes. A
+	// resource that sets it is refused.
 	// +optional
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Type=object
 	Routing *apiextensionsv1.JSON `json:"routing,omitempty" yaml:"routing,omitempty"`
+
+	// Recipes contains canonical recipes[]: each recipe's signals,
+	// projections, decisions, model_bindings and plugins. It is preserved as
+	// objects so the operator passes the router-owned contract through
+	// without lagging behind every router schema addition. The fields a
+	// recipe named default sets replace the operator's default recipe's.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Recipes *apiextensionsv1.JSON `json:"recipes,omitempty" yaml:"recipes,omitempty"`
+
+	// Entrypoints contains canonical entrypoints[]: the public model names of
+	// each recipe. Several recipes need them, with exactly one marked
+	// default: true.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Entrypoints *apiextensionsv1.JSON `json:"entrypoints,omitempty" yaml:"entrypoints,omitempty"`
+
+	// Plugins contains canonical global.plugins: the default plugins of every
+	// decision, which a recipe's and a decision's plugins override.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Plugins *apiextensionsv1.JSON `json:"plugins,omitempty" yaml:"plugins,omitempty"`
+
+	// Models contains the facts of providers.models[] entries (capabilities,
+	// modalities, description, context_window_size, ...), by name; the
+	// operator writes each entry's transport from vllmEndpoints.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Models *apiextensionsv1.JSON `json:"models,omitempty" yaml:"models,omitempty"`
 
 	// DecisionModel selects the declared deployment that answers default judgment
 	// tasks: a model_runtime deployment, or a systemone deployment that a remote
@@ -314,8 +342,8 @@ type ConfigSpec struct {
 	// refusal, turn_relation, complexity, modality), and each value names the
 	// model_deployments entry that answers it. A rule
 	// that asks its own question names its deployment on the rule. A signal no
-	// binding names follows decision_model; routing.model_bindings binds in
-	// the routing scope and wins over these.
+	// binding names follows decision_model; recipes[].model_bindings binds in
+	// its recipe and wins over these.
 	// +optional
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Type=object
@@ -430,7 +458,9 @@ type StreamedBodyConfig struct {
 
 // SemanticCacheConfig defines semantic cache configuration
 type SemanticCacheConfig struct {
-	// Enabled controls whether semantic caching is active
+	// Enabled, on by default, gives a configuration without decisions a
+	// response_cache plugin in config.plugins that caches every request; off,
+	// it turns the decisions' response_cache plugins off.
 	// +kubebuilder:default=true
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
@@ -442,7 +472,8 @@ type SemanticCacheConfig struct {
 	// +optional
 	BackendType string `json:"backend_type,omitempty"`
 
-	// Similarity threshold for cache hits (0.0-1.0). Stored as string to avoid float precision issues.
+	// SimilarityThreshold (0.0-1.0) is the min_similarity of the response_cache
+	// plugin Enabled adds. Stored as string to avoid float precision issues.
 	// +kubebuilder:default="0.8"
 	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
 	// +optional
@@ -1360,7 +1391,7 @@ type RuleCombinationConfig struct {
 // RuleConditionConfig references a specific rule by type and name
 type RuleConditionConfig struct {
 	// Type specifies the signal or projection type referenced by this condition.
-	// +kubebuilder:validation:Enum=keyword;embedding;domain;fact_check;user_feedback;reask;preference;language;context;complexity;modality;authz;jailbreak;pii;kb;conversation;projection
+	// +kubebuilder:validation:Enum=authz;complexity;context;conversation;domain;fact_check;hallucination;input_modality;jailbreak;keyword;language;metadata;modality;pii;projection;refusal;safety;systemone;turn_relation;user_feedback
 	Type string `json:"type" yaml:"type"`
 
 	// Name is the name of the rule to reference
@@ -1654,7 +1685,7 @@ type VLLMEndpointSpec struct {
 	// +optional
 	Reasoning *ModelReasoningSpec `json:"reasoning,omitempty"`
 
-	// LoRAs declares the LoRA adapters exposed for this logical model in routing.modelCards.
+	// LoRAs declares the LoRA adapters exposed for this logical model: the loras of its providers.models[] entry.
 	// +optional
 	// +kubebuilder:validation:MaxItems=50
 	LoRAs []LoRAAdapterSpec `json:"loras,omitempty"`

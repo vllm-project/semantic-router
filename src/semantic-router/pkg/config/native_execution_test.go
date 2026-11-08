@@ -19,9 +19,10 @@ func TestNativeCascadeAndCalibrationUseCommonContract(t *testing.T) {
 	// Configuration parsing checks references and immutable identities without
 	// opening local files. The execution owner verifies the artifact bytes.
 	canonical := CanonicalConfigFromRouterConfig(cfg)
+	native := nativeRecipe(t, &canonical)
 	risk := 0.01
 	canonical.Evaluation = &CanonicalEvaluation{Calibrations: []CalibrationArtifact{{Name: "suite-v1", Source: "./calibration/suite.json", SHA256: digest}}}
-	canonical.Recipes[0].Routing.Decisions[0].Algorithm.Escalate.Quality = &EscalateQuality{
+	native.Decisions[0].Algorithm.Escalate.Quality = &EscalateQuality{
 		Type: "calibrated", Calibration: "suite-v1", Loss: "bundle_error", MaxRisk: &risk,
 	}
 	calibrated, err := normalizeCanonicalConfig(&canonical)
@@ -32,7 +33,7 @@ func TestNativeCascadeAndCalibrationUseCommonContract(t *testing.T) {
 	if !ok || artifact.SHA256 != digest {
 		t.Fatalf("calibration reference = %+v, %v", artifact, ok)
 	}
-	canonical.Recipes[0].Routing.Decisions[0].Algorithm.Escalate.Quality.Calibration = "missing"
+	native.Decisions[0].Algorithm.Escalate.Quality.Calibration = "missing"
 	if _, err := normalizeCanonicalConfig(&canonical); err == nil || !strings.Contains(err.Error(), "unknown evaluation calibration") {
 		t.Fatalf("unresolved evidence reference accepted: %v", err)
 	}
@@ -69,11 +70,12 @@ func TestNativeDecisionsHaveIndependentAlgorithmBudgets(t *testing.T) {
 		t.Fatal(err)
 	}
 	canonical := CanonicalConfigFromRouterConfig(cfg)
-	first := canonical.Recipes[0].Routing.Decisions[0]
+	authored := nativeRecipe(t, &canonical)
+	first := authored.Decisions[0]
 	second := copyDecisions([]Decision{first})[0]
 	second.Name = "alternate"
 	second.Algorithm.Budget = &AlgorithmBudget{Deadline: "9s", MaxCalls: 2}
-	canonical.Recipes[0].Routing.Decisions = append(canonical.Recipes[0].Routing.Decisions, second)
+	authored.Decisions = append(authored.Decisions, second)
 	compiled, err := normalizeCanonicalConfig(&canonical)
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +85,7 @@ func TestNativeDecisionsHaveIndependentAlgorithmBudgets(t *testing.T) {
 		t.Fatal("decisions shared their algorithm budgets")
 	}
 	exported := CanonicalConfigFromRouterConfig(compiled)
-	exported.Recipes[0].Routing.Decisions[1].Algorithm.Budget.MaxCalls = 99
+	nativeRecipe(t, &exported).Decisions[1].Algorithm.Budget.MaxCalls = 99
 	if native.Profile.Decisions[1].Algorithm.Budget.MaxCalls != 2 {
 		t.Fatal("export mutated retained algorithm budget")
 	}
@@ -114,7 +116,8 @@ func TestNativeExportDoesNotMutateRetainedPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	retained := findRecipe(cfg.Recipes, "native-decisions").Profile.Decisions[0].Algorithm
-	exported := CanonicalConfigFromRouterConfig(cfg).Recipes[0].Routing.Decisions[0].Algorithm
+	canonical := CanonicalConfigFromRouterConfig(cfg)
+	exported := nativeRecipe(t, &canonical).Decisions[0].Algorithm
 	exported.Escalate.Stages[0].Model = "different"
 	*exported.Escalate.Stages[2].Enabled = true
 	*exported.Escalate.Quality.Accept.Native[0].State = "another-state"
@@ -145,9 +148,20 @@ func TestNativeAcceptanceProbabilityBounds(t *testing.T) {
 }
 
 func TestChatRecipeDoesNotSilentlyIgnoreNativeBudget(t *testing.T) {
-	raw := strings.Replace(nativeRoutingTestYAML, "entrypoints:\n", "routing:\n  budget: {deadline: 3s, max_calls: 4}\nentrypoints:\n", 1)
+	raw := strings.Replace(nativeRoutingTestYAML, "\n  - name: default\n", "\n  - name: default\n    budget: {deadline: 3s, max_calls: 4}\n", 1)
 	_, err := ParseYAMLBytes([]byte(raw))
 	if err == nil || !strings.Contains(err.Error(), "unknown field") {
 		t.Fatalf("Chat routing accepted an unenforced native budget: %v", err)
 	}
+}
+
+func nativeRecipe(t *testing.T, canonical *CanonicalConfig) *CanonicalRecipe {
+	t.Helper()
+	for i := range canonical.Recipes {
+		if canonical.Recipes[i].Name == "native-decisions" {
+			return &canonical.Recipes[i]
+		}
+	}
+	t.Fatal("the native-decisions recipe is missing")
+	return nil
 }

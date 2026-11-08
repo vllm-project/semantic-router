@@ -69,27 +69,29 @@ An entrypoint maps one or more public model names to an isolated recipe:
 
 ```yaml
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: ["acme/assistant-fast"]
     recipe: fast
-
 recipes:
+  - name: default
   - name: fast
-    routing:
-      strategy: priority
-      decisions:
-        - name: default-fast-route
-          description: Route eligible requests through the fast model pool.
-          priority: 10
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: local/small
-              use_reasoning: false
-            - model: local/vision
-              use_reasoning: false
-          algorithm:
-            type: static
+    strategy: priority
+    decisions:
+      - name: default-fast-route
+        description: Route eligible requests through the fast model pool.
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: local/small
+            use_reasoning: false
+          - model: local/vision
+            use_reasoning: false
+        algorithm:
+          type: static
 ```
 
 Signals and decisions identify the task. Candidate requirements then check the

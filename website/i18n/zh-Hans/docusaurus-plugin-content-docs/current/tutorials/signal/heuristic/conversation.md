@@ -10,7 +10,7 @@ translation:
 
 ## 概览 {#overview}
 
-`conversation` 按聊天结构与协议事实路由，例如消息数量、开发者指令、可用工具、显式工具使用约束，或正在进行的工具循环。在 `routing.signals.conversation` 下定义这些规则。
+`conversation` 按聊天结构与协议事实路由，例如消息数量、开发者指令、可用工具、显式工具使用约束，或正在进行的工具循环。在 `recipes[].signals.conversation` 下定义这些规则。
 
 该族为启发式：检查请求的 `messages[]` 与 `tools[]` 数组，不做任何模型推理。
 
@@ -37,35 +37,34 @@ translation:
 ## 配置 {#configuration}
 
 ```yaml
-routing:
-  signals:
-    conversation:
-      - name: multi_turn_user
-        description: At least two user messages.
-        feature:
-          type: count
-          source:
-            type: message
-            role: user
-        predicate:
-          gte: 2
-
-      - name: has_developer_message
-        description: Request includes a developer message.
-        feature:
-          type: exists
-          source:
-            type: message
-            role: developer
-
-      - name: tool_heavy
-        description: Three or more tool definitions.
-        feature:
-          type: count
-          source:
-            type: tool_definition
-        predicate:
-          gte: 3
+recipes:
+  - name: default
+    signals:
+      conversation:
+        - name: multi_turn_user
+          description: At least two user messages.
+          feature:
+            type: count
+            source:
+              type: message
+              role: user
+          predicate:
+            gte: 2
+        - name: has_developer_message
+          description: Request includes a developer message.
+          feature:
+            type: exists
+            source:
+              type: message
+              role: developer
+        - name: tool_heavy
+          description: Three or more tool definitions.
+          feature:
+            type: count
+            source:
+              type: tool_definition
+          predicate:
+            gte: 3
 ```
 
 ## 特征类型 {#feature-types}
@@ -93,20 +92,21 @@ routing:
 ## 决策用法 {#decision-usage}
 
 ```yaml
-routing:
-  decisions:
-    - name: agentic_routing
-      description: Send tool-heavy chats to an agent-capable model.
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: conversation
-            name: tool_heavy
-          - type: conversation
-            name: multi_turn_user
-      modelRefs:
-        - model: gpt-4o
+recipes:
+  - name: default
+    decisions:
+      - name: agentic_routing
+        description: Send tool-heavy chats to an agent-capable model.
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: conversation
+              name: tool_heavy
+            - type: conversation
+              name: multi_turn_user
+        modelRefs:
+          - model: gpt-4o
 ```
 
 ## 依赖与限制 {#dependencies-and-limitations}

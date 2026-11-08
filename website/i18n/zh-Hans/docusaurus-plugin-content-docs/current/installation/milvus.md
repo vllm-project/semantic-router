@@ -99,23 +99,24 @@ global:
 在可能读取或填充缓存的决策上启用路由插件：
 
 ```yaml
-routing:
-  decisions:
-    - name: general-chat
-      description: General requests that may use response cache.
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: local/general
-      plugins:
-        - type: response_cache
-          configuration:
-            enabled: true
-            semantic:
-              match:
-                recall: {top_k: 3, min_similarity: 0.86}
+recipes:
+  - name: default
+    decisions:
+      - name: general-chat
+        description: General requests that may use response cache.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: local/general
+        plugins:
+          - type: response_cache
+            configuration:
+              enabled: true
+              semantic:
+                match:
+                  recall: {top_k: 3, min_similarity: 0.86}
 ```
 
 在发布前运行配置校验：

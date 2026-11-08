@@ -110,9 +110,26 @@ class DSLConfig:
         return None, None
 
 
+def default_recipe(cfg: dict) -> dict:
+    """The recipe a config routes by default: the only recipe, or the one
+    the entrypoint marked default maps."""
+    recipes = [recipe for recipe in cfg.get("recipes", []) if isinstance(recipe, dict)]
+    if len(recipes) == 1:
+        return recipes[0]
+    name = next(
+        (
+            entrypoint.get("recipe")
+            for entrypoint in cfg.get("entrypoints", [])
+            if isinstance(entrypoint, dict) and entrypoint.get("default")
+        ),
+        "default",
+    )
+    return next((recipe for recipe in recipes if recipe.get("name") == name), {})
+
+
 def load_dsl_config(cfg: dict) -> DSLConfig:
     """Extract projection formulas and decisions from a parsed YAML config."""
-    routing = cfg.get("routing", {})
+    routing = default_recipe(cfg)
     proj_raw = routing.get("projections", {})
 
     scores = []

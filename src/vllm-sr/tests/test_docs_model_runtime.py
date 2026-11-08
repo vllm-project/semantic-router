@@ -168,9 +168,21 @@ def _merge(base: dict, fragment: dict) -> dict:
     for key, value in fragment.items():
         if isinstance(value, dict) and isinstance(base.get(key), dict):
             _merge(base[key], value)
+        elif key == "recipes" and isinstance(base.get(key), list):
+            _merge_recipes(base[key], value)
         else:
             base[key] = copy.deepcopy(value)
     return base
+
+
+def _merge_recipes(base: list, fragment: list) -> None:
+    """A fragment's recipe extends the recipe of the same name before it."""
+    by_name = {recipe.get("name"): recipe for recipe in base}
+    for recipe in fragment:
+        if recipe.get("name") in by_name:
+            _merge(by_name[recipe["name"]], recipe)
+        else:
+            base.append(copy.deepcopy(recipe))
 
 
 def _model_names(value) -> set[str]:
@@ -192,7 +204,7 @@ def _complete(fragment: dict) -> dict:
         return fragment
     models = sorted(_model_names(fragment) | {"answer-model"})
     base = {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [{"name": "http", "address": "0.0.0.0", "port": 8899}],
         "providers": {
             "defaults": {"model": "answer-model"},
@@ -206,7 +218,7 @@ def _complete(fragment: dict) -> dict:
                 for name in models
             ],
         },
-        "routing": {"modelCards": [{"name": name} for name in models]},
+        "recipes": [{"name": "default"}],
     }
     return _merge(base, fragment)
 

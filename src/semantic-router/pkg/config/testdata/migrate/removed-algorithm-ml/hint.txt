@@ -1,1 +1,1 @@
-routing.decisions[knn-route].algorithm: removed_algorithm_type: algorithm type knn is removed; run `vllm-sr config migrate` (type: systemone, or static for a decision with one candidate; the trained model is not used)
+recipes[default].decisions[knn-route].algorithm: removed_algorithm_type: algorithm type knn is removed; run `vllm-sr config migrate` (type: systemone, or static for a decision with one candidate; the trained model is not used)

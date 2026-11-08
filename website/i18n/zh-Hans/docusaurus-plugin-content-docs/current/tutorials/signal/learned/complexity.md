@@ -31,22 +31,23 @@ translation:
 ## 配置 {#configuration}
 
 ```yaml
-routing:
-  signals:
-    complexity:
-      - name: needs_reasoning
-        threshold: 0.10
-        description: Estimate the work needed to produce a supported answer.
-        hard:
-          candidates:
-            - Find a solution satisfying interacting constraints and justify why alternatives fail.
-            - Reconcile conflicting evidence and defend a conclusion under uncertainty.
-            - Derive an algorithm and prove its correctness.
-        easy:
-          candidates:
-            - Retrieve a fact explicitly stated in the supplied text.
-            - Copy the supplied information into the requested format.
-            - Apply one specified local edit while preserving everything else.
+recipes:
+  - name: default
+    signals:
+      complexity:
+        - name: needs_reasoning
+          threshold: 0.10
+          description: Estimate the work needed to produce a supported answer.
+          hard:
+            candidates:
+              - Find a solution satisfying interacting constraints and justify why alternatives fail.
+              - Reconcile conflicting evidence and defend a conclusion under uncertainty.
+              - Derive an algorithm and prove its correctness.
+          easy:
+            candidates:
+              - Retrieve a fact explicitly stated in the supplied text.
+              - Copy the supplied information into the requested format.
+              - Apply one specified local edit while preserving everything else.
 ```
 
 `threshold` 是裕量，不是相似度截止。Router 分别对 `hard` 与 `easy` 候选库打分，再比较两者：
@@ -66,19 +67,20 @@ otherwise            -> medium
 规则会发出带后缀的名称。决策必须引用 `<rule>:easy`、`<rule>:medium` 或 `<rule>:hard`：
 
 ```yaml
-routing:
-  decisions:
-    - name: reasoning
-      description: Route hard prompts to the reasoning model.
-      priority: 150
-      rules:
-        operator: AND
-        conditions:
-          - type: complexity
-            name: needs_reasoning:hard
-      modelRefs:
-        - model: reasoning-model
-          use_reasoning: true
+recipes:
+  - name: default
+    decisions:
+      - name: reasoning
+        description: Route hard prompts to the reasoning model.
+        priority: 150
+        rules:
+          operator: AND
+          conditions:
+            - type: complexity
+              name: needs_reasoning:hard
+        modelRefs:
+          - model: reasoning-model
+            use_reasoning: true
 ```
 
 如需可选的原型库调参，在族级模块上配置一次：
@@ -118,13 +120,14 @@ prototype_scoring:
 每条 complexity 规则都提出自己的问题，因此在规则上用 `deployment` 指定它的模型。带有 `hard`/`easy` 样例库且没有 `deployment` 的规则继续使用嵌入比较。在规则上指定一个 `model_runtime` 或 `systemone` 部署，即可改为向它提出打分问题；此时候选样例作为各等级的示例。既没有样例库、也没有 `deployment` 的规则询问决策模型。部署必须支持 `score` 问题。
 
 ```yaml
-routing:
-  signals:
-    complexity:
-      - name: needs_reasoning
-        deployment: primary
-        threshold: 0.10
-        description: Estimate the work needed to produce a supported answer.
+recipes:
+  - name: default
+    signals:
+      complexity:
+        - name: needs_reasoning
+          deployment: primary
+          threshold: 0.10
+          description: Estimate the work needed to produce a supported answer.
 ```
 
 任务提出 easy、medium、hard 等级问题，将原生等级分数归一化到 `[0, 1]` 后应用显式边界；仅设置 `threshold` 时先映射到 `[-1, 1]` 再应用对称区间。这是模型判断，不是余弦差值或校准后的正确率；切换任务或模型时应重新评估边界。
@@ -133,7 +136,7 @@ routing:
 
 没有远程部署时，complexity 在本地打分：`hard` 与 `easy` 候选列表在启动时嵌入一次，每个请求按它更像难示例还是易示例的程度打分。该差值是以零为中心的有符号裕量，因此 `threshold` 是对称的——高于 `+threshold` 为 hard，低于 `-threshold` 为 easy，中间档为 medium。
 
-远程打分器是在 complexity 规则上指定的 `classify` 部署。Router 把请求文本发送到 `<endpoint>/classify`，服务返回一个难度分数（`score.v1`）。所有 complexity 规则由同一个分数驱动，因此一个路由配置中的每条规则都指定同一个部署：如果规则指向不同的远程部署，或者一些规则询问打分器而另一些不询问，Router 会拒绝该配置。替换 `routing.signals` 的配方在它自己的规则上指定部署。
+远程打分器是在 complexity 规则上指定的 `classify` 部署。Router 把请求文本发送到 `<endpoint>/classify`，服务返回一个难度分数（`score.v1`）。所有 complexity 规则由同一个分数驱动，因此一个路由配置中的每条规则都指定同一个部署：如果规则指向不同的远程部署，或者一些规则询问打分器而另一些不询问，Router 会拒绝该配置。替换 `recipes[].signals` 的配方在它自己的规则上指定部署。
 
 #### 返回分数的模型 {#a-model-that-returns-a-score}
 
@@ -150,18 +153,18 @@ global:
         endpoint: https://difficulty-scorer.example.com
         auth: {api_key_env: DIFFICULTY_SCORER_KEY}
         timeout_ms: 5000
-
-routing:
-  signals:
-    complexity:
-      - name: needs_reasoning
-        deployment: difficulty-scorer
-        hard_above: 0.85          # a higher score is harder
-        easy_below: 0.60
-      - name: extreme
-        deployment: difficulty-scorer
-        hard_above: 0.95          # same score, stricter boundaries
-        easy_below: 0.30
+recipes:
+  - name: default
+    signals:
+      complexity:
+        - name: needs_reasoning
+          deployment: difficulty-scorer
+          hard_above: 0.85 # a higher score is harder
+          easy_below: 0.60
+        - name: extreme
+          deployment: difficulty-scorer
+          hard_above: 0.95 # same score, stricter boundaries
+          easy_below: 0.30
 ```
 
 对于分数随难度上升而下降的模型——例如预测正确答案概率的模型——改用 `hard_below` 与 `easy_above`。把方向编码在字段名里，就不必再维护单独的方向设置，也不会意外写出重叠档。这两个字段适用于远程分数或判断模型评分。本地样例库的裕量是 hard 减 easy，因此更高值本身就更难；要在本地反转它，交换候选列表即可。

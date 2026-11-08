@@ -32,7 +32,7 @@ func TestStandaloneRefusesPolicyOnGatewayAssertedIdentity(t *testing.T) {
 		{
 			name: "authz signal in a nested rule",
 			cfg:  &RouterConfig{IntelligentRouting: IntelligentRouting{Decisions: []Decision{authzDecision}}},
-			path: "routing.decisions[admins].rules",
+			path: "recipes[default].decisions[admins].rules",
 			want: "decision 'admins': the authz signal 'admin'",
 		},
 		{
@@ -81,11 +81,13 @@ func TestStandaloneRefusesPolicyOnGatewayAssertedIdentity(t *testing.T) {
 }
 
 func TestUntrustedIdentityWarningNamesTheFeaturesThatRecordAUser(t *testing.T) {
-	cfg := &RouterConfig{
-		APIServer:    APIServer{Listeners: []Listener{{Name: "public", Port: 8899}}},
-		Memory:       MemoryConfig{Enabled: true},
-		RouterReplay: RouterReplayConfig{Enabled: true},
-	}
+	cfg := layeredRouting([]DecisionPlugin{
+		{Type: DecisionPluginContext, Configuration: MustStructuredPayload(ContextPluginConfig{
+			Enabled: true, Sources: []ContextSource{{Type: ContextSourceMemory}},
+		})},
+		{Type: DecisionPluginRouterReplay, Configuration: MustStructuredPayload(map[string]interface{}{"enabled": true})},
+	}, Decision{Name: "plain"})
+	cfg.Listeners = []Listener{{Name: "public", Port: 8899}}
 	warning := UntrustedIdentityWarning(cfg)
 	if !strings.Contains(warning, "memory and router replay record") ||
 		!strings.Contains(warning, "listeners[].identity.trust_headers") {

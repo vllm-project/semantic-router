@@ -29,7 +29,7 @@ func (r *OpenAIRouter) retrieveContextSources(ctx *RequestContext, userContent s
 	if ctx.MemoryBackend == "" {
 		ctx.MemoryBackend = "milvus"
 	}
-	plugin := r.Config.ContextPlugin(ctx.VSRSelectedDecision)
+	plugin := config.ContextPluginOf(requestPlugins(r.Config, ctx))
 	if plugin.Source(config.ContextSourceMemory) == nil {
 		recordMemoryOutcome(ctx, "disabled", memoryDisabledReason(ctx), false)
 	}

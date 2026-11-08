@@ -26,26 +26,27 @@ translation:
 
 ## 何时使用
 
-当行为应仅在特定路由匹配后生效时，使用插件。当每条路由共享同一服务或后台存储时，改用 `global:`。插件条目位于 `routing.decisions[].plugins` 下。
+当行为应仅在特定路由匹配后生效时，使用插件。当每条路由共享同一服务或后台存储时，改用 `global:`。插件条目位于 `recipes[].decisions[].plugins` 下。
 
 ## 配置
 
 ```yaml
-routing:
-  decisions:
-    - name: cached-support
-      description: Reuse cached responses for support requests.
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: support-model
-      plugins:
-        - type: response_cache
-          configuration:
-            enabled: true
-            ttl_seconds: 3600
+recipes:
+  - name: default
+    decisions:
+      - name: cached-support
+        description: Reuse cached responses for support requests.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: support-model
+        plugins:
+          - type: response_cache
+            configuration:
+              enabled: true
+              ttl_seconds: 3600
 ```
 
 ## 插件清单 {#plugin-inventory}

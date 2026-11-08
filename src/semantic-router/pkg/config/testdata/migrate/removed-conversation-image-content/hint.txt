@@ -1,1 +1,1 @@
-routing.signals.conversation[has_images].feature.source.type: invalid_value: the conversation feature image_content is removed; run `vllm-sr config migrate` (an input_modality rule with modality: image, which counts the image parts of user messages)
+recipes[default].signals.conversation[has_images].feature.source.type: invalid_value: the conversation feature image_content is removed; run `vllm-sr config migrate` (an input_modality rule with modality: image, which counts the image parts of user messages)

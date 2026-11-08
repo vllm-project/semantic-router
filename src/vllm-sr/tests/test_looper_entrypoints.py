@@ -14,7 +14,7 @@ FLOW_FIELD = "global.integrations.looper.flow.model_names"
 # A backend model formerly captured by an implicit Flow alias. That config
 # now fails explicitly; authors must choose a distinct recipe entrypoint.
 _CAPTURED_MODEL_CONFIG = {
-    "version": "v0.3",
+    "version": "v0.5",
     "providers": {
         "defaults": {"model": "gpt-oss"},
         "models": [
@@ -25,44 +25,44 @@ _CAPTURED_MODEL_CONFIG = {
             {
                 "name": "base",
                 "backend_refs": [{"endpoint": "127.0.0.1:8001", "provider": "vllm"}],
+                "loras": [{"name": "base-sql"}],
             },
         ],
     },
-    "routing": {
-        "modelCards": [
-            {"name": "gpt-oss"},
-            {"name": "base", "loras": [{"name": "base-sql"}]},
-        ],
-        "signals": {
-            "keywords": [
-                {"name": "plan_keywords", "operator": "OR", "keywords": ["plan"]}
-            ]
-        },
-        "decisions": [
-            {
-                "name": "workflow_route",
-                "priority": 20,
-                "rules": {
-                    "operator": "AND",
-                    "conditions": [{"type": "keyword", "name": "plan_keywords"}],
-                },
-                "modelRefs": [{"model": "gpt-oss"}],
-                "algorithm": {
-                    "type": "workflows",
-                    "workflows": {
-                        "mode": "static",
-                        "roles": [{"name": "worker", "models": ["gpt-oss"]}],
+    "recipes": [
+        {
+            "name": "default",
+            "signals": {
+                "keywords": [
+                    {"name": "plan_keywords", "operator": "OR", "keywords": ["plan"]}
+                ]
+            },
+            "decisions": [
+                {
+                    "name": "workflow_route",
+                    "priority": 20,
+                    "rules": {
+                        "operator": "AND",
+                        "conditions": [{"type": "keyword", "name": "plan_keywords"}],
+                    },
+                    "modelRefs": [{"model": "gpt-oss"}],
+                    "algorithm": {
+                        "type": "workflows",
+                        "workflows": {
+                            "mode": "static",
+                            "roles": [{"name": "worker", "models": ["gpt-oss"]}],
+                        },
                     },
                 },
-            },
-            {
-                "name": "default_route",
-                "priority": 10,
-                "rules": {"operator": "AND", "conditions": []},
-                "modelRefs": [{"model": "gpt-oss"}],
-            },
-        ],
-    },
+                {
+                    "name": "default_route",
+                    "priority": 10,
+                    "rules": {"operator": "AND", "conditions": []},
+                    "modelRefs": [{"model": "gpt-oss"}],
+                },
+            ],
+        }
+    ],
     "global": {"integrations": {"looper": {"flow": {"model_names": ["gpt-oss"]}}}},
 }
 
@@ -86,17 +86,19 @@ def test_implicit_algorithm_alias_is_rejected(family):
 def test_workflow_recipe_uses_an_explicit_distinct_entrypoint():
     document = copy.deepcopy(_CAPTURED_MODEL_CONFIG)
     document["global"] = {}
-    routing = document["routing"]
+    default = document["recipes"][0]
     document["recipes"] = [
+        default,
         {
             "name": "workflow",
-            "routing": {
-                "signals": routing["signals"],
-                "decisions": [routing["decisions"].pop(0)],
-            },
-        }
+            "signals": default["signals"],
+            "decisions": [default["decisions"].pop(0)],
+        },
     ]
-    document["entrypoints"] = [{"model_names": ["team/workflow"], "recipe": "workflow"}]
+    document["entrypoints"] = [
+        {"model_names": ["vllm-sr/auto"], "recipe": "default", "default": True},
+        {"model_names": ["team/workflow"], "recipe": "workflow"},
+    ]
     assert (
         validate_user_config(UserConfig.model_validate(document), log_summary=False)
         == []

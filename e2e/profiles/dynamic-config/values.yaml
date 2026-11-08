@@ -1,5 +1,5 @@
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -14,20 +14,19 @@ config:
             provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    modelCards:
-      - name: base-model
-    signals: {}
-    decisions:
-      - name: bootstrap-default
-        description: Valid startup route replaced by the dynamic CRD profile.
-        priority: 1
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: base-model
-            use_reasoning: false
+  recipes:
+    - name: default
+      signals: {}
+      decisions:
+        - name: bootstrap-default
+          description: Valid startup route replaced by the dynamic CRD profile.
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: base-model
+              use_reasoning: false
   global:
     model_catalog: {}
     router:
@@ -66,9 +65,7 @@ config:
               - 200
     stores:
       response_cache:
-        enabled: true
         backend_type: memory
-        similarity_threshold: 0.8
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo

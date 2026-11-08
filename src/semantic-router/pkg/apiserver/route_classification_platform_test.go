@@ -99,19 +99,20 @@ func TestHandleConfigGetReturnsFullRouterConfig(t *testing.T) {
 		t.Fatalf("json.Unmarshal error: %v", err)
 	}
 
-	routing, ok := payload["routing"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected routing block, got %#v", payload)
+	recipes, ok := payload["recipes"].([]interface{})
+	if !ok || len(recipes) == 0 {
+		t.Fatalf("expected recipes, got %#v", payload)
 	}
-	if _, hasSignals := routing["signals"].(map[string]interface{}); !hasSignals {
-		t.Fatalf("expected routing.signals, got %#v", routing)
+	recipe, _ := recipes[0].(map[string]interface{})
+	if _, hasSignals := recipe["signals"].(map[string]interface{}); !hasSignals {
+		t.Fatalf("expected recipes[0].signals, got %#v", recipe)
 	}
-	projections, ok := routing["projections"].(map[string]interface{})
+	projections, ok := recipe["projections"].(map[string]interface{})
 	if !ok {
-		t.Fatalf("expected routing.projections, got %#v", routing)
+		t.Fatalf("expected recipes[default].projections, got %#v", recipe)
 	}
 	if _, ok := projections["partitions"]; !ok {
-		t.Fatalf("expected routing.projections.partitions in response, got %#v", projections)
+		t.Fatalf("expected recipes[default].projections.partitions in response, got %#v", projections)
 	}
 }
 

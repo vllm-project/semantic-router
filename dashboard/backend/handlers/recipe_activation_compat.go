@@ -260,7 +260,7 @@ func addResponseAPIStorage(required map[string]struct{}, config *routerconfig.Ro
 }
 
 func addRouterReplayStorage(required map[string]struct{}, config *routerconfig.RouterConfig) {
-	if !config.RouterReplay.Enabled {
+	if !config.UsesRouterReplay() {
 		return
 	}
 	switch strings.ToLower(strings.TrimSpace(config.RouterReplay.StoreBackend)) {
@@ -287,7 +287,7 @@ func addStartupStatusStorage(required map[string]struct{}, config *routerconfig.
 }
 
 func addSemanticCacheStorage(required map[string]struct{}, config *routerconfig.RouterConfig) {
-	if !config.SemanticCache.Enabled {
+	if store, _ := config.ResponseCacheDemand(); !store {
 		return
 	}
 	switch strings.ToLower(strings.TrimSpace(config.SemanticCache.BackendType)) {

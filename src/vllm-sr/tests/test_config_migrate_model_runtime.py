@@ -347,8 +347,10 @@ def test_graph_heads_and_the_explainer_binding_leave_task_bindings():
             "adapter": "modernbert",
         }
     }
-    recipe_binding = migrated["recipes"][0]["routing"]["model_bindings"][
-        "domain_classifier"
+    (recipe_binding,) = [
+        recipe["model_bindings"]["domain_classifier"]
+        for recipe in migrated["recipes"]
+        if "model_bindings" in recipe
     ]
     assert "head" not in recipe_binding
     paths = _note_paths(notes)
@@ -703,7 +705,7 @@ def test_signal_and_plugin_nli_options_and_mlp_devices_are_removed():
         )
     )
 
-    routing = migrated["routing"]
+    routing = migrated["recipes"][0]
     assert routing["signals"]["classifiers"][0]["model_path"] == (
         "models/Vela-1.0-Encoder-307M-Domain"
     )

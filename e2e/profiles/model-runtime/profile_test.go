@@ -12,7 +12,7 @@ import (
 // values mirrors the parts of values.yaml this test checks.
 type values struct {
 	Config struct {
-		Routing struct {
+		Recipes []struct {
 			Signals struct {
 				SystemOne []struct {
 					Name       string `yaml:"name"`
@@ -28,7 +28,7 @@ type values struct {
 					} `yaml:"systemone"`
 				} `yaml:"algorithm"`
 			} `yaml:"decisions"`
-		} `yaml:"routing"`
+		} `yaml:"recipes"`
 		Global struct {
 			ModelCatalog struct {
 				Deployments map[string]struct {
@@ -142,13 +142,13 @@ func TestProfileRunsManagedAndAttachedRuntimesOnItsOwnFixtures(t *testing.T) {
 	for _, deployment := range profile.Config.Global.ModelCatalog.Bindings {
 		used[deployment] = true
 	}
-	for _, deployment := range profile.Config.Routing.ModelBindings {
+	for _, deployment := range profile.Config.Recipes[0].ModelBindings {
 		used[deployment] = true
 	}
-	for _, rule := range profile.Config.Routing.Signals.SystemOne {
+	for _, rule := range profile.Config.Recipes[0].Signals.SystemOne {
 		used[rule.Deployment] = true
 	}
-	for _, decision := range profile.Config.Routing.Decisions {
+	for _, decision := range profile.Config.Recipes[0].Decisions {
 		if decision.Algorithm != nil && decision.Algorithm.SystemOne != nil {
 			used[decision.Algorithm.SystemOne.Deployment] = true
 		}

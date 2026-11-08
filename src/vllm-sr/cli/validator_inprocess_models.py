@@ -11,6 +11,7 @@ import json
 from collections.abc import Iterator
 from typing import Any
 
+from cli.config_contract import iter_routing_profiles
 from cli.config_schema import routing_surface_catalog
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
@@ -43,20 +44,18 @@ def validate_inprocess_model_backends(config: UserConfig) -> list[ValidationErro
 
 
 def _routing_profiles(config: UserConfig) -> list[tuple[str, Any]]:
-    profiles = [("decisions", config.routing)]
-    profiles.extend(
-        (f"recipes.{recipe.name}.decisions", recipe.routing)
-        for recipe in config.recipes
-    )
-    return profiles
+    return [
+        (f"recipes.{name}.decisions", recipe)
+        for name, recipe in iter_routing_profiles(config)
+    ]
 
 
 def _served_models(config: UserConfig) -> set[str]:
     """Models with a backend, and the LoRA adapters their model cards declare."""
     served = {model.name for model in config.providers.models if model.backend_refs}
-    for card in config.routing.model_cards:
-        if card.name in served:
-            served.update(lora.name for lora in card.loras or [])
+    for model in config.providers.models:
+        if model.name in served:
+            served.update(lora.name for lora in model.loras or [])
     return served
 
 

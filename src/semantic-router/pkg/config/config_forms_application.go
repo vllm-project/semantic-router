@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"math"
 	"slices"
 	"strconv"
@@ -19,7 +20,7 @@ import (
 // module's threshold becomes the predicate of the rules that inherited it.
 var applicationForms = slices.Concat(removedSignalTypeForms, applicationFieldForms, applicationModuleForms)
 
-// conditionPaths are the places a routing scope names a signal: decision
+// conditionPaths are the places a recipe names a signal: decision
 // conditions at any depth and projection score inputs.
 var conditionPaths = slices.Concat(
 	RoutingScopes("decisions[].rules.**"),
@@ -41,13 +42,15 @@ var removedSignalTypeForms = []ConfigForm{
 		Code:    CodeRemovedSignalType,
 		Paths:   RoutingScopes("signals.reasks"),
 		What:    "the reask signal is a turn_relation rule",
-		Becomes: "signals.turn_relation with labels [reask]; lookback_turns becomes input.previous_turns",
+		Becomes: "signals.turn_relation with labels [reask]; input.previous_turns is twice lookback_turns",
 		Migrate: func(m *Migration, at FormMatch) error {
 			for _, rule := range sequenceItems(at.Node) {
 				next := copiedRule(rule, "name", "description")
 				setNode(next, "labels", stringSequence("reask"))
-				if turns := mappingValue(rule, "lookback_turns"); turns != nil {
-					setNode(next, "input", newMapping("previous_turns", turns))
+				// lookback_turns counted user turns; previous_turns counts each
+				// of them and the answer that followed it.
+				if turns, ok := intAt(rule, "lookback_turns"); ok {
+					setNode(next, "input", newMapping("previous_turns", intNode(2*turns)))
 				}
 				if scalarAt(rule, "threshold") != "" {
 					m.Note(at.Path, "a reask rule's threshold has no counterpart: the decision model tells a re-ask from the turns themselves")
@@ -170,7 +173,7 @@ var removedSignalTypeForms = []ConfigForm{
 	},
 	{
 		Code:    CodeRemovedSignalType,
-		Paths:   []string{"routing", "recipes[].routing"},
+		Paths:   []string{"recipes[]"},
 		Match:   func(node *yaml.Node, _ string) bool { return len(embeddingPartitions(node)) > 0 },
 		What:    "projection partitions over embedding rules are removed with the embedding signal",
 		Becomes: "drop them; a systemone choice question chooses one of a partition's members",
@@ -228,7 +231,8 @@ var removedSignalTypeForms = []ConfigForm{
 		Code:    CodeRemovedSignalType,
 		Paths:   RoutingScopes("signals.kb"),
 		What:    "the kb signal is removed",
-		Becomes: "write a systemone set or choice question over the knowledge base's labels",
+		Becomes: "nothing: its rules never match; ask a systemone set question over the knowledge base's labels instead",
+		Migrate: migrateKBSignal,
 	},
 	{
 		Code:  CodeRemovedSignalType,
@@ -237,7 +241,15 @@ var removedSignalTypeForms = []ConfigForm{
 			return hasType("kb")(node, path) || hasType("kb_metric")(node, path)
 		},
 		What:    "kb conditions and kb_metric projection inputs are removed",
-		Becomes: "read a systemone question's labels instead",
+		Becomes: "nothing: a kb condition never matches, and a score drops a kb_metric input; read a systemone question's labels instead",
+		Migrate: func(m *Migration, at FormMatch) error {
+			if strings.Contains(at.Path, ".projections.") {
+				dropScoreInput(m, at, kbInputName(at.Node), kbNeverMatches)
+				return nil
+			}
+			settleRemovedCondition(m, at, "kb rule", func(node *yaml.Node) bool { return hasType("kb")(node, "") }, kbNeverMatches)
+			return nil
+		},
 	},
 	{
 		Code:    CodeRemovedSection,
@@ -246,9 +258,62 @@ var removedSignalTypeForms = []ConfigForm{
 		Becomes: "drop it; a systemone question names its labels",
 		Migrate: func(m *Migration, at FormMatch) error {
 			m.Delete(at.Parent, at.Key)
+			deleteEmpty(m.Root(), "global", "model_catalog")
 			return nil
 		},
 	},
+}
+
+// kbNeverMatches is why a kb condition never matches.
+var kbNeverMatches = neverMatches{
+	why:     "no v0.5 signal reads a knowledge base",
+	restore: "to keep it, condition it on a systemone question over the knowledge base's labels",
+}
+
+// migrateKBSignal drops a recipe's kb rules, which never match, each with the
+// systemone set question over its knowledge base's labels that replaces it.
+func migrateKBSignal(m *Migration, at FormMatch) error {
+	groups := kbGroups(at.Root)
+	for _, rule := range sequenceItems(resolveAlias(at.Node)) {
+		name, target := scalarAt(rule, "name"), mappingAt(rule, "target")
+		labels := groups[scalarAt(rule, "kb")][scalarAt(target, "value")]
+		if !strings.EqualFold(scalarAt(target, "kind"), "group") || len(labels) == 0 {
+			labels = []string{scalarAt(target, "value")}
+		}
+		keys := make([]string, len(labels))
+		for i, label := range labels {
+			keys[i] = "{key: " + label + "}"
+		}
+		m.Note(at.Path+"["+name+"]", fmt.Sprintf("kb rule %s is dropped: %s, so it never matches; to route on its labels, ask signals.systemone: "+
+			"[{name: %s, question: {type: set, instructions: \"Which of these does the request concern?\", labels: [%s]}}]",
+			name, kbNeverMatches.why, name, strings.Join(keys, ", ")))
+	}
+	m.Delete(at.Parent, at.Key)
+	deleteEmpty(at.Ancestors[len(at.Ancestors)-1], "signals")
+	return nil
+}
+
+// kbGroups are the labels of each group of each knowledge base
+// global.model_catalog.kbs declares.
+func kbGroups(root *yaml.Node) map[string]map[string][]string {
+	groups := map[string]map[string][]string{}
+	for _, kb := range sequenceAt(root, "global", "model_catalog", "kbs") {
+		byGroup := map[string][]string{}
+		mapping := mappingAt(kb, "groups")
+		for i := 0; mapping != nil && i+1 < len(mapping.Content); i += 2 {
+			byGroup[mapping.Content[i].Value] = stringItems(resolveAlias(mapping.Content[i+1]))
+		}
+		groups[scalarAt(kb, "name")] = byGroup
+	}
+	return groups
+}
+
+// kbInputName names a kb or kb_metric projection input for a note.
+func kbInputName(input *yaml.Node) string {
+	if metric := scalarAt(input, "metric"); metric != "" {
+		return "kb_metric " + metric
+	}
+	return "kb " + scalarAt(input, "name")
 }
 
 var applicationFieldForms = []ConfigForm{
@@ -258,12 +323,18 @@ var applicationFieldForms = []ConfigForm{
 		What:    "a domain rule's mmlu_categories are its labels",
 		Becomes: "labels",
 		Migrate: func(m *Migration, at FormMatch) error {
+			for _, category := range sequenceItems(resolveAlias(at.Node)) {
+				if domain := strings.ReplaceAll(category.Value, "_", " "); !IsSupportedRoutingDomainName(category.Value) && IsSupportedRoutingDomainName(domain) {
+					m.Changed(at.Path, "mmlu category "+category.Value+" is the domain "+domain)
+					category.Value = domain
+				}
+			}
 			return m.Rename(at.Parent, at.Key, "labels")
 		},
 	},
 	{
 		Code:  CodeRemovedField,
-		Paths: []string{"routing", "recipes[].routing"},
+		Paths: []string{"recipes[]"},
 		Match: func(node *yaml.Node, _ string) bool {
 			return len(sequenceAt(node, "signals", "domains")) == 0 && len(domainConditionNames(node)) > 0
 		},
@@ -385,7 +456,8 @@ var applicationFieldForms = []ConfigForm{
 		Code:    CodeRemovedField,
 		Paths:   RoutingScopes("signals.safety[].hazard"),
 		What:    "a safety rule's hazard part is removed",
-		Becomes: "name the harm categories the rule matches in its labels (map the hazard labels to them by hand)",
+		Becomes: "labels: the harm categories of its categories, predicate: {gte: <hazard.threshold>}",
+		Migrate: migrateSafetyHazard,
 	},
 	{
 		Code:  CodeRemovedField,
@@ -657,7 +729,7 @@ func inheritsModuleThreshold(collection string, rule *yaml.Node) bool {
 	return len(labels) == 0 || slices.Equal(labels, []string{"FACT_CHECK_NEEDED"})
 }
 
-// embeddingPartitions are a routing scope's projection partitions with a
+// embeddingPartitions are a recipe's projection partitions with a
 // member that is an embedding rule.
 func embeddingPartitions(scope *yaml.Node) []*yaml.Node {
 	var embeddings []string
@@ -694,7 +766,7 @@ func embeddingQuestion(rule *yaml.Node) string {
 	return question
 }
 
-// domainConditionNames are the domains a routing scope's decisions name, in
+// domainConditionNames are the domains a recipe's decisions name, in
 // order.
 func domainConditionNames(scope *yaml.Node) []string {
 	var names []string
@@ -729,31 +801,27 @@ func preferenceQuestion(signals *yaml.Node) string {
 	return preferenceQuestionName
 }
 
-// scopeRouting is the routing mapping of the scope a path lies in: the
-// top-level routing block or a recipe's.
+// scopeRouting is the recipe a path lies in.
 func scopeRouting(root *yaml.Node, path string) *yaml.Node {
-	if strings.HasPrefix(path, "routing.") {
-		return mappingAt(root, "routing")
-	}
 	label, _, _ := strings.Cut(strings.TrimPrefix(path, "recipes["), "]")
 	for index, recipe := range sequenceAt(root, "recipes") {
 		if scalarAt(recipe, "name") == label || strconv.Itoa(index) == label {
-			return mappingAt(recipe, "routing")
+			return resolveAlias(recipe)
 		}
 	}
 	return nil
 }
 
-// scopeSignals is the signals mapping of the routing scope a path lies in.
+// scopeSignals is the signals mapping of the recipe a path lies in.
 func scopeSignals(root *yaml.Node, path string) *yaml.Node {
 	return mappingAt(scopeRouting(root, path), "signals")
 }
 
-// allScopeSignals are the signals mappings of every routing scope.
+// allScopeSignals are the signals mappings of every recipe.
 func allScopeSignals(root *yaml.Node) []*yaml.Node {
-	scopes := []*yaml.Node{mappingAt(root, "routing", "signals")}
+	var scopes []*yaml.Node
 	for _, recipe := range sequenceAt(root, "recipes") {
-		scopes = append(scopes, mappingAt(recipe, "routing", "signals"))
+		scopes = append(scopes, mappingAt(recipe, "signals"))
 	}
 	return slices.DeleteFunc(scopes, func(signals *yaml.Node) bool { return signals == nil })
 }
@@ -859,11 +927,103 @@ func floatScalar(value float64) *yaml.Node {
 // bindingKeyOf is the binding key a model_bindings or bindings path ends in;
 // a key may hold dots.
 func bindingKeyOf(path string) string {
-	for _, prefix := range []string{"global.model_catalog.bindings.", "routing.model_bindings."} {
-		if strings.HasPrefix(path, prefix) {
-			return strings.TrimPrefix(path, prefix)
+	if key, ok := strings.CutPrefix(path, "global.model_catalog.bindings."); ok {
+		return key
+	}
+	_, key, _ := strings.Cut(path, "].model_bindings.")
+	return key
+}
+
+// hazardHarmCategories are the harm categories (presets.HarmCategoryOptions)
+// of each Vela 1.0 Hazard label: the AEGIS 2.0 categories the head was trained
+// on and the MLCommons hazard codes of the same harms.
+var hazardHarmCategories = map[string][]string{
+	"violence":             {"Violence", "Threat", "S1"},
+	"criminal_activity":    {"Criminal Planning/Confessions", "Illegal Activity", "Fraud/Deception", "S2"},
+	"sexual_content":       {"Sexual", "S3", "S12"},
+	"child_exploitation":   {"Sexual (minor)", "S4"},
+	"hate":                 {"Hate/Identity Hate", "S10"},
+	"harassment_abuse":     {"Harassment", "Profanity"},
+	"regulated_substances": {"Controlled/Regulated Substances"},
+	"weapons":              {"Guns and Illegal Weapons", "S9"},
+	"self_harm":            {"Suicide and Self Harm", "S11"},
+	"privacy":              {"PII/Privacy", "S7"},
+	"specialized_advice":   {"Unauthorized Advice", "S6"},
+	"misinformation":       {"Political/Misinformation/Conspiracy"},
+}
+
+// harmCategoriesOf are the harm categories a hazard category names: a Vela
+// 1.0 Hazard label's, else the harm category of its name.
+func harmCategoriesOf(category string) []string {
+	if categories, ok := hazardHarmCategories[category]; ok {
+		return categories
+	}
+	for _, option := range presets.HarmCategoryOptions() {
+		if strings.EqualFold(option.Key, category) {
+			return []string{option.Key}
 		}
 	}
-	_, key, _ := strings.Cut(path, ".routing.model_bindings.")
-	return key
+	return nil
+}
+
+// migrateSafetyHazard writes a safety rule with a hazard part as a rule of
+// the harm categories its hazard categories name. The rule matched an unsafe
+// request whose score in one of the categories reached hazard.threshold; a
+// rule with labels matches a request harmful in one of them, so
+// hazard.threshold is its predicate. A rule whose categories name no harm
+// category keeps its unsafe verdict alone.
+func migrateSafetyHazard(m *Migration, at FormMatch) error {
+	rule, hazard := at.Parent, at.Node
+	path := strings.TrimSuffix(at.Path, ".hazard")
+	categories := stringItems(mappingValue(hazard, "categories"))
+	var labels, named, unnamed []string
+	for _, category := range categories {
+		harms := harmCategoriesOf(category)
+		if len(harms) == 0 {
+			unnamed = append(unnamed, category)
+			continue
+		}
+		named = append(named, category)
+		for _, label := range harms {
+			if !slices.Contains(labels, label) {
+				labels = append(labels, label)
+			}
+		}
+	}
+	if scalarAt(rule, "model") != "" {
+		m.Note(path, "a safety rule's model is removed: the rule asks the decision model unless a deployment is set")
+	}
+	for _, key := range []string{"deployment", "model"} {
+		if value := scalarAt(hazard, key); value != "" {
+			m.Note(path, "hazard."+key+" "+value+" is removed: the rule's deployment, else the decision model, answers the harm categories")
+		}
+	}
+	threshold := mappingValue(hazard, "threshold")
+	for _, key := range []string{"labels", "unsafe_labels", "model", "hazard"} {
+		m.Delete(rule, key)
+	}
+	if len(labels) == 0 {
+		moveThreshold(m, rule, "gte")
+		unmatched := "the hazard part names no category"
+		if len(categories) > 0 {
+			unmatched = "hazard categories " + strings.Join(categories, ", ") + " name no harm category"
+		}
+		m.Note(path, unmatched+", so the rule matches an unsafe request as its threshold did, "+
+			"and hazard.threshold has no counterpart; name the harm categories it meant in labels")
+		return nil
+	}
+	if gate := scalarAt(rule, "threshold"); gate != "" {
+		m.Note(path, "the rule's threshold "+gate+" has no counterpart: it asked for an unsafe verdict before the hazard categories were scored, "+
+			"and a rule with labels asks whether the request is harmful in one of them")
+	}
+	m.Delete(rule, "threshold")
+	setNode(rule, "labels", stringSequence(labels...))
+	if threshold != nil && mappingValue(rule, "predicate") == nil {
+		setNode(rule, "predicate", newMapping("gte", threshold))
+	}
+	if len(unnamed) > 0 {
+		m.Note(path, "hazard categories "+strings.Join(unnamed, ", ")+" name no harm category; name the ones they meant in labels")
+	}
+	m.Changed(path, "hazard categories "+strings.Join(named, ", ")+" are the harm categories "+strings.Join(labels, ", "))
+	return nil
 }

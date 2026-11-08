@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: qwen-2.5-7b
@@ -10,57 +10,6 @@ providers:
     - name: qwen-2.5-72b
       reasoning:
         family: qwen3
-routing:
-  modelCards:
-    - name: qwen-2.5-7b
-    - name: qwen-2.5-72b
-  signals:
-    keywords:
-      - name: long_report
-        operator: OR
-        keywords:
-          - full report
-          - long report
-        case_sensitive: false
-  decisions:
-    - name: long_report
-      description: Long reports get more time and their own fallback policy
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: long_report
-      modelRefs:
-        - model: qwen-2.5-72b
-          use_reasoning: false
-      reliability:
-        total_timeout: 600s
-        per_try_timeout: 300s
-        retry_count: 1
-        retry_on: reset
-        retriable_status_codes:
-          - 429
-      fallback:
-        enabled: true
-        max_attempts: 2
-        total_timeout: 15m0s
-        per_attempt_timeout: 7m30s
-        retryable_status_codes:
-          - 502
-          - 503
-          - 504
-    - name: default_route
-      description: Everything else keeps the provider model's reliability and the router's fallback
-      priority: 10
-      rules:
-        operator: OR
-        conditions:
-          - type: keyword
-            name: long_report
-      modelRefs:
-        - model: qwen-2.5-7b
-          use_reasoning: false
 global:
   router:
     config_source: kubernetes
@@ -130,15 +79,12 @@ global:
     ratelimit: {}
     management_api: {}
     router_replay:
-      enabled: false
       ttl_seconds: 0
     startup_status:
       store_backend: ""
   stores:
     response_cache:
       backend_type: memory
-      enabled: true
-      similarity_threshold: 0.8
       max_entries: 1000
       ttl_seconds: 3600
       eviction_policy: fifo
@@ -153,3 +99,62 @@ global:
       prompt_compression:
         enabled: false
         max_tokens: 0
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        scope: global
+        semantic:
+          match:
+            recall:
+              min_similarity: 0.8
+              top_k: 1
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: long_report
+          operator: OR
+          keywords:
+            - full report
+            - long report
+          case_sensitive: false
+    decisions:
+      - name: long_report
+        description: Long reports get more time and their own fallback policy
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: long_report
+        modelRefs:
+          - model: qwen-2.5-72b
+            use_reasoning: false
+        reliability:
+          total_timeout: 600s
+          per_try_timeout: 300s
+          retry_count: 1
+          retry_on: reset
+          retriable_status_codes:
+            - 429
+        fallback:
+          enabled: true
+          max_attempts: 2
+          total_timeout: 15m0s
+          per_attempt_timeout: 7m30s
+          retryable_status_codes:
+            - 502
+            - 503
+            - 504
+      - name: default_route
+        description: Everything else keeps the provider model's reliability and the router's fallback
+        priority: 10
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: long_report
+        modelRefs:
+          - model: qwen-2.5-7b
+            use_reasoning: false

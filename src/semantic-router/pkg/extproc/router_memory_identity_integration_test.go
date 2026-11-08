@@ -55,7 +55,7 @@ func TestMemoryEmbeddingIdentityPersistent(t *testing.T) {
 	t.Setenv("VLLM_SR_DETERMINISTIC_EMBEDDINGS", "")
 	cfg := &config.RouterConfig{
 		Memory: config.MemoryConfig{
-			Enabled: true, Backend: "qdrant",
+			InUse: true, Backend: "qdrant",
 			Qdrant:     &config.MemoryQdrantConfig{Host: fixture.QdrantHost, Port: fixture.QdrantPort, Collection: fixture.Collection, Dimension: fixture.Dimension},
 			RedisCache: &config.MemoryRedisCacheConfig{Enabled: true, Address: fixture.RedisAddress, KeyPrefix: fixture.Collection + ":hot:", TTLSeconds: 3600},
 		},

@@ -18,66 +18,67 @@ import (
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// Sample config for testing - uses raw config fallback since full parsing requires more dependencies
+// A v0.5 configuration the Router parses; the handler reads its decisions and
+// its routing-preview timeout.
 const testConfig = `
-backend_models:
-  default_model: "gpt-4"
-  model_config:
-    gpt-4:
-      reasoning_family: "openai"
-
-semantic_cache:
-  enabled: true
-  backend_type: "memory"
-  similarity_threshold: 0.85
-
-intelligent_routing:
-  signals:
-    keyword_rules:
-      - name: "thinking"
-        operator: "OR"
-        keywords: ["think", "reason", "analyze", "step by step"]
-      - name: "coding"
-        operator: "OR"
-        keywords: ["code", "program", "function", "debug"]
-    categories:
-      - name: "math"
-        description: "Mathematical calculations and equations"
-      - name: "general"
-        description: "General knowledge questions"
-    embedding_rules:
-      - name: "creative_writing"
-        threshold: 0.8
-        candidates: ["write a story", "create a poem"]
-  decisions:
-    - name: "reasoning_decision"
-      description: "Handle reasoning tasks"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "keyword"
-            name: "thinking"
-      modelRefs:
-        - model: "gpt-4"
-          use_reasoning: true
-    - name: "coding_decision"
-      description: "Handle coding tasks"
-      priority: 90
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "keyword"
-            name: "coding"
-          - type: "domain"
-            name: "code"
-      modelRefs:
-        - model: "gpt-4"
-    - name: "default_decision"
-      description: "Default fallback"
-      priority: 10
-      modelRefs:
-        - model: "gpt-4"
+version: v0.5
+providers:
+  defaults:
+    model: gpt-4
+  models:
+    - name: gpt-4
+      backend_refs:
+        - name: primary
+          endpoint: 127.0.0.1:8000
+          protocol: http
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: thinking
+          operator: OR
+          keywords: ["think", "reason", "analyze", "step by step"]
+        - name: coding
+          operator: OR
+          keywords: ["code", "program", "function", "debug"]
+      domains:
+        - name: code
+          description: Programming and software questions
+          labels: ["computer science"]
+        - name: math
+          description: Mathematical calculations and equations
+          labels: ["math"]
+    decisions:
+      - name: reasoning_decision
+        description: Handle reasoning tasks
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: thinking
+        modelRefs:
+          - model: gpt-4
+      - name: coding_decision
+        description: Handle coding tasks
+        priority: 90
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: coding
+            - type: domain
+              name: code
+        modelRefs:
+          - model: gpt-4
+      - name: default_decision
+        description: Default fallback
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: gpt-4
 `
 
 func setupTestConfig(t *testing.T) string {
@@ -91,6 +92,9 @@ func setupTestConfig(t *testing.T) string {
 	configPath := filepath.Join(tmpDir, "config.yaml")
 	if err := os.WriteFile(configPath, []byte(testConfig), 0o644); err != nil {
 		t.Fatalf("Failed to write test config: %v", err)
+	}
+	if _, err := routerconfig.Parse(configPath); err != nil {
+		t.Fatalf("Test config does not parse: %v", err)
 	}
 
 	return configPath
@@ -230,7 +234,7 @@ func TestCallRouterAPIUsesServerCredential(t *testing.T) {
 
 func TestTopologyPreviewUsesCanonicalTimeout(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
-	require.NoError(t, os.WriteFile(configPath, []byte("version: v0.3\nglobal:\n  services:\n    api:\n      routing_preview:\n        request_timeout_seconds: 600\n"), 0o600))
+	require.NoError(t, os.WriteFile(configPath, []byte("version: v0.5\nglobal:\n  services:\n    api:\n      routing_preview:\n        request_timeout_seconds: 600\n"), 0o600))
 	require.Equal(t, 605*time.Second, topologyPreviewTimeout(configPath))
 }
 

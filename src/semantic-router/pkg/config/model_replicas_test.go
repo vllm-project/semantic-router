@@ -39,7 +39,7 @@ func TestReplicaConfigCopiesDoNotAliasAndRetiredProcessIsRejected(t *testing.T) 
 	if original["primary"].Replicas[0].Device != "cpu" {
 		t.Fatal("canonical export can mutate active worker placements")
 	}
-	_, err := ParseYAMLBytes([]byte("version: v0.3\nglobal:\n  model_catalog:\n    deployments:\n      primary:\n        provider: model_runtime\n        artifact: org/model\n        process: old-group\n"))
+	_, err := ParseYAMLBytes([]byte("version: v0.5\nglobal:\n  model_catalog:\n    deployments:\n      primary:\n        provider: model_runtime\n        artifact: org/model\n        process: old-group\n"))
 	if err == nil || !strings.Contains(err.Error(), "process") {
 		t.Fatalf("retired grouping accepted: %v", err)
 	}

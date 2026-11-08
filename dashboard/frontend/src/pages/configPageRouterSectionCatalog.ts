@@ -15,22 +15,6 @@ export const CURATED_ROUTER_SECTIONS = {
   memory: { path: ['stores', 'memory'], layer: 'stores' },
   response_cache: { path: ['stores', 'response_cache'], layer: 'stores' },
   vector_store: { path: ['stores', 'vector_store'], layer: 'stores' },
-  prompt_guard: {
-    path: ['model_catalog', 'modules', 'prompt_guard'],
-    layer: 'model_catalog',
-  },
-  classifier: {
-    path: ['model_catalog', 'modules', 'classifier'],
-    layer: 'model_catalog',
-  },
-  hallucination_mitigation: {
-    path: ['model_catalog', 'modules', 'hallucination_mitigation'],
-    layer: 'model_catalog',
-  },
-  feedback_detector: {
-    path: ['model_catalog', 'modules', 'feedback_detector'],
-    layer: 'model_catalog',
-  },
   external_models: { path: ['model_catalog', 'external'], layer: 'model_catalog' },
   admission: { path: ['model_catalog', 'admission'], layer: 'model_catalog' },
   system_models: { path: ['model_catalog', 'system'], layer: 'model_catalog' },

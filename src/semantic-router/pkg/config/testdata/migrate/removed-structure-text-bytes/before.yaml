@@ -1,22 +1,24 @@
-# A structure rule on text_bytes has no keywords form: migrate stops at it and
-# says what to write instead.
-version: v0.3
+# A structure rule on text_bytes counted the bytes of the current user turn.
+# It is a keywords rule now whose regex patterns, counted together, match each
+# character once per UTF-8 byte, with the rule's count predicate.
+version: v0.5
 providers:
   defaults: {model: general}
   models:
     - name: general
       backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
-routing:
-  signals:
-    structure:
-      - name: long_current_turn
-        description: Current user turn is at least four thousand UTF-8 bytes.
-        feature:
-          type: count
-          source: {type: text_bytes}
-        predicate: {gte: 4000}
-  decisions:
-    - name: long
-      priority: 100
-      rules: {type: structure, name: long_current_turn}
-      modelRefs: [{model: general}]
+recipes:
+  - name: default
+    signals:
+      structure:
+        - name: long_current_turn
+          description: Current user turn is at least four thousand UTF-8 bytes.
+          feature:
+            type: count
+            source: {type: text_bytes}
+          predicate: {gte: 4000}
+    decisions:
+      - name: long
+        priority: 100
+        rules: {type: structure, name: long_current_turn}
+        modelRefs: [{model: general}]

@@ -1,7 +1,10 @@
 """Tests for router_replay's shadow block, a decision's retention, and the
 cache, shadow and retention forms the CLI refuses like the Router."""
 
+from pathlib import Path
+
 import pytest
+import yaml
 from cli.config_reuse_forms import removed_reuse_forms
 from cli.models import (
     DecisionRetention,
@@ -72,7 +75,12 @@ class TestDecisionRetention:
 
 def _decisions(*plugins, **decision):
     return {
-        "routing": {"decisions": [{"name": "d", "plugins": list(plugins), **decision}]}
+        "recipes": [
+            {
+                "name": "default",
+                "decisions": [{"name": "d", "plugins": list(plugins), **decision}],
+            }
+        ]
     }
 
 
@@ -99,18 +107,18 @@ class TestRemovedReuseForms:
         assert lines == [
             "global.stores.semantic_cache: removed_field: global.stores.semantic_cache "
             "is removed; run `vllm-sr config migrate` (global.stores.response_cache)",
-            "routing.decisions[d].plugins[0]: removed_plugin_type: plugin "
+            "recipes[default].decisions[d].plugins[0]: removed_plugin_type: plugin "
             "semantic-cache is removed; run `vllm-sr config migrate` "
             "(type: response_cache)",
-            "routing.decisions[d].plugins[1]: removed_field: response_cache fields "
+            "recipes[default].decisions[d].plugins[1]: removed_field: response_cache fields "
             "similarity_threshold, control_header are removed; run `vllm-sr config "
             "migrate` (the similarity threshold is semantic.match.recall.min_similarity; "
             "allow_request_controls and control_header are request_controls.enabled "
             "and request_controls.header)",
-            "routing.decisions[d].plugins[2]: removed_plugin_type: plugin "
+            "recipes[default].decisions[d].plugins[2]: removed_plugin_type: plugin "
             "shadow_dispatch is removed; run `vllm-sr config "
             "migrate` (a shadow block in the decision's router_replay plugin)",
-            "routing.decisions[d].emits: removed_field: emits is removed; run "
+            "recipes[default].decisions[d].emits: removed_field: emits is removed; run "
             "`vllm-sr config migrate` (the decision's retention attribute)",
         ]
 
@@ -134,3 +142,15 @@ class TestRemovedReuseForms:
             )
             == []
         )
+
+    def test_a_recipes_data_policy_is_named_with_the_routers_line(self):
+        golden = (
+            Path(__file__).resolve().parents[3]
+            / "src/semantic-router/pkg/config/testdata/migrate/removed-field-data-policy"
+        )
+        before = yaml.safe_load((golden / "before.yaml").read_text(encoding="utf-8"))
+        hint = (golden / "hint.txt").read_text(encoding="utf-8").strip()
+
+        assert hint in removed_reuse_forms(before)
+        after = yaml.safe_load((golden / "after.yaml").read_text(encoding="utf-8"))
+        assert removed_reuse_forms(after) == []

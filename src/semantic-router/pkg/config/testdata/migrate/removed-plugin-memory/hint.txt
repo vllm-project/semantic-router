@@ -1,1 +1,1 @@
-routing.decisions[personal].plugins[0]: removed_plugin_type: plugin memory is removed; run `vllm-sr config migrate` (a memory source of the decision's context plugin)
+recipes[default].decisions[personal].plugins[0]: removed_plugin_type: plugin memory is removed; run `vllm-sr config migrate` (a memory source of the decision's context plugin)

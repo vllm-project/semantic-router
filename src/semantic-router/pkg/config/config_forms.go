@@ -77,7 +77,7 @@ type ConfigForm struct {
 	Code string
 	// Paths are patterns over the raw document: dotted mapping keys, `name[]`
 	// for every item of the sequence under name, `*` for any key and `**`
-	// for any depth. RoutingScopes builds the patterns of every routing scope.
+	// for any depth. RoutingScopes builds the patterns of every recipe.
 	Paths []string
 	// Match, when set, keeps only the matches it accepts.
 	Match func(node *yaml.Node, path string) bool
@@ -86,6 +86,9 @@ type ConfigForm struct {
 	What, Becomes string
 	Describe      func(at FormMatch) (what, becomes string)
 	Renamed       bool
+	// Whole refuses the document with this form's line alone: the document is
+	// written in a layout no other form's paths describe.
+	Whole bool
 	// Migrate rewrites one match in the form that replaces it; nil when the
 	// form has no mechanical rewrite, which migrate then refuses with Becomes.
 	Migrate func(m *Migration, at FormMatch) error
@@ -119,23 +122,27 @@ func (at FormMatch) Above(levels int) *yaml.Node {
 }
 
 // configForms lists every removed and renamed form, in the order migrate
-// rewrites them, as the concatenation of the per-feature lists.
-var configForms = slices.Concat(systemOneForms, pluginForms, applicationForms, heuristicForms, algorithmForms, toolsForms, contextForms, responseCacheForms, routerReplayForms, retentionForms, embeddingForms)
+// rewrites them, as the concatenation of the per-feature lists: the v0.3
+// layout first, the global feature switches last.
+var configForms = slices.Concat(structureForms, systemOneForms, pluginForms, applicationForms, heuristicForms, algorithmForms, toolsForms, contextForms, responseCacheForms, routerReplayForms, retentionForms, embeddingForms, switchForms)
 
-// RoutingScopes returns the patterns of suffix in every routing scope of a
-// document: the top-level routing block and each recipe's.
+// RoutingScopes returns the patterns of suffix in every recipe of a v0.5
+// document. Forms match v0.5 paths only: migrate rewrites the v0.3 structure
+// first (structureForms), and the Router refuses a v0.3 document by its
+// version.
 func RoutingScopes(suffix string) []string {
-	return []string{"routing." + suffix, "recipes[].routing." + suffix}
+	return []string{"recipes[]." + suffix}
 }
 
-// ScopePath is the document path of rest in the routing scope of c, for a
-// one-line error of a check that runs per scope. The default recipe is the
-// top-level routing block.
+// ScopePath is the document path of rest in the recipe of c, for a one-line
+// error of a check that runs per recipe; an unscoped config is its default
+// recipe.
 func (c *RouterConfig) ScopePath(rest string) string {
-	if c == nil || c.RoutingScope == "" || c.RoutingScope == DefaultRecipeName {
-		return "routing." + rest
+	scope := c.defaultRecipeName()
+	if c != nil && c.RoutingScope != "" {
+		scope = c.RoutingScope
 	}
-	return fmt.Sprintf("recipes[%s].routing.%s", c.RoutingScope, rest)
+	return fmt.Sprintf("recipes[%s].%s", scope, rest)
 }
 
 func (f ConfigForm) describe(at FormMatch) (string, string) {
@@ -278,6 +285,9 @@ func applyConfigForms(data []byte, forms []ConfigForm) ([]byte, []ConfigWarning,
 	for _, form := range forms {
 		for _, at := range form.matches(root) {
 			what, becomes := form.describe(at)
+			if form.Whole {
+				return nil, nil, FormError(at.Path, form.Code, what, becomes)
+			}
 			if !form.Renamed {
 				failures = append(failures, FormError(at.Path, form.Code, what, becomes))
 				continue

@@ -273,37 +273,39 @@ func TestToStringKeyMap(t *testing.T) {
 }
 
 func TestCanonicalizeYAMLForDiff_EquivalentMapOrder(t *testing.T) {
-	yamlA := []byte(`version: v0.3
+	yamlA := []byte(`version: v0.5
 providers:
   defaults:
     model: test-model
-routing:
-  modelCards:
+  models:
     - name: test-model
-  decisions:
-    - name: default-route
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: test-model
+recipes:
+  - name: default
+    decisions:
+      - name: default-route
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: test-model
 `)
-	yamlB := []byte(`routing:
-  decisions:
-    - rules:
-        conditions: []
-        operator: AND
-      modelRefs:
-        - model: test-model
-      priority: 1
-      name: default-route
-  modelCards:
-    - name: test-model
+	yamlB := []byte(`recipes:
+  - name: default
+    decisions:
+      - rules:
+          conditions: []
+          operator: AND
+        modelRefs:
+          - model: test-model
+        priority: 1
+        name: default-route
 providers:
   defaults:
     model: test-model
-version: v0.3
+  models:
+    - name: test-model
+version: v0.5
 `)
 
 	canonicalA := canonicalizeYAMLForDiff(yamlA)
@@ -336,24 +338,26 @@ func TestDeployPreviewHandler_IgnoresOrderOnlyDiff(t *testing.T) {
 		t.Fatalf("failed to read current config: %v", err)
 	}
 
-	previewRequest := `routing:
-  decisions:
-    - name: default-business
-      description: Route business requests to the default model
-      priority: 1
-      modelRefs:
-        - use_reasoning: false
-          model: test-model
-      rules:
-        conditions:
-          - name: business
-            type: domain
-        operator: OR
-  signals:
-    domains:
-      - description: Business and management related queries
-        name: business
-  modelCards:
+	previewRequest := `recipes:
+  - name: default
+    decisions:
+      - name: default-business
+        description: Route business requests to the default model
+        priority: 1
+        modelRefs:
+          - use_reasoning: false
+            model: test-model
+        rules:
+          conditions:
+            - name: business
+              type: domain
+          operator: OR
+    signals:
+      domains:
+        - description: Business and management related queries
+          name: business
+providers:
+  models:
     - name: test-model
 `
 	body, _ := json.Marshal(DeployRequest{YAML: previewRequest})
@@ -513,19 +517,20 @@ func TestDeployHandler_SuccessfulDeploy(t *testing.T) {
 	// Read original config to verify preservation after merge
 	originalData, _ := os.ReadFile(configPath)
 
-	deployYAML := `routing:
-  decisions:
-    - name: deployed-default
-      description: Deployed route
-      priority: 5
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: test-model
-          use_reasoning: false
+	deployYAML := `recipes:
+  - name: default
+    decisions:
+      - name: deployed-default
+        description: Deployed route
+        priority: 5
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: test-model
+            use_reasoning: false
 `
 	body := DeployRequest{
 		YAML: deployYAML,
@@ -600,15 +605,16 @@ func TestDeployHandler_DeepMergePreservesExistingFields(t *testing.T) {
 	configPath := createValidTestConfig(t, tempDir)
 
 	// Deploy a routing-only fragment (simulating current DSL output).
-	deployYAML := `routing:
-  signals:
-    keywords:
-      - name: test-signal
-        operator: OR
-        keywords:
-          - hello
-          - world
-        case_sensitive: false
+	deployYAML := `recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: test-signal
+          operator: OR
+          keywords:
+            - hello
+            - world
+          case_sensitive: false
 `
 	body := DeployRequest{YAML: deployYAML}
 	bodyBytes, _ := json.Marshal(body)
@@ -638,8 +644,8 @@ func TestDeployHandler_DeepMergePreservesExistingFields(t *testing.T) {
 	if !contains(configStr, "model: test-model") {
 		t.Error("providers.defaults.model should be preserved after deploy")
 	}
-	if !contains(configStr, "routing:") || !contains(configStr, "keywords:") {
-		t.Error("routing signals from deploy should be present")
+	if !contains(configStr, "recipes:") || !contains(configStr, "keywords:") {
+		t.Error("recipe signals from deploy should be present")
 	}
 }
 
@@ -647,7 +653,7 @@ func TestDeployHandler_UsesImportedCanonicalBaseConfig(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 
-	importedBase := `version: v0.3
+	importedBase := `version: v0.5
 listeners:
   - name: imported
     address: 0.0.0.0
@@ -665,48 +671,48 @@ providers:
           provider: vllm
           endpoint: 192.168.1.10:9000
           protocol: http
-routing:
-  modelCards:
-    - name: imported-model
-  signals:
-    domains:
-      - name: imported
-        description: Imported domain
-        labels: [business]
-  decisions:
-    - name: imported-route
-      priority: 10
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: imported
-      modelRefs:
-        - model: imported-model
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: imported
+          description: Imported domain
+          labels: [business]
+    decisions:
+      - name: imported-route
+        priority: 10
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: imported
+        modelRefs:
+          - model: imported-model
 global:
   router:
     strategy: priority
 `
 
-	deployYAML := `routing:
-  signals:
-    domains:
-      - name: imported
-        description: Imported domain
-        labels: [business]
-      - name: deployed
-        description: Deployed domain
-        labels: [law]
-  decisions:
-    - name: deployed-route
-      priority: 20
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: deployed
-      modelRefs:
-        - model: imported-model
+	deployYAML := `recipes:
+  - name: default
+    signals:
+      domains:
+        - name: imported
+          description: Imported domain
+          labels: [business]
+        - name: deployed
+          description: Deployed domain
+          labels: [law]
+    decisions:
+      - name: deployed-route
+        priority: 20
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: deployed
+        modelRefs:
+          - model: imported-model
 `
 	body := DeployRequest{
 		YAML:     deployYAML,
@@ -744,7 +750,7 @@ func TestDeployPreviewHandler_UsesImportedCanonicalBaseConfig(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 
-	importedBase := `version: v0.3
+	importedBase := `version: v0.5
 providers:
   defaults:
     model: imported-model
@@ -756,32 +762,32 @@ providers:
           provider: vllm
           endpoint: 10.0.0.1:9000
           protocol: http
-routing:
-  modelCards:
-    - name: imported-model
-  signals:
-    domains:
-      - name: imported
-        description: Imported domain
-        labels: [business]
-  decisions:
-    - name: imported-route
-      priority: 10
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: imported
-      modelRefs:
-        - model: imported-model
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: imported
+          description: Imported domain
+          labels: [business]
+    decisions:
+      - name: imported-route
+        priority: 10
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: imported
+        modelRefs:
+          - model: imported-model
 `
 
-	deployYAML := `routing:
-  signals:
-    domains:
-      - name: previewed
-        description: Preview domain
-        labels: [history]
+	deployYAML := `recipes:
+  - name: default
+    signals:
+      domains:
+        - name: previewed
+          description: Preview domain
+          labels: [history]
 `
 
 	bodyBytes, _ := json.Marshal(DeployRequest{
@@ -875,44 +881,48 @@ func TestMergeDeployPayload_RoundTripsMaintainedAMDConfig(t *testing.T) {
 }
 
 func TestMergeDeployPayloadReplaceOwnsCompleteDSLSurface(t *testing.T) {
-	baseYAML := `version: v0.3
+	baseYAML := `version: v0.5
 listeners:
   - name: main
     address: 0.0.0.0
     port: 8080
-routing:
-  signals:
-    keywords:
-      - name: stale
-        operator: OR
-        keywords: [stale]
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [vllm-sr/stale]
     recipe: stale
 recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: stale
+          operator: OR
+          keywords: [stale]
   - name: stale
-    routing:
-      decisions: []
+    decisions: []
 global:
   router:
     clear_route_cache: true
 `
-	fragmentYAML := `routing:
-  strategy: confidence
-  projections:
-    partitions:
-      - name: difficulty
-        members: [easy, hard]
-        default: easy
-  decisions: []
-entrypoints:
+	fragmentYAML := `entrypoints:
   - model_names: [vllm-sr/accuracy]
     recipe: accuracy
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 recipes:
+  - name: default
+    strategy: confidence
+    projections:
+      partitions:
+        - name: difficulty
+          members: [easy, hard]
+          default: easy
+    decisions: []
   - name: accuracy
-    routing:
-      strategy: priority
-      decisions: []
+    strategy: priority
+    decisions: []
 `
 
 	merged, err := mergeDeployPayload([]byte(baseYAML), DeployRequest{
@@ -936,18 +946,20 @@ recipes:
 	}
 }
 
-func TestMergeDeployPayloadReplaceClearsOmittedScopes(t *testing.T) {
-	baseYAML := `routing: {}
-entrypoints:
+func TestMergeDeployPayloadReplaceClearsOmittedEntrypoints(t *testing.T) {
+	baseYAML := `entrypoints:
   - model_names: [vllm-sr/old]
     recipe: old
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 recipes:
+  - name: default
   - name: old
-    routing: {}
 `
 
 	merged, err := mergeDeployPayload([]byte(baseYAML), DeployRequest{
-		YAML: "routing: {}\n",
+		YAML: "recipes:\n  - name: default\n",
 		Mode: DeployModeReplace,
 	})
 	if err != nil {
@@ -961,22 +973,22 @@ recipes:
 	if err != nil {
 		t.Fatalf("read merged root: %v", err)
 	}
-	if mappingValueNode(root, "entrypoints") != nil || mappingValueNode(root, "recipes") != nil {
-		t.Fatalf("replace should clear omitted scoped sections:\n%s", merged)
+	if mappingValueNode(root, "entrypoints") != nil || len(sequenceItems(mappingValueNode(root, "recipes"))) != 1 {
+		t.Fatalf("replace should clear omitted entrypoints and replace recipes:\n%s", merged)
 	}
 }
 
 func TestMergeDeployPayloadRejectsUnknownMode(t *testing.T) {
 	_, err := mergeDeployPayload(
-		[]byte("routing: {}\n"),
-		DeployRequest{YAML: "routing: {}\n", Mode: DeployMode("append")},
+		[]byte("recipes: []\n"),
+		DeployRequest{YAML: "recipes: []\n", Mode: DeployMode("append")},
 	)
 	if err == nil || !strings.Contains(err.Error(), "unsupported deploy mode") {
 		t.Fatalf("expected unsupported mode error, got %v", err)
 	}
 }
 
-func TestDeployPreviewHandler_AllowsPartialFragmentWithoutRouting(t *testing.T) {
+func TestDeployPreviewHandler_AllowsPartialFragmentWithoutRecipes(t *testing.T) {
 	configPath := createValidTestConfig(t, t.TempDir())
 	body, err := json.Marshal(DeployRequest{YAML: "default_model: \"MoM\"\n"})
 	if err != nil {
@@ -990,25 +1002,25 @@ func TestDeployPreviewHandler_AllowsPartialFragmentWithoutRouting(t *testing.T) 
 	DeployPreviewHandler(configPath, false)(w, req)
 
 	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200 for a partial fragment without routing, got %d: %s", w.Code, w.Body.String())
+		t.Fatalf("expected 200 for a partial fragment without recipes, got %d: %s", w.Code, w.Body.String())
 	}
 
 	var response DeployPreviewResponse
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("decode preview response: %v", err)
 	}
-	if !strings.Contains(response.Preview, "routing:") {
-		t.Fatalf("preview lost existing routing:\n%s", response.Preview)
+	if !strings.Contains(response.Preview, "recipes:") {
+		t.Fatalf("preview lost existing recipes:\n%s", response.Preview)
 	}
 }
 
-func TestMergeDeployPayloadReplaceRejectsFragmentWithoutRouting(t *testing.T) {
+func TestMergeDeployPayloadReplaceRejectsFragmentWithoutRecipes(t *testing.T) {
 	_, err := mergeDeployPayload(
-		[]byte("routing: {}\n"),
+		[]byte("recipes: []\n"),
 		DeployRequest{YAML: "default_model: \"MoM\"\n", Mode: DeployModeReplace},
 	)
-	if err == nil || !strings.Contains(err.Error(), "compiled routing fragment must contain routing") {
-		t.Fatalf("expected missing-routing error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "compiled routing fragment must contain recipes") {
+		t.Fatalf("expected missing-recipes error, got %v", err)
 	}
 }
 
@@ -1017,18 +1029,19 @@ func TestDeployHandler_NoDSLSource(t *testing.T) {
 	configPath := createValidTestConfig(t, tempDir)
 
 	// Deploy without DSL source
-	body := DeployRequest{YAML: `routing:
-  decisions:
-    - name: no-dsl-route
-      priority: 9
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: test-model
-          use_reasoning: false
+	body := DeployRequest{YAML: `recipes:
+  - name: default
+    decisions:
+      - name: no-dsl-route
+        priority: 9
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: test-model
+            use_reasoning: false
 `}
 	bodyBytes, _ := json.Marshal(body)
 
@@ -1150,7 +1163,7 @@ func TestRollbackHandler_SuccessfulRollback(t *testing.T) {
 	}
 
 	// Modify current config so we can verify rollback restores it
-	modifiedConfig := `version: v0.3
+	modifiedConfig := `version: v0.5
 listeners:
   - name: public
     address: 0.0.0.0
@@ -1165,17 +1178,16 @@ providers:
           provider: vllm
           endpoint: 127.0.0.1:8000
           protocol: http
-routing:
-  modelCards:
-    - name: test-model
-  decisions:
-    - name: modified-route
-      priority: 9
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: test-model
+recipes:
+  - name: default
+    decisions:
+      - name: modified-route
+        priority: 9
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: test-model
 `
 	if err := os.WriteFile(configPath, []byte(modifiedConfig), 0o644); err != nil {
 		t.Fatalf("Failed to modify config: %v", err)
@@ -1408,18 +1420,19 @@ func TestDeployAndRollback_Integration(t *testing.T) {
 	originalData, _ := os.ReadFile(configPath)
 
 	// Deploy
-	deployYAML := `routing:
-  decisions:
-    - name: integrated-deploy
-      priority: 11
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: test-model
-          use_reasoning: false
+	deployYAML := `recipes:
+  - name: default
+    decisions:
+      - name: integrated-deploy
+        priority: 11
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: test-model
+            use_reasoning: false
 `
 	body := DeployRequest{YAML: deployYAML}
 	bodyBytes, _ := json.Marshal(body)
@@ -1506,7 +1519,7 @@ func TestUpdateConfigHandler_ReplacesLegacyConfigWithCanonicalPayload(t *testing
 	if contains(configStr, "vllm_endpoints:") {
 		t.Error("legacy vllm_endpoints should be removed after canonical replace")
 	}
-	if !contains(configStr, "providers:") || !contains(configStr, "routing:") {
-		t.Error("canonical providers/routing blocks should be written")
+	if !contains(configStr, "providers:") || !contains(configStr, "recipes:") {
+		t.Error("canonical providers/recipes blocks should be written")
 	}
 }

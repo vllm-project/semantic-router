@@ -1,6 +1,7 @@
 """`vllm-sr validate` mirrors the Router's backends check for in-process model calls."""
 
 import sys
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -15,7 +16,7 @@ from cli.validator import validate_user_config  # noqa: E402
 # Behind an external gateway (`listeners: []`) a provider model may go without
 # backend_refs; the Router still calls a Looper's models itself.
 CONFIG = """
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -26,27 +27,25 @@ providers:
         - name: a-backend
           provider: vllm
           endpoint: 127.0.0.1:8000
-    - name: b
-      provider_model_id: b
-routing:
-  modelCards:
-    - name: a
       loras:
         - name: a-lora
     - name: b
-  decisions:
-    - name: panel
-      priority: 10
-      rules:
-        operator: AND
-        conditions: []
+      provider_model_id: b
+recipes:
+  - name: default
+    decisions:
+      - name: panel
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
 {decision}
 """
 
 
 def _errors(tmp_path, decision: str) -> list[str]:
     path = tmp_path / "config.yaml"
-    path.write_text(CONFIG.format(decision=decision))
+    path.write_text(CONFIG.format(decision=textwrap.indent(decision, "  ")))
     errors = validate_user_config(parse_user_config(str(path)), log_summary=False)
     return [error.message for error in errors if "in process" in error.message]
 

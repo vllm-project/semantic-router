@@ -45,15 +45,16 @@ avoids loading another copy of the model; it does not guarantee one forward
 pass for the complete routed request:
 
 ```yaml
-routing:
-  signals:
-    systemone:
-      - name: needs_tools
-        question:
-          type: noul
-          instructions: Does answering this request need a tool call?
-        predicate:
-          gte: 0.7
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: needs_tools
+          question:
+            type: noul
+            instructions: Does answering this request need a tool call?
+          predicate:
+            gte: 0.7
 ```
 
 The decision model is `{deployment: primary}` by default and can be a Vela or
@@ -72,58 +73,57 @@ global:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
         device: auto
-
-routing:
-  signals:
-    systemone:
-      - name: needs_reasoning
-        deployment: decision-kai
-        question:
-          type: noul
-          instructions: Does answering this request need multi-step reasoning?
-        predicate:
-          gte: 0.7
-        timeout_ms: 1000
-      - name: request_kind
-        deployment: decision-kai
-        question:
-          type: choice
-          instructions: What kind of request is this?
-          choices:
-            - key: code
-              description: Writing, reviewing or debugging code
-            - key: math
-              description: Mathematics or quantitative reasoning
-            - key: chat
-              description: Anything else
-        labels: [code, math]
-      - name: difficulty
-        deployment: decision-kai
-        question:
-          type: score
-          instructions: How difficult is this request?
-          levels: [Trivial, Moderate, Hard]
-        predicate:
-          gte: 1.5
-
-  decisions:
-    - name: hard-code
-      priority: 200
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions:
-          - type: systemone
-            name: request_kind
-            label: code
-          - type: systemone
-            name: needs_reasoning
-      modelRefs:
-        - model: large-coder
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: needs_reasoning
+          deployment: decision-kai
+          question:
+            type: noul
+            instructions: Does answering this request need multi-step reasoning?
+          predicate:
+            gte: 0.7
+          timeout_ms: 1000
+        - name: request_kind
+          deployment: decision-kai
+          question:
+            type: choice
+            instructions: What kind of request is this?
+            choices:
+              - key: code
+                description: Writing, reviewing or debugging code
+              - key: math
+                description: Mathematics or quantitative reasoning
+              - key: chat
+                description: Anything else
+          labels: [code, math]
+        - name: difficulty
+          deployment: decision-kai
+          question:
+            type: score
+            instructions: How difficult is this request?
+            levels: [Trivial, Moderate, Hard]
+          predicate:
+            gte: 1.5
+    decisions:
+      - name: hard-code
+        priority: 200
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: systemone
+              name: request_kind
+              label: code
+            - type: systemone
+              name: needs_reasoning
+        modelRefs:
+          - model: large-coder
 ```
 
 Configurations written for earlier releases name this signal `decision`
-(`routing.signals.decision` and `type: decision` conditions). They still
+(`recipes[].signals.decision` and `type: decision` conditions). They still
 load, with a `renamed_signal_type` warning, and `vllm-sr config migrate`
 rewrites them to `systemone`.
 
@@ -181,55 +181,56 @@ label of a `choice`, `set` or `span` question. The question is asked whenever
 a used projection reads it:
 
 ```yaml
-routing:
-  signals:
-    systemone:
-      - name: difficulty
-        question:
-          type: score
-          instructions: How much reasoning does a strong expert need to answer well?
-          levels: [none, a little, multi-step, expert]
-        predicate:
-          gte: 2
-      - name: needs
-        question:
-          type: set
-          instructions: What does a good answer need?
-          labels:
-            - key: deliberation
-              description: a derivation, proof or careful step-by-step check
-            - key: tools
-              description: calling external tools or functions
-  projections:
-    scores:
-      - name: effort
-        method: weighted_sum
-        inputs:
-          - type: systemone
-            name: difficulty
-            weight: 0.3
-            value_source: raw
-          - type: systemone
-            name: needs:deliberation
-            weight: 0.4
-            value_source: raw
-    mappings:
-      - name: effort_band
-        source: effort
-        method: threshold_bands
-        outputs:
-          - name: effort_high
-            gte: 0.9
-  decisions:
-    - name: deliberate
-      priority: 200
-      rules:
-        operator: AND
-        conditions:
-          - type: projection
-            name: effort_high
-      modelRefs:
-        - model: large-reasoner
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: difficulty
+          question:
+            type: score
+            instructions: How much reasoning does a strong expert need to answer well?
+            levels: [none, a little, multi-step, expert]
+          predicate:
+            gte: 2
+        - name: needs
+          question:
+            type: set
+            instructions: What does a good answer need?
+            labels:
+              - key: deliberation
+                description: a derivation, proof or careful step-by-step check
+              - key: tools
+                description: calling external tools or functions
+    projections:
+      scores:
+        - name: effort
+          method: weighted_sum
+          inputs:
+            - type: systemone
+              name: difficulty
+              weight: 0.3
+              value_source: raw
+            - type: systemone
+              name: needs:deliberation
+              weight: 0.4
+              value_source: raw
+      mappings:
+        - name: effort_band
+          source: effort
+          method: threshold_bands
+          outputs:
+            - name: effort_high
+              gte: 0.9
+    decisions:
+      - name: deliberate
+        priority: 200
+        rules:
+          operator: AND
+          conditions:
+            - type: projection
+              name: effort_high
+        modelRefs:
+          - model: large-reasoner
 ```
 
 ### Read more than the current turn
@@ -238,17 +239,18 @@ A rule reads the current user turn. `input` adds named parts of the
 conversation to what the model reads:
 
 ```yaml
-routing:
-  signals:
-    systemone:
-      - name: escalation
-        question:
-          type: noul
-          instructions: Has the user asked for the same fix more than once?
-        input:
-          history: true
-          previous_turns: 6
-          tool_results: true
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: escalation
+          question:
+            type: noul
+            instructions: Has the user asked for the same fix more than once?
+          input:
+            history: true
+            previous_turns: 6
+            tool_results: true
 ```
 
 - `history`: the earlier user turns.
@@ -277,18 +279,19 @@ rule reports: `match`, `no_match`, or `unknown` (default), which leaves the
 decision's failure policy to decide:
 
 ```yaml
-routing:
-  signals:
-    systemone:
-      - name: account_ids
-        question:
-          type: span
-          instructions: Which spans are account or order numbers?
-          labels:
-            - key: account_number
-              description: a customer account or order number
-        coverage: full
-        on_unscanned: match
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: account_ids
+          question:
+            type: span
+            instructions: Which spans are account or order numbers?
+            labels:
+              - key: account_number
+                description: a customer account or order number
+          coverage: full
+          on_unscanned: match
 ```
 
 ### Questions about the answer
@@ -319,21 +322,21 @@ global:
         auth:
           api_key_env: VSR_APP_KEY
         timeout_ms: 3000
-
-routing:
-  signals:
-    systemone:
-      - name: support_team
-        deployment: d3-ultra-remote
-        question:
-          type: choice
-          instructions: Which team should handle this ticket?
-          choices:
-            - key: billing
-              description: Payments and refunds
-            - key: engineering
-              description: Outages and bugs
-        labels: [billing]
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: support_team
+          deployment: d3-ultra-remote
+          question:
+            type: choice
+            instructions: Which team should handle this ticket?
+            choices:
+              - key: billing
+                description: Payments and refunds
+              - key: engineering
+                description: Outages and bugs
+          labels: [billing]
 ```
 
 `endpoint` is the URL the API answers `POST` requests on, with any path
@@ -412,46 +415,45 @@ global:
         provider: model_runtime
         artifact: vllm-sr/Vela-2.0-0.3B
         device: cpu
-
-routing:
-  signals:
-    systemone:
-      - name: support_topics
-        deployment: vela2
-        question:
-          type: set
-          instructions: Which topics does the request mention?
-          labels:
-            - key: billing
-              description: payments, invoices or refunds
-            - key: shipping
-              description: deliveries, tracking or returns
-            - key: other
-              description: anything else
-        ignore_labels: [other]
-      - name: account_ids
-        deployment: vela2
-        question:
-          type: span
-          instructions: Which spans are account or order numbers?
-          labels:
-            - key: account_number
-              description: a customer account or order number
-          head: router
-
-  decisions:
-    - name: billing-with-account
-      priority: 200
-      rules:
-        operator: AND
-        conditions:
-          - type: systemone
-            name: support_topics
-            label: billing
-          - type: systemone
-            name: account_ids
-      modelRefs:
-        - model: support-model
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: support_topics
+          deployment: vela2
+          question:
+            type: set
+            instructions: Which topics does the request mention?
+            labels:
+              - key: billing
+                description: payments, invoices or refunds
+              - key: shipping
+                description: deliveries, tracking or returns
+              - key: other
+                description: anything else
+          ignore_labels: [other]
+        - name: account_ids
+          deployment: vela2
+          question:
+            type: span
+            instructions: Which spans are account or order numbers?
+            labels:
+              - key: account_number
+                description: a customer account or order number
+            head: router
+    decisions:
+      - name: billing-with-account
+        priority: 200
+        rules:
+          operator: AND
+          conditions:
+            - type: systemone
+              name: support_topics
+              label: billing
+            - type: systemone
+              name: account_ids
+        modelRefs:
+          - model: support-model
 ```
 
 - `threshold` (0 to 1) replaces the model's own decision threshold for the

@@ -34,44 +34,45 @@ Use signals when:
 
 ## Configuration
 
-In canonical v0.3 YAML, signals live under `routing.signals`:
+In canonical v0.3 YAML, signals live under `recipes[].signals`:
 
 ```yaml
-routing:
-  signals:
-    keywords:
-      - name: urgent_keywords
-        operator: OR
-        keywords: ["urgent", "asap"]
-    embeddings:
-      - name: technical_support
-        threshold: 0.75
-        candidates: ["installation guide", "troubleshooting steps"]
-      - name: account_management
-        threshold: 0.72
-        candidates: ["billing information", "subscription management"]
-  projections:
-    partitions:
-      - name: support_intents
-        semantics: exclusive
-        temperature: 0.3
-        members: [technical_support, account_management]
-        default: technical_support
-    scores:
-      - name: request_difficulty
-        method: weighted_sum
-        inputs:
-          - type: embedding
-            name: technical_support
-            weight: 0.18
-            value_source: confidence
-    mappings:
-      - name: request_band
-        source: request_difficulty
-        method: threshold_bands
-        outputs:
-          - name: support_escalated
-            gte: 0.25
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: urgent_keywords
+          operator: OR
+          keywords: ["urgent", "asap"]
+      embeddings:
+        - name: technical_support
+          threshold: 0.75
+          candidates: ["installation guide", "troubleshooting steps"]
+        - name: account_management
+          threshold: 0.72
+          candidates: ["billing information", "subscription management"]
+    projections:
+      partitions:
+        - name: support_intents
+          semantics: exclusive
+          temperature: 0.3
+          members: [technical_support, account_management]
+          default: technical_support
+      scores:
+        - name: request_difficulty
+          method: weighted_sum
+          inputs:
+            - type: embedding
+              name: technical_support
+              weight: 0.18
+              value_source: confidence
+      mappings:
+        - name: request_band
+          source: request_difficulty
+          method: threshold_bands
+          outputs:
+            - name: support_escalated
+              gte: 0.25
 ```
 
 Choose a signal by the kind of fact you need to detect.
@@ -115,7 +116,7 @@ Keep these rules in mind:
 
 - keep signals named and reusable
 - keep signals detection-only; routing outcomes belong in `decision/`
-- keep partitions and derived routing bands in `routing.projections`, not back inside `routing.signals`
+- keep partitions and derived routing bands in `recipes[].projections`, not back inside `recipes[].signals`
 - keep model choice separate; that belongs in `algorithm/`
 - keep route-side behavior separate; that belongs in `plugin/`
 

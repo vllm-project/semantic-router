@@ -23,19 +23,18 @@ translation:
 ## 配置 {#configuration}
 
 ```yaml
-routing:
-  signals:
-    safety:
-      - name: unsafe-content
-        threshold: 0.5
-      - name: unsafe-privacy
-        threshold: 0.5
-        hazard:
-          labels: [violence, criminal_activity, sexual_content, child_exploitation,
-                   hate, harassment_abuse, regulated_substances, weapons,
-                   self_harm, privacy, specialized_advice, misinformation]
-          categories: [privacy]
-          threshold: 0.6
+recipes:
+  - name: default
+    signals:
+      safety:
+        - name: unsafe-content
+          threshold: 0.5
+        - name: unsafe-privacy
+          threshold: 0.5
+          hazard:
+            labels: [violence, criminal_activity, sexual_content, child_exploitation, hate, harassment_abuse, regulated_substances, weapons, self_harm, privacy, specialized_advice, misinformation]
+            categories: [privacy]
+            threshold: 0.6
 ```
 
 每条安全规则都提出自己的问题。没写 `deployment` 的规则询问决策模型，它的 `hazard` 部分询问预先声明的 `hazard` 部署（Vela 1.0 Hazard）。在规则上，或在它的 `hazard` 部分里写 `deployment`，即可指定其他部署；见[为信号选择模型](../../../installation/choose-a-model-for-a-signal.md)。各种部署的分数语义一样。本地模型的 `labels` 必须和 `config.json` 的 `id2label` 顺序完全一致；加载器还会查头的 `problem_type`。`classify` 服务按名字对齐标签。
@@ -51,18 +50,19 @@ routing:
 在决策里引用规则，动作也定在那里：
 
 ```yaml
-routing:
-  decisions:
-    - name: handle-content-risk
-      priority: 300
-      rules:
-        operator: AND
-        on_unknown: fail_request
-        conditions:
-          - type: safety
-            name: unsafe-content
-      modelRefs:
-        - model: safety-capable-model
+recipes:
+  - name: default
+    decisions:
+      - name: handle-content-risk
+        priority: 300
+        rules:
+          operator: AND
+          on_unknown: fail_request
+          conditions:
+            - type: safety
+              name: unsafe-content
+        modelRefs:
+          - model: safety-capable-model
 ```
 
 `safety-capable-model` 换成 `providers.models` 里一个后端能恰当处理内容风险的别名。信号命中也可能包含一个危机中求助的人；它不意味恶意，也不该导向一刀切的拒绝。该拒绝时才用按类别细分的决策。Safety 信号只出分；消费它的决策选应对策略。提示词攻击的决策和内容风险的决策放在一起排，相对优先级要显式定。
@@ -85,12 +85,13 @@ global:
         provider: model_runtime
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Shield
         revision: a981a99eeb05a2859b88b5cee9af4352897ec4ec
-routing:
-  signals:
-    safety:
-      - name: unsafe-content
-        deployment: shield
-        threshold: 0.5
+recipes:
+  - name: default
+    signals:
+      safety:
+        - name: unsafe-content
+          deployment: shield
+          threshold: 0.5
 ```
 
 配方里的规则以同样的方式指定部署，因此可以只让一个配方用 Shield，其他配方仍询问决策模型：
@@ -104,13 +105,17 @@ global:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Shield
         revision: a981a99eeb05a2859b88b5cee9af4352897ec4ec
 recipes:
+  - name: default
   - name: care
-    routing:
-      signals:
-        safety:
-          - name: unsafe-content
-            deployment: shield
-            threshold: 0.5
+    signals:
+      safety:
+        - name: unsafe-content
+          deployment: shield
+          threshold: 0.5
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 ```
 
 部署下载它声明的 `revision`，并且只下载根分类器。Shield 仓库在 `heads/` 下还发布了辅助头、在 `lc/` 下发布了标签条件编码器；router 不加载、也不下载它们。
@@ -136,12 +141,13 @@ global:
           window:
             size: 512
             overlap: 255
-routing:
-  signals:
-    safety:
-      - name: unsafe-content
-        deployment: my-safety
-        threshold: 0.5
+recipes:
+  - name: default
+    signals:
+      safety:
+        - name: unsafe-content
+          deployment: my-safety
+          threshold: 0.5
 ```
 
 `input.max_tokens` 限的是分词后整个请求，特殊 token 也算。更长的输入直接失败；router 绝不悄悄只留第一个窗口。`window.size` 含特殊 token，`overlap` 数的是内容 token。对一个加两个特殊 token 的分词器，这个例子每次前进 255 个内容 token。每个窗口都还原原始特殊 token，位置从零起。内容为空、窗口预算非法，都失败。

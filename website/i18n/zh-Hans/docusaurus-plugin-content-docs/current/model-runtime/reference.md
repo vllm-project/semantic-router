@@ -331,7 +331,7 @@ Set 把每个标签作为一个 Noul 答在 `<id>.<label>` 下，并在 `sets` �
 | `on_unscanned` | `modules.prompt_guard`、`modules.classifier.pii` | `block`（默认）：模型没整读的内容，规则匹配为 `unscanned`。`allow`：跟随 `on_error`。 |
 | `process` | 部署 | 同名的托管部署共用一个进程。 |
 | `endpoint`、`model` | 部署 | 挂到你自己跑的 runtime；`model` 是所服务模型的 ID。[连接块](../installation/model-catalog.md#connection-block)另有 `auth`、`headers`、`timeout_ms` 和 `tls`。 |
-| `bindings.<type>`、`routing.model_bindings.<type>` | `global.model_catalog`、配方 | 一个信号类型使用的部署：写部署名，或写 `{deployment, head}` 以选择头。 |
+| `bindings.<type>`、`recipes[].model_bindings.<type>` | `global.model_catalog`、配方 | 一个信号类型使用的部署：写部署名，或写 `{deployment, head}` 以选择头。 |
 | `deployment` | 规则 | `decision`、`classifiers`、`safety`（及 `hazard`）或 `complexity` 规则询问的部署。 |
 
 绑定键是信号类型 `domain`、`jailbreak`、`pii`、`fact_check`、`user_feedback`、`modality`、`hallucination`、`preference` 和 `reask`。Embedding 在 `global.model_catalog.embeddings.default` 中指定部署。各信号如何解析见[为信号选择模型](../installation/choose-a-model-for-a-signal.md)；各信号读取的答案见各任务指南。

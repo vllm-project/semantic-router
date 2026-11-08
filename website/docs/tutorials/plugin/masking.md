@@ -19,30 +19,31 @@ Because every wire format (Chat Completions, Responses, Anthropic Messages) is d
 ## Configuration
 
 Masking masks what a [pii rule](../signal/learned/pii) detects. Declare the
-rule under `routing.signals.pii` and name it in the plugin under
-`routing.decisions[].plugins`:
+rule under `recipes[].signals.pii` and name it in the plugin under
+`recipes[].decisions[].plugins`:
 
 ```yaml
-routing:
-  signals:
-    pii:
-      - name: contact_details
-        threshold: 0.85
-        description: Contact details masked before the request leaves the Router.
-  decisions:
-    - name: support
-      # ...rules, modelRefs...
-      plugins:
-        - type: masking
-          configuration:
-            enabled: true
-            signal: contact_details
-            entity_types:
-              - EMAIL_ADDRESS
-              - PHONE_NUMBER
-            placeholders:
-              EMAIL_ADDRESS: "[EMAIL_{index}]"
-              PHONE_NUMBER: "[PHONE_{index}]"
+recipes:
+  - name: default
+    signals:
+      pii:
+        - name: contact_details
+          threshold: 0.85
+          description: Contact details masked before the request leaves the Router.
+    decisions:
+      - name: support
+        # ...rules, modelRefs...
+        plugins:
+          - type: masking
+            configuration:
+              enabled: true
+              signal: contact_details
+              entity_types:
+                - EMAIL_ADDRESS
+                - PHONE_NUMBER
+              placeholders:
+                EMAIL_ADDRESS: "[EMAIL_{index}]"
+                PHONE_NUMBER: "[PHONE_{index}]"
 ```
 
 | Field | Meaning |

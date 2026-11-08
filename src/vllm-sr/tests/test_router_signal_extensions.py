@@ -119,45 +119,37 @@ def test_nested_condition_rejects_on_unknown():
 def test_user_config_accepts_recipe_entrypoints():
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
+            "version": "v0.5",
             "entrypoints": [
-                {
-                    "model_names": ["vllm-sr/privacy"],
-                    "recipe": "privacy",
-                }
+                {"model_names": ["vllm-sr/auto"], "recipe": "default", "default": True},
+                {"model_names": ["vllm-sr/privacy"], "recipe": "privacy"},
             ],
             "recipes": [
+                {"name": "default"},
                 {
                     "name": "privacy",
-                    "routing": {
-                        "signals": {
-                            "metadata": [
-                                {
-                                    "name": "consent-denied",
-                                    "key": "consent",
-                                    "predicate": {"equals": "denied"},
-                                }
-                            ]
-                        }
+                    "signals": {
+                        "metadata": [
+                            {
+                                "name": "consent-denied",
+                                "key": "consent",
+                                "predicate": {"equals": "denied"},
+                            }
+                        ]
                     },
-                }
+                },
             ],
         }
     )
-    assert config.entrypoints[0].recipe == "privacy"
-    assert config.recipes[0].routing.signals.metadata[0].name == "consent-denied"
+    assert config.entrypoints[1].recipe == "privacy"
+    assert config.recipes[1].signals.metadata[0].name == "consent-denied"
 
 
 def test_user_config_rejects_unknown_recipe_entrypoint():
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
-            "entrypoints": [
-                {
-                    "model_names": ["vllm-sr/missing"],
-                    "recipe": "missing",
-                }
-            ],
+            "version": "v0.5",
+            "entrypoints": [{"model_names": ["vllm-sr/missing"], "recipe": "missing"}],
         }
     )
     errors = validate_user_config(config)
@@ -167,31 +159,32 @@ def test_user_config_rejects_unknown_recipe_entrypoint():
 def test_general_validators_cover_recipe_decisions():
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
+            "version": "v0.5",
             "providers": {"models": [{"name": "model-a"}]},
-            "routing": {"modelCards": [{"name": "model-a"}]},
             "recipes": [
+                {"name": "default"},
                 {
                     "name": "invalid-recipe",
-                    "routing": {
-                        "decisions": [
-                            {
-                                "name": "invalid-route",
-                                "description": "invalid",
-                                "priority": 1,
-                                "rules": {
-                                    "operator": "AND",
-                                    "conditions": [{"type": "latency", "name": "p95"}],
-                                },
-                                "modelRefs": [{"model": "missing-model"}],
-                                "algorithm": {
-                                    "type": "static",
-                                    "multi_factor": {"weights": {"quality": 1}},
-                                },
-                            }
-                        ]
-                    },
-                }
+                    "decisions": [
+                        {
+                            "name": "invalid-route",
+                            "description": "invalid",
+                            "priority": 1,
+                            "rules": {
+                                "operator": "AND",
+                                "conditions": [{"type": "latency", "name": "p95"}],
+                            },
+                            "modelRefs": [{"model": "missing-model"}],
+                            "algorithm": {
+                                "type": "static",
+                                "multi_factor": {"weights": {"quality": 1}},
+                            },
+                        }
+                    ],
+                },
+            ],
+            "entrypoints": [
+                {"model_names": ["vllm-sr/auto"], "recipe": "default", "default": True}
             ],
         }
     )
@@ -202,21 +195,23 @@ def test_general_validators_cover_recipe_decisions():
         "recipes.invalid-recipe.decisions.invalid-route.algorithm.multi_factor"
         in fields
     )
-    assert (
-        "recipes.invalid-recipe.routing.decisions.invalid-route.rules.conditions"
-        in fields
-    )
+    assert "recipes.invalid-recipe.decisions.invalid-route.rules.conditions" in fields
 
 
 def test_user_config_rejects_recipe_owned_model_cards():
     with pytest.raises(ValidationError):
         UserConfig.model_validate(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "recipes": [
+                    {"name": "default"},
+                    {"name": "with-models", "modelCards": [{"name": "model-a"}]},
+                ],
+                "entrypoints": [
                     {
-                        "name": "with-models",
-                        "routing": {"modelCards": [{"name": "model-a"}]},
+                        "model_names": ["vllm-sr/auto"],
+                        "recipe": "default",
+                        "default": True,
                     }
                 ],
             }
@@ -226,64 +221,61 @@ def test_user_config_rejects_recipe_owned_model_cards():
 def test_user_config_allows_recipe_local_decision_names():
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
-            "routing": {
-                "decisions": [
-                    {
-                        "name": "shared-name",
-                        "description": "default",
-                        "priority": 1,
-                        "rules": {},
-                        "modelRefs": [],
-                    }
-                ]
-            },
+            "version": "v0.5",
             "recipes": [
                 {
+                    "name": "default",
+                    "decisions": [
+                        {
+                            "name": "shared-name",
+                            "description": "default",
+                            "priority": 1,
+                            "rules": {},
+                            "modelRefs": [],
+                        }
+                    ],
+                },
+                {
                     "name": "other",
-                    "routing": {
-                        "decisions": [
-                            {
-                                "name": "shared-name",
-                                "description": "recipe",
-                                "priority": 1,
-                                "rules": {},
-                                "modelRefs": [],
-                            }
-                        ]
-                    },
-                }
+                    "decisions": [
+                        {
+                            "name": "shared-name",
+                            "description": "recipe",
+                            "priority": 1,
+                            "rules": {},
+                            "modelRefs": [],
+                        }
+                    ],
+                },
+            ],
+            "entrypoints": [
+                {"model_names": ["vllm-sr/auto"], "recipe": "default", "default": True}
             ],
         }
     )
-    assert config.recipes[0].routing.decisions[0].name == "shared-name"
+    assert config.recipes[0].decisions[0].name == "shared-name"
 
 
 def test_user_config_accepts_recipes_only_default_profile():
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
+            "version": "v0.5",
             "recipes": [
                 {
                     "name": "default",
-                    "routing": {
-                        "signals": {
-                            "metadata": [
-                                {
-                                    "name": "canary",
-                                    "key": "cohort",
-                                    "predicate": {"equals": "canary"},
-                                }
-                            ]
-                        }
+                    "signals": {
+                        "metadata": [
+                            {
+                                "name": "canary",
+                                "key": "cohort",
+                                "predicate": {"equals": "canary"},
+                            }
+                        ]
                     },
                 }
             ],
             "entrypoints": [
-                {
-                    "model_names": ["vllm-sr/default-route"],
-                    "recipe": "default",
-                }
+                {"model_names": ["vllm-sr/default-route"], "recipe": "default"}
             ],
         }
     )
@@ -298,53 +290,52 @@ def test_user_config_allows_identical_signal_redeclaration():
     }
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
-            "routing": {"signals": {"metadata": [metadata]}},
+            "version": "v0.5",
             "recipes": [
-                {
-                    "name": "other",
-                    "routing": {"signals": {"metadata": [metadata]}},
-                }
+                {"name": "default", "signals": {"metadata": [metadata]}},
+                {"name": "other", "signals": {"metadata": [metadata]}},
             ],
         }
     )
-    assert config.recipes[0].routing.signals.metadata[0].name == "canary"
+    assert config.recipes[0].signals.metadata[0].name == "canary"
 
 
 def test_user_config_allows_conflicting_names_across_isolated_recipes():
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
-            "routing": {
-                "signals": {
-                    "metadata": [
-                        {
-                            "name": "canary",
-                            "key": "cohort",
-                            "predicate": {"equals": "canary"},
-                        }
-                    ]
-                }
-            },
+            "version": "v0.5",
             "recipes": [
                 {
-                    "name": "other",
-                    "routing": {
-                        "signals": {
-                            "metadata": [
-                                {
-                                    "name": "canary",
-                                    "key": "cohort",
-                                    "predicate": {"equals": "beta"},
-                                }
-                            ]
-                        }
+                    "name": "default",
+                    "signals": {
+                        "metadata": [
+                            {
+                                "name": "canary",
+                                "key": "cohort",
+                                "predicate": {"equals": "canary"},
+                            }
+                        ]
                     },
-                }
+                },
+                {
+                    "name": "other",
+                    "signals": {
+                        "metadata": [
+                            {
+                                "name": "canary",
+                                "key": "cohort",
+                                "predicate": {"equals": "beta"},
+                            }
+                        ]
+                    },
+                },
+            ],
+            "entrypoints": [
+                {"model_names": ["vllm-sr/auto"], "recipe": "default", "default": True}
             ],
         }
     )
-    predicate = config.recipes[0].routing.signals.metadata[0].predicate
+    predicate = config.recipes[1].signals.metadata[0].predicate
     assert predicate.equals == "beta"
 
 
@@ -357,17 +348,14 @@ def test_user_config_allows_recipe_local_projection_names():
     }
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
-            "routing": {"projections": {"partitions": [partition]}},
+            "version": "v0.5",
             "recipes": [
-                {
-                    "name": "other",
-                    "routing": {"projections": {"partitions": [partition]}},
-                }
+                {"name": "default", "projections": {"partitions": [partition]}},
+                {"name": "other", "projections": {"partitions": [partition]}},
             ],
         }
     )
-    assert config.recipes[0].routing.projections.partitions[0].name == "difficulty"
+    assert config.recipes[0].projections.partitions[0].name == "difficulty"
 
 
 @pytest.mark.parametrize(
@@ -377,16 +365,11 @@ def test_user_config_allows_recipe_local_projection_names():
 def test_user_config_rejects_entrypoint_name_collisions(model_name):
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
-            "providers": {"models": [{"name": "model-a"}]},
-            "routing": {
-                "modelCards": [
-                    {
-                        "name": "model-a",
-                        "loras": [{"name": "adapter-a"}],
-                    }
-                ]
+            "version": "v0.5",
+            "providers": {
+                "models": [{"name": "model-a", "loras": [{"name": "adapter-a"}]}]
             },
+            "recipes": [{"name": "default"}],
             "entrypoints": [{"model_names": [model_name], "recipe": "default"}],
         }
     )
@@ -397,7 +380,7 @@ def test_user_config_rejects_entrypoint_name_collisions(model_name):
 def test_user_config_normalizes_entrypoint_names():
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
+            "version": "v0.5",
             "entrypoints": [
                 {
                     "model_names": [" virtual-route ", "virtual-route", ""],
@@ -414,7 +397,7 @@ def test_user_config_rejects_empty_entrypoint_names():
     with pytest.raises(ValidationError):
         UserConfig.model_validate(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "entrypoints": [{"model_names": [], "recipe": "default"}],
             }
         )

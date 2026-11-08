@@ -1,6 +1,7 @@
-routing:
-  signals:
-    complexity:
-      - name: needs_reasoning
-        description: Escalate multi-step reasoning or synthesis-heavy prompts.
-        labels: [hard]
+recipes:
+  - name: default
+    signals:
+      complexity:
+        - name: needs_reasoning
+          description: Escalate multi-step reasoning or synthesis-heavy prompts.
+          labels: [hard]

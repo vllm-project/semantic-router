@@ -7,21 +7,10 @@ import {
 } from './configPageSignalReferences'
 
 describe('signal references', () => {
-  it('counts decision, projection, and composer references in one routing scope', () => {
+  it('counts decision and projection references in one routing scope', () => {
     const routing: RecipeRoutingConfig = {
       signals: {
-        complexity: [
-          {
-            name: 'difficulty',
-            threshold: 0.5,
-            hard: { candidates: [] },
-            easy: { candidates: [] },
-            composer: {
-              operator: 'AND',
-              conditions: [{ type: 'keyword', name: 'release' }],
-            },
-          },
-        ],
+        keywords: [{ name: 'release', operator: 'OR', keywords: ['release'] }],
       },
       projections: {
         scores: [
@@ -46,7 +35,7 @@ describe('signal references', () => {
       ],
     }
 
-    expect(getSignalReferenceCountInRoutingProfile(routing, 'Keywords', 'release')).toBe(3)
+    expect(getSignalReferenceCountInRoutingProfile(routing, 'Keywords', 'release')).toBe(2)
   })
 
   it('keeps reference counts local to the selected recipe', () => {

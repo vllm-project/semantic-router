@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 
 listeners:
   - name: "agent-smoke-http"
@@ -18,26 +18,21 @@ providers:
           weight: 100
           endpoint: "host.docker.internal:8000/v1"
           protocol: "http"
-
-routing:
-  modelCards:
-    - name: "smoke-model"
       modality: "text"
-  decisions:
-    - name: "default-route"
-      description: "Minimal default route for agent smoke validation"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions: []
-      modelRefs:
-        - model: "smoke-model"
-          use_reasoning: false
 
-global:
-  stores:
-    response_cache:
-      enabled: false
+recipes:
+  - name: default
+    decisions:
+      - name: "default-route"
+        description: "Minimal default route for agent smoke validation"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions: []
+        modelRefs:
+          - model: "smoke-model"
+            use_reasoning: false
+global: {}
 entrypoints:
   - model_names: ["vllm-sr/auto"]
     recipe: default

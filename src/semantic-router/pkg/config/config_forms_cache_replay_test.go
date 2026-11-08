@@ -6,7 +6,7 @@ import (
 )
 
 func decisionPluginsDocument(plugins string) string {
-	return "routing:\n  decisions:\n    - name: d\n      plugins:\n" + plugins
+	return "recipes:\n  - name: default\n    decisions:\n      - name: d\n        plugins:\n" + strings.ReplaceAll(plugins, "        - ", "          - ")
 }
 
 // The response cache, shadow and retention rewrites keep what each old form
@@ -72,13 +72,13 @@ func TestCacheReplayRetentionMigrations(t *testing.T) {
 		{
 			name:     "emits of another kind",
 			forms:    retentionForms,
-			document: "routing:\n  decisions:\n    - name: d\n      emits: [{kind: log}]\n",
+			document: "recipes:\n  - name: default\n    decisions:\n      - name: d\n        emits: [{kind: log}]\n",
 			wantErr:  `emits kind "log" has no replacement`,
 		},
 		{
 			name:     "emits beside retention",
 			forms:    retentionForms,
-			document: "routing:\n  decisions:\n    - name: d\n      retention: {drop: true}\n      emits: [{kind: retention, retention: {ttl_turns: 2}}]\n",
+			document: "recipes:\n  - name: default\n    decisions:\n      - name: d\n        retention: {drop: true}\n        emits: [{kind: retention, retention: {ttl_turns: 2}}]\n",
 			wantErr:  "keep retention",
 		},
 	}

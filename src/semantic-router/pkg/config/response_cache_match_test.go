@@ -3,13 +3,16 @@ package config
 import "testing"
 
 // A decision's semantic lookup runs its written block, or the default; a
-// request that matched no decision recalls by the store's threshold.
+// request that matched no decision runs the block of global.plugins.
 func TestResponseCacheMatch(t *testing.T) {
-	cfg := &RouterConfig{}
-	cfg.SemanticCache.SimilarityThreshold = f32(0.75)
-	if block := cfg.ResponseCacheMatch(nil); block == nil || block.Recall.TopK != 3 || *block.Recall.MinSimilarity != float64(float32(0.75)) || block.Judge != nil {
+	global := responseCacheDecision(map[string]interface{}{"enabled": true, "semantic": map[string]interface{}{"match": map[string]interface{}{
+		"recall": map[string]interface{}{"top_k": 3, "min_similarity": 0.75},
+	}}})
+	cfg := layeredRouting(global.Plugins, Decision{Name: "plain"})
+	if block := cfg.ResponseCacheMatch(nil); block == nil || block.Recall.TopK != 3 || *block.Recall.MinSimilarity != 0.75 || block.Judge != nil {
 		t.Fatalf("decisionless block %+v", block)
 	}
+	cfg = &RouterConfig{}
 	plain := responseCacheDecision(map[string]interface{}{"enabled": true})
 	if block := cfg.ResponseCacheMatch(&plain); block != nil {
 		t.Fatalf("a decision without semantic.match runs the default, got %+v", block)

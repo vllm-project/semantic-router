@@ -10,7 +10,7 @@ translation:
 
 ## 概览 {#overview}
 
-`pii` 检测请求中的敏感个人数据。在 `routing.signals.pii` 下定义 PII 规则。
+`pii` 检测请求中的敏感个人数据。在 `recipes[].signals.pii` 下定义 PII 规则。
 
 除非 `pii` 绑定指定了其他部署，否则由决策模型回答它；见[为信号选择模型](../../../installation/choose-a-model-for-a-signal.md)。`global.model_catalog.modules.classifier.pii` 保存它的扫描设置。
 
@@ -39,15 +39,16 @@ translation:
 ## 配置 {#configuration}
 
 ```yaml
-routing:
-  signals:
-    pii:
-      - name: restricted_pii
-        threshold: 0.85
-        include_history: true
-        pii_types_allowed:
-          - EMAIL_ADDRESS
-        description: Sensitive prompts where only low-risk identifiers may pass through.
+recipes:
+  - name: default
+    signals:
+      pii:
+        - name: restricted_pii
+          threshold: 0.85
+          include_history: true
+          pii_types_allowed:
+            - EMAIL_ADDRESS
+          description: Sensitive prompts where only low-risk identifiers may pass through.
 ```
 
 `pii_types_allowed` 为空时，任意检测到的 PII 都可能使信号匹配。

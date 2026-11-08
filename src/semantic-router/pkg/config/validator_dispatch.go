@@ -21,7 +21,6 @@ var (
 		validateModelPricingContracts,
 		validateReasoningFamilyContracts,
 		validateExternalModelContracts,
-		validateGlobalSemanticCacheContracts,
 		validateGlobalMemoryContracts,
 		validateEmbeddingStores,
 		validateModelSelectionConfig,
@@ -37,6 +36,7 @@ var (
 		validateGlobalModelBindingContracts,
 		validateGlobalToolSessionsContracts,
 		validateGlobalRouterReplayCaptureContracts,
+		validateGlobalPluginContracts,
 	}
 
 	// These contracts need the complete routing graph, including all recipes.

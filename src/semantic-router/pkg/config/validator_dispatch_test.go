@@ -41,7 +41,7 @@ func TestConfigLoadValidatesGlobalsForEverySource(t *testing.T) {
 	}{
 		{"preview_timeout", `services: {api: {routing_preview: {request_timeout_seconds: 0}}}`, "routing_preview.request_timeout_seconds"},
 		{"preview_concurrency", `services: {api: {routing_preview: {max_concurrency: 0}}}`, "routing_preview.max_concurrency"},
-		{"cache_similarity", `stores: {response_cache: {enabled: true, similarity_threshold: 1.5}}`, "similarity_threshold"},
+		{"cache_similarity", `plugins: [{type: response_cache, configuration: {enabled: true, semantic: {match: {recall: {top_k: 1, min_similarity: 1.5}}}}}]`, "min_similarity must be a cosine similarity"},
 		{"memory_similarity", `stores: {memory: {default_similarity_threshold: 1.5}}`, "default_similarity_threshold"},
 		{"learning_backend", `router: {learning: {state_store: {backend: redis_typo}}}`, "state_store.backend"},
 		{"learning_ttl", `router: {learning: {state_store: {ttl_seconds: -1}}}`, "state_store.ttl_seconds"},
@@ -96,7 +96,7 @@ router:
   learning:
     state_store: {backend: local, ttl_seconds: 0}
 stores:
-  response_cache: {enabled: true, similarity_threshold: 1}
+  response_cache: {}
   memory: {default_similarity_threshold: 0}
 model_catalog:
   admission:
@@ -126,7 +126,7 @@ func globalValidationDocument(t *testing.T, source ConfigSource, fragment string
 	}
 	router["config_source"] = source
 	raw, err := json.Marshal(map[string]any{
-		"version": "v0.3",
+		"version": "v0.5",
 		"global":  global,
 	})
 	if err != nil {

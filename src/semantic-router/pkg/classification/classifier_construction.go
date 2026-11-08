@@ -44,7 +44,7 @@ func (b *classifierOptionBuilder) build() ([]option, error) {
 	if err := b.prepareEmbeddingSet(); err != nil {
 		return nil, err
 	}
-	if b.cfg.RoutingScope == config.DefaultRecipeName && !b.cfg.IsRecipeReachableForRouting(config.DefaultRecipeName) {
+	if b.cfg.IsDefaultRecipe(b.cfg.RoutingScope) && !b.cfg.IsRecipeReachableForRouting(b.cfg.RoutingScope) {
 		return b.options, nil
 	}
 	steps := []func() (option, error){

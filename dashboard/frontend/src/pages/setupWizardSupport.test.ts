@@ -170,37 +170,35 @@ describe("setup wizard model drafts", () => {
     expect(guard.isCurrent(second)).toBe(false);
   });
 
-  it("summarizes nested provider and routing collections", () => {
+  it("summarizes provider models and the default recipe", () => {
     expect(
       summarizeSetupConfig({
         providers: { models: [{ name: "alpha" }, { name: "beta" }] },
-        routing: {
-          decisions: [{ name: "default" }],
-          signals: { domains: [{ name: "code" }], keywords: [{ name: "fast" }] },
-        },
+        recipes: [
+          {
+            name: "default",
+            decisions: [{ name: "default" }],
+            signals: { domains: [{ name: "code" }], keywords: [{ name: "fast" }] },
+          },
+        ],
       }),
     ).toEqual({ models: 2, decisions: 1, signals: 2, canActivate: true });
   });
 
-  it("summarizes entrypoint-only recipe routing collections", () => {
+  it("summarizes every recipe", () => {
     expect(
       summarizeSetupConfig({
         providers: { models: [{ name: "shared" }] },
-        routing: { decisions: [], signals: {} },
         recipes: [
           {
             name: "balanced",
-            routing: {
-              decisions: [{ name: "balanced-route" }],
-              signals: { keywords: [{ name: "balanced-keyword" }] },
-            },
+            decisions: [{ name: "balanced-route" }],
+            signals: { keywords: [{ name: "balanced-keyword" }] },
           },
           {
             name: "private",
-            routing: {
-              decisions: [{ name: "private-route" }],
-              signals: { pii: [{ name: "private-pii" }] },
-            },
+            decisions: [{ name: "private-route" }],
+            signals: { pii: [{ name: "private-pii" }] },
           },
         ],
       }),

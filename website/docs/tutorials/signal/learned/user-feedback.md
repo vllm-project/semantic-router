@@ -4,7 +4,7 @@
 
 `user-feedback` detects correction, dissatisfaction, or escalation feedback
 from the conversation. Define its labels under
-`routing.signals.user_feedbacks`.
+`recipes[].signals.user_feedbacks`.
 
 This family is learned: the decision model answers it unless a `user_feedback` binding names another deployment ([Choose a model for a signal](../../../installation/choose-a-model-for-a-signal.md)). `global.model_catalog.modules.feedback_detector` holds the detector's settings. Leave `feedback_mapping_path` empty so the detector reads `id2label` from the model's `config.json`; set it only to a mapping file whose index order matches the model head.
 
@@ -33,13 +33,14 @@ Use `user-feedback` when:
 ## Configuration
 
 ```yaml
-routing:
-  signals:
-    user_feedbacks:
-      - name: wrong_answer
-        description: User indicates the current answer is incorrect.
-      - name: need_clarification
-        description: User asks for a clearer or more detailed follow-up.
+recipes:
+  - name: default
+    signals:
+      user_feedbacks:
+        - name: wrong_answer
+          description: User indicates the current answer is incorrect.
+        - name: need_clarification
+          description: User asks for a clearer or more detailed follow-up.
 ```
 
 Define the feedback labels your decisions will consume, then let the learned detector decide which one matches each turn.

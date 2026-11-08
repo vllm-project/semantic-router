@@ -307,7 +307,7 @@ func TestValidateRuleOperatorContracts_ShapeCorpusNamesDecisionAndPath(t *testin
 
 func TestParseYAMLBytes_RejectsMultiChildNotInDecisionRules(t *testing.T) {
 	yamlConfig := `
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: gpt-worker
@@ -318,34 +318,33 @@ providers:
         - name: openrouter
           base_url: https://openrouter.ai/api/v1
           provider: openai
-routing:
-  modelCards:
-    - name: gpt-worker
-  signals:
-    keywords:
-      - name: urgent
-        operator: OR
-        keywords: ["urgent"]
-      - name: billing
-        operator: OR
-        keywords: ["invoice"]
-  decisions:
-    - name: not_urgent_billing
-      priority: 10
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: billing
-          - operator: NOT
-            conditions:
-              - type: keyword
-                name: urgent
-              - type: keyword
-                name: billing
-      modelRefs:
-        - model: gpt-worker
-          use_reasoning: false
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: urgent
+          operator: OR
+          keywords: ["urgent"]
+        - name: billing
+          operator: OR
+          keywords: ["invoice"]
+    decisions:
+      - name: not_urgent_billing
+        priority: 10
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: billing
+            - operator: NOT
+              conditions:
+                - type: keyword
+                  name: urgent
+                - type: keyword
+                  name: billing
+        modelRefs:
+          - model: gpt-worker
+            use_reasoning: false
 `
 	_, err := ParseYAMLBytes([]byte(yamlConfig))
 	if err == nil {

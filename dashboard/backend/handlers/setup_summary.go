@@ -24,11 +24,10 @@ func summarizeCanonicalSetupConfig(configData *routerconfig.CanonicalConfig) set
 	if configData == nil {
 		return setupConfigSummary{}
 	}
-	decisions := len(configData.Routing.Decisions)
-	signals := countCanonicalSignals(configData.Routing.Signals)
+	decisions, signals := 0, 0
 	for _, recipe := range configData.Recipes {
-		decisions += len(recipe.Routing.Decisions)
-		signals += countCanonicalSignals(recipe.Routing.Signals)
+		decisions += len(recipe.Decisions)
+		signals += countCanonicalSignals(recipe.Signals)
 	}
 	return setupConfigSummary{
 		Models:    countConfiguredModels(configData),
@@ -40,9 +39,6 @@ func summarizeCanonicalSetupConfig(configData *routerconfig.CanonicalConfig) set
 func countConfiguredModels(configData *routerconfig.CanonicalConfig) int {
 	if configData == nil {
 		return 0
-	}
-	if len(configData.Routing.ModelCards) > 0 {
-		return len(configData.Routing.ModelCards)
 	}
 	return len(configData.Providers.Models)
 }

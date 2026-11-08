@@ -8,7 +8,7 @@ earlier turn, `shift`s to an unrelated one, or `return`s to an earlier topic.
 It replaces the `reasks` and `topic_continuity` signals.
 
 It maps to config/fragments/signal/turn-relation and is declared under
-`routing.signals.turn_relation`.
+`recipes[].signals.turn_relation`.
 
 ## Key Advantages
 
@@ -32,19 +32,20 @@ Use `turn_relation` when:
 ## Configuration
 
 ```yaml
-routing:
-  signals:
-    turn_relation:
-      - name: likely_dissatisfied
-        description: The current user turn repeats the previous one.
-        labels: [reask]
-        input:
-          previous_turns: 1
-      - name: topic_boundary
-        description: Whether the live turn still depends on retained history.
-        labels: [continue, shift]
-        input:
-          previous_turns: 8
+recipes:
+  - name: default
+    signals:
+      turn_relation:
+        - name: likely_dissatisfied
+          description: The current user turn repeats the previous one.
+          labels: [reask]
+          input:
+            previous_turns: 1
+        - name: topic_boundary
+          description: Whether the live turn still depends on retained history.
+          labels: [continue, shift]
+          input:
+            previous_turns: 8
 ```
 
 | Field | Meaning |

@@ -310,6 +310,35 @@ func validateDecisionPluginContracts(cfg *RouterConfig) error {
 			return err
 		}
 	}
+	return validateDefaultPluginContracts(cfg)
+}
+
+// validateGlobalPluginContracts checks global.plugins at every load: a request
+// that routes through no recipe runs them as written.
+func validateGlobalPluginContracts(cfg *RouterConfig) error {
+	configuration := func(_ int, pluginType string) string {
+		return fmt.Sprintf("global.plugins[%s].configuration", NormalizeDecisionPluginType(pluginType))
+	}
+	return validatePluginContracts(cfg, "global.plugins", cfg.GlobalPlugins, configuration)
+}
+
+// validateDefaultPluginContracts checks the plugins a request that matches no
+// decision runs, global.plugins layered with its recipe's, as a decision's
+// plugins are checked.
+func validateDefaultPluginContracts(cfg *RouterConfig) error {
+	recipes := cfg.Recipes
+	if len(recipes) == 0 {
+		recipes = []RoutingRecipe{*cfg.DefaultRecipe()}
+	}
+	for i := range recipes {
+		owner := recipePath(string(recipes[i].Name)) + ".plugins"
+		configuration := func(_ int, pluginType string) string {
+			return fmt.Sprintf("%s[%s].configuration", owner, NormalizeDecisionPluginType(pluginType))
+		}
+		if err := validatePluginContracts(cfg, owner, recipes[i].Profile.DefaultPlugins, configuration); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -317,24 +346,45 @@ func validateOneDecisionPluginContracts(
 	cfg *RouterConfig,
 	decision *Decision,
 ) error {
-	seenPluginTypes := make(map[string]string, len(decision.Plugins))
-	for index, plugin := range decision.Plugins {
+	configuration := func(index int, _ string) string {
+		return cfg.ScopePath(fmt.Sprintf("decisions[%s].plugins[%d].configuration", decision.Name, index))
+	}
+	if err := validatePluginContracts(cfg, decision.Name, decision.Plugins, configuration); err != nil {
+		return err
+	}
+	if err := validateDecisionReplayShadow(cfg, decision); err != nil {
+		return err
+	}
+	warnCachedPersonalization(cfg, decision)
+	return nil
+}
+
+// validatePluginContracts checks the plugins one request runs; owner names
+// them, and configuration is the path of a plugin's configuration.
+func validatePluginContracts(
+	cfg *RouterConfig,
+	owner string,
+	plugins []DecisionPlugin,
+	configuration func(index int, pluginType string) string,
+) error {
+	seenPluginTypes := make(map[string]string, len(plugins))
+	for index, plugin := range plugins {
 		normalizedType := NormalizeDecisionPluginType(plugin.Type)
 		if previous, exists := seenPluginTypes[normalizedType]; exists {
 			return fmt.Errorf(
 				"decision %q has duplicate plugin %q via %q and %q",
-				decision.Name,
+				owner,
 				normalizedType,
 				previous,
 				plugin.Type,
 			)
 		}
 		seenPluginTypes[normalizedType] = plugin.Type
-		payload, err := DecodeDecisionPluginAt(PluginAt{Decision: decision.Name, Index: index, Type: plugin.Type}, plugin)
+		payload, err := DecodeDecisionPluginAt(PluginAt{Decision: owner, Index: index, Type: plugin.Type}, plugin)
 		if err != nil {
 			return err
 		}
-		path := cfg.ScopePath(fmt.Sprintf("decisions[%s].plugins[%d].configuration", decision.Name, index))
+		path := configuration(index, plugin.Type)
 		switch typed := payload.(type) {
 		case *ToolsPluginConfig:
 			err = validateToolsPlugin(cfg, path, typed)
@@ -347,10 +397,6 @@ func validateOneDecisionPluginContracts(
 			return err
 		}
 	}
-	if err := validateDecisionReplayShadow(cfg, decision); err != nil {
-		return err
-	}
-	warnCachedPersonalization(cfg, decision)
 	return nil
 }
 

@@ -21,33 +21,34 @@ is_mtpe: true
 ## 打开它 {#turn-it-on}
 
 ```yaml
-routing:
-  signals:
-    jailbreak:
-      - name: prompt_attack
-        threshold: 0.5
-    safety:
-      - name: unsafe-content
-        threshold: 0.5
-  decisions:
-    - name: block-attacks
-      priority: 300
-      rules:
-        operator: AND
-        conditions:
-          - type: jailbreak
-            name: prompt_attack
-      modelRefs:
-        - model: refusal-model
-    - name: handle-content-risk
-      priority: 290
-      rules:
-        operator: AND
-        conditions:
-          - type: safety
-            name: unsafe-content
-      modelRefs:
-        - model: safety-capable-model
+recipes:
+  - name: default
+    signals:
+      jailbreak:
+        - name: prompt_attack
+          threshold: 0.5
+      safety:
+        - name: unsafe-content
+          threshold: 0.5
+    decisions:
+      - name: block-attacks
+        priority: 300
+        rules:
+          operator: AND
+          conditions:
+            - type: jailbreak
+              name: prompt_attack
+        modelRefs:
+          - model: refusal-model
+      - name: handle-content-risk
+        priority: 290
+        rules:
+          operator: AND
+          conditions:
+            - type: safety
+              name: unsafe-content
+        modelRefs:
+          - model: safety-capable-model
 ```
 
 没有绑定、规则上也没写 `deployment` 时，prompt guard 和 safety 使用决策模型，默认是 vela3-fast。Vela 1.0 Guard 和 Safety 专用模型是显式的替代选择，各有自己的输入窗口和校准阈值。换模型时要重新评估规则阈值，并区分模型的输入上限和完整扫描预算。见[选择模型](../choose-a-model#vela-20)和[为信号选择模型](../../installation/choose-a-model-for-a-signal.md)。
@@ -72,12 +73,13 @@ global:
         provider: model_runtime
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Shield
         revision: a981a99eeb05a2859b88b5cee9af4352897ec4ec
-routing:
-  signals:
-    safety:
-      - name: unsafe-content
-        deployment: shield
-        threshold: 0.5
+recipes:
+  - name: default
+    signals:
+      safety:
+        - name: unsafe-content
+          deployment: shield
+          threshold: 0.5
 ```
 
 想让 Guard 跑在 GPU 上，就写部署再绑：

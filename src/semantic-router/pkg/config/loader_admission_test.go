@@ -8,7 +8,7 @@ import (
 )
 
 const admissionTestYAMLTemplate = `
-version: v0.3
+version: v0.5
 listeners:
   - name: http
     address: 0.0.0.0
@@ -24,10 +24,9 @@ providers:
           provider: vllm
           endpoint: 127.0.0.1:11434
           protocol: http
-routing:
-  modelCards:
-    - name: qwen2.5:3b
       param_size: 3b
+recipes:
+  - name: default
 global:
   model_catalog:
     admission:

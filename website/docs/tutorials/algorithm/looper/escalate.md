@@ -49,31 +49,32 @@ reads `budget` and `on_error` beside its type.
 ### On Chat
 
 ```yaml
-routing:
-  decisions:
-    - name: verified-answers
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: qwen3-8b
-        - model: qwen3-32b
-      algorithm:
-        type: escalate
-        budget: {deadline: 60s, max_calls: 2}
-        on_error: last_attempt
-        escalate:
-          order: size
-          accept:
-            confidence:
-              method: hybrid
-              gte: 0.72
-              hybrid_weights: {logprob_weight: 0.65, margin_weight: 0.35}
+recipes:
+  - name: default
+    decisions:
+      - name: verified-answers
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: qwen3-8b
+          - model: qwen3-32b
+        algorithm:
+          type: escalate
+          budget: {deadline: 60s, max_calls: 2}
+          on_error: last_attempt
+          escalate:
+            order: size
+            accept:
+              confidence:
+                method: hybrid
+                gte: 0.72
+                hybrid_weights: {logprob_weight: 0.65, margin_weight: 0.35}
 ```
 
 `order` sets the escalation order: `size` tries the smallest
-`routing.modelCards[].param_size` first, `cost` the cheapest priced model
+`providers.models[].param_size` first, `cost` the cheapest priced model
 first, and omitting it keeps the `modelRefs` order.
 
 `accept` names exactly one check:
@@ -200,32 +201,36 @@ evaluation.
 
 ```yaml
 recipes:
+  - name: default
   - name: native-escalate
-    routing:
-      decisions:
-        - name: answer
-          rules: {}
-          modelRefs: [{model: kai}, {model: vega}]
-          algorithm:
-            type: escalate
-            budget: {deadline: 10s, max_calls: 2}
-            escalate:
-              quality:
-                type: uncalibrated
+    decisions:
+      - name: answer
+        rules: {}
+        modelRefs: [{model: kai}, {model: vega}]
+        algorithm:
+          type: escalate
+          budget: {deadline: 10s, max_calls: 2}
+          escalate:
+            quality:
+              type: uncalibrated
+              accept:
+                native:
+                  - {question_type: choice, field: top_probability, gte: 0}
+                  - {question_type: score, field: top_probability, gte: 0}
+                  - {question_type: noul, field: top_probability, gte: 0}
+            stages:
+              - name: fast
+                model: kai
                 accept:
                   native:
-                    - {question_type: choice, field: top_probability, gte: 0}
-                    - {question_type: score, field: top_probability, gte: 0}
-                    - {question_type: noul, field: top_probability, gte: 0}
-              stages:
-                - name: fast
-                  model: kai
-                  accept:
-                    native:
-                      - {question_type: choice, field: top_probability, gte: 0.6059704079536342}
-                      - {question_type: score, field: top_probability, gte: 0.6059704079536342}
-                      - {question_type: noul, field: top_probability, gte: 0.6059704079536342}
-                - {name: strong, model: vega}
+                    - {question_type: choice, field: top_probability, gte: 0.6059704079536342}
+                    - {question_type: score, field: top_probability, gte: 0.6059704079536342}
+                    - {question_type: noul, field: top_probability, gte: 0.6059704079536342}
+              - {name: strong, model: vega}
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 ```
 
 The common `gte: 0` rules require a valid distribution for every answer; they

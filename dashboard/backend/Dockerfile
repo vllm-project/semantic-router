@@ -29,7 +29,7 @@ FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}library/node:20-alpine AS fronte
 WORKDIR /workspace/dashboard/frontend
 COPY dashboard/frontend/package.json dashboard/frontend/package-lock.json dashboard/frontend/tsconfig.json dashboard/frontend/tsconfig.node.json dashboard/frontend/vite.config.ts ./
 COPY dashboard/frontend/src ./src
-COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /workspace/src/semantic-router/pkg/configschema/router-config-v0.3.schema.json
+COPY src/semantic-router/pkg/configschema/router-config-v0.5.schema.json /workspace/src/semantic-router/pkg/configschema/router-config-v0.5.schema.json
 COPY dashboard/frontend/public ./public
 COPY dashboard/frontend/index.html ./
 COPY website/static/model-catalog/catalog.json /workspace/website/static/model-catalog/catalog.json
@@ -142,7 +142,7 @@ COPY src/vllm-sr/requirements.txt /app/requirements.txt
 # Do not inherit restrictive permissions from a caller's build context.
 COPY --chmod=0444 src/vllm-sr/pyproject.toml /app/pyproject.toml
 COPY src/vllm-sr/cli/ /app/cli/
-COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /app/cli/config_schema/router-config-v0.3.schema.json
+COPY src/semantic-router/pkg/configschema/router-config-v0.5.schema.json /app/cli/config_schema/router-config-v0.5.schema.json
 COPY config/recipes/built-in/ /app/cli/model_assets/
 COPY config/fragments/algorithm/selection/latency-aware.yaml /app/cli/proposal_assets/fragments/algorithm/selection/latency-aware.yaml
 COPY src/vllm-sr/start-dashboard.sh /app/start-dashboard.sh

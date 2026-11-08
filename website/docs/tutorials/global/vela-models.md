@@ -193,10 +193,10 @@ an explicit CPU deployment with a 32K budget. Apply it to an existing
 configuration containing providers, signals and decisions.
 
 ```yaml
-routing:
-  model_bindings:
-    domain: vela-domain
-
+recipes:
+  - name: default
+    model_bindings:
+      domain: vela-domain
 global:
   model_catalog:
     deployments:

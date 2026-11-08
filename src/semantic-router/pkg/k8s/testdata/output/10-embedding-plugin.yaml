@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: deepseek-v3
@@ -10,45 +10,18 @@ providers:
       pricing:
         prompt_per_1m: 0.27
         completion_per_1m: 1.1
+      loras:
+        - name: secure-assistant
+          description: Security-aware assistant
     - name: deepseek-r1
       reasoning:
         family: deepseek
       pricing:
         prompt_per_1m: 0.55
         completion_per_1m: 2.2
-routing:
-  modelCards:
-    - name: deepseek-v3
-      loras:
-        - name: secure-assistant
-          description: Security-aware assistant
-    - name: deepseek-r1
       loras:
         - name: security-expert
           description: Advanced security specialist
-  signals:
-    keywords:
-      - name: sensitive_data
-        operator: OR
-        keywords:
-          - I need to share my personal information
-          - Here is my credit card number
-          - My social security number is
-        case_sensitive: false
-  decisions:
-    - name: pii_protected
-      description: PII-protected queries
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: sensitive_data
-      modelRefs:
-        - model: deepseek-r1
-          use_reasoning: false
-      plugins:
-        - type: fast_response
 global:
   router:
     config_source: kubernetes
@@ -118,15 +91,12 @@ global:
     ratelimit: {}
     management_api: {}
     router_replay:
-      enabled: false
       ttl_seconds: 0
     startup_status:
       store_backend: ""
   stores:
     response_cache:
       backend_type: memory
-      enabled: true
-      similarity_threshold: 0.8
       max_entries: 1000
       ttl_seconds: 3600
       eviction_policy: fifo
@@ -141,3 +111,38 @@ global:
       prompt_compression:
         enabled: false
         max_tokens: 0
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        scope: global
+        semantic:
+          match:
+            recall:
+              min_similarity: 0.8
+              top_k: 1
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: sensitive_data
+          operator: OR
+          keywords:
+            - I need to share my personal information
+            - Here is my credit card number
+            - My social security number is
+          case_sensitive: false
+    decisions:
+      - name: pii_protected
+        description: PII-protected queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: sensitive_data
+        modelRefs:
+          - model: deepseek-r1
+            use_reasoning: false
+        plugins:
+          - type: fast_response

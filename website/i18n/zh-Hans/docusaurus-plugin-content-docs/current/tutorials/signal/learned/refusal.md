@@ -12,7 +12,7 @@ translation:
 
 `refusal` 询问决策模型：模型的回答是否拒绝了请求。它读取回答，所以拒答规则只在模型作答之后存在：由响应插件读取，决策规则不会读取它。
 
-它对应 config/fragments/signal/refusal，在 `routing.signals.refusal` 下声明。
+它对应 config/fragments/signal/refusal，在 `recipes[].signals.refusal` 下声明。
 
 ## 主要优势 {#key-advantages}
 
@@ -34,13 +34,14 @@ translation:
 ## 配置 {#configuration}
 
 ```yaml
-routing:
-  signals:
-    refusal:
-      - name: declined
-        description: The answer declines the request or refuses to help.
-        predicate:
-          gte: 0.5
+recipes:
+  - name: default
+    signals:
+      refusal:
+        - name: declined
+          description: The answer declines the request or refuses to help.
+          predicate:
+            gte: 0.5
 ```
 
 | 字段 | 含义 |

@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 listeners:
   - name: public
     address: 127.0.0.1
@@ -17,18 +17,17 @@ providers:
           provider: vllm
           api_key_env: VSR_BACKEND_API_KEY
           weight: 100
-routing:
-  modelCards:
-    - name: backend-model
       modality: ar
-  decisions:
-    - name: default-route
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: backend-model
+recipes:
+  - name: default
+    decisions:
+      - name: default-route
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: backend-model
 entrypoints:
   - model_names: [vllm-sr/auto]
     recipe: default
@@ -39,12 +38,7 @@ global:
   services:
     response_api:
       enabled: false
-    router_replay:
-      enabled: false
     observability:
       tracing:
         enabled: false
-  stores:
-    response_cache:
-      enabled: false
   model_catalog: {}

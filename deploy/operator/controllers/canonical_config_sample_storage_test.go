@@ -45,7 +45,7 @@ func TestStorageSamplesSurviveConfigMapReconciliation(t *testing.T) {
 				t.Fatal(err)
 			}
 			cache := cfg.SemanticCache
-			if !cache.Enabled || cache.BackendType != backend {
+			if cache.BackendType != backend {
 				t.Fatalf("cache backend lost in translation: %+v", cache)
 			}
 			switch backend {

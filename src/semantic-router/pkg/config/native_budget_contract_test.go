@@ -13,14 +13,14 @@ func TestNativeCascadeBudgetBelongsToSelectedAlgorithm(t *testing.T) {
 }
 
 func TestNativeLearnedPolicyIsNotAProductAlgorithm(t *testing.T) {
-	raw := strings.Replace(nativeRoutingTestYAML, "type: escalate", "type: policy\n            policy: {source: policy.json, sha256: "+strings.Repeat("a", 64)+"}", 1)
+	raw := strings.Replace(nativeRoutingTestYAML, "type: escalate", "type: policy\n          policy: {source: policy.json, sha256: "+strings.Repeat("a", 64)+"}", 1)
 	if _, err := ParseYAMLBytes([]byte(raw)); err == nil {
 		t.Fatal("removed native policy accepted")
 	}
 }
 
 func TestNativeCascadeRejectsChatCandidateMinimum(t *testing.T) {
-	raw := strings.Replace(nativeRoutingTestYAML, "type: escalate", "type: escalate\n            minimum_candidates: 2", 1)
+	raw := strings.Replace(nativeRoutingTestYAML, "type: escalate", "type: escalate\n          minimum_candidates: 2", 1)
 	if _, err := ParseYAMLBytes([]byte(raw)); err == nil || !strings.Contains(err.Error(), "minimum_candidates") {
 		t.Fatalf("native cascade accepted an unenforced Chat candidate minimum: %v", err)
 	}
@@ -28,8 +28,7 @@ func TestNativeCascadeRejectsChatCandidateMinimum(t *testing.T) {
 
 func TestLegacyRecipeBudgetAndChatAlgorithmBudgetAreRejected(t *testing.T) {
 	for _, legacy := range []string{
-		strings.Replace(nativeRoutingTestYAML, "    routing:\n", "    routing:\n      budget: {deadline: 3s, max_calls: 4}\n", 1),
-		strings.Replace(nativeRoutingTestYAML, "entrypoints:\n", "routing:\n  budget: {deadline: 3s, max_calls: 4}\nentrypoints:\n", 1),
+		strings.Replace(nativeRoutingTestYAML, "\n    decisions:", "\n    budget: {deadline: 3s, max_calls: 4}\n    decisions:", 1),
 	} {
 		if _, err := ParseYAMLBytes([]byte(legacy)); err == nil || !strings.Contains(err.Error(), "budget") {
 			t.Fatalf("old routing budget accepted: %v", err)

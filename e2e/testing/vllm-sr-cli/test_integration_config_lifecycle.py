@@ -210,7 +210,7 @@ class TestConfigLifecycle(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
                 self._send_mock_chat_completion(mock_container)
 
                 def describe(document):
-                    document["routing"]["decisions"][0]["description"] = "Applied"
+                    document["recipes"][0]["decisions"][0]["description"] = "Applied"
 
                 self._edit_config(describe)
                 applied = self._cli_json("config", "apply", "--config", "config.yaml")
@@ -224,7 +224,7 @@ class TestConfigLifecycle(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
                 self._cli_json("config", "versions")
                 active = self._cli_json("config", "get", "--format", "json")["config"]
                 self.assertEqual(
-                    active["routing"]["decisions"][0]["description"], "Applied"
+                    active["recipes"][0]["decisions"][0]["description"], "Applied"
                 )
                 self._send_mock_chat_completion(mock_container)
         finally:
@@ -284,47 +284,70 @@ class TestConfigLifecycle(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
         )
         self.write_minimal_canonical_config()
 
-        def image_generation(condition):
+        # Only the Router knows the headers it owns and which models have a
+        # calibrated threshold, so both verdicts below are the Router's.
+        def guarded(header):
             def edit(document):
-                routing = document["routing"]
+                document["global"] = {
+                    "model_catalog": {
+                        "deployments": {
+                            "custom-judge": {
+                                "provider": "model_runtime",
+                                "artifact": "acme/custom-judge",
+                                "revision": "0123456789abcdef0123456789abcdef01234567",
+                            }
+                        }
+                    }
+                }
+                routing = document["recipes"][0]
                 routing["signals"] = {
-                    "modality": [
-                        {"name": "AR", "description": "Text requests."},
-                        {"name": "BOTH", "description": "Text and image requests."},
-                    ]
+                    "jailbreak": [{"name": "attack", "deployment": "custom-judge"}]
                 }
                 routing["decisions"].insert(
                     0,
                     {
-                        "name": "image-gen",
-                        "description": "Image generation",
+                        "name": "guarded",
+                        "description": "Requests that attack the assistant",
                         "priority": 200,
                         "rules": {
                             "operator": "AND",
-                            "conditions": [{"type": "modality", "name": condition}],
+                            "conditions": [{"type": "jailbreak", "name": "attack"}],
                         },
                         "modelRefs": [{"model": "test-model", "use_reasoning": False}],
+                        "plugins": [
+                            {
+                                "type": "header_mutation",
+                                "configuration": {
+                                    "add": [{"name": header, "value": "guarded"}]
+                                },
+                            }
+                        ],
                     },
                 )
 
             return edit
 
-        self._edit_config(image_generation("BOTH"))
+        self._edit_config(guarded("Authorization"))
         code, stdout, stderr = self.run_cli(
             ["config", "validate", "--config", "config.yaml"], timeout=240
         )
         self.assertEqual(code, 1, f"{stdout}\n{stderr}")
-        self.assertIn('uses modality condition "BOTH"', stderr)
+        self.assertIn(
+            "Authorization is owned by the Router or Envoy", " ".join(stderr.split())
+        )
         self.assertNotIn("Configuration is valid", stdout)
 
         self.write_minimal_canonical_config()
-        self._edit_config(image_generation("AR"))
+        self._edit_config(guarded("X-Guarded"))
         code, stdout, stderr = self.run_cli(
             ["config", "validate", "--config", "config.yaml"], timeout=240
         )
         self.assertEqual(code, 0, f"{stdout}\n{stderr}")
         self.assertIn("Checked by the Router in", stdout)
-        self.assertIn("the modality signal never matches", stderr)
+        self.assertIn(
+            "has no calibrated threshold for the jailbreak preset",
+            " ".join(stderr.split()),
+        )
         self.print_test_result(True, "validate gave the Router's verdict and warnings")
 
 

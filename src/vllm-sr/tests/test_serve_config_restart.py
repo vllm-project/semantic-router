@@ -18,9 +18,7 @@ from cli.runtime_stack import resolve_runtime_stack
 def prepare_replacement(tmp_path, monkeypatch):
     source = tmp_path / "config.yaml"
     source.write_text(
-        "version: v0.3\nlisteners:\n- name: main\n  address: 0.0.0.0\n  port: 8888\n"
-        # Keep tracing explicit so these tests isolate watched-file replacement.
-        "global:\n  services:\n    observability:\n      tracing:\n        enabled: false\n"
+        "version: v0.5\nlisteners:\n  - name: main\n    address: 0.0.0.0\n    port: 8888\nglobal:\n  services:\n    observability:\n      tracing:\n        enabled: false\n"
     )
     old = source.read_bytes()
     active = runtime_paths.materialize_runtime_config(source, old)
@@ -120,7 +118,7 @@ def test_invalid_candidate_does_not_stop_or_publish(tmp_path, monkeypatch):
     monkeypatch.setattr(
         runtime_serve_config,
         "build_effective_config_bytes",
-        lambda *args: b"version: v0.3\nunknown_surface: true\n",
+        lambda *args: b"version: v0.5\nunknown_surface: true\n",
     )
     stopped = []
     monkeypatch.setattr(

@@ -60,7 +60,7 @@ func TestDiscoveryCacheRequestFreshness(t *testing.T) {
 				router := &OpenAIRouter{
 					Cache: backend,
 					Config: &config.RouterConfig{
-						SemanticCache:      config.SemanticCache{Enabled: true},
+						SemanticCache:      config.SemanticCache{InUse: true},
 						IntelligentRouting: config.IntelligentRouting{Decisions: []config.Decision{decision}},
 					},
 					ResponseCache: cache.NewResponseCacheService(

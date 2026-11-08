@@ -9,11 +9,6 @@ interface RawSignalRecord extends Record<string, unknown> {
   description?: string
 }
 
-interface LegacySignalSource {
-  type: Exclude<SignalType, 'projection'>
-  value: unknown
-}
-
 function signalRecords(value: unknown): RawSignalRecord[] {
   if (!Array.isArray(value)) return []
   return value.filter(
@@ -38,31 +33,8 @@ function signalFromRecord(
   }
 }
 
-function legacySignalSources(config: ConfigData): LegacySignalSource[] {
-  return [
-    { type: 'keyword', value: config.keyword_rules },
-    { type: 'embedding', value: config.embedding_rules },
-    { type: 'domain', value: config.categories },
-    { type: 'fact_check', value: config.fact_check_rules },
-    { type: 'user_feedback', value: config.user_feedback_rules },
-    { type: 'reask', value: config.reask_rules },
-    { type: 'preference', value: config.preference_rules },
-    { type: 'language', value: config.language_rules },
-    { type: 'context', value: config.context_rules },
-    { type: 'complexity', value: config.complexity_rules },
-    { type: 'modality', value: config.modality_rules },
-    { type: 'authz', value: config.role_bindings },
-    { type: 'jailbreak', value: config.jailbreak },
-    { type: 'hallucination', value: config.hallucination },
-    { type: 'pii', value: config.pii },
-    { type: 'conversation', value: config.conversation },
-  ]
-}
-
 /**
- * Extract every canonical signal through the generated Router catalog. Legacy
- * root collections remain an explicit compatibility seam and never define the
- * canonical inventory.
+ * Extract every canonical signal through the generated Router catalog.
  */
 export function extractSignals(config: ConfigData): SignalConfig[] {
   const signals: SignalConfig[] = []
@@ -79,12 +51,6 @@ export function extractSignals(config: ConfigData): SignalConfig[] {
   ROUTER_CONFIG_EXTENSION.signals.forEach((surface) => {
     signalRecords(canonicalCollections[surface.collection]).forEach((record) =>
       addSignal(signalFromRecord(surface.type, record)),
-    )
-  })
-
-  legacySignalSources(config).forEach((source) => {
-    signalRecords(source.value).forEach((record) =>
-      addSignal(signalFromRecord(source.type, record)),
     )
   })
 

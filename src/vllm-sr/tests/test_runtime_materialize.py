@@ -12,16 +12,19 @@ from cli.commands.runtime_support import realize_runtime_config
 def _write_source(path: Path) -> bytes:
     raw = yaml.safe_dump(
         {
-            "version": "v0.3",
-            "routing": {
-                "decisions": [
-                    {
-                        "name": "default",
-                        "priority": 0,
-                        "modelRefs": [{"model": "test-model"}],
-                    }
-                ]
-            },
+            "version": "v0.5",
+            "recipes": [
+                {
+                    "name": "default",
+                    "decisions": [
+                        {
+                            "name": "default",
+                            "priority": 0,
+                            "modelRefs": [{"model": "test-model"}],
+                        }
+                    ],
+                }
+            ],
             "global": {
                 "model_catalog": {
                     "modules": {"classifier": {"domain": {"use_cpu": True}}}
@@ -54,7 +57,7 @@ def test_realize_runtime_config_applies_overrides_without_mutating_source(
     assert result == target
     assert source.read_bytes() == original
     realized = yaml.safe_load(target.read_text(encoding="utf-8"))
-    assert realized["routing"]["decisions"][0]["algorithm"]["type"] == "multi_factor"
+    assert realized["recipes"][0]["decisions"][0]["algorithm"]["type"] == "multi_factor"
     assert _domain_use_cpu(realized) is False
     assert stat.S_IMODE(target.stat().st_mode) == 0o600
 
@@ -119,7 +122,7 @@ def test_runtime_materialize_module_uses_current_runtime_env(
 
     assert capsys.readouterr().out.strip() == str(target)
     realized = yaml.safe_load(target.read_text(encoding="utf-8"))
-    assert realized["routing"]["decisions"][0]["algorithm"]["type"] == "multi_factor"
+    assert realized["recipes"][0]["decisions"][0]["algorithm"]["type"] == "multi_factor"
     assert _domain_use_cpu(realized) is False
 
 
@@ -168,7 +171,7 @@ def test_managed_materialization_rejects_before_publishing(
     source.write_text(yaml.safe_dump(document), encoding="utf-8")
     original = source.read_bytes()
     target = tmp_path / "runtime-config.yaml"
-    active = b"version: v0.3\nsetup:\n  mode: true\n"
+    active = b"version: v0.5\nsetup:\n  mode: true\n"
     target.write_bytes(active)
 
     with pytest.raises(ValueError, match=error):

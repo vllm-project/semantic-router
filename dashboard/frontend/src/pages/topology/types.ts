@@ -7,7 +7,7 @@ import type {
   PluginType as CanonicalPluginType,
   SignalType as CanonicalSignalType,
 } from '../../generated/routerConfigContract'
-import type { TopologyCacheConfig, TopologyOptionalCacheConfig } from './cacheTypes'
+import type { TopologyOptionalCacheConfig } from './cacheTypes'
 
 // ============== Signal Types ==============
 export type SignalType = CanonicalSignalType | 'projection'
@@ -19,7 +19,6 @@ export interface SignalConfig {
   latency: string
   config:
     | KeywordSignalConfig
-    | EmbeddingSignalConfig
     | DomainSignalConfig
     | ContextSignalConfig
     | ComplexitySignalConfig
@@ -39,18 +38,8 @@ export interface KeywordSignalConfig {
   density?: NumericPredicateConfig
 }
 
-export interface EmbeddingSignalConfig {
-  threshold: number
-  candidates?: string[]
-  image_candidates?: string[]
-  negative_candidates?: string[]
-  negative_image_candidates?: string[]
-  aggregation_method?: 'max' | 'mean' | 'any'
-  query_modality?: 'text' | 'image' | 'audio'
-}
-
 export interface DomainSignalConfig {
-  mmlu_categories?: string[]
+  labels?: string[]
 }
 
 export interface ContextSignalConfig {
@@ -229,10 +218,8 @@ export interface PricingConfig {
 
 // ============== Global Plugin Types ==============
 export interface GlobalPluginConfig {
-  type: 'prompt_guard' | 'pii_detection' | 'response_cache'
+  type: 'response_cache'
   enabled: boolean
-  modelId?: string
-  threshold?: number
   config?: Record<string, unknown>
 }
 
@@ -344,116 +331,6 @@ export interface FilterState {
 
 // ============== Config Data (from API) ==============
 export interface ConfigData {
-  prompt_guard?: {
-    enabled: boolean
-    model_id?: string
-    model_ref?: string
-    threshold?: number
-    use_vllm?: boolean
-  }
-  classifier?: {
-    category_model?: {
-      model_id?: string
-      threshold?: number
-    }
-    pii_model?: {
-      enabled?: boolean
-      model_id?: string
-      model_ref?: string
-      threshold?: number
-    }
-  }
-  response_cache?: TopologyCacheConfig
-  semantic_cache?: TopologyCacheConfig
-  // Signal definitions
-  keyword_rules?: Array<{
-    name: string
-    operator: 'AND' | 'OR'
-    keywords: string[]
-    case_sensitive?: boolean
-  }>
-  embedding_rules?: Array<EmbeddingSignalConfig & { name: string }>
-  fact_check_rules?: Array<{
-    name: string
-    description?: string
-  }>
-  user_feedback_rules?: Array<{
-    name: string
-    description?: string
-  }>
-  reask_rules?: Array<{
-    name: string
-    description?: string
-    threshold?: number
-    lookback_turns?: number
-  }>
-  preference_rules?: Array<{
-    name: string
-    description?: string
-    examples?: string[]
-    threshold?: number
-  }>
-  language_rules?: Array<{
-    name: string
-    languages?: string[]
-  }>
-  context_rules?: Array<{
-    name: string
-    min_tokens?: string
-    max_tokens?: string
-  }>
-  complexity_rules?: Array<{
-    name: string
-    threshold?: number
-    hard?: {
-      candidates?: string[]
-    }
-    easy?: {
-      candidates?: string[]
-    }
-    description?: string
-  }>
-  // Modality signal rules
-  modality_rules?: Array<{
-    name: string
-    description?: string
-  }>
-  // Authz / RBAC role bindings
-  role_bindings?: Array<{
-    name: string
-    role: string
-    subjects: Array<{
-      kind: 'User' | 'Group'
-      name: string
-    }>
-    description?: string
-  }>
-  // Jailbreak/PII signal rules (top-level due to yaml:",inline")
-  jailbreak?: Array<{
-    name: string
-    threshold?: number
-    include_history?: boolean
-    direction?: 'request' | 'response'
-    description?: string
-  }>
-  hallucination?: Array<{
-    name: string
-    description?: string
-  }>
-  pii?: Array<{
-    name: string
-    threshold?: number
-    source?: 'tool_result'
-    pii_types_allowed?: string[]
-    include_history?: boolean
-    description?: string
-  }>
-  conversation?: Array<{
-    name: string
-    description?: string
-    feature?: Record<string, unknown>
-    predicate?: Record<string, unknown>
-  }>
   projections?: {
     scores?: Array<{
       name: string
@@ -480,26 +357,7 @@ export interface ConfigData {
       }>
     }>
   }
-  // Legacy format
-  categories?: Array<{
-    name: string
-    description?: string
-    system_prompt?: string
-    mmlu_categories?: string[]
-    model_scores?:
-      | Array<{
-          model: string
-          score: number
-          use_reasoning?: boolean
-        }>
-      | Record<string, number>
-  }>
-  model_config?: {
-    [key: string]: {
-      reasoning_family?: string
-    }
-  }
-  // Python CLI format - signals wrapper
+  // The selected routing profile's signals
   signals?: {
     [collection: string]: unknown
     keywords?: Array<{
@@ -508,11 +366,10 @@ export interface ConfigData {
       keywords: string[]
       case_sensitive?: boolean
     }>
-    embeddings?: Array<EmbeddingSignalConfig & { name: string }>
     domains?: Array<{
       name: string
       description?: string
-      mmlu_categories?: string[]
+      labels?: string[]
     }>
     fact_check?: Array<{
       name: string
@@ -521,18 +378,6 @@ export interface ConfigData {
     user_feedbacks?: Array<{
       name: string
       description?: string
-    }>
-    reasks?: Array<{
-      name: string
-      description?: string
-      threshold?: number
-      lookback_turns?: number
-    }>
-    preferences?: Array<{
-      name: string
-      description?: string
-      examples?: string[]
-      threshold?: number
     }>
     language?: Array<{
       name: string
@@ -545,13 +390,9 @@ export interface ConfigData {
     }>
     complexity?: Array<{
       name: string
-      threshold?: number
-      hard?: {
-        candidates?: string[]
-      }
-      easy?: {
-        candidates?: string[]
-      }
+      labels?: string[]
+      deployment?: string
+      timeout_ms?: number
       description?: string
     }>
     modality?: Array<{
@@ -663,25 +504,6 @@ export interface ConfigData {
     }
     stores?: {
       response_cache?: TopologyOptionalCacheConfig
-    }
-    model_catalog?: {
-      modules?: {
-        prompt_guard?: {
-          enabled?: boolean
-          model_id?: string
-          model_ref?: string
-          threshold?: number
-          use_vllm?: boolean
-        }
-        classifier?: {
-          pii?: {
-            model_id?: string
-            model_ref?: string
-            threshold?: number
-            enabled?: boolean
-          }
-        }
-      }
     }
   }
 }

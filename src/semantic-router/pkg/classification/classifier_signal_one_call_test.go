@@ -19,7 +19,7 @@ import (
 // guard and the PII rule read the conversation's history too, and two
 // decision questions route. TIMEOUT is the tone question's own timeout.
 const oneCallConfig = `
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: general-model
@@ -39,53 +39,54 @@ global:
     bindings:
       jailbreak: vela2
       pii: vela2
-routing:
-  signals:
-    jailbreak:
-      - name: attack
-        predicate: {gte: 0.9}
-        input: {history: true}
-    pii:
-      - name: personal_data
-        predicate: {gte: 0.5}
-        input: {history: true}
-    systemone:
-      - name: tone
-        deployment: vela2
-        timeout_ms: TIMEOUT
-        question:
-          type: choice
-          instructions: What tone does the request take?
-          choices:
-            - key: neutral
-            - key: urgent
-      - name: topics
-        deployment: vela2
-        question:
-          type: set
-          instructions: Which topics does the request mention?
-          labels:
-            - key: billing
-            - key: shipping
-  decisions:
-    - name: everything
-      priority: 100
-      rules:
-        operator: OR
-        conditions:
-          - {type: jailbreak, name: attack}
-          - {type: pii, name: personal_data}
-          - {type: systemone, name: tone, label: urgent}
-          - {type: systemone, name: topics, label: billing}
-      modelRefs:
-        - model: general-model
+recipes:
+  - name: default
+    signals:
+      jailbreak:
+        - name: attack
+          predicate: {gte: 0.9}
+          input: {history: true}
+      pii:
+        - name: personal_data
+          predicate: {gte: 0.5}
+          input: {history: true}
+      systemone:
+        - name: tone
+          deployment: vela2
+          timeout_ms: TIMEOUT
+          question:
+            type: choice
+            instructions: What tone does the request take?
+            choices:
+              - key: neutral
+              - key: urgent
+        - name: topics
+          deployment: vela2
+          question:
+            type: set
+            instructions: Which topics does the request mention?
+            labels:
+              - key: billing
+              - key: shipping
+    decisions:
+      - name: everything
+        priority: 100
+        rules:
+          operator: OR
+          conditions:
+            - {type: jailbreak, name: attack}
+            - {type: pii, name: personal_data}
+            - {type: systemone, name: tone, label: urgent}
+            - {type: systemone, name: topics, label: billing}
+        modelRefs:
+          - model: general-model
 `
 
 // oneCallGuardRule and oneCallPIIRule are the history-aware rules of
 // oneCallConfig.
 const (
-	oneCallGuardRule = "    jailbreak:\n      - name: attack\n        predicate: {gte: 0.9}\n        input: {history: true}\n"
-	oneCallPIIRule   = "    pii:\n      - name: personal_data\n        predicate: {gte: 0.5}\n        input: {history: true}\n"
+	oneCallGuardRule = "      jailbreak:\n        - name: attack\n          predicate: {gte: 0.9}\n          input: {history: true}\n"
+	oneCallPIIRule   = "      pii:\n        - name: personal_data\n          predicate: {gte: 0.5}\n          input: {history: true}\n"
 )
 
 func oneCallClassifier(t *testing.T, timeout string) (*Classifier, *runtimetest.Runtime) {
@@ -175,7 +176,7 @@ func TestHistoryAwareRulesAskTheirStateInTheStagesOneCall(t *testing.T) {
 		reading  int
 	}{
 		"the guard and the pii rule": {document, 2},
-		"the guard alone":            {strings.Replace(document, oneCallPIIRule, strings.Replace(oneCallPIIRule, "        input: {history: true}\n", "", 1), 1), 1},
+		"the guard alone":            {strings.Replace(document, oneCallPIIRule, strings.Replace(oneCallPIIRule, "          input: {history: true}\n", "", 1), 1), 1},
 	} {
 		t.Run(name, func(t *testing.T) {
 			classifier, fake := oneCallClassifierFrom(t, tc.document)
@@ -237,7 +238,7 @@ func TestADecisionTimeoutDoesNotDropAnAnswerOfTheSharedCall(t *testing.T) {
 	}
 	// Asked alone, the question still stops at its own timeout.
 	alone := strings.NewReplacer(oneCallGuardRule, "", oneCallPIIRule, "",
-		"          - {type: jailbreak, name: attack}\n", "", "          - {type: pii, name: personal_data}\n", "",
+		"            - {type: jailbreak, name: attack}\n", "", "            - {type: pii, name: personal_data}\n", "",
 	).Replace(strings.Replace(oneCallConfig, "TIMEOUT", "100", 1))
 	classifier, fake = oneCallClassifierFrom(t, alone)
 	fake.SetDelay(300 * time.Millisecond)

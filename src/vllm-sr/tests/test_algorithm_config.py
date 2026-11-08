@@ -75,13 +75,16 @@ class TestAlgorithmConfigTypes:
     )
     def test_removed_types_point_to_migrate(self, algo_type):
         document = {
-            "routing": {
-                "decisions": [{"name": "route", "algorithm": {"type": algo_type}}]
-            }
+            "recipes": [
+                {
+                    "name": "default",
+                    "decisions": [{"name": "route", "algorithm": {"type": algo_type}}],
+                }
+            ]
         }
         (line,) = removed_algorithm_forms(document)
         assert line.startswith(
-            "routing.decisions[route].algorithm: removed_algorithm_type: "
+            "recipes[default].decisions[route].algorithm: removed_algorithm_type: "
             f"algorithm type {algo_type} is removed; run `vllm-sr config migrate` ("
         )
 

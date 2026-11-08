@@ -32,7 +32,7 @@ translation:
 
 ## 配置 {#configuration}
 
-在 `routing.decisions[].plugins` 下添加插件：
+在 `recipes[].decisions[].plugins` 下添加插件：
 
 ```yaml
 plugins:

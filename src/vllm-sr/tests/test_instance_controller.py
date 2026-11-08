@@ -170,8 +170,8 @@ def test_preparation_failure_leaves_previous_desire(tmp_path):
 
 def frontend_backend(tmp_path):
     document = {
-        "version": "v0.3",
-        "routing": {"decisions": [{"name": "kept-router-policy"}]},
+        "version": "v0.5",
+        "recipes": [{"name": "default", "decisions": [{"name": "kept-router-policy"}]}],
         "global": {
             "router": {"enabled": True},
             "model_catalog": {
@@ -240,7 +240,7 @@ def test_mode_only_publication_preserves_models_routing_and_container_lifetime(
         assert result["operation"]["phase"] == "ready"
         assert result["active_deployment"] == "primary"
         assert result["observed_mode"] == "engine"
-        assert state["document"]["routing"] == before["routing"]
+        assert state["document"]["recipes"] == before["recipes"]
         assert (
             state["document"]["global"]["model_catalog"]
             == before["global"]["model_catalog"]
@@ -348,7 +348,7 @@ def test_attach_preserves_actual_accelerator_scope_without_copying_credentials(
     directory = tmp_path / "controller"
     directory.mkdir()
     active = tmp_path / "active.yaml"
-    active.write_text("version: v0.3\n")
+    active.write_text("version: v0.5\n")
     paths = {"effective_config_path": str(active), "models_dir": str(tmp_path)}
 
     def inspect(command, **_kwargs):
@@ -386,7 +386,7 @@ def test_attach_preserves_actual_accelerator_scope_without_copying_credentials(
 
 def test_instance_attach_and_models_use_supported_controller_commands(tmp_path):
     source = tmp_path / "config.yaml"
-    source.write_text("version: v0.3\n")
+    source.write_text("version: v0.5\n")
     arguments = ["--config", str(source)]
     with (
         patch("cli.commands.instance.attach_controller") as attach,

@@ -218,18 +218,19 @@ global:
 路由可以用 `context` 插件的记忆源覆盖全局记忆设置：
 
 ```yaml
-routing:
-  decisions:
-    - name: personalized_route
-      plugins:
-        - type: context
-          configuration:
-            enabled: true
-            sources:
-              - type: memory
-                match:
-                  recall: {method: embedding, top_k: 10, min_similarity: 0.60}
-                store: {auto: true}
+recipes:
+  - name: default
+    decisions:
+      - name: personalized_route
+        plugins:
+          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: memory
+                  match:
+                    recall: {method: embedding, top_k: 10, min_similarity: 0.60}
+                  store: {auto: true}
 ```
 
 详情见[记忆源教程](../tutorials/plugin/context.md#memory-sources)。

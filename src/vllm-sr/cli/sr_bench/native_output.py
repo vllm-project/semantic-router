@@ -140,7 +140,7 @@ def validate_recipes(manifest, provenance):
             raise NativeOutputError(
                 "Native MoM requires its captured entrypoint and active recipe"
             )
-        decisions = recipes[0].get("routing", {}).get("decisions", [])
+        decisions = recipes[0].get("decisions", [])
         if not decisions:
             raise NativeOutputError(
                 "Native MoM recipe has no automatic-output decisions"

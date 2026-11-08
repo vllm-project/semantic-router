@@ -48,7 +48,7 @@ const (
 )
 
 const looperEquivalenceConfig = `
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -75,18 +75,14 @@ providers:
       provider_model_id: judge
       api_format: openai
       backend_refs: [{name: fake-judge, endpoint: BACKEND, protocol: http, provider: vllm}]
-routing:
-  modelCards:
-    - name: model-a
-    - name: model-b
-    - name: model-c
-    - name: judge
-  decisions:
-    - name: looper_route
-      priority: 10
-      rules:
-        operator: AND
-        conditions: []
+recipes:
+  - name: default
+    decisions:
+      - name: looper_route
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
 DECISION
 global:
   integrations:
@@ -97,7 +93,7 @@ global:
 // looperFixture is one algorithm's deterministic scenario.
 type looperFixture struct {
 	name string
-	// decision is the rest of routing.decisions[0]: its modelRefs and
+	// decision is the rest of recipes[default].decisions[0]: its modelRefs and
 	// algorithm, indented for the config above.
 	decision string
 	request  string
@@ -381,7 +377,7 @@ func newLooperHarness(t *testing.T, fixture looperFixture) *looperHarness {
 	t.Cleanup(backendServer.Close)
 	configYAML := strings.NewReplacer(
 		"BACKEND", strings.TrimPrefix(backendServer.URL, "http://"),
-		"DECISION", strings.TrimPrefix(fixture.decision, "\n"),
+		"DECISION", "  "+strings.ReplaceAll(strings.TrimSuffix(strings.TrimPrefix(fixture.decision, "\n"), "\n"), "\n", "\n  ")+"\n",
 	).Replace(looperEquivalenceConfig)
 	cfg, err := config.ParseYAMLBytes([]byte(configYAML))
 	if err != nil {

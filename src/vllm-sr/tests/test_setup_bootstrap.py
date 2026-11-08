@@ -18,7 +18,7 @@ from cli.runtime_stack import resolve_runtime_stack
 def test_build_bootstrap_config_contains_setup_marker():
     config = build_bootstrap_config()
 
-    assert config["version"] == "v0.3"
+    assert config["version"] == "v0.5"
     assert config["listeners"][0]["port"] == 8899
     assert config["setup"]["mode"] is True
     assert config["setup"]["state"] == "bootstrap"
@@ -152,11 +152,7 @@ def test_bootstrap_metadata_preserves_typed_model_bindings(tmp_path: Path, owner
         "contract": "token_spans.v1",
         "adapter": "mmbert",
     }
-    profile = {"model_bindings": {"pii": binding}}
-    if owner == "default":
-        document["routing"] = profile
-    else:
-        document["recipes"] = [{"name": owner, "routing": profile}]
+    document["recipes"] = [{"name": owner, "model_bindings": {"pii": binding}}]
     document["global"] = {
         "model_catalog": {
             "deployments": {
@@ -172,7 +168,7 @@ def test_bootstrap_metadata_preserves_typed_model_bindings(tmp_path: Path, owner
     path.write_text(original)
 
     parsed = parse_user_config(str(path), log_summary=False)
-    parsed_profile = parsed.routing if owner == "default" else parsed.recipes[0].routing
+    parsed_profile = parsed.recipes[0]
 
     assert parsed_profile.model_bindings["pii"].model_dump(exclude_none=True) == binding
     assert parsed.global_ == document["global"]

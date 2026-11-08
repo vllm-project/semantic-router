@@ -55,7 +55,7 @@ func newCapabilityFixture(t *testing.T, setupMode bool) capabilityFixture {
 	t.Helper()
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.yaml")
-	body := "version: v0.3\n"
+	body := "version: v0.5\n"
 	if setupMode {
 		body += "setup:\n  mode: true\n"
 	}
@@ -211,7 +211,7 @@ func TestCollectCapabilitiesReasons(t *testing.T) {
 // newCapabilityFixtureLike rewrites the fixture's config in place with or
 // without setup mode, keeping its other settings.
 func newCapabilityFixtureLike(f *capabilityFixture, setupMode bool) capabilityFixture {
-	body := "version: v0.3\n"
+	body := "version: v0.5\n"
 	if setupMode {
 		body += "setup:\n  mode: true\n"
 	}

@@ -1,1 +1,0 @@
-routing.signals.kb: removed_signal_type: the kb signal is removed; it has no mechanical rewrite: write a systemone set or choice question over the knowledge base's labels

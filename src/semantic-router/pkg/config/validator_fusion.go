@@ -79,7 +79,7 @@ func validateFusionFallbackTargetModel(
 	modelConfig, ok := cfg.ModelConfig[target]
 	if !ok {
 		return fusionFallbackTargetError(decision.Name, target,
-			"is not declared in routing.modelCards")
+			"is not a providers.models[] entry")
 	}
 	if strings.EqualFold(modelConfig.APIFormat, ClientProtocolAnthropic) {
 		return fusionFallbackTargetError(decision.Name, target,

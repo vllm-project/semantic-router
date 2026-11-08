@@ -76,7 +76,7 @@ def validate_systemone_signals(config: UserConfig) -> list[ValidationError]:
     """Systemone conditions name declared answers; selectors choose among modelRefs."""
     errors = []
     for name, profile in iter_routing_profiles(config):
-        prefix = "routing" if name == "default" else f"recipes.{name}.routing"
+        prefix = f"recipes.{name}"
         rules = {rule.name: rule for rule in profile.signals.systemone or []}
         for decision in profile.decisions:
             errors.extend(_selector_errors(prefix, decision))

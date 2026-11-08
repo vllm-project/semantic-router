@@ -22,7 +22,7 @@ MOVED_PORT = 8890
 WARMUP_SECONDS = 120
 
 SOURCE = f"""\
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -34,9 +34,8 @@ providers:
     - name: m
       backend_refs:
         - endpoint: host.docker.internal:8000
-routing:
-  modelCards:
-    - name: m
+recipes:
+  - name: default
 """
 
 

@@ -8,7 +8,6 @@ import {
   decisionBindingsPatch,
   decisionBindingsState,
   decisionBindingsSummary,
-  signalModelSummary,
 } from './configPageDecisionBindingsSupport'
 import { DEFAULT_SECTIONS, SECTION_META } from './configPageRouterDefaultsCatalog'
 import { routerStructuredField } from './configPageRouterStructuredFields'
@@ -119,10 +118,6 @@ const LEGACY_ROOT_KEYS: Partial<Record<RouterSystemKey, keyof ConfigData>> = {
   router_replay: 'router_replay',
   memory: 'memory',
   response_cache: 'response_cache',
-  prompt_guard: 'prompt_guard',
-  classifier: 'classifier',
-  hallucination_mitigation: 'hallucination_mitigation',
-  feedback_detector: 'feedback_detector',
   external_models: 'external_models',
   embedding_models: 'embedding_models',
   observability: 'observability',
@@ -232,11 +227,7 @@ function getSectionValue(
   return legacyKey ? maybeConfig[legacyKey] : undefined
 }
 
-function summaryForKey(
-  key: RouterSystemKey,
-  data: unknown,
-  signalModel: (signal: string) => string,
-): RouterSectionSummaryItem[] {
+function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummaryItem[] {
   const section = asObject(data)
 
   switch (key) {
@@ -319,7 +310,6 @@ function summaryForKey(
     case 'response_cache':
       return [
         { label: 'Backend', value: stringOrFallback(section?.backend_type) },
-        { label: 'Similarity threshold', value: percentOrFallback(section?.similarity_threshold) },
         { label: 'Retention', value: section?.ttl_seconds ? `${section.ttl_seconds}s` : 'Not set' },
       ]
     case 'vector_store':
@@ -327,36 +317,6 @@ function summaryForKey(
         { label: 'Backend', value: stringOrFallback(section?.backend_type) },
         { label: 'Embedding', value: embeddingDeploymentSummary(section) },
         { label: 'Enabled', value: stringOrFallback(section?.enabled, 'Disabled') },
-      ]
-    case 'prompt_guard':
-      return [
-        { label: 'Model', value: signalModel('jailbreak') },
-        { label: 'Threshold', value: percentOrFallback(section?.threshold) },
-        { label: 'Runtime', value: section?.use_cpu ? 'CPU' : 'GPU' },
-      ]
-    case 'classifier': {
-      const classifier = section
-      return [
-        { label: 'Domain model', value: signalModel('domain') },
-        { label: 'PII model', value: signalModel('pii') },
-        {
-          label: 'Preference mode',
-          value: asObject(classifier?.preference)?.use_contrastive
-            ? 'Contrastive'
-            : 'External / unset',
-        },
-      ]
-    }
-    case 'hallucination_mitigation':
-      return [
-        { label: 'Fact-check model', value: signalModel('fact_check') },
-        { label: 'Detector model', value: signalModel('hallucination') },
-      ]
-    case 'feedback_detector':
-      return [
-        { label: 'Model', value: signalModel('user_feedback') },
-        { label: 'Threshold', value: percentOrFallback(section?.threshold) },
-        { label: 'Runtime', value: section?.use_cpu ? 'CPU' : 'GPU' },
       ]
     case 'external_models': {
       const models = asArray(data) || []
@@ -650,37 +610,6 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
         routerStructuredField(key, 'milvus'),
         routerStructuredField(key, 'llama_stack'),
       ]
-    case 'prompt_guard':
-      return [
-        { name: 'enabled', label: 'Enable Prompt Guard', type: 'boolean' },
-        { name: 'threshold', label: 'Threshold', type: 'percentage', placeholder: '70' },
-        { name: 'use_cpu', label: 'Use CPU', type: 'boolean' },
-        {
-          name: 'jailbreak_mapping_path',
-          label: 'Mapping Path',
-          type: 'text',
-          placeholder: 'models/.../jailbreak_type_mapping.json',
-        },
-      ]
-    case 'classifier':
-      return [
-        routerStructuredField(key, 'domain'),
-        routerStructuredField(key, 'pii'),
-        routerStructuredField(key, 'mcp'),
-        routerStructuredField(key, 'preference'),
-      ]
-    case 'hallucination_mitigation':
-      return [
-        { name: 'enabled', label: 'Enable Hallucination Mitigation', type: 'boolean' },
-        routerStructuredField(key, 'fact_check'),
-        routerStructuredField(key, 'detector'),
-      ]
-    case 'feedback_detector':
-      return [
-        { name: 'enabled', label: 'Enable Feedback Detector', type: 'boolean' },
-        { name: 'threshold', label: 'Threshold', type: 'percentage', placeholder: '70' },
-        { name: 'use_cpu', label: 'Use CPU', type: 'boolean' },
-      ]
     case 'external_models':
       return [routerStructuredField(key, 'items')]
     case 'embedding_models':
@@ -802,13 +731,6 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
 
 // Modules whose model a binding chooses; their deprecated model fields are
 // neither offered nor saved.
-const MODEL_MODULE_KEYS = new Set<RouterSystemKey>([
-  'prompt_guard',
-  'classifier',
-  'hallucination_mitigation',
-  'feedback_detector',
-])
-
 function withoutModelFields(module: unknown): Record<string, unknown> {
   const rest = { ...(asObject(module) || {}) }
   for (const field of DEPRECATED_MODULE_MODEL_FIELDS) delete rest[field]
@@ -833,12 +755,7 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
     return curated
   }
 
-  const omit =
-    key === 'router_core'
-      ? ['clear_route_cache', 'model_selection', 'learning']
-      : MODEL_MODULE_KEYS.has(key)
-        ? DEPRECATED_MODULE_MODEL_FIELDS
-        : []
+  const omit = key === 'router_core' ? ['clear_route_cache', 'model_selection', 'learning'] : []
   return mergeGeneratedRouterFields(['global', ...CURATED_ROUTER_SECTIONS[key].path], curated, {
     omit,
   })
@@ -864,47 +781,11 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
       streamed_body: asObject(router?.streamed_body) || {},
     }
   }
-  if (key === 'classifier') {
-    const classifier = asObject(data)
-    return {
-      ...(classifier || {}),
-      domain: asObject(classifier?.domain) || {},
-      pii: asObject(classifier?.pii) || {},
-      mcp: asObject(classifier?.mcp) || {},
-      preference: asObject(classifier?.preference) || {},
-    }
-  }
-  if (key === 'hallucination_mitigation') {
-    const hallucination = asObject(data)
-    const editData: Record<string, unknown> = {
-      ...(hallucination || {}),
-      enabled: hallucination?.enabled,
-      fact_check: asObject(hallucination?.fact_check) || {},
-      detector: asObject(hallucination?.detector) || {},
-    }
-    delete editData.explainer
-    return editData
-  }
   if (key === 'embedding_models') {
     return embeddingModelsEditData(data)
   }
   const objectData = asObject(data)
   return objectData ? { ...objectData } : asObject(cloneDefaultSection(key)) || {}
-}
-
-// A module threshold left empty is saved as no threshold, so the Router gives
-// the module the operating point of the model it runs.
-function withoutEmptyThreshold(module: Record<string, unknown>): Record<string, unknown> {
-  const threshold = module.threshold
-  if (typeof threshold === 'number' && Number.isFinite(threshold)) {
-    return module
-  }
-  if (typeof threshold === 'string' && threshold.trim() !== '') {
-    return module
-  }
-  const rest = { ...module }
-  delete rest.threshold
-  return rest
 }
 
 function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<ConfigData> {
@@ -943,31 +824,6 @@ function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<Config
     }
     return buildNestedPatch(CURATED_ROUTER_SECTIONS[key].path, routerCore) as Partial<ConfigData>
   }
-  if (key === 'classifier') {
-    return buildNestedPatch(CURATED_ROUTER_SECTIONS[key].path, {
-      ...data,
-      domain: withoutEmptyThreshold(withoutModelFields(data.domain)),
-      pii: withoutEmptyThreshold(withoutModelFields(data.pii)),
-      mcp: asObject(data.mcp) || {},
-      preference: asObject(data.preference) || {},
-    }) as Partial<ConfigData>
-  }
-  if (key === 'prompt_guard' || key === 'feedback_detector') {
-    return buildNestedPatch(
-      CURATED_ROUTER_SECTIONS[key].path,
-      withoutEmptyThreshold(withoutModelFields(data)),
-    ) as Partial<ConfigData>
-  }
-  if (key === 'hallucination_mitigation') {
-    const hallucination: Record<string, unknown> = {
-      ...data,
-      enabled: Boolean(data.enabled),
-      fact_check: withoutEmptyThreshold(withoutModelFields(data.fact_check)),
-      detector: withoutModelFields(data.detector),
-    }
-    delete hallucination.explainer
-    return buildNestedPatch(CURATED_ROUTER_SECTIONS[key].path, hallucination) as Partial<ConfigData>
-  }
   return buildNestedPatch(CURATED_ROUTER_SECTIONS[key].path, data) as Partial<ConfigData>
 }
 
@@ -989,7 +845,6 @@ export function buildRouterSectionCards(ctx: RouterSectionContext): RouterSectio
     ctx.config,
     ctx.routerDefaults,
   )
-  const signalModel = (signal: string) => signalModelSummary(decisionBindings, signal)
 
   const deployments =
     getNestedValue(ctx.routerDefaults, ['model_catalog', 'deployments']) ??
@@ -1025,7 +880,7 @@ export function buildRouterSectionCards(ctx: RouterSectionContext): RouterSectio
     return {
       ...card,
       badges: badgesForKey(key, view),
-      summary: summaryForKey(key, view, signalModel),
+      summary: summaryForKey(key, view),
       editData: editDataForKey(key, view),
       editFields: fieldsForKey(key),
       save: (nextData: EditFormData) => saveForKey(key, nextData),

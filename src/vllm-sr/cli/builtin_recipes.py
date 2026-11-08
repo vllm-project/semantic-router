@@ -10,6 +10,7 @@ from typing import Any
 import yaml
 
 from cli.catalog_provider_projection import validate_provider_model_configuration
+from cli.config_recipe_scopes import add_recipe
 from cli.config_yaml import safe_load_router_config
 from cli.decision_model import DEFAULT_DECISION_MODEL, configured_decision_model
 from cli.model_bundle import MODEL_BUNDLE_FILES
@@ -67,9 +68,7 @@ def list_builtin_recipes(version: str = DEFAULT_CHANNEL) -> dict[str, Any]:
                         "description": recipe.get("description", ""),
                         "decisions": [
                             _decision_requirements(decision)
-                            for decision in recipe.get("routing", {}).get(
-                                "decisions", []
-                            )
+                            for decision in recipe.get("decisions", [])
                         ],
                     }
                     for recipe in document.get("recipes", [])
@@ -132,10 +131,23 @@ def _bundle_decision_model(
     return selected
 
 
+def _copy_missing_plugins(candidate: dict[str, Any], plugins: Any) -> None:
+    """The bundle's default plugins, of the types candidate's global.plugins
+    does not declare."""
+    if not isinstance(plugins, list) or not plugins:
+        return
+    target = candidate.setdefault("global", {}).setdefault("plugins", [])
+    declared = {plugin.get("type") for plugin in target if isinstance(plugin, dict)}
+    for plugin in plugins:
+        if isinstance(plugin, dict) and plugin.get("type") not in declared:
+            target.append(copy.deepcopy(plugin))
+
+
 def apply_builtin_runtime_defaults(
     candidate: dict[str, Any], bundle_document: dict[str, Any]
 ) -> None:
-    """Fill omitted learning, replay and decision-model settings; authored ones win.
+    """Fill omitted learning, replay, default-plugin and decision-model settings;
+    authored ones win.
 
     These are configuration-wide defaults, materialized during initialization.
     Runtime parsing does not infer policy from built-in recipe names.
@@ -149,6 +161,7 @@ def apply_builtin_runtime_defaults(
     decision_model = _bundle_decision_model(candidate, bundle_document)
     if decision_model:
         defaults["model_catalog"] = decision_model
+    _copy_missing_plugins(candidate, bundle_global.get("plugins"))
     if not defaults:
         return
 
@@ -202,7 +215,7 @@ def compose_builtin_recipe(
     }
     if not isinstance(bindings, dict):
         raise ValueError("Bindings must map each decision name to a list of modelRefs")
-    decisions = selected["routing"]["decisions"]
+    decisions = selected["decisions"]
     excluded = set(excluded_decisions)
     unknown_exclusions = excluded - {decision["name"] for decision in decisions}
     if unknown_exclusions:
@@ -210,7 +223,7 @@ def compose_builtin_recipe(
     decisions = [decision for decision in decisions if decision["name"] not in excluded]
     if not decisions:
         raise ValueError("At least one recipe decision must remain")
-    selected["routing"]["decisions"] = decisions
+    selected["decisions"] = decisions
     declared = {decision["name"] for decision in decisions}
     expected = {
         decision["name"] for decision in decisions if _requires_backend(decision)
@@ -259,7 +272,7 @@ def compose_builtin_recipe(
 
     if any(recipe["name"] == name for recipe in candidate.get("recipes", [])):
         raise ValueError(f"Config already contains recipe '{name}'")
-    candidate.setdefault("recipes", []).append(selected)
+    add_recipe(candidate, selected)
     candidate.setdefault("entrypoints", []).append(
         {"model_names": list(model_names), "recipe": name}
     )
@@ -336,6 +349,6 @@ def initialize_builtin_recipe(
         "catalog_version": version,
         "output": str(output.resolve()),
         "valid": True,
-        "decisions": len(candidate["recipes"][-1]["routing"]["decisions"]),
+        "decisions": len(candidate["recipes"][-1]["decisions"]),
         "excluded_decisions": sorted(set(excluded_decisions)),
     }

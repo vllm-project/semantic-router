@@ -20,12 +20,9 @@ export const ALGORITHM_TYPES: AlgorithmType[] = [...ROUTER_ALGORITHM_TYPES]
 // ============== Signal Icons ==============
 const SIGNAL_ICON_OVERRIDES: Partial<Record<SignalType, string>> = {
   keyword: 'KW',
-  embedding: 'EMB',
   domain: 'DOM',
   fact_check: 'FC',
   user_feedback: 'UF',
-  reask: 'RA',
-  preference: 'PREF',
   language: 'LANG',
   context: 'CTX',
   complexity: 'CPX',
@@ -50,12 +47,9 @@ export const SIGNAL_COLORS = Object.fromEntries(
 // ============== Signal Latency ==============
 const SIGNAL_LATENCY_OVERRIDES: Partial<Record<SignalType, string>> = {
   keyword: '<1ms',
-  embedding: '10-50ms',
   domain: '10-50ms',
   fact_check: '10-50ms',
   user_feedback: '10-50ms',
-  reask: '10-50ms',
-  preference: '200-500ms',
   language: '<1ms',
   context: '<1ms',
   complexity: '50-100ms',
@@ -167,8 +161,6 @@ export const MODEL_NODE_WIDTH = 220
 // ============== Global Plugin Display (Graphite Theme) ==============
 export const GLOBAL_PLUGIN_DISPLAY: Record<string, { icon: string; label: string; color: string }> =
   {
-    prompt_guard: { icon: 'PG', label: 'Jailbreak Guard', color: '#718096' }, // Medium Gray
-    pii_detection: { icon: 'PII', label: 'PII Detection', color: '#5a6c7d' }, // Blue Gray
     response_cache: { icon: 'RC', label: 'Response Cache', color: '#8f949c' }, // Graphite Alloy
   }
 

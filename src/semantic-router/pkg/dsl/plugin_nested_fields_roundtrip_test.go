@@ -11,59 +11,61 @@ import (
 
 func TestMemoryAndToolsPluginFieldsSurviveRoundTrip(t *testing.T) {
 	for mode, selectFields := range map[string]string{
-		"filter": "preserve_count: 2\n              on_error: strip\n              on_overflow: reject",
-		"add":    "tools_db_path: config/tools_db.json\n              on_error: skip",
+		"filter": "preserve_count: 2\n                on_error: strip\n                on_overflow: reject",
+		"add":    "tools_db_path: config/tools_db.json\n                on_error: skip",
 	} {
 		t.Run(mode, func(t *testing.T) {
 			cfg := mustParseRoutingPluginConfigTest(t, fmt.Sprintf(`
-version: v0.3
-routing:
-  modelCards:
+version: v0.5
+providers:
+  models:
     - name: "test-model"
-  signals:
-    domains:
-      - name: test
-        labels: [other]
-        description: test
-  decisions:
-    - name: plugin_route
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: test
-      modelRefs:
-        - model: test-model
-      plugins:
-        - type: context
-          configuration:
-            enabled: true
-            sources:
-              - type: memory
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: test
+          labels: [other]
+          description: test
+    decisions:
+      - name: plugin_route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: test
+        modelRefs:
+          - model: test-model
+        plugins:
+          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: memory
+                  match:
+                    recall: {method: embedding, top_k: 6, min_similarity: 0.5}
+                  hybrid_search: true
+                  hybrid_mode: weighted
+                  reflection:
+                    enabled: true
+                    algorithm: heuristic
+                    max_inject_tokens: 384
+                    block_patterns: ["api key", "password"]
+          - type: tools
+            configuration:
+              enabled: true
+              policy:
+                mode: filtered
+                block_tools: [admin.delete]
+              select:
+                mode: %s
+                %s
                 match:
-                  recall: {method: embedding, top_k: 6, min_similarity: 0.5}
-                hybrid_search: true
-                hybrid_mode: weighted
-                reflection:
-                  enabled: true
-                  algorithm: heuristic
-                  max_inject_tokens: 384
-                  block_patterns: ["api key", "password"]
-        - type: tools
-          configuration:
-            enabled: true
-            policy:
-              mode: filtered
-              block_tools: [admin.delete]
-            select:
-              mode: %s
-              %s
-              match:
-                judge: {preset: tool_rank, top_k: 5, min_ratio: 0.2}
-              need_threshold: 0.4
-              input: {history: true}
-              timeout_ms: 800
+                  judge: {preset: tool_rank, top_k: 5, min_ratio: 0.2}
+                need_threshold: 0.4
+                input: {history: true}
+                timeout_ms: 800
 `, mode, selectFields))
 
 			dslText := mustDecompileRoutingPluginConfigTest(t, cfg)

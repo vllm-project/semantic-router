@@ -21,6 +21,8 @@ from cli.config_renamed_forms import read_renamed_forms
 from cli.config_context_forms import removed_context_forms
 from cli.config_embedding_forms import removed_embedding_forms
 from cli.config_reuse_forms import removed_reuse_forms
+from cli.config_recipe_scopes import recipe_scopes
+from cli.config_structure_forms import removed_structure_forms
 from cli.config_tools_forms import removed_tools_forms
 from cli.config_schema.validation import validate_config_structure
 from cli.config_yaml import safe_load_router_config
@@ -48,10 +50,6 @@ def _deprecated_config_fields(data: Dict[str, Any]) -> list[str]:
     for field_name in ("signals", "decisions", *LEGACY_SIGNAL_KEY_TO_CANONICAL):
         if field_name in data:
             fields.append(field_name)
-
-    routing = data.get("routing")
-    if isinstance(routing, dict) and "models" in routing:
-        fields.append("routing.models")
 
     providers = data.get("providers")
     if isinstance(providers, dict):
@@ -142,9 +140,8 @@ def _removed_router_learning_fields(data: Dict[str, Any]) -> list[str]:
                 }:
                     fields.append(f"global.router.model_selection.method={method}")
 
-    routing = data.get("routing")
-    if isinstance(routing, dict):
-        decisions = routing.get("decisions")
+    for prefix, recipe in recipe_scopes(data):
+        decisions = recipe.get("decisions")
         if isinstance(decisions, list):
             for index, decision in enumerate(decisions):
                 if not isinstance(decision, dict):
@@ -155,7 +152,7 @@ def _removed_router_learning_fields(data: Dict[str, Any]) -> list[str]:
                 algorithm_type = str(algorithm.get("type", "")).strip().lower()
                 if algorithm_type == "session_aware":
                     fields.append(
-                        f"routing.decisions[{index}].algorithm.type=session_aware"
+                        f"{prefix}.decisions[{index}].algorithm.type=session_aware"
                     )
                 if algorithm_type in {
                     "elo",
@@ -165,10 +162,12 @@ def _removed_router_learning_fields(data: Dict[str, Any]) -> list[str]:
                     "personalization",
                 }:
                     fields.append(
-                        f"routing.decisions[{index}].algorithm.type={algorithm_type}"
+                        f"{prefix}.decisions[{index}].algorithm.type={algorithm_type}"
                     )
                 if "session_aware" in algorithm:
-                    fields.append(f"routing.decisions[{index}].algorithm.session_aware")
+                    fields.append(
+                        f"{prefix}.decisions[{index}].algorithm.session_aware"
+                    )
                 for field_name in (
                     "elo",
                     "rl_driven",
@@ -178,20 +177,24 @@ def _removed_router_learning_fields(data: Dict[str, Any]) -> list[str]:
                 ):
                     if field_name in algorithm:
                         fields.append(
-                            f"routing.decisions[{index}].algorithm.{field_name}"
+                            f"{prefix}.decisions[{index}].algorithm.{field_name}"
                         )
 
     return fields
 
 
 def _reject_invalid_config_surfaces(data: Dict[str, Any], config_path: str) -> None:
+    structure_forms = removed_structure_forms(data)
+    if structure_forms:
+        raise ConfigParseError("\n".join(structure_forms))
+
     deprecated_fields = _deprecated_config_fields(data)
     if deprecated_fields:
         joined_fields = ", ".join(deprecated_fields)
         raise ConfigParseError(
             "Deprecated config fields are no longer supported: "
             f"{joined_fields}. Use `vllm-sr config migrate --config {config_path}` "
-            "or rewrite the file to canonical v0.3 `providers/routing/global`."
+            "or rewrite the file to canonical v0.5 `providers/recipes/global`."
         )
 
     removed_backend_ref_fields = _removed_backend_ref_fields(data)
@@ -209,7 +212,7 @@ def _reject_invalid_config_surfaces(data: Dict[str, Any], config_path: str) -> N
             "Removed Router Learning config fields are no longer supported: "
             f"{joined_fields}. Use `global.router.learning.adaptation` for online "
             "model-choice learning, `global.router.learning.protection` for "
-            "session or conversation protection, and `routing.decisions[].adaptations` "
+            "session or conversation protection, and `recipes[].decisions[].adaptations` "
             "only when a decision needs apply/observe/bypass control or a local "
             "adaptation candidate_set override."
         )
@@ -252,11 +255,7 @@ def _deferred_context_limits(config: UserConfig) -> list[tuple[str, str]]:
     environment, which the Router expands before parsing."""
     deferred: list[tuple[str, str]] = []
     for profile_name, profile in iter_routing_profiles(config):
-        prefix = (
-            "routing"
-            if profile_name == "default"
-            else f"recipes[{profile_name}].routing"
-        )
+        prefix = f"recipes[{profile_name}]"
         for rule in profile.signals.context or []:
             for field_name in ("min_tokens", "max_tokens"):
                 value = getattr(rule, field_name)
@@ -360,17 +359,12 @@ def parse_user_config_data(
             log.info("Configuration parsed successfully")
             log.info(f"  Version: {config.version}")
             log.info(f"  Listeners: {len(config.listeners)}")
-            recipe_decisions = sum(
-                len(profile.decisions)
-                for name, profile in iter_routing_profiles(config)
-                if name != "default"
+            decisions = sum(
+                len(profile.decisions) for _, profile in iter_routing_profiles(config)
             )
             log.info(f"  Entrypoints: {len(config.entrypoints)}")
             log.info(f"  Recipes: {len(config.recipes)}")
-            log.info(
-                f"  Decisions: {len(config.decisions) + recipe_decisions} total "
-                f"({len(config.decisions)} default, {recipe_decisions} recipe-owned)"
-            )
+            log.info(f"  Decisions: {decisions}")
             log.info(f"  Models: {len(config.providers.models)}")
         return config
     except ValidationError as e:

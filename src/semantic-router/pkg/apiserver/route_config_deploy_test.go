@@ -54,18 +54,17 @@ func TestHandleConfigPutReplacesExistingConfig(t *testing.T) {
 	routing := requireRoutingSection(t, doc)
 	requireFirstDecisionName(t, routing, "new_route")
 	if projections, ok := routing["projections"].(map[string]any); ok && len(projections) > 0 {
-		t.Fatalf("expected replace deploy to drop omitted routing.projections, got %#v", projections)
+		t.Fatalf("expected replace deploy to drop omitted recipes[default].projections, got %#v", projections)
 	}
 }
 
 func TestHandleConfigPutPreservesDisabledRouterReplay(t *testing.T) {
 	configPath := writeDeployTestBaseConfig(t)
 	payloadCfg := minimalDeployTestConfig("new_route")
-	payloadCfg.RouterReplay = config.RouterReplayConfig{
-		Enabled:      false,
-		StoreBackend: "memory",
-		TTLSeconds:   600,
-	}
+	payloadCfg.RouterReplay = config.RouterReplayConfig{StoreBackend: "memory", TTLSeconds: 600}
+	payloadCfg.GlobalPlugins = []config.DecisionPlugin{{
+		Type: config.DecisionPluginRouterReplay, Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": false}),
+	}}
 	payloadYAML := mustMarshalCanonicalConfigYAML(t, payloadCfg)
 	body, err := json.Marshal(RouterConfigUpdateRequest{YAML: string(payloadYAML)})
 	if err != nil {
@@ -86,8 +85,8 @@ func TestHandleConfigPutPreservesDisabledRouterReplay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse deployed config: %v", err)
 	}
-	if reloaded.RouterReplay.Enabled {
-		t.Fatal("expected router_replay.enabled=false to survive canonical PUT normalization")
+	if reloaded.UsesRouterReplay() || len(reloaded.GlobalPlugins) != 1 {
+		t.Fatalf("expected global.plugins router_replay enabled: false to survive canonical PUT normalization, got %+v", reloaded.GlobalPlugins)
 	}
 }
 
@@ -105,8 +104,8 @@ func TestHandleConfigPutPreservesCanonicalUserDocument(t *testing.T) {
 	backendRefs := model["backend_refs"].([]any)
 	backendRefs[0].(map[string]any)["name"] = "vllm_primary"
 
-	routing := expected["routing"].(map[string]any)
-	decisions := routing["decisions"].([]any)
+	recipe := expected["recipes"].([]any)[0].(map[string]any)
+	decisions := recipe["decisions"].([]any)
 	rules := decisions[0].(map[string]any)["rules"].(map[string]any)
 	rules["conditions"] = []any{}
 
@@ -280,11 +279,15 @@ func executeRouterConfigUpdateAndRead(
 func requireRoutingSection(t *testing.T, doc map[string]any) map[string]any {
 	t.Helper()
 
-	routing, ok := doc["routing"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected routing block in updated config, got %#v", doc)
+	recipes, ok := doc["recipes"].([]any)
+	if !ok || len(recipes) == 0 {
+		t.Fatalf("expected recipes in updated config, got %#v", doc)
 	}
-	return routing
+	recipe, ok := recipes[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected a recipe mapping, got %#v", recipes[0])
+	}
+	return recipe
 }
 
 func requireRoutingProjectionBlock(t *testing.T, routing map[string]any, rawYAML []byte) {
@@ -292,7 +295,7 @@ func requireRoutingProjectionBlock(t *testing.T, routing map[string]any, rawYAML
 
 	projections, ok := routing["projections"].(map[string]any)
 	if !ok || len(projections) == 0 {
-		t.Fatalf("expected merge to preserve existing routing.projections, got %#v in:\n%s", routing["projections"], string(rawYAML))
+		t.Fatalf("expected merge to preserve existing recipes[default].projections, got %#v in:\n%s", routing["projections"], string(rawYAML))
 	}
 }
 
@@ -301,14 +304,14 @@ func requireFirstDecisionName(t *testing.T, routing map[string]any, want string)
 
 	decisions, ok := routing["decisions"].([]any)
 	if !ok || len(decisions) == 0 {
-		t.Fatalf("expected routing.decisions in updated config, got %#v", routing["decisions"])
+		t.Fatalf("expected recipes[default].decisions in updated config, got %#v", routing["decisions"])
 	}
 	firstDecision, ok := decisions[0].(map[string]any)
 	if !ok {
-		t.Fatalf("expected routing.decisions[0] to be a map, got %#v", decisions[0])
+		t.Fatalf("expected recipes[default].decisions[0] to be a map, got %#v", decisions[0])
 	}
 	if got := firstDecision["name"]; got != want {
-		t.Fatalf("expected routing.decisions[0].name = %s, got %v", want, got)
+		t.Fatalf("expected recipes[default].decisions[0].name = %s, got %v", want, got)
 	}
 }
 
@@ -588,7 +591,7 @@ func TestConfigVersionSourceMetadataUsesCanonicalOrigins(t *testing.T) {
 		t.Fatalf("set permissive backup directory mode: %v", err)
 	}
 
-	apiVersion, backupDir, backupErr := server.recordRouterConfigArtifacts(configPath, []byte("version: v0.3\n"))
+	apiVersion, backupDir, backupErr := server.recordRouterConfigArtifacts(configPath, []byte("version: v0.5\n"))
 	if backupErr != nil {
 		t.Fatal(backupErr)
 	}
@@ -622,7 +625,7 @@ func TestConfigCleanupBackupsRemovesSourceSidecar(t *testing.T) {
 		version := fmt.Sprintf("20260802-1200%02d", i)
 		if err := os.WriteFile(
 			filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version)),
-			[]byte("version: v0.3\n"),
+			[]byte("version: v0.5\n"),
 			0o644,
 		); err != nil {
 			t.Fatalf("write backup: %v", err)

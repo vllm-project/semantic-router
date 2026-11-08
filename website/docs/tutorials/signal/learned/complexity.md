@@ -31,22 +31,23 @@ domain-specific evaluation and safety signals for those concerns.
 ## Configuration
 
 ```yaml
-routing:
-  signals:
-    complexity:
-      - name: needs_reasoning
-        threshold: 0.10
-        description: Estimate the work needed to produce a supported answer.
-        hard:
-          candidates:
-            - Find a solution satisfying interacting constraints and justify why alternatives fail.
-            - Reconcile conflicting evidence and defend a conclusion under uncertainty.
-            - Derive an algorithm and prove its correctness.
-        easy:
-          candidates:
-            - Retrieve a fact explicitly stated in the supplied text.
-            - Copy the supplied information into the requested format.
-            - Apply one specified local edit while preserving everything else.
+recipes:
+  - name: default
+    signals:
+      complexity:
+        - name: needs_reasoning
+          threshold: 0.10
+          description: Estimate the work needed to produce a supported answer.
+          hard:
+            candidates:
+              - Find a solution satisfying interacting constraints and justify why alternatives fail.
+              - Reconcile conflicting evidence and defend a conclusion under uncertainty.
+              - Derive an algorithm and prove its correctness.
+          easy:
+            candidates:
+              - Retrieve a fact explicitly stated in the supplied text.
+              - Copy the supplied information into the requested format.
+              - Apply one specified local edit while preserving everything else.
 ```
 
 `threshold` is a margin, not a similarity cutoff. The router scores the request
@@ -75,19 +76,20 @@ A rule emits a suffixed name. Decisions must reference
 `<rule>:easy`, `<rule>:medium`, or `<rule>:hard`:
 
 ```yaml
-routing:
-  decisions:
-    - name: reasoning
-      description: Route hard prompts to the reasoning model.
-      priority: 150
-      rules:
-        operator: AND
-        conditions:
-          - type: complexity
-            name: needs_reasoning:hard
-      modelRefs:
-        - model: reasoning-model
-          use_reasoning: true
+recipes:
+  - name: default
+    decisions:
+      - name: reasoning
+        description: Route hard prompts to the reasoning model.
+        priority: 150
+        rules:
+          operator: AND
+          conditions:
+            - type: complexity
+              name: needs_reasoning:hard
+        modelRefs:
+          - model: reasoning-model
+            use_reasoning: true
 ```
 
 For optional prototype-bank tuning, configure the family-level module once:
@@ -135,13 +137,14 @@ without `deployment` asks the decision model. The deployment must support
 `score` questions.
 
 ```yaml
-routing:
-  signals:
-    complexity:
-      - name: needs_reasoning
-        deployment: primary
-        threshold: 0.10
-        description: Estimate the work needed to produce a supported answer.
+recipes:
+  - name: default
+    signals:
+      complexity:
+        - name: needs_reasoning
+          deployment: primary
+          threshold: 0.10
+          description: Estimate the work needed to produce a supported answer.
 ```
 
 The task asks for easy, medium and hard levels, then normalizes the native
@@ -165,7 +168,7 @@ Router posts the request text to `<endpoint>/classify`, and the service returns
 one difficulty score (`score.v1`). One score drives every complexity rule, so
 every rule of a routing profile names the same deployment: the Router refuses a
 profile whose rules name different remote deployments, or where some rules ask
-the scorer and others do not. A recipe that replaces `routing.signals` names
+the scorer and others do not. A recipe that replaces `recipes[].signals` names
 the deployment on its own rules.
 
 #### A model that returns a score
@@ -187,18 +190,18 @@ global:
         endpoint: https://difficulty-scorer.example.com
         auth: {api_key_env: DIFFICULTY_SCORER_KEY}
         timeout_ms: 5000
-
-routing:
-  signals:
-    complexity:
-      - name: needs_reasoning
-        deployment: difficulty-scorer
-        hard_above: 0.85          # a higher score is harder
-        easy_below: 0.60
-      - name: extreme
-        deployment: difficulty-scorer
-        hard_above: 0.95          # same score, stricter boundaries
-        easy_below: 0.30
+recipes:
+  - name: default
+    signals:
+      complexity:
+        - name: needs_reasoning
+          deployment: difficulty-scorer
+          hard_above: 0.85 # a higher score is harder
+          easy_below: 0.60
+        - name: extreme
+          deployment: difficulty-scorer
+          hard_above: 0.95 # same score, stricter boundaries
+          easy_below: 0.30
 ```
 
 Leave `threshold` out of a rule that states a pair. The Router and the CRD

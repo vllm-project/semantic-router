@@ -88,8 +88,8 @@ func cloneRouterConfigForTest(cfg *config.RouterConfig) *config.RouterConfig {
 func newTestSemanticCache(cfg *config.RouterConfig) (cache.CacheBackend, error) {
 	return cache.NewCacheBackend(cache.CacheConfig{
 		BackendType:         cache.InMemoryCacheType,
-		Enabled:             cfg.Enabled,
-		SimilarityThreshold: cfg.GetCacheSimilarityThreshold(),
+		Enabled:             cfg.SemanticCache.InUse,
+		SimilarityThreshold: config.ResponseCacheDefaultSimilarity(),
 		MaxEntries:          cfg.MaxEntries,
 		TTLSeconds:          cfg.TTLSeconds,
 		EvictionPolicy:      cache.EvictionPolicyType(cfg.EvictionPolicy),

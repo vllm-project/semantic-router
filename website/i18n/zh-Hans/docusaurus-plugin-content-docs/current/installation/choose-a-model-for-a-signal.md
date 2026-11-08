@@ -20,10 +20,10 @@ Router 询问的每个模型都在 `global.model_catalog.deployments` 下按名�
 | 层级 | 部署名称写在哪里 | 适用于 |
 | --- | --- | --- |
 | 规则 | 规则上的 `deployment:` | 每条应用规则（`domains`、`fact_check`、`user_feedbacks`、`jailbreak`、`safety`、`pii`、`hallucination`、`refusal`、`turn_relation`、`complexity`、`modality`）、每条 `systemone` 规则，以及 System One 选择器 `algorithm.systemone` |
-| 信号类型 | `global.model_catalog.bindings.<type>`，或配方中的 `routing.model_bindings.<type>` | 未指定部署的应用信号类型规则：`domain`、`fact_check`、`user_feedback`、`jailbreak`、`safety`、`pii`、`hallucination`、`refusal`、`turn_relation`、`complexity`、`modality` |
+| 信号类型 | `global.model_catalog.bindings.<type>`，或配方中的 `recipes[].model_bindings.<type>` | 未指定部署的应用信号类型规则：`domain`、`fact_check`、`user_feedback`、`jailbreak`、`safety`、`pii`、`hallucination`、`refusal`、`turn_relation`、`complexity`、`modality` |
 | 默认 | `global.model_catalog.system.decision_model` | 上面两个层级未覆盖的所有问题 |
 
-`recipes[].routing.model_bindings` 中的绑定只作用于该配方，并优先于同一信号类型的全局绑定。
+`recipes[].model_bindings` 中的绑定只作用于该配方，并优先于同一信号类型的全局绑定。
 
 Embedding 不提问，也不回答任何信号；它们只用于召回。它们在使用的地方指定：
 
@@ -92,7 +92,7 @@ global:
       pii: local-vela
 ```
 
-`pii` 解析到 `local-vela`；其他所有信号解析到 `d3-remote`。绑定的键是信号类型，与 `routing.signals` 中的命名一致；值是部署名称。
+`pii` 解析到 `local-vela`；其他所有信号解析到 `d3-remote`。绑定的键是信号类型，与 `recipes[].signals` 中的命名一致；值是部署名称。
 
 ## S4. systemone 信号和 domain 信号共用默认值，再各改一个 {#s4-a-systemone-signal-and-the-domain-signal-share-the-default-then-one-of-each-is-changed}
 
@@ -112,23 +112,24 @@ global:
         auth: {api_key_env: VSR_APP_KEY}
     system:
       decision_model: {deployment: kai}
-routing:                           # or recipes[].routing, which affects only that recipe
-  model_bindings:
-    domain: d3-remote              # signal type: every domain rule shares one answer
-  signals:
-    domains: [{name: math, description: Mathematics, labels: [math]}]
-    systemone:
-      - name: needs_reasoning      # no deployment: asks the default, kai
-        question: {type: noul, instructions: "Does answering need multi-step reasoning?"}
-      - name: support_team
-        deployment: d3-remote      # rule: only this question goes remote
-        question:
-          type: choice
-          instructions: Which team?
-          choices: [{key: billing}, {key: engineering}]
+recipes: # or recipes[], which affects only that recipe
+  - name: default
+    model_bindings:
+      domain: d3-remote # signal type: every domain rule shares one answer
+    signals:
+      domains: [{name: math, description: Mathematics, labels: [math]}]
+      systemone:
+        - name: needs_reasoning # no deployment: asks the default, kai
+          question: {type: noul, instructions: "Does answering need multi-step reasoning?"}
+        - name: support_team
+          deployment: d3-remote # rule: only this question goes remote
+          question:
+            type: choice
+            instructions: Which team?
+            choices: [{key: billing}, {key: engineering}]
 ```
 
-`domain` 解析到 `d3-remote`，`needs_reasoning` 解析到 `kai`，`support_team` 解析到 `d3-remote`。同样的内容写在 `recipes[].routing` 下时，只改变该配方：
+`domain` 解析到 `d3-remote`，`needs_reasoning` 解析到 `kai`，`support_team` 解析到 `d3-remote`。同样的内容写在 `recipes[]` 下时，只改变该配方：
 
 ```yaml title="s4-recipe-scope"
 global:
@@ -147,14 +148,17 @@ global:
     system:
       decision_model: {deployment: kai}
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - {model_names: [vllm-sr/support], recipe: support}
 recipes:
+  - name: default
   - name: support
-    routing:
-      model_bindings:
-        domain: d3-remote          # only the support recipe asks d3-remote about domains
-      signals:
-        domains: [{name: math, description: Mathematics, labels: [math]}]
+    model_bindings:
+      domain: d3-remote # only the support recipe asks d3-remote about domains
+    signals:
+      domains: [{name: math, description: Mathematics, labels: [math]}]
 ```
 
 在 `support` 配方中，`domain` 解析到 `d3-remote`；在其他地方解析到 `kai`。
@@ -162,19 +166,20 @@ recipes:
 ## S5. 自己指定部署的规则 {#s5-rules-that-name-their-own-deployment}
 
 ```yaml title="s5-rule-level"
-routing:
-  signals:
-    domains:
-      - {name: math, labels: [math]}
-      - {name: law, labels: [law], deployment: kai}
-    safety:
-      - name: harmful
-        deployment: d3-remote
-        predicate: {gte: 0.5}
-  decisions:
-    - name: pick-model
-      modelRefs: [{model: general}, {model: small}]
-      algorithm: {type: systemone, systemone: {deployment: kai, instructions: Pick the cheapest capable model.}}
+recipes:
+  - name: default
+    signals:
+      domains:
+        - {name: math, labels: [math]}
+        - {name: law, labels: [law], deployment: kai}
+      safety:
+        - name: harmful
+          deployment: d3-remote
+          predicate: {gte: 0.5}
+    decisions:
+      - name: pick-model
+        modelRefs: [{model: general}, {model: small}]
+        algorithm: {type: systemone, systemone: {deployment: kai, instructions: Pick the cheapest capable model.}}
 ```
 
 `d3-remote` 和 `kai` 是已声明的部署，这里分别是一个 System One API 和一个 Decision 模型。`harmful` 询问 `d3-remote`，`law` 和 `pick-model` 选择器询问 `kai`，`math` 询问默认部署 `primary`。同一类型、同一部署上的规则仍共享一个问题。

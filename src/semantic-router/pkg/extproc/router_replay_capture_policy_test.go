@@ -43,7 +43,7 @@ func TestReplayGlobalRuntimeCapturesBeforeDecisionAndDirectRequests(t *testing.T
 	no := false
 	for _, enabled := range []bool{false, true} {
 		for _, direct := range []bool{false, true} {
-			cfg := &config.RouterConfig{RouterReplay: config.RouterReplayConfig{Enabled: enabled, StoreBackend: "memory", CapturePersonalData: &no}}
+			cfg := withGlobalPlugins(t, &config.RouterConfig{RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"}}, replayTestPlugin(map[string]interface{}{"enabled": enabled, "capture_personal_data": no}))
 			router := replayRuntimeRouter(t, cfg)
 			ctx := replayPolicyRequest(t)
 			if direct {
@@ -75,7 +75,7 @@ func TestReplayGlobalRuntimeCapturesBeforeDecisionAndDirectRequests(t *testing.T
 
 func TestReplaySelectedDecisionReplacesCachedGlobalPolicy(t *testing.T) {
 	no := false
-	cfg := &config.RouterConfig{RouterReplay: config.RouterReplayConfig{Enabled: true, CapturePersonalData: &no}}
+	cfg := withGlobalPlugins(t, &config.RouterConfig{}, replayTestPlugin(map[string]interface{}{"enabled": true, "capture_personal_data": no}))
 	router := replayRuntimeRouter(t, cfg)
 	ctx := replayPolicyRequest(t)
 	ctx.RouterReplayPluginConfig = cfg.EffectiveRouterReplayConfig(nil)
@@ -91,7 +91,7 @@ func TestReplaySelectedDecisionReplacesCachedGlobalPolicy(t *testing.T) {
 	// A failed earlier persistence attempt can leave capture state without an ID.
 	// The next capture resolves the selected policy rather than keeping that state.
 	ctx.RouterReplayContentOmitted = true
-	allow := replayDecision(map[string]interface{}{"capture_personal_data": true})
+	allow := replayDecision(map[string]interface{}{"enabled": true, "capture_personal_data": true})
 	router.applyDecisionResultToContext(&decision.DecisionResult{Decision: allow}, ctx)
 	router.startRouterReplay(ctx, "public-entry", "model", allow.Name)
 	record, ok := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
@@ -111,7 +111,7 @@ func TestReplayPersonalDataPolicyKeepsMetadataAndLifecycle(t *testing.T) {
 		{"default capture", true, false, true, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			cfg := &config.RouterConfig{RouterReplay: config.RouterReplayConfig{Enabled: true, StoreBackend: "memory", CapturePersonalData: &test.capture}}
+			cfg := withGlobalPlugins(t, &config.RouterConfig{RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"}}, replayTestPlugin(map[string]interface{}{"enabled": true, "capture_personal_data": test.capture}))
 			router := replayRuntimeRouter(t, cfg)
 			ctx := replayPolicyRequest(t)
 			ctx.PIIContentVerified, ctx.PIIDetected = test.verified, test.detected
@@ -142,9 +142,10 @@ func TestReplayChecksAWithheldPromptAfterRoutingAndAttachesItOnlyWhenClean(t *te
 	for _, clean := range []bool{true, false} {
 		no := false
 		cfg := &config.RouterConfig{
-			RouterReplay:       config.RouterReplayConfig{Enabled: true, StoreBackend: "memory", CapturePersonalData: &no},
+			RouterReplay:       config.RouterReplayConfig{StoreBackend: "memory"},
 			IntelligentRouting: config.IntelligentRouting{Signals: config.Signals{PIIRules: []config.PIIRule{{Name: "personal_data"}}}},
 		}
+		withGlobalPlugins(t, cfg, replayTestPlugin(map[string]interface{}{"enabled": true, "capture_personal_data": no}))
 		router := replayRuntimeRouter(t, cfg)
 		router.Classifier = &classification.Classifier{Config: cfg}
 		release, read := make(chan struct{}), make(chan string, 1)
@@ -155,7 +156,7 @@ func TestReplayChecksAWithheldPromptAfterRoutingAndAttachesItOnlyWhenClean(t *te
 			return classification.NewPrivacyEvidence("request", text, true, clean)
 		}
 		ctx := replayPolicyRequest(t)
-		ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: config.DefaultRecipeName})
+		ctx.Routing.SelectRecipe(cfg.DefaultRecipe())
 		router.startRouterReplay(ctx, "public-entry", "model", "ordinary")
 		record, ok := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
 		if !ok || record.Prompt != "" || !ctx.RouterReplayContentOmitted {
@@ -182,7 +183,7 @@ func TestReplayChecksAWithheldPromptAfterRoutingAndAttachesItOnlyWhenClean(t *te
 
 func TestReplayRuntimeUsesGlobalMemoryCapacity(t *testing.T) {
 	max := 1
-	cfg := &config.RouterConfig{RouterReplay: config.RouterReplayConfig{Enabled: true, StoreBackend: "memory", MaxRecords: &max}}
+	cfg := withGlobalPlugins(t, &config.RouterConfig{RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"}}, replayTestPlugin(map[string]interface{}{"enabled": true, "max_records": max}))
 	router := replayRuntimeRouter(t, cfg)
 	for i := 0; i < 2; i++ {
 		ctx := replayPolicyRequest(t)
@@ -201,10 +202,10 @@ func TestReplayOmittedContentDropsResponseDetectorExcerpts(t *testing.T) {
 			name = "allow"
 		}
 		t.Run(name, func(t *testing.T) {
-			cfg := &config.RouterConfig{RouterReplay: config.RouterReplayConfig{Enabled: true, CapturePersonalData: &capture}}
+			cfg := withGlobalPlugins(t, &config.RouterConfig{}, replayTestPlugin(map[string]interface{}{"enabled": true, "capture_personal_data": capture}))
 			router := replayRuntimeRouter(t, cfg)
 			ctx := replayPolicyRequest(t)
-			ctx.VSRSelectedDecision = &config.Decision{Name: "ordinary"}
+			ctx.VSRSelectedDecision = &config.Decision{Name: "ordinary", Plugins: cfg.DefaultPlugins}
 			router.startRouterReplay(ctx, "public-entry", "model", "ordinary")
 			key := signalKey(config.SignalTypeHallucination, "ungrounded")
 			observed := &classification.ResponseSignal{
@@ -230,7 +231,7 @@ func TestReplayOmittedContentDropsResponseDetectorExcerpts(t *testing.T) {
 
 func TestReplayDirectStartResolvesGlobalPolicyWithoutDecisionPreparation(t *testing.T) {
 	no := false
-	router := replayRuntimeRouter(t, &config.RouterConfig{RouterReplay: config.RouterReplayConfig{Enabled: true, StoreBackend: "memory", CapturePersonalData: &no}})
+	router := replayRuntimeRouter(t, withGlobalPlugins(t, &config.RouterConfig{RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"}}, replayTestPlugin(map[string]interface{}{"enabled": true, "capture_personal_data": no})))
 	ctx := replayPolicyRequest(t)
 	ctx.Routing.SelectPassthrough()
 	router.startRouterReplay(ctx, "backend", "backend", "")
@@ -241,7 +242,8 @@ func TestReplayDirectStartResolvesGlobalPolicyWithoutDecisionPreparation(t *test
 }
 
 func TestReplayQueriesIncludeGlobalAndDecisionMemoryStores(t *testing.T) {
-	cfg := &config.RouterConfig{RouterReplay: config.RouterReplayConfig{Enabled: true, StoreBackend: "memory"}, IntelligentRouting: config.IntelligentRouting{Decisions: []config.Decision{*replayDecision(map[string]interface{}{})}}}
+	cfg := &config.RouterConfig{RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"}, IntelligentRouting: config.IntelligentRouting{Decisions: []config.Decision{*replayDecision(map[string]interface{}{})}}}
+	withGlobalPlugins(t, cfg, replayTestPlugin(map[string]interface{}{"enabled": true}))
 	router := replayRuntimeRouter(t, cfg)
 	before := replayPolicyRequest(t)
 	router.startRouterReplay(before, "direct", "direct", "")
@@ -256,12 +258,12 @@ func TestReplayQueriesIncludeGlobalAndDecisionMemoryStores(t *testing.T) {
 
 func TestReplayRequestPolicyDoesNotBorrowAnotherFallbackCapture(t *testing.T) {
 	no := false
-	cfg := &config.RouterConfig{RouterReplay: config.RouterReplayConfig{Enabled: true, StoreBackend: "memory", CaptureResponseBody: &no}}
+	cfg := withGlobalPlugins(t, &config.RouterConfig{RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"}}, replayTestPlugin(map[string]interface{}{"enabled": true, "capture_response_body": no}))
 	router := replayRuntimeRouter(t, cfg)
 	global := replayPolicyRequest(t)
 	router.startRouterReplay(global, "direct", "direct", "")
 	selected := replayPolicyRequest(t)
-	d := replayDecision(map[string]interface{}{"capture_response_body": true})
+	d := replayDecision(map[string]interface{}{"enabled": true, "capture_response_body": true})
 	router.applyDecisionResultToContext(&decision.DecisionResult{Decision: d}, selected)
 	router.startRouterReplay(selected, "public", "backend", d.Name)
 	body := []byte(`{"text":"Synthetic response"}`)
@@ -279,7 +281,7 @@ func TestReplayRequestPolicyDoesNotBorrowAnotherFallbackCapture(t *testing.T) {
 
 func TestReplayCleanPromptDoesNotAuthorizeResponseToolsOrDifferentInput(t *testing.T) {
 	no := false
-	cfg := &config.RouterConfig{RouterReplay: config.RouterReplayConfig{Enabled: true, CapturePersonalData: &no}}
+	cfg := withGlobalPlugins(t, &config.RouterConfig{}, replayTestPlugin(map[string]interface{}{"enabled": true, "capture_personal_data": no}))
 	router := replayRuntimeRouter(t, cfg)
 	for _, exact := range []bool{false, true} {
 		ctx := replayPolicyRequest(t)

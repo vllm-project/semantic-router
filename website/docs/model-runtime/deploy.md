@@ -103,7 +103,7 @@ runtime, metadata validation is deferred until a ready model card is observed;
 requests cannot run an unchecked task. See [readiness](#when-a-model-is-not-ready).
 
 A binding under `global.model_catalog.bindings` applies everywhere. A recipe
-can override it under its own `routing.model_bindings`. Rules that ask their
+can override it under its own `recipes[].model_bindings`. Rules that ask their
 own question (`decision`, `classifiers`, `safety`, `complexity`) name their
 deployment on the rule instead; see
 [Choose a model for a signal](../installation/choose-a-model-for-a-signal.md).

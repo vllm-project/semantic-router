@@ -140,7 +140,7 @@ this as `config.yaml`, replacing `host.docker.internal:8000` with an
 OpenAI-compatible backend that answers your users:
 
 ```yaml
-version: v0.3
+version: v0.5
 listeners:
   - name: http
     address: 0.0.0.0
@@ -156,38 +156,37 @@ providers:
         - name: answer
           endpoint: host.docker.internal:8000
           protocol: http
-routing:
-  modelCards:
-    - name: answer-model
-  signals:
-    systemone:
-      - name: needs_reasoning
-        deployment: primary
-        question:
-          type: noul
-          instructions: Does answering this request need multi-step reasoning?
-        predicate:
-          gte: 0.7
-  decisions:
-    - name: think-first
-      priority: 100
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions:
-          - type: systemone
-            name: needs_reasoning
-      modelRefs:
-        - model: answer-model
-          use_reasoning: true
-    - name: default-route
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: answer-model
-          use_reasoning: false
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: needs_reasoning
+          deployment: primary
+          question:
+            type: noul
+            instructions: Does answering this request need multi-step reasoning?
+          predicate:
+            gte: 0.7
+    decisions:
+      - name: think-first
+        priority: 100
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: systemone
+              name: needs_reasoning
+        modelRefs:
+          - model: answer-model
+            use_reasoning: true
+      - name: default-route
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: answer-model
+            use_reasoning: false
 global:
   model_catalog:
     deployments:

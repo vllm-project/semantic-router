@@ -23,7 +23,7 @@ BEARER_IN_DESCRIPTION = "Bearer superSecretTokenValue12"
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 BASE_CONFIG = f"""
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -49,31 +49,29 @@ providers:
           endpoint: 127.0.0.1:8001
           protocol: http
           weight: 100
-routing:
-  modelCards:
-    - name: local-model
-    - name: cheap-model
-  decisions:
-    - name: default-route
-      description: Catch-all route
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: local-model
-          use_reasoning: false
-        - model: cheap-model
-          use_reasoning: false
-    - name: keep-me
-      description: Unrelated decision that must survive {BEARER_IN_DESCRIPTION} http://user:URLSECRET@example.com/v1 /home/pranav/private/router.yaml
-      priority: 10
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: cheap-model
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: default-route
+        description: Catch-all route
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: local-model
+            use_reasoning: false
+          - model: cheap-model
+            use_reasoning: false
+      - name: keep-me
+        description: Unrelated decision that must survive {BEARER_IN_DESCRIPTION} http://user:URLSECRET@example.com/v1 /home/pranav/private/router.yaml
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: cheap-model
+            use_reasoning: false
 """
 
 
@@ -103,7 +101,7 @@ def test_supported_intent_preserves_unrelated_config_and_redacts_secrets(tmp_pat
     ]
     assert all(check["ok"] for check in document["validation"]["checks"])
     assert document["provenance"]["input"]["name"] == "config.yaml"
-    assert document["provenance"]["input"]["version"] == "v0.3"
+    assert document["provenance"]["input"]["version"] == "v0.5"
     assert document["provenance"]["sources"] == [
         {
             "kind": "fragment",
@@ -115,8 +113,8 @@ def test_supported_intent_preserves_unrelated_config_and_redacts_secrets(tmp_pat
     assert SECRET not in json.dumps(document)
 
     candidate = yaml.safe_load(document["candidate_yaml"])
-    default_route = candidate["routing"]["decisions"][0]
-    keep_me = candidate["routing"]["decisions"][1]
+    default_route = candidate["recipes"][0]["decisions"][0]
+    keep_me = candidate["recipes"][0]["decisions"][1]
     assert default_route["algorithm"]["type"] == "multi_factor"
     assert default_route["algorithm"]["multi_factor"] == {
         "weights": {"latency": 1},
@@ -195,9 +193,11 @@ def test_missing_decision_is_unsupported(tmp_path):
 
 
 def test_non_canonical_version_is_unsupported(tmp_path):
-    config_path = _write_config(tmp_path, "version: v0.2\nrouting: {}\n")
+    config_path = _write_config(
+        tmp_path, "version: v0.2\nrecipes:\n  - name: default\n"
+    )
 
-    with pytest.raises(ProposalUnsupportedError, match=r"not canonical v0\.3"):
+    with pytest.raises(ProposalUnsupportedError, match=r"not canonical v0\.5"):
         propose(
             config_path,
             "selection.latency-aware",
@@ -284,9 +284,9 @@ def test_free_form_field_redacts_embedded_bearer_literal(tmp_path):
     rendered = json.dumps(document)
     assert BEARER_IN_DESCRIPTION not in rendered
     assert "superSecretTokenValue12" not in rendered
-    description = yaml.safe_load(document["candidate_yaml"])["routing"]["decisions"][0][
-        "description"
-    ]
+    description = yaml.safe_load(document["candidate_yaml"])["recipes"][0]["decisions"][
+        0
+    ]["description"]
     assert "superSecretTokenValue12" not in description
     assert "***" in description
 
@@ -318,7 +318,7 @@ def test_access_key_and_client_secret_are_redacted(tmp_path):
 
 
 RECIPE_CONFIG = f"""
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -344,45 +344,44 @@ providers:
           endpoint: 127.0.0.1:8001
           protocol: http
           weight: 100
-routing:
-  modelCards:
-    - name: local-model
-    - name: cheap-model
-  decisions:
-    - name: keep-default
-      description: Top-level decision that must survive
-      priority: 50
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: local-model
-          use_reasoning: false
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 recipes:
+  - name: default
+    decisions:
+      - name: keep-default
+        description: Top-level decision that must survive
+        priority: 50
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: local-model
+            use_reasoning: false
   - name: privacy-lane
     description: Target recipe
-    routing:
-      decisions:
-        - name: old-privacy
-          priority: 20
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: local-model
-              use_reasoning: false
+    decisions:
+      - name: old-privacy
+        priority: 20
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: local-model
+            use_reasoning: false
   - name: keep-recipe
     description: Leave this recipe alone
-    routing:
-      decisions:
-        - name: stay
-          priority: 10
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: cheap-model
-              use_reasoning: false
+    decisions:
+      - name: stay
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: cheap-model
+            use_reasoning: false
 """
 
 
@@ -469,7 +468,7 @@ def test_opaque_credential_copied_into_description_is_masked(tmp_path):
     assert OPAQUE not in document["candidate_yaml"]
     assert OPAQUE not in document["diff"]
     candidate = yaml.safe_load(document["candidate_yaml"])
-    description = candidate["routing"]["decisions"][0]["description"]
+    description = candidate["recipes"][0]["decisions"][0]["description"]
     assert OPAQUE not in description
     assert "***" in description
     assert candidate["providers"]["models"][0]["backend_refs"][0]["api_key"] == "***"
@@ -482,7 +481,7 @@ MULTILINE_SECRET = "line-one-credential-aaa\nline-two-credential-bbb"
 
 def test_multiline_pem_in_description_is_removed(tmp_path):
     loaded = yaml.safe_load(BASE_CONFIG)
-    loaded["routing"]["decisions"][0]["description"] = f"notes\n{PEM_BLOCK}\nend"
+    loaded["recipes"][0]["decisions"][0]["description"] = f"notes\n{PEM_BLOCK}\nend"
     config_path = _write_config(tmp_path, yaml.safe_dump(loaded, sort_keys=False))
 
     document = propose(
@@ -494,7 +493,7 @@ def test_multiline_pem_in_description_is_removed(tmp_path):
 
     rendered = json.dumps(document)
     candidate = yaml.safe_load(document["candidate_yaml"])
-    description = candidate["routing"]["decisions"][0]["description"]
+    description = candidate["recipes"][0]["decisions"][0]["description"]
     assert document["provenance"]["candidate_redacted"] is True
     assert document["validation"]["status"] == "valid"
     assert PEM_BODY not in rendered
@@ -508,7 +507,7 @@ def test_multiline_pem_in_description_is_removed(tmp_path):
 def test_multiline_credential_copied_into_description_is_masked(tmp_path):
     loaded = yaml.safe_load(BASE_CONFIG)
     loaded["providers"]["models"][0]["backend_refs"][0]["api_key"] = MULTILINE_SECRET
-    loaded["routing"]["decisions"][0]["description"] = f"copied\n{MULTILINE_SECRET}"
+    loaded["recipes"][0]["decisions"][0]["description"] = f"copied\n{MULTILINE_SECRET}"
     config_path = _write_config(tmp_path, yaml.safe_dump(loaded, sort_keys=False))
 
     document = propose(
@@ -520,7 +519,7 @@ def test_multiline_credential_copied_into_description_is_masked(tmp_path):
 
     rendered = json.dumps(document)
     candidate = yaml.safe_load(document["candidate_yaml"])
-    description = candidate["routing"]["decisions"][0]["description"]
+    description = candidate["recipes"][0]["decisions"][0]["description"]
     assert document["provenance"]["candidate_redacted"] is True
     assert document["validation"]["status"] == "valid"
     assert "line-one-credential-aaa" not in rendered
@@ -537,7 +536,7 @@ def test_credential_containing_a_url_is_masked_in_full(tmp_path):
     )
     loaded = yaml.safe_load(BASE_CONFIG)
     loaded["providers"]["models"][0]["backend_refs"][0]["api_key"] = secret
-    loaded["routing"]["decisions"][0]["description"] = f"copied {secret}"
+    loaded["recipes"][0]["decisions"][0]["description"] = f"copied {secret}"
     config_path = _write_config(tmp_path, yaml.safe_dump(loaded, sort_keys=False))
 
     document = propose(
@@ -549,7 +548,7 @@ def test_credential_containing_a_url_is_masked_in_full(tmp_path):
 
     rendered = json.dumps(document)
     candidate = yaml.safe_load(document["candidate_yaml"])
-    description = candidate["routing"]["decisions"][0]["description"]
+    description = candidate["recipes"][0]["decisions"][0]["description"]
     assert "prefix-opaque-value" not in rendered
     assert "tail-opaque-9911" not in rendered
     assert "URLSECRET99" not in rendered
@@ -562,7 +561,7 @@ def test_one_line_of_a_multiline_credential_is_masked(tmp_path):
     loaded["providers"]["models"][0]["backend_refs"][0]["api_key"] = (
         MULTILINE_SECRET + "\n"
     )
-    loaded["routing"]["decisions"][0]["description"] = "only line-one-credential-aaa"
+    loaded["recipes"][0]["decisions"][0]["description"] = "only line-one-credential-aaa"
     config_path = _write_config(tmp_path, yaml.safe_dump(loaded, sort_keys=False))
 
     document = propose(
@@ -577,7 +576,7 @@ def test_one_line_of_a_multiline_credential_is_masked(tmp_path):
     assert "line-one-credential-aaa" not in rendered
     assert "line-two-credential-bbb" not in rendered
     assert "line-one-credential-aaa" not in (
-        candidate["routing"]["decisions"][0]["description"]
+        candidate["recipes"][0]["decisions"][0]["description"]
     )
 
 
@@ -604,7 +603,7 @@ def test_nested_api_key_mapping_is_redacted(tmp_path):
     loaded["providers"]["models"][0]["backend_refs"][0]["api_key"] = {
         "inline": "nested-opaque-credential-77"
     }
-    loaded["routing"]["decisions"][0][
+    loaded["recipes"][0]["decisions"][0][
         "description"
     ] = "sees nested-opaque-credential-77"
     config_path = _write_config(tmp_path, yaml.safe_dump(loaded, sort_keys=False))
@@ -621,7 +620,7 @@ def test_nested_api_key_mapping_is_redacted(tmp_path):
     assert "nested-opaque-credential-77" not in rendered
     assert candidate["providers"]["models"][0]["backend_refs"][0]["api_key"] == "***"
     assert "nested-opaque-credential-77" not in (
-        candidate["routing"]["decisions"][0]["description"]
+        candidate["recipes"][0]["decisions"][0]["description"]
     )
 
 
@@ -688,7 +687,7 @@ def test_installed_package_resolves_intents_without_checkout(tmp_path, monkeypat
         "selection.latency-aware",
         "default-route",
     )
-    algorithm = yaml.safe_load(latency["candidate_yaml"])["routing"]["decisions"][0][
+    algorithm = yaml.safe_load(latency["candidate_yaml"])["recipes"][0]["decisions"][0][
         "algorithm"
     ]
     assert algorithm["type"] == "multi_factor"

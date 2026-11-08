@@ -1,5 +1,5 @@
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -17,49 +17,48 @@ config:
             provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    modelCards:
-      - name: general-expert
-    signals:
-      # The System One fixture answers the complexity preset; each decision
-      # reads the label it chose.
-      complexity:
-        - name: task_difficulty
-          description: Separates demanding reasoning requests from simple lookup or copy requests.
-    decisions:
-      - name: complexity_hard_routing
-        description: Route requests the complexity signal rates hard.
-        priority: 100
-        rules:
-          operator: AND
-          conditions:
-            - type: complexity
-              name: task_difficulty
-              label: hard
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
-      - name: complexity_easy_routing
-        description: Route requests the complexity signal rates easy.
-        priority: 90
-        rules:
-          operator: AND
-          conditions:
-            - type: complexity
-              name: task_difficulty
-              label: easy
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
-      - name: default-route
-        description: Fallback route, reached when the request rates medium.
-        priority: 10
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
+  recipes:
+    - name: default
+      signals:
+        # The System One fixture answers the complexity preset; each decision
+        # reads the label it chose.
+        complexity:
+          - name: task_difficulty
+            description: Separates demanding reasoning requests from simple lookup or copy requests.
+      decisions:
+        - name: complexity_hard_routing
+          description: Route requests the complexity signal rates hard.
+          priority: 100
+          rules:
+            operator: AND
+            conditions:
+              - type: complexity
+                name: task_difficulty
+                label: hard
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: complexity_easy_routing
+          description: Route requests the complexity signal rates easy.
+          priority: 90
+          rules:
+            operator: AND
+            conditions:
+              - type: complexity
+                name: task_difficulty
+                label: easy
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: default-route
+          description: Fallback route, reached when the request rates medium.
+          priority: 10
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
   global:
     router:
       strategy: priority

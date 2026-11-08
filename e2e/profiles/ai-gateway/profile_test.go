@@ -11,8 +11,8 @@ import (
 
 func TestFeatureRecipesReuseBaselinePluginContracts(t *testing.T) {
 	config := profileConfig(t)
-	baseline := profileMap(t, config, "routing")
-	routing := profileMap(t, profileNamed(t, config["recipes"], "e2e-plugins"), "routing")
+	baseline := profileNamed(t, config["recipes"], "default")
+	routing := profileNamed(t, config["recipes"], "e2e-plugins")
 	signals := profileMap(t, routing, "signals")
 	if len(signals) != 1 || signals["keywords"] == nil {
 		t.Fatalf("plugin feature recipe must use only its explicit keyword signals: %#v", signals)
@@ -39,8 +39,8 @@ func TestFeatureRecipesReuseBaselinePluginContracts(t *testing.T) {
 
 func TestPIIPrecedenceRecipeOrdersOnlyTheBaselinePIIBlockAndToolsRoute(t *testing.T) {
 	config := profileConfig(t)
-	baseline := profileMap(t, config, "routing")
-	routing := profileMap(t, profileNamed(t, config["recipes"], "e2e-pii-precedence"), "routing")
+	baseline := profileNamed(t, config["recipes"], "default")
+	routing := profileNamed(t, config["recipes"], "e2e-pii-precedence")
 	signals := profileMap(t, routing, "signals")
 	if len(signals) != 2 || len(routing["decisions"].([]any)) != 2 {
 		t.Fatalf("PII precedence recipe must hold only the PII block and one tools route: %#v", routing)
@@ -60,7 +60,7 @@ func TestPIIPrecedenceRecipeOrdersOnlyTheBaselinePIIBlockAndToolsRoute(t *testin
 
 func TestProtocolAndCacheRecipesReachTheirOwnedBoundaries(t *testing.T) {
 	config := profileConfig(t)
-	baselineCache := profileNamed(t, profileMap(t, config, "routing")["decisions"], "other_decision")["plugins"]
+	baselineCache := profileNamed(t, profileNamed(t, config["recipes"], "default")["decisions"], "other_decision")["plugins"]
 	for _, test := range []struct {
 		recipe   string
 		decision string
@@ -70,7 +70,7 @@ func TestProtocolAndCacheRecipesReachTheirOwnedBoundaries(t *testing.T) {
 		{"e2e-cache", "e2e_cache_decision", baselineCache},
 	} {
 		t.Run(test.recipe, func(t *testing.T) {
-			routing := profileMap(t, profileNamed(t, config["recipes"], test.recipe), "routing")
+			routing := profileNamed(t, config["recipes"], test.recipe)
 			if routing["signals"] != nil || len(routing["decisions"].([]any)) != 1 {
 				t.Fatal("boundary fixture must not depend on learned signals or competing decisions")
 			}
@@ -91,7 +91,7 @@ func TestProtocolAndCacheRecipesReachTheirOwnedBoundaries(t *testing.T) {
 
 func TestExactCacheRecipeKeepsMultilingualNegationOnAnExactOnlyPolicy(t *testing.T) {
 	config := profileConfig(t)
-	routing := profileMap(t, profileNamed(t, config["recipes"], "e2e-cache-exact"), "routing")
+	routing := profileNamed(t, config["recipes"], "e2e-cache-exact")
 	if routing["signals"] != nil || len(routing["decisions"].([]any)) != 1 {
 		t.Fatal("exact-cache fixture must have one unconditional decision")
 	}
@@ -125,7 +125,7 @@ func TestFeatureEntrypointsPreserveDefaultSecurityPrecedence(t *testing.T) {
 			t.Fatalf("feature model must resolve explicitly to its owned recipe: %s", recipe)
 		}
 	}
-	routing := profileMap(t, config, "routing")
+	routing := profileNamed(t, config["recipes"], "default")
 	for _, test := range []struct {
 		name, signalType, signalName string
 		priority                     int
@@ -149,8 +149,8 @@ func TestFeatureEntrypointsPreserveDefaultSecurityPrecedence(t *testing.T) {
 
 func TestDomainRecipePreservesEveryBaselineLabelAndSelection(t *testing.T) {
 	config := profileConfig(t)
-	baseline := profileMap(t, config, "routing")
-	routing := profileMap(t, profileNamed(t, config["recipes"], "e2e-domain"), "routing")
+	baseline := profileNamed(t, config["recipes"], "default")
+	routing := profileNamed(t, config["recipes"], "e2e-domain")
 	signals := profileMap(t, routing, "signals")
 	if len(signals) != 1 || !reflect.DeepEqual(signals["domains"], profileMap(t, baseline, "signals")["domains"]) {
 		t.Fatal("domain recipe must retain the original domain labels without competing signal families")
@@ -175,7 +175,7 @@ func TestDomainRecipePreservesEveryBaselineLabelAndSelection(t *testing.T) {
 
 func TestFallbackRecipeRetainsARealUnmatchedPath(t *testing.T) {
 	config := profileConfig(t)
-	routing := profileMap(t, profileNamed(t, config["recipes"], "e2e-fallback"), "routing")
+	routing := profileNamed(t, config["recipes"], "e2e-fallback")
 	if len(routing["decisions"].([]any)) != 1 {
 		t.Fatal("fallback fixture must not have a catch-all decision")
 	}

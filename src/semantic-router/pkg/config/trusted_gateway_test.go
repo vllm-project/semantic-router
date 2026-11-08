@@ -19,7 +19,7 @@ global:
 `
 	}
 	return `
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: gateway-model
@@ -27,7 +27,8 @@ providers:
       api_format: openai
       backend_refs:
 ` + backendRefs + `
-routing: {}
+recipes:
+  - name: default
 ` + gatewayCredential
 }
 
@@ -170,7 +171,7 @@ func TestGatewayCredentialHeaderRejectsClientCredentialAndIdentityHeaders(t *tes
 		"x-authz-user-id", "x-authz-user-groups", "x-authz-team-id", "x-authz-tenant-id", "x-auth-request-user",
 	} {
 		_, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: gateway-model
@@ -181,7 +182,8 @@ providers:
           provider: openai-compatible
           endpoint: https://gateway.example/v1
           trusted_gateway: true
-routing: {}
+recipes:
+  - name: default
 global:
   services:
     authz:

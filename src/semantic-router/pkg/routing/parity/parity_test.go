@@ -174,7 +174,7 @@ func TestLoadCorpusRejectsAnUnsendableEncoding(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 			cases := "cases: []\nupstreams:\n  fixture:\n    " + upstream + "\n"
-			if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("version: v0.3\n"), 0o600); err != nil {
+			if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("version: v0.5\n"), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			if err := os.WriteFile(filepath.Join(dir, "cases.yaml"), []byte(cases), 0o600); err != nil {

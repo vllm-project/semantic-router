@@ -42,7 +42,7 @@ func TestStandaloneReloadNeedsARestartOnlyForListeners(t *testing.T) {
 // the document, so `vllm-sr config validate --endpoint` can print them.
 func TestHandleConfigValidateReturnsLoadWarnings(t *testing.T) {
 	document := strings.Join([]string{
-		"version: v0.3",
+		"version: v0.5",
 		"listeners:",
 		"  - name: http-8899",
 		"    address: 0.0.0.0",
@@ -54,9 +54,8 @@ func TestHandleConfigValidateReturnsLoadWarnings(t *testing.T) {
 		"    - name: m",
 		"      backend_refs:",
 		"        - endpoint: 127.0.0.1:8000",
-		"routing:",
-		"  modelCards:",
-		"    - name: m",
+		"recipes:",
+		"  - name: default",
 		"global:",
 		"  model_catalog:",
 		"    bindings:",

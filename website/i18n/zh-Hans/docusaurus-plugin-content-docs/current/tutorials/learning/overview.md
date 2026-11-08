@@ -16,7 +16,7 @@ translation:
 
 - `global.router.learning.adaptation`：在线模型选择学习。
 - `global.router.learning.protection`：会话和对话稳定性。
-- `routing.decisions[].adaptations`：按决策的应用、观察或绕过控制。
+- `recipes[].decisions[].adaptations`：按决策的应用、观察或绕过控制。
 - 路由回放：可选诊断和结果，用于离线配方学习；持久化需要耐用的回放后端。
 
 当决策应保持语义，但重复请求应考虑当前模型、工具循环状态、前缀缓存证据、交接成本、切换历史或运行时结果时，使用路由学习。

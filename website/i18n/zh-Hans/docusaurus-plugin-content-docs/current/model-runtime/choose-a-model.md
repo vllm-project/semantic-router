@@ -113,7 +113,7 @@ domain、prompt guard、safety、fact check、user feedback、modality、PII 和
 
 - **PII：** 0.3B 的片段头在返回片段前已按各标签自己的阈值筛选，因此 0.01 会接受它返回的每个片段。
 - **其他模型：** 运行其他模型且未设置阈值的模块，保持它之前的默认阈值。
-- **你自己的规则阈值**（`routing.signals.jailbreak[].threshold` 等）由你设定，很可能是为 Vela 1.0 选的。
+- **你自己的规则阈值**（`recipes[].signals.jailbreak[].threshold` 等）由你设定，很可能是为 Vela 1.0 选的。
   记录给出了每个 Vela 1.0 值在 0.3B 上的对应值：prompt guard 0.3–0.9 → 0.74–0.77、PII → 0.01、safety 0.5 → 0.46、
   fact check 0.95 → 0.93、modality 的 `confidence_threshold` 0.7 → 0.51。
 

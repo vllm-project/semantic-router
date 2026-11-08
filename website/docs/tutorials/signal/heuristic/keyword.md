@@ -3,7 +3,7 @@
 ## Overview
 
 `keyword` matches explicit words and phrases in the request. Define keyword
-rules under `routing.signals.keywords`.
+rules under `recipes[].signals.keywords`.
 
 This family is heuristic: it routes from configured words, phrases, or lightweight retrieval methods instead of learned intent classifiers.
 
@@ -32,22 +32,23 @@ Use `keyword` when:
 ## Configuration
 
 ```yaml
-routing:
-  signals:
-    keywords:
-      - name: code_keywords
-        operator: OR
-        method: bm25
-        keywords: ["code", "function", "debug", "algorithm", "refactor"]
-        bm25_threshold: 0.1
-        case_sensitive: false
-      - name: urgent_keywords
-        operator: OR
-        method: ngram
-        keywords: ["urgent", "immediate", "asap", "emergency"]
-        ngram_threshold: 0.4
-        ngram_arity: 3
-        case_sensitive: false
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: code_keywords
+          operator: OR
+          method: bm25
+          keywords: ["code", "function", "debug", "algorithm", "refactor"]
+          bm25_threshold: 0.1
+          case_sensitive: false
+        - name: urgent_keywords
+          operator: OR
+          method: ngram
+          keywords: ["urgent", "immediate", "asap", "emergency"]
+          ngram_threshold: 0.4
+          ngram_arity: 3
+          case_sensitive: false
 ```
 
 Use plain keyword lists for simple matching, then add `method: bm25` or `method: ngram` when exact text matching becomes too brittle.
@@ -60,13 +61,14 @@ that should keep applying for the rest of the conversation, such as a
 privacy or local-only marker:
 
 ```yaml
-routing:
-  signals:
-    keywords:
-      - name: local_only_markers
-        operator: OR
-        keywords: ["local model only", "do not upload to cloud"]
-        include_history: true
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: local_only_markers
+          operator: OR
+          keywords: ["local model only", "do not upload to cloud"]
+          include_history: true
 ```
 
 With `include_history: true`, the rule also matches the most recent 20 prior
@@ -88,23 +90,24 @@ occur instead of whether one occurs. `count` compares the number of matches;
 Both take the predicate fields `gt`, `gte`, `lt`, and `lte`:
 
 ```yaml
-routing:
-  signals:
-    keywords:
-      - name: many_questions
-        description: Prompts that ask four or more explicit questions.
-        operator: OR
-        keywords: ["?", "？"]
-        count: { gte: 4 }
-      - name: numbered_steps
-        operator: OR
-        method: regex
-        keywords: ['(?m)^\s*\d+[.)]\s+']
-        count: { gte: 2 }
-      - name: constraint_dense
-        operator: OR
-        keywords: ["must", "must not", "at least", "at most", "exactly"]
-        density: { gt: 16 }
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: many_questions
+          description: Prompts that ask four or more explicit questions.
+          operator: OR
+          keywords: ["?", "？"]
+          count: {gte: 4}
+        - name: numbered_steps
+          operator: OR
+          method: regex
+          keywords: ['(?m)^\s*\d+[.)]\s+']
+          count: {gte: 2}
+        - name: constraint_dense
+          operator: OR
+          keywords: ["must", "must not", "at least", "at most", "exactly"]
+          density: {gt: 16}
 ```
 
 A literal keyword counts each occurrence that stands as a word of its own;

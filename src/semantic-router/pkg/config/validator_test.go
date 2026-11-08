@@ -32,14 +32,14 @@ var _ = Describe("validateLoRAName", func() {
 		cfg := &RouterConfig{BackendModels: BackendModels{ModelConfig: map[string]ModelParams{}}}
 		err := validateLoRAName(cfg, "ghost", "adapter")
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("is not declared in routing.modelCards"))
+		Expect(err.Error()).To(ContainSubstring("is not declared in providers.models"))
 	})
 
 	It("rejects model with no loras", func() {
 		cfg := loraConfig("qwen3") // zero adapters
 		err := validateLoRAName(cfg, "qwen3", "adapter")
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("declares no routing.modelCards[].loras"))
+		Expect(err.Error()).To(ContainSubstring("declares no providers.models[].loras"))
 	})
 
 	It("rejects unknown name and lists available", func() {
@@ -376,7 +376,7 @@ func registerValidateConfigStructureLoRASpecs() {
 		}
 		err := validateConfigStructure(cfg)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("is not declared in routing.modelCards"))
+		Expect(err.Error()).To(ContainSubstring("is not declared in providers.models"))
 	})
 }
 

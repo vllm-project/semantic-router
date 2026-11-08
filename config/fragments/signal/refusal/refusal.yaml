@@ -2,9 +2,10 @@
 #
 # Asks whether the model's answer declines the request, so it is only
 # available after the model has answered.
-routing:
-  signals:
-    refusal:
-      - name: declined
-        description: The answer declines the request or refuses to help.
-        predicate: {gte: 0.5}
+recipes:
+  - name: default
+    signals:
+      refusal:
+        - name: declined
+          description: The answer declines the request or refuses to help.
+          predicate: {gte: 0.5}

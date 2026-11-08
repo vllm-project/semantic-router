@@ -61,7 +61,7 @@ def test_generate_envoy_config_uses_logical_dns_for_split_extproc_host(
         tmp_path,
         monkeypatch,
         """
-version: v0.3
+version: v0.5
 listeners:
   - name: "http-8899"
     address: "0.0.0.0"
@@ -77,19 +77,18 @@ providers:
           protocol: "http"
           provider: "vllm"
           weight: 100
-routing:
-  modelCards:
-    - name: "test-model"
-  decisions:
-    - name: "default-route"
-      description: "default route"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions: []
-      modelRefs:
-        - model: "test-model"
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: "default-route"
+        description: "default route"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions: []
+        modelRefs:
+          - model: "test-model"
+            use_reasoning: false
 """,
         extproc_host="vllm-sr-router-container",
         router_api_host="vllm-sr-router-container",
@@ -138,7 +137,7 @@ def test_listener_api_key_is_removed_before_no_auth_upstream(tmp_path, monkeypat
         tmp_path,
         monkeypatch,
         """
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -153,7 +152,8 @@ providers:
       backend_refs:
         - provider: vllm
           endpoint: 127.0.0.1:8000
-routing: {}
+recipes:
+  - name: default
 """,
         extproc_host="localhost",
         router_api_host="localhost",
@@ -189,7 +189,7 @@ def test_envoy_mode_refuses_a_tls_listener(tmp_path, monkeypatch):
             tmp_path,
             monkeypatch,
             """
-version: v0.3
+version: v0.5
 listeners:
   - name: https-8443
     address: 0.0.0.0
@@ -205,7 +205,8 @@ providers:
       backend_refs:
         - provider: vllm
           endpoint: 127.0.0.1:8000
-routing: {}
+recipes:
+  - name: default
 """,
             extproc_host="localhost",
             router_api_host="localhost",
@@ -220,7 +221,7 @@ def test_envoy_mode_refuses_a_listener_model_allow_list(tmp_path, monkeypatch):
             tmp_path,
             monkeypatch,
             """
-version: v0.3
+version: v0.5
 listeners:
   - name: public
     address: 0.0.0.0
@@ -235,7 +236,8 @@ providers:
       backend_refs:
         - provider: vllm
           endpoint: 127.0.0.1:8000
-routing: {}
+recipes:
+  - name: default
 """,
             extproc_host="localhost",
             router_api_host="localhost",
@@ -248,7 +250,7 @@ def test_weighted_backend_refs_preserve_weights_and_shared_path(tmp_path, monkey
         tmp_path,
         monkeypatch,
         """
-version: v0.3
+version: v0.5
 listeners:
   - name: "http-8899"
     address: "0.0.0.0"
@@ -267,19 +269,18 @@ providers:
           endpoint: "http://10.0.0.2:8001/v1"
           provider: "vllm"
           weight: 25
-routing:
-  modelCards:
-    - name: "test-model"
-  decisions:
-    - name: "default-route"
-      description: "default route"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions: []
-      modelRefs:
-        - model: "test-model"
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: "default-route"
+        description: "default route"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions: []
+        modelRefs:
+          - model: "test-model"
+            use_reasoning: false
 """,
         extproc_host="localhost",
         router_api_host="localhost",
@@ -327,7 +328,7 @@ def test_base_url_path_rewrite_is_idempotent(tmp_path, monkeypatch):
         tmp_path,
         monkeypatch,
         """
-version: v0.3
+version: v0.5
 listeners:
   - name: "http-8899"
     address: "0.0.0.0"
@@ -343,19 +344,18 @@ providers:
           base_url: "https://generativelanguage.googleapis.com/v1beta/openai"
           provider: "openai"
           weight: 100
-routing:
-  modelCards:
-    - name: "gemini-model"
-  decisions:
-    - name: "default-route"
-      description: "default route"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions: []
-      modelRefs:
-        - model: "gemini-model"
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: "default-route"
+        description: "default route"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions: []
+        modelRefs:
+          - model: "gemini-model"
+            use_reasoning: false
 """,
         extproc_host="localhost",
         router_api_host="localhost",
@@ -403,7 +403,7 @@ def test_selected_model_route_does_not_rewrite_overlapping_provider_path(
         tmp_path,
         monkeypatch,
         """
-version: v0.3
+version: v0.5
 listeners:
   - name: "http-8899"
     address: "0.0.0.0"
@@ -419,19 +419,18 @@ providers:
           base_url: "https://api.example.com/v1/chat"
           provider: "openai"
           weight: 100
-routing:
-  modelCards:
-    - name: "provider-model"
-  decisions:
-    - name: "default-route"
-      description: "default route"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions: []
-      modelRefs:
-        - model: "provider-model"
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: "default-route"
+        description: "default route"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions: []
+        modelRefs:
+          - model: "provider-model"
+            use_reasoning: false
 """.replace(
             "https://api.example.com/v1/chat", "https://api.example.com" + prefix
         ),
@@ -468,7 +467,7 @@ def test_provider_reliability_renders_retry_outlier_and_least_request(
         tmp_path,
         monkeypatch,
         """
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -493,18 +492,17 @@ providers:
           provider: vllm
         - endpoint: 10.0.0.2:8000
           provider: vllm
-routing:
-  modelCards:
-    - name: test-model
-  decisions:
-    - name: default-route
-      description: default route
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: test-model
+recipes:
+  - name: default
+    decisions:
+      - name: default-route
+        description: default route
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: test-model
 """,
         extproc_host="localhost",
         router_api_host="localhost",
@@ -549,7 +547,7 @@ def test_backend_ref_domain_with_path_produces_correct_envoy_cluster_and_route(
         tmp_path,
         monkeypatch,
         """
-version: v0.3
+version: v0.5
 listeners:
   - name: "http-8899"
     address: "0.0.0.0"
@@ -564,19 +562,18 @@ providers:
           endpoint: "https://api.example.com/compatible-mode/v1/"
           provider: "vllm"
           weight: 100
-routing:
-  modelCards:
-    - name: "test-model"
-  decisions:
-    - name: "default-route"
-      description: "default route"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions: []
-      modelRefs:
-        - model: "test-model"
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: "default-route"
+        description: "default route"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions: []
+        modelRefs:
+          - model: "test-model"
+            use_reasoning: false
 """,
         extproc_host="localhost",
         router_api_host="localhost",
@@ -615,7 +612,7 @@ def test_backend_ref_https_base_url_uses_tls_and_explicit_extra_headers(
         tmp_path,
         monkeypatch,
         """
-version: v0.3
+version: v0.5
 listeners:
   - name: "http-8899"
     address: "0.0.0.0"
@@ -637,19 +634,18 @@ providers:
             X-Test-Trace: "router-flow"
             X-Test-Tenant: "eval"
           weight: 1
-routing:
-  modelCards:
-    - name: "test-model"
-  decisions:
-    - name: "default-route"
-      description: "default route"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions: []
-      modelRefs:
-        - model: "test-model"
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: "default-route"
+        description: "default route"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions: []
+        modelRefs:
+          - model: "test-model"
+            use_reasoning: false
 """,
         extproc_host="localhost",
         router_api_host="localhost",
@@ -694,7 +690,7 @@ def test_https_pool_rejects_distinct_tls_server_names(tmp_path, monkeypatch):
             tmp_path,
             monkeypatch,
             """
-version: v0.3
+version: v0.5
 listeners:
   - name: "http-8899"
     address: "0.0.0.0"
@@ -716,19 +712,18 @@ providers:
           provider: "openai"
           api_key_env: "OPENAI_API_KEY"
           weight: 1
-routing:
-  modelCards:
-    - name: "test-model"
-  decisions:
-    - name: "default-route"
-      description: "default route"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions: []
-      modelRefs:
-        - model: "test-model"
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: "default-route"
+        description: "default route"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions: []
+        modelRefs:
+          - model: "test-model"
+            use_reasoning: false
 """,
             extproc_host="localhost",
             router_api_host="localhost",
@@ -744,7 +739,7 @@ def test_https_backend_rejects_ip_literal_certificate_identity(tmp_path, monkeyp
             tmp_path,
             monkeypatch,
             """
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -757,7 +752,8 @@ providers:
       backend_refs:
         - provider: openai-compatible
           base_url: https://192.0.2.1/v1
-routing: {}
+recipes:
+  - name: default
 """,
             extproc_host="localhost",
             router_api_host="localhost",
@@ -771,7 +767,7 @@ def test_generate_envoy_config_custom_anthropic_upstream_rewrites_host(
         tmp_path,
         monkeypatch,
         """
-version: v0.3
+version: v0.5
 listeners:
   - name: "http-8899"
     address: "0.0.0.0"
@@ -787,19 +783,18 @@ providers:
           weight: 100
           base_url: "https://domain.com/Anthropic"
           provider: "anthropic"
-routing:
-  modelCards:
-    - name: "claude-sonnet-4.6"
-  decisions:
-    - name: "default-route"
-      description: "default route"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions: []
-      modelRefs:
-        - model: "claude-sonnet-4.6"
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: "default-route"
+        description: "default route"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions: []
+        modelRefs:
+          - model: "claude-sonnet-4.6"
+            use_reasoning: false
 """,
         extproc_host="vllm-sr-router-container",
         router_api_host="vllm-sr-router-container",
@@ -824,7 +819,7 @@ def test_generate_envoy_config_rejects_backendless_physical_model(
             tmp_path,
             monkeypatch,
             """
-version: v0.3
+version: v0.5
 listeners:
   - name: "http-8899"
     address: "0.0.0.0"
@@ -835,19 +830,18 @@ providers:
   models:
     - name: "claude-test"
       api_format: "anthropic"
-routing:
-  modelCards:
-    - name: "claude-test"
-  decisions:
-    - name: "default-route"
-      description: "default route"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions: []
-      modelRefs:
-        - model: "claude-test"
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: "default-route"
+        description: "default route"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions: []
+        modelRefs:
+          - model: "claude-test"
+            use_reasoning: false
 """,
             extproc_host="vllm-sr-router-container",
             router_api_host="vllm-sr-router-container",

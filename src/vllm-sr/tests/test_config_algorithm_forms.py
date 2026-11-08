@@ -53,22 +53,27 @@ def test_migrated_algorithms_have_no_removed_forms(case: str) -> None:
 def test_lines_follow_the_routers_order_in_every_routing_scope() -> None:
     document = {
         "global": {"router": {"model_selection": {"enabled": True, "ml": {}}}},
-        "routing": {
-            "decisions": [
-                {"name": "pinned", "algorithm": {"type": "static", "on_error": "skip"}},
-                {
-                    "name": "fused",
-                    "algorithm": {"type": "fusion", "fusion": {"on_error": "skip"}},
-                },
-            ]
-        },
         "recipes": [
             {
+                "name": "default",
+                "decisions": [
+                    {
+                        "name": "pinned",
+                        "algorithm": {"type": "static", "on_error": "skip"},
+                    },
+                    {
+                        "name": "fused",
+                        "algorithm": {"type": "fusion", "fusion": {"on_error": "skip"}},
+                    },
+                ],
+            },
+            {
                 "name": "native",
-                "routing": {
-                    "decisions": [{"name": "cheap", "algorithm": {"type": "knn"}}]
-                },
-            }
+                "decisions": [{"name": "cheap", "algorithm": {"type": "knn"}}],
+            },
+        ],
+        "entrypoints": [
+            {"model_names": ["vllm-sr/auto"], "recipe": "default", "default": True}
         ],
     }
 
@@ -76,10 +81,10 @@ def test_lines_follow_the_routers_order_in_every_routing_scope() -> None:
 
     assert lines == [
         [
-            "recipes[native].routing.decisions[cheap].algorithm",
+            "recipes[native].decisions[cheap].algorithm",
             "removed_algorithm_type",
         ],
-        ["routing.decisions[fused].algorithm", "removed_field"],
-        ["routing.decisions[pinned].algorithm", "removed_field"],
+        ["recipes[default].decisions[fused].algorithm", "removed_field"],
+        ["recipes[default].decisions[pinned].algorithm", "removed_field"],
         ["global.router.model_selection.ml", "removed_field"],
     ]

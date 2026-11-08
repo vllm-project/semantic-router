@@ -188,7 +188,7 @@ func TestPlaygroundChatProxyPreservesIdentityAndStripsBrowserCredentials(t *test
 		t.Fatal(err)
 	}
 	configPath := filepath.Join(t.TempDir(), "runtime.yaml")
-	runtimeConfig := "version: v0.3\nlisteners:\n  - name: public\n    address: 127.0.0.1\n    port: " + target.Port() + "\n"
+	runtimeConfig := "version: v0.5\nlisteners:\n  - name: public\n    address: 127.0.0.1\n    port: " + target.Port() + "\n"
 	if err := os.WriteFile(configPath, []byte(runtimeConfig), 0o600); err != nil {
 		t.Fatal(err)
 	}

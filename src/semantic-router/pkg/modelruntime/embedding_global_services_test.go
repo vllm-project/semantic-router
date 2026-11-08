@@ -36,7 +36,10 @@ func TestGlobalServicesEmbedWithTheDefaultDeployment(t *testing.T) {
 	defer server.Close()
 	cfg := &config.RouterConfig{}
 	cfg.EmbeddingDeployment = "global-default"
-	cfg.Memory.Enabled, cfg.Memory.Milvus.Dimension = true, 2
+	cfg.Memory.InUse, cfg.Memory.Milvus.Dimension = true, 2
+	cfg.GlobalPlugins = []config.DecisionPlugin{{Type: config.DecisionPluginContext, Configuration: config.MustStructuredPayload(map[string]any{
+		"enabled": true, "sources": []any{map[string]any{"type": config.ContextSourceMemory}},
+	})}}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{
 		"global-default": {Provider: config.OpenAIEmbeddingsProvider, Endpoint: server.URL, Model: "global-default", Capabilities: &config.DeploymentCapabilities{Dimensions: 2}},
 		"recipe-only":    {Provider: config.ModelRuntimeProvider, Device: "rocm:7", Artifact: "/not-installed/recipe-only"},

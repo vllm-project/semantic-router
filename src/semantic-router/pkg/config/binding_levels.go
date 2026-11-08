@@ -27,7 +27,7 @@ var SharedAnswerSignalTypes = []string{
 // ruleLevelDeployment is where a rule of a signal type that asks its own
 // question writes its deployment.
 var ruleLevelDeployment = map[string]string{
-	SignalTypeSystemOne: "routing.signals.systemone[].deployment",
+	SignalTypeSystemOne: "recipes[].signals.systemone[].deployment",
 }
 
 // checkBindingKeys checks the keys one bindings map of a configuration
@@ -44,7 +44,7 @@ func checkBindingKeys(path string, bindings map[string]ModelBinding) ([]ConfigWa
 		case strings.HasPrefix(key, "safety.") || strings.HasPrefix(key, "complexity."):
 			note = fmt.Sprintf("a binding for one rule is deprecated; set deployment on the rule (%s)", ruleDeploymentPath(key))
 		case strings.HasPrefix(key, "systemone."):
-			return nil, fmt.Errorf("%s.%s: systemone rules each ask their own question; set deployment on the rule (routing.signals.systemone[].deployment)", path, key)
+			return nil, fmt.Errorf("%s.%s: systemone rules each ask their own question; set deployment on the rule (recipes[].signals.systemone[].deployment)", path, key)
 		case ruleLevelDeployment[key] != "":
 			return nil, fmt.Errorf("%s.%s: %s rules each ask their own question, so a binding cannot choose their deployment; set %s, or leave it out to use system.decision_model", path, key, key, ruleLevelDeployment[key])
 		default:
@@ -69,9 +69,9 @@ func checkBindingKeys(path string, bindings map[string]ModelBinding) ([]ConfigWa
 // deployment.
 func ruleDeploymentPath(key string) string {
 	if strings.HasPrefix(key, "safety.") {
-		return "routing.signals.safety[" + strings.TrimPrefix(key, "safety.") + "].deployment"
+		return "recipes[].signals.safety[" + strings.TrimPrefix(key, "safety.") + "].deployment"
 	}
-	return "routing.signals.complexity[" + strings.TrimPrefix(key, "complexity.") + "].deployment"
+	return "recipes[].signals.complexity[" + strings.TrimPrefix(key, "complexity.") + "].deployment"
 }
 
 // suggestKey names the signal type, or the deprecated consumer name of
@@ -103,13 +103,8 @@ func checkCanonicalBindingKeys(canonical *CanonicalConfig) ([]ConfigWarning, err
 	if err != nil {
 		return nil, err
 	}
-	routing, err := checkBindingKeys("routing.model_bindings", canonical.Routing.ModelBindings)
-	if err != nil {
-		return nil, err
-	}
-	warnings = append(warnings, routing...)
 	for _, recipe := range canonical.Recipes {
-		scoped, err := checkBindingKeys(fmt.Sprintf("recipes[%s].routing.model_bindings", recipe.Name), recipe.Routing.ModelBindings)
+		scoped, err := checkBindingKeys(recipePath(recipe.Name)+".model_bindings", recipe.ModelBindings)
 		if err != nil {
 			return nil, err
 		}

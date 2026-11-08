@@ -36,7 +36,6 @@ def _legacy() -> dict:
         "configuration": {"enabled": True, "use_nli": True},
     }
     routing = {
-        "modelCards": [{"name": "general"}],
         "signals": {"hallucination": [hallucination_rule]},
         "decisions": [
             {
@@ -53,12 +52,15 @@ def _legacy() -> dict:
         ],
     }
     return {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [],
         "providers": {"defaults": {"model": "general"}},
-        "routing": routing,
+        "entrypoints": [
+            {"model_names": ["vllm-sr/auto"], "recipe": "default", "default": True}
+        ],
         "recipes": [
-            {"name": "isolated", "routing": yaml.safe_load(yaml.safe_dump(routing))}
+            {"name": "default", **routing},
+            {"name": "isolated", **yaml.safe_load(yaml.safe_dump(routing))},
         ],
         "global": {
             "model_catalog": {
@@ -114,12 +116,7 @@ def _legacy() -> dict:
                     },
                 },
             },
-            "stores": {
-                "response_cache": {
-                    "enabled": True,
-                    "polarity_guard": {"mode": "lexical"},
-                }
-            },
+            "stores": {"response_cache": {"polarity_guard": {"mode": "lexical"}}},
         },
     }
 
@@ -145,7 +142,7 @@ def test_every_retired_setting_is_found_by_its_path():
         "global.model_catalog.system.hallucination_explainer",
         "global.stores.response_cache.polarity_guard",
     ]
-    for prefix in ("routing", "recipes[0].routing"):
+    for prefix in ("recipes[default]", "recipes[isolated]"):
         expected += [
             f"{prefix}.signals.hallucination[0].use_nli",
             f"{prefix}.decisions[0].algorithm.fusion.grounding.nli_contradiction_penalty",
@@ -210,7 +207,7 @@ def test_the_hallucination_endpoint_shorthand_is_retired():
 
 def test_parsing_refuses_a_runtime_profile_and_names_the_migration(tmp_path):
     document = {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [],
         "providers": {"defaults": {"model": "general"}},
         "global": {

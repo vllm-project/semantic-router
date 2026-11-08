@@ -1,5 +1,5 @@
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -19,55 +19,54 @@ config:
             provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    modelCards:
-      - name: general-expert
-    signals:
-      keywords:
-        - name: many_questions
-          description: Prompts that contain many explicit questions.
-          operator: OR
-          method: regex
-          keywords: ['[?？]']
-          count:
-            gte: 4
-        - name: numbered_steps
-          description: Prompts that contain numbered list items such as "1. ..."
-          operator: OR
-          method: regex
-          keywords: ['(?m)^\s*\d+\.\s+']
-    decisions:
-      - name: many_questions_routing
-        description: Route requests with four or more explicit questions.
-        priority: 100
-        rules:
-          operator: AND
-          conditions:
-            - type: keyword
-              name: many_questions
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
-      - name: numbered_steps_routing
-        description: Route requests that contain numbered steps.
-        priority: 90
-        rules:
-          operator: AND
-          conditions:
-            - type: keyword
-              name: numbered_steps
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
-      - name: default-route
-        description: Fallback route for requests matching no request-shape rule.
-        priority: 10
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
+  recipes:
+    - name: default
+      signals:
+        keywords:
+          - name: many_questions
+            description: Prompts that contain many explicit questions.
+            operator: OR
+            method: regex
+            keywords: ['[?？]']
+            count:
+              gte: 4
+          - name: numbered_steps
+            description: Prompts that contain numbered list items such as "1. ..."
+            operator: OR
+            method: regex
+            keywords: ['(?m)^\s*\d+\.\s+']
+      decisions:
+        - name: many_questions_routing
+          description: Route requests with four or more explicit questions.
+          priority: 100
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: many_questions
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: numbered_steps_routing
+          description: Route requests that contain numbered steps.
+          priority: 90
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: numbered_steps
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: default-route
+          description: Fallback route for requests matching no request-shape rule.
+          priority: 10
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
   global:
     router:
       strategy: priority

@@ -1,1 +1,1 @@
-routing.decisions[docs].plugins[0]: removed_field: rag top_k, similarity_threshold, rerank are removed; run `vllm-sr config migrate` (match.recall.top_k, match.recall.min_similarity, match.judge with the relevance preset on the decision model)
+recipes[default].decisions[docs].plugins[0]: removed_field: rag top_k, similarity_threshold, rerank are removed; run `vllm-sr config migrate` (match.recall.top_k, match.recall.min_similarity, match.judge with the relevance preset on the decision model)

@@ -59,7 +59,7 @@ def test_envoy_generation_rejects_invalid_backend_group_at_shared_seam(
     output_path = tmp_path / "envoy.yaml"
     config_path.write_text(
         f"""
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: local-model
@@ -68,7 +68,8 @@ providers:
       api_format: openai
       backend_refs:
 {backend_refs}
-routing: {{}}
+recipes:
+  - name: default
 """
     )
 

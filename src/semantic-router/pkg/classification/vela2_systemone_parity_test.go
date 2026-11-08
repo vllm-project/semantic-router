@@ -28,7 +28,7 @@ const (
 )
 
 const vela2ParityConfig = `
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: m
@@ -57,54 +57,55 @@ global:
         detector:
           min_span_length: 1
           min_span_confidence: 0
-routing:
-  signals:
-    systemone:
-      - name: topics
-        deployment: vela2
-        timeout_ms: 60000
-        question:
-          type: set
-          instructions: Which topics does the request mention?
-          labels:
-            - {key: billing, description: "payments, invoices, charges or refunds"}
-            - {key: shipping, description: "deliveries, parcels, tracking or returns"}
-            - {key: account, description: "logins, passwords or account settings"}
-            - {key: medication, description: drugs or doses}
-      - name: entities
-        deployment: vela2
-        timeout_ms: 60000
-        question:
-          type: span
-          instructions: Which spans name a place or an organization?
-          labels:
-            - {key: location, description: "a city, country or address"}
-            - {key: organization, description: a company or institution}
-      - name: urgent
-        deployment: vela2
-        timeout_ms: 60000
-        question:
-          type: noul
-          instructions: Does the request need an urgent answer?
-    pii:
-      - name: any_pii
-        predicate: {gte: 0.0001}
-  decisions:
-    - name: every-signal
-      priority: 10
-      rules:
-        operator: OR
-        conditions:
-          - {type: systemone, name: topics, label: billing}
-          - {type: systemone, name: topics, label: shipping}
-          - {type: systemone, name: topics, label: account}
-          - {type: systemone, name: topics, label: medication}
-          - {type: systemone, name: entities, label: location}
-          - {type: systemone, name: entities, label: organization}
-          - {type: systemone, name: urgent}
-          - {type: pii, name: any_pii}
-      modelRefs:
-        - model: m
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: topics
+          deployment: vela2
+          timeout_ms: 60000
+          question:
+            type: set
+            instructions: Which topics does the request mention?
+            labels:
+              - {key: billing, description: "payments, invoices, charges or refunds"}
+              - {key: shipping, description: "deliveries, parcels, tracking or returns"}
+              - {key: account, description: "logins, passwords or account settings"}
+              - {key: medication, description: drugs or doses}
+        - name: entities
+          deployment: vela2
+          timeout_ms: 60000
+          question:
+            type: span
+            instructions: Which spans name a place or an organization?
+            labels:
+              - {key: location, description: "a city, country or address"}
+              - {key: organization, description: a company or institution}
+        - name: urgent
+          deployment: vela2
+          timeout_ms: 60000
+          question:
+            type: noul
+            instructions: Does the request need an urgent answer?
+      pii:
+        - name: any_pii
+          predicate: {gte: 0.0001}
+    decisions:
+      - name: every-signal
+        priority: 10
+        rules:
+          operator: OR
+          conditions:
+            - {type: systemone, name: topics, label: billing}
+            - {type: systemone, name: topics, label: shipping}
+            - {type: systemone, name: topics, label: account}
+            - {type: systemone, name: topics, label: medication}
+            - {type: systemone, name: entities, label: location}
+            - {type: systemone, name: entities, label: organization}
+            - {type: systemone, name: urgent}
+            - {type: pii, name: any_pii}
+        modelRefs:
+          - model: m
 `
 
 // The questions the configuration above asks, written out as a client of

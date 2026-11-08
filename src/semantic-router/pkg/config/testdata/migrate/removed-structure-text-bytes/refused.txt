@@ -1,1 +1,0 @@
-routing.signals.structure[long_current_turn]: removed_signal_type: a structure rule on text_bytes is removed, and no keywords rule measures text length; it has no mechanical rewrite: a context rule on the request's estimated tokens

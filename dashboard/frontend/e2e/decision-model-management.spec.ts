@@ -28,11 +28,8 @@ async function mockDecisionModelManager(
   })
   const global = {
     model_catalog: {
-      system: (options.defaultModel
-        ? {}
-        : { decision_model: { deployment: 'primary' }, pii_classifier: 'models/custom-pii' }) as {
+      system: (options.defaultModel ? {} : { decision_model: { deployment: 'primary' } }) as {
         decision_model?: { deployment: string }
-        pii_classifier?: string
       },
       deployments: (options.defaultModel
         ? {}
@@ -48,15 +45,18 @@ async function mockDecisionModelManager(
   let observed = options.defaultModel ? 'vela3-fast' : 'Vela-2.0-4B'
   let observedDeployment = 'primary'
   const config = {
-    version: 'v0.3',
+    version: 'v0.5',
     global,
     providers: { models: [] },
-    routing: {
-      signals: options.defaultModel
-        ? {}
-        : { decision: [{ name: 'task', question: { type: 'noul' } }] },
-      decisions: [],
-    },
+    recipes: [
+      {
+        name: 'default',
+        signals: options.defaultModel
+          ? {}
+          : { systemone: [{ name: 'task', question: { type: 'noul' } }] },
+        decisions: [],
+      },
+    ],
   }
   let pending = false
   let revision = 'active-config'
@@ -633,10 +633,7 @@ test.describe('System One model management and monitoring', () => {
         ...fixture.config,
         global: {
           model_catalog: {
-            system: {
-              decision_model: { deployment: 'vela-2-0-9b' },
-              pii_classifier: 'models/custom-pii',
-            },
+            system: { decision_model: { deployment: 'vela-2-0-9b' } },
             deployments: {
               primary: {
                 provider: 'model_runtime',

@@ -181,7 +181,7 @@ func vela3DecisionSignals(valuesPath string) (map[string]mrVela3Signal, error) {
 	}
 	var values struct {
 		Config struct {
-			Routing struct {
+			Recipes []struct {
 				Signals struct {
 					SystemOne []struct {
 						Name     string `yaml:"name"`
@@ -195,14 +195,17 @@ func vela3DecisionSignals(valuesPath string) (map[string]mrVela3Signal, error) {
 						} `yaml:"predicate"`
 					} `yaml:"systemone"`
 				} `yaml:"signals"`
-			} `yaml:"routing"`
+			} `yaml:"recipes"`
 		} `yaml:"config"`
 	}
 	if err := yaml.Unmarshal(data, &values); err != nil {
 		return nil, fmt.Errorf("%s: %w", valuesPath, err)
 	}
 	signals := map[string]mrVela3Signal{}
-	for _, rule := range values.Config.Routing.Signals.SystemOne {
+	if len(values.Config.Recipes) == 0 {
+		return nil, fmt.Errorf("%s: no recipe declares a signal", valuesPath)
+	}
+	for _, rule := range values.Config.Recipes[0].Signals.SystemOne {
 		signals[rule.Name] = mrVela3Signal{
 			question: modelruntime.Question{Type: rule.Question.Type, Instructions: rule.Question.Instructions, Labels: rule.Question.Labels},
 			gte:      rule.Predicate.GTE,

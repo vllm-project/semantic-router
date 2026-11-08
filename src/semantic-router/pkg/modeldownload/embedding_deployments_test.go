@@ -21,8 +21,8 @@ func findSpecByPath(specs []ModelSpec, localPath string) (ModelSpec, bool) {
 func TestEmbeddingDeploymentsAreLeftToTheRuntime(t *testing.T) {
 	cfg := config.DefaultGlobalConfig()
 	cfg.MoMRegistry = config.ToLegacyRegistry()
-	cfg.SemanticCache.Enabled = true
-	cfg.Memory.Enabled = true
+	cfg.SemanticCache.InUse = true
+	cfg.Memory.InUse = true
 	cfg.API.Embeddings.Enabled = true
 	cfg.ModelDeployments["qwen3-embedding"] = config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: "Qwen/Qwen3-Embedding-0.6B", Device: "cpu"}
 	cfg.VectorStore = &config.VectorStoreConfig{Enabled: true, BackendType: "memory", Embedding: &config.EmbeddingBinding{Deployment: "qwen3-embedding"}}

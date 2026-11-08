@@ -67,14 +67,14 @@ def validate_native_execution(config: UserConfig) -> list[ValidationError]:
     }
     chat_recipes = {
         entry.recipe for entry in config.entrypoints if entry.api != "systemone"
-    } | {"default"}
+    } | {config.default_recipe.name}
     calibrations = (
         {item["name"] for item in config.evaluation.calibrations}
         if config.evaluation
         else set()
     )
     for name, profile in iter_routing_profiles(config):
-        field = "routing" if name == "default" else f"recipes.{name}.routing"
+        field = f"recipes.{name}"
         if name in native_recipes and name in chat_recipes:
             errors.append(
                 ValidationError(
@@ -148,7 +148,7 @@ def _native_profile_errors(config, profile, field):
     if enabled:
         errors.append(
             ValidationError(
-                "native execution uses stages and algorithm.budget; Chat routing.fallback must be disabled",
+                "native execution uses stages and algorithm.budget; Chat fallback must be disabled",
                 field=field + ".fallback",
             )
         )

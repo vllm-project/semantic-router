@@ -55,9 +55,9 @@ def test_the_routers_migration_leaves_no_removed_application_form(case):
 )
 def test_a_removed_signal_type_is_refused_in_a_recipe(collection):
     rule = {"name": "rule", "candidates": ["a question about tax law"]}
-    config = {"recipes": [{"name": "r", "routing": {"signals": {collection: [rule]}}}]}
+    config = {"recipes": [{"name": "r", "signals": {collection: [rule]}}]}
     assert removed_application_forms(config)[0].startswith(
-        f"recipes[r].routing.signals.{collection}: removed_signal_type: "
+        f"recipes[r].signals.{collection}: removed_signal_type: "
     )
 
 
@@ -67,9 +67,11 @@ def test_a_removed_condition_type_is_refused_where_it_is_nested():
         "operator": "AND",
         "conditions": [{"operator": "OR", "conditions": [leaf]}],
     }
-    config = {"routing": {"decisions": [{"name": "d", "rules": rules}]}}
+    config = {
+        "recipes": [{"name": "default", "decisions": [{"name": "d", "rules": rules}]}]
+    }
     assert removed_application_forms(config) == [
-        "routing.decisions[d].rules.conditions[0].conditions[risk]: "
+        "recipes[default].decisions[d].rules.conditions[0].conditions[risk]: "
         "removed_signal_type: condition type classifier is systemone; run "
         "`vllm-sr config migrate` (type: systemone)"
     ]
@@ -108,7 +110,7 @@ def test_parsing_refuses_a_removed_application_form(tmp_path):
     with pytest.raises(
         ConfigParseError,
         match=re.escape(
-            "routing.signals.kb: removed_signal_type: the kb signal is removed"
+            "recipes[default].signals.kb: removed_signal_type: the kb signal is removed"
         ),
     ):
         parse_user_config(str(path), log_summary=False)

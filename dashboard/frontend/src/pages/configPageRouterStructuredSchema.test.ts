@@ -159,28 +159,6 @@ describe('router defaults structured schemas', () => {
     ])
   })
 
-  it('round-trips typed classifier modules with unknown keys', () => {
-    const classifier = normalizeRouterStructuredFields('classifier', {
-      preference: {
-        use_contrastive: true,
-        prototype_scoring: {
-          enabled: true,
-          max_prototypes: 8,
-          future_bank_mode: 'adaptive',
-        },
-      },
-    })
-    expect(classifier.preference).toEqual(
-      expect.objectContaining({
-        prototype_scoring: {
-          enabled: true,
-          max_prototypes: 8,
-          future_bank_mode: 'adaptive',
-        },
-      }),
-    )
-  })
-
   it('rejects duplicate list values and invalid typed numbers', () => {
     const aliases = ROUTER_STRUCTURED_FIELDS.prompt_compression?.skip_signals.schema
     const streamedBody = ROUTER_STRUCTURED_FIELDS.router_core?.streamed_body.schema
@@ -203,13 +181,6 @@ describe('router defaults structured schemas', () => {
       config: null,
       routerConfig: {
         model_selection: selection,
-        classifier: {
-          preference: {
-            use_contrastive: true,
-            prototype_scoring: { enabled: true, future_bank_mode: 'adaptive' },
-          },
-          future_classifier_module: { enabled: true },
-        },
       },
       routerDefaults: null,
     })
@@ -236,19 +207,6 @@ describe('router defaults structured schemas', () => {
       enabled: false,
       momentum: { enabled: true, attack: 0.7 },
     })
-
-    const classifierCard = cards.find((card) => card.key === 'classifier')
-    const classifierPatch = classifierCard?.save(classifierCard.editData) as {
-      model_catalog?: { modules?: { classifier?: Record<string, unknown> } }
-    }
-    expect(classifierPatch.model_catalog?.modules?.classifier).toEqual(
-      expect.objectContaining({
-        future_classifier_module: { enabled: true },
-        preference: expect.objectContaining({
-          prototype_scoring: expect.objectContaining({ future_bank_mode: 'adaptive' }),
-        }),
-      }),
-    )
 
     const embeddingCards = buildRouterSectionCards({
       config: null,

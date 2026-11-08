@@ -7,14 +7,20 @@ import (
 )
 
 func TestAPersonalDataReplayLimitLeavesThePIISignalsOutOfRouting(t *testing.T) {
-	no := false
-	classifier := &Classifier{Config: &config.RouterConfig{
-		RouterReplay: config.RouterReplayConfig{Enabled: true, CapturePersonalData: &no},
+	cfg := &config.RouterConfig{
+		GlobalPlugins: []config.DecisionPlugin{{
+			Type:          config.DecisionPluginRouterReplay,
+			Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true, "capture_personal_data": false}),
+		}},
 		IntelligentRouting: config.IntelligentRouting{
 			Signals:   config.Signals{PIIRules: []config.PIIRule{{Name: "personal_data"}}},
 			Decisions: []config.Decision{{Name: "everything", Rules: config.RuleCombination{Operator: "AND"}}},
 		},
-	}}
+	}
+	if err := cfg.LayerPlugins(); err != nil {
+		t.Fatal(err)
+	}
+	classifier := &Classifier{Config: cfg}
 	if !classifier.Config.ReplayNeedsPIIEvidence() {
 		t.Fatal("the replay data policy reads the PII rules")
 	}

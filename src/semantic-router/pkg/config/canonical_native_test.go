@@ -9,7 +9,7 @@ import (
 )
 
 const nativeRoutingTestYAML = `
-version: v0.3
+version: v0.5
 listeners:
   - name: native
     port: 8801
@@ -40,33 +40,36 @@ global:
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
         device: cpu
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - api: systemone
     model_names: [vllm-sr/auto]
     recipe: native-decisions
 recipes:
+  - name: default
   - name: native-decisions
-    routing:
-      decisions:
-        - name: classify
-          rules: {}
-          modelRefs: [{model: kai}, {model: strong}, {model: reviewer}]
-          algorithm:
-            type: escalate
-            budget: {deadline: 3s, max_calls: 4}
-            escalate:
-              quality:
-                type: uncalibrated
-                accept:
-                  native:
-                    - {state: document, question: task, question_type: choice, field: confidence, gte: 0.8}
-              stages:
-                - {name: fast, model: kai}
-                - {name: strong, model: strong, timeout: 1s}
-                - name: review
-                  kind: judge
-                  model: reviewer
-                  enabled: false
-                  generation: {max_output_tokens: 256}
+    decisions:
+      - name: classify
+        rules: {}
+        modelRefs: [{model: kai}, {model: strong}, {model: reviewer}]
+        algorithm:
+          type: escalate
+          budget: {deadline: 3s, max_calls: 4}
+          escalate:
+            quality:
+              type: uncalibrated
+              accept:
+                native:
+                  - {state: document, question: task, question_type: choice, field: confidence, gte: 0.8}
+            stages:
+              - {name: fast, model: kai}
+              - {name: strong, model: strong, timeout: 1s}
+              - name: review
+                kind: judge
+                model: reviewer
+                enabled: false
+                generation: {max_output_tokens: 256}
 `
 
 func TestCanonicalNativeRoutingRoundTrip(t *testing.T) {
@@ -76,7 +79,7 @@ func TestCanonicalNativeRoutingRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	chat, ok := cfg.ResolveEntrypoint(ChatAPI, DefaultEntrypointModel)
-	if !ok || chat.Source != EntrypointBuiltin || chat.Recipe != DefaultRecipeName {
+	if !ok || !chat.Default || chat.Recipe != DefaultRecipeName {
 		t.Fatalf("Chat default changed: %+v", chat)
 	}
 	native, ok := cfg.ResolveEntrypoint(SystemOneAPI, DefaultEntrypointModel)
@@ -131,7 +134,8 @@ func TestCanonicalNativeRoutingRejectsAmbiguousContracts(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			raw := strings.Replace(nativeRoutingTestYAML, test.old, test.replacement, 1)
 			if test.name == "native Chat recipe" {
-				raw = strings.ReplaceAll(raw, "vllm-sr/auto", "native-alias")
+				raw = strings.Replace(raw, "api: chat\n    model_names: [vllm-sr/auto]", "api: chat\n    model_names: [native-alias]", 1)
+				raw = strings.Replace(raw, "models: [vllm-sr/auto]", "models: [native-alias]", 1)
 			}
 			if raw == nativeRoutingTestYAML {
 				t.Fatal("test mutation did not match")
@@ -221,11 +225,11 @@ func TestSystemOneProviderAliasesAreDirectNativeTargets(t *testing.T) {
 func TestNativeAliasCollisionsAreScopedAndUnambiguous(t *testing.T) {
 	// A System One routing name can coexist with a Chat provider. The two
 	// APIs have separate request model namespaces.
-	raw := strings.ReplaceAll(nativeRoutingTestYAML, "vllm-sr/auto", "reviewer")
+	raw := nativeAliased("reviewer")
 	if _, err := ParseYAMLBytes([]byte(raw)); err != nil {
 		t.Fatalf("cross-API alias was incorrectly rejected: %v", err)
 	}
-	raw = strings.ReplaceAll(nativeRoutingTestYAML, "vllm-sr/auto", "strong")
+	raw = nativeAliased("strong")
 	if _, err := ParseYAMLBytes([]byte(raw)); err == nil || !strings.Contains(err.Error(), "native provider model") {
 		t.Fatalf("same-API routing/provider collision was accepted: %v", err)
 	}
@@ -251,12 +255,11 @@ func TestNativeModelsCannotBecomeChatDefaultsOrCandidates(t *testing.T) {
 	if _, err := ParseYAMLBytes([]byte(raw)); err == nil || !strings.Contains(err.Error(), "must be a Chat provider") {
 		t.Fatalf("native alias became Chat default: %v", err)
 	}
-	raw = strings.Replace(nativeRoutingTestYAML, "entrypoints:\n", `routing:
-  decisions:
-    - name: invalid-chat
-      rules: {}
-      modelRefs: [{model: kai}]
-entrypoints:
+	raw = strings.Replace(nativeRoutingTestYAML, "  - name: default\n", `  - name: default
+    decisions:
+      - name: invalid-chat
+        rules: {}
+        modelRefs: [{model: kai}]
 `, 1)
 	if _, err := ParseYAMLBytes([]byte(raw)); err == nil || !strings.Contains(err.Error(), "Chat execution cannot use native") {
 		t.Fatalf("native alias became Chat candidate: %v", err)
@@ -302,4 +305,10 @@ func TestNativeCascadeRejectsATaskInputOnALocalAlias(t *testing.T) {
 			t.Fatalf("publish=%v window: %v", publish, err)
 		}
 	}
+}
+
+// nativeAliased renames the native routing name, keeping the Chat default.
+func nativeAliased(alias string) string {
+	raw := strings.Replace(nativeRoutingTestYAML, "models: [vllm-sr/auto]", "models: ["+alias+"]", 1)
+	return strings.Replace(raw, "api: systemone\n    model_names: [vllm-sr/auto]", "api: systemone\n    model_names: ["+alias+"]", 1)
 }

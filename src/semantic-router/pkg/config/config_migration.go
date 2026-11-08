@@ -90,6 +90,13 @@ func Scalar(value string) *yaml.Node {
 // that replace them, keeping every other field as written, and then its
 // deprecated model fields (MigrateModelResources). The notes name what
 // changed and what a person must review. The migrated document must load.
+//
+// The forms run in one order, configForms': first the v0.3 layout
+// (structureForms: the version, the model cards, the top-level routing block
+// and each recipe's), then every other form, whose patterns name v0.5 paths
+// only, so a removed form written in a v0.3 layout is matched after the
+// layout is rewritten; last the global feature switches (switchForms), which
+// read the decisions and stores the earlier forms made canonical.
 func MigrateConfig(data []byte) ([]byte, []ConfigWarning, error) {
 	migrated, notes, err := migrateConfigForms(data, configForms)
 	if err != nil {

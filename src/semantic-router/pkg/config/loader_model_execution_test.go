@@ -79,32 +79,35 @@ global:
 		{
 			name: "NLI routing fields in routing and recipes",
 			yaml: `
-routing:
-  signals:
-    hallucination:
-      - name: grounded
-        use_nli: true
-  decisions:
-    - name: fused
-      algorithm:
-        type: fusion
-        fusion:
-          grounding:
-            nli_contradiction_penalty: 1.0
 recipes:
+  - name: default
+    signals:
+      hallucination:
+        - name: grounded
+          use_nli: true
+    decisions:
+      - name: fused
+        algorithm:
+          type: fusion
+          fusion:
+            grounding:
+              nli_contradiction_penalty: 1.0
   - name: private
-    routing:
-      decisions:
-        - name: checked
-          plugins:
-            - type: hallucination
-              configuration:
-                use_nli: true
+    decisions:
+      - name: checked
+        plugins:
+          - type: hallucination
+            configuration:
+              use_nli: true
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `,
 			want: []string{
-				"routing.signals.hallucination[0].use_nli",
-				"routing.decisions[0].algorithm.fusion.grounding.nli_contradiction_penalty",
-				"recipes[0].routing.decisions[0].plugins[0].configuration.use_nli",
+				"recipes[default].signals.hallucination[0].use_nli",
+				"recipes[default].decisions[0].algorithm.fusion.grounding.nli_contradiction_penalty",
+				"recipes[private].decisions[0].plugins[0].configuration.use_nli",
 			},
 		},
 	}
@@ -129,14 +132,15 @@ recipes:
 
 func TestRejectRemovedModelExecutionFieldsAcceptsCanonicalFields(t *testing.T) {
 	raw, err := parseRawConfigMap([]byte(`
-routing:
-  decisions:
-    - name: fused
-      algorithm:
-        type: fusion
-        fusion:
-          grounding:
-            contradiction_penalty: 1.0
+recipes:
+  - name: default
+    decisions:
+      - name: fused
+        algorithm:
+          type: fusion
+          fusion:
+            grounding:
+              contradiction_penalty: 1.0
 global:
   model_catalog:
     deployments:
@@ -159,7 +163,7 @@ global:
 }
 
 func TestParseRefusesADeploymentProfileWithTheMigrateCommand(t *testing.T) {
-	_, err := ParseYAMLBytes([]byte(`version: v0.3
+	_, err := ParseYAMLBytes([]byte(`version: v0.5
 global:
   model_catalog:
     deployments:
@@ -183,7 +187,7 @@ global:
 }
 
 func TestParseKeepsADeploymentsEngineArguments(t *testing.T) {
-	cfg, err := ParseYAMLBytes([]byte(`version: v0.3
+	cfg, err := ParseYAMLBytes([]byte(`version: v0.5
 global:
   model_catalog:
     deployments:

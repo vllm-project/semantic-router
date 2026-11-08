@@ -9,38 +9,39 @@ global:
     # same call as the decision questions below.
     bindings:
       pii: vela2
-routing:
-  signals:
-    systemone:
-      - name: support_topics
-        description: Which support topics the request mentions.
-        deployment: vela2
-        question:
-          type: set
-          instructions: Which topics does the request mention?
-          labels:
-            - key: billing
-              description: Payments, invoices or refunds
-            - key: shipping
-              description: Deliveries, tracking or returns
-            - key: account
-              description: Logins, passwords or account settings
-        timeout_ms: 1000
-      - name: order_numbers
-        description: Where the request quotes an order or account number.
-        deployment: vela2
-        question:
-          type: span
-          instructions: Which spans are order or account numbers?
-          labels:
-            - key: order_number
-              description: A customer order or account number
-          head: router
-        predicate:
-          gte: 0.8
-        timeout_ms: 1000
-    pii:
-      - name: personal_data
-        predicate:
-          gte: 0.5
-        ignore_labels: [EMAIL_ADDRESS]
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: support_topics
+          description: Which support topics the request mentions.
+          deployment: vela2
+          question:
+            type: set
+            instructions: Which topics does the request mention?
+            labels:
+              - key: billing
+                description: Payments, invoices or refunds
+              - key: shipping
+                description: Deliveries, tracking or returns
+              - key: account
+                description: Logins, passwords or account settings
+          timeout_ms: 1000
+        - name: order_numbers
+          description: Where the request quotes an order or account number.
+          deployment: vela2
+          question:
+            type: span
+            instructions: Which spans are order or account numbers?
+            labels:
+              - key: order_number
+                description: A customer order or account number
+            head: router
+          predicate:
+            gte: 0.8
+          timeout_ms: 1000
+      pii:
+        - name: personal_data
+          predicate:
+            gte: 0.5
+          ignore_labels: [EMAIL_ADDRESS]

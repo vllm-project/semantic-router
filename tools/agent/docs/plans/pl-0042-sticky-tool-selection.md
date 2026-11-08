@@ -159,7 +159,7 @@ it. Kept in sync by hand if the issue's completion signal changes.
       original task wording: empirically confirmed (round-trip test against
       the live `UserConfig` Pydantic model) that `global` is an untyped
       `Optional[Dict[str, Any]]` passthrough in `src/vllm-sr/cli/models.py`
-      (`UserConfig.global_`), unlike `routing.decisions[].plugins[].configuration`
+      (`UserConfig.global_`), unlike `recipes[].decisions[].plugins[].configuration`
       which is strictly typed per-plugin (that's why `StickyToolSelectionConfig`
       needed a Python mirror in TASK-01 — Pydantic silently drops unknown
       fields there, but not under an untyped dict). No `StoresConfig` class

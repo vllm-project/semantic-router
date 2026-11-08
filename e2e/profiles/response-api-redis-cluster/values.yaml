@@ -4,7 +4,7 @@ image:
   tag: latest
   pullPolicy: Never
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -16,27 +16,26 @@ config:
             provider: vllm
             endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    decisions:
-      - name: default_decision
-        description: Default catch-all decision
-        priority: 1
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: other
-        modelRefs:
-          - model: openai/gpt-oss-20b
-            use_reasoning: false
-    signals:
-      domains:
-        - name: other
-          description: General knowledge and miscellaneous topics
-          labels:
-            - other
-    modelCards:
-      - name: openai/gpt-oss-20b
+  recipes:
+    - name: default
+      decisions:
+        - name: default_decision
+          description: Default catch-all decision
+          priority: 1
+          rules:
+            operator: OR
+            conditions:
+              - type: domain
+                name: other
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: false
+      signals:
+        domains:
+          - name: other
+            description: General knowledge and miscellaneous topics
+            labels:
+              - other
   global:
     router:
       strategy: priority

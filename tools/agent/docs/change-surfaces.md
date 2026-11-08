@@ -6,7 +6,7 @@ This document defines the project-level surfaces used by skills, reports, and va
 
 - Router-side config schema and shared config files consumed directly by the runtime.
 - The canonical Go types and routing registries generate the JSON schema,
-  `src/semantic-router/pkg/configschema/router-config-v0.3.schema.json`, and
+  `src/semantic-router/pkg/configschema/router-config-v0.5.schema.json`, and
   `dashboard/frontend/src/generated/routerConfigContract.ts`.
   CLI and container builds stage that artifact without tracked mirrors; the
   Dashboard frontend imports it directly. Do not maintain a parallel field or

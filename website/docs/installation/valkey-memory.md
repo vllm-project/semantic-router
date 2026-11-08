@@ -232,18 +232,19 @@ Routes can override global memory settings with a memory source of the
 `context` plugin:
 
 ```yaml
-routing:
-  decisions:
-    - name: personalized_route
-      plugins:
-        - type: context
-          configuration:
-            enabled: true
-            sources:
-              - type: memory
-                match:
-                  recall: {method: embedding, top_k: 10, min_similarity: 0.60}
-                store: {auto: true}
+recipes:
+  - name: default
+    decisions:
+      - name: personalized_route
+        plugins:
+          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: memory
+                  match:
+                    recall: {method: embedding, top_k: 10, min_similarity: 0.60}
+                  store: {auto: true}
 ```
 
 See the [memory source tutorial](../tutorials/plugin/context.md#memory-sources) for details.

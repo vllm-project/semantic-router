@@ -5,7 +5,7 @@
 `hallucination` checks the model's answer against the grounding context the
 request carried, such as tool results or retrieved documents, and reports the
 claims that context does not support. Define its rules under
-`routing.signals.hallucination`.
+`recipes[].signals.hallucination`.
 
 This family is learned: the decision model (vela3-fast's span-set adapter by
 default) answers it unless a `hallucination` binding names another deployment,
@@ -50,11 +50,12 @@ Use `hallucination` when:
 ## Configuration
 
 ```yaml
-routing:
-  signals:
-    hallucination:
-      - name: ungrounded_claims
-        description: Detect claims the grounding context does not support.
+recipes:
+  - name: default
+    signals:
+      hallucination:
+        - name: ungrounded_claims
+          description: Detect claims the grounding context does not support.
 ```
 
 A rule has no threshold of its own: the detector's `threshold`,

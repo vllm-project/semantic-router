@@ -42,7 +42,7 @@ func TestCreateMemoryRuntimeValidatesReflectionAlgorithm(t *testing.T) {
 		},
 		{
 			name:  "flat_decision",
-			field: "routing.decisions[memory_route].plugins[context].sources[memory].reflection.algorithm",
+			field: "recipes[default].decisions[memory_route].plugins[context].sources[memory].reflection.algorithm",
 			build: func(algorithm string) *config.RouterConfig {
 				cfg := &config.RouterConfig{}
 				cfg.Decisions = []config.Decision{reflectionDecision("memory_route", algorithm)}
@@ -51,7 +51,7 @@ func TestCreateMemoryRuntimeValidatesReflectionAlgorithm(t *testing.T) {
 		},
 		{
 			name:  "recipe_decision",
-			field: "routing.decisions[recipe_memory_route].plugins[context].sources[memory].reflection.algorithm",
+			field: "recipes[private].decisions[recipe_memory_route].plugins[context].sources[memory].reflection.algorithm",
 			build: func(algorithm string) *config.RouterConfig {
 				cfg := &config.RouterConfig{}
 				cfg.Recipes = []config.RoutingRecipe{

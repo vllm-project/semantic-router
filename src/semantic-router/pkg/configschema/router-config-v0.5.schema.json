@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vllm-sr.ai/schemas/router-config-v0.3.schema.json",
+  "$id": "https://vllm-sr.ai/schemas/router-config-v0.5.schema.json",
   "$defs": {
     "APIConfig": {
       "properties": {
@@ -508,6 +508,9 @@
         },
         "recipe": {
           "type": "string"
+        },
+        "default": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -592,6 +595,12 @@
         },
         "model_catalog": {
           "$ref": "#/$defs/CanonicalModelCatalog"
+        },
+        "plugins": {
+          "items": {
+            "$ref": "#/$defs/DecisionPlugin"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -820,6 +829,69 @@
             "type": "string"
           },
           "type": "object"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "publisher": {
+          "type": "string"
+        },
+        "presentation": {
+          "$ref": "#/$defs/ProviderPresentation"
+        },
+        "distribution": {
+          "$ref": "#/$defs/ModelDistribution"
+        },
+        "family": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "released_at": {
+          "type": "string"
+        },
+        "knowledge_cutoff": {
+          "type": "string"
+        },
+        "lifecycle": {
+          "type": "string"
+        },
+        "param_size": {
+          "type": "string"
+        },
+        "context_window_size": {
+          "type": "integer"
+        },
+        "max_output_tokens": {
+          "type": "integer"
+        },
+        "description": {
+          "type": "string"
+        },
+        "capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "loras": {
+          "items": {
+            "$ref": "#/$defs/LoRAAdapter"
+          },
+          "type": "array"
+        },
+        "modalities": {
+          "$ref": "#/$defs/Modalities"
+        },
+        "modality": {
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -893,18 +965,6 @@
         "description": {
           "type": "string"
         },
-        "routing": {
-          "$ref": "#/$defs/CanonicalRecipeRouting"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "CanonicalRecipeRouting": {
-      "properties": {
-        "candidate_requirements": {
-          "$ref": "#/$defs/CandidateRequirements"
-        },
         "model_bindings": {
           "additionalProperties": {
             "oneOf": [
@@ -980,6 +1040,12 @@
           },
           "type": "object"
         },
+        "plugins": {
+          "items": {
+            "$ref": "#/$defs/DecisionPlugin"
+          },
+          "type": "array"
+        },
         "signals": {
           "$ref": "#/$defs/CanonicalSignals"
         },
@@ -1001,11 +1067,13 @@
         },
         "fallback": {
           "$ref": "#/$defs/FallbackPolicy"
+        },
+        "candidate_requirements": {
+          "$ref": "#/$defs/CandidateRequirements"
         }
       },
       "additionalProperties": false,
-      "type": "object",
-      "description": "Recipe-owned routing profile. Model cards remain in the shared top-level catalog."
+      "type": "object"
     },
     "CanonicalRouterGlobal": {
       "properties": {
@@ -1060,118 +1128,6 @@
         },
         "headers": {
           "$ref": "#/$defs/RouterHeadersConfig"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "CanonicalRouting": {
-      "properties": {
-        "candidate_requirements": {
-          "$ref": "#/$defs/CandidateRequirements"
-        },
-        "model_bindings": {
-          "additionalProperties": {
-            "oneOf": [
-              {
-                "type": "string",
-                "description": "The deployment that answers the signal."
-              },
-              {
-                "properties": {
-                  "deployment": {
-                    "type": "string",
-                    "description": "The deployment that answers the signal: a name in global.model_catalog.deployments."
-                  },
-                  "head": {
-                    "type": "string",
-                    "description": "The classify head of a multi-head model_runtime deployment."
-                  },
-                  "operating_point": {
-                    "properties": {
-                      "path": {
-                        "type": "string",
-                        "description": "The operating point file in the deployment's package."
-                      },
-                      "sha256": {
-                        "type": "string",
-                        "description": "The digest of the operating point file the runtime must serve."
-                      }
-                    },
-                    "additionalProperties": false,
-                    "type": "object",
-                    "required": [
-                      "path",
-                      "sha256"
-                    ]
-                  },
-                  "contract": {
-                    "type": "string",
-                    "description": "Deprecated: the signal decides the result contract.",
-                    "deprecated": true
-                  },
-                  "adapter": {
-                    "type": "string",
-                    "description": "Deprecated: the deployment's provider decides the adapter.",
-                    "deprecated": true
-                  },
-                  "mapping_path": {
-                    "type": "string",
-                    "description": "Deprecated: the module's own mapping path names the labels.",
-                    "deprecated": true
-                  },
-                  "pair_scorer": {
-                    "properties": {
-                      "layer": {
-                        "type": "integer"
-                      },
-                      "dimension": {
-                        "type": "integer"
-                      }
-                    },
-                    "type": "object",
-                    "description": "Deprecated: write layer and dimension in the rag plugin's rerank block.",
-                    "deprecated": true
-                  }
-                },
-                "additionalProperties": false,
-                "type": "object",
-                "required": [
-                  "deployment"
-                ]
-              }
-            ],
-            "description": "The deployment that answers a signal, by name, or an object that also selects a head or pins an operating point."
-          },
-          "type": "object"
-        },
-        "modelCards": {
-          "items": {
-            "$ref": "#/$defs/RoutingModel"
-          },
-          "type": "array"
-        },
-        "signals": {
-          "$ref": "#/$defs/CanonicalSignals"
-        },
-        "projections": {
-          "$ref": "#/$defs/CanonicalProjections"
-        },
-        "decisions": {
-          "items": {
-            "$ref": "#/$defs/Decision"
-          },
-          "type": "array"
-        },
-        "strategy": {
-          "type": "string",
-          "enum": [
-            "priority",
-            "confidence"
-          ]
-        },
-        "fallback": {
-          "$ref": "#/$defs/FallbackPolicy"
         }
       },
       "additionalProperties": false,
@@ -3535,9 +3491,6 @@
     },
     "MemoryConfig": {
       "properties": {
-        "enabled": {
-          "type": "boolean"
-        },
         "backend": {
           "type": "string"
         },
@@ -5554,12 +5507,6 @@
         "backend_type": {
           "type": "string"
         },
-        "enabled": {
-          "type": "boolean"
-        },
-        "similarity_threshold": {
-          "type": "number"
-        },
         "max_entries": {
           "type": "integer"
         },
@@ -5923,33 +5870,6 @@
     },
     "RouterReplayConfig": {
       "properties": {
-        "capture_request_body": {
-          "type": "boolean"
-        },
-        "capture_response_body": {
-          "type": "boolean"
-        },
-        "capture_personal_data": {
-          "type": "boolean"
-        },
-        "capture_tool_results": {
-          "type": "boolean"
-        },
-        "max_records": {
-          "type": "integer"
-        },
-        "max_body_bytes": {
-          "type": "integer"
-        },
-        "max_tool_trace_bytes": {
-          "type": "integer"
-        },
-        "max_tool_trace_steps": {
-          "type": "integer"
-        },
-        "enabled": {
-          "type": "boolean"
-        },
         "store_backend": {
           "type": "string"
         },
@@ -6203,78 +6123,6 @@
         "start",
         "end"
       ]
-    },
-    "RoutingModel": {
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "display_name": {
-          "type": "string"
-        },
-        "publisher": {
-          "type": "string"
-        },
-        "presentation": {
-          "$ref": "#/$defs/ProviderPresentation"
-        },
-        "distribution": {
-          "$ref": "#/$defs/ModelDistribution"
-        },
-        "family": {
-          "type": "string"
-        },
-        "revision": {
-          "type": "string"
-        },
-        "released_at": {
-          "type": "string"
-        },
-        "knowledge_cutoff": {
-          "type": "string"
-        },
-        "lifecycle": {
-          "type": "string"
-        },
-        "param_size": {
-          "type": "string"
-        },
-        "context_window_size": {
-          "type": "integer"
-        },
-        "max_output_tokens": {
-          "type": "integer"
-        },
-        "description": {
-          "type": "string"
-        },
-        "capabilities": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "loras": {
-          "items": {
-            "$ref": "#/$defs/LoRAAdapter"
-          },
-          "type": "array"
-        },
-        "modalities": {
-          "$ref": "#/$defs/Modalities"
-        },
-        "modality": {
-          "type": "string"
-        },
-        "tags": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
     },
     "RoutingPreviewConfig": {
       "properties": {
@@ -7358,7 +7206,7 @@
   "properties": {
     "version": {
       "type": "string",
-      "const": "v0.3"
+      "const": "v0.5"
     },
     "listeners": {
       "items": {
@@ -7369,17 +7217,8 @@
     "providers": {
       "$ref": "#/$defs/CanonicalProviders"
     },
-    "evaluation": {
-      "$ref": "#/$defs/CanonicalEvaluation"
-    },
-    "routing": {
-      "$ref": "#/$defs/CanonicalRouting"
-    },
-    "entrypoints": {
-      "items": {
-        "$ref": "#/$defs/CanonicalEntrypoint"
-      },
-      "type": "array"
+    "global": {
+      "$ref": "#/$defs/CanonicalGlobal"
     },
     "recipes": {
       "items": {
@@ -7387,17 +7226,23 @@
       },
       "type": "array"
     },
-    "global": {
-      "$ref": "#/$defs/CanonicalGlobal"
+    "entrypoints": {
+      "items": {
+        "$ref": "#/$defs/CanonicalEntrypoint"
+      },
+      "type": "array"
+    },
+    "evaluation": {
+      "$ref": "#/$defs/CanonicalEvaluation"
     }
   },
   "additionalProperties": false,
   "type": "object",
   "title": "vLLM Semantic Router canonical configuration",
-  "description": "Canonical v0.3 Router configuration. JSON Schema validates document structure; the Router validation endpoint applies cross-field, reference, and runtime semantic checks.",
+  "description": "Canonical v0.5 Router configuration. JSON Schema validates document structure; the Router validation endpoint applies cross-field, reference, and runtime semantic checks.",
   "x-vllm-sr": {
     "contract_version": "vllm-sr/config-schema/v1",
-    "config_version": "v0.3",
+    "config_version": "v0.5",
     "schema_endpoint": "/api/v1/config/schema",
     "validation": {
       "structural": "json-schema-draft-2020-12",
@@ -7984,6 +7829,14 @@
         "path": [
           "model_catalog",
           "signal_timeout_ms"
+        ]
+      },
+      {
+        "key": "plugins",
+        "layer": "plugins",
+        "display_name": "Default Plugins",
+        "path": [
+          "plugins"
         ]
       }
     ]

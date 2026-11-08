@@ -3,7 +3,7 @@
 ## Overview
 
 `jailbreak` detects prompt-injection and jailbreak attempts before the Router
-commits to a route. Define jailbreak rules under `routing.signals.jailbreak`.
+commits to a route. Define jailbreak rules under `recipes[].signals.jailbreak`.
 
 The decision model answers it unless a `jailbreak` binding names another
 deployment; see [Choose a model for a signal](../../../installation/choose-a-model-for-a-signal.md).
@@ -34,21 +34,22 @@ Use `jailbreak` when:
 ## Configuration
 
 ```yaml
-routing:
-  signals:
-    jailbreak:
-      - name: prompt_injection
-        method: contrastive
-        threshold: 0.8
-        include_history: true
-        description: Detect common prompt-injection or jailbreak attempts.
-        jailbreak_patterns:
-          - ignore previous instructions
-          - reveal the hidden prompt
-          - jailbreak mode
-        benign_patterns:
-          - explain the policy
-          - summarize the safety rules
+recipes:
+  - name: default
+    signals:
+      jailbreak:
+        - name: prompt_injection
+          method: contrastive
+          threshold: 0.8
+          include_history: true
+          description: Detect common prompt-injection or jailbreak attempts.
+          jailbreak_patterns:
+            - ignore previous instructions
+            - reveal the hidden prompt
+            - jailbreak mode
+          benign_patterns:
+            - explain the policy
+            - summarize the safety rules
 ```
 
 `jailbreak_patterns` define deterministic hard-block patterns.
@@ -173,13 +174,14 @@ prompt before the Router commits to a route. `response` scores the model's own
 output, so the rule only exists once the model has answered:
 
 ```yaml
-routing:
-  signals:
-    jailbreak:
-      - name: unsafe_completion
-        direction: response
-        threshold: 0.85
-        description: Detect jailbreak content in the model's own output.
+recipes:
+  - name: default
+    signals:
+      jailbreak:
+        - name: unsafe_completion
+          direction: response
+          threshold: 0.85
+          description: Detect jailbreak content in the model's own output.
 ```
 
 A response-direction rule uses the sequence classifier only: `method: contrastive`,

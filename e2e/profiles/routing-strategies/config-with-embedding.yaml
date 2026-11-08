@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -13,298 +13,297 @@ providers:
           provider: vllm
           endpoint: 172.28.0.20:8002
           weight: 1
-routing:
-  decisions:
-    - name: urgent_request_decision
-      description: Urgent and time-sensitive requests
-      priority: 150
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: urgent_request
-      modelRefs:
-        - model: qwen3
-          use_reasoning: false
-      plugins:
-        - type: system_prompt
-          configuration:
-            system_prompt: You are a highly responsive assistant specialized in handling urgent requests. Prioritize speed and efficiency while maintaining accuracy.
-    - name: sensitive_data_decision
-      description: Requests involving sensitive personal data
-      priority: 150
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: sensitive_data
-      modelRefs:
-        - model: qwen3
-          use_reasoning: false
-      plugins:
-        - type: system_prompt
-          configuration:
-            system_prompt: You are a security-conscious assistant specialized in handling sensitive data. Exercise extreme caution with personal information.
-    - name: exclude_spam_decision
-      description: Potential spam or suspicious requests
-      priority: 150
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: exclude_spam
-      modelRefs:
-        - model: qwen3
-          use_reasoning: false
-      plugins:
-        - type: system_prompt
-          configuration:
-            system_prompt: You are a content moderation assistant. This request has been flagged as potential spam.
-    - name: regex_pattern_match_decision
-      description: Structured data and pattern-based requests
-      priority: 150
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: regex_pattern_match
-      modelRefs:
-        - model: qwen3
-          use_reasoning: false
-      plugins:
-        - type: system_prompt
-          configuration:
-            system_prompt: You are a technical assistant specialized in handling structured data and pattern-based requests.
-    - name: ai_decision
-      description: Artificial intelligence and machine learning topics
-      priority: 140
-      rules:
-        operator: AND
-        conditions:
-          - type: systemone
-            name: ai
-      modelRefs:
-        - model: qwen3
-          use_reasoning: false
-      plugins:
-        - type: system_prompt
-          configuration:
-            system_prompt: You are an AI and machine learning expert. Provide detailed, technical explanations about artificial intelligence, neural networks, and related topics.
-    - name: data_science_decision
-      description: Data science and analytics
-      priority: 140
-      rules:
-        operator: AND
-        conditions:
-          - type: systemone
-            name: data_science
-      modelRefs:
-        - model: qwen3
-          use_reasoning: false
-      plugins:
-        - type: system_prompt
-          configuration:
-            system_prompt: You are a data science expert. Provide insights on data analysis, statistical methods, and predictive modeling.
-    - name: programming_decision
-      description: Programming and software development
-      priority: 140
-      rules:
-        operator: AND
-        conditions:
-          - type: systemone
-            name: programming
-      modelRefs:
-        - model: qwen3
-          use_reasoning: false
-      plugins:
-        - type: system_prompt
-          configuration:
-            system_prompt: You are a programming expert. Help with code implementation, debugging, and software development best practices.
-    - name: business_decision
-      description: Business and management related queries
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: qwen3
-          use_reasoning: false
-      plugins:
-        - type: system_prompt
-          configuration:
-            system_prompt: You are a senior business consultant and strategic advisor.
-    - name: math_decision
-      description: Mathematics and quantitative reasoning
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: math
-      modelRefs:
-        - model: qwen3
-          use_reasoning: true
-      plugins:
-        - type: system_prompt
-          configuration:
-            system_prompt: You are a mathematics expert. Provide step-by-step solutions.
-    - name: computer_science_decision
-      description: Computer science and programming
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: "computer science"
-      modelRefs:
-        - model: qwen3
-          use_reasoning: false
-      plugins:
-        - type: system_prompt
-          configuration:
-            system_prompt: You are a computer science expert.
-    - name: general_decision
-      description: General knowledge and miscellaneous topics
-      priority: 50
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: other
-      modelRefs:
-        - model: qwen3
-          use_reasoning: false
-      plugins:
-        - type: system_prompt
-          configuration:
-            system_prompt: You are a helpful and knowledgeable assistant.
-        - type: response_cache
-          configuration:
-            enabled: true
-            scope: global
-            semantic: {match: {recall: {top_k: 3, min_similarity: 0.75}}}
-  signals:
-    keywords:
-      - name: code_keywords
-        operator: OR
-        method: bm25
-        keywords:
-          - code
-          - function
-          - implement
-          - debug
-          - algorithm
-          - compile
-          - syntax
-          - variable
-          - loop
-          - refactor
-        bm25_threshold: 0.1
-        case_sensitive: false
-      - name: urgent_request
-        operator: OR
-        method: ngram
-        keywords:
-          - urgent
-          - immediate
-          - asap
-          - emergency
-        ngram_threshold: 0.4
-        ngram_arity: 3
-        case_sensitive: false
-      - name: sensitive_data
-        operator: AND
-        keywords:
-          - SSN
-          - social security number
-          - credit card
-        case_sensitive: false
-      - name: exclude_spam
-        operator: NOR
-        keywords:
-          - buy now
-          - free money
-        case_sensitive: false
-      - name: regex_pattern_match
-        operator: OR
-        keywords:
-          - user\.name@domain\.com
-          - C:\Program Files\\
-        case_sensitive: false
-    domains:
-      - name: business
+recipes:
+  - name: default
+    decisions:
+      - name: urgent_request_decision
+        description: Urgent and time-sensitive requests
+        priority: 150
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: urgent_request
+        modelRefs:
+          - model: qwen3
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              system_prompt: You are a highly responsive assistant specialized in handling urgent requests. Prioritize speed and efficiency while maintaining accuracy.
+      - name: sensitive_data_decision
+        description: Requests involving sensitive personal data
+        priority: 150
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: sensitive_data
+        modelRefs:
+          - model: qwen3
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              system_prompt: You are a security-conscious assistant specialized in handling sensitive data. Exercise extreme caution with personal information.
+      - name: exclude_spam_decision
+        description: Potential spam or suspicious requests
+        priority: 150
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: exclude_spam
+        modelRefs:
+          - model: qwen3
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              system_prompt: You are a content moderation assistant. This request has been flagged as potential spam.
+      - name: regex_pattern_match_decision
+        description: Structured data and pattern-based requests
+        priority: 150
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: regex_pattern_match
+        modelRefs:
+          - model: qwen3
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              system_prompt: You are a technical assistant specialized in handling structured data and pattern-based requests.
+      - name: ai_decision
+        description: Artificial intelligence and machine learning topics
+        priority: 140
+        rules:
+          operator: AND
+          conditions:
+            - type: systemone
+              name: ai
+        modelRefs:
+          - model: qwen3
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              system_prompt: You are an AI and machine learning expert. Provide detailed, technical explanations about artificial intelligence, neural networks, and related topics.
+      - name: data_science_decision
+        description: Data science and analytics
+        priority: 140
+        rules:
+          operator: AND
+          conditions:
+            - type: systemone
+              name: data_science
+        modelRefs:
+          - model: qwen3
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              system_prompt: You are a data science expert. Provide insights on data analysis, statistical methods, and predictive modeling.
+      - name: programming_decision
+        description: Programming and software development
+        priority: 140
+        rules:
+          operator: AND
+          conditions:
+            - type: systemone
+              name: programming
+        modelRefs:
+          - model: qwen3
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              system_prompt: You are a programming expert. Help with code implementation, debugging, and software development best practices.
+      - name: business_decision
         description: Business and management related queries
-        labels:
-          - business
-      - name: law
-        description: Legal questions and law-related topics
-        labels:
-          - law
-      - name: psychology
-        description: Psychology and mental health topics
-        labels:
-          - psychology
-      - name: biology
-        description: Biology and life sciences questions
-        labels:
-          - biology
-      - name: chemistry
-        description: Chemistry and chemical sciences questions
-        labels:
-          - chemistry
-      - name: history
-        description: Historical questions and cultural topics
-        labels:
-          - history
-      - name: other
-        description: General knowledge and miscellaneous topics
-        labels:
-          - other
-      - name: health
-        description: Health and medical information queries
-        labels:
-          - health
-      - name: economics
-        description: Economics and financial topics
-        labels:
-          - economics
-      - name: math
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: qwen3
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              system_prompt: You are a senior business consultant and strategic advisor.
+      - name: math_decision
         description: Mathematics and quantitative reasoning
-        labels:
-          - math
-      - name: physics
-        description: Physics and physical sciences
-        labels:
-          - physics
-      - name: "computer science"
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: math
+        modelRefs:
+          - model: qwen3
+            use_reasoning: true
+        plugins:
+          - type: system_prompt
+            configuration:
+              system_prompt: You are a mathematics expert. Provide step-by-step solutions.
+      - name: computer_science_decision
         description: Computer science and programming
-        labels:
-          - "computer science"
-      - name: philosophy
-        description: Philosophy and ethical questions
-        labels:
-          - philosophy
-      - name: engineering
-        description: Engineering and technical problem-solving
-        labels:
-          - engineering
-    systemone:
-      - name: ai
-        question:
-          type: noul
-          instructions: 'Is the request about any of these: artificial intelligence; machine learning; deep learning; neural networks; AI algorithms?'
-      - name: data_science
-        question:
-          type: noul
-          instructions: 'Is the request about any of these: data analysis; statistical modeling; predictive analytics; data visualization?'
-      - name: programming
-        question:
-          type: noul
-          instructions: 'Is the request about any of these: write code; implement function; create class; code snippet; programming task?'
-  modelCards:
-    - name: qwen3
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: "computer science"
+        modelRefs:
+          - model: qwen3
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              system_prompt: You are a computer science expert.
+      - name: general_decision
+        description: General knowledge and miscellaneous topics
+        priority: 50
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: other
+        modelRefs:
+          - model: qwen3
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              system_prompt: You are a helpful and knowledgeable assistant.
+          - type: response_cache
+            configuration:
+              enabled: true
+              scope: global
+              semantic: {match: {recall: {top_k: 3, min_similarity: 0.75}}}
+    signals:
+      keywords:
+        - name: code_keywords
+          operator: OR
+          method: bm25
+          keywords:
+            - code
+            - function
+            - implement
+            - debug
+            - algorithm
+            - compile
+            - syntax
+            - variable
+            - loop
+            - refactor
+          bm25_threshold: 0.1
+          case_sensitive: false
+        - name: urgent_request
+          operator: OR
+          method: ngram
+          keywords:
+            - urgent
+            - immediate
+            - asap
+            - emergency
+          ngram_threshold: 0.4
+          ngram_arity: 3
+          case_sensitive: false
+        - name: sensitive_data
+          operator: AND
+          keywords:
+            - SSN
+            - social security number
+            - credit card
+          case_sensitive: false
+        - name: exclude_spam
+          operator: NOR
+          keywords:
+            - buy now
+            - free money
+          case_sensitive: false
+        - name: regex_pattern_match
+          operator: OR
+          keywords:
+            - user\.name@domain\.com
+            - C:\Program Files\\
+          case_sensitive: false
+      domains:
+        - name: business
+          description: Business and management related queries
+          labels:
+            - business
+        - name: law
+          description: Legal questions and law-related topics
+          labels:
+            - law
+        - name: psychology
+          description: Psychology and mental health topics
+          labels:
+            - psychology
+        - name: biology
+          description: Biology and life sciences questions
+          labels:
+            - biology
+        - name: chemistry
+          description: Chemistry and chemical sciences questions
+          labels:
+            - chemistry
+        - name: history
+          description: Historical questions and cultural topics
+          labels:
+            - history
+        - name: other
+          description: General knowledge and miscellaneous topics
+          labels:
+            - other
+        - name: health
+          description: Health and medical information queries
+          labels:
+            - health
+        - name: economics
+          description: Economics and financial topics
+          labels:
+            - economics
+        - name: math
+          description: Mathematics and quantitative reasoning
+          labels:
+            - math
+        - name: physics
+          description: Physics and physical sciences
+          labels:
+            - physics
+        - name: "computer science"
+          description: Computer science and programming
+          labels:
+            - "computer science"
+        - name: philosophy
+          description: Philosophy and ethical questions
+          labels:
+            - philosophy
+        - name: engineering
+          description: Engineering and technical problem-solving
+          labels:
+            - engineering
+      systemone:
+        - name: ai
+          question:
+            type: noul
+            instructions: 'Is the request about any of these: artificial intelligence; machine learning; deep learning; neural networks; AI algorithms?'
+        - name: data_science
+          question:
+            type: noul
+            instructions: 'Is the request about any of these: data analysis; statistical modeling; predictive analytics; data visualization?'
+        - name: programming
+          question:
+            type: noul
+            instructions: 'Is the request about any of these: write code; implement function; create class; code snippet; programming task?'
 global:
   router:
     strategy: priority
@@ -326,9 +325,7 @@ global:
           deployment_environment: development
   stores:
     response_cache:
-      enabled: true
       backend_type: memory
-      similarity_threshold: 0.8
       max_entries: 1000
       ttl_seconds: 3600
       eviction_policy: fifo

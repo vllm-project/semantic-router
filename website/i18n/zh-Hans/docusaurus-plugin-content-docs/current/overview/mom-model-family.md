@@ -58,27 +58,29 @@ Router 系统模型支撑决策过程。判断模型 deployment 也可以通过 
 
 ```yaml
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: ["acme/assistant-fast"]
     recipe: fast
-
 recipes:
+  - name: default
   - name: fast
-    routing:
-      strategy: priority
-      decisions:
-        - name: default-fast-route
-          description: Route eligible requests through the fast model pool.
-          priority: 10
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: local/small
-              use_reasoning: false
-            - model: local/vision
-              use_reasoning: false
-          algorithm:
-            type: static
+    strategy: priority
+    decisions:
+      - name: default-fast-route
+        description: Route eligible requests through the fast model pool.
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: local/small
+            use_reasoning: false
+          - model: local/vision
+            use_reasoning: false
+        algorithm:
+          type: static
 ```
 
 信号与决策识别任务，候选条件再检查已分配模型的能力和上下文容量。部署位置与数据处理边界由运维人员负责。请求发往后端前，公开模型名会解析为选中的提供方模型。

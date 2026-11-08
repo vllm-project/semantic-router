@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: qwen-2.5-14b
@@ -10,90 +10,18 @@ providers:
       pricing:
         prompt_per_1m: 1
         completion_per_1m: 2
+      loras:
+        - name: general-assistant
+          description: General purpose assistant
     - name: qwen-2.5-32b
       reasoning:
         family: qwen3
       pricing:
         prompt_per_1m: 2
         completion_per_1m: 4
-routing:
-  modelCards:
-    - name: qwen-2.5-14b
-      loras:
-        - name: general-assistant
-          description: General purpose assistant
-    - name: qwen-2.5-32b
       loras:
         - name: advanced-assistant
           description: Advanced general purpose assistant
-  signals:
-    keywords:
-      - name: tutorial
-        operator: OR
-        keywords:
-          - tutorial
-          - guide
-          - how-to
-          - learn
-        case_sensitive: false
-      - name: learning_intent
-        operator: OR
-        keywords:
-          - I want to learn about this topic
-          - Can you teach me how to do this?
-          - I'm trying to understand this concept
-        case_sensitive: false
-    domains:
-      - name: computer science
-        description: Computer science and programming
-      - name: math
-        description: Mathematics and quantitative reasoning
-      - name: engineering
-        description: Engineering and technical problem-solving
-  decisions:
-    - name: cs_tutorial
-      description: Computer science tutorials
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: tutorial
-          - type: keyword
-            name: learning_intent
-          - type: domain
-            name: computer science
-      modelRefs:
-        - model: qwen-2.5-32b
-          use_reasoning: false
-    - name: math_tutorial
-      description: Math tutorials
-      priority: 90
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: tutorial
-          - type: keyword
-            name: learning_intent
-          - type: domain
-            name: math
-      modelRefs:
-        - model: qwen-2.5-32b
-          use_reasoning: false
-    - name: general_learning
-      description: General learning queries
-      priority: 50
-      rules:
-        operator: OR
-        conditions:
-          - type: keyword
-            name: tutorial
-          - type: keyword
-            name: learning_intent
-      modelRefs:
-        - model: qwen-2.5-32b
-          use_reasoning: false
 global:
   router:
     config_source: kubernetes
@@ -163,15 +91,12 @@ global:
     ratelimit: {}
     management_api: {}
     router_replay:
-      enabled: false
       ttl_seconds: 0
     startup_status:
       store_backend: ""
   stores:
     response_cache:
       backend_type: memory
-      enabled: true
-      similarity_threshold: 0.8
       max_entries: 1000
       ttl_seconds: 3600
       eviction_policy: fifo
@@ -186,3 +111,83 @@ global:
       prompt_compression:
         enabled: false
         max_tokens: 0
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        scope: global
+        semantic:
+          match:
+            recall:
+              min_similarity: 0.8
+              top_k: 1
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: tutorial
+          operator: OR
+          keywords:
+            - tutorial
+            - guide
+            - how-to
+            - learn
+          case_sensitive: false
+        - name: learning_intent
+          operator: OR
+          keywords:
+            - I want to learn about this topic
+            - Can you teach me how to do this?
+            - I'm trying to understand this concept
+          case_sensitive: false
+      domains:
+        - name: computer science
+          description: Computer science and programming
+        - name: math
+          description: Mathematics and quantitative reasoning
+        - name: engineering
+          description: Engineering and technical problem-solving
+    decisions:
+      - name: cs_tutorial
+        description: Computer science tutorials
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: tutorial
+            - type: keyword
+              name: learning_intent
+            - type: domain
+              name: computer science
+        modelRefs:
+          - model: qwen-2.5-32b
+            use_reasoning: false
+      - name: math_tutorial
+        description: Math tutorials
+        priority: 90
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: tutorial
+            - type: keyword
+              name: learning_intent
+            - type: domain
+              name: math
+        modelRefs:
+          - model: qwen-2.5-32b
+            use_reasoning: false
+      - name: general_learning
+        description: General learning queries
+        priority: 50
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: tutorial
+            - type: keyword
+              name: learning_intent
+        modelRefs:
+          - model: qwen-2.5-32b
+            use_reasoning: false

@@ -228,16 +228,17 @@ global:
 按决策覆盖应写在插件配置中：
 
 ```yaml
-routing:
-  decisions:
-    - name: cached-route
-      plugins:
-        - type: response_cache
-          configuration:
-            enabled: true
-            semantic:
-              match:
-                recall: {top_k: 3, min_similarity: 0.70}
+recipes:
+  - name: default
+    decisions:
+      - name: cached-route
+        plugins:
+          - type: response_cache
+            configuration:
+              enabled: true
+              semantic:
+                match:
+                  recall: {top_k: 3, min_similarity: 0.70}
 ```
 
 降低阈值会增加误匹配风险。上线前先评估答案是否等价，诊断后端时使用管理 API 的响应缓存统计和测试端点。
@@ -276,14 +277,15 @@ global:
 若该类型按策略应被允许，把它加入该信号的允许名单。若检测器产生低置信度误报，评估更高阈值：
 
 ```yaml
-routing:
-  signals:
-    pii:
-      - name: pii-policy
-        threshold: 0.90
-        pii_types_allowed:
-          - GPE
-          - ORGANIZATION
+recipes:
+  - name: default
+    signals:
+      pii:
+        - name: pii-policy
+          threshold: 0.90
+          pii_types_allowed:
+            - GPE
+            - ORGANIZATION
 ```
 
 更改隐私阈值会改变漏报风险。请用带标签的数据集验证，而不是几条手写提示词。
@@ -301,11 +303,12 @@ routing:
 要减少误报，对受影响信号评估更高阈值：
 
 ```yaml
-routing:
-  signals:
-    jailbreak:
-      - name: jailbreak-standard
-        threshold: 0.85
+recipes:
+  - name: default
+    signals:
+      jailbreak:
+        - name: jailbreak-standard
+          threshold: 0.85
 ```
 
 若某条路由不应依赖越狱检测，从该路由中去掉该条件。全局关闭分类器会改变所有使用它的决策。

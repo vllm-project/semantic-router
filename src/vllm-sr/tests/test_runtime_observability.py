@@ -32,7 +32,7 @@ def tracing_block(config):
 def source_config(tmp_path, tracing=None):
     source = tmp_path / "config.yaml"
     config = {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [{"name": "http", "address": "127.0.0.1", "port": 8899}],
     }
     if tracing is not None:

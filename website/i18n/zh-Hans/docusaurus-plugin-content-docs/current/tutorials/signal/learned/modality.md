@@ -10,14 +10,14 @@ translation:
 
 ## 概览 {#overview}
 
-`modality` 检测请求应留在文本生成、切到图像生成，还是同时支持两者。在 `routing.signals.modality` 下定义其输出标签。
+`modality` 检测请求应留在文本生成、切到图像生成，还是同时支持两者。在 `recipes[].signals.modality` 下定义其输出标签。
 
 已配置的 `modality_detector` 对预期输出模式分类；命名结果随后可供普通决策使用。
 
 ## 主要优势 {#key-advantages}
 
 - 将图像生成路由与纯文本路由分开。
-- 使多模态流量在 `routing.decisions` 中可见。
+- 使多模态流量在 `recipes[].decisions` 中可见。
 - 避免把模态检查混进每条决策规则。
 - 可从简单请求形态路由扩展到检测器支持的多模态分类。
 
@@ -39,15 +39,16 @@ translation:
 ## 配置 {#configuration}
 
 ```yaml
-routing:
-  signals:
-    modality:
-      - name: AR
-        description: Text-only autoregressive requests.
-      - name: DIFFUSION
-        description: Requests that should route into image generation flows.
-      - name: BOTH
-        description: Requests that need both text and image generation behavior.
+recipes:
+  - name: default
+    signals:
+      modality:
+        - name: AR
+          description: Text-only autoregressive requests.
+        - name: DIFFUSION
+          description: Requests that should route into image generation flows.
+        - name: BOTH
+          description: Requests that need both text and image generation behavior.
 ```
 
 保持规则名与决策要引用的路由行为对齐。
@@ -66,7 +67,7 @@ global:
 
 没有这个块时，Router 加载配置时会记录 `modality_detector_disabled` 警告，`vllm-sr config validate` 也会通过 Router 自身的校验打印同一警告。`method: keyword` 需要 `keywords`；`method: hybrid` 还需要 `lower_threshold_ratio`，以及分类器或关键词。
 
-基于 `BOTH` 的决策必须同时引用一个 AR 模型（在 `routing.modelCards` 中设 `modality: ar`）和一个扩散模型（`modality: diffusion`），或者引用一个全模态模型（`modality: omni`）。
+基于 `BOTH` 的决策必须同时引用一个 AR 模型（在 `providers.models` 中设 `modality: ar`）和一个扩散模型（`modality: diffusion`），或者引用一个全模态模型（`modality: omni`）。
 
 ## 依赖与限制 {#dependencies-and-limitations}
 

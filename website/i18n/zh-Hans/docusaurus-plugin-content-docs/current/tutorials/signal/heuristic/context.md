@@ -10,7 +10,7 @@ translation:
 
 ## 概览 {#overview}
 
-`context` 检测需要更大有效上下文窗口的请求。在 `routing.signals.context` 下定义上下文规则。
+`context` 检测需要更大有效上下文窗口的请求。在 `recipes[].signals.context` 下定义上下文规则。
 
 该族为启发式：按 token 窗口需求路由，而非分类器推理。
 
@@ -39,13 +39,14 @@ translation:
 ## 配置 {#configuration}
 
 ```yaml
-routing:
-  signals:
-    context:
-      - name: long_context
-        min_tokens: 32K
-        max_tokens: 256K
-        description: Requests that need a larger effective context window.
+recipes:
+  - name: default
+    signals:
+      context:
+        - name: long_context
+          min_tokens: 32K
+          max_tokens: 256K
+          description: Requests that need a larger effective context window.
 ```
 
 当 Router 应根据提示长度或预期上下文需求切换候选时，使用 `context`。
@@ -68,18 +69,19 @@ routing:
 上限可以引用环境变量，例如 `${CTX_MIN}`。Router 在配置加载时展开它，因此 CLI 会带警告接受该档，而不是检查它。
 
 ```yaml
-routing:
-  signals:
-    context:
-      - name: short_context
-        min_tokens: 0
-        max_tokens: 8K
-      - name: medium_context
-        min_tokens: 8001
-        max_tokens: 64K
-      - name: long_context
-        min_tokens: 64001
-        description: Open-ended band; matches everything above 64K tokens.
+recipes:
+  - name: default
+    signals:
+      context:
+        - name: short_context
+          min_tokens: 0
+          max_tokens: 8K
+        - name: medium_context
+          min_tokens: 8001
+          max_tokens: 64K
+        - name: long_context
+          min_tokens: 64001
+          description: Open-ended band; matches everything above 64K tokens.
 ```
 
 上下文档只是路由信号。它们不改变模型上下文窗口上限；Router 仍会在筛选候选时单独强制这些上限。

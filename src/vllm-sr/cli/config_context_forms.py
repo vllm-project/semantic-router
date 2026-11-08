@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from cli.config_recipe_scopes import recipe_scopes
+
 MIGRATE = "run `vllm-sr config migrate`"
 
 RAG_RECALL_FIELDS = ("top_k", "similarity_threshold", "rerank")
@@ -28,6 +30,12 @@ REMOVED_PLUGIN_TYPES = {
     "memory": "a memory source of the decision's context plugin",
     "context_compression": "the compress block and budget of the decision's context plugin",
 }
+MCP_RAG = (
+    "invalid_value: an enabled RAG source on backend mcp is removed: the Router has "
+    "no MCP tool invoker; "
+    f"{MIGRATE} (nothing: migrate drops the source, or a hybrid's mcp fallback; "
+    "serve the retrieval over HTTP and read it with backend: external_api)"
+)
 
 
 def removed_context_forms(data: dict[str, Any]) -> list[str]:
@@ -36,7 +44,7 @@ def removed_context_forms(data: dict[str, Any]) -> list[str]:
 
     field_lines: list[str] = []
     type_lines: list[str] = []
-    for prefix, routing in _routing_scopes(data):
+    for prefix, routing in recipe_scopes(data):
         decisions = routing.get("decisions")
         for index, decision in enumerate(
             decisions if isinstance(decisions, list) else []
@@ -60,7 +68,73 @@ def removed_context_forms(data: dict[str, Any]) -> list[str]:
                         f"{path}: removed_plugin_type: plugin {plugin_type} is removed; "
                         f"{MIGRATE} ({REMOVED_PLUGIN_TYPES[plugin_type]})"
                     )
-    return field_lines + type_lines + _model_catalog_forms(data)
+    return _mcp_rag_lines(data) + field_lines + type_lines + _model_catalog_forms(data)
+
+
+def _mcp_rag_lines(data: dict[str, Any]) -> list[str]:
+    """The lines of the enabled rag plugins, and of the enabled context plugins
+    with a source, on the mcp backend."""
+
+    lines: list[str] = []
+    for prefix, routing in recipe_scopes(data):
+        lines += _mcp_plugin_lines(f"{prefix}.plugins", routing.get("plugins"))
+        decisions = routing.get("decisions")
+        for index, decision in enumerate(
+            decisions if isinstance(decisions, list) else []
+        ):
+            if not isinstance(decision, dict):
+                continue
+            name = decision.get("name")
+            label = name if isinstance(name, str) and name else str(index)
+            lines += _mcp_plugin_lines(
+                f"{prefix}.decisions[{label}].plugins", decision.get("plugins")
+            )
+    global_section = data.get("global")
+    if isinstance(global_section, dict):
+        lines += _mcp_plugin_lines("global.plugins", global_section.get("plugins"))
+    return lines
+
+
+def _mcp_plugin_lines(path: str, plugins: Any) -> list[str]:
+    lines: list[str] = []
+    for position, plugin in enumerate(plugins if isinstance(plugins, list) else []):
+        configuration = (
+            plugin.get("configuration") if isinstance(plugin, dict) else None
+        )
+        if (
+            not isinstance(configuration, dict)
+            or configuration.get("enabled") is not True
+        ):
+            continue
+        sources = configuration.get("sources")
+        on_mcp = (plugin.get("type") == "rag" and _reads_mcp(configuration)) or (
+            plugin.get("type") == "context"
+            and any(
+                isinstance(source, dict)
+                and source.get("type") == "rag"
+                and _reads_mcp(source)
+                for source in (sources if isinstance(sources, list) else [])
+            )
+        )
+        if on_mcp:
+            lines.append(f"{path}[{position}]: {MCP_RAG}")
+    return lines
+
+
+def _reads_mcp(settings: Any) -> bool:
+    """Whether rag settings retrieve through mcp, as a hybrid's primary or
+    fallback included."""
+
+    if not isinstance(settings, dict):
+        return False
+    if settings.get("backend") == "mcp":
+        return True
+    hybrid = settings.get("backend_config")
+    return (
+        settings.get("backend") == "hybrid"
+        and isinstance(hybrid, dict)
+        and "mcp" in (hybrid.get("primary"), hybrid.get("fallback"))
+    )
 
 
 def _field_forms(plugin: dict[str, Any]) -> list[tuple[str, str, str]]:
@@ -116,7 +190,7 @@ def _model_catalog_forms(data: dict[str, Any]) -> list[str]:
     binding_maps = [("global.model_catalog.bindings", catalog.get("bindings"))]
     binding_maps += [
         (f"{prefix}.model_bindings", routing.get("model_bindings"))
-        for prefix, routing in _routing_scopes(data)
+        for prefix, routing in recipe_scopes(data)
     ]
     for prefix, bindings in binding_maps:
         if isinstance(bindings, dict) and "rag.reranker" in bindings:
@@ -136,18 +210,3 @@ def _model_catalog_forms(data: dict[str, Any]) -> list[str]:
                 f"{MIGRATE} (the rag source's match.judge; the deployment is deleted)"
             )
     return lines
-
-
-def _routing_scopes(data: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
-    scopes: list[tuple[str, dict[str, Any]]] = []
-    routing = data.get("routing")
-    if isinstance(routing, dict):
-        scopes.append(("routing", routing))
-    recipes = data.get("recipes")
-    for index, recipe in enumerate(recipes if isinstance(recipes, list) else []):
-        if not isinstance(recipe, dict) or not isinstance(recipe.get("routing"), dict):
-            continue
-        name = recipe.get("name")
-        label = name if isinstance(name, str) and name else str(index)
-        scopes.append((f"recipes[{label}].routing", recipe["routing"]))
-    return scopes

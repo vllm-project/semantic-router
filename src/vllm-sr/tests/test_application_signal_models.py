@@ -18,9 +18,14 @@ def test_a_safety_rule_names_harm_categories_with_a_predicate_and_stage():
         }
     )
     config = UserConfig.model_validate(
-        {"version": "v0.3", "routing": {"signals": {"safety": [rule.model_dump()]}}}
+        {
+            "version": "v0.5",
+            "recipes": [
+                {"name": "default", "signals": {"safety": [rule.model_dump()]}}
+            ],
+        }
     )
-    assert config.routing.signals.safety == [rule]
+    assert config.default_recipe.signals.safety == [rule]
 
 
 @pytest.mark.parametrize(

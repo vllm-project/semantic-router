@@ -26,7 +26,7 @@ HINT = "was removed; gateway response fields are accepted by default, so delete 
 
 def _gateway_config(extra: dict) -> dict:
     return {
-        "version": "v0.3",
+        "version": "v0.5",
         "providers": {
             "models": [
                 {
@@ -44,17 +44,19 @@ def _gateway_config(extra: dict) -> dict:
                 }
             ]
         },
-        "routing": {
-            "modelCards": [{"name": "claude-via-gateway"}],
-            "decisions": [
-                {
-                    "name": "default",
-                    "priority": 0,
-                    "rules": {"operator": "AND", "conditions": []},
-                    "modelRefs": [{"model": "claude-via-gateway"}],
-                }
-            ],
-        },
+        "recipes": [
+            {
+                "name": "default",
+                "decisions": [
+                    {
+                        "name": "default",
+                        "priority": 0,
+                        "rules": {"operator": "AND", "conditions": []},
+                        "modelRefs": [{"model": "claude-via-gateway"}],
+                    }
+                ],
+            }
+        ],
     }
 
 

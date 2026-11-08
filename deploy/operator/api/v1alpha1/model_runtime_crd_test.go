@@ -44,7 +44,7 @@ func TestModelRuntimeCRDAndSample(t *testing.T) {
 	if err := yaml.Unmarshal(data, &sample); err != nil {
 		t.Fatal(err)
 	}
-	if sample.Spec.Config.ModelDeployments == nil || sample.Spec.Config.ModelAdmission == nil || sample.Spec.Config.Routing == nil {
+	if sample.Spec.Config.ModelDeployments == nil || sample.Spec.Config.ModelAdmission == nil || sample.Spec.Config.Recipes == nil {
 		t.Fatal("sample lost model runtime declarations")
 	}
 	if _, err := sample.ValidateCreate(context.Background(), &sample); err != nil {

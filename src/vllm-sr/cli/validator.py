@@ -1,6 +1,7 @@
 """Configuration validator for vLLM Semantic Router."""
 
 from typing import Any, List
+from cli.config_contract import iter_routing_profiles
 from cli.models import (
     UserConfig,
     PluginType,
@@ -65,12 +66,10 @@ MIGRATED_LEARNING_ALGORITHM_TARGETS = {
 
 
 def _routing_profiles(config: UserConfig):
-    profiles = [("decisions", config.routing)]
-    profiles.extend(
-        (f"recipes.{recipe.name}.decisions", recipe.routing)
-        for recipe in config.recipes
-    )
-    return profiles
+    return [
+        (f"recipes.{name}.decisions", recipe)
+        for name, recipe in iter_routing_profiles(config)
+    ]
 
 
 def _all_decisions(config: UserConfig):

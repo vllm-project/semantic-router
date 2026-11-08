@@ -60,7 +60,7 @@ class TestK8sBackend:
         config.write_text(
             yaml.safe_dump(
                 {
-                    "version": "v0.3",
+                    "version": "v0.5",
                     "providers": {"models": [{"api_key": secret_value}]},
                 }
             ),
@@ -95,7 +95,7 @@ class TestK8sBackend:
         config.write_text(
             yaml.safe_dump(
                 {
-                    "version": "v0.3",
+                    "version": "v0.5",
                     "global": {
                         "services": {
                             "management_api": {
@@ -144,7 +144,7 @@ class TestK8sBackend:
         config.write_text(
             yaml.safe_dump(
                 {
-                    "version": "v0.3",
+                    "version": "v0.5",
                     "providers": {"models": [{"api_key": "${GEMINI_API_KEY}"}]},
                 }
             ),
@@ -495,7 +495,7 @@ class TestCLITargetRouting:
         built = []
         config_path = tmp_path / "config.yaml"
         config_path.write_text(
-            "version: v0.3\nlisteners:\n  - name: http\n    address: 0.0.0.0\n    port: 8899\n",
+            "version: v0.5\nlisteners:\n  - name: http\n    address: 0.0.0.0\n    port: 8899\n",
             encoding="utf-8",
         )
 
@@ -551,7 +551,7 @@ class TestCLITargetRouting:
         captured = {}
         config_path = tmp_path / "config.yaml"
         config_path.write_text(
-            "version: v0.3\nlisteners:\n  - name: http\n    address: 0.0.0.0\n    port: 8899\n",
+            "version: v0.5\nlisteners:\n  - name: http\n    address: 0.0.0.0\n    port: 8899\n",
             encoding="utf-8",
         )
 
@@ -592,10 +592,7 @@ class TestCLITargetRouting:
         if config_state == "setup":
             config_path.write_text(
                 yaml.safe_dump(
-                    {
-                        "version": "v0.3",
-                        "setup": {"mode": True, "state": "bootstrap"},
-                    }
+                    {"version": "v0.5", "setup": {"mode": True, "state": "bootstrap"}}
                 ),
                 encoding="utf-8",
             )
@@ -623,13 +620,9 @@ class TestCLITargetRouting:
         captured = {}
         config_path = tmp_path / "config.yaml"
         source = {
-            "version": "v0.3",
+            "version": "v0.5",
             "listeners": [{"name": "http", "address": "0.0.0.0", "port": 8899}],
-            "global": {
-                "services": {},
-                "stores": {},
-                "integrations": {"looper": {}},
-            },
+            "global": {"services": {}, "stores": {}, "integrations": {"looper": {}}},
         }
         config_path.write_text(yaml.safe_dump(source), encoding="utf-8")
 
@@ -667,11 +660,16 @@ class TestCLITargetRouting:
         monkeypatch.delenv("VLLM_SR_ROCM_FORCE_GPU", raising=False)
         monkeypatch.delenv("VLLM_SR_ROCM_PRESERVE_CPU", raising=False)
         source = {
-            "version": "v0.3",
+            "version": "v0.5",
             "listeners": [{"name": "http", "address": "0.0.0.0", "port": 8899}],
-            "routing": {
-                "decisions": [{"name": "route", "algorithm": {"type": "multi_factor"}}]
-            },
+            "recipes": [
+                {
+                    "name": "default",
+                    "decisions": [
+                        {"name": "route", "algorithm": {"type": "multi_factor"}}
+                    ],
+                }
+            ],
             "global": {
                 "model_catalog": {
                     "modules": {"classifier": {"domain": {"use_cpu": True}}}
@@ -714,7 +712,7 @@ class TestCLITargetRouting:
 
         assert result.exit_code == 0, result.output
         value = captured["config_document"]
-        for component in ("routing", "decisions", 0, "algorithm", "type"):
+        for component in ("recipes", 0, "decisions", 0, "algorithm", "type"):
             value = value[component]
         assert value == "static"
         assert active_path.read_text() == "dashboard_owned: do-not-clobber\n"
@@ -748,7 +746,7 @@ class TestCLITargetRouting:
         captured = {}
         config_path = tmp_path / "config.yaml"
         config_path.write_text(
-            "version: v0.3\nlisteners:\n  - name: http\n    address: 0.0.0.0\n    port: 8899\n",
+            "version: v0.5\nlisteners:\n  - name: http\n    address: 0.0.0.0\n    port: 8899\n",
             encoding="utf-8",
         )
 

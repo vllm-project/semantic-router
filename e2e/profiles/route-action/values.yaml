@@ -4,7 +4,7 @@ image:
   tag: latest
   pullPolicy: Never
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -22,43 +22,41 @@ config:
             provider: vllm
             endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    decisions:
-      # Only prompts the System One fixture answers as a jailbreak match this
-      # decision, and the route action must then send them to the safe
-      # destination.
-      - name: route_prompt_attack
-        description: Route detected prompt attacks to the safe fallback model.
-        priority: 120
-        rules:
-          operator: AND
-          conditions:
-            - type: jailbreak
-              name: prompt_attack
-        action:
-          type: route
-          destination: openai/safe-model
-        modelRefs:
-          - model: openai/safe-model
-            use_reasoning: false
-      - name: default_decision
-        description: Default catch-all decision for benign requests.
-        priority: 1
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: openai/mock-model
-            use_reasoning: false
-    signals:
-      jailbreak:
-        - name: prompt_attack
-          description: Prompt injection or jailbreak, answered by the System One fixture
-          predicate:
-            gte: 0.5
-    modelCards:
-      - name: openai/mock-model
-      - name: openai/safe-model
+  recipes:
+    - name: default
+      decisions:
+        # Only prompts the System One fixture answers as a jailbreak match this
+        # decision, and the route action must then send them to the safe
+        # destination.
+        - name: route_prompt_attack
+          description: Route detected prompt attacks to the safe fallback model.
+          priority: 120
+          rules:
+            operator: AND
+            conditions:
+              - type: jailbreak
+                name: prompt_attack
+          action:
+            type: route
+            destination: openai/safe-model
+          modelRefs:
+            - model: openai/safe-model
+              use_reasoning: false
+        - name: default_decision
+          description: Default catch-all decision for benign requests.
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/mock-model
+              use_reasoning: false
+      signals:
+        jailbreak:
+          - name: prompt_attack
+            description: Prompt injection or jailbreak, answered by the System One fixture
+            predicate:
+              gte: 0.5
   global:
     router:
       strategy: priority
@@ -74,9 +72,6 @@ config:
       observability:
         tracing:
           enabled: false
-    stores:
-      response_cache:
-        enabled: false
     integrations: {}
     model_catalog:
       deployments:

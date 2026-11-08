@@ -10,27 +10,29 @@ import (
 	"testing"
 )
 
-const envReferenceDeployRouting = `routing:
-  modelCards:
+const envReferenceDeployRouting = `recipes:
+  - name: default
+    signals:
+      domains:
+        - name: business
+          description: Business and management related queries
+    decisions:
+      - name: default-business
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: test-model
+            use_reasoning: false
+providers:
+  models:
     - name: test-model
-  signals:
-    domains:
-      - name: business
-        description: Business and management related queries
-  decisions:
-    - name: default-business
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: test-model
-          use_reasoning: false
 `
 
-const envReferenceProviderConfig = `version: v0.3
+const envReferenceProviderConfig = `version: v0.5
 listeners:
   - name: public
     address: 0.0.0.0
@@ -51,87 +53,93 @@ providers:
           protocol: http
 ` + envReferenceDeployRouting
 
-const envReferenceRAGRouting = `routing:
-  modelCards:
+const envReferenceRAGRouting = `recipes:
+  - name: default
+    signals:
+      domains:
+        - name: business
+          description: Business and management related queries
+    decisions:
+      - name: docs-route
+        priority: 5
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: test-model
+            use_reasoning: false
+        plugins:
+          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: rag
+                  backend: openai
+                  backend_config:
+                    vector_store_id: vs_docs
+                    api_key: ${DEPLOY_TEST_OPENAI_API_KEY}
+providers:
+  models:
     - name: test-model
-  signals:
-    domains:
-      - name: business
-        description: Business and management related queries
-  decisions:
-    - name: docs-route
-      priority: 5
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: test-model
-          use_reasoning: false
-      plugins:
-        - type: context
-          configuration:
-            enabled: true
-            sources:
-              - type: rag
-                backend: openai
-                backend_config:
-                  vector_store_id: vs_docs
-                  api_key: ${DEPLOY_TEST_OPENAI_API_KEY}
 `
 
-const envReferenceContextRouting = `routing:
-  modelCards:
+const envReferenceContextRouting = `recipes:
+  - name: default
+    signals:
+      context:
+        - name: long_context
+          min_tokens: ${DEPLOY_TEST_CONTEXT_MIN:-8K}
+          max_tokens: ${DEPLOY_TEST_CONTEXT_MAX}
+    decisions:
+      - name: long-context-route
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+            - type: context
+              name: long_context
+        modelRefs:
+          - model: test-model
+            use_reasoning: false
+providers:
+  models:
     - name: test-model
-  signals:
-    context:
-      - name: long_context
-        min_tokens: ${DEPLOY_TEST_CONTEXT_MIN:-8K}
-        max_tokens: ${DEPLOY_TEST_CONTEXT_MAX}
-  decisions:
-    - name: long-context-route
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: context
-            name: long_context
-      modelRefs:
-        - model: test-model
-          use_reasoning: false
 `
 
 // The RAG key is valid only as written, the context limit only when unset.
-const envReferenceMixedRouting = `routing:
-  modelCards:
-    - name: test-model
-  signals:
-    context:
-      - name: long_context
-        min_tokens: 8K
-        max_tokens: ${DEPLOY_TEST_CONTEXT_MAX}
-  decisions:
-    - name: long-context-docs
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
+const envReferenceMixedRouting = `recipes:
+  - name: default
+    signals:
+      context:
+        - name: long_context
+          min_tokens: 8K
+          max_tokens: ${DEPLOY_TEST_CONTEXT_MAX}
+    decisions:
+      - name: long-context-docs
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+            - type: context
+              name: long_context
+        modelRefs:
+          - model: test-model
+            use_reasoning: false
+        plugins:
           - type: context
-            name: long_context
-      modelRefs:
-        - model: test-model
-          use_reasoning: false
-      plugins:
-        - type: context
-          configuration:
-            enabled: true
-            sources:
-              - type: rag
-                backend: openai
-                backend_config:
-                  vector_store_id: vs_docs
-                  api_key: ${DEPLOY_TEST_OPENAI_API_KEY}
+            configuration:
+              enabled: true
+              sources:
+                - type: rag
+                  backend: openai
+                  backend_config:
+                    vector_store_id: vs_docs
+                    api_key: ${DEPLOY_TEST_OPENAI_API_KEY}
+providers:
+  models:
+    - name: test-model
 `
 
 // The Router resolves these references with its own environment, which the

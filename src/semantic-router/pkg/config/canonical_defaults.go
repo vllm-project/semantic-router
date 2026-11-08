@@ -37,18 +37,9 @@ func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 			MaxResponses: 1000,
 		},
 		RouterReplay: RouterReplayConfig{
-			CaptureRequestBody:  canonicalBoolPtr(true),
-			CaptureResponseBody: canonicalBoolPtr(true),
-			CapturePersonalData: canonicalBoolPtr(true),
-			CaptureToolResults:  canonicalBoolPtr(false),
-			MaxRecords:          canonicalIntPtr(defaultRouterReplayMaxRecords),
-			MaxBodyBytes:        canonicalIntPtr(defaultRouterReplayMaxBodyBytes),
-			MaxToolTraceBytes:   canonicalIntPtr(0),
-			MaxToolTraceSteps:   canonicalIntPtr(defaultRouterReplayMaxToolTraceSteps),
-			Enabled:             false,
-			StoreBackend:        "memory",
-			TTLSeconds:          2592000,
-			AsyncWrites:         false,
+			StoreBackend: "memory",
+			TTLSeconds:   2592000,
+			AsyncWrites:  false,
 		},
 		StartupStatus: StartupStatusConfig{
 			StoreBackend: "file",
@@ -88,7 +79,6 @@ func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 func defaultCanonicalStoreGlobal() CanonicalStoreGlobal {
 	return CanonicalStoreGlobal{
 		Memory: MemoryConfig{
-			Enabled:                    false,
 			AutoStore:                  false,
 			Milvus:                     MemoryMilvusConfig{Collection: "agentic_memory"},
 			DefaultRetrievalLimit:      5,
@@ -101,7 +91,6 @@ func defaultCanonicalStoreGlobal() CanonicalStoreGlobal {
 			},
 		},
 		ResponseCache: SemanticCache{
-			Enabled:        true,
 			BackendType:    "memory",
 			MaxEntries:     1000,
 			TTLSeconds:     3600,

@@ -24,7 +24,7 @@ func PrepareOwnedResponseCacheEmbeddings(ctx context.Context, cfg *config.Router
 	// signals, selectors or recipe overrides: only the cache's demand.
 	scoped := cfg.ConfigForGlobalModelServices()
 	scoped.API.Embeddings.Enabled = false
-	scoped.Memory.Enabled = false
+	scoped.Memory.InUse = false
 	scoped.VectorStore = nil
 	_, dimension, layer := scoped.ResponseCacheEmbedding()
 	return prepareEmbeddings(ctx, scoped, runtime, true, embedding.Options{Dimension: dimension, Layer: layer})

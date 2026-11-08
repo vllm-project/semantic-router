@@ -12,6 +12,8 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
+from cli.config_recipe_scopes import recipe_scopes
+
 MIGRATE = "run `vllm-sr config migrate`"
 REMOVED_ALGORITHM_TYPE = "removed_algorithm_type"
 REMOVED_FIELD = "removed_field"
@@ -138,7 +140,7 @@ def _mapping(value: Any) -> dict[str, Any]:
 
 
 def _algorithms(data: dict[str, Any]) -> Iterator[tuple[str, dict[str, Any]]]:
-    for prefix, routing in _routing_scopes(data):
+    for prefix, routing in recipe_scopes(data):
         decisions = routing.get("decisions")
         for index, decision in enumerate(
             decisions if isinstance(decisions, list) else []
@@ -151,18 +153,3 @@ def _algorithms(data: dict[str, Any]) -> Iterator[tuple[str, dict[str, Any]]]:
             name = decision.get("name")
             label = name if isinstance(name, str) and name else str(index)
             yield f"{prefix}.decisions[{label}].algorithm", algorithm
-
-
-def _routing_scopes(data: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
-    scopes: list[tuple[str, dict[str, Any]]] = []
-    routing = data.get("routing")
-    if isinstance(routing, dict):
-        scopes.append(("routing", routing))
-    recipes = data.get("recipes")
-    for index, recipe in enumerate(recipes if isinstance(recipes, list) else []):
-        if not isinstance(recipe, dict) or not isinstance(recipe.get("routing"), dict):
-            continue
-        name = recipe.get("name")
-        label = name if isinstance(name, str) and name else str(index)
-        scopes.append((f"recipes[{label}].routing", recipe["routing"]))
-    return scopes

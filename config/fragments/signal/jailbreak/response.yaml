@@ -3,11 +3,12 @@
 # Scores the model's output rather than the request, so it is only available
 # after the model has answered. The response_jailbreak plugin of the decision
 # selected for the request enforces on it; decision rules cannot read it.
-routing:
-  signals:
-    jailbreak:
-      - name: unsafe_completion
-        description: Detect jailbreak content in the model's own output.
-        predicate:
-          gte: 0.90
-        stage: response
+recipes:
+  - name: default
+    signals:
+      jailbreak:
+        - name: unsafe_completion
+          description: Detect jailbreak content in the model's own output.
+          predicate:
+            gte: 0.90
+          stage: response

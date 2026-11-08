@@ -50,9 +50,10 @@ global:
         enabled: true
         threshold: 0.7
         positive_labels: [INJECTION]
-routing:
-  model_bindings:
-    jailbreak: guard-service
+recipes:
+  - name: default
+    model_bindings:
+      jailbreak: guard-service
 ```
 
 `guard-service` is the connection; the `jailbreak` binding makes it answer the

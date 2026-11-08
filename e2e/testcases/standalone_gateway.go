@@ -288,8 +288,13 @@ func testStandaloneConfigRollout(ctx context.Context, client *kubernetes.Clients
 }
 
 func setDecisionModel(document map[string]any, decision, model string) error {
-	routing, _ := document["routing"].(map[string]any)
-	decisions, _ := routing["decisions"].([]any)
+	recipes, _ := document["recipes"].([]any)
+	var decisions []any
+	for _, raw := range recipes {
+		recipe, _ := raw.(map[string]any)
+		list, _ := recipe["decisions"].([]any)
+		decisions = append(decisions, list...)
+	}
 	for _, item := range decisions {
 		entry, _ := item.(map[string]any)
 		if entry["name"] != decision {

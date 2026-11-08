@@ -107,11 +107,12 @@ optional; configuring one allows content capture for requests it identifies as
 free of personal data. For example:
 
 ```yaml
-routing:
-  signals:
-    pii:
-      - name: personal_data
-        pii_types_allowed: []
+recipes:
+  - name: default
+    signals:
+      pii:
+        - name: personal_data
+          pii_types_allowed: []
 ```
 
 ### Capture tool results for development and audit

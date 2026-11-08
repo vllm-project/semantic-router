@@ -34,7 +34,7 @@ func assertRuntimeServed(t *testing.T, cfg *config.RouterConfig, specs []ModelSp
 // rule and a hallucination rule download no classifier of their own.
 func TestApplicationRulesAreServedByTheDecisionModel(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: demo
@@ -45,27 +45,28 @@ providers:
           endpoint: localhost:8000
           protocol: http
           weight: 1
-routing:
-  signals:
-    pii:
-      - name: sensitive-contact
-        predicate: {gte: 0.9}
-    hallucination:
-      - name: ungrounded
-  decisions:
-    - name: protect-contact
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: pii
-            name: sensitive-contact
-      modelRefs:
-        - model: demo
-      plugins:
-        - type: response_guard
-          configuration:
-            rules: [{when: {type: hallucination, name: ungrounded}, action: annotate}]
+recipes:
+  - name: default
+    signals:
+      pii:
+        - name: sensitive-contact
+          predicate: {gte: 0.9}
+      hallucination:
+        - name: ungrounded
+    decisions:
+      - name: protect-contact
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: pii
+              name: sensitive-contact
+        modelRefs:
+          - model: demo
+        plugins:
+          - type: response_guard
+            configuration:
+              rules: [{when: {type: hallucination, name: ungrounded}, action: annotate}]
 `))
 	if err != nil {
 		t.Fatal(err)

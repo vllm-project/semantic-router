@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 
 listeners:
   - name: http-8899
@@ -18,6 +18,7 @@ providers:
           endpoint: 127.0.0.1:18000
           protocol: http
           provider: vllm
+      description: fast general model
     - name: general-large
       provider_model_id: general-large-instruct
       api_format: openai
@@ -30,6 +31,7 @@ providers:
           extra_headers:
             X-Tenant: parity-corpus
           api_key: parity-static-key
+      description: strong general model
     - name: claude-compatible
       provider_model_id: claude-compatible-1
       api_format: anthropic
@@ -38,89 +40,84 @@ providers:
           endpoint: 127.0.0.1:18001
           protocol: http
           provider: anthropic-compatible
-
-routing:
-  modelCards:
-    - name: general-small
-      description: fast general model
-    - name: general-large
-      description: strong general model
-    - name: claude-compatible
       description: Anthropic Messages backend
-  signals:
-    keywords:
-      - name: code_keywords
-        operator: OR
-        keywords: ["python", "golang", "compile"]
-      - name: urgent_keywords
-        operator: OR
-        keywords: ["urgent", "asap"]
-      - name: essay_keywords
-        operator: OR
-        keywords: ["essay", "poem"]
-  decisions:
-    - name: code_route
-      priority: 30
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: code_keywords
-      modelRefs:
-        - model: general-large
-          use_reasoning: false
-      plugins:
-        - type: system_prompt
-          configuration:
-            enabled: true
-            mode: insert
-            system_prompt: You are a careful senior engineer.
-        - type: header_mutation
-          configuration:
-            add:
-              - name: x-route-source
-                value: parity-corpus
-    - name: urgent_route
-      priority: 20
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: urgent_keywords
-      modelRefs:
-        - model: general-small
-          use_reasoning: false
-    - name: essay_route
-      priority: 10
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: essay_keywords
-      modelRefs:
-        - model: claude-compatible
-          use_reasoning: false
 
 recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: code_keywords
+          operator: OR
+          keywords: ["python", "golang", "compile"]
+        - name: urgent_keywords
+          operator: OR
+          keywords: ["urgent", "asap"]
+        - name: essay_keywords
+          operator: OR
+          keywords: ["essay", "poem"]
+    decisions:
+      - name: code_route
+        priority: 30
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: code_keywords
+        modelRefs:
+          - model: general-large
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              enabled: true
+              mode: insert
+              system_prompt: You are a careful senior engineer.
+          - type: header_mutation
+            configuration:
+              add:
+                - name: x-route-source
+                  value: parity-corpus
+      - name: urgent_route
+        priority: 20
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: urgent_keywords
+        modelRefs:
+          - model: general-small
+            use_reasoning: false
+      - name: essay_route
+        priority: 10
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: essay_keywords
+        modelRefs:
+          - model: claude-compatible
+            use_reasoning: false
   - name: support
-    routing:
-      signals:
-        keywords:
-          - name: refund_keywords
-            operator: OR
-            keywords: ["refund", "invoice"]
-      decisions:
-        - name: billing_route
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: refund_keywords
-          modelRefs:
-            - model: general-small
-              use_reasoning: false
+    signals:
+      keywords:
+        - name: refund_keywords
+          operator: OR
+          keywords: ["refund", "invoice"]
+    decisions:
+      - name: billing_route
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: refund_keywords
+        modelRefs:
+          - model: general-small
+            use_reasoning: false
 
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: ["vllm-sr/support"]
     recipe: support
 

@@ -188,7 +188,7 @@ func (r *OpenAIRouter) responseMemoryAutoStoreEnabled(ctx *RequestContext) bool 
 	if r == nil || r.Config == nil || ctx == nil || retentionDropsResponseContent(ctx) {
 		return false
 	}
-	source := r.Config.ContextPlugin(ctx.VSRSelectedDecision).Source(config.ContextSourceMemory)
+	source := config.ContextPluginOf(requestPlugins(r.Config, ctx)).Source(config.ContextSourceMemory)
 	if _, _, optedOut := r.memoryOptOut(ctx); source == nil || optedOut {
 		return false
 	}

@@ -7,13 +7,11 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-type routingFragmentDocument struct {
-	Routing CanonicalRouting `yaml:"routing"`
-}
-
-// ParseRoutingYAMLBytes parses a routing-only YAML fragment containing the DSL-owned
-// canonical surface under `routing:`. This intentionally skips provider/global
-// cross-reference checks so DSL compile/decompile flows can round-trip fragments.
+// ParseRoutingYAMLBytes parses a routing fragment: a document holding only the
+// DSL-owned surface, its recipes and entrypoints and the providers.models[]
+// entries that state model facts. It intentionally skips provider and global
+// cross-reference checks so DSL compile/decompile flows can round-trip
+// fragments.
 func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 	data, formWarnings, err := applyConfigForms(data, configForms)
 	if err != nil {
@@ -30,34 +28,25 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 		return nil, err
 	}
 
-	doc := &routingFragmentDocument{}
+	doc := &CanonicalConfig{}
 	if err := yaml.Unmarshal(data, doc); err != nil {
 		return nil, fmt.Errorf("failed to parse routing fragment: %w", err)
 	}
-
-	if err := doc.Routing.CandidateRequirements.Validate(); err != nil {
+	if err := validateCanonicalFallback(doc); err != nil {
 		return nil, err
-	}
-	if doc.Routing.Fallback != nil {
-		if err := doc.Routing.Fallback.Validate(); err != nil {
-			return nil, fmt.Errorf("routing.fallback: %w", err)
-		}
 	}
 	cfg := DefaultGlobalConfig()
 	cfg.RoutingFragmentOnly = true
 	cfg.FormWarnings = formWarnings
-	cfg.CandidateRequirements = doc.Routing.CandidateRequirements.Clone()
-	cfg.Strategy = doc.Routing.Strategy
-	if doc.Routing.Fallback != nil {
-		cfg.Fallback = doc.Routing.Fallback.Clone()
+	routing := &CanonicalConfig{Recipes: doc.Recipes, Entrypoints: doc.Entrypoints}
+	if err := applyCanonicalRecipeState(&cfg, routing); err != nil {
+		return nil, err
 	}
-	cfg.Decisions = copyDecisions(doc.Routing.Decisions)
-	ensureModelRefDefaults(cfg.Decisions)
-	cfg.Signals = normalizeSignals(doc.Routing.Signals)
-	cfg.Projections = normalizeProjections(doc.Routing.Projections)
 	cfg.ModelConfig = make(map[string]ModelParams)
-
-	for _, model := range canonicalRoutingModels(doc.Routing) {
+	for _, model := range doc.Providers.Models {
+		if !model.ModelFacts.declared() {
+			continue
+		}
 		cfg.ModelConfig[model.Name] = ModelParams{
 			ParamSize:         model.ParamSize,
 			ContextWindowSize: model.ContextWindowSize,

@@ -100,7 +100,7 @@ providers:
           weight: 1
 ```
 
-定价是运维提供的部署元数据，不是实时报价。它保留在 `providers.models[]` 上；`routing.modelCards` 只描述语义能力。`currency` 可选，省略时记账解析为 `USD`。若设置，必须是大写三字母代码。所有每百万 token 费率必须为有限且非负。`cached_input_per_1m` 和 `cache_write_per_1m` 可选，显式零表示免费费率。
+定价是运维提供的部署元数据，不是实时报价。它保留在 `providers.models[]` 上；`providers.models` 只描述语义能力。`currency` 可选，省略时记账解析为 `USD`。若设置，必须是大写三字母代码。所有每百万 token 费率必须为有限且非负。`cached_input_per_1m` 和 `cache_write_per_1m` 可选，显式零表示免费费率。
 
 `api_format` 声明上游线路契约：`openai` 对应 Chat Completions，`responses` 对应 OpenAI Responses API，`anthropic` 对应 Anthropic Messages。客户端可以使用任何受支持的推理路径；Router 在 provider 边界转换一次，并返回客户端原来的线路格式。
 

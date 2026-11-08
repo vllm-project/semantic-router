@@ -30,7 +30,7 @@ translation:
 
 ## 配置
 
-在 `routing.decisions[].plugins` 下添加打包的插件条目：
+在 `recipes[].decisions[].plugins` 下添加打包的插件条目：
 
 ```yaml
 plugins:

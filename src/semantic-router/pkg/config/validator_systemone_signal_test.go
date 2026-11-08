@@ -145,7 +145,7 @@ func TestSystemOneRuleFieldErrors(t *testing.T) {
 		cfg := labelledSystemOneConfig()
 		test.mutate(cfg)
 		err := validateSystemOneContracts(cfg)
-		if err == nil || !strings.Contains(err.Error(), test.want) || !strings.HasPrefix(err.Error(), "routing.signals.systemone[") {
+		if err == nil || !strings.Contains(err.Error(), test.want) || !strings.HasPrefix(err.Error(), "recipes[default].signals.systemone[") {
 			t.Fatalf("%s: got %v, want %q", name, err, test.want)
 		}
 	}
@@ -163,7 +163,7 @@ func TestSystemOneRuleFieldErrors(t *testing.T) {
 // labelledSystemOneConfig adds a Vela 2.0 deployment with a set and a span question.
 func labelledSystemOneConfig() *RouterConfig {
 	cfg := systemOneConfig()
-	cfg.ModelDeployments["vela"] = ModelDeployment{Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Vela-2.0-0.3B"}
+	cfg.ModelDeployments["vela"] = ModelDeployment{Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Vela-2.0-0.8B"}
 	threshold := 0.4
 	cfg.SystemOneRules = append(cfg.SystemOneRules,
 		SystemOneRule{Name: "topics", Deployment: "vela", Question: SystemOneQuestion{
@@ -367,13 +367,13 @@ func TestSystemOneAnswererLoadChecks(t *testing.T) {
 			}
 			continue
 		}
-		prefix := "routing.signals.systemone[" + rule.Name + "]: " + test.code + ": "
+		prefix := "recipes[default].signals.systemone[" + rule.Name + "]: " + test.code + ": "
 		if err == nil || !strings.HasPrefix(err.Error(), prefix) || !strings.Contains(err.Error(), `deployment "`+test.deployment+`"`) || strings.Contains(err.Error(), "\n") {
 			t.Fatalf("%s on %s: got %v, want one line starting %q", rule.Name, test.deployment, err, prefix)
 		}
 	}
-	err := CheckSystemOneAnswerer("routing.signals.systemone[accounts]", "primary", span, []string{"choice", "noul", "score"}, []string{"text"})
-	want := `routing.signals.systemone[accounts]: span_required: resolves to deployment "primary", which cannot answer span questions; bind it to a span-capable deployment (rule deployment)`
+	err := CheckSystemOneAnswerer("recipes[default].signals.systemone[accounts]", "primary", span, []string{"choice", "noul", "score"}, []string{"text"})
+	want := `recipes[default].signals.systemone[accounts]: span_required: resolves to deployment "primary", which cannot answer span questions; bind it to a span-capable deployment (rule deployment)`
 	if err == nil || err.Error() != want {
 		t.Fatalf("span_required: %v", err)
 	}
@@ -383,7 +383,7 @@ func TestSystemOneAnswererLoadChecks(t *testing.T) {
 	span.Deployment = "kai"
 	recipe.SystemOneRules = []SystemOneRule{span}
 	err = wrapRoutingProfileValidationError("support", validateSystemOneContracts(recipe))
-	if err == nil || !strings.HasPrefix(err.Error(), "recipes[support].routing.signals.systemone[accounts]: span_required: ") {
+	if err == nil || !strings.HasPrefix(err.Error(), "recipes[support].signals.systemone[accounts]: span_required: ") {
 		t.Fatalf("a recipe's rule: %v", err)
 	}
 }

@@ -1,20 +1,41 @@
 package config
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
-// contextRouting is a routing scope whose one decision, d, has a context
-// plugin of the given configuration, or none when it is nil.
+// layeredRouting is a config whose one recipe holds decision, its plugins
+// layered over global as the loader layers them. Plain tests call it too, so
+// it panics instead of using Gomega's global Expect, which needs a fail
+// handler that only the Ginkgo suite registers.
+func layeredRouting(global []DecisionPlugin, decision Decision) *RouterConfig {
+	recipe := RoutingRecipe{Name: DefaultRecipeName, Profile: RoutingProfile{Decisions: []Decision{decision}}}
+	if err := layerRecipePlugins(global, &recipe); err != nil {
+		panic(fmt.Sprintf("layeredRouting: layering the plugins of decision %q: %v", decision.Name, err))
+	}
+	cfg := &RouterConfig{GlobalPlugins: global, Recipes: []RoutingRecipe{recipe}}
+	cfg.mirrorDefaultRecipe()
+	return cfg
+}
+
+// contextRouting is a recipe whose one decision, d, has a context plugin of
+// the given configuration, or none when it is nil; with globalMemory,
+// global.plugins recall memories.
 func contextRouting(globalMemory bool, configuration *ContextPluginConfig) *RouterConfig {
 	decision := Decision{Name: "d", ModelRefs: []ModelRef{{Model: "m"}}}
 	if configuration != nil {
 		decision.Plugins = []DecisionPlugin{{Type: DecisionPluginContext, Configuration: MustStructuredPayload(*configuration)}}
 	}
-	cfg := &RouterConfig{IntelligentRouting: IntelligentRouting{Decisions: []Decision{decision}}}
-	cfg.Memory.Enabled = globalMemory
-	return cfg
+	var global []DecisionPlugin
+	if globalMemory {
+		global = []DecisionPlugin{{Type: DecisionPluginContext, Configuration: MustStructuredPayload(ContextPluginConfig{
+			Enabled: true, Sources: []ContextSource{{Type: ContextSourceMemory}},
+		})}}
+	}
+	return layeredRouting(global, decision)
 }
 
 var _ = Describe("a decision's context sources", func() {
@@ -56,18 +77,18 @@ var _ = Describe("a decision's context sources", func() {
 	})
 })
 
-var _ = Describe("EffectiveRouterReplayConfigForDecision", registerEffectiveRouterReplayConfigForDecisionSpecs)
+var _ = Describe("EffectiveRouterReplayConfig", registerEffectiveRouterReplayConfigSpecs)
 
-func registerEffectiveRouterReplayConfigForDecisionSpecs() {
-	It("returns nil when replay is globally disabled and no decision override exists", func() {
+func registerEffectiveRouterReplayConfigSpecs() {
+	It("returns nil without a router_replay plugin in global.plugins or the decision", func() {
 		cfg := routerReplayDecisionConfig(false, "plain", nil)
-		Expect(cfg.EffectiveRouterReplayConfigForDecision("plain")).To(BeNil())
+		Expect(cfg.EffectiveRouterReplayConfig(cfg.GetDecisionByName("plain"))).To(BeNil())
 	})
 
-	It("inherits default replay settings when replay is globally enabled", func() {
+	It("takes the default capture settings from a global.plugins router_replay", func() {
 		cfg := routerReplayDecisionConfig(true, "plain", nil)
 
-		replayCfg := cfg.EffectiveRouterReplayConfigForDecision("plain")
+		replayCfg := cfg.EffectiveRouterReplayConfig(cfg.GetDecisionByName("plain"))
 		Expect(replayCfg).NotTo(BeNil())
 		Expect(replayCfg.Enabled).To(BeTrue())
 		Expect(replayCfg.MaxRecords).To(Equal(10000))
@@ -80,44 +101,44 @@ func registerEffectiveRouterReplayConfigForDecisionSpecs() {
 }
 
 func registerRouterReplayPluginOverrideSpecs() {
-	It("allows a decision plugin to opt in even when global replay is disabled", func() {
+	It("allows a decision plugin to opt in without a global.plugins router_replay", func() {
 		cfg := routerReplayDecisionConfig(false, "opt-in", map[string]interface{}{
 			"enabled":               false,
 			"capture_response_body": false,
 		})
-		Expect(cfg.EffectiveRouterReplayConfigForDecision("opt-in")).To(BeNil())
+		Expect(cfg.EffectiveRouterReplayConfig(cfg.GetDecisionByName("opt-in"))).To(BeNil())
 
 		cfg.Decisions[0].Plugins[0].Configuration = MustStructuredPayload(map[string]interface{}{
 			"enabled":               false,
 			"capture_response_body": false,
 		})
-		Expect(cfg.EffectiveRouterReplayConfigForDecision("opt-in")).To(BeNil())
+		Expect(cfg.EffectiveRouterReplayConfig(cfg.GetDecisionByName("opt-in"))).To(BeNil())
 
 		cfg.Decisions[0].Plugins[0].Configuration = MustStructuredPayload(map[string]interface{}{
 			"enabled":               true,
 			"capture_response_body": false,
 		})
-		replayCfg := cfg.EffectiveRouterReplayConfigForDecision("opt-in")
+		replayCfg := cfg.EffectiveRouterReplayConfig(cfg.GetDecisionByName("opt-in"))
 		Expect(replayCfg).NotTo(BeNil())
 		Expect(replayCfg.Enabled).To(BeTrue())
 		Expect(replayCfg.CaptureRequestBody).To(BeTrue())
 		Expect(replayCfg.CaptureResponseBody).To(BeFalse())
 	})
 
-	It("lets a decision plugin disable replay when global replay is enabled", func() {
+	It("lets a decision plugin disable replay that global.plugins enables", func() {
 		cfg := routerReplayDecisionConfig(true, "opt-out", map[string]interface{}{
 			"enabled": false,
 		})
-		Expect(cfg.EffectiveRouterReplayConfigForDecision("opt-out")).To(BeNil())
+		Expect(cfg.EffectiveRouterReplayConfig(cfg.GetDecisionByName("opt-out"))).To(BeNil())
 	})
 
-	It("treats omitted enabled as inherit-from-global while applying other plugin overrides", func() {
+	It("layers a decision plugin over global.plugins field by field", func() {
 		cfg := routerReplayDecisionConfig(true, "customized", map[string]interface{}{
 			"capture_response_body": false,
 			"max_records":           42,
 		})
 
-		replayCfg := cfg.EffectiveRouterReplayConfigForDecision("customized")
+		replayCfg := cfg.EffectiveRouterReplayConfig(cfg.GetDecisionByName("customized"))
 		Expect(replayCfg).NotTo(BeNil())
 		Expect(replayCfg.Enabled).To(BeTrue())
 		Expect(replayCfg.MaxRecords).To(Equal(42))
@@ -140,10 +161,9 @@ func routerReplayDecisionConfig(globalEnabled bool, name string, pluginConfig ma
 		}
 	}
 
-	return &RouterConfig{
-		RouterReplay: RouterReplayConfig{Enabled: globalEnabled},
-		IntelligentRouting: IntelligentRouting{
-			Decisions: []Decision{decision},
-		},
+	var global []DecisionPlugin
+	if globalEnabled {
+		global = []DecisionPlugin{{Type: DecisionPluginRouterReplay, Configuration: MustStructuredPayload(map[string]interface{}{"enabled": true})}}
 	}
+	return layeredRouting(global, decision)
 }

@@ -91,15 +91,16 @@ switch if proposal_gain >= switch_margin + stability_weight * switch_cost
 大多数决策不需要局部配置。硬策略边界使用 `bypass`：
 
 ```yaml
-routing:
-  decisions:
-    - name: local_privacy_policy
-      description: Keep privacy-sensitive traffic on the local model.
-      priority: 200
-      modelRefs:
-        - model: local-private-model
-      adaptations:
-        mode: bypass
+recipes:
+  - name: default
+    decisions:
+      - name: local_privacy_policy
+        description: Keep privacy-sensitive traffic on the local model.
+        priority: 200
+        modelRefs:
+          - model: local-private-model
+        adaptations:
+          mode: bypass
 ```
 
 使用 `observe` 收集诊断而不更改最终模型：

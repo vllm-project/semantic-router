@@ -1,8 +1,8 @@
 /**
  * Configuration types for vLLM Semantic Router Dashboard
  *
- * Public config uses the canonical v0.3 layout:
- *   version / listeners / providers / routing / global
+ * Public config uses the canonical v0.5 layout:
+ *   version / listeners / providers / global / recipes / entrypoints
  *
  * Some interfaces below are dashboard view-model adapters that flatten
  * routing-owned data for editing and legacy read-only fallback handling.
@@ -111,13 +111,6 @@ export interface KeywordSignal {
   density?: NumericPredicate
 }
 
-export interface EmbeddingSignal {
-  name: string
-  threshold: number
-  candidates: string[]
-  aggregation_method: 'max' | 'avg' | 'min'
-}
-
 export interface DomainSignal {
   name: string
   description: string
@@ -137,20 +130,6 @@ export interface HallucinationSignal {
 export interface UserFeedbackSignal {
   name: string
   description: string
-}
-
-export interface ReaskSignal {
-  name: string
-  description?: string
-  threshold?: number
-  lookback_turns?: number
-}
-
-export interface PreferenceSignal {
-  name: string
-  description: string
-  examples?: string[]
-  threshold?: number
 }
 
 export interface LanguageSignal {
@@ -196,24 +175,6 @@ export interface MetadataSignal {
     in?: string[]
     exists?: boolean
   }
-}
-
-export interface ClassifierSignal {
-  name: string
-  description?: string
-  /** The deployment that answers this rule; without one, its binding or the decision model does. */
-  deployment?: string
-  /** @deprecated Name a deployment instead. */
-  type?: 'local' | 'llm' | 'sequence_classifier'
-  /** @deprecated Name a deployment instead. */
-  model?: string
-  /** @deprecated Name a deployment instead. */
-  model_path?: string
-  labels: string[]
-  instructions?: string
-  disable_rationale?: boolean
-  /** @deprecated Name a deployment instead. */
-  use_cpu?: boolean
 }
 
 export interface InputModalitySignal {
@@ -320,13 +281,12 @@ export interface RoleBindingSignal {
 
 export interface JailbreakSignal {
   name: string
-  threshold: number
-  method?: string // "classifier" (default) or "contrastive"
-  include_history?: boolean
-  direction?: 'request' | 'response' // "request" (default) scores the prompt, "response" the model's output
-  jailbreak_patterns?: string[] // Deterministic case-insensitive, whitespace-normalized substring hard blocks
-  benign_patterns?: string[] // Benign examples for contrastive scoring; not explicit allow rules
   description?: string
+  /** The deployment that answers this rule; without one, its binding or the decision model does. */
+  deployment?: string
+  predicate?: NumericPredicate
+  stage?: 'request' | 'response'
+  timeout_ms?: number
 }
 
 export interface SafetySignal {
@@ -343,21 +303,20 @@ export interface SafetySignal {
 
 export interface PIISignal {
   name: string
-  threshold: number
-  source?: 'tool_result'
-  pii_types_allowed?: string[]
-  include_history?: boolean
   description?: string
+  /** The deployment that answers this rule; without one, its binding or the decision model does. */
+  deployment?: string
+  predicate?: NumericPredicate
+  /** PII types the rule does not match. */
+  ignore_labels?: string[]
+  timeout_ms?: number
 }
 
 export interface Signals {
   keywords?: KeywordSignal[]
-  embeddings?: EmbeddingSignal[]
   domains?: DomainSignal[]
   fact_check?: FactCheckSignal[]
   user_feedbacks?: UserFeedbackSignal[]
-  reasks?: ReaskSignal[]
-  preferences?: PreferenceSignal[]
   language?: LanguageSignal[]
   context?: ContextSignal[]
   complexity?: ComplexitySignal[]
@@ -369,7 +328,6 @@ export interface Signals {
   pii?: PIISignal[]
   conversation?: ConversationSignal[]
   metadata?: MetadataSignal[]
-  classifiers?: ClassifierSignal[]
   input_modality?: InputModalitySignal[]
   systemone?: SystemOneSignal[]
   topic_continuity?: TopicContinuitySignal[]
@@ -382,10 +340,8 @@ export interface Signals {
 export type DecisionConditionType =
   | 'keyword'
   | 'domain'
-  | 'preference'
   | 'user_feedback'
-  | 'reask'
-  | 'embedding'
+  | 'turn_relation'
   | 'fact_check'
   | 'language'
   | 'context'
@@ -394,11 +350,11 @@ export type DecisionConditionType =
   | 'authz'
   | 'jailbreak'
   | 'safety'
+  | 'hallucination'
+  | 'refusal'
   | 'pii'
-  | 'kb'
   | 'conversation'
   | 'metadata'
-  | 'classifier'
   | 'input_modality'
   | 'systemone'
   | 'projection'

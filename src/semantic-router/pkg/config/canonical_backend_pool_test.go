@@ -146,7 +146,7 @@ func TestCanonicalBackendPoolErrorDoesNotExposeCredential(t *testing.T) {
 
 func canonicalBackendPoolConfig(backendRefs string) string {
 	return `
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: replica-pool
@@ -156,7 +156,8 @@ providers:
       api_format: openai
       backend_refs:
 ` + backendRefs + `
-routing: {}
+recipes:
+  - name: default
 `
 }
 

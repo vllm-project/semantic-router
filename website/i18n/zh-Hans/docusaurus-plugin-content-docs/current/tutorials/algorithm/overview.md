@@ -32,24 +32,25 @@ translation:
 算法是决策本地的。每种类型的设置都是以该类型命名的块：
 
 ```yaml
-routing:
-  decisions:
-    - name: responsive-route
-      description: Prefer the model with the best observed latency.
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: small-model
-        - model: large-model
-      algorithm:
-        type: multi_factor
-        minimum_candidates: 2
-        multi_factor:
-          weights:
-            latency: 1
-          latency_percentile: 90
+recipes:
+  - name: default
+    decisions:
+      - name: responsive-route
+        description: Prefer the model with the best observed latency.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: small-model
+          - model: large-model
+        algorithm:
+          type: multi_factor
+          minimum_candidates: 2
+          multi_factor:
+            weights:
+              latency: 1
+            latency_percentile: 90
 ```
 
 从下面的清单中选择算法，然后按其指南配置必填字段和依赖。
@@ -116,7 +117,7 @@ routing:
 
 - 当算法接受重复的模型引用时，候选包含其 LoRA 和推理控制，而不仅仅是模型名。打分、组合和分派都保留精确的胜出引用。与多个不同候选匹配的旧式仅模型名结果会被拒绝，而不是解析为第一个引用。对于 LoRA 候选，服务前端按所选的基础模型路由，而提供商请求使用适配器的名称。
 - Router Learning 的会话记忆保留所选候选的控制项。即使之后的基础选择偏好同一模型的另一种推理强度，保护机制也可以在工具循环续接中保持这一精确选择。如果在仍处于接纳它的决策上的活动工具循环中，或在不可移植的续接中，该精确所有者被排除，路由会拒绝请求，而不是恢复该所有者或回退到不同的推理强度。决策漂移会释放工具循环锁，并从新决策的候选中选择；不透明的提供商状态仍绑定到创建它的模型。可移植的轮次可以选择新的可用候选；观察和旁路模式不会强制执行保护决定。
-- 在完整配置中，候选模型名必须能通过 `routing.modelCards` 和 `providers.models` 解析。
+- 在完整配置中，候选模型名必须能通过 `providers.models` 和 `providers.models` 解析。
 - 延迟和负载观测值只在单个 Router 进程内有效；它们不是集群级的调度器。
 - 执行器会与其配置的工作模型共享请求内容。请在选择执行器之前先应用隐私和提供商边界决策。
 - 执行器生成的规划、工作、校验、评审和合成提示词会在分派前对照每个目标模型的已知上下文窗口进行检查。缺少上下文元数据的模型仍保持兼容可用。

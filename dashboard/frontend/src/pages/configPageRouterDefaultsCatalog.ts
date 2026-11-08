@@ -9,9 +9,7 @@ import type {
   APIConfig,
   AuthzConfig,
   CanonicalEmbeddingCatalogConfig,
-  CanonicalHallucinationModuleConfig,
   CanonicalSystemModels,
-  FeedbackDetectorConfig,
   LooperConfig,
   MemoryConfig,
   ModelSelectionConfig,
@@ -65,18 +63,9 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     max_responses: 1000,
   } satisfies ResponseAPIConfig,
   router_replay: {
-    enabled: false,
     store_backend: 'memory',
     ttl_seconds: 2592000,
     async_writes: false,
-    capture_request_body: true,
-    capture_response_body: true,
-    capture_personal_data: true,
-    capture_tool_results: false,
-    max_records: 10000,
-    max_body_bytes: 4096,
-    max_tool_trace_bytes: 0,
-    max_tool_trace_steps: 100,
   } satisfies RouterReplayConfig,
   authz: {
     fail_open: false,
@@ -93,7 +82,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   management_api: {},
   startup_status: {},
   memory: {
-    enabled: false,
     auto_store: false,
     milvus: {
       collection: 'agentic_memory',
@@ -102,7 +90,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     default_similarity_threshold: 0.7,
   } satisfies MemoryConfig,
   response_cache: {
-    enabled: true,
     backend_type: 'memory',
     max_entries: 1000,
     ttl_seconds: 3600,
@@ -120,41 +107,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
       max_entries_per_store: 100000,
     },
   } satisfies VectorStoreConfig,
-  // The module thresholds are left out: the Router gives a module without one
-  // the operating point of the model it runs. No module names a model: a
-  // binding of its signal does, else the decision model answers it.
-  prompt_guard: {
-    enabled: true,
-    use_cpu: true,
-  },
-  classifier: {
-    domain: {
-      use_cpu: true,
-    },
-    pii: {
-      use_cpu: true,
-    },
-    preference: {
-      use_contrastive: false,
-    },
-  },
-  hallucination_mitigation: {
-    enabled: false,
-    fact_check: {
-      use_cpu: true,
-    },
-    detector: {
-      threshold: 0.5,
-      use_cpu: true,
-      min_span_length: 1,
-      min_span_confidence: 0,
-      context_window_size: 50,
-    },
-  } satisfies CanonicalHallucinationModuleConfig,
-  feedback_detector: {
-    enabled: true,
-    use_cpu: true,
-  } satisfies FeedbackDetectorConfig,
   external_models: [],
   admission: {},
   system_models: {
@@ -273,27 +225,6 @@ export const SECTION_META: Record<
     eyebrow: 'Stores',
     description:
       'Document ingestion, vector backend selection, and file-backed knowledge-store defaults.',
-  },
-  prompt_guard: {
-    title: 'Prompt Guard',
-    eyebrow: 'Model Catalog',
-    description:
-      'Prompt-injection detection module settings. The jailbreak binding chooses its model.',
-  },
-  classifier: {
-    title: 'Classifier Modules',
-    eyebrow: 'Model Catalog',
-    description: 'Domain, PII, MCP, and preference-classification module settings.',
-  },
-  hallucination_mitigation: {
-    title: 'Hallucination Mitigation',
-    eyebrow: 'Model Catalog',
-    description: 'Fact-check and detector modules used for hallucination review.',
-  },
-  feedback_detector: {
-    title: 'Feedback Detector',
-    eyebrow: 'Model Catalog',
-    description: 'Feedback classification defaults for routing-aware user correction flows.',
   },
   external_models: {
     title: 'External Models',

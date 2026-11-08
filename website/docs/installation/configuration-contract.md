@@ -100,7 +100,7 @@ configuration, send the authored YAML to `POST /api/v1/config/validate`:
 
 ```json
 {
-  "yaml": "version: v0.3\nrouting: {}\nglobal: {}\n"
+  "yaml": "version: v0.5\nrecipes:\n  - name: default\nglobal: {}\n"
 }
 ```
 
@@ -199,7 +199,7 @@ make check
 ```
 
 The repository tracks exactly one full schema at
-`src/semantic-router/pkg/configschema/router-config-v0.3.schema.json`. The
+`src/semantic-router/pkg/configschema/router-config-v0.5.schema.json`. The
 generator also emits a small TypeScript import/typing adapter, but no second
 JSON copy. Packaging stages the canonical artifact into wheels and container
 images without writing generated files back into the worktree. CI fails when

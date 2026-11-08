@@ -14,7 +14,7 @@ from cli.validator import validate_user_config
 
 def _write_config(tmp_path, aliases, address="127.0.0.1"):
     document = {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [{"name": "local", "address": address, "port": 8899}],
         "providers": {
             "defaults": {"model": aliases[0]},
@@ -28,7 +28,7 @@ def _write_config(tmp_path, aliases, address="127.0.0.1"):
                 for index, alias in enumerate(aliases)
             ],
         },
-        "routing": {},
+        "recipes": [{"name": "default"}],
     }
     path = tmp_path / "config.yaml"
     path.write_text(yaml.safe_dump(document))

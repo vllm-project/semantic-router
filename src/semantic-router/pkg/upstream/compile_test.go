@@ -21,7 +21,7 @@ listeners:
     timeout: 0s
 `
 
-const compileFixture = "version: v0.3\n" + compileFixtureListeners + compileFixtureProviders
+const compileFixture = "version: v0.5\n" + compileFixtureListeners + compileFixtureProviders
 
 const compileFixtureProviders = `
 providers:
@@ -50,7 +50,8 @@ providers:
           extra_headers:
             X-Tenant: one
             X-Region: west
-routing: {}
+recipes:
+  - name: default
 `
 
 func compileYAML(t *testing.T, yaml string) Topology {
@@ -137,7 +138,7 @@ func TestCompileListenerTimeoutsBecomeRouteDefaults(t *testing.T) {
 		t.Fatalf("listeners = %+v, want %+v", topology.Listeners, want)
 	}
 
-	defaults := compileYAML(t, "version: v0.3\n"+compileFixtureProviders).Listeners
+	defaults := compileYAML(t, "version: v0.5\n"+compileFixtureProviders).Listeners
 	wantDefault := []ListenerSpec{{Name: "listener_0", Timeouts: Timeouts{Total: 300 * time.Second, Idle: 300 * time.Second}}}
 	if !reflect.DeepEqual(defaults, wantDefault) {
 		t.Fatalf("default listeners = %+v, want %+v", defaults, wantDefault)
@@ -145,7 +146,7 @@ func TestCompileListenerTimeoutsBecomeRouteDefaults(t *testing.T) {
 }
 
 const reliabilityFixture = `
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: pooled
@@ -161,22 +162,23 @@ providers:
         health_check_interval: 5s
         health_check_timeout: 1s
       backend_refs:
-        - {name: a, provider: vllm, endpoint: 10.0.0.1:8000}
-        - {name: b, provider: vllm, endpoint: 10.0.0.2:8000}
+        - {name: a, provider: vllm, endpoint: '10.0.0.1:8000'}
+        - {name: b, provider: vllm, endpoint: '10.0.0.2:8000'}
     - name: single
       provider_model_id: single-model
       api_format: openai
       reliability:
         consecutive_5xx: 3
       backend_refs:
-        - {name: a, provider: vllm, endpoint: 10.0.0.3:8000}
+        - {name: a, provider: vllm, endpoint: '10.0.0.3:8000'}
     - name: plain
       provider_model_id: plain-model
       api_format: openai
       backend_refs:
-        - {name: a, provider: vllm, endpoint: 10.0.0.4:8000}
-        - {name: b, provider: vllm, endpoint: 10.0.0.5:8000}
-routing: {}
+        - {name: a, provider: vllm, endpoint: '10.0.0.4:8000'}
+        - {name: b, provider: vllm, endpoint: '10.0.0.5:8000'}
+recipes:
+  - name: default
 `
 
 func TestCompileMapsReliabilityWithTheTemplateConditions(t *testing.T) {

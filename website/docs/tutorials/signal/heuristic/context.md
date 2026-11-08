@@ -3,7 +3,7 @@
 ## Overview
 
 `context` detects requests that need a larger effective context window. Define
-context rules under `routing.signals.context`.
+context rules under `recipes[].signals.context`.
 
 This family is heuristic: it routes from token-window requirements rather than classifier inference.
 
@@ -32,13 +32,14 @@ Use `context` when:
 ## Configuration
 
 ```yaml
-routing:
-  signals:
-    context:
-      - name: long_context
-        min_tokens: 32K
-        max_tokens: 256K
-        description: Requests that need a larger effective context window.
+recipes:
+  - name: default
+    signals:
+      context:
+        - name: long_context
+          min_tokens: 32K
+          max_tokens: 256K
+          description: Requests that need a larger effective context window.
 ```
 
 Use `context` when the router should switch candidates based on prompt length or expected context demand.
@@ -77,18 +78,19 @@ Router expands it when the config loads, so the CLI accepts that band with a
 warning instead of checking it.
 
 ```yaml
-routing:
-  signals:
-    context:
-      - name: short_context
-        min_tokens: 0
-        max_tokens: 8K
-      - name: medium_context
-        min_tokens: 8001
-        max_tokens: 64K
-      - name: long_context
-        min_tokens: 64001
-        description: Open-ended band; matches everything above 64K tokens.
+recipes:
+  - name: default
+    signals:
+      context:
+        - name: short_context
+          min_tokens: 0
+          max_tokens: 8K
+        - name: medium_context
+          min_tokens: 8001
+          max_tokens: 64K
+        - name: long_context
+          min_tokens: 64001
+          description: Open-ended band; matches everything above 64K tokens.
 ```
 
 Context bands are routing signals only. They do not change model

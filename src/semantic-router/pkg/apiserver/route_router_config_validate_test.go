@@ -11,7 +11,7 @@ import (
 )
 
 func TestHandleConfigValidate(t *testing.T) {
-	body := `{"yaml":"version: v0.3\nproviders:\n  defaults:\n    model: m1\n  models:\n    - name: m1\n      backend_refs:\n        - endpoint: 127.0.0.1:8000\nrouting:\n  modelCards:\n    - name: m1\n"}`
+	body := `{"yaml":"version: v0.5\nproviders:\n  defaults:\n    model: m1\n  models:\n    - name: m1\n      backend_refs:\n        - endpoint: 127.0.0.1:8000\nrecipes:\n  - name: default\n"}`
 	request := httptest.NewRequest("POST", "/api/v1/config/validate", strings.NewReader(body))
 	response := httptest.NewRecorder()
 
@@ -26,7 +26,7 @@ func TestHandleConfigValidate(t *testing.T) {
 }
 
 func TestHandleConfigValidateRejectsUnknownFields(t *testing.T) {
-	body := `{"yaml":"version: v0.3\n","dsl":"ignored legacy payload"}`
+	body := `{"yaml":"version: v0.5\n","dsl":"ignored legacy payload"}`
 	request := httptest.NewRequest("POST", "/api/v1/config/validate", strings.NewReader(body))
 	response := httptest.NewRecorder()
 
@@ -38,7 +38,7 @@ func TestHandleConfigValidateRejectsUnknownFields(t *testing.T) {
 }
 
 func TestHandleConfigValidateRejectsUnknownYAMLFields(t *testing.T) {
-	body := `{"yaml":"version: v0.3\nproviders:\n  defaults:\n    model: m1\nrouting:\n  modelCards:\n    - name: m1\n      descriptin: typo\n"}`
+	body := `{"yaml":"version: v0.5\nproviders:\n  defaults:\n    model: m1\n  models:\n    - name: m1\n      descriptin: typo\nrecipes:\n  - name: default\n"}`
 	request := httptest.NewRequest("POST", "/api/v1/config/validate", strings.NewReader(body))
 	response := httptest.NewRecorder()
 
@@ -65,7 +65,7 @@ func TestHandleConfigValidateDoesNotExpandEnvironmentSecrets(t *testing.T) {
 	const canary = "validation-secret-canary"
 	t.Setenv("VALIDATE_SECRET_CANARY", canary)
 	yamlInput := `
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: m1
@@ -75,10 +75,9 @@ providers:
         - endpoint: 127.0.0.1:8000
           provider: vllm
           api_key_env: VALIDATE_SECRET_CANARY
-routing:
-  modelCards:
-    - name: m1
       description: ${VALIDATE_SECRET_CANARY}
+recipes:
+  - name: default
 `
 	body, err := json.Marshal(RouterConfigUpdateRequest{YAML: yamlInput})
 	if err != nil {
@@ -117,7 +116,7 @@ routing:
 
 func TestHandleConfigValidatePreservesCredentialEnvironmentReference(t *testing.T) {
 	yamlInput := `
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: m1
@@ -127,9 +126,8 @@ providers:
         - endpoint: 127.0.0.1:8000
           provider: vllm
           api_key: ${MODEL_API_KEY}
-routing:
-  modelCards:
-    - name: m1
+recipes:
+  - name: default
 `
 	body, err := json.Marshal(RouterConfigUpdateRequest{YAML: yamlInput})
 	if err != nil {

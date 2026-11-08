@@ -38,7 +38,7 @@ Flow 在配置的工作流内协调模型 worker。调用它的 Agent Harness �
 
 ## 配置
 
-将公开名字映射到下方的默认路由。若需隔离策略，请将 `routing` 块放入命名 recipe，并修改入口的 recipe 引用。
+将公开名字映射到下方的配方。若需与其他配方隔离，请为它声明独立的 recipe，并修改入口的 recipe 引用。
 
 ```yaml
 entrypoints:
@@ -59,28 +59,29 @@ global:
 配置一条动态 Flow 决策：
 
 ```yaml
-routing:
-  decisions:
-    - name: coding_flow
-      description: Coordinate coding work through planned worker steps.
-      priority: 100
-      output_contract: Preserve any explicit output format exactly.
-      modelRefs:
-        - model: openrouter/gemini-pro
-        - model: openrouter/deepseek
-        - model: qwen/qwen3.6-rocm
-      algorithm:
-        type: workflows
-        on_error: skip
-        workflows:
-          mode: dynamic
-          planner:
-            model: qwen-coordinator
-            max_completion_tokens: 2048
-          max_steps: 6
-          max_parallel: 3
-          round_timeout_seconds: 90
-          min_successful_responses: 2
+recipes:
+  - name: default
+    decisions:
+      - name: coding_flow
+        description: Coordinate coding work through planned worker steps.
+        priority: 100
+        output_contract: Preserve any explicit output format exactly.
+        modelRefs:
+          - model: openrouter/gemini-pro
+          - model: openrouter/deepseek
+          - model: qwen/qwen3.6-rocm
+        algorithm:
+          type: workflows
+          on_error: skip
+          workflows:
+            mode: dynamic
+            planner:
+              model: qwen-coordinator
+              max_completion_tokens: 2048
+            max_steps: 6
+            max_parallel: 3
+            round_timeout_seconds: 90
+            min_successful_responses: 2
 ```
 
 `output_contract` 是决策范围的提示词文本。把它用于应同时作用于静态 Flow、动态 Flow、Fusion 和 ReMoM 的基准或应用格式要求，而不是把任务特定提示词硬编码进算法。使用 `output_contract_spec` 做类型化的路由器可执行归一化和后处理，例如 choice 提取、终端动作 JSON 归一化或引用解引用。提取默认精确匹配 `content`；仅当决策明确允许更宽的解析器时，才使用 `extract.sources` 或 `extract.mode: json_object`。
@@ -95,31 +96,32 @@ worker 调用始终限制在 `modelRefs` 内，执行器会拒绝包含范围外
 静态模式使用显式角色计划。每个角色模型都必须在决策的 `modelRefs` 中。
 
 ```yaml
-routing:
-  decisions:
-    - name: static_flow
-      description: Coordinate a fixed sequence of worker roles.
-      priority: 100
-      modelRefs:
-        - model: qwen-worker
-        - model: deepseek-worker
-      algorithm:
-        type: workflows
-        on_error: skip
-        workflows:
-          mode: static
-          roles:
-            - name: thinker
-              models: [qwen-worker]
-            - name: worker
-              models: [deepseek-worker]
-            - name: verifier
-              models: [qwen-worker]
-          final:
-            model: qwen-worker
-          max_steps: 3
-          max_parallel: 1
-          round_timeout_seconds: 90
+recipes:
+  - name: default
+    decisions:
+      - name: static_flow
+        description: Coordinate a fixed sequence of worker roles.
+        priority: 100
+        modelRefs:
+          - model: qwen-worker
+          - model: deepseek-worker
+        algorithm:
+          type: workflows
+          on_error: skip
+          workflows:
+            mode: static
+            roles:
+              - name: thinker
+                models: [qwen-worker]
+              - name: worker
+                models: [deepseek-worker]
+              - name: verifier
+                models: [qwen-worker]
+            final:
+              model: qwen-worker
+            max_steps: 3
+            max_parallel: 1
+            round_timeout_seconds: 90
 ```
 
 ## 参数

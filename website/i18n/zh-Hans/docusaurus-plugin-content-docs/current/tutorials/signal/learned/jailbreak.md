@@ -10,7 +10,7 @@ translation:
 
 ## 概览 {#overview}
 
-`jailbreak` 在 Router 提交路由前检测提示注入与越狱企图。在 `routing.signals.jailbreak` 下定义越狱规则。
+`jailbreak` 在 Router 提交路由前检测提示注入与越狱企图。在 `recipes[].signals.jailbreak` 下定义越狱规则。
 
 除非 `jailbreak` 绑定指定了其他部署，否则由决策模型回答它；见[为信号选择模型](../../../installation/choose-a-model-for-a-signal.md)。`global.model_catalog.modules.prompt_guard` 保存它的设置。
 
@@ -39,21 +39,22 @@ translation:
 ## 配置 {#configuration}
 
 ```yaml
-routing:
-  signals:
-    jailbreak:
-      - name: prompt_injection
-        method: contrastive
-        threshold: 0.8
-        include_history: true
-        description: Detect common prompt-injection or jailbreak attempts.
-        jailbreak_patterns:
-          - ignore previous instructions
-          - reveal the hidden prompt
-          - jailbreak mode
-        benign_patterns:
-          - explain the policy
-          - summarize the safety rules
+recipes:
+  - name: default
+    signals:
+      jailbreak:
+        - name: prompt_injection
+          method: contrastive
+          threshold: 0.8
+          include_history: true
+          description: Detect common prompt-injection or jailbreak attempts.
+          jailbreak_patterns:
+            - ignore previous instructions
+            - reveal the hidden prompt
+            - jailbreak mode
+          benign_patterns:
+            - explain the policy
+            - summarize the safety rules
 ```
 
 多轮攻击使用 `include_history`；把模式列表当作所配置检测方法的调参数据。
@@ -100,13 +101,14 @@ global:
 `direction` 选择规则打分的对象。默认 `request` 在 Router 提交路由前对提示打分。`response` 对模型自身输出打分，因此规则只有在模型回答后才存在：
 
 ```yaml
-routing:
-  signals:
-    jailbreak:
-      - name: unsafe_completion
-        direction: response
-        threshold: 0.85
-        description: Detect jailbreak content in the model's own output.
+recipes:
+  - name: default
+    signals:
+      jailbreak:
+        - name: unsafe_completion
+          direction: response
+          threshold: 0.85
+          description: Detect jailbreak content in the model's own output.
 ```
 
 响应方向规则只使用序列分类器：`method: contrastive`、模式列表与 `include_history` 是请求阶段设置，在其上会被拒绝。匹配、分数与失败报告在与请求方向规则相同的 `jailbreak:<name>` 键下。路由回放将观察记录为每条响应方向规则一条结果，包含判定（`detected`、`not_detected` 或 `unavailable`）、它阈值化的分数或失败码，以及守卫应用的动作；使用 `x-vsr-debug` 时，`x-vsr-matched-jailbreak` 请求头在请求规则之后携带匹配的响应规则。

@@ -97,16 +97,14 @@ func TestUpdateConfigHandler_PreservesEntrypointsAndRecipes(t *testing.T) {
 		{
 			"name":        "privacy-first",
 			"description": "Keep private traffic on the governed model.",
-			"routing": map[string]interface{}{
-				"decisions": []map[string]interface{}{
-					{
-						"name":        "privacy-route",
-						"description": "Private recipe route",
-						"priority":    100,
-						"rules":       map[string]interface{}{"operator": "AND"},
-						"modelRefs": []map[string]interface{}{
-							{"model": "test-model", "use_reasoning": false},
-						},
+			"decisions": []map[string]interface{}{
+				{
+					"name":        "privacy-route",
+					"description": "Private recipe route",
+					"priority":    100,
+					"rules":       map[string]interface{}{"operator": "AND"},
+					"modelRefs": []map[string]interface{}{
+						{"model": "test-model", "use_reasoning": false},
 					},
 				},
 			},
@@ -136,7 +134,7 @@ func TestUpdateConfigHandler_PreservesEntrypointsAndRecipes(t *testing.T) {
 	if len(updated.Recipes) != 1 || updated.Recipes[0].Name != "privacy-first" {
 		t.Fatalf("recipes were not preserved: %+v", updated.Recipes)
 	}
-	if got := updated.Recipes[0].Routing.Decisions[0].ModelRefs[0].Model; got != "test-model" {
+	if got := updated.Recipes[0].Decisions[0].ModelRefs[0].Model; got != "test-model" {
 		t.Fatalf("recipe model ref = %q, want test-model", got)
 	}
 }
@@ -247,8 +245,8 @@ func TestUpdateConfigHandler_ReplacesLegacyLayout(t *testing.T) {
 	if _, ok := updatedConfig["providers"]; !ok {
 		t.Fatal("Expected canonical providers block to be present")
 	}
-	if _, ok := updatedConfig["routing"]; !ok {
-		t.Fatal("Expected canonical routing block to be present")
+	if _, ok := updatedConfig["recipes"]; !ok {
+		t.Fatal("Expected canonical recipes block to be present")
 	}
 	if _, ok := updatedConfig["model_config"]; ok {
 		t.Error("Legacy model_config should not be preserved after canonical save")

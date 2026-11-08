@@ -512,7 +512,7 @@ func validateEffectiveLoRAReferences(cfg *RouterConfig) error {
 				}
 			}
 			if !found {
-				return fmt.Errorf("routing.decisions[%s].modelRefs[%s].lora_name %q is not declared by model card %q", decision.Name, ref.Model, ref.LoRAName, params.Catalog)
+				return fmt.Errorf("%s.lora_name %q is not declared by model card %q", cfg.ScopePath(fmt.Sprintf("decisions[%s].modelRefs[%s]", decision.Name, ref.Model)), ref.LoRAName, params.Catalog)
 			}
 		}
 	}

@@ -1,7 +1,7 @@
 # The native cascade is escalate: its stages and quality move under escalate,
 # each acceptance becomes accept.native with its bounds on each rule, a native
 # stage needs no kind, and the budget stays the executor's own.
-version: v0.3
+version: v0.5
 listeners:
   - name: native
     port: 8801
@@ -26,29 +26,32 @@ global:
         provider: model_runtime
         device: cpu
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - api: systemone
     model_names: [vllm-sr/auto]
     recipe: native-decisions
 recipes:
+  - name: default
   - name: native-decisions
-    routing:
-      decisions:
-        - name: classify
-          rules: {}
-          modelRefs: [{model: kai}, {model: strong}]
-          algorithm:
-            type: escalate
-            budget: {deadline: 3s, max_calls: 2}
-            escalate:
-              quality:
-                type: uncalibrated
+    decisions:
+      - name: classify
+        rules: {}
+        modelRefs: [{model: kai}, {model: strong}]
+        algorithm:
+          type: escalate
+          budget: {deadline: 3s, max_calls: 2}
+          escalate:
+            quality:
+              type: uncalibrated
+              accept:
+                native:
+                  - {question_type: choice, field: top_probability, gte: 0}
+            stages:
+              - name: fast
+                model: kai
                 accept:
                   native:
-                    - {question_type: choice, field: top_probability, gte: 0}
-              stages:
-                - name: fast
-                  model: kai
-                  accept:
-                    native:
-                      - {question_type: choice, field: top_probability, gte: 0.61}
-                - {name: strong, model: strong, timeout: 1s}
+                    - {question_type: choice, field: top_probability, gte: 0.61}
+              - {name: strong, model: strong, timeout: 1s}

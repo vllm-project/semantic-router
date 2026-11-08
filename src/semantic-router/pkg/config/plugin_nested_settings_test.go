@@ -8,45 +8,46 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-const nestedPluginSettingsYAML = `routing:
-  decisions:
-    - name: nested
-      plugins:
-        - type: context
-          configuration:
-            enabled: true
-            sources:
-              - type: memory
+const nestedPluginSettingsYAML = `recipes:
+  - name: default
+    decisions:
+      - name: nested
+        plugins:
+          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: memory
+                  match:
+                    recall: {method: embedding, top_k: 4, min_similarity: 0.6}
+                  reflection:
+                    enabled: true
+                    algorithm: heuristic
+                    max_inject_tokens: 384
+                    recency_decay_days: 14
+                    dedup_threshold: 0.9
+                    block_patterns: [api key, password]
+              compress:
+                targets: {tool_outputs: {mode: extractive, min_tokens: 1500, target_tokens: 600}}
                 match:
-                  recall: {method: embedding, top_k: 4, min_similarity: 0.6}
-                reflection:
-                  enabled: true
-                  algorithm: heuristic
-                  max_inject_tokens: 384
-                  recency_decay_days: 14
-                  dedup_threshold: 0.9
-                  block_patterns: [api key, password]
-            compress:
-              targets: {tool_outputs: {mode: extractive, min_tokens: 1500, target_tokens: 600}}
-              match:
-                recall: {method: bm25}
-                judge: {preset: relevance, min_ratio: 0.5}
-            budget: {max_tokens: 6000, reserve_output_tokens: auto}
-        - type: tools
-          configuration:
-            enabled: true
-            select:
-              mode: filter
-              match:
-                judge:
-                  question: {type: choice, instructions: "Which listed tool does the request need?"}
-                  top_k: 4
-                  min_score: 0.2
-                  min_ratio: 0.3
-              need_threshold: 0.6
-              preserve_count: 1
-              input: {history: true}
-              sticky: {enabled: false, max_tools: 8, max_new_tools_per_turn: 1, pin_called_tools: false}
+                  recall: {method: bm25}
+                  judge: {preset: relevance, min_ratio: 0.5}
+              budget: {max_tokens: 6000, reserve_output_tokens: auto}
+          - type: tools
+            configuration:
+              enabled: true
+              select:
+                mode: filter
+                match:
+                  judge:
+                    question: {type: choice, instructions: "Which listed tool does the request need?"}
+                    top_k: 4
+                    min_score: 0.2
+                    min_ratio: 0.3
+                need_threshold: 0.6
+                preserve_count: 1
+                input: {history: true}
+                sticky: {enabled: false, max_tools: 8, max_new_tools_per_turn: 1, pin_called_tools: false}
 `
 
 func TestDecisionPluginsReadNestedSettings(t *testing.T) {
@@ -55,18 +56,18 @@ func TestDecisionPluginsReadNestedSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	var document struct {
-		Routing struct {
+		Recipes []struct {
 			Decisions []struct {
 				Plugins []struct {
 					Configuration map[string]interface{} `yaml:"configuration"`
 				} `yaml:"plugins"`
 			} `yaml:"decisions"`
-		} `yaml:"routing"`
+		} `yaml:"recipes"`
 	}
 	if err := yaml.Unmarshal([]byte(nestedPluginSettingsYAML), &document); err != nil {
 		t.Fatal(err)
 	}
-	plugins := document.Routing.Decisions[0].Plugins
+	plugins := document.Recipes[0].Decisions[0].Plugins
 	decision := cfg.Decisions[0]
 	// Written back with its YAML keys, each decoded block must equal the input.
 	for _, tc := range []struct {

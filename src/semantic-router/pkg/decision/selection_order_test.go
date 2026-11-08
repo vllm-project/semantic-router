@@ -36,7 +36,7 @@ func TestUntieredDecisionOutranksTieredDecision(t *testing.T) {
 	}
 }
 
-// routing.strategy decides inside a tier as well, so an unrelated tiered
+// recipes[default].strategy decides inside a tier as well, so an unrelated tiered
 // match no longer switches an untiered pool to confidence ordering.
 func TestMatchedTieredDecisionKeepsConfiguredOrdering(t *testing.T) {
 	highPriority := config.Decision{Name: "high_priority", Priority: 160, Rules: config.RuleNode{Type: "domain", Name: "law"}}

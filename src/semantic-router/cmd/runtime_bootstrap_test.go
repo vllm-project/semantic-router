@@ -226,14 +226,14 @@ func TestStartupRejectsInvalidKubernetesGlobals(t *testing.T) {
 		global string
 		want   string
 	}{
-		{"cache", "  stores: {response_cache: {enabled: true, similarity_threshold: 1.5}}", "similarity_threshold"},
+		{"cache", "  plugins: [{type: response_cache, configuration: {enabled: true, semantic: {match: {recall: {top_k: 1, min_similarity: 1.5}}}}}]", "min_similarity"},
 		{"memory", "  stores: {memory: {default_similarity_threshold: 1.5}}", "default_similarity_threshold"},
 		{"admission", "  model_catalog: {admission: {primary: {max_concurrency: 1, max_queue: -1}}}", "max_queue"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "config.yaml")
-			raw := "version: v0.3\nglobal:\n  router: {config_source: kubernetes}\n" + tc.global + "\n"
+			raw := "version: v0.5\nglobal:\n  router: {config_source: kubernetes}\n" + tc.global + "\n"
 			if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
 				t.Fatal(err)
 			}

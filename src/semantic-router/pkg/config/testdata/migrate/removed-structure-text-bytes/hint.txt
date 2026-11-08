@@ -1,1 +1,1 @@
-routing.signals.structure[long_current_turn]: removed_signal_type: a structure rule on text_bytes is removed, and no keywords rule measures text length; run `vllm-sr config migrate` (a context rule on the request's estimated tokens)
+recipes[default].signals.structure: removed_signal_type: the structure signal is removed; run `vllm-sr config migrate` (keywords rules with operator: OR and a count or density predicate)

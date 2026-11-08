@@ -5,10 +5,11 @@ import (
 	"strings"
 )
 
-func validateKeywordContracts(cfg *RouterConfig) error {
+func validateKeywordContracts(cfg *RouterConfig) (err error) {
+	defer func() { err = cfg.inRecipe(err) }()
 	for _, rule := range cfg.KeywordRules {
 		if err := ValidateKeywordRuleContract(rule); err != nil {
-			return fmt.Errorf("routing.signals.keywords[%q]: %w", rule.Name, err)
+			return fmt.Errorf("signals.keywords[%q]: %w", rule.Name, err)
 		}
 	}
 	return nil

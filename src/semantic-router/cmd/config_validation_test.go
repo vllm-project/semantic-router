@@ -14,7 +14,7 @@ import (
 )
 
 const modalityValidationConfig = `
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -26,27 +26,26 @@ providers:
     - name: text-model
       backend_refs:
         - endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: text-model
       modality: ar
-  signals:
-    modality:
-      - name: AR
-        description: Text-only requests.
-        labels: [text]
-      - name: BOTH
-        description: Text and image requests.
-        labels: [text_image]
-  decisions:
-    - name: image-gen
-      rules:
-        operator: AND
-        conditions:
-          - type: modality
-            name: CONDITION
-      modelRefs:
-        - model: text-model
+recipes:
+  - name: default
+    signals:
+      modality:
+        - name: AR
+          description: Text-only requests.
+          labels: [text]
+        - name: BOTH
+          description: Text and image requests.
+          labels: [text_image]
+    decisions:
+      - name: image-gen
+        rules:
+          operator: AND
+          conditions:
+            - type: modality
+              name: CONDITION
+        modelRefs:
+          - model: text-model
 `
 
 func runValidation(t *testing.T, document string) (int, configValidationReport) {
@@ -103,20 +102,21 @@ func TestValidateConfigReportsAnUnreadableFile(t *testing.T) {
 // replace them; the migrated file loads with no deprecated field.
 func TestMigrateConfigRewritesDeprecatedModelFields(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	document := `version: v0.3
+	document := `version: v0.5
 providers:
   defaults: {model: general}
   models:
     - name: general
       backend_refs: [{name: local, base_url: "http://127.0.0.1:8000/v1", provider: vllm, weight: 1}]
-routing:
-  signals:
-    pii: [{name: personal, predicate: {gte: 0.5}}]
-  decisions:
-    - name: route
-      priority: 100
-      rules: {operator: OR, conditions: [{type: pii, name: personal}]}
-      modelRefs: [{model: general}]
+recipes:
+  - name: default
+    signals:
+      pii: [{name: personal, predicate: {gte: 0.5}}]
+    decisions:
+      - name: route
+        priority: 100
+        rules: {operator: OR, conditions: [{type: pii, name: personal}]}
+        modelRefs: [{model: general}]
 global:
   model_catalog:
     bindings:

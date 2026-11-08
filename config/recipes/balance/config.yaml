@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 listeners:
   - address: 0.0.0.0
     name: http-8899
@@ -7,7 +7,6 @@ listeners:
 global:
   stores:
     response_cache:
-      enabled: false
       backend_type: memory
   router:
     learning:
@@ -45,6 +44,14 @@ providers:
           weight: 1
       name: local/omni
       provider_model_id: local/omni
+      capabilities:
+        - chat
+        - image_understanding
+        - multimodal
+        - omni
+        - text
+        - vision
+      modality: omni
     - backend_refs:
         - endpoint: vllm:8000
           provider: vllm
@@ -70,6 +77,20 @@ providers:
         health_check_timeout: 2s
       reasoning:
         family: qwen3
+      capabilities:
+        - fast_qa
+        - self_hosted
+        - concise_answers
+        - general_chat
+        - creative_drafting
+      context_window_size: 262144
+      description: SIMPLE tier alias and free self-hosted default for fast QA, broad fallback, creative drafting, and most low-cost traffic.
+      modality: text
+      tags:
+        - tier:simple
+        - cost:free
+        - deployment:self_hosted
+        - traffic:default
     - backend_refs:
         - endpoint: vllm:8000
           provider: vllm
@@ -93,6 +114,17 @@ providers:
         health_check_path: /health
         health_check_interval: 10s
         health_check_timeout: 2s
+      capabilities:
+        - verified_explanation
+        - source_backed_correction
+        - nuanced_explanation
+      context_window_size: 262144
+      description: MEDIUM tier alias for low-cost verified explanation and correction tasks.
+      modality: text
+      tags:
+        - tier:medium
+        - cost:low
+        - specialty:verified
     - backend_refs:
         - endpoint: vllm:8000
           provider: vllm
@@ -116,6 +148,18 @@ providers:
         health_check_path: /health
         health_check_interval: 10s
         health_check_timeout: 2s
+      capabilities:
+        - architecture
+        - stem_analysis
+        - long_context
+        - general_reasoning
+      context_window_size: 262144
+      description: COMPLEX tier alias for systems design, hard STEM, health guidance, and deep general reasoning.
+      modality: text
+      tags:
+        - tier:complex
+        - cost:upper_mid
+        - specialty:complex_generalist
     - backend_refs:
         - endpoint: vllm:8000
           provider: vllm
@@ -139,6 +183,17 @@ providers:
         health_check_path: /health
         health_check_interval: 10s
         health_check_timeout: 2s
+      capabilities:
+        - reasoning
+        - proofs
+        - formal_derivation
+      context_window_size: 262144
+      description: REASONING tier alias for narrow formal math proofs and derivations.
+      modality: text
+      tags:
+        - tier:reasoning
+        - cost:high
+        - specialty:formal_proof
     - backend_refs:
         - endpoint: vllm:8000
           provider: vllm
@@ -162,6 +217,17 @@ providers:
         health_check_path: /health
         health_check_interval: 10s
         health_check_timeout: 2s
+      capabilities:
+        - legal_analysis
+        - policy_review
+        - high_risk_review
+      context_window_size: 262144
+      description: PREMIUM tier alias reserved for legal and high-risk analysis.
+      modality: text
+      tags:
+        - tier:premium
+        - cost:highest
+        - specialty:legal
 evaluation:
   records:
     - model: anthropic/claude-opus-4.6
@@ -184,554 +250,463 @@ evaluation:
       benchmark: vllm-sr/operator-rating@1.0.0
       metrics:
         score: 0.58
-routing:
-  modelCards:
-    - capabilities:
-        - legal_analysis
-        - policy_review
-        - high_risk_review
-      context_window_size: 262144
-      description: PREMIUM tier alias reserved for legal and high-risk analysis.
-      modality: text
-      name: anthropic/claude-opus-4.6
-      tags:
-        - tier:premium
-        - cost:highest
-        - specialty:legal
-    - capabilities:
-        - verified_explanation
-        - source_backed_correction
-        - nuanced_explanation
-      context_window_size: 262144
-      description: MEDIUM tier alias for low-cost verified explanation and correction tasks.
-      modality: text
-      name: google/gemini-2.5-flash-lite
-      tags:
-        - tier:medium
-        - cost:low
-        - specialty:verified
-    - capabilities:
-        - architecture
-        - stem_analysis
-        - long_context
-        - general_reasoning
-      context_window_size: 262144
-      description: COMPLEX tier alias for systems design, hard STEM, health guidance, and deep general
-        reasoning.
-      modality: text
-      name: google/gemini-3.1-pro
-      tags:
-        - tier:complex
-        - cost:upper_mid
-        - specialty:complex_generalist
-    - capabilities:
-        - chat
-        - image_understanding
-        - multimodal
-        - omni
-        - text
-        - vision
-      modality: omni
-      name: local/omni
-    - capabilities:
-        - reasoning
-        - proofs
-        - formal_derivation
-      context_window_size: 262144
-      description: REASONING tier alias for narrow formal math proofs and derivations.
-      modality: text
-      name: openai/gpt5.4
-      tags:
-        - tier:reasoning
-        - cost:high
-        - specialty:formal_proof
-    - capabilities:
-        - fast_qa
-        - self_hosted
-        - concise_answers
-        - general_chat
-        - creative_drafting
-      context_window_size: 262144
-      description: SIMPLE tier alias and free self-hosted default for fast QA, broad fallback, creative
-        drafting, and most low-cost traffic.
-      modality: text
-      name: qwen/qwen3.5-rocm
-      tags:
-        - tier:simple
-        - cost:free
-        - deployment:self_hosted
-        - traffic:default
-  signals:
-    conversation:
-      - name: has_prior_answer
-        description: The conversation already holds an assistant answer.
-        feature:
-          type: exists
-          source:
-            type: message
-            role: assistant
-    input_modality:
-      - name: has_image
-        description: The request carries at least one image.
-        modality: image
-    systemone:
-      - name: task
-        description: The kind of work the request asks for; its most likely answer picks the work lane.
-        question:
-          type: choice
-          instructions: What kind of work does this request ask for?
-          choices:
-            - key: chat
-              description: Greetings, small talk, questions about the assistant itself, or a simple everyday
-                explanation of how a household thing works
-            - key: creative
-              description: 'Creative writing or drafting: names, taglines, poems, stories, or personal
-                messages and replies'
-            - key: code
-              description: Writing, debugging, testing or reviewing code, or fixing a software bug
-            - key: proof
-              description: A mathematical proof or a formal derivation, such as proving a theorem
-            - key: systems
-              description: An engineering plan or design, such as an architecture, a migration or a runbook
-            - key: science
-              description: A hard science problem that needs expert multi-step reasoning, such as analyzing
-                physical or chemical mechanisms or designing experiments
-            - key: legal
-              description: Legal or compliance analysis of contracts, regulations or obligations
-            - key: health
-              description: Health, symptoms, medicine or treatment
-            - key: argument
-              description: 'Philosophy or ethics: comparing moral frameworks or forms of reasoning such
-                as deduction and induction, and arguing for a position'
-            - key: explain
-              description: Explaining, comparing or verifying ideas in business, economics, history or
-                psychology, such as pricing, markets, historical events, human behavior, biases and fallacies
-            - key: facts
-              description: A short factual question with a direct, well-known answer, such as a basic
-                fact of science, nature, geography or history, even when the user asks to verify it or
-                cite a source
-        predicate:
-          gte: 0.4
-      - name: verification
-        description: The user asks for sources, citations or evidence.
-        question:
-          type: noul
-          instructions: Does the user ask to verify the answer, or to back it with sources, citations
-            or evidence?
-          choices:
-            - key: 'false'
-              description: 'No: no verification or sources are requested'
-            - key: 'true'
-              description: 'Yes: the user asks for verification, sources or evidence'
-        predicate:
-          gte: 0.5
-      - name: correction
-        description: The user says the assistant's previous answer was wrong.
-        question:
-          type: noul
-          instructions: In the latest message, does the user say the assistant's previous answer was wrong
-            and ask for a corrected answer?
-          choices:
-            - key: 'false'
-              description: 'No: the user continues, asks something new, or is satisfied'
-            - key: 'true'
-              description: 'Yes: the user says the previous answer was wrong'
-        predicate:
-          gte: 0.7
-      - name: clarify
-        description: The user asks for the previous answer again, more clearly.
-        question:
-          type: noul
-          instructions: In the latest message, does the user ask the assistant to explain its previous
-            answer again, more clearly, more simply or with an example?
-          choices:
-            - key: 'false'
-              description: 'No: a new request, a correction or satisfaction'
-            - key: 'true'
-              description: 'Yes: the previous answer should be explained again more clearly'
-        predicate:
-          gte: 0.6
-  decisions:
-    - name: omni
-      description: Image requests go to the visual-language model.
-      priority: 300
-      tier: 1
-      rules:
-        operator: AND
-        conditions:
-          - type: input_modality
-            name: has_image
-      modelRefs:
-        - model: local/omni
-          use_reasoning: false
-      algorithm:
-        type: static
-    - name: premium_legal
-      description: 'Legal and compliance analysis (task: legal) goes to the premium lane.'
-      priority: 260
-      tier: 2
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions:
-          - type: systemone
-            name: task
-            label: legal
-      modelRefs:
-        - model: anthropic/claude-opus-4.6
-          reasoning_effort: high
-          use_reasoning: true
-        - model: openai/gpt5.4
-          reasoning_effort: high
-          use_reasoning: true
-      plugins:
-        - configuration:
-            capture_request_body: true
-            capture_response_body: true
-            enabled: true
-            max_body_bytes: 4096
-            max_records: 100000
-          type: router_replay
-    - name: formal_math_proof
-      description: 'Mathematical proofs and derivations (task: proof) go to the formal reasoning lane.'
-      priority: 252
-      tier: 3
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions:
-          - type: systemone
-            name: task
-            label: proof
-      modelRefs:
-        - model: openai/gpt5.4
-          reasoning_effort: high
-          use_reasoning: true
-        - model: anthropic/claude-opus-4.6
-          reasoning_effort: high
-          use_reasoning: true
-      plugins:
-        - configuration:
-            capture_request_body: true
-            capture_response_body: true
-            enabled: true
-            max_body_bytes: 4096
-            max_records: 100000
-          type: router_replay
-    - name: reasoning_deep
-      description: 'Comparing ideas and arguing for a position (task: argument) goes to the deep reasoning
-        lane.'
-      priority: 250
-      tier: 4
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions:
-          - type: systemone
-            name: task
-            label: argument
-      modelRefs:
-        - model: google/gemini-3.1-pro
-          reasoning_effort: high
-          use_reasoning: true
-        - model: openai/gpt5.4
-          reasoning_effort: high
-          use_reasoning: true
-      plugins:
-        - configuration:
-            capture_request_body: true
-            capture_response_body: true
-            enabled: true
-            max_body_bytes: 4096
-            max_records: 100000
-          type: router_replay
-    - name: complex_specialist
-      description: 'Engineering plans and designs (task: systems) and advanced science (task: science)
-        go to the specialist lane.'
-      priority: 242
-      tier: 5
-      rules:
-        operator: OR
-        on_unknown: no_match
-        conditions:
-          - type: systemone
-            name: task
-            label: systems
-          - type: systemone
-            name: task
-            label: science
-      modelRefs:
-        - model: google/gemini-3.1-pro
-          reasoning_effort: high
-          use_reasoning: true
-        - model: openai/gpt5.4
-          reasoning_effort: high
-          use_reasoning: true
-      plugins:
-        - configuration:
-            capture_request_body: true
-            capture_response_body: true
-            enabled: true
-            max_body_bytes: 4096
-            max_records: 100000
-          type: router_replay
-    - name: feedback_wrong_answer_verified
-      description: A follow-up that says the previous answer was wrong (correction, after an answer) goes
-        to the recovery lane.
-      priority: 232
-      tier: 6
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions:
-          - type: conversation
-            name: has_prior_answer
-          - type: systemone
-            name: correction
-      modelRefs:
-        - model: google/gemini-2.5-flash-lite
-          use_reasoning: false
-        - model: google/gemini-3.1-pro
-          reasoning_effort: medium
-          use_reasoning: true
-      plugins:
-        - configuration:
-            capture_request_body: true
-            capture_response_body: true
-            enabled: true
-            max_body_bytes: 4096
-            max_records: 100000
-          type: router_replay
-    - name: medium_code_general
-      description: 'Coding and debugging (task: code) go to the code lane.'
-      priority: 220
-      tier: 7
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions:
-          - type: systemone
-            name: task
-            label: code
-      modelRefs:
-        - model: qwen/qwen3.5-rocm
-          reasoning_mode: enabled
-          use_reasoning: true
-        - model: google/gemini-2.5-flash-lite
-          use_reasoning: false
-      plugins:
-        - configuration:
-            capture_request_body: true
-            capture_response_body: true
-            enabled: true
-            max_body_bytes: 4096
-            max_records: 100000
-          type: router_replay
-    - name: verified_health
-      description: 'Health questions (task: health) go to the conservative health lane.'
-      priority: 218
-      tier: 8
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions:
-          - type: systemone
-            name: task
-            label: health
-      modelRefs:
-        - model: google/gemini-3.1-pro
-          reasoning_effort: medium
-          use_reasoning: true
-        - model: anthropic/claude-opus-4.6
-          reasoning_effort: medium
-          use_reasoning: true
-      plugins:
-        - configuration:
-            capture_request_body: true
-            capture_response_body: true
-            enabled: true
-            max_body_bytes: 4096
-            max_records: 100000
-          type: router_replay
-    - name: verified_explainer
-      description: 'Explanations that ask for sources (task: explain, verification) go to the verified
-        lane.'
-      priority: 214
-      tier: 9
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions:
-          - type: systemone
-            name: task
-            label: explain
-          - type: systemone
-            name: verification
-      modelRefs:
-        - model: google/gemini-2.5-flash-lite
-          use_reasoning: false
-        - model: google/gemini-3.1-pro
-          reasoning_effort: medium
-          use_reasoning: true
-      plugins:
-        - configuration:
-            capture_request_body: true
-            capture_response_body: true
-            enabled: true
-            max_body_bytes: 4096
-            max_records: 100000
-          type: router_replay
-    - name: feedback_need_clarification
-      description: A follow-up that asks to explain the previous answer more clearly (clarify, after an
-        answer) stays on the low-cost lane.
-      priority: 212
-      tier: 10
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions:
-          - type: conversation
-            name: has_prior_answer
-          - type: systemone
-            name: clarify
-          - operator: NOT
-            conditions:
-              - type: systemone
-                name: correction
-      modelRefs:
-        - model: qwen/qwen3.5-rocm
-          use_reasoning: false
-        - model: google/gemini-2.5-flash-lite
-          use_reasoning: false
-      plugins:
-        - configuration:
-            capture_request_body: true
-            capture_response_body: true
-            enabled: true
-            max_body_bytes: 4096
-            max_records: 100000
-          type: router_replay
-    - name: medium_explainer
-      description: 'Explanations without a source request (task: explain) go to the explainer lane.'
-      priority: 208
-      tier: 11
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions:
-          - type: systemone
-            name: task
-            label: explain
-          - operator: NOT
-            conditions:
-              - type: systemone
-                name: verification
-      modelRefs:
-        - model: qwen/qwen3.5-rocm
-          reasoning_mode: enabled
-          use_reasoning: true
-        - model: google/gemini-2.5-flash-lite
-          use_reasoning: false
-      plugins:
-        - configuration:
-            capture_request_body: true
-            capture_response_body: true
-            enabled: true
-            max_body_bytes: 4096
-            max_records: 100000
-          type: router_replay
-    - name: medium_creative
-      description: 'Creative writing and drafting (task: creative) go to the creative lane.'
-      priority: 200
-      tier: 12
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions:
-          - type: systemone
-            name: task
-            label: creative
-      modelRefs:
-        - model: qwen/qwen3.5-rocm
-          use_reasoning: false
-        - model: google/gemini-2.5-flash-lite
-          use_reasoning: false
-      plugins:
-        - configuration:
-            capture_request_body: true
-            capture_response_body: true
-            enabled: true
-            max_body_bytes: 4096
-            max_records: 100000
-          type: router_replay
-    - name: fast_qa
-      description: 'Short factual questions (task: facts) go to the fast lane.'
-      priority: 184
-      tier: 13
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions:
-          - type: systemone
-            name: task
-            label: facts
-      modelRefs:
-        - model: qwen/qwen3.5-rocm
-          use_reasoning: false
-        - model: google/gemini-2.5-flash-lite
-          use_reasoning: false
-      plugins:
-        - configuration:
-            capture_request_body: true
-            capture_response_body: true
-            enabled: true
-            max_body_bytes: 4096
-            max_records: 100000
-          type: router_replay
-    - name: simple_general
-      description: 'Greetings and everyday questions (task: chat) go to the simple lane.'
-      priority: 170
-      tier: 14
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions:
-          - type: systemone
-            name: task
-            label: chat
-      modelRefs:
-        - model: qwen/qwen3.5-rocm
-          use_reasoning: false
-        - model: google/gemini-2.5-flash-lite
-          use_reasoning: false
-      plugins:
-        - configuration:
-            capture_request_body: true
-            capture_response_body: true
-            enabled: true
-            max_body_bytes: 4096
-            max_records: 100000
-          type: router_replay
-    - name: casual_chat
-      description: Everything else, including requests whose answers are unclear or unknown, goes to the
-        lowest-cost lane.
-      priority: 10
-      tier: 15
-      rules:
-        operator: AND
-      modelRefs:
-        - model: qwen/qwen3.5-rocm
-          use_reasoning: false
-        - model: google/gemini-2.5-flash-lite
-          use_reasoning: false
-      plugins:
-        - configuration:
-            capture_request_body: true
-            capture_response_body: true
-            enabled: true
-            max_body_bytes: 4096
-            max_records: 100000
-          type: router_replay
+recipes:
+  - name: default
+    signals:
+      conversation:
+        - name: has_prior_answer
+          description: The conversation already holds an assistant answer.
+          feature:
+            type: exists
+            source:
+              type: message
+              role: assistant
+      input_modality:
+        - name: has_image
+          description: The request carries at least one image.
+          modality: image
+      systemone:
+        - name: task
+          description: The kind of work the request asks for; its most likely answer picks the work lane.
+          question:
+            type: choice
+            instructions: What kind of work does this request ask for?
+            choices:
+              - key: chat
+                description: Greetings, small talk, questions about the assistant itself, or a simple everyday explanation of how a household thing works
+              - key: creative
+                description: 'Creative writing or drafting: names, taglines, poems, stories, or personal messages and replies'
+              - key: code
+                description: Writing, debugging, testing or reviewing code, or fixing a software bug
+              - key: proof
+                description: A mathematical proof or a formal derivation, such as proving a theorem
+              - key: systems
+                description: An engineering plan or design, such as an architecture, a migration or a runbook
+              - key: science
+                description: A hard science problem that needs expert multi-step reasoning, such as analyzing physical or chemical mechanisms or designing experiments
+              - key: legal
+                description: Legal or compliance analysis of contracts, regulations or obligations
+              - key: health
+                description: Health, symptoms, medicine or treatment
+              - key: argument
+                description: 'Philosophy or ethics: comparing moral frameworks or forms of reasoning such as deduction and induction, and arguing for a position'
+              - key: explain
+                description: Explaining, comparing or verifying ideas in business, economics, history or psychology, such as pricing, markets, historical events, human behavior, biases and fallacies
+              - key: facts
+                description: A short factual question with a direct, well-known answer, such as a basic fact of science, nature, geography or history, even when the user asks to verify it or cite a source
+          predicate:
+            gte: 0.4
+        - name: verification
+          description: The user asks for sources, citations or evidence.
+          question:
+            type: noul
+            instructions: Does the user ask to verify the answer, or to back it with sources, citations or evidence?
+            choices:
+              - key: 'false'
+                description: 'No: no verification or sources are requested'
+              - key: 'true'
+                description: 'Yes: the user asks for verification, sources or evidence'
+          predicate:
+            gte: 0.5
+        - name: correction
+          description: The user says the assistant's previous answer was wrong.
+          question:
+            type: noul
+            instructions: In the latest message, does the user say the assistant's previous answer was wrong and ask for a corrected answer?
+            choices:
+              - key: 'false'
+                description: 'No: the user continues, asks something new, or is satisfied'
+              - key: 'true'
+                description: 'Yes: the user says the previous answer was wrong'
+          predicate:
+            gte: 0.7
+        - name: clarify
+          description: The user asks for the previous answer again, more clearly.
+          question:
+            type: noul
+            instructions: In the latest message, does the user ask the assistant to explain its previous answer again, more clearly, more simply or with an example?
+            choices:
+              - key: 'false'
+                description: 'No: a new request, a correction or satisfaction'
+              - key: 'true'
+                description: 'Yes: the previous answer should be explained again more clearly'
+          predicate:
+            gte: 0.6
+    decisions:
+      - name: omni
+        description: Image requests go to the visual-language model.
+        priority: 300
+        tier: 1
+        rules:
+          operator: AND
+          conditions:
+            - type: input_modality
+              name: has_image
+        modelRefs:
+          - model: local/omni
+            use_reasoning: false
+        algorithm:
+          type: static
+      - name: premium_legal
+        description: 'Legal and compliance analysis (task: legal) goes to the premium lane.'
+        priority: 260
+        tier: 2
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: systemone
+              name: task
+              label: legal
+        modelRefs:
+          - model: anthropic/claude-opus-4.6
+            reasoning_effort: high
+            use_reasoning: true
+          - model: openai/gpt5.4
+            reasoning_effort: high
+            use_reasoning: true
+        plugins:
+          - configuration:
+              capture_request_body: true
+              capture_response_body: true
+              enabled: true
+              max_body_bytes: 4096
+              max_records: 100000
+            type: router_replay
+      - name: formal_math_proof
+        description: 'Mathematical proofs and derivations (task: proof) go to the formal reasoning lane.'
+        priority: 252
+        tier: 3
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: systemone
+              name: task
+              label: proof
+        modelRefs:
+          - model: openai/gpt5.4
+            reasoning_effort: high
+            use_reasoning: true
+          - model: anthropic/claude-opus-4.6
+            reasoning_effort: high
+            use_reasoning: true
+        plugins:
+          - configuration:
+              capture_request_body: true
+              capture_response_body: true
+              enabled: true
+              max_body_bytes: 4096
+              max_records: 100000
+            type: router_replay
+      - name: reasoning_deep
+        description: 'Comparing ideas and arguing for a position (task: argument) goes to the deep reasoning lane.'
+        priority: 250
+        tier: 4
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: systemone
+              name: task
+              label: argument
+        modelRefs:
+          - model: google/gemini-3.1-pro
+            reasoning_effort: high
+            use_reasoning: true
+          - model: openai/gpt5.4
+            reasoning_effort: high
+            use_reasoning: true
+        plugins:
+          - configuration:
+              capture_request_body: true
+              capture_response_body: true
+              enabled: true
+              max_body_bytes: 4096
+              max_records: 100000
+            type: router_replay
+      - name: complex_specialist
+        description: 'Engineering plans and designs (task: systems) and advanced science (task: science) go to the specialist lane.'
+        priority: 242
+        tier: 5
+        rules:
+          operator: OR
+          on_unknown: no_match
+          conditions:
+            - type: systemone
+              name: task
+              label: systems
+            - type: systemone
+              name: task
+              label: science
+        modelRefs:
+          - model: google/gemini-3.1-pro
+            reasoning_effort: high
+            use_reasoning: true
+          - model: openai/gpt5.4
+            reasoning_effort: high
+            use_reasoning: true
+        plugins:
+          - configuration:
+              capture_request_body: true
+              capture_response_body: true
+              enabled: true
+              max_body_bytes: 4096
+              max_records: 100000
+            type: router_replay
+      - name: feedback_wrong_answer_verified
+        description: A follow-up that says the previous answer was wrong (correction, after an answer) goes to the recovery lane.
+        priority: 232
+        tier: 6
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: conversation
+              name: has_prior_answer
+            - type: systemone
+              name: correction
+        modelRefs:
+          - model: google/gemini-2.5-flash-lite
+            use_reasoning: false
+          - model: google/gemini-3.1-pro
+            reasoning_effort: medium
+            use_reasoning: true
+        plugins:
+          - configuration:
+              capture_request_body: true
+              capture_response_body: true
+              enabled: true
+              max_body_bytes: 4096
+              max_records: 100000
+            type: router_replay
+      - name: medium_code_general
+        description: 'Coding and debugging (task: code) go to the code lane.'
+        priority: 220
+        tier: 7
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: systemone
+              name: task
+              label: code
+        modelRefs:
+          - model: qwen/qwen3.5-rocm
+            reasoning_mode: enabled
+            use_reasoning: true
+          - model: google/gemini-2.5-flash-lite
+            use_reasoning: false
+        plugins:
+          - configuration:
+              capture_request_body: true
+              capture_response_body: true
+              enabled: true
+              max_body_bytes: 4096
+              max_records: 100000
+            type: router_replay
+      - name: verified_health
+        description: 'Health questions (task: health) go to the conservative health lane.'
+        priority: 218
+        tier: 8
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: systemone
+              name: task
+              label: health
+        modelRefs:
+          - model: google/gemini-3.1-pro
+            reasoning_effort: medium
+            use_reasoning: true
+          - model: anthropic/claude-opus-4.6
+            reasoning_effort: medium
+            use_reasoning: true
+        plugins:
+          - configuration:
+              capture_request_body: true
+              capture_response_body: true
+              enabled: true
+              max_body_bytes: 4096
+              max_records: 100000
+            type: router_replay
+      - name: verified_explainer
+        description: 'Explanations that ask for sources (task: explain, verification) go to the verified lane.'
+        priority: 214
+        tier: 9
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: systemone
+              name: task
+              label: explain
+            - type: systemone
+              name: verification
+        modelRefs:
+          - model: google/gemini-2.5-flash-lite
+            use_reasoning: false
+          - model: google/gemini-3.1-pro
+            reasoning_effort: medium
+            use_reasoning: true
+        plugins:
+          - configuration:
+              capture_request_body: true
+              capture_response_body: true
+              enabled: true
+              max_body_bytes: 4096
+              max_records: 100000
+            type: router_replay
+      - name: feedback_need_clarification
+        description: A follow-up that asks to explain the previous answer more clearly (clarify, after an answer) stays on the low-cost lane.
+        priority: 212
+        tier: 10
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: conversation
+              name: has_prior_answer
+            - type: systemone
+              name: clarify
+            - operator: NOT
+              conditions:
+                - type: systemone
+                  name: correction
+        modelRefs:
+          - model: qwen/qwen3.5-rocm
+            use_reasoning: false
+          - model: google/gemini-2.5-flash-lite
+            use_reasoning: false
+        plugins:
+          - configuration:
+              capture_request_body: true
+              capture_response_body: true
+              enabled: true
+              max_body_bytes: 4096
+              max_records: 100000
+            type: router_replay
+      - name: medium_explainer
+        description: 'Explanations without a source request (task: explain) go to the explainer lane.'
+        priority: 208
+        tier: 11
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: systemone
+              name: task
+              label: explain
+            - operator: NOT
+              conditions:
+                - type: systemone
+                  name: verification
+        modelRefs:
+          - model: qwen/qwen3.5-rocm
+            reasoning_mode: enabled
+            use_reasoning: true
+          - model: google/gemini-2.5-flash-lite
+            use_reasoning: false
+        plugins:
+          - configuration:
+              capture_request_body: true
+              capture_response_body: true
+              enabled: true
+              max_body_bytes: 4096
+              max_records: 100000
+            type: router_replay
+      - name: medium_creative
+        description: 'Creative writing and drafting (task: creative) go to the creative lane.'
+        priority: 200
+        tier: 12
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: systemone
+              name: task
+              label: creative
+        modelRefs:
+          - model: qwen/qwen3.5-rocm
+            use_reasoning: false
+          - model: google/gemini-2.5-flash-lite
+            use_reasoning: false
+        plugins:
+          - configuration:
+              capture_request_body: true
+              capture_response_body: true
+              enabled: true
+              max_body_bytes: 4096
+              max_records: 100000
+            type: router_replay
+      - name: fast_qa
+        description: 'Short factual questions (task: facts) go to the fast lane.'
+        priority: 184
+        tier: 13
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: systemone
+              name: task
+              label: facts
+        modelRefs:
+          - model: qwen/qwen3.5-rocm
+            use_reasoning: false
+          - model: google/gemini-2.5-flash-lite
+            use_reasoning: false
+        plugins:
+          - configuration:
+              capture_request_body: true
+              capture_response_body: true
+              enabled: true
+              max_body_bytes: 4096
+              max_records: 100000
+            type: router_replay
+      - name: simple_general
+        description: 'Greetings and everyday questions (task: chat) go to the simple lane.'
+        priority: 170
+        tier: 14
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: systemone
+              name: task
+              label: chat
+        modelRefs:
+          - model: qwen/qwen3.5-rocm
+            use_reasoning: false
+          - model: google/gemini-2.5-flash-lite
+            use_reasoning: false
+        plugins:
+          - configuration:
+              capture_request_body: true
+              capture_response_body: true
+              enabled: true
+              max_body_bytes: 4096
+              max_records: 100000
+            type: router_replay
+      - name: casual_chat
+        description: Everything else, including requests whose answers are unclear or unknown, goes to the lowest-cost lane.
+        priority: 10
+        tier: 15
+        rules:
+          operator: AND
+        modelRefs:
+          - model: qwen/qwen3.5-rocm
+            use_reasoning: false
+          - model: google/gemini-2.5-flash-lite
+            use_reasoning: false
+        plugins:
+          - configuration:
+              capture_request_body: true
+              capture_response_body: true
+              enabled: true
+              max_body_bytes: 4096
+              max_records: 100000
+            type: router_replay
 entrypoints:
   - model_names: ["vllm-sr/auto"]
     recipe: default

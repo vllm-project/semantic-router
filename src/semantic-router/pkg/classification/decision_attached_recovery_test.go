@@ -2,7 +2,6 @@ package classification
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -39,7 +38,7 @@ func attachedDecisionModels(t *testing.T, explicit bool) (*classifierModelRuntim
 	t.Helper()
 	source := setQuestionOnTheDecisionModel
 	if explicit {
-		source = strings.Replace(source, "routing:\n", "routing:\n  model_bindings:\n    pii_classifier: {deployment: primary, contract: decision.v1}\n", 1)
+		source = strings.Replace(source, "\n  - name: default\n", "\n  - name: default\n    model_bindings:\n      pii_classifier: {deployment: primary, contract: decision.v1}\n", 1)
 	}
 	cfg, err := config.ParseYAMLBytes([]byte(source))
 	if err != nil {
@@ -89,7 +88,8 @@ func TestAttachedDecisionQuestionsRecoverWithoutDiscovery(t *testing.T) {
 	if result := evaluate(); result.SignalErrors["systemone:needs"] == "" || len(services.requests) != 1 {
 		t.Fatal("changed attached capabilities reused an old card or bypassed compilation")
 	}
-	if err := c.prepareSystemOneSignals(); !errors.Is(err, modelservice.ErrRejected) {
+	want := `recipes[default].signals.systemone[needs]: question_type_unsupported: resolves to deployment "primary", which answers choice questions and cannot answer set questions`
+	if err := c.prepareSystemOneSignals(); err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Fatalf("known unsupported capability must reject preparation: %v", err)
 	}
 }
@@ -102,7 +102,7 @@ func TestAttachedDecisionSpanIsNeverComposedOrSilentlyAccepted(t *testing.T) {
 		t.Fatal(err)
 	}
 	services.card, services.ready = decisionObservation("noul"), true
-	want := `routing.signals.systemone[needs]: span_required: resolves to deployment "primary", which cannot answer span questions`
+	want := `recipes[default].signals.systemone[needs]: span_required: resolves to deployment "primary", which cannot answer span questions`
 	if err := c.prepareSystemOneSignals(); err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Fatalf("Noul cannot provide locations: %v", err)
 	}

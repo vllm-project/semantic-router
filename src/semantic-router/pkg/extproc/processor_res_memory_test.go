@@ -73,7 +73,8 @@ func (s *blockingMemoryStore) Close() error {
 func TestScheduleResponseMemoryStore_NoOpWithoutMemoryExtractor(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
-			Memory: config.MemoryConfig{Enabled: true, AutoStore: true},
+			GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()},
+			Memory:        config.MemoryConfig{InUse: true, AutoStore: true},
 		},
 		MemoryExtractor: nil,
 	}
@@ -106,7 +107,8 @@ func TestScheduleResponseMemoryStore_SkippedWhenAutoStoreDisabled(t *testing.T) 
 func TestScheduleResponseMemoryStore_SkippedWhenJailbreakDetected(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
-			Memory: config.MemoryConfig{Enabled: true, AutoStore: true},
+			GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()},
+			Memory:        config.MemoryConfig{InUse: true, AutoStore: true},
 		},
 		MemoryExtractor: memory.NewMemoryChunkStore(&noopMemoryStore{}),
 	}
@@ -124,7 +126,8 @@ func TestScheduleResponseMemoryStore_FallsBackToRouterAutoStore(t *testing.T) {
 	runner := memory.NewPersistenceRunner(time.Second, 1, 1)
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
-			Memory: config.MemoryConfig{Enabled: true, AutoStore: true},
+			GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()},
+			Memory:        config.MemoryConfig{InUse: true, AutoStore: true},
 		},
 		// Non-nil extractor so the function reaches past the nil check
 		MemoryExtractor:   memory.NewMemoryChunkStore(&noopMemoryStore{}),
@@ -152,7 +155,8 @@ func TestScheduleResponseMemoryStore_AppendsScheduledAndTerminalReplayOutcomes(t
 	runner := memory.NewPersistenceRunner(time.Second, 1, 1)
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
-			Memory: config.MemoryConfig{Enabled: true, AutoStore: true},
+			GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()},
+			Memory:        config.MemoryConfig{InUse: true, AutoStore: true},
 		},
 		MemoryExtractor:   memory.NewMemoryChunkStore(&noopMemoryStore{}),
 		ReplayRecorder:    recorder,
@@ -223,7 +227,7 @@ func TestResponseMemoryStoreHoldsGenerationUntilBackgroundWriteCompletes(t *test
 	resources.add(store.Close)
 	resources.add(func() error { return runner.RetireAndWait(time.Second) })
 	router := &OpenAIRouter{
-		Config:            &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, AutoStore: true}},
+		Config:            &config.RouterConfig{GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()}, Memory: config.MemoryConfig{InUse: true, AutoStore: true}},
 		MemoryExtractor:   memory.NewMemoryChunkStore(store),
 		memoryPersistence: runner,
 		resources:         resources,
@@ -283,7 +287,8 @@ func TestScheduleResponseMemoryStore_RejectedWriteIsItsOwnMetricStatus(t *testin
 
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
-			Memory: config.MemoryConfig{Enabled: true, AutoStore: true},
+			GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()},
+			Memory:        config.MemoryConfig{InUse: true, AutoStore: true},
 		},
 		MemoryExtractor:   memory.NewMemoryChunkStore(&noopMemoryStore{}),
 		memoryPersistence: runner,
@@ -336,7 +341,7 @@ func TestResponseMemoryAutoStoreSurvivesProviderPreparation(t *testing.T) {
 				assert.NoError(t, recorder.DrainOutcomes())
 			})
 			router := &OpenAIRouter{
-				Config:            &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, AutoStore: tc.configAutoStore}},
+				Config:            &config.RouterConfig{GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()}, Memory: config.MemoryConfig{InUse: true, AutoStore: tc.configAutoStore}},
 				MemoryExtractor:   memory.NewMemoryChunkStore(backend),
 				ReplayRecorder:    recorder,
 				memoryPersistence: runner,

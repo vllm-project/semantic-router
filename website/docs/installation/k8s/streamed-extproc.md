@@ -185,27 +185,28 @@ Looper algorithms are the main immediate-response path added by the full-duplex 
 Example decision fragment:
 
 ```yaml
-routing:
-  decisions:
-    - name: streamed_confidence_route
-      description: Escalate code requests when the first model is uncertain.
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: computer science
-      modelRefs:
-        - model: small-code-model
-          use_reasoning: false
-        - model: large-code-model
-          use_reasoning: false
-      algorithm:
-        type: escalate
-        escalate:
-          order: size
-          accept:
-            confidence: {method: hybrid, gte: 0.72}
+recipes:
+  - name: default
+    decisions:
+      - name: streamed_confidence_route
+        description: Escalate code requests when the first model is uncertain.
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: computer science
+        modelRefs:
+          - model: small-code-model
+            use_reasoning: false
+          - model: large-code-model
+            use_reasoning: false
+        algorithm:
+          type: escalate
+          escalate:
+            order: size
+            accept:
+              confidence: {method: hybrid, gte: 0.72}
 ```
 
 The `computer science` signal and both provider models must also exist in the
@@ -240,27 +241,28 @@ Look for:
 `fast_response` can also short-circuit requests that arrive as streamed body chunks. This is useful for safety decisions such as PII or jailbreak blocking.
 
 ```yaml
-routing:
-  signals:
-    jailbreak:
-      - name: streamed_jailbreak
-        method: classifier
-        threshold: 0.6
-        description: Detect prompt-injection attempts before forwarding.
-  decisions:
-    - name: streamed_jailbreak_block
-      description: Return a policy response for detected prompt injection.
-      priority: 1000
-      rules:
-        operator: AND
-        conditions:
-          - type: jailbreak
-            name: streamed_jailbreak
-      modelRefs: []
-      plugins:
-        - type: fast_response
-          configuration:
-            message: This request was blocked by policy.
+recipes:
+  - name: default
+    signals:
+      jailbreak:
+        - name: streamed_jailbreak
+          method: classifier
+          threshold: 0.6
+          description: Detect prompt-injection attempts before forwarding.
+    decisions:
+      - name: streamed_jailbreak_block
+        description: Return a policy response for detected prompt injection.
+        priority: 1000
+        rules:
+          operator: AND
+          conditions:
+            - type: jailbreak
+              name: streamed_jailbreak
+        modelRefs: []
+        plugins:
+          - type: fast_response
+            configuration:
+              message: This request was blocked by policy.
 ```
 
 With `request_body_mode: STREAMED` or `requestBodyMode: FullDuplexStreamed`, Semantic Router accumulates the body, runs the safety signal at end-of-stream, and returns the configured immediate response without forwarding the request to the backend.

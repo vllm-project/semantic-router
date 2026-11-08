@@ -1,9 +1,10 @@
-routing:
-  signals:
-    jailbreak:
-      - name: prompt_injection
-        description: Detect common prompt-injection or jailbreak attempts.
-        predicate:
-          gte: 0.8
-        input:
-          history: true
+recipes:
+  - name: default
+    signals:
+      jailbreak:
+        - name: prompt_injection
+          description: Detect common prompt-injection or jailbreak attempts.
+          predicate:
+            gte: 0.8
+          input:
+            history: true

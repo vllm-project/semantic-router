@@ -30,7 +30,7 @@ func (store receiptMemoryStore) Retrieve(context.Context, memory.RetrieveOptions
 
 func TestConcreteModelBypassesMemoryPlugin(t *testing.T) {
 	router := &OpenAIRouter{
-		Config:      &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, Backend: "milvus"}},
+		Config:      &config.RouterConfig{GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()}, Memory: config.MemoryConfig{InUse: true, Backend: "milvus"}},
 		MemoryStore: &receiptMemoryStore{err: errors.New("must not be called")},
 	}
 	request := testNeutralRequest("concrete-model", "hello")
@@ -65,7 +65,7 @@ func TestExtractConversationHistoryUsesNeutralMessages(t *testing.T) {
 
 func TestMemoryRuntimeReceiptRecordsFailOpenRetrievalError(t *testing.T) {
 	router := &OpenAIRouter{
-		Config:      &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, Backend: "milvus"}},
+		Config:      &config.RouterConfig{GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()}, Memory: config.MemoryConfig{InUse: true, Backend: "milvus"}},
 		MemoryStore: &receiptMemoryStore{err: errors.New("backend unavailable secret-canary")},
 	}
 	request := testNeutralRequest("entrypoint", "What did I say?")
@@ -89,7 +89,7 @@ func TestMemoryRuntimeReceiptRecordsFailOpenRetrievalError(t *testing.T) {
 
 func TestMemoryRuntimeInjectsNeutralMessage(t *testing.T) {
 	router := &OpenAIRouter{
-		Config: &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, Backend: "milvus"}},
+		Config: &config.RouterConfig{GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()}, Memory: config.MemoryConfig{InUse: true, Backend: "milvus"}},
 		MemoryStore: &receiptMemoryStore{results: []*memory.RetrieveResult{{
 			Memory: &memory.Memory{Content: "The user's deadline is Friday."}, Score: 0.9,
 		}}},
@@ -141,13 +141,14 @@ func TestMemoryRetrievalThresholdFallsBackToConfigDefault(t *testing.T) {
 		memory string
 		want   float32
 	}{
-		{name: "omitted", memory: "{enabled: true}", want: configDefault},
-		{name: "zero means unset", memory: "{enabled: true, default_similarity_threshold: 0}", want: configDefault},
-		{name: "configured", memory: "{enabled: true, default_similarity_threshold: 0.74}", want: 0.74},
+		{name: "omitted", memory: "{}", want: configDefault},
+		{name: "zero means unset", memory: "{default_similarity_threshold: 0}", want: configDefault},
+		{name: "configured", memory: "{default_similarity_threshold: 0.74}", want: 0.74},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg, err := config.ParseYAMLBytes([]byte("version: v0.3\nglobal:\n  stores:\n    memory: " + tc.memory + "\n"))
+			cfg, err := config.ParseYAMLBytes([]byte("version: v0.5\nglobal:\n  stores:\n    memory: " + tc.memory + "\n" +
+				"  plugins: [{type: context, configuration: {enabled: true, sources: [{type: memory}]}}]\n"))
 			require.NoError(t, err)
 			store := &thresholdRecordingMemoryStore{}
 			router := &OpenAIRouter{Config: cfg, MemoryStore: store}

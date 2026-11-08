@@ -2,39 +2,40 @@
 # external model fields and the batch concurrency of the removed modules: a
 # module's threshold becomes the predicate of the rules that inherited it, and
 # a decision-task binding is named for its signal type.
-version: v0.3
+version: v0.5
 providers:
   defaults: {model: general}
   models:
     - name: general
       backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
-routing:
-  model_bindings:
-    pii_classifier: {deployment: primary, contract: decision.v1}
-  signals:
-    jailbreak:
-      - {name: attack}
-    pii:
-      - {name: contact}
-    hallucination:
-      - {name: ungrounded}
-  decisions:
-    - name: blocked
-      priority: 200
-      rules:
-        operator: OR
-        conditions:
-          - {type: jailbreak, name: attack}
-          - {type: pii, name: contact}
-      modelRefs: [{model: general}]
-    - name: answer
-      priority: 100
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: general}]
-      plugins:
-        - type: response_guard
-          configuration:
-            rules: [{when: {type: hallucination, name: ungrounded}, action: annotate}]
+recipes:
+  - name: default
+    model_bindings:
+      pii_classifier: {deployment: primary, contract: decision.v1}
+    signals:
+      jailbreak:
+        - {name: attack}
+      pii:
+        - {name: contact}
+      hallucination:
+        - {name: ungrounded}
+    decisions:
+      - name: blocked
+        priority: 200
+        rules:
+          operator: OR
+          conditions:
+            - {type: jailbreak, name: attack}
+            - {type: pii, name: contact}
+        modelRefs: [{model: general}]
+      - name: answer
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+        plugins:
+          - type: response_guard
+            configuration:
+              rules: [{when: {type: hallucination, name: ungrounded}, action: annotate}]
 global:
   services:
     api:

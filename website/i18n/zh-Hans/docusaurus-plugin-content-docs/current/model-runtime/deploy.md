@@ -76,7 +76,7 @@ global:
 
 信号决定它读哪种答案：语义判断、标签概率、互相独立的标签分、文本片段、向量或相关性分。绑定只写部署名；每个功能读哪个信号，看对应的任务指南。Router 会把每个绑定和模型自身的说明（它的头、标签、维度、问题类型和输入上限）对一遍，已知的不匹配会被拒绝。挂接的 runtime 离线时，向它提出的自定义问题的元数据校验会推迟到观察到就绪的模型卡为止；未过检的任务接不了请求。见[就绪规则](#when-a-model-is-not-ready)。
 
-写在 `global.model_catalog.bindings` 下的绑定全局生效。配方可以在自己的 `routing.model_bindings` 下覆盖它。自己提问的规则（`decision`、`classifiers`、`safety`、`complexity`）在规则上指定部署；见[为信号选择模型](../installation/choose-a-model-for-a-signal.md)。
+写在 `global.model_catalog.bindings` 下的绑定全局生效。配方可以在自己的 `recipes[].model_bindings` 下覆盖它。自己提问的规则（`decision`、`classifiers`、`safety`、`complexity`）在规则上指定部署；见[为信号选择模型](../installation/choose-a-model-for-a-signal.md)。
 
 ## 放置与扩容副本 {#place-and-scale-replicas}
 

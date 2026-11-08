@@ -14,7 +14,7 @@ spec:
   # ====================
   # The operator discovers Llama Stack services using label selectors
   # and automatically generates canonical providers.models[].backend_refs
-  # plus matching routing.modelCards entries
+  # with the facts routing reads about each model
   vllmEndpoints:
     # Example 1: Llama Stack service discovery by labels
     - name: llama-3-3-70b-endpoint

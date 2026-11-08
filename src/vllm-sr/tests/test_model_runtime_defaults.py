@@ -9,23 +9,24 @@ from cli.models import UserConfig
 
 def primary_document():
     return {
-        "version": "v0.3",
-        "routing": {},
+        "version": "v0.5",
         "recipes": [
+            {"name": "default"},
             {
                 "name": "care",
-                "routing": {
-                    "signals": {
-                        "safety": [
-                            {
-                                "name": "content-risk",
-                                "deployment": "primary",
-                                "labels": ["Harassment"],
-                            }
-                        ]
-                    },
+                "signals": {
+                    "safety": [
+                        {
+                            "name": "content-risk",
+                            "deployment": "primary",
+                            "labels": ["Harassment"],
+                        }
+                    ]
                 },
-            }
+            },
+        ],
+        "entrypoints": [
+            {"model_names": ["vllm-sr/auto"], "recipe": "default", "default": True}
         ],
     }
 
@@ -43,7 +44,7 @@ def test_named_default_resolves_without_mutating_authoring_config():
     before = config.model_dump()
     deployments = effective_model_deployments(config)
     assert deployments == _defaults()
-    assert config.routing.model_bindings == {}
+    assert config.default_recipe.model_bindings == {}
     deployments["primary"]["input"]["max_tokens"] = 1
     assert effective_model_deployments(config) == _defaults()
     assert config.model_dump() == before
@@ -82,7 +83,9 @@ def test_an_override_replaces_the_whole_default_and_null_clears_them():
 
 
 def test_unbound_config_does_not_materialize_or_activate_defaults():
-    config = UserConfig.model_validate({"version": "v0.3", "routing": {}})
+    config = UserConfig.model_validate(
+        {"version": "v0.5", "recipes": [{"name": "default"}]}
+    )
     assert config.global_ is None
-    assert config.routing.model_bindings == {}
-    assert config.routing.signals.safety == []
+    assert config.default_recipe.model_bindings == {}
+    assert config.default_recipe.signals.safety == []

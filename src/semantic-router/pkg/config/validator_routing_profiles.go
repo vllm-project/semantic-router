@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // visitRoutingProfileConfigs applies a contract to one isolated routing
@@ -33,5 +34,26 @@ func wrapRoutingProfileValidationError(name RecipeName, err error) error {
 	if errors.As(err, &located) {
 		return err
 	}
-	return fmt.Errorf("routing recipe %q: %w", name, err)
+	// A check that names the field it refused writes the field's path in the
+	// recipe; the recipe's path leads it, unless the check wrote it already.
+	message := err.Error()
+	if strings.HasPrefix(message, "recipes[") {
+		return err
+	}
+	for _, field := range []string{"signals.", "projections.", "decisions[", "decisions:", "model_bindings", "plugins", "strategy", "fallback", "candidate_requirements"} {
+		if strings.HasPrefix(message, field) {
+			return fmt.Errorf("%s.%w", recipePath(string(name)), err)
+		}
+	}
+	return fmt.Errorf("%s: %w", recipePath(string(name)), err)
+}
+
+// inRecipe leads an error of a check of the recipe the config is scoped to
+// with the recipe's path.
+func (c *RouterConfig) inRecipe(err error) error {
+	scope := c.RoutingScope
+	if scope == "" {
+		scope = c.defaultRecipeName()
+	}
+	return wrapRoutingProfileValidationError(scope, err)
 }

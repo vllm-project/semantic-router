@@ -21,9 +21,8 @@ func TestEmbeddingSampleSurvivesRouterConfigRoundTrip(t *testing.T) {
 		t.Fatalf("sample cache embedding lost in translation: %s at %d", deployment, dimension)
 	}
 	cache := cfg.SemanticCache
-	if !cache.Enabled || cache.BackendType != "memory" ||
-		cache.MaxEntries != 5000 || cache.TTLSeconds != 7200 || cache.EvictionPolicy != "lru" ||
-		cache.SimilarityThreshold == nil || *cache.SimilarityThreshold != .85 {
+	if cache.BackendType != "memory" ||
+		cache.MaxEntries != 5000 || cache.TTLSeconds != 7200 || cache.EvictionPolicy != "lru" {
 		t.Fatalf("sample response cache settings lost in translation: %+v", cache)
 	}
 	// The legacy response_cache.hnsw sample field has no router store field.

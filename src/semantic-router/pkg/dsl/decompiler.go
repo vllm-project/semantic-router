@@ -15,7 +15,7 @@ func Decompile(cfg *config.RouterConfig) (string, error) {
 }
 
 func DecompileToAST(cfg *config.RouterConfig) *Program {
-	prog := DecompileRoutingToAST(cfg)
+	prog := DecompileRoutingToAST(topLevelView(cfg))
 	appendConfigScopesToAST(prog, cfg)
 	return prog
 }
@@ -40,7 +40,7 @@ func (d *decompiler) extractPluginTemplates() {
 	seen := make(map[pluginKey]*pluginTemplate)
 
 	for _, dec := range d.cfg.Decisions {
-		for _, p := range dec.Plugins {
+		for _, p := range dec.DeclaredPlugins() {
 			key := pluginKey{pluginType: p.Type}
 			// Use a simple fingerprint: type
 			if _, exists := seen[key]; !exists {

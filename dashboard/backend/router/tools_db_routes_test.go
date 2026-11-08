@@ -91,7 +91,7 @@ func TestToolsDBRouteResourcePathContract(t *testing.T) {
 				}
 			}
 			configPath := filepath.Join(t.TempDir(), "runtime.yaml")
-			body := "version: v0.3\nglobal: {}\n"
+			body := "version: v0.5\nglobal: {}\n"
 			if configured != "" {
 				body = toolsCatalogConfig(configured)
 			}
@@ -144,7 +144,7 @@ func TestToolsDBRouteKeepsExplicitContainerAssetRoot(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(configPath, []byte("version: v0.3\nglobal: {}\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\nglobal: {}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := routercontract.ReadToolSelection(configPath); err != nil {
@@ -205,24 +205,24 @@ const fixtureCatalog = `[{"tool":{"function":{"name":"fixture"},"type":"function
 // toolsCatalogConfig is a configuration whose one decision adds tools from the
 // catalog at path.
 func toolsCatalogConfig(path string) string {
-	return fmt.Sprintf(`version: v0.3
+	return fmt.Sprintf(`version: v0.5
 providers:
   defaults: {model: local}
   models:
     - name: local
       backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
-routing:
-  modelCards:
-    - {name: local, description: Local model}
-  decisions:
-    - name: agent
-      priority: 100
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: local}]
-      plugins:
-        - type: tools
-          configuration:
-            enabled: true
-            select: {mode: add, tools_db_path: %q}
+      description: Local model
+recipes:
+  - name: default
+    decisions:
+      - name: agent
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: local}]
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              select: {mode: add, tools_db_path: %q}
 `, path)
 }

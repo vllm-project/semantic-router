@@ -1011,7 +1011,7 @@ spec:
                 type: object
               config:
                 description: |-
-                  Configuration overrides merged into the canonical v0.3 config.yaml.
+                  Configuration overrides merged into the canonical v0.5 config.yaml.
                   Router-wide runtime overrides land under config.global.router/services/stores/
                   integrations/model_catalog, with model-backed modules nested under
                   config.global.model_catalog.modules. Provider defaults land under
@@ -1465,23 +1465,26 @@ spec:
                                     description: Type specifies the signal or projection
                                       type referenced by this condition.
                                     enum:
-                                    - keyword
-                                    - embedding
+                                    - authz
+                                    - complexity
+                                    - context
+                                    - conversation
                                     - domain
                                     - fact_check
-                                    - user_feedback
-                                    - reask
-                                    - preference
-                                    - language
-                                    - context
-                                    - complexity
-                                    - modality
-                                    - authz
+                                    - hallucination
+                                    - input_modality
                                     - jailbreak
+                                    - keyword
+                                    - language
+                                    - metadata
+                                    - modality
                                     - pii
-                                    - kb
-                                    - conversation
                                     - projection
+                                    - refusal
+                                    - safety
+                                    - systemone
+                                    - turn_relation
+                                    - user_feedback
                                     type: string
                                 required:
                                 - name
@@ -1520,6 +1523,12 @@ spec:
                       and global.model_catalog.embeddings.default names the one stores embed
                       with (vela-embedding by default). A resource that sets it is refused.
                     type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  entrypoints:
+                    description: |-
+                      Entrypoints contains canonical entrypoints[]: the public model names of
+                      each recipe. Several recipes need them, with exactly one marked
+                      default: true.
                     x-kubernetes-preserve-unknown-fields: true
                   external_models:
                     description: |-
@@ -1592,8 +1601,8 @@ spec:
                       refusal, turn_relation, complexity, modality), and each value names the
                       model_deployments entry that answers it. A rule
                       that asks its own question names its deployment on the rule. A signal no
-                      binding names follows decision_model; routing.model_bindings binds in
-                      the routing scope and wins over these.
+                      binding names follows decision_model; recipes[].model_bindings binds in
+                      its recipe and wins over these.
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                   model_deployments:
@@ -1607,6 +1616,12 @@ spec:
                       that valueFrom.secretKeyRef fills from a Secret. The operator mounts no
                       Secret into the Pod, so auth.api_key_file is not available.
                     type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  models:
+                    description: |-
+                      Models contains the facts of providers.models[] entries (capabilities,
+                      modalities, description, context_window_size, ...), by name; the
+                      operator writes each entry's transport from vllmEndpoints.
                     x-kubernetes-preserve-unknown-fields: true
                   observability:
                     description: Observability configuration
@@ -1662,6 +1677,11 @@ spec:
                             type: object
                         type: object
                     type: object
+                  plugins:
+                    description: |-
+                      Plugins contains canonical global.plugins: the default plugins of every
+                      decision, which a recipe's and a decision's plugins override.
+                    x-kubernetes-preserve-unknown-fields: true
                   prompt_guard:
                     description: |-
                       PromptGuard is removed: the decision model answers jailbreak rules, and
@@ -1675,6 +1695,14 @@ spec:
                       not select a different effort. The selected model family validates the
                       value because built-in and custom families may expose different ladders.
                     type: string
+                  recipes:
+                    description: |-
+                      Recipes contains canonical recipes[]: each recipe's signals,
+                      projections, decisions, model_bindings and plugins. It is preserved as
+                      objects so the operator passes the router-owned contract through
+                      without lagging behind every router schema addition. The fields a
+                      recipe named default sets replace the operator's default recipe's.
+                    x-kubernetes-preserve-unknown-fields: true
                   response_cache:
                     description: Response cache configuration.
                     properties:
@@ -1716,8 +1744,10 @@ spec:
                         type: string
                       enabled:
                         default: true
-                        description: Enabled controls whether semantic caching is
-                          active
+                        description: |-
+                          Enabled, on by default, gives a configuration without decisions a
+                          response_cache plugin in config.plugins that caches every request; off,
+                          it turns the decisions' response_cache plugins off.
                         type: boolean
                       eviction_policy:
                         default: fifo
@@ -2159,8 +2189,9 @@ spec:
                         type: object
                       similarity_threshold:
                         default: "0.8"
-                        description: Similarity threshold for cache hits (0.0-1.0).
-                          Stored as string to avoid float precision issues.
+                        description: |-
+                          SimilarityThreshold (0.0-1.0) is the min_similarity of the response_cache
+                          plugin Enabled adds. Stored as string to avoid float precision issues.
                         pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
                         type: string
                       ttl_seconds:
@@ -2340,10 +2371,9 @@ spec:
                     type: object
                   routing:
                     description: |-
-                      Routing contains canonical v0.3 routing configuration under config.routing.
-                      It is intentionally preserved as an object so the operator can pass through
-                      the router-owned signal, projection, decision, and algorithm contract without
-                      lagging behind every router schema addition.
+                      Routing is removed: the router configuration has no top-level routing
+                      block. Its fields are the recipe named default under config.recipes. A
+                      resource that sets it is refused.
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                   semantic_cache:
@@ -2387,8 +2417,10 @@ spec:
                         type: string
                       enabled:
                         default: true
-                        description: Enabled controls whether semantic caching is
-                          active
+                        description: |-
+                          Enabled, on by default, gives a configuration without decisions a
+                          response_cache plugin in config.plugins that caches every request; off,
+                          it turns the decisions' response_cache plugins off.
                         type: boolean
                       eviction_policy:
                         default: fifo
@@ -2830,8 +2862,9 @@ spec:
                         type: object
                       similarity_threshold:
                         default: "0.8"
-                        description: Similarity threshold for cache hits (0.0-1.0).
-                          Stored as string to avoid float precision issues.
+                        description: |-
+                          SimilarityThreshold (0.0-1.0) is the min_similarity of the response_cache
+                          plugin Enabled adds. Stored as string to avoid float precision issues.
                         pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
                         type: string
                       ttl_seconds:
@@ -4131,7 +4164,7 @@ spec:
                 description: |-
                   VLLMEndpoints is a Kubernetes-native backend discovery adapter.
                   It generates canonical config.providers.models[].backend_refs
-                  and config.routing.modelCards entries.
+                  and the loras of those entries.
                 items:
                   description: VLLMEndpointSpec defines a vLLM model backend endpoint
                   properties:
@@ -4182,8 +4215,8 @@ spec:
                         the request-facing alias.
                       type: string
                     loras:
-                      description: LoRAs declares the LoRA adapters exposed for this
-                        logical model in routing.modelCards.
+                      description: 'LoRAs declares the LoRA adapters exposed for this
+                        logical model: the loras of its providers.models[] entry.'
                       items:
                         description: LoRAAdapterSpec defines one LoRA adapter exposed
                           by a VLLMEndpoint model.

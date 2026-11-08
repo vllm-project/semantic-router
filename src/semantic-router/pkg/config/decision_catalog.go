@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 )
 
@@ -17,13 +18,15 @@ import (
 //go:embed decision_catalog.generated.json
 var decisionCatalogJSON []byte
 
-// DecisionCatalogModel is one built-in decision model: its question types
-// and the input modalities a decisions request to it may carry.
+// DecisionCatalogModel is one built-in decision model: its question types,
+// the input modalities a decisions request to it may carry, and, for a model
+// with span answers, the span heads it has.
 type DecisionCatalogModel struct {
 	ID            string   `json:"id"`
 	Family        string   `json:"family"`
 	QuestionTypes []string `json:"question_types"`
 	Modalities    []string `json:"modalities"`
+	SpanHeads     []string `json:"span_heads,omitempty"`
 }
 
 var decisionCatalog = sync.OnceValue(func() []DecisionCatalogModel {
@@ -42,6 +45,7 @@ func DecisionCatalog() []DecisionCatalogModel {
 	for index := range models {
 		models[index].QuestionTypes = slices.Clone(models[index].QuestionTypes)
 		models[index].Modalities = slices.Clone(models[index].Modalities)
+		models[index].SpanHeads = slices.Clone(models[index].SpanHeads)
 	}
 	return models
 }
@@ -64,8 +68,18 @@ func (c *RouterConfig) deploymentAnswers(name string) (questionTypes, modalities
 		}
 		return questionTypes, modalities
 	}
-	if !deployment.IsModelRuntime() || deployment.Artifact == "" {
-		return nil, nil
+	if model, ok := c.catalogModel(name); ok {
+		return model.QuestionTypes, model.Modalities
+	}
+	return nil, nil
+}
+
+// catalogModel is the built-in decision model a model_runtime deployment
+// serves, when the catalog lists it.
+func (c *RouterConfig) catalogModel(name string) (DecisionCatalogModel, bool) {
+	deployment, ok := c.ModelDeployments[name]
+	if !ok || !deployment.IsModelRuntime() || deployment.Artifact == "" {
+		return DecisionCatalogModel{}, false
 	}
 	repo := deployment.Artifact
 	if spec := registeredModel(repo); spec != nil {
@@ -73,31 +87,72 @@ func (c *RouterConfig) deploymentAnswers(name string) (questionTypes, modalities
 	}
 	for _, model := range decisionCatalog() {
 		if model.ID == repo {
-			return model.QuestionTypes, model.Modalities
+			return model, true
 		}
 	}
-	return nil, nil
+	return DecisionCatalogModel{}, false
+}
+
+// deploymentSpanHeads is the span heads of the built-in decision model a
+// model_runtime deployment serves; nil is unknown, as for a systemone
+// deployment, which declares none.
+func (c *RouterConfig) deploymentSpanHeads(name string) []string {
+	model, _ := c.catalogModel(name)
+	return model.SpanHeads
 }
 
 // validateSystemOneAnswerer checks a rule against what its deployment is
-// known at load to answer and read.
+// known at load to answer and read, and a span question's head against the
+// heads its model has.
 func validateSystemOneAnswerer(cfg *RouterConfig, path string, rule SystemOneRule) error {
 	name := cfg.SystemOneRuleDeployment(rule)
 	questionTypes, modalities := cfg.deploymentAnswers(name)
-	return CheckSystemOneAnswerer(path, name, rule, questionTypes, modalities)
+	if err := CheckSystemOneAnswerer(path, name, rule, questionTypes, modalities); err != nil {
+		return err
+	}
+	return checkSpanHead(path, name, rule, cfg.deploymentSpanHeads(name))
 }
 
-// CheckSystemOneAnswerer refuses a rule its deployment cannot answer: a span
-// question to a model without span answers, and media input the model does
-// not read. A nil list is unknown and passes; the generation checks it
-// against the model's card when it prepares.
+// CodeSpanHeadUnsupported is the load error of a span question whose head
+// its deployment's model does not have.
+const CodeSpanHeadUnsupported = "span_head_unsupported"
+
+// checkSpanHead refuses a span question that names a head the model lacks:
+// the Vela 3.0 models have only the router head. nil heads are unknown and
+// pass; the model refuses the head when it is asked.
+func checkSpanHead(path, deployment string, rule SystemOneRule, spanHeads []string) error {
+	head := rule.Question.Head
+	if rule.Question.Type != SystemOneQuestionSpan || head == "" || spanHeads == nil || slices.Contains(spanHeads, head) {
+		return nil
+	}
+	return CheckError(path, CodeSpanHeadUnsupported, fmt.Sprintf("resolves to deployment %q, whose model has span heads %s and no %s head; drop head, or bind it to a deployment whose model has one (rule deployment)", deployment, strings.Join(spanHeads, ", "), head))
+}
+
+// CodeQuestionTypeUnsupported is the load error of a question whose type its
+// deployment does not answer; a span question keeps CodeSpanRequired.
+const CodeQuestionTypeUnsupported = "question_type_unsupported"
+
+// answersQuestionType reports whether a model that answers questionTypes
+// answers a question of questionType: natively, or a set question as one noul
+// question per label, which is how a model that answers no set question is
+// asked one (modelservice.CompileTask).
+func answersQuestionType(questionTypes []string, questionType string) bool {
+	return slices.Contains(questionTypes, questionType) ||
+		(questionType == SystemOneQuestionSet && slices.Contains(questionTypes, SystemOneQuestionNoul))
+}
+
+// CheckSystemOneAnswerer refuses a rule its deployment cannot answer: a
+// question of a type the model does not answer (a span question to a model
+// without span answers, a score question to vela3-fast), and media input the
+// model does not read. A nil list is unknown and passes; the generation
+// checks it against the model's card when it prepares.
 func CheckSystemOneAnswerer(path, deployment string, rule SystemOneRule, questionTypes, modalities []string) error {
 	return checkAnswerer(path, deployment, rule, questionTypes, modalities, "it", "rule deployment")
 }
 
 // CheckApplicationAnswerer refuses an application rule its deployment cannot
 // answer, as CheckSystemOneAnswerer does a systemone rule; the hint names the
-// bindings of the rule's type. scope is the rule's routing scope path
+// bindings of the rule's type. scope is the rule's recipe path
 // (RouterConfig.ScopePath of "").
 func CheckApplicationAnswerer(path, scope, deployment string, rule ApplicationRule, questionTypes, modalities []string) error {
 	bindings := fmt.Sprintf("rule deployment, %smodel_bindings.%s or global.model_catalog.bindings.%s", scope, rule.Type, rule.Type)
@@ -105,8 +160,12 @@ func CheckApplicationAnswerer(path, scope, deployment string, rule ApplicationRu
 }
 
 func checkAnswerer(path, deployment string, rule SystemOneRule, questionTypes, modalities []string, subject, bindings string) error {
-	if rule.Question.Type == SystemOneQuestionSpan && questionTypes != nil && !slices.Contains(questionTypes, SystemOneQuestionSpan) {
-		return CheckError(path, CodeSpanRequired, fmt.Sprintf("resolves to deployment %q, which cannot answer span questions; bind %s to a span-capable deployment (%s)", deployment, subject, bindings))
+	questionType := rule.Question.Type
+	if questionTypes != nil && !answersQuestionType(questionTypes, questionType) {
+		if questionType == SystemOneQuestionSpan {
+			return CheckError(path, CodeSpanRequired, fmt.Sprintf("resolves to deployment %q, which cannot answer span questions; bind %s to a span-capable deployment (%s)", deployment, subject, bindings))
+		}
+		return CheckError(path, CodeQuestionTypeUnsupported, fmt.Sprintf("resolves to deployment %q, which answers %s questions and cannot answer %s questions; bind %s to a deployment that does (%s)", deployment, strings.Join(questionTypes, ", "), questionType, subject, bindings))
 	}
 	for _, medium := range rule.Input.Media() {
 		if modalities != nil && !slices.Contains(modalities, medium) {

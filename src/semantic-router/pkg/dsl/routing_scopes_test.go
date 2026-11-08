@@ -52,8 +52,8 @@ func TestCompileAndDecompileRoutingScopes(t *testing.T) {
 	if len(cfg.Recipes) != 3 {
 		t.Fatalf("recipe count = %d, want default plus two named recipes", len(cfg.Recipes))
 	}
-	if len(cfg.Entrypoints) != 2 {
-		t.Fatalf("entrypoint count = %d, want 2", len(cfg.Entrypoints))
+	if len(cfg.Entrypoints) != 3 || !cfg.Entrypoints[0].Default || cfg.Entrypoints[0].Recipe != config.DefaultRecipeName {
+		t.Fatalf("entrypoints = %+v, want the default one first, then 2", cfg.Entrypoints)
 	}
 	alpha, ok := cfg.RecipeByName("alpha")
 	if !ok || alpha.Profile.Strategy != config.RoutingStrategyConfidence {
@@ -79,7 +79,7 @@ func TestCompileAndDecompileRoutingScopes(t *testing.T) {
 func TestEntrypointAPISurvivesRoundTrip(t *testing.T) {
 	source := `
 MODEL shared_model {}
-ENTRYPOINT { model_names: ["router/auto"] recipe: "alpha" }
+ENTRYPOINT { model_names: ["router/auto"] recipe: "alpha" default: true }
 ENTRYPOINT { api: "systemone" model_names: ["router/auto"] recipe: "native" }
 RECIPE alpha { ROUTE alpha_route { MODEL shared_model } }
 RECIPE native { ROUTE native_route { MODEL shared_model } }

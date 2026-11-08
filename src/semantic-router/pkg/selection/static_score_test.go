@@ -9,34 +9,35 @@ import (
 
 func TestStaticSelectorConfiguredOneFromCanonicalConfig(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: small
-routing:
-  modelCards:
+  models:
     - name: small
     - name: large
-  signals:
-    domains:
-      - name: business
-        model_scores:
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: business
+          model_scores:
+            - model: small
+              score: 0.2
+            - model: large
+              score: 1.0
+    decisions:
+      - name: business_route
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: business
+        algorithm:
+          type: static
+        modelRefs:
           - model: small
-            score: 0.2
           - model: large
-            score: 1.0
-  decisions:
-    - name: business_route
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: business
-      algorithm:
-        type: static
-      modelRefs:
-        - model: small
-        - model: large
 `))
 	if err != nil {
 		t.Fatal(err)

@@ -1,15 +1,16 @@
 # Merge into a canonical config. A rule without labels asks whether the request
 # is harmful; a rule with labels asks which hazard categories apply, and more
 # than one can.
-version: v0.3
-routing:
-  signals:
-    safety:
-    - name: unsafe-content
-      predicate: {gte: 0.5}
-    - name: unsafe-hazard
-      labels:
-      - Violence
-      - Criminal Planning/Confessions
-      - Sexual
-      - Sexual (minor)
+version: v0.5
+recipes:
+  - name: default
+    signals:
+      safety:
+        - name: unsafe-content
+          predicate: {gte: 0.5}
+        - name: unsafe-hazard
+          labels:
+            - Violence
+            - Criminal Planning/Confessions
+            - Sexual
+            - Sexual (minor)

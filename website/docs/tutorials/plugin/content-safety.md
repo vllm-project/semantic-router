@@ -25,7 +25,7 @@ across those routes.
 
 ## Configuration
 
-Add the bundled plugin entries under `routing.decisions[].plugins`:
+Add the bundled plugin entries under `recipes[].decisions[].plugins`:
 
 ```yaml
 plugins:

@@ -93,8 +93,8 @@ class TestExtprocListenerIdentity(MockUpstreamMixin, ServeSessionMixin, CLITestB
                 "identity": {"trust_headers": True},
             }
         )
-        default_route = config["routing"]["decisions"][0]
-        config["routing"]["signals"] = {
+        default_route = config["recipes"][0]["decisions"][0]
+        config["recipes"][0]["signals"] = {
             "role_bindings": [
                 {
                     "name": "admin",
@@ -103,7 +103,7 @@ class TestExtprocListenerIdentity(MockUpstreamMixin, ServeSessionMixin, CLITestB
                 }
             ]
         }
-        config["routing"]["decisions"].insert(
+        config["recipes"][0]["decisions"].insert(
             0,
             {
                 "name": ADMIN_ROUTE,

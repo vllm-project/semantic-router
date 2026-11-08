@@ -186,17 +186,19 @@ type MilvusConfig struct {
 	} `json:"development" yaml:"development"`
 }
 
+// ResponseCacheStoreConfig says where the response cache keeps entries. A
+// response_cache plugin turns caching on.
 type ResponseCacheStoreConfig struct {
-	BackendType         string        `yaml:"backend_type,omitempty"`
-	Enabled             bool          `yaml:"enabled"`
-	SimilarityThreshold *float32      `yaml:"similarity_threshold,omitempty"`
-	MaxEntries          int           `yaml:"max_entries,omitempty"`
-	TTLSeconds          int           `yaml:"ttl_seconds"`
-	EvictionPolicy      string        `yaml:"eviction_policy,omitempty"`
-	Redis               *RedisConfig  `yaml:"redis,omitempty"`
-	Valkey              *ValkeyConfig `yaml:"valkey,omitempty"`
-	Milvus              *MilvusConfig `yaml:"milvus,omitempty"`
-	Qdrant              *QdrantConfig `yaml:"qdrant,omitempty"`
+	BackendType string `yaml:"backend_type,omitempty"`
+	// InUse is set at load when a response_cache plugin uses the store.
+	InUse          bool          `yaml:"-" json:"-"`
+	MaxEntries     int           `yaml:"max_entries,omitempty"`
+	TTLSeconds     int           `yaml:"ttl_seconds"`
+	EvictionPolicy string        `yaml:"eviction_policy,omitempty"`
+	Redis          *RedisConfig  `yaml:"redis,omitempty"`
+	Valkey         *ValkeyConfig `yaml:"valkey,omitempty"`
+	Milvus         *MilvusConfig `yaml:"milvus,omitempty"`
+	Qdrant         *QdrantConfig `yaml:"qdrant,omitempty"`
 	// Embedding names the deployment semantic reuse embeds with.
 	Embedding *EmbeddingBinding `yaml:"embedding,omitempty"`
 }
@@ -217,8 +219,11 @@ type QdrantConfig struct {
 // DefaultMemorySimilarityThreshold applies when no memory similarity threshold is configured.
 const DefaultMemorySimilarityThreshold float32 = 0.70
 
+// MemoryConfig says where memories are kept and how they are recalled by
+// default. A context plugin's memory source turns memory on.
 type MemoryConfig struct {
-	Enabled        bool                    `yaml:"enabled,omitempty"`
+	// InUse is set at load when a context plugin recalls memories.
+	InUse          bool                    `yaml:"-" json:"-"`
 	Backend        string                  `yaml:"backend,omitempty"`
 	AutoStore      bool                    `yaml:"auto_store,omitempty"`
 	DisabledRoutes []string                `yaml:"disabled_routes,omitempty"`
@@ -365,29 +370,19 @@ type ResponseAPIRedisConfig struct {
 	ConfigPath       string   `yaml:"config_path,omitempty" json:"config_path,omitempty"`
 }
 
-// RouterReplayConfig controls routing-decision replay record storage.
-// Replay is disabled by default and uses an in-memory store when a decision
-// explicitly opts in without a global storage configuration. Supported
+// RouterReplayConfig says where routing-decision replay records are stored.
+// A router_replay plugin turns recording on and says what a record captures.
+// Without a storage configuration records stay in memory. Supported
 // backends: "postgres", "redis", "milvus", "qdrant", "memory". Production
-// deployments should explicitly enable replay and configure a durable backend.
+// deployments should configure a durable backend.
 type RouterReplayConfig struct {
-	// Optional capture defaults are overlaid by explicit decision plugin fields.
-	CaptureRequestBody  *bool                       `json:"capture_request_body,omitempty" yaml:"capture_request_body,omitempty"`
-	CaptureResponseBody *bool                       `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
-	CapturePersonalData *bool                       `json:"capture_personal_data,omitempty" yaml:"capture_personal_data,omitempty"`
-	CaptureToolResults  *bool                       `json:"capture_tool_results,omitempty" yaml:"capture_tool_results,omitempty"`
-	MaxRecords          *int                        `json:"max_records,omitempty" yaml:"max_records,omitempty"`
-	MaxBodyBytes        *int                        `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
-	MaxToolTraceBytes   *int                        `json:"max_tool_trace_bytes,omitempty" yaml:"max_tool_trace_bytes,omitempty"`
-	MaxToolTraceSteps   *int                        `json:"max_tool_trace_steps,omitempty" yaml:"max_tool_trace_steps,omitempty"`
-	Enabled             bool                        `json:"enabled" yaml:"enabled"`
-	StoreBackend        string                      `json:"store_backend,omitempty" yaml:"store_backend,omitempty"`
-	TTLSeconds          int                         `json:"ttl_seconds" yaml:"ttl_seconds"`
-	AsyncWrites         bool                        `json:"async_writes,omitempty" yaml:"async_writes,omitempty"`
-	Redis               *RouterReplayRedisConfig    `json:"redis,omitempty" yaml:"redis,omitempty"`
-	Postgres            *RouterReplayPostgresConfig `json:"postgres,omitempty" yaml:"postgres,omitempty"`
-	Milvus              *RouterReplayMilvusConfig   `json:"milvus,omitempty" yaml:"milvus,omitempty"`
-	Qdrant              *RouterReplayQdrantConfig   `json:"qdrant,omitempty" yaml:"qdrant,omitempty"`
+	StoreBackend string                      `json:"store_backend,omitempty" yaml:"store_backend,omitempty"`
+	TTLSeconds   int                         `json:"ttl_seconds" yaml:"ttl_seconds"`
+	AsyncWrites  bool                        `json:"async_writes,omitempty" yaml:"async_writes,omitempty"`
+	Redis        *RouterReplayRedisConfig    `json:"redis,omitempty" yaml:"redis,omitempty"`
+	Postgres     *RouterReplayPostgresConfig `json:"postgres,omitempty" yaml:"postgres,omitempty"`
+	Milvus       *RouterReplayMilvusConfig   `json:"milvus,omitempty" yaml:"milvus,omitempty"`
+	Qdrant       *RouterReplayQdrantConfig   `json:"qdrant,omitempty" yaml:"qdrant,omitempty"`
 }
 
 type RouterReplayRedisConfig struct {

@@ -567,7 +567,7 @@ Validate, inspect, apply, version, and roll back Router configuration and Recipe
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/api/v1/config/recipes` | List the default and named routing recipes with their entrypoints |
+| `GET` | `/api/v1/config/recipes` | List the recipes with their entrypoints |
 | `POST` | `/api/v1/config/recipes/validate` | Validate a recipe mutation without writing or reloading config |
 | `GET` | `/api/v1/config/recipes/{name}` | Read one routing recipe and its entrypoints |
 | `PUT` | `/api/v1/config/recipes/{name}` | Atomically create or replace one routing recipe; requires If-Match |

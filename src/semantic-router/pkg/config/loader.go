@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -150,7 +151,7 @@ func ParseYAMLBytesDeferringEnv(data []byte) (*RouterConfig, error) {
 }
 
 // routingSections are the top-level sections that hold routing state.
-var routingSections = map[string]bool{"routing": true, "entrypoints": true, "recipes": true}
+var routingSections = map[string]bool{"recipes": true, "entrypoints": true}
 
 // deferredEnvExpander returns the expander with which data passes
 // ValidateYAMLBytesDeferringEnv. Each variable starts kept as written. A check
@@ -268,12 +269,10 @@ func rejectRemovedEvaluationFields(raw map[string]interface{}) error {
 	if _, ok := raw["evaluation_catalog"]; ok {
 		removed = append(removed, "evaluation_catalog")
 	}
-	routing := nestedStringMap(raw["routing"])
-	if cards, ok := routing["modelCards"].([]interface{}); ok {
-		for index, rawCard := range cards {
-			if _, ok := nestedStringMap(rawCard)["evaluations"]; ok {
-				removed = append(removed, fmt.Sprintf("routing.modelCards[%d].evaluations", index))
-			}
+	models, _ := nestedStringMap(raw["providers"])["models"].([]interface{})
+	for index, rawModel := range models {
+		if _, ok := nestedStringMap(rawModel)["evaluations"]; ok {
+			removed = append(removed, fmt.Sprintf("providers.models[%d].evaluations", index))
 		}
 	}
 	if len(removed) == 0 {
@@ -299,7 +298,7 @@ func parseRawConfigMap(data []byte) (map[string]interface{}, error) {
 func rejectDeprecatedUserConfigFields(raw map[string]interface{}) error {
 	if deprecated := deprecatedUserConfigFields(raw); len(deprecated) > 0 {
 		return fmt.Errorf(
-			"deprecated config fields are no longer supported: %s; rewrite the file to canonical v0.3 providers/routing/global or run `vllm-sr config migrate --config old-config.yaml`",
+			"deprecated config fields are no longer supported: %s; rewrite the file to canonical v0.5 providers/recipes/global or run `vllm-sr config migrate --config old-config.yaml`",
 			strings.Join(deprecated, ", "),
 		)
 	}
@@ -307,17 +306,16 @@ func rejectDeprecatedUserConfigFields(raw map[string]interface{}) error {
 }
 
 func rejectRemovedTaxonomyLegacyFields(raw map[string]interface{}) error {
-	routing := nestedStringMap(raw["routing"])
-	signals := nestedStringMap(routing["signals"])
-	if _, ok := signals["category_kb"]; ok {
-		return fmt.Errorf(
-			"routing.signals.category_kb is no longer supported; write a systemone set or choice question instead",
-		)
-	}
-	if _, ok := signals["taxonomy"]; ok {
-		return fmt.Errorf(
-			"routing.signals.taxonomy is no longer supported; write a systemone set or choice question instead",
-		)
+	for _, recipe := range rawRecipes(raw) {
+		signals := nestedStringMap(recipe.fields["signals"])
+		for _, field := range []string{"category_kb", "taxonomy"} {
+			if _, ok := signals[field]; ok {
+				return fmt.Errorf(
+					"%s.signals.%s is no longer supported; write a systemone set or choice question instead",
+					recipe.path, field,
+				)
+			}
+		}
 	}
 	global := nestedStringMap(raw["global"])
 	modelCatalog := nestedStringMap(global["model_catalog"])
@@ -329,19 +327,47 @@ func rejectRemovedTaxonomyLegacyFields(raw map[string]interface{}) error {
 	return nil
 }
 
-func rejectRemovedDecisionToolFields(raw map[string]interface{}) error {
-	routing := nestedStringMap(raw["routing"])
-	decisions, ok := routing["decisions"].([]interface{})
-	if !ok {
-		return nil
-	}
+// rawRecipe is one recipe of a raw document, at its path.
+type rawRecipe struct {
+	path   string
+	fields map[string]interface{}
+}
 
+func rawRecipes(raw map[string]interface{}) []rawRecipe {
+	items, _ := raw["recipes"].([]interface{})
+	recipes := make([]rawRecipe, 0, len(items))
+	for index, item := range items {
+		fields := nestedStringMap(item)
+		name, _ := fields["name"].(string)
+		if name == "" {
+			name = strconv.Itoa(index)
+		}
+		recipes = append(recipes, rawRecipe{path: recipePath(name), fields: fields})
+	}
+	return recipes
+}
+
+// decisions are the recipe's decisions, each at its path.
+func (r rawRecipe) decisions() ([]string, []map[string]interface{}) {
+	items, _ := r.fields["decisions"].([]interface{})
+	paths := make([]string, 0, len(items))
+	decisions := make([]map[string]interface{}, 0, len(items))
+	for index, item := range items {
+		paths = append(paths, fmt.Sprintf("%s.decisions[%d]", r.path, index))
+		decisions = append(decisions, nestedStringMap(item))
+	}
+	return paths, decisions
+}
+
+func rejectRemovedDecisionToolFields(raw map[string]interface{}) error {
 	removed := make([]string, 0)
-	for index, rawDecision := range decisions {
-		decision := nestedStringMap(rawDecision)
-		for _, field := range []string{"tool_scope", "allow_tools", "block_tools"} {
-			if _, ok := decision[field]; ok {
-				removed = append(removed, fmt.Sprintf("routing.decisions[%d].%s", index, field))
+	for _, recipe := range rawRecipes(raw) {
+		paths, decisions := recipe.decisions()
+		for index, decision := range decisions {
+			for _, field := range []string{"tool_scope", "allow_tools", "block_tools"} {
+				if _, ok := decision[field]; ok {
+					removed = append(removed, paths[index]+"."+field)
+				}
 			}
 		}
 	}
@@ -350,7 +376,7 @@ func rejectRemovedDecisionToolFields(raw map[string]interface{}) error {
 	}
 
 	return fmt.Errorf(
-		"removed config fields are no longer supported: %s; migrate to routing.decisions[].plugins[type=tools].configuration",
+		"removed config fields are no longer supported: %s; migrate to recipes[].decisions[].plugins[type=tools].configuration",
 		strings.Join(removed, ", "),
 	)
 }
@@ -382,36 +408,33 @@ func rejectRemovedRouterLearningFields(raw map[string]interface{}) error {
 		)
 	}
 
-	routing := nestedStringMap(raw["routing"])
-	decisions, ok := routing["decisions"].([]interface{})
-	if !ok {
-		return nil
-	}
-	for index, rawDecision := range decisions {
-		decision := nestedStringMap(rawDecision)
-		if err := rejectRemovedDecisionLearningFields(index, nestedStringMap(decision["algorithm"])); err != nil {
-			return err
+	for _, recipe := range rawRecipes(raw) {
+		paths, decisions := recipe.decisions()
+		for index, decision := range decisions {
+			if err := rejectRemovedDecisionLearningFields(paths[index], nestedStringMap(decision["algorithm"])); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
 }
 
-func rejectRemovedDecisionLearningFields(index int, algorithm map[string]interface{}) error {
+func rejectRemovedDecisionLearningFields(path string, algorithm map[string]interface{}) error {
 	algorithmType := strings.TrimSpace(fmt.Sprint(algorithm["type"]))
-	if err := removedLearningAlgorithmTypeError(index, algorithmType); err != nil {
+	if err := removedLearningAlgorithmTypeError(path, algorithmType); err != nil {
 		return err
 	}
 	if _, ok := algorithm["session_aware"]; ok {
 		return fmt.Errorf(
-			"routing.decisions[%d].algorithm.session_aware is no longer supported; remove algorithm.session_aware and configure global.router.learning.protection plus routing.decisions[].adaptations when this decision needs apply/observe/bypass control",
-			index,
+			"%s.algorithm.session_aware is no longer supported; remove algorithm.session_aware and configure global.router.learning.protection plus recipes[].decisions[].adaptations when this decision needs apply/observe/bypass control",
+			path,
 		)
 	}
 	for field, adaptation := range removedDecisionLearningBlocks() {
 		if _, ok := algorithm[field]; ok {
 			return fmt.Errorf(
-				"routing.decisions[%d].algorithm.%s has moved to %s; remove the decision-local learning algorithm block",
-				index,
+				"%s.algorithm.%s has moved to %s; remove the decision-local learning algorithm block",
+				path,
 				field,
 				adaptation,
 			)
@@ -420,17 +443,17 @@ func rejectRemovedDecisionLearningFields(index int, algorithm map[string]interfa
 	return nil
 }
 
-func removedLearningAlgorithmTypeError(index int, algorithmType string) error {
+func removedLearningAlgorithmTypeError(path string, algorithmType string) error {
 	if algorithmType == "session_aware" {
 		return fmt.Errorf(
-			"routing.decisions[%d].algorithm.type=session_aware is no longer supported; remove algorithm.type=session_aware and enable global.router.learning.protection",
-			index,
+			"%s.algorithm.type=session_aware is no longer supported; remove algorithm.type=session_aware and enable global.router.learning.protection",
+			path,
 		)
 	}
 	if target, ok := removedDecisionLearningBlocks()[algorithmType]; ok {
 		return fmt.Errorf(
-			"routing.decisions[%d].algorithm.type=%s has moved to %s; remove algorithm.type=%s and choose a request-time base algorithm only when needed",
-			index,
+			"%s.algorithm.type=%s has moved to %s; remove algorithm.type=%s and choose a request-time base algorithm only when needed",
+			path,
 			algorithmType,
 			target,
 			algorithmType,
@@ -488,18 +511,22 @@ func rejectUnsupportedGlobalRouterLearningFields(raw map[string]interface{}) err
 }
 
 func rejectUnsupportedDecisionAdaptationFields(raw map[string]interface{}) error {
-	routing := nestedStringMap(raw["routing"])
-	decisions, ok := routing["decisions"].([]interface{})
-	if !ok {
-		return nil
+	for _, recipe := range rawRecipes(raw) {
+		if err := rejectUnsupportedRecipeAdaptationFields(recipe); err != nil {
+			return err
+		}
 	}
-	for index, rawDecision := range decisions {
-		decision := nestedStringMap(rawDecision)
+	return nil
+}
+
+func rejectUnsupportedRecipeAdaptationFields(recipe rawRecipe) error {
+	paths, decisions := recipe.decisions()
+	for index, decision := range decisions {
 		adaptations := nestedStringMap(decision["adaptations"])
 		if len(adaptations) == 0 {
 			continue
 		}
-		prefix := fmt.Sprintf("routing.decisions[%d].adaptations", index)
+		prefix := paths[index] + ".adaptations"
 		if err := rejectUnknownMapFields(prefix, adaptations, []string{"mode", "adaptation", "protection"}); err != nil {
 			return err
 		}
@@ -641,12 +668,12 @@ func attachCanonicalGlobalOverride(raw map[string]interface{}, canonical *Canoni
 
 func canonicalConfigRequiredError(raw map[string]interface{}) error {
 	unsupported := unsupportedTopLevelConfigFields(raw)
-	detail := "missing canonical routing/global sections"
+	detail := "missing canonical recipes/global sections"
 	if len(unsupported) > 0 {
 		detail = fmt.Sprintf("unexpected top-level keys: %s", strings.Join(unsupported, ", "))
 	}
 	return fmt.Errorf(
-		"config file must use the canonical v0.3 hierarchy; %s; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3",
+		"config file must use the canonical v0.5 hierarchy; %s; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3",
 		detail,
 	)
 }
@@ -687,22 +714,9 @@ func logParsedDecisions(cfg *RouterConfig) {
 }
 
 func deprecatedUserConfigFields(raw map[string]interface{}) []string {
-	routing := nestedStringMap(raw["routing"])
-	providers := nestedStringMap(raw["providers"])
-	fields := deprecatedRoutingConfigFields(routing)
-	fields = append(fields, deprecatedProviderConfigFields(providers)...)
+	fields := deprecatedProviderConfigFields(nestedStringMap(raw["providers"]))
 	fields = append(fields, deprecatedGlobalConfigFields(nestedStringMap(raw["global"]))...)
-	fields = append(fields, deprecatedDecisionConfigFields(routing)...)
-	return fields
-}
-
-func deprecatedRoutingConfigFields(routing map[string]interface{}) []string {
-	fields := []string{}
-	if _, ok := routing["models"]; ok {
-		fields = append(fields, "routing.models")
-	}
-	fields = append(fields, deprecatedModelCardFields(routing)...)
-	return fields
+	return append(fields, deprecatedDecisionConfigFields(raw)...)
 }
 
 func deprecatedProviderConfigFields(providers map[string]interface{}) []string {
@@ -744,8 +758,7 @@ func deprecatedProviderModelFields(providers map[string]interface{}) []string {
 func deprecatedProviderModelFieldNames(model map[string]interface{}, index int) []string {
 	fields := []string{}
 	for _, key := range []string{
-		"access", "endpoints", "access_key", "param_size", "context_window_size",
-		"description", "capabilities", "loras", "quality_score", "modality", "tags",
+		"access", "endpoints", "access_key", "quality_score",
 	} {
 		if _, ok := model[key]; ok {
 			fields = append(fields, fmt.Sprintf("providers.models[%d].%s", index, key))
@@ -773,18 +786,6 @@ func deprecatedBackendRefFields(model map[string]interface{}, modelIndex int) []
 	return fields
 }
 
-func deprecatedModelCardFields(routing map[string]interface{}) []string {
-	fields := []string{}
-	if cards, ok := routing["modelCards"].([]interface{}); ok {
-		for index, rawCard := range cards {
-			if _, ok := nestedStringMap(rawCard)["quality_score"]; ok {
-				fields = append(fields, fmt.Sprintf("routing.modelCards[%d].quality_score", index))
-			}
-		}
-	}
-	return fields
-}
-
 func deprecatedGlobalConfigFields(global map[string]interface{}) []string {
 	fields := []string{}
 	if _, ok := global["modules"]; ok {
@@ -798,17 +799,14 @@ func deprecatedGlobalConfigFields(global map[string]interface{}) []string {
 	return fields
 }
 
-func deprecatedDecisionConfigFields(routing map[string]interface{}) []string {
-	decisions, ok := routing["decisions"].([]interface{})
-	if !ok {
-		return nil
-	}
-
+func deprecatedDecisionConfigFields(raw map[string]interface{}) []string {
 	fields := make([]string, 0)
-	for index, rawDecision := range decisions {
-		decision := nestedStringMap(rawDecision)
-		if _, ok := decision["modelSelectionAlgorithm"]; ok {
-			fields = append(fields, fmt.Sprintf("routing.decisions[%d].modelSelectionAlgorithm", index))
+	for _, recipe := range rawRecipes(raw) {
+		paths, decisions := recipe.decisions()
+		for index, decision := range decisions {
+			if _, ok := decision["modelSelectionAlgorithm"]; ok {
+				fields = append(fields, paths[index]+".modelSelectionAlgorithm")
+			}
 		}
 	}
 	return fields
@@ -820,7 +818,6 @@ func unsupportedTopLevelConfigFields(raw map[string]interface{}) []string {
 		"listeners":   true,
 		"providers":   true,
 		"evaluation":  true,
-		"routing":     true,
 		"entrypoints": true,
 		"recipes":     true,
 		"global":      true,

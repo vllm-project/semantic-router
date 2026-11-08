@@ -10,7 +10,7 @@ The public concepts are:
 
 - `global.router.learning.adaptation`: online model-choice learning.
 - `global.router.learning.protection`: session and conversation stability.
-- `routing.decisions[].adaptations`: per-decision apply, observe, or bypass
+- `recipes[].decisions[].adaptations`: per-decision apply, observe, or bypass
   controls.
 - Router Replay: optional diagnostics and outcomes for offline recipe learning;
   persistence requires a durable replay backend.

@@ -161,7 +161,7 @@ class DomainRegistryTests(unittest.TestCase):
             "src/semantic-router/pkg/apiserver/route_config.go",
             "src/semantic-router/pkg/catalog/catalog.go",
             "src/semantic-router/pkg/config/canonical.go",
-            "src/semantic-router/pkg/configschema/router-config-v0.3.schema.json",
+            "src/semantic-router/pkg/configschema/router-config-v0.5.schema.json",
             "dashboard/frontend/src/generated/routerConfigContract.ts",
             "dashboard/frontend/scripts/generate-decision-runtime-catalog.py",
             "dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.json",
@@ -203,7 +203,7 @@ class DomainRegistryTests(unittest.TestCase):
             "config/recipes/vela-amd/config.yaml",
             "config/recipes/built-in/latest/mom-v1/config.yaml",
             "e2e/config/config.memory-user.yaml",
-            "src/semantic-router/pkg/configschema/router-config-v0.3.schema.json",
+            "src/semantic-router/pkg/configschema/router-config-v0.5.schema.json",
         ):
             with self.subTest(path=path):
                 result = classify([path])

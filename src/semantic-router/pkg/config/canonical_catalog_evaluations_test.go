@@ -13,7 +13,7 @@ import (
 
 func TestUnknownOperatorBenchmarkSurvivesMaterializationAndCanonicalExport(t *testing.T) {
 	cfg, err := ParseYAMLBytesWithoutEnvExpansion([]byte(`
-version: v0.3
+version: v0.5
 evaluation:
   records:
     - model: private-reasoner
@@ -34,9 +34,8 @@ providers:
         - name: primary
           provider: vllm
           base_url: http://127.0.0.1:8000/v1
-routing:
-  modelCards:
-    - name: private-reasoner
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -58,7 +57,7 @@ routing:
 
 func TestCustomEvaluationComputesAndRoundTripsIndex(t *testing.T) {
 	document := []byte(`
-version: v0.3
+version: v0.5
 evaluation:
   benchmarks:
     - id: acme/support-bench@1.0.0
@@ -103,9 +102,8 @@ providers:
       backend_refs:
         - provider: vllm
           base_url: http://127.0.0.1:8000/v1
-routing:
-  modelCards:
-    - name: private-reasoner
+recipes:
+  - name: default
 `)
 
 	cfg, err := ParseYAMLBytesWithoutEnvExpansion(document)
@@ -132,7 +130,7 @@ routing:
 
 func TestCustomEvaluationCanAdmitExplicitPartialCoverage(t *testing.T) {
 	document := []byte(`
-version: v0.3
+version: v0.5
 evaluation:
   benchmarks:
     - id: acme/support-bench@1.0.0
@@ -183,9 +181,8 @@ providers:
       backend_refs:
         - provider: vllm
           base_url: http://127.0.0.1:8000/v1
-routing:
-  modelCards:
-    - name: private-reasoner
+recipes:
+  - name: default
 `)
 
 	cfg, err := ParseYAMLBytesWithoutEnvExpansion(document)
@@ -266,13 +263,13 @@ func TestRemovedEvaluationLayoutsAreRejected(t *testing.T) {
 	}{
 		{
 			name: "evaluation catalog root",
-			yaml: "version: v0.3\nevaluation_catalog: {}\nrouting: {}\n",
+			yaml: "version: v0.5\nevaluation_catalog: {}\nrecipes: [{name: default}]\n",
 			want: "evaluation_catalog",
 		},
 		{
 			name: "model card evaluations",
-			yaml: "version: v0.3\nrouting:\n  modelCards:\n    - name: private\n      evaluations: []\n",
-			want: "routing.modelCards[0].evaluations",
+			yaml: "version: v0.5\nproviders:\n  models:\n    - name: private\n      evaluations: []\nrecipes: [{name: default}]\n",
+			want: "providers.models[0].evaluations",
 		},
 	}
 	for _, test := range tests {

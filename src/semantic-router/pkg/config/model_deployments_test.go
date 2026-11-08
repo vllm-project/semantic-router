@@ -168,7 +168,7 @@ func TestNamedDeploymentAdmissionAndCanonicalRoundTrip(t *testing.T) {
 		t.Fatal("deployment lost during canonical round trip")
 	}
 	recipes := canonicalRecipesFromRouterConfig(cfg)
-	if len(recipes) != 2 || recipes[0].Routing.ModelBindings[BindingKey("pii_classifier")] != (ModelBinding{Deployment: "shared-encoder"}) {
+	if len(recipes) != 2 || recipes[0].ModelBindings[BindingKey("pii_classifier")] != (ModelBinding{Deployment: "shared-encoder"}) {
 		t.Fatal("recipe binding lost during export")
 	}
 	scoped := cfg.ConfigForRecipe(&cfg.Recipes[0])
@@ -179,7 +179,7 @@ func TestNamedDeploymentAdmissionAndCanonicalRoundTrip(t *testing.T) {
 
 func TestRemovedClassifierSessionBankOptionIsRejected(t *testing.T) {
 	_, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 global:
   model_catalog:
     deployments:

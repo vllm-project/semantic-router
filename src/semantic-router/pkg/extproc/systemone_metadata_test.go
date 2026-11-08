@@ -18,7 +18,7 @@ func TestSystemOneAutoMetadataVisibilityCoversEveryState(t *testing.T) {
 		ModelID: "kai-native", Revision: "revision-1", ModelSHA256: strings.Repeat("a", 64),
 		Engine: "native", Dtype: "float32", Numerics: "exact", Accelerator: "cpu",
 	}
-	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.3
+	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.5
 listeners:
   - name: native
     port: 8801
@@ -28,25 +28,28 @@ providers:
     - name: kai
       api_format: systemone
       provider_model_id: kai-native
-      backend_refs: [{provider: systemone-compatible, base_url: http://unused.invalid/v1}]
+      backend_refs: [{provider: systemone-compatible, base_url: 'http://unused.invalid/v1'}]
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - {api: systemone, model_names: [vllm-sr/auto], recipe: native}
 recipes:
+  - name: default
   - name: native
-    routing:
-      decisions:
-        - name: answer
-          rules: {}
-          modelRefs: [{model: kai}]
-          algorithm:
-            type: escalate
-            budget: {deadline: 2s, max_calls: 1}
-            escalate:
-              quality:
-                type: uncalibrated
-                accept:
-                  native: [{question_type: noul, field: top_probability, gte: 0}]
-              stages: [{name: fast, model: kai}]
+    decisions:
+      - name: answer
+        rules: {}
+        modelRefs: [{model: kai}]
+        algorithm:
+          type: escalate
+          budget: {deadline: 2s, max_calls: 1}
+          escalate:
+            quality:
+              type: uncalibrated
+              accept:
+                native: [{question_type: noul, field: top_probability, gte: 0}]
+            stages: [{name: fast, model: kai}]
 `))
 	if err != nil {
 		t.Fatal(err)

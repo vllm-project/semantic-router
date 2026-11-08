@@ -116,18 +116,13 @@ func ProjectTaskCatalog(cfg *config.RouterConfig, statuses []DeploymentStatus) T
 	if len(profiles) == 0 {
 		profiles = []config.RoutingRecipe{{Name: config.DefaultRecipeName, Profile: config.RoutingProfile{Signals: cfg.Signals, ModelBindings: cfg.ModelBindings}}}
 	}
-	namedIndex := 0
 	for index := range profiles {
 		recipe := &profiles[index]
 		scoped := cfg
 		if len(cfg.Recipes) > 0 {
 			scoped = cfg.ConfigForRecipe(recipe)
 		}
-		path := []string{"routing", "model_bindings"}
-		if recipe.Name != config.DefaultRecipeName {
-			path = []string{"recipes", strconv.Itoa(namedIndex), "routing", "model_bindings"}
-			namedIndex++
-		}
+		path := []string{"recipes", strconv.Itoa(index), "model_bindings"}
 		// An application signal type the recipe asks is bound once, for
 		// the rules that name no deployment of their own.
 		for _, signalType := range applicationTypesInUse(scoped) {

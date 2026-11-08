@@ -35,14 +35,14 @@ func assertMultiObjectiveMappings(t *testing.T, cfg *RouterConfig) {
 		"vllm-sr/mom-v1-ultra": "accuracy-first",
 		"vllm-sr/mom-v1-vault": "privacy-first",
 	}
-	if len(cfg.Entrypoints) != len(expectedEntrypoints) {
-		t.Fatalf("entrypoint count = %d, want %d", len(cfg.Entrypoints), len(expectedEntrypoints))
+	if len(cfg.Entrypoints) != len(expectedEntrypoints)+1 {
+		t.Fatalf("entrypoint count = %d, want %d and the default one", len(cfg.Entrypoints), len(expectedEntrypoints))
 	}
 	if len(cfg.Recipes) != len(expectedEntrypoints)+1 {
-		t.Fatalf("normalized recipe count = %d, want %d named recipes plus internal default", len(cfg.Recipes), len(expectedEntrypoints))
+		t.Fatalf("recipe count = %d, want %d named recipes and the default one", len(cfg.Recipes), len(expectedEntrypoints))
 	}
-	if defaultRecipe := cfg.DefaultRecipe(); defaultRecipe == nil || len(defaultRecipe.Profile.Decisions) != 0 {
-		t.Fatalf("expected decisionless internal default recipe, got %+v", defaultRecipe)
+	if defaultRecipe := cfg.DefaultRecipe(); defaultRecipe == nil || defaultRecipe.Name != DefaultRecipeName || len(defaultRecipe.Profile.Decisions) != 0 {
+		t.Fatalf("expected the empty default recipe, got %+v", defaultRecipe)
 	}
 	if len(cfg.DefaultEntrypointNames()) != 1 || cfg.DefaultEntrypointNames()[0] != DefaultEntrypointModel {
 		t.Fatalf("expected entrypoint-only public catalog, got auto aliases %#v", cfg.DefaultEntrypointNames())

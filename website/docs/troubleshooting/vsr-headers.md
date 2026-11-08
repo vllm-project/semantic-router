@@ -225,8 +225,8 @@ identity header reaches a model provider.
   configuration, compare the document hash that
   `GET /api/v1/config/hash` reports as `active_runtime_hash`.
 - Recipe names scope local signal, projection, decision, cache, replay, metric, and learning/session identities. Use `x-vsr-selected-recipe` together with the local decision/signal names when correlating a response with Insights or metrics.
-- `event` is the public signal type used by decisions and DSL. Canonical YAML stores event rules under `routing.signals.events`, matching other plural signal containers.
-- Router Learning uses router-owned online state internally. Users enable online model-choice learning through `global.router.learning.adaptation`, enable stability protection through `global.router.learning.protection`, pass stable identity headers, and optionally set `routing.decisions[].adaptations.mode`, component modes, or `adaptations.adaptation.candidate_set`. `scope: conversation` protects one `x-conversation-id`; `scope: session` protects the broader `x-session-id`. The old `routing.decisions[].algorithm.session_aware` shape is not part of the public contract.
+- `event` is the public signal type used by decisions and DSL. Canonical YAML stores event rules under `recipes[].signals.events`, matching other plural signal containers.
+- Router Learning uses router-owned online state internally. Users enable online model-choice learning through `global.router.learning.adaptation`, enable stability protection through `global.router.learning.protection`, pass stable identity headers, and optionally set `recipes[].decisions[].adaptations.mode`, component modes, or `adaptations.adaptation.candidate_set`. `scope: conversation` protects one `x-conversation-id`; `scope: session` protects the broader `x-session-id`. The old `recipes[].decisions[].algorithm.session_aware` shape is not part of the public contract.
 
 ## Header reference
 

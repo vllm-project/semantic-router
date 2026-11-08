@@ -32,33 +32,31 @@ const (
 )
 
 const promptCompressionDispatchConfigYAML = `
-version: v0.3
-routing:
-  modelCards:
-    - name: general-model
-    - name: coding-model
-  signals:
-    keywords:
-      - name: refactor_request
-        operator: OR
-        keywords: ["refactor"]
-      - name: dropped_detail
-        operator: OR
-        keywords: ["zanzibar"]
-  decisions:
-    - name: compressed_view
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: refactor_request
-          - operator: NOT
-            conditions:
-              - type: keyword
-                name: dropped_detail
-      modelRefs:
-        - model: coding-model
-          use_reasoning: false
+version: v0.5
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: refactor_request
+          operator: OR
+          keywords: ["refactor"]
+        - name: dropped_detail
+          operator: OR
+          keywords: ["zanzibar"]
+    decisions:
+      - name: compressed_view
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: refactor_request
+            - operator: NOT
+              conditions:
+                - type: keyword
+                  name: dropped_detail
+        modelRefs:
+          - model: coding-model
+            use_reasoning: false
 providers:
   defaults:
     model: general-model

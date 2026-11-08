@@ -15,7 +15,7 @@ import (
 const migrationActionCode = "migration_action"
 
 // MigrateModelResources rewrites the deprecated model-resource fields of a
-// v0.3 document in the forms that replace them, as the Router reads them,
+// v0.5 document in the forms that replace them, as the Router reads them,
 // and keeps every other field as written. The notes name the fields that have
 // no replacement and stay (deprecated_model_field, which the Router still
 // reads), and what an operator must do (migration_action), such as setting
@@ -179,14 +179,11 @@ func (m *modelResourceMigration) apply() error {
 		}
 	}
 	m.migrateBackendRefs()
-	if err := m.migrateRouting("routing", mappingAt(m.root, "routing"), &m.exported.Routing); err != nil {
-		return err
-	}
 	for i, recipe := range sequenceAt(m.root, "recipes") {
 		name := scalarAt(recipe, "name")
 		for j := range m.exported.Recipes {
 			if m.exported.Recipes[j].Name == name {
-				if err := m.migrateRouting(fmt.Sprintf("recipes[%s].routing", name), mappingAt(recipe, "routing"), &m.exported.Recipes[j].Routing); err != nil {
+				if err := m.migrateRecipe(recipePath(name), recipe, &m.exported.Recipes[j]); err != nil {
 					return fmt.Errorf("recipes[%d]: %w", i, err)
 				}
 			}
@@ -336,9 +333,9 @@ func (m *modelResourceMigration) migrateBackendRefs() {
 	}
 }
 
-var deprecatedBindingKeyPath = regexp.MustCompile(`^(routing|recipes\[[^]]+\]\.routing)\.model_bindings\.`)
+var deprecatedBindingKeyPath = regexp.MustCompile(`^recipes\[[^]]+\]\.model_bindings\.`)
 
-func (m *modelResourceMigration) migrateRouting(path string, routing *yaml.Node, exported *CanonicalRouting) error {
+func (m *modelResourceMigration) migrateRecipe(path string, routing *yaml.Node, exported *CanonicalRecipe) error {
 	if routing == nil {
 		return nil
 	}

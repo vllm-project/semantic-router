@@ -205,9 +205,9 @@ func reportServedContextWindow(target servedContextWindowTarget, body []byte) {
 				"upstream_model":        target.upstreamModel,
 				"served_max_model_len":  served.MaxModelLen,
 				"message": fmt.Sprintf(
-					"vLLM at %s serves %s with max_model_len %d, below the %d-token context window that routing uses for model %q, so it can reject requests the Router admits. Align the deployment and model card: start vLLM with --max-model-len %d, or set context_window_size: %d on the routing.modelCards entry named %q.",
+					"vLLM at %s serves %s with max_model_len %d, below the %d-token context window that routing uses for model %q, so it can reject requests the Router admits. Align the deployment and model card: start vLLM with --max-model-len %d, or set context_window_size: %d on the providers.models[] entry named %q.",
 					target.baseURL, target.upstreamModel, served.MaxModelLen, target.declared, target.model,
-					target.declared, served.MaxModelLen, target.card,
+					target.declared, served.MaxModelLen, target.model,
 				),
 			})
 		}

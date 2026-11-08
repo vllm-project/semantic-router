@@ -15,8 +15,8 @@ func PrepareOwnedEmbeddingAPI(ctx context.Context, cfg *config.RouterConfig, run
 		return nil, nil
 	}
 	scoped := cfg.ConfigForGlobalModelServices()
-	scoped.SemanticCache.Enabled = false
-	scoped.Memory.Enabled = false
+	scoped.SemanticCache.InUse = false
+	scoped.Memory.InUse = false
 	scoped.VectorStore = nil
 	return prepareEmbeddings(ctx, scoped, runtime, true, embedding.Options{})
 }

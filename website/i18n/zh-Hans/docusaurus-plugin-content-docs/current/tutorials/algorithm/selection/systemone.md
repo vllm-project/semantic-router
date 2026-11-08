@@ -42,41 +42,41 @@ global:
     system:
       decision_model:
         deployment: primary
-
-routing:
-  signals:
-    systemone:
-      - name: request_kind
-        question:
-          type: choice
-          instructions: What kind of request is this?
-          choices:
-            - key: code
-              description: Writing, reviewing or debugging code
-            - key: chat
-              description: Anything else
-  decisions:
-    - name: code-route
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: systemone
-            name: request_kind
-            label: code
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-        - model: qwen3-32b
-          use_reasoning: true
-      algorithm:
-        type: systemone
-        systemone:
-          instructions: Which model should answer this request?
-          candidates:
-            qwen3-8b: Fast general model for routine code
-            qwen3-32b: Strong reasoning model for hard code
-          timeout_ms: 1000
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: request_kind
+          question:
+            type: choice
+            instructions: What kind of request is this?
+            choices:
+              - key: code
+                description: Writing, reviewing or debugging code
+              - key: chat
+                description: Anything else
+    decisions:
+      - name: code-route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: systemone
+              name: request_kind
+              label: code
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: false
+          - model: qwen3-32b
+            use_reasoning: true
+        algorithm:
+          type: systemone
+          systemone:
+            instructions: Which model should answer this request?
+            candidates:
+              qwen3-8b: Fast general model for routine code
+              qwen3-32b: Strong reasoning model for hard code
+            timeout_ms: 1000
 ```
 
 选择器在 decision 匹配后，向同一部署发起独立调用。默认绑定可以选择 Vela 或 Decision 1.0/2.0，前提是所选资源支持 Choice 任务。选择器显式配置的部署会覆盖默认绑定。
@@ -92,43 +92,43 @@ global:
       decision-kai:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
-
-routing:
-  signals:
-    systemone:
-      - name: request_kind
-        deployment: decision-kai
-        question:
-          type: choice
-          instructions: What kind of request is this?
-          choices:
-            - key: code
-              description: Writing, reviewing or debugging code
-            - key: chat
-              description: Anything else
-  decisions:
-    - name: code-route
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: systemone
-            name: request_kind
-            label: code
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-        - model: qwen3-32b
-          use_reasoning: true
-      algorithm:
-        type: systemone
-        systemone:
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: request_kind
           deployment: decision-kai
-          instructions: Which model should answer this request?
-          candidates:
-            qwen3-8b: Fast general model for routine code
-            qwen3-32b: Strong reasoning model for hard code
-          timeout_ms: 1000
+          question:
+            type: choice
+            instructions: What kind of request is this?
+            choices:
+              - key: code
+                description: Writing, reviewing or debugging code
+              - key: chat
+                description: Anything else
+    decisions:
+      - name: code-route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: systemone
+              name: request_kind
+              label: code
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: false
+          - model: qwen3-32b
+            use_reasoning: true
+        algorithm:
+          type: systemone
+          systemone:
+            deployment: decision-kai
+            instructions: Which model should answer this request?
+            candidates:
+              qwen3-8b: Fast general model for routine code
+              qwen3-32b: Strong reasoning model for hard code
+            timeout_ms: 1000
 ```
 
 命名部署必须使用 `provider: model_runtime`，或在使用[远程 System One API](../../signal/learned/systemone.md#ask-a-remote-system-one-model) 时使用 `provider: systemone`；未设置自身 `timeout_ms` 的选择器使用部署的值。decision 需要 2–255 个不同的 `modelRefs`，`candidates` 只能描述这些模型；没有在其中提供描述的模型会使用自身配置的描述。

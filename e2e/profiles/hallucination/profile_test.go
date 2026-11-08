@@ -17,7 +17,12 @@ func TestProfileAsksFactCheckOfTheDecisionModelAndHallucinationOfTheFixture(t *t
 	if err := yaml.Unmarshal(raw, &values); err != nil {
 		t.Fatal(err)
 	}
-	signals := profileSection(t, values, "config", "routing", "signals")
+	recipes, _ := profileSection(t, values, "config")["recipes"].([]any)
+	if len(recipes) == 0 {
+		t.Fatal("the profile declares no recipe")
+	}
+	defaultRecipe, _ := recipes[0].(map[string]any)
+	signals := profileSection(t, defaultRecipe, "signals")
 	rules, _ := signals["fact_check"].([]any)
 	var factCheck map[string]any
 	for _, rule := range rules {

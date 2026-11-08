@@ -29,7 +29,7 @@ func newClassifierModelRuntime(cfg *config.RouterConfig, options RecipeRuntimeOp
 	}
 	recipe := cfg.RoutingScope
 	if recipe == "" {
-		recipe = config.DefaultRecipeName
+		recipe = cfg.DefaultRecipe().Name
 	}
 	return &classifierModelRuntime{runtime: runtime, systemOne: options.SystemOne, plan: plan, cfg: cfg, recipe: recipe}, nil
 }

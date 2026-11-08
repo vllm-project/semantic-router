@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: qwen-2.5-32b
@@ -10,56 +10,18 @@ providers:
       pricing:
         prompt_per_1m: 2
         completion_per_1m: 4
+      loras:
+        - name: api-router
+          description: API routing specialist
     - name: qwen-2.5-72b
       reasoning:
         family: qwen3
       pricing:
         prompt_per_1m: 3
         completion_per_1m: 6
-routing:
-  modelCards:
-    - name: qwen-2.5-32b
-      loras:
-        - name: api-router
-          description: API routing specialist
-    - name: qwen-2.5-72b
       loras:
         - name: advanced-router
           description: Advanced API routing expert
-  signals:
-    keywords:
-      - name: security
-        operator: OR
-        keywords:
-          - security
-          - vulnerability
-          - exploit
-          - hack
-        case_sensitive: false
-      - name: threat_detection
-        operator: OR
-        keywords:
-          - I found a security vulnerability in the system
-          - There's a potential exploit that needs attention
-          - We need to patch this security issue
-        case_sensitive: false
-  decisions:
-    - name: security_alert
-      description: Security-related queries with guided handling
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: security
-          - type: keyword
-            name: threat_detection
-      modelRefs:
-        - model: qwen-2.5-72b
-          use_reasoning: false
-      plugins:
-        - type: system_prompt
-        - type: header_mutation
 global:
   router:
     config_source: kubernetes
@@ -129,15 +91,12 @@ global:
     ratelimit: {}
     management_api: {}
     router_replay:
-      enabled: false
       ttl_seconds: 0
     startup_status:
       store_backend: ""
   stores:
     response_cache:
       backend_type: memory
-      enabled: true
-      similarity_threshold: 0.8
       max_entries: 1000
       ttl_seconds: 3600
       eviction_policy: fifo
@@ -152,3 +111,49 @@ global:
       prompt_compression:
         enabled: false
         max_tokens: 0
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        scope: global
+        semantic:
+          match:
+            recall:
+              min_similarity: 0.8
+              top_k: 1
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: security
+          operator: OR
+          keywords:
+            - security
+            - vulnerability
+            - exploit
+            - hack
+          case_sensitive: false
+        - name: threat_detection
+          operator: OR
+          keywords:
+            - I found a security vulnerability in the system
+            - There's a potential exploit that needs attention
+            - We need to patch this security issue
+          case_sensitive: false
+    decisions:
+      - name: security_alert
+        description: Security-related queries with guided handling
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: security
+            - type: keyword
+              name: threat_detection
+        modelRefs:
+          - model: qwen-2.5-72b
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+          - type: header_mutation

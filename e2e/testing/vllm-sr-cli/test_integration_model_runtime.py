@@ -38,7 +38,7 @@ def quickstart_router_config() -> dict:
     page = QUICKSTART.read_text(encoding="utf-8")
     for block in YAML_BLOCK.findall(page):
         document = yaml.safe_load(block)
-        if isinstance(document, dict) and "routing" in document:
+        if isinstance(document, dict) and "recipes" in document:
             return document
     raise AssertionError(f"{QUICKSTART} has no router configuration")
 
@@ -86,11 +86,11 @@ class TestServeManagedModelRuntime(MockUpstreamMixin, ServeSessionMixin, CLITest
         """The test stack's config plus the Quickstart's signal, route and
         deployment; returns the route that needs the signal's answer."""
         page = quickstart_router_config()
-        signal = copy.deepcopy(page["routing"]["signals"]["systemone"][0])
+        signal = copy.deepcopy(page["recipes"][0]["signals"]["systemone"][0])
         route = copy.deepcopy(
             next(
                 decision
-                for decision in page["routing"]["decisions"]
+                for decision in page["recipes"][0]["decisions"]
                 if decision["rules"]["conditions"]
             )
         )
@@ -111,11 +111,11 @@ class TestServeManagedModelRuntime(MockUpstreamMixin, ServeSessionMixin, CLITest
             )
         )
         config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-        default_route = config["routing"]["decisions"][0]
+        default_route = config["recipes"][0]["decisions"][0]
         route["priority"] = default_route["priority"] + 100
         route["modelRefs"] = copy.deepcopy(default_route["modelRefs"])
-        config["routing"]["signals"] = {"systemone": [signal]}
-        config["routing"]["decisions"].insert(0, route)
+        config["recipes"][0]["signals"] = {"systemone": [signal]}
+        config["recipes"][0]["decisions"].insert(0, route)
         config["global"]["model_catalog"]["deployments"] = deployments
         # The route check reads x-vsr-matched-decision-model, a debug header.
         config["global"].setdefault("router", {})["headers"] = {"debug": "any"}

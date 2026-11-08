@@ -31,7 +31,7 @@ func TestStoreImportsListsAndIdempotentlyInstallsExactFiveZIP(t *testing.T) {
 	}))
 	defer server.Close()
 	configPath := filepath.Join(t.TempDir(), "runtime-config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	store := NewStore(StoreOptions{Root: filepath.Join(t.TempDir(), "store"), ConfigPath: configPath, HTTPClient: server.Client()})
@@ -232,7 +232,7 @@ func TestStoreImportVerifiesArchiveDigestAndDownloadLimit(t *testing.T) {
 	}))
 	defer server.Close()
 	configPath := filepath.Join(t.TempDir(), "runtime-config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	store := NewStore(StoreOptions{Root: filepath.Join(t.TempDir(), "store"), ConfigPath: configPath, HTTPClient: server.Client()})
@@ -269,7 +269,7 @@ func TestStoreImportRollsSameIDVersionAndPreservesActiveOldDigest(t *testing.T) 
 	}))
 	defer server.Close()
 	configPath := filepath.Join(t.TempDir(), "runtime-config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	store := NewStore(StoreOptions{Root: filepath.Join(t.TempDir(), "store"), ConfigPath: configPath, HTTPClient: server.Client()})
@@ -281,7 +281,7 @@ func TestStoreImportRollsSameIDVersionAndPreservesActiveOldDigest(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	previous := []byte("version: v0.3\n")
+	previous := []byte("version: v0.5\n")
 	transaction, err := store.BeginActivation(firstSummary.RecipeDigest, previous)
 	if err != nil {
 		t.Fatal(err)
@@ -349,7 +349,7 @@ extra_headers:
 			t.Fatalf("warning = %#v", warning)
 		}
 	}
-	if err := validateRuntimeConfig([]byte("version: v0.3\nsetup:\n  mode: true\n")); err == nil {
+	if err := validateRuntimeConfig([]byte("version: v0.5\nsetup:\n  mode: true\n")); err == nil {
 		t.Fatal("setup.mode=true config accepted")
 	}
 }
@@ -421,27 +421,27 @@ escaped: $$NOT_A_REFERENCE
 
 func TestPackageRuntimeValidationRejectsYAMLIndirection(t *testing.T) {
 	for name, config := range map[string]string{
-		"alias": `version: v0.3
+		"alias": `version: v0.5
 literal: &private_value ${HOST_SECRET}
 headers:
   Authorization: *private_value
 `,
-		"merge": `version: v0.3
+		"merge": `version: v0.5
 defaults: &private_headers
   Authorization: ${HOST_SECRET}
 headers:
-  <<: *private_headers
+  !!merge <<: *private_headers
 `,
-		"binary value": `version: v0.3
+		"binary value": `version: v0.5
 provider:
   base_url: !!binary aHR0cHM6Ly91c2VyOnNlbnNpdGl2ZUBleGFtcGxlLmNvbS92MQ==
 `,
-		"binary key": `version: v0.3
+		"binary key": `version: v0.5
 request:
   headers:
     !!binary QXV0aG9yaXphdGlvbg==: Bearer sensitive
 `,
-		"explicit string": `version: v0.3
+		"explicit string": `version: v0.5
 value: !!str sensitive
 `,
 	} {
@@ -601,7 +601,7 @@ func TestActivationTargetRequiresExplicitEnvironmentWarningAcknowledgement(t *te
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(archive) }))
 	defer server.Close()
 	configPath := filepath.Join(t.TempDir(), "runtime-config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	store := NewStore(StoreOptions{Root: filepath.Join(t.TempDir(), "store"), ConfigPath: configPath, HTTPClient: server.Client()})
@@ -633,7 +633,7 @@ func TestActivationTargetRejectsSymlinkedImmutableObjectDirectory(t *testing.T) 
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(archive) }))
 	defer server.Close()
 	configPath := filepath.Join(t.TempDir(), "runtime-config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	store := NewStore(StoreOptions{Root: filepath.Join(t.TempDir(), "store"), ConfigPath: configPath, HTTPClient: server.Client()})

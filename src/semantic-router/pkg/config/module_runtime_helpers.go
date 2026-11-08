@@ -1,9 +1,8 @@
 package config
 
-// GetCacheSimilarityThreshold returns the effective threshold for the semantic cache.
-func (c *RouterConfig) GetCacheSimilarityThreshold() float32 {
-	if c.SimilarityThreshold != nil {
-		return *c.SimilarityThreshold
-	}
-	return 0.5
+// ResponseCacheDefaultSimilarity is the cache backend's default similarity
+// bound: the response cache's default recall bound. Each lookup passes the
+// bound of the match block its request runs.
+func ResponseCacheDefaultSimilarity() float32 {
+	return float32(*MatchResponseCache.Default().Recall.MinSimilarity)
 }

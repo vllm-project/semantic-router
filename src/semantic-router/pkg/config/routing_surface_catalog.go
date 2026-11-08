@@ -35,7 +35,7 @@ type SignalReferenceQualifier string
 const SignalReferenceQualifierLabel SignalReferenceQualifier = "label"
 
 // SignalCatalogEntry is the canonical public identity for one signal family.
-// Collection is the YAML key under routing.signals. ObservationKey is the JSON
+// Collection is the YAML key under recipes[].signals. ObservationKey is the JSON
 // field under decision_result matched/used/unmatched signal collections.
 type SignalCatalogEntry struct {
 	Type                  string                   `json:"type"`

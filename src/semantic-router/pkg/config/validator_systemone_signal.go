@@ -9,17 +9,18 @@ import (
 
 // validateSystemOneContracts checks systemone rules, the systemone selector
 // and the model_runtime or systemone deployments they name.
-func validateSystemOneContracts(cfg *RouterConfig) error {
+func validateSystemOneContracts(cfg *RouterConfig) (err error) {
+	defer func() { err = cfg.inRecipe(err) }()
 	seen := make(map[string]struct{}, len(cfg.SystemOneRules))
 	for index, rule := range cfg.SystemOneRules {
 		if err := ValidateSystemOneRuleContract(rule); err != nil {
-			path := fmt.Sprintf("routing.signals.systemone[%d]", index)
+			path := fmt.Sprintf("signals.systemone[%d]", index)
 			if validRuleName(rule.Name) {
-				path = SystemOneRulePath(rule.Name)
+				path = systemOneRulePath(rule.Name)
 			}
 			return fmt.Errorf("%s: %w", path, err)
 		}
-		path := SystemOneRulePath(rule.Name)
+		path := systemOneRulePath(rule.Name)
 		if _, exists := seen[rule.Name]; exists {
 			return fmt.Errorf("%s: duplicate name %q", path, rule.Name)
 		}
@@ -29,9 +30,6 @@ func validateSystemOneContracts(cfg *RouterConfig) error {
 		}
 		if err := validateSystemOneAnswerer(cfg, cfg.ScopePath("signals.systemone["+rule.Name+"]"), rule); err != nil {
 			return err
-		}
-		if err := validateDeclaredQuestionType(cfg, cfg.SystemOneRuleDeployment(rule), rule.Question.Type); err != nil {
-			return fmt.Errorf("%s: %w", path, err)
 		}
 	}
 	if err := validateSetLabelAnswerKeys(cfg, cfg.SystemOneRules); err != nil {
@@ -74,28 +72,32 @@ func validateDecisionSystemOneQuestions(cfg *RouterConfig, decision Decision) er
 	return nil
 }
 
-// SystemOneRulePath is where a configuration writes a rule.
-func SystemOneRulePath(name string) string {
-	return "routing.signals.systemone[" + name + "]"
+// systemOneRulePath is where a recipe writes a rule.
+func systemOneRulePath(name string) string {
+	return "signals.systemone[" + name + "]"
 }
 
 func validRuleName(name string) bool {
 	return strings.TrimSpace(name) != "" && strings.TrimSpace(name) == name && !strings.Contains(name, ":")
 }
 
-// validateDeclaredQuestionType refuses a question a systemone deployment's
-// declared question types leave out. A deployment that declares none is told
-// by its API's listing.
+// validateDeclaredQuestionType refuses a question its deployment cannot
+// answer, as far as the configuration tells (deploymentAnswers): the question
+// types a systemone deployment declares, or the catalog entry of the built-in
+// decision model a model_runtime deployment serves. A set question is also
+// answered as one noul per label. A deployment whose types are unknown at
+// load, a systemone one that declares none (its API's listing tells) or a
+// model the catalog does not list, is checked against the model's card when
+// the generation prepares.
 func validateDeclaredQuestionType(cfg *RouterConfig, name, questionType string) error {
-	deployment, ok := cfg.ModelDeployments[name]
-	if !ok || !deployment.IsSystemOne() {
+	questionTypes, _ := cfg.deploymentAnswers(name)
+	if questionTypes == nil || answersQuestionType(questionTypes, questionType) {
 		return nil
 	}
-	declared := deployment.DeclaredQuestionTypes()
-	if len(declared) == 0 || slices.Contains(declared, questionType) {
-		return nil
+	if cfg.IsSystemOneDeployment(name) {
+		return fmt.Errorf("deployment %q declares question types %s, so it does not answer a %s question", name, strings.Join(questionTypes, ", "), questionType)
 	}
-	return fmt.Errorf("deployment %q declares question types %s, so it does not answer a %s question", name, strings.Join(declared, ", "), questionType)
+	return fmt.Errorf("deployment %q serves a model that answers %s questions, so it does not answer a %s question", name, strings.Join(questionTypes, ", "), questionType)
 }
 
 // ValidateSystemOneRuleContract validates one systemone rule without the
@@ -225,7 +227,7 @@ func validateSetLabelAnswerKeys(cfg *RouterConfig, rules []SystemOneRule) error 
 		deployment := cfg.SystemOneRuleDeployment(rule)
 		for _, label := range rule.Question.Labels {
 			if other, exists := names[deployment+"\x00"+rule.Name+"."+label.Key]; exists {
-				return fmt.Errorf("%s: the name collides with the answer key of set question %q's label %q on deployment %q; rename one of them", SystemOneRulePath(other), rule.Name, label.Key, deployment)
+				return fmt.Errorf("%s: the name collides with the answer key of set question %q's label %q on deployment %q; rename one of them", systemOneRulePath(other), rule.Name, label.Key, deployment)
 			}
 		}
 	}

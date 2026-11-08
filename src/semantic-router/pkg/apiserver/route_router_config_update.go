@@ -334,7 +334,7 @@ func normalizeRouterConfigDocumentWithParser(
 	if _, err := parse(rawYAML); err != nil {
 		return nil, fmt.Errorf("config validation failed: %w", err)
 	}
-	// The submitted document is already canonical v0.3 because ParseYAMLBytes
+	// The submitted document is already canonical v0.5 because ParseYAMLBytes
 	// rejects legacy layouts. Persist that document rather than exporting the
 	// runtime representation back to YAML: runtime endpoint names and explicit
 	// zero values are implementation details and must not rewrite user intent.
@@ -372,7 +372,37 @@ func mergeConfigDocuments(base map[string]any, patch map[string]any) map[string]
 	if !ok {
 		return map[string]any{}
 	}
+	if recipes, ok := patch["recipes"].([]any); ok {
+		merged["recipes"] = mergeRecipes(base["recipes"], recipes)
+	}
 	return merged
+}
+
+// mergeRecipes merges a patch's recipes into the base's by name: a recipe of
+// the patch merges into the base recipe of its name, and the base recipes the
+// patch does not name stay.
+func mergeRecipes(base any, patch []any) []any {
+	recipes, _ := cloneYAMLValue(base).([]any)
+	index := make(map[string]int, len(recipes))
+	for at, recipe := range recipes {
+		if name := recipeNameOf(recipe); name != "" {
+			index[name] = at
+		}
+	}
+	for _, recipe := range patch {
+		if at, ok := index[recipeNameOf(recipe)]; ok {
+			recipes[at] = mergeYAMLValue(recipes[at], recipe)
+			continue
+		}
+		recipes = append(recipes, cloneYAMLValue(recipe))
+	}
+	return recipes
+}
+
+func recipeNameOf(recipe any) string {
+	mapping, _ := recipe.(map[string]any)
+	name, _ := mapping["name"].(string)
+	return name
 }
 
 func mergeYAMLValue(base any, patch any) any {

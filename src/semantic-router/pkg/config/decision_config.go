@@ -43,19 +43,21 @@ type DecisionAction struct {
 
 // Decision represents a routing decision that combines multiple rules with boolean logic.
 type Decision struct {
-	Name                string                     `yaml:"name"`
-	Description         string                     `yaml:"description,omitempty"`
-	Priority            int                        `yaml:"priority,omitempty"`
-	Tier                int                        `yaml:"tier,omitempty"`
-	OutputContract      string                     `yaml:"output_contract,omitempty" json:"output_contract,omitempty"`
-	OutputContractSpec  *OutputContractSpec        `yaml:"output_contract_spec,omitempty" json:"output_contract_spec,omitempty"`
-	Rules               RuleCombination            `yaml:"rules"`
-	Action              *DecisionAction            `yaml:"action,omitempty" json:"action,omitempty"`
-	ModelRefs           []ModelRef                 `yaml:"modelRefs,omitempty"`
-	Algorithm           *AlgorithmConfig           `yaml:"algorithm,omitempty"`
-	Adaptations         DecisionAdaptationsConfig  `yaml:"adaptations,omitempty"`
-	Reliability         *DecisionReliability       `yaml:"reliability,omitempty" json:"reliability,omitempty"`
-	Fallback            *fallback.FallbackOverride `yaml:"fallback,omitempty" json:"fallback,omitempty"`
+	Name               string                     `yaml:"name"`
+	Description        string                     `yaml:"description,omitempty"`
+	Priority           int                        `yaml:"priority,omitempty"`
+	Tier               int                        `yaml:"tier,omitempty"`
+	OutputContract     string                     `yaml:"output_contract,omitempty" json:"output_contract,omitempty"`
+	OutputContractSpec *OutputContractSpec        `yaml:"output_contract_spec,omitempty" json:"output_contract_spec,omitempty"`
+	Rules              RuleCombination            `yaml:"rules"`
+	Action             *DecisionAction            `yaml:"action,omitempty" json:"action,omitempty"`
+	ModelRefs          []ModelRef                 `yaml:"modelRefs,omitempty"`
+	Algorithm          *AlgorithmConfig           `yaml:"algorithm,omitempty"`
+	Adaptations        DecisionAdaptationsConfig  `yaml:"adaptations,omitempty"`
+	Reliability        *DecisionReliability       `yaml:"reliability,omitempty" json:"reliability,omitempty"`
+	Fallback           *fallback.FallbackOverride `yaml:"fallback,omitempty" json:"fallback,omitempty"`
+	// Plugins are the decision's effective plugins: its own layered over its
+	// recipe's and global.plugins (DeclaredPlugins are its own).
 	Plugins             []DecisionPlugin           `yaml:"plugins,omitempty"`
 	CandidateIterations []CandidateIterationConfig `yaml:"candidateIterations,omitempty"`
 	// Retention says what the Router keeps of the decision's answers.
@@ -64,6 +66,11 @@ type Decision struct {
 	// and transport projections. Executable behavior belongs in Plugins or the
 	// decision's attributes.
 	Annotations map[string]interface{} `yaml:"annotations,omitempty" json:"annotations,omitempty"`
+
+	// declaredPlugins are the decision's own plugins once the loader layered
+	// Plugins (pluginsLayered).
+	declaredPlugins []DecisionPlugin
+	pluginsLayered  bool
 }
 
 // DecisionRetention expresses keep / drop / prefer-retain semantics over the

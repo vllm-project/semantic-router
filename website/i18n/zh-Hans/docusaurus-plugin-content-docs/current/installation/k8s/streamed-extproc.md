@@ -141,27 +141,28 @@ Looper 算法是全双工流式工作新增的主要立即响应路径。带有 
 决策片段示例：
 
 ```yaml
-routing:
-  decisions:
-    - name: streamed_confidence_route
-      description: Escalate code requests when the first model is uncertain.
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: computer science
-      modelRefs:
-        - model: small-code-model
-          use_reasoning: false
-        - model: large-code-model
-          use_reasoning: false
-      algorithm:
-        type: escalate
-        escalate:
-          order: size
-          accept:
-            confidence: {method: hybrid, gte: 0.72}
+recipes:
+  - name: default
+    decisions:
+      - name: streamed_confidence_route
+        description: Escalate code requests when the first model is uncertain.
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: computer science
+        modelRefs:
+          - model: small-code-model
+            use_reasoning: false
+          - model: large-code-model
+            use_reasoning: false
+        algorithm:
+          type: escalate
+          escalate:
+            order: size
+            accept:
+              confidence: {method: hybrid, gte: 0.72}
 ```
 
 `computer science` 信号和两个提供商模型也必须存在于同一配方中。完整约定见[Escalate 教程](../../tutorials/algorithm/looper/escalate.md)。
@@ -194,27 +195,28 @@ curl -N -i http://localhost:8080/v1/chat/completions \
 `fast_response` 也可以短路以流式 body 分片到达的请求。这对 PII 或越狱拦截等安全决策很有用。
 
 ```yaml
-routing:
-  signals:
-    jailbreak:
-      - name: streamed_jailbreak
-        method: classifier
-        threshold: 0.6
-        description: Detect prompt-injection attempts before forwarding.
-  decisions:
-    - name: streamed_jailbreak_block
-      description: Return a policy response for detected prompt injection.
-      priority: 1000
-      rules:
-        operator: AND
-        conditions:
-          - type: jailbreak
-            name: streamed_jailbreak
-      modelRefs: []
-      plugins:
-        - type: fast_response
-          configuration:
-            message: This request was blocked by policy.
+recipes:
+  - name: default
+    signals:
+      jailbreak:
+        - name: streamed_jailbreak
+          method: classifier
+          threshold: 0.6
+          description: Detect prompt-injection attempts before forwarding.
+    decisions:
+      - name: streamed_jailbreak_block
+        description: Return a policy response for detected prompt injection.
+        priority: 1000
+        rules:
+          operator: AND
+          conditions:
+            - type: jailbreak
+              name: streamed_jailbreak
+        modelRefs: []
+        plugins:
+          - type: fast_response
+            configuration:
+              message: This request was blocked by policy.
 ```
 
 在 `request_body_mode: STREAMED` 或 `requestBodyMode: FullDuplexStreamed` 下，Semantic Router 累积 body，在流结束时运行安全信号，并返回配置的立即响应，而不将请求转发到后端。

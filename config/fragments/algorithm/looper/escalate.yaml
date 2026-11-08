@@ -1,53 +1,49 @@
-# escalate calls the candidates in order and returns the first accepted answer.
-# On Chat one accept check judges each answer: its confidence, the decision
-# model's answer_check (systemone), or refusal: false. On System One each stage
-# carries its own native accept rules; combine that recipe with System One
-# provider aliases and an api: systemone entrypoint. The fast gate is the
-# measured Kai/Vega pilot operating point; evaluate it on your workload before
-# adopting it.
-routing:
-  decisions:
-    - name: escalate-on-confidence
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-        - model: qwen3-32b
-          use_reasoning: true
-      algorithm:
-        type: escalate
-        budget: {deadline: 60s, max_calls: 2}
-        on_error: last_attempt
-        escalate:
-          order: size
-          accept:
-            confidence: {method: hybrid, gte: 0.72}
 recipes:
+  - name: default
+    decisions:
+      - name: escalate-on-confidence
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: false
+          - model: qwen3-32b
+            use_reasoning: true
+        algorithm:
+          type: escalate
+          budget: {deadline: 60s, max_calls: 2}
+          on_error: last_attempt
+          escalate:
+            order: size
+            accept:
+              confidence: {method: hybrid, gte: 0.72}
   - name: native-escalate
-    routing:
-      decisions:
-        - name: kai-to-vega
-          rules: {}
-          modelRefs: [{model: kai}, {model: vega}]
-          algorithm:
-            type: escalate
-            budget: {deadline: 3s, max_calls: 2}
-            escalate:
-              quality:
-                type: uncalibrated
+    decisions:
+      - name: kai-to-vega
+        rules: {}
+        modelRefs: [{model: kai}, {model: vega}]
+        algorithm:
+          type: escalate
+          budget: {deadline: 3s, max_calls: 2}
+          escalate:
+            quality:
+              type: uncalibrated
+              accept:
+                native:
+                  - {question_type: choice, field: top_probability, gte: 0}
+                  - {question_type: score, field: top_probability, gte: 0}
+                  - {question_type: noul, field: top_probability, gte: 0}
+            stages:
+              - name: fast
+                model: kai
                 accept:
                   native:
-                    - {question_type: choice, field: top_probability, gte: 0}
-                    - {question_type: score, field: top_probability, gte: 0}
-                    - {question_type: noul, field: top_probability, gte: 0}
-              stages:
-                - name: fast
-                  model: kai
-                  accept:
-                    native:
-                      - {question_type: choice, field: top_probability, gte: 0.6059704079536342}
-                      - {question_type: score, field: top_probability, gte: 0.6059704079536342}
-                      - {question_type: noul, field: top_probability, gte: 0.6059704079536342}
-                - {name: upgrade, model: vega}
+                    - {question_type: choice, field: top_probability, gte: 0.6059704079536342}
+                    - {question_type: score, field: top_probability, gte: 0.6059704079536342}
+                    - {question_type: noul, field: top_probability, gte: 0.6059704079536342}
+              - {name: upgrade, model: vega}
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true

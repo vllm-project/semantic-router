@@ -522,32 +522,20 @@ export function summarizeSetupConfig(
     config.providers && typeof config.providers === "object"
       ? (config.providers as Record<string, unknown>)
       : {};
-  const routing =
-    config.routing && typeof config.routing === "object"
-      ? (config.routing as Record<string, unknown>)
-      : {};
-  const recipeRoutings = Array.isArray(config.recipes)
-    ? config.recipes.flatMap((recipe) => {
-        if (!recipe || typeof recipe !== "object" || Array.isArray(recipe)) {
-          return [];
-        }
-        const scopedRouting = (recipe as Record<string, unknown>).routing;
-        return scopedRouting &&
-          typeof scopedRouting === "object" &&
-          !Array.isArray(scopedRouting)
-          ? [scopedRouting as Record<string, unknown>]
-          : [];
-      })
+  const recipes = Array.isArray(config.recipes)
+    ? config.recipes.filter(
+        (recipe): recipe is Record<string, unknown> =>
+          Boolean(recipe) && typeof recipe === "object" && !Array.isArray(recipe),
+      )
     : [];
-  const routingProfiles = [routing, ...recipeRoutings];
   const models = Array.isArray(providers.models) ? providers.models.length : 0;
-  const decisions = routingProfiles.reduce(
-    (total, profile) =>
-      total + (Array.isArray(profile.decisions) ? profile.decisions.length : 0),
+  const decisions = recipes.reduce(
+    (total, recipe) =>
+      total + (Array.isArray(recipe.decisions) ? recipe.decisions.length : 0),
     0,
   );
-  const signals = routingProfiles.reduce(
-    (total, profile) => total + countConfigSignals(profile.signals),
+  const signals = recipes.reduce(
+    (total, recipe) => total + countConfigSignals(recipe.signals),
     0,
   );
 
@@ -637,9 +625,12 @@ export function buildSetupConfig(
         model: defaultModel.name,
       },
     },
-    routing: {
-      decisions: [catchAllDecision],
-    },
+    recipes: [
+      {
+        name: "default",
+        decisions: [catchAllDecision],
+      },
+    ],
   };
 
   return config;

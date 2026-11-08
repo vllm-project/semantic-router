@@ -34,8 +34,8 @@ type CRDConverter struct{}
 // NewCRDConverter creates a new CRD converter
 func NewCRDConverter() *CRDConverter { return &CRDConverter{} }
 
-// Convert builds a canonical v0.3 config from IntelligentPool/IntelligentRoute
-// CRDs plus a static canonical base.
+// Convert builds a canonical v0.5 config from IntelligentPool/IntelligentRoute
+// CRDs plus a static canonical base: the route is its one recipe.
 func (c *CRDConverter) Convert(
 	pool *v1alpha1.IntelligentPool,
 	route *v1alpha1.IntelligentRoute,
@@ -52,19 +52,22 @@ func (c *CRDConverter) Convert(
 	if err != nil {
 		return nil, err
 	}
-	canonical.Version = "v0.3"
+	canonical.Version = config.CanonicalConfigVersion
 
 	canonical.Providers.Defaults.DefaultModel = pool.Spec.DefaultModel
-	canonical.Routing.ModelCards = convertRoutingModelCards(pool.Spec.Models)
-	canonical.Routing.Signals = convertSignals(route.Spec.Signals)
-	canonical.Routing.Decisions = make([]config.Decision, 0, len(route.Spec.Decisions))
+	recipe := config.CanonicalRecipe{
+		Name:      string(config.DefaultRecipeName),
+		Signals:   convertSignals(route.Spec.Signals),
+		Decisions: make([]config.Decision, 0, len(route.Spec.Decisions)),
+	}
 	for _, decision := range route.Spec.Decisions {
 		configDecision, err := c.convertDecision(decision)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert decision %s: %w", decision.Name, err)
 		}
-		canonical.Routing.Decisions = append(canonical.Routing.Decisions, configDecision)
+		recipe.Decisions = append(recipe.Decisions, configDecision)
 	}
+	canonical.Recipes = []config.CanonicalRecipe{recipe}
 
 	canonical.Providers.Models = mergeProviderMetadata(canonical.Providers.Models, convertProviderMetadata(pool.Spec.Models))
 	return canonical, nil
@@ -135,34 +138,6 @@ func (c *CRDConverter) convertDecision(decision v1alpha1.Decision) (config.Decis
 	configDecision.Fallback = decisionFallback
 
 	return configDecision, nil
-}
-
-func convertRoutingModelCards(models []v1alpha1.ModelConfig) []config.RoutingModel {
-	if len(models) == 0 {
-		return nil
-	}
-
-	cards := make([]config.RoutingModel, 0, len(models))
-	for _, model := range models {
-		cardName := model.Catalog
-		if cardName == "" {
-			cardName = model.Name
-		}
-		card := config.RoutingModel{
-			Name: cardName,
-		}
-		if len(model.LoRAs) > 0 {
-			card.LoRAs = make([]config.LoRAAdapter, len(model.LoRAs))
-			for i, lora := range model.LoRAs {
-				card.LoRAs[i] = config.LoRAAdapter{
-					Name:        lora.Name,
-					Description: lora.Description,
-				}
-			}
-		}
-		cards = append(cards, card)
-	}
-	return cards
 }
 
 func convertSignals(signals v1alpha1.Signals) config.CanonicalSignals {
@@ -245,8 +220,8 @@ func convertProviderMetadata(models []v1alpha1.ModelConfig) []config.CanonicalPr
 			Catalog:   model.Catalog,
 			Reasoning: convertModelReasoning(model.Reasoning),
 		}
-		if model.Pricing == nil && providerModel.Catalog == "" && providerModel.Reasoning == nil {
-			continue
+		for _, lora := range model.LoRAs {
+			providerModel.LoRAs = append(providerModel.LoRAs, config.LoRAAdapter{Name: lora.Name, Description: lora.Description})
 		}
 		if model.Pricing != nil {
 			providerModel.Pricing = config.ModelPricing{
@@ -332,12 +307,15 @@ func mergeCanonicalProviderMetadata(
 	if len(overlay.ExternalModelIDs) > 0 {
 		existing.ExternalModelIDs = overlay.ExternalModelIDs
 	}
+	if len(overlay.LoRAs) > 0 {
+		existing.LoRAs = overlay.LoRAs
+	}
 	return existing
 }
 
 func cloneCanonicalConfig(base *config.CanonicalConfig) (*config.CanonicalConfig, error) {
 	if base == nil {
-		return &config.CanonicalConfig{Version: "v0.3"}, nil
+		return &config.CanonicalConfig{Version: config.CanonicalConfigVersion}, nil
 	}
 
 	data, err := yamlv3.Marshal(base)

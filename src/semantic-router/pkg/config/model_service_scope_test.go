@@ -13,14 +13,14 @@ func TestGlobalModelServicesUseOnlyReachableEnabledPlugins(t *testing.T) {
 		}}}}},
 	}
 	cfg.Entrypoints = []EntrypointMapping{{Recipe: "active", ModelNames: []string{"auto"}}}
-	if services := cfg.ConfigForGlobalModelServices(); services.Memory.Enabled {
+	if services := cfg.ConfigForGlobalModelServices(); services.Memory.InUse {
 		t.Fatal("neither an unreachable nor a disabled plugin demands the memory service")
 	}
 	cfg.Entrypoints = []EntrypointMapping{{Recipe: "dormant", ModelNames: []string{"auto"}}}
-	if services := cfg.ConfigForGlobalModelServices(); !services.Memory.Enabled {
+	if services := cfg.ConfigForGlobalModelServices(); !services.Memory.InUse {
 		t.Fatal("a reachable enabled plugin demands the memory service")
 	}
-	if cfg.Memory.Enabled {
+	if cfg.Memory.InUse {
 		t.Fatal("preparation demand changed global authoring")
 	}
 }

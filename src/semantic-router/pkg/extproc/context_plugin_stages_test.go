@@ -23,7 +23,7 @@ const contextQuery = "how long do refunds take?"
 func contextRouter(t *testing.T) (*OpenAIRouter, string) {
 	t.Helper()
 	router, storeID := ragVectorStoreFixture(t, &plainRAGEmbedder{})
-	router.Config = &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, Backend: "milvus"}}
+	router.Config = &config.RouterConfig{GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()}, Memory: config.MemoryConfig{InUse: true, Backend: "milvus"}}
 	router.MemoryStore = &receiptMemoryStore{results: []*memory.RetrieveResult{{
 		Memory: &memory.Memory{Content: "The user prefers short answers."}, Score: 0.9,
 	}}}

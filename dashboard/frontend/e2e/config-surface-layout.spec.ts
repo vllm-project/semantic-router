@@ -2,18 +2,10 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { mockAuthenticatedAppShell } from './support/auth';
 
 const configResponse = {
-  version: 'v0.3',
+  version: 'v0.5',
   listeners: [{ name: 'public', address: '0.0.0.0', port: 8801 }],
   providers: {
-    defaults: {
-      default_model: 'test-model',
-      reasoning_families: {
-        qwen3: {
-          type: 'reasoning_effort',
-          parameter: 'reasoning_effort',
-        },
-      },
-    },
+    defaults: { model: 'test-model' },
     models: [
       {
         name: 'test-model',
@@ -26,37 +18,40 @@ const configResponse = {
             protocol: 'http',
           },
         ],
+        description: 'Primary routing model',
       },
     ],
   },
-  routing: {
-    modelCards: [{ name: 'test-model', description: 'Primary routing model' }],
-    signals: {
-      domains: [{ name: 'business', description: 'Business' }],
-      keywords: [{ name: 'pricing', value: 'pricing' }],
-    },
-    decisions: [
-      {
-        name: 'business-route',
-        priority: 1,
-        description: 'Route business requests',
-        rules: {
-          operator: 'AND',
-          conditions: [{ type: 'domain', name: 'business' }],
-        },
-        modelRefs: [
-          {
-            model: 'test-model',
-            use_reasoning: true,
-            reasoning_effort: 'medium',
-            lora_name: 'adapter-v1',
-            weight: 1,
-            reasoning_description: 'Use chain-of-thought for harder tasks',
+  recipes: [
+    {
+      name: 'default',
+      signals: {
+        domains: [{ name: 'business', description: 'Business' }],
+        keywords: [{ name: 'pricing', operator: 'OR', keywords: ['pricing'], case_sensitive: false }],
+      },
+      decisions: [
+        {
+          name: 'business-route',
+          priority: 1,
+          description: 'Route business requests',
+          rules: {
+            operator: 'AND',
+            conditions: [{ type: 'domain', name: 'business' }],
           },
-        ],
-      },
-    ],
-  },
+          modelRefs: [
+            {
+              model: 'test-model',
+              use_reasoning: true,
+              reasoning_effort: 'medium',
+              lora_name: 'adapter-v1',
+              weight: 1,
+              reasoning_description: 'Use chain-of-thought for harder tasks',
+            },
+          ],
+        },
+      ],
+    },
+  ],
   global: {
     router: { strategy: 'priority' },
     services: {

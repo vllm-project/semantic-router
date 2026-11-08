@@ -99,30 +99,31 @@ Some prompts benefit from multiple independent attempts and a judge pass rather 
 Decision-level Fusion:
 
 ```yaml
-routing:
-  decisions:
-    - name: deliberation
-      description: Compare candidate answers and synthesize one response.
-      priority: 100
-      output_contract: Preserve any explicit output format exactly.
-      modelRefs:
-        - model: qwen3-32b
-        - model: deepseek-worker
-      algorithm:
-        type: fusion
-        fusion:
-          model: qwen3-32b
-          analysis_models:
-            - qwen3-32b
-            - deepseek-worker
-          analysis_mode: separate
-          analysis_overrides:
-            - model: qwen3-32b
-              temperature: 0.15
-              max_completion_tokens: 512
-            - model: deepseek-worker
-              temperature: 0.2
-              max_completion_tokens: 384
+recipes:
+  - name: default
+    decisions:
+      - name: deliberation
+        description: Compare candidate answers and synthesize one response.
+        priority: 100
+        output_contract: Preserve any explicit output format exactly.
+        modelRefs:
+          - model: qwen3-32b
+          - model: deepseek-worker
+        algorithm:
+          type: fusion
+          fusion:
+            model: qwen3-32b
+            analysis_models:
+              - qwen3-32b
+              - deepseek-worker
+            analysis_mode: separate
+            analysis_overrides:
+              - model: qwen3-32b
+                temperature: 0.15
+                max_completion_tokens: 512
+              - model: deepseek-worker
+                temperature: 0.2
+                max_completion_tokens: 384
 ```
 
 `output_contract` is decision-scoped prompt text. Use it for benchmark or
@@ -180,21 +181,24 @@ For a dedicated Fusion surface, map its public names to an isolated recipe:
 
 ```yaml
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [vllm-sr/fusion, openrouter/fusion]
     recipe: fusion
 recipes:
+  - name: default
   - name: fusion
-    routing:
-      decisions:
-        - name: panel
-          priority: 1
-          rules: {operator: AND, conditions: []}
-          modelRefs: [{model: qwen3-8b}, {model: qwen3-32b}]
-          algorithm:
-            type: fusion
-            fusion:
-              model: qwen3-32b
-              analysis_models: [qwen3-8b, qwen3-32b]
+    decisions:
+      - name: panel
+        priority: 1
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: qwen3-8b}, {model: qwen3-32b}]
+        algorithm:
+          type: fusion
+          fusion:
+            model: qwen3-32b
+            analysis_models: [qwen3-8b, qwen3-32b]
 ```
 
 Public entrypoint names must not collide with backend models. Recipe signals,
@@ -281,7 +285,7 @@ answer instead of synthesizing from an under-strength panel. The judge and
 grounding stages are skipped: there is no panel to deliberate over.
 
 The target is validated when the configuration loads. It must be declared in
-`routing.modelCards`, use an OpenAI-compatible API format, be chat-capable text
+`providers.models`, use an OpenAI-compatible API format, be chat-capable text
 modality, have a provider backend, and not be one of the decision's own
 `analysis_models`. It must also be a concrete provider model: `vllm-sr/auto`,
 an entrypoint name, or a Fusion, Flow, or ReMoM slug is rejected, because

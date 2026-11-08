@@ -15,7 +15,7 @@ import (
 // vela2RoutingConfig routes on a Set label, a Span label and the PII signal,
 // all answered by one Vela 2.0 deployment.
 const vela2RoutingConfig = `
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: private-model
@@ -36,51 +36,52 @@ global:
         endpoint: http://kai.invalid:8100
     bindings:
       pii: vela2
-routing:
-  signals:
-    systemone:
-      - name: topics
-        deployment: vela2
-        question:
-          type: set
-          instructions: Which topics does the request mention?
-          labels:
-            - key: billing
-              description: payments, invoices or refunds
-            - key: shipping
-              description: deliveries or returns
-      - name: places
-        deployment: vela2
-        question:
-          type: span
-          instructions: Which spans name a place?
-          labels:
-            - key: city
-              description: a city name
-      - name: urgent
-        deployment: vela2
-        question:
-          type: noul
-          instructions: Is this request urgent?
-    pii:
-      - name: personal_data
-        predicate: {gte: 0.5}
-  decisions:
-    - name: private-billing
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: systemone
-            name: topics
-            label: billing
-          - type: systemone
-            name: places
-            label: city
-          - type: pii
-            name: personal_data
-      modelRefs:
-        - model: private-model
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: topics
+          deployment: vela2
+          question:
+            type: set
+            instructions: Which topics does the request mention?
+            labels:
+              - key: billing
+                description: payments, invoices or refunds
+              - key: shipping
+                description: deliveries or returns
+        - name: places
+          deployment: vela2
+          question:
+            type: span
+            instructions: Which spans name a place?
+            labels:
+              - key: city
+                description: a city name
+        - name: urgent
+          deployment: vela2
+          question:
+            type: noul
+            instructions: Is this request urgent?
+      pii:
+        - name: personal_data
+          predicate: {gte: 0.5}
+    decisions:
+      - name: private-billing
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: systemone
+              name: topics
+              label: billing
+            - type: systemone
+              name: places
+              label: city
+            - type: pii
+              name: personal_data
+        modelRefs:
+          - model: private-model
 `
 
 func vela2Classifier(t *testing.T, yaml string) (*Classifier, *runtimetest.Runtime) {
@@ -158,15 +159,15 @@ func TestVela2SetSpanAndPIIAnswersRouteFromOneCall(t *testing.T) {
 }
 
 func TestGenericDecisionSetCompositionAndNativeSpanCapability(t *testing.T) {
-	yaml := strings.Replace(vela2RoutingConfig, "      - name: topics\n        deployment: vela2", "      - name: topics\n        deployment: kai", 1)
+	yaml := strings.Replace(vela2RoutingConfig, "        - name: topics\n          deployment: vela2", "        - name: topics\n          deployment: kai", 1)
 	classifier, _ := vela2Classifier(t, yaml)
 	if err := classifier.InitializeRuntime(); err != nil {
 		t.Fatalf("a set task can compose native noul questions: %v", err)
 	}
-	yaml = strings.Replace(vela2RoutingConfig, "      - name: places\n        deployment: vela2", "      - name: places\n        deployment: kai", 1)
+	yaml = strings.Replace(vela2RoutingConfig, "        - name: places\n          deployment: vela2", "        - name: places\n          deployment: kai", 1)
 	classifier, _ = vela2Classifier(t, yaml)
 	err := classifier.InitializeRuntime()
-	if err == nil || !strings.Contains(err.Error(), "routing.signals.systemone[places]: span_required: ") {
+	if err == nil || !strings.Contains(err.Error(), "recipes[default].signals.systemone[places]: span_required: ") {
 		t.Fatalf("precise spans require a native span capability, got %v", err)
 	}
 }

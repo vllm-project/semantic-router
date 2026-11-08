@@ -11,7 +11,7 @@ func (r *SemanticRouterReconciler) buildCanonicalConfig(ctx context.Context, sr 
 	defaults := routerconfig.DefaultCanonicalGlobal()
 	catalog := defaults.ModelCatalog
 	canonical := &routerconfig.CanonicalConfig{
-		Version: "v0.3",
+		Version: routerconfig.CanonicalConfigVersion,
 		Listeners: []routerconfig.Listener{
 			{
 				Name:    DefaultListenerName,
@@ -20,7 +20,8 @@ func (r *SemanticRouterReconciler) buildCanonicalConfig(ctx context.Context, sr 
 				Timeout: "300s",
 			},
 		},
-		Routing: routerconfig.CanonicalRouting{
+		Recipes: []routerconfig.CanonicalRecipe{{
+			Name: string(routerconfig.DefaultRecipeName),
 			Signals: routerconfig.CanonicalSignals{
 				Domains: []routerconfig.Category{
 					{
@@ -30,7 +31,7 @@ func (r *SemanticRouterReconciler) buildCanonicalConfig(ctx context.Context, sr 
 					},
 				},
 			},
-		},
+		}},
 		Providers: routerconfig.CanonicalProviders{
 			Defaults: routerconfig.CanonicalProviderDefaults{},
 			Models:   []routerconfig.CanonicalProviderModel{},

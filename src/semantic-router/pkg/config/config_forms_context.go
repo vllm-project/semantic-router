@@ -33,6 +33,14 @@ var (
 // provider go last: the decision model judges relevance.
 var contextForms = []ConfigForm{
 	{
+		Code:    CodeInvalidValue,
+		Paths:   slices.Concat(RoutingScopes("decisions[].plugins[]"), RoutingScopes("plugins[]"), []string{"global.plugins[]"}),
+		Match:   func(node *yaml.Node, _ string) bool { return mcpRAGPlugin(node) || len(mcpRAGSources(node)) > 0 },
+		What:    "an enabled RAG source on backend mcp is removed: the Router has no MCP tool invoker",
+		Becomes: "nothing: migrate drops the source, or a hybrid's mcp fallback; serve the retrieval over HTTP and read it with backend: external_api",
+		Migrate: migrateMCPRAG,
+	},
+	{
 		Code:    CodeRemovedField,
 		Paths:   RoutingScopes("decisions[].plugins[]"),
 		Match:   hasPluginFields("rag", "min_confidence_threshold"),
@@ -266,6 +274,99 @@ func migrateRAGPlugin(m *Migration, at FormMatch) error {
 	return nil
 }
 
+// ragSettings are the settings of a rag plugin, under its configuration, or of
+// a context plugin's rag source.
+func ragSettings(node *yaml.Node) *yaml.Node {
+	if configuration := mappingValue(node, "configuration"); configuration != nil {
+		return resolveAlias(configuration)
+	}
+	return node
+}
+
+// ragReadsMCP reports whether a rag plugin or source retrieves through the mcp
+// backend, itself or as a hybrid's primary or fallback.
+func ragReadsMCP(node *yaml.Node) bool {
+	settings := ragSettings(node)
+	switch scalarAt(settings, "backend") {
+	case "mcp":
+		return true
+	case "hybrid":
+		hybrid := mappingAt(settings, "backend_config")
+		return scalarAt(hybrid, "primary") == "mcp" || scalarAt(hybrid, "fallback") == "mcp"
+	}
+	return false
+}
+
+// mcpRAGPlugin reports whether a plugin is an enabled rag plugin that
+// retrieves through mcp. A disabled one retrieves nothing and loads as written.
+func mcpRAGPlugin(plugin *yaml.Node) bool {
+	return hasType("rag")(plugin, "") && enabledScalar(resolveAlias(mappingValue(plugin, "configuration"))) && ragReadsMCP(plugin)
+}
+
+// mcpRAGSources are the rag sources of an enabled context plugin that
+// retrieve through mcp.
+func mcpRAGSources(plugin *yaml.Node) []*yaml.Node {
+	configuration := resolveAlias(mappingValue(plugin, "configuration"))
+	if !hasType(DecisionPluginContext)(plugin, "") || !enabledScalar(configuration) {
+		return nil
+	}
+	var sources []*yaml.Node
+	for _, source := range sequenceItems(resolveAlias(mappingValue(configuration, "sources"))) {
+		if source = resolveAlias(source); hasType(ContextSourceRAG)(source, "") && ragReadsMCP(source) {
+			sources = append(sources, source)
+		}
+	}
+	return sources
+}
+
+// migrateMCPRAG drops what retrieves through mcp, which has no invoker: an
+// enabled rag plugin on it, or a context plugin's source on it, or the mcp
+// fallback of a hybrid source, which then retrieves from its primary alone.
+func migrateMCPRAG(m *Migration, at FormMatch) error {
+	if mcpRAGPlugin(at.Node) {
+		removeItem(at.Parent, at.Node)
+		if holder := at.Ancestors[len(at.Ancestors)-1]; len(at.Parent.Content) == 0 {
+			for i := 0; i+1 < len(holder.Content); i += 2 {
+				if resolveAlias(holder.Content[i+1]) == at.Parent {
+					m.Delete(holder, holder.Content[i].Value)
+					break
+				}
+			}
+		}
+		noteMCPRAGDropped(m, at.Path, ragSettings(at.Node))
+		return nil
+	}
+	configuration := resolveAlias(mappingValue(at.Node, "configuration"))
+	sources := resolveAlias(mappingValue(configuration, "sources"))
+	for _, source := range mcpRAGSources(at.Node) {
+		path := fmt.Sprintf("%s.configuration.sources[%s]", at.Path, itemLabel(source, slices.Index(sources.Content, source)))
+		config := mappingAt(source, "backend_config")
+		if scalarAt(source, "backend") == "hybrid" && scalarAt(config, "primary") != "mcp" {
+			m.Delete(config, "fallback")
+			m.Delete(config, "fallback_config")
+			m.Note(path, "the hybrid source's mcp fallback is dropped: the Router has no MCP tool invoker; the source retrieves from its primary "+scalarAt(config, "primary")+" alone")
+			continue
+		}
+		removeItem(sources, source)
+		noteMCPRAGDropped(m, path, source)
+	}
+	if len(sources.Content) == 0 {
+		m.Delete(configuration, "sources")
+	}
+	return nil
+}
+
+// noteMCPRAGDropped notes the RAG source on mcp that migrate dropped.
+func noteMCPRAGDropped(m *Migration, path string, settings *yaml.Node) {
+	config := mappingAt(settings, "backend_config")
+	if scalarAt(settings, "backend") == "hybrid" {
+		config = mappingAt(config, "primary_config")
+	}
+	m.Note(path, fmt.Sprintf("the RAG source on the mcp backend is dropped: the Router has no MCP tool invoker, so these requests retrieve nothing from server %s (tool %s); "+
+		"to keep that retrieval, serve it over HTTP and add a source {type: rag, backend: external_api, backend_config: {endpoint: <its URL>, request_format: custom, "+
+		"request_template: <its JSON body, with {{.Query}} and {{.TopK}}>}}", scalarAt(config, "server_name"), scalarAt(config, "tool_name")))
+}
+
 // migrateMemoryPlugin makes an enabled memory plugin the memory source of
 // the decision's context plugin. A disabled one turned memory off for the
 // decision: its context plugin lists no memory source, or, without one, the
@@ -417,7 +518,7 @@ func addSource(configuration, source *yaml.Node) error {
 }
 
 // scopeDecision returns the decision whose plugins are plugins, and the
-// document path of its routing scope.
+// document path of its recipe.
 func scopeDecision(root, plugins *yaml.Node) (*yaml.Node, string) {
 	for _, pattern := range RoutingScopes("decisions[]") {
 		for _, decision := range matchPattern(root, strings.Split(pattern, ".")) {
@@ -429,7 +530,7 @@ func scopeDecision(root, plugins *yaml.Node) (*yaml.Node, string) {
 	return nil, ""
 }
 
-// scopeRuleNames are the names of a routing scope's rules of a signal type.
+// scopeRuleNames are the names of a recipe's rules of a signal type.
 func scopeRuleNames(root *yaml.Node, scope, signalType string) []string {
 	var names []string
 	for _, pattern := range RoutingScopes("signals." + signalType + "[]") {

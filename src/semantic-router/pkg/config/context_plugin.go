@@ -117,20 +117,19 @@ func (d *Decision) GetContextConfig() *ContextPluginConfig {
 	return decodeDecisionPlugin(d, DecisionPluginContext, &ContextPluginConfig{})
 }
 
-// ContextPlugin is the context a decision assembles: its context plugin when
-// enabled, none when disabled, and for a decision without one the memory
-// source global.stores.memory enables. nil when it assembles none.
+// ContextPlugin is the context a request assembles: the context plugin it
+// runs (RequestPlugins) when enabled; nil without one or when disabled.
 func (c *RouterConfig) ContextPlugin(decision *Decision) *ContextPluginConfig {
-	if decision != nil && decision.HasPlugin(DecisionPluginContext) {
-		if plugin := decision.GetContextConfig(); plugin != nil && plugin.Enabled {
-			return plugin
-		}
+	return ContextPluginOf(c.RequestPlugins(decision))
+}
+
+// ContextPluginOf is the enabled context plugin among a request's plugins.
+func ContextPluginOf(plugins []DecisionPlugin) *ContextPluginConfig {
+	plugin := decodePlugin(plugins, DecisionPluginContext, &ContextPluginConfig{})
+	if plugin == nil || !plugin.Enabled {
 		return nil
 	}
-	if c == nil || !c.Memory.Enabled {
-		return nil
-	}
-	return &ContextPluginConfig{Enabled: true, Sources: []ContextSource{{Type: ContextSourceMemory}}}
+	return plugin
 }
 
 // Source returns the plugin's source of a type, nil without one.
@@ -171,22 +170,27 @@ func (c *RouterConfig) HasPersonalizationPlugins(decisionName string) bool {
 	return plugin != nil && len(plugin.Sources) > 0
 }
 
-// UsesMemory reports whether any decision retrieves memories, which the
-// memory store is created for.
+// UsesMemory reports whether a request of any recipe retrieves memories, which
+// the memory store is created for.
 func (c *RouterConfig) UsesMemory() bool {
 	if c == nil {
 		return false
 	}
-	if c.Memory.Enabled {
-		return true
-	}
-	decisions := c.AllRoutingDecisions()
-	for index := range decisions {
-		if c.ContextPlugin(&decisions[index]).Source(ContextSourceMemory) != nil {
-			return true
-		}
-	}
-	return false
+	uses := false
+	c.visitEveryPlugins(func(plugins []DecisionPlugin) {
+		uses = uses || ContextPluginOf(plugins).Source(ContextSourceMemory) != nil
+	})
+	return uses
+}
+
+// usesReachableMemory reports whether a reachable request retrieves memories,
+// which the shared embedding services are prepared for.
+func (c *RouterConfig) usesReachableMemory() bool {
+	uses := false
+	c.visitReachablePlugins(func(plugins []DecisionPlugin) {
+		uses = uses || ContextPluginOf(plugins).Source(ContextSourceMemory) != nil
+	})
+	return uses
 }
 
 // MemoryMatch is the match block a memory source runs: its own, else recall

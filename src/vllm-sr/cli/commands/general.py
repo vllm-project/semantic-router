@@ -172,7 +172,7 @@ def config_schema(
 def config_migrate(
     config_path: str, output: str | None, force: bool, offline: bool
 ) -> None:
-    """Migrate a legacy or mixed config file to canonical v0.3 YAML.
+    """Migrate a legacy or mixed config file to canonical v0.5 YAML.
 
     The output is written only when the Router's own validation accepts it: a
     local Router binary ($VLLM_SR_ROUTER_BINARY) or the Router in its local
@@ -190,7 +190,7 @@ def config_migrate(
     "--config",
     "config_path",
     required=True,
-    help="Path to a canonical v0.3 config file. The file is not modified.",
+    help="Path to a canonical v0.5 config file. The file is not modified.",
 )
 @click.option(
     "--intent",

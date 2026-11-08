@@ -50,43 +50,44 @@ global:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
         device: auto
-routing:
-  signals:
-    systemone:
-      - name: needs_reasoning
-        deployment: decision-kai
-        question:
-          type: noul
-          instructions: Does answering this request need multi-step reasoning?
-        predicate:
-          gte: 0.7
-        timeout_ms: 1000
-      - name: request_kind
-        deployment: decision-kai
-        question:
-          type: choice
-          instructions: What kind of request is this?
-          choices:
-            - key: code
-              description: Writing, reviewing or debugging code
-            - key: math
-              description: Mathematics or quantitative reasoning
-            - key: chat
-              description: Anything else
-  decisions:
-    - name: hard-code
-      priority: 200
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions:
-          - type: systemone
-            name: request_kind
-            label: code
-          - type: systemone
-            name: needs_reasoning
-      modelRefs:
-        - model: large-coder
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: needs_reasoning
+          deployment: decision-kai
+          question:
+            type: noul
+            instructions: Does answering this request need multi-step reasoning?
+          predicate:
+            gte: 0.7
+          timeout_ms: 1000
+        - name: request_kind
+          deployment: decision-kai
+          question:
+            type: choice
+            instructions: What kind of request is this?
+            choices:
+              - key: code
+                description: Writing, reviewing or debugging code
+              - key: math
+                description: Mathematics or quantitative reasoning
+              - key: chat
+                description: Anything else
+    decisions:
+      - name: hard-code
+        priority: 200
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: systemone
+              name: request_kind
+              label: code
+            - type: systemone
+              name: needs_reasoning
+        modelRefs:
+          - model: large-coder
 ```
 
 Write instructions the way you would ask a colleague, and describe each option
@@ -95,28 +96,29 @@ in a few words. Short, concrete options give the most reliable answers.
 ## Let it choose the model
 
 ```yaml
-routing:
-  decisions:
-    - name: code-route
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: systemone
-            name: request_kind
-            label: code
-      modelRefs:
-        - model: qwen3-8b
-        - model: qwen3-32b
-      algorithm:
-        type: systemone
-        systemone:
-          deployment: decision-kai
-          instructions: Which model should answer this request?
-          candidates:
-            qwen3-8b: Fast general model for routine code
-            qwen3-32b: Strong reasoning model for hard code
-          timeout_ms: 1000
+recipes:
+  - name: default
+    decisions:
+      - name: code-route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: systemone
+              name: request_kind
+              label: code
+        modelRefs:
+          - model: qwen3-8b
+          - model: qwen3-32b
+        algorithm:
+          type: systemone
+          systemone:
+            deployment: decision-kai
+            instructions: Which model should answer this request?
+            candidates:
+              qwen3-8b: Fast general model for routine code
+              qwen3-32b: Strong reasoning model for hard code
+            timeout_ms: 1000
 ```
 
 The model's probability for each candidate becomes its selection score. If the
@@ -139,41 +141,42 @@ global:
         provider: model_runtime
         artifact: vllm-sr/Vela-2.0-0.3B
         device: cpu
-routing:
-  signals:
-    systemone:
-      - name: support_topics
-        deployment: vela2
-        question:
-          type: set
-          instructions: Which topics does the request mention?
-          labels:
-            - key: billing
-              description: payments, invoices or refunds
-            - key: shipping
-              description: deliveries, tracking or returns
-      - name: places
-        deployment: vela2
-        question:
-          type: span
-          instructions: Which spans name a city?
-          labels:
-            - key: city
-              description: a city name
-  decisions:
-    - name: billing-in-a-city
-      priority: 150
-      rules:
-        operator: AND
-        conditions:
-          - type: systemone
-            name: support_topics
-            label: billing
-          - type: systemone
-            name: places
-            label: city
-      modelRefs:
-        - model: support-model
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: support_topics
+          deployment: vela2
+          question:
+            type: set
+            instructions: Which topics does the request mention?
+            labels:
+              - key: billing
+                description: payments, invoices or refunds
+              - key: shipping
+                description: deliveries, tracking or returns
+        - name: places
+          deployment: vela2
+          question:
+            type: span
+            instructions: Which spans name a city?
+            labels:
+              - key: city
+                description: a city name
+    decisions:
+      - name: billing-in-a-city
+        priority: 150
+        rules:
+          operator: AND
+          conditions:
+            - type: systemone
+              name: support_topics
+              label: billing
+            - type: systemone
+              name: places
+              label: city
+        modelRefs:
+          - model: support-model
 ```
 
 A `set` label matches when the model selects it, and a `span` label when the

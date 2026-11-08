@@ -35,7 +35,7 @@ selected model does not speak the Anthropic Messages wire format.
 
 ## Configuration
 
-Add the plugin under `routing.decisions[].plugins`:
+Add the plugin under `recipes[].decisions[].plugins`:
 
 ```yaml
 plugins:

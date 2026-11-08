@@ -22,13 +22,12 @@ trim it for a deployment instead of treating every optional service as required.
 A router config uses these top-level sections:
 
 ```yaml
-version: v0.3
+version: v0.5
 listeners: []
 providers: {}
 evaluation: {}
-routing: {}
 entrypoints: []
-recipes: []
+recipes: [{name: default}]
 global: {}
 ```
 
@@ -37,17 +36,20 @@ global: {}
   `providers.models[]` binds model names to concrete backends and owns their
   deployment pricing metadata. A built-in model may add an optional `catalog`
   identity, while `backend_refs[].provider` selects the stable runtime Provider
-  ID. Custom vLLM/SGLang models continue to omit `catalog`.
+  ID. Custom vLLM/SGLang models continue to omit `catalog`. The facts routing
+  reads about a model (`capabilities`, `modalities`, context window, LoRA
+  adapters) sit on the same entry.
 - `evaluation` optionally defines benchmarks, indices, and model-linked
   measurement records.
-- `routing` owns model cards, signals, projections, decisions, and the routing
-  strategy for the default profile.
-- `entrypoints` maps request-facing model names to isolated `recipes`. Each
-  recipe has its own signals, decisions, algorithms, and plugins while sharing
-  providers and router-wide services. See
+- `recipes` are isolated routing profiles. Each recipe has its own signals,
+  projections, decisions, strategy, algorithms, and plugins while sharing
+  providers and router-wide services. One recipe needs no entrypoints.
+- `entrypoints` maps request-facing model names to recipes; with several
+  recipes, exactly one chat entrypoint is marked `default: true`. See
   [`tutorials/global/entrypoints-and-recipes.md`](../website/docs/tutorials/global/entrypoints-and-recipes.md).
 - `global` owns cross-cutting router settings, services, stores, integrations,
-  and router-managed model assets.
+  router-managed model assets, and the default plugins (`global.plugins`) that
+  recipes and decisions override field by field.
 
 Validate a file before serving it:
 
@@ -60,7 +62,7 @@ The [Vela model guide](../website/docs/tutorials/global/vela-models.md) explains
 the built-in model defaults, explicit older models, and opt-in long-context
 deployment settings. Model migration preserves the existing input budgets.
 
-`src/semantic-router/pkg/configschema/router-config-v0.3.schema.json` is the one
+`src/semantic-router/pkg/configschema/router-config-v0.5.schema.json` is the one
 checked-in schema generated from the Go configuration types and routing
 registries. Do not edit it directly. See the
 [Configuration Contract](../website/docs/installation/configuration-contract.md)
@@ -114,7 +116,7 @@ runtime dependency; they do not define routing behavior by themselves.
   values.
 - Catalog-backed models materialize their built-in Model Card, reasoning family,
   provider protocol, path, and non-secret defaults automatically. A handwritten
-  override uses the canonical `catalog` identity as `routing.modelCards[].name`;
+  override uses the canonical `catalog` identity as `providers.models[].name`;
   a fully custom model uses its request alias as the card name.
 - `api_format` selects the upstream wire format; it never selects a Provider.
   When this config declares a listener, every physical model must use
@@ -128,16 +130,16 @@ runtime dependency; they do not define routing behavior by themselves.
   but must keep one DNS hostname. Provider ID, wire protocol, native model ID,
   credentials, headers, request path, and TLS semantics must also match; use
   separate aliases for heterogeneous providers.
-- `routing.modelCards` describes semantic capabilities; concrete URLs,
+- `providers.models` describes semantic capabilities; concrete URLs,
   credentials, and pricing belong in `providers.models`.
 - Protocol controls such as `tool_choice` enter routing as conversation facts;
   projections combine those facts with text-derived intent before decisions
   apply policy.
-- `routing.projections` derives named routing outputs from signals. Decisions
+- `recipes[].projections` derives named routing outputs from signals. Decisions
   consume those outputs instead of embedding free-form computation.
 - Candidate iteration is bounded policy metadata, not a general scripting
   runtime.
-- `routing.decisions[].algorithm.minimum_candidates` keeps a model-free Recipe
+- `recipes[].decisions[].algorithm.minimum_candidates` keeps a model-free Recipe
   portable while making its candidate-pool cardinality executable as soon as
   an Entrypoint assigns Models. Request-time context filtering cannot silently
   reduce the eligible pool below that contract.
@@ -162,7 +164,7 @@ runtime dependency; they do not define routing behavior by themselves.
 - Complexity attaches the same block at
   `global.model_catalog.modules.complexity.backend`, beside `prototype_scoring`
   rather than on a rule, so it survives the per-recipe replacement of
-  `routing.signals`. It reads two contracts and therefore requires `contract`
+  `recipes[].signals`. It reads two contracts and therefore requires `contract`
   to be stated: `score.v1`, where each rule converts the score with its own
   `hard_above`/`easy_below` boundaries, or `label_distribution.v1`, where the
   winning label is the verdict. `threshold` stays the symmetric shorthand for

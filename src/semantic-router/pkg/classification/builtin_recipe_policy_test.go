@@ -175,7 +175,7 @@ func TestBuiltinRecipesReplayDefaultsRespectOperatorOptOut(t *testing.T) {
 	for _, name := range []string{"balance", "speed", "cost", "accuracy", "vault"} {
 		t.Run(name, func(t *testing.T) {
 			cfg := builtinPolicyClassifier(t, name).Config
-			if !cfg.RouterReplay.Enabled || cfg.RouterReplay.StoreBackend != "postgres" || cfg.RouterReplay.TTLSeconds != 604800 {
+			if !cfg.UsesRouterReplay() || cfg.RouterReplay.StoreBackend != "postgres" || cfg.RouterReplay.TTLSeconds != 604800 {
 				t.Fatal("built-in recipes must default to seven-day PostgreSQL Replay")
 			}
 			for _, route := range cfg.Decisions {
@@ -183,7 +183,12 @@ func TestBuiltinRecipesReplayDefaultsRespectOperatorOptOut(t *testing.T) {
 					t.Fatalf("decision %q must inherit Replay capture", route.Name)
 				}
 			}
-			cfg.RouterReplay.Enabled = false
+			cfg.GlobalPlugins = []config.DecisionPlugin{{
+				Type: config.DecisionPluginRouterReplay, Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": false}),
+			}}
+			if err := cfg.LayerPlugins(); err != nil {
+				t.Fatal(err)
+			}
 			for _, route := range cfg.Decisions {
 				if cfg.EffectiveRouterReplayConfig(&route) != nil {
 					t.Fatalf("global opt-out must prevent default capture for decision %q", route.Name)

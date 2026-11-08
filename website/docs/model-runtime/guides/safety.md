@@ -21,33 +21,34 @@ worded, so most deployments use both.
 ## Turn it on
 
 ```yaml
-routing:
-  signals:
-    jailbreak:
-      - name: prompt_attack
-        predicate: {gte: 0.5}
-    safety:
-      - name: unsafe-content
-        predicate: {gte: 0.5}
-  decisions:
-    - name: block-attacks
-      priority: 300
-      rules:
-        operator: AND
-        conditions:
-          - type: jailbreak
-            name: prompt_attack
-      modelRefs:
-        - model: refusal-model
-    - name: handle-content-risk
-      priority: 290
-      rules:
-        operator: AND
-        conditions:
-          - type: safety
-            name: unsafe-content
-      modelRefs:
-        - model: safety-capable-model
+recipes:
+  - name: default
+    signals:
+      jailbreak:
+        - name: prompt_attack
+          predicate: {gte: 0.5}
+      safety:
+        - name: unsafe-content
+          predicate: {gte: 0.5}
+    decisions:
+      - name: block-attacks
+        priority: 300
+        rules:
+          operator: AND
+          conditions:
+            - type: jailbreak
+              name: prompt_attack
+        modelRefs:
+          - model: refusal-model
+      - name: handle-content-risk
+        priority: 290
+        rules:
+          operator: AND
+          conditions:
+            - type: safety
+              name: unsafe-content
+        modelRefs:
+          - model: safety-capable-model
 ```
 
 Without a binding or a rule's own `deployment`, jailbreak and safety rules ask
@@ -79,12 +80,13 @@ global:
         provider: model_runtime
         artifact: vllm-sr/Vela-2.0-0.8B
         device: cpu
-routing:
-  signals:
-    safety:
-      - name: unsafe-content
-        deployment: vela2
-        labels: [Harassment]
+recipes:
+  - name: default
+    signals:
+      safety:
+        - name: unsafe-content
+          deployment: vela2
+          labels: [Harassment]
 ```
 
 To run the jailbreak check on a GPU, describe a deployment and bind it:
@@ -112,21 +114,22 @@ by the signals' deadline) matches a jailbreak rule as `unscanned`, so padding a
 prompt cannot carry an attack past it:
 
 ```yaml
-routing:
-  signals:
-    jailbreak:
-      - name: prompt_attack
-  decisions:
-    - name: block-attacks
-      priority: 300
-      rules:
-        operator: AND
-        on_unknown: fail_request
-        conditions:
-          - type: jailbreak
-            name: prompt_attack
-      modelRefs:
-        - model: refusal-model
+recipes:
+  - name: default
+    signals:
+      jailbreak:
+        - name: prompt_attack
+    decisions:
+      - name: block-attacks
+        priority: 300
+        rules:
+          operator: AND
+          on_unknown: fail_request
+          conditions:
+            - type: jailbreak
+              name: prompt_attack
+        modelRefs:
+          - model: refusal-model
 ```
 
 With `fail_request`, a request that could not be checked is refused.

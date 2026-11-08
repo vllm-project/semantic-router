@@ -12,12 +12,13 @@ import (
 // rules: a unique, well-formed name per type, the stage and input each type
 // takes, labels and ignore_labels among the preset's options, the predicate,
 // and a deployment that answers the compiled question.
-func validateApplicationSignalContracts(cfg *RouterConfig) error {
+func validateApplicationSignalContracts(cfg *RouterConfig) (err error) {
+	defer func() { err = cfg.inRecipe(err) }()
 	seen := map[string]bool{}
 	for _, spec := range cfg.applicationRuleSpecs() {
-		path := "routing.signals." + ApplicationCollections[spec.signalType] + "[" + spec.name + "]"
+		path := "signals." + ApplicationCollections[spec.signalType] + "[" + spec.name + "]"
 		if !validRuleName(spec.name) {
-			return fmt.Errorf("routing.signals.%s: every rule needs a name, trimmed and without ':'", ApplicationCollections[spec.signalType])
+			return fmt.Errorf("signals.%s: every rule needs a name, trimmed and without ':'", ApplicationCollections[spec.signalType])
 		}
 		if seen[spec.signalType+"\x00"+spec.name] {
 			return fmt.Errorf("%s: duplicate name %q", path, spec.name)
@@ -37,9 +38,6 @@ func validateApplicationSignalContracts(cfg *RouterConfig) error {
 		questionTypes, modalities := cfg.deploymentAnswers(deployment)
 		if err := CheckApplicationAnswerer(cfg.ApplicationRulePath(spec.signalType, spec.name), cfg.ScopePath(""), deployment, rule, questionTypes, modalities); err != nil {
 			return err
-		}
-		if err := validateDeclaredQuestionType(cfg, deployment, rule.Rule.Question.Type); err != nil {
-			return fmt.Errorf("%s: %w", path, err)
 		}
 	}
 	return nil
@@ -92,7 +90,7 @@ func validateApplicationLeaf(cfg *RouterConfig, decisionName string, node *RuleN
 	signalType := strings.ToLower(strings.TrimSpace(node.Type))
 	rule, ok := cfg.ApplicationRuleByName(signalType, node.Name)
 	if !ok {
-		return fmt.Errorf("decision '%s': %s condition references unknown signal %q; declare it in routing.signals.%s", decisionName, signalType, node.Name, ApplicationCollections[signalType])
+		return fmt.Errorf("decision '%s': %s condition references unknown signal %q; declare it in the recipe's signals.%s", decisionName, signalType, node.Name, ApplicationCollections[signalType])
 	}
 	if node.Label == "" {
 		if !rule.Rule.MatchesItself() {

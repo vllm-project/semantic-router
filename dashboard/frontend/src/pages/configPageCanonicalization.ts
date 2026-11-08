@@ -1,3 +1,4 @@
+import { fromCanonicalLayout, toCanonicalLayout } from './configPageCanonicalLayout'
 import type {
   BackendRefEntry,
   ConfigData,
@@ -536,7 +537,7 @@ const stripLegacyRootFields = (cfg: ConfigData) => {
   delete rawConfig.provider_profiles
 }
 
-export const canonicalizeConfigForManagerSave = (updatedConfig: ConfigData): ConfigData => {
+const canonicalizeManagerView = (updatedConfig: ConfigData): ConfigData => {
   const next = cloneConfigData(updatedConfig)
   const routing = ensureRoutingConfig(next)
   if (next.signals) {
@@ -558,15 +559,14 @@ export const canonicalizeConfigForManagerSave = (updatedConfig: ConfigData): Con
   promoteLegacyModelBindings(next)
   promoteLegacyGlobalBlocks(next)
   stripLegacyRootFields(next)
-
-  if (!next.version) {
-    next.version = 'v0.3'
-  }
   return next
 }
 
+export const canonicalizeConfigForManagerSave = (updatedConfig: ConfigData): ConfigData =>
+  toCanonicalLayout(canonicalizeManagerView(updatedConfig))
+
 export const projectCanonicalConfigForManager = (data: ConfigData): ConfigData => {
-  const next = canonicalizeConfigForManagerSave(data)
+  const next = canonicalizeManagerView(fromCanonicalLayout(data))
   if (next.routing?.signals) {
     next.signals = cloneUnknown(next.routing.signals)
   }

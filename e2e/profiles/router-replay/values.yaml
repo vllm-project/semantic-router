@@ -4,7 +4,7 @@ image:
   tag: latest
   pullPolicy: Never
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -41,34 +41,10 @@ config:
           - name: shadow-queue-endpoint
             endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    decisions:
-      - name: default_decision
-        description: Default catch-all decision
-        priority: 1
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: openai/gpt-oss-20b
-            use_reasoning: false
-        plugins:
-          - type: router_replay
-            configuration:
-              enabled: true
-              max_records: 1000
-              capture_request_body: true
-              capture_response_body: true
-              max_body_bytes: 65536
-    signals: {}
-    modelCards:
-      - name: openai/gpt-oss-20b
-      - name: openai/shadow-candidate
-      - name: openai/shadow-unreachable
-      - name: openai/shadow-timeout
-      - name: openai/shadow-malformed
-      - name: openai/shadow-queue
   entrypoints:
+    - model_names: [vllm-sr/auto]
+      recipe: default
+      default: true
     - model_names: ["vllm-sr/replay-first"]
       recipe: replay-first
     - model_names: ["vllm-sr/replay-second"]
@@ -88,253 +64,264 @@ config:
     - model_names: ["vllm-sr/shadow-queue"]
       recipe: shadow-queue
   recipes:
+    - name: default
+      decisions:
+        - name: default_decision
+          description: Default catch-all decision
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: false
+          plugins:
+            - type: router_replay
+              configuration:
+                enabled: true
+                max_records: 1000
+                capture_request_body: true
+                capture_response_body: true
+                max_body_bytes: 65536
+      signals: {}
     - name: replay-first
-      routing:
-        strategy: priority
-        signals: {}
-        decisions:
-          - name: shared_replay_decision
-            priority: 1
-            rules:
-              operator: AND
-              conditions: []
-            modelRefs:
-              - model: openai/gpt-oss-20b
-                use_reasoning: false
-            plugins:
-              - type: router_replay
-                configuration:
-                  enabled: true
-                  max_records: 1000
-                  capture_request_body: true
-                  capture_response_body: true
-                  max_body_bytes: 65536
+      strategy: priority
+      signals: {}
+      decisions:
+        - name: shared_replay_decision
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: false
+          plugins:
+            - type: router_replay
+              configuration:
+                enabled: true
+                max_records: 1000
+                capture_request_body: true
+                capture_response_body: true
+                max_body_bytes: 65536
     - name: replay-second
-      routing:
-        strategy: priority
-        signals: {}
-        decisions:
-          - name: shared_replay_decision
-            priority: 1
-            rules:
-              operator: AND
-              conditions: []
-            modelRefs:
-              - model: openai/gpt-oss-20b
-                use_reasoning: false
-            plugins:
-              - type: router_replay
-                configuration:
-                  enabled: true
-                  max_records: 1000
-                  capture_request_body: true
-                  capture_response_body: true
-                  max_body_bytes: 65536
+      strategy: priority
+      signals: {}
+      decisions:
+        - name: shared_replay_decision
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: false
+          plugins:
+            - type: router_replay
+              configuration:
+                enabled: true
+                max_records: 1000
+                capture_request_body: true
+                capture_response_body: true
+                max_body_bytes: 65536
     # Stores client tool results, cut to 32 bytes, for replay.detail readers.
     - name: replay-tool-results
-      routing:
-        strategy: priority
-        signals: {}
-        decisions:
-          - name: tool_results_decision
-            priority: 1
-            rules:
-              operator: AND
-              conditions: []
-            modelRefs:
-              - model: openai/gpt-oss-20b
-                use_reasoning: false
-            plugins:
-              - type: router_replay
-                configuration:
-                  enabled: true
-                  max_records: 1000
-                  capture_request_body: true
-                  capture_response_body: true
-                  capture_tool_results: true
-                  max_body_bytes: 65536
-                  max_tool_trace_bytes: 32
+      strategy: priority
+      signals: {}
+      decisions:
+        - name: tool_results_decision
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: false
+          plugins:
+            - type: router_replay
+              configuration:
+                enabled: true
+                max_records: 1000
+                capture_request_body: true
+                capture_response_body: true
+                capture_tool_results: true
+                max_body_bytes: 65536
+                max_tool_trace_bytes: 32
     - name: shadow-ok
-      routing:
-        strategy: priority
-        signals: {}
-        decisions:
-          - name: shadow_decision
-            priority: 1
-            rules:
-              operator: AND
-              conditions: []
-            modelRefs:
-              - model: openai/gpt-oss-20b
-                use_reasoning: false
-            plugins:
-              - type: router_replay
-                configuration:
-                  enabled: true
-                  max_records: 1000
-                  capture_request_body: true
-                  capture_response_body: true
-                  max_body_bytes: 65536
-                  shadow:
-                    model: openai/shadow-candidate
-                    sample_rate: 1.0
-                    max_concurrency: 2
-                    max_queue_depth: 8
-                    timeout_seconds: 20
-                    max_response_bytes: 1048576
-                    max_retries: 0
-                    capture_response_body: false
+      strategy: priority
+      signals: {}
+      decisions:
+        - name: shadow_decision
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: false
+          plugins:
+            - type: router_replay
+              configuration:
+                enabled: true
+                max_records: 1000
+                capture_request_body: true
+                capture_response_body: true
+                max_body_bytes: 65536
+                shadow:
+                  model: openai/shadow-candidate
+                  sample_rate: 1.0
+                  max_concurrency: 2
+                  max_queue_depth: 8
+                  timeout_seconds: 20
+                  max_response_bytes: 1048576
+                  max_retries: 0
+                  capture_response_body: false
     - name: shadow-judge
-      routing:
-        strategy: priority
-        signals: {}
-        decisions:
-          - name: shadow_judge_decision
-            priority: 1
-            rules:
-              operator: AND
-              conditions: []
-            modelRefs:
-              - model: openai/gpt-oss-20b
-                use_reasoning: false
-            plugins:
-              - type: router_replay
-                configuration:
-                  enabled: true
-                  max_records: 1000
-                  capture_request_body: true
+      strategy: priority
+      signals: {}
+      decisions:
+        - name: shadow_judge_decision
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: false
+          plugins:
+            - type: router_replay
+              configuration:
+                enabled: true
+                max_records: 1000
+                capture_request_body: true
+                capture_response_body: true
+                max_body_bytes: 65536
+                shadow:
+                  model: openai/shadow-candidate
+                  sample_rate: 1.0
+                  max_concurrency: 2
+                  max_queue_depth: 8
+                  timeout_seconds: 20
+                  max_response_bytes: 1048576
+                  max_retries: 0
                   capture_response_body: true
-                  max_body_bytes: 65536
-                  shadow:
-                    model: openai/shadow-candidate
-                    sample_rate: 1.0
-                    max_concurrency: 2
-                    max_queue_depth: 8
-                    timeout_seconds: 20
-                    max_response_bytes: 1048576
-                    max_retries: 0
-                    capture_response_body: true
-                    max_capture_bytes: 4096
+                  max_capture_bytes: 4096
     - name: shadow-timeout
-      routing:
-        strategy: priority
-        signals: {}
-        decisions:
-          - name: shadow_timeout_decision
-            priority: 1
-            rules:
-              operator: AND
-              conditions: []
-            modelRefs:
-              - model: openai/gpt-oss-20b
-                use_reasoning: false
-            plugins:
-              - type: router_replay
-                configuration:
-                  enabled: true
-                  max_records: 1000
-                  capture_request_body: false
-                  capture_response_body: true
-                  max_body_bytes: 65536
-                  shadow:
-                    model: openai/shadow-timeout
-                    sample_rate: 1.0
-                    max_concurrency: 1
-                    max_queue_depth: 1
-                    timeout_seconds: 5
-                    max_response_bytes: 1048576
-                    max_retries: 0
-                    capture_response_body: false
+      strategy: priority
+      signals: {}
+      decisions:
+        - name: shadow_timeout_decision
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: false
+          plugins:
+            - type: router_replay
+              configuration:
+                enabled: true
+                max_records: 1000
+                capture_request_body: false
+                capture_response_body: true
+                max_body_bytes: 65536
+                shadow:
+                  model: openai/shadow-timeout
+                  sample_rate: 1.0
+                  max_concurrency: 1
+                  max_queue_depth: 1
+                  timeout_seconds: 5
+                  max_response_bytes: 1048576
+                  max_retries: 0
+                  capture_response_body: false
     - name: shadow-malformed
-      routing:
-        strategy: priority
-        signals: {}
-        decisions:
-          - name: shadow_malformed_decision
-            priority: 1
-            rules:
-              operator: AND
-              conditions: []
-            modelRefs:
-              - model: openai/gpt-oss-20b
-                use_reasoning: false
-            plugins:
-              - type: router_replay
-                configuration:
-                  enabled: true
-                  max_records: 1000
-                  capture_request_body: false
-                  capture_response_body: true
-                  max_body_bytes: 65536
-                  shadow:
-                    model: openai/shadow-malformed
-                    sample_rate: 1.0
-                    max_concurrency: 1
-                    max_queue_depth: 1
-                    timeout_seconds: 5
-                    max_response_bytes: 1048576
-                    max_retries: 0
-                    capture_response_body: false
+      strategy: priority
+      signals: {}
+      decisions:
+        - name: shadow_malformed_decision
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: false
+          plugins:
+            - type: router_replay
+              configuration:
+                enabled: true
+                max_records: 1000
+                capture_request_body: false
+                capture_response_body: true
+                max_body_bytes: 65536
+                shadow:
+                  model: openai/shadow-malformed
+                  sample_rate: 1.0
+                  max_concurrency: 1
+                  max_queue_depth: 1
+                  timeout_seconds: 5
+                  max_response_bytes: 1048576
+                  max_retries: 0
+                  capture_response_body: false
     - name: shadow-queue
-      routing:
-        strategy: priority
-        signals: {}
-        decisions:
-          - name: shadow_queue_decision
-            priority: 1
-            rules:
-              operator: AND
-              conditions: []
-            modelRefs:
-              - model: openai/gpt-oss-20b
-                use_reasoning: false
-            plugins:
-              - type: router_replay
-                configuration:
-                  enabled: true
-                  max_records: 1000
-                  capture_request_body: false
-                  capture_response_body: true
-                  max_body_bytes: 65536
-                  shadow:
-                    model: openai/shadow-queue
-                    sample_rate: 1.0
-                    max_concurrency: 1
-                    max_queue_depth: 1
-                    timeout_seconds: 30
-                    max_response_bytes: 1048576
-                    max_retries: 0
-                    capture_response_body: false
+      strategy: priority
+      signals: {}
+      decisions:
+        - name: shadow_queue_decision
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: false
+          plugins:
+            - type: router_replay
+              configuration:
+                enabled: true
+                max_records: 1000
+                capture_request_body: false
+                capture_response_body: true
+                max_body_bytes: 65536
+                shadow:
+                  model: openai/shadow-queue
+                  sample_rate: 1.0
+                  max_concurrency: 1
+                  max_queue_depth: 1
+                  timeout_seconds: 30
+                  max_response_bytes: 1048576
+                  max_retries: 0
+                  capture_response_body: false
     - name: shadow-down
-      routing:
-        strategy: priority
-        signals: {}
-        decisions:
-          - name: shadow_decision
-            priority: 1
-            rules:
-              operator: AND
-              conditions: []
-            modelRefs:
-              - model: openai/gpt-oss-20b
-                use_reasoning: false
-            plugins:
-              - type: router_replay
-                configuration:
-                  enabled: true
-                  max_records: 1000
-                  capture_request_body: false
-                  capture_response_body: true
-                  max_body_bytes: 65536
-                  shadow:
-                    model: openai/shadow-unreachable
-                    sample_rate: 1.0
-                    max_concurrency: 2
-                    max_queue_depth: 8
-                    timeout_seconds: 5
-                    max_response_bytes: 1048576
-                    max_retries: 0
-                    capture_response_body: false
+      strategy: priority
+      signals: {}
+      decisions:
+        - name: shadow_decision
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: false
+          plugins:
+            - type: router_replay
+              configuration:
+                enabled: true
+                max_records: 1000
+                capture_request_body: false
+                capture_response_body: true
+                max_body_bytes: 65536
+                shadow:
+                  model: openai/shadow-unreachable
+                  sample_rate: 1.0
+                  max_concurrency: 2
+                  max_queue_depth: 8
+                  timeout_seconds: 5
+                  max_response_bytes: 1048576
+                  max_retries: 0
+                  capture_response_body: false
   global:
     router:
       strategy: priority
@@ -380,9 +367,6 @@ config:
       observability:
         tracing:
           enabled: false
-    stores:
-      response_cache:
-        enabled: false
 resources:
   limits:
     cpu: '2'

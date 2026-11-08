@@ -3,14 +3,14 @@ package config
 import "reflect"
 
 func assertSupportedSignalTypesInReferenceConfig(t testingT, root map[string]interface{}) {
-	signals := mustMapAt(t, root, "routing", "signals")
+	signals := mustMapAt(t, referenceDefaultRecipe(t, mustSliceAt(t, root, "recipes")), "signals")
 	for _, signalType := range SupportedSignalTypes() {
 		entry, ok := LookupSignalCatalog(signalType)
 		if !ok {
 			t.Fatalf("missing canonical signal catalog entry for %q", signalType)
 		}
 		if len(mustSliceAt(t, signals, entry.Collection)) == 0 {
-			t.Fatalf("config/config.yaml must include at least one %s signal under routing.signals.%s", signalType, entry.Collection)
+			t.Fatalf("config/config.yaml must include at least one %s signal under recipes[default].signals.%s", signalType, entry.Collection)
 		}
 	}
 }
@@ -23,19 +23,19 @@ func assertSupportedAlgorithmsInReferenceConfig(t testingT, decisions []interfac
 		}
 	}
 	assertReferenceEscalateAlgorithmCoverage(t, decisions)
-	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["ratings"], "ratings"), reflect.TypeOf(RatingsAlgorithmConfig{}), "routing.decisions[].algorithm.ratings")
-	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["remom"], "remom"), reflect.TypeOf(ReMoMAlgorithmConfig{}), "routing.decisions[].algorithm.remom")
-	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["fusion"], "fusion"), reflect.TypeOf(FusionAlgorithmConfig{}), "routing.decisions[].algorithm.fusion")
+	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["ratings"], "ratings"), reflect.TypeOf(RatingsAlgorithmConfig{}), "recipes[default].decisions[].algorithm.ratings")
+	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["remom"], "remom"), reflect.TypeOf(ReMoMAlgorithmConfig{}), "recipes[default].decisions[].algorithm.remom")
+	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["fusion"], "fusion"), reflect.TypeOf(FusionAlgorithmConfig{}), "recipes[default].decisions[].algorithm.fusion")
 	multiFactor := mustMapAt(t, algorithmsByType["multi_factor"], "multi_factor")
-	assertMapCoversStructFields(t, multiFactor, reflect.TypeOf(MultiFactorSelectionConfig{}), "routing.decisions[].algorithm.multi_factor")
-	assertMapCoversStructFields(t, mustMapAt(t, multiFactor, "quality"), reflect.TypeOf(QualityEvidenceConfig{}), "routing.decisions[].algorithm.multi_factor.quality")
+	assertMapCoversStructFields(t, multiFactor, reflect.TypeOf(MultiFactorSelectionConfig{}), "recipes[default].decisions[].algorithm.multi_factor")
+	assertMapCoversStructFields(t, mustMapAt(t, multiFactor, "quality"), reflect.TypeOf(QualityEvidenceConfig{}), "recipes[default].decisions[].algorithm.multi_factor.quality")
 }
 
 // The Chat escalate decision covers the accept settings; the System One one
 // lives in a native recipe.
 func assertReferenceEscalateAlgorithmCoverage(t testingT, decisions []interface{}) {
 	var escalate map[string]interface{}
-	for _, algorithm := range collectChildMapsFromSlice(t, decisions, "algorithm", "routing.decisions") {
+	for _, algorithm := range collectChildMapsFromSlice(t, decisions, "algorithm", "recipes[default].decisions") {
 		if block, ok := algorithm["escalate"].(map[string]interface{}); ok && algorithm["type"] == DecisionAlgorithmEscalate && block["accept"] != nil {
 			escalate = algorithm
 		}
@@ -43,11 +43,11 @@ func assertReferenceEscalateAlgorithmCoverage(t testingT, decisions []interface{
 	if escalate == nil {
 		t.Fatalf("config/config.yaml must include a Chat escalate decision")
 	}
-	requireMapKeys(t, escalate, "routing.decisions[].algorithm(type=escalate)", "type", "budget", "on_error", "escalate")
-	requireMapKeys(t, mustMapAt(t, escalate, "escalate"), "routing.decisions[].algorithm.escalate", "order", "accept")
+	requireMapKeys(t, escalate, "recipes[default].decisions[].algorithm(type=escalate)", "type", "budget", "on_error", "escalate")
+	requireMapKeys(t, mustMapAt(t, escalate, "escalate"), "recipes[default].decisions[].algorithm.escalate", "order", "accept")
 	confidence := mustMapAt(t, escalate, "escalate", "accept", "confidence")
-	assertMapCoversStructFields(t, confidence, reflect.TypeOf(EscalateConfidence{}), "routing.decisions[].algorithm.escalate.accept.confidence")
-	assertMapCoversStructFields(t, mustMapAt(t, confidence, "hybrid_weights"), reflect.TypeOf(HybridWeightsConfig{}), "routing.decisions[].algorithm.escalate.accept.confidence.hybrid_weights")
+	assertMapCoversStructFields(t, confidence, reflect.TypeOf(EscalateConfidence{}), "recipes[default].decisions[].algorithm.escalate.accept.confidence")
+	assertMapCoversStructFields(t, mustMapAt(t, confidence, "hybrid_weights"), reflect.TypeOf(HybridWeightsConfig{}), "recipes[default].decisions[].algorithm.escalate.accept.confidence.hybrid_weights")
 }
 
 func assertSupportedPluginsInReferenceConfig(t testingT, decisions []interface{}) {
@@ -120,7 +120,7 @@ func assertReferenceNestedPluginCoverage(t testingT, pluginsByType map[string][]
 func assertReferenceContextSourceCoverage(t testingT, plugins []map[string]interface{}) {
 	configs := collectChildMapsFromSlice(t, plugins, "configuration", "plugins(context)")
 	sources := collectNestedSliceItems(t, configs, "sources", "plugins(context).configuration")
-	assertSliceUnionCoversStructFields(t, sources, reflect.TypeOf(ContextSource{}), "routing.decisions[].plugins[type=context].configuration.sources")
+	assertSliceUnionCoversStructFields(t, sources, reflect.TypeOf(ContextSource{}), "recipes[default].decisions[].plugins[type=context].configuration.sources")
 	var ragSources, memorySources []map[string]interface{}
 	for _, item := range sources {
 		source, ok := item.(map[string]interface{})
@@ -154,13 +154,13 @@ func assertReferenceHeaderMutationCoverage(t testingT, plugins []map[string]inte
 		t,
 		collectNestedSliceItems(t, configs, "add", "plugins(header_mutation).configuration"),
 		reflect.TypeOf(HeaderPair{}),
-		"routing.decisions[].plugins[type=header_mutation].configuration.add",
+		"recipes[default].decisions[].plugins[type=header_mutation].configuration.add",
 	)
 	assertSliceUnionCoversStructFields(
 		t,
 		collectNestedSliceItems(t, configs, "update", "plugins(header_mutation).configuration"),
 		reflect.TypeOf(HeaderPair{}),
-		"routing.decisions[].plugins[type=header_mutation].configuration.update",
+		"recipes[default].decisions[].plugins[type=header_mutation].configuration.update",
 	)
 }
 
@@ -169,35 +169,35 @@ func assertDecisionRuleCompositionInReferenceConfig(t testingT, decisions []inte
 	ruleTypes := make(map[string]bool)
 
 	for _, rawDecision := range decisions {
-		decision := mustMapValue(t, rawDecision, "routing.decisions")
+		decision := mustMapValue(t, rawDecision, "recipes[default].decisions")
 		collectRuleCoverage(t, mustMapAt(t, decision, "rules"), ruleOperators, ruleTypes)
 	}
 	for _, operator := range []string{"AND", "OR", "NOT"} {
 		if !ruleOperators[operator] {
-			t.Fatalf("config/config.yaml must exercise %s rule composition in routing.decisions", operator)
+			t.Fatalf("config/config.yaml must exercise %s rule composition in recipes[default].decisions", operator)
 		}
 	}
 }
 
 func assertReferenceLoRACatalogCoverage(t testingT, root map[string]interface{}) {
-	modelCards := mustSliceAt(t, root, "routing", "modelCards")
-	if len(collectNestedSliceItems(t, modelCards, "loras", "routing.modelCards")) == 0 {
-		t.Fatalf("config/config.yaml must declare at least one routing.modelCards[].loras entry")
+	models := mustSliceAt(t, root, "providers", "models")
+	if len(collectNestedSliceItems(t, models, "loras", "providers.models")) == 0 {
+		t.Fatalf("config/config.yaml must declare at least one providers.models[].loras entry")
 	}
 
-	decisions := mustSliceAt(t, root, "routing", "decisions")
-	modelRefs := collectNestedSliceItems(t, decisions, "modelRefs", "routing.decisions")
+	decisions := mustSliceAt(t, referenceDefaultRecipe(t, mustSliceAt(t, root, "recipes")), "decisions")
+	modelRefs := collectNestedSliceItems(t, decisions, "modelRefs", "recipes[default].decisions")
 	for _, rawModelRef := range modelRefs {
-		modelRef := mustMapValue(t, rawModelRef, "routing.decisions[].modelRefs")
+		modelRef := mustMapValue(t, rawModelRef, "recipes[default].decisions[].modelRefs")
 		if _, ok := modelRef["lora_name"]; ok {
 			return
 		}
 	}
-	t.Fatalf("config/config.yaml must exercise routing.decisions[].modelRefs[].lora_name")
+	t.Fatalf("config/config.yaml must exercise recipes[default].decisions[].modelRefs[].lora_name")
 }
 
 func referenceAlgorithmsByType(t testingT, decisions []interface{}) map[string]map[string]interface{} {
-	algorithms := collectChildMapsFromSlice(t, decisions, "algorithm", "routing.decisions")
+	algorithms := collectChildMapsFromSlice(t, decisions, "algorithm", "recipes[default].decisions")
 	result := make(map[string]map[string]interface{}, len(algorithms))
 	for _, rawAlgorithm := range algorithms {
 		algorithmType := mustStringAt(t, rawAlgorithm, "type")
@@ -208,8 +208,8 @@ func referenceAlgorithmsByType(t testingT, decisions []interface{}) map[string]m
 
 func referencePluginsByType(t testingT, decisions []interface{}) map[string][]map[string]interface{} {
 	result := make(map[string][]map[string]interface{})
-	for _, rawPlugin := range collectNestedSliceItems(t, decisions, "plugins", "routing.decisions") {
-		plugin := mustMapValue(t, rawPlugin, "routing.decisions[].plugins")
+	for _, rawPlugin := range collectNestedSliceItems(t, decisions, "plugins", "recipes[default].decisions") {
+		plugin := mustMapValue(t, rawPlugin, "recipes[default].decisions[].plugins")
 		pluginType := mustStringAt(t, plugin, "type")
 		result[pluginType] = append(result[pluginType], plugin)
 	}

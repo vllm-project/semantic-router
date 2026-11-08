@@ -14,7 +14,7 @@ from pydantic import ValidationError
 REVISION = "cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764"
 
 BASE = {
-    "version": "v0.3",
+    "version": "v0.5",
     "listeners": [{"name": "http", "address": "0.0.0.0", "port": 8899}],
     "providers": {
         "defaults": {"model": "small"},
@@ -34,54 +34,60 @@ BASE = {
             }
         }
     },
-    "routing": {
-        "modelCards": [{"name": "small"}, {"name": "large"}],
-        "signals": {
-            "systemone": [
-                {
-                    "name": "request_kind",
-                    "deployment": "decision-kai",
-                    "question": {
-                        "type": "choice",
-                        "instructions": "What kind of request is this?",
-                        "choices": [{"key": "code"}, {"key": "chat"}],
-                    },
-                },
-                {
-                    "name": "needs_reasoning",
-                    "deployment": "decision-kai",
-                    "question": {"type": "noul", "instructions": "Reasoning?"},
-                    "predicate": {"gte": 0.7},
-                },
-            ]
-        },
-        "decisions": [
-            {
-                "name": "code",
-                "priority": 10,
-                "rules": {
-                    "operator": "AND",
-                    "conditions": [
-                        {"type": "systemone", "name": "request_kind", "label": "code"},
-                        {
-                            "type": "systemone",
-                            "name": "needs_reasoning",
-                            "on_error": "no_match",
-                        },
-                    ],
-                },
-                "modelRefs": [{"model": "small"}, {"model": "large"}],
-                "algorithm": {
-                    "type": "systemone",
-                    "systemone": {
+    "recipes": [
+        {
+            "name": "default",
+            "signals": {
+                "systemone": [
+                    {
+                        "name": "request_kind",
                         "deployment": "decision-kai",
-                        "instructions": "Which model should answer?",
-                        "candidates": {"large": "Strong reasoning"},
+                        "question": {
+                            "type": "choice",
+                            "instructions": "What kind of request is this?",
+                            "choices": [{"key": "code"}, {"key": "chat"}],
+                        },
                     },
-                },
-            }
-        ],
-    },
+                    {
+                        "name": "needs_reasoning",
+                        "deployment": "decision-kai",
+                        "question": {"type": "noul", "instructions": "Reasoning?"},
+                        "predicate": {"gte": 0.7},
+                    },
+                ]
+            },
+            "decisions": [
+                {
+                    "name": "code",
+                    "priority": 10,
+                    "rules": {
+                        "operator": "AND",
+                        "conditions": [
+                            {
+                                "type": "systemone",
+                                "name": "request_kind",
+                                "label": "code",
+                            },
+                            {
+                                "type": "systemone",
+                                "name": "needs_reasoning",
+                                "on_error": "no_match",
+                            },
+                        ],
+                    },
+                    "modelRefs": [{"model": "small"}, {"model": "large"}],
+                    "algorithm": {
+                        "type": "systemone",
+                        "systemone": {
+                            "deployment": "decision-kai",
+                            "instructions": "Which model should answer?",
+                            "candidates": {"large": "Strong reasoning"},
+                        },
+                    },
+                }
+            ],
+        }
+    ],
 }
 
 
@@ -98,11 +104,11 @@ def _errors(document: dict) -> list[str]:
 
 
 def _rules(document: dict) -> list[dict]:
-    return document["routing"]["signals"]["systemone"]
+    return document["recipes"][0]["signals"]["systemone"]
 
 
 def _conditions(document: dict) -> list[dict]:
-    return document["routing"]["decisions"][0]["rules"]["conditions"]
+    return document["recipes"][0]["decisions"][0]["rules"]["conditions"]
 
 
 def test_valid_systemone_config_passes():
@@ -304,7 +310,7 @@ def test_condition_labels_follow_the_question_type():
 
 def test_selector_candidates_must_be_model_refs():
     def mutate(document):
-        selector = document["routing"]["decisions"][0]["algorithm"]["systemone"]
+        selector = document["recipes"][0]["decisions"][0]["algorithm"]["systemone"]
         selector["candidates"] = {"other": "x"}
 
     assert any(
@@ -314,12 +320,12 @@ def test_selector_candidates_must_be_model_refs():
 
 def test_selector_candidate_count_applies_once_models_are_assigned():
     def model_free(document):
-        decision = document["routing"]["decisions"][0]
+        decision = document["recipes"][0]["decisions"][0]
         del decision["modelRefs"]
         del decision["algorithm"]["systemone"]["candidates"]
 
     def one_model(document):
-        document["routing"]["decisions"][0]["modelRefs"] = [{"model": "small"}]
+        document["recipes"][0]["decisions"][0]["modelRefs"] = [{"model": "small"}]
 
     assert _errors(_config(model_free)) == []
     assert any("modelRefs to choose from" in e for e in _errors(_config(one_model)))
@@ -327,7 +333,9 @@ def test_selector_candidate_count_applies_once_models_are_assigned():
 
 def test_selector_without_deployment_asks_the_decision_model():
     def omit(document):
-        del document["routing"]["decisions"][0]["algorithm"]["systemone"]["deployment"]
+        del document["recipes"][0]["decisions"][0]["algorithm"]["systemone"][
+            "deployment"
+        ]
 
     assert _errors(_config(omit)) == []
 
@@ -340,7 +348,7 @@ def test_selector_without_deployment_asks_the_decision_model():
     assert _errors(_config(alternate)) == []
 
     def blank(document):
-        document["routing"]["decisions"][0]["algorithm"]["systemone"][
+        document["recipes"][0]["decisions"][0]["algorithm"]["systemone"][
             "deployment"
         ] = " "
 
@@ -350,7 +358,7 @@ def test_selector_without_deployment_asks_the_decision_model():
 
 def test_systemone_type_requires_its_configuration():
     def mutate(document):
-        document["routing"]["decisions"][0]["algorithm"] = {"type": "systemone"}
+        document["recipes"][0]["decisions"][0]["algorithm"] = {"type": "systemone"}
 
     with pytest.raises(ValidationError, match="requires systemone configuration"):
         UserConfig.model_validate(_config(mutate))
@@ -429,7 +437,7 @@ def test_decision_window_input_is_a_supported_scan_budget():
 def _ask_the_default_decision_model(document):
     for rule in _rules(document):
         del rule["deployment"]
-    del document["routing"]["decisions"][0]["algorithm"]["systemone"]["deployment"]
+    del document["recipes"][0]["decisions"][0]["algorithm"]["systemone"]["deployment"]
     document["global"]["model_catalog"]["system"] = {
         "decision_model": {"deployment": "decision-kai"}
     }
@@ -464,7 +472,7 @@ def test_the_decision_forms_are_read_as_systemone(tmp_path):
     Router does: as systemone."""
 
     def written_as_decision(document):
-        routing = document["routing"]
+        routing = document["recipes"][0]
         routing["signals"]["decision"] = routing["signals"].pop("systemone")
         for condition in _conditions(document):
             condition["type"] = "decision"

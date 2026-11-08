@@ -14,10 +14,7 @@ from cli.models import UserConfig
 from cli.runtime_stack import resolve_runtime_stack
 from cli.validator import validate_user_config
 
-SOURCE = (
-    "version: v0.3\nlisteners:\n- name: main\n  address: 0.0.0.0\n  port: 8888\n"
-    "global:\n  model_catalog:\n    deployments:\n      candidate:\n        provider: model_runtime\n        artifact: vllm-sr/Decision-2.0-Kai-0.6B\n        device: cpu\n      gpu:\n        provider: model_runtime\n        artifact: vllm-sr/Vela-2.0-4B\n        device: rocm\n  services:\n    observability:\n      tracing:\n        enabled: false\n"
-)
+SOURCE = "version: v0.5\nlisteners:\n  - name: main\n    address: 0.0.0.0\n    port: 8888\nglobal:\n  model_catalog:\n    deployments:\n      candidate:\n        provider: model_runtime\n        artifact: vllm-sr/Decision-2.0-Kai-0.6B\n        device: cpu\n      gpu:\n        provider: model_runtime\n        artifact: vllm-sr/Vela-2.0-4B\n        device: rocm\n  services:\n    observability:\n      tracing:\n        enabled: false\n"
 
 
 def _system(document):
@@ -139,21 +136,23 @@ def _document(system=None):
         "defaults": {"model": "small"},
         "models": [{"name": "small", "backend_refs": [{"endpoint": "small:8000"}]}],
     }
-    document["routing"] = {
-        "modelCards": [{"name": "small"}],
-        "signals": {"systemone": [dict(QUESTION)]},
-        "decisions": [
-            {
-                "name": "tools",
-                "priority": 10,
-                "rules": {
-                    "operator": "AND",
-                    "conditions": [{"type": "systemone", "name": "needs_tools"}],
-                },
-                "modelRefs": [{"model": "small"}],
-            }
-        ],
-    }
+    document["recipes"] = [
+        {
+            "name": "default",
+            "signals": {"systemone": [dict(QUESTION)]},
+            "decisions": [
+                {
+                    "name": "tools",
+                    "priority": 10,
+                    "rules": {
+                        "operator": "AND",
+                        "conditions": [{"type": "systemone", "name": "needs_tools"}],
+                    },
+                    "modelRefs": [{"model": "small"}],
+                }
+            ],
+        }
+    ]
     if system is not None:
         document["global"]["model_catalog"]["system"] = system
     return document

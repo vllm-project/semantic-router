@@ -43,6 +43,7 @@ from .context_bands import normalize_token_count, validate_context_band
 from .durations import parse_duration
 
 RoutingStrategy = Literal["priority", "confidence"]
+DEFAULT_RECIPE_NAME = "default"
 MAX_DECISION_ANNOTATIONS = 32
 MAX_DECISION_ANNOTATION_BYTES = 4096
 # Condition types whose conditions may name one of the rule's options.
@@ -1842,25 +1843,8 @@ class Reasoning(BaseModel):
         return self
 
 
-class Model(BaseModel):
-    """Provider model binding under the existing providers.models hierarchy."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    name: str
-    catalog: Optional[str] = None
-    reasoning: Optional[Reasoning] = None
-    provider_model_id: Optional[str] = None
-    deployment: Optional[str] = None
-    backend_refs: List["BackendRef"] = Field(default_factory=list)
-    pricing: Optional[ModelPricing] = None
-    reliability: Optional[ProviderReliability] = None
-    api_format: Optional[str] = None
-    external_model_ids: Optional[Dict[str, str]] = None
-
-
 class LoRAAdapter(BaseModel):
-    """LoRA adapter metadata exposed under routing.modelCards[].loras."""
+    """LoRA adapter metadata exposed under providers.models[].loras."""
 
     name: str
     description: Optional[str] = None
@@ -2067,12 +2051,12 @@ class RoutingModelDistribution(BaseModel):
     license: Optional[str] = None
 
 
-class RoutingModel(BaseModel):
-    """Handwritten custom card or explicit overlay of a built-in card."""
+class ModelFacts(BaseModel):
+    """What routing reads about a model: a handwritten card, or an explicit
+    overlay of its built-in card."""
 
     model_config = ConfigDict(extra="forbid")
 
-    name: str
     display_name: Optional[str] = None
     publisher: Optional[str] = None
     presentation: Optional[RoutingModelPresentation] = None
@@ -2098,6 +2082,38 @@ class RoutingModel(BaseModel):
         if isinstance(value, (date, datetime)):
             return value.isoformat()
         return value
+
+
+MODEL_FACT_FIELDS = tuple(ModelFacts.model_fields)
+
+
+class Model(ModelFacts):
+    """A providers.models[] entry: its transport, and the facts routing reads
+    about it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    catalog: Optional[str] = None
+    reasoning: Optional[Reasoning] = None
+    provider_model_id: Optional[str] = None
+    deployment: Optional[str] = None
+    backend_refs: List["BackendRef"] = Field(default_factory=list)
+    pricing: Optional[ModelPricing] = None
+    reliability: Optional[ProviderReliability] = None
+    api_format: Optional[str] = None
+    external_model_ids: Optional[Dict[str, str]] = None
+
+    def declares_facts(self) -> bool:
+        return any(getattr(self, field) is not None for field in MODEL_FACT_FIELDS)
+
+    def states_only_facts(self) -> bool:
+        """A name and facts, and no transport: a model routing reads about,
+        which the Router does not serve."""
+        transport = self.model_dump(exclude_none=True, exclude_defaults=True)
+        for field in ("name", *MODEL_FACT_FIELDS):
+            transport.pop(field, None)
+        return not transport
 
 
 class ReasoningFamily(BaseModel):
@@ -2268,21 +2284,6 @@ class CandidateRequirements(BaseModel):
     context: Optional[Literal["known_limits"]] = None
 
 
-class Routing(BaseModel):
-    """Canonical routing block."""
-
-    model_config = ConfigDict(populate_by_name=True, extra="forbid")
-
-    model_cards: List[RoutingModel] = Field(default_factory=list, alias="modelCards")
-    model_bindings: Dict[str, ModelBinding] = Field(default_factory=dict)
-    candidate_requirements: Optional[CandidateRequirements] = None
-    signals: Signals = Field(default_factory=Signals)
-    projections: Projections = Field(default_factory=Projections)
-    decisions: List[Decision] = Field(default_factory=list)
-    strategy: Optional[RoutingStrategy] = None
-    fallback: Optional[FallbackPolicy] = None
-
-
 class Entrypoint(BaseModel):
     """Request-facing virtual model names mapped to one routing recipe."""
 
@@ -2291,6 +2292,7 @@ class Entrypoint(BaseModel):
     api: Literal["chat", "systemone"] | None = None
     model_names: List[str] = Field(min_length=1)
     recipe: str = Field(min_length=1)
+    default: Optional[bool] = None
 
     @field_validator("model_names", mode="before")
     @classmethod
@@ -2313,28 +2315,22 @@ class Entrypoint(BaseModel):
         return normalized
 
 
-class RecipeRouting(BaseModel):
-    """Recipe-owned routing profile; the shared model catalog stays top-level."""
+class Recipe(BaseModel):
+    """A routing profile: its signals, projections, decisions and policy. The
+    shared model catalog is providers.models."""
 
     model_config = ConfigDict(extra="forbid")
 
+    name: str = Field(min_length=1)
+    description: Optional[str] = None
     model_bindings: Dict[str, ModelBinding] = Field(default_factory=dict)
+    plugins: Optional[List[PluginConfig]] = None
     candidate_requirements: Optional[CandidateRequirements] = None
     signals: Signals = Field(default_factory=Signals)
     projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
     strategy: Optional[RoutingStrategy] = None
     fallback: Optional[FallbackPolicy] = None
-
-
-class Recipe(BaseModel):
-    """Named routing profile selected through an entrypoint."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    name: str = Field(min_length=1)
-    description: Optional[str] = None
-    routing: RecipeRouting = Field(default_factory=RecipeRouting)
 
     @field_validator("name")
     @classmethod
@@ -2346,7 +2342,7 @@ class Recipe(BaseModel):
 
 
 class UserConfig(BaseModel):
-    """Canonical v0.3 user configuration."""
+    """Canonical v0.5 user configuration."""
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
@@ -2354,9 +2350,8 @@ class UserConfig(BaseModel):
     listeners: List[Listener] = Field(default_factory=list)
     providers: Providers = Field(default_factory=Providers)
     evaluation: Optional[Evaluation] = None
-    routing: Routing = Field(default_factory=Routing)
-    entrypoints: List[Entrypoint] = Field(default_factory=list)
     recipes: List[Recipe] = Field(default_factory=list)
+    entrypoints: List[Entrypoint] = Field(default_factory=list)
     global_: Optional[Dict[str, Any]] = Field(default=None, alias="global")
     setup: Optional[Dict[str, Any]] = None
 
@@ -2374,12 +2369,28 @@ class UserConfig(BaseModel):
         return router.get("enabled", True)
 
     @property
+    def default_recipe(self) -> Recipe:
+        """The only recipe, or the one the entrypoint marked default maps; an
+        empty recipe named default without either."""
+        if len(self.recipes) == 1:
+            return self.recipes[0]
+        for entrypoint in self.entrypoints:
+            if entrypoint.default:
+                for recipe in self.recipes:
+                    if recipe.name == entrypoint.recipe:
+                        return recipe
+        for recipe in self.recipes:
+            if recipe.name == DEFAULT_RECIPE_NAME:
+                return recipe
+        return Recipe(name=DEFAULT_RECIPE_NAME)
+
+    @property
     def signals(self) -> Signals:
-        return self.routing.signals
+        return self.default_recipe.signals
 
     @property
     def decisions(self) -> List[Decision]:
-        return self.routing.decisions
+        return self.default_recipe.decisions
 
 
 # Resolve forward references for recursive condition trees.

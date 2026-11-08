@@ -21,7 +21,7 @@ func TestDecisionPublicIdentityNeverUsesRuntimePrivateNames(t *testing.T) {
 func TestSystemOneListenerIsExactModelDemand(t *testing.T) {
 	cfg := DefaultGlobalConfig()
 	// The response cache's semantic tier would demand the embedding model.
-	cfg.SemanticCache.Enabled = false
+	cfg.SemanticCache.InUse = false
 	cfg.ModelDeployments["published"] = ModelDeployment{Provider: ModelRuntimeProvider, Artifact: "org/decision", PublicName: "public-model"}
 	cfg.ModelDeployments["unused"] = ModelDeployment{Provider: ModelRuntimeProvider, Artifact: "org/other"}
 	cfg.Listeners = []Listener{{Name: "public", SystemOne: &ListenerSystemOne{Models: []string{"public-model"}}}}

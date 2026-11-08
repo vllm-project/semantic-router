@@ -1,13 +1,12 @@
-version: v0.3
+version: v0.5
 listeners:
-- address: 0.0.0.0
-  name: http-8899
-  port: 8899
-  timeout: 1200s
+  - address: 0.0.0.0
+    name: http-8899
+    port: 8899
+    timeout: 1200s
 global:
   stores:
     response_cache:
-      enabled: false
       backend_type: memory
   model_catalog:
     deployments:
@@ -22,159 +21,153 @@ providers:
     model: local/small-7b
     reasoning_effort: medium
   models:
-  - name: local/omni
-    api_format: openai
-    provider_model_id: local/omni
-    backend_refs:
-    - name: local-omni
-      endpoint: vllm-omni:8000
-      protocol: http
-      provider: vllm
-      weight: 1
-  - name: local/small-7b
-    api_format: openai
-    provider_model_id: qwen/qwen3.5-rocm
-    backend_refs:
-    - name: local-vllm
-      endpoint: vllm:8000
-      protocol: http
-      provider: vllm
-      weight: 1
-    pricing:
-      prompt_per_1m: 0.04
-      completion_per_1m: 0.1
-      currency: USD
-  - name: cloud/frontier-72b
-    api_format: openai
-    provider_model_id: anthropic/claude-opus-4.6
-    backend_refs:
-    - name: vllm_primary
-      endpoint: vllm:8000
-      provider: vllm
-      protocol: http
-      weight: 1
-    pricing:
-      prompt_per_1m: 0.12
-      completion_per_1m: 0.39
-      currency: USD
-routing:
-  modelCards:
-  - name: local/omni
-    capabilities:
-    - chat
-    - image_understanding
-    - multimodal
-    - omni
-    - text
-    - vision
-    modality: omni
-  - name: local/small-7b
-    context_window_size: 131072
-  - name: cloud/frontier-72b
-    context_window_size: 262144
-  signals:
-    input_modality:
-    - name: knowledge_has_images
-      description: Request contains at least one image content part.
-      modality: image
-    systemone:
-    - name: knowledge_subject
-      description: The subject a knowledge question is about.
-      question:
-        type: choice
-        instructions: Which subject is this question about?
-        choices:
-        - key: biology
-          description: Biology, cells, organisms and genetics
-        - key: business
-          description: Business, accounting, finance and management
-        - key: computer_science
-          description: Computer science, algorithms and programming
-        - key: economics
-          description: Economics, markets and macroeconomics
-        - key: engineering
-          description: Engineering, circuits, machines and materials
-        - key: health
-          description: Health, medicine, anatomy and nutrition
-        - key: history
-          description: History, wars, empires and historical events
-        - key: law
-          description: Law, contracts, courts and legal rules
-        - key: math
-          description: Mathematics, algebra, matrices and proofs
-        - key: philosophy
-          description: Philosophy, ethics and logic
-        - key: physics
-          description: Physics, energy, forces and units
-        - key: chemistry
-          description: Chemistry, reactions, bonds and solutions
-        - key: psychology
-          description: Psychology, behavior and learning
-        - key: other
-          description: General knowledge, geography, culture and everything else
-      predicate:
-        gte: 0.4
-  decisions:
-  - name: omni
-    description: Understand image-bearing knowledge requests with the dedicated visual-language model.
-    priority: 300
-    rules:
-      operator: AND
-      conditions:
-      - type: input_modality
-        name: knowledge_has_images
-    modelRefs:
-    - model: local/omni
-    algorithm:
-      type: static
-  - name: escalate_72b
-    description: 'Subjects where the larger model gains most (knowledge_subject: biology, business, computer
-      science, economics, history, math, philosophy, psychology or other) escalate to the frontier 72B
-      lane.'
-    priority: 200
-    tier: 1
-    rules:
-      operator: OR
-      on_unknown: no_match
-      conditions:
-      - type: systemone
-        name: knowledge_subject
-        label: biology
-      - type: systemone
-        name: knowledge_subject
-        label: business
-      - type: systemone
-        name: knowledge_subject
-        label: computer_science
-      - type: systemone
-        name: knowledge_subject
-        label: economics
-      - type: systemone
-        name: knowledge_subject
-        label: history
-      - type: systemone
-        name: knowledge_subject
-        label: math
-      - type: systemone
-        name: knowledge_subject
-        label: other
-      - type: systemone
-        name: knowledge_subject
-        label: philosophy
-      - type: systemone
-        name: knowledge_subject
-        label: psychology
-    modelRefs:
-    - model: cloud/frontier-72b
-      use_reasoning: false
-  - name: keep_7b
-    description: Lower-uplift subjects (engineering, health, law, physics, chemistry) and questions whose
-      subject is unclear or unknown stay on the local 7B lane.
-    priority: 100
-    tier: 2
-    modelRefs:
-    - model: local/small-7b
-      use_reasoning: false
+    - name: local/omni
+      api_format: openai
+      provider_model_id: local/omni
+      backend_refs:
+        - name: local-omni
+          endpoint: vllm-omni:8000
+          protocol: http
+          provider: vllm
+          weight: 1
+      capabilities:
+        - chat
+        - image_understanding
+        - multimodal
+        - omni
+        - text
+        - vision
+      modality: omni
+    - name: local/small-7b
+      api_format: openai
+      provider_model_id: qwen/qwen3.5-rocm
+      backend_refs:
+        - name: local-vllm
+          endpoint: vllm:8000
+          protocol: http
+          provider: vllm
+          weight: 1
+      pricing:
+        prompt_per_1m: 0.04
+        completion_per_1m: 0.1
+        currency: USD
+      context_window_size: 131072
+    - name: cloud/frontier-72b
+      api_format: openai
+      provider_model_id: anthropic/claude-opus-4.6
+      backend_refs:
+        - name: vllm_primary
+          endpoint: vllm:8000
+          provider: vllm
+          protocol: http
+          weight: 1
+      pricing:
+        prompt_per_1m: 0.12
+        completion_per_1m: 0.39
+        currency: USD
+      context_window_size: 262144
+recipes:
+  - name: default
+    signals:
+      input_modality:
+        - name: knowledge_has_images
+          description: Request contains at least one image content part.
+          modality: image
+      systemone:
+        - name: knowledge_subject
+          description: The subject a knowledge question is about.
+          question:
+            type: choice
+            instructions: Which subject is this question about?
+            choices:
+              - key: biology
+                description: Biology, cells, organisms and genetics
+              - key: business
+                description: Business, accounting, finance and management
+              - key: computer_science
+                description: Computer science, algorithms and programming
+              - key: economics
+                description: Economics, markets and macroeconomics
+              - key: engineering
+                description: Engineering, circuits, machines and materials
+              - key: health
+                description: Health, medicine, anatomy and nutrition
+              - key: history
+                description: History, wars, empires and historical events
+              - key: law
+                description: Law, contracts, courts and legal rules
+              - key: math
+                description: Mathematics, algebra, matrices and proofs
+              - key: philosophy
+                description: Philosophy, ethics and logic
+              - key: physics
+                description: Physics, energy, forces and units
+              - key: chemistry
+                description: Chemistry, reactions, bonds and solutions
+              - key: psychology
+                description: Psychology, behavior and learning
+              - key: other
+                description: General knowledge, geography, culture and everything else
+          predicate:
+            gte: 0.4
+    decisions:
+      - name: omni
+        description: Understand image-bearing knowledge requests with the dedicated visual-language model.
+        priority: 300
+        rules:
+          operator: AND
+          conditions:
+            - type: input_modality
+              name: knowledge_has_images
+        modelRefs:
+          - model: local/omni
+        algorithm:
+          type: static
+      - name: escalate_72b
+        description: 'Subjects where the larger model gains most (knowledge_subject: biology, business, computer science, economics, history, math, philosophy, psychology or other) escalate to the frontier 72B lane.'
+        priority: 200
+        tier: 1
+        rules:
+          operator: OR
+          on_unknown: no_match
+          conditions:
+            - type: systemone
+              name: knowledge_subject
+              label: biology
+            - type: systemone
+              name: knowledge_subject
+              label: business
+            - type: systemone
+              name: knowledge_subject
+              label: computer_science
+            - type: systemone
+              name: knowledge_subject
+              label: economics
+            - type: systemone
+              name: knowledge_subject
+              label: history
+            - type: systemone
+              name: knowledge_subject
+              label: math
+            - type: systemone
+              name: knowledge_subject
+              label: other
+            - type: systemone
+              name: knowledge_subject
+              label: philosophy
+            - type: systemone
+              name: knowledge_subject
+              label: psychology
+        modelRefs:
+          - model: cloud/frontier-72b
+            use_reasoning: false
+      - name: keep_7b
+        description: Lower-uplift subjects (engineering, health, law, physics, chemistry) and questions whose subject is unclear or unknown stay on the local 7B lane.
+        priority: 100
+        tier: 2
+        modelRefs:
+          - model: local/small-7b
+            use_reasoning: false
 entrypoints:
-- model_names: ["vllm-sr/auto"]
-  recipe: default
+  - model_names: ["vllm-sr/auto"]
+    recipe: default

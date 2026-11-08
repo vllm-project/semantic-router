@@ -19,6 +19,7 @@ spec:
         max_queue: 8
         queue_timeout_ms: 1000
         on_overflow: shed
-    routing:
-      model_bindings:
-        pii: local-vela
+    recipes:
+      - name: default
+        model_bindings:
+          pii: local-vela

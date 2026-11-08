@@ -148,8 +148,8 @@ x-vsr-replay-id: replay_01J...
 - `x-vsr-matched-projections` 是投影头。单数形式不属于公开合约。
 - `x-vsr-config-version` 计数的是单个 Router 的激活次数，每个 Router 保留自己的配置历史。要检查各副本是否服务同一配置，请比较 `GET /api/v1/config/hash` 报告的 `active_runtime_hash` 文档哈希。
 - 配方名限定本地信号、投影、决策、缓存、回放、指标以及学习/会话身份。把响应与 Insights 或指标关联时，把 `x-vsr-selected-recipe` 与本地决策/信号名一起使用。
-- `event` 是决策和 DSL 使用的公开信号类型。规范 YAML 把 event 规则存在 `routing.signals.events` 下，与其他复数信号容器一致。
-- 路由学习在内部使用 Router 自有的在线状态。用户通过 `global.router.learning.adaptation` 启用在线模型选择学习，通过 `global.router.learning.protection` 启用稳定性保护，传入稳定身份头，并可选设置 `routing.decisions[].adaptations.mode`、组件模式或 `adaptations.adaptation.candidate_set`。`scope: conversation` 保护一个 `x-conversation-id`；`scope: session` 保护更广的 `x-session-id`。旧的 `routing.decisions[].algorithm.session_aware` 形态不属于公开合约。
+- `event` 是决策和 DSL 使用的公开信号类型。规范 YAML 把 event 规则存在 `recipes[].signals.events` 下，与其他复数信号容器一致。
+- 路由学习在内部使用 Router 自有的在线状态。用户通过 `global.router.learning.adaptation` 启用在线模型选择学习，通过 `global.router.learning.protection` 启用稳定性保护，传入稳定身份头，并可选设置 `recipes[].decisions[].adaptations.mode`、组件模式或 `adaptations.adaptation.candidate_set`。`scope: conversation` 保护一个 `x-conversation-id`；`scope: session` 保护更广的 `x-session-id`。旧的 `recipes[].decisions[].algorithm.session_aware` 形态不属于公开合约。
 
 ## 头参考
 

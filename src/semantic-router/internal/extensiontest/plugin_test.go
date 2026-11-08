@@ -67,7 +67,7 @@ func init() {
 }
 
 func stampDocument(backend, configuration string) string {
-	return `version: v0.3
+	return `version: v0.5
 listeners:
   - name: http-8899
     address: 127.0.0.1
@@ -81,33 +81,28 @@ providers:
         - endpoint: ` + strings.TrimPrefix(backend, "http://") + `
           protocol: http
           provider: vllm
-global:
-  stores:
-    response_cache:
-      enabled: false
-routing:
-  modelCards:
-    - name: m
-  signals:
-    keywords:
-      - name: greeting
-        operator: OR
-        keywords: ["hello"]
-  decisions:
-    - name: greet
-      priority: 10
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: greeting
-      modelRefs:
-        - model: m
-          use_reasoning: false
-      plugins:
-        - type: ` + stampType + `
-          configuration:
-` + configuration
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: greeting
+          operator: OR
+          keywords: ["hello"]
+    decisions:
+      - name: greet
+        priority: 10
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: greeting
+        modelRefs:
+          - model: m
+            use_reasoning: false
+        plugins:
+          - type: ` + stampType + `
+            configuration:
+` + nested(configuration)
 }
 
 func writeDocument(t *testing.T, document string) string {

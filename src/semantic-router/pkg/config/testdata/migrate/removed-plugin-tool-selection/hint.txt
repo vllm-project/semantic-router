@@ -1,1 +1,1 @@
-routing.decisions[agent].plugins[1]: removed_plugin_type: plugin tool_selection is removed; run `vllm-sr config migrate` (a select block in the decision's tools plugin)
+recipes[default].decisions[agent].plugins[1]: removed_plugin_type: plugin tool_selection is removed; run `vllm-sr config migrate` (a select block in the decision's tools plugin)

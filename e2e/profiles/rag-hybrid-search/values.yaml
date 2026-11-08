@@ -1,5 +1,5 @@
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -13,30 +13,28 @@ config:
             provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    decisions:
-      - name: other_decision
-        description: General knowledge and miscellaneous topics
-        priority: 1
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: other
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-    signals:
-      domains:
-        - name: other
-          description: General knowledge and miscellaneous topics
-    modelCards:
-      - name: base-model
         loras:
           - name: general-expert
             description: General-purpose adapter
-      - name: general-expert
+  recipes:
+    - name: default
+      decisions:
+        - name: other_decision
+          description: General knowledge and miscellaneous topics
+          priority: 1
+          rules:
+            operator: OR
+            conditions:
+              - type: domain
+                name: other
+          modelRefs:
+            - model: base-model
+              lora_name: general-expert
+              use_reasoning: false
+      signals:
+        domains:
+          - name: other
+            description: General knowledge and miscellaneous topics
   global:
     model_catalog: {}
     router:
@@ -60,6 +58,4 @@ config:
           embedding_model: sentence-transformers/all-MiniLM-L6-v2
           request_timeout_seconds: 120
           search_type: hybrid
-      response_cache:
-        enabled: false
     integrations: {}

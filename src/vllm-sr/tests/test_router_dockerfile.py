@@ -203,8 +203,8 @@ def test_vllm_sr_image_ships_the_cli_runtime_sync_and_catalog() -> None:
     ) in vllm_sr
     assert "config/recipes/privacy/" not in vllm_sr
     assert (
-        "COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json "
-        "/app/cli/config_schema/router-config-v0.3.schema.json"
+        "COPY src/semantic-router/pkg/configschema/router-config-v0.5.schema.json "
+        "/app/cli/config_schema/router-config-v0.5.schema.json"
     ) in vllm_sr
     # The script is not executable in git; the entrypoint needs the bit.
     assert (
@@ -242,7 +242,7 @@ def test_entrypoint_dispatches_flags_and_config_paths(tmp_path: Path) -> None:
     entrypoint = tmp_path / "start-router.sh"
     entrypoint.write_text(script, encoding="utf-8")
     config = tmp_path / "config.yaml"
-    config.write_text("version: v0.3\n", encoding="utf-8")
+    config.write_text("version: v0.5\n", encoding="utf-8")
 
     def run(*args: str) -> str:
         return (

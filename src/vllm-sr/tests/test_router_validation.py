@@ -18,8 +18,7 @@ from cli.router_validation import (
 )
 from click.testing import CliRunner
 
-CONFIG = """\
-version: v0.3
+CONFIG = """version: v0.5
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -31,9 +30,8 @@ providers:
     - name: m
       backend_refs:
         - endpoint: host.docker.internal:8000
-routing:
-  modelCards:
-    - name: m
+recipes:
+  - name: default
 """
 
 MODALITY_WARNING = {

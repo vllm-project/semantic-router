@@ -1,14 +1,11 @@
 import sys
 from pathlib import Path
 
-import yaml
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from cli.config_migration import migrate_config_data  # noqa: E402
-from cli.parser import ConfigParseError, parse_user_config  # noqa: E402
 
 
 def _legacy_model_catalog_config() -> dict:
@@ -93,13 +90,14 @@ def test_migrate_config_data_promotes_legacy_provider_defaults_and_signals():
     migrated = migrate_config_data(_legacy_model_catalog_config())
 
     assert migrated["providers"]["defaults"]["model"] == "qwen3-32b"
-    assert migrated["routing"]["signals"]["keywords"][0]["name"] == "code-keywords"
+    assert migrated["recipes"][0]["signals"]["keywords"][0]["name"] == "code-keywords"
 
 
 def test_migrate_config_data_promotes_legacy_lora_catalog_and_backend_refs():
     migrated = migrate_config_data(_legacy_model_catalog_config())
 
-    assert migrated["routing"]["modelCards"] == [
+    assert "routing" not in migrated
+    assert migrated["providers"]["models"] == [
         {
             "name": "qwen3-32b",
             "description": "Premium reasoning tier",
@@ -110,11 +108,6 @@ def test_migrate_config_data_promotes_legacy_lora_catalog_and_backend_refs():
                     "description": "Adapter for advanced computer science prompts",
                 }
             ],
-        }
-    ]
-    assert migrated["providers"]["models"] == [
-        {
-            "name": "qwen3-32b",
             "reasoning": {
                 "type": "chat_template_kwargs",
                 "parameter": "enable_thinking",
@@ -155,58 +148,9 @@ def test_migrate_config_data_preserves_decision_lora_reference():
     migrated = migrate_config_data(_legacy_model_catalog_config())
 
     assert (
-        migrated["routing"]["decisions"][0]["modelRefs"][0]["lora_name"]
+        migrated["recipes"][0]["decisions"][0]["modelRefs"][0]["lora_name"]
         == "computer-science-expert"
     )
-
-
-def test_parse_user_config_rejects_deprecated_provider_model_loras(tmp_path: Path):
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text(
-        yaml.safe_dump(
-            {
-                "version": "v0.3",
-                "listeners": [
-                    {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
-                ],
-                "providers": {
-                    "defaults": {"default_model": "qwen3-32b"},
-                    "models": [
-                        {
-                            "name": "qwen3-32b",
-                            "loras": [{"name": "computer-science-expert"}],
-                            "backend_refs": [
-                                {
-                                    "endpoint": "host.docker.internal:8000",
-                                    "protocol": "http",
-                                }
-                            ],
-                        }
-                    ],
-                },
-                "routing": {
-                    "modelCards": [{"name": "qwen3-32b"}],
-                    "decisions": [
-                        {
-                            "name": "default-route",
-                            "description": "fallback",
-                            "priority": 100,
-                            "rules": {"operator": "AND", "conditions": []},
-                            "modelRefs": [{"model": "qwen3-32b"}],
-                        }
-                    ],
-                },
-            },
-            sort_keys=False,
-        )
-    )
-
-    try:
-        parse_user_config(str(config_path))
-    except ConfigParseError as exc:
-        assert "providers.models[0].loras" in str(exc)
-    else:
-        raise AssertionError("expected ConfigParseError")
 
 
 def test_migrate_config_data_turns_the_hallucination_endpoint_into_a_binding():

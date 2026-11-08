@@ -3,7 +3,7 @@
 ## Overview
 
 `domain` classifies the request topic family. Define domain rules under
-`routing.signals.domains`.
+`recipes[].signals.domains`.
 
 The decision model answers it unless a `domain` binding names another
 deployment; see [Choose a model for a signal](../../../installation/choose-a-model-for-a-signal.md).
@@ -35,24 +35,25 @@ Use `domain` when:
 ## Configuration
 
 ```yaml
-routing:
-  signals:
-    domains:
-      - name: business
-        description: Business and management related queries.
-        mmlu_categories: [business]
-      - name: law
-        description: Legal questions and law-related topics.
-        mmlu_categories: [law]
-      - name: psychology
-        description: Psychology and mental health topics.
-        mmlu_categories: [psychology]
-      - name: health
-        description: Health and medical information queries.
-        mmlu_categories: [health]
-      - name: other
-        description: General fallback traffic.
-        mmlu_categories: [other]
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: business
+          description: Business and management related queries.
+          mmlu_categories: [business]
+        - name: law
+          description: Legal questions and law-related topics.
+          mmlu_categories: [law]
+        - name: psychology
+          description: Psychology and mental health topics.
+          mmlu_categories: [psychology]
+        - name: health
+          description: Health and medical information queries.
+          mmlu_categories: [health]
+        - name: other
+          description: General fallback traffic.
+          mmlu_categories: [other]
 ```
 
 Keep domain names stable because decisions reference those names directly.

@@ -360,7 +360,7 @@ func apiConfigRoutes() []apiRoute {
 func apiRecipeRoutes() []apiRoute {
 	return []apiRoute{
 		managedRoute(
-			EndpointMetadata{Path: apiRecipesPath, Method: "GET", Description: "List the default and named routing recipes with their entrypoints"},
+			EndpointMetadata{Path: apiRecipesPath, Method: "GET", Description: "List the recipes with their entrypoints"},
 			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivitySecretView},
 			(*ClassificationAPIServer).handleListRecipes,
 			jsonResponse[recipeCollectionResponse](http.StatusOK, "Successful response"),

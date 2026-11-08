@@ -70,11 +70,9 @@ func TestBuildRouterComponentsReplayFailurePreservesPublishedSessionStore(t *tes
 			Address: "candidate.invalid:6379",
 		},
 	}
-	cfg.RouterReplay = config.RouterReplayConfig{
-		Enabled:      true,
-		StoreBackend: "redis",
-	}
+	cfg.RouterReplay = config.RouterReplayConfig{StoreBackend: "redis"}
 	cfg.IntelligentRouting.Decisions[0].ModelRefs = []config.ModelRef{{Model: "model-a"}}
+	withGlobalPlugins(t, cfg, replayTestPlugin(map[string]interface{}{"enabled": true}))
 
 	_, err := buildRouterComponents(cfg)
 	if err == nil || !strings.Contains(err.Error(), "redis config required") {

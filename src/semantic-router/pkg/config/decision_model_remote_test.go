@@ -12,7 +12,7 @@ import (
 // Bearer auth and gateway-d3 behind a gateway's own header and path prefix.
 // One question names gateway-d3; the rest, and a selector, ask the decision
 // model, hosted-d3.
-const systemOneDecisionYAML = `version: v0.3
+const systemOneDecisionYAML = `version: v0.5
 providers:
   defaults: {model: general}
   models:
@@ -20,32 +20,33 @@ providers:
       backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
     - name: other-model
       backend_refs: [{name: other, endpoint: "127.0.0.1:8001", protocol: http}]
-routing:
-  signals:
-    systemone:
-      - name: support_team
-        deployment: gateway-d3
-        question: {type: choice, instructions: "Which team should handle this request?", choices: [{key: billing}, {key: engineering}]}
-      - name: needs_tools
-        question: {type: noul, instructions: "Does the request need a tool?"}
-  decisions:
-    - name: engineering
-      priority: 200
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions: [{type: systemone, name: support_team, label: engineering}]
-      modelRefs: [{model: general}]
-    - name: choose
-      priority: 100
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions: [{type: systemone, name: needs_tools}]
-      modelRefs: [{model: general}, {model: other-model}]
-      algorithm:
-        type: systemone
-        systemone: {instructions: "Which model should answer?"}
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: support_team
+          deployment: gateway-d3
+          question: {type: choice, instructions: "Which team should handle this request?", choices: [{key: billing}, {key: engineering}]}
+        - name: needs_tools
+          question: {type: noul, instructions: "Does the request need a tool?"}
+    decisions:
+      - name: engineering
+        priority: 200
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions: [{type: systemone, name: support_team, label: engineering}]
+        modelRefs: [{model: general}]
+      - name: choose
+        priority: 100
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions: [{type: systemone, name: needs_tools}]
+        modelRefs: [{model: general}, {model: other-model}]
+        algorithm:
+          type: systemone
+          systemone: {instructions: "Which model should answer?"}
 global:
   model_catalog:
     deployments:

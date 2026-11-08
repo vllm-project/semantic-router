@@ -33,22 +33,23 @@ Use a decision when:
 
 ## Configuration
 
-In v0.3, decisions live under `routing.decisions`:
+In v0.3, decisions live under `recipes[].decisions`:
 
 ```yaml
-routing:
-  decisions:
-    - name: business_route
-      description: Route business requests to the business model.
-      priority: 110
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: qwen2.5:3b
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: business_route
+        description: Route business requests to the business model.
+        priority: 110
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: qwen2.5:3b
+            use_reasoning: false
 ```
 
 Each `rules` node is either a leaf (`type` and `name`) or a combination
@@ -100,10 +101,10 @@ true becomes a candidate, and ranking then picks one of them.
 `decision.tier` is the hard precedence boundary: a lower tier wins, and a
 decision that omits `tier` is tier 0, so it ranks ahead of every decision that
 sets one. Tier is compared first whenever one matched decision carries a tier
-above 0. `routing.strategy` then decides how the decisions inside that tier are
+above 0. `recipes[].strategy` then decides how the decisions inside that tier are
 ordered, and it means the same thing where no decision sets a tier at all.
 
-| `routing.strategy` | Keys, in order |
+| `recipes[].strategy` | Keys, in order |
 | --- | --- |
 | `priority` (the default) | tier ascending, catch-all last, priority descending, confidence descending, name ascending |
 | `confidence` | tier ascending, catch-all last, confidence descending, priority descending, name ascending |

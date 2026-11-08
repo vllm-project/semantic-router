@@ -225,7 +225,7 @@ providers:
 ```
 
 Pricing is operator-supplied deployment metadata, not a live quote. It stays on
-`providers.models[]`; `routing.modelCards` only describes semantic capabilities.
+`providers.models[]`; `providers.models` only describes semantic capabilities.
 `currency` is optional and resolves to `USD` for accounting when omitted. When set,
 it must be an uppercase three-letter code. All per-million-token rates must be finite
 and non-negative. `cached_input_per_1m` and `cache_write_per_1m` are optional, and an

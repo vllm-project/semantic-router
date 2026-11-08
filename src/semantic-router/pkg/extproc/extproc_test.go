@@ -512,12 +512,11 @@ func CreateTestConfig() *config.RouterConfig {
 			},
 		},
 		SemanticCache: config.SemanticCache{
-			BackendType:         "memory",
-			Enabled:             false, // Disable for most tests
-			SimilarityThreshold: &[]float32{0.9}[0],
-			MaxEntries:          100,
-			EvictionPolicy:      "lru",
-			TTLSeconds:          3600,
+			BackendType:    "memory",
+			InUse:          false, // Disable for most tests
+			MaxEntries:     100,
+			EvictionPolicy: "lru",
+			TTLSeconds:     3600,
 		},
 		ResponseAPI: config.ResponseAPIConfig{
 			Enabled:      true,
@@ -570,9 +569,6 @@ var _ = Describe("ExtProc Package", func() {
 
 			Expect(cfg.SemanticCache.MaxEntries).To(BeNumerically(">", 0))
 			Expect(cfg.SemanticCache.TTLSeconds).To(BeNumerically(">", 0))
-			Expect(cfg.SemanticCache.SimilarityThreshold).NotTo(BeNil())
-			Expect(*cfg.SemanticCache.SimilarityThreshold).To(BeNumerically(">=", 0))
-			Expect(*cfg.SemanticCache.SimilarityThreshold).To(BeNumerically("<=", 1))
 		})
 	})
 
@@ -1107,7 +1103,7 @@ var _ = Describe("Caching Functionality", func() {
 
 	BeforeEach(func() {
 		cfg = CreateTestConfig()
-		cfg.Enabled = true
+		cfg.SemanticCache.InUse = true
 
 		provider, err := embedding.NewFuncProvider("test", 2, func(_ context.Context, text string) ([]float32, error) { return []float32{float32(len(text)), 1}, nil })
 		Expect(err).NotTo(HaveOccurred())
@@ -1268,7 +1264,7 @@ var _ = Describe("Caching Functionality", func() {
 
 	Context("with cache disabled", func() {
 		BeforeEach(func() {
-			cfg.Enabled = false
+			cfg.SemanticCache.InUse = false
 			cacheConfig := cache.CacheConfig{
 				BackendType:         cache.InMemoryCacheType,
 				Enabled:             false,

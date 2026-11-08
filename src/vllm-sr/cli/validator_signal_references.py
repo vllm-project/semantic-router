@@ -29,10 +29,7 @@ def _validate_profile_signal_references(profile_name, routing):
     projection_names = build_projection_reference_index(routing.projections)
 
     for decision in routing.decisions:
-        field = (
-            f"recipes.{profile_name}.routing.decisions."
-            f"{decision.name}.rules.conditions"
-        )
+        field = f"recipes.{profile_name}.decisions." f"{decision.name}.rules.conditions"
         decision_context = f"Decision '{decision.name}' in recipe '{profile_name}'"
         for condition in iter_condition_leaves(decision.rules.conditions):
             message = _condition_reference_error(

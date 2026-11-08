@@ -40,11 +40,11 @@ func TestModelCatalogRefusesWhatCannotWork(t *testing.T) {
 			`unknown deployment "missing"; declared deployments: `,
 		},
 		"a rule naming an undeclared deployment": {
-			"routing: {signals: {domains: [{name: math, labels: [math], deployment: missing}]}}",
+			"recipes: [{name: default, signals: {domains: [{name: math, labels: [math], deployment: missing}]}}]",
 			`deployment "missing" is not declared in global.model_catalog.deployments`,
 		},
 		"a rule naming a deployment that answers no question": {
-			"routing: {signals: {domains: [{name: math, labels: [math], deployment: content-risk}]}}",
+			"recipes: [{name: default, signals: {domains: [{name: math, labels: [math], deployment: content-risk}]}}]",
 			`deployment "content-risk" must use provider model_runtime or systemone`,
 		},
 		"a binding of an application type to a classify deployment": {
@@ -89,16 +89,16 @@ func TestModelCatalogRefusesWhatCannotWork(t *testing.T) {
 			"unknown signal type (did you mean pii?)",
 		},
 		"a systemone question the remote model does not answer": {
-			"global: {model_catalog: {deployments: {d3-remote: {capabilities: {question_types: [choice]}}}}}\nrouting: {signals: {systemone: [{name: tools, deployment: d3-remote, question: {type: noul, instructions: \"Does it need a tool?\"}}]}}",
+			"global: {model_catalog: {deployments: {d3-remote: {capabilities: {question_types: [choice]}}}}}\nrecipes: [{name: default, signals: {systemone: [{name: tools, deployment: d3-remote, question: {type: noul, instructions: \"Does it need a tool?\"}}]}}]",
 			"noul",
 		},
 		"a pii rule on a deployment without spans": {
-			"global: {model_catalog: {deployments: {d3-remote: {capabilities: {question_types: [choice, noul]}}}, system: {decision_model: {deployment: d3-remote}}}}\nrouting: {signals: {pii: [{name: personal, predicate: {gte: 0.5}}]}, decisions: [{name: guard, rules: {type: pii, name: personal}, modelRefs: [{model: general}]}]}",
+			"global: {model_catalog: {deployments: {d3-remote: {capabilities: {question_types: [choice, noul]}}}, system: {decision_model: {deployment: d3-remote}}}}\nrecipes: [{name: default, signals: {pii: [{name: personal, predicate: {gte: 0.5}}]}, decisions: [{name: guard, rules: {type: pii, name: personal}, modelRefs: [{model: general}]}]}]",
 			"span_required",
 		},
 		"a masking plugin on PII without spans": {
-			"global: {model_catalog: {deployments: {d3-remote: {capabilities: {presets: [halu]}}}, system: {decision_model: {deployment: d3-remote}}}}\nrouting: {signals: {keywords: [{name: secret, operator: OR, keywords: [ssn]}], pii: [{name: personal, predicate: {gte: 0.5}}]}, decisions: [{name: mask, rules: {type: keyword, name: secret}, modelRefs: [{model: general}], plugins: [{type: masking, configuration: {enabled: true, signal: personal}}]}]}",
-			`routing.signals.pii[personal]: span_required: resolves to deployment "d3-remote", which cannot answer span questions`,
+			"global: {model_catalog: {deployments: {d3-remote: {capabilities: {presets: [halu]}}}, system: {decision_model: {deployment: d3-remote}}}}\nrecipes: [{name: default, signals: {keywords: [{name: secret, operator: OR, keywords: [ssn]}], pii: [{name: personal, predicate: {gte: 0.5}}]}, decisions: [{name: mask, rules: {type: keyword, name: secret}, modelRefs: [{model: general}], plugins: [{type: masking, configuration: {enabled: true, signal: personal}}]}]}]",
+			`recipes[default].signals.pii[personal]: span_required: resolves to deployment "d3-remote", which cannot answer span questions`,
 		},
 		"operating_point on a remote deployment": {
 			"global: {model_catalog: {deployments: {content-risk: {operating_point: {path: operating_point.json, sha256: e79a78f48bf45eb38e3f5402de3b3b18eeaa822e00b42b3640bf471276290de5}}}}}",

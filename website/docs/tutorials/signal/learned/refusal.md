@@ -7,7 +7,7 @@ request. It reads the answer, so a refusal rule exists only once the model has
 answered: a response plugin reads it, never a decision's rules.
 
 It maps to config/fragments/signal/refusal and is declared under
-`routing.signals.refusal`.
+`recipes[].signals.refusal`.
 
 ## Key Advantages
 
@@ -32,13 +32,14 @@ Use `refusal` when:
 ## Configuration
 
 ```yaml
-routing:
-  signals:
-    refusal:
-      - name: declined
-        description: The answer declines the request or refuses to help.
-        predicate:
-          gte: 0.5
+recipes:
+  - name: default
+    signals:
+      refusal:
+        - name: declined
+          description: The answer declines the request or refuses to help.
+          predicate:
+            gte: 0.5
 ```
 
 | Field | Meaning |

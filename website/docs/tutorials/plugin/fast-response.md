@@ -22,7 +22,7 @@ Some routes should degrade gracefully instead of waiting for the full model path
 
 ## Configuration
 
-Add the plugin under `routing.decisions[].plugins`:
+Add the plugin under `recipes[].decisions[].plugins`:
 
 ```yaml
 plugins:

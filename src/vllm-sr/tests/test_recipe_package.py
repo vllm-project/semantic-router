@@ -31,7 +31,7 @@ tags:
 links:
   source: https://example.com/source
 """,
-        "config.yaml": "version: v0.3\nlisteners: []\n",
+        "config.yaml": "version: v0.5\nlisteners: []\n",
         "probes.yaml": "schema_version: v1\ndecisions: []\n",
         "recipe.dsl": "MODEL test\n",
         "README.md": "# Test Recipe\n",
@@ -92,14 +92,14 @@ def test_recipe_digest_matches_go_snapshot_algorithm_and_changes_on_tamper(
 def test_recipe_digest_cross_language_golden():
     files = {
         "metadata.yaml": b"schema_version: vllm-sr/recipe-metadata/v1\nid: fixture\n",
-        "config.yaml": b"version: v0.3\n",
+        "config.yaml": b"version: v0.5\n",
         "probes.yaml": b"schema_version: v1\ndecisions: []\n",
         "recipe.dsl": b"MODEL fixture\n",
         "README.md": b"# Fixture\n",
     }
 
     assert recipe_digest(files) == (
-        "sha256:b461747f69f276aea124f9d0907e373f9f201245f635d840276765dd6829ef7b"
+        "sha256:7fc4723f68b489bd2d44c4a2faaa6927ec31b759ff20e6fd76765c31fdd6ccd9"
     )
 
 
@@ -220,7 +220,7 @@ def test_pack_rejects_literal_credential_with_key_path_only(tmp_path: Path):
     _write_recipe(recipe)
     secret_value = "super-sensitive-value"
     (recipe / "config.yaml").write_text(
-        f"version: v0.3\nproviders:\n  password: {secret_value}\n",
+        f"version: v0.5\nproviders:\n  password: {secret_value}\n",
         encoding="utf-8",
     )
 
@@ -272,7 +272,7 @@ def test_pack_literal_credential_detector_matches_runtime_fields(
     _write_recipe(recipe)
     secret_value = "credential-value-canary"
     (recipe / "config.yaml").write_text(
-        "version: v0.3\n" + config.replace("canary", secret_value),
+        "version: v0.5\n" + config.replace("canary", secret_value),
         encoding="utf-8",
     )
 
@@ -301,7 +301,7 @@ def test_pack_rejects_embedded_url_credential_without_exposing_it(
     _write_recipe(recipe)
     secret_value = "url-password-canary"
     (recipe / "config.yaml").write_text(
-        f"version: v0.3\nprovider:\n  {field}: {url_template.format(secret=secret_value)}\n",
+        f"version: v0.5\nprovider:\n  {field}: {url_template.format(secret=secret_value)}\n",
         encoding="utf-8",
     )
 
@@ -318,7 +318,7 @@ def test_pack_allows_api_key_env_and_exact_braced_credential_reference(tmp_path:
     recipe = tmp_path / "recipe"
     _write_recipe(recipe)
     (recipe / "config.yaml").write_text(
-        """version: v0.3
+        """version: v0.5
 providers:
   api_key_env: PROVIDER_API_KEY
 stores:
@@ -341,7 +341,7 @@ def test_pack_rejects_noncanonical_credential_environment_reference(
     recipe = tmp_path / "recipe"
     _write_recipe(recipe)
     (recipe / "config.yaml").write_text(
-        f"version: v0.3\nstores:\n  password: {value}\n",
+        f"version: v0.5\nstores:\n  password: {value}\n",
         encoding="utf-8",
     )
 
@@ -358,7 +358,7 @@ def test_pack_rejects_literal_env_fallback_but_not_pure_reference(tmp_path: Path
     recipe = tmp_path / "recipe"
     _write_recipe(recipe)
     (recipe / "config.yaml").write_text(
-        """version: v0.3
+        """version: v0.5
 providers:
   api_key: ${PROVIDER_API_KEY}
   password: ${DATABASE_PASSWORD:-unsafe-default}
@@ -376,7 +376,7 @@ providers:
     assert "unsafe-default" not in result.output
 
     (recipe / "config.yaml").write_text(
-        "version: v0.3\nproviders:\n  api_key: ${PROVIDER_API_KEY}\n",
+        "version: v0.5\nproviders:\n  api_key: ${PROVIDER_API_KEY}\n",
         encoding="utf-8",
     )
     allowed = CliRunner().invoke(
@@ -403,7 +403,7 @@ def test_pack_rejects_enabled_local_process_mcp_without_exposing_values(
     recipe = tmp_path / "recipe"
     _write_recipe(recipe)
     (recipe / "config.yaml").write_text(
-        """version: v0.3
+        """version: v0.5
 global:
   model_catalog:
     modules:
@@ -439,7 +439,7 @@ def test_pack_allows_enabled_remote_mcp_transports(tmp_path: Path, mcp_config: s
     recipe = tmp_path / "recipe"
     _write_recipe(recipe)
     (recipe / "config.yaml").write_text(
-        """version: v0.3
+        """version: v0.5
 global:
   model_catalog:
     modules:
@@ -462,12 +462,12 @@ global:
 @pytest.mark.parametrize(
     "config",
     [
-        "version: v0.3\nsecret: &private-value sensitive\ncopy: *private-value\n",
-        "version: v0.3\ndefaults: &private-map {token: sensitive}\nrequest:\n  <<: *private-map\n",
-        "version: v0.3\nrequest:\n  <<: {token: sensitive}\n",
-        "version: v0.3\nprovider:\n  base_url: !!binary aHR0cHM6Ly91c2VyOnNlbnNpdGl2ZUBleGFtcGxlLmNvbS92MQ==\n",
-        "version: v0.3\nrequest:\n  headers:\n    !!binary QXV0aG9yaXphdGlvbg==: Bearer sensitive\n",
-        "version: v0.3\nvalue: !!str sensitive\n",
+        "version: v0.5\nsecret: &private-value sensitive\ncopy: *private-value\n",
+        "version: v0.5\ndefaults: &private-map {token: sensitive}\nrequest:\n  !!merge <<: *private-map\n",
+        "version: v0.5\nrequest:\n  !!merge <<: {token: sensitive}\n",
+        "version: v0.5\nprovider:\n  base_url: !!binary aHR0cHM6Ly91c2VyOnNlbnNpdGl2ZUBleGFtcGxlLmNvbS92MQ==\n",
+        "version: v0.5\nrequest:\n  headers:\n    !!binary QXV0aG9yaXphdGlvbg==: Bearer sensitive\n",
+        "version: v0.5\nvalue: !!str sensitive\n",
     ],
 )
 def test_pack_rejects_yaml_indirection_without_exposing_values(

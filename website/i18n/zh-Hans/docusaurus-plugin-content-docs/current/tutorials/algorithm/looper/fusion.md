@@ -86,30 +86,31 @@ flowchart TD
 决策级 Fusion：
 
 ```yaml
-routing:
-  decisions:
-    - name: deliberation
-      description: Compare candidate answers and synthesize one response.
-      priority: 100
-      output_contract: Preserve any explicit output format exactly.
-      modelRefs:
-        - model: qwen3-32b
-        - model: deepseek-worker
-      algorithm:
-        type: fusion
-        fusion:
-          model: qwen3-32b
-          analysis_models:
-            - qwen3-32b
-            - deepseek-worker
-          analysis_mode: separate
-          analysis_overrides:
-            - model: qwen3-32b
-              temperature: 0.15
-              max_completion_tokens: 512
-            - model: deepseek-worker
-              temperature: 0.2
-              max_completion_tokens: 384
+recipes:
+  - name: default
+    decisions:
+      - name: deliberation
+        description: Compare candidate answers and synthesize one response.
+        priority: 100
+        output_contract: Preserve any explicit output format exactly.
+        modelRefs:
+          - model: qwen3-32b
+          - model: deepseek-worker
+        algorithm:
+          type: fusion
+          fusion:
+            model: qwen3-32b
+            analysis_models:
+              - qwen3-32b
+              - deepseek-worker
+            analysis_mode: separate
+            analysis_overrides:
+              - model: qwen3-32b
+                temperature: 0.15
+                max_completion_tokens: 512
+              - model: deepseek-worker
+                temperature: 0.2
+                max_completion_tokens: 384
 ```
 
 `output_contract` 是决策范围的提示词文本。把它用于应同时作用于 Fusion、Flow 和 ReMoM 的基准或应用格式要求，而不是把任务特定提示词硬编码进算法。
@@ -160,21 +161,24 @@ entrypoints:
 
 ```yaml
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [vllm-sr/fusion, openrouter/fusion]
     recipe: fusion
 recipes:
+  - name: default
   - name: fusion
-    routing:
-      decisions:
-        - name: panel
-          priority: 1
-          rules: {operator: AND, conditions: []}
-          modelRefs: [{model: qwen3-8b}, {model: qwen3-32b}]
-          algorithm:
-            type: fusion
-            fusion:
-              model: qwen3-32b
-              analysis_models: [qwen3-8b, qwen3-32b]
+    decisions:
+      - name: panel
+        priority: 1
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: qwen3-8b}, {model: qwen3-32b}]
+        algorithm:
+          type: fusion
+          fusion:
+            model: qwen3-32b
+            analysis_models: [qwen3-8b, qwen3-32b]
 ```
 
 公开入口名不能与后端模型冲突。Signals、裁判、面板、并发、预算、模板及错误策略

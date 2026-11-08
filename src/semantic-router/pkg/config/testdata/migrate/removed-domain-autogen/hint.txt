@@ -1,1 +1,1 @@
-routing: removed_field: domain conditions no longer declare the domains they name; run `vllm-sr config migrate` (signals.domains with one rule per domain the conditions name)
+recipes[default]: removed_field: domain conditions no longer declare the domains they name; run `vllm-sr config migrate` (signals.domains with one rule per domain the conditions name)

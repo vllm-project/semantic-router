@@ -44,7 +44,7 @@ func TestPolarityUnverifiedMissContinuesUpstream(t *testing.T) {
 		},
 	}
 	cfg := &config.RouterConfig{}
-	cfg.Enabled = true
+	cfg.SemanticCache.InUse = true
 	cfg.Decisions = []config.Decision{decision}
 
 	router := &OpenAIRouter{Config: cfg, Cache: backend}

@@ -97,12 +97,12 @@ func TestMatchEffectiveBlock(t *testing.T) {
 }
 
 func TestMatchEmptyBlockFailsWithItsCode(t *testing.T) {
-	err := validateMatch(matchConfig(), "routing.decisions[faq].plugins[0].configuration.semantic.match", &MatchConfig{}, MatchResponseCache)
+	err := validateMatch(matchConfig(), "recipes[default].decisions[faq].plugins[0].configuration.semantic.match", &MatchConfig{}, MatchResponseCache)
 	var located *LocatedError
 	if !errors.As(err, &located) || located.Code != CodeMatchEmpty {
 		t.Fatalf("err = %v", err)
 	}
-	if want := "routing.decisions[faq].plugins[0].configuration.semantic.match: match_empty: a match block runs recall, judge or both; write at least one"; err.Error() != want {
+	if want := "recipes[default].decisions[faq].plugins[0].configuration.semantic.match: match_empty: a match block runs recall, judge or both; write at least one"; err.Error() != want {
 		t.Fatalf("err = %q\nwant %q", err, want)
 	}
 	if err := validateMatch(matchConfig(), "x", nil, MatchResponseCache); err != nil {
@@ -137,7 +137,7 @@ func TestMatchBlockValidation(t *testing.T) {
 		"compress custom noul":          {MatchCompress, MatchConfig{Judge: judge(question(SystemOneQuestionNoul, none))}},
 		"compress custom score bound": {MatchCompress, MatchConfig{Judge: judge(func(j *MatchJudge) {
 			question(SystemOneQuestionScore, func(q *SystemOneQuestion) { q.Levels = []string{"no", "some", "all"} })(j)
-			j.MinScore = matchBound(2)
+			j.MinScore, j.Deployment = matchBound(2), "lite"
 		})}},
 		"tools custom choice on chooser": {MatchToolsSelect, MatchConfig{Judge: judge(func(j *MatchJudge) {
 			question(SystemOneQuestionChoice, none)(j)
@@ -196,7 +196,7 @@ func TestMatchBlockValidation(t *testing.T) {
 		"probability above one": {MatchCompress, MatchConfig{Judge: judge(func(j *MatchJudge) { j.MinScore = matchBound(1.2) })}, "m.judge.min_score must be within [0, 1]"},
 		"level above the top": {MatchCompress, MatchConfig{Judge: judge(func(j *MatchJudge) {
 			question(SystemOneQuestionScore, func(q *SystemOneQuestion) { q.Levels = []string{"no", "yes"} })(j)
-			j.MinScore = matchBound(1.5)
+			j.MinScore, j.Deployment = matchBound(1.5), "lite"
 		})}, "m.judge.min_score must be within [0, 1]"},
 		"zero ratio":       {MatchCompress, MatchConfig{Judge: judge(func(j *MatchJudge) { j.MinRatio = matchBound(0) })}, "m.judge.min_ratio must be within (0, 1]"},
 		"ratio above one":  {MatchCompress, MatchConfig{Judge: judge(func(j *MatchJudge) { j.MinRatio = matchBound(1.1) })}, "m.judge.min_ratio must be within (0, 1]"},

@@ -12,7 +12,7 @@
 # the runtimes' own answers, so the fixtures' random weights need no planted
 # behaviour.
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -33,152 +33,150 @@ config:
             provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    modelCards:
-      - name: general-expert
-      - name: math-expert
-    signals:
-      # Replaces the chart's default general domain, which would ask the
-      # system decision model this offline profile does not serve.
-      domains: []
-      # testcases/decision_runtime_routing.go asks the runtimes these questions.
-      systemone:
-        - name: answered
-          description: Matches whenever the managed decision model answers.
-          deployment: decision-fixture
-          question:
-            type: noul
-            instructions: Is this request about software?
-          predicate:
-            gte: 0
-          timeout_ms: 10000
-        - name: request_kind
-          description: Which kind of work the request asks for.
-          deployment: decision-fixture
-          question:
-            type: choice
-            instructions: What kind of work does this request ask for?
-            choices:
-              - key: code
-                description: Writing, reviewing or debugging code
-              - key: math
-                description: Mathematics or quantitative reasoning
-              - key: chat
-                description: Anything else
-          timeout_ms: 10000
-        - name: attached_answered
-          description: Matches whenever the attached decision model answers.
-          deployment: attached-decisions
-          question:
-            type: noul
-            instructions: Does this request ask a question?
-          predicate:
-            gte: 0
-          timeout_ms: 10000
-        - name: offline
-          description: Asks a deployment with no runtime behind it.
-          deployment: decision-offline
-          question:
-            type: noul
-            instructions: Is this request about software?
-          predicate:
-            gte: 0
-        # testcases/decision_runtime_set_span.go asks the attached Vela 2.0
-        # fixture these questions. A zero threshold makes every label count,
-        # so the random weights still select labels and mark spans.
-        - name: topics
-          description: Which support topics the request mentions.
-          deployment: attached-vela2
-          question:
-            type: set
-            instructions: Which topics does the request mention?
-            labels:
-              - key: billing
-                description: Payments, invoices or refunds
-              - key: shipping
-                description: Deliveries, parcels or returns
-            threshold: 0
-          timeout_ms: 10000
-        - name: names
-          description: Where the request names a city or a person.
-          deployment: attached-vela2
-          question:
-            type: span
-            instructions: Which spans name a city or a person?
-            labels:
-              - key: city
-                description: A city name
-              - key: person
-                description: A person's name
-            threshold: 0
-          timeout_ms: 10000
-    decisions:
-      # An unknown answer never matches: the offline deployment never answers.
-      - name: offline_route
-        description: Fails open; never selected
-        priority: 500
-        rules:
-          operator: AND
-          on_unknown: no_match
-          conditions:
-            - type: systemone
-              name: offline
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
-      - name: selector_route
-        description: Both runtimes answered; the managed decision model also chooses the model
-        priority: 400
-        rules:
-          operator: AND
-          on_unknown: no_match
-          conditions:
-            - type: systemone
-              name: answered
-            - type: systemone
-              name: attached_answered
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
-          - model: math-expert
-            use_reasoning: false
-        algorithm:
-          type: systemone
-          systemone:
+  recipes:
+    - name: default
+      signals:
+        # Replaces the chart's default general domain, which would ask the
+        # system decision model this offline profile does not serve.
+        domains: []
+        # testcases/decision_runtime_routing.go asks the runtimes these questions.
+        systemone:
+          - name: answered
+            description: Matches whenever the managed decision model answers.
             deployment: decision-fixture
-            instructions: Which model should answer this request?
-            candidates:
-              general-expert: General assistant for everyday requests
-              math-expert: Specialist for mathematics and quantitative reasoning
+            question:
+              type: noul
+              instructions: Is this request about software?
+            predicate:
+              gte: 0
             timeout_ms: 10000
-      # Keeps every systemone signal in use, so each request evaluates all of
-      # them and the signal tests can read their results.
-      - name: signals_route
-        description: Any systemone signal matched
-        priority: 300
-        rules:
-          operator: OR
-          on_unknown: no_match
-          conditions:
-            - {type: systemone, name: request_kind, label: code}
-            - {type: systemone, name: request_kind, label: math}
-            - {type: systemone, name: request_kind, label: chat}
-            - {type: systemone, name: topics, label: billing}
-            - {type: systemone, name: topics, label: shipping}
-            - {type: systemone, name: names, label: city}
-            - {type: systemone, name: names, label: person}
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
-      - name: default-route
-        description: Fallback route
-        priority: 10
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
+          - name: request_kind
+            description: Which kind of work the request asks for.
+            deployment: decision-fixture
+            question:
+              type: choice
+              instructions: What kind of work does this request ask for?
+              choices:
+                - key: code
+                  description: Writing, reviewing or debugging code
+                - key: math
+                  description: Mathematics or quantitative reasoning
+                - key: chat
+                  description: Anything else
+            timeout_ms: 10000
+          - name: attached_answered
+            description: Matches whenever the attached decision model answers.
+            deployment: attached-decisions
+            question:
+              type: noul
+              instructions: Does this request ask a question?
+            predicate:
+              gte: 0
+            timeout_ms: 10000
+          - name: offline
+            description: Asks a deployment with no runtime behind it.
+            deployment: decision-offline
+            question:
+              type: noul
+              instructions: Is this request about software?
+            predicate:
+              gte: 0
+          # testcases/decision_runtime_set_span.go asks the attached Vela 2.0
+          # fixture these questions. A zero threshold makes every label count,
+          # so the random weights still select labels and mark spans.
+          - name: topics
+            description: Which support topics the request mentions.
+            deployment: attached-vela2
+            question:
+              type: set
+              instructions: Which topics does the request mention?
+              labels:
+                - key: billing
+                  description: Payments, invoices or refunds
+                - key: shipping
+                  description: Deliveries, parcels or returns
+              threshold: 0
+            timeout_ms: 10000
+          - name: names
+            description: Where the request names a city or a person.
+            deployment: attached-vela2
+            question:
+              type: span
+              instructions: Which spans name a city or a person?
+              labels:
+                - key: city
+                  description: A city name
+                - key: person
+                  description: A person's name
+              threshold: 0
+            timeout_ms: 10000
+      decisions:
+        # An unknown answer never matches: the offline deployment never answers.
+        - name: offline_route
+          description: Fails open; never selected
+          priority: 500
+          rules:
+            operator: AND
+            on_unknown: no_match
+            conditions:
+              - type: systemone
+                name: offline
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: selector_route
+          description: Both runtimes answered; the managed decision model also chooses the model
+          priority: 400
+          rules:
+            operator: AND
+            on_unknown: no_match
+            conditions:
+              - type: systemone
+                name: answered
+              - type: systemone
+                name: attached_answered
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+            - model: math-expert
+              use_reasoning: false
+          algorithm:
+            type: systemone
+            systemone:
+              deployment: decision-fixture
+              instructions: Which model should answer this request?
+              candidates:
+                general-expert: General assistant for everyday requests
+                math-expert: Specialist for mathematics and quantitative reasoning
+              timeout_ms: 10000
+        # Keeps every systemone signal in use, so each request evaluates all of
+        # them and the signal tests can read their results.
+        - name: signals_route
+          description: Any systemone signal matched
+          priority: 300
+          rules:
+            operator: OR
+            on_unknown: no_match
+            conditions:
+              - {type: systemone, name: request_kind, label: code}
+              - {type: systemone, name: request_kind, label: math}
+              - {type: systemone, name: request_kind, label: chat}
+              - {type: systemone, name: topics, label: billing}
+              - {type: systemone, name: topics, label: shipping}
+              - {type: systemone, name: names, label: city}
+              - {type: systemone, name: names, label: person}
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: default-route
+          description: Fallback route
+          priority: 10
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
   global:
     router:
       strategy: priority
@@ -229,7 +227,7 @@ extraVolumes:
   - name: model-runtime-e2e
     configMap:
       name: model-runtime-e2e
-      defaultMode: 493  # 0755
+      defaultMode: 493 # 0755
 extraVolumeMounts:
   - name: model-runtime-e2e
     mountPath: /opt/vsr-e2e

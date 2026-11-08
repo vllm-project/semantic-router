@@ -20,7 +20,7 @@ func createBootstrapSetupConfig(t *testing.T, dir string) string {
 
 	configPath := filepath.Join(dir, "config.yaml")
 	config := map[string]interface{}{
-		"version": "v0.3",
+		"version": "v0.5",
 		"listeners": []map[string]interface{}{
 			{
 				"name":    "http-8899",
@@ -60,53 +60,55 @@ func isolateConfigMutationRuntime(t *testing.T) {
 func TestSummarizeSetupConfigIncludesRecipeOwnedSignalsAndDecisions(t *testing.T) {
 	var config setupConfigFile
 	err := yaml.Unmarshal([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: shared-model
-routing:
-  modelCards:
-    - name: shared-model
-  decisions: []
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+          provider: vllm
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [vllm-sr/balanced]
     recipe: balanced
 recipes:
+  - name: default
+    decisions: []
   - name: balanced
-    routing:
-      signals:
-        keywords:
-          - name: balanced-keyword
-            operator: OR
-            keywords: [balanced]
-      decisions:
-        - name: balanced-route
-          priority: 100
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: balanced-keyword
-          modelRefs:
-            - model: shared-model
-              use_reasoning: false
+    signals:
+      keywords:
+        - name: balanced-keyword
+          operator: OR
+          keywords: [balanced]
+    decisions:
+      - name: balanced-route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: balanced-keyword
+        modelRefs:
+          - model: shared-model
+            use_reasoning: false
   - name: private
-    routing:
-      signals:
-        pii:
-          - name: private-pii
-            threshold: 0.8
-      decisions:
-        - name: private-route
-          priority: 100
-          rules:
-            operator: AND
-            conditions:
-              - type: pii
-                name: private-pii
-          modelRefs:
-            - model: shared-model
-              use_reasoning: false
+    signals:
+      pii:
+        - name: private-pii
+          threshold: 0.8
+    decisions:
+      - name: private-route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: pii
+              name: private-pii
+        modelRefs:
+          - model: shared-model
+            use_reasoning: false
 `), &config)
 	if err != nil {
 		t.Fatalf("unmarshal config: %v", err)
@@ -119,7 +121,7 @@ recipes:
 	}
 
 	merged := mergeSetupCanonicalConfig(setupConfigFile{}.CanonicalConfig, config.CanonicalConfig)
-	if len(merged.Entrypoints) != 1 || len(merged.Recipes) != 2 {
+	if len(merged.Entrypoints) != 2 || len(merged.Recipes) != 3 {
 		t.Fatalf(
 			"setup merge dropped scoped routing: entrypoints=%d recipes=%d",
 			len(merged.Entrypoints),
@@ -136,7 +138,8 @@ func createValidSetupPatch() map[string]interface{} {
 			},
 			"models": []map[string]interface{}{
 				{
-					"name": "test-model",
+					"name":     "test-model",
+					"modality": "text",
 					"backend_refs": []map[string]interface{}{
 						{
 							"name":     "primary",
@@ -149,13 +152,8 @@ func createValidSetupPatch() map[string]interface{} {
 				},
 			},
 		},
-		"routing": map[string]interface{}{
-			"modelCards": []map[string]interface{}{
-				{
-					"name":     "test-model",
-					"modality": "text",
-				},
-			},
+		"recipes": []map[string]interface{}{{
+			"name": "default",
 			"signals": map[string]interface{}{
 				"domains": []map[string]interface{}{
 					{
@@ -198,7 +196,7 @@ func createValidSetupPatch() map[string]interface{} {
 					},
 				},
 			},
-		},
+		}},
 	}
 }
 
@@ -295,7 +293,7 @@ func TestSetupImportRemoteHandler(t *testing.T) {
 	remoteConfigServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/x-yaml")
 		_, _ = w.Write([]byte(`
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: remote-model
@@ -307,27 +305,26 @@ providers:
           endpoint: remote.example.com
           protocol: https
           weight: 100
-routing:
-  modelCards:
-    - name: remote-model
       modality: text
-  signals:
-    domains:
-      - name: remote-domain
-        description: Remote domain signal
-        labels: [other]
-  decisions:
-    - name: remote-route
-      description: Remote route
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: remote-domain
-      modelRefs:
-        - model: remote-model
-          use_reasoning: false
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: remote-domain
+          description: Remote domain signal
+          labels: [other]
+    decisions:
+      - name: remote-route
+        description: Remote route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: remote-domain
+        modelRefs:
+          - model: remote-model
+            use_reasoning: false
 `))
 	}))
 	defer remoteConfigServer.Close()
@@ -369,8 +366,9 @@ routing:
 	} else if defaults, ok := providers["defaults"].(map[string]interface{}); !ok || defaults["model"] != "remote-model" {
 		t.Fatalf("expected imported config providers.defaults.model=remote-model, got %#v", importedConfig["providers"])
 	}
-	if routing, ok := importedConfig["routing"].(map[string]interface{}); !ok || routing["modelCards"] == nil {
-		t.Fatalf("expected imported config routing.modelCards to be preserved, got %#v", importedConfig["routing"])
+	models, _ := importedConfig["providers"].(map[string]interface{})["models"].([]interface{})
+	if len(models) == 0 || models[0].(map[string]interface{})["modality"] != "text" {
+		t.Fatalf("expected imported config model facts to be preserved, got %#v", importedConfig["providers"])
 	}
 }
 

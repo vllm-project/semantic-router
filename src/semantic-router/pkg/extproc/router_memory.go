@@ -70,12 +70,12 @@ func validateMemoryFilterAlgorithms(cfg *config.RouterConfig) error {
 	if err := validateMemoryFilterAlgorithm(cfg.Memory.Reflection.Algorithm, "global.stores.memory.reflection.algorithm"); err != nil {
 		return err
 	}
-	for _, decision := range cfg.AllRoutingDecisions() {
-		source := decision.GetContextConfig().Source(config.ContextSourceMemory)
+	for _, at := range cfg.RoutingDecisionsAt() {
+		source := at.Decision.GetContextConfig().Source(config.ContextSourceMemory)
 		if source == nil || source.Reflection == nil {
 			continue
 		}
-		field := fmt.Sprintf("routing.decisions[%s].plugins[context].sources[memory].reflection.algorithm", decision.Name)
+		field := at.Path + ".plugins[context].sources[memory].reflection.algorithm"
 		if err := validateMemoryFilterAlgorithm(source.Reflection.Algorithm, field); err != nil {
 			return err
 		}

@@ -115,14 +115,15 @@ global:
   model_catalog:
     deployments:
       local-vela: {provider: model_runtime, artifact: vllm-sr/vela3-fast, device: cpu}
-    bindings:            # every recipe
+    bindings: # every recipe
       pii: local-vela
-routing:
-  model_bindings:        # this routing profile; recipes[].routing.model_bindings for one recipe
-    domain: d3-remote
+recipes:
+  - name: default
+    model_bindings: # this routing profile; recipes[].model_bindings for one recipe
+      domain: d3-remote
 ```
 
-绑定键是应用信号类型：`domain`、`fact_check`、`user_feedback`、`jailbreak`、`safety`、`pii`、`hallucination`、`refusal`、`turn_relation`、`complexity` 和 `modality`。绑定回答该类型中未指定部署的规则；规则写 `deployment:` 可改用其他部署。`routing.signals.systemone[]` 规则和决策的 `algorithm.systemone` 也写 `deployment:`。`jailbreak`、`pii` 和 `hallucination` 绑定同时指定该类型插件模块的模型。
+绑定键是应用信号类型：`domain`、`fact_check`、`user_feedback`、`jailbreak`、`safety`、`pii`、`hallucination`、`refusal`、`turn_relation`、`complexity` 和 `modality`。绑定回答该类型中未指定部署的规则；规则写 `deployment:` 可改用其他部署。`recipes[].signals.systemone[]` 规则和决策的 `algorithm.systemone` 也写 `deployment:`。`jailbreak`、`pii` 和 `hallucination` 绑定同时指定该类型插件模块的模型。
 
 绑定也可以写成对象，用于选择多头 `model_runtime` 部署的某个头：`pii: {deployment: local-vela, head: pii}`。工作点通过 `operating_point` 固定在部署上。
 
@@ -178,10 +179,11 @@ global:
         model: vllm-sr/d3-ultra
         auth: {api_key_env: JUDGE_KEY}
         timeout_ms: 5000
-routing:
-  model_bindings:
-    jailbreak: d3-judge                  # request- and response-stage rules
-    hallucination: d3-judge
+recipes:
+  - name: default
+    model_bindings:
+      jailbreak: d3-judge # request- and response-stage rules
+      hallucination: d3-judge
 ```
 
 该作用域中的每条 `jailbreak` 和 `hallucination` 规则都向 `d3-judge` 提问；其他信号仍由 `primary` 回答。绑定只写部署名：信号决定问题，provider 决定 Router 如何提问。幻觉规则提出 span 问题，因此其部署必须能回答 span；列出 `capabilities.question_types` 的 `systemone` 部署必须包含 `span`。

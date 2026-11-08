@@ -142,53 +142,52 @@ Otherwise write it, replacing `MODEL`, `provider` and `endpoint` with the
 chosen model:
 
 ```yaml
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8899
-    address: 127.0.0.1    # also the host publication: 0.0.0.0 exposes the API on every interface
+    address: 127.0.0.1 # also the host publication: 0.0.0.0 exposes the API on every interface
     port: 8899
     timeout: 300s
 providers:
   defaults:
     model: MODEL
   models:
-    - name: MODEL          # the name the backend serves, such as llama3.2:3b
+    - name: MODEL # the name the backend serves, such as llama3.2:3b
       backend_refs:
         - name: primary
-          provider: ollama                      # or vllm
-          endpoint: host.docker.internal:11434  # host:port as the Router container sees it
+          provider: ollama # or vllm
+          endpoint: host.docker.internal:11434 # host:port as the Router container sees it
           protocol: http
           weight: 100
-routing:
-  modelCards:
-    - name: MODEL
-  signals:
-    keywords:
-      - name: code_request
-        operator: OR
-        keywords: ["python", "function", "bug"]
-        case_sensitive: false
-  decisions:
-    - name: code-route
-      description: Code requests. Same model; it proves that signals reach decisions.
-      priority: 200
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: code_request
-      modelRefs:
-        - model: MODEL
-          use_reasoning: false
-    - name: default-route
-      description: Everything else.
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: MODEL
-          use_reasoning: false
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: code_request
+          operator: OR
+          keywords: ["python", "function", "bug"]
+          case_sensitive: false
+    decisions:
+      - name: code-route
+        description: Code requests. Same model; it proves that signals reach decisions.
+        priority: 200
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: code_request
+        modelRefs:
+          - model: MODEL
+            use_reasoning: false
+      - name: default-route
+        description: Everything else.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: MODEL
+            use_reasoning: false
 ```
 
 ```bash

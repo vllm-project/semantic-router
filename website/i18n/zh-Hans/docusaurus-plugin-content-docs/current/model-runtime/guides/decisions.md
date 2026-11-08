@@ -38,43 +38,44 @@ global:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
         device: auto
-routing:
-  signals:
-    systemone:
-      - name: needs_reasoning
-        deployment: decision-kai
-        question:
-          type: noul
-          instructions: Does answering this request need multi-step reasoning?
-        predicate:
-          gte: 0.7
-        timeout_ms: 1000
-      - name: request_kind
-        deployment: decision-kai
-        question:
-          type: choice
-          instructions: What kind of request is this?
-          choices:
-            - key: code
-              description: Writing, reviewing or debugging code
-            - key: math
-              description: Mathematics or quantitative reasoning
-            - key: chat
-              description: Anything else
-  decisions:
-    - name: hard-code
-      priority: 200
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions:
-          - type: systemone
-            name: request_kind
-            label: code
-          - type: systemone
-            name: needs_reasoning
-      modelRefs:
-        - model: large-coder
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: needs_reasoning
+          deployment: decision-kai
+          question:
+            type: noul
+            instructions: Does answering this request need multi-step reasoning?
+          predicate:
+            gte: 0.7
+          timeout_ms: 1000
+        - name: request_kind
+          deployment: decision-kai
+          question:
+            type: choice
+            instructions: What kind of request is this?
+            choices:
+              - key: code
+                description: Writing, reviewing or debugging code
+              - key: math
+                description: Mathematics or quantitative reasoning
+              - key: chat
+                description: Anything else
+    decisions:
+      - name: hard-code
+        priority: 200
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: systemone
+              name: request_kind
+              label: code
+            - type: systemone
+              name: needs_reasoning
+        modelRefs:
+          - model: large-coder
 ```
 
 instructions 照你怎么问同事的写，每个选项用几个词描述清楚。选项短而具体，答案最可靠。
@@ -82,28 +83,29 @@ instructions 照你怎么问同事的写，每个选项用几个词描述清楚�
 ## 让它来挑模型 {#let-it-choose-the-model}
 
 ```yaml
-routing:
-  decisions:
-    - name: code-route
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: systemone
-            name: request_kind
-            label: code
-      modelRefs:
-        - model: qwen3-8b
-        - model: qwen3-32b
-      algorithm:
-        type: systemone
-        systemone:
-          deployment: decision-kai
-          instructions: Which model should answer this request?
-          candidates:
-            qwen3-8b: Fast general model for routine code
-            qwen3-32b: Strong reasoning model for hard code
-          timeout_ms: 1000
+recipes:
+  - name: default
+    decisions:
+      - name: code-route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: systemone
+              name: request_kind
+              label: code
+        modelRefs:
+          - model: qwen3-8b
+          - model: qwen3-32b
+        algorithm:
+          type: systemone
+          systemone:
+            deployment: decision-kai
+            instructions: Which model should answer this request?
+            candidates:
+              qwen3-8b: Fast general model for routine code
+              qwen3-32b: Strong reasoning model for hard code
+            timeout_ms: 1000
 ```
 
 模型给每个候选的概率，就是它的选择分。模型没就绪或答晚了，`modelRefs` 里的第一个模型答。

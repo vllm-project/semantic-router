@@ -16,7 +16,7 @@ func TestMemoryStartupRespectsDisabledDecisionPlugins(t *testing.T) {
 	}
 	tests := []struct {
 		name      string
-		global    bool
+		global    []config.DecisionPlugin
 		decisions []config.Decision
 		recipes   []config.RoutingRecipe
 		want      bool
@@ -24,7 +24,7 @@ func TestMemoryStartupRespectsDisabledDecisionPlugins(t *testing.T) {
 		{name: "omitted"},
 		{name: "disabled flat plugin", decisions: []config.Decision{plugin(false)}},
 		{name: "enabled flat plugin", decisions: []config.Decision{plugin(true)}, want: true},
-		{name: "global API opt in", global: true, decisions: []config.Decision{plugin(false)}, want: true},
+		{name: "global plugins opt in", global: []config.DecisionPlugin{memoryTestPlugin()}, decisions: []config.Decision{plugin(false)}, want: true},
 		{name: "all recipe plugins disabled", recipes: []config.RoutingRecipe{
 			{Name: "vault", Profile: config.RoutingProfile{Decisions: []config.Decision{plugin(false), plugin(false), plugin(false)}}},
 			{Name: "balance", Profile: config.RoutingProfile{Decisions: []config.Decision{{Name: "simple"}}}},
@@ -36,7 +36,7 @@ func TestMemoryStartupRespectsDisabledDecisionPlugins(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := &config.RouterConfig{Memory: config.MemoryConfig{Enabled: tc.global}, Recipes: tc.recipes}
+			cfg := &config.RouterConfig{GlobalPlugins: tc.global, Recipes: tc.recipes}
 			cfg.Decisions = tc.decisions
 			if got := cfg.UsesMemory(); got != tc.want {
 				t.Fatalf("backend initialization = %v, want %v", got, tc.want)

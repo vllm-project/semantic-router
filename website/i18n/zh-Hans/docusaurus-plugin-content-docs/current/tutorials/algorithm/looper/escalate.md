@@ -41,30 +41,31 @@ Escalate 的设置位于 `escalate` 块中。与每个执行器一样，它还�
 ### 在 Chat 上
 
 ```yaml
-routing:
-  decisions:
-    - name: verified-answers
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: qwen3-8b
-        - model: qwen3-32b
-      algorithm:
-        type: escalate
-        budget: {deadline: 60s, max_calls: 2}
-        on_error: last_attempt
-        escalate:
-          order: size
-          accept:
-            confidence:
-              method: hybrid
-              gte: 0.72
-              hybrid_weights: {logprob_weight: 0.65, margin_weight: 0.35}
+recipes:
+  - name: default
+    decisions:
+      - name: verified-answers
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: qwen3-8b
+          - model: qwen3-32b
+        algorithm:
+          type: escalate
+          budget: {deadline: 60s, max_calls: 2}
+          on_error: last_attempt
+          escalate:
+            order: size
+            accept:
+              confidence:
+                method: hybrid
+                gte: 0.72
+                hybrid_weights: {logprob_weight: 0.65, margin_weight: 0.35}
 ```
 
-`order` 设置升级顺序：`size` 先尝试 `routing.modelCards[].param_size` 最小的模型，`cost` 先尝试定价最低的模型；省略时保持 `modelRefs` 的顺序。
+`order` 设置升级顺序：`size` 先尝试 `providers.models[].param_size` 最小的模型，`cost` 先尝试定价最低的模型；省略时保持 `modelRefs` 的顺序。
 
 `accept` 只能指定一项检查：
 
@@ -160,32 +161,36 @@ entrypoints:
 
 ```yaml
 recipes:
+  - name: default
   - name: native-escalate
-    routing:
-      decisions:
-        - name: answer
-          rules: {}
-          modelRefs: [{model: kai}, {model: vega}]
-          algorithm:
-            type: escalate
-            budget: {deadline: 10s, max_calls: 2}
-            escalate:
-              quality:
-                type: uncalibrated
+    decisions:
+      - name: answer
+        rules: {}
+        modelRefs: [{model: kai}, {model: vega}]
+        algorithm:
+          type: escalate
+          budget: {deadline: 10s, max_calls: 2}
+          escalate:
+            quality:
+              type: uncalibrated
+              accept:
+                native:
+                  - {question_type: choice, field: top_probability, gte: 0}
+                  - {question_type: score, field: top_probability, gte: 0}
+                  - {question_type: noul, field: top_probability, gte: 0}
+            stages:
+              - name: fast
+                model: kai
                 accept:
                   native:
-                    - {question_type: choice, field: top_probability, gte: 0}
-                    - {question_type: score, field: top_probability, gte: 0}
-                    - {question_type: noul, field: top_probability, gte: 0}
-              stages:
-                - name: fast
-                  model: kai
-                  accept:
-                    native:
-                      - {question_type: choice, field: top_probability, gte: 0.6059704079536342}
-                      - {question_type: score, field: top_probability, gte: 0.6059704079536342}
-                      - {question_type: noul, field: top_probability, gte: 0.6059704079536342}
-                - {name: strong, model: vega}
+                    - {question_type: choice, field: top_probability, gte: 0.6059704079536342}
+                    - {question_type: score, field: top_probability, gte: 0.6059704079536342}
+                    - {question_type: noul, field: top_probability, gte: 0.6059704079536342}
+              - {name: strong, model: vega}
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 ```
 
 通用的 `gte: 0` 规则要求每个答案都有有效的分布；它们并不声称有准确率下限。当 Kai 未通过更严格的提前退出门限时，Vega 仍可以返回完整有效的答案。此示例没有依赖模型的路由信号，因此其两次调用的预算覆盖 Kai 以及（需要时的）Vega。如果一次传输重试消耗了一次调用，后续阶段可用的调用就会减少。

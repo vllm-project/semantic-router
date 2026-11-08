@@ -10,13 +10,30 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+// routingYAMLDocument is the routing fragment the DSL owns: its recipes and
+// entrypoints, and the facts its MODEL declarations state on providers.models[]
+// entries (each model's transport stays in the base configuration).
 type routingYAMLDocument struct {
-	Routing     config.CanonicalRouting      `yaml:"routing"`
-	Entrypoints []config.CanonicalEntrypoint `yaml:"entrypoints,omitempty"`
+	Providers   *routingFragmentProviders    `yaml:"providers,omitempty"`
 	Recipes     []config.CanonicalRecipe     `yaml:"recipes,omitempty"`
+	Entrypoints []config.CanonicalEntrypoint `yaml:"entrypoints,omitempty"`
 }
 
-// EmitRoutingYAML compiles DSL source and emits the v0.3 routing fragment.
+type routingFragmentProviders struct {
+	Models []config.CanonicalProviderModel `yaml:"models"`
+}
+
+// modelFactEntries are the providers.models[] entries stating the facts of
+// MODEL declarations.
+func modelFactEntries(cfg *config.RouterConfig) []config.CanonicalProviderModel {
+	var models []config.CanonicalProviderModel
+	for _, card := range config.ModelCardsFromRouterConfig(cfg) {
+		models = append(models, config.CanonicalProviderModel{Name: card.Name, ModelFacts: card.ModelFacts})
+	}
+	return models
+}
+
+// EmitRoutingYAML compiles DSL source and emits the v0.5 routing fragment.
 func EmitRoutingYAML(input string) ([]byte, []error) {
 	cfg, errs := Compile(input)
 	if len(errs) > 0 {
@@ -32,10 +49,9 @@ func EmitRoutingYAML(input string) ([]byte, []error) {
 // EmitRoutingYAMLFromConfig marshals only the DSL-owned routing surface.
 func EmitRoutingYAMLFromConfig(cfg *config.RouterConfig) ([]byte, error) {
 	canonical := config.CanonicalConfigFromRouterConfig(cfg)
-	doc := routingYAMLDocument{
-		Routing:     canonical.Routing,
-		Entrypoints: canonical.Entrypoints,
-		Recipes:     canonical.Recipes,
+	doc := routingYAMLDocument{Recipes: canonical.Recipes, Entrypoints: canonical.Entrypoints}
+	if models := modelFactEntries(cfg); len(models) > 0 {
+		doc.Providers = &routingFragmentProviders{Models: models}
 	}
 	return yaml.Marshal(doc)
 }
@@ -50,7 +66,7 @@ func DecompileRouting(cfg *config.RouterConfig) (string, error) {
 	d.writeSection("SIGNALS")
 	d.decompileSignals()
 
-	models := config.CanonicalRoutingFromRouterConfig(cfg).ModelCards
+	models := config.ModelCardsFromRouterConfig(cfg)
 	if len(models) > 0 {
 		d.writeSection("MODELS")
 		d.decompileRoutingModels(models)
@@ -70,7 +86,7 @@ func DecompileRouting(cfg *config.RouterConfig) (string, error) {
 // DecompileRoutingToAST converts runtime config to a routing-only AST.
 func DecompileRoutingToAST(cfg *config.RouterConfig) *Program {
 	d := &decompiler{cfg: cfg}
-	prog := &Program{Strategy: string(cfg.Strategy), ModelBindings: config.PublicBindings(cfg.ModelBindings), CandidateRequirements: cfg.CandidateRequirements.Clone()}
+	prog := &Program{Strategy: string(cfg.Strategy), ModelBindings: config.PublicBindings(cfg.ModelBindings), RecipePlugins: cfg.Plugins, CandidateRequirements: cfg.CandidateRequirements.Clone()}
 	d.appendSignalsToProgram(prog)
 	d.appendModelsToProgram(prog)
 	d.appendRoutesToProgram(prog)
@@ -78,7 +94,7 @@ func DecompileRoutingToAST(cfg *config.RouterConfig) *Program {
 }
 
 func (d *decompiler) decompileRoutingStrategy() {
-	if d.cfg.Strategy == "" && len(d.cfg.ModelBindings) == 0 && d.cfg.CandidateRequirements == nil {
+	if d.cfg.Strategy == "" && len(d.cfg.ModelBindings) == 0 && d.cfg.CandidateRequirements == nil && len(d.cfg.Plugins) == 0 {
 		return
 	}
 	d.writeSection("ROUTING PROFILE")
@@ -94,6 +110,9 @@ func (d *decompiler) decompileRoutingStrategy() {
 		var fields map[string]interface{}
 		_ = json.Unmarshal(bindings, &fields)
 		d.write("  model_bindings: %s\n", formatPluginConfigValue(fields))
+	}
+	if len(d.cfg.Plugins) > 0 {
+		d.write("  plugins: %s\n", formatRecipePlugins(d.cfg.Plugins))
 	}
 	d.write("}\n\n")
 }
@@ -202,7 +221,7 @@ func (d *decompiler) appendSafetySignals(prog *Program) {
 }
 
 func (d *decompiler) appendModelsToProgram(prog *Program) {
-	for _, model := range config.CanonicalRoutingFromRouterConfig(d.cfg).ModelCards {
+	for _, model := range config.ModelCardsFromRouterConfig(d.cfg) {
 		prog.Models = append(prog.Models, routingModelToDecl(model))
 	}
 }

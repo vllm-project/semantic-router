@@ -35,7 +35,7 @@ var embeddingForms = []ConfigForm{
 		Code:    CodeRemovedField,
 		Paths:   slices.Concat(RoutingScopes("model_bindings.embedding"), []string{"global.model_catalog.bindings.embedding"}),
 		What:    "the embedding binding is removed",
-		Becomes: "global.model_catalog.embeddings.default; a RAG source's backend_config.embedding.deployment for a routing scope's own",
+		Becomes: "global.model_catalog.embeddings.default; a RAG source's backend_config.embedding.deployment for a recipe's own",
 		Migrate: migrateEmbeddingBinding,
 	},
 	{
@@ -75,7 +75,7 @@ var embeddingForms = []ConfigForm{
 }
 
 // migrateEmbeddingBinding writes a global embedding binding as
-// embeddings.default, and a routing scope's as the deployment of the scope's
+// embeddings.default, and a recipe's as the deployment of the scope's
 // RAG sources that embed their queries.
 func migrateEmbeddingBinding(m *Migration, at FormMatch) error {
 	name := at.Node.Value
@@ -112,7 +112,7 @@ func migrateEmbeddingBinding(m *Migration, at FormMatch) error {
 		}
 	}
 	if sources == 0 {
-		m.Note(at.Path, fmt.Sprintf("no RAG source of the routing scope embeds its queries, so deployment %s embeds nothing here", name))
+		m.Note(at.Path, fmt.Sprintf("no RAG source of the recipe embeds its queries, so deployment %s embeds nothing here", name))
 	}
 	return nil
 }

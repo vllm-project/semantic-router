@@ -23,13 +23,13 @@ from cli.router_validation import ROUTER_BINARY_ENV, RouterVerdict
 from click.testing import CliRunner
 
 BASE = {
-    "version": "v0.3",
+    "version": "v0.5",
     "listeners": [{"name": "http", "address": "0.0.0.0", "port": 8899}],
     "providers": {
         "defaults": {"model": "small"},
         "models": [{"name": "small", "backend_refs": [{"endpoint": "small:8000"}]}],
     },
-    "routing": {"modelCards": [{"name": "small"}]},
+    "recipes": [{"name": "default"}],
     "global": {
         "model_catalog": {
             "deployments": {
@@ -79,7 +79,7 @@ DEPRECATED = {
 }
 UNCALIBRATED = {
     "code": "uncalibrated_preset",
-    "field": "routing.signals.jailbreak[attack]",
+    "field": "recipes[default].signals.jailbreak[attack]",
     "message": 'resolves to deployment "d3-remote", whose model has no calibrated '
     "threshold for the jailbreak preset",
 }
@@ -121,7 +121,7 @@ def _signal_bindings(document):
 
 
 def _rag_judge(document):
-    document["routing"]["decisions"] = [
+    document["recipes"][0]["decisions"] = [
         {
             "name": "retrieve",
             "priority": 1,
@@ -165,13 +165,11 @@ def _string_bindings(document):
     document["recipes"] = [
         {
             "name": "private",
-            "routing": {
-                "model_bindings": {
-                    "turn_relation": "chat-judge",
-                    "complexity": "local-vela",
-                    "user_feedback": "local-vela",
-                    "modality": "local-vela",
-                }
+            "model_bindings": {
+                "turn_relation": "chat-judge",
+                "complexity": "local-vela",
+                "user_feedback": "local-vela",
+                "modality": "local-vela",
             },
         }
     ]
@@ -217,7 +215,7 @@ def _deployment_settings(document):
 
 
 def _rule_deployments(document):
-    document["routing"]["signals"] = {
+    document["recipes"][0]["signals"] = {
         "jailbreak": [{"name": "attack", "deployment": "d3-remote"}],
         "safety": [
             {
@@ -236,7 +234,7 @@ def _rule_deployments(document):
             }
         ],
     }
-    document["routing"]["decisions"] = [
+    document["recipes"][0]["decisions"] = [
         {
             "name": "choose",
             "priority": 1,
@@ -257,7 +255,6 @@ def _rule_deployments(document):
     document["providers"]["models"].append(
         {"name": "large", "backend_refs": [{"endpoint": "large:8000"}]}
     )
-    document["routing"]["modelCards"].append({"name": "large"})
 
 
 def _embedding_defaults(document):
@@ -277,7 +274,7 @@ def _bind(scope: str, key: str):
             _catalog(document)["bindings"] = {key: binding}
         else:
             document["recipes"] = [
-                {"name": "private", "routing": {"model_bindings": {key: binding}}}
+                {"name": "private", "model_bindings": {key: binding}}
             ]
 
     return bind
@@ -305,7 +302,7 @@ def test_bindings_of_removed_modules_and_signals_are_refused(scope, key, becomes
     prefix = (
         "global.model_catalog.bindings"
         if scope == "global"
-        else "recipes[private].routing.model_bindings"
+        else "recipes[private].model_bindings"
     )
     assert str(refused.value).startswith(
         f"{prefix}.{key}: removed_field: binding {key} "
@@ -339,7 +336,7 @@ def test_the_generated_schema_admits_the_shapes_the_router_reads(mutate):
 
 def test_a_string_binding_names_its_deployment():
     config = UserConfig.model_validate(_document(_string_bindings))
-    binding = config.recipes[0].routing.model_bindings["turn_relation"]
+    binding = config.recipes[0].model_bindings["turn_relation"]
 
     assert binding.deployment == "chat-judge" and binding.contract is None
     assert binding.model_dump() == "chat-judge"

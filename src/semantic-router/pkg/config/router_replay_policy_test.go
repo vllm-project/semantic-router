@@ -8,7 +8,7 @@ import (
 )
 
 func TestReplayWithoutPersonalDataActivatesPIIEvidence(t *testing.T) {
-	cfg, err := ParseYAMLBytes([]byte(`version: v0.3
+	cfg, err := ParseYAMLBytes([]byte(`version: v0.5
 providers:
   defaults:
     model: local
@@ -16,25 +16,24 @@ providers:
     - name: local
       backend_refs:
         - endpoint: local:8000
-routing:
-  signals:
-    pii:
-      - name: personal_data
-        input: {history: false}
-        ignore_labels: [DATE_TIME]
-  decisions:
-    - name: fast
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: local
+recipes:
+  - name: default
+    signals:
+      pii:
+        - name: personal_data
+          input: {history: false}
+          ignore_labels: [DATE_TIME]
+    decisions:
+      - name: fast
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: local
 global:
   services:
-    router_replay:
-      enabled: true
-      capture_personal_data: false
+    router_replay: {}
   model_catalog:
     deployments:
       primary:
@@ -43,6 +42,11 @@ global:
     system:
       decision_model:
         deployment: primary
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
+        capture_personal_data: false
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -53,51 +57,61 @@ global:
 	}
 }
 
+func replayPlugin(configuration map[string]interface{}) DecisionPlugin {
+	return DecisionPlugin{Type: DecisionPluginRouterReplay, Configuration: MustStructuredPayload(configuration)}
+}
+
 func TestReplayGlobalDefaultsAndExplicitDecisionOverrides(t *testing.T) {
-	no, yes, zero := false, true, 0
-	cfg := &RouterConfig{RouterReplay: RouterReplayConfig{Enabled: true, CaptureRequestBody: &no, CapturePersonalData: &no, MaxToolTraceSteps: &zero}}
-	inherited := cfg.EffectiveRouterReplayConfig(nil)
+	yes, no := true, false
+	global := []DecisionPlugin{replayPlugin(map[string]interface{}{
+		"enabled": true, "capture_request_body": false, "capture_personal_data": false, "max_tool_trace_steps": 0,
+	})}
+	inherited := layeredRouting(global, Decision{Name: "plain"}).EffectiveRouterReplayConfig(nil)
 	if inherited.CaptureRequestBody || inherited.CapturesPersonalData() || inherited.MaxToolTraceSteps != 0 || !inherited.CaptureResponseBody {
 		t.Fatalf("incorrect global defaults: %+v", inherited)
 	}
-	d := &Decision{Plugins: []DecisionPlugin{{Type: DecisionPluginRouterReplay, Configuration: MustStructuredPayload(map[string]interface{}{
+	cfg := layeredRouting(global, Decision{Name: "d", Plugins: []DecisionPlugin{replayPlugin(map[string]interface{}{
 		"capture_request_body": true, "capture_personal_data": true, "capture_response_body": false, "max_body_bytes": 0,
-	})}}}
-	got := cfg.EffectiveRouterReplayConfig(d)
+	})}})
+	got := cfg.EffectiveRouterReplayConfig(cfg.GetDecisionByName("d"))
 	if !got.CaptureRequestBody || !got.CapturesPersonalData() || got.CaptureResponseBody || got.MaxBodyBytes != 0 || got.MaxToolTraceSteps != 0 {
 		t.Fatalf("incorrect overlay: %+v", got)
 	}
-	if *cfg.RouterReplay.CapturePersonalData || *cfg.RouterReplay.CaptureRequestBody {
-		t.Fatal("resolution mutated global defaults")
-	}
-	for _, global := range []bool{false, true} {
+	for _, enabled := range []bool{false, true} {
 		for _, override := range []*bool{nil, &yes, &no} {
-			cfg.RouterReplay.Enabled, d.Plugins = global, nil
-			want := global
+			var layer []DecisionPlugin
+			if enabled {
+				layer = []DecisionPlugin{replayPlugin(map[string]interface{}{"enabled": true})}
+			}
+			want, decision := enabled, Decision{Name: "d"}
 			if override != nil {
 				want = *override
-				d.Plugins = []DecisionPlugin{{Type: DecisionPluginRouterReplay, Configuration: MustStructuredPayload(map[string]interface{}{"enabled": *override})}}
+				decision.Plugins = []DecisionPlugin{replayPlugin(map[string]interface{}{"enabled": *override})}
 			}
-			if (cfg.EffectiveRouterReplayConfig(d) != nil) != want {
-				t.Fatalf("global %v override %v", global, override)
+			cfg := layeredRouting(layer, decision)
+			if (cfg.EffectiveRouterReplayConfig(cfg.GetDecisionByName("d")) != nil) != want {
+				t.Fatalf("global %v override %v", enabled, override)
 			}
 		}
 	}
 }
 
 func TestReplayCaptureDefaultsRoundTripWithoutPIIRules(t *testing.T) {
-	raw := []byte(`version: v0.3
+	raw := []byte(`version: v0.5
 global:
   services:
-    router_replay:
-      enabled: true
-      capture_request_body: false
-      capture_response_body: false
-      capture_personal_data: false
-      max_records: 77
-      max_body_bytes: 0
-      max_tool_trace_bytes: 0
-      max_tool_trace_steps: 0
+    router_replay: {}
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
+        capture_request_body: false
+        capture_response_body: false
+        capture_personal_data: false
+        max_records: 77
+        max_body_bytes: 0
+        max_tool_trace_bytes: 0
+        max_tool_trace_steps: 0
 `)
 	cfg, err := ParseYAMLBytes(raw)
 	if err != nil {
@@ -120,53 +134,61 @@ global:
 	}
 }
 
-func TestRemovedDataPolicyIsUnknownInCanonicalAndFragments(t *testing.T) {
+// A recipe's data_policy is a removed form, in a configuration and in a
+// routing fragment: the line names the router_replay plugin migrate writes.
+func TestRemovedDataPolicyIsARemovedFormInCanonicalAndFragments(t *testing.T) {
+	const line = "data_policy: removed_field: a recipe's data_policy is removed"
 	for _, field := range []string{"replay: false", "replay_personal_data: false"} {
-		for _, prefix := range []string{"routing:\n  ", "recipes:\n  - name: other\n    routing:\n      "} {
-			_, err := ParseYAMLBytes([]byte("version: v0.3\n" + prefix + "data_policy: {" + field + "}\n"))
-			if err == nil || !strings.Contains(err.Error(), "unknown field \"data_policy\"") {
-				t.Fatalf("want unknown data_policy: %v", err)
+		for _, prefix := range []string{"recipes:\n  - name: default\n    ", "recipes:\n  - name: default\n  - name: other\n    "} {
+			_, err := ParseYAMLBytes([]byte("version: v0.5\n" + prefix + "data_policy: {" + field + "}\n"))
+			if err == nil || !strings.Contains(err.Error(), line) {
+				t.Fatalf("want the removed data_policy: %v", err)
 			}
 		}
-		_, err := ParseRoutingYAMLBytes([]byte("routing:\n  data_policy: {" + field + "}\n"))
-		if err == nil || !strings.Contains(err.Error(), "unknown field \"data_policy\"") {
+		_, err := ParseRoutingYAMLBytes([]byte("recipes:\n  - name: default\n    data_policy: {" + field + "}\n"))
+		if err == nil || !strings.Contains(err.Error(), line) {
 			t.Fatalf("fragment accepted data_policy: %v", err)
 		}
 	}
 }
 
 func TestReplayPIIDemandTracksPossibleEffectivePolicies(t *testing.T) {
-	no := false
-	cfg := &RouterConfig{RouterReplay: RouterReplayConfig{Enabled: true, CapturePersonalData: &no}, IntelligentRouting: IntelligentRouting{Signals: Signals{PIIRules: []PIIRule{{Name: "personal"}}}}}
+	withheld := []DecisionPlugin{replayPlugin(map[string]interface{}{"capture_personal_data": false})}
+	routing := func(global []DecisionPlugin, decision Decision) *RouterConfig {
+		cfg := layeredRouting(global, decision)
+		cfg.Recipes[0].Profile.Signals.PIIRules = []PIIRule{{Name: "personal"}}
+		cfg.mirrorDefaultRecipe()
+		return cfg
+	}
+	cfg := routing([]DecisionPlugin{replayPlugin(map[string]interface{}{"enabled": true, "capture_personal_data": false})}, Decision{Name: "plain"})
 	if !cfg.ReplayNeedsPIIEvidence() || !cfg.UsesSignalTypeInRouting(SignalTypePII) {
 		t.Fatal("global policy must consume existing PII rules")
 	}
-	cfg.RouterReplay.Enabled = false
-	if cfg.ReplayNeedsPIIEvidence() {
+	if routing(withheld, Decision{Name: "plain"}).ReplayNeedsPIIEvidence() {
 		t.Fatal("disabled replay must not consume PII")
 	}
-	cfg.Decisions = []Decision{{Plugins: []DecisionPlugin{{Type: DecisionPluginRouterReplay, Configuration: MustStructuredPayload(map[string]interface{}{"enabled": true})}}}}
-	if !cfg.ReplayNeedsPIIEvidence() {
+	optedIn := Decision{Name: "d", Plugins: []DecisionPlugin{replayPlugin(map[string]interface{}{"enabled": true})}}
+	if !routing(withheld, optedIn).ReplayNeedsPIIEvidence() {
 		t.Fatal("decision opt-in must consume PII")
 	}
-	cfg.Decisions[0].Plugins[0].Configuration = MustStructuredPayload(map[string]interface{}{"enabled": true, "capture_personal_data": true})
-	if cfg.ReplayNeedsPIIEvidence() {
+	captured := Decision{Name: "d", Plugins: []DecisionPlugin{replayPlugin(map[string]interface{}{"enabled": true, "capture_personal_data": true})}}
+	if routing(withheld, captured).ReplayNeedsPIIEvidence() {
 		t.Fatal("explicit capture must remove unused PII demand")
 	}
 }
 
 func TestReplayToolResultCaptureDefaultsAndDecisionOverrides(t *testing.T) {
-	yes, no := true, false
-	cfg := &RouterConfig{RouterReplay: RouterReplayConfig{Enabled: true}}
+	no := false
+	cfg := layeredRouting([]DecisionPlugin{replayPlugin(map[string]interface{}{"enabled": true})}, Decision{Name: "plain"})
 	if cfg.EffectiveRouterReplayConfig(nil).CapturesToolResults() {
 		t.Fatal("tool results must stay redacted by default")
 	}
-	cfg.RouterReplay.CaptureToolResults = &yes
+	global := []DecisionPlugin{replayPlugin(map[string]interface{}{"enabled": true, "capture_tool_results": true})}
+	cfg = layeredRouting(global, Decision{Name: "off", Plugins: []DecisionPlugin{replayPlugin(map[string]interface{}{"capture_tool_results": false})}})
 	if !cfg.EffectiveRouterReplayConfig(nil).CapturesToolResults() {
 		t.Fatal("global capture_tool_results was not applied")
 	}
-	off := &Decision{Plugins: []DecisionPlugin{{Type: DecisionPluginRouterReplay, Configuration: MustStructuredPayload(map[string]interface{}{"capture_tool_results": false})}}}
-	if cfg.EffectiveRouterReplayConfig(off).CapturesToolResults() {
+	if cfg.EffectiveRouterReplayConfig(cfg.GetDecisionByName("off")).CapturesToolResults() {
 		t.Fatal("a decision could not turn tool-result capture off")
 	}
 	withheld := &RouterReplayPluginConfig{Enabled: true, CaptureToolResults: true, CapturePersonalData: &no}
@@ -177,21 +199,22 @@ func TestReplayToolResultCaptureDefaultsAndDecisionOverrides(t *testing.T) {
 
 func TestReplayToolResultCaptureRequiresPersonalDataAtLoad(t *testing.T) {
 	const decisions = `
-routing:
-  decisions:
-    - name: agent_loop
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: local
-      plugins:
-        - type: router_replay
-          configuration:
+recipes:
+  - name: default
+    decisions:
+      - name: agent_loop
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: local
+        plugins:
+          - type: router_replay
+            configuration:
 `
 	document := func(global, plugin string) []byte {
-		return []byte(`version: v0.3
+		return []byte(`version: v0.5
 providers:
   defaults:
     model: local
@@ -199,20 +222,23 @@ providers:
     - name: local
       backend_refs:
         - endpoint: local:8000
-` + decisions + "            " + plugin + `
+` + decisions + "              " + plugin + `
 global:
   services:
-    router_replay:
-      enabled: true
+    router_replay: {}
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
 ` + global)
 	}
 	for _, test := range []struct {
 		name, global, plugin, refused string
 	}{
-		{"allowed", "      capture_tool_results: true\n", "enabled: true", ""},
-		{"global conflict", "      capture_tool_results: true\n      capture_personal_data: false\n", "capture_tool_results: false", "global.services.router_replay"},
-		{"decision inherits withheld personal data", "      capture_personal_data: false\n", "capture_tool_results: true", `decision "agent_loop"`},
-		{"decision withholds inherited capture", "      capture_tool_results: true\n", "capture_personal_data: false", `decision "agent_loop"`},
+		{"allowed", "        capture_tool_results: true\n", "enabled: true", ""},
+		{"global conflict", "        capture_tool_results: true\n        capture_personal_data: false\n", "capture_tool_results: false", "global.plugins[router_replay]"},
+		{"decision inherits withheld personal data", "        capture_personal_data: false\n", "capture_tool_results: true", `decision "agent_loop"`},
+		{"decision withholds inherited capture", "        capture_tool_results: true\n", "capture_personal_data: false", `decision "agent_loop"`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := ParseYAMLBytes(document(test.global, test.plugin))

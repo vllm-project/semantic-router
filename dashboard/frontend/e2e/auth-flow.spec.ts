@@ -291,10 +291,9 @@ test.describe('Dashboard auth flow', () => {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          signals: {},
-          decisions: [],
+          version: 'v0.5',
           providers: { models: [] },
-          plugins: {},
+          recipes: [{ name: 'default' }],
         }),
       })
     })
@@ -456,10 +455,9 @@ test.describe('Dashboard auth flow', () => {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          signals: {},
-          decisions: [],
+          version: 'v0.5',
           providers: { models: [] },
-          plugins: {},
+          recipes: [{ name: 'default' }],
         }),
       })
     })
@@ -595,10 +593,9 @@ test.describe('Dashboard auth flow', () => {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          signals: {},
-          decisions: [],
+          version: 'v0.5',
           providers: { models: [] },
-          plugins: {},
+          recipes: [{ name: 'default' }],
         }),
       })
     })
@@ -776,9 +773,9 @@ test.describe('Dashboard auth flow', () => {
     await page.route('**/api/router/config/all', (route) =>
       route.fulfill({
         json: {
-          version: 'v0.3',
+          version: 'v0.5',
           providers: { models: [] },
-          routing: { signals: {}, decisions: [] },
+          recipes: [{ name: 'default' }],
         },
       }),
     )
@@ -830,10 +827,9 @@ test.describe('Dashboard auth flow', () => {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          signals: {},
-          decisions: [],
+          version: 'v0.5',
           providers: { models: [] },
-          plugins: {},
+          recipes: [{ name: 'default' }],
         }),
       })
     })
@@ -911,10 +907,9 @@ test.describe('Dashboard auth flow', () => {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          signals: {},
-          decisions: [],
+          version: 'v0.5',
           providers: { models: [] },
-          plugins: {},
+          recipes: [{ name: 'default' }],
         }),
       })
     })
@@ -931,7 +926,7 @@ test.describe('Dashboard auth flow', () => {
       await route.fulfill({
         status: 200,
         headers: { 'Content-Type': 'text/plain' },
-        body: 'signals: {}\ndecisions: []\nproviders:\n  models: []\nplugins: {}\n',
+        body: 'version: v0.5\nproviders:\n  models: []\nrecipes:\n  - name: default\n',
       })
     })
 

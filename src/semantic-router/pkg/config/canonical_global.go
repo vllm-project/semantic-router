@@ -10,13 +10,18 @@ import (
 )
 
 // CanonicalGlobal contains router-managed runtime defaults plus sparse
-// overrides, organized into explicit platform modules.
+// overrides, organized into explicit platform modules. Stores and services
+// say where the Router keeps state; a plugin turns a feature on.
 type CanonicalGlobal struct {
 	Router       CanonicalRouterGlobal      `yaml:"router"`
 	Services     CanonicalServiceGlobal     `yaml:"services"`
 	Stores       CanonicalStoreGlobal       `yaml:"stores"`
 	Integrations CanonicalIntegrationGlobal `yaml:"integrations"`
 	ModelCatalog CanonicalModelCatalog      `yaml:"model_catalog"`
+	// Plugins are the default plugins of every decision, and of a request that
+	// matches no decision. A recipe's plugin of the same type overrides one
+	// field by field, and a decision's plugin overrides the recipe's.
+	Plugins []DecisionPlugin `yaml:"plugins,omitempty"`
 }
 
 // CanonicalRouterGlobal captures router-engine control knobs.

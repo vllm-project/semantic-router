@@ -65,15 +65,17 @@ A binding is keyed by its signal type and names a deployment. The signal
 decides the contract and the provider decides the adapter.
 
 ```yaml title="migrate-binding-object-before"
-routing:
-  model_bindings:
-    jailbreak: {deployment: kai, contract: decision.v1}
+recipes:
+  - name: default
+    model_bindings:
+      jailbreak: {deployment: kai, contract: decision.v1}
 ```
 
 ```yaml title="migrate-binding-object-after"
-routing:
-  model_bindings:
-    jailbreak: kai
+recipes:
+  - name: default
+    model_bindings:
+      jailbreak: kai
 ```
 
 ## Rule bindings
@@ -81,19 +83,21 @@ routing:
 A binding for one rule becomes the rule's `deployment`.
 
 ```yaml title="migrate-rule-bindings-before"
-routing:
-  model_bindings:
-    safety.harmful: kai
-  signals:
-    safety:
-      - {name: harmful, predicate: {gte: 0.5}}
+recipes:
+  - name: default
+    model_bindings:
+      safety.harmful: kai
+    signals:
+      safety:
+        - {name: harmful, predicate: {gte: 0.5}}
 ```
 
 ```yaml title="migrate-rule-bindings-after"
-routing:
-  signals:
-    safety:
-      - {name: harmful, deployment: kai, predicate: {gte: 0.5}}
+recipes:
+  - name: default
+    signals:
+      safety:
+        - {name: harmful, deployment: kai, predicate: {gte: 0.5}}
 ```
 
 ## The memory rewrite model

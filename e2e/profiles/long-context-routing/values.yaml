@@ -1,5 +1,5 @@
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -19,35 +19,34 @@ config:
             provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    modelCards:
-      - name: general-expert
-    signals:
-      context:
-        - name: long_context
-          description: Requests estimated at 500 tokens or more.
-          min_tokens: "500"
-    decisions:
-      - name: long_context_routing
-        description: Route requests whose estimated token count matches the long_context band.
-        priority: 2000
-        rules:
-          operator: AND
-          conditions:
-            - type: context
-              name: long_context
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
-      - name: default-route
-        description: Fallback route for requests below the long_context threshold
-        priority: 10
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
+  recipes:
+    - name: default
+      signals:
+        context:
+          - name: long_context
+            description: Requests estimated at 500 tokens or more.
+            min_tokens: "500"
+      decisions:
+        - name: long_context_routing
+          description: Route requests whose estimated token count matches the long_context band.
+          priority: 2000
+          rules:
+            operator: AND
+            conditions:
+              - type: context
+                name: long_context
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: default-route
+          description: Fallback route for requests below the long_context threshold
+          priority: 10
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
   global:
     router:
       strategy: priority

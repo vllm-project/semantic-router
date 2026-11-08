@@ -386,18 +386,7 @@ func initMemoryStore(maxRetries int, retryInterval time.Duration) memory.Store {
 }
 
 func shouldInitMemoryStore(cfg *config.RouterConfig) bool {
-	if cfg == nil {
-		return false
-	}
-	if cfg.Memory.Enabled {
-		return true
-	}
-	for _, decision := range cfg.Decisions {
-		if decision.HasPlugin("memory") {
-			return true
-		}
-	}
-	return false
+	return cfg != nil && cfg.Memory.InUse
 }
 
 // setupRoutes configures all API routes

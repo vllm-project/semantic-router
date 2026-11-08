@@ -131,7 +131,7 @@ Dashboard 修改合并到 `legacy.migrated.yaml`，再加上 `--replace-active-c
 并使用响应缓存的 NLI polarity guard：
 
 ```yaml title="legacy.yaml"
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -142,13 +142,14 @@ providers:
         - name: answer
           endpoint: vllm:8000
           provider: vllm
-routing:
-  model_bindings:
-    embedding:
-      deployment: vela-embedding
-      contract: embedding.v1
-      adapter: mmbert
-      head: onnx/model_fa.onnx
+recipes:
+  - name: default
+    model_bindings:
+      embedding:
+        deployment: vela-embedding
+        contract: embedding.v1
+        adapter: mmbert
+        head: onnx/model_fa.onnx
 global:
   model_catalog:
     deployments:
@@ -165,16 +166,20 @@ global:
         precision: fp16
   stores:
     response_cache:
-      enabled: true
       backend_type: memory
       polarity_guard:
         mode: lexical+nli
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        scope: global
 ```
 
 `vllm-sr config migrate --config legacy.yaml` 写出：
 
 ```yaml title="legacy.migrated.yaml"
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -185,7 +190,8 @@ providers:
         - name: answer
           endpoint: vllm:8000
           provider: vllm
-routing: {}
+recipes:
+  - name: default
 global:
   model_catalog:
     deployments:
@@ -199,8 +205,12 @@ global:
         device: rocm:0
   stores:
     response_cache:
-      enabled: true
       backend_type: memory
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        scope: global
 ```
 
 响应缓存原本使用此前的默认模型 MiniLM；现在它用 `embeddings.default` 向量化，即文件在 AMD GPU 上声明的 `vela-embedding` 部署，它也取代了 embedding 绑定。

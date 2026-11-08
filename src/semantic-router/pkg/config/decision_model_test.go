@@ -24,19 +24,19 @@ func mustParseDecisionModel(t *testing.T, raw string) *RouterConfig {
 }
 
 func withDecisionQuestion(raw string) string {
-	return strings.Replace(raw, "  signals:\n", "  signals:\n    systemone:\n      - name: needs_tools\n"+
-		"        question: {type: noul, instructions: \"Does the request need a tool?\"}\n", 1)
+	return strings.Replace(raw, "\n    signals:\n", "\n    signals:\n      systemone:\n        - name: needs_tools\n"+
+		"          question: {type: noul, instructions: \"Does the request need a tool?\"}\n", 1)
 }
 
 func withDecisionSelector(raw, deployment string) string {
-	selector := "        systemone:\n          instructions: Which model should answer?\n"
+	selector := "          systemone:\n            instructions: Which model should answer?\n"
 	if deployment != "" {
-		selector += "          deployment: " + deployment + "\n"
+		selector += "            deployment: " + deployment + "\n"
 	}
-	return strings.Replace(raw, "  decisions:\n", "  decisions:\n    - name: choose\n      priority: 200\n"+
-		"      rules: {operator: AND, conditions: [{type: domain, name: math}]}\n"+
-		"      modelRefs: [{model: general}, {model: other-model}]\n"+
-		"      algorithm:\n        type: systemone\n"+selector, 1)
+	return strings.Replace(raw, "\n    decisions:\n", "\n    decisions:\n      - name: choose\n        priority: 200\n"+
+		"        rules: {operator: AND, conditions: [{type: domain, name: math}]}\n"+
+		"        modelRefs: [{model: general}, {model: other-model}]\n"+
+		"        algorithm:\n          type: systemone\n"+selector, 1)
 }
 
 func withOtherModel(raw string) string {

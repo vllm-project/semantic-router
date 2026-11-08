@@ -22,7 +22,7 @@ func TestMemoryWarnsThatRemoteEmbeddingIdentityIsUnverified(t *testing.T) {
 		})
 	}))
 	t.Cleanup(server.Close)
-	cfg := &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, Milvus: config.MemoryMilvusConfig{Collection: "existing"}}}
+	cfg := &config.RouterConfig{GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()}, Memory: config.MemoryConfig{InUse: true, Milvus: config.MemoryMilvusConfig{Collection: "existing"}}}
 	cfg.EmbeddingDeployment = "remote-embedding"
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"remote-embedding": {
 		Provider: config.OpenAIEmbeddingsProvider, Endpoint: server.URL, Model: "text-embedding", Capabilities: &config.DeploymentCapabilities{Dimensions: 2},

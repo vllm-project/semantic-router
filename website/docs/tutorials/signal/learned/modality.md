@@ -4,7 +4,7 @@
 
 `modality` detects whether a request should stay in text generation, switch into
 image generation, or support both. Define its output labels under
-`routing.signals.modality`.
+`recipes[].signals.modality`.
 
 The configured `modality_detector` classifies the intended output mode; the
 named result is then available to ordinary decisions.
@@ -12,7 +12,7 @@ named result is then available to ordinary decisions.
 ## Key Advantages
 
 - Keeps image-generation routing separate from text-only routes.
-- Makes multimodal traffic visible in `routing.decisions`.
+- Makes multimodal traffic visible in `recipes[].decisions`.
 - Avoids mixing modality checks into every decision rule.
 - Scales from simple request-shape routing into detector-backed multimodal classification.
 
@@ -34,15 +34,16 @@ Use `modality` when:
 ## Configuration
 
 ```yaml
-routing:
-  signals:
-    modality:
-      - name: AR
-        description: Text-only autoregressive requests.
-      - name: DIFFUSION
-        description: Requests that should route into image generation flows.
-      - name: BOTH
-        description: Requests that need both text and image generation behavior.
+recipes:
+  - name: default
+    signals:
+      modality:
+        - name: AR
+          description: Text-only autoregressive requests.
+        - name: DIFFUSION
+          description: Requests that should route into image generation flows.
+        - name: BOTH
+          description: Requests that need both text and image generation behavior.
 ```
 
 Keep the rule names aligned with the route behavior you want decisions to
@@ -72,7 +73,7 @@ keyword` needs `keywords`; `method: hybrid` also needs `lower_threshold_ratio`
 and a classifier or keywords.
 
 A decision on `BOTH` must reference both an AR model (`modality: ar` in
-`routing.modelCards`) and a diffusion model (`modality: diffusion`), or an omni
+`providers.models`) and a diffusion model (`modality: diffusion`), or an omni
 model (`modality: omni`).
 
 ## Dependencies and Limitations

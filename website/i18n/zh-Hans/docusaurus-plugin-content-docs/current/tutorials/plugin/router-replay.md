@@ -90,11 +90,12 @@ plugins:
 没有配置 PII 检测器、证据不可用或分类失败时，也会保守地省略内容；无需为了此设置强制配置 PII 信号。配置检测器后，确认没有个人数据的请求可以采集内容，例如：
 
 ```yaml
-routing:
-  signals:
-    pii:
-      - name: personal_data
-        pii_types_allowed: []
+recipes:
+  - name: default
+    signals:
+      pii:
+        - name: personal_data
+          pii_types_allowed: []
 ```
 
 ## 影子请求 {#shadow}

@@ -10,7 +10,7 @@
 # testcases/model_runtime_real.go asserts what these models decide for clear
 # prompts, and that the Router routes on Kai's own answer.
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -31,91 +31,89 @@ config:
             provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    modelCards:
-      - name: general-expert
-      - name: math-expert
-    signals:
-      domains:
-        - {name: math, description: Mathematics, labels: [math]}
-        - {name: computer science, description: Computer science, labels: [computer science]}
-        - {name: other, description: Anything else, labels: [other]}
-      pii:
-        - name: personal_data
-          description: Any personal information.
-          predicate:
-            gte: 0.5
-      jailbreak:
-        - name: prompt_attack
-          description: Prompt injection or jailbreak.
-          predicate:
-            gte: 0.5
-      systemone:
-        - name: request_kind
-          description: Which kind of work the request asks for.
-          deployment: kai
-          question:
-            type: choice
-            instructions: What kind of work does this request ask for?
-            choices:
-              - key: code
-                description: Writing, reviewing or debugging code
-              - key: math
-                description: Mathematics or quantitative reasoning
-              - key: chat
-                description: Anything else
-          timeout_ms: 30000
-    decisions:
-      - name: jailbreak_route
-        description: A prompt attack
-        priority: 500
-        rules:
-          operator: AND
-          conditions:
-            - {type: jailbreak, name: prompt_attack}
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
-      - name: pii_route
-        description: The request carries personal data
-        priority: 400
-        rules:
-          operator: AND
-          conditions:
-            - {type: pii, name: personal_data}
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
-      - name: code_route
-        description: Kai says the request asks for code
-        priority: 300
-        rules:
-          operator: AND
-          on_unknown: no_match
-          conditions:
-            - {type: systemone, name: request_kind, label: code}
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
-      - name: math_route
-        description: Vela Domain says the request is mathematics
-        priority: 200
-        rules:
-          operator: AND
-          conditions:
-            - {type: domain, name: math}
-        modelRefs:
-          - model: math-expert
-            use_reasoning: false
-      - name: default-route
-        description: Fallback route
-        priority: 10
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
+  recipes:
+    - name: default
+      signals:
+        domains:
+          - {name: math, description: Mathematics, labels: [math]}
+          - {name: computer science, description: Computer science, labels: [computer science]}
+          - {name: other, description: Anything else, labels: [other]}
+        pii:
+          - name: personal_data
+            description: Any personal information.
+            predicate:
+              gte: 0.5
+        jailbreak:
+          - name: prompt_attack
+            description: Prompt injection or jailbreak.
+            predicate:
+              gte: 0.5
+        systemone:
+          - name: request_kind
+            description: Which kind of work the request asks for.
+            deployment: kai
+            question:
+              type: choice
+              instructions: What kind of work does this request ask for?
+              choices:
+                - key: code
+                  description: Writing, reviewing or debugging code
+                - key: math
+                  description: Mathematics or quantitative reasoning
+                - key: chat
+                  description: Anything else
+            timeout_ms: 30000
+      decisions:
+        - name: jailbreak_route
+          description: A prompt attack
+          priority: 500
+          rules:
+            operator: AND
+            conditions:
+              - {type: jailbreak, name: prompt_attack}
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: pii_route
+          description: The request carries personal data
+          priority: 400
+          rules:
+            operator: AND
+            conditions:
+              - {type: pii, name: personal_data}
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: code_route
+          description: Kai says the request asks for code
+          priority: 300
+          rules:
+            operator: AND
+            on_unknown: no_match
+            conditions:
+              - {type: systemone, name: request_kind, label: code}
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: math_route
+          description: Vela Domain says the request is mathematics
+          priority: 200
+          rules:
+            operator: AND
+            conditions:
+              - {type: domain, name: math}
+          modelRefs:
+            - model: math-expert
+              use_reasoning: false
+        - name: default-route
+          description: Fallback route
+          priority: 10
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
   global:
     router:
       strategy: priority

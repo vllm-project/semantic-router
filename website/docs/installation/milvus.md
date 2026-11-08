@@ -111,23 +111,24 @@ inserts or searches to fail.
 Enable the route plugin on decisions that may read or populate the cache:
 
 ```yaml
-routing:
-  decisions:
-    - name: general-chat
-      description: General requests that may use response cache.
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: local/general
-      plugins:
-        - type: response_cache
-          configuration:
-            enabled: true
-            semantic:
-              match:
-                recall: {top_k: 3, min_similarity: 0.86}
+recipes:
+  - name: default
+    decisions:
+      - name: general-chat
+        description: General requests that may use response cache.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: local/general
+        plugins:
+          - type: response_cache
+            configuration:
+              enabled: true
+              semantic:
+                match:
+                  recall: {top_k: 3, min_similarity: 0.86}
 ```
 
 Run configuration validation before rollout:

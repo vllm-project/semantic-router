@@ -1,4 +1,4 @@
-"""Helpers for migrating legacy CLI config layouts to canonical v0.3 YAML."""
+"""Helpers for migrating legacy CLI config layouts to the canonical layout."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ from typing import Any
 
 from cli.config_contract import (
     CANONICAL_TOP_LEVEL_KEYS,
-    CANONICAL_VERSION,
     LEGACY_PROVIDER_DEFAULT_KEYS,
     LEGACY_PROVIDER_KEYS,
     LEGACY_ROUTING_KEYS,
@@ -18,12 +17,15 @@ from cli.config_migration_global import normalize_global_layout, place_global_bl
 from cli.config_migration_looper import drop_looper_endpoint
 from cli.config_migration_model_runtime import migrate_model_runtime_contract
 from cli.config_migration_notes import MigrationNotes
+from cli.config_migration_structure import restructure_layout
+from cli.config_structure_forms import PREVIOUS_VERSION
+from cli.models import MODEL_FACT_FIELDS
 
 
 def migrate_config_data(
     data: dict[str, Any], notes: MigrationNotes | None = None
 ) -> dict[str, Any]:
-    """Return a canonical v0.3 config dict from legacy or mixed input data.
+    """Return a canonical config dict from legacy or mixed input data.
 
     ``notes`` collects the rewrites and removals an operator should review.
     """
@@ -47,22 +49,25 @@ def migrate_config_data(
     _migrate_legacy_flat_model_bindings(
         source, provider_models, routing_models, routing_models_by_name
     )
-    _ensure_routing_model_refs(
-        providers, provider_models, routing_models, routing_models_by_name
-    )
-    if routing_models:
-        routing["modelCards"] = routing_models
+    cards = [
+        card for card in routing_models if isinstance(card, dict) and len(card) > 1
+    ]
+    if cards:
+        routing["modelCards"] = cards
+    else:
+        routing.pop("modelCards", None)
     routing.pop("models", None)
 
     _move_legacy_global_blocks(source, providers, global_config)
     _persist_provider_models(providers, provider_models)
 
     canonical: dict[str, Any] = {
-        "version": CANONICAL_VERSION,
+        "version": str(source.get("version") or PREVIOUS_VERSION),
         "listeners": _clone_list(source.get("listeners")),
         "providers": providers,
-        "routing": routing,
     }
+    if routing:
+        canonical["routing"] = routing
     for key in ("evaluation", "evaluation_catalog"):
         if key in source:
             canonical[key] = deepcopy(source[key])
@@ -81,7 +86,7 @@ def migrate_config_data(
     notes = notes if notes is not None else MigrationNotes()
     migrate_model_runtime_contract(canonical, notes)
     drop_looper_endpoint(canonical, notes)
-
+    restructure_layout(canonical, notes)
     return canonical
 
 
@@ -178,11 +183,12 @@ def _normalize_existing_provider_model(
     if not model_name:
         return None
 
-    semantic_model = _ensure_routing_model(
-        model_name, routing_models, routing_models_by_name
-    )
-    _populate_semantic_model_fields(semantic_model, model)
+    if model.get("quality_score") is not None:
+        card = _ensure_routing_model(model_name, routing_models, routing_models_by_name)
+        _set_if_missing(card, "quality_score", model.get("quality_score"))
     provider_model = {"name": model_name}
+    for field in MODEL_FACT_FIELDS:
+        _set_if_missing(provider_model, field, model.get(field))
     access = _as_dict(model.get("access"))
 
     _set_if_missing(provider_model, "catalog", model.get("catalog"))
@@ -262,33 +268,6 @@ def _migrate_legacy_endpoints_to_backend_refs(
     return backend_refs
 
 
-def _ensure_routing_model_refs(
-    providers: dict[str, Any],
-    provider_models: list[dict[str, Any]],
-    routing_models: list[dict[str, Any]],
-    routing_models_by_name: dict[str, dict[str, Any]],
-) -> None:
-    defaults = _as_dict(providers.get("defaults"))
-    default_model = (
-        defaults.get("model")
-        or defaults.get("default_model")
-        or providers.get("default_model")
-    )
-    if isinstance(default_model, str) and default_model.strip():
-        _ensure_routing_model(
-            default_model.strip(), routing_models, routing_models_by_name
-        )
-
-    for provider_model in provider_models:
-        if not isinstance(provider_model, dict):
-            continue
-        model_name = provider_model.get("name")
-        if model_name:
-            _ensure_routing_model(
-                str(model_name), routing_models, routing_models_by_name
-            )
-
-
 def _move_legacy_global_blocks(
     source: dict[str, Any],
     providers: dict[str, Any],
@@ -302,6 +281,7 @@ def _move_legacy_global_blocks(
     for key, value in source.items():
         if (
             key in CANONICAL_TOP_LEVEL_KEYS
+            or key == "routing"
             or key in LEGACY_ROUTING_KEYS
             or key in LEGACY_PROVIDER_KEYS
         ):

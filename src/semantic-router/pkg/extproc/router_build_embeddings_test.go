@@ -26,7 +26,7 @@ func TestBuildRouterDoesNotLoadEmbeddingForIdleOrExactOnlyCache(t *testing.T) {
 	for _, mode := range []string{"unused", "exact"} {
 		t.Run(mode, func(t *testing.T) {
 			cfg := &config.RouterConfig{}
-			cfg.SemanticCache.Enabled = true
+			cfg.SemanticCache.InUse = true
 			cfg.EmbeddingDeployment = "unused-cache"
 			cfg.ModelDeployments = map[string]config.ModelDeployment{"unused-cache": {Provider: config.ModelRuntimeProvider, Artifact: "/not-installed/unused-cache-embedding"}}
 			cfg.Decisions = []config.Decision{{Name: "route"}}

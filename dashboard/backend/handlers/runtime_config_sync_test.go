@@ -56,7 +56,7 @@ func TestRuntimeOwnedConfigPathDoesNotResyncIntoNestedStateDirectory(t *testing.
 		t.Fatal(err)
 	}
 	configPath := filepath.Join(stateDir, "runtime-config.stack.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", configPath)
@@ -77,7 +77,7 @@ func TestRuntimeOwnedConfigPathDoesNotResyncIntoNestedStateDirectory(t *testing.
 func TestSyncRuntimeConfigLocallyWritesInternalRuntimeConfig(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "config.yaml")
-	configYAML := `version: v0.3
+	configYAML := `version: v0.5
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -132,7 +132,7 @@ global:
 func TestHostDashboardSavesWithoutReachingIntoContainers(t *testing.T) {
 	invocations := trapContainerCLIs(t)
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", "")

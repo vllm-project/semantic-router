@@ -12,7 +12,7 @@ translation:
 
 `turn_relation` 询问决策模型：当前用户轮次与之前的对话是什么关系——延续当前话题（`continue`）、重复之前的提问（`reask`）、转向无关话题（`shift`），或回到更早的话题（`return`）。它取代了 `reasks` 和 `topic_continuity` 信号。
 
-它对应 config/fragments/signal/turn-relation，在 `routing.signals.turn_relation` 下声明。
+它对应 config/fragments/signal/turn-relation，在 `recipes[].signals.turn_relation` 下声明。
 
 ## 主要优势 {#key-advantages}
 
@@ -34,19 +34,20 @@ translation:
 ## 配置 {#configuration}
 
 ```yaml
-routing:
-  signals:
-    turn_relation:
-      - name: likely_dissatisfied
-        description: The current user turn repeats the previous one.
-        labels: [reask]
-        input:
-          previous_turns: 1
-      - name: topic_boundary
-        description: Whether the live turn still depends on retained history.
-        labels: [continue, shift]
-        input:
-          previous_turns: 8
+recipes:
+  - name: default
+    signals:
+      turn_relation:
+        - name: likely_dissatisfied
+          description: The current user turn repeats the previous one.
+          labels: [reask]
+          input:
+            previous_turns: 1
+        - name: topic_boundary
+          description: Whether the live turn still depends on retained history.
+          labels: [continue, shift]
+          input:
+            previous_turns: 8
 ```
 
 | 字段 | 含义 |

@@ -152,7 +152,7 @@ an NVIDIA GPU for a domain classifier, and the response cache's NLI polarity
 guard:
 
 ```yaml title="legacy.yaml"
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -163,13 +163,14 @@ providers:
         - name: answer
           endpoint: vllm:8000
           provider: vllm
-routing:
-  model_bindings:
-    embedding:
-      deployment: vela-embedding
-      contract: embedding.v1
-      adapter: mmbert
-      head: onnx/model_fa.onnx
+recipes:
+  - name: default
+    model_bindings:
+      embedding:
+        deployment: vela-embedding
+        contract: embedding.v1
+        adapter: mmbert
+        head: onnx/model_fa.onnx
 global:
   model_catalog:
     deployments:
@@ -186,16 +187,20 @@ global:
         precision: fp16
   stores:
     response_cache:
-      enabled: true
       backend_type: memory
       polarity_guard:
         mode: lexical+nli
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        scope: global
 ```
 
 `vllm-sr config migrate --config legacy.yaml` writes:
 
 ```yaml title="legacy.migrated.yaml"
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -206,7 +211,8 @@ providers:
         - name: answer
           endpoint: vllm:8000
           provider: vllm
-routing: {}
+recipes:
+  - name: default
 global:
   model_catalog:
     deployments:
@@ -220,8 +226,12 @@ global:
         device: rocm:0
   stores:
     response_cache:
-      enabled: true
       backend_type: memory
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        scope: global
 ```
 
 The response cache used MiniLM, the former default; it now embeds with

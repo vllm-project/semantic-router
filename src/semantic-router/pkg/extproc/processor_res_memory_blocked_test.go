@@ -33,7 +33,8 @@ func TestBlockedResponseRecordsMemoryPersistenceReceipt(t *testing.T) {
 				server = newFailingDecider()
 			}
 			router, ctx := newResponseStageRouter(t, server, config.ResponseGuardBlock, config.ResponseGuardBlock)
-			router.Config.Memory.Enabled = true
+			router.Config.Memory.InUse = true
+			ctx.VSRSelectedDecision.Plugins = append(ctx.VSRSelectedDecision.Plugins, memoryTestPlugin())
 			router.Config.Memory.AutoStore = true
 			if !tc.noExtractor {
 				router.MemoryExtractor = memory.NewMemoryChunkStore(&noopMemoryStore{})
@@ -91,7 +92,7 @@ func TestUnscheduledResponseMemoryStoreRecordsTerminalReceipt(t *testing.T) {
 			recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
 			t.Cleanup(func() { assert.NoError(t, recorder.Close()) })
 			router := &OpenAIRouter{
-				Config: &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, AutoStore: true}},
+				Config: &config.RouterConfig{GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()}, Memory: config.MemoryConfig{InUse: true, AutoStore: true}},
 			}
 			if !tc.noExtractor {
 				router.MemoryExtractor = memory.NewMemoryChunkStore(&noopMemoryStore{})

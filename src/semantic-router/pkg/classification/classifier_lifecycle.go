@@ -38,7 +38,7 @@ func buildClassifier(cfg *config.RouterConfig, runtimeOptions ...RecipeRuntimeOp
 		}
 	}()
 	builder.models = models
-	if cfg.RoutingScope == "" || cfg.RoutingScope == config.DefaultRecipeName {
+	if cfg.RoutingScope == "" || cfg.IsDefaultRecipe(cfg.RoutingScope) {
 		builder.embeddingSet = runtimeOption.Embeddings
 	}
 	options, err := builder.build()

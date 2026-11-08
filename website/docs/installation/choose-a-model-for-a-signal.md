@@ -19,10 +19,10 @@ specific level wins.
 | Level | Where you write the deployment name | Applies to |
 | --- | --- | --- |
 | Rule | `deployment:` on the rule | Every application rule (`domains`, `fact_check`, `user_feedbacks`, `jailbreak`, `safety`, `pii`, `hallucination`, `refusal`, `turn_relation`, `complexity`, `modality`), every `systemone` rule, and the System One selector `algorithm.systemone` |
-| Signal type | `global.model_catalog.bindings.<type>`, or `routing.model_bindings.<type>` in a recipe | The rules of an application signal type that name no deployment: `domain`, `fact_check`, `user_feedback`, `jailbreak`, `safety`, `pii`, `hallucination`, `refusal`, `turn_relation`, `complexity`, `modality` |
+| Signal type | `global.model_catalog.bindings.<type>`, or `recipes[].model_bindings.<type>` in a recipe | The rules of an application signal type that name no deployment: `domain`, `fact_check`, `user_feedback`, `jailbreak`, `safety`, `pii`, `hallucination`, `refusal`, `turn_relation`, `complexity`, `modality` |
 | Default | `global.model_catalog.system.decision_model` | Every question the two levels above do not cover |
 
-A binding in `recipes[].routing.model_bindings` applies only to that recipe
+A binding in `recipes[].model_bindings` applies only to that recipe
 and wins over the global binding for the same signal type.
 
 Embeddings ask no question and answer no signal; they serve recall only. They
@@ -108,7 +108,7 @@ global:
 ```
 
 `pii` resolves to `local-vela`; every other signal resolves to `d3-remote`.
-Binding keys are signal types, as they are named in `routing.signals`; values
+Binding keys are signal types, as they are named in `recipes[].signals`; values
 are deployment names.
 
 ## S4. A systemone signal and the domain signal share the default, then one of each is changed
@@ -129,24 +129,25 @@ global:
         auth: {api_key_env: VSR_APP_KEY}
     system:
       decision_model: {deployment: kai}
-routing:                           # or recipes[].routing, which affects only that recipe
-  model_bindings:
-    domain: d3-remote              # signal type: every domain rule shares one answer
-  signals:
-    domains: [{name: math, description: Mathematics, labels: [math]}]
-    systemone:
-      - name: needs_reasoning      # no deployment: asks the default, kai
-        question: {type: noul, instructions: "Does answering need multi-step reasoning?"}
-      - name: support_team
-        deployment: d3-remote      # rule: only this question goes remote
-        question:
-          type: choice
-          instructions: Which team?
-          choices: [{key: billing}, {key: engineering}]
+recipes: # or recipes[], which affects only that recipe
+  - name: default
+    model_bindings:
+      domain: d3-remote # signal type: every domain rule shares one answer
+    signals:
+      domains: [{name: math, description: Mathematics, labels: [math]}]
+      systemone:
+        - name: needs_reasoning # no deployment: asks the default, kai
+          question: {type: noul, instructions: "Does answering need multi-step reasoning?"}
+        - name: support_team
+          deployment: d3-remote # rule: only this question goes remote
+          question:
+            type: choice
+            instructions: Which team?
+            choices: [{key: billing}, {key: engineering}]
 ```
 
 `domain` resolves to `d3-remote`, `needs_reasoning` to `kai` and
-`support_team` to `d3-remote`. The same block under `recipes[].routing`
+`support_team` to `d3-remote`. The same block under `recipes[]`
 changes only that recipe:
 
 ```yaml title="s4-recipe-scope"
@@ -166,14 +167,17 @@ global:
     system:
       decision_model: {deployment: kai}
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - {model_names: [vllm-sr/support], recipe: support}
 recipes:
+  - name: default
   - name: support
-    routing:
-      model_bindings:
-        domain: d3-remote          # only the support recipe asks d3-remote about domains
-      signals:
-        domains: [{name: math, description: Mathematics, labels: [math]}]
+    model_bindings:
+      domain: d3-remote # only the support recipe asks d3-remote about domains
+    signals:
+      domains: [{name: math, description: Mathematics, labels: [math]}]
 ```
 
 In the `support` recipe, `domain` resolves to `d3-remote`; everywhere else it
@@ -182,19 +186,20 @@ resolves to `kai`.
 ## S5. Rules that name their own deployment
 
 ```yaml title="s5-rule-level"
-routing:
-  signals:
-    domains:
-      - {name: math, labels: [math]}
-      - {name: law, labels: [law], deployment: kai}
-    safety:
-      - name: harmful
-        deployment: d3-remote
-        predicate: {gte: 0.5}
-  decisions:
-    - name: pick-model
-      modelRefs: [{model: general}, {model: small}]
-      algorithm: {type: systemone, systemone: {deployment: kai, instructions: Pick the cheapest capable model.}}
+recipes:
+  - name: default
+    signals:
+      domains:
+        - {name: math, labels: [math]}
+        - {name: law, labels: [law], deployment: kai}
+      safety:
+        - name: harmful
+          deployment: d3-remote
+          predicate: {gte: 0.5}
+    decisions:
+      - name: pick-model
+        modelRefs: [{model: general}, {model: small}]
+        algorithm: {type: systemone, systemone: {deployment: kai, instructions: Pick the cheapest capable model.}}
 ```
 
 `d3-remote` and `kai` are declared deployments, here a System One API and a

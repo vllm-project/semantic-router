@@ -7,7 +7,7 @@ service:
   type: ClusterIP
   port: 8080
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -30,117 +30,116 @@ config:
             endpoint: provider-mocker.provider-protocols-system.svc.cluster.local:8000
             weight: 1
             provider: anthropic
+        description: Deterministic Anthropic Messages provider fixture
+        capabilities:
+          - chat
   evaluation:
     records:
       - model: MoM
         benchmark: vllm-sr/operator-rating@1.0.0
         metrics:
           score: 0.5
-  routing:
-    decisions:
-      - name: provider_cache_cost
-        priority: 90
-        rules:
-          operator: AND
-          conditions:
-            - type: keyword
-              name: provider_cache_cost
-        modelRefs:
-          - model: MoM
-            use_reasoning: false
-        plugins:
-          - type: router_replay
-            configuration:
-              enabled: true
-              max_records: 100
-      - name: json_prompt_keyword
-        description: Distinguish original JSON text from the bounded signal view
-        priority: 100
-        rules:
-          operator: AND
-          conditions:
-            - type: keyword
-              name: json_prompt_marker
-        modelRefs:
-          - model: MoM
-            use_reasoning: false
-      - name: prompt_cache_enabled
-        description: Route the prompt-cache policy probe to the Anthropic backend
-        priority: 70
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: prompt_cache_enabled
-        modelRefs:
-          - model: MoM
-            use_reasoning: false
-        plugins:
-          - type: prompt_cache
-            configuration:
-              enabled: true
-              ttl: 1h
-              targets:
-                - instructions
-                - tools
-              on_unsupported: reject
-      - name: prompt_cache_disabled
-        description: Preserve the disabled prompt-cache policy contract
-        priority: 60
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: prompt_cache_disabled
-        modelRefs:
-          - model: MoM
-            use_reasoning: false
-        plugins:
-          - type: prompt_cache
-            configuration:
-              enabled: false
-      - name: route_to_anthropic_provider
-        description: Route all requests to the native Anthropic provider fixture
-        priority: 50
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: all_requests
-        modelRefs:
-          - model: MoM
-            use_reasoning: false
-    signals:
-      keywords:
+  recipes:
+    - name: default
+      decisions:
         - name: provider_cache_cost
-          operator: OR
-          keywords:
-            - "__mock_provider_cache_cost__"
-        - name: json_prompt_marker
-          operator: OR
-          keywords:
-            - signalonlyjsonmarker
+          priority: 90
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: provider_cache_cost
+          modelRefs:
+            - model: MoM
+              use_reasoning: false
+          plugins:
+            - type: router_replay
+              configuration:
+                enabled: true
+                max_records: 100
+        - name: json_prompt_keyword
+          description: Distinguish original JSON text from the bounded signal view
+          priority: 100
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: json_prompt_marker
+          modelRefs:
+            - model: MoM
+              use_reasoning: false
         - name: prompt_cache_enabled
-          operator: OR
-          keywords:
-            - "__PROMPT_CACHE_ENABLED__"
+          description: Route the prompt-cache policy probe to the Anthropic backend
+          priority: 70
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: prompt_cache_enabled
+          modelRefs:
+            - model: MoM
+              use_reasoning: false
+          plugins:
+            - type: prompt_cache
+              configuration:
+                enabled: true
+                ttl: 1h
+                targets:
+                  - instructions
+                  - tools
+                on_unsupported: reject
         - name: prompt_cache_disabled
-          operator: OR
-          keywords:
-            - "__PROMPT_CACHE_DISABLED__"
-        - name: all_requests
-          operator: OR
-          keywords:
-            # Catch-all routing; the AIGatewayRoute also has a bare fallback
-            # rule in gwapi-resources.yaml. Both are intentional — the router
-            # needs a signal match to route, and the gateway provides a
-            # safety-net in case the router produces no match.
-            - ""
-    modelCards:
-      - name: MoM
-        description: Deterministic Anthropic Messages provider fixture
-        capabilities:
-          - chat
+          description: Preserve the disabled prompt-cache policy contract
+          priority: 60
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: prompt_cache_disabled
+          modelRefs:
+            - model: MoM
+              use_reasoning: false
+          plugins:
+            - type: prompt_cache
+              configuration:
+                enabled: false
+        - name: route_to_anthropic_provider
+          description: Route all requests to the native Anthropic provider fixture
+          priority: 50
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: all_requests
+          modelRefs:
+            - model: MoM
+              use_reasoning: false
+      signals:
+        keywords:
+          - name: provider_cache_cost
+            operator: OR
+            keywords:
+              - "__mock_provider_cache_cost__"
+          - name: json_prompt_marker
+            operator: OR
+            keywords:
+              - signalonlyjsonmarker
+          - name: prompt_cache_enabled
+            operator: OR
+            keywords:
+              - "__PROMPT_CACHE_ENABLED__"
+          - name: prompt_cache_disabled
+            operator: OR
+            keywords:
+              - "__PROMPT_CACHE_DISABLED__"
+          - name: all_requests
+            operator: OR
+            keywords:
+              # Catch-all routing; the AIGatewayRoute also has a bare fallback
+              # rule in gwapi-resources.yaml. Both are intentional — the router
+              # needs a signal match to route, and the gateway provides a
+              # safety-net in case the router produces no match.
+              - ""
   global:
     model_catalog:
       modules:
@@ -170,9 +169,6 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
-    stores:
-      response_cache:
-        enabled: false
     integrations: {}
 resources:
   limits:

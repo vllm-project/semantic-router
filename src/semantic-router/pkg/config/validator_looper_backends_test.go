@@ -88,7 +88,7 @@ func TestARoutingFragmentNeedsNoBackends(t *testing.T) {
 }
 
 func TestALooperModelWithoutBackendRefsFailsTheDocument(t *testing.T) {
-	_, err := ParseYAMLBytes([]byte(`version: v0.3
+	_, err := ParseYAMLBytes([]byte(`version: v0.5
 listeners: []
 providers:
   defaults:
@@ -99,21 +99,19 @@ providers:
         - endpoint: 127.0.0.1:8000
     - name: b
       provider_model_id: b
-routing:
-  modelCards:
-    - name: a
-    - name: b
-  decisions:
-    - name: rate
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: a
-        - model: b
-      algorithm:
-        type: ratings
+recipes:
+  - name: default
+    decisions:
+      - name: rate
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: a
+          - model: b
+        algorithm:
+          type: ratings
 `))
 	if err == nil || !strings.Contains(err.Error(), `decision "rate": the Router calls model "b" in process, but it has no backend`) {
 		t.Fatalf("parse = %v, want model b refused for its missing backend", err)

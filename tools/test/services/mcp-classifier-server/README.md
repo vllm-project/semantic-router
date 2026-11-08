@@ -86,14 +86,11 @@ providers:
           endpoint: 127.0.0.1:8000
           protocol: http
           type: chat
-
-routing:
-  modelCards:
-    - name: openai/gpt-oss-20b
-  signals:
-    domains: []
-  decisions: []
-
+recipes:
+  - name: default
+    signals:
+      domains: []
+    decisions: []
 global:
   model_catalog:
     modules:

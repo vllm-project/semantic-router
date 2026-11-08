@@ -23,7 +23,7 @@ import (
 // deployment's answer. Its API sits behind a gateway with its own credential
 // header and path prefix; any other answer, or none, goes to fast.
 const systemOneRoutingConfig = `
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -37,29 +37,30 @@ providers:
       backend_refs: [{name: fast, endpoint: "BACKEND", protocol: http, weight: 1}]
     - name: deep
       backend_refs: [{name: deep, endpoint: "BACKEND", protocol: http, weight: 1}]
-routing:
-  signals:
-    systemone:
-      - name: support_team
-        deployment: gateway-d3
-        question:
-          type: choice
-          instructions: Which team should handle this ticket?
-          choices:
-            - {key: billing, description: Payments and refunds}
-            - {key: engineering, description: Outages and bugs}
-  decisions:
-    - name: engineering
-      priority: 200
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions: [{type: systemone, name: support_team, label: engineering}]
-      modelRefs: [{model: deep}]
-    - name: everything-else
-      priority: 10
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: fast}]
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: support_team
+          deployment: gateway-d3
+          question:
+            type: choice
+            instructions: Which team should handle this ticket?
+            choices:
+              - {key: billing, description: Payments and refunds}
+              - {key: engineering, description: Outages and bugs}
+    decisions:
+      - name: engineering
+        priority: 200
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions: [{type: systemone, name: support_team, label: engineering}]
+        modelRefs: [{model: deep}]
+      - name: everything-else
+        priority: 10
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: fast}]
 global:
   router:
     list_backend_models: true
@@ -219,7 +220,7 @@ func TestDecisionSelectorAsksASystemOneDeployment(t *testing.T) {
 	gatewayServer := httptest.NewServer(gateway)
 	defer gatewayServer.Close()
 	t.Setenv("REMOTE_DECISION_TEST_KEY", "fake-gateway-key")
-	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.3
+	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.5
 providers:
   defaults: {model: fast}
   models:
@@ -227,20 +228,21 @@ providers:
       backend_refs: [{name: fast, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
     - name: deep
       backend_refs: [{name: deep, endpoint: "127.0.0.1:8001", protocol: http, weight: 1}]
-routing:
-  decisions:
-    - name: choose
-      priority: 100
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: fast}, {model: deep}]
-      algorithm:
-        type: systemone
-        systemone:
-          deployment: gateway-d3
-          instructions: Which model should answer this request?
-          candidates:
-            fast: Quick answers to routine requests
-            deep: Careful multi-step reasoning
+recipes:
+  - name: default
+    decisions:
+      - name: choose
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: fast}, {model: deep}]
+        algorithm:
+          type: systemone
+          systemone:
+            deployment: gateway-d3
+            instructions: Which model should answer this request?
+            candidates:
+              fast: Quick answers to routine requests
+              deep: Careful multi-step reasoning
 global:
   model_catalog:
     deployments:

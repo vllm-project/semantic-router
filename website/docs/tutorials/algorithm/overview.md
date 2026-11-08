@@ -33,24 +33,25 @@ Algorithms are decision-local. Each type's settings are the block named after
 the type:
 
 ```yaml
-routing:
-  decisions:
-    - name: responsive-route
-      description: Prefer the model with the best observed latency.
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: small-model
-        - model: large-model
-      algorithm:
-        type: multi_factor
-        minimum_candidates: 2
-        multi_factor:
-          weights:
-            latency: 1
-          latency_percentile: 90
+recipes:
+  - name: default
+    decisions:
+      - name: responsive-route
+        description: Prefer the model with the best observed latency.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: small-model
+          - model: large-model
+        algorithm:
+          type: multi_factor
+          minimum_candidates: 2
+          multi_factor:
+            weights:
+              latency: 1
+            latency_percentile: 90
 ```
 
 Choose an algorithm from the inventory below, then follow its guide for the
@@ -175,7 +176,7 @@ trained artifacts it no longer uses.
   from the new decision's candidates; opaque provider state stays bound to the
   model that created it. Portable turns may select a new eligible candidate;
   observe and bypass modes do not enforce the protection decision.
-- Candidate model names must resolve through `routing.modelCards` and
+- Candidate model names must resolve through `providers.models` and
   `providers.models` in a complete config.
 - Latency and load observations are local to a Router process; they are not a
   cluster-wide scheduler.

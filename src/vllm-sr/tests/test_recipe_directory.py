@@ -11,7 +11,7 @@ from cli.recipe_directory import (
 
 def _write_managed_recipe(tmp_path):
     files = {
-        "config.yaml": "version: v0.3\nlisteners: []\n",
+        "config.yaml": "version: v0.5\nlisteners: []\n",
         "metadata.yaml": "schema_version: vllm-sr/recipe-metadata/v1\n",
         "probes.yaml": "schema_version: v1\n",
         "recipe.dsl": "ROUTE default\n",
@@ -46,14 +46,14 @@ def _find_container_run_cmd(commands, container_name):
 
 def test_bare_config_is_not_a_managed_recipe(tmp_path):
     config_path = tmp_path / "config.yaml"
-    config_path.write_text("version: v0.3\n", encoding="utf-8")
+    config_path.write_text("version: v0.5\n", encoding="utf-8")
 
     assert resolve_active_recipe_directory(config_path) is None
 
 
 def test_partial_recipe_requires_metadata(tmp_path):
     config_path = tmp_path / "config.yaml"
-    config_path.write_text("version: v0.3\n", encoding="utf-8")
+    config_path.write_text("version: v0.5\n", encoding="utf-8")
     (tmp_path / "probes.yaml").write_text("schema_version: v1\n", encoding="utf-8")
 
     with pytest.raises(RecipeDirectoryError, match=r"metadata.yaml is missing"):
@@ -62,7 +62,7 @@ def test_partial_recipe_requires_metadata(tmp_path):
 
 def test_managed_recipe_requires_all_fixed_assets(tmp_path):
     config_path = tmp_path / "config.yaml"
-    config_path.write_text("version: v0.3\n", encoding="utf-8")
+    config_path.write_text("version: v0.5\n", encoding="utf-8")
     (tmp_path / "metadata.yaml").write_text(
         "schema_version: vllm-sr/recipe-metadata/v1\n", encoding="utf-8"
     )
@@ -73,7 +73,7 @@ def test_managed_recipe_requires_all_fixed_assets(tmp_path):
 
 def test_start_rejects_incomplete_recipe_before_runtime_cleanup(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
-    config_path.write_text("version: v0.3\n", encoding="utf-8")
+    config_path.write_text("version: v0.5\n", encoding="utf-8")
     (tmp_path / "metadata.yaml").write_text(
         "schema_version: vllm-sr/recipe-metadata/v1\n", encoding="utf-8"
     )
@@ -244,7 +244,7 @@ def test_source_discovered_secrets_use_name_only_arguments_and_logs(
 ):
     config_path = _write_managed_recipe(tmp_path)
     config_path.write_text(
-        """version: v0.3
+        """version: v0.5
 listeners: []
 providers:
   models:
@@ -304,7 +304,7 @@ providers:
 
 def test_bare_config_cannot_inherit_stale_recipe_directory_env(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
-    config_path.write_text("version: v0.3\n", encoding="utf-8")
+    config_path.write_text("version: v0.5\n", encoding="utf-8")
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
         container_start,

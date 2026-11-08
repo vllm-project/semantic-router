@@ -21,6 +21,8 @@ type RecipeClassifiers struct {
 	order        []config.RecipeName
 	runtimeOrder []config.RecipeName
 	routingOrder []config.RecipeName
+	// defaultRecipe names the recipe whose classifier serves the default APIs.
+	defaultRecipe config.RecipeName
 }
 
 // RecipeRuntimeOptions borrows the generation's model runtime and default
@@ -49,20 +51,21 @@ func BuildRecipeClassifiers(cfg *config.RouterConfig, runtimeOptions ...RecipeRu
 		options.Runtime = serving.New(nil, nil)
 	}
 	set := &RecipeClassifiers{
-		byRecipe:     make(map[config.RecipeName]*Classifier),
-		runtimeOrder: make([]config.RecipeName, 0, len(cfg.Recipes)),
-		routingOrder: make([]config.RecipeName, 0, len(cfg.Recipes)),
+		byRecipe:      make(map[config.RecipeName]*Classifier),
+		runtimeOrder:  make([]config.RecipeName, 0, len(cfg.Recipes)),
+		routingOrder:  make([]config.RecipeName, 0, len(cfg.Recipes)),
+		defaultRecipe: cfg.DefaultRecipe().Name,
 	}
 	if len(cfg.Recipes) == 0 {
 		classifier, err := buildClassifier(cfg, options)
 		if err != nil {
-			return nil, fmt.Errorf("build routing recipe %q: %w", config.DefaultRecipeName, err)
+			return nil, fmt.Errorf("build routing recipe %q: %w", set.defaultRecipe, err)
 		}
-		set.byRecipe[config.DefaultRecipeName] = classifier
-		set.order = append(set.order, config.DefaultRecipeName)
-		set.runtimeOrder = append(set.runtimeOrder, config.DefaultRecipeName)
-		if cfg.IsRecipeReachableForRouting(config.DefaultRecipeName) {
-			set.routingOrder = append(set.routingOrder, config.DefaultRecipeName)
+		set.byRecipe[set.defaultRecipe] = classifier
+		set.order = append(set.order, set.defaultRecipe)
+		set.runtimeOrder = append(set.runtimeOrder, set.defaultRecipe)
+		if cfg.IsRecipeReachableForRouting(set.defaultRecipe) {
+			set.routingOrder = append(set.routingOrder, set.defaultRecipe)
 		}
 		return set, nil
 	}
@@ -73,7 +76,7 @@ func BuildRecipeClassifiers(cfg *config.RouterConfig, runtimeOptions ...RecipeRu
 		reachable := cfg.IsRecipeReachableForRouting(recipe.Name)
 		var classifier *Classifier
 		var err error
-		if recipe.Name != config.DefaultRecipeName && !reachable {
+		if recipe.Name != set.defaultRecipe && !reachable {
 			// Canonical contract validation remains eager. Provisioning belongs
 			// only to reachable routing scopes and the default API owner.
 			err = config.ValidateKubernetesConfigContracts(scopedConfig)
@@ -93,7 +96,7 @@ func BuildRecipeClassifiers(cfg *config.RouterConfig, runtimeOptions ...RecipeRu
 		}
 		set.byRecipe[recipe.Name] = classifier
 		set.order = append(set.order, recipe.Name)
-		if recipe.Name == config.DefaultRecipeName || reachable {
+		if recipe.Name == set.defaultRecipe || reachable {
 			set.runtimeOrder = append(set.runtimeOrder, recipe.Name)
 		}
 		if reachable {
@@ -114,7 +117,7 @@ func (s *RecipeClassifiers) InitializeRuntime() error {
 	for _, recipeName := range s.lifecycleOrder() {
 		// The default APIs of a default recipe that routes nothing own no
 		// runtime: the decision model answers them.
-		if recipeName == config.DefaultRecipeName && !s.routingRecipe(recipeName) {
+		if recipeName == s.defaultRecipe && !s.routingRecipe(recipeName) {
 			continue
 		}
 		if err := s.byRecipe[recipeName].InitializeRuntime(); err != nil {
@@ -185,7 +188,7 @@ func (s *RecipeClassifiers) ForRecipe(recipeName config.RecipeName) (*Classifier
 
 // Default returns the classifier for the default recipe.
 func (s *RecipeClassifiers) Default() *Classifier {
-	classifier, _ := s.ForRecipe(config.DefaultRecipeName)
+	classifier, _ := s.ForRecipe(s.defaultRecipe)
 	return classifier
 }
 

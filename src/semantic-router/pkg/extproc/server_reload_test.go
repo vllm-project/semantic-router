@@ -62,7 +62,7 @@ func TestReloadChecksGatewayCapabilitiesBeforePreparation(t *testing.T) {
 		err := server.reloadRouterFromConfig(source, "config.yaml", candidate)
 		reasons := configsnapshot.ReasonsOf(err)
 		if len(reasons) != 1 || reasons[0].Code != configsnapshot.CodeUnsupported ||
-			reasons[0].Path != "routing.decisions[slow].reliability" || !strings.Contains(err.Error(), "--gateway standalone") {
+			reasons[0].Path != "recipes[default].decisions[slow].reliability" || !strings.Contains(err.Error(), "--gateway standalone") {
 			t.Fatalf("%s reload error = %v (%+v)", source, err, reasons)
 		}
 		if server.service.GetRouter() != previous {

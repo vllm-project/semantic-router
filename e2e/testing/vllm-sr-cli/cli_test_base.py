@@ -61,7 +61,7 @@ def stack_scoped_test_container_name(stack_name: str, base_name: str) -> str:
 # exist to name Redis and Postgres specifically.
 MANAGED_STORAGE_SERVICES: dict[str, dict[str, object]] = {
     "response_api": {"enabled": True, "store_backend": "redis"},
-    "router_replay": {"enabled": True, "store_backend": "postgres"},
+    "router_replay": {"store_backend": "postgres"},
 }
 
 
@@ -400,7 +400,7 @@ class CLITestBase(unittest.TestCase):
         skip_processing: bool = False,
         looper: bool = False,
     ) -> str:
-        """Write a minimal runnable canonical v0.3 config into the temp workspace.
+        """Write a minimal runnable canonical v0.5 config into the temp workspace.
 
         *managed_storage* asks for the service backends this CLI provisions
         locally, which is what makes `serve` start Redis and Postgres.
@@ -439,7 +439,7 @@ class CLITestBase(unittest.TestCase):
             }
 
         config = {
-            "version": "v0.3",
+            "version": "v0.5",
             "listeners": [
                 {
                     "name": "test-listener",
@@ -461,10 +461,7 @@ class CLITestBase(unittest.TestCase):
                     }
                 ],
             },
-            "routing": {
-                "modelCards": [{"name": model_name}],
-                "decisions": [decision],
-            },
+            "recipes": [{"name": "default", "decisions": [decision]}],
         }
         if api_only:
             config["global"] = _api_only_global_config()
@@ -482,6 +479,9 @@ class CLITestBase(unittest.TestCase):
                 service_key: dict(service_config)
                 for service_key, service_config in MANAGED_STORAGE_SERVICES.items()
             }
+            global_config["plugins"] = [
+                {"type": "router_replay", "configuration": {"enabled": True}}
+            ]
         config_path.write_text(
             yaml.safe_dump(config, sort_keys=False),
             encoding="utf-8",

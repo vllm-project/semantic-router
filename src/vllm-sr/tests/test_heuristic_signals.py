@@ -18,6 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from cli.config_heuristic_forms import removed_heuristic_forms  # noqa: E402
+from cli.config_structure_forms import removed_structure_forms  # noqa: E402
 from cli.models import KeywordSignal  # noqa: E402
 from cli.parser import ConfigParseError, parse_user_config_data  # noqa: E402
 
@@ -27,17 +28,6 @@ MAINTAINED_GOLDEN = (
     / "src/semantic-router/pkg/config/testdata/model_resolution/maintained.golden.json"
 )
 RELEASE_SNAPSHOT = "config/recipes/built-in/v0.4/mom-v1/config.yaml"
-HEURISTIC_WHATS = (
-    "the events signal is removed",
-    "condition type event is removed",
-    "a structure rule on text_bytes is removed",
-    "the structure signal is removed",
-    "condition type structure is removed",
-    "the actions signal is removed",
-    "condition type action is removed",
-    "projection input type action is removed",
-    "the conversation feature image_content is removed",
-)
 CASES = (
     "removed-events-signal",
     "removed-structure-signal",
@@ -74,12 +64,12 @@ def test_removed_forms_and_their_references_are_named_in_every_routing_scope() -
     lines = removed_heuristic_forms(_golden("removed-events-signal", "before.yaml"))
 
     assert [line.split(": ", 1)[0] for line in lines] == [
-        "routing.signals.events",
-        "recipes[ops].routing.signals.events",
-        "routing.decisions[incident].rules.conditions[critical_payment_event]",
-        "routing.decisions[incident].rules.conditions[audit_event]",
-        "recipes[ops].routing.decisions[outage].rules",
-        "routing.projections.scores[incident_pressure].inputs[critical_payment_event]",
+        "recipes[default].signals.events",
+        "recipes[ops].signals.events",
+        "recipes[default].decisions[incident].rules.conditions[critical_payment_event]",
+        "recipes[default].decisions[incident].rules.conditions[audit_event]",
+        "recipes[ops].decisions[outage].rules",
+        "recipes[default].projections.scores[incident_pressure].inputs[critical_payment_event]",
     ]
 
 
@@ -90,12 +80,8 @@ def test_cli_lines_are_the_routers_on_a_release_snapshot() -> None:
         (REPO_ROOT / RELEASE_SNAPSHOT).read_text(encoding="utf-8")
     )
 
-    lines = removed_heuristic_forms(snapshot)
-
-    assert lines
-    assert lines == [
-        line for line in router_lines if any(what in line for what in HEURISTIC_WHATS)
-    ]
+    # The Router refuses a v0.3 snapshot by its version alone.
+    assert removed_structure_forms(snapshot) == router_lines
 
 
 def test_keyword_rule_counts_with_one_predicate_on_an_or_rule() -> None:

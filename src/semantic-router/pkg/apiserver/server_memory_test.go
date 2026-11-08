@@ -26,24 +26,14 @@ func TestShouldInitMemoryStore(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "global memory enabled",
-			cfg:  &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true}},
+			name: "memory in use",
+			cfg:  &config.RouterConfig{Memory: config.MemoryConfig{InUse: true}},
 			want: true,
 		},
 		{
-			name: "memory plugin present",
+			name: "memory not in use",
 			cfg: &config.RouterConfig{
-				Memory: config.MemoryConfig{Enabled: false},
-				IntelligentRouting: config.IntelligentRouting{
-					Decisions: []config.Decision{memoryPluginDecision("with-memory-plugin", "memory")},
-				},
-			},
-			want: true,
-		},
-		{
-			name: "memory disabled and no plugin",
-			cfg: &config.RouterConfig{
-				Memory: config.MemoryConfig{Enabled: false},
+				Memory: config.MemoryConfig{InUse: false},
 				IntelligentRouting: config.IntelligentRouting{
 					Decisions: []config.Decision{memoryPluginDecision("no-memory-plugin", "pii")},
 				},
@@ -63,7 +53,7 @@ func TestShouldInitMemoryStore(t *testing.T) {
 }
 
 func TestResolveMemoryStoreUsesRuntimeRegistryOnly(t *testing.T) {
-	cfg := &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true}}
+	cfg := &config.RouterConfig{Memory: config.MemoryConfig{InUse: true}}
 	globalStore := newMockMemoryStore()
 	runtimeStore := newMockMemoryStore()
 
@@ -167,7 +157,7 @@ func TestEnsureClassificationServiceWaitsForRuntimeRegistry(t *testing.T) {
 }
 
 func TestResolveMemoryStorePreservesLegacyGlobalFallback(t *testing.T) {
-	cfg := &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true}}
+	cfg := &config.RouterConfig{Memory: config.MemoryConfig{InUse: true}}
 	globalStore := newMockMemoryStore()
 
 	memory.SetGlobalMemoryStore(globalStore)

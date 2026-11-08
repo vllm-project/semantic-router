@@ -19,7 +19,7 @@ service:
 persistence:
   enabled: false
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -52,29 +52,26 @@ config:
         benchmark: vllm-sr/operator-rating@1.0.0
         metrics:
           score: 0.5
-  routing:
-    # Replaces the chart's placeholder card; every card must be a catalog model.
-    modelCards:
-      - name: gateway-model
-      - name: static-model
-    decisions:
-      - name: route_to_gateway
-        description: Route virtual-model requests to the trusted gateway
-        priority: 50
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: all_requests
-        modelRefs:
-          - model: gateway-model
-            use_reasoning: false
-    signals:
-      keywords:
-        - name: all_requests
-          operator: OR
-          keywords:
-            - ""
+  recipes:
+    - name: default
+      decisions:
+        - name: route_to_gateway
+          description: Route virtual-model requests to the trusted gateway
+          priority: 50
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: all_requests
+          modelRefs:
+            - model: gateway-model
+              use_reasoning: false
+      signals:
+        keywords:
+          - name: all_requests
+            operator: OR
+            keywords:
+              - ""
   global:
     router:
       clear_route_cache: true

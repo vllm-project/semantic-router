@@ -297,7 +297,7 @@ func compileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 			decl.Deployment = resolved.Name
 			deployment := resolved.Deployment
 			decl = withImpliedContract(consumer, decl, deployment)
-			path := fmt.Sprintf("recipes[%s].routing.model_bindings.%s", recipe, BindingKey(consumer))
+			path := fmt.Sprintf("recipes[%s].model_bindings.%s", recipe, BindingKey(consumer))
 			if err := validateTaskModelBinding(consumer, decl, deployment); err != nil {
 				return nil, fmt.Errorf("%s: %w", path, err)
 			}
@@ -323,23 +323,23 @@ func validateDeclaredBindingKeys(recipe RecipeName, scoped *RouterConfig) error 
 	for _, key := range sortedModelKeys(scoped.recipeBindings()) {
 		binding := scoped.recipeBindings()[key]
 		if !knownBindingKey(key) {
-			return fmt.Errorf("recipes[%s].routing.model_bindings.%s: unknown task consumer %q", recipe, BindingKey(key), key)
+			return fmt.Errorf("recipes[%s].model_bindings.%s: unknown task consumer %q", recipe, BindingKey(key), key)
 		}
 		deployment, exists := scoped.ModelDeployments[binding.Deployment]
 		if !exists {
-			return fmt.Errorf("recipes[%s].routing.model_bindings.%s: unknown deployment %q; %s", recipe, BindingKey(key), binding.Deployment, declaredDeployments(scoped.ModelDeployments))
+			return fmt.Errorf("recipes[%s].model_bindings.%s: unknown deployment %q; %s", recipe, BindingKey(key), binding.Deployment, declaredDeployments(scoped.ModelDeployments))
 		}
 		if isApplicationConsumer(key) {
 			deployment = deployment.WithDefaults()
 			if err := validateTaskModelBinding(key, withImpliedContract(key, binding, deployment), deployment); err != nil {
-				return fmt.Errorf("recipes[%s].routing.model_bindings.%s: %w", recipe, BindingKey(key), err)
+				return fmt.Errorf("recipes[%s].model_bindings.%s: %w", recipe, BindingKey(key), err)
 			}
 		}
 		if rule, isRuleKey := strings.CutPrefix(key, "safety."); isRuleKey && !slices.ContainsFunc(scoped.SafetyRules, func(safety SafetyRule) bool { return safety.Name == rule }) {
-			return fmt.Errorf("recipes[%s].routing.model_bindings.%s: names no safety rule of the recipe", recipe, key)
+			return fmt.Errorf("recipes[%s].model_bindings.%s: names no safety rule of the recipe", recipe, key)
 		}
 		if rule, isRuleKey := strings.CutPrefix(key, "complexity."); isRuleKey && !slices.ContainsFunc(scoped.ComplexityRules, func(complexity ComplexityRule) bool { return complexity.Name == rule }) {
-			return fmt.Errorf("recipes[%s].routing.model_bindings.%s: names no complexity rule of the recipe", recipe, key)
+			return fmt.Errorf("recipes[%s].model_bindings.%s: names no complexity rule of the recipe", recipe, key)
 		}
 	}
 	return nil

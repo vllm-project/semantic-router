@@ -1,1 +1,1 @@
-routing.signals.structure: removed_signal_type: the structure signal is removed; run `vllm-sr config migrate` (keywords rules with operator: OR and a count or density predicate)
+recipes[default].signals.structure: removed_signal_type: the structure signal is removed; run `vllm-sr config migrate` (keywords rules with operator: OR and a count or density predicate)

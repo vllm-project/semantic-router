@@ -24,8 +24,8 @@ export type ModelBindings = Record<string, ModelBindingValue>
 
 /**
  * The signal types a binding is keyed by. Rules that ask a question of their
- * own (systemone, classifier, safety and its hazard part, complexity) name
- * their deployment on the rule instead.
+ * own (systemone, safety, complexity) name their deployment on the rule
+ * instead.
  */
 export const SIGNAL_BINDING_KEYS = [
   'domain',
@@ -78,26 +78,19 @@ export function bindingSpellings(key: string): string[] {
 
 /** The rules of one signal collection a rule-level task consumer names. */
 export interface RuleTarget {
-  collection: 'classifiers' | 'safety' | 'complexity' | 'systemone'
+  collection: 'safety' | 'complexity' | 'systemone'
   /** Every rule of the collection when absent. */
   rule?: string
-  /** The rule's hazard part rather than the rule. */
-  hazard?: boolean
 }
 
 /**
  * The rules a task consumer of the Router's catalog stands for when the rule
- * names its own deployment: classifier.<rule>, safety.<rule>,
- * safety.<rule>.hazard, complexity, complexity.<rule> and systemone.<rule>.
+ * names its own deployment: safety.<rule>, complexity, complexity.<rule> and
+ * systemone.<rule>.
  */
 export function ruleTarget(consumer: string): RuleTarget | undefined {
   if (consumer === 'complexity') return { collection: 'complexity' }
-  if (consumer.startsWith('safety.') && consumer.endsWith('.hazard')) {
-    const rule = consumer.slice('safety.'.length, -'.hazard'.length)
-    return rule ? { collection: 'safety', rule, hazard: true } : undefined
-  }
   const collections = {
-    classifier: 'classifiers',
     safety: 'safety',
     complexity: 'complexity',
     systemone: 'systemone',

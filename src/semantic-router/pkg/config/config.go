@@ -99,8 +99,13 @@ type RouterConfig struct {
 	IntelligentRouting `yaml:",inline"`
 	Entrypoints        []EntrypointMapping `yaml:"-"`
 	Recipes            []RoutingRecipe     `yaml:"-"`
+	// GlobalPlugins are global.plugins, the default plugins of every
+	// decision and of a request that matches none.
+	GlobalPlugins []DecisionPlugin `yaml:"-" json:"-"`
 	// RoutingScope is populated only on immutable recipe views.
-	RoutingScope  RecipeName `yaml:"-"`
+	RoutingScope RecipeName `yaml:"-"`
+	// defaultRecipe names the default recipe; empty is DefaultRecipeName.
+	defaultRecipe RecipeName
 	BackendModels `yaml:",inline"`
 
 	Authz         AuthzConfig         `yaml:"authz,omitempty"`
@@ -331,13 +336,18 @@ type InlineModels struct {
 type IntelligentRouting struct {
 	CandidateRequirements *CandidateRequirements  `yaml:"candidate_requirements,omitempty"`
 	ModelBindings         map[string]ModelBinding `yaml:"model_bindings,omitempty"`
-	Signals               `yaml:",inline"`
-	Projections           Projections              `yaml:"projections,omitempty"`
-	Decisions             []Decision               `yaml:"decisions,omitempty"`
-	Strategy              RoutingStrategy          `yaml:"strategy,omitempty"`
-	Fallback              *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
-	ModelSelection        ModelSelectionConfig     `yaml:"model_selection,omitempty"`
-	ReasoningConfig       `yaml:",inline"`
+	// Plugins are the recipe's declared plugins, the layer between
+	// GlobalPlugins and a decision's own; DefaultPlugins are the two layered,
+	// what a request that matches no decision runs.
+	Plugins         []DecisionPlugin `yaml:"-" json:"-"`
+	DefaultPlugins  []DecisionPlugin `yaml:"-" json:"-"`
+	Signals         `yaml:",inline"`
+	Projections     Projections              `yaml:"projections,omitempty"`
+	Decisions       []Decision               `yaml:"decisions,omitempty"`
+	Strategy        RoutingStrategy          `yaml:"strategy,omitempty"`
+	Fallback        *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
+	ModelSelection  ModelSelectionConfig     `yaml:"model_selection,omitempty"`
+	ReasoningConfig `yaml:",inline"`
 }
 
 // BackendModels captures configured backend endpoints and model metadata.

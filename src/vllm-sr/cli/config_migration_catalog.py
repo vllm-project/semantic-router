@@ -43,7 +43,8 @@ def migrate_v03_catalog_contract(
         canonical["evaluation"] = evaluation
     else:
         canonical.pop("evaluation", None)
-    canonical["routing"] = routing
+    if routing:
+        canonical["routing"] = routing
 
 
 def _migrate_evaluation_root(

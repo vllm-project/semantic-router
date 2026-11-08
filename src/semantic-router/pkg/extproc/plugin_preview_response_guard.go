@@ -20,7 +20,7 @@ func (r *OpenAIRouter) pluginPreviewContext(ctx context.Context, binding pluginr
 		return nil, pluginruntime.ErrInvalidBinding
 	}
 	var recipe *config.RoutingRecipe
-	if binding.Recipe == config.DefaultRecipeName && len(r.Config.Recipes) == 0 {
+	if r.Config.IsDefaultRecipe(binding.Recipe) && len(r.Config.Recipes) == 0 {
 		recipe = r.Config.DefaultRecipe()
 	} else {
 		recipe, _ = r.Config.RecipeByName(binding.Recipe)

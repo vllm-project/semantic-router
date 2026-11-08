@@ -4,7 +4,7 @@ image:
   tag: latest
   pullPolicy: Never
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -16,57 +16,56 @@ config:
             provider: vllm
             endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    decisions:
-      - name: skip_on_classifier_error
-        description: Skips the decision when the guardrail classifier is unreachable
-        priority: 110
-        rules:
-          operator: OR
-          on_unknown: no_match
-          conditions:
-            - type: jailbreak
-              name: guardrail_unreachable
-        plugins:
-          - type: fast_response
-            configuration:
-              message: This response must not be selected.
-      # #2918: every request matches this decision, because the jailbreak
-      # rule's deployment points at an endpoint nothing listens on
-      # (127.0.0.1:1 inside the router pod) - the call always fails, and the
-      # rule's on_unknown: match makes it match without an answer instead of
-      # silently letting the request through.
-      - name: block_on_classifier_error
-        description: Blocks every request because the guardrail deployment is unreachable
-        priority: 100
-        rules:
-          operator: OR
-          conditions:
-            - type: jailbreak
-              name: guardrail_unreachable
-        plugins:
-          - type: fast_response
-            configuration:
-              message: Your request has been declined due to a policy violation.
-      - name: default_decision
-        description: Default catch-all decision (should not be reached - the blocking decision always matches first)
-        priority: 1
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: openai/mock-model
-            use_reasoning: false
-    signals:
-      jailbreak:
-        - name: guardrail_unreachable
-          description: Signal rule bound to the deliberately-unreachable guardrail endpoint
-          predicate:
-            gte: 0.5
-          # The contract under test: a guardrail that gives no answer blocks.
-          on_unknown: match
-    modelCards:
-      - name: openai/mock-model
+  recipes:
+    - name: default
+      decisions:
+        - name: skip_on_classifier_error
+          description: Skips the decision when the guardrail classifier is unreachable
+          priority: 110
+          rules:
+            operator: OR
+            on_unknown: no_match
+            conditions:
+              - type: jailbreak
+                name: guardrail_unreachable
+          plugins:
+            - type: fast_response
+              configuration:
+                message: This response must not be selected.
+        # #2918: every request matches this decision, because the jailbreak
+        # rule's deployment points at an endpoint nothing listens on
+        # (127.0.0.1:1 inside the router pod) - the call always fails, and the
+        # rule's on_unknown: match makes it match without an answer instead of
+        # silently letting the request through.
+        - name: block_on_classifier_error
+          description: Blocks every request because the guardrail deployment is unreachable
+          priority: 100
+          rules:
+            operator: OR
+            conditions:
+              - type: jailbreak
+                name: guardrail_unreachable
+          plugins:
+            - type: fast_response
+              configuration:
+                message: Your request has been declined due to a policy violation.
+        - name: default_decision
+          description: Default catch-all decision (should not be reached - the blocking decision always matches first)
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/mock-model
+              use_reasoning: false
+      signals:
+        jailbreak:
+          - name: guardrail_unreachable
+            description: Signal rule bound to the deliberately-unreachable guardrail endpoint
+            predicate:
+              gte: 0.5
+            # The contract under test: a guardrail that gives no answer blocks.
+            on_unknown: match
   global:
     router:
       strategy: priority
@@ -82,17 +81,6 @@ config:
       observability:
         tracing:
           enabled: false
-    stores:
-      # Caching is unrelated to on_error, so it stays off - this profile only
-      # needs the jailbreak signal path.
-      #
-      # Note this does NOT stop the startup embedding-model download: that is
-      # gated only on !EmbeddingModels.UsesRemoteEmbeddingBackend() and the
-      # model_catalog.embeddings *_model_path values
-      # (pkg/modeldownload/feature_gates.go), which never consult
-      # stores.response_cache. See the resources comment below.
-      response_cache:
-        enabled: false
     integrations: {}
     model_catalog:
       deployments:

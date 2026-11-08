@@ -23,7 +23,7 @@ import (
 // question of each type. The guard and PII rules also read earlier messages,
 // so a request with history asks its questions about several states.
 const vela2PublishedConfig = `
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: m
@@ -60,91 +60,92 @@ global:
         detector:
           min_span_length: 1
           min_span_confidence: 0
-routing:
-  signals:
-    domains:
-      - {name: health, labels: [health]}
-      - {name: math, labels: [math]}
-      - {name: computer science, labels: [computer science]}
-    jailbreak:
-      - {name: attack, predicate: {gte: 0.75}, input: {history: true}}
-    safety:
-      - {name: unsafe, predicate: {gte: 0.46}}
-    pii:
-      - {name: personal_data, predicate: {gte: 0.01}, input: {history: true}}
-    fact_check:
-      - {name: needs_fact_check}
-    user_feedbacks:
-      - {name: wrong_answer, labels: [WRONG_ANSWER]}
-    modality:
-      - {name: DIFFUSION, labels: [image]}
-    systemone:
-      - name: tone
-        deployment: vela2
-        timeout_ms: 60000
-        question:
-          type: choice
-          instructions: What tone does the request take?
-          choices:
-            - {key: formal, description: polite and formal}
-            - {key: casual, description: relaxed or chatty}
-            - {key: upset, description: angry or frustrated}
-      - name: urgent
-        deployment: vela2
-        timeout_ms: 60000
-        question:
-          type: noul
-          instructions: Does the request need an urgent answer?
-      - name: effort
-        deployment: vela2
-        timeout_ms: 60000
-        predicate: {gte: 1}
-        question:
-          type: score
-          instructions: How much work would a good answer take?
-          levels: [A one-line answer, A short explanation, A detailed multi-step answer]
-      - name: topics
-        deployment: vela2
-        timeout_ms: 60000
-        question:
-          type: set
-          instructions: Which topics does the request mention?
-          labels:
-            - {key: billing, description: "payments, invoices, charges or refunds"}
-            - {key: shipping, description: "deliveries, parcels, tracking or returns"}
-            - {key: account, description: "logins, passwords or account settings"}
-            - {key: medication, description: drugs or doses}
-      - name: entities
-        deployment: vela2
-        timeout_ms: 60000
-        question:
-          type: span
-          instructions: Which spans name a place or an organization?
-          labels:
-            - {key: location, description: "a city, country or address"}
-            - {key: organization, description: a company or institution}
-  decisions:
-    - name: every-signal
-      priority: 10
-      rules:
-        operator: OR
-        conditions:
-          - {type: domain, name: health}
-          - {type: domain, name: math}
-          - {type: domain, name: computer science}
-          - {type: jailbreak, name: attack}
-          - {type: safety, name: unsafe}
-          - {type: pii, name: personal_data}
-          - {type: fact_check, name: needs_fact_check}
-          - {type: user_feedback, name: wrong_answer}
-          - {type: modality, name: DIFFUSION}
-          - {type: systemone, name: tone, label: formal}
-          - {type: systemone, name: urgent}
-          - {type: systemone, name: effort}
-          - {type: systemone, name: topics, label: billing}
-          - {type: systemone, name: entities, label: location}
-      modelRefs:
-        - model: m
+recipes:
+  - name: default
+    signals:
+      domains:
+        - {name: health, labels: [health]}
+        - {name: math, labels: [math]}
+        - {name: computer science, labels: [computer science]}
+      jailbreak:
+        - {name: attack, predicate: {gte: 0.75}, input: {history: true}}
+      safety:
+        - {name: unsafe, predicate: {gte: 0.46}}
+      pii:
+        - {name: personal_data, predicate: {gte: 0.01}, input: {history: true}}
+      fact_check:
+        - {name: needs_fact_check}
+      user_feedbacks:
+        - {name: wrong_answer, labels: [WRONG_ANSWER]}
+      modality:
+        - {name: DIFFUSION, labels: [image]}
+      systemone:
+        - name: tone
+          deployment: vela2
+          timeout_ms: 60000
+          question:
+            type: choice
+            instructions: What tone does the request take?
+            choices:
+              - {key: formal, description: polite and formal}
+              - {key: casual, description: relaxed or chatty}
+              - {key: upset, description: angry or frustrated}
+        - name: urgent
+          deployment: vela2
+          timeout_ms: 60000
+          question:
+            type: noul
+            instructions: Does the request need an urgent answer?
+        - name: effort
+          deployment: vela2
+          timeout_ms: 60000
+          predicate: {gte: 1}
+          question:
+            type: score
+            instructions: How much work would a good answer take?
+            levels: [A one-line answer, A short explanation, A detailed multi-step answer]
+        - name: topics
+          deployment: vela2
+          timeout_ms: 60000
+          question:
+            type: set
+            instructions: Which topics does the request mention?
+            labels:
+              - {key: billing, description: "payments, invoices, charges or refunds"}
+              - {key: shipping, description: "deliveries, parcels, tracking or returns"}
+              - {key: account, description: "logins, passwords or account settings"}
+              - {key: medication, description: drugs or doses}
+        - name: entities
+          deployment: vela2
+          timeout_ms: 60000
+          question:
+            type: span
+            instructions: Which spans name a place or an organization?
+            labels:
+              - {key: location, description: "a city, country or address"}
+              - {key: organization, description: a company or institution}
+    decisions:
+      - name: every-signal
+        priority: 10
+        rules:
+          operator: OR
+          conditions:
+            - {type: domain, name: health}
+            - {type: domain, name: math}
+            - {type: domain, name: computer science}
+            - {type: jailbreak, name: attack}
+            - {type: safety, name: unsafe}
+            - {type: pii, name: personal_data}
+            - {type: fact_check, name: needs_fact_check}
+            - {type: user_feedback, name: wrong_answer}
+            - {type: modality, name: DIFFUSION}
+            - {type: systemone, name: tone, label: formal}
+            - {type: systemone, name: urgent}
+            - {type: systemone, name: effort}
+            - {type: systemone, name: topics, label: billing}
+            - {type: systemone, name: entities, label: location}
+        modelRefs:
+          - model: m
 `
 
 // vela2Item is one request of the corpus: its text, the user's earlier

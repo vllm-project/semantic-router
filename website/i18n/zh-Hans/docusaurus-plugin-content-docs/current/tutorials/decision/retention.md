@@ -38,20 +38,21 @@ translation:
 ## 配置
 
 ```yaml
-routing:
-  decisions:
-    - name: sensitive-turn
-      description: Drop retained state for sensitive turns.
-      priority: 200
-      rules:
-        operator: AND
-        conditions:
-          - type: pii
-            name: restricted_pii
-      modelRefs:
-        - model: private-model
-      retention:
-        drop: true
+recipes:
+  - name: default
+    decisions:
+      - name: sensitive-turn
+        description: Drop retained state for sensitive turns.
+        priority: 200
+        rules:
+          operator: AND
+          conditions:
+            - type: pii
+              name: restricted_pii
+        modelRefs:
+          - model: private-model
+        retention:
+          drop: true
 ```
 
 等价 DSL 是：

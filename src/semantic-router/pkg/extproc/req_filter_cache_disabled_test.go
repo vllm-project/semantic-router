@@ -25,7 +25,7 @@ func TestHandleCachingWithoutBackendSkipsIdentityButKeepsModelAndQuery(t *testin
 		},
 	}
 	cfg := &config.RouterConfig{}
-	cfg.Enabled = true
+	cfg.SemanticCache.InUse = true
 	cfg.Decisions = []config.Decision{decision}
 
 	request := testNeutralRequest("test-model", "What is 2+2?")
@@ -74,7 +74,7 @@ func TestHandleCachingWithoutBackendStillAppliesRequestControls(t *testing.T) {
 		},
 	}
 	cfg := &config.RouterConfig{}
-	cfg.Enabled = true
+	cfg.SemanticCache.InUse = true
 	cfg.Decisions = []config.Decision{decision}
 	router := &OpenAIRouter{Config: cfg, Cache: cache.NewInMemoryCache(cache.InMemoryCacheOptions{Enabled: false})}
 	ctx := &RequestContext{
@@ -106,7 +106,7 @@ func TestHandleCachingWithoutBackendStillSkipsPersonalizingDecisions(t *testing.
 		},
 	}
 	cfg := &config.RouterConfig{}
-	cfg.Enabled = true
+	cfg.SemanticCache.InUse = true
 	cfg.Decisions = []config.Decision{decision}
 	router := &OpenAIRouter{Config: cfg, Cache: cache.NewInMemoryCache(cache.InMemoryCacheOptions{Enabled: false})}
 	ctx := &RequestContext{

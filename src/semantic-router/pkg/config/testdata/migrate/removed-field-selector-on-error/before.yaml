@@ -1,31 +1,31 @@
 # A selector that fails falls back to the first candidate whatever on_error
 # said, so a selector's on_error is dropped.
-version: v0.3
+version: v0.5
 providers:
   defaults: {model: small}
   models:
     - name: small
       backend_refs: [{name: small, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+      description: Fast general model
     - name: large
       backend_refs: [{name: large, endpoint: "127.0.0.1:8001", protocol: http, weight: 1}]
-routing:
-  modelCards:
-    - {name: small, description: Fast general model}
-    - {name: large, description: Strong reasoning model}
-  decisions:
-    - name: pinned
-      priority: 100
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: small}, {model: large}]
-      algorithm:
-        type: static
-        on_error: skip
-    - name: weighted
-      priority: 50
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: small}, {model: large}]
-      algorithm:
-        type: multi_factor
-        on_error: fallback
-        multi_factor:
-          weights: {quality: 0.7, cost: 0.3}
+      description: Strong reasoning model
+recipes:
+  - name: default
+    decisions:
+      - name: pinned
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: small}, {model: large}]
+        algorithm:
+          type: static
+          on_error: skip
+      - name: weighted
+        priority: 50
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: small}, {model: large}]
+        algorithm:
+          type: multi_factor
+          on_error: fallback
+          multi_factor:
+            weights: {quality: 0.7, cost: 0.3}

@@ -20,7 +20,7 @@ func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.
 
 	if len(cfg.Recipes) == 0 {
 		registry := createModelSelectorRegistry(cfg)
-		registries[config.DefaultRecipeName] = registry
+		registries[cfg.DefaultRecipe().Name] = registry
 		return registries, registry, lt, cancel
 	}
 
@@ -28,7 +28,7 @@ func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.
 		recipe := &cfg.Recipes[i]
 		registries[recipe.Name] = createModelSelectorRegistry(cfg.ConfigForRecipe(recipe))
 	}
-	defaultRegistry := registries[config.DefaultRecipeName]
+	defaultRegistry := registries[cfg.DefaultRecipe().Name]
 	return registries, defaultRegistry, lt, cancel
 }
 

@@ -90,7 +90,7 @@ flowchart TD
 
 ## 配置
 
-将公开名字映射到下方的默认路由。若需隔离策略，请将 `routing` 块放入命名 recipe，并修改入口的 recipe 引用。
+将公开名字映射到下方的配方。若需与其他配方隔离，请为它声明独立的 recipe，并修改入口的 recipe 引用。
 
 ```yaml
 entrypoints:
@@ -101,30 +101,31 @@ entrypoints:
 配置一条 ReMoM 决策：
 
 ```yaml
-routing:
-  decisions:
-    - name: reasoning_panel
-      description: Combine a bounded reasoning panel into one answer.
-      priority: 100
-      output_contract: Preserve any explicit output format exactly.
-      output_contract_spec:
-        type: reference_selection
-        reference:
-          source: candidate_responses
-          id_format: index
-        extract:
-          mode: exact
-          sources: [content]
-        postprocess:
-          - type: dereference_selected_reference
-      modelRefs:
-        - model: qwen3-32b
-        - model: deepseek-worker
-      algorithm:
-        type: remom
-        remom:
-          breadth_schedule: [3, 2]
-          model_distribution: weighted
+recipes:
+  - name: default
+    decisions:
+      - name: reasoning_panel
+        description: Combine a bounded reasoning panel into one answer.
+        priority: 100
+        output_contract: Preserve any explicit output format exactly.
+        output_contract_spec:
+          type: reference_selection
+          reference:
+            source: candidate_responses
+            id_format: index
+          extract:
+            mode: exact
+            sources: [content]
+          postprocess:
+            - type: dereference_selected_reference
+        modelRefs:
+          - model: qwen3-32b
+          - model: deepseek-worker
+        algorithm:
+          type: remom
+          remom:
+            breadth_schedule: [3, 2]
+            model_distribution: weighted
 ```
 
 `output_contract` 是决策范围的提示词文本。把它用于应同时作用于 ReMoM、Fusion 和 Flow 的基准或应用格式要求，而不是把任务特定提示词硬编码进算法。`output_contract_spec` 是路由器可执行的类型化契约，用于后处理与归一化；把运行时行为放在这里，而不是编码成提示词启发式。提取默认精确匹配 `content`；仅当决策明确允许更宽的解析器时，才使用 `extract.sources` 或 `extract.mode: json_object`。

@@ -9,7 +9,7 @@ import (
 
 const velaShieldPath = "models/Vela-1.0-Encoder-307M-Shield"
 
-const velaShieldBaseYAML = `version: v0.3
+const velaShieldBaseYAML = `version: v0.5
 listeners: []
 providers:
   defaults: {model: backend}
@@ -18,14 +18,15 @@ providers:
       backend_refs: [{name: local, provider: vllm, endpoint: "127.0.0.1:8000"}]
 `
 
-const velaShieldGlobalYAML = velaShieldBaseYAML + `routing:
-  signals:
-    safety:
-      - {name: unsafe-content, deployment: shield, predicate: {gte: 0.5}}
-  decisions:
-    - name: unsafe
-      rules: {operator: AND, conditions: [{type: safety, name: unsafe-content}]}
-      modelRefs: [{model: backend}]
+const velaShieldGlobalYAML = velaShieldBaseYAML + `recipes:
+  - name: default
+    signals:
+      safety:
+        - {name: unsafe-content, deployment: shield, predicate: {gte: 0.5}}
+    decisions:
+      - name: unsafe
+        rules: {operator: AND, conditions: [{type: safety, name: unsafe-content}]}
+        modelRefs: [{model: backend}]
 global:
   model_catalog:
     deployments:
@@ -39,18 +40,21 @@ global:
 const velaShieldRecipeYAML = velaShieldBaseYAML + `entrypoints:
   - model_names: [care]
     recipe: care
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 recipes:
+  - name: default
   - name: care
-    routing:
-      model_bindings:
-        safety: shield
-      signals:
-        safety:
-          - {name: unsafe-content, predicate: {gte: 0.5}}
-      decisions:
-        - name: unsafe
-          rules: {operator: AND, conditions: [{type: safety, name: unsafe-content}]}
-          modelRefs: [{model: backend}]
+    model_bindings:
+      safety: shield
+    signals:
+      safety:
+        - {name: unsafe-content, predicate: {gte: 0.5}}
+    decisions:
+      - name: unsafe
+        rules: {operator: AND, conditions: [{type: safety, name: unsafe-content}]}
+        modelRefs: [{model: backend}]
 global:
   model_catalog:
     deployments:

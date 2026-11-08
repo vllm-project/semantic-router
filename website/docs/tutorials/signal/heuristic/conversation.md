@@ -4,7 +4,7 @@
 
 `conversation` routes on chat structure and protocol facts, such as message
 count, developer instructions, available tools, explicit tool-use constraints,
-or an active tool loop. Define these rules under `routing.signals.conversation`.
+or an active tool loop. Define these rules under `recipes[].signals.conversation`.
 
 This family is heuristic: it inspects the request's `messages[]` and `tools[]` arrays without any model inference.
 
@@ -31,35 +31,34 @@ Use `conversation` when:
 ## Configuration
 
 ```yaml
-routing:
-  signals:
-    conversation:
-      - name: multi_turn_user
-        description: At least two user messages.
-        feature:
-          type: count
-          source:
-            type: message
-            role: user
-        predicate:
-          gte: 2
-
-      - name: has_developer_message
-        description: Request includes a developer message.
-        feature:
-          type: exists
-          source:
-            type: message
-            role: developer
-
-      - name: tool_heavy
-        description: Three or more tool definitions.
-        feature:
-          type: count
-          source:
-            type: tool_definition
-        predicate:
-          gte: 3
+recipes:
+  - name: default
+    signals:
+      conversation:
+        - name: multi_turn_user
+          description: At least two user messages.
+          feature:
+            type: count
+            source:
+              type: message
+              role: user
+          predicate:
+            gte: 2
+        - name: has_developer_message
+          description: Request includes a developer message.
+          feature:
+            type: exists
+            source:
+              type: message
+              role: developer
+        - name: tool_heavy
+          description: Three or more tool definitions.
+          feature:
+            type: count
+            source:
+              type: tool_definition
+          predicate:
+            gte: 3
 ```
 
 ## Feature Types
@@ -88,20 +87,21 @@ rule with `modality: image`.
 ## Decision Usage
 
 ```yaml
-routing:
-  decisions:
-    - name: agentic_routing
-      description: Send tool-heavy chats to an agent-capable model.
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: conversation
-            name: tool_heavy
-          - type: conversation
-            name: multi_turn_user
-      modelRefs:
-        - model: gpt-4o
+recipes:
+  - name: default
+    decisions:
+      - name: agentic_routing
+        description: Send tool-heavy chats to an agent-capable model.
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: conversation
+              name: tool_heavy
+            - type: conversation
+              name: multi_turn_user
+        modelRefs:
+          - model: gpt-4o
 ```
 
 ## Dependencies and Limitations

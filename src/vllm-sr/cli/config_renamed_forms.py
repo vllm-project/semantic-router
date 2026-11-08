@@ -11,6 +11,8 @@ from __future__ import annotations
 import copy
 from typing import Any
 
+from cli.config_recipe_scopes import recipe_scopes
+
 RENAMED = "decision"
 CANONICAL = "systemone"
 
@@ -18,7 +20,7 @@ CANONICAL = "systemone"
 def read_renamed_forms(data: dict[str, Any]) -> dict[str, Any]:
     """A copy of data with the renamed forms written as systemone."""
     data = copy.deepcopy(data)
-    for routing in _routing_scopes(data):
+    for routing in [recipe for _, recipe in recipe_scopes(data)]:
         signals = routing.get("signals")
         if isinstance(signals, dict):
             _rename_signals(signals)
@@ -33,12 +35,6 @@ def read_renamed_forms(data: dict[str, Any]) -> dict[str, Any]:
                 for item in _items(score.get("inputs")):
                     _rename_type(item)
     return data
-
-
-def _routing_scopes(data: dict[str, Any]) -> list[dict[str, Any]]:
-    scopes = [data.get("routing")]
-    scopes.extend(recipe.get("routing") for recipe in _items(data.get("recipes")))
-    return [scope for scope in scopes if isinstance(scope, dict)]
 
 
 def _items(value: Any) -> list[dict[str, Any]]:

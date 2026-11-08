@@ -47,7 +47,7 @@ func backendConfigWithRouting(t *testing.T, url, routing string) *config.RouterC
 
 func backendDocument(url, routing string) string {
 	host := strings.TrimPrefix(url, "http://")
-	return `version: v0.3
+	return `version: v0.5
 listeners:
   - name: http-8899
     address: 127.0.0.1
@@ -61,13 +61,8 @@ providers:
         - endpoint: ` + host + `
           protocol: http
           provider: vllm
-global:
-  stores:
-    response_cache:
-      enabled: false
-routing:
-  modelCards:
-    - name: m
+recipes:
+  - name: default
 ` + routing
 }
 
@@ -134,11 +129,11 @@ func TestNativeUpstreamSetIsOwnedByTheSnapshot(t *testing.T) {
 		t.Fatalf("calls = %d, %d (%v); the new snapshot must serve the new backend", first.Load(), second.Load(), err)
 	}
 
-	tuned, err := apply(backendConfigWithRouting(t, two.URL, `  signals:
-    keywords:
-      - name: urgent
-        operator: OR
-        keywords: ["urgent"]
+	tuned, err := apply(backendConfigWithRouting(t, two.URL, `    signals:
+      keywords:
+        - name: urgent
+          operator: OR
+          keywords: ["urgent"]
 `))
 	if err != nil {
 		t.Fatal(err)

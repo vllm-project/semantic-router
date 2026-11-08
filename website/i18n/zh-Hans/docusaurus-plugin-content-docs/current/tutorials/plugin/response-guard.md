@@ -30,38 +30,39 @@ translation:
 
 ## 配置
 
-在 `routing.signals` 下声明信号，并在 `routing.decisions[].plugins` 下添加插件：
+在 `recipes[].signals` 下声明信号，并在 `recipes[].decisions[].plugins` 下添加插件：
 
 ```yaml
-routing:
-  signals:
-    jailbreak:
-      - name: unsafe_completion
-        direction: response
-        threshold: 0.9
-    fact_check:
-      - name: needs_fact_check
-        description: Prompts whose answers are worth checking against their context.
-    hallucination:
-      - name: ungrounded_claims
-        description: Answers with claims their grounding context does not support.
-  decisions:
-    - name: grounded_support
-      # ...rules, modelRefs...
-      plugins:
-        - type: response_guard
-          configuration:
-            rules:
-              - when: {type: jailbreak, name: unsafe_completion}
-                action: block
-              - when:
-                  operator: AND
-                  conditions:
-                    - {type: fact_check, name: needs_fact_check}
-                    - {type: hallucination, name: ungrounded_claims}
-                action: annotate
-                details: true
-            on_unknown: annotate
+recipes:
+  - name: default
+    signals:
+      jailbreak:
+        - name: unsafe_completion
+          stage: response
+          predicate: {gte: 0.9}
+      fact_check:
+        - name: needs_fact_check
+          description: Prompts whose answers are worth checking against their context.
+      hallucination:
+        - name: ungrounded_claims
+          description: Answers with claims their grounding context does not support.
+    decisions:
+      - name: grounded_support
+        # ...rules, modelRefs...
+        plugins:
+          - type: response_guard
+            configuration:
+              rules:
+                - when: {type: jailbreak, name: unsafe_completion}
+                  action: block
+                - when:
+                    operator: AND
+                    conditions:
+                      - {type: fact_check, name: needs_fact_check}
+                      - {type: hallucination, name: ungrounded_claims}
+                  action: annotate
+                  details: true
+              on_unknown: annotate
 ```
 
 | 字段 | 含义 |

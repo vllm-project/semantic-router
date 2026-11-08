@@ -12,9 +12,10 @@ import (
 
 func TestBuildRouterComponentsClosesEarlierResourcesOnLaterFailure(t *testing.T) {
 	cfg := newDefaultRouteConfig()
-	cfg.SemanticCache = config.SemanticCache{Enabled: true, TTLSeconds: 60}
+	cfg.SemanticCache = config.SemanticCache{InUse: true, TTLSeconds: 60}
 	// The replay store is built after the signal runtime and the cache.
-	cfg.RouterReplay = config.RouterReplayConfig{Enabled: true, StoreBackend: "redis"}
+	cfg.RouterReplay = config.RouterReplayConfig{StoreBackend: "redis"}
+	withGlobalPlugins(t, cfg, replayTestPlugin(map[string]interface{}{"enabled": true}))
 
 	baseline := stableGoroutineCount(t)
 

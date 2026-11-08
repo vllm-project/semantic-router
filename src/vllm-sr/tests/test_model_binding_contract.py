@@ -19,32 +19,31 @@ from cli.validator_recipe_contracts import _recipe_name_contract
 
 def binding_document():
     return {
-        "version": "v0.3",
-        "routing": {
-            "model_bindings": {
-                "jailbreak_classifier": {
-                    "deployment": "shared",
-                    "contract": "label_scores.v1",
-                    "adapter": "mmbert",
-                    "head": "jailbreak",
-                }
-            }
-        },
+        "version": "v0.5",
         "recipes": [
             {
-                "name": "private",
-                "routing": {
-                    "model_bindings": {
-                        "pii_classifier": {
-                            "deployment": "shared",
-                            "contract": "token_spans.v1",
-                            "adapter": "mmbert",
-                            "head": "pii",
-                            "mapping_path": "mappings/pii.json",
-                        }
+                "name": "default",
+                "model_bindings": {
+                    "jailbreak_classifier": {
+                        "deployment": "shared",
+                        "contract": "label_scores.v1",
+                        "adapter": "mmbert",
+                        "head": "jailbreak",
                     }
                 },
-            }
+            },
+            {
+                "name": "private",
+                "model_bindings": {
+                    "pii_classifier": {
+                        "deployment": "shared",
+                        "contract": "token_spans.v1",
+                        "adapter": "mmbert",
+                        "head": "pii",
+                        "mapping_path": "mappings/pii.json",
+                    }
+                },
+            },
         ],
         "global": {
             "model_catalog": {
@@ -67,6 +66,9 @@ def binding_document():
                 },
             }
         },
+        "entrypoints": [
+            {"model_names": ["vllm-sr/auto"], "recipe": "default", "default": True}
+        ],
     }
 
 
@@ -75,17 +77,22 @@ def test_model_bindings_survive_typed_and_schema_roundtrip():
     assert validate_config_structure(document) == []
     parsed = UserConfig.model_validate(document)
     emitted = parsed.model_dump(mode="json", by_alias=True, exclude_none=True)
-    assert emitted["routing"]["model_bindings"] == document["routing"]["model_bindings"]
     assert (
-        emitted["recipes"][0]["routing"]["model_bindings"]
-        == document["recipes"][0]["routing"]["model_bindings"]
+        emitted["recipes"][0]["model_bindings"]
+        == document["recipes"][0]["model_bindings"]
+    )
+    assert (
+        emitted["recipes"][0]["model_bindings"]
+        == document["recipes"][0]["model_bindings"]
     )
     assert emitted["global"] == document["global"]
 
 
 def test_model_binding_fields_are_strict():
     document = binding_document()
-    document["routing"]["model_bindings"]["jailbreak_classifier"]["deploymnt"] = "typo"
+    document["recipes"][0]["model_bindings"]["jailbreak_classifier"][
+        "deploymnt"
+    ] = "typo"
     assert validate_config_structure(document)
     with pytest.raises(ValidationError):
         UserConfig.model_validate(document)

@@ -129,7 +129,7 @@ domains:
       - src/semantic-router/pkg/catalog/**/*.go
       - src/semantic-router/pkg/config/**/*.go
       - src/semantic-router/pkg/configschema/**/*.go
-      - src/semantic-router/pkg/configschema/router-config-v0.3.schema.json
+      - src/semantic-router/pkg/configschema/router-config-v0.5.schema.json
       - src/semantic-router/pkg/headers/**
       - tools/codegen/configschema/**
       - tools/codegen/headers/**
@@ -394,7 +394,7 @@ domains:
       - config/recipes/vela-amd/config.yaml
       - config/recipes/built-in/**
       - e2e/config/config.memory-user.yaml
-      - src/semantic-router/pkg/configschema/router-config-v0.3.schema.json
+      - src/semantic-router/pkg/configschema/router-config-v0.5.schema.json
     checks: [make vllm-sr-test]
     verifications: [cli-unit]
 

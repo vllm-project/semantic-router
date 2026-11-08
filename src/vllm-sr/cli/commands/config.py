@@ -150,7 +150,7 @@ def config_command(config_type: str, config_path: str = "config.yaml"):
             "Run 'vllm-sr serve' to bootstrap setup mode and create a config file"
         )
         log.error(
-            "Or write a canonical v0.3 config.yaml using the docs examples if you want to hand-author it directly"
+            "Or write a canonical v0.5 config.yaml using the docs examples if you want to hand-author it directly"
         )
         sys.exit(1)
 
@@ -203,7 +203,7 @@ def migrate_config_command(
     force: bool = False,
     offline: bool = False,
 ) -> Path:
-    """Migrate a legacy or mixed config file to canonical v0.3 YAML."""
+    """Migrate a legacy or mixed config file to canonical v0.5 YAML."""
 
     source_path = Path(config_path)
     if not source_path.exists():

@@ -5,36 +5,6 @@ import (
 	"testing"
 )
 
-func f32(v float32) *float32 { return &v }
-
-func TestValidateSemanticCacheThresholdRange(t *testing.T) {
-	cases := []struct {
-		name      string
-		threshold *float32
-		wantErr   bool
-	}{
-		{"unset_ok", nil, false},
-		{"zero_ok", f32(0), false},
-		{"mid_ok", f32(0.8), false},
-		{"one_ok", f32(1.0), false},
-		{"above_one_rejected", f32(1.5), true},
-		{"negative_rejected", f32(-0.1), true},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			cfg := &RouterConfig{}
-			cfg.SemanticCache.SimilarityThreshold = tc.threshold
-			err := validateGlobalSemanticCacheContracts(cfg)
-			if tc.wantErr != (err != nil) {
-				t.Fatalf("threshold=%v: wantErr=%v, got err=%v", tc.threshold, tc.wantErr, err)
-			}
-		})
-	}
-	if err := validateGlobalSemanticCacheContracts(nil); err != nil {
-		t.Fatalf("nil config must be valid, got: %v", err)
-	}
-}
-
 func responseCacheDecision(configuration map[string]interface{}) Decision {
 	return Decision{Name: "route", Plugins: []DecisionPlugin{{Type: DecisionPluginResponseCache, Configuration: MustStructuredPayload(configuration)}}}
 }
@@ -48,7 +18,7 @@ func TestValidateResponseCacheSemanticMatch(t *testing.T) {
 		wantErr string
 	}{
 		{name: "recall", match: map[string]interface{}{"recall": map[string]interface{}{"top_k": 3, "min_similarity": 0.85}}},
-		{name: "empty", match: map[string]interface{}{}, wantErr: "routing.decisions[route].plugins[0].configuration.semantic.match: match_empty"},
+		{name: "empty", match: map[string]interface{}{}, wantErr: "recipes[default].decisions[route].plugins[0].configuration.semantic.match: match_empty"},
 		{name: "similarity beyond a cosine", match: map[string]interface{}{"recall": map[string]interface{}{"top_k": 3, "min_similarity": 2.0}}, wantErr: "semantic.match.recall.min_similarity must be a cosine similarity"},
 		{name: "judge without recall", match: map[string]interface{}{"judge": map[string]interface{}{"preset": "same_request"}}, wantErr: "add recall"},
 		{name: "bm25 recall", match: map[string]interface{}{"recall": map[string]interface{}{"method": "bm25", "top_k": 3}}, wantErr: "recalls with embedding only"},

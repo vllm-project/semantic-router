@@ -2,18 +2,19 @@
 # embeddings.default (vela-embedding), qwen3 the deployment of
 # qwen3_model_path, multimodal omni-nano; the vector store's width is its
 # embedding block's dimension.
-version: v0.3
+version: v0.5
 providers:
   defaults: {model: general}
   models:
     - name: general
       backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
-routing:
-  decisions:
-    - name: faq
-      priority: 100
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: general}]
+recipes:
+  - name: default
+    decisions:
+      - name: faq
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
 global:
   model_catalog:
     deployments:
@@ -32,10 +33,8 @@ global:
           overflow: truncate
   stores:
     response_cache:
-      enabled: true
       backend_type: memory
     memory:
-      enabled: false
       embedding:
         deployment: omni-nano
     vector_store:

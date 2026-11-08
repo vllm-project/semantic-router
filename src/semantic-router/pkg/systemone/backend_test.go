@@ -35,8 +35,9 @@ func TestNativeRemoteAdapterPreservesTaskAndUsesProviderAuth(t *testing.T) {
 	}))
 	defer server.Close()
 	t.Setenv("SYSTEMONE_BACKEND_TEST_KEY", "private-test-key")
-	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.3
-routing: {}
+	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.5
+recipes:
+  - name: default
 providers:
   models:
     - name: native
@@ -77,8 +78,9 @@ func TestNativeRemoteAdapterRefusesATrustedGatewayBeforeDispatch(t *testing.T) {
 		_, _ = w.Write([]byte(certainResponse))
 	}))
 	defer server.Close()
-	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.3
-routing: {}
+	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.5
+recipes:
+  - name: default
 global:
   services:
     authz:

@@ -2,84 +2,85 @@
 # regex keyword, a keyword_set its literal keywords and each sequence a regex
 # over its markers. A count predicate stays; a density one is scaled to
 # matches per 1,000 characters. Structure conditions are keyword ones.
-version: v0.3
+version: v0.5
 providers:
   defaults: {model: general}
   models:
     - name: general
       backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
-routing:
-  signals:
-    keywords:
-      - name: many_questions
-        description: Prompts that contain many explicit questions.
-        operator: OR
-        method: regex
-        keywords: ['[?？]']
-        count: {gte: 4}
-      - name: at_most_one_question
-        operator: OR
-        method: regex
-        keywords: ['[?？]']
-        count: {lte: 1}
-      - name: numbered_steps
-        operator: OR
-        method: regex
-        keywords: ['(?m)^\s*\d+\.\s+']
-      - name: first_then_flow
-        operator: OR
-        method: regex
-        keywords: ['(?s)first.*then', '(?s)首先.*然后']
-      - name: no_ordered_flow
-        operator: OR
-        method: regex
-        keywords: ['(?s)first.*then']
-        count:
-          lt: 1
-      - name: constraint_dense
-        description: Constraint language is dense.
-        operator: OR
-        keywords: [at most, at least, 至少]
-        case_sensitive: true
-        density:
-          gt: 16
-      - name: todo_markers
-        operator: OR
-        keywords: [TODO, FIXME]
-  projections:
-    scores:
-      - name: shape
-        method: weighted_sum
-        inputs:
-          - {type: keyword, name: first_then_flow, weight: 0.5}
-          - {type: keyword, name: constraint_dense, weight: 0.5, value_source: raw}
-    mappings:
-      - name: shape_band
-        source: shape
-        method: threshold_bands
-        outputs: [{name: shaped, gte: 0.5}]
-  decisions:
-    - name: questions
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - {type: keyword, name: many_questions}
-          - operator: NOT
-            conditions:
-              - {type: keyword, name: numbered_steps}
-      modelRefs: [{model: general}]
-    - name: dense
-      priority: 90
-      rules: {type: keyword, name: constraint_dense, predicate: {gt: 0.1}}
-      modelRefs: [{model: general}]
-    - name: plain
-      priority: 80
-      rules:
-        operator: OR
-        conditions:
-          - {type: keyword, name: at_most_one_question}
-          - {type: keyword, name: no_ordered_flow}
-          - {type: keyword, name: todo_markers}
-          - {type: projection, name: shaped}
-      modelRefs: [{model: general}]
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: many_questions
+          description: Prompts that contain many explicit questions.
+          operator: OR
+          method: regex
+          keywords: ['[?？]']
+          count: {gte: 4}
+        - name: at_most_one_question
+          operator: OR
+          method: regex
+          keywords: ['[?？]']
+          count: {lte: 1}
+        - name: numbered_steps
+          operator: OR
+          method: regex
+          keywords: ['(?m)^\s*\d+\.\s+']
+        - name: first_then_flow
+          operator: OR
+          method: regex
+          keywords: ['(?s)first.*then', '(?s)首先.*然后']
+        - name: no_ordered_flow
+          operator: OR
+          method: regex
+          keywords: ['(?s)first.*then']
+          count:
+            lt: 1
+        - name: constraint_dense
+          description: Constraint language is dense.
+          operator: OR
+          keywords: [at most, at least, 至少]
+          case_sensitive: true
+          density:
+            gt: 16
+        - name: todo_markers
+          operator: OR
+          keywords: [TODO, FIXME]
+    projections:
+      scores:
+        - name: shape
+          method: weighted_sum
+          inputs:
+            - {type: keyword, name: first_then_flow, weight: 0.5}
+            - {type: keyword, name: constraint_dense, weight: 0.5, value_source: raw}
+      mappings:
+        - name: shape_band
+          source: shape
+          method: threshold_bands
+          outputs: [{name: shaped, gte: 0.5}]
+    decisions:
+      - name: questions
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - {type: keyword, name: many_questions}
+            - operator: NOT
+              conditions:
+                - {type: keyword, name: numbered_steps}
+        modelRefs: [{model: general}]
+      - name: dense
+        priority: 90
+        rules: {type: keyword, name: constraint_dense, predicate: {gt: 0.1}}
+        modelRefs: [{model: general}]
+      - name: plain
+        priority: 80
+        rules:
+          operator: OR
+          conditions:
+            - {type: keyword, name: at_most_one_question}
+            - {type: keyword, name: no_ordered_flow}
+            - {type: keyword, name: todo_markers}
+            - {type: projection, name: shaped}
+        modelRefs: [{model: general}]

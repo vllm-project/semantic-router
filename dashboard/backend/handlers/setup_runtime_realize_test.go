@@ -43,7 +43,7 @@ func importSetupRuntimePatch(t *testing.T, path string, resolver *setupmode.Reso
 	// The fixture server is on loopback; declare it the way an operator would
 	// declare a real internal target (#1388).
 	allowLoopbackForTest(t)
-	patch["version"] = "v0.3"
+	patch["version"] = "v0.5"
 	raw, err := yaml.Marshal(patch)
 	if err != nil {
 		t.Fatal(err)
@@ -67,7 +67,7 @@ func importSetupRuntimePatch(t *testing.T, path string, resolver *setupmode.Reso
 func TestManagedSetupRealizesImportedConfigBeforePublishingOwnedPath(t *testing.T) {
 	configPath, resolver := managedSetupRuntime(t)
 	patch := createValidSetupPatch()
-	patch["global"] = map[string]interface{}{"services": map[string]interface{}{"router_replay": map[string]interface{}{"enabled": false}}}
+	patch["global"] = map[string]interface{}{"services": map[string]interface{}{"router_replay": map[string]interface{}{"store_backend": "memory"}}}
 	imported := importSetupRuntimePatch(t, configPath, resolver, patch)
 	// Import must retain absent listener intent, so CLI realization can choose
 	// its container-reachable default instead of an explicit standalone bind.
@@ -123,7 +123,7 @@ func TestManagedSetupPreservesAuthoredGlobalThroughRealization(t *testing.T) {
 			name   string
 			global any
 		}{name: "empty management", global: map[string]any{
-			"services": map[string]any{"management_api": map[string]any{}, "router_replay": map[string]any{"enabled": false}},
+			"services": map[string]any{"management_api": map[string]any{}, "router_replay": map[string]any{"async_writes": false}},
 		}},
 		struct {
 			name   string
@@ -133,7 +133,7 @@ func TestManagedSetupPreservesAuthoredGlobalThroughRealization(t *testing.T) {
 			"services": map[string]any{
 				"management_api": map[string]any{"bind_address": "0.0.0.0", "port": 9099},
 				"response_api":   map[string]any{"enabled": false},
-				"router_replay":  map[string]any{"enabled": false, "ttl_seconds": 0},
+				"router_replay":  map[string]any{"async_writes": false, "ttl_seconds": 0},
 			},
 		}},
 	)
@@ -174,7 +174,7 @@ func TestManagedSetupPreservesAuthoredGlobalThroughRealization(t *testing.T) {
 				t.Fatalf("activation did not publish reachable runtime: listener=%+v setup=%v", parsed.ManagementAPI, resolver.Active())
 			}
 			// Sparse overrides still inherit the Router's model catalog defaults.
-			defaults, err := routerconfig.ParseYAMLBytesWithoutEnvExpansion([]byte("version: v0.3\nglobal: {}\n"))
+			defaults, err := routerconfig.ParseYAMLBytesWithoutEnvExpansion([]byte("version: v0.5\nglobal: {}\n"))
 			if err != nil {
 				t.Fatal(err)
 			}

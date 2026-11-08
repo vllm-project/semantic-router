@@ -2508,7 +2508,8 @@ func TestFallbackResponsePolicyJailbreakWarningAndMemorySuppression(t *testing.T
 	router.FallbackOrchestrator = orchestrator
 	router.CredentialResolver = newTestCredentialResolver(router.Config)
 
-	router.Config.Memory.Enabled = true
+	router.Config.Memory.InUse = true
+	ctx.VSRSelectedDecision.Plugins = append(ctx.VSRSelectedDecision.Plugins, memoryTestPlugin())
 	router.Config.Memory.AutoStore = true
 	router.MemoryExtractor = memory.NewMemoryChunkStore(&noopMemoryStore{})
 
@@ -3201,7 +3202,7 @@ func TestFallbackWritesClientResponseToCache(t *testing.T) {
 	router, cfg := setupFallbackTestRouter(t, policy)
 	mockCache := &mockStreamingCache{}
 	router.Cache = mockCache
-	cfg.SemanticCache = config.SemanticCache{Enabled: true}
+	cfg.SemanticCache = config.SemanticCache{InUse: true}
 
 	decision := config.Decision{
 		Name: "chat_fallback_decision",
@@ -3271,7 +3272,7 @@ func TestFallbackBlockedResponseNotCached(t *testing.T) {
 
 	mockCache := &mockStreamingCache{}
 	router.Cache = mockCache
-	router.Config.SemanticCache = config.SemanticCache{Enabled: true}
+	router.Config.SemanticCache = config.SemanticCache{InUse: true}
 	router.Config.Decisions[0].Plugins = append(router.Config.Decisions[0].Plugins, config.DecisionPlugin{
 		Type: config.DecisionPluginResponseCache,
 		Configuration: config.MustStructuredPayload(map[string]interface{}{

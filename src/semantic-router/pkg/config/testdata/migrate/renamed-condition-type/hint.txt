@@ -1,1 +1,1 @@
-routing.decisions[tools].rules.conditions[1].conditions[difficulty]: renamed_signal_type: condition type decision is named systemone; run `vllm-sr config migrate` (type: systemone)
+recipes[default].decisions[tools].rules.conditions[1].conditions[difficulty]: renamed_signal_type: condition type decision is named systemone; run `vllm-sr config migrate` (type: systemone)

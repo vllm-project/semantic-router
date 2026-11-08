@@ -44,7 +44,7 @@ func TestKeywordRuleCountAndDensityContract(t *testing.T) {
 	}
 	cfg := &RouterConfig{}
 	cfg.KeywordRules = []KeywordRule{invalid["and"].rule}
-	if err := validateKeywordContracts(cfg); err == nil || !strings.HasPrefix(err.Error(), `routing.signals.keywords["questions"]: count`) {
+	if err := validateKeywordContracts(cfg); err == nil || !strings.HasPrefix(err.Error(), `recipes[default].signals.keywords["questions"]: count`) {
 		t.Fatalf("the error names the rule: %v", err)
 	}
 }

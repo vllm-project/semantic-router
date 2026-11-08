@@ -99,7 +99,7 @@ func writeReferenceConfigCopy(t *testing.T, from, to string) string {
 func memoryStartupBuildConfig(loaded *config.RouterConfig) *config.RouterConfig {
 	cfg := &config.RouterConfig{}
 	cfg.Memory = loaded.Memory
-	cfg.Memory.Enabled = false
+	cfg.Memory.InUse = false
 	for _, decision := range loaded.AllRoutingDecisions() {
 		plugin := decision.GetContextConfig().Source(config.ContextSourceMemory)
 		if plugin == nil {
@@ -160,7 +160,7 @@ func (p servedViews) EmbeddingInfo() embedding.ModelInfo {
 func TestReferenceMemoryStoresUseAWidthVelaEmbeddingServes(t *testing.T) {
 	loaded, err := loadRouterConfig(writeReferenceConfigCopy(t, "", ""))
 	require.NoError(t, err)
-	require.True(t, loaded.Memory.Enabled)
+	require.True(t, loaded.Memory.InUse)
 	deployment, _ := loaded.MemoryEmbedding()
 	require.Equal(t, config.EmbeddingDefaultDeployment, deployment)
 	require.NotNil(t, loaded.Memory.Valkey)

@@ -25,7 +25,7 @@ import (
 // falls back in the router's response phase; the native gateway runs the same
 // policy in the upstream layer.
 const fallbackConfig = `
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -51,27 +51,25 @@ providers:
           endpoint: SECONDARY
           protocol: http
           provider: vllm
-routing:
-  modelCards:
-    - name: primary-model
-    - name: fallback-model
-  decisions:
-    - name: default_route
-      priority: 10
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: primary-model
-          use_reasoning: false
-        - model: fallback-model
-          use_reasoning: false
-      algorithm:
-        type: static
-  fallback:
-    enabled: true
-    max_attempts: 3
-    retryable_status_codes: [502, 503, 504]
+recipes:
+  - name: default
+    decisions:
+      - name: default_route
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: primary-model
+            use_reasoning: false
+          - model: fallback-model
+            use_reasoning: false
+        algorithm:
+          type: static
+    fallback:
+      enabled: true
+      max_attempts: 3
+      retryable_status_codes: [502, 503, 504]
 `
 
 const fallbackRequest = `{"model":"vllm-sr/auto","messages":[{"role":"user","content":"Hello there."}]}`

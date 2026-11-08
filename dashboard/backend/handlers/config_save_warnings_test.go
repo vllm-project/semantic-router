@@ -70,17 +70,18 @@ func forEverySave(t *testing.T, config map[string]any, check func(*testing.T, *h
 			t.Fatal(err)
 		}
 	}
-	deploy, err := json.Marshal(DeployRequest{YAML: `routing:
-  decisions:
-    - name: deployed-default
-      priority: 5
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: test-model
+	deploy, err := json.Marshal(DeployRequest{YAML: `recipes:
+  - name: default
+    decisions:
+      - name: deployed-default
+        priority: 5
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: test-model
 `})
 	if err != nil {
 		t.Fatal(err)
@@ -125,7 +126,7 @@ func forEverySave(t *testing.T, config map[string]any, check func(*testing.T, *h
 
 func withRoutingBindings(bindings map[string]any) map[string]any {
 	config := canonicalConfigBody("127.0.0.1:8000")
-	config["routing"].(map[string]interface{})["model_bindings"] = bindings
+	config["recipes"].([]map[string]interface{})[0]["model_bindings"] = bindings
 	return config
 }
 
@@ -136,7 +137,7 @@ func TestConfigSavesReturnTheRouterWarningForADeprecatedBindingField(t *testing.
 	})
 	forEverySave(t, config, func(t *testing.T, response *httptest.ResponseRecorder) {
 		body := decodeSavedConfig(t, response)
-		if !hasConfigWarning(body.Warnings, "deprecated_model_field", "routing.model_bindings.pii") {
+		if !hasConfigWarning(body.Warnings, "deprecated_model_field", "recipes[default].model_bindings.pii") {
 			t.Fatalf("warnings = %+v, want the Router's deprecation of the binding contract", body.Warnings)
 		}
 	})
@@ -154,7 +155,7 @@ func TestConfigSavesDoNotDeprecateABindingWrittenAsADeploymentName(t *testing.T)
 }
 
 func TestGlobalPatchRemovesKeysSetToNull(t *testing.T) {
-	existing := []byte(`version: v0.3
+	existing := []byte(`version: v0.5
 global:
   router:
     strategy: priority

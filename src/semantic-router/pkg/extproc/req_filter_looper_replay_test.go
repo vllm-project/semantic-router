@@ -374,7 +374,10 @@ func TestLooperHopReplayUsesRecipeScopedDuplicateDecision(t *testing.T) {
 
 func TestSpoofedLooperContextCannotExecuteRecipePlugins(t *testing.T) {
 	cfg := looperReplayRecipeConfig()
-	cfg.RouterReplay.Enabled = false
+	cfg.GlobalPlugins = nil
+	if err := cfg.LayerPlugins(); err != nil {
+		t.Fatal(err)
+	}
 	cfg.Recipes[1].Profile.Decisions[0].Plugins = []config.DecisionPlugin{{
 		Type: config.DecisionPluginFastResponse,
 		Configuration: config.MustStructuredPayload(map[string]interface{}{
@@ -495,7 +498,7 @@ func TestHydrateLooperRoutingContextPreservesResolvedRouting(t *testing.T) {
 }
 
 func looperReplayRecipeConfig() *config.RouterConfig {
-	return &config.RouterConfig{
+	cfg := &config.RouterConfig{
 		BackendModels: config.BackendModels{
 			ModelConfig: map[string]config.ModelParams{
 				"model-a": {PreferredEndpoints: []string{"model-backend"}},
@@ -504,8 +507,8 @@ func looperReplayRecipeConfig() *config.RouterConfig {
 				Name: "model-backend", Address: "127.0.0.1", Port: 8000, Type: "vllm", Weight: 1,
 			}},
 		},
+		GlobalPlugins: []config.DecisionPlugin{replayTestPlugin(map[string]interface{}{"enabled": true})},
 		RouterReplay: config.RouterReplayConfig{
-			Enabled:      true,
 			StoreBackend: "memory",
 		},
 		Recipes: []config.RoutingRecipe{
@@ -531,4 +534,8 @@ func looperReplayRecipeConfig() *config.RouterConfig {
 			},
 		},
 	}
+	if err := cfg.LayerPlugins(); err != nil {
+		panic(err)
+	}
+	return cfg
 }

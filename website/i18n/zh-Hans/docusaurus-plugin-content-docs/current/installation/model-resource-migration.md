@@ -32,15 +32,17 @@ translation:
 绑定以信号类型为键，值是一个部署名称。信号决定契约，provider 决定适配器。
 
 ```yaml title="migrate-binding-object-before"
-routing:
-  model_bindings:
-    jailbreak: {deployment: kai, contract: decision.v1}
+recipes:
+  - name: default
+    model_bindings:
+      jailbreak: {deployment: kai, contract: decision.v1}
 ```
 
 ```yaml title="migrate-binding-object-after"
-routing:
-  model_bindings:
-    jailbreak: kai
+recipes:
+  - name: default
+    model_bindings:
+      jailbreak: kai
 ```
 
 ## 规则绑定 {#rule-bindings}
@@ -48,19 +50,21 @@ routing:
 为单条规则写的绑定，变为该规则的 `deployment`。
 
 ```yaml title="migrate-rule-bindings-before"
-routing:
-  model_bindings:
-    safety.harmful: kai
-  signals:
-    safety:
-      - {name: harmful, predicate: {gte: 0.5}}
+recipes:
+  - name: default
+    model_bindings:
+      safety.harmful: kai
+    signals:
+      safety:
+        - {name: harmful, predicate: {gte: 0.5}}
 ```
 
 ```yaml title="migrate-rule-bindings-after"
-routing:
-  signals:
-    safety:
-      - {name: harmful, deployment: kai, predicate: {gte: 0.5}}
+recipes:
+  - name: default
+    signals:
+      safety:
+        - {name: harmful, deployment: kai, predicate: {gte: 0.5}}
 ```
 
 ## 记忆查询改写模型 {#the-memory-rewrite-model}

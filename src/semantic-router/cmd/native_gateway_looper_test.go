@@ -50,7 +50,7 @@ func TestStandaloneRouterRunsLooperHopsInProcess(t *testing.T) {
 	previous := modelservice.DefaultManager()
 	modelservice.SetDefault(nil)
 	t.Cleanup(func() { modelservice.SetDefault(previous) })
-	document := strings.NewReplacer("BACKEND", strings.TrimPrefix(backend.URL, "http://"), "LOOPER", loopback.URL).Replace(`version: v0.3
+	document := strings.NewReplacer("BACKEND", strings.TrimPrefix(backend.URL, "http://"), "LOOPER", loopback.URL).Replace(`version: v0.5
 listeners:
   - name: http-8899
     address: 127.0.0.1
@@ -65,24 +65,21 @@ providers:
       backend_refs: [{endpoint: BACKEND, protocol: http, provider: vllm}]
 global:
   stores:
-    response_cache:
-      enabled: false
+    response_cache: {}
   integrations:
     looper:
       endpoint: LOOPER/v1/chat/completions
-routing:
-  modelCards:
-    - name: a
-    - name: b
-  decisions:
-    - name: compare
-      priority: 10
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: a}, {model: b}]
-      algorithm:
-        type: ratings
-        on_error: fail
-        ratings: {max_concurrent: 2}
+recipes:
+  - name: default
+    decisions:
+      - name: compare
+        priority: 10
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: a}, {model: b}]
+        algorithm:
+          type: ratings
+          on_error: fail
+          ratings: {max_concurrent: 2}
 `)
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	if err := os.WriteFile(path, []byte(document), 0o600); err != nil {

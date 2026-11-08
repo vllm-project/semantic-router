@@ -10,10 +10,10 @@ const globalConfig = {
 }
 
 const configResponse = {
-  version: 'v0.3',
+  version: 'v0.5',
   listeners: [{ name: 'public', address: '0.0.0.0', port: 8801 }],
-  providers: { defaults: { default_model: 'test-model' }, models: [] },
-  routing: { signals: {}, decisions: [] },
+  providers: { defaults: { model: 'test-model' }, models: [] },
+  recipes: [{ name: 'default' }],
   global: globalConfig,
 }
 

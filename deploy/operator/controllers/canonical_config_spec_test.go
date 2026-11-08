@@ -41,7 +41,7 @@ func TestBuildCanonicalConfigAppliesOperatorDefaults(t *testing.T) {
 	}
 
 	assertOperatorRouterProviderConfig(t, canonical)
-	assertOperatorComplexityConfig(t, canonical.Routing.Signals.Complexity)
+	assertOperatorComplexityConfig(t, defaultRecipe(canonical).Signals.Complexity)
 	assertOperatorExternalModels(t, canonical.Global.ModelCatalog.External)
 }
 
@@ -81,7 +81,7 @@ func TestBuildCanonicalConfigAppliesCanonicalRoutingOverride(t *testing.T) {
 	sr := &vllmv1alpha1.SemanticRouter{
 		Spec: vllmv1alpha1.SemanticRouterSpec{
 			Config: vllmv1alpha1.ConfigSpec{
-				Routing: rawCanonicalRoutingJSON(t, `{
+				Recipes: rawCanonicalRoutingJSON(t, `[{"name": "default",
 					"signals": {
 						"conversation": [
 							{
@@ -145,7 +145,7 @@ func TestBuildCanonicalConfigAppliesCanonicalRoutingOverride(t *testing.T) {
 							}
 						}
 					]
-				}`),
+				}]`),
 			},
 		},
 	}
@@ -155,7 +155,7 @@ func TestBuildCanonicalConfigAppliesCanonicalRoutingOverride(t *testing.T) {
 		t.Fatalf("buildCanonicalConfig failed: %v", err)
 	}
 
-	assertCanonicalV03RoutingConfig(t, canonical)
+	assertCanonicalDefaultRecipe(t, canonical)
 }
 
 func TestBuildCanonicalConfigPreservesDecisionAlgorithm(t *testing.T) {
@@ -194,21 +194,21 @@ func TestBuildCanonicalConfigPreservesDecisionAlgorithm(t *testing.T) {
 		t.Fatalf("buildCanonicalConfig failed: %v", err)
 	}
 
-	if len(canonical.Routing.Decisions) != 1 {
-		t.Fatalf("expected one decision, got %#v", canonical.Routing.Decisions)
+	if len(defaultRecipe(canonical).Decisions) != 1 {
+		t.Fatalf("expected one decision, got %#v", defaultRecipe(canonical).Decisions)
 	}
-	algorithm := canonical.Routing.Decisions[0].Algorithm
+	algorithm := defaultRecipe(canonical).Decisions[0].Algorithm
 	if algorithm == nil || algorithm.Type != "multi_factor" || algorithm.MultiFactor == nil || algorithm.MultiFactor.Weights == nil {
 		t.Fatalf("expected multi_factor algorithm to survive typed decision conversion, got %#v", algorithm)
 	}
 	if algorithm.MultiFactor.Weights.Quality != 0.6 || algorithm.MultiFactor.Weights.Cost != 0.4 {
 		t.Fatalf("expected multi_factor weights to survive typed decision conversion, got %#v", algorithm.MultiFactor)
 	}
-	if canonical.Routing.Decisions[0].Rules.Conditions[0].Type != "keyword" {
-		t.Fatalf("expected keyword condition to survive typed decision conversion, got %#v", canonical.Routing.Decisions[0].Rules)
+	if defaultRecipe(canonical).Decisions[0].Rules.Conditions[0].Type != "keyword" {
+		t.Fatalf("expected keyword condition to survive typed decision conversion, got %#v", defaultRecipe(canonical).Decisions[0].Rules)
 	}
-	if canonical.Routing.Decisions[0].Rules.OnUnknown != "fail_request" {
-		t.Fatalf("expected on_unknown to survive typed decision conversion, got %#v", canonical.Routing.Decisions[0].Rules)
+	if defaultRecipe(canonical).Decisions[0].Rules.OnUnknown != "fail_request" {
+		t.Fatalf("expected on_unknown to survive typed decision conversion, got %#v", defaultRecipe(canonical).Decisions[0].Rules)
 	}
 }
 
@@ -241,10 +241,10 @@ func TestBuildCanonicalConfigCarriesDecisionReliabilityAndFallback(t *testing.T)
 	if err != nil {
 		t.Fatalf("buildCanonicalConfig failed: %v", err)
 	}
-	if len(canonical.Routing.Decisions) != 1 {
-		t.Fatalf("expected one decision, got %#v", canonical.Routing.Decisions)
+	if len(defaultRecipe(canonical).Decisions) != 1 {
+		t.Fatalf("expected one decision, got %#v", defaultRecipe(canonical).Decisions)
 	}
-	decision := canonical.Routing.Decisions[0]
+	decision := defaultRecipe(canonical).Decisions[0]
 	reliability := decision.Reliability
 	if reliability == nil || reliability.TotalTimeout != "600s" || reliability.PerTryTimeout != "300s" ||
 		reliability.RetryCount == nil || *reliability.RetryCount != 1 || reliability.RetryOn != "reset" ||
@@ -256,6 +256,45 @@ func TestBuildCanonicalConfigCarriesDecisionReliabilityAndFallback(t *testing.T)
 		fallback.TotalTimeout != 900*time.Second || fallback.PerAttemptTimeout != 450*time.Second ||
 		len(fallback.RetryableStatusCodes) != 2 {
 		t.Fatalf("decision fallback = %#v, want the CR's block", fallback)
+	}
+}
+
+func TestConfigRoutingIsRefusedWithItsReplacement(t *testing.T) {
+	r := &SemanticRouterReconciler{}
+	global := routerconfig.DefaultCanonicalGlobal()
+	canonical := &routerconfig.CanonicalConfig{Global: &global}
+	err := r.applyOperatorRouting(canonical, vllmv1alpha1.ConfigSpec{Routing: rawCanonicalRoutingJSON(t, `{"decisions":[]}`)})
+	if err == nil || !strings.Contains(err.Error(), "config.routing is removed") || !strings.Contains(err.Error(), "config.recipes") {
+		t.Fatalf("config.routing was not refused with its replacement: %v", err)
+	}
+}
+
+// Several recipes publish their entrypoints, and config.models states facts
+// on the provider models of the same name.
+func TestConfigRecipesEntrypointsAndModelFacts(t *testing.T) {
+	global := routerconfig.DefaultCanonicalGlobal()
+	canonical := &routerconfig.CanonicalConfig{Global: &global, Providers: routerconfig.CanonicalProviders{
+		Models: []routerconfig.CanonicalProviderModel{{Name: "local"}},
+	}}
+	if err := applyOperatorRecipes(canonical, configRoutingSpec{
+		recipes:     rawCanonicalRoutingJSON(t, `[{"name":"default","strategy":"priority"},{"name":"private","decisions":[]}]`),
+		entrypoints: rawCanonicalRoutingJSON(t, `[{"model_names":["vllm-sr/auto"],"recipe":"default","default":true},{"model_names":["acme/private"],"recipe":"private"}]`),
+		models:      rawCanonicalRoutingJSON(t, `[{"name":"local","capabilities":["chat"],"context_window_size":32768}]`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(canonical.Recipes) != 2 || defaultRecipe(canonical).Strategy != "priority" || canonical.Recipes[1].Name != "private" {
+		t.Fatalf("recipes = %+v", canonical.Recipes)
+	}
+	if len(canonical.Entrypoints) != 2 || !canonical.Entrypoints[0].Default {
+		t.Fatalf("entrypoints = %+v", canonical.Entrypoints)
+	}
+	if facts := canonical.Providers.Models[0].ModelFacts; facts.ContextWindowSize != 32768 || len(facts.Capabilities) != 1 {
+		t.Fatalf("model facts = %+v", facts)
+	}
+	err := applyOperatorRecipes(canonical, configRoutingSpec{models: rawCanonicalRoutingJSON(t, `[{"name":"local","backend_refs":[{"endpoint":"x:1"}]}]`)})
+	if err == nil || !strings.Contains(err.Error(), "its transport comes from vllmEndpoints") {
+		t.Fatalf("config.models accepted a transport: %v", err)
 	}
 }
 
@@ -276,13 +315,13 @@ func assertOperatorRouterProviderConfig(t *testing.T, canonical *routerconfig.Ca
 	}
 }
 
-func assertCanonicalV03RoutingConfig(t *testing.T, canonical *routerconfig.CanonicalConfig) {
+func assertCanonicalDefaultRecipe(t *testing.T, canonical *routerconfig.CanonicalConfig) {
 	t.Helper()
 
-	assertCanonicalConversationSignal(t, canonical.Routing.Signals.Conversation)
-	assertCanonicalKeywordSignal(t, canonical.Routing.Signals.Keywords)
-	assertCanonicalProjectionConfig(t, canonical.Routing.Projections)
-	assertCanonicalAgenticWorkflowDecision(t, canonical.Routing.Decisions)
+	assertCanonicalConversationSignal(t, defaultRecipe(canonical).Signals.Conversation)
+	assertCanonicalKeywordSignal(t, defaultRecipe(canonical).Signals.Keywords)
+	assertCanonicalProjectionConfig(t, defaultRecipe(canonical).Projections)
+	assertCanonicalAgenticWorkflowDecision(t, defaultRecipe(canonical).Decisions)
 }
 
 func assertCanonicalConversationSignal(t *testing.T, signals []routerconfig.ConversationRule) {

@@ -259,11 +259,11 @@ func TestConfigSpecWithNewFields(t *testing.T) {
 
 func TestConfigSpecPreservesCanonicalRoutingAndAlgorithmObjects(t *testing.T) {
 	config := ConfigSpec{
-		Routing: &apiextensionsv1.JSON{Raw: []byte(`{
+		Recipes: &apiextensionsv1.JSON{Raw: []byte(`[{"name": "default",
 			"signals": {
 				"keywords": [{"name": "critical_payment_event", "operator": "AND", "keywords": ["payment_failed", "critical"]}]
 			}
-		}`)},
+		}]`)},
 		Decisions: []DecisionConfig{
 			{
 				Name: "agentic-session-route",
@@ -286,18 +286,18 @@ func TestConfigSpecPreservesCanonicalRoutingAndAlgorithmObjects(t *testing.T) {
 		t.Fatalf("json.Marshal() error = %v", err)
 	}
 	serialized := string(data)
-	if !strings.Contains(serialized, `"routing"`) ||
+	if !strings.Contains(serialized, `"recipes"`) ||
 		!strings.Contains(serialized, `"keywords"`) ||
 		!strings.Contains(serialized, `"multi_factor"`) {
-		t.Fatalf("expected canonical routing and algorithm objects to serialize as public fields, got %s", serialized)
+		t.Fatalf("expected canonical recipes and algorithm objects to serialize as public fields, got %s", serialized)
 	}
 
 	var decoded ConfigSpec
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
-	if decoded.Routing == nil || !strings.Contains(string(decoded.Routing.Raw), "critical_payment_event") {
-		t.Fatalf("expected routing raw object to round-trip, got %#v", decoded.Routing)
+	if decoded.Recipes == nil || !strings.Contains(string(decoded.Recipes.Raw), "critical_payment_event") {
+		t.Fatalf("expected recipes raw array to round-trip, got %#v", decoded.Recipes)
 	}
 	if len(decoded.Decisions) != 1 ||
 		decoded.Decisions[0].Algorithm == nil ||

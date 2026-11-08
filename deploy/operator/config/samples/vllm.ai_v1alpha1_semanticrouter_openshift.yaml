@@ -27,7 +27,7 @@ spec:
   # ====================
   # Configure model backends that semantic router routes to after classification.
   # The operator renders these into canonical providers.models[].backend_refs
-  # and routing.modelCards entries in config.yaml.
+  # with the facts routing reads about each model in config.yaml.
   vllmEndpoints:
     # Example 1: KServe InferenceService (RHOAI 3)
     - name: kserve-llama3-8b

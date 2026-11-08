@@ -19,7 +19,7 @@ import (
 )
 
 const azureIngressTestConfig = `
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: worker
@@ -36,7 +36,8 @@ providers:
         - provider: vllm
           endpoint: http://127.0.0.1:18001/v1
           api_key: provider-secret
-routing: {}
+recipes:
+  - name: default
 `
 
 func TestValidateAzureDeploymentPaths(t *testing.T) {

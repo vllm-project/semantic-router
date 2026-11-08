@@ -9,7 +9,14 @@ import (
 
 func TestOwnedRecipeEmbeddingDoesNotProvisionSharedCache(t *testing.T) {
 	cfg := &config.RouterConfig{}
-	cfg.SemanticCache.Enabled = true
+	cfg.SemanticCache.InUse = true
+	cfg.GlobalPlugins = []config.DecisionPlugin{{
+		Type:          config.DecisionPluginResponseCache,
+		Configuration: config.MustStructuredPayload(map[string]any{"enabled": true}),
+	}}
+	if err := cfg.LayerPlugins(); err != nil {
+		t.Fatal(err)
+	}
 	cfg.EmbeddingDeployment = "shared-cache"
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"shared-cache": {Provider: config.ModelRuntimeProvider, Artifact: "/does-not-exist/shared-cache"}}
 	prepared, err := PrepareOwnedEmbeddings(context.Background(), cfg, nil)

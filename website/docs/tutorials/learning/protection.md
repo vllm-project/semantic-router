@@ -339,15 +339,16 @@ Most decisions do not need local configuration. Use `bypass` for hard policy
 boundaries:
 
 ```yaml
-routing:
-  decisions:
-    - name: local_privacy_policy
-      description: Keep privacy-sensitive traffic on the local model.
-      priority: 200
-      modelRefs:
-        - model: local-private-model
-      adaptations:
-        mode: bypass
+recipes:
+  - name: default
+    decisions:
+      - name: local_privacy_policy
+        description: Keep privacy-sensitive traffic on the local model.
+        priority: 200
+        modelRefs:
+          - model: local-private-model
+        adaptations:
+          mode: bypass
 ```
 
 Use `observe` to collect diagnostics without changing the final model:

@@ -363,7 +363,7 @@ func (r *OpenAIRouter) groundingForRecipe(recipe config.RecipeName) *looper.Grou
 		}
 		return classifier.GroundingBackends()
 	}
-	if recipe == "" || recipe == config.DefaultRecipeName {
+	if recipe == "" || r.Config.IsDefaultRecipe(recipe) {
 		return r.Classifier.GroundingBackends()
 	}
 	return nil

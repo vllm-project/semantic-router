@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from cli.config_recipe_scopes import recipe_scopes
+
 MIGRATE = "run `vllm-sr config migrate`"
 
 KEYWORD_STORES = ("response_cache", "memory", "vector_store")
@@ -40,7 +42,7 @@ def removed_embedding_forms(data: dict[str, Any]) -> list[str]:
     """The one-line load errors of the removed embedding forms in data."""
 
     lines: list[str] = []
-    for prefix, routing in _routing_scopes(data):
+    for prefix, routing in recipe_scopes(data):
         bindings = routing.get("model_bindings")
         if isinstance(bindings, dict) and "embedding" in bindings:
             lines.append(_line(f"{prefix}.model_bindings.embedding", BINDING))
@@ -74,18 +76,3 @@ def removed_embedding_forms(data: dict[str, Any]) -> list[str]:
 def _line(path: str, form: tuple[str, str]) -> str:
     what, becomes = form
     return f"{path}: removed_field: {what}; {MIGRATE} ({becomes})"
-
-
-def _routing_scopes(data: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
-    scopes: list[tuple[str, dict[str, Any]]] = []
-    routing = data.get("routing")
-    if isinstance(routing, dict):
-        scopes.append(("routing", routing))
-    recipes = data.get("recipes")
-    for index, recipe in enumerate(recipes if isinstance(recipes, list) else []):
-        if not isinstance(recipe, dict) or not isinstance(recipe.get("routing"), dict):
-            continue
-        name = recipe.get("name")
-        label = name if isinstance(name, str) and name else str(index)
-        scopes.append((f"recipes[{label}].routing", recipe["routing"]))
-    return scopes

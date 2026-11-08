@@ -110,9 +110,9 @@ func TestOperatorSamplesHoldTheirDecisionModel(t *testing.T) {
 
 func TestTypedOperatorSampleServesThePinnedVela2(t *testing.T) {
 	canonical := sampleModelConfig(t, "vllm.ai_v1alpha1_semanticrouter_model_runtime.yaml")
-	binding, bound := canonical.Routing.ModelBindings["pii"]
+	binding, bound := defaultRecipe(canonical).ModelBindings["pii"]
 	if !bound {
-		t.Fatalf("the sample binds no pii deployment: %+v", canonical.Routing.ModelBindings)
+		t.Fatalf("the sample binds no pii deployment: %+v", defaultRecipe(canonical).ModelBindings)
 	}
 	release := routerconfig.GetModelByPath(routerconfig.Vela2Model08B)
 	deployment := canonical.Global.ModelCatalog.Deployments[binding.Deployment]

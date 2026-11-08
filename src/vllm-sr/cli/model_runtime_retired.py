@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from cli.config_recipe_scopes import recipe_scopes
+
 REMOVED_PROVIDERS = frozenset({"candle", "ort", "openvino"})
 # A remote hallucination detector is a hallucination binding; the
 # `backend: endpoint` shorthand was desugared into one.
@@ -108,14 +110,8 @@ def retired_model_fields(data: dict[str, Any]) -> list[str]:
             ("polarity_guard",),
         )
     )
-    removed.extend(_nli_routing_fields("routing", _mapping(data.get("routing"))))
-    recipes = data.get("recipes")
-    for index, recipe in enumerate(recipes if isinstance(recipes, list) else []):
-        removed.extend(
-            _nli_routing_fields(
-                f"recipes[{index}].routing", _mapping(_mapping(recipe).get("routing"))
-            )
-        )
+    for path, recipe in recipe_scopes(data):
+        removed.extend(_nli_routing_fields(path, recipe))
     return removed
 
 

@@ -305,28 +305,26 @@ func stricterGuardAction(current, other string) string {
 	return current
 }
 
-// pluginSite is the routing scope and the decision that hold the plugin at.
+// pluginSite is the recipe and the decision that hold the plugin at.
 func pluginSite(at FormMatch) (scope, decision *yaml.Node, err error) {
-	scopes := []*yaml.Node{mappingAt(at.Root, "routing")}
 	for _, recipe := range sequenceAt(at.Root, "recipes") {
-		scopes = append(scopes, mappingAt(resolveAlias(recipe), "routing"))
-	}
-	for _, scope := range scopes {
+		scope := resolveAlias(recipe)
 		for _, decision := range sequenceAt(scope, "decisions") {
 			if resolveAlias(mappingValue(resolveAlias(decision), "plugins")) == at.Parent {
 				return scope, resolveAlias(decision), nil
 			}
 		}
 	}
-	return nil, nil, errors.New("the plugin is not in a decision of a routing scope")
+	return nil, nil, errors.New("the plugin is not in a decision of a recipe")
 }
 
-// scopePrefix is the path of the routing scope a decision path is in.
+// scopePrefix is the path of the recipe a decision path is in, with a
+// trailing dot.
 func scopePrefix(path string) string {
-	if i := strings.Index(path, "routing.decisions"); i >= 0 {
-		return path[:i] + "routing."
+	if i := strings.Index(path, ".decisions"); i >= 0 {
+		return path[:i] + "."
 	}
-	return "routing."
+	return path + "."
 }
 
 // signalRules is the scope's sequence of rules of one signal type, which it

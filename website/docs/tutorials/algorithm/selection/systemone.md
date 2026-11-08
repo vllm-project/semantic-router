@@ -46,41 +46,41 @@ global:
     system:
       decision_model:
         deployment: primary
-
-routing:
-  signals:
-    systemone:
-      - name: request_kind
-        question:
-          type: choice
-          instructions: What kind of request is this?
-          choices:
-            - key: code
-              description: Writing, reviewing or debugging code
-            - key: chat
-              description: Anything else
-  decisions:
-    - name: code-route
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: systemone
-            name: request_kind
-            label: code
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-        - model: qwen3-32b
-          use_reasoning: true
-      algorithm:
-        type: systemone
-        systemone:
-          instructions: Which model should answer this request?
-          candidates:
-            qwen3-8b: Fast general model for routine code
-            qwen3-32b: Strong reasoning model for hard code
-          timeout_ms: 1000
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: request_kind
+          question:
+            type: choice
+            instructions: What kind of request is this?
+            choices:
+              - key: code
+                description: Writing, reviewing or debugging code
+              - key: chat
+                description: Anything else
+    decisions:
+      - name: code-route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: systemone
+              name: request_kind
+              label: code
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: false
+          - model: qwen3-32b
+            use_reasoning: true
+        algorithm:
+          type: systemone
+          systemone:
+            instructions: Which model should answer this request?
+            candidates:
+              qwen3-8b: Fast general model for routine code
+              qwen3-32b: Strong reasoning model for hard code
+            timeout_ms: 1000
 ```
 
 The selector asks after the decision matches, in its own call to the same
@@ -103,43 +103,43 @@ global:
       decision-kai:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
-
-routing:
-  signals:
-    systemone:
-      - name: request_kind
-        deployment: decision-kai
-        question:
-          type: choice
-          instructions: What kind of request is this?
-          choices:
-            - key: code
-              description: Writing, reviewing or debugging code
-            - key: chat
-              description: Anything else
-  decisions:
-    - name: code-route
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: systemone
-            name: request_kind
-            label: code
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-        - model: qwen3-32b
-          use_reasoning: true
-      algorithm:
-        type: systemone
-        systemone:
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: request_kind
           deployment: decision-kai
-          instructions: Which model should answer this request?
-          candidates:
-            qwen3-8b: Fast general model for routine code
-            qwen3-32b: Strong reasoning model for hard code
-          timeout_ms: 1000
+          question:
+            type: choice
+            instructions: What kind of request is this?
+            choices:
+              - key: code
+                description: Writing, reviewing or debugging code
+              - key: chat
+                description: Anything else
+    decisions:
+      - name: code-route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: systemone
+              name: request_kind
+              label: code
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: false
+          - model: qwen3-32b
+            use_reasoning: true
+        algorithm:
+          type: systemone
+          systemone:
+            deployment: decision-kai
+            instructions: Which model should answer this request?
+            candidates:
+              qwen3-8b: Fast general model for routine code
+              qwen3-32b: Strong reasoning model for hard code
+            timeout_ms: 1000
 ```
 
 A named deployment must use `provider: model_runtime`, or `provider: systemone`

@@ -115,49 +115,6 @@ const redisSchema = object('Redis Backend', {
 /** Module fields that chose a model before bindings and deployments did. */
 export const DEPRECATED_MODULE_MODEL_FIELDS = ['model_id', 'model_ref', 'backend'] as const
 
-const modelModule = (label: string, detector = false): RouterStructuredSchema => ({
-  ...object(label, {
-    threshold: number('Threshold', { min: 0, max: 1, step: 0.01 }),
-    use_cpu: boolean('Use CPU'),
-    ...(detector
-      ? {
-          min_span_length: number('Min Span Length', { min: 1 }),
-          min_span_confidence: number('Min Span Confidence', { min: 0, max: 1, step: 0.01 }),
-          context_window_size: number('Context Window Size', { min: 1 }),
-        }
-      : {}),
-  }),
-  omit: DEPRECATED_MODULE_MODEL_FIELDS,
-})
-
-const prototypeScoringSchema = object('Prototype Scoring', {
-  enabled: boolean('Enabled'),
-  cluster_similarity_threshold: number('Cluster Similarity Threshold', {
-    min: 0,
-    max: 1,
-    step: 0.01,
-  }),
-  max_prototypes: number('Max Prototypes', { min: 1 }),
-  best_weight: number('Best Weight', { min: 0, max: 1, step: 0.01 }),
-  top_m: number('Top M', { min: 1 }),
-  margin_threshold: number('Margin Threshold', { min: 0, step: 0.01 }),
-})
-
-const classifierModelSchema = (
-  label: string,
-  mappingField?: 'category_mapping_path' | 'pii_mapping_path',
-): RouterStructuredSchema => ({
-  ...object(label, {
-    threshold: number('Threshold', { min: 0, max: 1, step: 0.01 }),
-    use_cpu: boolean('Use CPU'),
-    ...(mappingField ? { [mappingField]: text('Mapping Path') } : {}),
-    ...(mappingField === 'category_mapping_path'
-      ? { fallback_category: text('Fallback Category') }
-      : {}),
-  }),
-  omit: DEPRECATED_MODULE_MODEL_FIELDS,
-})
-
 const tracingSchema = object('Tracing', {
   enabled: boolean('Enabled'),
   provider: text('Provider'),
@@ -374,60 +331,6 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
         request_timeout_seconds: number('Request Timeout Seconds', { min: 0 }),
         search_type: text('Search Type'),
       }),
-    },
-  },
-  classifier: {
-    domain: {
-      label: 'Domain Module',
-      description:
-        'Domain classifier threshold, mapping, and fallback. Bind the domain signal in Decision Model & Bindings to choose its model.',
-      schema: classifierModelSchema('Domain Module', 'category_mapping_path'),
-    },
-    pii: {
-      label: 'PII Module',
-      description:
-        'PII classifier threshold and type mapping. Bind the pii signal in Decision Model & Bindings to choose its model.',
-      schema: classifierModelSchema('PII Module', 'pii_mapping_path'),
-    },
-    mcp: {
-      label: 'MCP Module',
-      description: 'MCP classifier transport, process, environment, and timeout settings.',
-      schema: object('MCP Module', {
-        enabled: boolean('Enabled'),
-        transport_type: select('Transport Type', ['stdio', 'sse', 'streamable-http']),
-        command: text('Command'),
-        args: stringList('Argument', '-m'),
-        env: stringMap('Environment Variable'),
-        url: text('URL'),
-        tool_name: text('Tool Name'),
-        threshold: number('Threshold', { min: 0, max: 1, step: 0.01 }),
-        timeout_seconds: number('Timeout Seconds', { min: 0 }),
-      }),
-    },
-    preference: {
-      label: 'Preference Module',
-      description: 'Contrastive preference embedding and prototype scoring settings.',
-      schema: object('Preference Module', {
-        use_contrastive: boolean('Use Contrastive'),
-        embedding_model: text('Embedding Model'),
-        model_id: text('Model ID'),
-        threshold: number('Threshold', { min: 0, max: 1, step: 0.01 }),
-        use_cpu: boolean('Use CPU'),
-        prototype_scoring: prototypeScoringSchema,
-      }),
-    },
-  },
-  hallucination_mitigation: {
-    fact_check: {
-      label: 'Fact Check Module',
-      description: 'Fact-check threshold. Bind the fact_check signal to choose its model.',
-      schema: modelModule('Fact Check Module'),
-    },
-    detector: {
-      label: 'Detector Module',
-      description:
-        'Hallucination detector span thresholds. Bind the hallucination signal to choose its model.',
-      schema: modelModule('Detector Module', true),
     },
   },
   external_models: {

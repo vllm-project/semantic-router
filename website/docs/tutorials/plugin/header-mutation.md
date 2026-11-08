@@ -22,7 +22,7 @@ Some routes need different downstream headers than the rest of the router. `head
 
 ## Configuration
 
-Add the plugin under `routing.decisions[].plugins`:
+Add the plugin under `recipes[].decisions[].plugins`:
 
 ```yaml
 plugins:

@@ -17,8 +17,8 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 	scopes := []*config.RouterConfig{}
 	defaultScope := *cfg.ModelConsumerScope()
 	defaultScope.Recipes, defaultScope.Entrypoints = nil, nil
-	defaultScope.SemanticCache.Enabled = false
-	defaultScope.Memory.Enabled = false
+	defaultScope.SemanticCache.InUse = false
+	defaultScope.Memory.InUse = false
 	defaultScope.VectorStore = nil
 	if err := inventory.addScope(cfg.ConfigForGlobalModelServices()); err != nil {
 		return nil, err
@@ -26,9 +26,9 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 
 	scopes = append(scopes, &defaultScope)
 	for _, recipe := range cfg.ReachableRoutingRecipes() {
-		if recipe.Name != config.DefaultRecipeName {
+		if !cfg.IsDefaultRecipe(recipe.Name) {
 			scoped := cfg.ConfigForRecipe(recipe)
-			scoped.SemanticCache.Enabled = false
+			scoped.SemanticCache.InUse = false
 			scopes = append(scopes, scoped)
 		}
 	}

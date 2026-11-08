@@ -359,30 +359,18 @@ func (c *RouterConfig) IsCacheEnabledForDecision(decisionName string) bool {
 	return c.IsCacheEnabledForDecisionObject(c.GetDecisionByName(decisionName))
 }
 
-// IsCacheEnabled resolves response_cache policy from a scoped decision.
+// IsCacheEnabledForDecisionObject resolves response_cache policy from a
+// scoped decision: the response_cache plugin it runs (RequestPlugins).
 func (c *RouterConfig) IsCacheEnabledForDecisionObject(decision *Decision) bool {
-	if decision != nil {
-		config := decision.GetResponseCacheConfig()
-		if config != nil {
-			return config.Enabled
-		}
-	}
-	// No explicit response_cache plugin configured for this decision
-	// Return false to respect per-decision plugin scoping
-	return false
+	config := c.ResponseCacheConfig(decision)
+	return config != nil && config.Enabled
 }
 
-// ResponseCacheMatch is the match block a request's semantic lookup runs: its
-// decision's semantic.match, nil for the response cache's default; or, for a
-// request that matched no decision, the default recall bounded by the store's
-// similarity threshold.
+// ResponseCacheMatch is the match block a request's semantic lookup runs: the
+// semantic.match of the response_cache plugin it runs, nil for the response
+// cache's default.
 func (c *RouterConfig) ResponseCacheMatch(decision *Decision) *MatchConfig {
-	if decision != nil {
-		return decision.GetResponseCacheConfig().SemanticMatch()
-	}
-	block := MatchResponseCache.Default()
-	block.Recall.MinSimilarity = matchBound(float64(c.GetCacheSimilarityThreshold()))
-	return &block
+	return c.ResponseCacheConfig(decision).SemanticMatch()
 }
 
 // GetCacheTTLSecondsForDecision returns the effective TTL for a decision
@@ -392,15 +380,12 @@ func (c *RouterConfig) GetCacheTTLSecondsForDecision(decisionName string) int {
 	return c.GetCacheTTLSecondsForDecisionObject(c.GetDecisionByName(decisionName))
 }
 
-// GetCacheTTLSeconds resolves TTL from a scoped decision.
+// GetCacheTTLSecondsForDecisionObject resolves TTL from a scoped decision:
+// the response_cache plugin it runs, -1 for the store's default TTL.
 func (c *RouterConfig) GetCacheTTLSecondsForDecisionObject(decision *Decision) int {
-	if decision != nil {
-		config := decision.GetResponseCacheConfig()
-		if config != nil && config.TTLSeconds != nil {
-			return *config.TTLSeconds
-		}
+	if config := c.ResponseCacheConfig(decision); config != nil && config.TTLSeconds != nil {
+		return *config.TTLSeconds
 	}
-	// Return -1 to indicate "use global default"
 	return -1
 }
 

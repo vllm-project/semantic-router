@@ -5,18 +5,19 @@ import (
 	"testing"
 )
 
-const embeddingStoresBase = `version: v0.3
+const embeddingStoresBase = `version: v0.5
 providers:
   defaults: {model: general}
   models:
     - name: general
       backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
-routing:
-  decisions:
-    - name: faq
-      priority: 100
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: general}]
+recipes:
+  - name: default
+    decisions:
+      - name: faq
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
 `
 
 func embeddingRequirement(t *testing.T, cfg *RouterConfig, sharedServices bool, consumer string) EmbeddingRequirement {
@@ -46,8 +47,12 @@ func TestVelaEmbeddingIsTheDefaultAndOnlyPreDeclaredEmbedding(t *testing.T) {
 // indexed with.
 func TestRecallConsumersEmbedWithTheDefaultDeployment(t *testing.T) {
 	cfg := DefaultGlobalConfig()
-	cfg.SemanticCache.Enabled = true
-	cfg.Memory.Enabled = true
+	cfg.SemanticCache.InUse = true
+	cfg.GlobalPlugins = []DecisionPlugin{{Type: DecisionPluginResponseCache, Configuration: MustStructuredPayload(map[string]any{"enabled": true})}}
+	if err := cfg.LayerPlugins(); err != nil {
+		t.Fatal(err)
+	}
+	cfg.Memory.InUse = true
 	cfg.API.Embeddings.Enabled = true
 	cfg.VectorStore = &VectorStoreConfig{Enabled: true, BackendType: "memory"}
 	for _, consumer := range []string{EmbeddingConsumerAPI, EmbeddingConsumerMemory, EmbeddingConsumerVectorStore, EmbeddingConsumerResponseCache} {
@@ -162,14 +167,14 @@ func TestEmbeddingBindingsAreValidatedAtLoad(t *testing.T) {
 }
 
 func TestARAGSourceEmbeddingIsValidatedWhereItIsWritten(t *testing.T) {
-	document := embeddingStoresBase + `      plugins:
-        - type: context
-          configuration:
-            enabled: true
-            sources:
-              - type: rag
-                backend: external_api
-                backend_config: {endpoint: "http://search:9200", request_format: elasticsearch, embedding: {deployment: vela-embedding}}
+	document := embeddingStoresBase + `        plugins:
+          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: rag
+                  backend: external_api
+                  backend_config: {endpoint: "http://search:9200", request_format: elasticsearch, embedding: {deployment: vela-embedding}}
 `
 	_, err := ParseYAMLBytes([]byte(document))
 	if err == nil || !strings.Contains(err.Error(), "request format elasticsearch searches without a query vector") {
@@ -185,40 +190,40 @@ func TestARAGSourceEmbeddingIsValidatedWhereItIsWritten(t *testing.T) {
 // Decisions, signals and selectors ask System One questions: no decision path
 // demands, starts or prepares an embedding deployment; only recall does.
 func TestNoDecisionPathUsesTheEmbeddingModel(t *testing.T) {
-	cfg, err := ParseYAMLBytes([]byte(`version: v0.3
+	cfg, err := ParseYAMLBytes([]byte(`version: v0.5
 providers:
   defaults: {model: general}
   models:
     - name: general
       backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+      description: Fast general model
     - name: strong
       backend_refs: [{name: strong, endpoint: "127.0.0.1:8001", protocol: http, weight: 1}]
-routing:
-  modelCards:
-    - {name: general, description: Fast general model}
-    - {name: strong, description: Strong reasoning model}
-  signals:
-    systemone:
-      - name: needs_tools
-        question: {type: noul, instructions: "Does the request need a tool?"}
-    keywords:
-      - {name: urgent, operator: OR, keywords: [urgent]}
-  decisions:
-    - name: tools
-      priority: 100
-      rules: {operator: AND, conditions: [{type: systemone, name: needs_tools}]}
-      modelRefs: [{model: general}, {model: strong}]
-      algorithm:
-        type: systemone
-        systemone:
-          instructions: Which model should answer this request?
-          candidates:
-            general: Fast general model for routine work
-            strong: Strong reasoning model for hard work
-    - name: urgent
-      priority: 50
-      rules: {operator: AND, conditions: [{type: keyword, name: urgent}]}
-      modelRefs: [{model: general}]
+      description: Strong reasoning model
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: needs_tools
+          question: {type: noul, instructions: "Does the request need a tool?"}
+      keywords:
+        - {name: urgent, operator: OR, keywords: [urgent]}
+    decisions:
+      - name: tools
+        priority: 100
+        rules: {operator: AND, conditions: [{type: systemone, name: needs_tools}]}
+        modelRefs: [{model: general}, {model: strong}]
+        algorithm:
+          type: systemone
+          systemone:
+            instructions: Which model should answer this request?
+            candidates:
+              general: Fast general model for routine work
+              strong: Strong reasoning model for hard work
+      - name: urgent
+        priority: 50
+        rules: {operator: AND, conditions: [{type: keyword, name: urgent}]}
+        modelRefs: [{model: general}]
 `))
 	if err != nil {
 		t.Fatal(err)

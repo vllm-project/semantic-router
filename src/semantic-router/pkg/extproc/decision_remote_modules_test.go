@@ -22,7 +22,7 @@ import (
 // no module names a model of its own, so every signal asks hosted-d3. Math
 // that needs a tool goes to deep, anything else to fast.
 const moduleSystemOneConfig = `
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -36,26 +36,27 @@ providers:
       backend_refs: [{name: fast, endpoint: "BACKEND", protocol: http, weight: 1}]
     - name: deep
       backend_refs: [{name: deep, endpoint: "BACKEND", protocol: http, weight: 1}]
-routing:
-  signals:
-    domains: [{name: math, description: Math requests., labels: [math]}]
-    jailbreak: [{name: attack, predicate: {gte: 0.75}}]
-    systemone:
-      - name: needs_tools
-        question: {type: noul, instructions: "Does the request need a tool?"}
-  decisions:
-    - name: attack
-      priority: 300
-      rules: {operator: AND, conditions: [{type: jailbreak, name: attack}]}
-      modelRefs: [{model: fast}]
-    - name: math
-      priority: 200
-      rules: {operator: AND, conditions: [{type: domain, name: math}, {type: systemone, name: needs_tools}]}
-      modelRefs: [{model: deep}]
-    - name: everything-else
-      priority: 10
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: fast}]
+recipes:
+  - name: default
+    signals:
+      domains: [{name: math, description: Math requests., labels: [math]}]
+      jailbreak: [{name: attack, predicate: {gte: 0.75}}]
+      systemone:
+        - name: needs_tools
+          question: {type: noul, instructions: "Does the request need a tool?"}
+    decisions:
+      - name: attack
+        priority: 300
+        rules: {operator: AND, conditions: [{type: jailbreak, name: attack}]}
+        modelRefs: [{model: fast}]
+      - name: math
+        priority: 200
+        rules: {operator: AND, conditions: [{type: domain, name: math}, {type: systemone, name: needs_tools}]}
+        modelRefs: [{model: deep}]
+      - name: everything-else
+        priority: 10
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: fast}]
 global:
   model_catalog:
     deployments:

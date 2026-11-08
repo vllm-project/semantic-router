@@ -77,11 +77,8 @@ func rejectRemovedModelExecutionFields(raw map[string]interface{}) error {
 	stores := nestedStringMap(nestedStringMap(raw["global"])["stores"])
 	removed = appendPresent(removed, "global.model_catalog.system", nestedStringMap(catalog["system"]), "hallucination_explainer")
 	removed = appendPresent(removed, "global.stores.response_cache", nestedStringMap(stores["response_cache"]), "polarity_guard")
-	removed = append(removed, removedNLIRoutingFields("routing", nestedStringMap(raw["routing"]))...)
-	if recipes, ok := raw["recipes"].([]interface{}); ok {
-		for index, recipe := range recipes {
-			removed = append(removed, removedNLIRoutingFields(fmt.Sprintf("recipes[%d].routing", index), nestedStringMap(nestedStringMap(recipe)["routing"]))...)
-		}
+	for _, recipe := range rawRecipes(raw) {
+		removed = append(removed, removedNLIRoutingFields(recipe.path, recipe.fields)...)
 	}
 	if len(removed) == 0 {
 		return nil
@@ -93,16 +90,16 @@ func rejectRemovedModelExecutionFields(raw map[string]interface{}) error {
 }
 
 // removedNLIRoutingFields finds use_nli on hallucination rules and on
-// hallucination plugins of one routing block, and the NLI name of the fusion
+// hallucination plugins of one recipe, and the NLI name of the fusion
 // grounding penalty (now contradiction_penalty).
-func removedNLIRoutingFields(prefix string, routing map[string]interface{}) []string {
+func removedNLIRoutingFields(prefix string, recipe map[string]interface{}) []string {
 	var removed []string
-	if rules, ok := nestedStringMap(routing["signals"])["hallucination"].([]interface{}); ok {
+	if rules, ok := nestedStringMap(recipe["signals"])["hallucination"].([]interface{}); ok {
 		for index, rule := range rules {
 			removed = appendPresent(removed, fmt.Sprintf("%s.signals.hallucination[%d]", prefix, index), nestedStringMap(rule), "use_nli")
 		}
 	}
-	decisions, _ := routing["decisions"].([]interface{})
+	decisions, _ := recipe["decisions"].([]interface{})
 	for index, decision := range decisions {
 		grounding := nestedStringMap(nestedStringMap(nestedStringMap(nestedStringMap(decision)["algorithm"])["fusion"])["grounding"])
 		removed = appendPresent(removed, fmt.Sprintf("%s.decisions[%d].algorithm.fusion.grounding", prefix, index), grounding, "nli_contradiction_penalty")

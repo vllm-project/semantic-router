@@ -1,35 +1,36 @@
 # The global tools block: the tools plugin's semantic selection and
 # tool_selection's add mode read its catalog and top_k.
-version: v0.3
+version: v0.5
 providers:
   defaults: {model: local}
   models:
     - name: local
       backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
-routing:
-  modelCards:
-    - {name: local, description: Local model}
-  decisions:
-    - name: search
-      priority: 200
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: local}]
-      plugins:
-        - type: tools
-          configuration: {enabled: true, mode: passthrough}
+      description: Local model
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - {model_names: [vllm-sr/support], recipe: support}
 recipes:
+  - name: default
+    decisions:
+      - name: search
+        priority: 200
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: local}]
+        plugins:
+          - type: tools
+            configuration: {enabled: true, mode: passthrough}
   - name: support
-    routing:
-      decisions:
-        - name: lookup
-          priority: 100
-          rules: {operator: AND, conditions: []}
-          modelRefs: [{model: local}]
-          plugins:
-            - type: tool_selection
-              configuration: {enabled: true, mode: add}
+    decisions:
+      - name: lookup
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: local}]
+        plugins:
+          - type: tool_selection
+            configuration: {enabled: true, mode: add}
 global:
   integrations:
     tools:

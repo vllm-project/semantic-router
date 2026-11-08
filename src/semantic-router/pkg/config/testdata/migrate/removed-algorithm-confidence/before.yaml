@@ -1,31 +1,33 @@
 # The Looper confidence algorithm is escalate: its method, threshold, weights and
 # token filter become escalate.accept.confidence, its size order is written out,
 # and the on_error it ignored is dropped.
-version: v0.3
+version: v0.5
 providers:
   defaults: {model: small}
   models:
     - name: small
       backend_refs: [{name: small, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+      description: Fast general model
+      param_size: 8b
     - name: large
       backend_refs: [{name: large, endpoint: "127.0.0.1:8001", protocol: http, weight: 1}]
-routing:
-  modelCards:
-    - {name: small, description: Fast general model, param_size: 8b}
-    - {name: large, description: Strong reasoning model, param_size: 70b}
-  decisions:
-    - name: escalate
-      priority: 100
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: large}, {model: small}]
-      algorithm:
-        type: confidence
-        on_error: fallback
-        confidence:
-          confidence_method: hybrid
-          threshold: 0.72
-          hybrid_weights: {logprob_weight: 0.65, margin_weight: 0.35}
-          escalation_order: small_to_large
-          cost_quality_tradeoff: 0.45
-          on_error: skip
-          token_filter: tool_call_args
+      description: Strong reasoning model
+      param_size: 70b
+recipes:
+  - name: default
+    decisions:
+      - name: escalate
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: large}, {model: small}]
+        algorithm:
+          type: confidence
+          on_error: fallback
+          confidence:
+            confidence_method: hybrid
+            threshold: 0.72
+            hybrid_weights: {logprob_weight: 0.65, margin_weight: 0.35}
+            escalation_order: small_to_large
+            cost_quality_tradeoff: 0.45
+            on_error: skip
+            token_filter: tool_call_args

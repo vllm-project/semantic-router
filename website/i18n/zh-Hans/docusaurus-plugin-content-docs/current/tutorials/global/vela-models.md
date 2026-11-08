@@ -108,10 +108,10 @@ Nano 的 English 分数通过未改变的冻结文本路径保留。Mini 的带�
 Router 提供服务的每个 Vela 模型都运行在[模型运行时](../../model-runtime/overview.md)中，因此默认配置无需任何设置。以下片段把 Domain 绑定到一个显式的 CPU deployment，输入预算为 32K。请将其加入已包含 providers、signals 和 decisions 的配置。
 
 ```yaml
-routing:
-  model_bindings:
-    domain: vela-domain
-
+recipes:
+  - name: default
+    model_bindings:
+      domain: vela-domain
 global:
   model_catalog:
     deployments:

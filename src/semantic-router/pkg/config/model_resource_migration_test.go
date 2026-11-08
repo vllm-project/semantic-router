@@ -141,7 +141,7 @@ func TestModelRuntimeMigrationExampleIsWhatConfigMigrateWrites(t *testing.T) {
 }
 
 func TestMigrationKeepsACanonicalDocumentAsWritten(t *testing.T) {
-	document := []byte("version: v0.3\nrouting: {}\nglobal:\n  model_catalog:\n    bindings: {pii: primary}\n")
+	document := []byte("version: v0.5\nrecipes: [{name: default}]\nglobal:\n  model_catalog:\n    bindings: {pii: primary}\n")
 	migrated, kept, err := MigrateModelResources(document)
 	if err != nil || len(kept) > 0 || string(migrated) != string(document) {
 		t.Fatalf("a canonical document changed: %q %+v %v", migrated, kept, err)
@@ -151,20 +151,21 @@ func TestMigrationKeepsACanonicalDocumentAsWritten(t *testing.T) {
 // memoryRewriteDocument declares the memory rewrite model as an external[]
 // chat model with the given extra settings.
 func memoryRewriteDocument(settings string) []byte {
-	return []byte(`version: v0.3
+	return []byte(`version: v0.5
 providers:
   defaults: {model: general}
   models:
     - name: general
       backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
-routing:
-  signals:
-    keywords: [{name: greeting, operator: OR, keywords: [hello]}]
-  decisions:
-    - name: route
-      priority: 100
-      rules: {operator: OR, conditions: [{type: keyword, name: greeting}]}
-      modelRefs: [{model: general}]
+recipes:
+  - name: default
+    signals:
+      keywords: [{name: greeting, operator: OR, keywords: [hello]}]
+    decisions:
+      - name: route
+        priority: 100
+        rules: {operator: OR, conditions: [{type: keyword, name: greeting}]}
+        modelRefs: [{model: general}]
 global:
   model_catalog:
     external:

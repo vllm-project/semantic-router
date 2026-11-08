@@ -27,25 +27,26 @@ is_mtpe: true
 把信号加上，在路由里用起来。模型由 router 在 CPU 上替你跑，不用别的：
 
 ```yaml
-routing:
-  signals:
-    domains:
-      - name: math
-        description: Mathematics and quantitative reasoning.
-        mmlu_categories: [math]
-      - name: computer science
-        description: Programming and computer science.
-        mmlu_categories: [computer science]
-  decisions:
-    - name: math-route
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: math
-      modelRefs:
-        - model: math-model
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: math
+          description: Mathematics and quantitative reasoning.
+          mmlu_categories: [math]
+        - name: computer science
+          description: Programming and computer science.
+          mmlu_categories: [computer science]
+    decisions:
+      - name: math-route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: math
+        modelRefs:
+          - model: math-model
 ```
 
 ## 选它跑在哪 {#choose-where-it-runs}
@@ -88,25 +89,26 @@ curl -s localhost:8100/v1/classify -H 'content-type: application/json' \
 Hugging Face 上的 ModernBERT 或 mmBERT 序列分类器，可以直接当 `classifier` 信号用，标签随你定。钉住它的 revision、在规则上指定它的部署、按它的标签路由：
 
 ```yaml
-routing:
-  signals:
-    classifiers:
-      - name: ticket_topic
-        deployment: ticket-topics
-        labels: [billing, shipping, other]
-  decisions:
-    - name: billing-desk
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: classifier
-            name: ticket_topic
-            label: billing
-            predicate:
-              gte: 0.5
-      modelRefs:
-        - model: support-model
+recipes:
+  - name: default
+    signals:
+      classifiers:
+        - name: ticket_topic
+          deployment: ticket-topics
+          labels: [billing, shipping, other]
+    decisions:
+      - name: billing-desk
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: classifier
+              name: ticket_topic
+              label: billing
+              predicate:
+                gte: 0.5
+        modelRefs:
+          - model: support-model
 global:
   model_catalog:
     deployments:

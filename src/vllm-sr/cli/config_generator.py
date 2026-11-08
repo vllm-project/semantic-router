@@ -7,6 +7,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 
 from cli.catalog_provider_projection import project_provider_models_for_envoy
+from cli.config_contract import iter_routing_profiles
 from cli.consts import DEFAULT_LISTENER_PORT
 from cli.durations import envoy_duration
 from cli.envoy_backend_pool import is_ip_address, project_envoy_backend_group
@@ -76,9 +77,9 @@ def _check_decision_reliability(user_config: UserConfig) -> None:
     headers, which the template's ext_proc filter always allows.
     """
 
-    scopes = [("routing", user_config.routing.decisions)] + [
-        (f"recipes[{recipe.name!r}].routing", recipe.routing.decisions)
-        for recipe in user_config.recipes
+    scopes = [
+        (f"recipes[{name!r}]", recipe.decisions)
+        for name, recipe in iter_routing_profiles(user_config)
     ]
     for scope, decisions in scopes:
         for decision in decisions:

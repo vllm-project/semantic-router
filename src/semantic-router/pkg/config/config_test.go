@@ -46,7 +46,7 @@ func parseLegacyRuntimeConfigForTest(data []byte) (*RouterConfig, error) {
 
 func writeCanonicalLoadTestConfig(path string) error {
 	return os.WriteFile(path, []byte(`
-version: v0.3
+version: v0.5
 listeners:
   - name: http
     address: 0.0.0.0
@@ -59,18 +59,17 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-routing:
-  modelCards:
-    - name: test-model
-  decisions:
-    - name: default-route
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: test-model
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: default-route
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: test-model
+            use_reasoning: false
 `), 0o644)
 }
 
@@ -128,7 +127,6 @@ decisions:
 default_model: "model-b"
 
 semantic_cache:
-  enabled: true
   similarity_threshold: 0.9
   max_entries: 1000
   ttl_seconds: 3600
@@ -172,8 +170,6 @@ model_config:
 				Expect(cfg.DefaultModel).To(Equal("model-b"))
 
 				// Verify semantic cache (legacy fields)
-				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
-				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.9)))
 				Expect(cfg.SemanticCache.MaxEntries).To(Equal(1000))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(3600))
 
@@ -338,48 +334,6 @@ bert_model:
 				for i := 1; i < numGoroutines; i++ {
 					Expect(results[i]).To(BeIdenticalTo(results[0]))
 				}
-			})
-		})
-	})
-
-	Describe("GetCacheSimilarityThreshold", func() {
-		Context("when semantic cache has explicit threshold", func() {
-			BeforeEach(func() {
-				configContent := `
-bert_model:
-  threshold: 0.8
-semantic_cache:
-  similarity_threshold: 0.9
-`
-				err := os.WriteFile(configFile, []byte(configContent), 0o644)
-				Expect(err).NotTo(HaveOccurred())
-			})
-
-			It("should return the semantic cache threshold", func() {
-				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
-				Expect(err).NotTo(HaveOccurred())
-
-				threshold := cfg.GetCacheSimilarityThreshold()
-				Expect(threshold).To(Equal(float32(0.9)))
-			})
-		})
-
-		Context("when semantic cache has no explicit threshold", func() {
-			BeforeEach(func() {
-				configContent := `
-semantic_cache:
-  enabled: true
-`
-				err := os.WriteFile(configFile, []byte(configContent), 0o644)
-				Expect(err).NotTo(HaveOccurred())
-			})
-
-			It("should return the default threshold", func() {
-				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
-				Expect(err).NotTo(HaveOccurred())
-
-				threshold := cfg.GetCacheSimilarityThreshold()
-				Expect(threshold).To(Equal(float32(0.5)))
 			})
 		})
 	})
@@ -1192,7 +1146,6 @@ default_model: "test-model"
 			BeforeEach(func() {
 				configContent := `
 semantic_cache:
-  enabled: true
   backend_type: "memory"
   similarity_threshold: 0.85
   max_entries: 2000
@@ -1206,9 +1159,7 @@ semantic_cache:
 				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
 				Expect(cfg.SemanticCache.BackendType).To(Equal("memory"))
-				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.85)))
 				Expect(cfg.SemanticCache.MaxEntries).To(Equal(2000))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(1800))
 			})
@@ -1218,7 +1169,6 @@ semantic_cache:
 			BeforeEach(func() {
 				configContent := `
 semantic_cache:
-  enabled: true
   backend_type: "milvus"
   similarity_threshold: 0.9
   ttl_seconds: 7200
@@ -1237,9 +1187,7 @@ semantic_cache:
 				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
 				Expect(cfg.SemanticCache.BackendType).To(Equal("milvus"))
-				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.9)))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(7200))
 				Expect(cfg.SemanticCache.Milvus).NotTo(BeNil())
 
@@ -1252,7 +1200,6 @@ semantic_cache:
 			BeforeEach(func() {
 				configContent := `
 semantic_cache:
-  enabled: true
   backend_type: "milvus"
   similarity_threshold: 0.9
   ttl_seconds: 7200
@@ -1362,7 +1309,6 @@ semantic_cache:
 			BeforeEach(func() {
 				configContent := `
 semantic_cache:
-  enabled: true
   backend_type: "milvus"
   similarity_threshold: 0.9
   ttl_seconds: 7200
@@ -1461,7 +1407,6 @@ semantic_cache:
 			BeforeEach(func() {
 				configContent := `
 semantic_cache:
-  enabled: false
   backend_type: "memory"
   similarity_threshold: 0.8
   max_entries: 1000
@@ -1475,9 +1420,7 @@ semantic_cache:
 				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(cfg.SemanticCache.Enabled).To(BeFalse())
 				Expect(cfg.SemanticCache.BackendType).To(Equal("memory"))
-				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.8)))
 			})
 		})
 
@@ -1485,7 +1428,6 @@ semantic_cache:
 			BeforeEach(func() {
 				configContent := `
 semantic_cache:
-  enabled: true
 `
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
@@ -1495,9 +1437,7 @@ semantic_cache:
 				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
-				Expect(cfg.SemanticCache.BackendType).To(BeEmpty())       // Should default to empty (memory)
-				Expect(cfg.SemanticCache.SimilarityThreshold).To(BeNil()) // Will fallback to BERT threshold
+				Expect(cfg.SemanticCache.BackendType).To(BeEmpty()) // Should default to empty (memory)
 				Expect(cfg.SemanticCache.MaxEntries).To(Equal(0))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(0))
 			})
@@ -1510,7 +1450,6 @@ bert_model:
   threshold: 0.7
 
 semantic_cache:
-  enabled: true
   backend_type: "milvus"
   similarity_threshold: 0.95
   ttl_seconds: 14400
@@ -1529,15 +1468,9 @@ semantic_cache:
 				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
 				Expect(cfg.SemanticCache.BackendType).To(Equal("milvus"))
-				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.95)))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(14400))
 				Expect(cfg.SemanticCache.Milvus).NotTo(BeNil())
-
-				// Verify threshold resolution
-				threshold := cfg.GetCacheSimilarityThreshold()
-				Expect(threshold).To(Equal(float32(0.95))) // Should use cache threshold, not BERT
 			})
 		})
 
@@ -1545,31 +1478,6 @@ semantic_cache:
 			BeforeEach(func() {
 				configContent := `
 semantic_cache:
-  enabled: true
-  backend_type: "memory"
-  max_entries: 500
-  # No similarity_threshold specified
-`
-				err := os.WriteFile(configFile, []byte(configContent), 0o644)
-				Expect(err).NotTo(HaveOccurred())
-			})
-
-			It("should fall back to the default threshold when cache threshold not specified", func() {
-				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
-				Expect(err).NotTo(HaveOccurred())
-
-				Expect(cfg.SemanticCache.SimilarityThreshold).To(BeNil())
-
-				threshold := cfg.GetCacheSimilarityThreshold()
-				Expect(threshold).To(Equal(float32(0.5)))
-			})
-		})
-
-		Context("with edge case values", func() {
-			BeforeEach(func() {
-				configContent := `
-semantic_cache:
-  enabled: true
   backend_type: "memory"
   similarity_threshold: 1.0
   max_entries: 0
@@ -1583,9 +1491,7 @@ semantic_cache:
 				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
 				Expect(cfg.SemanticCache.BackendType).To(Equal("memory"))
-				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(1.0)))
 				Expect(cfg.SemanticCache.MaxEntries).To(Equal(0))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(-1))
 			})
@@ -1595,7 +1501,6 @@ semantic_cache:
 			BeforeEach(func() {
 				configContent := `
 semantic_cache:
-  enabled: true
   backend_type: "redis"
   similarity_threshold: 0.8
 `
@@ -1608,7 +1513,6 @@ semantic_cache:
 				Expect(err).NotTo(HaveOccurred())
 
 				// Configuration parsing should succeed
-				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
 				Expect(cfg.SemanticCache.BackendType).To(Equal("redis"))
 
 				// Runtime validation will catch unsupported backend types
@@ -1624,7 +1528,6 @@ bert_model:
   use_cpu: false
 
 semantic_cache:
-  enabled: true
   backend_type: "milvus"
   similarity_threshold: 0.85
   ttl_seconds: 86400  # 24 hours
@@ -1655,15 +1558,9 @@ default_model: "gpt-4"
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify semantic cache config
-				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
 				Expect(cfg.SemanticCache.BackendType).To(Equal("milvus"))
-				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.85)))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(86400))
 				Expect(cfg.SemanticCache.Milvus).NotTo(BeNil())
-
-				// Verify threshold resolution
-				threshold := cfg.GetCacheSimilarityThreshold()
-				Expect(threshold).To(Equal(float32(0.85))) // Should use cache threshold
 
 				// Verify other config is still working
 				Expect(cfg.DefaultModel).To(Equal("gpt-4"))
@@ -1698,9 +1595,7 @@ semantic_cache:
 				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
 				Expect(cfg.SemanticCache.BackendType).To(Equal("memory"))
-				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.8)))
 				Expect(cfg.SemanticCache.MaxEntries).To(Equal(1000))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(3600))
 			})
@@ -1834,7 +1729,7 @@ api:
 
 				cfg := &RouterConfig{
 					SemanticCache: SemanticCache{
-						Enabled: true, // Global enabled, but should not affect decisions without plugin
+						InUse: true, // The store is in use, which does not cache a decision without the plugin
 					},
 					IntelligentRouting: IntelligentRouting{
 						Decisions: []Decision{decision},
@@ -1861,7 +1756,7 @@ api:
 
 				cfg := &RouterConfig{
 					SemanticCache: SemanticCache{
-						Enabled: true,
+						InUse: true,
 					},
 					IntelligentRouting: IntelligentRouting{
 						Decisions: []Decision{decision},
@@ -1887,7 +1782,7 @@ api:
 
 				cfg := &RouterConfig{
 					SemanticCache: SemanticCache{
-						Enabled: false, // Global disabled, but decision enables it
+						InUse: false, // The decision's plugin enables caching
 					},
 					IntelligentRouting: IntelligentRouting{
 						Decisions: []Decision{decision},
@@ -1900,7 +1795,7 @@ api:
 			It("should return false for non-existent decision", func() {
 				cfg := &RouterConfig{
 					SemanticCache: SemanticCache{
-						Enabled: true,
+						InUse: true,
 					},
 				}
 
@@ -1924,18 +1819,16 @@ api:
 					},
 				}
 
-				globalThreshold := float32(0.80)
 				cfg := &RouterConfig{
 					SemanticCache: SemanticCache{
-						Enabled:             true,
-						SimilarityThreshold: &globalThreshold,
+						InUse: true,
 					},
 					IntelligentRouting: IntelligentRouting{
 						Decisions: []Decision{decision},
 					},
 				}
 
-				// The decision's block bounds recall, not the store's threshold.
+				// The decision's semantic.match bounds its recall.
 				block := cfg.ResponseCacheMatch(cfg.GetDecisionByName("test"))
 				Expect(block).NotTo(BeNil())
 				Expect(*block.Recall.MinSimilarity).To(Equal(0.95))
@@ -1959,7 +1852,7 @@ api:
 
 				cfg := &RouterConfig{
 					SemanticCache: SemanticCache{
-						Enabled:    true,
+						InUse:      true,
 						TTLSeconds: 3600, // Global TTL
 					},
 					IntelligentRouting: IntelligentRouting{
@@ -1999,7 +1892,7 @@ var _ = Describe("ParseConfigFile and ReplaceGlobalConfig", func() {
 		// Create real config target
 		target := filepath.Join(tempDir, "real-config.yaml")
 		content := []byte(`
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -2009,17 +1902,16 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-routing:
-  modelCards:
-    - name: test-model
-  decisions:
-    - name: default-route
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: test-model
+recipes:
+  - name: default
+    decisions:
+      - name: default-route
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: test-model
 `)
 		Expect(os.WriteFile(target, content, 0o644)).To(Succeed())
 
@@ -2067,18 +1959,21 @@ var _ = Describe("Decision and Global Configuration", func() {
 			return &Decision{Name: "d", Plugins: []DecisionPlugin{{Type: DecisionPluginContext, Configuration: MustStructuredPayload(configuration)}}}
 		}
 
-		It("gives a decision without a context plugin the global memory's source", func() {
+		It("gives a request without a decision the context plugin of global.plugins", func() {
 			cfg := &RouterConfig{}
-			Expect(cfg.ContextPlugin(&Decision{Name: "d"})).To(BeNil())
-			cfg.Memory.Enabled = true
-			plugin := cfg.ContextPlugin(&Decision{Name: "d"})
+			Expect(cfg.ContextPlugin(nil)).To(BeNil())
+			cfg.GlobalPlugins = []DecisionPlugin{{Type: DecisionPluginContext, Configuration: MustStructuredPayload(
+				ContextPluginConfig{Enabled: true, Sources: []ContextSource{{Type: ContextSourceMemory}}},
+			)}}
+			Expect(cfg.LayerPlugins()).To(Succeed())
+			plugin := cfg.ContextPlugin(nil)
 			Expect(plugin).NotTo(BeNil())
 			Expect(plugin.Sources).To(Equal([]ContextSource{{Type: ContextSourceMemory}}))
 		})
 
 		It("reads only the sources an enabled context plugin lists", func() {
 			cfg := &RouterConfig{}
-			cfg.Memory.Enabled = true
+			cfg.Memory.InUse = true
 			plugin := cfg.ContextPlugin(contextDecision(ContextPluginConfig{Enabled: true, Sources: []ContextSource{{Type: ContextSourceRAG, Backend: "vectorstore"}}}))
 			Expect(plugin.Source(ContextSourceRAG)).NotTo(BeNil())
 			Expect(plugin.Source(ContextSourceMemory)).To(BeNil())
@@ -2086,7 +1981,7 @@ var _ = Describe("Decision and Global Configuration", func() {
 
 		It("turns context off, global memory included, for a disabled context plugin", func() {
 			cfg := &RouterConfig{}
-			cfg.Memory.Enabled = true
+			cfg.Memory.InUse = true
 			Expect(cfg.ContextPlugin(contextDecision(ContextPluginConfig{Enabled: false}))).To(BeNil())
 		})
 	})

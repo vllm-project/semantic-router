@@ -31,19 +31,19 @@ func TestValidateDecisionOnUnknown(t *testing.T) {
 }
 
 func TestParseYAMLBytesRejectsOnUnknownOnErrorConflict(t *testing.T) {
-	yaml := buildDecisionRefConfig(`    - name: guarded
-      priority: 1
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions:
-          - {type: systemone, name: risk, label: RISKY, on_error: no_match}
-      modelRefs:
-        - model: m1
-  signals:
-    systemone:
-      - name: risk
-        question: {type: choice, instructions: "Is the request risky?", choices: [{key: SAFE}, {key: RISKY}]}
+	yaml := buildDecisionRefConfig(`      - name: guarded
+        priority: 1
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - {type: systemone, name: risk, label: RISKY, on_error: no_match}
+        modelRefs:
+          - model: m1
+    signals:
+      systemone:
+        - name: risk
+          question: {type: choice, instructions: "Is the request risky?", choices: [{key: SAFE}, {key: RISKY}]}
 `)
 	_, err := ParseYAMLBytes(yaml)
 	if err == nil || !strings.Contains(err.Error(), OnUnknownOnErrorConflictMessage) {

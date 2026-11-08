@@ -659,7 +659,7 @@ In summary:
 | `replicas` | deployment | Placements of independent workers for one logical model. Each has `device` or `endpoint`/`model`; omit for one worker. Do not combine with deployment-level placement. |
 | `enabled` | `global.router` | Default `true`. Disable routing signals while retaining the frontend, native API and decision model. |
 | `endpoint`, `model` | deployment | Attach to a runtime you run; `model` is the served model's ID. The [connection block](../installation/model-catalog.md#connection-block) adds `auth`, `headers`, `timeout_ms` and `tls`. |
-| `bindings.<type>`, `routing.model_bindings.<type>` | `global.model_catalog`, recipe | The deployment a signal type uses: a name, or `{deployment, head}` to select a head. |
+| `bindings.<type>`, `recipes[].model_bindings.<type>` | `global.model_catalog`, recipe | The deployment a signal type uses: a name, or `{deployment, head}` to select a head. |
 | `deployment` | rule | The deployment a `decision`, `classifiers`, `safety` (and `hazard`) or `complexity` rule asks. |
 
 The binding keys are the signal types `domain`, `jailbreak`, `pii`,

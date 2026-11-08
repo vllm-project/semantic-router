@@ -17,7 +17,7 @@ var errBenchmarkCallLimit = errors.New("the selected route cannot enforce the re
 // Only these transformations are known not to dispatch auxiliary generative
 // calls. Unknown plugins and future algorithms fail closed for cost proof.
 func (r *OpenAIRouter) benchmarkUsageScopeKnown(ctx *RequestContext, allowLooper bool) bool {
-	if r == nil || r.Config == nil || ctx == nil || ctx.SkipProcessing || r.Config.Memory.Enabled ||
+	if r == nil || r.Config == nil || ctx == nil || ctx.SkipProcessing || r.Config.Memory.InUse ||
 		(ctx.RouterReplayPluginConfig != nil && ctx.RouterReplayPluginConfig.Shadow != nil) {
 		return false
 	}

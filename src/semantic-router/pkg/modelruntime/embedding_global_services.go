@@ -18,6 +18,6 @@ func PrepareOwnedGlobalServiceEmbeddings(ctx context.Context, cfg *config.Router
 		return nil, fmt.Errorf("global model services require configuration")
 	}
 	scoped := cfg.ConfigForGlobalModelServices()
-	scoped.SemanticCache.Enabled = false
+	scoped.SemanticCache.InUse = false
 	return prepareEmbeddings(ctx, scoped, runtime, true, embedding.Options{})
 }

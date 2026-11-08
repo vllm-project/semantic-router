@@ -26,13 +26,14 @@ var routeQuestion = Question{ID: "route", Type: "choice", Instructions: "Which t
 // systemOneConfig parses one systemone deployment, remote-d3, from YAML.
 func systemOneConfig(t *testing.T, deployment string) *config.RouterConfig {
 	t.Helper()
-	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.3
+	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.5
 providers:
   defaults: {model: general}
   models:
     - name: general
       backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
-routing: {}
+recipes:
+  - name: default
 global:
   model_catalog:
     deployments:

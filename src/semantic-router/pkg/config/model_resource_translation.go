@@ -118,17 +118,17 @@ func (c *RouterConfig) translateModelResources() error {
 	if c.GlobalModelBindings, err = normalizeBindingKeys("global.model_catalog.bindings", c.GlobalModelBindings); err != nil {
 		return err
 	}
-	if c.ModelBindings, err = normalizeBindingKeys("routing.model_bindings", c.ModelBindings); err != nil {
+	if c.ModelBindings, err = normalizeBindingKeys(c.ScopePath("model_bindings"), c.ModelBindings); err != nil {
 		return err
 	}
 	if c.scopedBindings != nil {
-		if c.scopedBindings, err = normalizeBindingKeys("routing.model_bindings", c.scopedBindings); err != nil {
+		if c.scopedBindings, err = normalizeBindingKeys(c.ScopePath("model_bindings"), c.scopedBindings); err != nil {
 			return err
 		}
 	}
 	for i := range c.Recipes {
 		recipe := &c.Recipes[i]
-		if recipe.Profile.ModelBindings, err = normalizeBindingKeys(fmt.Sprintf("recipes[%s].routing.model_bindings", recipe.Name), recipe.Profile.ModelBindings); err != nil {
+		if recipe.Profile.ModelBindings, err = normalizeBindingKeys(recipePath(string(recipe.Name))+".model_bindings", recipe.Profile.ModelBindings); err != nil {
 			return err
 		}
 	}

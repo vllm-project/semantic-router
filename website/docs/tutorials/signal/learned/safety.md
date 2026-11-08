@@ -22,19 +22,18 @@ application's languages and input lengths before enabling refusal policies.
 ## Configuration
 
 ```yaml
-routing:
-  signals:
-    safety:
-      - name: unsafe-content
-        threshold: 0.5
-      - name: unsafe-privacy
-        threshold: 0.5
-        hazard:
-          labels: [violence, criminal_activity, sexual_content, child_exploitation,
-                   hate, harassment_abuse, regulated_substances, weapons,
-                   self_harm, privacy, specialized_advice, misinformation]
-          categories: [privacy]
-          threshold: 0.6
+recipes:
+  - name: default
+    signals:
+      safety:
+        - name: unsafe-content
+          threshold: 0.5
+        - name: unsafe-privacy
+          threshold: 0.5
+          hazard:
+            labels: [violence, criminal_activity, sexual_content, child_exploitation, hate, harassment_abuse, regulated_substances, weapons, self_harm, privacy, specialized_advice, misinformation]
+            categories: [privacy]
+            threshold: 0.6
 ```
 
 Each safety rule asks its own question. A rule without `deployment` asks the
@@ -66,18 +65,19 @@ the model's evaluation report and your own validation set to choose thresholds.
 Reference a rule in a decision and define the action there:
 
 ```yaml
-routing:
-  decisions:
-    - name: handle-content-risk
-      priority: 300
-      rules:
-        operator: AND
-        on_unknown: fail_request
-        conditions:
-          - type: safety
-            name: unsafe-content
-      modelRefs:
-        - model: safety-capable-model
+recipes:
+  - name: default
+    decisions:
+      - name: handle-content-risk
+        priority: 300
+        rules:
+          operator: AND
+          on_unknown: fail_request
+          conditions:
+            - type: safety
+              name: unsafe-content
+        modelRefs:
+          - model: safety-capable-model
 ```
 
 Replace `safety-capable-model` with an alias in `providers.models` whose backend
@@ -119,12 +119,13 @@ global:
         provider: model_runtime
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Shield
         revision: a981a99eeb05a2859b88b5cee9af4352897ec4ec
-routing:
-  signals:
-    safety:
-      - name: unsafe-content
-        deployment: shield
-        threshold: 0.5
+recipes:
+  - name: default
+    signals:
+      safety:
+        - name: unsafe-content
+          deployment: shield
+          threshold: 0.5
 ```
 
 A rule in a recipe names its deployment the same way, so one recipe can use
@@ -139,13 +140,17 @@ global:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Shield
         revision: a981a99eeb05a2859b88b5cee9af4352897ec4ec
 recipes:
+  - name: default
   - name: care
-    routing:
-      signals:
-        safety:
-          - name: unsafe-content
-            deployment: shield
-            threshold: 0.5
+    signals:
+      safety:
+        - name: unsafe-content
+          deployment: shield
+          threshold: 0.5
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 ```
 
 The deployment downloads the `revision` it declares, and only the root
@@ -176,12 +181,13 @@ global:
           window:
             size: 512
             overlap: 255
-routing:
-  signals:
-    safety:
-      - name: unsafe-content
-        deployment: my-safety
-        threshold: 0.5
+recipes:
+  - name: default
+    signals:
+      safety:
+        - name: unsafe-content
+          deployment: my-safety
+          threshold: 0.5
 ```
 
 `input.max_tokens` limits the complete tokenized request, including special

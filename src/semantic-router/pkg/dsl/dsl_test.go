@@ -676,8 +676,8 @@ ROUTE math_route {
 
 	yamlStr := string(yamlBytes)
 	// Basic sanity checks on the YAML output
-	if !strings.Contains(yamlStr, "modelCards:") {
-		t.Error("YAML should contain routing.modelCards")
+	if strings.Contains(yamlStr, "modelCards:") || !strings.Contains(yamlStr, "providers:") {
+		t.Error("YAML should declare model facts on providers.models")
 	}
 	if !strings.Contains(yamlStr, "name: math") {
 		t.Error("YAML should contain category name")
@@ -842,8 +842,8 @@ func TestCompileFullExample(t *testing.T) {
 		t.Fatalf("YAML emit error: %v", err)
 	}
 	yamlStr := string(yamlBytes)
-	if !strings.Contains(yamlStr, "modelCards:") {
-		t.Error("YAML missing routing.modelCards")
+	if strings.Contains(yamlStr, "modelCards:") || !strings.Contains(yamlStr, "providers:") {
+		t.Error("YAML should declare model facts on providers.models")
 	}
 	if !strings.Contains(yamlStr, "name: math") {
 		t.Error("YAML missing math category")
@@ -1728,7 +1728,7 @@ ROUTE math_route {
 		if !strings.Contains(crdStr, "decisions:") {
 			t.Error("CRD missing spec.config.routing.decisions")
 		}
-		// Domain signals use the canonical routing.signals key.
+		// Domain signals use the canonical recipes[default].signals key.
 		if !strings.Contains(crdStr, "domains:") {
 			t.Error("CRD missing spec.config.routing.signals.domains")
 		}
@@ -3429,8 +3429,8 @@ func TestDecompileOmitsLegacyStaticSections(t *testing.T) {
 		InlineModels: config.InlineModels{
 			EmbeddingDeployment: config.EmbeddingDefaultDeployment,
 		},
-		SemanticCache: config.SemanticCache{Enabled: true, BackendType: "redis"},
-		Memory:        config.MemoryConfig{Enabled: true, AutoStore: true},
+		SemanticCache: config.SemanticCache{BackendType: "redis"},
+		Memory:        config.MemoryConfig{AutoStore: true},
 		ResponseAPI:   config.ResponseAPIConfig{Enabled: true, StoreBackend: "redis"},
 	}
 
@@ -3786,7 +3786,7 @@ func TestCLICompileAndDecompile(t *testing.T) {
 		t.Fatal("DSL output is empty")
 	}
 
-	if strings.Contains(string(yamlData), "global:") || strings.Contains(string(yamlData), "providers:") {
+	if strings.Contains(string(yamlData), "global:") || strings.Contains(string(yamlData), "backend_refs:") || !isRoutingOnlyFragment(yamlData) {
 		t.Fatalf("CLICompile should emit a routing fragment, got:\n%s", string(yamlData))
 	}
 
@@ -3991,15 +3991,15 @@ func TestEmitHelm(t *testing.T) {
 		t.Error("expected top-level 'config:' key in Helm values")
 	}
 	// Should contain canonical version
-	if !strings.Contains(yamlStr, "version: v0.3") {
+	if !strings.Contains(yamlStr, "version: v0.5") {
 		t.Error("expected canonical config version in Helm values")
 	}
-	// Should contain routing under config
-	if !strings.Contains(yamlStr, "routing:") {
-		t.Error("expected 'routing:' under config")
+	// Should contain the recipes under config
+	if !strings.Contains(yamlStr, "recipes:") || strings.Contains(yamlStr, "routing:") {
+		t.Error("expected recipes, and no routing block, under config")
 	}
 	if !strings.Contains(yamlStr, "decisions:") {
-		t.Error("expected routing decisions in Helm values")
+		t.Error("expected recipe decisions in Helm values")
 	}
 	// Helm emission should stay routing-only
 	if strings.Contains(yamlStr, "default_model:") {

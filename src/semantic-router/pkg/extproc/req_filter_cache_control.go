@@ -10,10 +10,7 @@ import (
 )
 
 func applyRequestCacheControls(ctx *RequestContext) {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
-		return
-	}
-	pluginConfig := ctx.VSRSelectedDecision.GetResponseCacheConfig()
+	pluginConfig := requestResponseCache(ctx)
 	if pluginConfig == nil {
 		return
 	}

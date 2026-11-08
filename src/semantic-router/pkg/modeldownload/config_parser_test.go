@@ -44,7 +44,7 @@ func TestIsModelDirectory(t *testing.T) {
 
 func TestBuildModelSpecsSkipsUnusedRouterOwnedDefaultsForScratchCanonicalConfig(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8888
     address: 0.0.0.0
@@ -61,19 +61,18 @@ providers:
           endpoint: localhost:8000
           protocol: http
           weight: 100
-routing:
-  modelCards:
-    - name: openai/gpt-oss-120b
       modality: text
-  decisions:
-    - name: default-route
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: openai/gpt-oss-120b
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: default-route
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: openai/gpt-oss-120b
+            use_reasoning: false
 `))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes() error = %v", err)
@@ -91,7 +90,7 @@ routing:
 
 func TestBuildModelSpecsSkipsUnusedRouterOwnedDefaultsForSparseAMDGlobalOverride(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8888
     address: 0.0.0.0
@@ -108,19 +107,18 @@ providers:
           endpoint: localhost:8000
           protocol: http
           weight: 100
-routing:
-  modelCards:
-    - name: openai/gpt-oss-120b
       modality: text
-  decisions:
-    - name: default-route
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: openai/gpt-oss-120b
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: default-route
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: openai/gpt-oss-120b
+            use_reasoning: false
 global:
   model_catalog:
     deployments:

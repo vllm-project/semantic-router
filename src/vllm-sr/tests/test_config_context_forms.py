@@ -28,6 +28,7 @@ CASES = (
     "removed-plugin-context-compression",
     "removed-field-rag-reranker-binding",
     "invalid-value-rerank-provider",
+    "invalid-value-rag-mcp-backend",
 )
 
 

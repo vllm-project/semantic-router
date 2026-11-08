@@ -6,7 +6,7 @@ from cli.config_contract import (
     iter_routing_profiles,
 )
 from cli.model_runtime_defaults import effective_model_deployments
-from cli.models import Entrypoint, UserConfig
+from cli.models import DEFAULT_RECIPE_NAME, Entrypoint, UserConfig
 from cli.validation_error import ValidationError
 from cli.validator_decision_model import public_model_name
 
@@ -35,7 +35,7 @@ def validate_domain_references(config: UserConfig) -> list[ValidationError]:
                             f"Decision '{decision.name}' in recipe '{profile_name}' "
                             "references unknown domain "
                             f"'{condition.name}'",
-                            field=f"recipes.{profile_name}.routing.decisions.{decision.name}.rules.conditions",
+                            field=f"recipes.{profile_name}.decisions.{decision.name}.rules.conditions",
                         )
                     )
 
@@ -46,18 +46,7 @@ def _recipe_name_contract(
     config: UserConfig,
 ) -> tuple[set[str], list[ValidationError]]:
     errors: list[ValidationError] = []
-    top_level_has_profile = bool(
-        config.routing.candidate_requirements is not None
-        or config.routing.model_bindings
-        or config.routing.signals.model_dump(exclude_defaults=True, exclude_none=True)
-        or config.routing.projections.model_dump(
-            exclude_defaults=True, exclude_none=True
-        )
-        or config.routing.decisions
-        or config.routing.strategy is not None
-    )
-    recipe_names = {"default"}
-    explicit_default_seen = False
+    recipe_names = set() if config.recipes else {DEFAULT_RECIPE_NAME}
     for recipe in config.recipes:
         if recipe.name == "@global":
             errors.append(
@@ -66,12 +55,7 @@ def _recipe_name_contract(
                     field="recipes.@global",
                 )
             )
-        explicit_default_allowed = (
-            recipe.name == "default"
-            and not top_level_has_profile
-            and not explicit_default_seen
-        )
-        if recipe.name in recipe_names and not explicit_default_allowed:
+        if recipe.name in recipe_names:
             errors.append(
                 ValidationError(
                     f"Duplicate recipe name '{recipe.name}'",
@@ -79,10 +63,54 @@ def _recipe_name_contract(
                     hint="Rename one recipe so every recipe has a unique name.",
                 )
             )
-        if recipe.name == "default":
-            explicit_default_seen = True
         recipe_names.add(recipe.name)
-    return recipe_names, errors
+    return recipe_names, errors + _default_entrypoint_contract(config)
+
+
+def _default_entrypoint_contract(config: UserConfig) -> list[ValidationError]:
+    """One recipe is the default; several need exactly one chat entrypoint
+    marked default: true."""
+    errors: list[ValidationError] = []
+    marked = [index for index, entry in enumerate(config.entrypoints) if entry.default]
+    for index in marked:
+        if config.entrypoints[index].api not in (None, "chat"):
+            errors.append(
+                ValidationError(
+                    "only a chat entrypoint can be the default",
+                    field=f"entrypoints[{index}].default",
+                )
+            )
+    if len(marked) > 1:
+        errors.append(
+            ValidationError(
+                f"entrypoints[{marked[0]}] is already the default; mark exactly one "
+                "entrypoint default",
+                field=f"entrypoints[{marked[1]}].default",
+            )
+        )
+    recipes = len(config.recipes)
+    if not recipes and config.entrypoints:
+        errors.append(
+            ValidationError(
+                "no recipe is declared for them to map", field="entrypoints"
+            )
+        )
+    elif recipes > 1 and not config.entrypoints:
+        errors.append(
+            ValidationError(
+                f"{recipes} recipes need entrypoints, exactly one of them marked "
+                "default: true",
+                field="entrypoints",
+            )
+        )
+    elif recipes > 1 and not marked:
+        errors.append(
+            ValidationError(
+                f"{recipes} recipes need exactly one entrypoint marked default: true",
+                field="entrypoints",
+            )
+        )
+    return errors
 
 
 def _optional_mapping(
@@ -122,12 +150,16 @@ def _normalized_string_list(
 
 
 def effective_entrypoints(config: UserConfig):
-    """Source mappings plus the default Chat entrypoint when not overridden."""
+    """Source mappings plus the built-in vllm-sr/auto entrypoint of the default
+    recipe when no chat entrypoint maps it."""
     entries = list(config.entrypoints)
+    default = config.default_recipe.name
     if not any(
-        entry.recipe == "default" and entry.api != "systemone" for entry in entries
+        entry.recipe == default and entry.api != "systemone" for entry in entries
     ):
-        entries.insert(0, Entrypoint(model_names=["vllm-sr/auto"], recipe="default"))
+        entries.insert(
+            0, Entrypoint(model_names=["vllm-sr/auto"], recipe=default, default=True)
+        )
     return entries
 
 
@@ -151,8 +183,8 @@ def _reserved_routing_models(
         if model.provider_model_id:
             names.add(model.provider_model_id)
         names.update((model.external_model_ids or {}).values())
-    for card in config.routing.model_cards:
-        names.update(adapter.name for adapter in (card.loras or []))
+    for model in models:
+        names.update(adapter.name for adapter in (model.loras or []))
     return {name for name in names if isinstance(name, str) and name}, []
 
 

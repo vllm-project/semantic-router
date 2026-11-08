@@ -10,7 +10,7 @@ translation:
 
 ## 概览 {#overview}
 
-`user-feedback` 从对话中检测纠正、不满或升级反馈。在 `routing.signals.user_feedbacks` 下定义其标签。
+`user-feedback` 从对话中检测纠正、不满或升级反馈。在 `recipes[].signals.user_feedbacks` 下定义其标签。
 
 该族为学习型：除非 `user_feedback` 绑定指定了其他部署，否则由决策模型回答它（[为信号选择模型](../../../installation/choose-a-model-for-a-signal.md)）。`global.model_catalog.modules.feedback_detector` 保存检测器的设置。将 `feedback_mapping_path` 留空，使检测器从模型的 `config.json` 读取 `id2label`；仅在映射文件的索引顺序与模型头一致时才设置它。
 
@@ -39,13 +39,14 @@ translation:
 ## 配置 {#configuration}
 
 ```yaml
-routing:
-  signals:
-    user_feedbacks:
-      - name: wrong_answer
-        description: User indicates the current answer is incorrect.
-      - name: need_clarification
-        description: User asks for a clearer or more detailed follow-up.
+recipes:
+  - name: default
+    signals:
+      user_feedbacks:
+        - name: wrong_answer
+          description: User indicates the current answer is incorrect.
+        - name: need_clarification
+          description: User asks for a clearer or more detailed follow-up.
 ```
 
 定义决策将消费的反馈标签，再由学习检测器决定每轮匹配哪一条。

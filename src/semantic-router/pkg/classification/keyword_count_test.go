@@ -2,9 +2,13 @@ package classification
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -45,6 +49,44 @@ func TestKeywordCountHonorsLiteralBoundaries(t *testing.T) {
 				t.Fatalf("count = %v (%v), want %v", values["must"], err, test.want)
 			}
 		})
+	}
+}
+
+// The keywords rule migrate writes for a structure rule on text_bytes counts
+// the UTF-8 bytes of the text, as text_bytes did, whatever its characters.
+func TestMigratedTextBytesRuleCountsUTF8Bytes(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "config", "testdata", "migrate", "removed-structure-text-bytes", "after.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document struct {
+		Recipes []struct {
+			Signals struct {
+				Keywords []config.KeywordRule `yaml:"keywords"`
+			} `yaml:"signals"`
+		} `yaml:"recipes"`
+	}
+	if err := yaml.Unmarshal(data, &document); err != nil || len(document.Recipes) == 0 || len(document.Recipes[0].Signals.Keywords) != 1 {
+		t.Fatalf("after.yaml holds no keywords rule: %v", err)
+	}
+	rule := document.Recipes[0].Signals.Keywords[0]
+	classifier := countingKeywordClassifier(t, rule)
+	for _, text := range []string{
+		"", "plain ASCII text", "line one\nline two", "café crème", "必须严格", "🙂 emoji 🚀", "mixed: é 中 🙂 \t\n",
+		strings.Repeat("a", 3998) + "é", // 4000 bytes in 3999 characters
+		strings.Repeat("中", 1333),       // 3999 bytes
+		strings.Repeat("中", 1333) + "a", // 4000 bytes in 1334 characters
+	} {
+		matches, values, err := classifier.MatchAllWithHistory(text, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := values[rule.Name]; got != float64(len(text)) {
+			t.Errorf("a %d-byte text counts %v", len(text), got)
+		}
+		if matched := len(matches) > 0; matched != (len(text) >= 4000) {
+			t.Errorf("a %d-byte text matched %v, want %v", len(text), matched, len(text) >= 4000)
+		}
 	}
 }
 

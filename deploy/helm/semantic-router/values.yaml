@@ -308,7 +308,7 @@ configMap:
   applyValuesRevision: ""
 # Application configuration
 config:
-  version: v0.3
+  version: v0.5
   # Standalone mode serves these listeners and the Service exposes them;
   # extproc mode doesn't use them.
   listeners:
@@ -329,24 +329,23 @@ config:
             endpoint: "replace-with-your-vllm-service:8000"
             protocol: "http"
             weight: 100
-  routing:
-    modelCards:
-      - name: "replace-with-your-model"
-    signals:
-      domains:
-        - name: "general"
-          description: "Catch-all domain"
-          labels: ["other"]
-    decisions:
-      - name: "default-route"
-        description: "Default route for every request while you wire real backends."
-        priority: 100
-        rules:
-          operator: "AND"
-          conditions: []
-        modelRefs:
-          - model: "replace-with-your-model"
-            use_reasoning: false
+  recipes:
+    - name: default
+      signals:
+        domains:
+          - name: "general"
+            description: "Catch-all domain"
+            labels: ["other"]
+      decisions:
+        - name: "default-route"
+          description: "Default route for every request while you wire real backends."
+          priority: 100
+          rules:
+            operator: "AND"
+            conditions: []
+          modelRefs:
+            - model: "replace-with-your-model"
+              use_reasoning: false
   global:
     services:
       response_api:
@@ -381,9 +380,7 @@ config:
             deployment_environment: "development"
     stores:
       response_cache:
-        enabled: true
         backend_type: "memory"
-        similarity_threshold: 0.8
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: "fifo"

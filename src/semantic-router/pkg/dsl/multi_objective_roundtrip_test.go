@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -53,8 +54,8 @@ func loadMultiObjectiveConfig(t *testing.T) *config.RouterConfig {
 
 func assertMultiObjectiveScopedDSL(t *testing.T, source string) {
 	t.Helper()
-	if got := strings.Count(source, "ENTRYPOINT {"); got != 5 {
-		t.Fatalf("decompiled entrypoints = %d, want 5", got)
+	if got := strings.Count(source, "ENTRYPOINT {"); got != 6 {
+		t.Fatalf("decompiled entrypoints = %d, want 6", got)
 	}
 	if got := strings.Count(source, "\nRECIPE "); got != 5 {
 		t.Fatalf("decompiled recipes = %d, want 5", got)
@@ -84,9 +85,12 @@ func assertMultiObjectiveRoutingScopesEqual(
 	if !reflect.DeepEqual(original.Entrypoints, recompiled.Entrypoints) {
 		t.Fatalf("entrypoints changed after YAML -> DSL -> config round trip")
 	}
+	// The DSL carries what each recipe declares; global.plugins stays in the
+	// YAML document.
 	recipeDiff := cmp.Diff(
-		original.Recipes,
-		recompiled.Recipes,
+		config.CanonicalConfigFromRouterConfig(original).Recipes,
+		config.CanonicalConfigFromRouterConfig(recompiled).Recipes,
+		cmpopts.IgnoreUnexported(config.Decision{}),
 		cmp.Comparer(func(left, right config.StructuredPayload) bool {
 			var leftValue, rightValue interface{}
 			if json.Unmarshal(left.Raw, &leftValue) != nil ||

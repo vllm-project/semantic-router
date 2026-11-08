@@ -7,11 +7,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const pluginFormsDoc = `version: v0.3
-routing:
-  decisions:
-    - name: guarded
-      plugins:
+const pluginFormsDoc = `version: v0.5
+recipes:
+  - name: default
+    decisions:
+      - name: guarded
+        plugins:
 PLUGINS
 global:
   model_catalog:
@@ -23,22 +24,22 @@ global:
 // written in plugins, and returns the decision's plugins and the notes.
 func migratePlugins(t *testing.T, plugins, onError, onUnscanned string) ([]map[string]interface{}, []ConfigWarning) {
 	t.Helper()
-	doc := strings.NewReplacer("PLUGINS", plugins, "ON_ERROR", onError, "ON_UNSCANNED", onUnscanned).Replace(pluginFormsDoc)
+	doc := strings.NewReplacer("PLUGINS", "  "+strings.ReplaceAll(plugins, "\n", "\n  "), "ON_ERROR", onError, "ON_UNSCANNED", onUnscanned).Replace(pluginFormsDoc)
 	migrated, notes, err := migrateConfigForms([]byte(doc), pluginForms)
 	if err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	var out struct {
-		Routing struct {
+		Recipes []struct {
 			Decisions []struct {
 				Plugins []map[string]interface{} `yaml:"plugins"`
 			} `yaml:"decisions"`
-		} `yaml:"routing"`
+		} `yaml:"recipes"`
 	}
 	if err := yaml.Unmarshal(migrated, &out); err != nil {
 		t.Fatal(err)
 	}
-	return out.Routing.Decisions[0].Plugins, notes
+	return out.Recipes[0].Decisions[0].Plugins, notes
 }
 
 func noteSaying(notes []ConfigWarning, code, text string) bool {
@@ -113,14 +114,15 @@ func TestMigrateResponseJailbreakUnknownFollowsPromptGuard(t *testing.T) {
 }
 
 func TestMigrateMaskingMovesItsThresholdOntoItsRule(t *testing.T) {
-	doc := `version: v0.3
-routing:
-  signals:
-    pii: [{name: personal}]
-  decisions:
-    - name: support
-      plugins:
-        - {type: masking, configuration: {enabled: true, signal: personal, threshold: 0.7}}
+	doc := `version: v0.5
+recipes:
+  - name: default
+    signals:
+      pii: [{name: personal}]
+    decisions:
+      - name: support
+        plugins:
+          - {type: masking, configuration: {enabled: true, signal: personal, threshold: 0.7}}
 `
 	migrated, _, err := migrateConfigForms([]byte(doc), pluginForms)
 	if err != nil {

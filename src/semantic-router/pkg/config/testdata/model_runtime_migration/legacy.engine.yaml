@@ -3,23 +3,24 @@
 # the Router to rewrite the model fields. The CLI test checks the first step
 # against this file; the Router test checks that the second step turns it into
 # the page's legacy.migrated.yaml.
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
     model: answer-model
   models:
-  - name: answer-model
-    backend_refs:
-    - name: answer
-      endpoint: vllm:8000
-      provider: vllm
-routing:
-  model_bindings:
-    embedding:
-      deployment: vela-embedding
-      contract: embedding.v1
-      adapter: mmbert
+    - name: answer-model
+      backend_refs:
+        - name: answer
+          endpoint: vllm:8000
+          provider: vllm
+recipes:
+  - name: default
+    model_bindings:
+      embedding:
+        deployment: vela-embedding
+        contract: embedding.v1
+        adapter: mmbert
 global:
   model_catalog:
     deployments:
@@ -33,5 +34,9 @@ global:
         device: cuda:0
   stores:
     response_cache:
-      enabled: true
       backend_type: memory
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        scope: global

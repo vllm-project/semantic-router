@@ -47,15 +47,15 @@ func (d *recordingDecider) Decide(_ context.Context, deployment string, request 
 // choose between them, on deployment or, without one, on the decision model.
 func decisionSelectorConfig(t *testing.T, deployment string) *config.RouterConfig {
 	t.Helper()
-	selector := "        systemone:\n          instructions: Which model should answer this request?\n" +
-		"          candidates:\n            fast: Quick answers to routine requests\n            deep: Careful multi-step reasoning\n"
+	selector := "          systemone:\n            instructions: Which model should answer this request?\n" +
+		"            candidates:\n              fast: Quick answers to routine requests\n              deep: Careful multi-step reasoning\n"
 	deployments := "    deployments:\n      primary:\n        provider: model_runtime\n        artifact: vllm-sr/Vela-2.0-4B\n"
 	if deployment != "" {
-		selector += "          deployment: " + deployment + "\n"
+		selector += "            deployment: " + deployment + "\n"
 		deployments += "      " + deployment + ":\n        provider: model_runtime\n" +
 			"        artifact: vllm-sr/Decision-2.0-Kai-0.6B\n        revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764\n"
 	}
-	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.3
+	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.5
 providers:
   defaults: {model: fast}
   models:
@@ -63,14 +63,15 @@ providers:
       backend_refs: [{name: fast, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
     - name: deep
       backend_refs: [{name: deep, endpoint: "127.0.0.1:8001", protocol: http, weight: 1}]
-routing:
-  decisions:
-    - name: choose
-      priority: 100
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: fast}, {model: deep}]
-      algorithm:
-        type: systemone
+recipes:
+  - name: default
+    decisions:
+      - name: choose
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: fast}, {model: deep}]
+        algorithm:
+          type: systemone
 ` + selector + `global:
   model_catalog:
     system:

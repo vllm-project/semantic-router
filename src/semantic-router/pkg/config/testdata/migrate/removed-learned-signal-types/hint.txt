@@ -1,1 +1,1 @@
-routing.signals.reasks: removed_signal_type: the reask signal is a turn_relation rule; run `vllm-sr config migrate` (signals.turn_relation with labels [reask]; lookback_turns becomes input.previous_turns)
+recipes[default].signals.reasks: removed_signal_type: the reask signal is a turn_relation rule; run `vllm-sr config migrate` (signals.turn_relation with labels [reask]; input.previous_turns is twice lookback_turns)

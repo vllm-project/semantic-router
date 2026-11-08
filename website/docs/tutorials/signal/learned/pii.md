@@ -3,7 +3,7 @@
 ## Overview
 
 `pii` detects sensitive personal data in requests. Define PII rules under
-`routing.signals.pii`.
+`recipes[].signals.pii`.
 
 The decision model answers it unless a `pii` binding names another deployment;
 see [Choose a model for a signal](../../../installation/choose-a-model-for-a-signal.md).
@@ -34,15 +34,16 @@ Use `pii` when:
 ## Configuration
 
 ```yaml
-routing:
-  signals:
-    pii:
-      - name: restricted_pii
-        threshold: 0.85
-        include_history: true
-        pii_types_allowed:
-          - EMAIL_ADDRESS
-        description: Sensitive prompts where only low-risk identifiers may pass through.
+recipes:
+  - name: default
+    signals:
+      pii:
+        - name: restricted_pii
+          threshold: 0.85
+          include_history: true
+          pii_types_allowed:
+            - EMAIL_ADDRESS
+          description: Sensitive prompts where only low-risk identifiers may pass through.
 ```
 
 When `pii_types_allowed` is empty, any detected PII can cause the signal to match.
@@ -53,14 +54,15 @@ threshold.
 To scan textual results returned by tools, opt in with `source: tool_result`:
 
 ```yaml
-routing:
-  signals:
-    pii:
-      - name: tool_result_pii
-        source: tool_result
-        threshold: 0.85
-        pii_types_allowed: []
-        description: Keep tool results containing sensitive data on a protected route.
+recipes:
+  - name: default
+    signals:
+      pii:
+        - name: tool_result_pii
+          source: tool_result
+          threshold: 0.85
+          pii_types_allowed: []
+          description: Keep tool results containing sensitive data on a protected route.
 ```
 
 This source is evaluated from the protocol-neutral tool-result representation,

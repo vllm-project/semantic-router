@@ -32,7 +32,7 @@ Anthropic 支持在可重用的提示词块上打显式缓存断点。用中性�
 
 ## 配置 {#configuration}
 
-插件加在 `routing.decisions[].plugins` 下：
+插件加在 `recipes[].decisions[].plugins` 下：
 
 ```yaml
 plugins:

@@ -1,40 +1,40 @@
 # tool_selection ran under the decision's tools plugin policy; it is now the
 # select block of that plugin. Without a tools plugin it becomes one.
-version: v0.3
+version: v0.5
 providers:
   defaults: {model: local}
   models:
     - name: local
       backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
-routing:
-  modelCards:
-    - {name: local, description: Local model}
-  decisions:
-    - name: agent
-      priority: 200
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: local}]
-      plugins:
-        - type: tools
-          configuration: {enabled: true, policy: {mode: filtered, allow_tools: [docs.search, tickets.lookup]}, select: {mode: add, tools_db_path: config/tools_db.json, match: {judge: {preset: tool_rank, top_k: 5, min_ratio: 0.1}}}}
-    - name: coding
-      priority: 100
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: local}]
-      plugins:
-        - type: tools
-          configuration:
-            enabled: true
-            select:
-              mode: filter
-              match:
-                judge:
-                  preset: tool_rank
-                  min_ratio: 0.1
-              preserve_count: 2
-              on_error: strip
-    - name: chat
-      priority: 50
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: local}]
-      plugins: []
+      description: Local model
+recipes:
+  - name: default
+    decisions:
+      - name: agent
+        priority: 200
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: local}]
+        plugins:
+          - type: tools
+            configuration: {enabled: true, policy: {mode: filtered, allow_tools: [docs.search, tickets.lookup]}, select: {mode: add, tools_db_path: config/tools_db.json, match: {judge: {preset: tool_rank, top_k: 5, min_ratio: 0.1}}}}
+      - name: coding
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: local}]
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              select:
+                mode: filter
+                match:
+                  judge:
+                    preset: tool_rank
+                    min_ratio: 0.1
+                preserve_count: 2
+                on_error: strip
+      - name: chat
+        priority: 50
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: local}]
+        plugins: []

@@ -38,44 +38,45 @@ translation:
 
 ## 配置 {#configuration}
 
-在规范 v0.3 YAML 中，信号位于 `routing.signals`：
+在规范 v0.3 YAML 中，信号位于 `recipes[].signals`：
 
 ```yaml
-routing:
-  signals:
-    keywords:
-      - name: urgent_keywords
-        operator: OR
-        keywords: ["urgent", "asap"]
-    embeddings:
-      - name: technical_support
-        threshold: 0.75
-        candidates: ["installation guide", "troubleshooting steps"]
-      - name: account_management
-        threshold: 0.72
-        candidates: ["billing information", "subscription management"]
-  projections:
-    partitions:
-      - name: support_intents
-        semantics: exclusive
-        temperature: 0.3
-        members: [technical_support, account_management]
-        default: technical_support
-    scores:
-      - name: request_difficulty
-        method: weighted_sum
-        inputs:
-          - type: embedding
-            name: technical_support
-            weight: 0.18
-            value_source: confidence
-    mappings:
-      - name: request_band
-        source: request_difficulty
-        method: threshold_bands
-        outputs:
-          - name: support_escalated
-            gte: 0.25
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: urgent_keywords
+          operator: OR
+          keywords: ["urgent", "asap"]
+      embeddings:
+        - name: technical_support
+          threshold: 0.75
+          candidates: ["installation guide", "troubleshooting steps"]
+        - name: account_management
+          threshold: 0.72
+          candidates: ["billing information", "subscription management"]
+    projections:
+      partitions:
+        - name: support_intents
+          semantics: exclusive
+          temperature: 0.3
+          members: [technical_support, account_management]
+          default: technical_support
+      scores:
+        - name: request_difficulty
+          method: weighted_sum
+          inputs:
+            - type: embedding
+              name: technical_support
+              weight: 0.18
+              value_source: confidence
+      mappings:
+        - name: request_band
+          source: request_difficulty
+          method: threshold_bands
+          outputs:
+            - name: support_escalated
+              gte: 0.25
 ```
 
 按需要检测的事实类型选择信号。
@@ -117,7 +118,7 @@ routing:
 
 - 信号命名且可复用
 - 信号只做检测；路由结果归属 `decision/`
-- 分区与派生路由档位放在 `routing.projections`，不要塞回 `routing.signals`
+- 分区与派生路由档位放在 `recipes[].projections`，不要塞回 `recipes[].signals`
 - 模型选择分离，归属 `algorithm/`
 - 路由侧行为分离，归属 `plugin/`
 

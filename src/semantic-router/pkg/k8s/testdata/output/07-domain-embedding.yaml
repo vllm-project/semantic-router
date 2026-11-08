@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: gpt-4o-mini
@@ -8,63 +8,16 @@ providers:
       pricing:
         prompt_per_1m: 0.15
         completion_per_1m: 0.6
-    - name: gpt-4o
-      pricing:
-        prompt_per_1m: 2.5
-        completion_per_1m: 10
-routing:
-  modelCards:
-    - name: gpt-4o-mini
       loras:
         - name: research-assistant
           description: Research assistant
     - name: gpt-4o
+      pricing:
+        prompt_per_1m: 2.5
+        completion_per_1m: 10
       loras:
         - name: research-expert
           description: Advanced research specialist
-  signals:
-    keywords:
-      - name: research_question
-        operator: OR
-        keywords:
-          - Can you explain the theory behind this concept?
-          - What are the latest research findings on this topic?
-          - I'm conducting research and need detailed information
-        case_sensitive: false
-    domains:
-      - name: biology
-        description: Biology and life sciences
-      - name: chemistry
-        description: Chemistry and chemical sciences
-      - name: physics
-        description: Physics and physical sciences
-  decisions:
-    - name: biology_research
-      description: Biology research queries
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: research_question
-          - type: domain
-            name: biology
-      modelRefs:
-        - model: gpt-4o
-          use_reasoning: false
-    - name: general_science_research
-      description: General science research
-      priority: 80
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: research_question
-          - type: domain
-            name: chemistry
-      modelRefs:
-        - model: gpt-4o
-          use_reasoning: false
 global:
   router:
     config_source: kubernetes
@@ -134,15 +87,12 @@ global:
     ratelimit: {}
     management_api: {}
     router_replay:
-      enabled: false
       ttl_seconds: 0
     startup_status:
       store_backend: ""
   stores:
     response_cache:
       backend_type: memory
-      enabled: true
-      similarity_threshold: 0.8
       max_entries: 1000
       ttl_seconds: 3600
       eviction_policy: fifo
@@ -157,3 +107,58 @@ global:
       prompt_compression:
         enabled: false
         max_tokens: 0
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        scope: global
+        semantic:
+          match:
+            recall:
+              min_similarity: 0.8
+              top_k: 1
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: research_question
+          operator: OR
+          keywords:
+            - Can you explain the theory behind this concept?
+            - What are the latest research findings on this topic?
+            - I'm conducting research and need detailed information
+          case_sensitive: false
+      domains:
+        - name: biology
+          description: Biology and life sciences
+        - name: chemistry
+          description: Chemistry and chemical sciences
+        - name: physics
+          description: Physics and physical sciences
+    decisions:
+      - name: biology_research
+        description: Biology research queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: research_question
+            - type: domain
+              name: biology
+        modelRefs:
+          - model: gpt-4o
+            use_reasoning: false
+      - name: general_science_research
+        description: General science research
+        priority: 80
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: research_question
+            - type: domain
+              name: chemistry
+        modelRefs:
+          - model: gpt-4o
+            use_reasoning: false

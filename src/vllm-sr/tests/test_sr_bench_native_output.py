@@ -169,21 +169,17 @@ def recipe_provenance(frozen):
                 "recipes": [
                     {
                         "name": "chosen",
-                        "routing": {
-                            "decisions": [
-                                {
-                                    "modelRefs": [{"model": "physical"}],
-                                    "plugins": [
-                                        {
-                                            "type": "request_params",
-                                            "configuration": {
-                                                "default_max_tokens": "auto"
-                                            },
-                                        }
-                                    ],
-                                }
-                            ]
-                        },
+                        "decisions": [
+                            {
+                                "modelRefs": [{"model": "physical"}],
+                                "plugins": [
+                                    {
+                                        "type": "request_params",
+                                        "configuration": {"default_max_tokens": "auto"},
+                                    }
+                                ],
+                            }
+                        ],
                     }
                 ],
             }
@@ -372,9 +368,9 @@ def test_native_recipe_gate_rejects_clip_and_unregistered_candidates(native_serv
     validate_recipes(frozen, original)
     for change in ("fixed", "clip", "unregistered"):
         provenance = copy.deepcopy(original)
-        decision = provenance["recipe_snapshots"]["subject"]["recipes"][0]["routing"][
-            "decisions"
-        ][0]
+        decision = provenance["recipe_snapshots"]["subject"]["recipes"][0]["decisions"][
+            0
+        ]
         if change == "fixed":
             decision["plugins"][0]["configuration"]["default_max_tokens"] = 4
         elif change == "clip":

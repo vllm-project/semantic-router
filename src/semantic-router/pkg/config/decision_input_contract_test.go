@@ -66,7 +66,7 @@ func systemOnePublicationYAML(models, extraModels, input string) string {
 	if input != "" {
 		body += "\n        " + input
 	}
-	return `version: v0.3
+	return `version: v0.5
 listeners:
   - name: public
     port: 8899
@@ -78,18 +78,18 @@ providers:
     - name: m
       backend_refs: [{endpoint: "127.0.0.1:8000", protocol: http}]
 ` + extraModels + `
-routing:
-  modelCards: [{name: m}]
-  decisions:
-    - name: d
-      priority: 1
-      rules: {operator: AND, conditions: [{type: keyword, name: k}]}
-      modelRefs: [{model: m}]
-  signals:
-    keywords:
-      - name: k
-        operator: OR
-        keywords: [hello]
+recipes:
+  - name: default
+    decisions:
+      - name: d
+        priority: 1
+        rules: {operator: AND, conditions: [{type: keyword, name: k}]}
+        modelRefs: [{model: m}]
+    signals:
+      keywords:
+        - name: k
+          operator: OR
+          keywords: [hello]
 global:
   model_catalog:
     deployments:
@@ -117,7 +117,7 @@ func embeddingDeploymentYAML(input string, publish bool) string {
 	if publish {
 		listener = "\n    systemone: {models: [encoder-public]}"
 	}
-	return `version: v0.3
+	return `version: v0.5
 listeners:
   - name: public
     port: 8899` + listener + `
@@ -126,15 +126,15 @@ providers:
   models:
     - name: m
       backend_refs: [{endpoint: "127.0.0.1:8000", protocol: http}]
-routing:
-  modelCards: [{name: m}]
-  signals:
-    domains: [{name: math, description: Math requests., labels: [math]}]
-  decisions:
-    - name: d
-      priority: 1
-      rules: {operator: AND, conditions: [{type: domain, name: math}]}
-      modelRefs: [{model: m}]
+recipes:
+  - name: default
+    signals:
+      domains: [{name: math, description: Math requests., labels: [math]}]
+    decisions:
+      - name: d
+        priority: 1
+        rules: {operator: AND, conditions: [{type: domain, name: math}]}
+        modelRefs: [{model: m}]
 global:
   model_catalog:
     deployments:

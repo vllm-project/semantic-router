@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: gemma-2-9b
@@ -8,63 +8,16 @@ providers:
       pricing:
         prompt_per_1m: 0.39999999999999997
         completion_per_1m: 0.7999999999999999
-    - name: gemma-2-27b
-      pricing:
-        prompt_per_1m: 2
-        completion_per_1m: 4
-routing:
-  modelCards:
-    - name: gemma-2-9b
       loras:
         - name: greeting-handler
           description: Optimized for greeting responses
     - name: gemma-2-27b
+      pricing:
+        prompt_per_1m: 2
+        completion_per_1m: 4
       loras:
         - name: urgent-specialist
           description: Specialized in handling urgent requests
-  signals:
-    keywords:
-      - name: urgent
-        operator: OR
-        keywords:
-          - urgent
-          - emergency
-          - critical
-          - asap
-        case_sensitive: false
-      - name: greeting
-        operator: OR
-        keywords:
-          - hello
-          - hi
-          - hey
-          - greetings
-        case_sensitive: false
-  decisions:
-    - name: urgent_request
-      description: Handle urgent requests with larger model
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: urgent
-      modelRefs:
-        - model: gemma-2-27b
-          lora_name: urgent-specialist
-          use_reasoning: false
-    - name: greeting_response
-      description: Handle greetings with fast small model
-      priority: 50
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: greeting
-      modelRefs:
-        - model: gemma-2-9b
-          lora_name: greeting-handler
-          use_reasoning: false
 global:
   router:
     config_source: kubernetes
@@ -134,15 +87,12 @@ global:
     ratelimit: {}
     management_api: {}
     router_replay:
-      enabled: false
       ttl_seconds: 0
     startup_status:
       store_backend: ""
   stores:
     response_cache:
       backend_type: memory
-      enabled: true
-      similarity_threshold: 0.8
       max_entries: 1000
       ttl_seconds: 3600
       eviction_policy: fifo
@@ -157,3 +107,58 @@ global:
       prompt_compression:
         enabled: false
         max_tokens: 0
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        scope: global
+        semantic:
+          match:
+            recall:
+              min_similarity: 0.8
+              top_k: 1
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: urgent
+          operator: OR
+          keywords:
+            - urgent
+            - emergency
+            - critical
+            - asap
+          case_sensitive: false
+        - name: greeting
+          operator: OR
+          keywords:
+            - hello
+            - hi
+            - hey
+            - greetings
+          case_sensitive: false
+    decisions:
+      - name: urgent_request
+        description: Handle urgent requests with larger model
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: urgent
+        modelRefs:
+          - model: gemma-2-27b
+            lora_name: urgent-specialist
+            use_reasoning: false
+      - name: greeting_response
+        description: Handle greetings with fast small model
+        priority: 50
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: greeting
+        modelRefs:
+          - model: gemma-2-9b
+            lora_name: greeting-handler
+            use_reasoning: false

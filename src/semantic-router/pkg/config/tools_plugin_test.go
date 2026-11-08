@@ -13,23 +13,23 @@ import (
 // loadToolsPlugin loads a configuration whose one decision, agent, has the
 // tools plugin configuration written as a YAML flow mapping.
 func loadToolsPlugin(configuration string) (*RouterConfig, error) {
-	return ParseYAMLBytes([]byte(`version: v0.3
+	return ParseYAMLBytes([]byte(`version: v0.5
 providers:
   defaults: {model: local}
   models:
     - name: local
       backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
-routing:
-  modelCards:
-    - {name: local, description: Local model}
-  decisions:
-    - name: agent
-      priority: 100
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: local}]
-      plugins:
-        - type: tools
-          configuration: ` + configuration + "\n"))
+      description: Local model
+recipes:
+  - name: default
+    decisions:
+      - name: agent
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: local}]
+        plugins:
+          - type: tools
+            configuration: ` + configuration + "\n"))
 }
 
 // writeToolCatalog writes a catalog of the named tools and returns its path.
@@ -77,7 +77,7 @@ func TestToolsPluginLoads(t *testing.T) {
 
 // Each error is one line that names the field by its document path.
 func TestToolsPluginLoadErrors(t *testing.T) {
-	const at = "routing.decisions[agent].plugins[0].configuration"
+	const at = "recipes[default].decisions[agent].plugins[0].configuration"
 	tooMany := writeToolCatalog(t, numberedTools(256)...)
 	twice := writeToolCatalog(t, "docs.search", "docs.search")
 	cases := map[string]struct{ configuration, want string }{

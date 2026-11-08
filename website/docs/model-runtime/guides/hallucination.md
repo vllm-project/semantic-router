@@ -23,38 +23,39 @@ request makes claims worth checking: the rule's `AND` reaches the detector only
 when it does.
 
 ```yaml
-routing:
-  signals:
-    fact_check:
-      - name: needs_fact_check
-        description: Requests that make factual claims.
-    hallucination:
-      - name: ungrounded_claims
-        description: Claims the context does not support.
-  decisions:
-    - name: grounded-answers
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: fact_check
-            name: needs_fact_check
-      modelRefs:
-        - model: answer-model
-      plugins:
-        - type: response_guard
-          configuration:
-            rules:
-              - when:
-                  operator: AND
-                  conditions:
-                    - type: fact_check
-                      name: needs_fact_check
-                    - type: hallucination
-                      name: ungrounded_claims
-                action: annotate
-                details: true
-            on_unknown: annotate
+recipes:
+  - name: default
+    signals:
+      fact_check:
+        - name: needs_fact_check
+          description: Requests that make factual claims.
+      hallucination:
+        - name: ungrounded_claims
+          description: Claims the context does not support.
+    decisions:
+      - name: grounded-answers
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: fact_check
+              name: needs_fact_check
+        modelRefs:
+          - model: answer-model
+        plugins:
+          - type: response_guard
+            configuration:
+              rules:
+                - when:
+                    operator: AND
+                    conditions:
+                      - type: fact_check
+                        name: needs_fact_check
+                      - type: hallucination
+                        name: ungrounded_claims
+                  action: annotate
+                  details: true
+              on_unknown: annotate
 ```
 
 Without a binding, these judgments use the decision model, vela3-fast by

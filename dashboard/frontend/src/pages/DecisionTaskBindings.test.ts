@@ -14,7 +14,7 @@ const binding: DecisionTaskBinding = {
   source: 'recipe',
   ready: true,
   editable: true,
-  path: ['recipes', '0', 'routing', 'model_bindings', 'domain_classifier'],
+  path: ['recipes', '0', 'model_bindings', 'domain_classifier'],
   binding: 'old',
 }
 
@@ -96,7 +96,7 @@ describe('inline task binding mutations', () => {
         ...binding,
         consumer,
         recipe: 'default',
-        path: ['routing', 'model_bindings', consumer],
+        path: ['recipes', '0', 'model_bindings', consumer],
       },
       'd3-remote',
     )
@@ -128,7 +128,7 @@ describe('inline task binding mutations', () => {
       ...binding,
       consumer: 'pii_classifier',
       source: 'global',
-      path: ['recipes', '0', 'routing', 'model_bindings', 'pii_classifier'],
+      path: ['recipes', '0', 'model_bindings', 'pii_classifier'],
     }
     const config: RouterConfig = {
       recipes: [{ name: 'coding', routing: { model_bindings: { domain: 'kept' } } }],
@@ -153,45 +153,37 @@ describe('inline task binding mutations', () => {
     ).toEqual({})
   })
 
-  it('writes an explicit default recipe, not the top-level routing it would conflict with', () => {
+  it('writes a binding of the default recipe into the routing profile', () => {
     const config: RouterConfig = {
-      recipes: [
-        { name: 'coding', routing: {} },
-        { name: 'default', routing: {} },
-      ],
+      routing: {},
+      default_recipe: { name: 'main' },
+      recipes: [{ name: 'coding', routing: {} }],
     }
     const next = withDecisionTaskBinding(
       config,
-      { ...binding, recipe: 'default', path: ['routing', 'model_bindings', 'domain_classifier'] },
+      { ...binding, recipe: 'main', path: ['recipes', '0', 'model_bindings', 'domain_classifier'] },
       'primary',
     )
-    expect(next.routing).toBeUndefined()
-    expect(next.recipes?.[1].routing.model_bindings).toEqual({ domain: 'primary' })
+    expect(next.routing?.model_bindings).toEqual({ domain: 'primary' })
+    expect(next.recipes?.[0].routing).toEqual({})
   })
 
   describe('a rule that asks its own question', () => {
     const recipeRow = (consumer: string): DecisionTaskBinding => ({
       ...binding,
       consumer,
-      path: ['recipes', '0', 'routing', 'model_bindings', consumer],
+      path: ['recipes', '0', 'model_bindings', consumer],
     })
     const config = (): RouterConfig => ({
       recipes: [
         {
           name: 'coding',
           routing: {
-            model_bindings: { 'classifier.risk': 'old', complexity: 'old', pii: 'kept' },
+            model_bindings: { 'safety.violence': 'old', complexity: 'old', pii: 'kept' },
             signals: {
-              classifiers: [
-                { name: 'risk', type: 'llm', model: 'external-risk', labels: ['high', 'low'] },
-                { name: 'other', labels: ['a'] },
-              ],
               safety: [
-                {
-                  name: 'violence',
-                  deployment: 'guard',
-                  hazard: { model: 'external-hazard', categories: ['violence'] },
-                },
+                { name: 'violence', model: 'external-guard', labels: ['violence'] },
+                { name: 'other', labels: ['self_harm'] },
               ],
               complexity: [{ name: 'difficulty' }, { name: 'reasoning', deployment: 'old' }],
             },
@@ -201,24 +193,13 @@ describe('inline task binding mutations', () => {
     })
 
     it("writes the rule's deployment instead of a binding and drops what it replaces", () => {
-      const next = withDecisionTaskBinding(config(), recipeRow('classifier.risk'), 'd3-remote')
+      const next = withDecisionTaskBinding(config(), recipeRow('safety.violence'), 'd3-remote')
       const routing = next.recipes?.[0].routing
-      expect(routing?.signals?.classifiers).toEqual([
-        { name: 'risk', labels: ['high', 'low'], deployment: 'd3-remote' },
-        { name: 'other', labels: ['a'] },
+      expect(routing?.signals?.safety).toEqual([
+        { name: 'violence', labels: ['violence'], deployment: 'd3-remote' },
+        { name: 'other', labels: ['self_harm'] },
       ])
       expect(routing?.model_bindings).toEqual({ complexity: 'old', pii: 'kept' })
-    })
-
-    it('names the deployment of a hazard part on the hazard part', () => {
-      const next = withDecisionTaskBinding(config(), recipeRow('safety.violence.hazard'), 'hazard')
-      expect(next.recipes?.[0].routing.signals?.safety).toEqual([
-        {
-          name: 'violence',
-          deployment: 'guard',
-          hazard: { categories: ['violence'], deployment: 'hazard' },
-        },
-      ])
     })
 
     it('names the deployment of every complexity rule for the complexity task', () => {
@@ -228,7 +209,7 @@ describe('inline task binding mutations', () => {
         { name: 'difficulty', deployment: 'scorer' },
         { name: 'reasoning', deployment: 'scorer' },
       ])
-      expect(routing?.model_bindings).toEqual({ 'classifier.risk': 'old', pii: 'kept' })
+      expect(routing?.model_bindings).toEqual({ 'safety.violence': 'old', pii: 'kept' })
       const inherited = withDecisionTaskBinding(next, recipeRow('complexity'), null)
       expect(inherited.recipes?.[0].routing.signals?.complexity).toEqual([
         { name: 'difficulty' },
@@ -247,7 +228,7 @@ describe('inline task binding mutations', () => {
     })
 
     it('refuses a removed rule and a consumer no binding or rule answers', () => {
-      expect(() => withDecisionTaskBinding(config(), recipeRow('classifier.gone'), 'x')).toThrow(
+      expect(() => withDecisionTaskBinding(config(), recipeRow('safety.gone'), 'x')).toThrow(
         'rule was removed',
       )
       expect(() => withDecisionTaskBinding(config(), recipeRow('embedding'), 'x')).toThrow(
@@ -262,7 +243,7 @@ describe('inline task binding mutations', () => {
             default_deployment: 'primary',
             tasks: [],
             deployments: [],
-            bindings: [{ ...recipeRow('safety.violence.hazard'), deployment: 'hazard' }],
+            bindings: [{ ...recipeRow('safety.violence'), deployment: 'guard' }],
           },
           error: null,
           observation: {
@@ -277,7 +258,7 @@ describe('inline task binding mutations', () => {
           save: async () => undefined,
         }),
       )
-      expect(html).toContain('coding · signals.safety[violence].hazard.deployment')
+      expect(html).toContain('coding · signals.safety[violence].deployment')
     })
   })
 
@@ -293,7 +274,7 @@ describe('inline task binding mutations', () => {
     expect(() =>
       withDecisionTaskBinding(
         {},
-        { ...binding, consumer: '__proto__', path: ['routing', 'model_bindings', '__proto__'] },
+        { ...binding, consumer: '__proto__', path: ['recipes', '0', 'model_bindings', '__proto__'] },
         'new',
       ),
     ).toThrow('editable')

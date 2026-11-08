@@ -45,7 +45,8 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "installation", "configuration.md"),
 		needles: []string{
-			"version:\nlisteners:\nproviders:\nevaluation:\nrouting:\nentrypoints:\nrecipes:\nglobal:",
+			"version:\nlisteners:\nproviders:\nevaluation:\nrecipes:\nentrypoints:\nglobal:",
+			"## Defaults and overrides",
 			"`providers.defaults.model`",
 			"vllm-sr config validate --config config.yaml",
 			"Environment references and secrets",
@@ -59,7 +60,7 @@ var configContractRequiredDocs = []docNeedles{
 		needles: []string{
 			"Choose one primary source of truth",
 			"vllm-sr serve --target kubernetes --config config.yaml",
-			"`spec.config.routing`",
+			"`spec.config.recipes`",
 			"Routing DSL",
 			"Avoid split ownership",
 		},
@@ -117,7 +118,7 @@ var configContractRequiredDocs = []docNeedles{
 		needles: []string{
 			"listeners: []",
 			"providers:\n  defaults:",
-			"routing:\n  modelCards:",
+			"recipes:\n  - name: default",
 			"model_catalog:",
 			"modules:",
 		},
@@ -154,7 +155,7 @@ var configContractRequiredDocs = []docNeedles{
 			"[config/config.yaml]",
 			"global:\n  stores:\n    response_cache:",
 			"global:\n  model_catalog:\n    modules:\n      classifier:",
-			"routing:\n  decisions:",
+			"recipes:\n  - name: default\n    decisions:",
 		},
 	},
 	{
@@ -170,8 +171,8 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("src", "vllm-sr", "README.md"),
 		needles: []string{
-			"`routing.decisions[]`",
-			"routing:\n  decisions:",
+			"`recipes[].decisions[]`",
+			"recipes:\n  - name: default\n    decisions:",
 			"vllm-sr config migrate --config old-config.yaml",
 		},
 	},
@@ -182,7 +183,7 @@ var configContractRequiredDocs = []docNeedles{
 			"`vsr_canonical_patch_recommendation.json`",
 			"providers:\n  defaults:\n    reasoning_effort:",
 			"reasoning:\n        family: qwen3",
-			"routing:\n  decisions:",
+			"recipes:\n  - name: default\n    decisions:",
 		},
 	},
 	{
@@ -205,7 +206,7 @@ var configContractRequiredDocs = []docNeedles{
 		path: repoRel("website", "docs", "installation", "k8s", "operator.md"),
 		needles: []string{
 			"kind: SemanticRouter",
-			"`spec.config.routing`",
+			"`spec.config.recipes`",
 			"`spec.vllmEndpoints[]`",
 			"| `service` |",
 			"| `kserve` |",
@@ -220,7 +221,7 @@ var configContractRequiredDocs = []docNeedles{
 			"kind: SemanticRouter",
 			"kubectl explain semanticrouter.spec --recursive",
 			"`vllmEndpoints`",
-			"`config.routing`",
+			"`config.recipes`",
 			"`status.observedGeneration`",
 		},
 	},
@@ -234,7 +235,7 @@ var configContractRequiredDocs = []docNeedles{
 		path: "tools/test/services/mcp-classifier-server/README.md",
 		needles: []string{
 			"providers:\n  defaults:",
-			"routing:\n  modelCards:",
+			"recipes:\n  - name: default",
 			"global:\n  model_catalog:\n    modules:\n      classifier:",
 		},
 	},
@@ -423,7 +424,7 @@ var latestTutorialOverviewDocs = []docNeedles{
 		path: repoRel("website", "docs", "tutorials", "decision", "overview.md"),
 		needles: []string{
 			"Signals tell the Router what it detected",
-			"`routing.decisions`",
+			"`recipes[].decisions`",
 			"`decision.algorithm`",
 			"`decision.plugins`",
 		},
@@ -442,7 +443,7 @@ var latestTutorialOverviewDocs = []docNeedles{
 		path: repoRel("website", "docs", "tutorials", "plugin", "overview.md"),
 		needles: []string{
 			"Plugins add route-local behavior after a decision matches",
-			"`routing.decisions[].plugins`",
+			"`recipes[].decisions[].plugins`",
 			"[Fast Response](./fast-response)",
 			"[Response Cache](./response-cache)",
 		},

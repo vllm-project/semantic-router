@@ -1,29 +1,30 @@
 # RAG's min_confidence_threshold retrieved only when a fact_check rule matched:
 # the condition moves into the decision's rules.
-version: v0.3
+version: v0.5
 providers:
   defaults: {model: general}
   models:
     - name: general
       backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
-routing:
-  signals:
-    keywords:
-      - {name: docs_question, operator: any, keywords: [manual, docs]}
-    fact_check:
-      - {name: needs_fact_check, description: Prompts with factual claims that should be verified.}
-  decisions:
-    - name: grounded
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - {type: keyword, name: docs_question}
-      modelRefs: [{model: general}]
-      plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: vectorstore
-            backend_config: {vector_store_id: vs_docs}
-            min_confidence_threshold: 0.6
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - {name: docs_question, operator: any, keywords: [manual, docs]}
+      fact_check:
+        - {name: needs_fact_check, description: Prompts with factual claims that should be verified.}
+    decisions:
+      - name: grounded
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - {type: keyword, name: docs_question}
+        modelRefs: [{model: general}]
+        plugins:
+          - type: rag
+            configuration:
+              enabled: true
+              backend: vectorstore
+              backend_config: {vector_store_id: vs_docs}
+              min_confidence_threshold: 0.6

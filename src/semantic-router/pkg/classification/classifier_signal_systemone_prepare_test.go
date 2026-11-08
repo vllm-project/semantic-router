@@ -38,30 +38,31 @@ func (s *cardServices) Rerank(context.Context, string, modelservice.RerankReques
 	return modelservice.RerankResponse{}, nil
 }
 
-const setQuestionOnTheDecisionModel = `version: v0.3
+const setQuestionOnTheDecisionModel = `version: v0.5
 providers:
   defaults: {model: general}
   models:
     - name: general
       backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
-routing:
-  signals:
-    systemone:
-      - name: needs
-        question:
-          type: set
-          instructions: What does a good answer need?
-          labels:
-            - {key: tools}
-            - {key: deliberation}
-  decisions:
-    - name: tools
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - {type: systemone, name: needs, label: tools, on_error: no_match}
-      modelRefs: [{model: general}]
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: needs
+          question:
+            type: set
+            instructions: What does a good answer need?
+            labels:
+              - {key: tools}
+              - {key: deliberation}
+    decisions:
+      - name: tools
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - {type: systemone, name: needs, label: tools, on_error: no_match}
+        modelRefs: [{model: general}]
 global:
   model_catalog:
     system:
@@ -109,7 +110,7 @@ func TestASetQuestionWithoutDeploymentIsCheckedOnTheDecisionModel(t *testing.T) 
 // generation prepares: a rule that reads images needs a model that reads
 // them.
 func TestPreparationChecksTheInputModalitiesOfTheCard(t *testing.T) {
-	source := strings.Replace(setQuestionOnTheDecisionModel, "      - name: needs\n", "      - name: needs\n        input: {image: true}\n", 1)
+	source := strings.Replace(setQuestionOnTheDecisionModel, "        - name: needs\n", "        - name: needs\n          input: {image: true}\n", 1)
 	source = strings.Replace(source, "artifact: vllm-sr/Vela-2.0-4B", "artifact: /models/custom-decider", 1)
 	cfg, err := config.ParseYAMLBytes([]byte(source))
 	if err != nil {
@@ -123,7 +124,7 @@ func TestPreparationChecksTheInputModalitiesOfTheCard(t *testing.T) {
 		return (&Classifier{Config: cfg, models: models}).prepareSystemOneSignals()
 	}
 	textOnly := modelservice.ModelCard{ID: "custom", Surfaces: []string{"decisions"}, QuestionTypes: []string{"choice", "noul", "score", "set"}}
-	want := `routing.signals.systemone[needs]: input_modality_unsupported: input.image resolves to deployment "primary", which does not read image input`
+	want := `recipes[default].signals.systemone[needs]: input_modality_unsupported: input.image resolves to deployment "primary", which does not read image input`
 	if err := prepare(textOnly); err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Fatalf("a text-only card: %v", err)
 	}

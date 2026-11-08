@@ -70,7 +70,7 @@ func TestCacheBypassWhenRAGEnabled(t *testing.T) {
 	}
 
 	cfg := &config.RouterConfig{}
-	cfg.Enabled = true
+	cfg.SemanticCache.InUse = true
 	cfg.Decisions = []config.Decision{decision}
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
@@ -98,8 +98,8 @@ func TestCacheBypassWhenMemoryEnabledGlobally(t *testing.T) {
 	}
 
 	cfg := &config.RouterConfig{}
-	cfg.Enabled = true
-	cfg.Memory.Enabled = true
+	cfg.SemanticCache.InUse = true
+	cfg.Memory.InUse = true
 	cfg.Decisions = []config.Decision{decision}
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
@@ -133,8 +133,8 @@ func TestCacheBypassWithBothRAGAndMemory(t *testing.T) {
 	}
 
 	cfg := &config.RouterConfig{}
-	cfg.Enabled = true
-	cfg.Memory.Enabled = true
+	cfg.SemanticCache.InUse = true
+	cfg.Memory.InUse = true
 	cfg.Decisions = []config.Decision{decision}
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
@@ -168,8 +168,8 @@ func TestCacheBypassWithPerDecisionMemoryOverride(t *testing.T) {
 	}
 
 	cfg := &config.RouterConfig{}
-	cfg.Enabled = true
-	cfg.Memory.Enabled = false
+	cfg.SemanticCache.InUse = true
+	cfg.Memory.InUse = false
 	cfg.Decisions = []config.Decision{decision}
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
@@ -206,7 +206,7 @@ func TestCacheWorksNormallyWithoutPersonalization(t *testing.T) {
 	}
 
 	cfg := &config.RouterConfig{}
-	cfg.Enabled = true
+	cfg.SemanticCache.InUse = true
 	cfg.Decisions = []config.Decision{decision}
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
@@ -245,8 +245,8 @@ func TestNoCacheBypassWhenMemoryExplicitlyDisabledPerDecision(t *testing.T) {
 	}
 
 	cfg := &config.RouterConfig{}
-	cfg.Enabled = true
-	cfg.Memory.Enabled = true
+	cfg.SemanticCache.InUse = true
+	cfg.Memory.InUse = true
 	cfg.Decisions = []config.Decision{decision}
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
@@ -281,7 +281,7 @@ func TestDecisionWillPersonalize_RAGEnabled(t *testing.T) {
 	}
 
 	ctx := &RequestContext{VSRSelectedDecision: &decision}
-	assert.True(t, decisionWillPersonalize(ctx, &config.RouterConfig{}))
+	assert.True(t, decisionWillPersonalize(ctx))
 }
 
 func TestDecisionWillPersonalize_MemoryEnabled(t *testing.T) {
@@ -290,11 +290,10 @@ func TestDecisionWillPersonalize_MemoryEnabled(t *testing.T) {
 		ModelRefs: []config.ModelRef{{Model: "m"}},
 	}
 
-	cfg := &config.RouterConfig{}
-	cfg.Memory.Enabled = true
+	cfg := withGlobalPlugins(t, &config.RouterConfig{IntelligentRouting: config.IntelligentRouting{Decisions: []config.Decision{decision}}}, memoryTestPlugin())
 
-	ctx := &RequestContext{VSRSelectedDecision: &decision}
-	assert.True(t, decisionWillPersonalize(ctx, cfg))
+	ctx := &RequestContext{VSRSelectedDecision: &cfg.Decisions[0]}
+	assert.True(t, decisionWillPersonalize(ctx))
 }
 
 func TestDecisionWillPersonalize_NoPersonalization(t *testing.T) {
@@ -304,12 +303,12 @@ func TestDecisionWillPersonalize_NoPersonalization(t *testing.T) {
 	}
 
 	ctx := &RequestContext{VSRSelectedDecision: &decision}
-	assert.False(t, decisionWillPersonalize(ctx, &config.RouterConfig{}))
+	assert.False(t, decisionWillPersonalize(ctx))
 }
 
 func TestDecisionWillPersonalize_NilDecision(t *testing.T) {
 	ctx := &RequestContext{VSRSelectedDecision: nil}
-	assert.False(t, decisionWillPersonalize(ctx, &config.RouterConfig{}))
+	assert.False(t, decisionWillPersonalize(ctx))
 }
 
 func TestDecisionWillPersonalize_PerDecisionMemoryDisabledOverridesGlobal(t *testing.T) {
@@ -323,11 +322,10 @@ func TestDecisionWillPersonalize_PerDecisionMemoryDisabledOverridesGlobal(t *tes
 		},
 	}
 
-	cfg := &config.RouterConfig{}
-	cfg.Memory.Enabled = true
+	cfg := withGlobalPlugins(t, &config.RouterConfig{IntelligentRouting: config.IntelligentRouting{Decisions: []config.Decision{decision}}}, memoryTestPlugin())
 
-	ctx := &RequestContext{VSRSelectedDecision: &decision}
-	assert.False(t, decisionWillPersonalize(ctx, cfg),
+	ctx := &RequestContext{VSRSelectedDecision: &cfg.Decisions[0]}
+	assert.False(t, decisionWillPersonalize(ctx),
 		"per-decision memory disabled must override global enabled")
 }
 

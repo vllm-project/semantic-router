@@ -87,7 +87,7 @@ func responseRetentionTestContext(t *testing.T, store *bool) (*OpenAIRouter, *Re
 	runner := memory.NewPersistenceRunner(time.Second, 1, 1)
 	t.Cleanup(func() { _ = runner.RetireAndWait(time.Second) })
 	router := &OpenAIRouter{
-		Config:            &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, AutoStore: true}},
+		Config:            &config.RouterConfig{GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()}, Memory: config.MemoryConfig{InUse: true, AutoStore: true}},
 		ResponseAPIFilter: NewResponseAPIFilter(responseStore), MemoryExtractor: memory.NewMemoryChunkStore(memoryStore),
 		memoryPersistence: runner,
 	}

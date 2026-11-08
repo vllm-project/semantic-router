@@ -67,7 +67,7 @@ func docFences(page string) []docFence {
 }
 
 // docExampleDocument completes a page's example into a whole document: the
-// version and an empty routing section when the example omits them.
+// version, and an empty recipe when the example declares none.
 func docExampleDocument(t *testing.T, body string) []byte {
 	t.Helper()
 	var document map[string]interface{}
@@ -75,10 +75,10 @@ func docExampleDocument(t *testing.T, body string) []byte {
 		t.Fatalf("example is not YAML: %v\n%s", err, body)
 	}
 	if _, ok := document["version"]; !ok {
-		document["version"] = "v0.3"
+		document["version"] = "v0.5"
 	}
-	if _, ok := document["routing"]; !ok {
-		document["routing"] = map[string]interface{}{}
+	if _, ok := document["recipes"]; !ok {
+		document["recipes"] = []interface{}{map[string]interface{}{"name": "default"}}
 	}
 	encoded, err := yaml.Marshal(document)
 	if err != nil {

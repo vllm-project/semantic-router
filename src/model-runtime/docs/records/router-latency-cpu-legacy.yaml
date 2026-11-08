@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 
 # Router latency gate config for the legacy router (in-process bindings):
 # router-latency-cpu.yaml plus the legacy backend selectors (variant,
@@ -22,6 +22,8 @@ providers:
           endpoint: 127.0.0.1:18000
           protocol: http
           weight: 100
+      description: General-purpose text model.
+      modality: ar
     - name: code-model
       provider_model_id: code-model
       api_format: openai
@@ -30,6 +32,8 @@ providers:
           endpoint: 127.0.0.1:18000
           protocol: http
           weight: 100
+      description: Code model.
+      modality: ar
     - name: guarded-model
       provider_model_id: guarded-model
       api_format: openai
@@ -38,160 +42,153 @@ providers:
           endpoint: 127.0.0.1:18000
           protocol: http
           weight: 100
-
-routing:
-  modelCards:
-    - name: general-model
-      description: General-purpose text model.
-      modality: ar
-    - name: code-model
-      description: Code model.
-      modality: ar
-    - name: guarded-model
       description: Model for flagged traffic.
       modality: ar
 
-  signals:
-    keywords:
-      - name: code_keywords
-        operator: OR
-        method: bm25
-        keywords: ["code", "function", "debug", "algorithm", "refactor"]
-        case_sensitive: false
-        bm25_threshold: 0.1
-    domains:
-      - name: business
-        description: Business and management related queries.
-        labels: [business]
-        predicate:
-          gte: 0.5
-      - name: law
-        description: Legal questions and policy topics.
-        labels: [law]
-        predicate:
-          gte: 0.5
-      - name: health
-        description: Health and medical information requests.
-        labels: [health]
-        predicate:
-          gte: 0.5
-      - name: "computer science"
-        description: Computer science and engineering prompts.
-        labels: ["computer science"]
-        predicate:
-          gte: 0.5
-      - name: other
-        description: General fallback traffic.
-        labels: [other]
-        predicate:
-          gte: 0.5
-    fact_check:
-      - name: needs_fact_check
-        description: Prompts with factual claims that should be verified.
-        predicate:
-          gte: 0.95
-      - name: no_fact_check_needed
-        description: Creative prompts that do not need factual verification.
-        labels: [NO_FACT_CHECK_NEEDED]
-        predicate:
-          gt: 0.05
-    user_feedbacks:
-      - name: wrong_answer
-        description: The user indicates the previous answer was incorrect.
-        labels: [WRONG_ANSWER]
-        predicate:
-          gte: 0.7
-      - name: need_clarification
-        description: The user asks for a clearer or more detailed answer.
-        labels: [NEED_CLARIFICATION]
-        predicate:
-          gte: 0.7
-    jailbreak:
-      - name: jailbreak_detected
-        description: Prompt attacks.
-        predicate:
-          gte: 0.5
-    pii:
-      - name: restricted_pii
-        description: Sensitive identifiers.
-        predicate:
-          gte: 0.85
-        ignore_labels: [EMAIL_ADDRESS]
-  decisions:
-    - name: guard_jailbreak
-      description: Prompt attacks go to the guarded model.
-      priority: 500
-      rules:
-        operator: AND
-        conditions:
-          - type: jailbreak
-            name: jailbreak_detected
-      modelRefs:
-        - model: guarded-model
-    - name: guard_pii
-      description: Sensitive identifiers go to the guarded model.
-      priority: 400
-      rules:
-        operator: AND
-        conditions:
-          - type: pii
-            name: restricted_pii
-      modelRefs:
-        - model: guarded-model
-    - name: retry_wrong_answer
-      description: Corrections go to the code model.
-      priority: 300
-      rules:
-        operator: AND
-        conditions:
-          - type: user_feedback
-            name: wrong_answer
-      modelRefs:
-        - model: code-model
-    - name: code
-      description: Computer science and code prompts.
-      priority: 200
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: "computer science"
-          - type: keyword
-            name: code_keywords
-      modelRefs:
-        - model: code-model
-    - name: verified_facts
-      description: Factual prompts in regulated domains.
-      priority: 150
-      rules:
-        operator: AND
-        conditions:
-          - type: fact_check
-            name: needs_fact_check
-          - operator: OR
-            conditions:
-              - type: domain
-                name: law
-              - type: domain
-                name: health
-              - type: domain
-                name: business
-      modelRefs:
-        - model: general-model
-    - name: general
-      description: Everything else.
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: other
-          - type: fact_check
-            name: no_fact_check_needed
-          - type: user_feedback
-            name: need_clarification
-      modelRefs:
-        - model: general-model
+recipes:
+  - name: default
+
+    signals:
+      keywords:
+        - name: code_keywords
+          operator: OR
+          method: bm25
+          keywords: ["code", "function", "debug", "algorithm", "refactor"]
+          case_sensitive: false
+          bm25_threshold: 0.1
+      domains:
+        - name: business
+          description: Business and management related queries.
+          labels: [business]
+          predicate:
+            gte: 0.5
+        - name: law
+          description: Legal questions and policy topics.
+          labels: [law]
+          predicate:
+            gte: 0.5
+        - name: health
+          description: Health and medical information requests.
+          labels: [health]
+          predicate:
+            gte: 0.5
+        - name: "computer science"
+          description: Computer science and engineering prompts.
+          labels: ["computer science"]
+          predicate:
+            gte: 0.5
+        - name: other
+          description: General fallback traffic.
+          labels: [other]
+          predicate:
+            gte: 0.5
+      fact_check:
+        - name: needs_fact_check
+          description: Prompts with factual claims that should be verified.
+          predicate:
+            gte: 0.95
+        - name: no_fact_check_needed
+          description: Creative prompts that do not need factual verification.
+          labels: [NO_FACT_CHECK_NEEDED]
+          predicate:
+            gt: 0.05
+      user_feedbacks:
+        - name: wrong_answer
+          description: The user indicates the previous answer was incorrect.
+          labels: [WRONG_ANSWER]
+          predicate:
+            gte: 0.7
+        - name: need_clarification
+          description: The user asks for a clearer or more detailed answer.
+          labels: [NEED_CLARIFICATION]
+          predicate:
+            gte: 0.7
+      jailbreak:
+        - name: jailbreak_detected
+          description: Prompt attacks.
+          predicate:
+            gte: 0.5
+      pii:
+        - name: restricted_pii
+          description: Sensitive identifiers.
+          predicate:
+            gte: 0.85
+          ignore_labels: [EMAIL_ADDRESS]
+    decisions:
+      - name: guard_jailbreak
+        description: Prompt attacks go to the guarded model.
+        priority: 500
+        rules:
+          operator: AND
+          conditions:
+            - type: jailbreak
+              name: jailbreak_detected
+        modelRefs:
+          - model: guarded-model
+      - name: guard_pii
+        description: Sensitive identifiers go to the guarded model.
+        priority: 400
+        rules:
+          operator: AND
+          conditions:
+            - type: pii
+              name: restricted_pii
+        modelRefs:
+          - model: guarded-model
+      - name: retry_wrong_answer
+        description: Corrections go to the code model.
+        priority: 300
+        rules:
+          operator: AND
+          conditions:
+            - type: user_feedback
+              name: wrong_answer
+        modelRefs:
+          - model: code-model
+      - name: code
+        description: Computer science and code prompts.
+        priority: 200
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: "computer science"
+            - type: keyword
+              name: code_keywords
+        modelRefs:
+          - model: code-model
+      - name: verified_facts
+        description: Factual prompts in regulated domains.
+        priority: 150
+        rules:
+          operator: AND
+          conditions:
+            - type: fact_check
+              name: needs_fact_check
+            - operator: OR
+              conditions:
+                - type: domain
+                  name: law
+                - type: domain
+                  name: health
+                - type: domain
+                  name: business
+        modelRefs:
+          - model: general-model
+      - name: general
+        description: Everything else.
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: other
+            - type: fact_check
+              name: no_fact_check_needed
+            - type: user_feedback
+              name: need_clarification
+        modelRefs:
+          - model: general-model
 
 global:
   model_catalog:

@@ -5,7 +5,13 @@
 SIGNAL turn_relation persistently_dissatisfied {
   description: "Current user turn repeats the last two user turns in a row."
   labels: ["reask"]
-  input: { previous_turns: 2 }
+  input: { previous_turns: 4 }
+}
+
+SIGNAL conversation two_prior_answers {
+  description: "The conversation already holds two assistant answers."
+  feature: { source: { role: "assistant", type: "message" }, type: "count" }
+  predicate: { gte: 2 }
 }
 
 SIGNAL input_modality feedback_has_images {
@@ -87,9 +93,9 @@ ROUTE omni (description = "Image-bearing follow-ups go to the visual-language mo
   ALGORITHM static
 }
 
-ROUTE feedback_verified_recovery (description = "A wrong answer or a repeated question (wrong, persistently_dissatisfied) that asks for sources (sources), outside code, goes to the verified recovery lane.", on_unknown = "no_match") {
+ROUTE feedback_verified_recovery (description = "A wrong answer or a question repeated after two answers (wrong, persistently_dissatisfied, two_prior_answers) that asks for sources (sources), outside code, goes to the verified recovery lane.", on_unknown = "no_match") {
   PRIORITY 240
-  WHEN (systemone("wrong") OR turn_relation("persistently_dissatisfied")) AND systemone("sources") AND NOT systemone("code")
+  WHEN (systemone("wrong") OR turn_relation("persistently_dissatisfied") AND conversation("two_prior_answers")) AND systemone("sources") AND NOT systemone("code")
   MODEL "openai/gpt5.4" (reasoning = true, effort = "high")
   PLUGIN header_mutation {
     add: [{ name: "X-Feedback-Lane", value: "verified-recovery" }]
@@ -97,9 +103,9 @@ ROUTE feedback_verified_recovery (description = "A wrong answer or a repeated qu
   }
 }
 
-ROUTE feedback_persistent_code_recovery (description = "A code question the user keeps repeating (code, persistently_dissatisfied) goes to the premium code-repair lane.", on_unknown = "no_match") {
+ROUTE feedback_persistent_code_recovery (description = "A code question the user keeps repeating after two answers (code, persistently_dissatisfied, two_prior_answers) goes to the premium code-repair lane.", on_unknown = "no_match") {
   PRIORITY 230
-  WHEN systemone("code") AND turn_relation("persistently_dissatisfied")
+  WHEN systemone("code") AND turn_relation("persistently_dissatisfied") AND conversation("two_prior_answers")
   MODEL "openai/gpt5.4" (reasoning = true, effort = "high")
   PLUGIN header_mutation {
     add: [{ name: "X-Feedback-Lane", value: "persistent-code-recovery" }]
@@ -109,7 +115,7 @@ ROUTE feedback_persistent_code_recovery (description = "A code question the user
 
 ROUTE feedback_code_recovery (description = "A first report that code is still wrong (code, wrong) goes to the code-repair lane.", on_unknown = "no_match") {
   PRIORITY 220
-  WHEN systemone("code") AND systemone("wrong") AND NOT turn_relation("persistently_dissatisfied")
+  WHEN systemone("code") AND systemone("wrong") AND NOT (turn_relation("persistently_dissatisfied") AND conversation("two_prior_answers"))
   MODEL "google/gemini-3.1-pro" (reasoning = true, effort = "medium")
   PLUGIN header_mutation {
     add: [{ name: "X-Feedback-Lane", value: "code-recovery" }]
@@ -117,9 +123,9 @@ ROUTE feedback_code_recovery (description = "A first report that code is still w
   }
 }
 
-ROUTE feedback_persistent_recovery (description = "Any other question the user keeps repeating (persistently_dissatisfied) goes to the premium general recovery lane.", on_unknown = "no_match") {
+ROUTE feedback_persistent_recovery (description = "Any other question the user keeps repeating after two answers (persistently_dissatisfied, two_prior_answers) goes to the premium general recovery lane.", on_unknown = "no_match") {
   PRIORITY 210
-  WHEN turn_relation("persistently_dissatisfied") AND NOT systemone("code") AND NOT systemone("sources")
+  WHEN turn_relation("persistently_dissatisfied") AND conversation("two_prior_answers") AND NOT systemone("code") AND NOT systemone("sources")
   MODEL "openai/gpt5.4" (reasoning = true, effort = "high")
   PLUGIN header_mutation {
     add: [{ name: "X-Feedback-Lane", value: "persistent-recovery" }]
@@ -129,7 +135,7 @@ ROUTE feedback_persistent_recovery (description = "Any other question the user k
 
 ROUTE feedback_general_recovery (description = "Any other report that an answer was wrong (wrong) goes to the general recovery lane.", on_unknown = "no_match") {
   PRIORITY 200
-  WHEN systemone("wrong") AND NOT systemone("code") AND NOT systemone("sources") AND NOT turn_relation("persistently_dissatisfied")
+  WHEN systemone("wrong") AND NOT systemone("code") AND NOT systemone("sources") AND NOT (turn_relation("persistently_dissatisfied") AND conversation("two_prior_answers"))
   MODEL "google/gemini-3.1-pro" (reasoning = true, effort = "medium")
   PLUGIN header_mutation {
     add: [{ name: "X-Feedback-Lane", value: "general-recovery" }]
@@ -139,10 +145,10 @@ ROUTE feedback_general_recovery (description = "Any other report that an answer 
 
 ROUTE feedback_need_clarification (description = "A request to explain an earlier answer again (clarify) that does not call it wrong stays on the low-cost lane.", on_unknown = "no_match") {
   PRIORITY 180
-  WHEN systemone("clarify") AND NOT systemone("wrong") AND NOT turn_relation("persistently_dissatisfied")
+  WHEN systemone("clarify") AND NOT systemone("wrong") AND NOT (turn_relation("persistently_dissatisfied") AND conversation("two_prior_answers"))
   MODEL "qwen/qwen3.5-rocm" (reasoning = false)
   PLUGIN response_cache {
-    enabled: true
+    enabled: false
     semantic: { match: { recall: { min_similarity: 0.86, top_k: 3 } } }
     ttl_seconds: 1800
   }

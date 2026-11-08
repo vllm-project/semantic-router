@@ -33,27 +33,27 @@ translation:
 ## 配置 {#configuration}
 
 ```yaml
-routing:
-  signals:
-    input_modality:
-      - name: image_input
-        description: Request contains at least one image content part.
-        modality: image
-      - name: audio_input
-        description: Request contains at least one audio content part.
-        modality: audio
-
-  decisions:
-    - name: vision-request
-      description: Send image-bearing requests to the vision pool.
-      priority: 1000
-      rules:
-        operator: AND
-        conditions:
-          - type: input_modality
-            name: image_input
-      modelRefs:
-        - model: vision-model
+recipes:
+  - name: default
+    signals:
+      input_modality:
+        - name: image_input
+          description: Request contains at least one image content part.
+          modality: image
+        - name: audio_input
+          description: Request contains at least one audio content part.
+          modality: audio
+    decisions:
+      - name: vision-request
+        description: Send image-bearing requests to the vision pool.
+        priority: 1000
+        rules:
+          operator: AND
+          conditions:
+            - type: input_modality
+              name: image_input
+        modelRefs:
+          - model: vision-model
 ```
 
 `modality` 必须是 `text`、`image`、`audio` 或 `video` 之一。规则名必须唯一且已去空白。

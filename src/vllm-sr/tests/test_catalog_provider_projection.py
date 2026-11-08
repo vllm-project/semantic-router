@@ -72,7 +72,7 @@ def test_catalog_provider_defaults_materialize_complete_cloud_route(
         tmp_path,
         monkeypatch,
         """
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -87,12 +87,13 @@ providers:
         - name: primary
           provider: openai
           api_key_env: OPENAI_API_KEY
-routing:
-  decisions:
-    - name: default-route
-      priority: 100
-      modelRefs:
-        - model: frontier
+recipes:
+  - name: default
+    decisions:
+      - name: default-route
+        priority: 100
+        modelRefs:
+          - model: frontier
 """,
     )
 
@@ -131,7 +132,7 @@ def test_catalog_anthropic_binding_keeps_credentials_and_default_headers(
         tmp_path,
         monkeypatch,
         """
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: claude
@@ -141,7 +142,8 @@ providers:
       backend_refs:
         - provider: anthropic
           api_key_env: ANTHROPIC_API_KEY
-routing: {}
+recipes:
+  - name: default
 """,
     )
 
@@ -175,7 +177,7 @@ def test_router_owned_physical_model_requires_explicit_provider(
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         f"""
-version: v0.3
+version: v0.5
 listeners:
   - name: public
     address: 0.0.0.0
@@ -184,7 +186,8 @@ providers:
   models:
     - name: {model_name}
       api_format: {api_format}
-routing: {{}}
+recipes:
+  - name: default
 """
     )
     config = parse_user_config(str(config_path))
@@ -210,7 +213,7 @@ def test_router_owned_virtual_model_may_resolve_its_recipe_pool(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         """
-version: v0.3
+version: v0.5
 listeners:
   - name: public
     address: 0.0.0.0
@@ -219,7 +222,8 @@ providers:
   models:
     - name: auto
       catalog: vllm-sr/mom-v1-lite
-routing: {}
+recipes:
+  - name: default
 """
     )
 
@@ -235,13 +239,14 @@ def test_backendless_api_model_is_valid_metadata_but_cannot_generate_envoy(tmp_p
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         """
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   models:
     - name: claude-test
       api_format: anthropic
-routing: {}
+recipes:
+  - name: default
 """
     )
 
@@ -266,7 +271,7 @@ def test_catalog_openai_responses_binding_keeps_header_and_base_path(
         tmp_path,
         monkeypatch,
         """
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: frontier-responses
@@ -277,7 +282,8 @@ providers:
       backend_refs:
         - provider: openai
           api_key_env: OPENAI_API_KEY
-routing: {}
+recipes:
+  - name: default
 """,
     )
 
@@ -299,7 +305,7 @@ def test_explicit_empty_auth_prefix_overrides_catalog_default(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         """
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: private
@@ -311,7 +317,8 @@ providers:
           auth_header: x-api-key
           auth_prefix: ""
           api_key_env: PRIVATE_API_KEY
-routing: {}
+recipes:
+  - name: default
 """
     )
 
@@ -327,7 +334,7 @@ def test_catalog_provider_keeps_operator_custom_endpoint(tmp_path, monkeypatch):
         tmp_path,
         monkeypatch,
         """
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: frontier
@@ -338,12 +345,13 @@ providers:
         - provider: openai
           base_url: https://gateway.example.test/openai/v1
           api_key_env: OPENAI_API_KEY
-routing:
-  decisions:
-    - name: default-route
-      priority: 100
-      modelRefs:
-        - model: frontier
+recipes:
+  - name: default
+    decisions:
+      - name: default-route
+        priority: 100
+        modelRefs:
+          - model: frontier
 """,
     )
 
@@ -366,7 +374,7 @@ def test_catalog_provider_projection_rejects_missing_model_mapping(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         """
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: frontier
@@ -374,7 +382,8 @@ providers:
       backend_refs:
         - provider: anthropic
           api_key_env: ANTHROPIC_API_KEY
-routing: {}
+recipes:
+  - name: default
 """
     )
     config = parse_user_config(str(config_path))
@@ -404,7 +413,7 @@ def test_catalog_provider_projection_rejects_unsupported_built_in_mapping(
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         f"""
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: unavailable
@@ -412,7 +421,8 @@ providers:
       backend_refs:
         - provider: {provider}
           base_url: https://example.test/v1
-routing: {{}}
+recipes:
+  - name: default
 """
     )
     config = parse_user_config(str(config_path))
@@ -430,14 +440,15 @@ def test_nova_2_lite_remains_available_through_openrouter(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         """
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: nova-2-lite
       catalog: amazon/nova-2-lite
       backend_refs:
         - provider: openrouter
-routing: {}
+recipes:
+  - name: default
 """
     )
 
@@ -451,7 +462,7 @@ def test_catalog_provider_projection_rejects_provider_without_endpoint(tmp_path)
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         """
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: private-deployment
@@ -460,7 +471,8 @@ providers:
       backend_refs:
         - provider: azure-openai
           api_key_env: AZURE_OPENAI_API_KEY
-routing: {}
+recipes:
+  - name: default
 """
     )
     config = parse_user_config(str(config_path))
@@ -506,7 +518,7 @@ def test_catalog_provider_projection_rejects_invalid_backend_url(
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         f"""
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   models:
@@ -515,7 +527,8 @@ providers:
       backend_refs:
         - provider: vllm
           base_url: {base_url}
-routing: {{}}
+recipes:
+  - name: default
 """
     )
 
@@ -528,7 +541,7 @@ def test_catalog_provider_projection_rejects_base_url_with_endpoint(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         """
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   models:
@@ -538,7 +551,8 @@ providers:
         - provider: vllm
           base_url: http://base.example/v1
           endpoint: endpoint.example:8000/v1
-routing: {}
+recipes:
+  - name: default
 """
     )
 
@@ -550,7 +564,7 @@ def test_catalog_provider_projection_accepts_backend_url_templates(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         """
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   models:
@@ -561,7 +575,8 @@ providers:
         - provider: azure-openai
           base_url: https://${AZURE_RESOURCE}.openai.azure.com/openai/deployments/${AZURE_DEPLOYMENT}
           api_version: "2025-04-01"
-routing: {}
+recipes:
+  - name: default
 """
     )
 
@@ -616,7 +631,7 @@ def test_shared_backend_projection_normalizes_protocol_and_ipv6_authority(
         tmp_path,
         monkeypatch,
         f"""
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: local-model
@@ -624,7 +639,8 @@ providers:
       backend_refs:
         - provider: vllm
           {backend_config}
-routing: {{}}
+recipes:
+  - name: default
 """,
     )
 
@@ -648,7 +664,7 @@ def test_catalog_deployment_name_requires_explicit_provider_model_id(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         """
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: mai
@@ -656,7 +672,8 @@ providers:
       backend_refs:
         - provider: microsoft-foundry
           base_url: https://foundry.example.test
-routing: {}
+recipes:
+  - name: default
 """
     )
     config = parse_user_config(str(config_path))
@@ -672,7 +689,7 @@ def test_catalog_deployment_name_preserves_operator_provider_model_id(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         """
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: mai
@@ -681,7 +698,8 @@ providers:
       backend_refs:
         - provider: microsoft-foundry
           base_url: https://foundry.example.test
-routing: {}
+recipes:
+  - name: default
 """
     )
     config = parse_user_config(str(config_path))
@@ -698,7 +716,7 @@ def test_backend_ref_rejects_negative_weight_during_cli_parse(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         """
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: local-model
@@ -706,7 +724,8 @@ providers:
         - provider: vllm
           endpoint: localhost:8000
           weight: -1
-routing: {}
+recipes:
+  - name: default
 """
     )
 
@@ -767,7 +786,7 @@ def test_generator_rejects_backend_groups_envoy_cannot_represent(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "providers": {
                     "models": [
                         {
@@ -776,7 +795,7 @@ def test_generator_rejects_backend_groups_envoy_cannot_represent(
                         }
                     ]
                 },
-                "routing": {},
+                "recipes": [{"name": "default"}],
             }
         )
     )
@@ -800,14 +819,15 @@ def test_catalog_virtual_model_without_backends_keeps_router_fallback(
         tmp_path,
         monkeypatch,
         """
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: virtual-entrypoint
   models:
     - name: virtual-entrypoint
       catalog: vllm-sr/mom-v1-blend
-routing: {}
+recipes:
+  - name: default
 """,
     )
 

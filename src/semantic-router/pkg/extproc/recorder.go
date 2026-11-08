@@ -177,6 +177,9 @@ func populateReplaySessionIfNeeded(ctx *RequestContext) {
 
 func (r *OpenAIRouter) resolveReplayRecorder(ctx *RequestContext, decisionName string) *routerreplay.Recorder {
 	recipeName := config.DefaultRecipeName
+	if r.Config != nil {
+		recipeName = r.Config.DefaultRecipe().Name
+	}
 	if ctx != nil && ctx.Routing.RecipeName() != "" {
 		recipeName = ctx.Routing.RecipeName()
 	}

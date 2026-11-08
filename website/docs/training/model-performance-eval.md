@@ -131,7 +131,7 @@ The generator creates a v0.3 document with:
 - one provider binding and model card for each evaluated logical model
 - one domain signal per observed MMLU-Pro category
 - ranked `model_scores` for each category
-- an empty `routing.decisions` list
+- an empty `recipes[].decisions` list
 - sparse defaults for response cache, tools, embeddings, prompt guard, and
   classifiers
 
@@ -140,17 +140,17 @@ abbreviated here; inspect `config.eval.yaml` for the evaluated models, scores,
 and category signals.
 
 ```yaml
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
     model: evaluated-model
   models: []
-routing:
-  modelCards: []
-  signals:
-    domains: []
-  decisions: []
+recipes:
+  - name: default
+    signals:
+      domains: []
+    decisions: []
 global:
   stores:
     response_cache: {}
@@ -175,7 +175,7 @@ settings, and pricing for each provider.
 `config.eval.yaml` is intentionally incomplete:
 
 - `listeners` is empty.
-- `routing.decisions` is empty.
+- `recipes[].decisions` is empty.
 - backend references use command-line defaults rather than deployment discovery.
 - evaluation categories may not match your user-facing decisions.
 - the sparse `global` section may not match your runtime or security policy.

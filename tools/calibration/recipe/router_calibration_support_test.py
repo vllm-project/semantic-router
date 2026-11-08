@@ -20,7 +20,7 @@ class LocalValidationTest(unittest.TestCase):
     def test_validation_runs_relocated_dsl_from_router_module(self) -> None:
         with tempfile.TemporaryDirectory(prefix="calibration inputs ") as tempdir:
             yaml_path = Path(tempdir) / "router config.yaml"
-            yaml_path.write_text("version: v0.3\n", encoding="utf-8")
+            yaml_path.write_text("version: v0.5\n", encoding="utf-8")
             with mock.patch.object(
                 router_calibration_support.subprocess,
                 "run",
@@ -92,7 +92,7 @@ class DeployConfigTest(unittest.TestCase):
     def test_deploy_config_plans_then_uses_cas_replace_semantics(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             yaml_path = Path(tempdir) / "router.yaml"
-            yaml_path.write_text("version: v0.3\n", encoding="utf-8")
+            yaml_path.write_text("version: v0.5\n", encoding="utf-8")
 
             with mock.patch.object(
                 router_calibration_support,
@@ -114,12 +114,12 @@ class DeployConfigTest(unittest.TestCase):
                     mock.call(
                         "POST",
                         "http://router.example:8080/api/v1/config/plan",
-                        {"yaml": "version: v0.3\n", "mode": "replace"},
+                        {"yaml": "version: v0.5\n", "mode": "replace"},
                     ),
                     mock.call(
                         "PUT",
                         "http://router.example:8080/api/v1/config",
-                        {"yaml": "version: v0.3\n"},
+                        {"yaml": "version: v0.5\n"},
                         if_match='"source-etag"',
                     ),
                 ],

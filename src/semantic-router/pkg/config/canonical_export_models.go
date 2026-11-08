@@ -104,21 +104,18 @@ func canonicalizeRuleBindings(doc *CanonicalConfig) {
 	if doc.Global != nil {
 		global = doc.Global.ModelCatalog.Bindings
 	}
-	doc.Routing.Signals.Safety = slices.Clone(doc.Routing.Signals.Safety)
-	doc.Routing.Signals.Complexity = slices.Clone(doc.Routing.Signals.Complexity)
-	moveRuleBindings(&doc.Routing.Signals, doc.Routing.ModelBindings, global)
 	for i := range doc.Recipes {
-		signals := &doc.Recipes[i].Routing.Signals
+		signals := &doc.Recipes[i].Signals
 		signals.Safety = slices.Clone(signals.Safety)
 		signals.Complexity = slices.Clone(signals.Complexity)
-		moveRuleBindings(signals, doc.Recipes[i].Routing.ModelBindings, global)
+		moveRuleBindings(signals, doc.Recipes[i].ModelBindings, global)
+		if len(doc.Recipes[i].ModelBindings) == 0 {
+			doc.Recipes[i].ModelBindings = nil
+		}
 	}
 	for key := range global {
 		if _, _, moved := ruleBindingDeployment(global, key); moved && startsWithAny(key, "safety.", "complexity.") {
 			delete(global, key)
 		}
-	}
-	if len(doc.Routing.ModelBindings) == 0 {
-		doc.Routing.ModelBindings = nil
 	}
 }

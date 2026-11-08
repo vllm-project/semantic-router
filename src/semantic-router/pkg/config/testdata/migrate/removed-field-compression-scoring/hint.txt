@@ -1,1 +1,1 @@
-routing.decisions[agent].plugins[0]: removed_field: context_compression scoring is removed: segments are judged, not embedded; run `vllm-sr config migrate` (compress.match: the relevance judge by default, or recall: {method: bm25} for lexical order)
+recipes[default].decisions[agent].plugins[0]: removed_field: context_compression scoring is removed: segments are judged, not embedded; run `vllm-sr config migrate` (compress.match: the relevance judge by default, or recall: {method: bm25} for lexical order)

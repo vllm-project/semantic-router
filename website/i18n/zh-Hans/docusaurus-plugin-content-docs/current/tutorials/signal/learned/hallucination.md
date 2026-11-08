@@ -10,7 +10,7 @@ translation:
 
 ## 概览 {#overview}
 
-`hallucination` 对照请求携带的依据上下文（例如工具结果或检索文档）检查模型回答，并报告上下文不支持的主张。在 `routing.signals.hallucination` 下定义其规则。
+`hallucination` 对照请求携带的依据上下文（例如工具结果或检索文档）检查模型回答，并报告上下文不支持的主张。在 `recipes[].signals.hallucination` 下定义其规则。
 
 该族为学习型：除非 `hallucination` 绑定指定了其他部署（例如[模型运行时](../../../model-runtime/guides/hallucination.md)中的 Vela Halu），否则由决策模型回答它（默认是 vela3-fast 的 span-set 适配器）；见[为信号选择模型](../../../installation/choose-a-model-for-a-signal.md)。`global.model_catalog.modules.hallucination_mitigation.detector` 保存检测器的设置。NLI 解释器已退役。
 
@@ -39,11 +39,12 @@ translation:
 ## 配置 {#configuration}
 
 ```yaml
-routing:
-  signals:
-    hallucination:
-      - name: ungrounded_claims
-        description: Detect claims the grounding context does not support.
+recipes:
+  - name: default
+    signals:
+      hallucination:
+        - name: ungrounded_claims
+          description: Detect claims the grounding context does not support.
 ```
 
 规则自身没有阈值：检测器在 `modules.hallucination_mitigation.detector` 下的 `threshold`、`min_span_length` 与 `min_span_confidence` 决定什么算不受支持的片段，检测器找到一个时规则匹配。早期版本可以用 `use_nli` 请求片段级 NLI 解释；该解释器已退役，`vllm-sr config migrate` 会移除这一设置。

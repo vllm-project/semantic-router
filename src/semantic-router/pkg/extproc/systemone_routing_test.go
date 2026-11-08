@@ -49,7 +49,7 @@ func TestSystemOneAutoUsesRecipeSignalsAndNativeBackends(t *testing.T) {
 		fmt.Fprintf(w, `{"model":%q,"answers":{"task":{"type":"choice","choice":"chat","probabilities":{"chat":%g,"code":%g},"confidence":0.5}},"usage":{"input_tokens":10,"output_tokens":0},"meta":{"dtype":"float32"}}`, request.Model, probability, 1-probability)
 	}))
 	defer backend.Close()
-	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.3
+	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.5
 listeners:
   - name: native
     port: 8801
@@ -64,33 +64,35 @@ providers:
       api_format: systemone
       provider_model_id: strong-native
       backend_refs: [{provider: systemone-compatible, base_url: %s/v1}]
-routing: {}
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - {api: systemone, model_names: [vllm-sr/auto], recipe: native}
 recipes:
+  - name: default
   - name: native
-    routing:
-      signals:
-        keywords:
-          - {name: greeting, operator: OR, keywords: [hello]}
-      decisions:
-        - name: greeting
-          rules: {type: keyword, name: greeting}
-          modelRefs: [{model: fast}, {model: strong}]
-          algorithm:
-            type: escalate
-            budget: {deadline: 2s, max_calls: 2}
-            escalate:
-              quality:
-                type: uncalibrated
+    signals:
+      keywords:
+        - {name: greeting, operator: OR, keywords: [hello]}
+    decisions:
+      - name: greeting
+        rules: {type: keyword, name: greeting}
+        modelRefs: [{model: fast}, {model: strong}]
+        algorithm:
+          type: escalate
+          budget: {deadline: 2s, max_calls: 2}
+          escalate:
+            quality:
+              type: uncalibrated
+              accept:
+                native: [{question_type: choice, field: top_probability, gte: 0}]
+            stages:
+              - name: fast
+                model: fast
                 accept:
-                  native: [{question_type: choice, field: top_probability, gte: 0}]
-              stages:
-                - name: fast
-                  model: fast
-                  accept:
-                    native: [{question_type: choice, field: top_probability, gte: 0.9}]
-                - {name: strong, model: strong}
+                  native: [{question_type: choice, field: top_probability, gte: 0.9}]
+              - {name: strong, model: strong}
 `, backend.URL, backend.URL)))
 	if err != nil {
 		t.Fatal(err)
@@ -208,7 +210,7 @@ func TestSystemOneBudgetIncludesRemoteSignalAndTransportRetries(t *testing.T) {
 		})
 	}))
 	defer backendServer.Close()
-	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.3
+	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.5
 listeners:
   - name: native
     port: 8801
@@ -225,42 +227,44 @@ providers:
       provider_model_id: strong-native
       backend_refs: [{provider: systemone-compatible, base_url: %s/v1}]
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - {api: systemone, model_names: [vllm-sr/auto], recipe: native}
 global:
   model_catalog:
     deployments:
       remote-kai: {provider: systemone, endpoint: %s/v1/systemone, model: vllm-sr/decision}
-routing: {}
 recipes:
+  - name: default
   - name: native
-    routing:
-      signals:
-        systemone:
-          - name: task_kind
-            deployment: remote-kai
-            timeout_ms: 1000
-            question:
-              type: choice
-              instructions: Is the task simple?
-              choices: [{key: simple}, {key: hard}]
-      decisions:
-        - name: simple
-          rules: {type: systemone, name: task_kind, label: simple}
-          modelRefs: [{model: fast}, {model: strong}]
-          algorithm:
-            type: escalate
-            budget: {deadline: 2s, max_calls: 3}
-            escalate:
-              quality:
-                type: uncalibrated
+    signals:
+      systemone:
+        - name: task_kind
+          deployment: remote-kai
+          timeout_ms: 1000
+          question:
+            type: choice
+            instructions: Is the task simple?
+            choices: [{key: simple}, {key: hard}]
+    decisions:
+      - name: simple
+        rules: {type: systemone, name: task_kind, label: simple}
+        modelRefs: [{model: fast}, {model: strong}]
+        algorithm:
+          type: escalate
+          budget: {deadline: 2s, max_calls: 3}
+          escalate:
+            quality:
+              type: uncalibrated
+              accept:
+                native: [{question_type: choice, field: top_probability, gte: 0.9}]
+            stages:
+              - name: fast
+                model: fast
                 accept:
                   native: [{question_type: choice, field: top_probability, gte: 0.9}]
-              stages:
-                - name: fast
-                  model: fast
-                  accept:
-                    native: [{question_type: choice, field: top_probability, gte: 0.9}]
-                - {name: strong, model: strong}
+              - {name: strong, model: strong}
 `, backendServer.URL, backendServer.URL, decisionServer.URL)))
 	if err != nil {
 		t.Fatal(err)
@@ -331,7 +335,7 @@ func TestSystemOneBudgetDeadlineIncludesRemoteSignal(t *testing.T) {
 		}})
 	}))
 	defer decisionServer.Close()
-	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.3
+	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.5
 listeners:
   - name: native
     port: 8801
@@ -341,39 +345,41 @@ providers:
     - name: fast
       api_format: systemone
       provider_model_id: fast-native
-      backend_refs: [{provider: systemone-compatible, base_url: http://unused.invalid/v1}]
+      backend_refs: [{provider: systemone-compatible, base_url: 'http://unused.invalid/v1'}]
 global:
   model_catalog:
     deployments:
       remote-kai: {provider: systemone, endpoint: %s/v1/systemone, model: vllm-sr/decision}
-routing: {}
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - {api: systemone, model_names: [vllm-sr/auto], recipe: native}
 recipes:
+  - name: default
   - name: native
-    routing:
-      signals:
-        systemone:
-          - name: task_kind
-            deployment: remote-kai
-            timeout_ms: 1000
-            question:
-              type: choice
-              instructions: Is the task simple?
-              choices: [{key: simple}, {key: hard}]
-      decisions:
-        - name: simple
-          rules: {type: systemone, name: task_kind, label: simple}
-          modelRefs: [{model: fast}]
-          algorithm:
-            type: escalate
-            budget: {deadline: 100ms, max_calls: 2}
-            escalate:
-              quality:
-                type: uncalibrated
-                accept:
-                  native: [{question_type: noul, field: top_probability, gte: 0}]
-              stages: [{name: answer, model: fast}]
+    signals:
+      systemone:
+        - name: task_kind
+          deployment: remote-kai
+          timeout_ms: 1000
+          question:
+            type: choice
+            instructions: Is the task simple?
+            choices: [{key: simple}, {key: hard}]
+    decisions:
+      - name: simple
+        rules: {type: systemone, name: task_kind, label: simple}
+        modelRefs: [{model: fast}]
+        algorithm:
+          type: escalate
+          budget: {deadline: 100ms, max_calls: 2}
+          escalate:
+            quality:
+              type: uncalibrated
+              accept:
+                native: [{question_type: noul, field: top_probability, gte: 0}]
+            stages: [{name: answer, model: fast}]
 `, decisionServer.URL)))
 	if err != nil {
 		t.Fatal(err)

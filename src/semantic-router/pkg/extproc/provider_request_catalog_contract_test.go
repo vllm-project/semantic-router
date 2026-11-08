@@ -451,7 +451,7 @@ func renderCatalogReasoningWire(
 		providerModelIDLine = fmt.Sprintf("      provider_model_id: %s\n", test.providerModelID)
 	}
 	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: routed
@@ -461,7 +461,8 @@ providers:
           provider: %s
           endpoint: 127.0.0.1:8000
           protocol: http
-routing: {}
+recipes:
+  - name: default
 `, catalogID, apiFormatLine, providerModelIDLine, providerID)))
 	require.NoError(t, err)
 
@@ -565,7 +566,7 @@ func TestAzureOpenAIProviderDispatch(t *testing.T) {
 			t.Cleanup(fixture.Close)
 
 			cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: routed
@@ -578,7 +579,8 @@ providers:
           endpoint: %s/openai/deployments/astra-prod
           api_version: "2024-10-21"
           api_key: azure-fixture-key
-routing: {}
+recipes:
+  - name: default
 `, test.apiFormat, fixture.URL)))
 			require.NoError(t, err)
 			router := &OpenAIRouter{

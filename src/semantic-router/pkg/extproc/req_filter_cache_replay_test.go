@@ -61,7 +61,7 @@ func TestHandleCaching_ReplayUsesSelectedBackendProvenance(t *testing.T) {
 				router := &OpenAIRouter{
 					Cache: backend, ReplayRecorder: recorder,
 					Config: &config.RouterConfig{
-						SemanticCache:      config.SemanticCache{Enabled: true},
+						SemanticCache:      config.SemanticCache{InUse: true},
 						IntelligentRouting: config.IntelligentRouting{Decisions: []config.Decision{decision}},
 						BackendModels: config.BackendModels{ModelConfig: map[string]config.ModelParams{
 							"backend": {

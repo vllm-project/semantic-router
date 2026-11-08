@@ -189,14 +189,12 @@ func assertReferenceConfigSemanticCacheCoverage(t testingT, semanticCache map[st
 }
 
 type responseCacheStoreReference struct {
-	BackendType         string            `yaml:"backend_type,omitempty"`
-	Enabled             bool              `yaml:"enabled"`
-	SimilarityThreshold *float32          `yaml:"similarity_threshold,omitempty"`
-	MaxEntries          int               `yaml:"max_entries,omitempty"`
-	TTLSeconds          int               `yaml:"ttl_seconds,omitempty"`
-	EvictionPolicy      string            `yaml:"eviction_policy,omitempty"`
-	Milvus              *MilvusConfig     `yaml:"milvus,omitempty"`
-	Embedding           *EmbeddingBinding `yaml:"embedding,omitempty"`
+	BackendType    string            `yaml:"backend_type,omitempty"`
+	MaxEntries     int               `yaml:"max_entries,omitempty"`
+	TTLSeconds     int               `yaml:"ttl_seconds,omitempty"`
+	EvictionPolicy string            `yaml:"eviction_policy,omitempty"`
+	Milvus         *MilvusConfig     `yaml:"milvus,omitempty"`
+	Embedding      *EmbeddingBinding `yaml:"embedding,omitempty"`
 }
 
 func assertReferenceConfigMemoryCoverage(t testingT, memory map[string]interface{}) {

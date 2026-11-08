@@ -3088,8 +3088,8 @@
     },
     "/api/v1/config/recipes": {
       "get": {
-        "summary": "List the default and named routing recipes with their entrypoints",
-        "description": "List the default and named routing recipes with their entrypoints",
+        "summary": "List the recipes with their entrypoints",
+        "description": "List the recipes with their entrypoints",
         "operationId": "get_api_v1_config_recipes",
         "tags": [
           "config"
@@ -3117,6 +3117,9 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "default": {
+                            "type": "boolean"
+                          },
                           "deletable": {
                             "type": "boolean"
                           },
@@ -3136,21 +3139,18 @@
                           "name": {
                             "type": "string"
                           },
-                          "routing": {
+                          "profile": {
                             "nullable": true,
                             "type": "object",
                             "additionalProperties": true
-                          },
-                          "source": {
-                            "type": "string"
                           }
                         },
                         "required": [
                           "entrypoint_source",
                           "name",
-                          "routing",
+                          "profile",
                           "entrypoints",
-                          "source",
+                          "default",
                           "deletable"
                         ]
                       }
@@ -3614,14 +3614,14 @@
                   "name": {
                     "type": "string"
                   },
-                  "routing": {
+                  "profile": {
                     "nullable": true,
                     "type": "object",
                     "additionalProperties": true
                   }
                 },
                 "required": [
-                  "routing"
+                  "profile"
                 ],
                 "additionalProperties": false
               }
@@ -3672,6 +3672,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "default": {
+                      "type": "boolean"
+                    },
                     "deletable": {
                       "type": "boolean"
                     },
@@ -3691,21 +3694,18 @@
                     "name": {
                       "type": "string"
                     },
-                    "routing": {
+                    "profile": {
                       "nullable": true,
                       "type": "object",
                       "additionalProperties": true
-                    },
-                    "source": {
-                      "type": "string"
                     }
                   },
                   "required": [
                     "entrypoint_source",
                     "name",
-                    "routing",
+                    "profile",
                     "entrypoints",
-                    "source",
+                    "default",
                     "deletable"
                   ]
                 }
@@ -4945,14 +4945,14 @@
                   "name": {
                     "type": "string"
                   },
-                  "routing": {
+                  "profile": {
                     "nullable": true,
                     "type": "object",
                     "additionalProperties": true
                   }
                 },
                 "required": [
-                  "routing"
+                  "profile"
                 ],
                 "additionalProperties": false
               }

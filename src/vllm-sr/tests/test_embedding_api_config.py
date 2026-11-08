@@ -12,9 +12,8 @@ from click.testing import CliRunner
 @pytest.mark.parametrize("enabled", [False, True])
 def test_global_embedding_api_round_trip_preserves_scope(enabled):
     raw = {
-        "version": "v0.3",
-        "routing": {},
-        "recipes": [{"name": "isolated", "routing": {}}],
+        "version": "v0.5",
+        "recipes": [{"name": "isolated"}],
         "global": {"services": {"api": {"embeddings": {"enabled": enabled}}}},
     }
     before = deepcopy(raw)
@@ -22,14 +21,14 @@ def test_global_embedding_api_round_trip_preserves_scope(enabled):
     parsed = UserConfig.model_validate(raw)
     exported = parsed.model_dump(by_alias=True, exclude_none=True)
     assert exported["global"] == raw["global"]
-    assert parsed.routing.model_bindings == {}
-    assert parsed.recipes[0].routing.model_bindings == {}
+    assert parsed.default_recipe.model_bindings == {}
+    assert parsed.recipes[0].model_bindings == {}
     assert "services" not in exported["recipes"][0]
     assert raw == before
 
 
 def test_embedding_api_opt_in_is_not_inserted_when_omitted():
-    raw = {"version": "v0.3", "routing": {}}
+    raw = {"version": "v0.5", "recipes": [{"name": "default"}]}
     assert validate_config_structure(raw) == []
     parsed = UserConfig.model_validate(raw)
     assert "global" not in parsed.model_dump(by_alias=True, exclude_none=True)
@@ -45,7 +44,7 @@ def test_embedding_api_opt_in_is_not_inserted_when_omitted():
 )
 def test_embedding_api_rejects_invalid_fields_and_wrong_scope(global_settings):
     errors = validate_config_structure(
-        {"version": "v0.3", "routing": {}, "global": global_settings}
+        {"version": "v0.5", "recipes": [{"name": "default"}], "global": global_settings}
     )
     assert errors
     assert any("global." in error for error in errors)

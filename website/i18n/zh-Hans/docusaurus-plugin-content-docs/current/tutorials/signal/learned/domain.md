@@ -10,7 +10,7 @@ translation:
 
 ## 概览 {#overview}
 
-`domain` 对请求主题族分类。在 `routing.signals.domains` 下定义领域规则。
+`domain` 对请求主题族分类。在 `recipes[].signals.domains` 下定义领域规则。
 
 除非 `domain` 绑定指定了其他部署，否则由决策模型回答它；见[为信号选择模型](../../../installation/choose-a-model-for-a-signal.md)。`global.model_catalog.modules.classifier.domain` 保存它的设置，例如阈值。
 
@@ -39,24 +39,25 @@ translation:
 ## 配置 {#configuration}
 
 ```yaml
-routing:
-  signals:
-    domains:
-      - name: business
-        description: Business and management related queries.
-        mmlu_categories: [business]
-      - name: law
-        description: Legal questions and law-related topics.
-        mmlu_categories: [law]
-      - name: psychology
-        description: Psychology and mental health topics.
-        mmlu_categories: [psychology]
-      - name: health
-        description: Health and medical information queries.
-        mmlu_categories: [health]
-      - name: other
-        description: General fallback traffic.
-        mmlu_categories: [other]
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: business
+          description: Business and management related queries.
+          mmlu_categories: [business]
+        - name: law
+          description: Legal questions and law-related topics.
+          mmlu_categories: [law]
+        - name: psychology
+          description: Psychology and mental health topics.
+          mmlu_categories: [psychology]
+        - name: health
+          description: Health and medical information queries.
+          mmlu_categories: [health]
+        - name: other
+          description: General fallback traffic.
+          mmlu_categories: [other]
 ```
 
 保持领域名稳定，因为决策直接引用这些名称。

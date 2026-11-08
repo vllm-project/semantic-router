@@ -164,7 +164,7 @@ func assertMaintainedBalanceDSLDiagnostics(t *testing.T, prog *Program) {
 	}
 }
 
-func mustCompileMaintainedRoutingDSL(t *testing.T, prog *Program) config.CanonicalRouting {
+func mustCompileMaintainedRoutingDSL(t *testing.T, prog *Program) routingSurface {
 	t.Helper()
 
 	compiledCfg, compileErrs := CompileAST(prog)
@@ -179,14 +179,14 @@ func mustCompileMaintainedRoutingDSL(t *testing.T, prog *Program) config.Canonic
 	if err != nil {
 		t.Fatalf("ParseRoutingYAMLBytes(compiledYAML) error: %v", err)
 	}
-	return config.CanonicalRoutingFromRouterConfig(compiledParsedCfg)
+	return routingSurfaceOf(compiledParsedCfg)
 }
 
-func mustLoadMaintainedBalanceRoutingYAML(t *testing.T, yamlPath string) config.CanonicalRouting {
+func mustLoadMaintainedBalanceRoutingYAML(t *testing.T, yamlPath string) routingSurface {
 	t.Helper()
 
 	parsedCfg := mustLoadMaintainedBalanceRouterConfig(t, yamlPath)
-	return config.CanonicalRoutingFromRouterConfig(parsedCfg)
+	return routingSurfaceOf(parsedCfg)
 }
 
 func mustLoadMaintainedBalanceRouterConfig(t *testing.T, yamlPath string) *config.RouterConfig {
@@ -228,4 +228,18 @@ func ruleTreeReadsSignalType(node *config.RuleCombination, signalType string) bo
 		}
 	}
 	return false
+}
+
+// routingSurface is the DSL-owned surface of a config: its recipes, and the
+// model cards its providers.models[] entries state.
+type routingSurface struct {
+	Recipes []config.CanonicalRecipe
+	Cards   []config.RoutingModel
+}
+
+func routingSurfaceOf(cfg *config.RouterConfig) routingSurface {
+	return routingSurface{
+		Recipes: config.CanonicalConfigFromRouterConfig(cfg).Recipes,
+		Cards:   config.ModelCardsFromRouterConfig(cfg),
+	}
 }

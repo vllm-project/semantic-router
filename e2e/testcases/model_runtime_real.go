@@ -153,7 +153,7 @@ func decisionSignalQuestion(valuesPath, signal string) (modelruntime.Question, e
 	}
 	var values struct {
 		Config struct {
-			Routing struct {
+			Recipes []struct {
 				Signals struct {
 					SystemOne []struct {
 						Name     string `yaml:"name"`
@@ -167,13 +167,16 @@ func decisionSignalQuestion(valuesPath, signal string) (modelruntime.Question, e
 						} `yaml:"question"`
 					} `yaml:"systemone"`
 				} `yaml:"signals"`
-			} `yaml:"routing"`
+			} `yaml:"recipes"`
 		} `yaml:"config"`
 	}
 	if err := yaml.Unmarshal(data, &values); err != nil {
 		return modelruntime.Question{}, fmt.Errorf("%s: %w", valuesPath, err)
 	}
-	for _, rule := range values.Config.Routing.Signals.SystemOne {
+	if len(values.Config.Recipes) == 0 {
+		return modelruntime.Question{}, fmt.Errorf("%s: no recipe declares %s", valuesPath, signal)
+	}
+	for _, rule := range values.Config.Recipes[0].Signals.SystemOne {
 		if rule.Name != signal {
 			continue
 		}

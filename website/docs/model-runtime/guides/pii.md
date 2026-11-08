@@ -20,22 +20,23 @@ The preset knows 17 types: `AGE`, `CREDIT_CARD`, `DATE_TIME`, `DOMAIN_NAME`,
 ## Turn it on
 
 ```yaml
-routing:
-  signals:
-    pii:
-      - name: personal_data
-        predicate: {gte: 0.85}
-        ignore_labels: [EMAIL_ADDRESS]
-  decisions:
-    - name: keep-private
-      priority: 200
-      rules:
-        operator: AND
-        conditions:
-          - type: pii
-            name: personal_data
-      modelRefs:
-        - model: private-model
+recipes:
+  - name: default
+    signals:
+      pii:
+        - name: personal_data
+          predicate: {gte: 0.85}
+          ignore_labels: [EMAIL_ADDRESS]
+    decisions:
+      - name: keep-private
+        priority: 200
+        rules:
+          operator: AND
+          conditions:
+            - type: pii
+              name: personal_data
+        modelRefs:
+          - model: private-model
 ```
 
 Without a binding, the Router asks the decision model, vela3-fast by default,
@@ -79,21 +80,22 @@ checked cannot pass as clean. If the model is not ready or a scan fails, the
 signal is unknown; decide what that means per route with `rules.on_unknown`:
 
 ```yaml
-routing:
-  signals:
-    pii:
-      - name: personal_data
-  decisions:
-    - name: keep-private
-      priority: 200
-      rules:
-        operator: AND
-        on_unknown: fail_request
-        conditions:
-          - type: pii
-            name: personal_data
-      modelRefs:
-        - model: private-model
+recipes:
+  - name: default
+    signals:
+      pii:
+        - name: personal_data
+    decisions:
+      - name: keep-private
+        priority: 200
+        rules:
+          operator: AND
+          on_unknown: fail_request
+          conditions:
+            - type: pii
+              name: personal_data
+        modelRefs:
+          - model: private-model
 ```
 
 ## Check it

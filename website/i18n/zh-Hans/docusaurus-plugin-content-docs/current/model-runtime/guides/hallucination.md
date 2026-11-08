@@ -19,38 +19,39 @@ Vela 1.0 Halu 把请求带的上下文（工具结果、检索来的文档）、
 把这次观察声明成信号，再在要检查的路由上用 `response_guard` 规则引用它。一个请求提的主张值不值得查，先由 Vela FactCheck 决定：只有值得查时，规则的 `AND` 才会走到检测器。
 
 ```yaml
-routing:
-  signals:
-    fact_check:
-      - name: needs_fact_check
-        description: Requests that make factual claims.
-    hallucination:
-      - name: ungrounded_claims
-        description: Claims the context does not support.
-  decisions:
-    - name: grounded-answers
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: fact_check
-            name: needs_fact_check
-      modelRefs:
-        - model: answer-model
-      plugins:
-        - type: response_guard
-          configuration:
-            rules:
-              - when:
-                  operator: AND
-                  conditions:
-                    - type: fact_check
-                      name: needs_fact_check
-                    - type: hallucination
-                      name: ungrounded_claims
-                action: annotate
-                details: true
-            on_unknown: annotate
+recipes:
+  - name: default
+    signals:
+      fact_check:
+        - name: needs_fact_check
+          description: Requests that make factual claims.
+      hallucination:
+        - name: ungrounded_claims
+          description: Claims the context does not support.
+    decisions:
+      - name: grounded-answers
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: fact_check
+              name: needs_fact_check
+        modelRefs:
+          - model: answer-model
+        plugins:
+          - type: response_guard
+            configuration:
+              rules:
+                - when:
+                    operator: AND
+                    conditions:
+                      - type: fact_check
+                        name: needs_fact_check
+                      - type: hallucination
+                        name: ungrounded_claims
+                  action: annotate
+                  details: true
+              on_unknown: annotate
 global:
   model_catalog:
     modules:
