@@ -65,7 +65,7 @@ function MetricsTable({
               {observationOnlyCohort
                 ? 'Observed / planned'
                 : mixedObservationCohort
-                  ? 'Scored / observed'
+                  ? 'Scored or observed / planned'
                   : 'Scored / planned'}
             </th>
             <th>Failures</th>

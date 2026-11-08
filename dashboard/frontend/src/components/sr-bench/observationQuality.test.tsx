@@ -88,7 +88,11 @@ const sessionObservation: TargetMetrics = {
   },
 }
 
-function renderMetrics(metrics: TargetMetrics, status: Run['status'] = 'completed'): string {
+function renderMetrics(
+  metrics: TargetMetrics,
+  status: Run['status'] = 'completed',
+  targets: TargetMetrics[] = [metrics],
+): string {
   const run: Run = {
     id: 'observation-run',
     status,
@@ -121,7 +125,7 @@ function renderMetrics(metrics: TargetMetrics, status: Run['status'] = 'complete
     version: 'sr-bench-1.0',
     run_id: run.id,
     status,
-    summary: { targets: [metrics] },
+    summary: { targets },
     benchmarks: [{ ...metrics, benchmark: 'cache-token-probe-v1' }],
     limitations: [],
     provenance: {},
@@ -157,6 +161,28 @@ function renderMetrics(metrics: TargetMetrics, status: Run['status'] = 'complete
 }
 
 describe('observation-only quality presentation', () => {
+  it('labels mixed rows with scored or observed counts over their planned denominators', () => {
+    const binary: TargetMetrics = {
+      ...observation,
+      id: 'binary',
+      result_kind: undefined,
+      total: 3,
+      scored: 2,
+      observed: undefined,
+      correct: 1,
+    }
+    const session: TargetMetrics = { ...sessionObservation, id: 'session', total: 4, observed: 1 }
+    const html = renderMetrics(
+      { ...observation, result_kind: 'mixed', total: 7, scored: 2, observed: 1 },
+      'completed',
+      [binary, session],
+    )
+    expect(html).toContain('<th>Scored or observed / planned</th>')
+    expect(html).not.toContain('<th>Scored / observed</th>')
+    expect(html).toContain('<td>2 / 3</td>')
+    expect(html).toContain('<td>1 / 4</td>')
+  })
+
   it.each([
     observation,
     sessionObservation,
