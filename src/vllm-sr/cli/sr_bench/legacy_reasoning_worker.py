@@ -5,6 +5,7 @@ import importlib
 import json
 import random
 import sys
+from collections import Counter
 from dataclasses import asdict
 from importlib.metadata import version
 from pathlib import Path
@@ -196,8 +197,10 @@ def plain_cases(
         "selection": selection,
     }
     cases: list[dict[str, Any]] = []
-    ids: set[str] = set()
+    occurrences: Counter[str] = Counter()
     for question in questions:
+        occurrence: int = occurrences[question.question_id]
+        occurrences[question.question_id] += 1
         native_question = asdict(question)
         messages = [
             {"role": "user", "content": dataset.format_prompt(question=question)}
@@ -207,10 +210,8 @@ def plain_cases(
             source_sha256=source_sha256,
             selection=selection,
             native_id=question.question_id,
+            native_occurrence=occurrence,
         )
-        if identity in ids:
-            raise ValueError("Native selection contains duplicate question IDs")
-        ids.add(identity)
         case = {
             "id": identity,
             "benchmark": benchmark,
@@ -226,6 +227,8 @@ def plain_cases(
                 "stratum": question.category,
             },
         }
+        if occurrence:
+            case["metadata"]["native_question_occurrence"] = occurrence
         validate_case(case=case, config=config)
         cases.append(case)
     return {"cases": cases, "benchmark_options": {benchmark: config}}
@@ -296,6 +299,7 @@ def export_mode_cases(request: dict[str, Any]) -> dict[str, Any]:
     explicit: list[dict[str, Any]] = []
     members: list[dict[str, Any]] = []
     for question, plain_case in zip(questions, plain["cases"], strict=True):
+        occurrence: int = plain_case["metadata"].get("native_question_occurrence", 0)
         native = asdict(question)
         messages = [
             {"role": "user", "content": dataset.format_prompt(question, "explicit_cot")}
@@ -305,6 +309,7 @@ def export_mode_cases(request: dict[str, Any]) -> dict[str, Any]:
             source_sha256=digest(source),
             selection=selection,
             native_id=question.question_id,
+            native_occurrence=occurrence,
         )
         case = {
             "id": identity,
@@ -322,6 +327,8 @@ def export_mode_cases(request: dict[str, Any]) -> dict[str, Any]:
                 "stratum": question.category,
             },
         }
+        if occurrence:
+            case["metadata"]["native_question_occurrence"] = occurrence
         xc.validate_case(case=case, config=config)
         explicit.append(case)
         members.append(
@@ -336,6 +343,8 @@ def export_mode_cases(request: dict[str, Any]) -> dict[str, Any]:
                 "xc_sha256": digest(case),
             }
         )
+        if occurrence:
+            members[-1]["native_question_occurrence"] = occurrence
     return {
         "plain_cases": plain["cases"],
         "explicit_cases": explicit,

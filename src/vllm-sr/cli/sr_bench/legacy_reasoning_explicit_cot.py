@@ -95,6 +95,14 @@ def validate_case(case: dict[str, Any], config: dict[str, Any]) -> None:
         )
     ):
         raise ValueError("Invalid native explicit-CoT question")
+    supplied_metadata = case.get("metadata")
+    if not isinstance(supplied_metadata, dict):
+        raise ValueError("Explicit-CoT requires native identity metadata")
+    occurrence: int = supplied_metadata.get("native_question_occurrence", 0)
+    if "native_question_occurrence" in supplied_metadata and (
+        type(occurrence) is not int or occurrence <= 0
+    ):
+        raise ValueError("Explicit-CoT has invalid native occurrence")
     if name == "mmlu-pro":
         if (
             config["plain_options"] != {}
@@ -110,6 +118,8 @@ def validate_case(case: dict[str, Any], config: dict[str, Any]) -> None:
             for key in ("source", "selection", "source_revision", "requirements_sha256")
         ):
             raise ValueError("Explicit-CoT and plain source identities differ")
+    if occurrence != plain["metadata"].get("native_question_occurrence", 0):
+        raise ValueError("Explicit-CoT and plain native occurrences differ")
     metadata = {
         "protocol": PROTOCOL,
         "native_dataset": name,
@@ -120,11 +130,14 @@ def validate_case(case: dict[str, Any], config: dict[str, Any]) -> None:
         "prompt_sha256": digest(case.get("messages")),
         "stratum": question["category"],
     }
+    if occurrence:
+        metadata["native_question_occurrence"] = occurrence
     if case.get("metadata") != metadata or case["id"] != case_identity(
         benchmark=case["benchmark"],
         source_sha256=metadata["source_sha256"],
         selection=config["selection"],
         native_id=question["question_id"],
+        native_occurrence=occurrence,
     ):
         raise ValueError("Explicit-CoT differs from its frozen native identity")
 

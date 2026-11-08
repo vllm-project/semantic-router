@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import re
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,7 @@ from .legacy_reasoning import (
     MAX_EXPORT_BYTES,
     REQUIREMENTS,
     SOURCE_REVISION,
+    case_identity,
     configuration,
     inspect_runtime,
     worker_request,
@@ -286,7 +288,15 @@ def selection_identity(section: dict[str, Any]) -> str:
             section["source"],
             section["selection"],
             [
-                [member["native_id"], member["native_sha256"]]
+                [
+                    member["native_id"],
+                    member["native_sha256"],
+                    *(
+                        [member["native_question_occurrence"]]
+                        if "native_question_occurrence" in member
+                        else []
+                    ),
+                ]
                 for member in section["members"]
             ],
         ]
@@ -361,6 +371,9 @@ def _validate_member(
     expected = "legacy-" + name + ("-explicit-cot" if explicit else "")
     if case["benchmark"] != expected:
         raise ValueError("Condition benchmark differs from its native selection")
+    occurrence: int = member.get("native_question_occurrence", 0)
+    if case["metadata"].get("native_question_occurrence", 0) != occurrence:
+        raise ValueError("Condition case differs from its native occurrence")
     config = options.get(expected, {})
     if not isinstance(config, dict) or any(
         config.get(key) != section[key]
@@ -377,6 +390,8 @@ def _validate_member(
             not isinstance(plain, dict)
             or digest(plain) != member["plain_sha256"]
             or plain.get("id") != member["plain_id"]
+            or not isinstance(plain.get("metadata"), dict)
+            or plain["metadata"].get("native_question_occurrence", 0) != occurrence
         ):
             raise ValueError("Explicit-CoT differs from its paired plain case")
     elif name != "mmlu-pro":
@@ -519,7 +534,7 @@ def validate_conditions(manifest: dict[str, Any], cache: dict[str, Any]) -> None
         )
     if manifest.get("recovery") or manifest.get("baseline_run_id"):
         raise ValueError("Derived runs do not support reasoning condition matrices")
-    _validate_source(section, manifest["seed"])
+    name = _validate_source(section, manifest["seed"])
     members = section["members"]
     if not isinstance(members, list) or not 1 <= len(members) <= MAX_ROWS:
         raise ValueError("Invalid native selection members")
@@ -533,11 +548,12 @@ def validate_conditions(manifest: dict[str, Any], cache: dict[str, Any]) -> None
         "xc_id",
         "xc_sha256",
     }
-    seen: set[str] = set()
+    occurrences: Counter[str] = Counter()
+    source_sha256 = digest(section["source"])
     for member in members:
         if (
             not isinstance(member, dict)
-            or set(member) != member_keys
+            or set(member) - {"native_question_occurrence"} != member_keys
             or type(member["has_cot"]) is not bool
             or not all(
                 isinstance(member[key], str) and member[key]
@@ -547,10 +563,31 @@ def validate_conditions(manifest: dict[str, Any], cache: dict[str, Any]) -> None
                 not re.fullmatch(r"[0-9a-f]{64}", member[key])
                 for key in ("native_sha256", "plain_sha256", "xc_sha256")
             )
-            or member["native_id"] in seen
         ):
-            raise ValueError("Invalid or duplicate native selection identity")
-        seen.add(member["native_id"])
+            raise ValueError("Invalid native selection identity")
+        occurrence: int = member.get("native_question_occurrence", 0)
+        if (
+            "native_question_occurrence" in member
+            and (type(occurrence) is not int or occurrence <= 0)
+        ) or occurrence != occurrences[member["native_id"]]:
+            raise ValueError("Native selection occurrence differs from its order")
+        occurrences[member["native_id"]] += 1
+        for prefix in ("plain", "xc"):
+            identity = (
+                "legacy-mmlu-pro/" + member["native_id"]
+                if prefix == "plain" and name == "mmlu-pro"
+                else case_identity(
+                    benchmark="legacy-"
+                    + name
+                    + ("-explicit-cot" if prefix == "xc" else ""),
+                    source_sha256=source_sha256,
+                    selection=section["selection"],
+                    native_id=member["native_id"],
+                    native_occurrence=occurrence,
+                )
+            )
+            if member[prefix + "_id"] != identity:
+                raise ValueError("Native condition case identity changed")
     if section["selection_sha256"] != selection_identity(section):
         raise ValueError("Native selection identity changed")
     conditions = section["conditions"]

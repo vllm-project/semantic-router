@@ -6,15 +6,18 @@ import os
 import subprocess
 import sys
 import threading
+from collections import Counter
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
 import pytest
+from cli.sr_bench.canonical import digest
 from cli.sr_bench.contracts import plan
 from cli.sr_bench.engine import Engine
 from cli.sr_bench.legacy_reasoning import CONFIGURATIONS, inspect_runtime
+from cli.sr_bench.legacy_reasoning_explicit_cot import validate_case as validate_xc_case
 from cli.sr_bench.legacy_reasoning_export import export_manifest as export_plain
 from cli.sr_bench.legacy_reasoning_modes import (
     FIELD,
@@ -375,6 +378,228 @@ def _run(document: dict[str, Any], store: Store) -> dict[str, Any]:
         return store.get(run["id"])
     finally:
         engine.close()
+
+
+def repeated_bundle(directory: Path, dataset: str, identical: bool) -> Path:
+    if dataset == "hellaswag":
+        row = {
+            "ind": 7,
+            "ctx": "A person opens a door.",
+            "endings": ["walks through", "flies away", "vanishes", "turns blue"],
+            "label": "0",
+            "activity_label": "diy",
+        }
+        unique = {**row, "ind": 8}
+        repeated = {
+            **row,
+            "ctx": row["ctx"] if identical else "A person opens a window.",
+        }
+        partitions = [
+            ("train", None, [row, unique, repeated]),
+            ("validation", None, [repeated]),
+        ]
+    else:
+        row = {
+            "Record ID": "7",
+            "Question": "Which option is first?",
+            "Correct Answer": "first",
+            "A": "first",
+            "B": "second",
+            "Subject": "Physics",
+            "Explanation": "The first option is first.",
+        }
+        unique = {**row, "Record ID": "8"}
+        repeated = {
+            **row,
+            "Question": (
+                row["Question"] if identical else "Which option precedes second?"
+            ),
+        }
+        partitions = [("train", "gpqa_main", [row, unique, repeated, repeated])]
+    sources = []
+    for split, configuration, rows in partitions:
+        path = directory / f"{split}.jsonl"
+        path.write_text("".join(json.dumps(row) + "\n" for row in rows))
+        sources.append(
+            {
+                "dataset": "hellaswag" if dataset == "hellaswag" else "Idavidrein/gpqa",
+                "configuration": configuration,
+                "split": split,
+                "path": path.name,
+                "revision": "repeated-native-fixture-v1",
+            }
+        )
+    bundle_path = directory / "bundle.json"
+    bundle_path.write_text(
+        json.dumps({"version": 1, "kind": "fixture", "sources": sources})
+    )
+    return bundle_path
+
+
+@pytest.mark.parametrize("dataset", ["hellaswag", "gpqa-main"])
+@pytest.mark.parametrize("identical", [False, True])
+def test_repeated_rows_keep_all_condition_receipts_and_denominators(
+    dataset: str, identical: bool, target: Any, tmp_path: Path
+) -> None:
+    bundle_path = repeated_bundle(
+        directory=tmp_path, dataset=dataset, identical=identical
+    )
+    request = template(target, ("NR", "NR_REASONING", "AR", "XC"))
+    compiled = export_manifest(
+        manifest=request, dataset=dataset, source_bundle=bundle_path
+    )
+    assert compiled == export_manifest(
+        manifest=request, dataset=dataset, source_bundle=bundle_path
+    )
+    plain = export_plain(manifest={}, dataset=dataset, source_bundle=bundle_path)
+    assert [
+        case
+        for case in compiled["cases"]
+        if not case["benchmark"].endswith("-explicit-cot")
+    ] == plain["cases"]
+    cases = plain["cases"]
+    members = compiled[FIELD]["members"]
+    assert len(cases) == len(members) == 4
+    assert [member.get("native_question_occurrence", 0) for member in members] == [
+        0,
+        0,
+        1,
+        2,
+    ]
+    assert "native_question_occurrence" not in members[0]
+    assert cases[0]["answer"]["question_id"] == cases[2]["answer"]["question_id"]
+    assert (cases[0]["answer"] == cases[2]["answer"]) is identical
+    assert cases[2]["answer"] == cases[3]["answer"]
+    assert len({member["plain_id"] for member in members}) == 4
+    assert len({member["xc_id"] for member in members}) == 4
+    for case, member in zip(cases, members, strict=True):
+        assert case["metadata"].get("native_question_occurrence", 0) == member.get(
+            "native_question_occurrence", 0
+        )
+    for case in compiled["cases"]:
+        if case["benchmark"].endswith("-explicit-cot"):
+            assert case["metadata"].get("native_question_occurrence", 0) == case[
+                "answer"
+            ]["plain_case"]["metadata"].get("native_question_occurrence", 0)
+    assert not target.requests
+    store = Store(tmp_path / "store")
+    run = _run(compiled, store)
+    assert run["status"] == "completed"
+    planned_calls = 12 if dataset == "hellaswag" else 16
+    calls = store.calls(run["id"])
+    assert (
+        len(target.requests)
+        == len(calls)
+        == len(store.results(run["id"]))
+        == planned_calls
+    )
+    assert {(call["case_id"], call["target_id"]) for call in calls} == {
+        (cell["case_id"], cell["target_id"]) for cell in compiled["execution_cells"]
+    }
+    case_map = {case["id"]: case for case in compiled["cases"]}
+    assert Counter(
+        json.dumps(call["request"]["effective_body"], sort_keys=True) for call in calls
+    ) == Counter(json.dumps(body, sort_keys=True) for body in target.requests)
+    assert all(
+        call["request"]["messages"] == case_map[call["case_id"]]["messages"]
+        for call in calls
+    )
+    conditions = make_report(store, run["id"])[FIELD]["conditions"]
+    for condition in conditions:
+        skipped = condition["mode"] == "XC" and dataset == "hellaswag"
+        expected = 0 if skipped else 4
+        metric = condition["summary"]
+        assert metric["total"] == metric["completed"] == metric["correct"] == expected
+        assert metric["accuracy"] == (None if skipped else 1)
+        assert (
+            sum(category["total"] for category in condition["categories"]) == expected
+        )
+    print(
+        json.dumps(
+            {
+                "repeated_conditions": {
+                    "dataset": dataset,
+                    "identical": identical,
+                    "selected": 4,
+                    "occurrences": [
+                        member.get("native_question_occurrence", 0)
+                        for member in members
+                    ],
+                    "requests": len(target.requests),
+                    "denominators": [
+                        condition["summary"]["total"] for condition in conditions
+                    ],
+                }
+            }
+        )
+    )
+
+
+@pytest.mark.parametrize("location", ["member", "plain", "xc", "paired_plain"])
+@pytest.mark.parametrize("occurrence", [None, True, 0, -1, "1", 1.5, 2])
+def test_altered_occurrence_is_rejected_before_condition_dispatch(
+    location: str, occurrence: Any, target: Any, tmp_path: Path
+) -> None:
+    bundle_path = repeated_bundle(
+        directory=tmp_path, dataset="gpqa-main", identical=True
+    )
+    compiled = export_manifest(
+        manifest=template(target), dataset="gpqa-main", source_bundle=bundle_path
+    )
+    section = compiled[FIELD]
+    member = section["members"][2]
+    cases = {case["id"]: case for case in compiled["cases"]}
+    plain, xc = cases[member["plain_id"]], cases[member["xc_id"]]
+    modified = {
+        "member": member,
+        "plain": plain["metadata"],
+        "xc": xc["metadata"],
+        "paired_plain": xc["answer"]["plain_case"]["metadata"],
+    }[location]
+    if occurrence is None:
+        modified.pop("native_question_occurrence")
+    else:
+        modified["native_question_occurrence"] = occurrence
+    member["plain_sha256"], member["xc_sha256"] = digest(plain), digest(xc)
+    section["selection_sha256"] = selection_identity(section)
+    compiled.pop("plan_sha256")
+    if location in {"xc", "paired_plain"}:
+        with pytest.raises(ValueError):
+            validate_xc_case(
+                case=xc, config=compiled["benchmark_options"][xc["benchmark"]]
+            )
+    engine = Engine(Store(tmp_path / "invalid-store"))
+    try:
+        with pytest.raises(ValueError, match=r"occurrence|identity|paired plain"):
+            engine.start(compiled)
+    finally:
+        engine.close()
+    assert not target.requests
+
+
+def test_repeated_member_order_is_validated_when_hashes_are_refreshed(
+    target: Any, tmp_path: Path
+) -> None:
+    bundle_path = repeated_bundle(
+        directory=tmp_path, dataset="gpqa-main", identical=True
+    )
+    compiled = export_manifest(
+        manifest=template(target), dataset="gpqa-main", source_bundle=bundle_path
+    )
+    section = compiled[FIELD]
+    section["members"][2], section["members"][3] = (
+        section["members"][3],
+        section["members"][2],
+    )
+    section["selection_sha256"] = selection_identity(section)
+    compiled.pop("plan_sha256")
+    engine = Engine(Store(tmp_path / "out-of-order"))
+    try:
+        with pytest.raises(ValueError, match="occurrence differs from its order"):
+            engine.start(compiled)
+    finally:
+        engine.close()
+    assert not target.requests
 
 
 def test_modes_use_real_native_and_streaming_paths(

@@ -10,14 +10,17 @@ from typing import Any
 import pytest
 from cli.sr_bench.adapters import get_adapter
 from cli.sr_bench.candidate_plans import candidate_manifest, validate_candidate_protocol
+from cli.sr_bench.canonical import digest
 from cli.sr_bench.contracts import BENCHMARK_WEIGHTS, catalog
 from cli.sr_bench.legacy_reasoning import CONFIGURATIONS
 from cli.sr_bench.legacy_reasoning_explicit_cot import PROTOCOL as XC_PROTOCOL
 from cli.sr_bench.legacy_reasoning_modes import (
     FIELD,
+    _validate_member,
     canonical_mode,
     export_manifest,
     reasoning_controls,
+    selection_identity,
 )
 from cli.sr_bench.recovery import recovery_plan
 from cli.sr_bench.report import ComparisonValidator
@@ -77,6 +80,67 @@ def test_native_mode_checks_require_explicit_collection(
     assert not any(
         suite.match(pattern) for pattern in pytestconfig.getini("python_files")
     )
+
+
+def test_selection_identity_only_extends_repeated_members() -> None:
+    section = {
+        "source": {"kind": "fixture"},
+        "selection": {"dataset": "hellaswag"},
+        "members": [
+            {"native_id": "shared", "native_sha256": "a" * 64},
+            {"native_id": "unique", "native_sha256": "b" * 64},
+        ],
+    }
+    original = digest(
+        [
+            section["source"],
+            section["selection"],
+            [
+                [member["native_id"], member["native_sha256"]]
+                for member in section["members"]
+            ],
+        ]
+    )
+    assert selection_identity(section) == original
+    section["members"].append(
+        {
+            **section["members"][0],
+            "native_question_occurrence": 1,
+        }
+    )
+    first_repeat = selection_identity(section)
+    section["members"][-1]["native_question_occurrence"] = 2
+    assert selection_identity(section) != first_repeat
+
+
+@pytest.mark.parametrize("metadata", [None, []])
+def test_invalid_paired_occurrence_metadata_is_rejected(metadata: Any) -> None:
+    section = {
+        "selection": {"dataset": "gpqa-main"},
+        "source": {},
+        "source_revision": "a" * 40,
+        "requirements_sha256": "b" * 64,
+    }
+    plain = {"id": "plain", "metadata": metadata}
+    member = {
+        "plain_id": "plain",
+        "plain_sha256": digest(plain),
+        "native_question_occurrence": 1,
+    }
+    benchmark = "legacy-gpqa-main-explicit-cot"
+    case = {
+        "benchmark": benchmark,
+        "metadata": {"native_question_occurrence": 1},
+        "answer": {"plain_case": plain},
+    }
+    with pytest.raises(ValueError, match="paired plain"):
+        _validate_member(
+            case=case,
+            member=member,
+            section=section,
+            options={benchmark: section},
+            explicit=True,
+        )
 
 
 @pytest.mark.parametrize(

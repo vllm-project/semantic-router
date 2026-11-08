@@ -304,7 +304,10 @@ export fails rather than silently truncating.
 
 Native IDs, source digests, selection parameters, protocol and dependency lock
 are frozen in the manifest. Some native IDs are assigned after sampling, so
-case IDs also bind the source and selection. These are selection-bound
+case IDs also bind the source and selection. When a native ID repeats, the
+exporter keeps every question and binds later occurrences to their position
+among that ID's selected rows. It preserves the native ID and reference record.
+These are selection-bound
 identities, not cross-seed task equivalence or exposure-history evidence.
 Reference answers, solutions and native metadata stay inside the private
 `answer` field. The output file is owner-readable and refuses overwrite.
@@ -428,6 +431,9 @@ Plain adapters retain `bench-reasoning-plain-v1` and
 `legacy-<configuration>-explicit-cot` adapters with
 `bench-reasoning-explicit-cot-v1`. The frozen selection records source content
 digests, native order, per-case hashes, eligibility and target bindings.
+Later occurrences of a repeated native ID use the same occurrence number across
+plain and explicit-CoT cases. Frozen member validation checks that order; exact
+repeats remain separate planned rows and keep their own results.
 `execution_cells` prevents a target from receiving another condition's prompt.
 The [condition report](./results.md#reasoning-condition-measurements) reads the
 same saved request and result evidence.
