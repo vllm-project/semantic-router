@@ -3,6 +3,7 @@ package extproc
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -64,5 +65,49 @@ func TestExtProcDispatchesCodexToolLoopToChatBackend(t *testing.T) {
 		if !dropped["client_metadata"] || !dropped["include"] {
 			t.Fatalf("turn %d did not report the dropped fields: %+v", turn+1, ctx.ProtocolDiagnostics)
 		}
+	}
+}
+
+// Codex CLI 0.163 attaches internal_chat_message_metadata_passthrough to every
+// input message. The first turn must still pass ingress, and the field must be
+// reported and never reach the backend.
+func TestExtProcDispatchesCodex0163FirstTurnToChatBackend(t *testing.T) {
+	raw, err := os.ReadFile("../protocolcodec/testdata/clients/codex-cli-0.163.0-first-turn.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var turns []json.RawMessage
+	if err = json.Unmarshal(raw, &turns); err != nil {
+		t.Fatal(err)
+	}
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{
+		SourceFormat: llmprotocol.OpenAIResponsesV1,
+		RequestID:    "request_codex_0163",
+		TraceContext: t.Context(),
+	}
+	request, immediate := router.prepareProtocolRequest(turns[0], ctx)
+	if immediate != nil || request == nil {
+		t.Fatalf("first turn rejected at ingress: %+v", ctx.ImmediateProtocolError)
+	}
+	request.Model = "routed-model"
+	request.Generation++
+	ctx.TargetFormat = llmprotocol.OpenAIChatV1
+	dispatch, err := router.encodeDispatchRequest(ctx)
+	if err != nil {
+		t.Fatalf("dispatch: %v", err)
+	}
+	if strings.Contains(string(dispatch), "internal_chat_message_metadata_passthrough") {
+		t.Fatalf("dispatch forwarded the Codex item metadata: %s", dispatch)
+	}
+	reported := false
+	for _, diagnostic := range ctx.ProtocolDiagnostics {
+		if diagnostic.Action == llmprotocol.DiagnosticDropped &&
+			diagnostic.Field == "input[].internal_chat_message_metadata_passthrough" {
+			reported = true
+		}
+	}
+	if !reported {
+		t.Fatalf("the dropped item metadata was not reported: %+v", ctx.ProtocolDiagnostics)
 	}
 }

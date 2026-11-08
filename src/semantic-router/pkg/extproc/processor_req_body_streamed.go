@@ -119,8 +119,22 @@ func (h *StreamedBodyHandler) Release() {
 	streamedHandlerPool.Put(h)
 }
 
+// releaseStreamedBody detaches the handler before returning it to the pool.
+// Both normal completion and stream error cleanup can safely call it.
+func releaseStreamedBody(ctx *RequestContext) {
+	if ctx == nil || ctx.StreamedBody == nil {
+		return
+	}
+	h := ctx.StreamedBody
+	ctx.StreamedBody = nil
+	h.Release()
+}
+
 // HandleChunk processes a single body chunk from Envoy STREAMED mode.
 func (h *StreamedBodyHandler) HandleChunk(body *ext_proc.HttpBody, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+	if h.ctx.streamedBodyRejected {
+		return nil, nil
+	}
 	chunk := body.GetBody()
 	eos := body.GetEndOfStream()
 
@@ -128,8 +142,11 @@ func (h *StreamedBodyHandler) HandleChunk(body *ext_proc.HttpBody, ctx *RequestC
 		h.firstChunkAt = streamedBodyNow()
 	}
 	h.chunkCount++
-	h.buf.Write(chunk)
 
+	if rejection := h.checkBodySize(len(chunk)); rejection != nil {
+		return rejection, nil
+	}
+	h.buf.Write(chunk)
 	if rejection := h.checkGuards(); rejection != nil {
 		return rejection, nil
 	}
@@ -151,15 +168,28 @@ func (h *StreamedBodyHandler) intermediateResponse() *ext_proc.ProcessingRespons
 	return sharedContinueEmptyBody
 }
 
-// checkGuards enforces max-body and deadline limits with an immediate client
-// error. Returning an error instead would close the gRPC stream and leave the
-// outcome to Envoy's failure_mode_allow policy.
-func (h *StreamedBodyHandler) checkGuards() *ext_proc.ProcessingResponse {
-	if h.maxBytes > 0 && int64(h.buf.Len()) > h.maxBytes {
-		logging.Infof("[StreamedBody] Accumulated %d bytes exceeds limit %d — aborting",
-			h.buf.Len(), h.maxBytes)
+// checkBodySize rejects incoming bytes before they can grow or fill the buffer.
+func (h *StreamedBodyHandler) checkBodySize(incomingBytes int) *ext_proc.ProcessingResponse {
+	// Compare against the remaining budget to avoid overflowing an accumulated sum.
+	if h.maxBytes > 0 && int64(incomingBytes) > h.maxBytes-int64(h.buf.Len()) {
+		if incomingBytes == 0 {
+			logging.Infof("[StreamedBody] Accumulated %d bytes exceeds limit %d — aborting", h.buf.Len(), h.maxBytes)
+		} else {
+			logging.Infof("[StreamedBody] Incoming %d bytes with %d accumulated bytes exceeds limit %d — aborting",
+				incomingBytes, h.buf.Len(), h.maxBytes)
+		}
 		return h.reject(http.StatusRequestEntityTooLarge, "request_too_large",
 			fmt.Sprintf("request body exceeds the %d-byte limit", h.maxBytes))
+	}
+	return nil
+}
+
+// checkGuards enforces the deadline and defensively rechecks accumulated size.
+// HandleChunk checks incoming size before buffering. Guard failures use an
+// immediate client error so Envoy's failure_mode_allow cannot bypass the limit.
+func (h *StreamedBodyHandler) checkGuards() *ext_proc.ProcessingResponse {
+	if rejection := h.checkBodySize(0); rejection != nil {
+		return rejection
 	}
 	if !h.deadline.IsZero() && time.Now().After(h.deadline) {
 		logging.Infof("[StreamedBody] Accumulation deadline exceeded after %d bytes — aborting",
@@ -171,6 +201,7 @@ func (h *StreamedBodyHandler) checkGuards() *ext_proc.ProcessingResponse {
 }
 
 func (h *StreamedBodyHandler) reject(status int, code, message string) *ext_proc.ProcessingResponse {
+	h.ctx.streamedBodyRejected = true
 	h.ctx.ImmediateProtocolError = llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, code, message, nil)
 	return h.router.createErrorResponse(status, message)
 }
@@ -178,6 +209,9 @@ func (h *StreamedBodyHandler) reject(status int, code, message string) *ext_proc
 // finishAtTrailers completes a FULL_DUPLEX_STREAMED body whose end Envoy
 // signaled with request trailers instead of an end_of_stream body chunk.
 func (h *StreamedBodyHandler) finishAtTrailers() (*ext_proc.ProcessingResponse, error) {
+	if h.ctx.streamedBodyRejected {
+		return nil, nil
+	}
 	if rejection := h.checkGuards(); rejection != nil {
 		return rejection, nil
 	}

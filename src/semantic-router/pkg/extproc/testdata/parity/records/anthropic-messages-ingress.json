@@ -55,6 +55,7 @@
             "x-vsr-looper-decision",
             "x-vsr-looper-iteration",
             "x-vsr-looper-request",
+            "x-vsr-protection-release",
             "x-vsr-selected-recipe"
           ]
         }
@@ -85,7 +86,8 @@
             },
             {
               "name": "x-route-source",
-              "value": "parity-corpus"
+              "value": "parity-corpus",
+              "append": true
             },
             {
               "name": "content-length",

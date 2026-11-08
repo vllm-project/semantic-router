@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 训练 Vela Safety 和 Hazard
 sidebar_label: Safety 和 Hazard
 translation:

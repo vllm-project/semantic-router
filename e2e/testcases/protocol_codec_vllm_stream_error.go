@@ -16,12 +16,16 @@ import (
 const (
 	vllmStreamErrorMarker    = "__mock_vllm_stream_error__"
 	vllmMidstreamErrorMarker = "__mock_vllm_midstream_error__"
-	vllmGrammarErrorPrefix   = "Grammar error: regex parse error"
+	// The same streams, with [DONE] written 0.3 s after the error event, which
+	// normally reaches the Router as a later read.
+	vllmStreamErrorSplitMarker    = "__mock_vllm_stream_error_split__"
+	vllmMidstreamErrorSplitMarker = "__mock_vllm_midstream_error_split__"
+	vllmGrammarErrorPrefix        = "Grammar error: regex parse error"
 )
 
 func init() {
 	pkgtestcases.Register("protocol-codec-vllm-stream-error", pkgtestcases.TestCase{
-		Description: "vLLM's in-stream error event, whose code is an integer HTTP status, reaches every client with vLLM's message",
+		Description: "vLLM's in-stream error event, whose code is an integer HTTP status, reaches every client with vLLM's message, whether [DONE] shares its read or comes later",
 		Tags:        []string{"protocol-codec", "vllm", "anthropic", "responses", "errors", "streaming"},
 		Fn:          testProtocolCodecVLLMStreamError,
 	})
@@ -33,20 +37,29 @@ func init() {
 // content has started.
 type vllmStreamErrorWant struct{ event, errorType, code, message, partial string }
 
+var (
+	vllmStreamErrorReply = map[string]vllmStreamErrorWant{
+		"/v1/chat/completions": {"", "invalid_request_error", `"400"`, vllmGrammarErrorPrefix, ""},
+		"/v1/messages":         {"error", "invalid_request_error", "", vllmGrammarErrorPrefix, ""},
+		"/v1/responses":        {"error", "", `"400"`, vllmGrammarErrorPrefix, ""},
+	}
+	vllmMidstreamErrorReply = map[string]vllmStreamErrorWant{
+		"/v1/chat/completions": {"", "server_error", `"500"`, "Internal server error", `"content":"partial"`},
+		"/v1/messages":         {"error", "api_error", "", "Internal server error", `"text":"partial"`},
+		"/v1/responses":        {"error", "", `"500"`, "Internal server error", `"delta":"partial"`},
+	}
+)
+
+// A split marker's client gets the same last frame as its twin's: for Chat,
+// the Router's error frame with a string code, however [DONE] is split off.
 var vllmStreamErrorCases = []struct {
 	marker string
 	want   map[string]vllmStreamErrorWant
 }{
-	{vllmStreamErrorMarker, map[string]vllmStreamErrorWant{
-		"/v1/chat/completions": {"", "invalid_request_error", `"400"`, vllmGrammarErrorPrefix, ""},
-		"/v1/messages":         {"error", "invalid_request_error", "", vllmGrammarErrorPrefix, ""},
-		"/v1/responses":        {"error", "", `"400"`, vllmGrammarErrorPrefix, ""},
-	}},
-	{vllmMidstreamErrorMarker, map[string]vllmStreamErrorWant{
-		"/v1/chat/completions": {"", "server_error", `"500"`, "Internal server error", `"content":"partial"`},
-		"/v1/messages":         {"error", "api_error", "", "Internal server error", `"text":"partial"`},
-		"/v1/responses":        {"error", "", `"500"`, "Internal server error", `"delta":"partial"`},
-	}},
+	{vllmStreamErrorMarker, vllmStreamErrorReply},
+	{vllmStreamErrorSplitMarker, vllmStreamErrorReply},
+	{vllmMidstreamErrorMarker, vllmMidstreamErrorReply},
+	{vllmMidstreamErrorSplitMarker, vllmMidstreamErrorReply},
 }
 
 func testProtocolCodecVLLMStreamError(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {

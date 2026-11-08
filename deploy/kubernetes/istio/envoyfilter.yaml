@@ -18,7 +18,10 @@ spec:
     patch:
       operation: INSERT_FIRST
       value:
-        name: envoy.filters.http.ext_proc
+        # Keep this name unique. Istio sets per-route ext_proc config for
+        # InferencePool routes under envoy.filters.http.ext_proc, and a filter
+        # with that name would take the pool's settings instead of the router's.
+        name: vllm-semantic-router.ext_proc
         typed_config:
           '@type': type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
           # A decision's reliability block reaches Envoy's router through these

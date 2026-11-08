@@ -49,7 +49,9 @@ type OpenAIRouter struct {
 	signals   *signalRuntime
 	rerankers map[config.RecipeName]modelruntime.PairScorer
 	// decisionDecider answers decision selectors; nil uses the process-wide model runtime manager.
-	decisionDecider      modelservice.Decider
+	decisionDecider modelservice.Decider
+	// systemOneDecider answers decision selectors on systemone deployments.
+	systemOneDecider     modelservice.Remote
 	decisionCards        map[string]modelservice.ModelCard
 	Embeddings           *embedding.Set
 	serviceEmbeddings    *embedding.Set
@@ -237,6 +239,7 @@ func (r *OpenAIRouter) createJSONResponse(statusCode int, data interface{}) *ext
 
 // createErrorResponse creates a direct error response.
 func (r *OpenAIRouter) createErrorResponse(statusCode int, message string) *ext_proc.ProcessingResponse {
+	statusCode = errorResponseStatusCode(statusCode)
 	errorType := "invalid_request_error"
 	if statusCode >= 500 {
 		errorType = "api_error"

@@ -20,6 +20,8 @@ is_mtpe: true
 | [`modality`](../../tutorials/signal/learned/modality.md) | Vela 1.0 Modality | `AR`（文本）、`DIFFUSION`（图像）、`BOTH` |
 | [`classifier`](../../tutorials/signal/learned/classifier.md) | 你自己的模型 | 你的标签 |
 
+表里列的是专用模型。没有绑定时，内置的 domain、fact-check、feedback 和 modality 信号使用决策模型，默认是 vela3-fast。下面的绑定显式选用 Vela 1.0。见[选择模型](../choose-a-model#by-task)和[为信号选择模型](../../installation/choose-a-model-for-a-signal.md)。
+
 ## 打开它 {#turn-it-on}
 
 把信号加上，在路由里用起来。模型由 router 在 CPU 上替你跑，不用别的：
@@ -48,7 +50,7 @@ routing:
 
 ## 选它跑在哪 {#choose-where-it-runs}
 
-想自己挑设备、输入上限或换个模型，就写个部署，把功能绑上去。绑定名叫 `domain_classifier`、`fact_check_classifier`、`feedback_detector` 和 `modality_detector`，它们读的都是标签概率（`label_distribution.v1`）：
+想自己挑设备、输入上限或换个模型，就写个部署，把信号绑上去。绑定键是信号类型 `domain`、`fact_check`、`user_feedback` 和 `modality`，每个都读取其模型的标签概率：
 
 ```yaml
 global:
@@ -62,9 +64,7 @@ global:
           max_tokens: 2048
           overflow: truncate
     bindings:
-      domain_classifier:
-        deployment: vela-domain
-        contract: label_distribution.v1
+      domain: vela-domain
 ```
 
 `overflow: truncate` 拿长请求的前 2,048 个 token 分类，并如实报告截断了；`reject`（默认）则让超限输入的信号保持未知。
@@ -85,14 +85,14 @@ curl -s localhost:8100/v1/classify -H 'content-type: application/json' \
 
 ## 用自己的分类器 {#use-your-own-classifier}
 
-Hugging Face 上的 ModernBERT 或 mmBERT 序列分类器，可以直接当 `classifier` 信号用，标签随你定。钉住它的 revision、绑到规则上、按它的标签路由：
+Hugging Face 上的 ModernBERT 或 mmBERT 序列分类器，可以直接当 `classifier` 信号用，标签随你定。钉住它的 revision、在规则上指定它的部署、按它的标签路由：
 
 ```yaml
 routing:
   signals:
     classifiers:
       - name: ticket_topic
-        type: local
+        deployment: ticket-topics
         labels: [billing, shipping, other]
   decisions:
     - name: billing-desk
@@ -107,10 +107,6 @@ routing:
               gte: 0.5
       modelRefs:
         - model: support-model
-  model_bindings:
-    classifier.ticket_topic:
-      deployment: ticket-topics
-      contract: label_distribution.v1
 global:
   model_catalog:
     deployments:
@@ -124,4 +120,4 @@ global:
           overflow: reject
 ```
 
-`labels` 要按模型自己的标签顺序列（它的 `id2label`）。router 从 runtime 读模型的标签，和规则对不上就拒绝启动。互相独立的标签、又有公开工作点的模型，用 `label_scores.v1`；见[分类器信号](../../tutorials/signal/learned/classifier.md)。
+`labels` 要按模型自己的标签顺序列（它的 `id2label`）。router 从 runtime 读模型的标签，和规则对不上就拒绝启动。互相独立的标签、又有公开工作点的模型，用部署的 `operating_point` 固定工作点；见[分类器信号](../../tutorials/signal/learned/classifier.md#independent-labels-with-a-frozen-operating-point)。

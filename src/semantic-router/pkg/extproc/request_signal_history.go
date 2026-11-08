@@ -3,6 +3,7 @@ package extproc
 import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routinginput"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
@@ -13,6 +14,7 @@ type signalConversationHistory struct {
 	toolResultTexts          []string
 	toolResultScanIncomplete bool
 	jailbreakInput           *classification.JailbreakInput
+	routingInput             routinginput.Outcome
 	hasAssistantReply        bool
 	lastUserHasText          bool
 	metadata                 map[string]string
@@ -20,6 +22,7 @@ type signalConversationHistory struct {
 	contextTextBytes         int
 	contextEquivalentBytes   int
 	contextHasNonText        bool
+	contextReserveTokens     int
 
 	// Conversation-shape facts for the conversation signal family.
 	hasDeveloperMessage       bool
@@ -51,6 +54,7 @@ func signalConversationHistoryFromSnapshot(result *requestSignalSnapshot) signal
 		priorUserMessages:         append([]string(nil), result.PriorUserMessages...),
 		nonUserMessages:           append([]string(nil), result.NonUserMessages...),
 		jailbreakInput:            result.JailbreakInput,
+		routingInput:              result.RoutingInput,
 		hasAssistantReply:         result.HasAssistantReply,
 		lastUserHasText:           result.LastUserHasText,
 		metadata:                  cloneRoutingMetadata(result.Metadata),
@@ -58,6 +62,7 @@ func signalConversationHistoryFromSnapshot(result *requestSignalSnapshot) signal
 		contextTextBytes:          result.ContextTextBytes,
 		contextEquivalentBytes:    result.ContextEquivalentBytes,
 		contextHasNonText:         result.ContextHasNonText,
+		contextReserveTokens:      result.ContextReserveTokens,
 		hasDeveloperMessage:       result.HasDeveloperMessage,
 		userMessageCount:          result.UserMessageCount,
 		assistantMessageCount:     result.AssistantMessageCount,
@@ -100,11 +105,11 @@ func cloneRoutingMetadata(values map[string]string) map[string]string {
 	return cloned
 }
 
-func extractToolTransitionContextFromRequest(req *llmprotocol.Request, historyWindow int, ctx *RequestContext) tools.ToolTransitionContext {
+func extractToolTransitionContextFromRequest(req *llmprotocol.Request, historyWindow int, ctx *RequestContext, selector *routinginput.Selector) tools.ToolTransitionContext {
 	if req == nil {
 		return toolTransitionContextFromConversationHistory(signalConversationHistory{}, historyWindow, ctx)
 	}
-	return toolTransitionContextFromConversationHistory(extractSignalConversationHistory(req), historyWindow, ctx)
+	return toolTransitionContextFromConversationHistory(extractSignalConversationHistoryWith(req, selector), historyWindow, ctx)
 }
 
 func toolTransitionContextFromConversationHistory(history signalConversationHistory, historyWindow int, ctx *RequestContext) tools.ToolTransitionContext {
@@ -118,10 +123,14 @@ func toolTransitionContextFromConversationHistory(history signalConversationHist
 }
 
 func extractSignalConversationHistory(req *llmprotocol.Request) signalConversationHistory {
+	return extractSignalConversationHistoryWith(req, nil)
+}
+
+func extractSignalConversationHistoryWith(req *llmprotocol.Request, selector *routinginput.Selector) signalConversationHistory {
 	if req == nil {
 		return signalConversationHistory{}
 	}
-	return signalConversationHistoryFromRequest(req, extractSemanticRequestSignals(req))
+	return signalConversationHistoryFromRequest(req, extractSemanticRequestSignalsWith(req, selector))
 }
 
 func recentToolNames(names []string, historyWindow int) []string {

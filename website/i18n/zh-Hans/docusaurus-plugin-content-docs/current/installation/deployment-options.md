@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 选择部署方式
 description: 为部署 vLLM Semantic Router 选择 Docker、Kubernetes 或硬件专用路径。
 translation:

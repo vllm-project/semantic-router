@@ -24,14 +24,28 @@ func (c *Classifier) labelledDecisionRules() []config.DecisionSignalRule {
 }
 
 // prepareDecisionSignals checks native or composed implementations before
-// publishing the generation. Without runtime services there is no card to check.
+// publishing the generation. Without runtime services there is no card of a
+// model_runtime deployment to check. A systemone deployment's questions are
+// checked against the question types it declares; its API's listing may add
+// more, so a deployment that declares none is checked per request.
 func (c *Classifier) prepareDecisionSignals() error {
-	if c.models == nil || c.models.runtime == nil || c.models.runtime.Services() == nil {
-		return nil
-	}
+	services := c.models != nil && c.models.runtime != nil && c.models.runtime.Services() != nil
 	cards := make(map[string]modelservice.ModelCard)
 	for _, rule := range c.labelledDecisionRules() {
 		name, deployment := c.decisionRuleDeployment(rule)
+		if deployment.IsSystemOne() {
+			declared := deployment.DeclaredQuestionTypes()
+			if len(declared) == 0 {
+				continue
+			}
+			if _, err := modelservice.CompileTask(modelservice.TaskDefinition{ID: "decision", Stage: "request"}, DecisionQuestion(rule.Name, rule.Question), modelservice.RemoteCard(deployment.Model, declared, deployment.DeclaredPresets())); err != nil {
+				return fmt.Errorf("routing.signals.decision[%s]: systemone deployment %q: %w", rule.Name, name, err)
+			}
+			continue
+		}
+		if !services {
+			continue
+		}
 		card, checked := cards[name]
 		if !checked {
 			if deployment.Managed() {
@@ -53,7 +67,9 @@ func (c *Classifier) prepareDecisionSignals() error {
 			return fmt.Errorf("routing.signals.decision[%s]: deployment %q: %w", rule.Name, name, err)
 		}
 	}
-	c.decisionCards = cards
+	if services {
+		c.decisionCards = cards
+	}
 	return nil
 }
 

@@ -50,6 +50,12 @@ func (r *OpenAIRouter) handleContextRecoveryFollowup(
 	if len(calls) > recovery.MaxRetrievals {
 		return responseBody, fmt.Errorf("context recovery retrieval limit exceeded")
 	}
+	// The followup keeps only this turn's retrieval calls and is sent through
+	// a Looper client, so neither this turn's nor the history's continuity
+	// blocks would reach the provider.
+	if carriesReasoningContinuity(requestCtx.SemanticRequest, &decoded.Response) {
+		return responseBody, fmt.Errorf("context recovery cannot carry reasoning continuity blocks")
+	}
 	toolMessages, err := r.loadContextRecoveryToolMessages(ctx, requestCtx, calls)
 	if err != nil {
 		return responseBody, err
@@ -150,6 +156,9 @@ func (r *OpenAIRouter) executeContextRecoveryFollowup(
 	followupRequest.Messages = append([]llmprotocol.Message(nil), requestCtx.SemanticRequest.Messages...)
 	followupRequest.Messages = append(followupRequest.Messages, assistant...)
 	followupRequest.Messages = append(followupRequest.Messages, toolMessages...)
+	// Single-hop recovery has consumed the issued keys. Drop the reserved
+	// retrieve tool so the follow-up hop cannot inject it again.
+	followupRequest.Tools = withoutContextRecoveryTools(followupRequest.Tools)
 	followupRequest.Stream = false
 	followupRequest.Generation++
 	model := strings.TrimSpace(requestCtx.VSRSelectedModel)
@@ -198,7 +207,9 @@ func (r *OpenAIRouter) executeContextRecoveryFollowup(
 	if err != nil {
 		return nil, err
 	}
-	decoded.Response.Model = requestCtx.RequestModel
+	// The reply names the model the upstream answered with, as one without
+	// recovery does.
+	decoded.Response.Model = firstNonEmpty(decoded.Response.Model, initial.Model, requestCtx.RequestModel)
 	decoded.Response.Generation++
 	format := requestCtx.SourceFormat
 	if format == "" {
@@ -217,6 +228,69 @@ func stringSet(values []string) map[string]struct{} {
 		result[value] = struct{}{}
 	}
 	return result
+}
+
+// isContextRecoveryFollowupRequest reports a Looper hop that already carries
+// trailing tool results for the immediately preceding assistant retrieval.
+// Those hops must not re-run context compression: the results are the
+// uncompressed recovered payload.
+func isContextRecoveryFollowupRequest(request *llmprotocol.Request) bool {
+	if request == nil {
+		return false
+	}
+	results := make(map[string]struct{})
+	index := len(request.Messages) - 1
+	for index >= 0 && request.Messages[index].Role == llmprotocol.RoleTool {
+		for _, content := range request.Messages[index].Content {
+			if content.Kind == llmprotocol.ContentToolResult && content.ToolResult != nil {
+				results[content.ToolResult.CallID] = struct{}{}
+			}
+		}
+		index--
+	}
+	if len(results) == 0 {
+		return false
+	}
+	// A provider response can produce several adjacent assistant output items.
+	// Stop at the previous exchange instead of matching recovery in history.
+	for ; index >= 0; index-- {
+		message := request.Messages[index]
+		if message.Role != llmprotocol.RoleAssistant && message.Role != "" {
+			break
+		}
+		for _, content := range message.Content {
+			if isContextRecoveryAssistantToolCall(message.Role, content) {
+				if _, ok := results[content.ToolCall.ID]; ok {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func isContextRecoveryAssistantToolCall(role llmprotocol.Role, content llmprotocol.Content) bool {
+	if content.Kind != llmprotocol.ContentToolCall || content.ToolCall == nil {
+		return false
+	}
+	if content.ToolCall.Name != contextcompression.RetrieveToolName || content.ToolCall.ID == "" {
+		return false
+	}
+	return role == llmprotocol.RoleAssistant || role == ""
+}
+
+func withoutContextRecoveryTools(tools []llmprotocol.Tool) []llmprotocol.Tool {
+	if len(tools) == 0 {
+		return nil
+	}
+	kept := make([]llmprotocol.Tool, 0, len(tools))
+	for _, tool := range tools {
+		if tool.Name == contextcompression.RetrieveToolName {
+			continue
+		}
+		kept = append(kept, tool)
+	}
+	return kept
 }
 
 func parseContextRecoveryCalls(

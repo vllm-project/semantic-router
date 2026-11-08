@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "fddd53d7c446c30ae183d16b6d63ec54f7a00a3e"
   source_file: "docs/tutorials/signal/learned/safety.md"
@@ -37,7 +38,7 @@ routing:
           threshold: 0.6
 ```
 
-不写 `model` 用内置的本地 Safety 或 Hazard 模块。显式写 `model` 则解析 `global.model_catalog.external` 里的一个分类端点。两种形式的分语义一样。本地产物，`labels` 必须和 `config.json` 的 `id2label` 顺序完全一致；加载器还会查头的 `problem_type`。外部端点按名字对齐标签。
+每条安全规则都提出自己的问题。没写 `deployment` 的规则询问决策模型，它的 `hazard` 部分询问预先声明的 `hazard` 部署（Vela 1.0 Hazard）。在规则上，或在它的 `hazard` 部分里写 `deployment`，即可指定其他部署；见[为信号选择模型](../../../installation/choose-a-model-for-a-signal.md)。各种部署的分数语义一样。本地模型的 `labels` 必须和 `config.json` 的 `id2label` 顺序完全一致；加载器还会查头的 `problem_type`。`classify` 服务按名字对齐标签。
 
 - `labels` 和 `unsafe_labels` 默认是 `[safe, unsafe]` 和 `[unsafe]`。
 - 二元规则把选中的不安全标签分求和，和 `threshold` 比。相等即命中。
@@ -68,24 +69,31 @@ routing:
 
 模型出错，信号未知。`rules.on_unknown: fail_request` 会在决策持续未知时返回 HTTP 503。打了分的不安全请求选中配好的处理路由。诊断在 `x-vsr-matched-safety`、dashboard 和回放记录里给出命中的规则名和分类结果。
 
-本地上下文预算、外部端点和失败策略见[共享模型配置](../../../model-runtime/guides/safety.md)，按类别细分的策略见[完整 HTTP 示例](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/safety/content-safety.yaml)。
+本地上下文预算、远程部署和失败策略见[共享模型配置](../../../model-runtime/guides/safety.md)，按类别细分的策略见[完整 HTTP 示例](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/safety/content-safety.yaml)。
 
 ## 选 Vela Shield {#select-vela-shield}
 
-内置 Safety 模块默认用 [Vela Safety](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-Safety)。[Vela Shield](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-Shield) 是另训的一套，标签同样是 `safe`/`unsafe`，现有规则和阈值原样适用。换模型后阈值要重验。
+规则上没写 `deployment` 时，Safety 询问决策模型，默认是 vela3-fast。[Vela Safety](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-Safety) 和 [Vela Shield](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-Shield) 是专用分类器，标签同样是 `safe`/`unsafe`。现有规则可以保留标签，但换模型后阈值要重验。
 
-所有安全规则都想换 Shield，就设模块的模型：
+要用 Shield，就声明它的部署，并在每条要用它的安全规则上指定它：
 
 ```yaml
 global:
   model_catalog:
-    modules:
-      safety:
-        safety:
-          model_id: models/Vela-1.0-Encoder-307M-Shield
+    deployments:
+      shield:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Shield
+        revision: a981a99eeb05a2859b88b5cee9af4352897ec4ec
+routing:
+  signals:
+    safety:
+      - name: unsafe-content
+        deployment: shield
+        threshold: 0.5
 ```
 
-只想一个配方里的一条规则用 Shield，就声明部署、把规则绑上去。别的配方仍用模块的模型：
+配方里的规则以同样的方式指定部署，因此可以只让一个配方用 Shield，其他配方仍询问决策模型：
 
 ```yaml
 global:
@@ -98,39 +106,48 @@ global:
 recipes:
   - name: care
     routing:
-      model_bindings:
-        safety.unsafe-content:
-          deployment: shield
-          contract: label_distribution.v1
       signals:
         safety:
           - name: unsafe-content
+            deployment: shield
             threshold: 0.5
 ```
 
-模块形式用内置注册表里钉住的 revision；部署用它自己声明的 `revision`。两种形式下载的都只有根分类器。Shield 仓库在 `heads/` 下还发布了辅助头、在 `lc/` 下发布了标签条件编码器；router 不加载、也不下载它们。
+部署下载它声明的 `revision`，并且只下载根分类器。Shield 仓库在 `heads/` 下还发布了辅助头、在 `lc/` 下发布了标签条件编码器；router 不加载、也不下载它们。
 
 ## 长输入扫描 {#long-input-scanning}
 
-Safety 头默认整输入推理。一套单独校准的窗口策略，可以扫长请求里随处可见的本地风险：
+Safety 头默认整输入推理。一套单独校准的窗口策略，可以扫长请求里随处可见的本地风险。把整文档预算给规则的部署，把窗口几何写在模块上：
 
 ```yaml
 global:
   model_catalog:
+    deployments:
+      my-safety:
+        provider: model_runtime
+        artifact: /models/my-safety-model
+        device: cpu
+        input:
+          max_tokens: 32768
+          overflow: window
     modules:
       safety:
         safety:
-          model_id: models/my-safety-model
-          max_sequence_length: 32768
           window:
             size: 512
             overlap: 255
+routing:
+  signals:
+    safety:
+      - name: unsafe-content
+        deployment: my-safety
+        threshold: 0.5
 ```
 
-`max_sequence_length` 限的是分词后整个请求，特殊 token 也算。更长的输入直接失败；router 绝不悄悄只留第一个窗口。`window.size` 含特殊 token，`overlap` 数的是内容 token。对一个加两个特殊 token 的分词器，这个例子每次前进 255 个内容 token。每个窗口都还原原始特殊 token，位置从零起。内容为空、窗口预算非法，都失败。
+`input.max_tokens` 限的是分词后整个请求，特殊 token 也算。更长的输入直接失败；router 绝不悄悄只留第一个窗口。`window.size` 含特殊 token，`overlap` 数的是内容 token。对一个加两个特殊 token 的分词器，这个例子每次前进 255 个内容 token。每个窗口都还原原始特殊 token，位置从零起。内容为空、窗口预算非法，都失败。
 
-具名的本地绑定，部署的 `input.max_tokens` 取代模块的整文档预算。加载的检查点和图支持 32K 前向时，文档预算 65,536、`window.size` 32,768 是合法的。只有单窗口必须装得进一次前向；文档可以要多个窗口。token 数按分类器的分词器算，不是下游生成模型的。一个窗口失败，整场扫描就失败，不会只给查过的前缀返一个好分。
+没写 `deployment` 的规则改用模块的 `max_sequence_length` 作为整文档预算。加载的检查点和图支持 32K 前向时，文档预算 65,536、`window.size` 32,768 是合法的。只有单窗口必须装得进一次前向；文档可以要多个窗口。token 数按分类器的分词器算，不是下游生成模型的。一个窗口失败，整场扫描就失败，不会只给查过的前缀返一个好分。
 
-扫描用原始 token ID，覆盖每个内容 token，最后一个窗口允许短一截。它把选中的不安全概率在窗内求和，再取最大的窗口分，启用一次规则阈值。Hazard 同理，取各窗口中选中的类别最高概率。那个产物是按扫描评过的，就在 `hazard` 头下单独设 `window`。外部分类器保留自己的输入处理契约。已发布的 Vela Hazard 工作点保持随附的 2,048 token 窗口和 32K 文档策略；把文档预算配大，不会让那个工作点够格换成另一种扫描。
+扫描用原始 token ID，覆盖每个内容 token，最后一个窗口允许短一截。它把选中的不安全概率在窗内求和，再取最大的窗口分，启用一次规则阈值。Hazard 同理，取各窗口中选中的类别最高概率。那个产物是按扫描评过的，就在 `hazard` 头下单独设 `window`。远程 `classify` 部署保留自己的输入处理契约。已发布的 Vela Hazard 工作点保持随附的 2,048 token 窗口和 32K 文档策略；把文档预算配大，不会让那个工作点够格换成另一种扫描。
 
 阈值要用按你部署的准确模型、窗口大小、重叠和[引擎参数](../../../model-runtime/engine-args.md)评出来的。窗口扫描能捞回整输入分类器漏掉的本地风险，但它读不懂同一窗口之外的远处拒绝或保护意图。引用材料和其他长程上下文，在应用层验。需要整输入语义时，别写 `window`。

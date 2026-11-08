@@ -653,6 +653,60 @@ def test_signal_references_cannot_cross_signal_families():
     )
 
 
+def authz_config(reference: str) -> UserConfig:
+    return UserConfig.model_validate(
+        {
+            "version": "v0.3",
+            "providers": {
+                "defaults": {"model": "model-a"},
+                "models": [
+                    {
+                        "name": "model-a",
+                        "backend_refs": [
+                            {"endpoint": "127.0.0.1:8000", "provider": "vllm"}
+                        ],
+                    }
+                ],
+            },
+            "routing": {
+                "modelCards": [{"name": "model-a"}],
+                "signals": {
+                    "role_bindings": [
+                        {
+                            "name": "admins",
+                            "role": "admin",
+                            "subjects": [{"kind": "Group", "name": "platform-admins"}],
+                        }
+                    ]
+                },
+                "decisions": [
+                    {
+                        "name": "admin-route",
+                        "priority": 100,
+                        "rules": {
+                            "operator": "AND",
+                            "conditions": [{"type": "authz", "name": reference}],
+                        },
+                        "modelRefs": [{"model": "model-a"}],
+                    }
+                ],
+            },
+        }
+    )
+
+
+def test_authz_conditions_reference_the_role_a_binding_grants():
+    assert validate_user_config(authz_config("admin"), log_summary=False) == []
+
+    errors = validate_user_config(authz_config("admins"), log_summary=False)
+
+    assert any(
+        "recipe 'default'" in error.message
+        and "unknown signal 'admins'" in error.message
+        for error in errors
+    )
+
+
 def test_nested_signal_conditions_validate_only_leaf_references():
     config = recipe_config()
     config.routing.signals.keywords = [

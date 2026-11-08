@@ -190,6 +190,9 @@ func (d *decompiler) complexityToSignal(comp *config.ComplexityRule) *SignalDecl
 	if comp.Description != "" {
 		fields["description"] = StringValue{V: comp.Description}
 	}
+	if comp.Deployment != "" {
+		fields["deployment"] = StringValue{V: comp.Deployment}
+	}
 	if len(comp.Hard.Candidates) > 0 || len(comp.Hard.ImageCandidates) > 0 {
 		fields["hard"] = complexityCandidatesValue(comp.Hard)
 	}

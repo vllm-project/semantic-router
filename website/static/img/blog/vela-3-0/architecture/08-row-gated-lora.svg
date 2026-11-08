@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="1040" viewBox="0 0 1500 1040" role="img"><title>Vela 3.0 d3 sizes: the row-gated LoRA linear layer</title><desc>MultiLoRA (vela3_adapters.py): every adapted Linear layer of the frozen base. Read bottom to top.</desc>
+<defs><marker id="arrow" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L12 5 L0 10 L3 5 Z" fill="#111"/></marker></defs>
+        <style>text{font-family:Arial,Helvetica,sans-serif;fill:#111;font-weight:400}.math{font-family:Georgia,'Times New Roman',serif;font-style:italic}.serif{font-family:Georgia,'Times New Roman',serif}</style>
+<g transform="translate(0,-230)">
+<g data-box="370.0 1080 380 80">
+<rect x="370.0" y="1080" width="380" height="80" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="560" y="1113.875" font-size="25" text-anchor="middle" class="">Layer input x</text>
+<text x="560" y="1143.125" font-size="25" text-anchor="middle" class="">rows of a batch</text>
+</g>
+<g data-box="150.0 900 360 84">
+<rect x="150.0" y="900" width="360" height="84" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="330" y="935.875" font-size="25" text-anchor="middle" class="">Frozen base Linear</text>
+<text x="330" y="965.125" font-size="25" text-anchor="middle" class="">y = W x (+ b)</text>
+</g>
+<g data-box="620.0 900 360 84">
+<rect x="620.0" y="900" width="360" height="84" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="800" y="936.12" font-size="24" text-anchor="middle" class="">A: in → r (fp32)</text>
+<text x="800" y="964.2" font-size="24" text-anchor="middle" class="">of the active adapter</text>
+</g>
+<path d="M560,1079 L560,1020 L330,1020 L330,985" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M560,1020 L800,1020 L800,985" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="560" cy="1020" r="3.5" fill="#111"/>
+<g data-box="620.0 770 360 84">
+<rect x="620.0" y="770" width="360" height="84" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="800" y="806.12" font-size="24" text-anchor="middle" class="">B: r → out (fp32)</text>
+<text x="800" y="834.2" font-size="24" text-anchor="middle" class="">× α / r</text>
+</g>
+<path d="M800,899 L800,855" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="560" cy="620" r="22" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
+<text x="560" y="628.99" font-size="29" text-anchor="middle" class="">+</text>
+<path d="M330,899 L330,620 L538,620" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M800,769 L800,620 L582,620" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="300.0 470 520 84">
+<rect x="300.0" y="470" width="520" height="84" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="560" y="506.11999999999995" font-size="24" text-anchor="middle" class="">Row gate: torch.where(rows,</text>
+<text x="560" y="534.1999999999999" font-size="24" text-anchor="middle" class="">y + Δ, y)</text>
+</g>
+<path d="M560,597 L560,555" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M330,700 L160,700 L160,512 L300,512" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 6" marker-end="url(#arrow)"/>
+<circle cx="330" cy="700" r="3.5" fill="#111"/>
+<text x="150" y="690.0" font-size="21" text-anchor="end" class="">y for rows</text>
+<text x="150" y="714.57" font-size="21" text-anchor="end" class="">off the gate</text>
+<g data-box="300.0 320 520 84">
+<rect x="300.0" y="320" width="520" height="84" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="560" y="356.12" font-size="24" text-anchor="middle" class="">Layer output</text>
+<text x="560" y="384.2" font-size="24" text-anchor="middle" class="">base(x) bit for bit on off rows</text>
+</g>
+<path d="M560,469 L560,405" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1010.0 560 420 110">
+<rect x="1010.0" y="560" width="420" height="110" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="1220" y="595.9100000000001" font-size="23" text-anchor="middle" class="">Gate state</text>
+<text x="1220" y="622.82" font-size="23" text-anchor="middle" class="">one adapter name or none</text>
+<text x="1220" y="649.73" font-size="23" text-anchor="middle" class="">+ optional row mask</text>
+</g>
+<path d="M1010,560 L822,512" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 6" marker-end="url(#arrow)"/>
+<g data-box="1010.0 760 420 110">
+<rect x="1010.0" y="760" width="420" height="110" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="1220" y="795.9100000000001" font-size="23" text-anchor="middle" class="">No adapter active:</text>
+<text x="1220" y="822.82" font-size="23" text-anchor="middle" class="">the layer returns base(x)</text>
+<text x="1220" y="849.73" font-size="23" text-anchor="middle" class="">itself</text>
+</g>
+<text x="1220" y="960.0" font-size="22" text-anchor="middle" class="">Decision LoRAs: every layer</text>
+<text x="1220" y="985.74" font-size="22" text-anchor="middle" class="">Span / NER / relation LoRAs:</text>
+<text x="1220" y="1011.48" font-size="22" text-anchor="middle" class="">the upper layers only</text>
+<text x="750" y="1240.0" font-size="31" text-anchor="middle" class="serif">Row-gated LoRA: an adapter changes only the rows it is switched on for</text>
+</g>
+</svg>

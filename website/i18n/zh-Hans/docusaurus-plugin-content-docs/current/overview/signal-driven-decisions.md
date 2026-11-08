@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 sidebar_position: 4
 title: 路由流水线
 description: 信号、投影、决策、插件、算法和模型池如何把一次请求变成执行路径。

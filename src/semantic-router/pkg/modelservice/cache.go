@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"time"
 )
 
 // ResultCacheEnv sets how many results each served model keeps (0 disables).
@@ -179,21 +180,30 @@ func (w *keyWriter) question(question Question) {
 }
 
 // resultCache is a bounded LRU of complete results for one served model.
-// Results are shared read-only with every caller that hits them.
+// Results are shared read-only with every caller that hits them. With a ttl,
+// a result also expires that long after it was stored.
 type resultCache struct {
 	mu      sync.Mutex
 	limit   int
+	ttl     time.Duration
 	entries map[cacheKey]*list.Element
 	order   *list.List
 }
 
 type cacheEntry struct {
-	key   cacheKey
-	value any
+	key     cacheKey
+	value   any
+	expires time.Time
 }
 
 func newResultCache(limit int) *resultCache {
 	return &resultCache{limit: limit, entries: make(map[cacheKey]*list.Element), order: list.New()}
+}
+
+func newExpiringResultCache(limit int, ttl time.Duration) *resultCache {
+	cache := newResultCache(limit)
+	cache.ttl = ttl
+	return cache
 }
 
 // active returns the cache, or nil when caching is disabled, so callers skip
@@ -215,22 +225,33 @@ func (c *resultCache) get(key cacheKey) (any, bool) {
 	if !ok {
 		return nil, false
 	}
+	entry := element.Value.(*cacheEntry)
+	if c.ttl > 0 && !time.Now().Before(entry.expires) {
+		c.order.Remove(element)
+		delete(c.entries, key)
+		return nil, false
+	}
 	c.order.MoveToFront(element)
-	return element.Value.(*cacheEntry).value, true
+	return entry.value, true
 }
 
 func (c *resultCache) put(key cacheKey, value any) {
 	if c == nil || c.limit == 0 {
 		return
 	}
+	var expires time.Time
+	if c.ttl > 0 {
+		expires = time.Now().Add(c.ttl)
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if element, ok := c.entries[key]; ok {
-		element.Value.(*cacheEntry).value = value
+		entry := element.Value.(*cacheEntry)
+		entry.value, entry.expires = value, expires
 		c.order.MoveToFront(element)
 		return
 	}
-	c.entries[key] = c.order.PushFront(&cacheEntry{key: key, value: value})
+	c.entries[key] = c.order.PushFront(&cacheEntry{key: key, value: value, expires: expires})
 	for c.order.Len() > c.limit {
 		oldest := c.order.Back()
 		c.order.Remove(oldest)

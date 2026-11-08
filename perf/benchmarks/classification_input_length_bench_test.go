@@ -68,8 +68,11 @@ func recordInputLengthProtocol(b *testing.B) {
 	defer benchmarkModelMu.Unlock()
 	identity := benchmarkIdentities[b.Name()]
 	card := benchmarkCards["domain"]
-	identity.Protocol = fmt.Sprintf("model-runtime-v1;engine=%s;profile=%s;max_tokens=%d;overflow=%s;embedding=full-layer/full-dimension;input=repeated-fixture",
-		card.Engine, card.Profile, inputLengthBudget.MaxTokens, inputLengthBudget.Overflow)
+	protocol, err := modelRuntimeProtocol(card, inputLengthBudget, "full-layer/full-dimension")
+	if err != nil {
+		b.Fatalf("record input-length execution settings: %v", err)
+	}
+	identity.Protocol = protocol + ";input=repeated-fixture"
 	benchmarkIdentities[b.Name()] = identity
 }
 

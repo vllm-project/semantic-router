@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -325,7 +326,12 @@ func TestAuditedWebSocketHandshakeRecordsSwitchingProtocols(t *testing.T) {
 		}
 	})
 	mux.Seal()
-	server := httptest.NewServer(AuthenticateRequest(svc, mux)(mux))
+	done := make(chan struct{})
+	authenticated := AuthenticateRequest(svc, mux)(mux)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer close(done)
+		authenticated.ServeHTTP(w, r)
+	}))
 	t.Cleanup(server.Close)
 	token, err := svc.issueToken(user)
 	if err != nil {
@@ -344,6 +350,12 @@ func TestAuditedWebSocketHandshakeRecordsSwitchingProtocols(t *testing.T) {
 	_ = conn.Close()
 	if response.StatusCode != http.StatusSwitchingProtocols {
 		t.Fatalf("handshake status = %d", response.StatusCode)
+	}
+	// The upgrade reaches the client before the outer middleware writes its audit.
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("authenticated websocket handler did not finish auditing")
 	}
 	var recordedStatus int
 	if err := svc.store.db.QueryRow(`SELECT status_code FROM user_audit_logs WHERE action = ? ORDER BY id DESC LIMIT 1`,

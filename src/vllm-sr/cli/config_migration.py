@@ -83,8 +83,8 @@ def migrate_config_data(
         canonical,
         router_owns_transport=router_owns_transport,
     )
-    migrate_prompt_guard_backend(canonical)
     notes = notes if notes is not None else MigrationNotes()
+    migrate_prompt_guard_backend(canonical, notes)
     migrate_model_runtime_contract(canonical, notes)
     drop_looper_endpoint(canonical, notes)
 

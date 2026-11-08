@@ -3,11 +3,12 @@ package config
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 )
 
 // validateDecisionSignalContracts checks decision signals, the decision
-// algorithm and the model_runtime deployments they name.
+// algorithm and the model_runtime or systemone deployments they name.
 func validateDecisionSignalContracts(cfg *RouterConfig) error {
 	seen := make(map[string]struct{}, len(cfg.DecisionRules))
 	for index, rule := range cfg.DecisionRules {
@@ -19,6 +20,9 @@ func validateDecisionSignalContracts(cfg *RouterConfig) error {
 		}
 		seen[rule.Name] = struct{}{}
 		if err := validateDecisionDeployment(cfg, rule.Deployment, "question"); err != nil {
+			return fmt.Errorf("routing.signals.decision[%s]: %w", rule.Name, err)
+		}
+		if err := validateDeclaredQuestionType(cfg, cfg.DecisionQuestionDeployment(rule), rule.Question.Type); err != nil {
 			return fmt.Errorf("routing.signals.decision[%s]: %w", rule.Name, err)
 		}
 	}
@@ -33,8 +37,26 @@ func validateDecisionSignalContracts(cfg *RouterConfig) error {
 		if err := validateDecisionDeployment(cfg, algorithm.Decision.Deployment, "selector"); err != nil {
 			return fmt.Errorf("decision '%s', algorithm.decision: %w", decision.Name, err)
 		}
+		if err := validateDeclaredQuestionType(cfg, cfg.DecisionSelectorDeployment(*algorithm.Decision), DecisionQuestionChoice); err != nil {
+			return fmt.Errorf("decision '%s', algorithm.decision: %w", decision.Name, err)
+		}
 	}
 	return nil
+}
+
+// validateDeclaredQuestionType refuses a question a systemone deployment's
+// declared question types leave out. A deployment that declares none is told
+// by its API's listing.
+func validateDeclaredQuestionType(cfg *RouterConfig, name, questionType string) error {
+	deployment, ok := cfg.ModelDeployments[name]
+	if !ok || !deployment.IsSystemOne() {
+		return nil
+	}
+	declared := deployment.DeclaredQuestionTypes()
+	if len(declared) == 0 || slices.Contains(declared, questionType) {
+		return nil
+	}
+	return fmt.Errorf("deployment %q declares question types %s, so it does not answer a %s question", name, strings.Join(declared, ", "), questionType)
 }
 
 // ValidateDecisionSignalRuleContract validates one decision signal without the
@@ -59,13 +81,21 @@ func ValidateDecisionSignalRuleContract(rule DecisionSignalRule) error {
 }
 
 // validateDecisionDeployment checks the deployment a decision question or
-// selector asks: a declared model_runtime deployment, or, when it names none,
-// the decision model, which must support the requested task.
+// selector asks: a declared model_runtime or systemone deployment, or, when
+// it names none, the decision model. A model_runtime deployment answers
+// questions, so its input is a scan budget or nothing.
 func validateDecisionDeployment(cfg *RouterConfig, deployment, asker string) error {
 	if deployment != "" {
-		return validateModelRuntimeReference(cfg, deployment)
+		return validateDecisionModelReference(cfg, deployment)
 	}
-	if _, _, _, err := cfg.DecisionModelDeployment(); err != nil {
+	if cfg.RemoteDecisionModel() {
+		return nil
+	}
+	name, resolved, _, err := cfg.DecisionModelDeployment()
+	if err != nil {
+		return fmt.Errorf("default decision deployment for %s: %w", asker, err)
+	}
+	if err := resolved.ValidateDecisionInput(name); err != nil {
 		return fmt.Errorf("default decision deployment for %s: %w", asker, err)
 	}
 	return nil
@@ -194,13 +224,22 @@ func validateDecisionChoiceKeys(choices []DecisionChoice, allowed map[string]str
 	return nil
 }
 
+// validateDecisionModelReference checks a deployment a decision question or
+// selector names: a model_runtime deployment, or a systemone deployment.
+func validateDecisionModelReference(cfg *RouterConfig, name string) error {
+	if cfg.IsSystemOneDeployment(name) {
+		return nil
+	}
+	return validateModelRuntimeReference(cfg, name)
+}
+
 func validateModelRuntimeReference(cfg *RouterConfig, name string) error {
 	deployment, exists := cfg.ModelDeployments[name]
 	if !exists {
 		return fmt.Errorf("deployment %q is not declared in global.model_catalog.deployments", name)
 	}
 	if !deployment.IsModelRuntime() {
-		return fmt.Errorf("deployment %q must use provider %s", name, ModelRuntimeProvider)
+		return fmt.Errorf("deployment %q must use provider %s or %s", name, ModelRuntimeProvider, SystemOneProvider)
 	}
 	return deployment.ValidateDecisionInput(name)
 }
@@ -242,7 +281,7 @@ func validateDecisionSelectorConfig(decisionName string, modelRefs []ModelRef, a
 	}
 	path := fmt.Sprintf("decision '%s', algorithm.decision", decisionName)
 	if strings.TrimSpace(cfg.Deployment) != cfg.Deployment {
-		return fmt.Errorf("%s: deployment must name a model_runtime deployment; omit it to ask the decision model", path)
+		return fmt.Errorf("%s: deployment must name a model_runtime or systemone deployment; omit it to ask the decision model", path)
 	}
 	if strings.TrimSpace(cfg.Instructions) == "" {
 		return fmt.Errorf("%s: instructions are required", path)
@@ -250,7 +289,9 @@ func validateDecisionSelectorConfig(decisionName string, modelRefs []ModelRef, a
 	if cfg.TimeoutMs < 0 || cfg.TimeoutMs > MaxDecisionTimeoutMs {
 		return fmt.Errorf("%s: timeout_ms must be within [1, %d] when set", path, MaxDecisionTimeoutMs)
 	}
-	if len(modelRefs) < MinDecisionChoices || len(modelRefs) > MaxDecisionChoices {
+	// A model-free built-in Recipe asset receives its candidates through
+	// assignments; the choice range applies once they are bound.
+	if len(modelRefs) > 0 && (len(modelRefs) < MinDecisionChoices || len(modelRefs) > MaxDecisionChoices) {
 		return fmt.Errorf("%s: needs %d..%d modelRefs to choose from", path, MinDecisionChoices, MaxDecisionChoices)
 	}
 	models := make(map[string]struct{}, len(modelRefs))

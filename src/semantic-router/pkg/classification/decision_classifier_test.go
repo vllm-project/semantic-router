@@ -115,6 +115,7 @@ func TestDecisionClassifierAndPreferenceUseSharedTaskWithoutFamilyGate(t *testin
 
 func TestDecisionSafetyComposesIndependentHazardsWithoutNormalizing(t *testing.T) {
 	models, services := preparedJudgmentModels(t)
+	models.cfg.SafetyRules = []config.SafetyRule{{Name: "risk", Hazard: &config.SafetyHazardRule{Deployment: "primary", Labels: []string{"violence", "fraud"}}}}
 	classifier, err := prepareDecisionSafety(models, "safety.risk.hazard", []string{"violence", "fraud"}, true)
 	if err != nil {
 		t.Fatal(err)

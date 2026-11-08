@@ -12,7 +12,7 @@ func TestTaskCatalogSeparatesAvailableTasksFromActiveBindings(t *testing.T) {
 	if len(response.Bindings) != 0 {
 		t.Fatalf("unused task rows: %+v", response.Bindings)
 	}
-	if response.DefaultDeployment != "primary" || len(response.Tasks) != len(BuiltinTasks()) || len(response.Models) != 23 {
+	if response.DefaultDeployment != "primary" || len(response.Tasks) != len(BuiltinTasks()) || len(response.Models) != 30 {
 		t.Fatalf("catalog unavailable: %d %d", len(response.Tasks), len(response.Models))
 	}
 	if response.DefaultBindings["pii_classifier"].Contract != config.DecisionTaskContract {
@@ -35,6 +35,27 @@ func TestTaskCatalogSeparatesAvailableTasksFromActiveBindings(t *testing.T) {
 			t.Fatal("span consumer disabled presence")
 		}
 	}
+}
+
+func TestTaskCatalogKeepsADeclaredVela3D3Deployment(t *testing.T) {
+	cfg := config.DefaultGlobalConfig()
+	cfg.ModelDeployments["mini"] = config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/vela3-mini"}
+	response := ProjectTaskCatalog(&cfg, nil)
+	for _, deployment := range response.Deployments {
+		if deployment.Deployment != "mini" {
+			continue
+		}
+		if deployment.Model != "vllm-sr/vela3-mini" || deployment.Ready {
+			t.Fatalf("declared vela3-mini deployment: %+v", deployment.TaskCatalogModel)
+		}
+		for _, kind := range deployment.NativeQuestionTypes {
+			if kind == "span" {
+				return
+			}
+		}
+		t.Fatalf("vela3-mini answers span questions: %v", deployment.NativeQuestionTypes)
+	}
+	t.Fatalf("declared vela3-mini deployment dropped: %+v", response.Deployments)
 }
 
 func TestTaskCatalogPreservesExplicitSpecialistBindingAndDemand(t *testing.T) {

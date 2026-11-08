@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "aa7b7e7bc1de4d193342e869a952552a4c15552c"
   source_file: "docs/tutorials/learning/memory-and-replay.md"

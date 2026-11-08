@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 故障排查与常见问题
 sidebar_label: 故障排查与常见问题
 description: 修复模型运行时的常见问题，并解答常见疑问。
@@ -44,7 +45,7 @@ deployment 及其状态：
 curl -s localhost:8080/startup-status
 ```
 
-离线的附加运行时不会阻塞自定义 `decision` 问题或显式 `decision.v1` 任务绑定的准备；当前能力信息就绪且兼容之前，这些任务不可用。隐式绑定和原生任务头仍可能需要在启动时读取模型元数据。见[部署就绪规则](./deploy#when-a-model-is-not-ready)。
+离线的挂接运行时不会阻塞自定义 `decision` 问题的准备；当前能力信息就绪且兼容之前，这些问题不可用。它作为决策模型回答的信号、或通过选择头的绑定回答的信号，仍可能需要在启动时读取模型元数据。见[部署就绪规则](./deploy#when-a-model-is-not-ready)。
 
 首次启动要下载模型，因此比之后的启动更久。等待在 `VLLM_SRUN_READY_TIMEOUT`（默认 10 分钟）后结束，
 并报告 `did not become ready within 10m0s`；再次启动即可从缓存继续下载，或在路由器的环境中调大该超时。
@@ -98,7 +99,7 @@ curl -s localhost:8080/startup-status
 ## 运行时报告 `failed` {#the-runtime-reports-failed}
 
 `GET /v1/models` 会给出每个模型失败的原因。由路由器运行模型时，路由器日志会带有同样的原因，例如
-`model runtime is not ready: model @domain_classifier failed to load: ...`。
+`model runtime is not ready: model vela-domain failed to load: ...`，其中给出部署名。
 路由器运行的某个运行时进程中所有模型都加载失败时，路由器会重启该进程（首次等待 1 秒，之后最长间隔 60 秒），
 因此 GPU 被占用、磁盘已满这类暂时性原因消除后，模型会自行恢复。与仍在服务的模型同处一个进程的模型加载失败时，由运行时自己重试，该进程会继续运行。路由器托管的模型重试三次仍然失败时，路由器无法启动；配置重新加载时，新配置会被拒绝，上一份配置继续服务。常见原因：
 
@@ -110,6 +111,8 @@ curl -s localhost:8080/startup-status
 | does not fit, out of memory | 换用更小的模型、显存更大的 GPU，或把副本分配到不同 GPU。 |
 | device not available | 指定的 GPU 不存在，或已安装的 PyTorch 不支持它。使用 `device: auto`，或安装正确的 PyTorch 版本。 |
 | built without LAPACK | 该模型在 CPU 上需要 LAPACK，而当前的 PyTorch（ROCm 镜像中的版本）没有。把模型放到 GPU 上（`device: rocm:0`），或用 CPU 镜像运行 CPU 上的模型。运行时不会重试。 |
+| FP8 weights need an NVIDIA GPU of compute capability 8.9 or later or an AMD Instinct MI300 or MI350 series GPU | 该包的权重为 FP8，而当前设备没有 FP8 矩阵单元。请在这类 GPU 上运行，或改用该模型的 BF16 或 int4 包。运行时不会重试。 |
+| NVFP4 packages need FP4 tensor cores; serve NVFP4 packages on a Blackwell GPU | 该包的权重为 NVFP4，而当前设备无法进行这种乘法：它是 CPU、ROCm GPU 或没有 FP4 Tensor Core 的 NVIDIA GPU（计算能力不是 10.x 或 12.x），或者其 PyTorch 没有 FP4 张量、或未安装 Triton（报错信息会指出是哪一种）。请在装有较新 PyTorch 和 Triton 的 Blackwell GPU 上运行，或改用该模型的 BF16、FP8 或 int4 包。运行时不会重试。 |
 | no family recognizes the package | 不支持该模型的架构。见[选择模型](model-runtime/choose-a-model.md#your-own-models)。 |
 | a licence must be accepted | 该模型的许可证限制了使用。确认你可以使用后，传入 `--accept-licence <id>`。 |
 

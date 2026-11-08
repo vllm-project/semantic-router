@@ -1,7 +1,7 @@
 schema_version: vllm-sr/recipe-metadata/v1
 id: mom-v1
 name: vLLM-SR MoM V1
-version: 3.0.0
+version: 4.0.0
 description: Five routing policies for balanced quality, fast responses, lower cost, demanding work, and
   private processing.
 authors:
@@ -12,6 +12,7 @@ tags:
 - mixture-of-models
 - multimodal
 - entrypoint-assignments
+- decision-model
 - semantic-routing
 links:
   source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1

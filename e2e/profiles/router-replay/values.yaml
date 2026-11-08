@@ -77,6 +77,8 @@ config:
       recipe: history-reset
     - model_names: ["vllm-sr/replay-second"]
       recipe: replay-second
+    - model_names: ["vllm-sr/replay-tool-results"]
+      recipe: replay-tool-results
     - model_names: ["vllm-sr/shadow-ok"]
       recipe: shadow-ok
     - model_names: ["vllm-sr/shadow-judge"]
@@ -195,6 +197,30 @@ config:
                   capture_request_body: true
                   capture_response_body: true
                   max_body_bytes: 65536
+    # Stores client tool results, cut to 32 bytes, for replay.detail readers.
+    - name: replay-tool-results
+      routing:
+        strategy: priority
+        signals: {}
+        decisions:
+          - name: tool_results_decision
+            priority: 1
+            rules:
+              operator: AND
+              conditions: []
+            modelRefs:
+              - model: openai/gpt-oss-20b
+                use_reasoning: false
+            plugins:
+              - type: router_replay
+                configuration:
+                  enabled: true
+                  max_records: 1000
+                  capture_request_body: true
+                  capture_response_body: true
+                  capture_tool_results: true
+                  max_body_bytes: 65536
+                  max_tool_trace_bytes: 32
     - name: shadow-ok
       routing:
         strategy: priority
@@ -451,17 +477,13 @@ config:
       modules:
         prompt_guard:
           enabled: false
-          model_ref: ""
-          model_id: ""
           jailbreak_mapping_path: ""
         classifier:
           domain:
-            model_ref: ""
-            model_id: ""
+            enabled: false
             category_mapping_path: ""
           pii:
-            model_ref: ""
-            model_id: ""
+            enabled: false
             pii_mapping_path: ""
 resources:
   limits:

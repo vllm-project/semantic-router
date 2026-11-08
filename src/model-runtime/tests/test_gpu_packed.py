@@ -3,7 +3,7 @@
 The Decision 3.0 vision fixture served on a GPU: merged text and image rows run packed (variable-length
 attention, the chunked gated-delta kernel over ``cu_seqlens``, one packed tower call) and answer as each
 question alone; the batch limits the engine arguments leave unset come from the device class and the startup
-calibration.
+calibration, which a state-once package's branched forwards pass too.
 """
 
 from __future__ import annotations
@@ -44,18 +44,31 @@ def test_installed_varlen_api_matches_per_row_attention(groups):
     torch.testing.assert_close(out, want, rtol=0.02, atol=0.02)
 
 
-@pytest.fixture(scope="module")
-def served(tmp_path_factory):
+def _serve(path, variant, seed):
+    """The fixture ``variant`` served on the GPU with default engine arguments."""
     if not torch.cuda.is_available():
         pytest.skip("needs a CUDA or ROCm GPU")
     device = "rocm:0" if torch.version.hip else "cuda:0"
-    package = write_fixture(
-        tmp_path_factory.mktemp("d3-gpu") / "d3-vision", "vision", seed=11
-    )
+    package = write_fixture(path, variant, seed=seed)
     runtime = Runtime(
         ServeConfig(models=(ModelConfig(model=str(package), device=device),))
     )
     runtime.start(background=False)
+    return runtime
+
+
+@pytest.fixture(scope="module")
+def served(tmp_path_factory):
+    runtime = _serve(tmp_path_factory.mktemp("d3-gpu") / "d3-vision", "vision", 11)
+    yield runtime.served[0]
+    runtime.stop()
+
+
+@pytest.fixture(scope="module")
+def state_once_served(tmp_path_factory):
+    runtime = _serve(
+        tmp_path_factory.mktemp("d3-gpu") / "prefix_bidir", "prefix_bidir", 31
+    )
     yield runtime.served[0]
     runtime.stop()
 
@@ -100,7 +113,9 @@ def test_packed_rows_answer_as_each_question_alone(served, png_url):
         assert _gap(merged, alone) < 0.02
 
 
-def test_the_token_budget_is_calibrated_at_startup(served):
+@pytest.mark.parametrize("which", ["served", "state_once_served"])
+def test_the_token_budget_is_calibrated_at_startup(which, request):
+    served = request.getfixturevalue(which)
     entry = calibration.device_class(served.placement.device)
     assert entry is not None
     assert served.args.max_num_seqs == entry.max_num_seqs

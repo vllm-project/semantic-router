@@ -44,9 +44,10 @@ func extractSemanticPromptAndTools(request *llmprotocol.Request) (prompt string,
 // replaySafeSemanticRequest clones the request's message content while
 // removing tool-result payloads. Replay keeps the request shape and bounded
 // tool identifiers, but raw tool output can contain PII and must not be
-// persisted in either RequestBody or Prompt. Context-recovery keys are removed
-// the same way: a key grants access to the stored content it names, so Replay
-// records that the retrieval tool was offered or called, never with which key.
+// persisted in either RequestBody or Prompt unless the route explicitly
+// captures tool results. Context-recovery keys are removed the same way: a key
+// grants access to the stored content it names, so Replay records that the
+// retrieval tool was offered or called, never with which key.
 func replaySafeSemanticRequest(request llmprotocol.Request) llmprotocol.Request {
 	sanitized := request
 	sanitized.Messages = replaySafeMessages(request.Messages)
@@ -127,6 +128,7 @@ func buildReplayRequestToolTrace(ctx *RequestContext) *routerreplay.ToolTrace {
 	}
 	steps := make([]routerreplay.ToolTraceStep, 0, len(ctx.SemanticRequest.Messages))
 	apiType := string(ctx.SourceFormat)
+	captureResults := replayCapturesToolResults(ctx)
 	for _, message := range ctx.SemanticRequest.Messages {
 		role := string(message.Role)
 		if message.Role == llmprotocol.RoleUser {
@@ -151,7 +153,7 @@ func buildReplayRequestToolTrace(ctx *RequestContext) *routerreplay.ToolTrace {
 					continue
 				}
 				steps = append(steps, replayToolResultStep(
-					replayToolSourceRequest, role, apiType, *content.ToolResult,
+					replayToolSourceRequest, role, apiType, *content.ToolResult, captureResults,
 				))
 			}
 		}
@@ -242,12 +244,26 @@ func replayToolCallStep(source, role, apiType string, call llmprotocol.ToolCall)
 	}
 }
 
-func replayToolResultStep(source, role, apiType string, result llmprotocol.ToolResult) routerreplay.ToolTraceStep {
-	return routerreplay.ToolTraceStep{
+// replayToolResultStep keeps the result's text in Output, which the recorder
+// bounds by max_tool_trace_bytes, only when the route captures tool results.
+func replayToolResultStep(
+	source, role, apiType string,
+	result llmprotocol.ToolResult,
+	captureContent bool,
+) routerreplay.ToolTraceStep {
+	step := routerreplay.ToolTraceStep{
 		Type: replayToolStepClientToolResult, Source: source, Role: role,
 		ToolCallID: result.CallID, APIType: apiType,
 		Status: replayToolResultStatus(result), ContentRedacted: true,
 	}
+	if captureContent {
+		step.Output, step.ContentRedacted = semanticText(result.Content), false
+	}
+	return step
+}
+
+func replayCapturesToolResults(ctx *RequestContext) bool {
+	return ctx != nil && ctx.RouterReplayPluginConfig.CapturesToolResults()
 }
 
 func replayToolResultStatus(result llmprotocol.ToolResult) string {

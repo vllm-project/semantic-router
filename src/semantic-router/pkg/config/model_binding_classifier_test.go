@@ -43,17 +43,17 @@ func TestGenericBindingUsesResolvedProviderAndKeepsCanonicalSelectors(t *testing
 				if err != nil {
 					t.Fatal(err)
 				}
-				projected, err := ProjectRecipeModelBindings(cfg, plan, DefaultRecipeName)
-				if err != nil {
-					t.Fatal(err)
+				spec, ok := plan.Lookup(DefaultRecipeName, "classifier.risk.tenant")
+				if !ok || spec.Binding.Deployment != "selected" {
+					t.Fatalf("binding = %+v, %v", spec, ok)
 				}
-				rule := projected.ClassifierRules[0]
+				kind := ClassifierRuleKind(spec.Deployment)
 				if provider == "http" {
-					if rule.Type != ClassifierSignalTypeSequenceClassifier || rule.Model != "new-endpoint" || rule.ModelPath != "" {
-						t.Fatalf("remote rule: %+v", rule)
+					if kind != ClassifierSignalTypeSequenceClassifier || spec.Deployment.Provider != ClassifyProvider || spec.Deployment.Endpoint != "http://localhost:8080" {
+						t.Fatalf("remote rule answers as %s through %+v", kind, spec.Deployment)
 					}
-				} else if rule.Type != ClassifierSignalTypeLocal || rule.ModelPath != "models/selected" || rule.Model != "" {
-					t.Fatalf("local rule: %+v", rule)
+				} else if kind != ClassifierSignalTypeLocal || spec.Deployment.Artifact != "models/selected" {
+					t.Fatalf("local rule answers as %s through %+v", kind, spec.Deployment)
 				}
 				if !reflect.DeepEqual(cfg.ClassifierRules[0], original) {
 					t.Fatal("canonical rule mutated")

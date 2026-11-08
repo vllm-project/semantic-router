@@ -55,6 +55,7 @@
             "x-vsr-looper-decision",
             "x-vsr-looper-iteration",
             "x-vsr-looper-request",
+            "x-vsr-protection-release",
             "x-vsr-selected-recipe"
           ]
         }

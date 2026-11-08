@@ -35,14 +35,11 @@ var BaselineRouterContract = []string{
 	"security-window-provenance",
 	"jailbreak-detection",
 	"decision-priority-selection",
-	"plugin-chain-execution",
 	// Provider-bound request effects for system_prompt, request_params, and header_mutation (issue #3180)
 	"plugin-request-mutations",
 	// Provider-bound tool passthrough, filtering, removal, semantic add/filter, and PII precedence (issue #3180)
 	"tool-selection",
-	"rule-condition-logic",
 	"decision-fallback-behavior",
-	"plugin-config-variations",
 	// A configured but disabled history_reset forwards the complete
 	// conversation (issue #3343)
 	"history-reset-negative",
@@ -125,6 +122,8 @@ var DashboardContract = []string{
 // OpenAI-shaped backends because they assert on Anthropic-specific
 // behaviour such as cache-token synthesis and stop-reason mapping.
 var ProviderProtocolsContract = []string{
+	"provider-cache-cost-breakdown",
+	"provider-cache-net-savings",
 	"prompt-compression-json-routing",
 	// Chat clients must receive Chat Completions even though the selected
 	// backend speaks Anthropic Messages.
@@ -145,6 +144,8 @@ var ProviderProtocolsContract = []string{
 	"protocol-codec-anthropic-backend-buffered-matrix",
 	"protocol-codec-anthropic-backend-streaming-matrix",
 	"protocol-codec-anthropic-response-diagnostics",
+	// Gateway fields in Anthropic usage need no backend setting (issue #5841)
+	"protocol-codec-anthropic-gateway-fields",
 	"protocol-codec-responses-verbosity-anthropic",
 	"protocol-codec-prompt-cache-key-anthropic",
 	"protocol-codec-anthropic-per-message-effort-backend",

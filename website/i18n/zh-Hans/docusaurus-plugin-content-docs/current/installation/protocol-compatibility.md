@@ -1,10 +1,11 @@
 ---
+is_mtpe: false
 title: 协议兼容性矩阵
 description: 将面向客户端的推理 API 与受支持的后端模型协议匹配，并理解跨协议功能边界。
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/protocol-compatibility.md"
-  outdated: false
+  outdated: true
 ---
 
 # 协议兼容性矩阵
@@ -50,7 +51,7 @@ client endpoint -> client codec -> routing -> backend codec -> model endpoint
 - 后端 ref 的 `protocol` 选择 HTTP 或 HTTPS 传输；以及
 - 后端 ref 的 `provider` 提供 provider 专用的身份验证和路径默认值。它并不能证明端点实现了某种 API 格式。
 
-对于每种后端格式，`base_url` 命名完整的上游 API 根。其路径会被保留，并且协议操作后缀恰好追加一次；仅当 URL 没有路径时，才使用协议的默认 `/v1` 基路径。`chat_path` 仅适用于 Chat Completions。
+对于每种后端格式，`endpoint` 中的完整 URL 命名完整的上游 API 根。其路径会被保留，并且协议操作后缀恰好追加一次；仅当 URL 没有路径时，才使用协议的默认 `/v1` 基路径。`chat_path` 仅适用于 Chat Completions。
 
 使用 `--gateway extproc` 时，对于 HTTPS 后端，生成的 Envoy cluster 会同时验证服务器证书链及其 DNS 主机名。HTTPS 副本池必须保持一个主机名，因为受支持的 Envoy 运行时在 cluster 内共享其 TLS 上下文；对不同的 HTTPS 主机使用单独的模型别名。IP 字面量 HTTPS 目标会被拒绝，而不是悄悄削弱主机名验证。与 `vllm-sr serve` 一起使用的自定义 Envoy 镜像必须在 `/etc/ssl/certs/ca-certificates.crt` 提供系统 CA 包；当该信任存储不可用时，启动校验会失败，而不是悄悄禁用验证。
 
@@ -132,10 +133,10 @@ providers:
       api_format: anthropic
       backend_refs:
         - name: anthropic-primary
-          base_url: https://api.anthropic.com
+          endpoint: https://api.anthropic.com
           provider: anthropic
-          api_key_env: ANTHROPIC_API_KEY
-          extra_headers:
+          auth: {api_key_env: ANTHROPIC_API_KEY}
+          headers:
             anthropic-version: "2023-06-01"
           weight: 100
 ```

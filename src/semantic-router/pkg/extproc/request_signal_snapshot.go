@@ -1,6 +1,9 @@
 package extproc
 
-import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+import (
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routinginput"
+)
 
 // requestSignalSnapshot contains the protocol-neutral facts consumed by
 // routing signals. It deliberately excludes wire JSON, provider fields, raw
@@ -27,6 +30,7 @@ type requestSignalSnapshot struct {
 	ContextTextBytes       int
 	ContextEquivalentBytes int
 	ContextHasNonText      bool
+	ContextReserveTokens   int
 
 	HasDeveloperMessage       bool
 	UserMessageCount          int
@@ -44,6 +48,8 @@ type requestSignalSnapshot struct {
 	LastMessageFlowToolResult bool
 	LastAssistantToolCall     bool
 	LastUserAfterToolResult   bool
+
+	RoutingInput routinginput.Outcome
 }
 
 func recordNonUserSignalMessage(result *requestSignalSnapshot, role string, text string) {

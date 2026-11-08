@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from ci_policy import LAYERS
+from execution_targets import resolve_execution_target, target_errors
 
 ROOT = Path(__file__).resolve().parents[2]
 CATALOG_PATH = ROOT / "tools/ci/verification_catalog.yaml"
@@ -54,10 +56,7 @@ def profile_image_dependencies() -> dict[str, list[str]]:
 def verification_records(registry: dict) -> dict[str, dict]:
     catalog = load_catalog()
     defaults = catalog["defaults"]
-    records = {
-        name: {**defaults, **record}
-        for name, record in catalog["verifications"].items()
-    }
+    records = {name: dict(record) for name, record in catalog["verifications"].items()}
     dependencies = profile_image_dependencies()
     for name, profile in registry["profiles"].items():
         if name not in dependencies:
@@ -66,8 +65,9 @@ def verification_records(registry: dict) -> dict[str, dict]:
             )
         images = dependencies[name]
         records[f"e2e.{name}"] = {
-            **defaults,
             "activity": "test",
+            "layer": "integrations",
+            "execution": "approved",
             "display_name": profile.get("display_name", ""),
             "category": "e2e",
             "boundary": ["e2e"],
@@ -81,8 +81,28 @@ def verification_records(registry: dict) -> dict[str, dict]:
             "resource_class": profile.get("resource_class", "standard"),
             "inventory": f"e2e-profile:{name}",
             "contract": profile["coverage_role"],
+            **{
+                key: profile[key]
+                for key in (
+                    "execution_target",
+                    "batch_policy",
+                    "setup_environment",
+                    "timeout_minutes",
+                )
+                if key in profile
+            },
         }
-    return records
+    executor_defaults = catalog["batching"]["executor_defaults"]
+    return {
+        name: resolve_execution_target(
+            {
+                **defaults,
+                **executor_defaults.get(record["executor"], {}),
+                **record,
+            }
+        )
+        for name, record in records.items()
+    }
 
 
 def full_cpu_ids() -> tuple[str, ...]:
@@ -101,6 +121,10 @@ def catalog_errors(registry: dict) -> list[str]:
             errors.append(f"full CPU inventory references missing verification {name}")
     display_names = set()
     for name, record in records.items():
+        if record.get("layer") not in LAYERS:
+            errors.append(f"verification {name} has no product layer")
+        if record.get("execution") not in {"automatic", "approved"}:
+            errors.append(f"verification {name} has no reviewed execution policy")
         label = record.get("display_name")
         if not isinstance(label, str) or not label.strip() or label == name:
             errors.append(f"verification {name} must declare a readable display_name")
@@ -139,8 +163,9 @@ def catalog_errors(registry: dict) -> list[str]:
             errors.append(f"verification {name} has an invalid test boundary")
         if record.get("activity") == "test" and not record.get("boundary"):
             errors.append(f"test verification {name} has no boundary")
-        if record.get("device") not in {"cpu", "none"}:
-            errors.append(f"verification {name} has no declared hardware runner")
+        errors.extend(
+            f"verification {name}: {error}" for error in target_errors(record)
+        )
     # Only recurring public CI promises are required. Manual/experimental support
     # must not accidentally be upgraded by the CPU planner.
     public = ROOT / "website/docs/installation/support-matrix.md"

@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: Milvus 向量库
 sidebar_label: Milvus 向量库
 description: 将 Milvus 用作响应缓存和其他 Router 存储功能的持久向量后端。

@@ -742,7 +742,7 @@
       "get": {
         "operationId": "listDecisionRoutes",
         "summary": "List active System One routes",
-        "description": "Reads the configured frontend without probing models. available describes routing availability, not backend health. Each route includes model, recipe, algorithms, question_types, and execution_timeout_ms. The timeout is the largest algorithm execution deadline in the recipe; signals have separate timeouts.",
+        "description": "Reads the configured frontend without probing models. available describes routing availability, not backend health. Each route includes model, recipe, algorithms, question_types, and execution_timeout_ms. The timeout is the largest algorithm budget deadline in the recipe; it bounds signals and the selected algorithm together.",
         "tags": [
           "decision-model"
         ],
@@ -884,7 +884,7 @@
       "post": {
         "operationId": "runDecisionRoute",
         "summary": "Run an active System One route",
-        "description": "Runs an operator diagnostic using configured management credentials. Browser credentials are not forwarded; no public listener API key is needed. The frontend validates the native request and owns route selection. The selected algorithm controls its execution deadline and physical call budget; signals use their own timeouts.",
+        "description": "Runs an operator diagnostic using configured management credentials. Browser credentials are not forwarded; no public listener API key is needed. The frontend validates the native request and owns route selection. Signals and the selected algorithm share one deadline and physical call ledger, with per-decision limits tightening the request ceiling.",
         "tags": [
           "decision-model"
         ],
@@ -1912,34 +1912,6 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
-    "/api/ml-pipeline/availability": {
-      "get": {
-        "operationId": "getApiMlPipelineAvailability",
-        "summary": "GET /api/ml-pipeline/availability",
-        "tags": [
-          "ml-pipeline"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "mlpipeline.manage",
-        "x-vllm-sr-sensitivity": "operational",
-        "x-vllm-sr-resource-owner": "ml",
-        "x-vllm-sr-audit-mode": "none",
-        "x-vllm-sr-csrf": false,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
     "/api/ml-pipeline/benchmark": {
       "post": {
         "operationId": "postApiMlPipelineBenchmark",
@@ -2897,6 +2869,358 @@
         "x-vllm-sr-max-body-bytes": 2097152,
         "x-vllm-sr-route-pattern": "/api/recipe/probes/",
         "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/recipes/builtin": {
+      "get": {
+        "operationId": "listBuiltinRecipes",
+        "summary": "List the Recipes installed with vllm-sr",
+        "description": "Reads the bundles packaged with the Dashboard. Each decision states the distinct models it needs; a decision that responds without calling a backend has a null algorithm and needs none.",
+        "tags": [
+          "recipes"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Installed bundles, their recipes, and each decision's candidate pool",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "bundles": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "recipes": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "decisions": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "algorithm": {
+                                        "nullable": true,
+                                        "type": "string"
+                                      },
+                                      "description": {
+                                        "type": "string"
+                                      },
+                                      "minimum_candidates": {
+                                        "type": "integer"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "name",
+                                      "description",
+                                      "algorithm",
+                                      "minimum_candidates"
+                                    ]
+                                  }
+                                },
+                                "description": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "description",
+                                "decisions"
+                              ]
+                            }
+                          },
+                          "sha256": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "sha256",
+                          "recipes"
+                        ]
+                      }
+                    },
+                    "catalog_version": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "catalog_version",
+                    "bundles"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is missing or invalid",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller lacks the permission, or the origin or CSRF check failed",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The installed vllm-sr package returned an invalid listing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The installed vllm-sr package could not be run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "operational",
+        "x-vllm-sr-resource-owner": "config",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "typed"
+      }
+    },
+    "/api/recipes/builtin/compose": {
+      "post": {
+        "operationId": "composeBuiltinRecipe",
+        "summary": "Compose a built-in Recipe into the current config",
+        "description": "Returns the current config with the recipe added, each decision that calls a backend bound to its models, and an entrypoint for model_names. Nothing is written: save the result with POST /api/router/config/update. The installed vllm-sr CLI applies the binding rules and validates the result.",
+        "tags": [
+          "recipes"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "description": "Installed recipe, model refs for each decision that calls a backend, and public model names",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "bindings": {
+                    "nullable": true,
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "nullable": true,
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    }
+                  },
+                  "bundle": {
+                    "type": "string"
+                  },
+                  "model_names": {
+                    "nullable": true,
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "recipe": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "bundle",
+                  "recipe",
+                  "bindings",
+                  "model_names"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Composed canonical config",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "nullable": true,
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "error invalid_request for a malformed body, or recipe_rejected with the CLI's reason, such as an unknown model, too few candidates, a recipe the config already contains, or a public name in use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is missing or invalid",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "JSON when the Dashboard is read-only (error readonly_mode); text when the caller lacks the permission or the origin or CSRF check failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request exceeds 64 KiB",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The installed vllm-sr package could not run the composition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "config.write",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "config",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 65536,
+        "x-vllm-sr-schema-status": "typed"
       }
     },
     "/api/router/api/v1": {
@@ -5388,12 +5712,6 @@
                     "envoyUrl": {
                       "type": "string"
                     },
-                    "mlPipelineAvailable": {
-                      "type": "boolean"
-                    },
-                    "mlPipelineUnavailableReason": {
-                      "type": "string"
-                    },
                     "platform": {
                       "type": "string"
                     },
@@ -5414,12 +5732,6 @@
                     },
                     "setupMode": {
                       "type": "boolean"
-                    },
-                    "srBenchAvailable": {
-                      "type": "boolean"
-                    },
-                    "srBenchUnavailableReason": {
-                      "type": "string"
                     }
                   },
                   "required": [
@@ -5430,11 +5742,7 @@
                     "setupMode",
                     "platform",
                     "envoyUrl",
-                    "routerEvalEndpoint",
-                    "srBenchAvailable",
-                    "srBenchUnavailableReason",
-                    "mlPipelineAvailable",
-                    "mlPipelineUnavailableReason"
+                    "routerEvalEndpoint"
                   ]
                 }
               }
@@ -8711,7 +9019,6 @@
                               "sr_bench_auth_unconfigured",
                               "upstream_unreachable",
                               "ml_pipeline_disabled",
-                              "ml_pipeline_unavailable",
                               "mcp_disabled"
                             ]
                           },

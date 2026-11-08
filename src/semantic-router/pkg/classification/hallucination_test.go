@@ -367,7 +367,7 @@ var _ = Describe("HallucinationDetector", func() {
 			}
 			d, err := NewHallucinationDetector(emptyCfg)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("model_id is required"))
+			Expect(err.Error()).To(ContainSubstring("no deployment answers"))
 			Expect(d).To(BeNil())
 		})
 

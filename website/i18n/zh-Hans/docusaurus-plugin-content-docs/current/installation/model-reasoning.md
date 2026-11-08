@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 模型推理
 description: 继承、复用或定义模型推理契约，并从路由决策中选择其 mode 和 effort。
 translation:

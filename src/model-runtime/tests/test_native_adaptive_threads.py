@@ -8,6 +8,7 @@ path the host's numerics take: serving on a bit-identical host, retired on
 one that drifts.
 """
 
+import logging
 import types
 
 import pytest
@@ -256,6 +257,43 @@ def test_level_2_transition_only_when_serving():
         reporter.pick(16)
         reporter.record(16, 10.0)
     assert reporter.adopted and reporter._transition == 0
+
+
+def test_the_table_log_names_the_state_the_resolver_is_in(caplog):
+    """The learned-table log says what the learned counts now do.
+
+    ``record`` files each sample under its count in ``counts`` order, so
+    feeding a whole cycle per round times every count. A table that picked
+    only the configured count verifies nothing new: level 2 serves it at
+    once ("serving", no transition), level 1 keeps reporting ("report
+    only"), and a count new to execution first announces its transition.
+    """
+    with caplog.at_level(logging.INFO, logger=adaptive.log.name):
+        server = adaptive.AdaptiveThreads(base=8, explore=12, serve=True)
+        server.start()
+        for _ in range(3):
+            for count in server.counts:  # one record cycle: [1, 2, 4, 8]
+                server.record(16, 1.0 if count == server.base else 5.0)
+        assert server.adopted and server._transition == 0
+        assert "(serving): 0-31: 8 threads" in caplog.text
+
+        caplog.clear()
+        reporter = adaptive.AdaptiveThreads(base=8, explore=12, serve=False)
+        reporter.start()
+        for _ in range(3):
+            for count in reporter.counts:
+                reporter.record(16, 1.0 if count == reporter.base else 5.0)
+        assert "(report only): 0-31: 8 threads" in caplog.text
+        assert "; set --threads to apply them" in caplog.text
+
+        caplog.clear()
+        transitioning = adaptive.AdaptiveThreads(base=8, explore=12, serve=True)
+        transitioning.start()
+        for _ in range(3):
+            for count in transitioning.counts:
+                transitioning.record(16, 1.0 if count == 4 else 5.0)
+        assert transitioning._transition == adaptive._TRANSITION
+        assert "(serving after transition): 0-31: 4 threads" in caplog.text
 
 
 def test_exploration_starts_once_the_runtime_is_ready(

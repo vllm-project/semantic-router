@@ -34,22 +34,13 @@ func (b *ownedRemoteGuardDecision) Decide(ctx context.Context, text string) (tas
 }
 func (b *ownedRemoteGuardDecision) Close() error { return b.handle.Close() }
 
-func bindRemoteJailbreak(models []*classifierModelRuntime, cfg *config.RouterConfig, backend *config.RemoteClassifierBackend, external *config.ExternalModelConfig, mapping *JailbreakMapping, inference SequenceClassifierBackend) (SequenceClassifierBackend, error) {
-	runtime := consumerModelRuntime(models)
-	contract := config.RemoteClassifierContractLabelDistribution
-	if backend.Protocol == config.RemoteClassifierProtocolHTTPChat {
-		contract = config.RemoteClassifierContractLabelDecision
-	}
-	spec := config.ResolvedModelBinding{Recipe: runtime.recipe, Name: "prompt_guard", Binding: config.ModelBinding{Deployment: backend.Model, Contract: contract, Adapter: backend.Protocol}, Deployment: config.ModelDeployment{Provider: "http", ExternalModel: backend.Model}, Admission: cfg.ModelAdmission["prompt_guard"]}
-	if declared, ok := runtime.plan.Lookup(runtime.recipe, "prompt_guard"); ok {
-		spec = declared
-	}
+func bindRemoteJailbreak(runtime *classifierModelRuntime, cfg *config.RouterConfig, spec config.ResolvedModelBinding, mapping *JailbreakMapping, inference SequenceClassifierBackend) (SequenceClassifierBackend, error) {
 	closer, ok := inference.(io.Closer)
 	if !ok {
 		return nil, fmt.Errorf("remote guard connector has no ownership lifecycle")
 	}
 	if decision, ok := inference.(LabelDecisionBackend); ok {
-		handle, err := remoteTaskBinding(context.Background(), runtime, spec, external, closer, decision.Decide, func(_ string, out tasks.LabelDecision) error {
+		handle, err := remoteTaskBinding(context.Background(), runtime, spec, closer, decision.Decide, func(_ string, out tasks.LabelDecision) error {
 			if _, ok := mapping.GetIndexForJailbreakType(out.Label); !ok {
 				return fmt.Errorf("unknown guard label %q", out.Label)
 			}
@@ -66,7 +57,7 @@ func bindRemoteJailbreak(models []*classifierModelRuntime, cfg *config.RouterCon
 		}
 		return &ownedRemoteGuardDecision{handle: handle, recipe: string(spec.Recipe)}, nil
 	}
-	handle, err := remoteTaskBinding(context.Background(), runtime, spec, external, closer, inference.Classify, func(_ string, out tasks.LabelDistribution) error {
+	handle, err := remoteTaskBinding(context.Background(), runtime, spec, closer, inference.Classify, func(_ string, out tasks.LabelDistribution) error {
 		return validateJailbreakDistribution(mapping, cfg.PromptGuard.PositiveLabels, out)
 	})
 	if err != nil {

@@ -66,6 +66,8 @@ func buildReplayRouteDiagnostics(
 		ContextCompressionQuality:      ctx.ContextCompressionQuality,
 		ContextCompressionFallback:     ctx.ContextCompressionFallback,
 		ContextCompressionCostSaved:    ctx.ContextCompressionCostSaved,
+		RoutingInputSkippedMessages:    ctx.RoutingInput.SkippedMessages,
+		RoutingInputStrippedBlocks:     ctx.RoutingInput.StrippedBlocks,
 		RequestDemandSnapshots:         cloneRequestDemandSnapshots(ctx.RequestDemandSnapshots),
 		SignalErrors:                   cloneReplayStringMap(ctx.VSRSignalErrors),
 		AppliedUnknownPolicies:         ctx.VSRDecisionDiagnostics.AppliedUnknownPolicies,

@@ -44,10 +44,10 @@ deployment in `model_deployments` with its state:
 curl -s localhost:8080/startup-status
 ```
 
-An offline attached runtime does not block custom `decision` questions or
-explicit `decision.v1` task bindings from being prepared. Those tasks remain
-unavailable until current capability metadata is ready and compatible.
-Implicit and native-head bindings may still need metadata at startup. See
+An offline attached runtime does not block custom `decision` questions from
+being prepared. Those questions remain unavailable until current capability
+metadata is ready and compatible. Signals it answers as the decision model, or
+through a binding that selects a head, may still need metadata at startup. See
 [deployment readiness](./deploy.md#when-a-model-is-not-ready).
 
 A first start downloads the models, so it takes longer than the next ones. The
@@ -119,7 +119,8 @@ The model is probably not ready yet, or its answers arrive too late.
 
 `GET /v1/models` shows the reason for each model. When the router runs the
 model, its log carries the same reason, for example
-`model runtime is not ready: model @domain_classifier failed to load: ...`.
+`model runtime is not ready: model vela-domain failed to load: ...`, naming the
+deployment.
 When every model of a runtime process the router runs has failed, the router
 restarts that process (1 second at first, up to 60 seconds apart), so a passing
 cause such as a busy GPU or a full disk clears on its own. A model that fails
@@ -137,8 +138,13 @@ reasons:
 | needs about X GiB, Y GiB free; out of memory | The GPU has less free memory than the model needs: its weights in the dtype the GPU holds them in (BF16 for Decision 3.0, plus 10%) and 2 GiB. Free memory on that GPU, choose another with `--device-ids`, use a smaller model, or place replicas on separate GPUs. |
 | device not available | The named GPU does not exist or the installed PyTorch has no support for it. Use `device: auto`, or install the right PyTorch build. |
 | built without LAPACK | The model needs LAPACK on the CPU, and this PyTorch (the ROCm image's) has none. Put the model on a GPU (`device: rocm:0`), or serve CPU models from the CPU image. The runtime does not retry it. |
+| FP8 weights need an NVIDIA GPU of compute capability 8.9 or later or an AMD Instinct MI300 or MI350 series GPU | The package holds FP8 weights and the device has no FP8 matrix units. Serve it on such a GPU, or serve the BF16 or int4 package of the model instead. The runtime does not retry it. |
+| NVFP4 packages need FP4 tensor cores; serve NVFP4 packages on a Blackwell GPU | The package holds NVFP4 weights and the device cannot multiply them: it is a CPU, a ROCm GPU or an NVIDIA GPU without FP4 tensor cores (compute capability other than 10.x or 12.x), or its PyTorch has no FP4 tensors or Triton is missing (the reason names which). Serve it on a Blackwell GPU with a recent PyTorch and Triton, or serve the BF16, FP8 or int4 package of the model instead. The runtime does not retry it. |
 | no family recognizes the package | The model's architecture is not supported. See [Choose a model](model-runtime/choose-a-model.md#your-own-models). |
 | a licence must be accepted | The model's licence restricts use. Pass `--accept-licence <id>` after you checked that you may use it. |
+| `max_model_len N is above` the model's limit | Lower `max_model_len` to at most the limit the reason names, or leave it out. |
+| `max_model_len applies to Decision models only` | Remove `max_model_len` from this deployment; other models keep their own input limits. |
+| `golden answers are malformed; max_model_len N may be below` | Raise `max_model_len`: the model's own check questions need more tokens. See [Engine arguments](model-runtime/engine-args.md#input-limit). |
 
 When one model of a process fails, the other models in that process keep
 serving.
@@ -147,16 +153,26 @@ serving.
 
 `GET /v1/models` shows each model's self-check under `golden`. `matched`
 means its answers equal the released answers for that kind of device.
+`golden.reference` identifies the recorded reference that was checked. When a
+hardware reference is recorded, it takes precedence over the device-class
+reference: for example `cpu:x86_64:avx2:bf16_emulated` or `cuda:sm_89`. Other
+hardware keeps using the existing `cpu`, `rocm` or `cuda` reference when available.
+CPU keys use PyTorch's selected instruction set and native or emulated BF16
+capability. A mismatching selected reference still fails startup; the runtime
+does not try another reference or relax the tolerance.
+
 `unverified` means the model serves, but the runtime can't vouch for that:
 
 - **No `reason`, and `golden.reference` is empty:** there are no released
   answers for this device, for example for a model that is not built in or a
-  GPU without a validated record (CUDA). The runtime checked only that the
+  GPU architecture without a recorded reference. The runtime checked only that the
   answers are well formed and the same on every run.
-- **`reason` starts with `kernel choices not applied`:** on AMD Instinct
-  MI300X and MI325X GPUs, Decision 2.0 and Vela 2.0 run their kernels with
-  the configurations their release recorded with FLA 0.5.2, so every process
-  gives the same answers. When those can't run here, the model still loads,
+- **`reason` starts with `kernel choices not applied`:** models with recorded
+  GPU kernel choices run with those configurations so restarts reproduce
+  the recorded answers. The records also name the dependency versions used
+  for qualification. These include Decision 2.0 and
+  Vela 2.0 on AMD Instinct MI300X/MI325X, and D3-edge on NVIDIA L4.
+  When those can't run here, the model still loads,
   the log says `... runs without its recorded kernel choices: ...`, and its
   answers may differ from the released ones.
 
@@ -179,6 +195,7 @@ replace the recorded configurations.
 | a binding does not match the model | The model has different labels, heads, dimensions or a smaller input limit than the feature needs. Bind a model made for that feature, or change `input`. |
 | `artifact must be a Hub repository ID or an absolute package path` | Use `owner/name` for a Hub model or an absolute path for a local copy. |
 | `revision must be a 40-hex commit` | Use the full commit hash, not a branch or tag. |
+| `max_model_len applies only to a managed worker` | Remove `max_model_len` from the deployment with `endpoint` or `replicas`; pass `--max-model-len` to an attached runtime yourself. |
 
 ## A long input is rejected
 
@@ -226,6 +243,10 @@ with bounded concurrency. It keeps the highest window risk and requires
 complete input coverage from each window. An unfinished scan stays unresolved;
 the scan budget and deadline still apply. Direct `/v1/decisions` calls retain
 the model's input limits.
+
+A Decision deployment with `max_model_len` fails a longer question with
+`max_length_exceeded`. Raise it up to the package's limit, or leave it out
+([Engine arguments](model-runtime/engine-args.md#input-limit)).
 
 A jailbreak or PII rule matches content its model did not read in full: an
 input over the model's `max_tokens` under `reject`, over its cap, truncated, or

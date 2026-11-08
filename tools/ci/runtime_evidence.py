@@ -69,6 +69,20 @@ def models_evidence(directory: Path) -> dict:
 
 def local_evidence(directory: Path, suite: str) -> dict:
     report = read(directory / f"{suite}-test-report.json")
+    if suite == "cli":
+        smoke = read(directory / "dev-smoke-report.json")
+        case = "tools/test/smoke/test-local-up-router.sh"
+        if smoke.get("expected_cases") != [case] or smoke.get("cases") != [
+            {"id": case, "status": "passed"}
+        ]:
+            raise ValueError(
+                "local development launcher did not complete its routed request"
+            )
+        report = {
+            **report,
+            "expected_cases": [*report["expected_cases"], case],
+            "cases": [*report["cases"], *smoke["cases"]],
+        }
     return {
         **report,
         "runtime": "model-runtime",
@@ -117,6 +131,7 @@ def recipe_evidence(directory: Path) -> dict:
         load_probe_manifest,
     )
     from recipe_conformance_sources import (  # noqa: PLC0415
+        CI_SHARDS_PER_SOURCE,
         discover_source_inventories,
         source_matrix_payload,
     )
@@ -126,7 +141,9 @@ def recipe_evidence(directory: Path) -> dict:
         lambda root: cpu_inventory(discover_inventory(root)),
     )
     cases, expected, identities = [], [], []
-    for job in source_matrix_payload(inventories, None, ROOT)["include"]:
+    for job in source_matrix_payload(inventories, CI_SHARDS_PER_SOURCE, ROOT)[
+        "include"
+    ]:
         identities.extend(read(directory / f"image-{job['shard']}.json"))
     for item in inventories:
         source = item.source

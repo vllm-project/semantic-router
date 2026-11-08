@@ -8,10 +8,11 @@ settings. Define preference rules under `routing.signals.preferences`.
 This family is learned: it uses the preference-classification path under `global.model_catalog.modules.classifier.preference`.
 
 Rules with authored examples use embedding similarity by default. Rules with
-only descriptions use the default decision deployment. An explicit
-`embedding_model` also selects embedding similarity. A configured external
-preference-role backend keeps its own path unless you explicitly choose another
-mode.
+only descriptions ask the decision model. An explicit `embedding_model` also
+selects embedding similarity. A `preference` binding to an `openai_chat`
+deployment asks that chat model to pick a route, unless you explicitly choose
+another mode. [Choose a model for a signal](../../../installation/choose-a-model-for-a-signal.md)
+shows where bindings go.
 
 ## Key Advantages
 
@@ -75,12 +76,12 @@ global:
 
 In contrastive mode, the router embeds each preference rule's descriptions and examples, compresses them into representative prototypes when `prototype_scoring` is enabled, and compares the incoming request against those prototypes. `margin_threshold` lets you reject ambiguous winners instead of forcing a weak preference match.
 
-An explicit `use_contrastive: false` disables this embedding comparison and uses
-the external preference backend when configured, or otherwise the default
-decision deployment. Prototype settings alone do not select contrastive mode.
+An explicit `use_contrastive: false` disables this embedding comparison and
+asks the `openai_chat` deployment a `preference` binding names, or otherwise
+the decision model. Prototype settings alone do not select contrastive mode.
 
-To select a native decision task explicitly, bind `preference` with
-`contract: decision.v1` under `routing.model_bindings` or
+To select a native decision task explicitly, bind `preference` to a
+`model_runtime` or `systemone` deployment under `routing.model_bindings` or
 `global.model_catalog.bindings`. That binding takes precedence over examples
 and `use_contrastive`, and its rule thresholds apply to native choice
 probabilities. Keep cosine thresholds and prototype margins with the embedding

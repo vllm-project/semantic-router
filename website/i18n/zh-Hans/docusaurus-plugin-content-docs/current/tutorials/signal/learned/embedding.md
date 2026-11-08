@@ -1,8 +1,9 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/signal/learned/embedding.md"
-  outdated: false
+  outdated: true
 ---
 
 # 嵌入信号 {#embedding-signal}
@@ -11,9 +12,9 @@ translation:
 
 `embedding` 按与代表性示例的语义相似度匹配请求。在 `routing.signals.embeddings` 下定义嵌入规则。
 
-它依赖 `global.model_catalog.embeddings` 中配置的嵌入模型。
+它在 `global.model_catalog.embeddings.default` 指定的部署上运行（默认 `vela-embedding`）。
 
-这些资产可以在本地运行，或通过外部兼容 OpenAI 的文本嵌入端点运行。共享提供方配置见[运行时嵌入](../../../model-runtime/guides/embeddings)；信号候选、阈值与决策条件保持不变。
+该部署可以在本地运行，也可以是远程文本 embedding API 的 `openai_embeddings` 部署。两种方式见[运行时嵌入](../../../model-runtime/guides/embeddings.md)；信号候选、阈值与决策条件保持不变。
 
 ## 主要优势 {#key-advantages}
 
@@ -135,7 +136,7 @@ Router 会给每条嵌入规则打分。默认的 `top_k: 0` 保留所有达到�
 - `"image"`：从 OpenAI 风格聊天消息中允许列表内的内联 `data:image/...;base64,...` 附件嵌入查询。
 - 目前不支持音频查询嵌入；请使用 `text` 或 `image`。
 
-`"image"` 要求 `global.model_catalog.embeddings.semantic.embedding_config.model_type: multimodal`，使候选与查询共享一个嵌入空间。Router 会拒绝与仅文本嵌入模型配对的图像模态规则。
+`"image"` 要求 `global.model_catalog.embeddings.semantic.embedding_config.model_type: multimodal`，使候选与查询共享一个嵌入空间；它在 `global.model_catalog.embeddings.multimodal` 指定的部署上运行（默认 `omni-nano`）。Router 会拒绝与仅文本嵌入模型配对的图像模态规则。
 
 ### 示例：把敏感影像路由到本地 {#worked-example-route-sensitive-imagery-on-prem}
 
@@ -143,8 +144,8 @@ Router 会给每条嵌入规则打分。默认的 `top_k: 0` 保留所有达到�
 global:
   model_catalog:
     embeddings:
+      multimodal: omni-nano
       semantic:
-        multimodal_model_path: models/multi-modal-embed-small
         embedding_config:
           model_type: multimodal
 
@@ -201,7 +202,7 @@ routing:
 
 ## 依赖与限制 {#dependencies-and-limitations}
 
-- 文本或图像内容由已配置的嵌入运行时处理。远程提供方目前只支持文本，并接收被嵌入的文本。不支持音频查询嵌入。
+- 文本或图像内容由 embedding 部署处理。远程 `openai_embeddings` 部署只支持文本，并接收被嵌入的文本。不支持音频查询嵌入。
 - 相似度分数与阈值在嵌入模型、维度或模态之间不可移植。这些变更时请重新校准。
 - 图像匹配是语义匹配，不是 OCR 或 PII 抽取；字面文本或受监管实体重要时，请使用专用检测器。
 - 完整示例：

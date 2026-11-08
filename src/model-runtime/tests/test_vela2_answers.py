@@ -10,6 +10,7 @@ from vllm_srun.families.vela2.answers import Answerer
 from vllm_srun.families.vela2.calibration import Calibration, sigmoid, softmax
 from vllm_srun.families.vela2.raw import RawRow, RawSpan
 from vllm_srun.families.vela2.request import QuestionReader
+from vllm_srun.systemone import choice_confidence, score_confidence
 from vllm_srun.testing.vela2 import calibration
 
 CAL = Calibration(calibration(decoder=True))
@@ -75,7 +76,9 @@ def test_choice_noul_and_score_answers() -> None:
     answers = answer(RAW)["answers"]
     choice = softmax(RAW.logits["domain"][:3] / 1.3)
     assert answers["domain"]["choice"] == "math"
-    assert answers["domain"]["confidence"] == choice[0] - max(choice[1:])
+    assert answers["domain"]["confidence"] == choice_confidence(
+        [float(p) for p in choice]
+    )
     full = softmax(RAW.logits["domain"] / 1.3)
     assert answers["domain"]["abstain_probability"] == float(full[-1])
     assert "abstain_probability" not in answers["level"]
@@ -85,9 +88,10 @@ def test_choice_noul_and_score_answers() -> None:
     }
     levels = softmax(RAW.logits["level"][:3] / 1.1)
     mean = math.fsum(i * p for i, p in enumerate(levels))
-    variance = math.fsum(p * (i - mean) ** 2 for i, p in enumerate(levels))
     assert answers["level"]["score"] == mean
-    assert answers["level"]["confidence"] == 1.0 - variance / (8 / 12)
+    assert answers["level"]["confidence"] == score_confidence(
+        [float(p) for p in levels]
+    )
     assert answers["level"]["legend"] == {
         "0": "easy",
         "1": "medium",

@@ -49,12 +49,34 @@ def test_variable_length_attention_attends_within_each_row():
         start += n
 
 
+def test_pytorch_varlen_attention_takes_16_bit_inputs_and_fp32_takes_the_reference():
+    from vllm_srun.accel.gpu import _wrap_varlen
+
+    packed = Packed([3, 7, 1], CPU)
+    seen = []
+
+    def flash(query, key, value, *args, scale, enable_gqa):
+        seen.append(query.dtype)
+        return query
+
+    attend = _wrap_varlen(flash)
+    q, k, v = torch.randn(11, 4, 8), torch.randn(11, 2, 8), torch.randn(11, 2, 8)
+    out = attend(q, k, v, packed, scale=0.125, groups=2)
+    torch.testing.assert_close(
+        out, varlen_attention_ref(q, k, v, packed, scale=0.125, groups=2)
+    )
+    assert seen == []
+    half = [x.to(torch.bfloat16) for x in (q, k, v)]
+    assert attend(*half, packed, scale=0.125, groups=2) is half[0]
+    assert seen == [torch.bfloat16]
+
+
 @pytest.mark.parametrize("groups", [1, 2])
 def test_legacy_varlen_api_keeps_default_scale_and_grouped_heads(groups):
     """The torch 2.10 interface infers GQA and accepts no scale/GQA keywords."""
     packed = Packed([3, 7, 1], CPU)
-    q = torch.randn(11, 4, 8)
-    k, v = (torch.randn(11, 4 // groups, 8) for _ in range(2))
+    q = torch.randn(11, 4, 8, dtype=torch.bfloat16)
+    k, v = (torch.randn(11, 4 // groups, 8, dtype=torch.bfloat16) for _ in range(2))
     calls = []
 
     def legacy(query, key, value, cu_q, cu_k, max_q, max_k, is_causal=False):
@@ -78,8 +100,8 @@ def test_installed_varlen_python_api_accepts_runtime_arguments(monkeypatch, grou
         torch.ops.torch_attn, "_varlen_attn", lambda *args: (args[0], None, None)
     )
     packed = Packed([2, 5], CPU)
-    q = torch.randn(7, 4, 8)
-    k, v = (torch.randn(7, 4 // groups, 8) for _ in range(2))
+    q = torch.randn(7, 4, 8, dtype=torch.bfloat16)
+    k, v = (torch.randn(7, 4 // groups, 8, dtype=torch.bfloat16) for _ in range(2))
     out = _wrap_varlen(varlen)(q, k, v, packed, scale=8**-0.5, groups=groups)
     assert out is q
 
@@ -88,7 +110,7 @@ def test_legacy_varlen_uses_reference_for_a_custom_scale():
     """A fixed-scale kernel must not silently change the caller's attention."""
     torch.manual_seed(3)
     packed = Packed([3, 7, 1], CPU)
-    q, k, v = torch.randn(11, 4, 8), torch.randn(11, 2, 8), torch.randn(11, 2, 8)
+    q, k, v = (torch.randn(11, n, 8, dtype=torch.bfloat16) for n in (4, 2, 2))
 
     def legacy(query, key, value, cu_q, cu_k, max_q, max_k):
         pytest.fail("the legacy kernel cannot represent this scale")
@@ -102,8 +124,8 @@ def test_legacy_varlen_uses_reference_for_a_custom_scale():
 def test_modern_varlen_api_receives_scale_and_gqa(groups):
     """Newer torch interfaces retain their explicit scale and GQA controls."""
     packed = Packed([2, 5], CPU)
-    q = torch.randn(7, 4, 8)
-    k, v = (torch.randn(7, 4 // groups, 8) for _ in range(2))
+    q = torch.randn(7, 4, 8, dtype=torch.bfloat16)
+    k, v = (torch.randn(7, 4 // groups, 8, dtype=torch.bfloat16) for _ in range(2))
 
     def modern(query, key, value, cu_q, cu_k, max_q, max_k, *, scale, enable_gqa):
         assert scale == 0.125

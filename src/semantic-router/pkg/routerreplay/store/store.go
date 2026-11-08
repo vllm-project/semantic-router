@@ -41,16 +41,17 @@ type Signal struct {
 
 // UsageCost captures token usage and pricing-derived cost details for a record.
 type UsageCost struct {
-	PromptTokens       *int     `json:"prompt_tokens,omitempty"`
-	CachedPromptTokens *int     `json:"cached_prompt_tokens,omitempty"`
-	CacheWriteTokens   *int     `json:"cache_write_tokens,omitempty"`
-	CompletionTokens   *int     `json:"completion_tokens,omitempty"`
-	TotalTokens        *int     `json:"total_tokens,omitempty"`
-	ActualCost         *float64 `json:"actual_cost,omitempty"`
-	BaselineCost       *float64 `json:"baseline_cost,omitempty"`
-	CostSavings        *float64 `json:"cost_savings,omitempty"`
-	Currency           *string  `json:"currency,omitempty"`
-	BaselineModel      *string  `json:"baseline_model,omitempty"`
+	ProviderCache      *ProviderCacheAccounting `json:"provider_cache,omitempty"`
+	PromptTokens       *int                     `json:"prompt_tokens,omitempty"`
+	CachedPromptTokens *int                     `json:"cached_prompt_tokens,omitempty"`
+	CacheWriteTokens   *int                     `json:"cache_write_tokens,omitempty"`
+	CompletionTokens   *int                     `json:"completion_tokens,omitempty"`
+	TotalTokens        *int                     `json:"total_tokens,omitempty"`
+	ActualCost         *float64                 `json:"actual_cost,omitempty"`
+	BaselineCost       *float64                 `json:"baseline_cost,omitempty"`
+	CostSavings        *float64                 `json:"cost_savings,omitempty"`
+	Currency           *string                  `json:"currency,omitempty"`
+	BaselineModel      *string                  `json:"baseline_model,omitempty"`
 }
 
 // Outcome captures typed post-route feedback linked to a replay record.
@@ -250,6 +251,8 @@ type RouteDiagnostics struct {
 	ContextCompressionFallback     string                               `json:"context_compression_fallback,omitempty"`
 	ContextCompressionCostSaved    float64                              `json:"context_compression_cost_saved,omitempty"`
 	HistoryReset                   *HistoryResetDiagnostics             `json:"history_reset,omitempty"`
+	RoutingInputSkippedMessages    int                                  `json:"routing_input_skipped_messages,omitempty"`
+	RoutingInputStrippedBlocks     int                                  `json:"routing_input_stripped_blocks,omitempty"`
 	RequestDemandSnapshots         []RequestDemandSnapshot              `json:"request_demand_snapshots,omitempty"`
 	Annotations                    map[string]interface{}               `json:"annotations,omitempty"`
 	SignalErrors                   map[string]string                    `json:"signal_errors,omitempty"`
@@ -420,16 +423,17 @@ type Record struct {
 	HallucinationSpanDetails    []HallucinationSpan `json:"hallucination_span_details,omitempty"`
 
 	// Usage & Cost
-	PromptTokens       *int     `json:"prompt_tokens,omitempty"`
-	CachedPromptTokens *int     `json:"cached_prompt_tokens,omitempty"`
-	CacheWriteTokens   *int     `json:"cache_write_tokens,omitempty"`
-	CompletionTokens   *int     `json:"completion_tokens,omitempty"`
-	TotalTokens        *int     `json:"total_tokens,omitempty"`
-	ActualCost         *float64 `json:"actual_cost,omitempty"`
-	BaselineCost       *float64 `json:"baseline_cost,omitempty"`
-	CostSavings        *float64 `json:"cost_savings,omitempty"`
-	Currency           *string  `json:"currency,omitempty"`
-	BaselineModel      *string  `json:"baseline_model,omitempty"`
+	ProviderCache      *ProviderCacheAccounting `json:"provider_cache,omitempty"`
+	PromptTokens       *int                     `json:"prompt_tokens,omitempty"`
+	CachedPromptTokens *int                     `json:"cached_prompt_tokens,omitempty"`
+	CacheWriteTokens   *int                     `json:"cache_write_tokens,omitempty"`
+	CompletionTokens   *int                     `json:"completion_tokens,omitempty"`
+	TotalTokens        *int                     `json:"total_tokens,omitempty"`
+	ActualCost         *float64                 `json:"actual_cost,omitempty"`
+	BaselineCost       *float64                 `json:"baseline_cost,omitempty"`
+	CostSavings        *float64                 `json:"cost_savings,omitempty"`
+	Currency           *string                  `json:"currency,omitempty"`
+	BaselineModel      *string                  `json:"baseline_model,omitempty"`
 }
 
 // RecordWriter creates records and advances their routing lifecycle.
@@ -453,6 +457,9 @@ type BodyWriter interface {
 
 	// AttachResponse updates the response body for an existing record.
 	AttachResponse(ctx context.Context, id string, body string, truncated bool) error
+
+	// AttachPrompt stores the prompt of an existing record that was written without it.
+	AttachPrompt(ctx context.Context, id string, prompt string, truncated bool) error
 }
 
 // OutcomeWriter appends post-route feedback to replay records.
@@ -627,6 +634,7 @@ func cloneRecord(record Record) Record {
 	cloned.PIIEntities = cloneStringSlice(record.PIIEntities)
 	cloned.HallucinationSpans = cloneStringSlice(record.HallucinationSpans)
 	cloned.HallucinationSpanDetails = cloneHallucinationSpanDetails(record.HallucinationSpanDetails)
+	cloned.ProviderCache = cloneProviderCacheAccounting(record.ProviderCache)
 	cloned.PromptTokens = cloneIntPtr(record.PromptTokens)
 	cloned.CachedPromptTokens = cloneIntPtr(record.CachedPromptTokens)
 	cloned.CacheWriteTokens = cloneIntPtr(record.CacheWriteTokens)

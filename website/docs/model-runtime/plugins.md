@@ -136,7 +136,10 @@ precision it does not list.
 **3. An accelerator, if you need one.** For new hardware, subclass
 `Accelerator` (`available`, `devices`, `torch_device`, `kernels`), and set
 `auto_priority` if `device: auto` may pick it; without it, only a request that
-names the device uses it.
+names the device uses it. The optional
+`golden_reference(device)` hook names a hardware reference for readiness; the
+default is `accelerator:arch`. If that key is absent, the runtime uses the
+existing device-class reference.
 
 **4. Register it** in your `pyproject.toml`:
 
@@ -172,8 +175,9 @@ contract
 
 ## Use it from the router
 
-Install your plugin next to the runtime the router uses, then bind a feature
-to a deployment of your model. For a runtime you run yourself, attach to it:
+Install your plugin next to the runtime the router uses, then name a
+deployment of your model where a signal uses it. For a runtime you run
+yourself, attach to it:
 
 ```yaml
 global:
@@ -181,13 +185,14 @@ global:
     deployments:
       ticket-topics:
         provider: model_runtime
-        endpoint: http://runtime.internal:8100
-        served_name: keywords
+        endpoint: http://runtime.example.com:8100
+        model: keywords
 ```
 
-A custom classifier signal can then read its labels; see
+A custom classifier signal can then name `ticket-topics` as its `deployment`
+and read its labels; see
 [Classify requests](./guides/classify.md#use-your-own-classifier). The router
-checks the binding against the labels your model reports in `/v1/models`. A
+checks the rule against the labels your model reports in `/v1/models`. A
 deployment names your accelerator in `device` the same way; the router
 checks only its form, and the runtime refuses a name it has no plugin for and
 lists the names it has.

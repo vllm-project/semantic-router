@@ -21,13 +21,12 @@ from pydantic import (
     StrictBool,
     StrictStr,
     field_validator,
+    model_serializer,
     model_validator,
 )
 
 from .algorithms import AlgorithmConfig, ModelRef
 from .config_contract import (
-    CLASSIFIER_TYPE_LLM,
-    CLASSIFIER_TYPE_LOCAL,
     ClassifierSignalType,
     UnknownPolicy,
 )
@@ -36,7 +35,6 @@ from .context_bands import normalize_token_count, validate_context_band
 from .durations import parse_duration
 
 RoutingStrategy = Literal["priority", "confidence"]
-SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT = 2
 PROMPT_MIN_CANDIDATES = 2
 MAX_DECISION_ANNOTATIONS = 32
 MAX_DECISION_ANNOTATION_BYTES = 4096
@@ -56,7 +54,7 @@ class ListenerTLS(BaseModel):
 
 
 class ListenerIdentity(BaseModel):
-    """The identity sources a standalone listener trusts."""
+    """The identity sources a listener trusts."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -64,12 +62,15 @@ class ListenerIdentity(BaseModel):
         default=False,
         description="Keep the client identity headers (x-authz-* and the "
         "global.services.authz.identity names) that an authenticating proxy "
-        "in front of this listener sets. Off, the Router drops them.",
+        "in front of this listener sets. Off, the listener drops them: the "
+        "Router in standalone mode, the generated Envoy listener with "
+        "--gateway extproc.",
     )
     trusted_peers: Optional[List[str]] = Field(
         default=None,
         description="CIDRs whose connections may carry trusted identity "
-        "headers; the TCP peer is checked, never X-Forwarded-For.",
+        "headers; the TCP peer is checked, never X-Forwarded-For. Standalone "
+        "mode checks it; --gateway extproc rejects it.",
     )
 
 
@@ -78,6 +79,13 @@ class ListenerSystemOne(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     models: List[str] = Field(min_length=1)
+    max_deadline_ms: Optional[int] = Field(
+        default=None,
+        gt=0,
+        description="The longest this listener waits for a model it calls "
+        "directly, however long a request's options.deadline_ms asks for. "
+        "Omitted, 600000 (10 minutes).",
+    )
 
     @field_validator("models")
     @classmethod
@@ -122,8 +130,7 @@ class Listener(BaseModel):
     )
     identity: Optional[ListenerIdentity] = Field(
         default=None,
-        description="The identity sources this listener trusts in standalone "
-        "mode; by default none.",
+        description="The identity sources this listener trusts; by default none.",
     )
 
 
@@ -447,9 +454,12 @@ class ComplexityRule(BaseModel):
     """
 
     name: str
+    # A deployment scores the rule's difficulty question in place of the
+    # hard and easy example banks.
+    deployment: Optional[str] = None
     threshold: float = 0.1
-    hard: ComplexityCandidates
-    easy: ComplexityCandidates
+    hard: Optional[ComplexityCandidates] = None
+    easy: Optional[ComplexityCandidates] = None
     description: Optional[str] = None
     composer: Optional["Rules"] = None  # Forward reference, defined below
     prototype_scoring: Optional[PrototypeScoringConfig] = None
@@ -739,13 +749,18 @@ class TopicContinuityRule(BaseModel):
 
 
 class ClassifierSignal(BaseModel):
-    """Generic label-score classifier signal."""
+    """Generic label-score classifier signal.
+
+    The Router validates the model that answers the rule: its deployment, or
+    the deprecated type, model, model_path and use_cpu it reads as one.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     name: str
     description: Optional[str] = None
-    type: ClassifierSignalType
+    deployment: Optional[str] = None
+    type: Optional[ClassifierSignalType] = None
     model: Optional[str] = None
     model_path: Optional[str] = None
     labels: List[str]
@@ -765,45 +780,7 @@ class ClassifierSignal(BaseModel):
             raise ValueError("labels must be trimmed and cannot contain ':'")
         if len(set(self.labels)) != len(self.labels):
             raise ValueError("labels cannot contain duplicates")
-
-        if self.type == CLASSIFIER_TYPE_LOCAL:
-            self._validate_local()
-        elif self.type == CLASSIFIER_TYPE_LLM:
-            self._validate_llm()
-        else:
-            self._validate_sequence()
         return self
-
-    def _validate_local(self) -> None:
-        if len(self.labels) < SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT:
-            raise ValueError("local classifiers require at least two labels")
-        if self.model or self.disable_rationale:
-            raise ValueError(
-                "local classifiers do not accept model or disable_rationale"
-            )
-        if self.model_path and self.instructions:
-            raise ValueError("specialist local classifiers do not accept instructions")
-
-    def _validate_llm(self):
-        if not self.instructions:
-            raise ValueError("llm classifiers require instructions")
-        if self.model_path or self.use_cpu:
-            raise ValueError("llm classifiers do not accept model_path or use_cpu")
-
-    def _validate_sequence(self) -> None:
-        if len(self.labels) < SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT:
-            raise ValueError(
-                "sequence_classifier classifiers require at least two labels"
-            )
-        if (
-            self.model_path
-            or self.use_cpu
-            or self.instructions
-            or self.disable_rationale
-        ):
-            raise ValueError(
-                "sequence_classifier classifiers do not accept model_path, use_cpu, instructions or disable_rationale"
-            )
 
 
 class Signals(BaseModel):
@@ -858,6 +835,8 @@ class Signals(BaseModel):
 
 class Condition(BaseModel):
     """Routing condition node (leaf or composite boolean expression)."""
+
+    model_config = ConfigDict(extra="forbid")
 
     type: Optional[str] = None
     name: Optional[str] = None
@@ -933,9 +912,12 @@ class Rules(BaseModel):
     Formats 2 and 3 are auto-normalised to composite form.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     operator: str = "AND"
     conditions: List[Condition] = Field(default_factory=list)
     on_unknown: Optional[UnknownPolicy] = None
+    on_error: Optional[str] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -945,17 +927,35 @@ class Rules(BaseModel):
             return data
         # Leaf node: has type/name but no operator → wrap in AND
         if "type" in data and "operator" not in data:
-            leaf = {
-                key: data[key]
-                for key in ("type", "name", "label", "predicate", "on_error")
-                if key in data
-            }
+            leaf = {key: value for key, value in data.items() if key != "on_unknown"}
             leaf.setdefault("name", "")
             rules = {"operator": "AND", "conditions": [leaf]}
             if "on_unknown" in data:
                 rules["on_unknown"] = data["on_unknown"]
             return rules
         return data
+
+    @model_validator(mode="after")
+    def validate_on_unknown_conflict(self):
+        if self.on_unknown is not None and (
+            self.on_error or _any_condition_sets_on_error(self.conditions)
+        ):
+            raise ValueError(
+                "condition on_error has no effect when rules.on_unknown is set; "
+                "remove one of them"
+            )
+        if self.on_error:
+            raise ValueError("on_error only applies to leaf conditions")
+        return self
+
+
+def _any_condition_sets_on_error(conditions: Optional[List["Condition"]]) -> bool:
+    for condition in conditions or []:
+        if condition.on_error is not None:
+            return True
+        if _any_condition_sets_on_error(condition.conditions):
+            return True
+    return False
 
 
 PluginType = Enum(
@@ -1399,6 +1399,7 @@ class RouterReplayPluginConfig(BaseModel):
     capture_request_body: Optional[StrictBool] = None
     capture_response_body: Optional[StrictBool] = None
     capture_personal_data: Optional[StrictBool] = None
+    capture_tool_results: Optional[StrictBool] = None
     max_records: Optional[int] = Field(default=None, ge=0)
     max_body_bytes: Optional[int] = Field(default=None, ge=0)
     max_tool_trace_bytes: Optional[int] = Field(default=None, ge=0)
@@ -1511,10 +1512,17 @@ class MemoryPluginConfig(BaseModel):
 
 
 class RAGRerankConfig(BaseModel):
-    """Select the number of neural-reranked vectorstore hits to inject."""
+    """Select the number of neural-reranked vectorstore hits to inject.
+
+    deployment names the deployment that scores the pairs, at the pair-scorer
+    exit layer and dimension select (zero: the model's full depth and width).
+    """
 
     model_config = ConfigDict(extra="forbid")
     top_k: Optional[int] = Field(default=None, ge=1)
+    deployment: Optional[str] = None
+    layer: int = 0
+    dimension: int = 0
 
 
 class RAGPluginConfig(BaseModel):
@@ -1728,6 +1736,7 @@ class RouterLearningIdentityHeadersConfig(BaseModel):
 
     session: Optional[StrictStr] = None
     conversation: Optional[StrictStr] = None
+    agent: Optional[StrictStr] = None
 
 
 class RouterLearningIdentityConfig(BaseModel):
@@ -1749,6 +1758,16 @@ class RouterLearningProtectionTuningConfig(BaseModel):
     stability_weight: Optional[float] = Field(default=None, ge=0.0)
 
 
+class RouterLearningProtectionReleaseConfig(BaseModel):
+    """Client-requested release of a protection hold."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: Optional[StrictBool] = None
+    header: Optional[StrictStr] = Field(default=None, min_length=1)
+    min_user_turns_between: Optional[int] = Field(default=None, ge=0)
+
+
 class RouterLearningProtectionConfig(BaseModel):
     """Global Router Learning protection controls."""
 
@@ -1758,6 +1777,7 @@ class RouterLearningProtectionConfig(BaseModel):
     scope: Optional[Literal["conversation", "session"]] = None
     identity: Optional[RouterLearningIdentityConfig] = None
     tuning: Optional[RouterLearningProtectionTuningConfig] = None
+    release: Optional[RouterLearningProtectionReleaseConfig] = None
 
 
 class RouterLearningRedisStateStoreConfig(BaseModel):
@@ -2627,6 +2647,11 @@ class ReasoningFamily(BaseModel):
     disabled: Optional[str] = None
 
 
+# Backend ref settings the Router removed; mirrors removedBackendRefFields in
+# src/semantic-router/pkg/config/removed_backend_ref_fields.go.
+REMOVED_BACKEND_REF_FIELDS = ("compat_gateway", "openai_compat_gateway")
+
+
 class BackendRef(BaseModel):
     """Inline backend access details carried under providers.models[].backend_refs."""
 
@@ -2645,11 +2670,21 @@ class BackendRef(BaseModel):
     chat_path: Optional[str] = None
     api_key: Optional[str] = None
     api_key_env: Optional[str] = None
-    # Opts a vLLM-type backend in to the OpenAI-compatible gateway response
-    # contract: the backend is a relay that injects its own usage metering
-    # fields, so the router decoder tolerates them. Mirrors the Go
-    # CanonicalBackendRef field of the same name.
-    openai_compat_gateway: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_removed_fields(cls, data):
+        # Every backend now accepts response fields its api_format does not
+        # define, so the opt-ins are gone; name them instead of reporting a
+        # generic extra field, as the Router does.
+        if isinstance(data, dict):
+            for field in REMOVED_BACKEND_REF_FIELDS:
+                if field in data:
+                    raise ValueError(
+                        f"{field} was removed; gateway response fields are "
+                        "accepted by default, so delete it"
+                    )
+        return data
 
     def resolve_api_key(self) -> Optional[str]:
         if self.api_key:
@@ -2717,29 +2752,41 @@ class OperatingPointReference(BaseModel):
 
 
 class ModelBinding(BaseModel):
-    """A shared task default or recipe-owned use of a model deployment."""
+    """The deployment that answers one shared-answer signal, globally or in one recipe.
+
+    A binding is written as the deployment's name (`pii: local-vela`); the
+    object form also takes a head. Its contract, adapter, mapping_path,
+    pair_scorer and operating_point are deprecated: the Router derives the
+    contract from the signal and the adapter from the deployment's provider.
+    A rule that asks its own question names its deployment on the rule.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     deployment: str
-    contract: str
-    # Required except on model_runtime deployments, whose card names the head.
-    adapter: str = ""
     head: Optional[str] = None
+    contract: Optional[str] = None
+    adapter: Optional[str] = None
     mapping_path: Optional[str] = None
     pair_scorer: Optional[PairScorerSelection] = None
     operating_point: Optional[OperatingPointReference] = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def read_deployment_name(cls, value):
+        if isinstance(value, str):
+            return {"deployment": value.strip()}
+        return value
 
-def _validate_unbound_classifier_selectors(profile):
-    for rule in profile.signals.classifiers or []:
-        if f"classifier.{rule.name}" in profile.model_bindings:
-            continue
-        if rule.type != CLASSIFIER_TYPE_LOCAL and not rule.model:
-            raise ValueError(
-                f"{rule.type} classifiers require model or a model binding"
-            )
-    return profile
+    @model_serializer(mode="wrap")
+    def write_deployment_name(self, handler):
+        if all(
+            getattr(self, name) is None
+            for name in type(self).model_fields
+            if name != "deployment"
+        ):
+            return self.deployment
+        return handler(self)
 
 
 class CandidateRequirements(BaseModel):
@@ -2870,25 +2917,18 @@ class UserConfig(BaseModel):
     global_: Optional[Dict[str, Any]] = Field(default=None, alias="global")
     setup: Optional[Dict[str, Any]] = None
 
+    @field_validator("global_")
+    @classmethod
+    def validate_routing_mode(cls, value):
+        router = (value or {}).get("router") or {}
+        if not isinstance(router.get("enabled", True), bool):
+            raise ValueError("global.router.enabled must be a boolean")
+        return value
+
     @property
     def routing_enabled(self) -> bool:
         router = (self.global_ or {}).get("router") or {}
-        enabled = router.get("enabled", True)
-        if not isinstance(enabled, bool):
-            raise ValueError("global.router.enabled must be a boolean")
-        return enabled
-
-    @model_validator(mode="after")
-    def validate_classifier_selectors(self):
-        # Global serving defaults are available only at document scope. Do not
-        # reject a valid inherited selector while parsing a child profile.
-        from cli.model_runtime_defaults import iter_effective_routing_profiles
-
-        if not self.routing_enabled:
-            return self
-        for _, profile in iter_effective_routing_profiles(self):
-            _validate_unbound_classifier_selectors(profile)
-        return self
+        return router.get("enabled", True)
 
     @property
     def signals(self) -> Signals:

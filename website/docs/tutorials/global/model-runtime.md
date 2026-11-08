@@ -43,7 +43,7 @@ global:
         device: auto
       decision-shared:
         provider: model_runtime
-        endpoint: http://decision-runtime:8100
+        endpoint: http://decision-runtime.example.com:8100
 ```
 
 Without `endpoint`, the router starts the runtime for the deployment and
@@ -53,6 +53,7 @@ Start here:
 
 - [Quickstart](../../model-runtime/quickstart.md): serve a model and use it from the router.
 - [Choose a model, size and hardware](../../model-runtime/choose-a-model.md).
+- [Choose a model for a signal](../../installation/choose-a-model-for-a-signal.md): which deployment answers each signal.
 - [Run it with the router](../../model-runtime/deploy.md): devices, processes, attaching, Kubernetes.
 - [Engine arguments](../../model-runtime/engine-args.md): batching, precision and shared context.
 - [Migrate from the native bindings](../../model-runtime/migrate.md).

@@ -31,28 +31,25 @@ Return ONLY the JSON in the exact format:
 {"route":"route_name"}`
 
 func newExternalPreferenceClassifier(
-	externalCfg *config.ExternalModelConfig,
+	deployment *config.ModelDeployment,
 	rules []config.PreferenceRule,
 ) (*PreferenceClassifier, error) {
-	if externalCfg == nil {
-		return nil, fmt.Errorf("external model config is required when contrastive preference classifier is not enabled")
+	if deployment == nil {
+		return nil, fmt.Errorf("an openai_chat deployment is required when contrastive preference classifier is not enabled")
 	}
-
-	if externalCfg.ModelEndpoint.Address == "" {
-		return nil, fmt.Errorf("external model endpoint address is required for preference")
+	if deployment.Endpoint == "" {
+		return nil, fmt.Errorf("external model endpoint is required for preference")
 	}
-	if externalCfg.ModelName == "" {
+	if deployment.Model == "" {
 		return nil, fmt.Errorf("external model name is required for preference")
 	}
 
-	client := newVLLMClientFromConfig(externalCfg)
-
-	timeout := externalCfg.GetTimeout()
+	client := newVLLMClientForDeployment(*deployment)
 
 	return &PreferenceClassifier{
 		client:             client,
-		modelName:          externalCfg.ModelName,
-		timeout:            timeout,
+		modelName:          deployment.Model,
+		timeout:            client.timeout,
 		preferenceRules:    rules,
 		systemPrompt:       defaultPreferenceSystemPrompt,
 		userPromptTemplate: defaultPreferenceUserPromptTemplate,

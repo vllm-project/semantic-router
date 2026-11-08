@@ -1124,26 +1124,24 @@ config:
       jailbreak:
         - name: jailbreak_standard
           # Match the published Guard operating point in canonical defaults.
-          threshold: 0.75
+          threshold: 0.88
           include_history: false
           description: Standard jailbreak detection
       pii:
         - &pii_deny_all
           name: pii_deny_all
-          threshold: 0.01
+          threshold: 0.18
           include_history: false
           description: Block all PII
       classifiers:
         - name: llm_toxicity
           description: Deterministic outbound LLM classifier E2E signal
-          type: llm
-          model: e2e-llm-classifier
+          deployment: e2e-llm-classifier
           labels: [benign, toxic]
           instructions: Score whether the input contains toxic content.
         - name: remote_toxicity
-          description: Deterministic outbound http_classify E2E signal
-          type: sequence_classifier
-          model: e2e-sequence-classifier
+          description: Deterministic outbound classify E2E signal
+          deployment: e2e-sequence-classifier
           labels: [benign, toxic]
     modelCards:
       - name: base-model
@@ -1384,25 +1382,22 @@ config:
       strategy: priority
     model_catalog:
       kbs: []
-      external:
-        - name: e2e-llm-classifier
-          llm_provider: openai
-          model_role: classification
-          llm_endpoint:
-            address: mock-sequence-classifier.default.svc.cluster.local
-            port: 8000
-            protocol: http
-          llm_model_name: e2e-llm-classifier
-          llm_timeout_seconds: 5
-          access_key: e2e-classifier-key
-        - name: e2e-sequence-classifier
-          model_role: classification
-          llm_endpoint:
-            address: mock-sequence-classifier.default.svc.cluster.local
-            port: 8000
-            protocol: http
-          llm_timeout_seconds: 5
-          access_key: e2e-classifier-key
+      deployments:
+        # The same mock answers both: chat completions for the llm_toxicity
+        # rule and the classification API for remote_toxicity.
+        e2e-llm-classifier:
+          provider: openai_chat
+          endpoint: http://mock-sequence-classifier.default.svc.cluster.local:8000/v1
+          model: e2e-llm-classifier
+          auth:
+            api_key_env: E2E_CLASSIFIER_KEY
+          timeout_ms: 5000
+        e2e-sequence-classifier:
+          provider: classify
+          endpoint: http://mock-sequence-classifier.default.svc.cluster.local:8000
+          auth:
+            api_key_env: E2E_CLASSIFIER_KEY
+          timeout_ms: 5000
     services:
       response_api:
         enabled: true
@@ -1536,6 +1531,12 @@ toolsDb:
       - search
       - web
       - internet
+# The mock classifier checks this test credential; the Router reads it from
+# the environment, never from its configuration.
+extraEnv:
+  - name: E2E_CLASSIFIER_KEY
+    value: e2e-classifier-key
+
 resources:
   limits:
     cpu: "2"

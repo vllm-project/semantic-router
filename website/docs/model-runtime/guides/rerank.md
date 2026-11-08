@@ -13,9 +13,8 @@ relevant ones reach the prompt.
 
 ## Turn it on
 
-Describe the reranker deployment, bind it as `rag.reranker` (it reads
-relevance scores, `relevance_scores.v1`) and opt a route's RAG plugin into
-`rerank`:
+Describe the reranker deployment and name it in the `rerank` block of a
+route's RAG plugin:
 
 ```yaml
 global:
@@ -29,13 +28,6 @@ global:
           max_tokens: 4096
           overflow: reject
 routing:
-  model_bindings:
-    rag.reranker:
-      deployment: document-ranker
-      contract: relevance_scores.v1
-      pair_scorer:
-        layer: 22
-        dimension: 768
   decisions:
     - name: answer-from-docs
       priority: 100
@@ -53,14 +45,19 @@ routing:
               vector_store_id: vs-your-documents
             top_k: 10
             rerank:
+              deployment: document-ranker
               top_k: 3
+              layer: 22
+              dimension: 768
             on_failure: block
 ```
 
 `top_k` retrieves ten candidates and `rerank.top_k` keeps the best three.
-`pair_scorer` selects the size of the model: the full 22 layers and 768
-dimensions are the most accurate; layers 3, 6 and 11 and smaller dimensions
-are faster.
+`layer` and `dimension` select the size of the model: the full 22 layers and
+768 dimensions are the most accurate; layers 3, 6 and 11 and smaller
+dimensions are faster. A remote reranker is a `rerank` deployment that the
+Router posts to `<endpoint>/rerank`; see the
+[model catalog reference](../../installation/model-catalog.md#deployments).
 
 The input limit covers the request and one document together. A pair over the
 limit is rejected, never shortened, and the plugin's `on_failure` decides what

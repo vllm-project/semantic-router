@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"slices"
 	"strings"
 	"testing"
 
@@ -13,17 +12,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestMaintainedBalanceRecipeHasNoUndefinedComplexitySignals(t *testing.T) {
-	assetPath := filepath.Join("..", "..", "..", "..", "config", "recipes", "balance", "config.yaml")
-	data, err := os.ReadFile(assetPath)
-	if err != nil {
-		t.Fatalf("failed to read config/recipes/balance/config.yaml: %v", err)
-	}
+func maintainedBalanceAsset(name string) string {
+	return filepath.Join("..", "..", "..", "..", "config", "recipes", "balance", name)
+}
 
-	cfg, err := config.ParseYAMLBytes(data)
-	if err != nil {
-		t.Fatalf("ParseYAMLBytes error: %v", err)
-	}
+func TestMaintainedBalanceRecipeHasNoUndefinedComplexitySignals(t *testing.T) {
+	cfg := mustLoadMaintainedBalanceRouterConfig(t, maintainedBalanceAsset("config.yaml"))
 
 	dslText, err := DecompileRouting(cfg)
 	if err != nil {
@@ -42,65 +36,50 @@ func TestMaintainedBalanceRecipeHasNoUndefinedComplexitySignals(t *testing.T) {
 	}
 }
 
-func TestMaintainedBalanceRecipeUsesProjectionPartitionsAndTieredDecisions(t *testing.T) {
-	assetPath := filepath.Join("..", "..", "..", "..", "config", "recipes", "balance", "config.yaml")
-	data, err := os.ReadFile(assetPath)
-	if err != nil {
-		t.Fatalf("failed to read config/recipes/balance/config.yaml: %v", err)
+// Every specialist and follow-up lane reads a named decision-model question;
+// only the image lane and the final fallback route without one.
+func TestMaintainedBalanceLanesReadNamedQuestions(t *testing.T) {
+	cfg := mustLoadMaintainedBalanceRouterConfig(t, maintainedBalanceAsset("config.yaml"))
+
+	questions := make(map[string]bool, len(cfg.DecisionRules))
+	for _, rule := range cfg.DecisionRules {
+		questions[rule.Name] = true
+	}
+	for _, name := range []string{"task", "verification", "correction", "clarify"} {
+		if !questions[name] {
+			t.Fatalf("expected balance to ask the %q question, got %v", name, questions)
+		}
+	}
+	if len(cfg.Projections.Scores) != 0 || len(cfg.Projections.Partitions) != 0 {
+		t.Fatalf("expected balance to route on questions without projections, got %+v", cfg.Projections)
 	}
 
-	cfg, err := config.ParseYAMLBytes(data)
-	if err != nil {
-		t.Fatalf("ParseYAMLBytes error: %v", err)
-	}
-	if len(cfg.Projections.Partitions) == 0 {
-		t.Fatal("expected config/recipes/balance/config.yaml to include at least one projection partition")
-	}
-	if len(cfg.Projections.Scores) == 0 || len(cfg.Projections.Mappings) == 0 {
-		t.Fatalf("expected config/recipes/balance/config.yaml to include derived projection scores and mappings, got %+v", cfg.Projections)
-	}
-	assertMaintainedBalanceDomainPartition(t, cfg.Projections.Partitions)
-	assertMaintainedBalanceIntentPartition(t, cfg.Projections.Partitions)
-	assertMaintainedBalanceProjectionBands(t, cfg.Projections)
 	assertMaintainedBalanceDecisionTiers(t, cfg.Decisions)
-	assertMaintainedBalanceRoute(t, cfg.Decisions, "formal_math_proof")
-	assertMaintainedBalanceRoute(t, cfg.Decisions, "complex_specialist")
-	assertMaintainedBalanceRoute(t, cfg.Decisions, "reasoning_deep")
-	assertMaintainedBalanceRoute(t, cfg.Decisions, "verified_health")
-	assertMaintainedBalanceRoute(t, cfg.Decisions, "fast_qa")
-	assertMaintainedBalanceRoute(t, cfg.Decisions, "casual_chat")
+	for _, decision := range cfg.Decisions {
+		switch decision.Name {
+		case "omni", "casual_chat":
+			continue
+		}
+		if !ruleTreeReadsSignalType(&decision.Rules, config.SignalTypeDecision) {
+			t.Fatalf("expected %s to read a decision-model question", decision.Name)
+		}
+	}
+	if fallback := mustFindMaintainedBalanceDecision(t, cfg.Decisions, "casual_chat"); len(fallback.Rules.Conditions) != 0 || fallback.Rules.Type != "" {
+		t.Fatalf("expected casual_chat to be the unconditional fallback, got %+v", fallback.Rules)
+	}
 }
 
 func TestMaintainedBalanceRoutingAssetsStayInSync(t *testing.T) {
-	dslPath := filepath.Join("..", "..", "..", "..", "config", "recipes", "balance", "recipe.dsl")
-	yamlPath := filepath.Join("..", "..", "..", "..", "config", "recipes", "balance", "config.yaml")
-
-	prog := mustLoadMaintainedBalanceDSLProgram(t, dslPath)
+	prog := mustLoadMaintainedBalanceDSLProgram(t, maintainedBalanceAsset("recipe.dsl"))
 	want := mustCompileMaintainedRoutingDSL(t, prog)
-	got := mustLoadMaintainedBalanceRoutingYAML(t, yamlPath)
+	got := mustLoadMaintainedBalanceRoutingYAML(t, maintainedBalanceAsset("config.yaml"))
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("maintained DSL/YAML examples diverged (-want +got):\n%s", cmp.Diff(want, got))
 	}
 }
 
-func TestMaintainedBalanceBaseRoutesExplicitlyExcludeVerifiedOverlay(t *testing.T) {
-	yamlPath := filepath.Join("..", "..", "..", "..", "config", "recipes", "balance", "config.yaml")
-	cfg := mustLoadMaintainedBalanceRouterConfig(t, yamlPath)
-
-	for _, routeName := range []string{
-		"medium_explainer",
-		"simple_general",
-	} {
-		decision := mustFindMaintainedBalanceDecision(t, cfg.Decisions, routeName)
-		if !ruleTreeContainsNegatedSignal(&decision.Rules, config.SignalTypeProjection, "verification_required") {
-			t.Fatalf("expected %s to negate projection(%q) so verified overlays stay explicit siblings", routeName, "verification_required")
-		}
-	}
-}
-
 func TestMaintainedBalanceWarningBudgetStaysBelowCeiling(t *testing.T) {
-	yamlPath := filepath.Join("..", "..", "..", "..", "config", "recipes", "balance", "config.yaml")
-	cfg := mustLoadMaintainedBalanceRouterConfig(t, yamlPath)
+	cfg := mustLoadMaintainedBalanceRouterConfig(t, maintainedBalanceAsset("config.yaml"))
 
 	dslText, err := DecompileRouting(cfg)
 	if err != nil {
@@ -143,80 +122,8 @@ func mustLoadMaintainedBalanceDSLProgram(t *testing.T, dslPath string) *Program 
 	if len(errs) > 0 {
 		t.Fatalf("Parse errors: %v", errs)
 	}
-	if len(prog.ProjectionPartitions) < 2 {
-		t.Fatalf("expected maintained balance DSL to declare at least 2 projection partitions, got %d", len(prog.ProjectionPartitions))
-	}
 	assertMaintainedBalanceDSLDiagnostics(t, prog)
 	return prog
-}
-
-func assertMaintainedBalanceDomainPartition(t *testing.T, groups []config.ProjectionPartition) {
-	t.Helper()
-
-	var domainPartition *config.ProjectionPartition
-	for i := range groups {
-		if groups[i].Name == "balance_domain_partition" {
-			domainPartition = &groups[i]
-			break
-		}
-	}
-	if domainPartition == nil {
-		t.Fatal("expected config/recipes/balance/config.yaml to define balance_domain_partition")
-	}
-	gotMembers := append([]string(nil), domainPartition.Members...)
-	wantMembers := config.SupportedRoutingDomainNames()
-	slices.Sort(gotMembers)
-	slices.Sort(wantMembers)
-	if !slices.Equal(gotMembers, wantMembers) {
-		t.Fatalf("balance_domain_partition members mismatch\nwant: %v\ngot:  %v", wantMembers, gotMembers)
-	}
-	if domainPartition.Default != "other" {
-		t.Fatalf("expected balance_domain_partition default to be %q, got %q", "other", domainPartition.Default)
-	}
-}
-
-func assertMaintainedBalanceIntentPartition(t *testing.T, groups []config.ProjectionPartition) {
-	t.Helper()
-
-	var intentPartition *config.ProjectionPartition
-	for i := range groups {
-		if groups[i].Name == "balance_intent_partition" {
-			intentPartition = &groups[i]
-			break
-		}
-	}
-	if intentPartition == nil {
-		t.Fatal("expected config/recipes/balance/config.yaml to define balance_intent_partition")
-	}
-
-	wantMembers := []string{
-		"agentic_workflows",
-		"architecture_design",
-		"business_analysis",
-		"code_general",
-		"complex_stem",
-		"creative_tasks",
-		"fast_qa_en",
-		"fast_qa_zh",
-		"general_chat_fallback",
-		"health_guidance",
-		"history_explainer",
-		"interpersonal_drafting",
-		"premium_legal_analysis",
-		"psychology_support",
-		"reasoning_general_en",
-		"reasoning_general_zh",
-		"research_synthesis",
-	}
-	gotMembers := append([]string(nil), intentPartition.Members...)
-	slices.Sort(gotMembers)
-	slices.Sort(wantMembers)
-	if !slices.Equal(gotMembers, wantMembers) {
-		t.Fatalf("balance_intent_partition members mismatch\nwant: %v\ngot:  %v", wantMembers, gotMembers)
-	}
-	if intentPartition.Default != "general_chat_fallback" {
-		t.Fatalf("expected balance_intent_partition default to be %q, got %q", "general_chat_fallback", intentPartition.Default)
-	}
 }
 
 func assertMaintainedBalanceDecisionTiers(t *testing.T, decisions []config.Decision) {
@@ -229,87 +136,22 @@ func assertMaintainedBalanceDecisionTiers(t *testing.T, decisions []config.Decis
 	}
 }
 
-func assertMaintainedBalanceProjectionBands(t *testing.T, projections config.Projections) {
-	t.Helper()
-
-	scoreNames := make(map[string]bool, len(projections.Scores))
-	for _, score := range projections.Scores {
-		scoreNames[score.Name] = true
-	}
-	for _, name := range []string{
-		"difficulty_score",
-		"verification_pressure",
-		"feedback_correction_pressure",
-		"feedback_clarification_pressure",
-	} {
-		if !scoreNames[name] {
-			t.Fatalf("expected balance projections to include %q, got %v", name, scoreNames)
-		}
-	}
-
-	outputNames := make(map[string]bool)
-	for _, mapping := range projections.Mappings {
-		for _, output := range mapping.Outputs {
-			outputNames[output.Name] = true
-		}
-	}
-	for _, name := range []string{
-		"balance_simple",
-		"balance_medium",
-		"balance_complex",
-		"balance_reasoning",
-		"verification_required",
-		"feedback_correction_verified",
-		"feedback_clarification_overlay",
-	} {
-		if !outputNames[name] {
-			t.Fatalf("expected balance projections to emit %q, got %v", name, outputNames)
-		}
-	}
-}
-
-func assertMaintainedBalanceRoute(t *testing.T, decisions []config.Decision, name string) {
-	t.Helper()
-
-	for _, decision := range decisions {
-		if decision.Name == name {
-			return
-		}
-	}
-	t.Fatalf("expected config/recipes/balance/config.yaml to include %s route", name)
-}
-
 func assertMaintainedBalanceDSLMarkers(t *testing.T, dslPath, dslText string) {
 	t.Helper()
-	if !strings.Contains(dslText, "PROJECTION partition balance_intent_partition") {
-		t.Fatalf("%s must define the learned intent projection partition", dslPath)
-	}
-	if !strings.Contains(dslText, "PROJECTION score difficulty_score") {
-		t.Fatalf("%s must define the derived difficulty score", dslPath)
-	}
-	if !strings.Contains(dslText, "PROJECTION mapping verification_band") {
-		t.Fatalf("%s must define the verification mapping", dslPath)
-	}
-	if !strings.Contains(dslText, "PROJECTION mapping feedback_correction_band") {
-		t.Fatalf("%s must define the feedback correction mapping", dslPath)
-	}
-	if !strings.Contains(dslText, "PROJECTION mapping feedback_clarification_band") {
-		t.Fatalf("%s must define the feedback clarification mapping", dslPath)
-	}
-	if !strings.Contains(dslText, "SIGNAL reask likely_dissatisfied") {
-		t.Fatalf("%s must define the maintained reask helper for clarification routing", dslPath)
-	}
-	if !strings.Contains(dslText, "ROUTE formal_math_proof") {
-		t.Fatalf("%s must include the narrow formal_math_proof route", dslPath)
-	}
-	if !strings.Contains(dslText, "ROUTE reasoning_deep") {
-		t.Fatalf("%s must include the merged reasoning_deep route", dslPath)
-	}
-	if !strings.Contains(dslText, "ROUTE complex_specialist") {
-		t.Fatalf("%s must include the merged complex_specialist route", dslPath)
-	}
-	if !strings.Contains(dslText, "ROUTE fast_qa") {
-		t.Fatalf("%s must include the merged fast_qa route", dslPath)
+	for _, marker := range []string{
+		"SIGNAL decision task",
+		"SIGNAL decision verification",
+		"SIGNAL decision correction",
+		"SIGNAL decision clarify",
+		"ROUTE formal_math_proof",
+		"ROUTE reasoning_deep",
+		"ROUTE complex_specialist",
+		"ROUTE fast_qa",
+		"ROUTE casual_chat",
+	} {
+		if !strings.Contains(dslText, marker) {
+			t.Fatalf("%s must contain %q", dslPath, marker)
+		}
 	}
 }
 
@@ -373,24 +215,15 @@ func mustFindMaintainedBalanceDecision(t *testing.T, decisions []config.Decision
 	return nil
 }
 
-func ruleTreeContainsNegatedSignal(node *config.RuleCombination, signalType string, name string) bool {
-	return ruleTreeContainsSignal(node, false, signalType, name)
-}
-
-func ruleTreeContainsSignal(node *config.RuleCombination, negated bool, signalType string, name string) bool {
+func ruleTreeReadsSignalType(node *config.RuleCombination, signalType string) bool {
 	if node == nil {
 		return false
 	}
 	if node.Type != "" {
-		return negated && node.Type == signalType && node.Name == name
-	}
-
-	childNegated := negated
-	if node.Operator == "NOT" {
-		childNegated = !negated
+		return node.Type == signalType
 	}
 	for i := range node.Conditions {
-		if ruleTreeContainsSignal(&node.Conditions[i], childNegated, signalType, name) {
+		if ruleTreeReadsSignalType(&node.Conditions[i], signalType) {
 			return true
 		}
 	}

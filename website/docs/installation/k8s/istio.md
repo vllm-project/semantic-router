@@ -5,6 +5,15 @@ description: Run Semantic Router as an ExtProc service behind an Istio Gateway a
 
 # Deploy with Istio Gateway
 
+:::note Experimental integration example
+
+This integration has no maintained platform-specific E2E qualification. The
+project continuously tests standalone and the Agent Router ExtProc path. Use
+this guide as an example and qualify the exact upstream release and deployment
+you choose. See [Deployment Support](../support-matrix).
+
+:::
+
 This guide shows a reference topology for running Semantic Router as an
 ExtProc service behind an Istio Gateway. Istio owns ingress and `HTTPRoute`
 processing; Semantic Router owns prompt-aware model selection. The supplied

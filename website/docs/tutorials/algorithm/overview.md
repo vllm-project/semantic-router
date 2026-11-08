@@ -133,9 +133,12 @@ traffic before using them for production routing.
 - Router Learning session memory retains the selected candidate's controls.
   Protection can hold that exact choice across tool-loop continuations even
   when a later base selection prefers another effort of the same model. If that
-  exact owner is excluded during an active tool loop or nonportable continuation,
-  routing rejects the request rather than restoring the owner or falling back
-  to a different effort. Portable turns may select a new eligible candidate;
+  exact owner is excluded during an active tool loop that is still on the
+  decision that admitted it, or during a nonportable continuation, routing
+  rejects the request rather than restoring the owner or falling back to a
+  different effort. A drifted decision releases the tool-loop lock and selects
+  from the new decision's candidates; opaque provider state stays bound to the
+  model that created it. Portable turns may select a new eligible candidate;
   observe and bypass modes do not enforce the protection decision.
 - Candidate model names must resolve through `routing.modelCards` and
   `providers.models` in a complete config.
@@ -153,9 +156,13 @@ traffic before using them for production routing.
 ### Native System One Algorithms
 
 A recipe published with `api: systemone` uses native execution. Its matched
-decision runs a `cascade`, preserving complete typed responses. Each cascade
-has its own `algorithm.budget` for its stages and transport retries. Signals
-run first with their own timeouts and request cancellation.
+decision runs a `cascade`, preserving complete typed responses. The request
+deadline and physical-call ledger start when the request arrives. Before a
+decision is selected, the ceiling uses the largest `algorithm.budget` deadline
+and `max_calls` among the recipe's native decisions; signal-specific timeouts
+remain upper bounds. After selection, the decision's `algorithm.budget`
+tightens the same deadline and ledger for its stages, judges and transport
+retries. Calls already spent on signals count toward that decision's `max_calls`.
 
 | Type | Status | Goal | Guide |
 | --- | --- | --- | --- |

@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 配方
 description: 在同一 Semantic Router 部署中定义隔离的路由策略，同时共享提供商模型和平台服务。
 translation:

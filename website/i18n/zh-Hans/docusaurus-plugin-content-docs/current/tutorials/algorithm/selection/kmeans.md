@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
   source_file: "docs/tutorials/algorithm/selection/kmeans.md"

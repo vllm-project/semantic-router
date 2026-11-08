@@ -10,9 +10,15 @@ path, groups the load sites by task, and checks that each site agrees with the
 ``system:`` reference table. That is enough to tell an evaluation run which
 artifact it must measure, and to show when two sites disagree.
 
-Since #4721 a module load site usually names no artifact path at all: it
-declares only a ``model_ref``, and the router resolves the reference in two
-steps this module mirrors (``resolveSystemModelRef`` and
+A configuration in the current form names no artifact on a module either:
+each built-in signal is answered by the deployment its binding names
+(``global.model_catalog.bindings.<type>``, or ``routing.model_bindings``),
+else by the decision model's deployment, and this module reports the
+artifact that deployment serves. A remote deployment serves none.
+
+Since #4721 a module load site in the earlier form names no artifact path
+either: it declares only a ``model_ref``, and the router resolves the
+reference in two steps this module mirrors (``resolveSystemModelRef`` and
 ``applyDecisionModel`` in the Router's config package). An explicit
 ``model_id``/``model_path`` on the module wins; otherwise the ``system:``
 table entry for the reference decides, and every system line the
@@ -63,6 +69,41 @@ REF_TASKS = {
 
 # Load sites that declare no model_ref are classified by their config location.
 LOCATION_TASKS = (("modality_detector", "modality"),)
+
+# The model_runtime deployments the Router always declares, mirroring
+# DefaultModelDeployments; a deployment the configuration declares under the
+# same name replaces one.
+PREDECLARED_ARTIFACTS = {
+    "primary": "vllm-sr/vela3-fast",
+    "hazard": "vllm-sr/Vela-1.0-Encoder-307M-Hazard",
+}
+
+# Each built-in task in the current form: the module that switches it on, the
+# binding keys that name its deployment (the signal type, then the earlier
+# consumer name), and its ``system:`` reference name.
+CANONICAL_TASKS = (
+    ("jailbreak", ("prompt_guard",), ("jailbreak", "prompt_guard"), "prompt_guard"),
+    (
+        "domain",
+        ("classifier", "domain"),
+        ("domain", "domain_classifier"),
+        "domain_classifier",
+    ),
+    ("pii", ("classifier", "pii"), ("pii", "pii_classifier"), "pii_classifier"),
+    (
+        "fact-check",
+        ("hallucination_mitigation", "fact_check"),
+        ("fact_check", "fact_check_classifier"),
+        "fact_check_classifier",
+    ),
+    (
+        "feedback",
+        ("feedback_detector",),
+        ("user_feedback", "feedback_detector"),
+        "feedback_detector",
+    ),
+    ("modality", ("modality_detector",), ("modality", "modality_detector"), None),
+)
 
 MAPPING_KEYS = (
     "jailbreak_mapping_path",
@@ -238,9 +279,53 @@ def _system_block(config: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
-def _decision_model(system: dict[str, Any]) -> DecisionModel:
+def _catalog(config: dict[str, Any]) -> dict[str, Any]:
+    catalog = (config.get("global") or {}).get("model_catalog")
+    return catalog if isinstance(catalog, dict) else {}
+
+
+def _deployment_artifact(catalog: dict[str, Any], name: str) -> str | None:
+    """The model a deployment serves, or None for one the Router runs nowhere."""
+    deployment = (catalog.get("deployments") or {}).get(name)
+    if deployment is None:
+        artifact = PREDECLARED_ARTIFACTS.get(name)
+    elif deployment.get("provider") != "model_runtime" or deployment.get("endpoint"):
+        return None
+    else:
+        artifact = deployment.get("artifact")
+    if not isinstance(artifact, str) or not artifact.strip():
+        return None
+    artifact = artifact.strip()
+    if artifact.startswith(f"{HF_ORG}/"):
+        return MODEL_PREFIX + artifact.removeprefix(f"{HF_ORG}/")
+    return artifact
+
+
+def _binding_deployment(config: dict[str, Any], keys: tuple[str, ...]) -> str | None:
+    """The deployment a binding names; the routing profile's wins."""
+    routing = config.get("routing") or {}
+    for scope in (routing.get("model_bindings"), _catalog(config).get("bindings")):
+        for key in keys:
+            value = (scope or {}).get(key)
+            name = value.get("deployment") if isinstance(value, dict) else value
+            if isinstance(name, str) and name.strip():
+                return name.strip()
+    return None
+
+
+def _decision_model(
+    system: dict[str, Any], catalog: dict[str, Any] | None = None
+) -> DecisionModel:
     """Resolve ``system.decision_model``; an unset name is the default."""
     raw = system.get("decision_model")
+    if isinstance(raw, dict):
+        # The current form names a deployment, whose model answers every
+        # built-in signal; Hazard stays on the hazard deployment.
+        name = str(raw.get("deployment") or "primary").strip()
+        model = _deployment_artifact(catalog or {}, name)
+        if model is None:
+            return DecisionModel(name=name, model=None, modality="", system={})
+        return _vela2_decision_model(name, model)
     name = raw.strip() if isinstance(raw, str) and raw.strip() else ""
     if not name:
         return DEFAULT_DECISION_MODEL
@@ -261,7 +346,7 @@ def system_refs(config: dict[str, Any]) -> dict[str, str]:
     fills them at load.
     """
     system = _system_block(config)
-    refs = dict(_decision_model(system).system)
+    refs = dict(_decision_model(system, _catalog(config)).system)
     for key, value in system.items():
         if key in refs and isinstance(value, str) and value.startswith(MODEL_PREFIX):
             refs[key] = value
@@ -277,7 +362,7 @@ def load_sites(config: dict[str, Any]) -> list[LoadSite]:
     ``model_path`` loads the decision model's modality model.
     """
     system = _system_block(config)
-    decision = _decision_model(system)
+    decision = _decision_model(system, _catalog(config))
     refs = system_refs(config)
     sites: list[LoadSite] = []
     for location, block in _walk_mappings(config):
@@ -317,7 +402,11 @@ def load_sites(config: dict[str, Any]) -> list[LoadSite]:
                     positive_labels=_positive_labels(block),
                 )
             )
-        elif "modality_detector" in location and block.get("model_path") == "":
+        elif (
+            "modality_detector" in location
+            and block.get("model_path") == ""
+            and decision.modality
+        ):
             sites.append(
                 LoadSite(
                     location=f"{location}.model_path" if location else "model_path",
@@ -328,7 +417,64 @@ def load_sites(config: dict[str, Any]) -> list[LoadSite]:
                     positive_labels=_positive_labels(block),
                 )
             )
+    return sites + _canonical_sites(config, decision, sites)
+
+
+def _canonical_sites(
+    config: dict[str, Any], decision: DecisionModel, legacy: list[LoadSite]
+) -> list[LoadSite]:
+    """The built-in tasks a module in the current form runs: no model field."""
+    covered = {_site_task(site) for site in legacy}
+    catalog = _catalog(config)
+    sites: list[LoadSite] = []
+    for task, module_path, keys, system_key in CANONICAL_TASKS:
+        block: Any = catalog.get("modules") or {}
+        for key in module_path:
+            block = block.get(key) if isinstance(block, dict) else None
+        if task in covered or not isinstance(block, dict):
+            continue
+        if block.get("enabled") is False or any(
+            key in block for key in ("model_ref", *MODEL_PATH_KEYS)
+        ):
+            continue
+        bound = _binding_deployment(config, keys)
+        if bound is not None:
+            model_path = _deployment_artifact(catalog, bound)
+        elif task == "modality":
+            model_path = decision.modality or None
+        else:
+            model_path = decision.model
+        if model_path is None:
+            continue
+        sites.append(
+            LoadSite(
+                location="global.model_catalog.modules." + ".".join(module_path),
+                model_path=model_path,
+                model_ref=system_key,
+                threshold=_canonical_threshold(block, model_path, system_key),
+                mapping_path=_mapping_path(block),
+                positive_labels=_positive_labels(block),
+            )
+        )
     return sites
+
+
+def _canonical_threshold(
+    block: dict[str, Any], model_path: str, system_key: str | None
+) -> float | None:
+    """A module's own threshold, else the published one of a Vela model.
+
+    Any other model's threshold comes from its model card, which this module
+    does not read.
+    """
+    declared = _as_float(block.get("threshold"))
+    if declared is not None:
+        return declared
+    name = model_path.removeprefix(MODEL_PREFIX)
+    if not name.startswith(("Vela-2.0-", "Vela-1.0-")):
+        return None
+    key = THRESHOLD_KEYS.get(system_key or "")
+    return _module_thresholds(model_path).get(key) if key else None
 
 
 def served_artifacts(config: dict[str, Any]) -> dict[str, ServedArtifact]:

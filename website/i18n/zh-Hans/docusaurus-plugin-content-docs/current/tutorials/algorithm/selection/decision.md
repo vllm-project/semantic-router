@@ -1,8 +1,9 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "dc40c9a164b35316778c66982e6184d9f45cc97c"
   source_file: "docs/tutorials/algorithm/selection/decision.md"
-  outdated: true
+  outdated: false
 ---
 
 # Decision 选模算法
@@ -28,7 +29,7 @@ translation:
 
 ## 配置 {#configuration}
 
-未指定 `deployment` 时，使用 `global.model_catalog.system.decision_model` 指向的 Router 判断模型，默认为 Vela 2.0 0.3B，也可以[选择其他规模](/model-runtime/choose-a-model.md#choose-a-size)。该模型已经负责请求的内置信号和未指定部署的 `decision` 问题，因此选模无需再加载第二份模型：
+未指定 `deployment` 时，使用 `global.model_catalog.system.decision_model` 指向的 Router 判断模型，默认为 Vela 3.0 vela3-fast，也可以[选择其他规模](/model-runtime/choose-a-model.md#choose-a-size)。该模型已经负责请求的内置信号和未指定部署的 `decision` 问题，因此选模无需再加载第二份模型：
 
 ```yaml
 global:

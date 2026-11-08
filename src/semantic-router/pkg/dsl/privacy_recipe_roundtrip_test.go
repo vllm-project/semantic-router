@@ -21,8 +21,8 @@ func TestMaintainedPrivacyRecipeParsesAndDecompilesWithoutError(t *testing.T) {
 		t.Fatalf("DecompileRouting error: %v", err)
 	}
 
-	if !strings.Contains(dslText, "SIGNAL kb") {
-		t.Error("decompiled DSL missing kb signal")
+	if !strings.Contains(dslText, "SIGNAL decision confidential") {
+		t.Error("decompiled DSL missing the confidential decision question")
 	}
 	if !strings.Contains(dslText, "PLUGIN tools") {
 		t.Error("decompiled DSL missing tools plugin directives")
@@ -43,8 +43,8 @@ func TestMaintainedPrivacyRecipeDSLRoundTrip(t *testing.T) {
 		t.Fatalf("Compile errors: %v", errs)
 	}
 
-	if len(cfg.KBRules) == 0 {
-		t.Error("expected at least one kb rule from privacy recipe")
+	if len(cfg.DecisionRules) == 0 {
+		t.Error("expected decision questions from privacy recipe")
 	}
 
 	hasToolsPlugin := false
@@ -70,9 +70,9 @@ func TestMaintainedPrivacyRecipeDSLRoundTrip(t *testing.T) {
 		t.Fatalf("Round-trip compile errors: %v", errs2)
 	}
 
-	if len(cfg2.KBRules) != len(cfg.KBRules) {
-		t.Errorf("round-trip kb rules: %d → %d",
-			len(cfg.KBRules), len(cfg2.KBRules))
+	if len(cfg2.DecisionRules) != len(cfg.DecisionRules) {
+		t.Errorf("round-trip decision questions: %d → %d",
+			len(cfg.DecisionRules), len(cfg2.DecisionRules))
 	}
 	if len(cfg2.Decisions) != len(cfg.Decisions) {
 		t.Errorf("round-trip Decisions: %d → %d",

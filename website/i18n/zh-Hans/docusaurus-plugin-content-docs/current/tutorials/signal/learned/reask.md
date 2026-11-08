@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
   source_file: "docs/tutorials/signal/learned/reask.md"
@@ -53,8 +54,7 @@ routing:
 
 每条规则将当前用户轮次与最近 `lookback_turns` 个先前用户轮次比较。仅当该近期连续中的每一轮都高于已配置相似度阈值时，规则才匹配。
 
-默认分数是余弦相似度，即使配置了默认决策模型也是如此。显式设置
-`routing.model_bindings.reask` 且使用 `contract: decision.v1` 时，才会启用原生的重复意图判断。
+默认分数是余弦相似度，即使配置了默认决策模型也是如此。`reask` 绑定（`routing.model_bindings.reask` 或 `global.model_catalog.bindings.reask`）会改为在该部署上进行原生的重复意图判断。
 该模式的分数表示两个请求寻求相同信息或操作的概率，需要针对所选模型重新校准阈值；
 余弦相似度阈值不能直接移用。两种模式都由 Router 统计连续轮次，完整且非空的相同轮次无需调用模型即可识别。
 

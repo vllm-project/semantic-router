@@ -174,13 +174,17 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	if response := r.runLooperInternalPlugins(ctx, decisionName); response != nil {
 		return response, nil
 	}
-	captureOriginalContextHistory(ctx)
-	prepareLooperContextHistorySteps(ctx)
-	// Internal hops run the same shared context stage as ingress requests, so
-	// history actions and compression compose identically on both paths.
-	if contextErr := r.applyContextTransformationPlan(ctx, request); contextErr != nil {
-		status, message := contextTransformationFailure(ctx)
-		return r.createErrorResponse(status, message), nil
+	// Recovery follow-ups already carry recovered payloads and the reserved
+	// retrieve tool. Re-running the context stage would fail closed on
+	// vsr_context_retrieve injection, and an inherited reset never removes on
+	// a follow-up, so the whole stage is skipped for that hop.
+	if !isContextRecoveryFollowupRequest(request) {
+		captureOriginalContextHistory(ctx)
+		prepareLooperContextHistorySteps(ctx)
+		if contextErr := r.applyContextTransformationPlan(ctx, request); contextErr != nil {
+			status, message := contextTransformationFailure(ctx)
+			return r.createErrorResponse(status, message), nil
+		}
 	}
 	err = r.modifyRequestBodyForLooper(
 		request,
@@ -295,7 +299,8 @@ func (r *OpenAIRouter) parseLooperRequestForPlugins(
 		})
 		return nil, err
 	}
-	ctx.UserContent = extractSemanticRequestSignals(ctx.SemanticRequest).UserContent
+	snapshot := extractSemanticRequestSignalsWith(ctx.SemanticRequest, r.routingInputSelector())
+	ctx.UserContent, ctx.RoutingInput = snapshot.UserContent, snapshot.RoutingInput
 	return ctx.SemanticRequest, nil
 }
 
@@ -312,7 +317,7 @@ func (r *OpenAIRouter) runLooperInternalPlugins(
 	}
 
 	if err := r.executeRAGPlugin(ctx, decisionName); err != nil {
-		return r.createErrorResponse(503, fmt.Sprintf("RAG failed: %v", err))
+		return r.createErrorResponse(503, "RAG retrieval failed")
 	}
 
 	return nil

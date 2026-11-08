@@ -2,21 +2,6 @@
 # SIGNALS
 # =============================================================================
 
-SIGNAL keyword accuracy_workflow_request {
-  operator: "OR"
-  keywords: ["investigate and produce an implementation plan", "research, compare, and synthesize", "diagnose the root cause and verify the fix", "break this into independent workstreams", "use tools to gather evidence", "调研、比较并综合", "分解为独立任务并验证", "根因分析并验证修复"]
-}
-
-SIGNAL keyword accuracy_deliberation_request {
-  operator: "OR"
-  keywords: ["debate both sides", "compare competing hypotheses", "adversarial review", "independent expert opinions", "challenge the proposed solution", "compare multiple approaches and reach a verdict", "比较多个假设并得出结论", "从正反两面论证", "对方案进行对抗性审查"]
-}
-
-SIGNAL keyword accuracy_direct_request {
-  operator: "OR"
-  keywords: ["answer the question directly", "do not debate", "do not compare", "do not create workstreams", "use a single model", "without multi-model fan-out", "直接回答问题", "不要比较多个方案", "不要创建并行工作流"]
-}
-
 SIGNAL context accuracy_long_context {
   description: "Long inputs stay on one capable worker to avoid multiplying context cost across a fan-out workflow."
   min_tokens: "16K"
@@ -26,6 +11,17 @@ SIGNAL context accuracy_long_context {
 SIGNAL conversation accuracy_has_images {
   description: "Request contains at least one image content part."
   feature: { source: { type: "image_content" }, type: "exists" }
+}
+
+SIGNAL decision accuracy_mode {
+  description: "The way of working the request asks for."
+  question: { choices: [{ description: "A single direct answer, explanation or summary, including when the user asks not to split the work, compare options or use several models", key: "direct" }, { description: "An investigation or plan with several workstreams, such as research, diagnosis or evidence gathering", key: "workstreams" }, { description: "Independent opinions, a debate or an adversarial review that ends in a verdict", key: "independent_review" }], instructions: "Which way of working does this request ask for?", type: "choice" }
+}
+
+SIGNAL decision accuracy_difficulty {
+  description: "How much reasoning a strong expert needs, from 0 (none) to 4 (research level)."
+  question: { instructions: "How much reasoning does a strong expert need to answer this request well?", levels: ["Answer immediately, with no thinking", "A little thought, one or two simple steps", "Multi-step reasoning or a careful check", "Deep expert reasoning on a hard problem", "Research-level work on an open or frontier problem"], type: "score" }
+  predicate: { gte: 1.5 }
 }
 
 # =============================================================================
@@ -80,9 +76,9 @@ ROUTE omni (description = "Understand image-bearing requests with the dedicated 
   ALGORITHM static
 }
 
-ROUTE accuracy_workflow (description = "Decompose evidence-gathering and tool-heavy tasks into a bounded parallel workflow.") {
+ROUTE accuracy_workflow (description = "Several workstreams (accuracy_mode: workstreams) that need multi-step reasoning (accuracy_difficulty 1.5 or more) run as a bounded parallel workflow.", on_unknown = "no_match") {
   PRIORITY 100
-  WHEN keyword("accuracy_workflow_request")
+  WHEN decision("accuracy_mode", label: "workstreams", predicate: { gte: 0.6 }) AND decision("accuracy_difficulty")
   MODEL "opus48-worker" (reasoning = true, effort = "medium"),
         "gemini31-worker" (reasoning = true, effort = "medium"),
         "gpt55-worker" (reasoning = true, effort = "medium")
@@ -106,9 +102,9 @@ ROUTE accuracy_long_context_direct (description = "Keep long-context work on one
   ALGORITHM static
 }
 
-ROUTE accuracy_deliberation (description = "Use independent frontier perspectives for ambiguous, adversarial, or high-stakes judgments.") {
+ROUTE accuracy_deliberation (description = "Independent opinions or a verdict (accuracy_mode: independent_review) that need multi-step reasoning (accuracy_difficulty 1.5 or more) get independent frontier perspectives.", on_unknown = "no_match") {
   PRIORITY 90
-  WHEN keyword("accuracy_deliberation_request") AND NOT keyword("accuracy_direct_request")
+  WHEN decision("accuracy_mode", label: "independent_review", predicate: { gte: 0.6 }) AND decision("accuracy_difficulty") AND NOT decision("accuracy_mode", label: "workstreams", predicate: { gte: 0.6 })
   MODEL "opus48-worker" (reasoning = true, effort = "medium"),
         "gemini31-worker" (reasoning = true, effort = "medium"),
         "gpt55-worker" (reasoning = true, effort = "medium"),
@@ -124,10 +120,14 @@ ROUTE accuracy_deliberation (description = "Use independent frontier perspective
   }
 }
 
-ROUTE accuracy_direct (description = "Default to one frontier worker when orchestration has no explicit expected-quality benefit.") {
+ROUTE accuracy_direct (description = "Everything else, including a request for one direct answer and requests the decision model cannot answer, goes to one frontier worker that the decision model picks.") {
   PRIORITY 10
-  MODEL "gpt55-worker" (reasoning = true, effort = "medium")
-  ALGORITHM static
+  MODEL "gpt55-worker" (reasoning = true, effort = "medium"),
+        "opus48-worker" (reasoning = true, effort = "medium"),
+        "gemini31-worker" (reasoning = true, effort = "medium")
+  ALGORITHM decision {
+    decision: { candidates: { gemini31-worker: "Broad reasoning, mathematics and everyday coding", gpt55-worker: "Long-context reading, planning and synthesis across many sources", opus48-worker: "Long-horizon agentic work and large code changes" }, instructions: "Which worker should answer this request?", timeout_ms: 30000 }
+  }
 }
 
 # =============================================================================
