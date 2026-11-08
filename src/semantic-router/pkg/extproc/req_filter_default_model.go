@@ -38,12 +38,15 @@ func (r *OpenAIRouter) selectDecisionDefaultRuntimeModel(
 	}
 	selectedModel := r.Config.DefaultModel
 	if r.modelNameExceedsContextWindow(selectedModel, ctx.VSRContextTokenCount) {
-		return "", entropy.ReasoningDecision{}, fmt.Errorf(
-			"%w: decision %q requires %d request tokens but the configured default model has a smaller context window",
-			errNoContextEligibleDecisionModel,
-			decisionName,
-			ctx.VSRContextTokenCount,
-		)
+		if r.modelNameExceedsContextWindow(selectedModel, contextTokensWithoutReserves(ctx, ctx.VSRContextTokenCount)) {
+			return "", entropy.ReasoningDecision{}, fmt.Errorf(
+				"%w: decision %q requires %d request tokens but the configured default model has a smaller context window",
+				errNoContextEligibleDecisionModel,
+				decisionName,
+				ctx.VSRContextTokenCount,
+			)
+		}
+		dropContextReserves(ctx, decisionName)
 	}
 	ctx.VSRSelectedModel = selectedModel
 	ctx.VSRSelectionMethod = "default"

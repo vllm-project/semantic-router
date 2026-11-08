@@ -5,7 +5,7 @@
 #     serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --host 0.0.0.0
 FROM python:3.12-slim
 
-ARG TORCH_VERSION=2.10.0
+ARG TORCH_VERSION=2.14.1
 
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \

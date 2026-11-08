@@ -7,10 +7,13 @@ request carried, such as tool results or retrieved documents, and reports the
 claims that context does not support. Define its rules under
 `routing.signals.hallucination`.
 
-This family is learned: it relies on the hallucination detector under
-`global.model_catalog.modules.hallucination_mitigation.hallucination_model`
-(Vela 2.0 0.3B's span head by default, or Vela Halu), which runs in the
-[model runtime](../../../model-runtime/guides/hallucination.md).
+This family is learned: the decision model (vela3-fast's span-set adapter by
+default) answers it unless a `hallucination` binding names another deployment,
+such as Vela Halu in the
+[model runtime](../../../model-runtime/guides/hallucination.md); see
+[Choose a model for a signal](../../../installation/choose-a-model-for-a-signal.md).
+`global.model_catalog.modules.hallucination_mitigation.detector` holds the
+detector's settings.
 
 ## Key Advantages
 
@@ -56,7 +59,8 @@ routing:
 ```
 
 A rule has no threshold of its own: the detector's `threshold`,
-`min_span_length` and `min_span_confidence` on `hallucination_model` decide
+`min_span_length` and `min_span_confidence` under
+`modules.hallucination_mitigation.detector` decide
 what counts as an unsupported span, and the rule matches when the detector
 found one. Earlier releases could ask for span-level NLI explanations with
 `use_nli`; that explainer is retired, and `vllm-sr config migrate` removes the
@@ -106,10 +110,10 @@ compatibility path.
 
 ## Vela 2.0
 
-Bind `hallucination_detector` to a Vela 2.0 deployment and the detector asks
-the model's ready-made hallucination question, answered by its router span
-head, about the answer, with the request and the grounding context as the
-other parts of the question's state:
+Bind `hallucination` to a Vela 2.0 deployment and the detector asks the
+model's ready-made hallucination question, answered by its router span head,
+about the answer, with the request and the grounding context as the other
+parts of the question's state:
 
 ```yaml
 global:
@@ -120,9 +124,7 @@ global:
         artifact: vllm-sr/Vela-2.0-0.3B
         device: cpu
     bindings:
-      hallucination_detector:
-        deployment: vela2
-        contract: token_spans.v1
+      hallucination: vela2
 ```
 
 The model reads the whole answer and applies its own calibrated threshold, so
@@ -133,24 +135,25 @@ same deployment can answer the request's
 [`decision`](decision.md) and
 [`pii`](pii.md#vela-20) questions.
 
-## Verdict-only decision models
+## Verdicts without spans
 
-To use a general decision model for the overall check, bind
-`routing.model_bindings.hallucination_detector` to the deployment with
-`contract: decision.v1`. The `hallucination` task asks a `noul` question using
-the request, grounding context and answer as separate state parts. It produces
-a supportedness verdict for the response observation and plugin, without
-inventing claim locations. `threshold` applies to this probability; span
-filters only apply when the selected model actually returns spans.
+A `systemone` deployment whose capabilities list neither the `halu` preset nor
+`span` questions answers the overall check yes/no: it asks a `noul` question
+with the request, grounding context and answer as separate state parts, and
+produces a supportedness verdict for the response observation and plugin,
+without inventing claim locations. `threshold` applies to this probability;
+span filters only apply when the model actually returns spans. The load
+reports a `span_fallback` warning, and the Router counts each such answer in
+`vsr_signal_span_verdict_fallbacks_total`.
 
-A `token_spans.v1` binding requires native span support. Both paths require
-complete admitted input and grounding context; a failed or incomplete check
-is unavailable, not evidence that the answer is supported.
+A deployment that answers with spans needs native span support. Both paths
+require complete admitted input and grounding context; a failed or incomplete
+check is unavailable, not evidence that the answer is supported.
 
 ## Dependencies and Limitations
 
-The detector processes the answer and the supplied grounding context through
-`global.model_catalog.modules.hallucination_mitigation.hallucination_model`.
+The detector processes the answer and the supplied grounding context on the
+deployment that answers the `hallucination` signal.
 It can identify text the context does not support; it cannot establish truth
 without authoritative evidence, and an answer with no context to check
 against is reported as unavailable, not clean. See a complete example:

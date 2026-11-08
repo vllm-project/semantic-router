@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="846" viewBox="0 0 760 846" role="img" aria-labelledby="title desc">
+  <title id="title">One thread, three managed runs, unchanged tool permissions</title>
+  <desc id="desc">Recorded local test with Qwen models. The first managed run uses Qwen3 0.6b and is allowed to call read_incident. After the completed run, the TypeScript runner restarts. The second run restores the conversation history, uses Qwen3 1.7b and is again allowed to call read_incident. The third run uses Qwen3 0.6b and requests restart_service. Runkite denies the tool and records policy_tool_denied; zero restart calls reach the upstream service. Each run makes two inference calls.</desc>
+  <rect width="760" height="846" rx="18" fill="#f7f9fc"/>
+  <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" fill="#14263c">
+    <text x="32" y="45" font-size="28" font-weight="720" letter-spacing="-.7">One thread. Three managed runs.</text>
+    <text x="32" y="76" font-size="18" fill="#526479">Recorded local test with Qwen models. Same tool permissions.</text>
+    <rect x="32" y="103" width="270" height="31" rx="7" fill="#fff0d2"/>
+    <text x="47" y="124" font-size="15" fill="#845009" font-weight="700" letter-spacing=".8">THREAD · FICTIONAL INC-1042</text>
+    <path d="M53 151V725" stroke="#ddbd84" stroke-width="2"/>
+
+    <circle cx="53" cy="176" r="10" fill="#fff6e5" stroke="#c28624" stroke-width="2"/>
+    <path d="M64 176H87" stroke="#ddbd84" stroke-width="2"/>
+    <rect x="88" y="151" width="640" height="145" rx="12" fill="#ffffff" stroke="#d2dce7"/>
+    <text x="108" y="183" font-size="21" font-weight="700">01</text>
+    <text x="145" y="183" font-size="21" font-weight="650">Read the incident</text>
+    <rect x="548" y="166" width="160" height="26" rx="6" fill="#edf5fa"/>
+    <text x="628" y="184" text-anchor="middle" font-size="15" fill="#246481">2 inference calls</text>
+    <text x="108" y="216" font-size="20" font-weight="600" fill="#086d94">Qwen3:0.6b</text>
+    <text x="260" y="216" font-size="16" fill="#66798e">local-fast</text>
+    <text x="108" y="248" font-size="18" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">read_incident</text>
+    <rect x="300" y="229" width="95" height="26" rx="6" fill="#e3f4ec"/>
+    <text x="347.5" y="247" text-anchor="middle" font-size="14" font-weight="750" fill="#176c4e">ALLOWED</text>
+    <text x="108" y="278" font-size="17" fill="#526479">Run completed. History recorded.</text>
+
+    <rect x="107" y="312" width="602" height="43" rx="8" fill="#fff3dd" stroke="#edd4a6"/>
+    <path d="M130 325A8 8 0 1 1 125 338M130 325H137M130 325V318" fill="none" stroke="#a26812" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="153" y="339" font-size="17" font-weight="600" fill="#845009">Runner restarted between completed runs</text>
+
+    <circle cx="53" cy="398" r="10" fill="#eaf6fc" stroke="#1683ac" stroke-width="2"/>
+    <path d="M64 398H87" stroke="#ddbd84" stroke-width="2"/>
+    <rect x="88" y="373" width="640" height="145" rx="12" fill="#ffffff" stroke="#a8cddf"/>
+    <path d="M101 373H715" stroke="#1683ac" stroke-width="2"/>
+    <text x="108" y="405" font-size="21" font-weight="700">02</text>
+    <text x="145" y="405" font-size="21" font-weight="650">Diagnose with prior context</text>
+    <rect x="548" y="388" width="160" height="26" rx="6" fill="#edf5fa"/>
+    <text x="628" y="406" text-anchor="middle" font-size="15" fill="#246481">2 inference calls</text>
+    <text x="108" y="438" font-size="20" font-weight="600" fill="#086d94">Qwen3:1.7b</text>
+    <text x="260" y="438" font-size="16" fill="#66798e">local-specialist</text>
+    <text x="108" y="470" font-size="18" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">read_incident</text>
+    <rect x="300" y="451" width="95" height="26" rx="6" fill="#e3f4ec"/>
+    <text x="347.5" y="469" text-anchor="middle" font-size="14" font-weight="750" fill="#176c4e">ALLOWED</text>
+    <text x="108" y="500" font-size="17" fill="#526479">Prior user message and tool result restored.</text>
+
+    <circle cx="53" cy="564" r="10" fill="#fff6e5" stroke="#c28624" stroke-width="2"/>
+    <path d="M64 564H87" stroke="#ddbd84" stroke-width="2"/>
+    <rect x="88" y="539" width="640" height="173" rx="12" fill="#ffffff" stroke="#d2dce7"/>
+    <text x="108" y="571" font-size="21" font-weight="700">03</text>
+    <text x="145" y="571" font-size="21" font-weight="650">Request a restart</text>
+    <rect x="548" y="554" width="160" height="26" rx="6" fill="#edf5fa"/>
+    <text x="628" y="572" text-anchor="middle" font-size="15" fill="#246481">2 inference calls</text>
+    <text x="108" y="604" font-size="20" font-weight="600" fill="#086d94">Qwen3:0.6b</text>
+    <text x="260" y="604" font-size="16" fill="#66798e">local-fast</text>
+    <text x="108" y="636" font-size="18" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">restart_service</text>
+    <rect x="300" y="617" width="95" height="26" rx="6" fill="#fbece6"/>
+    <text x="347.5" y="635" text-anchor="middle" font-size="14" font-weight="750" fill="#a13b27">DENIED</text>
+    <text x="108" y="666" font-size="17" fill="#526479">Policy denial recorded. No restart reached the service.</text>
+    <text x="108" y="691" font-size="15" fill="#98604d" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">policy_tool_denied</text>
+    <circle cx="53" cy="725" r="4" fill="#c28624"/>
+
+    <rect x="88" y="738" width="640" height="51" rx="10" fill="#13263c"/>
+    <text x="110" y="770" font-size="18" fill="#f4f8fc" font-weight="650">3 managed runs</text>
+    <path d="M299 751V776M506 751V776" stroke="#41566e"/>
+    <text x="321" y="770" font-size="18" fill="#d1e8f3">6 inference calls</text>
+    <text x="528" y="770" font-size="18" fill="#ffe0a2">0 upstream restarts</text>
+    <text x="88" y="821" font-size="16" fill="#66798e">Model aliases describe configuration roles, not measured quality.</text>
+  </g>
+</svg>

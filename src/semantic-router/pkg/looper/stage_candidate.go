@@ -50,7 +50,8 @@ func validateLooperStageCandidate(base *Request, body []byte, model string, logp
 		// only the stage model and never its prompt or tool definitions.
 		return fmt.Errorf("%w: looper model %q stage cannot be represented by its Chat codec", selection.ErrNoEligibleCandidates, model)
 	}
-	demand := selection.DemandForRequest(&request)
+	// A refusal rests on the estimate without reserves.
+	demand := selection.DemandForRequest(&request).WithoutReserves()
 	if err := selection.ValidateCandidateRequirements(base.CandidateRequirements, model, params, demand); err != nil {
 		return err
 	}

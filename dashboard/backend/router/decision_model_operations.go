@@ -12,7 +12,7 @@ var decisionRoutesOperation = apicontract.Operation{
 	Summary: "List active System One routes",
 	Description: "Reads the configured frontend without probing models. available describes routing availability, not backend health. " +
 		"Each route includes model, recipe, algorithms, question_types, and execution_timeout_ms. " +
-		"The timeout is the largest algorithm execution deadline in the recipe; signals have separate timeouts.",
+		"The timeout is the largest algorithm budget deadline in the recipe; it bounds signals and the selected algorithm together.",
 	Responses: decisionRouteResponses("Frontend route inventory with available and routes"),
 }
 
@@ -21,7 +21,7 @@ var decisionRouteRunOperation = apicontract.Operation{
 	Summary: "Run an active System One route",
 	Description: "Runs an operator diagnostic using configured management credentials. Browser credentials are not forwarded; " +
 		"no public listener API key is needed. The frontend validates the native request and owns route selection. " +
-		"The selected algorithm controls its execution deadline and physical call budget; signals use their own timeouts.",
+		"Signals and the selected algorithm share one deadline and physical call ledger, with per-decision limits tightening the request ceiling.",
 	Request:   decisionRouteRequestBody(),
 	Responses: decisionRouteResponses("Selected native response with routing outcome: recipe, decision, algorithm, stage, selected_model, quality, and model_calls"),
 }
