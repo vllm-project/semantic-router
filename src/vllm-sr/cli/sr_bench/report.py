@@ -20,6 +20,7 @@ from .failures import first_saved_failure
 from .grading import (
     BINARY_RESULT,
     CACHE_OBSERVATION_RESULT,
+    SESSION_OBSERVATION_RESULT,
     TOKEN_COVERAGE_RESULT,
     WEIGHTED_RUBRIC_RESULT,
     ResultKind,
@@ -272,7 +273,7 @@ def metric(
     observed: list[dict[str, Any]] = []
     for row in completed:
         kind = result_kinds.get(row.get("benchmark", ""), BINARY_RESULT)
-        if kind == CACHE_OBSERVATION_RESULT:
+        if kind in {CACHE_OBSERVATION_RESULT, SESSION_OBSERVATION_RESULT}:
             validate_result(kind=kind, result=row)
             observed.append(row)
         elif kind != BINARY_RESULT:
@@ -388,7 +389,10 @@ def metric(
         )
         result["continuity"]["switched_accuracy"] = None
         result["continuity"]["unswitched_accuracy"] = None
-    if CACHE_OBSERVATION_RESULT in result_kinds.values():
+    if any(
+        kind in {CACHE_OBSERVATION_RESULT, SESSION_OBSERVATION_RESULT}
+        for kind in result_kinds.values()
+    ):
         result["observed"] = len(observed)
     return result
 
@@ -824,6 +828,364 @@ def cache_observation_report(
     return metrics
 
 
+def _session_validation(
+    *,
+    metrics: dict[str, Any],
+    thresholds: dict[str, Any],
+) -> dict[str, Any]:
+    predicates: dict[str, Any] = {}
+    for name, actual in (
+        ("min_success_rate", metrics["success_rate"]),
+        ("max_p95_latency_ms", metrics["latency_ms"]["p95"]),
+        ("max_tool_loop_violations", metrics["tool_loop_switch_violations"]),
+    ):
+        required = thresholds[name]
+        enabled = required > 0 if name != "max_tool_loop_violations" else required >= 0
+        if not enabled:
+            status, reason = "pass", "threshold_disabled"
+        elif actual is None:
+            status, reason = "incomplete", "required_observation_missing"
+        elif name == "min_success_rate" and actual < required:
+            status, reason = "fail", "below_threshold"
+        elif name == "max_tool_loop_violations" and actual > required:
+            status, reason = "fail", "above_threshold"
+        elif not metrics["execution_complete"]:
+            status, reason = "incomplete", "planned_turns_incomplete"
+        elif (
+            name == "max_tool_loop_violations"
+            and metrics["assessed_tool_loop_transitions"]
+            < metrics["planned_tool_loop_transitions"]
+        ):
+            status, reason = "incomplete", "model_transition_evidence_missing"
+        elif (
+            name == "max_p95_latency_ms" and not metrics["latency_ms"]["p95_assessable"]
+        ):
+            status, reason = "incomplete", "successful_latency_evidence_missing"
+        else:
+            sufficient = (
+                actual >= required if name == "min_success_rate" else actual <= required
+            )
+            status = "pass" if sufficient else "fail"
+            reason = None if sufficient else "above_threshold"
+        predicates[name] = {
+            "enabled": enabled,
+            "required": required,
+            "actual": actual,
+            "status": status,
+            "reason": reason,
+        }
+    statuses = {row["status"] for row in predicates.values()}
+    return {
+        "status": (
+            "fail"
+            if "fail" in statuses
+            else (
+                "incomplete"
+                if "incomplete" in statuses or not metrics["execution_complete"]
+                else "pass"
+            )
+        ),
+        "predicates": predicates,
+    }
+
+
+def session_routing_report(
+    *,
+    cases: list[dict[str, Any]],
+    results: list[dict[str, Any]],
+    calls: list[dict[str, Any]],
+    thresholds: dict[str, Any],
+    target: dict[str, Any],
+) -> dict[str, Any]:
+    by_case: dict[str, list[dict[str, Any]]] = {}
+    for call in calls:
+        if call["role"] == "subject":
+            by_case.setdefault(call["case_id"], []).append(call)
+    result_by_case = {row["case_id"]: row for row in results}
+    sessions: list[dict[str, Any]] = []
+    turns: list[dict[str, Any]] = []
+    phase_rows: dict[str, list[dict[str, Any]]] = {}
+    usage_rows: list[dict[str, int] | None] = []
+    execution_complete = True
+    planned_tool_loop_transitions = 0
+    assessed_tool_loop_transitions = 0
+    model_switches = 0
+    model_transitions = 0
+    tool_loop_switches = 0
+    idle_planned = 0
+    idle_attempted = 0
+    idle_successful = 0
+    idle_request_session_id_reused = 0
+    cache_qualifications: Counter[str] = Counter()
+
+    for case in cases:
+        metadata = case.get("metadata")
+        spec = metadata.get("session_routing") if isinstance(metadata, dict) else None
+        if not isinstance(spec, dict) or not isinstance(spec.get("turns"), list):
+            raise ValueError("Session-routing report requires frozen turn schedules")
+        planned = spec["turns"]
+        requests = by_case.get(case["id"], [])
+        if len(requests) > len(planned):
+            raise ValueError("Session-routing receipts exceed the frozen turn count")
+        result = result_by_case.get(case["id"], {})
+        if result.get("status") == "completed":
+            validate_result(kind=SESSION_OBSERVATION_RESULT, result=result)
+            observation = result["details"]["session_observation"]
+            if observation["planned_turns"] != len(planned):
+                raise ValueError(
+                    "Session-routing result differs from the frozen turn count"
+                )
+        rows: list[dict[str, Any]] = []
+        for index, planned_turn in enumerate(planned):
+            call = requests[index] if index < len(requests) else {}
+            response_status = call.get("response_status")
+            http_success = (
+                HTTPStatus.OK <= response_status < HTTPStatus.MULTIPLE_CHOICES
+                if type(response_status) is int
+                else None
+            )
+            model = _observed_model(call)
+            usage = call.get("usage") if isinstance(call.get("usage"), dict) else None
+            cache_observation = call.get("provider_cache_observation")
+            if isinstance(cache_observation, dict):
+                cache_qualifications[
+                    str(cache_observation.get("qualification", "unknown"))
+                ] += 1
+            else:
+                cache_qualifications["unknown"] += 1
+            turn = {
+                "case_id": case["id"],
+                "scenario": spec["scenario"],
+                "session_index": spec["session_index"],
+                "turn": planned_turn["turn"],
+                "benchmark_phase": planned_turn["phase"],
+                "request_phase": call.get("request_phase"),
+                "previous_response_id_sent": call.get("previous_response_id_sent"),
+                "router_phase": (
+                    call.get("phase") if call.get("phase_source") == "router" else None
+                ),
+                "phase_source": call.get("phase_source"),
+                "call_id": call.get("id"),
+                "transport_status": call.get("status", "undispatched"),
+                "response_status": response_status,
+                "http_success": http_success,
+                "output_complete": call.get("output_complete"),
+                "latency_ms": (
+                    call["latency_s"] * 1000
+                    if isinstance(call.get("latency_s"), (int, float))
+                    else None
+                ),
+                "selected_model": model,
+                "usage": usage,
+                "provider_cache_observation": cache_observation,
+                "session_id": call.get("session_id"),
+            }
+            rows.append(turn)
+            turns.append(turn)
+            phase_rows.setdefault(planned_turn["phase"], []).append(turn)
+            usage_rows.append(usage)
+            if planned_turn["phase"] == "idle_boundary":
+                idle_planned += 1
+                if call.get("id"):
+                    idle_attempted += 1
+                    idle_successful += http_success is True
+                    previous_call = (
+                        requests[index - 1]
+                        if index > 0 and index - 1 < len(requests)
+                        else {}
+                    )
+                    if (
+                        call.get("session_id")
+                        and previous_call.get("session_id")
+                        and call["session_id"] == previous_call["session_id"]
+                    ):
+                        idle_request_session_id_reused += 1
+
+        completed_calls = sum(
+            row["transport_status"] == "completed" and row["output_complete"] is True
+            for row in rows
+        )
+        failed_calls = sum(
+            row["transport_status"] in {"failed", "cancelled", "interrupted"}
+            for row in rows
+        )
+        session_complete = (
+            result.get("status") == "completed"
+            and len(requests) == len(planned)
+            and completed_calls == len(planned)
+        )
+        execution_complete = execution_complete and session_complete
+        known_session_ids = [
+            call["session_id"] for call in requests if call.get("session_id")
+        ]
+        request_session_id_preserved = (
+            len(known_session_ids) == len(requests) and len(set(known_session_ids)) == 1
+            if requests
+            else None
+        )
+        session_model_switches = 0
+        session_model_transitions = 0
+        session_tool_loop_switches = 0
+        planned_tool_loop_transitions += sum(
+            turn["phase"] == "tool_loop" and turn["turn"] > 0 for turn in planned
+        )
+        for previous, current in pairwise(rows):
+            if previous["selected_model"] is None or current["selected_model"] is None:
+                continue
+            session_model_transitions += 1
+            model_transitions += 1
+            switched = previous["selected_model"] != current["selected_model"]
+            session_model_switches += switched
+            model_switches += switched
+            if current["benchmark_phase"] == "tool_loop":
+                assessed_tool_loop_transitions += 1
+                session_tool_loop_switches += switched
+                tool_loop_switches += switched
+        sessions.append(
+            {
+                "case_id": case["id"],
+                "scenario": spec["scenario"],
+                "session_index": spec["session_index"],
+                "session_key": spec["session_key"],
+                "planned_turns": len(planned),
+                "attempted_turns": len(requests),
+                "completed_turns": completed_calls,
+                "failed_turns": failed_calls,
+                "undispatched_turns": len(planned) - len(requests),
+                "execution_complete": session_complete,
+                "request_session_id_preserved": request_session_id_preserved,
+                "selected_model_transitions": session_model_transitions,
+                "selected_model_switches": session_model_switches,
+                "tool_loop_switch_violations": session_tool_loop_switches,
+            }
+        )
+
+    successful_turns = [row for row in turns if row["http_success"] is True]
+    latencies = [
+        row["latency_ms"] for row in successful_turns if row["latency_ms"] is not None
+    ]
+    planned_turns = sum(
+        len(case["metadata"]["session_routing"]["turns"]) for case in cases
+    )
+    attempted_turns = sum(row["call_id"] is not None for row in turns)
+    completed_turns = sum(
+        row["transport_status"] == "completed" and row["output_complete"] is True
+        for row in turns
+    )
+    failed_turns = sum(
+        row["transport_status"] in {"failed", "cancelled", "interrupted"}
+        for row in turns
+    )
+    usage_complete = (
+        execution_complete
+        and len(usage_rows) == planned_turns
+        and all(row is not None for row in usage_rows)
+    )
+    usage = (
+        {key: sum(row[key] for row in usage_rows if row is not None) for key in BUCKETS}
+        if usage_complete
+        else None
+    )
+    phase_metrics = {}
+    for phase, rows in sorted(phase_rows.items()):
+        phase_latencies = [
+            row["latency_ms"]
+            for row in rows
+            if row["http_success"] is True and row["latency_ms"] is not None
+        ]
+        phase_metrics[phase] = {
+            "planned_turns": len(rows),
+            "attempted_turns": sum(row["call_id"] is not None for row in rows),
+            "http_successes": sum(row["http_success"] is True for row in rows),
+            "http_outcomes_unknown": sum(row["http_success"] is None for row in rows),
+            "latency_ms": {
+                "p50": percentile(values=phase_latencies, q=0.5),
+                "p95": percentile(values=phase_latencies, q=0.95),
+            },
+            "request_phase_counts": dict(
+                Counter(row["request_phase"] for row in rows if row["request_phase"])
+            ),
+            "router_phase_counts": dict(
+                Counter(row["router_phase"] for row in rows if row["router_phase"])
+            ),
+        }
+    metrics: dict[str, Any] = {
+        "version": SESSION_OBSERVATION_RESULT,
+        "denominator": "all frozen turns; undispatched turns remain unsuccessful in the rate denominator",
+        "target": {
+            "id": target["id"],
+            "kind": target["kind"],
+            "model": target["model"],
+            "session_mode": target.get("session_mode", STATELESS),
+        },
+        "planned_sessions": len(sessions),
+        "attempted_sessions": sum(row["attempted_turns"] > 0 for row in sessions),
+        "completed_sessions": sum(row["execution_complete"] for row in sessions),
+        "failed_sessions": sum(row["failed_turns"] > 0 for row in sessions),
+        "planned_turns": planned_turns,
+        "attempted_turns": attempted_turns,
+        "completed_turns": completed_turns,
+        "failed_turns": failed_turns,
+        "undispatched_turns": planned_turns - attempted_turns,
+        "execution_complete": execution_complete and completed_turns == planned_turns,
+        "http_successes": len(successful_turns),
+        "http_outcomes_unknown": sum(row["http_success"] is None for row in turns),
+        "success_rate": (
+            round(len(successful_turns) / planned_turns, 4) if planned_turns else None
+        ),
+        "success_rate_basis": "all_planned_turns; partial runs are lower bounds",
+        "latency_ms": {
+            "p50": percentile(values=latencies, q=0.5),
+            "p95": percentile(values=latencies, q=0.95),
+            "p95_assessable": execution_complete and bool(latencies),
+        },
+        "selected_model_counts": dict(
+            Counter(
+                row["selected_model"]
+                for row in turns
+                if isinstance(row["selected_model"], str) and row["selected_model"]
+            )
+        ),
+        "unknown_selected_model_turns": sum(
+            row["selected_model"] is None for row in turns if row["call_id"]
+        ),
+        "selected_model_transitions": model_transitions,
+        "selected_model_switches": model_switches,
+        "selected_model_continuity_rate": (
+            round(1 - model_switches / model_transitions, 4)
+            if model_transitions
+            else None
+        ),
+        "tool_loop_switch_violations": tool_loop_switches,
+        "planned_tool_loop_transitions": planned_tool_loop_transitions,
+        "assessed_tool_loop_transitions": assessed_tool_loop_transitions,
+        "usage_complete": usage_complete,
+        "usage": usage,
+        "cache_evidence_qualification_counts": dict(
+            sorted(cache_qualifications.items())
+        ),
+        "cache_evidence_unknown_turns": cache_qualifications["unknown"],
+        "phase_metrics": phase_metrics,
+        "session_recovery": {
+            "error_recovery_status": "not_measured",
+            "error_recovery_reason": (
+                "A CallFailure ends the frozen session case; the runner does not "
+                "dispatch a later turn to test recovery."
+            ),
+            "idle_resumption": {
+                "planned": idle_planned,
+                "attempted": idle_attempted,
+                "successful": idle_successful,
+                "request_session_id_reused": idle_request_session_id_reused,
+            },
+        },
+        "sessions": sessions,
+        "turns": turns,
+    }
+    metrics["validation"] = _session_validation(metrics=metrics, thresholds=thresholds)
+    return metrics
+
+
 def make_report(store, run_id):
     run = store.get(run_id)
     manifest = run["manifest"]
@@ -928,6 +1290,21 @@ def make_report(store, run_id):
                     metrics[-1]["cache_observation"] = benchmarks[-1][
                         "cache_observation"
                     ]
+            if (
+                kinds[benchmark] == SESSION_OBSERVATION_RESULT
+                and manifest["mode"] != "preview"
+            ):
+                benchmarks[-1]["session_observation"] = session_routing_report(
+                    cases=[c for c in manifest["cases"] if c["id"] in ids],
+                    results=rows,
+                    calls=tcalls,
+                    thresholds=manifest["benchmark_options"][benchmark]["thresholds"],
+                    target=target,
+                )
+                if len(kinds) == 1:
+                    metrics[-1]["session_observation"] = benchmarks[-1][
+                        "session_observation"
+                    ]
     selected_ids = {cell["case_id"] for cell in cells}
     present = {c["benchmark"] for c in manifest["cases"] if c["id"] in selected_ids}
     weights = manifest["benchmark_weights"]
@@ -954,21 +1331,25 @@ def make_report(store, run_id):
         )
         item["score_scope"] = (
             (
-                "cache-observation diagnostic; no answer-quality score"
-                if any("cache_observation" in row for row in rows)
+                "session-routing observation; no answer-quality score"
+                if any("session_observation" in row for row in rows)
                 else (
-                    "token-coverage diagnostic; no combined accuracy"
-                    if any("token_coverage" in row for row in rows)
+                    "cache-observation diagnostic; no answer-quality score"
+                    if any("cache_observation" in row for row in rows)
                     else (
-                        "weighted-rubric diagnostic; no combined accuracy"
-                        if any("weighted_rubric" in row for row in rows)
+                        "token-coverage diagnostic; no combined accuracy"
+                        if any("token_coverage" in row for row in rows)
                         else (
-                            "full sr-bench 1.0"
-                            if target_full_suite
+                            "weighted-rubric diagnostic; no combined accuracy"
+                            if any("weighted_rubric" in row for row in rows)
                             else (
-                                "extension diagnostic; normalized adapter weights"
-                                if extension_subset
-                                else "selected benchmark subset; renormalized fixed weights"
+                                "full sr-bench 1.0"
+                                if target_full_suite
+                                else (
+                                    "extension diagnostic; normalized adapter weights"
+                                    if extension_subset
+                                    else "selected benchmark subset; renormalized fixed weights"
+                                )
                             )
                         )
                     )
@@ -1060,6 +1441,10 @@ def make_report(store, run_id):
             "and existing billing. Unverified legacy aliases cannot qualify cache-dependent thresholds. "
             "Streaming and strict stopping differ from the retained buffered probe; "
             "target URLs, session IDs and latency alone do not prove model equivalence or cache reuse."
+        )
+    if any("session_observation" in benchmark for benchmark in benchmarks):
+        limitations.append(
+            "Session-routing observations measure request outcomes, latency, selected-model continuity, phase, usage, and cache evidence without answer grading. Request phase and Router response phase are separate; missing usage or model evidence stays unknown. Error recovery, Responses API state, and provider-state retirement are not measured."
         )
     if manifest["mode"] == "replay":
         limitations.append(

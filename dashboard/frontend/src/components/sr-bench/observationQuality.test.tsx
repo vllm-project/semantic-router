@@ -24,6 +24,70 @@ const observation: TargetMetrics = {
   sr_bench_score: null,
 }
 
+const sessionObservation: TargetMetrics = {
+  ...observation,
+  result_kind: 'session-observation-v1',
+  session_observation: {
+    planned_sessions: 1,
+    attempted_sessions: 1,
+    completed_sessions: 1,
+    failed_sessions: 0,
+    planned_turns: 2,
+    attempted_turns: 2,
+    completed_turns: 2,
+    failed_turns: 0,
+    undispatched_turns: 0,
+    execution_complete: true,
+    success_rate: 1,
+    latency_ms: { p50: 12, p95: 14, p95_assessable: true },
+    selected_model_counts: { 'model-a': 2 },
+    unknown_selected_model_turns: 0,
+    selected_model_transitions: 1,
+    selected_model_switches: 0,
+    selected_model_continuity_rate: 1,
+    tool_loop_switch_violations: 0,
+    planned_tool_loop_transitions: 0,
+    assessed_tool_loop_transitions: 0,
+    usage_complete: true,
+    usage: { input_tokens: 4, output_tokens: 2, cached_input_tokens: 0 },
+    cache_evidence_qualification_counts: { unknown: 2 },
+    cache_evidence_unknown_turns: 2,
+    phase_metrics: {
+      user_turn: {
+        planned_turns: 2,
+        attempted_turns: 2,
+        http_successes: 2,
+        http_outcomes_unknown: 0,
+        latency_ms: { p50: 12, p95: 14 },
+        request_phase_counts: { user_turn: 2 },
+        router_phase_counts: { 'phase-a': 2 },
+      },
+    },
+    session_recovery: {
+      error_recovery_status: 'not_measured',
+      error_recovery_reason: 'CallFailure ends the session case.',
+      idle_resumption: {
+        planned: 0,
+        attempted: 0,
+        successful: 0,
+        request_session_id_reused: 0,
+      },
+    },
+    validation: {
+      status: 'pass',
+      predicates: {
+        min_success_rate: {
+          enabled: false,
+          required: 0,
+          actual: 1,
+          status: 'pass',
+          reason: 'threshold_disabled',
+        },
+      },
+    },
+  },
+}
+
 function renderMetrics(metrics: TargetMetrics, status: Run['status'] = 'completed'): string {
   const run: Run = {
     id: 'observation-run',
@@ -95,6 +159,7 @@ function renderMetrics(metrics: TargetMetrics, status: Run['status'] = 'complete
 describe('observation-only quality presentation', () => {
   it.each([
     observation,
+    sessionObservation,
     { ...observation, result_kind: 'mixed', total: 2, completed: 2, scored: 1 },
   ])('does not label a completed $result_kind report as incomplete quality', (metrics) => {
     expect(hasScoredOutcomes(metrics)).toBe(false)
@@ -104,6 +169,12 @@ describe('observation-only quality presentation', () => {
     expect(html).not.toContain('95% CI')
     expect(html).not.toContain('failures count as incorrect')
     expect(metrics.scored).toBe(metrics.result_kind === 'mixed' ? 1 : 0)
+    if (metrics.result_kind === 'session-observation-v1') {
+      expect(html).toContain('Session-routing observations')
+      expect(html).toContain('Session recovery after a failed request was not measured.')
+      expect(html).toContain('Workload and Router response phases')
+      expect(html).toContain('12 / 14 ms')
+    }
   })
 
   it('keeps quality inapplicable when the observation sequence itself fails', () => {

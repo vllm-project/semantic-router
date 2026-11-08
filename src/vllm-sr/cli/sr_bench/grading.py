@@ -13,12 +13,17 @@ MCQ_GRADER_VERSION = "sr-bench-mcq-final-v2"
 FINAL_GRADER_VERSION = "sr-bench-final-v2"
 ARC_MAX_COLOR = 9
 ResultKind: TypeAlias = Literal[
-    "binary", "weighted-rubric-v1", "token-coverage-v1", "cache-observation-v1"
+    "binary",
+    "weighted-rubric-v1",
+    "token-coverage-v1",
+    "cache-observation-v1",
+    "session-observation-v1",
 ]
 BINARY_RESULT: ResultKind = "binary"
 WEIGHTED_RUBRIC_RESULT: ResultKind = "weighted-rubric-v1"
 TOKEN_COVERAGE_RESULT: ResultKind = "token-coverage-v1"
 CACHE_OBSERVATION_RESULT: ResultKind = "cache-observation-v1"
+SESSION_OBSERVATION_RESULT: ResultKind = "session-observation-v1"
 
 
 def frozen_result_kind(manifest: dict[str, Any], benchmark: str) -> ResultKind:
@@ -31,6 +36,7 @@ def frozen_result_kind(manifest: dict[str, Any], benchmark: str) -> ResultKind:
         WEIGHTED_RUBRIC_RESULT,
         TOKEN_COVERAGE_RESULT,
         CACHE_OBSERVATION_RESULT,
+        SESSION_OBSERVATION_RESULT,
     }:
         raise ValueError("Unknown frozen result kind")
     return kind
@@ -50,6 +56,9 @@ def require_binary_results(manifest: dict[str, Any], operation: str) -> None:
 def validate_result(kind: ResultKind, result: object) -> None:
     if kind == CACHE_OBSERVATION_RESULT:
         _validate_cache_observation(result)
+        return
+    if kind == SESSION_OBSERVATION_RESULT:
+        _validate_session_observation(result)
         return
     if kind == BINARY_RESULT:
         if (
@@ -169,6 +178,31 @@ def _validate_cache_observation(result: object) -> None:
     ):
         raise ValueError(
             "Cache observation result requires a completed repeat sequence"
+        )
+
+
+def _validate_session_observation(result: object) -> None:
+    if not isinstance(result, dict) or any(
+        key not in result or result[key] is not None
+        for key in ("answer", "correct", "score")
+    ):
+        raise ValueError(
+            "Session observations must not claim an answer or quality score"
+        )
+    details = result.get("details")
+    observation = (
+        details.get("session_observation") if isinstance(details, dict) else None
+    )
+    if (
+        not isinstance(observation, dict)
+        or observation.get("version") != SESSION_OBSERVATION_RESULT
+        or type(observation.get("planned_turns")) is not int
+        or observation["planned_turns"] < 1
+        or type(observation.get("completed_turns")) is not int
+        or observation["completed_turns"] != observation["planned_turns"]
+    ):
+        raise ValueError(
+            "Session observation result requires a completed frozen turn sequence"
         )
 
 

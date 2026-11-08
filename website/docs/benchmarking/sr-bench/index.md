@@ -41,6 +41,10 @@ disjoint from quick. Related units such as SciCode subproblems stay together.
 Public tasks are not contamination-free. Previously seen GPQA labels require a
 retest disclosure even when the local split is called holdout.
 
+The six live session-routing schedules are opt-in observation cases, separate
+from this catalog and its published weights. See [Plan and run](./plan-and-run.md)
+to prepare them and [Read the results](./results.md) for their measurement limits.
+
 ## Next
 
 1. [Connect the shared worker](./shared-worker.md): set up the service that

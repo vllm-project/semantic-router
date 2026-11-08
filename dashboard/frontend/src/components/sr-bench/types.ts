@@ -166,6 +166,7 @@ export interface Catalog {
 export interface TargetMetrics {
   id: string
   result_kind?: string
+  session_observation?: SessionObservationMetrics
   total?: number
   completed?: number
   failed?: number
@@ -191,6 +192,68 @@ export interface TargetMetrics {
   selection_reasons?: Record<string, number>
   output_diagnostics?: OutputDiagnosticsMetrics
   [key: string]: unknown
+}
+
+export interface SessionObservationMetrics {
+  planned_sessions: number
+  attempted_sessions: number
+  completed_sessions: number
+  failed_sessions: number
+  planned_turns: number
+  attempted_turns: number
+  completed_turns: number
+  failed_turns: number
+  undispatched_turns: number
+  execution_complete: boolean
+  success_rate: number | null
+  latency_ms: { p50: number | null; p95: number | null; p95_assessable: boolean }
+  selected_model_counts: Record<string, number>
+  unknown_selected_model_turns: number
+  selected_model_transitions: number
+  selected_model_switches: number
+  selected_model_continuity_rate: number | null
+  tool_loop_switch_violations: number
+  planned_tool_loop_transitions: number
+  assessed_tool_loop_transitions: number
+  usage_complete: boolean
+  usage: Record<string, number> | null
+  cache_evidence_qualification_counts: Record<string, number>
+  cache_evidence_unknown_turns: number
+  phase_metrics: Record<
+    string,
+    {
+      planned_turns: number
+      attempted_turns: number
+      http_successes: number
+      http_outcomes_unknown: number
+      latency_ms: { p50: number | null; p95: number | null }
+      request_phase_counts: Record<string, number>
+      router_phase_counts: Record<string, number>
+    }
+  >
+  session_recovery: {
+    error_recovery_status: string
+    error_recovery_reason: string
+    idle_resumption: {
+      planned: number
+      attempted: number
+      successful: number
+      request_session_id_reused: number
+    }
+  }
+  validation: {
+    status: string
+    predicates: Record<
+      string,
+      {
+        enabled: boolean
+        required: number
+        actual: number | null
+        status: string
+        reason: string | null
+      }
+    >
+  }
 }
 
 export interface OutputDiagnosticsMetrics {
