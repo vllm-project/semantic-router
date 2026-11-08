@@ -404,6 +404,87 @@ def test_alias_repeat_and_source_changes_have_explicit_identity(
     ] == ["Physics"]
 
 
+@pytest.mark.parametrize("identical", [False, True])
+def test_repeated_native_ids_preserve_every_question_and_receipt(
+    identical: bool, target: Any, tmp_path: Path
+) -> None:
+    bundle_path = source_bundle(directory=tmp_path)
+    entry = next(
+        entry
+        for entry in json.loads(bundle_path.read_text())["sources"]
+        if entry["dataset"] == "hellaswag" and entry["split"] == "train"
+    )
+    source_path = tmp_path / entry["path"]
+    rows = [json.loads(line) for line in source_path.read_text().splitlines()]
+    repeated = copy.deepcopy(rows[0])
+    if not identical:
+        repeated["ctx"] = "A person pauses at a different door."
+    rows.append(repeated)
+    source_path.write_text("".join(json.dumps(row) + "\n" for row in rows))
+
+    exported = export_manifest(
+        manifest={}, dataset="hellaswag", source_bundle=bundle_path
+    )
+    cases = exported["cases"]
+    assert len(cases) == len({case["id"] for case in cases}) == 9
+    assert cases[0]["answer"]["question_id"] == cases[4]["answer"]["question_id"]
+    assert (cases[0]["answer"] == cases[4]["answer"]) is identical
+    assert repeated["ctx"] in cases[4]["messages"][0]["content"]
+    assert "native_question_occurrence" not in cases[0]["metadata"]
+    assert cases[4]["metadata"]["native_question_occurrence"] == 1
+    assert exported == export_manifest(
+        manifest={}, dataset="hellaswag", source_bundle=bundle_path
+    )
+
+    target.answer = "Answer: A"
+    store = Store(tmp_path / "store")
+    run = Engine(store).start(
+        manifest(
+            target,
+            cases=cases,
+            benchmark_options=exported["benchmark_options"],
+            limits={
+                "total_timeout_s": 10,
+                "idle_timeout_s": 5,
+                "max_run_seconds": 60,
+            },
+        )
+    )
+    assert wait_for_run(store=store, run_id=run["id"])["status"] == "completed"
+    assert len(target.requests) == len(store.calls(run["id"])) == 9
+    assert len(store.results(run["id"])) == 9
+    metric = make_report(store, run["id"])["benchmarks"][0]
+    assert metric["total"] == metric["completed"] == metric["correct"] == 9
+
+
+@pytest.mark.parametrize(
+    ("occurrence", "error"),
+    [
+        (True, "native occurrence"),
+        (-1, "native occurrence"),
+        (0, "native occurrence"),
+        ("1", "native occurrence"),
+        (1.5, "native occurrence"),
+        (1, "frozen native identity"),
+        (2, "frozen native identity"),
+    ],
+)
+def test_altered_native_occurrence_fails_before_dispatch(
+    occurrence: Any, error: str, catalog_cases: dict[str, dict[str, Any]], target: Any
+) -> None:
+    exported = copy.deepcopy(catalog_cases["hellaswag"])
+    exported["cases"][0]["metadata"]["native_question_occurrence"] = occurrence
+    with pytest.raises(ValueError, match=error):
+        plan(
+            manifest(
+                target,
+                cases=exported["cases"],
+                benchmark_options=exported["benchmark_options"],
+            )
+        )
+    assert not target.requests
+
+
 def test_native_correctness_helper_matches_the_legacy_runner() -> None:
     result = native_python(
         source="""

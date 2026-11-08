@@ -232,7 +232,10 @@ export fails rather than silently truncating.
 
 Native IDs, source digests, selection parameters, protocol and dependency lock
 are frozen in the manifest. Some native IDs are assigned after sampling, so
-case IDs also bind the source and selection. These are selection-bound
+case IDs also bind the source and selection. When a native ID repeats, the
+exporter keeps every question and binds later occurrences to their position
+among that ID's selected rows. It preserves the native ID and reference record.
+These are selection-bound
 identities, not cross-seed task equivalence or exposure-history evidence.
 Reference answers, solutions and native metadata stay inside the private
 `answer` field. The output file is owner-readable and refuses overwrite.

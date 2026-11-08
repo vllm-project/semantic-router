@@ -4,11 +4,14 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 from cli.sr_bench.adapters import get_adapter
+from cli.sr_bench.canonical import digest
 from cli.sr_bench.contracts import BENCHMARK_WEIGHTS, BENCHMARKS, catalog
 from cli.sr_bench.external import HARNESSES
+from cli.sr_bench.legacy_reasoning import case_identity
 from cli.sr_bench.legacy_reasoning_export import export_manifest
 from cli.sr_bench.setup import PACKAGES, setup
 
@@ -29,6 +32,24 @@ CONFIGURATIONS: tuple[str, ...] = (
     "commonsenseqa",
     "hellaswag",
 )
+
+
+def test_native_occurrences_keep_existing_case_identity() -> None:
+    arguments: dict[str, Any] = {
+        "benchmark": "legacy-hellaswag",
+        "source_sha256": "a" * 64,
+        "selection": {"dataset": "hellaswag", "seed": 42},
+        "native_id": "hellaswag_4",
+    }
+    original = "legacy-hellaswag/" + digest(
+        [arguments["source_sha256"], arguments["selection"], arguments["native_id"]]
+    )
+    assert case_identity(**arguments) == original
+    assert case_identity(**arguments, native_occurrence=0) == original
+    assert (
+        len({case_identity(**arguments, native_occurrence=index) for index in range(3)})
+        == 3
+    )
 
 
 def test_legacy_catalog_registers_distinct_opt_in_diagnostics() -> None:

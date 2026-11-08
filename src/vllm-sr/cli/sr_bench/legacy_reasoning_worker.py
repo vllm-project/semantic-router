@@ -5,6 +5,7 @@ import importlib
 import json
 import random
 import sys
+from collections import Counter
 from dataclasses import asdict
 from importlib.metadata import version
 from pathlib import Path
@@ -177,8 +178,10 @@ def export_cases(request: dict[str, Any]) -> dict[str, Any]:
         "selection": selection,
     }
     cases: list[dict[str, Any]] = []
-    ids: set[str] = set()
+    occurrences: Counter[str] = Counter()
     for question in questions:
+        occurrence: int = occurrences[question.question_id]
+        occurrences[question.question_id] += 1
         native_question = asdict(question)
         messages = [
             {"role": "user", "content": dataset.format_prompt(question=question)}
@@ -188,10 +191,8 @@ def export_cases(request: dict[str, Any]) -> dict[str, Any]:
             source_sha256=source_sha256,
             selection=selection,
             native_id=question.question_id,
+            native_occurrence=occurrence,
         )
-        if identity in ids:
-            raise ValueError("Native selection contains duplicate question IDs")
-        ids.add(identity)
         case = {
             "id": identity,
             "benchmark": benchmark,
@@ -207,6 +208,8 @@ def export_cases(request: dict[str, Any]) -> dict[str, Any]:
                 "stratum": question.category,
             },
         }
+        if occurrence:
+            case["metadata"]["native_question_occurrence"] = occurrence
         validate_case(case=case, config=config)
         cases.append(case)
     return {"cases": cases, "benchmark_options": {benchmark: config}}

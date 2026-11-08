@@ -50,9 +50,17 @@ def configuration(name: str) -> str:
 
 
 def case_identity(
-    *, benchmark: str, source_sha256: str, selection: dict[str, Any], native_id: str
+    *,
+    benchmark: str,
+    source_sha256: str,
+    selection: dict[str, Any],
+    native_id: str,
+    native_occurrence: int = 0,
 ) -> str:
-    return benchmark + "/" + digest([source_sha256, selection, native_id])
+    identity: list[Any] = [source_sha256, selection, native_id]
+    if native_occurrence:
+        identity.append(native_occurrence)
+    return benchmark + "/" + digest(identity)
 
 
 def worker_request(
@@ -221,7 +229,7 @@ def validate_case(case: dict[str, Any], config: dict[str, Any]) -> None:
         )
     ):
         raise ValueError("Legacy reasoning has invalid native selection parameters")
-    if set(metadata) != {
+    if set(metadata) - {"native_question_occurrence"} != {
         "protocol",
         "native_dataset",
         "native_question_id",
@@ -233,6 +241,11 @@ def validate_case(case: dict[str, Any], config: dict[str, Any]) -> None:
         raise ValueError(
             "Legacy reasoning metadata must not carry native reference records"
         )
+    occurrence: int = metadata.get("native_question_occurrence", 0)
+    if "native_question_occurrence" in metadata and (
+        type(occurrence) is not int or occurrence <= 0
+    ):
+        raise ValueError("Legacy reasoning has invalid native occurrence")
     source_sha256 = digest(source)
     if (
         metadata.get("native_dataset") != name
@@ -247,6 +260,7 @@ def validate_case(case: dict[str, Any], config: dict[str, Any]) -> None:
             source_sha256=source_sha256,
             selection=selection,
             native_id=question["question_id"],
+            native_occurrence=occurrence,
         )
     ):
         raise ValueError(
