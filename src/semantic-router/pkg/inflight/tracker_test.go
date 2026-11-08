@@ -136,9 +136,9 @@ func TestBeginPanicsBeforeReusingTokenAfterExhaustion(t *testing.T) {
 	if panicValue == nil {
 		t.Errorf("Begin returned token %d after token space exhaustion; want panic", returnedToken)
 	}
-	mu.RLock()
+	mu.Lock()
 	_, stateExists := states["m1"]
-	mu.RUnlock()
+	mu.Unlock()
 	if stateExists {
 		t.Error("Begin created model state after token space exhaustion")
 	}

@@ -90,8 +90,13 @@ func (s *Set) Has(model string) bool {
 }
 
 // Select retains the existing embedding endpoint's priority policy, using only
-// providers prepared in this snapshot. It never loads a requested model.
+// providers prepared in this snapshot. The requested dimension is a capability,
+// not a preference: a model that does not declare it is skipped so the next
+// prepared candidate can serve the request. It never loads a requested model.
 func (s *Set) Select(text string, quality, latency float32, dimension int) (string, error) {
+	if s == nil {
+		return "", fmt.Errorf("no prepared embedding model is available")
+	}
 	words := len(strings.Fields(text))
 	// Input budgets belong to the selected deployment's tokenizer and overflow
 	// policy; whitespace counts here only guide the existing model preference.
@@ -99,15 +104,38 @@ func (s *Set) Select(text string, quality, latency float32, dimension int) (stri
 	if (words <= 512 && quality <= 0.7 && latency > 0.7) || (words > 512 && words <= 2048) || (dimension > 0 && dimension < 768 && latency > 0.5) {
 		order = []string{"mmbert", "qwen3"}
 	}
-	for _, model := range order {
-		if s.Has(model) {
-			return model, nil
-		}
+	if !slices.Contains(order, s.primary) {
+		order = append(order, s.primary)
 	}
-	if s.Has("") {
-		return s.primary, nil
+	var rejected []string
+	for _, model := range order {
+		if !s.Has(model) {
+			continue
+		}
+		if _, err := s.Get(model, dimension, 0); err != nil {
+			rejected = append(rejected, model)
+			continue
+		}
+		return model, nil
+	}
+	if len(rejected) > 0 {
+		return "", s.unsupportedDimension(dimension, rejected)
 	}
 	return "", fmt.Errorf("no prepared embedding model is available")
+}
+
+// unsupportedDimension names the requested width and what each rejected auto
+// candidate declares, so the client can pick a dimension that will be served.
+// It speaks only for the candidates Select checked: another prepared model,
+// such as multimodal, may still serve the width when requested explicitly.
+func (s *Set) unsupportedDimension(dimension int, rejected []string) error {
+	var declared []string
+	for _, info := range s.Models() {
+		if slices.Contains(rejected, info.Name) {
+			declared = append(declared, fmt.Sprintf("%s supports %v", info.Name, info.Dimensions))
+		}
+	}
+	return fmt.Errorf("%w: no auto embedding candidate supports dimension %d (%s)", binding.ErrCapability, dimension, strings.Join(declared, "; "))
 }
 
 // SelectModalities chooses one already prepared representation for an entire

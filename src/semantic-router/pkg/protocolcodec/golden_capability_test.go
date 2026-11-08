@@ -24,7 +24,7 @@ func TestGoldenCapabilityMatrix(t *testing.T) {
 	if len(inputs) == 0 {
 		t.Fatalf("no capability protocol golden inputs found in %s", directory)
 	}
-	engine := NewBuiltinEngine()
+	engine := conformanceEngine()
 	for _, inputPath := range inputs {
 		runGoldenCapabilityInput(t, engine, directory, inputPath)
 	}

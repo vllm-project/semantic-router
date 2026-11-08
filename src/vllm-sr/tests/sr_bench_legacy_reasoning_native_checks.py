@@ -457,13 +457,24 @@ def test_repeated_native_ids_preserve_every_question_and_receipt(
     assert metric["total"] == metric["completed"] == metric["correct"] == 9
 
 
-@pytest.mark.parametrize("occurrence", [True, -1, 0, "1", 1.5])
-def test_invalid_native_occurrence_fails_before_dispatch(
-    occurrence: Any, catalog_cases: dict[str, dict[str, Any]], target: Any
+@pytest.mark.parametrize(
+    ("occurrence", "error"),
+    [
+        (True, "native occurrence"),
+        (-1, "native occurrence"),
+        (0, "native occurrence"),
+        ("1", "native occurrence"),
+        (1.5, "native occurrence"),
+        (1, "frozen native identity"),
+        (2, "frozen native identity"),
+    ],
+)
+def test_altered_native_occurrence_fails_before_dispatch(
+    occurrence: Any, error: str, catalog_cases: dict[str, dict[str, Any]], target: Any
 ) -> None:
     exported = copy.deepcopy(catalog_cases["hellaswag"])
     exported["cases"][0]["metadata"]["native_question_occurrence"] = occurrence
-    with pytest.raises(ValueError, match="native occurrence"):
+    with pytest.raises(ValueError, match=error):
         plan(
             manifest(
                 target,

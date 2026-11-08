@@ -13,9 +13,9 @@ import (
 
 // The balance recipe's classifiers are runtime-served; the router downloads
 // only the embedding it runs itself.
-var expectedAMDModelSpecs = []string{
-	"models/Vela-1.0-Encoder-307M-Embedding",
-}
+// The balance recipe routes on decision-model questions; the model runtime
+// serves that model, so the router downloads nothing for it.
+var expectedAMDModelSpecs = []string{}
 
 func TestExtractModelPaths(t *testing.T) {
 	tests := []struct {
@@ -593,14 +593,15 @@ func TestBuildModelSpecsAcceptsReferenceConfig(t *testing.T) {
 		t.Fatalf("BuildModelSpecs() error = %v", err)
 	}
 
-	assertContainsAllModelSpecs(t, specs, "models/Vela-1.0-Encoder-307M-Embedding")
+	// embeddings.default names vela-embedding, so the model runtime serves it.
+	assertRuntimeServed(t, cfg, specs, "models/Vela-1.0-Encoder-307M-Embedding")
 	served := cfg.RuntimeServedModelPaths()
 	for _, spec := range specs {
 		if served[spec.LocalPath] && !spec.FilesOnly {
 			t.Fatalf("router downloads the runtime-served %s: %+v", spec.LocalPath, spec)
 		}
 	}
-	assertRuntimeServed(t, cfg, specs, config.Vela2SignalModel)
+	assertRuntimeServed(t, cfg, specs, config.Vela3SignalModel)
 }
 
 func TestBuildModelSpecsIncludesAllAMDDeployModels(t *testing.T) {

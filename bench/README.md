@@ -9,6 +9,38 @@ and are ignored by Git.
 For an interpretation of maintained benchmark coverage, see the
 [benchmarking overview](../website/docs/benchmarking/overview.md).
 
+## Ownership and maintenance checks
+
+These tools measure Router mechanisms or classifier quality, so
+they stay outside sr-bench. The [domain registry](../tools/agent/domains.yaml)
+defines their ownership and selects their checks.
+
+| Harness | Owner | Deterministic check |
+| --- | --- | --- |
+| Router Learning scenarios and profiles | `router-core` | `make test-learning-tools` |
+| Router Memory cold start | `developer-experience` (`router-tools`) | `make test-memory-coldstart`, included in `make go-tools-test` |
+| Grounded fusion's Go `fusioneval` harness | `developer-experience` (`router-tools`) | `make test-fusioneval`, included in `make go-tools-test` |
+| Fault proxy and soak harness | `e2e` (`soak-tools`) | `make test-fault-proxy` and `make soak-test` |
+| Looper fixed-budget experiment contracts | `router-core` (`looper-bench-contracts`) | `make test-looper-tts`, included in `make test-bench-tools` |
+| Hallucination-detector and trajectory evaluation | `evaluation-quality` (`hallucination-bench`) | `make test-hallucination-bench` |
+| Native classifier and artifact evaluation in `src/training/model_eval/` | `training` | `make test-training-contracts` |
+
+The checks above do not qualify live model performance. Router Learning's
+architecture thresholds use `make bench-router-learning`; the
+[production protection gate](../website/docs/benchmarking/agent-routing-protection.md)
+exercises the Router's per-turn contracts.
+
+The reasoning suite, Router Flow's EvalScope path, grounded fusion's Python
+evaluators, and the agent-workflow runners remain available during the
+[sr-bench migration](https://github.com/vllm-project/semantic-router/issues/4255).
+Each moves only after a comparison against the same target demonstrates that
+sr-bench reproduces its measurements. Classifier and artifact evaluation keeps
+its domain-specific metrics and current owners; this migration does not add a
+classifier target to sr-bench. This follows the
+[Router Models](https://github.com/vllm-project/semantic-router/issues/2966) and
+[Evaluation & Quality](https://github.com/vllm-project/semantic-router/issues/2969)
+boundaries without moving another domain's tools.
+
 ## Find the right runner
 
 | Question | Runner |

@@ -69,7 +69,7 @@ func TestInstanceUnixStatusAndModels(t *testing.T) {
 	}
 	response := httptest.NewRecorder()
 	InstanceHandler()(response, httptest.NewRequest("PATCH", "/api/instance", strings.NewReader(`{}`)))
-	if response.Code != 405 || response.Header().Get("Allow") != "GET" {
+	if response.Code != 405 || response.Header().Get("Allow") != "GET, HEAD" {
 		t.Fatal("instance mutation allowed")
 	}
 }

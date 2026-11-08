@@ -21,7 +21,7 @@ func newLocalLabelClassifier(rule config.ClassifierSignalRule, models ...*classi
 
 func newLocalLabelClassifierForBinding(consumerName string, rule config.ClassifierSignalRule, models ...*classifierModelRuntime) (labelClassifier, error) {
 	runtime := consumerModelRuntime(models)
-	spec, err := runtime.localSpec(consumerName, rule.ModelPath, "auto", config.RemoteClassifierContractLabelDistribution, rule.UseCPU)
+	spec, err := runtime.localSpec(consumerName, "auto", config.RemoteClassifierContractLabelDistribution)
 	if err != nil {
 		return nil, fmt.Errorf("initialize classifier %q: %w", rule.Name, err)
 	}
@@ -33,7 +33,7 @@ func newLocalLabelClassifierForBinding(consumerName string, rule config.Classifi
 		return &localOperatingPointClassifier{handle: handle, recipe: string(spec.Recipe), labels: append([]string(nil), rule.Labels...)}, nil
 	}
 	backend := &ownedSequenceBackend{runtime: runtime.runtime, spec: spec, labels: append([]string(nil), rule.Labels...)}
-	if err := backend.Init(rule.ModelPath, rule.UseCPU, len(rule.Labels)); err != nil {
+	if err := backend.Init(spec.Binding.Deployment, false, len(rule.Labels)); err != nil {
 		return nil, fmt.Errorf("initialize classifier %q: %w", rule.Name, err)
 	}
 	return &localLabelClassifier{labels: append([]string(nil), rule.Labels...), backend: backend}, nil

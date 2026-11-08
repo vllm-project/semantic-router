@@ -10,7 +10,7 @@ translation:
 
 ## 概述 {#overview}
 
-`decision` 向判断模型提出一个关于请求的类型化问题，再把答案转换成路由事实。你可以用自然语言描述问题：从几个选项中选一个（`choice`）、回答是或否（`noul`），或在一组等级上评分（`score`）。Vela 2.0 等支持更多题型的模型还能回答 `set`（哪些标签适用？）和 `span`（各标签出现在文本的什么位置？）问题。模型运行在 Router 自动启动的[内置模型运行时](/model-runtime/overview.md)中。
+`decision` 向判断模型提出一个关于请求的类型化问题，再把答案转换成路由事实。你可以用自然语言描述问题：从几个选项中选一个（`choice`）、回答是或否（`noul`），或在一组等级上评分（`score`）。Vela 2.0 等支持更多题型的模型还能回答 `set`（哪些标签适用？）和 `span`（各标签出现在文本的什么位置？）问题。模型运行在 Router 自动启动的[内置模型运行时](/model-runtime/overview.md)中，或运行在远程 [System One API](#ask-a-remote-system-one-model) 之后。
 
 ## 主要优势 {#key-advantages}
 
@@ -29,7 +29,7 @@ translation:
 
 ## 配置 {#configuration}
 
-未指定 `deployment` 的问题使用 `global.model_catalog.system.decision_model` 指向的 Router 判断模型，默认为 Vela 2.0 0.3B，也可以[选择其他规模](/model-runtime/choose-a-model.md#choose-a-size)。它会与输入兼容的内置问题一起加入请求阶段的批处理。复用部署可以避免重复加载模型，但不保证完整路由请求只执行一次前向计算：
+未指定 `deployment` 的问题使用 `global.model_catalog.system.decision_model` 指向的 Router 判断模型，默认为 Vela 3.0 vela3-fast，也可以[选择其他模型](/model-runtime/choose-a-model.md#choose-a-size)。它会与输入兼容的内置问题一起加入请求阶段的批处理。复用部署可以避免重复加载模型，但不保证完整路由请求只执行一次前向计算：
 
 ```yaml
 routing:
@@ -43,7 +43,7 @@ routing:
           gte: 0.7
 ```
 
-绑定使用 `{deployment: primary}`，可以选择 Vela 或 Decision 1.0/2.0。所选模型必须支持所有请求的题型。[`decision` 选模算法](../../algorithm/selection/decision.md)使用相同的默认绑定，因此这份模型资源也可以选择后端。
+决策模型默认为 `{deployment: primary}`，也可以是 Vela 或 Decision 1.0/2.0 部署。所选模型必须支持所有请求的题型。[`decision` 选模算法](../../algorithm/selection/decision.md)默认询问同一个决策模型，因此它也可以选择后端。
 
 要使用另一个模型，例如 Decision 2.0，先声明一个 `model_runtime` 部署，再为每个问题指定 `deployment`：
 
@@ -103,6 +103,60 @@ routing:
       modelRefs:
         - model: large-coder
 ```
+
+### 询问远程 System One 模型 {#ask-a-remote-system-one-model}
+
+问题也可以询问 Router 不管理的 System One API：托管的 Decision API、另一个 vLLM-SR Engine，或位于它们前面的网关。在 `global.model_catalog.deployments` 中把它声明为 `systemone` 部署，并像 `model_runtime` 部署一样把它写进问题的 `deployment`。它只回答 decision 问题：它不属于请求会被路由到的 `providers.models`，任何模型列表都不会显示它。
+
+```yaml alternative
+global:
+  model_catalog:
+    deployments:
+      d3-ultra-remote:
+        provider: systemone
+        endpoint: https://app.vllm-sr.ai/v1/systemone
+        model: vllm-sr/d3-ultra
+        auth:
+          api_key_env: VSR_APP_KEY
+        timeout_ms: 3000
+
+routing:
+  signals:
+    decision:
+      - name: support_team
+        deployment: d3-ultra-remote
+        question:
+          type: choice
+          instructions: Which team should handle this ticket?
+          choices:
+            - key: billing
+              description: Payments and refunds
+            - key: engineering
+              description: Outages and bugs
+```
+
+`endpoint` 是 API 接收 `POST` 请求的 URL，包含路径前缀；`model` 是 API 用来回答的模型。密钥来自 `auth.api_key_env`，或来自 `auth.api_key_file`（绝对路径，在调用需要时读取），从不写在配置里，并以 `Authorization: Bearer <key>` 发送。如果网关要求把密钥放在自己的请求头中，设置 `auth.header`；设置 `auth.prefix: ""` 可以不带前缀发送密钥：
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      gateway-d3:
+        provider: systemone
+        endpoint: https://gateway.example.com/Unified/v1/systemone
+        model: vLLM-SR-d3-27B
+        capabilities: {question_types: [choice, noul, score]}
+        auth:
+          header: Ocp-Apim-Subscription-Key
+          prefix: ""
+          api_key_env: GATEWAY_KEY
+```
+
+- 同一请求阶段发给该部署的问题（包括询问它的内置信号的问题）会合并为一次 System One 调用：选项以 System One `criteria` 发送，问题读取的其他文本作为额外的 `states` 条目发送，调用的截止时间以 `options.deadline_ms` 发送。System One API 会因一个失败的问题而整体拒绝调用，并指明该问题，因此 Router 会在同一截止时间内去掉它、把其余问题再问一次：只有失败问题对应的信号变为未知。其他任何失败都会使该次调用的所有信号变为未知。针对同一文本的相同问题，其答案最多复用 10 分钟，配置变更后即失效。
+- 模型能回答的题型和现成问题（`pii`、`halu`）优先取自配置加载时读取的 `GET <endpoint>/models` 列表中该模型的信息；列表未列出时使用 `capabilities.question_types` 和 `capabilities.presets`；都没有时使用 System One 题型 `choice`、`noul` 和 `score`。模型不原生支持 `set` 时，`set` 问题会组合为多个 `noul` 问题。
+- 网络往返比本地模型更慢。未设置自身 `timeout_ms` 的问题使用部署的 `timeout_ms`，否则使用默认的 1000 ms。API 变慢、失败或不可达时，其信号为未知，请求不会因此失败。Router 对每类失败只记录一次日志，且不包含密钥。
+- `global.model_catalog.system.decision_model.deployment` 也可以指向 `systemone` 部署。此时未指定部署的问题和 [decision 选择器](../../algorithm/selection/decision.md) 会询问它，没有被绑定到其他部署的内置信号也会询问它。安全规则的 hazard 部分、embedding 和重排序仍使用各自的部署。配置未写出的模块阈值在这样的模型上为 0.5，并给出 `uncalibrated_threshold` 警告。在不回答 span 问题的模型上，PII 和幻觉检测只给出不含位置的是/否判断，并在配置加载时给出 `span_fallback` 警告；此时对 PII 做 masking 的配置会被拒绝。[为信号选择模型](../../../installation/choose-a-model-for-a-signal.md#s2-everything-on-a-remote-system-one-model)展示了这种配置。
+- `systemone` 部署不接受设备、引擎参数、副本或输入预算。
 
 | 题型 | 匹配条件 | 路由可读取的值 |
 | --- | --- | --- |

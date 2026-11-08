@@ -241,3 +241,33 @@ func TestSRBenchEvidencePaginationAndCallDetail(t *testing.T) {
 		}
 	}
 }
+
+func TestSRBenchHeadReadsWithoutMutationRevalidation(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("upstream method=%s, want GET representation", r.Method)
+		}
+		_, _ = io.WriteString(w, `{"items":[]}`)
+	}))
+	defer upstream.Close()
+	handler, err := NewSRBenchHandler(upstream.URL, "service-secret", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := srBenchTestRequest(http.MethodHead, SRBenchAPIPath+"/catalog", "")
+	request = request.WithContext(dashboardauth.WithPermissionRevalidator(request.Context(), func(context.Context) error {
+		t.Error("HEAD triggered mutation revalidation")
+		return errors.New("revoked mutation")
+	}))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("HEAD returned %d: %s", response.Code, response.Body.String())
+	}
+	request = srBenchTestRequest(http.MethodHead, SRBenchAPIPath+"/runs/run-1/reconcile-usage", "")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("HEAD reached POST-only operation: %d", response.Code)
+	}
+}
