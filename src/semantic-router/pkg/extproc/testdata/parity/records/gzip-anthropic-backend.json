@@ -124,7 +124,7 @@
         },
         {
           "name": "content-length",
-          "value": "270"
+          "value": "267"
         }
       ],
       "effect": {
@@ -183,7 +183,7 @@
       "phase": "response_body",
       "end_of_stream": true,
       "body": {
-        "base64": "H4sIAAAAAAAA/wDyAA3/eyJpZCI6Im1zZ19wYXJpdHkiLCJ0eXBlIjoibWVzc2FnZSIsInJvbGUiOiJhc3Npc3RhbnQiLCJtb2RlbCI6ImNsYXVkZS1jb21wYXRpYmxlLTEiLCJjb250ZW50IjpbeyJ0eXBlIjoidGV4dCIsInRleHQiOiLwn5KhIFJpdmVycyBjYXJ2ZSB0aGUgbGFuZC4ifV0sInN0b3BfcmVhc29uIjoiZW5kX3R1cm4iLCJzdG9wX3NlcXVlbmNlIjpudWxsLCJ1c2FnZSI6eyJpbnB1dF90b2tlbnMiOjEwLCJvdXRwdXRfdG9rZW5zIjo1fX0BAAD//yDeNsLyAAAA"
+        "base64": "H4sIAAAAAAAA/wDyAA3/eyJpZCI6Im1zZ19wYXJpdHkiLCJ0eXBlIjoibWVzc2FnZSIsInJvbGUiOiJhc3Npc3RhbnQiLCJtb2RlbCI6ImNsYXVkZS1jb21wYXRpYmxlLTEiLCJjb250ZW50IjpbeyJ0eXBlIjoidGV4dCIsInRleHQiOiLwn5KhIFJpdmVycyBjYXJ2ZSB0aGUgbGFuZC4ifV0sInN0b3BfcmVhc29uIjoiZW5kX3R1cm4iLCJzdG9wX3NlcXVlbmNlIjpudWxsLCJ1c2FnZSI6eyJpbnB1dF90b2tlbnMiOjEwLCJvdXRwdXRfdG9rZW5zIjo1fX0DACDeNsLyAAAA"
       },
       "effect": {
         "header": {

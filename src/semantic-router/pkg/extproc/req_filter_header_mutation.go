@@ -2,6 +2,7 @@ package extproc
 
 import (
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -39,6 +40,12 @@ func (r *OpenAIRouter) buildHeaderMutations(decision *config.Decision) ([]*corev
 		header := &corev3.HeaderValueOption{Header: &corev3.HeaderValue{Key: mutation.Name, RawValue: []byte(mutation.Value)}}
 		if mutation.Operation == "set" {
 			header.AppendAction = corev3.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD
+		} else {
+			// "add" keeps an existing value. Envoy's ext_proc filter reads the
+			// deprecated append flag and ignores append_action, so the enum
+			// alone would still overwrite: set both.
+			header.Append = &wrapperspb.BoolValue{Value: true}
+			header.AppendAction = corev3.HeaderValueOption_APPEND_IF_EXISTS_OR_ADD
 		}
 		setHeaders = append(setHeaders, header)
 	}

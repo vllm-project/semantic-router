@@ -120,7 +120,7 @@
         },
         {
           "name": "content-length",
-          "value": "92"
+          "value": "89"
         }
       ],
       "effect": {
@@ -151,7 +151,7 @@
       "phase": "response_body",
       "end_of_stream": true,
       "body": {
-        "base64": "H4sIAAAAAAAA/wBAAL//eyJlcnJvciI6eyJtZXNzYWdlIjoiYmFja2VuZCBvdmVybG9hZGVkIiwidHlwZSI6InNlcnZlcl9lcnJvciJ9fQEAAP//FbKaX0AAAAA="
+        "base64": "H4sIAAAAAAAA/wBAAL//eyJlcnJvciI6eyJtZXNzYWdlIjoiYmFja2VuZCBvdmVybG9hZGVkIiwidHlwZSI6InNlcnZlcl9lcnJvciJ9fQMAFbKaX0AAAAA="
       },
       "effect": {
         "header": {
