@@ -42,10 +42,7 @@ config:
     - name: nano
       routing:
         model_bindings:
-          embedding:
-            deployment: nano
-            contract: embedding.v1
-            adapter: vela_omni
+          embedding: nano
         signals:
           embeddings:
             - name: exact-text
@@ -73,10 +70,7 @@ config:
     - name: mini
       routing:
         model_bindings:
-          embedding:
-            deployment: mini
-            contract: embedding.v1
-            adapter: vela_omni
+          embedding: mini
         signals:
           embeddings:
             - name: exact-text

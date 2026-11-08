@@ -54,7 +54,7 @@ func TestFileStateStore_SameDirectoryTTLChangeOnReload(t *testing.T) {
 		t.Fatal("Take used the previous generation TTL")
 	}
 
-	reloaded.cleanupExpired(time.Now().UTC())
+	reloaded.cleanupExpired()
 	namespaced, err := workflowNamespacedStateID(config.DefaultRecipeName, "ttl-sweep")
 	if err != nil {
 		t.Fatalf("namespace: %v", err)

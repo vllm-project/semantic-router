@@ -5,6 +5,7 @@ import type { MonacoDiffEditor } from '@monaco-editor/react'
 
 import type { DeployResult, DeployStep } from '@/types/dsl'
 import useAccessibleDialog from '@/hooks/useAccessibleDialog'
+import ConfigSaveWarnings from '../components/ConfigSaveWarnings'
 import ProductLoadingState from '../components/ProductLoadingState'
 
 import styles from './BuilderPage.module.css'
@@ -406,6 +407,7 @@ const BuilderDeployToast: React.FC<BuilderDeployToastProps> = ({
           </button>
         </div>
       )}
+      {deployResult && !deploying && <ConfigSaveWarnings warnings={deployResult.warnings ?? []} />}
     </div>,
     document.body,
   )

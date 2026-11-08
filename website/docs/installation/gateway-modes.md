@@ -47,7 +47,8 @@ See the [release note](../release-notes/standalone-mode).
 ## What a standalone Router does
 
 - **Listeners:** each entry of `listeners` is served with HTTP/1.1 and HTTP/2
-  (h2c in cleartext), with its `timeout` as the idle timeout, a 500 MiB request
+  (h2c in cleartext), with its `timeout` bounding a whole call including its
+  streamed response, a stalled stream, and an idle connection, a 500 MiB request
   body limit and at most 50,000 connections, the limits of the Envoy template.
 - **API keys:** with `api_keys` set, a client sends one of them as
   `Authorization: Bearer <key>` or `api-key: <key>`; other requests get an
@@ -129,10 +130,12 @@ listeners:
 
 ### Identity headers
 
-By default a standalone listener drops the identity headers a client sends,
-because nothing in front of the Router has authenticated it: anyone could claim
-any user. Behind an authenticating proxy, or for a trusted application server
-that sets the user itself, let the listener keep them:
+By default a listener drops the identity headers a client sends, because
+nothing in front of the Router has authenticated it: anyone could claim any
+user. A standalone Router drops them itself; with `--gateway extproc`, the Envoy
+listener the CLI generates removes them before any filter or the Router reads
+them. Behind an authenticating proxy, or for a trusted application server that
+sets the user itself, let the listener keep them:
 
 ```yaml
 listeners:
@@ -145,13 +148,19 @@ listeners:
       trusted_peers: ["10.0.0.0/8"]
 ```
 
-- `trust_headers` keeps the `x-authz-*` headers and the names
+- `trust_headers` keeps the `x-authz-*` headers (`x-authz-user-id`,
+  `x-authz-user-groups`, `x-authz-team-id`, `x-authz-tenant-id`) and the names
   `global.services.authz.identity` sets.
 - `trusted_peers` (CIDRs) keeps them only when the connection's peer address is
   in one of the networks; the Router never reads `X-Forwarded-For` for this.
-  Empty, every peer of a trusting listener is trusted.
+  Empty, every peer of a trusting listener is trusted. Only standalone mode
+  checks the peer: `--gateway extproc` refuses `trusted_peers`, so there keep
+  `trust_headers` alone, behind a proxy that removes the identity headers
+  clients send.
 - Each listener decides for its own requests, and a reload applies a change.
   Requests on a listener that doesn't trust identity are anonymous.
+- No identity header reaches a model provider, in either mode: the Router and
+  the generated Envoy listener remove them from every upstream request.
 
 Memory, router replay and the per-user selection algorithms (`gmtrouter`,
 `rl_driven`) record the user of each request. Without a trusting listener they
@@ -171,8 +180,12 @@ Router refuses it at startup and on reload when no listener sets
 
 Turn on `identity.trust_headers` on a listener behind an authenticating proxy,
 or serve them with `--gateway extproc` behind a gateway that authenticates
-clients. Token-bucket rate limiting, mTLS, JWT or OIDC, and advanced route
-matching are planned for standalone mode; until then they need Envoy as well.
+clients and removes the identity headers they send. With the Envoy listener the
+CLI generates, which authenticates no one, that again means
+`identity.trust_headers` behind an authenticating proxy; otherwise every request
+is anonymous, and a role binding refuses the requests it evaluates. Token-bucket rate limiting, mTLS,
+JWT or OIDC, and advanced route matching are planned for standalone mode; until
+then they need Envoy as well.
 
 ## Targets and platforms
 

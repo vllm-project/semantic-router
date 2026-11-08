@@ -40,7 +40,7 @@ func (r *OpenAIRouter) handleRouterReplayDatasetAPI(
 	if failure != nil {
 		return failure
 	}
-	return r.createRouterReplayJSONResponse(200, manifest)
+	return r.createJSONResponse(200, manifest)
 }
 
 // buildRouterReplayDataset reads the selection and policy from the query and

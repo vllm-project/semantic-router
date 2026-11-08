@@ -73,11 +73,13 @@ func NewHallucinationDetector(cfg *config.HallucinationModelConfig, models ...*c
 	if cfg == nil {
 		return nil, fmt.Errorf("hallucination model config is required")
 	}
-	runtime := consumerModelRuntime(models)
-	if _, bound := runtime.plan.Lookup(runtime.recipe, "hallucination_detector"); !bound && strings.TrimSpace(cfg.ModelID) == "" {
-		return nil, fmt.Errorf("hallucination model_id is required")
+	runtime := consumerModelRuntime(models).withModule(cfg.ModelID, func(scoped *config.RouterConfig) {
+		scoped.HallucinationMitigation.HallucinationModel = *cfg
+	})
+	if !moduleConfigured(runtime.cfg, "hallucination_detector") {
+		return nil, fmt.Errorf("no deployment answers the hallucination signal")
 	}
-	spec, err := runtime.localSpec("hallucination_detector", cfg.ModelID, "modernbert", config.RemoteClassifierContractTokenSpans, cfg.UseCPU)
+	spec, err := runtime.localSpec("hallucination_detector", "modernbert", config.RemoteClassifierContractTokenSpans)
 	return &HallucinationDetector{config: cfg, models: runtime, spec: spec, specErr: err}, nil
 }
 
@@ -92,14 +94,17 @@ func (d *HallucinationDetector) Initialize() error {
 		return err
 	}
 	if judgment != nil {
-		explicit, bound := d.models.plan.Lookup(d.models.recipe, "hallucination_detector")
-		useVerdict := !judgment.card.Answers("span") || (bound && explicit.Binding.Contract == config.DecisionTaskContract)
+		authored := authoredVerdictBinding(d.models, "hallucination_detector")
+		useVerdict := !judgment.card.Answers("span") && !judgment.card.HasPreset("halu") || authored
 		if useVerdict {
 			if explicitSpanBinding(d.models, "hallucination_detector") {
 				return fmt.Errorf("%w: hallucination token_spans.v1 binding requires native span capability", binding.ErrCapability)
 			}
 			if d.config.MinSpanLength > 1 || d.config.MinSpanConfidence > 0 {
 				return fmt.Errorf("%w: hallucination span filters require native span capability", binding.ErrCapability)
+			}
+			if !authored {
+				reportSpanFallback("hallucination_detector", judgment)
 			}
 			d.judgment, d.initialized = judgment, true
 			return nil

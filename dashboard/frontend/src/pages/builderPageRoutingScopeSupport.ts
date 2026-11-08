@@ -1,5 +1,6 @@
 import { dslHeaderPattern } from '@/lib/dslMutations'
-import type { ASTProgram, SymbolTable } from '@/types/dsl'
+import type { ASTProgram, ASTProjectionMappingDecl, ASTSignalDecl, SymbolTable } from '@/types/dsl'
+import type { AvailableSignal } from './builderPageTypes'
 
 export interface BuilderRoutingScope {
   id: string
@@ -56,6 +57,39 @@ export function resolveBuilderRoutingScope(
     entrypoints: [],
     recipes: [],
   }
+}
+
+// Route conditions reference complexity signals by level and authz bindings by
+// the role they grant, which is what the Router's authz signal emits.
+export function listReferenceableSignals(
+  signals: ASTSignalDecl[] = [],
+  projectionMappings: ASTProjectionMappingDecl[] = [],
+): AvailableSignal[] {
+  const result: AvailableSignal[] = []
+  for (const s of signals) {
+    if (s.signalType === 'complexity') {
+      result.push({ signalType: s.signalType, name: `${s.name}:easy` })
+      result.push({ signalType: s.signalType, name: `${s.name}:medium` })
+      result.push({ signalType: s.signalType, name: `${s.name}:hard` })
+    } else if (s.signalType === 'authz') {
+      const role = s.fields.role
+      if (
+        typeof role === 'string' &&
+        role &&
+        !result.some((signal) => signal.signalType === 'authz' && signal.name === role)
+      ) {
+        result.push({ signalType: 'authz', name: role })
+      }
+    } else {
+      result.push({ signalType: s.signalType, name: s.name })
+    }
+  }
+  for (const mapping of projectionMappings) {
+    for (const output of mapping.outputs ?? []) {
+      result.push({ signalType: 'projection', name: output.name })
+    }
+  }
+  return result
 }
 
 export function chooseDefaultBuilderRoutingScope(ast: ASTProgram | null): string {

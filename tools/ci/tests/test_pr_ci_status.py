@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from manual_ci import ManualCIError
 from pr_ci_status import (
     APP_ID,
     CAPABILITIES,
@@ -68,6 +69,8 @@ class Client:
         self.checks, self.comments, self.writes = [], [], []
         self.ready, self.missing_report, self.newer_run = True, False, False
         self.parents = [BASE, HEAD]
+        self.main_sha, self.base_ancestor = BASE, BASE
+        self.compare_error = None
         self.refresh_report()
 
     def refresh_report(self):
@@ -102,6 +105,15 @@ class Client:
         prefix = f"repos/{REPO}/"
         self.assert_prefix(endpoint, prefix)
         path = endpoint[len(prefix) :]
+        if path == "git/ref/heads/main":
+            return {
+                "ref": "refs/heads/main",
+                "object": {"type": "commit", "sha": self.main_sha},
+            }
+        if path.startswith(f"compare/{BASE}..."):
+            if self.compare_error is not None:
+                raise self.compare_error
+            return {"merge_base_commit": {"sha": self.base_ancestor}}
         if path == "actions/runs/101":
             return copy.deepcopy(self.run)
         if path == "actions/workflows/pr.yml":
@@ -422,11 +434,49 @@ class PRStatusTests(unittest.TestCase):
 
     def test_changed_base_stays_pending_and_requests_branch_update(self):
         client = Client()
-        client.pull["merge_commit_sha"] = "f" * 40
+        client.main_sha = "f" * 40
+        client.base_ancestor = "e" * 40
         result = reconcile(client, REPO, 101)
         self.assertEqual(result["state"], "stale")
         self.assertEqual(result["check"]["status"], "in_progress")
         self.assertIn("Update the branch", result["comment"])
+
+    def test_unreachable_base_compare_api_error_marks_gate_stale(self):
+        client = Client()
+        client.main_sha = "f" * 40
+        client.compare_error = ManualCIError(
+            "Comparison not found (HTTP 404).", http_status=404
+        )
+        client.pull["merge_commit_sha"] = "d" * 40
+        result = reconcile(client, REPO, 101)
+        self.assertEqual(result["state"], "stale")
+        self.assertEqual(result["check"]["status"], "in_progress")
+        self.assertIn("Update the branch", result["comment"])
+
+    def test_advanced_main_with_unchanged_head_does_not_mark_gate_stale(self):
+        client = Client()
+        client.main_sha = "f" * 40
+        client.base_ancestor = BASE
+        client.pull["merge_commit_sha"] = "d" * 40
+        result = reconcile(client, REPO, 101)
+        self.assertEqual(result["state"], "awaiting-approval")
+        self.assertEqual(result["check"]["status"], "in_progress")
+        self.assertNotIn("Update the branch", result["comment"])
+
+    def test_advanced_main_with_passed_verdict_publishes_success(self):
+        client = Client()
+        client.main_sha = "f" * 40
+        client.base_ancestor = BASE
+        client.pull["merge_commit_sha"] = "d" * 40
+        client.plan.update(
+            expected_verification_ids=["quality", "e2e.dashboard"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        result = reconcile(client, REPO, 101)
+        self.assertEqual(result["state"], "success")
+        self.assertEqual(result["check"]["conclusion"], "success")
 
     def test_late_event_reads_current_attempt_before_publishing(self):
         client = Client()

@@ -59,8 +59,11 @@ func validateNativeRoutingConfig(cfg *RouterConfig) error {
 			continue
 		}
 		deployment, ok := cfg.ModelDeployments[model.Deployment]
-		if !ok || !deployment.IsModelRuntime() {
-			return fmt.Errorf("providers.models[%s].deployment %q must reference a model_runtime deployment", alias, model.Deployment)
+		if !ok || (!deployment.IsModelRuntime() && !deployment.IsSystemOne()) {
+			return fmt.Errorf("providers.models[%s].deployment %q must reference a model_runtime or systemone deployment", alias, model.Deployment)
+		}
+		if deployment.IsSystemOne() {
+			continue
 		}
 		// A local alias is served through the decisions API even when no
 		// listener publishes it, and the worker plan does not apply this input.

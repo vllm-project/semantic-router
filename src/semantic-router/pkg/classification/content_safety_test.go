@@ -57,9 +57,9 @@ providers:
 			}
 			input := strings.Repeat("ordinary context ", 2048) + "final request"
 			var binaryCalls, hazardCalls atomic.Int32
-			for i := range cfg.ExternalModels {
-				model := &cfg.ExternalModels[i]
-				binary := model.Name == "content-safety-binary"
+			for _, name := range []string{"content-safety-binary", "content-safety-hazard"} {
+				deployment := cfg.ModelDeployments[name]
+				binary := name == "content-safety-binary"
 				labels := cfg.SafetyRules[0].EffectiveLabels()
 				if !binary {
 					labels = cfg.SafetyRules[1].Hazard.Labels
@@ -101,7 +101,8 @@ providers:
 					_ = json.NewEncoder(w).Encode(scores)
 				}))
 				t.Cleanup(server.Close)
-				model.ModelEndpoint = endpointForTestServer(t, server)
+				deployment.Endpoint = server.URL
+				cfg.ModelDeployments[name] = deployment
 			}
 			builder := classifierOptionBuilder{cfg: cfg}
 			apply, err := builder.buildSafetyClassifiersOption()
