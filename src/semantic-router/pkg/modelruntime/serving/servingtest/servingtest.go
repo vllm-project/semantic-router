@@ -40,6 +40,16 @@ func Runtime(t testing.TB, deployments map[string]runtimetest.Model) (*serving.R
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Preparation checks an attached deployment against the card the lease's
+	// watcher has observed, and skips one it has not observed yet. Return
+	// once every card is observed, as from a runtime that is already serving.
+	ctx, cancel := context.WithTimeout(context.Background(), modelservice.ReadyTimeout())
+	defer cancel()
+	for name := range attached {
+		if _, err := lease.Card(ctx, name); err != nil {
+			t.Fatal(err)
+		}
+	}
 	return serving.New(lease, nil), fake
 }
 
