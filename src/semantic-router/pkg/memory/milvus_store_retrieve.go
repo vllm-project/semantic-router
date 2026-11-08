@@ -299,7 +299,7 @@ func retrieveCandidateFromRow(fields []entity.Column, idx searchFieldIndex, row 
 	if idx.createdAt >= 0 && idx.createdAt < len(fields) {
 		if col, ok := fields[idx.createdAt].(*entity.ColumnInt64); ok {
 			assignInt64ColumnAt(col, row, func(value int64) {
-				createdAt = timeFromMilvusTimestamp(value)
+				createdAt = time.Unix(value, 0)
 			})
 		}
 	}

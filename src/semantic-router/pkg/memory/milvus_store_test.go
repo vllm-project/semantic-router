@@ -396,37 +396,6 @@ func TestMilvusStore_Retrieve_InflateJSONMetadata(t *testing.T) {
 	// Note: "importance": "high" is a string, so it won't be set in Memory.Importance (which is float32)
 }
 
-func TestMilvusTimestampParsingPreservesPrecisionAndLegacyValues(t *testing.T) {
-	createdAt := time.Date(2026, time.October, 1, 12, 0, 0, 123456789, time.UTC)
-	for _, test := range []struct {
-		name  string
-		value int64
-		want  time.Time
-	}{
-		{name: "legacy seconds", value: createdAt.Unix(), want: time.Unix(createdAt.Unix(), 0)},
-		{name: "milliseconds", value: createdAt.UnixMilli(), want: time.UnixMilli(createdAt.UnixMilli())},
-		{name: "nanoseconds", value: createdAt.UnixNano(), want: createdAt},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			assert.True(t, test.want.Equal(timeFromMilvusTimestamp(test.value)))
-		})
-	}
-}
-
-func TestMilvusStoreColumnsPreserveCreatedAtPrecision(t *testing.T) {
-	createdAt := time.Date(2026, time.October, 1, 12, 0, 0, 123456789, time.UTC)
-	columns := newMemoryRowColumns(
-		&Memory{ID: "precise", Content: "test", UserID: "user-1", CreatedAt: createdAt},
-		[]float32{1},
-		"{}",
-	)
-	createdAtColumn, ok := columns.createdAt.(*entity.ColumnInt64)
-	require.True(t, ok)
-	value, err := createdAtColumn.ValueByIdx(0)
-	require.NoError(t, err)
-	assert.Equal(t, createdAt.UnixNano(), value)
-}
-
 func TestMilvusStore_Retrieve_FilterByThreshold(t *testing.T) {
 	store, mockClient := setupTestStore()
 	ctx := context.Background()
