@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -25,10 +26,12 @@ import (
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -435,6 +438,153 @@ func TestUpdateStatus(t *testing.T) {
 	if updatedSR2.Status.ReadyReplicas != 2 {
 		t.Errorf("expected 2 ready replicas, got %d", updatedSR2.Status.ReadyReplicas)
 	}
+}
+
+func TestUpdateStatusClearsStaleProgressingOnZeroReady(t *testing.T) {
+	s := runtime.NewScheme()
+	_ = scheme.AddToScheme(s)
+	_ = vllmv1alpha1.AddToScheme(s)
+
+	sr := &vllmv1alpha1.SemanticRouter{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test",
+			Namespace: "default",
+		},
+		Spec: vllmv1alpha1.SemanticRouterSpec{},
+	}
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test",
+			Namespace: "default",
+		},
+		Status: appsv1.DeploymentStatus{
+			Replicas:      3,
+			ReadyReplicas: 1,
+		},
+	}
+
+	cl := fake.NewClientBuilder().WithScheme(s).WithObjects(sr, deployment).WithStatusSubresource(sr, deployment).Build()
+	r := &SemanticRouterReconciler{Client: cl, Scheme: s}
+	key := types.NamespacedName{Name: "test", Namespace: "default"}
+
+	getSR := func(t *testing.T) *vllmv1alpha1.SemanticRouter {
+		t.Helper()
+		got := &vllmv1alpha1.SemanticRouter{}
+		if err := cl.Get(context.Background(), key, got); err != nil {
+			t.Fatalf("get SemanticRouter: %v", err)
+		}
+		return got
+	}
+	patchDeploymentReady := func(t *testing.T, ready int32) {
+		t.Helper()
+		current := &appsv1.Deployment{}
+		if err := cl.Get(context.Background(), key, current); err != nil {
+			t.Fatalf("get Deployment: %v", err)
+		}
+		patched := current.DeepCopy()
+		patched.Status.ReadyReplicas = ready
+		if err := cl.Status().Patch(context.Background(), patched, client.MergeFrom(current)); err != nil {
+			t.Fatalf("patch Deployment readyReplicas=%d: %v", ready, err)
+		}
+	}
+	runUpdateStatus := func(t *testing.T) *vllmv1alpha1.SemanticRouter {
+		t.Helper()
+		current := getSR(t)
+		if err := r.updateStatus(context.Background(), current, current.DeepCopy()); err != nil {
+			t.Fatalf("updateStatus: %v", err)
+		}
+		return getSR(t)
+	}
+	conditionMessages := func(conditions []metav1.Condition) []string {
+		msgs := make([]string, 0, len(conditions))
+		for _, c := range conditions {
+			msgs = append(msgs, c.Type+":"+c.Message)
+		}
+		return msgs
+	}
+
+	// Seed: 1/3 ready leaves Progressing=True with the partial count.
+	partial := runUpdateStatus(t)
+	if partial.Status.Phase != "Progressing" {
+		t.Fatalf("1/3 seed: phase=%q, want Progressing", partial.Status.Phase)
+	}
+	progressing := meta.FindStatusCondition(partial.Status.Conditions, typeProgressingSemanticRouter)
+	if progressing == nil || progressing.Status != metav1.ConditionTrue {
+		t.Fatalf("1/3 seed: missing Progressing=True: %+v", partial.Status.Conditions)
+	}
+	if progressing.Message != "1/3 replicas ready" {
+		t.Fatalf("1/3 seed: Progressing message=%q, want %q", progressing.Message, "1/3 replicas ready")
+	}
+
+	t.Run("partial_to_zero_clears_stale_progressing", func(t *testing.T) {
+		patchDeploymentReady(t, 0)
+		got := runUpdateStatus(t)
+
+		if got.Status.ReadyReplicas != 0 {
+			t.Errorf("ReadyReplicas=%d, want 0", got.Status.ReadyReplicas)
+		}
+		if got.Status.Phase != "Pending" {
+			t.Errorf("Phase=%q, want Pending", got.Status.Phase)
+		}
+		available := meta.FindStatusCondition(got.Status.Conditions, typeAvailableSemanticRouter)
+		if available == nil || available.Status != metav1.ConditionFalse || available.Message != "No replicas are ready" {
+			t.Errorf("Available condition: %+v", available)
+		}
+		if meta.FindStatusCondition(got.Status.Conditions, typeProgressingSemanticRouter) != nil {
+			t.Errorf("Progressing should be removed at 0 ready, got conditions %v", conditionMessages(got.Status.Conditions))
+		}
+		for _, msg := range conditionMessages(got.Status.Conditions) {
+			if strings.Contains(msg, "1/3 replicas ready") {
+				t.Errorf("stale partial-ready count survived in condition %q", msg)
+			}
+		}
+	})
+
+	t.Run("partial_to_all_ready_clears_progressing", func(t *testing.T) {
+		// Re-seed 1/3 so this case does not depend on the zero-ready branch.
+		patchDeploymentReady(t, 1)
+		if seed := runUpdateStatus(t); meta.FindStatusCondition(seed.Status.Conditions, typeProgressingSemanticRouter) == nil {
+			t.Fatal("re-seed 1/3 did not restore Progressing")
+		}
+
+		patchDeploymentReady(t, 3)
+		got := runUpdateStatus(t)
+
+		if got.Status.ReadyReplicas != 3 {
+			t.Errorf("ReadyReplicas=%d, want 3", got.Status.ReadyReplicas)
+		}
+		if got.Status.Phase != "Running" {
+			t.Errorf("Phase=%q, want Running", got.Status.Phase)
+		}
+		available := meta.FindStatusCondition(got.Status.Conditions, typeAvailableSemanticRouter)
+		if available == nil || available.Status != metav1.ConditionTrue || available.Reason != "AllReplicasReady" {
+			t.Errorf("Available condition: %+v", available)
+		}
+		if meta.FindStatusCondition(got.Status.Conditions, typeProgressingSemanticRouter) != nil {
+			t.Errorf("Progressing should be removed when all replicas are ready, got %v", conditionMessages(got.Status.Conditions))
+		}
+	})
+
+	t.Run("zero_to_partial_sets_progressing", func(t *testing.T) {
+		patchDeploymentReady(t, 0)
+		if seed := runUpdateStatus(t); seed.Status.Phase != "Pending" {
+			t.Fatalf("zero seed: phase=%q, want Pending", seed.Status.Phase)
+		}
+
+		patchDeploymentReady(t, 1)
+		got := runUpdateStatus(t)
+
+		if got.Status.Phase != "Progressing" {
+			t.Errorf("Phase=%q, want Progressing", got.Status.Phase)
+		}
+		progressing := meta.FindStatusCondition(got.Status.Conditions, typeProgressingSemanticRouter)
+		if progressing == nil || progressing.Status != metav1.ConditionTrue {
+			t.Fatalf("expected Progressing=True after 0->1/3, got %v", conditionMessages(got.Status.Conditions))
+		}
+		if progressing.Message != "1/3 replicas ready" {
+			t.Errorf("Progressing message=%q, want %q", progressing.Message, "1/3 replicas ready")
+		}
+	})
 }
 
 func TestUpdateStatusPreservesReconcileDerivedFields(t *testing.T) {
