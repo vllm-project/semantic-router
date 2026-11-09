@@ -51,6 +51,7 @@
           ],
           "remove": [
             "x-vsr-fusion-depth",
+            "x-vsr-gateway-credential",
             "x-vsr-internal-auth",
             "x-vsr-looper-decision",
             "x-vsr-looper-iteration",
@@ -86,7 +87,8 @@
             },
             {
               "name": "x-route-source",
-              "value": "parity-corpus"
+              "value": "parity-corpus",
+              "append": true
             },
             {
               "name": "content-length",
@@ -102,7 +104,8 @@
             "x-user-gemini-key",
             "x-user-minimax-key",
             "x-user-openai-key",
-            "x-user-vertex-ai-key"
+            "x-user-vertex-ai-key",
+            "x-vsr-gateway-credential"
           ]
         },
         "body": {

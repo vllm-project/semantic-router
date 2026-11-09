@@ -212,6 +212,9 @@ type ProviderInstance struct {
 	// ProviderInstance an internal materialization contract.
 	AuthPrefixSet bool   `json:"-" yaml:"-"`
 	ChatPath      string `json:"chat_path,omitempty" yaml:"chat_path,omitempty"`
+	// TrustedGateway receives the request's trusted gateway credential in
+	// place of a configured credential.
+	TrustedGateway bool `json:"trusted_gateway,omitempty" yaml:"trusted_gateway,omitempty"`
 }
 
 // ModelProviderBinding binds a request-facing model alias to one provider
