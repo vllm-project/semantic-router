@@ -92,44 +92,25 @@ func validateClassifierSignalRules(cfg *RouterConfig) error {
 		if err := validateClassifierLabels(rule); err != nil {
 			return err
 		}
-		if decl, exists := cfg.ModelBindings["classifier."+rule.Name]; exists {
-			deployment, found := cfg.ModelDeployments[decl.Deployment]
-			if !found {
-				return fmt.Errorf("classifier %q: unknown deployment %q", rule.Name, decl.Deployment)
-			}
-			if err := validateGenericModelBinding(cfg, &rule, decl, deployment.WithDefaults()); err != nil {
-				return err
+		resolved, ok, err := cfg.ResolveTask("classifier." + rule.Name)
+		if IsDeferredModelError(err) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("classifier %q: %w", rule.Name, err)
+		}
+		if !ok {
+			return fmt.Errorf("classifier %q: no deployment answers it; set its deployment or declare a decision model", rule.Name)
+		}
+		if !resolved.Explicit() {
+			if rule.DisableRationale || len(rule.Labels) < 2 {
+				return fmt.Errorf("classifier %q: a default judgment needs two labels and accepts no rationale setting", rule.Name)
 			}
 			continue
 		}
-		switch rule.Type {
-		case ClassifierSignalTypeLocal:
-			if strings.TrimSpace(rule.ModelPath) == "" && cfg.DecisionModel != "" {
-				if rule.Model != "" || rule.DisableRationale || len(rule.Labels) < 2 {
-					return fmt.Errorf("classifier %q: a default judgment needs two labels and accepts no external model or rationale setting", rule.Name)
-				}
-				continue
-			}
-			if err := validateLocalClassifierSignal(rule); err != nil {
-				return err
-			}
-		case ClassifierSignalTypeLLM:
-			if err := validateLLMClassifierSignal(cfg, rule); err != nil {
-				return err
-			}
-		case ClassifierSignalTypeSequenceClassifier:
-			if err := validateSequenceClassifierSignal(cfg, rule); err != nil {
-				return err
-			}
-		default:
-			return fmt.Errorf(
-				"routing.signals.classifiers[%q]: unsupported type %q (supported: %s, %s, %s)",
-				rule.Name,
-				rule.Type,
-				ClassifierSignalTypeLocal,
-				ClassifierSignalTypeLLM,
-				ClassifierSignalTypeSequenceClassifier,
-			)
+		decl := withImpliedContract("classifier."+rule.Name, resolved.Binding, resolved.Deployment)
+		if err := validateGenericModelBinding(cfg, &rule, decl, resolved.Deployment); err != nil {
+			return fmt.Errorf("classifier %q: %w", rule.Name, err)
 		}
 	}
 	return nil
@@ -164,6 +145,21 @@ func validateClassifierSignalIdentity(
 	return nil
 }
 
+// validateLegacyClassifierRule checks a rule that chooses its model with the
+// deprecated type, model and model_path fields as those fields were checked
+// before they were translated, so a rule that failed to load still does.
+func validateLegacyClassifierRule(cfg *RouterConfig, rule ClassifierSignalRule) error {
+	switch rule.Type {
+	case ClassifierSignalTypeLocal:
+		return validateLocalClassifierSignal(rule)
+	case ClassifierSignalTypeLLM:
+		return validateLLMClassifierSignal(cfg, rule)
+	case ClassifierSignalTypeSequenceClassifier:
+		return validateSequenceClassifierSignal(cfg, rule)
+	}
+	return nil
+}
+
 func validateLocalClassifierSignal(rule ClassifierSignalRule) error {
 	if strings.TrimSpace(rule.ModelPath) == "" {
 		return fmt.Errorf("routing.signals.classifiers[%q]: local classifiers require model_path", rule.Name)
@@ -179,38 +175,6 @@ func validateLocalClassifierSignal(rule ClassifierSignalRule) error {
 			"routing.signals.classifiers[%q]: local classifiers require at least two labels",
 			rule.Name,
 		)
-	}
-	return nil
-}
-
-func validateClassifierLabels(rule ClassifierSignalRule) error {
-	if len(rule.Labels) == 0 {
-		return fmt.Errorf("routing.signals.classifiers[%q]: labels cannot be empty", rule.Name)
-	}
-	labels := make(map[string]struct{}, len(rule.Labels))
-	for _, label := range rule.Labels {
-		trimmedLabel := strings.TrimSpace(label)
-		if trimmedLabel == "" {
-			return fmt.Errorf("routing.signals.classifiers[%q]: labels cannot contain empty values", rule.Name)
-		}
-		if trimmedLabel != label {
-			return fmt.Errorf(
-				"routing.signals.classifiers[%q]: label %q must not contain surrounding whitespace",
-				rule.Name,
-				label,
-			)
-		}
-		if strings.Contains(label, ":") {
-			return fmt.Errorf(
-				"routing.signals.classifiers[%q]: label %q cannot contain ':'",
-				rule.Name,
-				label,
-			)
-		}
-		if _, exists := labels[label]; exists {
-			return fmt.Errorf("routing.signals.classifiers[%q]: duplicate label %q", rule.Name, label)
-		}
-		labels[label] = struct{}{}
 	}
 	return nil
 }
@@ -290,6 +254,38 @@ func validateSequenceClassifierSignal(cfg *RouterConfig, rule ClassifierSignalRu
 	return validateClassifierExternalEndpoint(rule, external)
 }
 
+func validateClassifierLabels(rule ClassifierSignalRule) error {
+	if len(rule.Labels) == 0 {
+		return fmt.Errorf("routing.signals.classifiers[%q]: labels cannot be empty", rule.Name)
+	}
+	labels := make(map[string]struct{}, len(rule.Labels))
+	for _, label := range rule.Labels {
+		trimmedLabel := strings.TrimSpace(label)
+		if trimmedLabel == "" {
+			return fmt.Errorf("routing.signals.classifiers[%q]: labels cannot contain empty values", rule.Name)
+		}
+		if trimmedLabel != label {
+			return fmt.Errorf(
+				"routing.signals.classifiers[%q]: label %q must not contain surrounding whitespace",
+				rule.Name,
+				label,
+			)
+		}
+		if strings.Contains(label, ":") {
+			return fmt.Errorf(
+				"routing.signals.classifiers[%q]: label %q cannot contain ':'",
+				rule.Name,
+				label,
+			)
+		}
+		if _, exists := labels[label]; exists {
+			return fmt.Errorf("routing.signals.classifiers[%q]: duplicate label %q", rule.Name, label)
+		}
+		labels[label] = struct{}{}
+	}
+	return nil
+}
+
 func validateLLMClassifierExternalDependency(
 	cfg *RouterConfig,
 	rule ClassifierSignalRule,
@@ -332,7 +328,12 @@ func validateLLMClassifierReasoningControl(
 	if strings.ToLower(strings.TrimSpace(external.Provider)) != "vllm" {
 		return fmt.Errorf("%s requires llm_provider %q", path, "vllm")
 	}
-	reasoning := external.Reasoning
+	return validateReasoningSetting(cfg, path, external.Reasoning)
+}
+
+// validateReasoningSetting checks a chat model's reasoning setting against
+// its reasoning family.
+func validateReasoningSetting(cfg *RouterConfig, path string, reasoning *ExternalModelReasoningConfig) error {
 	family, exists := cfg.ReasoningFamilies[reasoning.Family]
 	if !exists {
 		return fmt.Errorf("%s family %q is not configured", path, reasoning.Family)

@@ -14,7 +14,7 @@ translation:
 
 Semantic Router Operator 将 `SemanticRouter` 自定义资源协调为 Router 工作负载、Service、配置、存储和可选平台集成。当 Kubernetes 应负责 Router 生命周期，且模型后端已作为 Kubernetes 服务、KServe `InferenceService` 或 Llama Stack 服务暴露时，使用它。
 
-Operator 不部署模型服务器。它发现或引用它们，并生成 Router 使用的提供商 binding。
+Operator 不部署模型服务器。它发现或引用它们，并生成 Router 使用的请求后端（`providers.models`）。
 
 ## Operator 管理什么
 
@@ -209,7 +209,7 @@ spec:
 kubectl -n vllm-serving get httproute semantic-router-gateway -o yaml
 kubectl -n vllm-serving get service semantic-router-gateway -o jsonpath='{.spec.ports}'
 kubectl -n vllm-serving port-forward service/semantic-router-gateway 8801:8801
-# 在另一个终端中，通过这个本地数据面验证同一请求。
+# In another terminal, verify the same request through this local data plane.
 curl --fail-with-body http://localhost:8801/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{"model":"local/model","messages":[{"role":"user","content":"Hello"}]}'

@@ -227,13 +227,22 @@ type MemoryConfig struct {
 	Qdrant                     *MemoryQdrantConfig     `yaml:"qdrant,omitempty"`
 	RedisCache                 *MemoryRedisCacheConfig `yaml:"redis_cache,omitempty"`
 	EmbeddingModel             string                  `yaml:"embedding_model,omitempty"`
-	DefaultRetrievalLimit      int                     `yaml:"default_retrieval_limit,omitempty"`
+	DefaultRetrievalLimit      int                     `yaml:"default_retrieval_limit"`
 	DefaultSimilarityThreshold float32                 `yaml:"default_similarity_threshold,omitempty"`
 	HybridSearch               bool                    `yaml:"hybrid_search,omitempty"`
 	HybridMode                 string                  `yaml:"hybrid_mode,omitempty"`
 	AdaptiveThreshold          bool                    `yaml:"adaptive_threshold,omitempty"`
 	Reflection                 MemoryReflectionConfig  `yaml:"reflection,omitempty"`
 	Persistence                MemoryPersistenceConfig `yaml:"persistence,omitempty"`
+	// QueryRewrite names the openai_chat deployment that rewrites a query
+	// with its conversation before memory search.
+	QueryRewrite *MemoryQueryRewriteConfig `yaml:"query_rewrite,omitempty"`
+}
+
+// MemoryQueryRewriteConfig names the deployment that rewrites memory search
+// queries.
+type MemoryQueryRewriteConfig struct {
+	Deployment string `yaml:"deployment"`
 }
 
 // MemoryPersistenceConfig bounds asynchronous response memory writes.
@@ -329,8 +338,8 @@ type MemoryQdrantConfig struct {
 type ResponseAPIConfig struct {
 	Enabled      bool                   `yaml:"enabled"`
 	StoreBackend string                 `yaml:"store_backend,omitempty"`
-	TTLSeconds   int                    `yaml:"ttl_seconds,omitempty"`
-	MaxResponses int                    `yaml:"max_responses,omitempty"`
+	TTLSeconds   int                    `yaml:"ttl_seconds"`
+	MaxResponses int                    `yaml:"max_responses"`
 	Redis        ResponseAPIRedisConfig `yaml:"redis,omitempty"`
 }
 
@@ -364,6 +373,7 @@ type RouterReplayConfig struct {
 	CaptureRequestBody  *bool                       `json:"capture_request_body,omitempty" yaml:"capture_request_body,omitempty"`
 	CaptureResponseBody *bool                       `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
 	CapturePersonalData *bool                       `json:"capture_personal_data,omitempty" yaml:"capture_personal_data,omitempty"`
+	CaptureToolResults  *bool                       `json:"capture_tool_results,omitempty" yaml:"capture_tool_results,omitempty"`
 	MaxRecords          *int                        `json:"max_records,omitempty" yaml:"max_records,omitempty"`
 	MaxBodyBytes        *int                        `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
 	MaxToolTraceBytes   *int                        `json:"max_tool_trace_bytes,omitempty" yaml:"max_tool_trace_bytes,omitempty"`

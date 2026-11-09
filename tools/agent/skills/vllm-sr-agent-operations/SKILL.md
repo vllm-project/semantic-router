@@ -75,7 +75,7 @@ Decide each row and tell the user what you chose.
 | Decision | Default | Otherwise |
 | --- | --- | --- |
 | Channel | stable, when it has this skill's commands (step 3); else dev | The user names a version or channel. |
-| Platform | `auto`: inspect the execution target | `/dev/kfd` and a `/dev/dri/render*` node exist: `--platform rocm` (AMD Instinct MI300X and MI325X are validated). `nvidia-smi -L` lists a GPU and `docker info` lists an `nvidia` runtime (the NVIDIA Container Toolkit): `--platform cuda` (works, not yet validated). macOS: always `cpu`. |
+| Platform | `auto`: inspect the execution target | `/dev/kfd` and a `/dev/dri/render*` node exist: `--platform rocm` (AMD Instinct MI300X and MI325X are validated). `nvidia-smi -L` lists a GPU and `docker info` lists an `nvidia` runtime (the NVIDIA Container Toolkit): `--platform cuda` (validated; H200, A100, Tesla T4 records; fused kernels without bit-exact evidence stay off the exact profile). macOS: always `cpu`. |
 | Gateway | standalone (no flag): the Router serves the API itself | `--gateway extproc` puts Envoy in front. Use it only when the user needs Envoy's rate limiting, mTLS, JWT or OIDC, advanced route matching, or an Envoy-based gateway they already run. |
 | Target | Docker on this machine | The user asks for a Kubernetes cluster: write the configuration (step 4), then follow [Deployment](https://vllm-sr.ai/install/agent/vllm-sr/references/deployment-loop.md#kubernetes) instead of steps 5 and 6. |
 | Model | the endpoint the user gave | None given: look for one on this host (below) and confirm it with the user. None at all: ask. For a local trial, offer [Ollama](https://vllm-sr.ai/docs/installation/ollama). |
@@ -254,16 +254,19 @@ Every check must pass. Header names are case-insensitive, so use `grep -i`.
 
    ```bash
    curl -s -D - -o answer.json http://127.0.0.1:8899/v1/chat/completions \
-     -H 'Content-Type: application/json' -H 'x-vsr-debug: true' \
+     -H 'Content-Type: application/json' \
      -d '{"model": "vllm-sr/auto", "max_tokens": 64,
           "messages": [{"role": "user", "content": "In one sentence, why does a Python function return None?"}]}' \
-     | grep -iE '^(HTTP|x-vsr-selected-(decision|model)|x-vsr-matched|server)'
+     | grep -iE '^(HTTP|x-vsr-selected-(decision|model)|server)'
    python3 -c 'import json; c = json.load(open("answer.json"))["choices"][0]; print(c["finish_reason"], repr(c["message"]["content"][:200]))'
    ```
 
    Pass: `HTTP/1.1 200 OK`, `x-vsr-selected-decision: code-route`,
-   `x-vsr-selected-model: MODEL`, `x-vsr-matched-keywords: code_request`, and
-   non-empty content. `server: envoy` appears only with `--gateway extproc`.
+   `x-vsr-selected-model: MODEL`, and non-empty content. `server: envoy`
+   appears only with `--gateway extproc`. The matched signals
+   (`x-vsr-matched-*`) are debug headers, sent only when
+   `global.router.headers.debug` allows the caller; step 3's `--trace` shows
+   each condition without them.
 5. **Probe**, the CLI's own end-to-end assertion:
 
    ```bash

@@ -435,10 +435,12 @@ func (c *Classifier) AnalyzeContentForPIIWithThreshold(ctx context.Context, cont
 }
 
 // collectPIIRuleContents builds the list of text contents to analyze for a PII rule.
-func collectPIIRuleContents(piiText string, nonUserMessages []string, includeHistory bool) []string {
+func collectPIIRuleContents(current []string, nonUserMessages []string, includeHistory bool) []string {
 	var contents []string
-	if piiText != "" {
-		contents = append(contents, piiText)
+	for _, piece := range current {
+		if piece != "" {
+			contents = append(contents, piece)
+		}
 	}
 	if includeHistory {
 		for _, msg := range nonUserMessages {
@@ -457,7 +459,7 @@ func collectPIIRuleContents(piiText string, nonUserMessages []string, includeHis
 // duplicates are preserved for the shared detector cache to handle later.
 func collectPIIRuleContentsForSource(
 	rule config.PIIRule,
-	piiText string,
+	current []string,
 	nonUserMessages []string,
 	toolResultTexts []string,
 ) []string {
@@ -471,7 +473,7 @@ func collectPIIRuleContentsForSource(
 		return contents
 	}
 
-	return collectPIIRuleContents(piiText, nonUserMessages, rule.IncludeHistory)
+	return collectPIIRuleContents(current, nonUserMessages, rule.IncludeHistory)
 }
 
 // collectPIIEntityTypes extracts entity types from cached PII results that meet the threshold.

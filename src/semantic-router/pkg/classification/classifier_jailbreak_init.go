@@ -2,7 +2,6 @@ package classification
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
@@ -31,39 +30,31 @@ func deriveArgmax(probabilities []float32) (int, float32) {
 // createJailbreakInference creates the remote jailbreak inference of
 // prompt_guard.backend; local prompt guards are prepared task bindings.
 func createJailbreakInference(promptGuardCfg *config.PromptGuardConfig, routerCfg *config.RouterConfig, jailbreakMapping *JailbreakMapping, models ...*classifierModelRuntime) (SequenceClassifierBackend, error) {
-	if promptGuardCfg.Backend != nil {
-		backend := promptGuardCfg.Backend
-		contract := config.RemoteClassifierContractLabelDistribution
-		if backend.Protocol == config.RemoteClassifierProtocolHTTPChat {
-			contract = config.RemoteClassifierContractLabelDecision
-		}
-		external, err := config.ResolveRemoteClassifierBackend(routerCfg, backend, config.ModelRoleGuardrail, contract)
+	runtime := consumerModelRuntime(models)
+	spec, ok, err := runtime.task("prompt_guard")
+	if err != nil {
+		return nil, err
+	}
+	if !ok || !remoteTask(spec) {
+		return nil, fmt.Errorf("prompt guard has no remote deployment")
+	}
+	switch spec.Binding.Adapter {
+	case config.RemoteClassifierProtocolHTTPClassify:
+		inference, err := newHTTPClassifierInference(spec.Deployment, jailbreakMapping)
 		if err != nil {
 			return nil, err
 		}
-		switch backend.Protocol {
-		case config.RemoteClassifierProtocolHTTPClassify:
-			inference, err := newHTTPClassifierInference(external, jailbreakMapping, time.Duration(backend.EffectiveDeadlineMs())*time.Millisecond)
-			if err != nil {
-				return nil, err
-			}
-			return bindRemoteJailbreak(models, routerCfg, backend, external, jailbreakMapping, inference)
-		case config.RemoteClassifierProtocolHTTPChat:
-			inference, err := NewVLLMJailbreakInference(external, promptGuardCfg.Threshold, jailbreakMapping, promptGuardCfg.PositiveLabels)
-			if err != nil {
-				return nil, err
-			}
-			inference.timeout = time.Duration(backend.EffectiveDeadlineMs()) * time.Millisecond
-			return bindRemoteJailbreak(models, routerCfg, backend, external, jailbreakMapping, inference)
-		default:
-			return nil, fmt.Errorf("unsupported prompt guard adapter %q", backend.Protocol)
+		return bindRemoteJailbreak(runtime, routerCfg, spec, jailbreakMapping, inference)
+	case config.RemoteClassifierProtocolHTTPChat:
+		inference, err := NewVLLMJailbreakInference(spec.Deployment, promptGuardCfg.Threshold, jailbreakMapping, promptGuardCfg.PositiveLabels)
+		if err != nil {
+			return nil, err
 		}
+		return bindRemoteJailbreak(runtime, routerCfg, spec, jailbreakMapping, inference)
 	}
-
-	return nil, fmt.Errorf("prompt guard has no remote backend")
+	return nil, fmt.Errorf("unsupported prompt guard adapter %q", spec.Binding.Adapter)
 }
 
-// JailbreakDetection represents the result of jailbreak analysis for a piece of content.
 type JailbreakDetection struct {
 	Content       string               `json:"content"`
 	IsJailbreak   bool                 `json:"is_jailbreak"`

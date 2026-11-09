@@ -134,7 +134,7 @@ Server-Timing: parse;dur=0.021, tokenize;dur=0.153, queue;dur=0.008, forward;dur
 
 这些 token 和读完整文本给出的是一样的，所以答案相同。runtime 第一次用一个分词器时，会在探针文本上检查每一种切法，切法检查不过关的文本整本读。会丢字符或折叠字符的分词器——比如 WordPiece 丢空白、把超过 100 字符的词当一个未知 token——从不在连续串内部切：这样的串整本读，好在串本身只有几个 token，代价很小。只读了一部分的输入，其 usage 按读到的 token 计（会超过预算），并加 `"tokens_lower_bound": true`。
 
-按窗口读输入的模型，读到扫描预算为止，单位 token。`overflow: window` 的分类最多读 `max_tokens`。Vela 2.0 的问题把长的 state 部分在窗口里整读，上限是它卡片上的 `limits.max_scan_tokens`：CPU 上四个输入（Vela 2.0 0.3B 是 32,768 token），GPU 上 32 个。决策请求的 `options.max_tokens`，或 models 文件选项 `max_scan_tokens`，设另一个值。带 `overflow: truncate` 的问题只读该部分的前 `limits.truncate_tokens`：CPU 上一个输入，一次前向。两类问题共享它们的模型输入，和没有 `overflow` 时一样，除非某部分必须按窗口读。超过扫描预算的输入直接失败，不读：
+按窗口读输入的模型，读到扫描预算为止，单位 token。`overflow: window` 的分类最多读 `max_tokens`。Vela 2.0 的问题把长的 state 部分在窗口里整读，上限是它卡片上的 `limits.max_scan_tokens`：CPU 上四个输入（Vela 2.0 0.3B 是 32,768 token），GPU 上 32 个。决策请求的 `options.max_tokens`，或 models 文件选项 `max_scan_tokens`，设另一个值。带 `overflow: truncate` 的问题只读该部分的前 `limits.truncate_tokens`：CPU 上一个输入，一次前向。Vela 3.0 的 evidence span 问题改为截到它自己的 32,768 token 窗口。两类问题共享它们的模型输入，和没有 `overflow` 时一样，除非某部分必须按窗口读。超过扫描预算的输入直接失败，不读：
 
 | 条目错误 | 含义 |
 | --- | --- |
@@ -296,7 +296,7 @@ Set 把每个标签作为一个 Noul 答在 `<id>.<label>` 下，并在 `sets` �
 }
 ```
 
-无效的问题答 `{"type", "error": "invalid_question", "message"}`，message 指出字段，比如 `set questions do not take ['colour']`；其他问题照常答。一个问题都无效的请求答 400 `invalid_request`，每个问题的理由在 message 里。
+无效的问题答 `{"type", "error": "invalid_question", "message"}`，message 指出字段，比如 `set questions do not take ['colour']`；其他问题照常答。Vela 3.0 只按 instructions 读 Noul，描述了 `false` 或 `true` 的 Noul 答 `invalid_question`。一个问题都无效的请求答 400 `invalid_request`，每个问题的理由在 message 里。
 
 一次请求可以问更多的 state。`states` 的每一条含一个 `state` 和它自己的 `questions`，读法和带它们的请求完全一样（连同请求的模型和选项），在响应的 `states` 里按同名答回。请求的信号让一个部署读多段文本时——比如能看历史的越狱或 PII 规则读到的先前消息——router 就这么问：
 
@@ -326,14 +326,15 @@ Set 把每个标签作为一个 Noul 答在 `<id>.<label>` 下，并在 `sets` �
 | `artifact`、`revision` | 部署 | Hub 仓库和 commit，或本地绝对路径。 |
 | `device` | 部署 | 见[让 router 来跑模型](./deploy.md#describe-a-deployment)。 |
 | `max_num_seqs`、`max_num_batched_tokens`、`batch_window_ms`、`dtype`、`enable_shared_context` | 部署 | 部署的[引擎参数](./engine-args.md)；没设的保持 runtime 默认值。 |
-| `input.max_tokens`、`input.overflow` | 部署 | 任务模型的输入上限。答问题的部署只收 `overflow: window` 加 `max_tokens`：它的那些问题把长的部分整读到的扫描预算（见[长输入](#long-inputs)）。 |
+| `input.max_tokens`、`input.overflow` | 部署 | 任务模型的输入上限。答问题的部署只收 `overflow: window` 加 `max_tokens`：它的那些问题把长的部分整读到的扫描预算（见[长输入](#long-inputs)）。这也包括默认决策模型、直接发布给 System One 的部署，以及本地 System One 别名的部署，不论监听器是否发布该别名。路由的 System One 入口不是一个部署。不属于这些情况的绑定部署仍保留任务模型的输入上限。 |
 | `signal_timeout_ms` | `global.model_catalog` | 请求的模型 runtime 信号的截止时间。默认取请求的截止时间扣掉剩余时间的十分之一（至少一秒）；router 看不到截止时间的受服务请求取 45 秒。还在跑的信号按它的政策收尾：路由信号走 `on_error`，安全信号按未扫描处理。 |
 | `on_unscanned` | `modules.prompt_guard`、`modules.classifier.pii` | `block`（默认）：模型没整读的内容，规则匹配为 `unscanned`。`allow`：跟随 `on_error`。 |
 | `process` | 部署 | 同名的托管部署共用一个进程。 |
-| `endpoint`、`served_name` | 部署 | 挂到你自己跑的 runtime。 |
-| `deployment`、`contract`、`head` | 绑定 | 功能用哪个部署、读哪种答案，以及可选的头名。 |
+| `endpoint`、`model` | 部署 | 挂到你自己跑的 runtime；`model` 是所服务模型的 ID。[连接块](../installation/model-catalog.md#connection-block)另有 `auth`、`headers`、`timeout_ms` 和 `tls`。 |
+| `bindings.<type>`、`routing.model_bindings.<type>` | `global.model_catalog`、配方 | 一个信号类型使用的部署：写部署名，或写 `{deployment, head}` 以选择头。 |
+| `deployment` | 规则 | `decision`、`classifiers`、`safety`（及 `hazard`）或 `complexity` 规则询问的部署。 |
 
-绑定名（`domain_classifier`、`pii_classifier`、`prompt_guard`、`fact_check_classifier`、`feedback_detector`、`modality_detector`、`hallucination_detector`、`embedding`、`rag.reranker`、`safety.<rule>`、`classifier.<rule>`）及其契约，见各任务指南。
+绑定键是信号类型 `domain`、`jailbreak`、`pii`、`fact_check`、`user_feedback`、`modality`、`hallucination`、`preference` 和 `reask`。Embedding 在 `global.model_catalog.embeddings.default` 中指定部署，reranker 在 RAG 插件的 `rerank.deployment` 中指定。各信号如何解析见[为信号选择模型](../installation/choose-a-model-for-a-signal.md)；各信号读取的答案见各任务指南。
 
 ## router 托管的 runtime {#router-managed-runtimes}
 

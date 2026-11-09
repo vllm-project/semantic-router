@@ -5,10 +5,16 @@ import "fmt"
 // ValidatePIIWindow separates the admitted document budget from one forward.
 func ValidatePIIWindow(cfg *RouterConfig) error {
 	pii := cfg.PIIModel
+	if pii.Window != nil && cfg.remoteTaskModule("pii_classifier") {
+		return fmt.Errorf("classifier.pii.window requires the local model")
+	}
 	if binding, bound := cfg.ModelBindings["pii_classifier"]; bound {
 		deployment, exists := cfg.ModelDeployments[binding.Deployment]
 		if !exists {
 			return fmt.Errorf("classifier.pii binding names an unknown deployment")
+		}
+		if deployment.Translated() {
+			return pii.ValidateWindow()
 		}
 		if pii.Window == nil {
 			// A head deployment that reads in windows without geometry fails

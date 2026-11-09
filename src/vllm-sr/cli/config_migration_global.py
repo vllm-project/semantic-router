@@ -198,17 +198,8 @@ def _place_model_catalog_block(
     if key == "bert_model":
         _place_legacy_bert_model(embeddings, value)
         return True
-    if key == "prompt_guard":
-        prompt_guard = deepcopy(value) if isinstance(value, dict) else {}
-        if "model_id" in prompt_guard and "model_ref" not in prompt_guard:
-            prompt_guard["model_ref"] = "prompt_guard"
-        modules.setdefault(key, prompt_guard)
-        return True
-    if key == "feedback_detector":
-        feedback = deepcopy(value) if isinstance(value, dict) else {}
-        if "model_id" in feedback and "model_ref" not in feedback:
-            feedback["model_ref"] = "feedback_detector"
-        modules.setdefault(key, feedback)
+    if key in ("prompt_guard", "feedback_detector"):
+        modules.setdefault(key, deepcopy(value) if isinstance(value, dict) else {})
         return True
     return False
 
@@ -230,19 +221,11 @@ def _place_legacy_bert_model(embeddings: dict[str, Any], value: Any) -> None:
 def _place_classifier_block(classifier: dict[str, Any], value: Any) -> None:
     classifier_value = deepcopy(value) if isinstance(value, dict) else {}
     if "category_model" in classifier_value:
-        domain = deepcopy(classifier_value.pop("category_model"))
-        if (
-            isinstance(domain, dict)
-            and "model_id" in domain
-            and "model_ref" not in domain
-        ):
-            domain["model_ref"] = "domain_classifier"
-        classifier.setdefault("domain", domain)
+        classifier.setdefault(
+            "domain", deepcopy(classifier_value.pop("category_model"))
+        )
     if "pii_model" in classifier_value:
-        pii = deepcopy(classifier_value.pop("pii_model"))
-        if isinstance(pii, dict) and "model_id" in pii and "model_ref" not in pii:
-            pii["model_ref"] = "pii_classifier"
-        classifier.setdefault("pii", pii)
+        classifier.setdefault("pii", deepcopy(classifier_value.pop("pii_model")))
     if "mcp_category_model" in classifier_value:
         classifier.setdefault(
             "mcp", deepcopy(classifier_value.pop("mcp_category_model"))
@@ -255,45 +238,17 @@ def _place_classifier_block(classifier: dict[str, Any], value: Any) -> None:
 
 def _place_hallucination_block(hallucination: dict[str, Any], value: Any) -> None:
     hallucination_value = deepcopy(value) if isinstance(value, dict) else {}
-    _move_model_ref(
-        hallucination,
-        hallucination_value,
-        legacy_key="fact_check_model",
-        canonical_key="fact_check",
-        model_ref="fact_check_classifier",
-    )
-    _move_model_ref(
-        hallucination,
-        hallucination_value,
-        legacy_key="hallucination_model",
-        canonical_key="detector",
-        model_ref="hallucination_detector",
-    )
-    _move_model_ref(
-        hallucination,
-        hallucination_value,
-        legacy_key="nli_model",
-        canonical_key="explainer",
-        model_ref="hallucination_explainer",
-    )
+    for legacy_key, canonical_key in (
+        ("fact_check_model", "fact_check"),
+        ("hallucination_model", "detector"),
+        ("nli_model", "explainer"),
+    ):
+        if legacy_key in hallucination_value:
+            hallucination.setdefault(
+                canonical_key, deepcopy(hallucination_value.pop(legacy_key))
+            )
     if "enabled" in hallucination_value:
         hallucination.setdefault("enabled", deepcopy(hallucination_value["enabled"]))
-
-
-def _move_model_ref(
-    target: dict[str, Any],
-    source: dict[str, Any],
-    *,
-    legacy_key: str,
-    canonical_key: str,
-    model_ref: str,
-) -> None:
-    if legacy_key not in source:
-        return
-    model = deepcopy(source.pop(legacy_key))
-    if isinstance(model, dict) and "model_id" in model and "model_ref" not in model:
-        model["model_ref"] = model_ref
-    target.setdefault(canonical_key, model)
 
 
 def _ensure_dict(target: dict[str, Any], key: str) -> dict[str, Any]:

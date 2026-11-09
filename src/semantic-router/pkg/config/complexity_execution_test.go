@@ -19,6 +19,7 @@ func TestComplexityPrototypeDemandFollowsCandidatesAndExplicitBinding(t *testing
 		t.Run(test.name, func(t *testing.T) {
 			cfg := &RouterConfig{}
 			cfg.DecisionModel = "primary"
+			cfg.ModelDeployments = map[string]ModelDeployment{"primary": {Provider: ModelRuntimeProvider, Artifact: "example/general-model"}}
 			rule := ComplexityRule{Name: "difficulty"}
 			if test.text {
 				rule.Hard.Candidates, rule.Easy.Candidates = []string{"hard example"}, []string{"easy example"}
@@ -27,7 +28,7 @@ func TestComplexityPrototypeDemandFollowsCandidatesAndExplicitBinding(t *testing
 				rule.Hard.ImageCandidates, rule.Easy.ImageCandidates = []string{"hard.png"}, []string{"easy.png"}
 			}
 			if test.binding {
-				cfg.GlobalModelBindings = map[string]ModelBinding{"complexity": {Deployment: "primary", Contract: DecisionTaskContract}}
+				rule.Deployment = "primary"
 			}
 			cfg.ComplexityRules = []ComplexityRule{rule}
 			cfg.Decisions = []Decision{{Rules: RuleCombination{Operator: "AND", Conditions: []RuleNode{{Type: SignalTypeComplexity, Name: "difficulty:hard"}}}}}

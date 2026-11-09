@@ -24,10 +24,12 @@ type windowedJailbreakBackend struct {
 }
 
 func newWindowedJailbreakBackend(cfg config.PromptGuardConfig, mapping *JailbreakMapping, models ...*classifierModelRuntime) (*windowedJailbreakBackend, error) {
-	runtime := consumerModelRuntime(models)
-	spec, specErr := runtime.localSpec("prompt_guard", cfg.ModelID, "modernbert", config.RemoteClassifierContractLabelDistribution, cfg.UseCPU, cfg.MaxSequenceLength)
+	runtime := consumerModelRuntime(models).withModule(cfg.ModelID, func(scoped *config.RouterConfig) {
+		scoped.PromptGuard = cfg
+	})
+	spec, specErr := runtime.localSpec("prompt_guard", "modernbert", config.RemoteClassifierContractLabelDistribution, cfg.MaxSequenceLength)
 	var windowErr error
-	if _, bound := runtime.plan.Lookup(runtime.recipe, "prompt_guard"); bound {
+	if planned, bound := runtime.plan.Lookup(runtime.recipe, "prompt_guard"); bound && !planned.Deployment.Translated() {
 		windowErr = cfg.ValidateBoundWindow(spec.Deployment)
 	} else {
 		windowErr = cfg.ValidateWindow()

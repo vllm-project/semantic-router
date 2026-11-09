@@ -40,7 +40,7 @@ vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine --platform cpu
 
 每次不带 `--engine`（`-e`）的启动都是 Router 模式。仅传 MODEL 不会选择 Engine 模式。Dashboard 展示启动模式并管理模型部署，不负责切换实例模式。
 
-模型 worker 根据实际使用方准备：原生模型发布、路由任务以及已启用的模型服务。声明但未使用的 deployment 不会启动。因而，纯规则 Chat 路由在没有其他模型使用方时可以不运行模型 worker；语义缓存、embedding、记忆和 RAG 等功能可能引入额外需求。“按需”指配置中的实际需求，不表示每个模型都等到首条请求才开始加载。
+模型 worker 只为实际用到的部署准备：原生模型发布、路由信号以及已启用的模型服务。声明但未使用的 deployment 不会启动。因而，纯规则 Chat 路由在没有其他功能需要模型时可以不运行模型 worker；语义缓存、embedding、记忆和 RAG 等功能可能让更多部署投入使用。“按需”指配置中的实际需求，不表示每个模型都等到首条请求才开始加载。
 
 ## 分开处理协议与路由策略 {#separate-protocol-handling-from-routing-policy}
 

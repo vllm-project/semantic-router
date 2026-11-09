@@ -1,9 +1,10 @@
 # Authorization and RBAC E2E profile
 
 This profile verifies the safe boundary for identity-derived routing headers.
-The Gateway removes client-supplied `x-authz-user-id` and
-`x-authz-user-groups` before ExtProc, so a caller cannot claim a Router role by
-setting those headers directly.
+The Gateway removes the client-supplied `x-authz-user-id`,
+`x-authz-user-groups`, `x-authz-team-id` and `x-authz-tenant-id` before
+ExtProc, so a caller cannot claim a Router role, team or tenant by setting
+those headers directly.
 
 The current profile runs:
 

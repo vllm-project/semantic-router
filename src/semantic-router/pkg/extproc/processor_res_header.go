@@ -13,6 +13,7 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 	// path, without invoking routing, plugins or additional metrics there.
 	if ctx != nil && v != nil {
 		ctx.UpstreamStatusCode = getStatusFromHeaders(v.ResponseHeaders.GetHeaders())
+		ctx.UpstreamResponseGzip = isGzipContentEncoding(v.ResponseHeaders.GetHeaders())
 	}
 	if skipResp := r.handleSkipProcessingResponseHeaders(v, ctx); skipResp != nil {
 		return skipResp, nil

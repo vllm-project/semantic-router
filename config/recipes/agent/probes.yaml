@@ -166,6 +166,9 @@ decisions:
       - id: architecture_tradeoffs
         query: Design a multi-region rate limiter and reason carefully about consistency and failure-mode tradeoffs.
         tags: [domain:code, architecture]
+      - id: python_bug
+        query: Debug this Python function that returns the wrong list order and suggest a focused fix.
+        tags: [domain:code, complex]
 
   - id: domain_code
     expected_decision: domain_code
@@ -173,9 +176,6 @@ decisions:
     expected_plugins: [router_replay]
     expected_alias: google/gemini-2.5-flash-lite
     variants:
-      - id: python_bug
-        query: Debug this Python function that returns the wrong list order and suggest a focused fix.
-        tags: [domain:code, medium]
       - id: api_refactor
         query: Rename the unclear variables in this short REST handler without changing its behavior.
         tags: [domain:code, medium]
@@ -232,6 +232,9 @@ decisions:
       - id: agent_delivery
         query: Reason from first principles about a high-stakes decision under deep uncertainty, compare three competing approaches, and justify the most robust conclusion.
         tags: [general, agentic]
+      - id: followup
+        query: Give a clear comparison of two common note-taking methods and their practical tradeoffs.
+        tags: [general, complex]
 
   - id: medium_general
     expected_decision: medium_general
@@ -242,9 +245,6 @@ decisions:
         query: Compare paper and digital note-taking methods and explain their practical tradeoffs.
         repeat: 120
         tags: [general, medium, stress:context]
-      - id: followup
-        query: Give a clear comparison of two common note-taking methods and their practical tradeoffs.
-        tags: [general, medium]
 
   - id: simple_general
     expected_decision: simple_general

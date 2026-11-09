@@ -1,4 +1,4 @@
-"""Decision signals: typed questions answered by a model_runtime deployment."""
+"""Decision signals: typed questions answered by a model_runtime or systemone deployment."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ MIN_DECISION_LABELS = 1
 MAX_DECISION_LABELS = 255
 NOUL_CHOICE_KEYS = frozenset({"false", "true"})
 LABELLED_QUESTION_TYPES = frozenset({"set", "span"})
+DECISION_QUESTION_TYPES = ("choice", "noul", "score", "set", "span")
 # Question types whose conditions name one of the question's options.
 OPTION_QUESTION_TYPES = frozenset({"choice", "set", "span"})
 
@@ -126,8 +127,8 @@ class DecisionSignalRule(BaseModel):
             )
         if self.deployment is not None and not self.deployment.strip():
             raise ValueError(
-                "deployment must name a model_runtime deployment; omit it to ask "
-                "the decision model"
+                "deployment must name a model_runtime or systemone deployment; "
+                "omit it to ask the decision model"
             )
         if self.question.type == "score" and self.predicate is None:
             raise ValueError(
@@ -158,8 +159,8 @@ class DecisionSelectionConfig(BaseModel):
     def validate_required_text(self):
         if self.deployment is not None and not _trimmed(self.deployment):
             raise ValueError(
-                "deployment must name a model_runtime deployment; omit it to ask "
-                "the decision model"
+                "deployment must name a model_runtime or systemone deployment; "
+                "omit it to ask the decision model"
             )
         if not self.instructions.strip():
             raise ValueError("instructions are required")

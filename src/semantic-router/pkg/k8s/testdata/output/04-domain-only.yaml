@@ -116,6 +116,8 @@ global:
           detailed_goroutine_tracking: true
     response_api:
       enabled: false
+      ttl_seconds: 0
+      max_responses: 0
     observability:
       tracing:
         enabled: false
@@ -148,7 +150,8 @@ global:
     response_cache:
       enabled: false
       ttl_seconds: 0
-    memory: {}
+    memory:
+      default_retrieval_limit: 0
   integrations:
     tools:
       enabled: true
@@ -186,14 +189,12 @@ global:
         max_tokens: 0
       prompt_guard:
         enabled: true
-        model_id: ""
         threshold: 0.7
         use_cpu: true
         jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
         model_ref: prompt_guard
       classifier:
         domain:
-          model_id: ""
           threshold: 0.5
           use_cpu: true
           category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
@@ -201,9 +202,7 @@ global:
         mcp:
           enabled: false
           transport_type: ""
-          threshold: 0
         pii:
-          model_id: ""
           threshold: 0.9
           use_cpu: true
           pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
@@ -212,17 +211,11 @@ global:
       complexity: {}
       hallucination_mitigation:
         fact_check:
-          model_id: ""
-          threshold: 0
           use_cpu: false
         detector:
-          model_id: ""
-          threshold: 0
           use_cpu: false
       feedback_detector:
         enabled: false
-        model_id: ""
-        threshold: 0
         use_cpu: false
         feedback_mapping_path: ""
       modality_detector:

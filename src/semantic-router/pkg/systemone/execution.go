@@ -10,11 +10,24 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/budget"
 )
 
 // ErrUnresolved means no complete response satisfied the declared quality
 // conditions within the available stages and request budget.
 var ErrUnresolved = errors.New("native inference quality unresolved")
+
+// BudgetExhaustedError reports a native request stopped by its shared deadline
+// or physical inference-call limit.
+type BudgetExhaustedError struct {
+	Calls  int
+	Reason string
+	Cause  error
+}
+
+func (e *BudgetExhaustedError) Error() string { return "native request budget exhausted" }
+
+func (e *BudgetExhaustedError) Unwrap() error { return e.Cause }
 
 // Router executes an API-scoped recipe within its retained generation.
 type Router interface {
@@ -71,12 +84,15 @@ func (e *Executor) Execute(ctx context.Context, request *NativeRequest, invoke I
 		outcome := "resolved"
 		if resultErr != nil {
 			outcome = "unresolved"
-			if ctx.Err() != nil {
+			if errors.Is(resultErr, budget.ErrExhausted) || errors.Is(resultErr, context.DeadlineExceeded) {
+				outcome = "budget_exhausted"
+			} else if ctx.Err() != nil {
 				outcome = "canceled"
 			}
 		}
 		metrics.RecordSystemOneRequest(e.algorithm.Type, outcome, time.Since(started).Seconds())
 	}()
+	ledger, hasLedger := budget.Current(ctx)
 	var candidates []Candidate
 	var history []StageEvidence
 	for _, stage := range e.algorithm.Stages {
@@ -87,7 +103,16 @@ func (e *Executor) Execute(ctx context.Context, request *NativeRequest, invoke I
 			continue
 		}
 		stageStarted := time.Now()
+		callsBefore := 0
+		if hasLedger {
+			callsBefore = ledger.Used()
+		}
 		candidate, err := e.invokeStage(ctx, request, stage, candidates, invoke)
+		recordStageCalls := func() {
+			if hasLedger {
+				metrics.RecordSystemOneStageCalls(e.algorithm.Type, stage.Name, stage.Model, ledger.Used()-callsBefore)
+			}
+		}
 		evidence := StageEvidence{Stage: stage.Name, Model: stage.Model, Response: candidate.Invocation, Outcome: "response"}
 		if err != nil {
 			evidence.Outcome = "error"
@@ -95,10 +120,18 @@ func (e *Executor) Execute(ctx context.Context, request *NativeRequest, invoke I
 		history = append(history, evidence)
 		candidate.History = append([]StageEvidence(nil), history...)
 		if err != nil {
-			metrics.RecordSystemOneStage(e.algorithm.Type, stage.Name, stage.Model, "error", time.Since(stageStarted).Seconds())
 			if ctx.Err() != nil {
+				metrics.RecordSystemOneStage(e.algorithm.Type, stage.Name, stage.Model, "canceled", time.Since(stageStarted).Seconds())
+				recordStageCalls()
 				return Candidate{}, ctx.Err()
 			}
+			if errors.Is(err, budget.ErrExhausted) {
+				metrics.RecordSystemOneStage(e.algorithm.Type, stage.Name, stage.Model, "budget_exhausted", time.Since(stageStarted).Seconds())
+				recordStageCalls()
+				return Candidate{}, err
+			}
+			metrics.RecordSystemOneStage(e.algorithm.Type, stage.Name, stage.Model, "error", time.Since(stageStarted).Seconds())
+			recordStageCalls()
 			continue
 		}
 		candidate.Observations = request.Observe(candidate.Body)
@@ -108,6 +141,7 @@ func (e *Executor) Execute(ctx context.Context, request *NativeRequest, invoke I
 		passes, qualityErr := e.accept(request, stage, candidate)
 		if contextErr := ctx.Err(); contextErr != nil {
 			metrics.RecordSystemOneStage(e.algorithm.Type, stage.Name, stage.Model, "canceled", time.Since(stageStarted).Seconds())
+			recordStageCalls()
 			return Candidate{}, contextErr
 		}
 		outcome := "rejected"
@@ -119,6 +153,7 @@ func (e *Executor) Execute(ctx context.Context, request *NativeRequest, invoke I
 			outcome = "invalid"
 		}
 		metrics.RecordSystemOneStage(e.algorithm.Type, stage.Name, stage.Model, outcome, time.Since(stageStarted).Seconds())
+		recordStageCalls()
 		if qualityErr != nil {
 			return Candidate{}, qualityErr
 		}

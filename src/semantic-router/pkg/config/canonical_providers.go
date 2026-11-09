@@ -112,11 +112,18 @@ type CanonicalBackendRef struct {
 	ChatPath     string            `yaml:"chat_path,omitempty"`
 	APIKey       string            `yaml:"api_key,omitempty"`
 	APIKeyEnv    string            `yaml:"api_key_env,omitempty"`
-	// OpenAICompatGateway opts a vLLM-type backend in to the OpenAI-compatible
-	// gateway response contract: the backend is a relay that injects its own
-	// usage metering fields, so the decoder tolerates them. A plain vLLM
-	// backend must leave it unset.
-	OpenAICompatGateway bool `yaml:"openai_compat_gateway,omitempty"`
+	// TrustedGateway marks an upstream gateway that receives the request's
+	// deployment-injected gateway credential (global.services.authz
+	// .gateway_credential) under this backend's auth header, instead of a
+	// static api_key. A request without a trusted credential is rejected
+	// before dispatch.
+	TrustedGateway bool `yaml:"trusted_gateway,omitempty"`
+	// Auth is the backend's credential, as in a deployment's connection
+	// block: the header (the provider's own when unset), the prefix ("" sends
+	// the bare key) and the key's environment variable.
+	Auth *DeploymentAuth `yaml:"auth,omitempty"`
+	// Headers are non-secret headers sent with every request.
+	Headers map[string]string `yaml:"headers,omitempty"`
 }
 
 func canonicalProviderDefaults(providers CanonicalProviders) CanonicalProviderDefaults {

@@ -16975,6 +16975,10 @@
                             "criteria": {
                               "nullable": true
                             },
+                            "decision_adapter": {
+                              "nullable": true,
+                              "type": "boolean"
+                            },
                             "head": {
                               "nullable": true,
                               "type": "string"
@@ -17084,6 +17088,10 @@
                                   },
                                   "criteria": {
                                     "nullable": true
+                                  },
+                                  "decision_adapter": {
+                                    "nullable": true,
+                                    "type": "boolean"
                                   },
                                   "head": {
                                     "nullable": true,
@@ -17799,9 +17807,7 @@
                               }
                             },
                             "required": [
-                              "deployment",
-                              "contract",
-                              "adapter"
+                              "deployment"
                             ]
                           },
                           "consumer": {
@@ -17812,6 +17818,9 @@
                           },
                           "editable": {
                             "type": "boolean"
+                          },
+                          "key": {
+                            "type": "string"
                           },
                           "model": {
                             "type": "string"
@@ -17839,6 +17848,7 @@
                         "required": [
                           "task_id",
                           "consumer",
+                          "key",
                           "recipe",
                           "deployment",
                           "model",
@@ -17901,9 +17911,7 @@
                           }
                         },
                         "required": [
-                          "deployment",
-                          "contract",
-                          "adapter"
+                          "deployment"
                         ]
                       }
                     },
@@ -18022,9 +18030,7 @@
                           }
                         },
                         "required": [
-                          "deployment",
-                          "contract",
-                          "adapter"
+                          "deployment"
                         ]
                       }
                     },
@@ -19260,8 +19266,8 @@
         "x-vllm-sr-visibility": "advanced"
       },
       "post": {
-        "summary": "Run a native recipe using operator classify.invoke permission; the selected algorithm owns its execution deadline and physical call budget, while signals use their own timeouts; independent of public listener grants",
-        "description": "Run a native recipe using operator classify.invoke permission; the selected algorithm owns its execution deadline and physical call budget, while signals use their own timeouts; independent of public listener grants",
+        "summary": "Run a native recipe using operator classify.invoke permission; signals and the selected algorithm share one deadline and physical call ledger, with per-decision limits tightening the request ceiling; independent of public listener grants",
+        "description": "Run a native recipe using operator classify.invoke permission; signals and the selected algorithm share one deadline and physical call ledger, with per-decision limits tightening the request ceiling; independent of public listener grants",
         "operationId": "post_api_v1_diagnostics_routes_systemone",
         "tags": [
           "diagnostics"
@@ -19797,6 +19803,10 @@
                             "criteria": {
                               "nullable": true
                             },
+                            "decision_adapter": {
+                              "nullable": true,
+                              "type": "boolean"
+                            },
                             "head": {
                               "nullable": true,
                               "type": "string"
@@ -19906,6 +19916,10 @@
                                   },
                                   "criteria": {
                                     "nullable": true
+                                  },
+                                  "decision_adapter": {
+                                    "nullable": true,
+                                    "type": "boolean"
                                   },
                                   "head": {
                                     "nullable": true,
@@ -24409,6 +24423,30 @@
                                   "reason": {
                                     "type": "string"
                                   },
+                                  "release": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "header": {
+                                        "type": "string"
+                                      },
+                                      "honored": {
+                                        "type": "boolean"
+                                      },
+                                      "previous_model": {
+                                        "type": "string"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      },
+                                      "selected_model": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "honored"
+                                    ]
+                                  },
                                   "remaining_turn_prior": {
                                     "type": "number"
                                   },
@@ -24700,6 +24738,30 @@
                                   },
                                   "reason": {
                                     "type": "string"
+                                  },
+                                  "release": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "header": {
+                                        "type": "string"
+                                      },
+                                      "honored": {
+                                        "type": "boolean"
+                                      },
+                                      "previous_model": {
+                                        "type": "string"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      },
+                                      "selected_model": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "honored"
+                                    ]
                                   },
                                   "remaining_turn_prior": {
                                     "type": "number"
@@ -25044,6 +25106,146 @@
                           },
                           "prompt_truncated": {
                             "type": "boolean"
+                          },
+                          "provider_cache": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "cache_read": {
+                                "type": "object",
+                                "properties": {
+                                  "cost": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "provenance": {
+                                    "type": "string"
+                                  },
+                                  "tokens": {
+                                    "nullable": true,
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "provenance"
+                                ]
+                              },
+                              "cache_savings": {
+                                "nullable": true,
+                                "type": "number"
+                              },
+                              "cache_write": {
+                                "type": "object",
+                                "properties": {
+                                  "cost": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "provenance": {
+                                    "type": "string"
+                                  },
+                                  "tokens": {
+                                    "nullable": true,
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "provenance"
+                                ]
+                              },
+                              "cache_write_1h": {
+                                "type": "object",
+                                "properties": {
+                                  "cost": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "provenance": {
+                                    "type": "string"
+                                  },
+                                  "tokens": {
+                                    "nullable": true,
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "provenance"
+                                ]
+                              },
+                              "cache_write_5m": {
+                                "type": "object",
+                                "properties": {
+                                  "cost": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "provenance": {
+                                    "type": "string"
+                                  },
+                                  "tokens": {
+                                    "nullable": true,
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "provenance"
+                                ]
+                              },
+                              "no_cache_cost": {
+                                "nullable": true,
+                                "type": "number"
+                              },
+                              "output": {
+                                "type": "object",
+                                "properties": {
+                                  "cost": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "provenance": {
+                                    "type": "string"
+                                  },
+                                  "tokens": {
+                                    "nullable": true,
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "provenance"
+                                ]
+                              },
+                              "state": {
+                                "type": "string"
+                              },
+                              "uncached_input": {
+                                "type": "object",
+                                "properties": {
+                                  "cost": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "provenance": {
+                                    "type": "string"
+                                  },
+                                  "tokens": {
+                                    "nullable": true,
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "provenance"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "state",
+                              "uncached_input",
+                              "cache_read",
+                              "cache_write",
+                              "output",
+                              "cache_write_5m",
+                              "cache_write_1h"
+                            ]
                           },
                           "rag_backend": {
                             "type": "string"
@@ -25603,6 +25805,12 @@
                                     "request_generation"
                                   ]
                                 }
+                              },
+                              "routing_input_skipped_messages": {
+                                "type": "integer"
+                              },
+                              "routing_input_stripped_blocks": {
+                                "type": "integer"
                               },
                               "selected_model": {
                                 "type": "string"
@@ -26660,6 +26868,139 @@
                     "object": {
                       "type": "string"
                     },
+                    "provider_cache": {
+                      "type": "object",
+                      "properties": {
+                        "actual_spend": {
+                          "type": "number"
+                        },
+                        "by_currency": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "actual_spend": {
+                                "type": "number"
+                              },
+                              "currency": {
+                                "type": "string"
+                              },
+                              "net_savings": {
+                                "type": "number"
+                              },
+                              "no_cache_spend": {
+                                "type": "number"
+                              },
+                              "priced_records": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "currency",
+                              "no_cache_spend",
+                              "actual_spend",
+                              "net_savings",
+                              "priced_records"
+                            ]
+                          }
+                        },
+                        "by_decision": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "actual_spend": {
+                                "type": "number"
+                              },
+                              "currency": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "net_savings": {
+                                "type": "number"
+                              },
+                              "no_cache_spend": {
+                                "type": "number"
+                              },
+                              "priced_records": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "currency",
+                              "no_cache_spend",
+                              "actual_spend",
+                              "net_savings",
+                              "priced_records"
+                            ]
+                          }
+                        },
+                        "by_selected_model": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "actual_spend": {
+                                "type": "number"
+                              },
+                              "currency": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "net_savings": {
+                                "type": "number"
+                              },
+                              "no_cache_spend": {
+                                "type": "number"
+                              },
+                              "priced_records": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "currency",
+                              "no_cache_spend",
+                              "actual_spend",
+                              "net_savings",
+                              "priced_records"
+                            ]
+                          }
+                        },
+                        "currency": {
+                          "type": "string"
+                        },
+                        "excluded_records": {
+                          "type": "integer"
+                        },
+                        "net_savings": {
+                          "type": "number"
+                        },
+                        "no_cache_spend": {
+                          "type": "number"
+                        },
+                        "priced_records": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "no_cache_spend",
+                        "actual_spend",
+                        "net_savings",
+                        "priced_records",
+                        "excluded_records",
+                        "by_decision",
+                        "by_selected_model"
+                      ]
+                    },
                     "record_count": {
                       "type": "integer"
                     },
@@ -26835,6 +27176,7 @@
                     "record_count",
                     "lifecycle",
                     "summary",
+                    "provider_cache",
                     "model_selection",
                     "decision_distribution",
                     "signal_distribution",
@@ -28172,6 +28514,9 @@
                           "content": {
                             "type": "string"
                           },
+                          "content_truncated": {
+                            "type": "boolean"
+                          },
                           "conversation_id": {
                             "type": "string"
                           },
@@ -29160,6 +29505,30 @@
                             "reason": {
                               "type": "string"
                             },
+                            "release": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "header": {
+                                  "type": "string"
+                                },
+                                "honored": {
+                                  "type": "boolean"
+                                },
+                                "previous_model": {
+                                  "type": "string"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                },
+                                "selected_model": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "honored"
+                              ]
+                            },
                             "remaining_turn_prior": {
                               "type": "number"
                             },
@@ -29451,6 +29820,30 @@
                             },
                             "reason": {
                               "type": "string"
+                            },
+                            "release": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "header": {
+                                  "type": "string"
+                                },
+                                "honored": {
+                                  "type": "boolean"
+                                },
+                                "previous_model": {
+                                  "type": "string"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                },
+                                "selected_model": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "honored"
+                              ]
                             },
                             "remaining_turn_prior": {
                               "type": "number"
@@ -29795,6 +30188,146 @@
                     },
                     "prompt_truncated": {
                       "type": "boolean"
+                    },
+                    "provider_cache": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "cache_read": {
+                          "type": "object",
+                          "properties": {
+                            "cost": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "provenance": {
+                              "type": "string"
+                            },
+                            "tokens": {
+                              "nullable": true,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "provenance"
+                          ]
+                        },
+                        "cache_savings": {
+                          "nullable": true,
+                          "type": "number"
+                        },
+                        "cache_write": {
+                          "type": "object",
+                          "properties": {
+                            "cost": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "provenance": {
+                              "type": "string"
+                            },
+                            "tokens": {
+                              "nullable": true,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "provenance"
+                          ]
+                        },
+                        "cache_write_1h": {
+                          "type": "object",
+                          "properties": {
+                            "cost": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "provenance": {
+                              "type": "string"
+                            },
+                            "tokens": {
+                              "nullable": true,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "provenance"
+                          ]
+                        },
+                        "cache_write_5m": {
+                          "type": "object",
+                          "properties": {
+                            "cost": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "provenance": {
+                              "type": "string"
+                            },
+                            "tokens": {
+                              "nullable": true,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "provenance"
+                          ]
+                        },
+                        "no_cache_cost": {
+                          "nullable": true,
+                          "type": "number"
+                        },
+                        "output": {
+                          "type": "object",
+                          "properties": {
+                            "cost": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "provenance": {
+                              "type": "string"
+                            },
+                            "tokens": {
+                              "nullable": true,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "provenance"
+                          ]
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "uncached_input": {
+                          "type": "object",
+                          "properties": {
+                            "cost": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "provenance": {
+                              "type": "string"
+                            },
+                            "tokens": {
+                              "nullable": true,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "provenance"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "uncached_input",
+                        "cache_read",
+                        "cache_write",
+                        "output",
+                        "cache_write_5m",
+                        "cache_write_1h"
+                      ]
                     },
                     "rag_backend": {
                       "type": "string"
@@ -30354,6 +30887,12 @@
                               "request_generation"
                             ]
                           }
+                        },
+                        "routing_input_skipped_messages": {
+                          "type": "integer"
+                        },
+                        "routing_input_stripped_blocks": {
+                          "type": "integer"
                         },
                         "selected_model": {
                           "type": "string"

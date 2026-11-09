@@ -3,6 +3,7 @@ package extproc
 import (
 	"bytes"
 	"encoding/json"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -263,6 +264,9 @@ func TestProcessRequestBodyRejectsStreamedGuardViolations(t *testing.T) {
 			require.NoError(t, json.Unmarshal(immediate.GetBody(), &body))
 			assert.Equal(t, "invalid_request_error", body.Error.Type)
 			assert.Equal(t, test.wantCode, body.Error.Code)
+			assert.Nil(t, ctx.StreamedBody)
+			require.NoError(t, send([]byte("c")))
+			assert.Len(t, stream.Responses, 2, "rejection is terminal for both size and deadline guards")
 		})
 	}
 }
@@ -286,24 +290,107 @@ func TestProcessRequestBodyRejectsSingleEOSAboveStreamedLimit(t *testing.T) {
 	assert.Nil(t, ctx.StreamedBody)
 }
 
-func TestSingleEOSWithinStreamedLimitReachesCodec(t *testing.T) {
-	router := makeTestRouterWithLimits(512, 0)
-	ctx := &RequestContext{Headers: make(map[string]string), SourceFormat: llmprotocol.OpenAIChatV1}
-	body := []byte(`{"model":"fallback-model","messages":[{"role":"user","content":"hello"}]}`)
+func TestStreamedBodyRejectsOversizedChunkBeforeBuffering(t *testing.T) {
+	const maxBytes = 1024
+	first := bytes.Repeat([]byte("a"), maxBytes-1)
+	chunk := bytes.Repeat([]byte("b"), 2*1024*1024)
+	for _, test := range []struct {
+		name       string
+		capacity   int
+		eos        bool
+		fullDuplex bool
+	}{
+		{name: "requires growth", capacity: maxBytes},
+		{name: "retained capacity", capacity: 4 * 1024 * 1024},
+		{name: "EOS", capacity: maxBytes, eos: true},
+		{name: "full duplex", capacity: maxBytes, fullDuplex: true},
+		{name: "full duplex EOS", capacity: maxBytes, eos: true, fullDuplex: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := &RequestContext{FullDuplexRequestBody: test.fullDuplex}
+			// Avoid the pool so retained capacity cannot hide an unexpected growth.
+			handler := &StreamedBodyHandler{
+				router: makeTestRouterWithLimits(maxBytes, 0), ctx: ctx, maxBytes: maxBytes,
+			}
+			handler.buf.Grow(test.capacity)
+			response, err := handler.HandleChunk(&ext_proc.HttpBody{Body: first}, ctx)
+			require.NoError(t, err)
+			require.Nil(t, response.GetImmediateResponse())
+			beforeLen, beforeCap := handler.buf.Len(), handler.buf.Cap()
 
-	response, err := router.handleRequestBodyDispatch(&ext_proc.ProcessingRequest_RequestBody{
-		RequestBody: &ext_proc.HttpBody{Body: body, EndOfStream: true},
-	}, ctx)
-	require.NoError(t, err)
-	require.NotNil(t, response)
-	require.NotNil(t, ctx.SemanticRequest)
-	assert.Equal(t, "fallback-model", ctx.SemanticRequest.Model)
-	assert.Nil(t, ctx.StreamedBody)
+			response, err = handler.HandleChunk(&ext_proc.HttpBody{Body: chunk, EndOfStream: test.eos}, ctx)
+			require.NoError(t, err)
+			immediate := response.GetImmediateResponse()
+			require.NotNil(t, immediate)
+			assert.Equal(t, typev3.StatusCode_PayloadTooLarge, immediate.GetStatus().GetCode())
+			require.NotNil(t, ctx.ImmediateProtocolError)
+			assert.Equal(t, "request_too_large", ctx.ImmediateProtocolError.Code)
+			assert.Equal(t, "request body exceeds the 1024-byte limit", ctx.ImmediateProtocolError.Message)
+			assert.Equal(t, beforeLen, handler.buf.Len(), "rejected chunk must not be appended")
+			assert.Equal(t, beforeCap, handler.buf.Cap(), "rejected chunk must not grow the buffer")
+			assert.True(t, bytes.Equal(first, handler.buf.Bytes()), "buffer contents must remain unchanged")
+		})
+	}
+}
+
+func TestProcessRequestBodyAtStreamedLimitReachesCodec(t *testing.T) {
+	body := []byte(`{"model":"fallback-model","messages":[{"role":"user","content":"hello"}]}`)
+	for _, test := range []struct {
+		name      string
+		chunkSize int
+	}{
+		{name: "single EOS", chunkSize: len(body)},
+		{name: "multiple chunks", chunkSize: 7},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := &RequestContext{Headers: make(map[string]string), SourceFormat: llmprotocol.OpenAIChatV1}
+			router := makeTestRouterWithLimits(int64(len(body)), 0)
+			chunks := splitTestChunks(body, test.chunkSize)
+			for i, chunk := range chunks {
+				response, err := router.handleRequestBodyDispatch(&ext_proc.ProcessingRequest_RequestBody{
+					RequestBody: &ext_proc.HttpBody{Body: chunk, EndOfStream: i == len(chunks)-1},
+				}, ctx)
+				require.NoError(t, err)
+				require.NotNil(t, response)
+				assert.Nil(t, response.GetImmediateResponse())
+			}
+			require.NotNil(t, ctx.SemanticRequest)
+			assert.Equal(t, "fallback-model", ctx.SemanticRequest.Model)
+			assert.Nil(t, ctx.StreamedBody)
+		})
+	}
+}
+
+func TestStreamedBodyGuardDoesNotOverflowAccumulatedSize(t *testing.T) {
+	ctx := &RequestContext{}
+	handler := &StreamedBodyHandler{router: makeTestRouterWithLimits(math.MaxInt64, 0), ctx: ctx, maxBytes: math.MaxInt64}
+	handler.buf.WriteByte('a')
+	// Exercise the size guard without allocating a chunk this large.
+	response := handler.checkBodySize(math.MaxInt)
+	if math.MaxInt == math.MaxInt64 {
+		require.NotNil(t, response)
+		assert.Equal(t, typev3.StatusCode_PayloadTooLarge, response.GetImmediateResponse().GetStatus().GetCode())
+	} else {
+		assert.Nil(t, response)
+	}
+}
+
+func TestStreamedBodyZeroLimitAllowsAccumulation(t *testing.T) {
+	ctx := &RequestContext{}
+	handler := &StreamedBodyHandler{router: makeTestRouterWithLimits(0, 0), ctx: ctx}
+	chunk := bytes.Repeat([]byte("a"), 1024)
+	for range 2 {
+		response, err := handler.HandleChunk(&ext_proc.HttpBody{Body: chunk}, ctx)
+		require.NoError(t, err)
+		assertChunkEaten(t, response)
+	}
+	assert.Equal(t, 2*len(chunk), handler.buf.Len())
 }
 
 func TestStreamedBodyPoolReuseClearsRequestStateAndGuards(t *testing.T) {
 	first := newStreamedBodyHandler(makeTestRouterWithLimits(500, 60), &RequestContext{})
 	first.buf.WriteString("leftover")
+	first.reject(413, "request_too_large", "rejected request")
 	first.Release()
 
 	second := newStreamedBodyHandler(makeTestRouterWithLimits(0, 0), &RequestContext{})
@@ -311,4 +398,8 @@ func TestStreamedBodyPoolReuseClearsRequestStateAndGuards(t *testing.T) {
 	assert.Empty(t, second.buf.Bytes())
 	assert.Zero(t, second.maxBytes)
 	assert.True(t, second.deadline.IsZero())
+	response, err := second.HandleChunk(&ext_proc.HttpBody{Body: []byte("new request")}, second.ctx)
+	require.NoError(t, err)
+	assertChunkEaten(t, response)
+	assert.Equal(t, "new request", second.buf.String())
 }

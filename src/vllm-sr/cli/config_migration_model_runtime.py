@@ -69,8 +69,22 @@ _MODULE_MODELS = (
 )
 
 
-def migrate_prompt_guard_backend(canonical: dict[str, Any]) -> None:
-    """Replace the retired prompt_guard.protocol without guessing a service."""
+# The provider that asks a guard service the way each retired protocol did.
+_GUARD_PROVIDERS = {"http_chat": "openai_chat", "http_classify": "classify"}
+# Guard service settings no deployment field expresses: a service that sets
+# one keeps the deprecated module backend, which the Router still reads.
+_GUARD_CHAT_SETTINGS = ("access_key", "parser_type", "threshold", "reasoning")
+_GUARD_ENDPOINT_SETTINGS = ("name", "use_chat_template", "prompt_template")
+
+
+def migrate_prompt_guard_backend(
+    canonical: dict[str, Any], notes: MigrationNotes | None = None
+) -> None:
+    """Replace the retired prompt_guard.protocol without guessing a service.
+
+    The one guardrail external model becomes a deployment the jailbreak
+    binding names, asked by the provider the protocol stood for.
+    """
 
     catalog = canonical.get("global", {}).get("model_catalog", {})
     guard = catalog.get("modules", {}).get("prompt_guard", {})
@@ -81,7 +95,7 @@ def migrate_prompt_guard_backend(canonical: dict[str, Any]) -> None:
         guard.pop("protocol")
         return
     field = "global.model_catalog.modules.prompt_guard"
-    if protocol not in {"http_chat", "http_classify"}:
+    if protocol not in _GUARD_PROVIDERS:
         raise ValueError(f"{field}.protocol: unsupported legacy protocol {protocol!r}")
     if guard.get("backend") or guard.get("variant"):
         raise ValueError(f"{field}.protocol conflicts with backend or variant")
@@ -99,7 +113,8 @@ def migrate_prompt_guard_backend(canonical: dict[str, Any]) -> None:
         )
     model = candidates[0]
     name = model.get("name") or "guardrail_classifier"
-    if any(
+    deployments = catalog.get("deployments") or {}
+    if name in deployments or any(
         other is not model and other.get("name") == name
         for other in external
         if isinstance(other, dict)
@@ -108,15 +123,86 @@ def migrate_prompt_guard_backend(canonical: dict[str, Any]) -> None:
             f"{field}.protocol migration: external model name {name!r} conflicts; "
             "assign a unique name to the guardrail service"
         )
-    model["name"] = name
-    guard["backend"] = {
-        "protocol": protocol,
-        "contract": (
-            "label_decision.v1" if protocol == "http_chat" else "label_distribution.v1"
-        ),
-        "model": name,
-    }
+    bindings = catalog.get("bindings") or {}
+    if any(key in bindings for key in ("jailbreak", "prompt_guard")):
+        raise ValueError(
+            f"{field}.protocol conflicts with global.model_catalog.bindings.jailbreak"
+        )
     guard.pop("protocol")
+    endpoint = model.get("llm_endpoint") or {}
+    kept = [key for key in _GUARD_CHAT_SETTINGS if model.get(key)] + [
+        f"llm_endpoint.{key}" for key in _GUARD_ENDPOINT_SETTINGS if endpoint.get(key)
+    ]
+    if kept:
+        model["name"] = name
+        guard["backend"] = {
+            "protocol": protocol,
+            "contract": (
+                "label_decision.v1"
+                if protocol == "http_chat"
+                else "label_distribution.v1"
+            ),
+            "model": name,
+        }
+        if notes is not None:
+            notes.changed(
+                f"{field}.backend",
+                "kept as a deprecated module backend: no deployment field "
+                f"expresses the guardrail service's {', '.join(kept)}",
+            )
+        return
+    catalog["deployments"] = {
+        **deployments,
+        name: _guard_deployment(model, _GUARD_PROVIDERS[protocol]),
+    }
+    catalog["bindings"] = {**bindings, "jailbreak": name}
+    external.remove(model)
+    if not external:
+        catalog.pop("external", None)
+
+
+def _guard_deployment(model: dict[str, Any], provider: str) -> dict[str, Any]:
+    """A guardrail external model as a deployment of provider."""
+
+    endpoint = model.get("llm_endpoint") or {}
+    url = legacy_endpoint_url(
+        str(endpoint.get("address") or ""),
+        int(endpoint.get("port") or 0),
+        str(endpoint.get("protocol") or ""),
+    )
+    if provider == "openai_chat" and not urlparse(url).path.strip("/"):
+        url = url.rstrip("/") + "/v1"
+    deployment: dict[str, Any] = {"provider": provider, "endpoint": url}
+    if model.get("llm_model_name"):
+        deployment["model"] = model["llm_model_name"]
+    if model.get("llm_timeout_seconds"):
+        deployment["timeout_ms"] = round(float(model["llm_timeout_seconds"]) * 1000)
+    limits = {
+        key: model[key]
+        for key in ("max_request_bytes", "max_response_bytes")
+        if model.get(key)
+    }
+    if limits:
+        deployment["limits"] = limits
+    generation = {
+        key: model[key] for key in ("max_tokens", "temperature") if model.get(key)
+    }
+    if generation and provider == "openai_chat":
+        deployment["generation"] = generation
+    return deployment
+
+
+def legacy_endpoint_url(address: str, port: int, protocol: str) -> str:
+    """The URL a legacy {address, port, protocol} endpoint names."""
+
+    address = address.strip()
+    if "://" in address:
+        return address.rstrip("/")
+    protocol = protocol.strip().lower() or "http"
+    if port > 0:
+        host = address.strip("[]")
+        address = f"[{host}]:{port}" if ":" in host else f"{host}:{port}"
+    return f"{protocol}://{address}"
 
 
 def migrate_model_runtime_contract(
@@ -127,7 +213,7 @@ def migrate_model_runtime_contract(
     catalog = dict_at(canonical, "global", "model_catalog")
     if catalog is not None:
         migrated = _migrate_deployments(catalog, notes)
-        _retire_explainer_deployments(catalog, notes)
+        _retire_explainer_deployments(canonical, catalog, notes)
         for path, bindings in binding_maps(canonical):
             _migrate_bindings(path, bindings, migrated, notes)
         _migrate_system_models(catalog, notes)
@@ -283,7 +369,7 @@ def _looks_like_hub_repository(value: str) -> bool:
 
 
 def _retire_explainer_deployments(
-    catalog: dict[str, Any], notes: MigrationNotes
+    canonical: dict[str, Any], catalog: dict[str, Any], notes: MigrationNotes
 ) -> None:
     deployments = catalog.get("deployments")
     if not isinstance(deployments, dict):
@@ -294,6 +380,23 @@ def _retire_explainer_deployments(
             f"global.model_catalog.deployments.{name}",
             "removed; the NLI explainer is retired",
         )
+        _note_provider_models_naming(canonical, name, notes)
+
+
+def _note_provider_models_naming(
+    canonical: dict[str, Any], deployment: str, notes: MigrationNotes
+) -> None:
+    """A provider model that still names a removed deployment needs another one."""
+
+    providers = canonical.get("providers")
+    models = providers.get("models") if isinstance(providers, dict) else None
+    for index, model in enumerate(models if isinstance(models, list) else []):
+        if isinstance(model, dict) and model.get("deployment") == deployment:
+            notes.action(
+                f"providers.models[{index}].deployment",
+                f"names {deployment!r}, which the migration removed as a retired NLI "
+                "explainer; point the model at the deployment that serves it",
+            )
 
 
 def _is_nli(deployment: Any) -> bool:
@@ -435,7 +538,7 @@ def _migrate_hallucination(
     if detector.pop("endpoint", None) is not None:
         notes.changed(
             detector_path + ".endpoint",
-            "removed; a remote detector is a hallucination_detector binding",
+            "removed; a remote detector is a hallucination binding",
         )
     if detector.pop("backend", None) not in (None, ""):
         notes.changed(
@@ -453,7 +556,7 @@ def _migrate_hallucination(
 def _migrate_hallucination_endpoint(
     path: str, detector: dict[str, Any], catalog: dict[str, Any], notes: MigrationNotes
 ) -> None:
-    """Rewrite `backend: endpoint` into the http_chat binding it was shorthand for.
+    """Rewrite `backend: endpoint` into the openai_chat deployment it was shorthand for.
 
     The shorthand applied to every recipe without its own binding, so the
     binding becomes the catalog-wide default.
@@ -467,50 +570,39 @@ def _migrate_hallucination_endpoint(
         )
     if parsed.path != "/v1" or parsed.query or parsed.fragment:
         raise ValueError(
-            f"{path}.endpoint {endpoint!r}: an http_chat deployment posts to "
-            "<host>/v1/chat/completions; declare the external model and the "
-            "hallucination_detector binding by hand for any other path"
+            f"{path}.endpoint {endpoint!r}: the detector posts to "
+            "<host>/v1/chat/completions; declare the openai_chat deployment and "
+            "the hallucination binding by hand for any other path"
         )
     bindings = catalog.setdefault("bindings", {})
-    if "hallucination_detector" in bindings:
+    bound = next(
+        (key for key in ("hallucination", "hallucination_detector") if key in bindings),
+        None,
+    )
+    if bound is not None:
         notes.changed(
             path + ".backend",
-            "removed; the hallucination_detector binding already selects the detector",
+            f"removed; the {bound} binding already selects the detector",
         )
     else:
         deployments = catalog.setdefault("deployments", {})
-        external = catalog.setdefault("external", [])
         name = _HALLUCINATION_ENDPOINT
-        if name in deployments or any(
-            isinstance(other, dict) and other.get("name") == name for other in external
-        ):
+        if name in deployments:
             raise ValueError(
-                f"{path}: the name {name!r} is taken; declare the "
-                "hallucination_detector binding by hand"
+                f"{path}: the deployment name {name!r} is taken; declare the "
+                "hallucination binding by hand"
             )
-        external.append(
-            {
-                "name": name,
-                "model_role": "classification",
-                "llm_endpoint": {
-                    "address": parsed.hostname,
-                    "port": parsed.port or (443 if parsed.scheme == "https" else 80),
-                    "protocol": parsed.scheme,
-                },
-                "llm_model_name": model,
-                "llm_timeout_seconds": 10,
-            }
-        )
-        deployments[name] = {"provider": "http", "external_model": name}
-        bindings["hallucination_detector"] = {
-            "deployment": name,
-            "contract": "token_spans.v1",
-            "adapter": "http_chat",
+        deployments[name] = {
+            "provider": "openai_chat",
+            "endpoint": parsed.geturl(),
+            "model": model,
+            "timeout_ms": 10000,
         }
+        bindings["hallucination"] = name
         notes.changed(
             path + ".backend",
-            "moved to global.model_catalog.bindings.hallucination_detector "
-            f"(http_chat deployment {name})",
+            "moved to global.model_catalog.bindings.hallucination "
+            f"(openai_chat deployment {name})",
         )
     for field in ("backend", "endpoint", "model_id"):
         detector.pop(field, None)

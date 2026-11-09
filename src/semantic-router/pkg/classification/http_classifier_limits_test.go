@@ -26,12 +26,12 @@ func inputForRequestBytes(t *testing.T, n int) string {
 
 func newLimitedTestInference(t *testing.T, server *httptest.Server, requestBytes, responseBytes int64) *HTTPClassifierInference {
 	t.Helper()
-	inf, err := NewHTTPClassifierInference(&config.ExternalModelConfig{
+	inf, err := NewHTTPClassifierInference(externalClassifyDeployment(&config.ExternalModelConfig{
 		ModelEndpoint:    endpointForTestServer(t, server),
 		ModelName:        "custom-classifier",
 		MaxRequestBytes:  requestBytes,
 		MaxResponseBytes: responseBytes,
-	}, testJailbreakMapping())
+	}, 0), testJailbreakMapping())
 	if err != nil {
 		t.Fatalf("failed to construct inference: %v", err)
 	}

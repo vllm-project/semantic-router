@@ -255,6 +255,8 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deplo
 			"image.repository": imageRepo,
 			"image.tag":        imageTag,
 			"image.pullPolicy": "Never",
+			// domain-classify asserts the selected-category debug header.
+			"config.global.router.headers.debug": "any",
 		},
 		Wait:    true,
 		Timeout: "30m",

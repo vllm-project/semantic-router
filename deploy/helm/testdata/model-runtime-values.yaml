@@ -8,16 +8,12 @@ configOverride:
   providers: {}
   routing:
     model_bindings:
-      domain_classifier:
-        deployment: local-domain
-        contract: label_distribution.v1
+      domain: local-domain
   recipes:
     - name: private
       routing:
         model_bindings:
-          pii_classifier:
-            deployment: local-pii
-            contract: token_spans.v1
+          pii: local-pii
   global:
     model_catalog:
       deployments:

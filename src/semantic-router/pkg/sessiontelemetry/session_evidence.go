@@ -95,7 +95,7 @@ func ConfigureTurnOutcomeWindow(sessionID string, size int, ttl time.Duration, n
 	}
 
 	s.mu.Lock()
-	st := s.sessionLocked(sessionID)
+	st := s.sessionLocked(sessionID, now)
 	st.outcomeWindowSize = size
 	st.outcomeWindowTTL = ttl
 	st.recentOutcomes = trimTurnOutcomes(pruneTurnOutcomes(st.recentOutcomes, ttl, now), size)
@@ -140,7 +140,7 @@ func RecordTurnOutcome(sessionID string, outcome TurnOutcome, timestamp time.Tim
 		s.mu.Unlock()
 		return
 	}
-	st := s.sessionLocked(sessionID)
+	st := s.sessionLocked(sessionID, now)
 	if st.lastSeen.IsZero() || ts.After(st.lastSeen) {
 		st.lastSeen = ts
 	}

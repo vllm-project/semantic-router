@@ -67,13 +67,20 @@ func prepareDecisionPII(models *classifierModelRuntime) (*decisionPIIBackend, er
 	if err != nil || judgment == nil {
 		return nil, err
 	}
-	// Existing span models and explicit token contracts keep the precise path.
-	spec, explicit := models.plan.Lookup(models.recipe, "pii_classifier")
-	if judgment.card.Answers("span") && (!explicit || spec.Binding.Contract != config.DecisionTaskContract) {
+	// Models that answer span questions or define the pii preset keep the
+	// precise path unless the configuration asks for the verdict.
+	authored := authoredVerdictBinding(models, "pii_classifier")
+	if (judgment.card.Answers("span") || judgment.card.HasPreset("pii")) && !authored {
 		return nil, nil
 	}
 	if explicitSpanBinding(models, "pii_classifier") {
 		return nil, fmt.Errorf("%w: explicit pii_classifier token_spans.v1 binding requires a span model; use decision.v1 for presence/categories", binding.ErrCapability)
+	}
+	if err = rejectMaskingWithoutSpans(models.cfg, judgment.deployment); err != nil {
+		return nil, err
+	}
+	if !authored {
+		reportSpanFallback("pii_classifier", judgment)
 	}
 	definition, _ := modelservice.BuiltinTask("pii_categories")
 	question := definition.Question
@@ -86,15 +93,15 @@ func prepareDecisionPII(models *classifierModelRuntime) (*decisionPIIBackend, er
 }
 
 func (c *Classifier) evaluateDecisionPIISignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, text string, history []string, backend *decisionPIIBackend) {
-	c.evaluateDecisionPIISignalWithToolResults(ctx, results, mu, text, history, nil, false, backend)
+	c.evaluateDecisionPIISignalWithToolResults(ctx, results, mu, []string{text}, history, nil, false, backend)
 }
 
-func (c *Classifier) evaluateDecisionPIISignalWithToolResults(ctx context.Context, results *SignalResults, mu *sync.Mutex, text string, history, toolTexts []string, toolIncomplete bool, backend *decisionPIIBackend) {
+func (c *Classifier) evaluateDecisionPIISignalWithToolResults(ctx context.Context, results *SignalResults, mu *sync.Mutex, current []string, history, toolTexts []string, toolIncomplete bool, backend *decisionPIIBackend) {
 	started := time.Now()
 	var contents []piiCacheKey
 	seen := map[piiCacheKey]bool{}
 	for _, rule := range c.Config.PIIRules {
-		for _, content := range collectPIIRuleContentsForSource(rule, text, history, toolTexts) {
+		for _, content := range collectPIIRuleContentsForSource(rule, current, history, toolTexts) {
 			key := piiCacheKey{source: piiCacheSource(rule.Source), content: content}
 			if !seen[key] {
 				seen[key] = true
@@ -125,7 +132,7 @@ func (c *Classifier) evaluateDecisionPIISignalWithToolResults(ctx context.Contex
 			verified = false
 		}
 	}
-	for _, content := range append(append([]string{text}, history...), toolTexts...) {
+	for _, content := range slices.Concat(current, history, toolTexts) {
 		if content != "" && !seen[piiCacheKey{source: "legacy", content: content}] && !seen[piiCacheKey{source: config.PIISourceToolResult, content: content}] {
 			verified = false
 		}
@@ -143,7 +150,7 @@ func (c *Classifier) evaluateDecisionPIISignalWithToolResults(ctx context.Contex
 		if incomplete {
 			code = piiEvaluationIncompleteCode
 		}
-		for _, content := range collectPIIRuleContentsForSource(rule, text, history, toolTexts) {
+		for _, content := range collectPIIRuleContentsForSource(rule, current, history, toolTexts) {
 			result := byContent[piiCacheKey{source: piiCacheSource(rule.Source), content: content}]
 			if result.err != nil {
 				failed = true

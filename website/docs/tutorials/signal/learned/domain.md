@@ -5,9 +5,10 @@
 `domain` classifies the request topic family. Define domain rules under
 `routing.signals.domains`.
 
-The detector uses the classifier configured under
-`global.model_catalog.modules.classifier` and its model bindings under
-`global.model_catalog.system`.
+The decision model answers it unless a `domain` binding names another
+deployment; see [Choose a model for a signal](../../../installation/choose-a-model-for-a-signal.md).
+`global.model_catalog.modules.classifier.domain` holds its settings, such as
+its threshold.
 
 ## Key Advantages
 
@@ -62,43 +63,34 @@ counts as `other`, so the domain that lists `other`, as above, is the fallback
 for every topic you didn't declare; without one, such a request matches no
 domain.
 
-### Local and remote classifier selection
+### Local and remote models
 
-With no `backend`, the domain classifier (Vela 2.0 0.3B by default) runs in the
+By default the decision model (vela3-fast) answers the domain signal in the
 [model runtime](../../../model-runtime/guides/classify.md). The runtime reads
 the model's architecture from the package, so there is no local selector to
 set; `vllm-sr config migrate` removes the earlier `variant`, `use_modernbert`
 and `use_mmbert_32k` keys.
 
-A remote category classifier uses the shared backend block. Its `model` is an
-explicit name from `global.model_catalog.external[]`, and that catalog entry
-must have `model_role: classification`. Category currently accepts only the
-`http_classify` protocol and the `label_distribution.v1` contract so the full
-label distribution continues to feed domain matching and routing decisions.
+A remote domain classifier is a `classify` deployment that `domain` is bound
+to. The Router posts the request text to `<endpoint>/classify` and reads the
+full label distribution, which feeds domain matching and routing decisions.
 
 ```yaml
 global:
   model_catalog:
-    external:
-      - name: domain-service
-        model_role: classification
-        llm_endpoint:
-          address: domain-classifier.default.svc
-          port: 8080
-        llm_model_name: domain-intent-v1
-    modules:
-      classifier:
-        domain:
-          backend:
-            protocol: http_classify
-            contract: label_distribution.v1
-            model: domain-service
-            deadline_ms: 5000
+    deployments:
+      domain-service:
+        provider: classify
+        endpoint: https://domain-classifier.example.com
+        auth: {api_key_env: DOMAIN_SERVICE_KEY}
+        timeout_ms: 5000
+    bindings:
+      domain: domain-service
 ```
 
 ## Dependencies and Limitations
 
-Domain classification uses the configured classifier module and processes the
-request text. Declare `other` as the fallback, and re-evaluate labels and
-thresholds when the classifier changes. See a complete example:
+Domain classification processes the request text on the deployment that
+answers the signal. Declare `other` as the fallback, and re-evaluate labels and
+thresholds when that deployment changes. See a complete example:
 [`config/fragments/signal/domain/mmlu.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/domain/mmlu.yaml).

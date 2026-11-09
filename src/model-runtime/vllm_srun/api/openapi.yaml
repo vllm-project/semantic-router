@@ -481,8 +481,9 @@ components:
           description: |
             Models with a scan budget (their card's `limits.max_scan_tokens`): how the question reads a field longer
             than one input. `window` (default): whole, in windows up to the request's `max_tokens`, failing with
-            `scan_budget_exceeded` past it. `truncate`: its first `limits.truncate_tokens` tokens only. Questions of
-            both kinds share their model inputs unless one has to be read in windows.
+            `scan_budget_exceeded` past it. `truncate`: its first `limits.truncate_tokens` tokens only (a Vela 3.0
+            evidence span question: its route's 32,768-token window). Questions of both kinds share their model inputs
+            unless one has to be read in windows.
         head:
           type: string
           enum: [router, broad]
@@ -496,6 +497,16 @@ components:
         preset:
           type: string
           description: A question the model defines; the model fills in its type, instructions and criteria.
+        decision_adapter:
+          type: boolean
+          default: false
+          description: |
+            Vela 3.0 d3 sizes (family `vela3_d3`) whose package declares `decision_opt_in`: true answers a
+            Choice, Noul or Score question with the opt-in decision adapter (`decision_optin`, else the router
+            adapter), as the package's runtime does. A router question keeps the router adapter; one the package
+            routes to a task adapter takes the opt-in adapter instead. Only true turns it on; any other value, a
+            package without opt-in, and a request with images, videos, assets or Box / track questions (which
+            runs every adapter off) answer it as false. Other models answer the field with invalid_question.
     ChoiceOption:
       type: object
       additionalProperties: false
@@ -1638,7 +1649,8 @@ components:
           type: integer
           description: |
             The same models: the most tokens of a part a question with `overflow: truncate` reads, one input on a
-            CPU (one forward) and the scan budget on a GPU.
+            CPU (one forward) and the scan budget on a GPU. A Vela 3.0 evidence span question reads its route's
+            32,768-token window instead.
         min_options:
           type: integer
         max_options:
@@ -1713,6 +1725,13 @@ components:
         enable_shared_context:
           type: boolean
           description: Whether a multi-question decision request computes its shared state once.
+        max_model_len:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: |
+            The most input tokens one question of a Decision model may have, as configured; null keeps the
+            package's limit. The limit the model applies is the card's `limits.max_input_tokens`.
     GoldenStatus:
       type: object
       required: [status]
